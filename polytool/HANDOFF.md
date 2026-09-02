@@ -1,5 +1,40 @@
 # Polytool handoff
 
+## Thirty-sequence web catalogue (2026-09-02)
+
+The host supervisor owns `web/index.html` and this handoff on isolated branch
+`feature/polytool-sequence-picker` in
+`/mnt/2TB-Babel/ai-storage/worktrees/polytool-sequence-picker`. The dirty
+shared Rust checkout and the website deployment directory remain untouched.
+
+The examples row now has a responsive dropdown containing exactly thirty
+coefficient triangles represented in `real-rooted-oeis-proofs`. The catalogue
+is divided into four parking-function families, four Eulerian-compendium
+families, and twenty-two classical or SymCat-related families. Each selection
+loads a short description, its OEIS URL, and trusted coefficient rows. Existing
+featured buttons remain available.
+
+Rows were taken from the existing polytool recurrence fixtures and examples
+when available. The remaining prefixes were checked against the current OEIS
+records, with row boundaries also checked against the Parking Functions and
+Eulerian compendium manuscripts for their eight highlighted families. Neither
+research project nor the OEIS proof repository was edited.
+
+Verification:
+
+```text
+inline JavaScript parse                                      passed
+dropdown count and uniqueness                               30/30
+loadExample textarea/status checks                          30/30
+polytool exact property parser                              30/30
+desktop and 390px-wide headless-Chrome inspection           passed
+wasm-pack release build                                      passed
+git diff --check                                             passed
+```
+
+The ignored `web/pkg/` output was rebuilt only for local verification. Nothing
+has been merged, pushed, copied to the deployment repository, or deployed.
+
 ## Uspensky/Descartes comparison
 
 The main Rust worker owns these files:
