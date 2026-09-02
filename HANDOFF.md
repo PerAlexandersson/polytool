@@ -40,6 +40,27 @@ The private proof-repository name was subsequently removed from all 26
 imported-sequence comments before publication; the public examples retain only
 their OEIS URLs and, where relevant, a broad project description.
 
+The recurrence-result page no longer generates or displays the bulky standalone
+Python export. It keeps the compact recurrence JSON and links directly to the
+documented `polytool recurrence-generate` command, which reconstructs exact
+rows from that JSON. The library and CLI Python exporter remain available for
+backward compatibility; only the browser payload and UI were simplified.
+
+The browser's adaptive bounds are now recurrence depth 10, `t`-degree 5,
+`n`-degree 5, and derivative order 5. In particular, this includes A059427's
+cubic derivative coefficient `t - t^3`; a regression test confirms that degree
+two fails and degree three finds the recurrence. The adaptive-mode tooltip
+states that there is no elapsed-time or candidate-count cutoff: the search
+stops only on a match, user cancellation, or exhaustion of its finite bounds,
+and a failed exhaustive search may therefore take a long time.
+
+Recurrence-option tooltips now mark their formulas with `data-tex` and render
+them through the already loaded KaTeX runtime. Rendering is applied both to the
+original tooltip nodes and to the floating tooltip layer; the alternating-sign
+label and tooltip therefore display `(-1)^n` with an actual superscript.
+The two focused web-crate tests, standalone WASM build, JavaScript parse,
+code-card checks, and a headless-browser KaTeX/WASM load all pass.
+
 ## Uspensky/Descartes comparison
 
 The main Rust worker owns these files:

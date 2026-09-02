@@ -865,32 +865,32 @@ Lines starting with # are ignored."></textarea>
 <div id="panel-recurrence" class="tab-panel">
   <div class="mode-group">
     <label><input type="radio" name="searchMode" value="adaptive" checked onchange="toggleSearchMode()"> Adaptive</label>
-    <span class="info">i<span class="tip">Automatically tries increasingly complex recurrence shapes (depth, degrees, derivatives) starting from the simplest. Stops at the first match. Usually the best choice.</span></span>
+    <span class="info">i<span class="tip">Tries increasingly complex recurrence shapes up to depth 10, <span data-tex="t">t</span>-degree 5, <span data-tex="n">n</span>-degree 5, and derivative order 5, starting from the simplest. There is no time or candidate-count cutoff: it stops at the first match or after exhausting the bounded search. An unsuccessful exhaustive search can take a long time; use Cancel to stop it.</span></span>
     <label><input type="radio" name="searchMode" value="manual" onchange="toggleSearchMode()"> Manual</label>
     <span class="info">i<span class="tip">Set exact search bounds yourself. Useful when you know the expected recurrence shape or want to explore a specific search space.</span></span>
   </div>
   <div class="options disabled" id="manualOpts">
     <label>depth <input type="number" id="maxRecLen" value="3" min="1" max="10"></label>
-    <span class="info">i<span class="tip">Maximum number of previous terms P(n&minus;1), P(n&minus;2), &hellip; the recurrence may reference.</span></span>
+    <span class="info">i<span class="tip">Maximum number of previous terms <span data-tex="P(n-1),\,P(n-2),\,\ldots">P(n&minus;1), P(n&minus;2), &hellip;</span> the recurrence may reference.</span></span>
 
     <label>t-deg <input type="number" id="maxVarDeg" value="2" min="0" max="6"></label>
-    <span class="info">i<span class="tip">Maximum degree in the polynomial variable t for each coefficient a_k(n, t).</span></span>
+    <span class="info">i<span class="tip">Maximum degree in the polynomial variable <span data-tex="t">t</span> for each coefficient <span data-tex="a_k(n,t)">a_k(n, t)</span>.</span></span>
 
     <label>n-deg <input type="number" id="maxIdxDeg" value="2" min="0" max="6"></label>
-    <span class="info">i<span class="tip">Maximum degree in the index n for each coefficient a_k(n, t).</span></span>
+    <span class="info">i<span class="tip">Maximum degree in the index <span data-tex="n">n</span> for each coefficient <span data-tex="a_k(n,t)">a_k(n, t)</span>.</span></span>
 
-    <label>D-order <input type="number" id="maxDiffDeg" value="1" min="0" max="4"></label>
-    <span class="info">i<span class="tip">Maximum order of the derivative operator D = d/dt applied to terms. Allows recurrences involving P(n&minus;k), P&prime;(n&minus;k), P&Prime;(n&minus;k), etc.</span></span>
+    <label>D-order <input type="number" id="maxDiffDeg" value="1" min="0" max="5"></label>
+    <span class="info">i<span class="tip">Maximum order of the derivative operator <span data-tex="D=d/dt">D = d/dt</span> applied to terms. Allows recurrences involving <span data-tex="P(n-k),\,P'(n-k),\,P''(n-k),\,\ldots">P(n&minus;k), P&prime;(n&minus;k), P&Prime;(n&minus;k), &hellip;</span></span></span>
   </div>
   <div class="options">
     <label><input type="checkbox" id="tryInhomogeneous"> non-homogeneous</label>
-    <span class="info">i<span class="tip">Allow an additive term g(n, t) on the right-hand side: &sum; a_k(n,t) P(n&minus;k) = g(n, t). Slower search but finds more recurrences.</span></span>
+    <span class="info">i<span class="tip">Allow an additive term <span data-tex="g(n,t)">g(n, t)</span> on the right-hand side: <span data-tex="\sum_k a_k(n,t)P(n-k)=g(n,t)">&sum; a_k(n,t) P(n&minus;k) = g(n, t)</span>. Slower search but finds more recurrences.</span></span>
 
     <label><input type="checkbox" id="tryDenominator"> rational coefficients</label>
-    <span class="info">i<span class="tip">Allow a common denominator f(n, t) on the left-hand side: f(n, t) P(n) = &sum; a_k(n, t) P(n&minus;k). Finds recurrences with rational function coefficients in n and t.</span></span>
+    <span class="info">i<span class="tip">Allow a common denominator on the left-hand side: <span data-tex="f(n,t)P(n)=\sum_k a_k(n,t)P(n-k)">f(n, t) P(n) = &sum; a_k(n, t) P(n&minus;k)</span>. Finds recurrences with rational function coefficients in <span data-tex="n">n</span> and <span data-tex="t">t</span>.</span></span>
 
-    <label><input type="checkbox" id="tryAlternatingSign"> (-1)<sup>n</sup> terms</label>
-    <span class="info">i<span class="tip">Also allow right-hand-side terms multiplied by (-1)^n, such as (-1)^n a_k(n, t) P(n&minus;k). Useful for alternating or parity-sensitive sequences.</span></span>
+    <label><input type="checkbox" id="tryAlternatingSign"> <span data-tex="(-1)^n">(-1)<sup>n</sup></span> terms</label>
+    <span class="info">i<span class="tip">Also allow right-hand-side terms multiplied by <span data-tex="(-1)^n">(-1)<sup>n</sup></span>, such as <span data-tex="(-1)^n a_k(n,t)P(n-k)">(-1)<sup>n</sup> a_k(n, t) P(n&minus;k)</span>. Useful for alternating or parity-sensitive sequences.</span></span>
   </div>
   <button class="run" onclick="run('recurrence')" id="btnRec">Find recurrence</button>
   <button class="cancel" onclick="cancelRecurrence()" id="btnCancel" style="display:none">Cancel</button>
@@ -906,9 +906,9 @@ Lines starting with # are ignored."></textarea>
   Source code: <a href="https://github.com/PerAlexandersson/polytool">polytool</a>.
 </footer>
 
-<script src="pkg/polytool_web.js?v=20260629b"></script>
+<script src="pkg/polytool_web.js?v=20260902a"></script>
 <script>
-const ASSET_VERSION = '20260629b';
+const ASSET_VERSION = '20260902a';
 const EXAMPLES = {
   eulerian: {
     label: 'Eulerian polynomials A_n(t) \u2014 descent generating function on S_n',
@@ -1741,7 +1741,6 @@ function copyRec(btn, kind) {
     latex: '_lastRecLatex',
     mathematica: '_lastRecMathematica',
     sage: '_lastRecSage',
-    python: '_lastRecPython',
     json: '_lastRecJson',
   })[kind] || '_lastRecPlain';
   const text = window[key] || '';
@@ -1752,11 +1751,15 @@ function copyRec(btn, kind) {
   });
 }
 
-function renderRecurrenceCodeCard(title, note, code) {
+function renderRecurrenceCodeCard(title, note, code, link) {
   if (!code) return '';
+  const linkHtml = link
+    ? ' <a href="' + escAttr(link.href) + '" target="_blank" rel="noopener">' +
+      esc(link.label) + '</a>.'
+    : '';
   return '<div class="recurrence-code-card">' +
     '<h3>' + esc(title) + '</h3>' +
-    '<div class="recurrence-note">' + esc(note) + '</div>' +
+    '<div class="recurrence-note">' + esc(note) + linkHtml + '</div>' +
     '<pre class="recurrence-code">' + esc(code) + '</pre>' +
     '</div>';
 }
@@ -1777,18 +1780,15 @@ function renderRecurrenceCodeStack(data) {
       data.sage
     ));
   }
-  if (data.python) {
-    cards.push(renderRecurrenceCodeCard(
-      'Python',
-      'Defines P(n) using exact Fraction arithmetic and coefficient lists in ascending powers of t.',
-      data.python
-    ));
-  }
   if (data.recurrence_json) {
     cards.push(renderRecurrenceCodeCard(
       'Recurrence JSON',
-      'Machine-readable recurrence with initial values; usable by polytool recurrence-generate.',
-      data.recurrence_json
+      'Machine-readable recurrence with the initial values needed to reproduce the sequence.',
+      data.recurrence_json,
+      {
+        href: 'https://github.com/PerAlexandersson/polytool#machine-readable-recurrence-json-and-row-generation',
+        label: 'Generate more rows with polytool recurrence-generate'
+      }
     ));
   }
   return cards.length ? ('<div class="recurrence-code-stack">' + cards.join('') + '</div>') : '';
@@ -2066,6 +2066,7 @@ function showFloatingInfoTip(anchor) {
   activeInfoAnchor = anchor;
   const layer = ensureFloatingInfoTip();
   layer.innerHTML = tip.innerHTML;
+  renderInlineMath(layer);
   positionFloatingInfoTip(anchor);
 }
 
@@ -2096,6 +2097,20 @@ function installInfoTooltipLayer() {
 
   window.addEventListener('resize', () => {
     if (activeInfoAnchor) positionFloatingInfoTip(activeInfoAnchor);
+  });
+
+  document.addEventListener('DOMContentLoaded', () => renderInlineMath(document));
+}
+
+function renderInlineMath(root) {
+  if (!root || !window.katex || typeof window.katex.render !== 'function') return;
+  root.querySelectorAll('[data-tex]').forEach(node => {
+    if (node.dataset.katexRendered === 'true') return;
+    window.katex.render(node.dataset.tex, node, {
+      displayMode: false,
+      throwOnError: false,
+    });
+    node.dataset.katexRendered = 'true';
   });
 }
 
@@ -2401,10 +2416,10 @@ function startRecurrence(text) {
   const params = {
     type: 'find_recurrence',
     input: text,
-    max_rec_len: adaptive ? 3 : readInt('maxRecLen', 3),
-    max_var_deg: adaptive ? 2 : readInt('maxVarDeg', 2),
-    max_idx_deg: adaptive ? 2 : readInt('maxIdxDeg', 2),
-    max_diff_deg: adaptive ? 1 : readInt('maxDiffDeg', 1),
+    max_rec_len: adaptive ? 10 : readInt('maxRecLen', 3),
+    max_var_deg: adaptive ? 5 : readInt('maxVarDeg', 2),
+    max_idx_deg: adaptive ? 5 : readInt('maxIdxDeg', 2),
+    max_diff_deg: adaptive ? 5 : readInt('maxDiffDeg', 1),
     try_inhomogeneous: document.getElementById('tryInhomogeneous').checked,
     try_denominator: document.getElementById('tryDenominator').checked,
     try_alternating_sign: document.getElementById('tryAlternatingSign').checked,
@@ -2431,7 +2446,6 @@ function startRecurrence(text) {
           '<button class="copy-btn" onclick="copyRec(this,\'latex\')">Copy LaTeX</button>' +
           (data.mathematica ? '<button class="copy-btn" onclick="copyRec(this,\'mathematica\')">Copy Mathematica</button>' : '') +
           (data.sage ? '<button class="copy-btn" onclick="copyRec(this,\'sage\')">Copy Sage</button>' : '') +
-          (data.python ? '<button class="copy-btn" onclick="copyRec(this,\'python\')">Copy Python</button>' : '') +
           (data.recurrence_json ? '<button class="copy-btn" onclick="copyRec(this,\'json\')">Copy JSON</button>' : '') +
           '</div>';
         const statsEl = '<div class="recurrence-stats">' +
@@ -2445,7 +2459,6 @@ function startRecurrence(text) {
         window._lastRecLatex = data.latex;
         window._lastRecMathematica = data.mathematica || '';
         window._lastRecSage = data.sage || '';
-        window._lastRecPython = data.python || '';
         window._lastRecJson = data.recurrence_json || '';
         // Render KaTeX (may load async)
         try {

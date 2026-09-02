@@ -349,6 +349,8 @@ candidates because it rejects a candidate when every usable fixed large-prime
 reduction is inconsistent. Use `--no-modular-prefilter` only when comparing
 against the exact-only search path.
 
+#### Machine-readable recurrence JSON and row generation
+
 To save a recurrence with enough initial conditions to regenerate the sequence,
 use JSON output:
 
@@ -366,6 +368,9 @@ polytool recurrence-generate --recurrence recurrence.json --rows 100 > rows-100.
 
 Use `--additional n` instead of `--rows n` to keep all initial rows and append
 `n` newly generated rows.
+
+The web interface exports this compact JSON record and links back to these
+generation instructions instead of emitting a large standalone Python program.
 
 Use Python output when a sequence extension script is more convenient than JSON:
 
