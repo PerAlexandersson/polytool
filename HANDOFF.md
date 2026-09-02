@@ -36,6 +36,10 @@ Commit `108916e` was pushed to monorepo `master`, projected to standalone
 and WASM byte for byte; a live headless-Chrome load reported no WASM or
 JavaScript error.
 
+The private proof-repository name was subsequently removed from all 26
+imported-sequence comments before publication; the public examples retain only
+their OEIS URLs and, where relevant, a broad project description.
+
 ## Uspensky/Descartes comparison
 
 The main Rust worker owns these files:
