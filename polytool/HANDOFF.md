@@ -32,8 +32,10 @@ wasm-pack release build                                      passed
 git diff --check                                             passed
 ```
 
-The ignored `web/pkg/` output was rebuilt only for local verification. Nothing
-has been merged, pushed, copied to the deployment repository, or deployed.
+The ignored `web/pkg/` output was rebuilt only for local verification. Commit
+`3654ad5` was fast-forwarded to monorepo `master` and synchronized to the
+generated standalone `main` branch with `scripts/sync-polytool-main.sh`. The
+deployment repository and live website remain unchanged.
 
 ## Uspensky/Descartes comparison
 
