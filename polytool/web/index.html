@@ -122,37 +122,17 @@ h1 {
   align-items: center;
   margin-bottom: 0.5rem;
 }
-.examples-label {
-  font-size: 0.85rem;
-  color: var(--c-text-sub);
-  font-family: 'Raleway', system-ui, sans-serif;
-}
-button.example {
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--c-border);
-  border-radius: 4px;
-  background: var(--c-bg-surface);
-  cursor: pointer;
-  font-family: 'Raleway', system-ui, sans-serif;
-  font-weight: 300;
-  font-size: 0.8rem;
-  color: var(--c-text-sub);
-}
-button.example:hover {
-  color: var(--c-link);
-  border-color: var(--c-link);
-}
 .sequence-picker {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 0.45rem;
-  margin-left: auto;
   font-family: 'Raleway', system-ui, sans-serif;
   font-size: 0.8rem;
   color: var(--c-text-sub);
 }
 .sequence-picker select {
-  max-width: min(32rem, 70vw);
+  width: min(42rem, 100%);
   padding: 0.3rem 2rem 0.3rem 0.55rem;
   border: 1px solid var(--c-border);
   border-radius: 4px;
@@ -167,10 +147,8 @@ button.example:hover {
 }
 @media (max-width: 760px) {
   .sequence-picker {
-    flex: 1 0 100%;
     flex-direction: column;
     align-items: stretch;
-    margin-left: 0;
   }
   .sequence-picker select {
     width: 100%;
@@ -811,55 +789,44 @@ footer {
 
 <div class="card">
 <div class="examples">
-  <span class="examples-label">Examples:</span>
-  <button class="example" onclick="loadExample('eulerian')">Eulerian</button>
-  <button class="example" onclick="loadExample('narayana')">Narayana</button>
-  <button class="example" onclick="loadExample('motzkin')">Motzkin</button>
-  <button class="example" onclick="loadExample('derangement')">Derangement exc</button>
-  <button class="example" onclick="loadExample('fibonacci')">Fibonacci matching (P<sub>n</sub>)</button>
-  <button class="example" onclick="loadExample('touchard')">Touchard</button>
-  <button class="example" onclick="loadExample('simsun')">Simsun</button>
-  <button class="example" onclick="loadExample('stirling_permutations')">Stirling perm.</button>
   <label class="sequence-picker" for="sequencePicker">
-    <span>More sequences:</span>
+    <span>Example:</span>
     <select id="sequencePicker" onchange="loadExample(this.value)">
-      <option value="">Choose from 30 OEIS triangles&hellip;</option>
-      <optgroup label="Parking functions">
-        <option value="A001263">A001263 &mdash; Narayana numbers</option>
-        <option value="A033282">A033282 &mdash; polygon dissections / two-pattern parking ascents</option>
-        <option value="A126216">A126216 &mdash; Schr&ouml;der paths / two-pattern parking descents</option>
-        <option value="A390883">A390883 &mdash; associahedron toric g-vectors</option>
-      </optgroup>
-      <optgroup label="Eulerian variations">
-        <option value="A120987">A120987 &mdash; ternary-word increasing runs</option>
-        <option value="A134434">A134434 &mdash; descents with even top</option>
-        <option value="A166073">A166073 &mdash; 123-avoiding descents</option>
-        <option value="A219836">A219836 &mdash; derangement descents</option>
-      </optgroup>
-      <optgroup label="Classical and SymCat families">
-        <option value="A008292">A008292 &mdash; Eulerian numbers</option>
-        <option value="A008517">A008517 &mdash; second-order Eulerian numbers</option>
-        <option value="A008303">A008303 &mdash; permutation peaks</option>
-        <option value="A019538">A019538 &mdash; ordered set partitions</option>
-        <option value="A035607">A035607 &mdash; cubic-lattice L1 spheres</option>
-        <option value="A039755">A039755 &mdash; type-B Stirling numbers</option>
-        <option value="A046739">A046739 &mdash; no-successions rises</option>
-        <option value="A055151">A055151 &mdash; Motzkin polynomials</option>
-        <option value="A059427">A059427 &mdash; alternating runs</option>
-        <option value="A060187">A060187 &mdash; type-B Eulerian numbers</option>
-        <option value="A065826">A065826 &mdash; weighted Eulerian numbers</option>
-        <option value="A089627">A089627 &mdash; a binomial-product triangle</option>
-        <option value="A091044">A091044 &mdash; selected Pascal entries</option>
-        <option value="A099759">A099759 &mdash; doubled Eulerian recurrence</option>
-        <option value="A104684">A104684 &mdash; bilateral Schr&ouml;der paths</option>
-        <option value="A108558">A108558 &mdash; type-D lattice differences</option>
-        <option value="A110319">A110319 &mdash; RNA structures by blocks</option>
-        <option value="A141689">A141689 &mdash; Eulerian&ndash;Pascal average</option>
-        <option value="A155495">A155495 &mdash; a binomial-product triangle</option>
-        <option value="A156289">A156289 &mdash; even-line rhyme patterns</option>
-        <option value="A321331">A321331 &mdash; distinguished-block partitions</option>
-        <option value="A348576">A348576 &mdash; ordered partitions, first block non-singleton</option>
-      </optgroup>
+      <option value="">Choose a sequence&hellip;</option>
+      <option value="A001263">A001263 &mdash; Narayana numbers</option>
+      <option value="touchard">A008277 &mdash; Touchard polynomials</option>
+      <option value="derangement">A008290 &mdash; derangements by excedances</option>
+      <option value="A008292">A008292 &mdash; Eulerian numbers</option>
+      <option value="A008303">A008303 &mdash; permutation peaks</option>
+      <option value="A008517">A008517 &mdash; second-order Eulerian numbers</option>
+      <option value="fibonacci">A011973 &mdash; Fibonacci matching polynomials</option>
+      <option value="A019538">A019538 &mdash; ordered set partitions</option>
+      <option value="A033282">A033282 &mdash; polygon dissections / two-pattern parking ascents</option>
+      <option value="A035607">A035607 &mdash; cubic-lattice L1 spheres</option>
+      <option value="A039755">A039755 &mdash; type-B Stirling numbers</option>
+      <option value="A046739">A046739 &mdash; no-successions rises</option>
+      <option value="A055151">A055151 &mdash; Motzkin polynomials</option>
+      <option value="A059427">A059427 &mdash; alternating runs</option>
+      <option value="A060187">A060187 &mdash; type-B Eulerian numbers</option>
+      <option value="A065826">A065826 &mdash; weighted Eulerian numbers</option>
+      <option value="A089627">A089627 &mdash; a binomial-product triangle</option>
+      <option value="A091044">A091044 &mdash; selected Pascal entries</option>
+      <option value="simsun">A094503 &mdash; Simsun descent polynomials</option>
+      <option value="A099759">A099759 &mdash; doubled Eulerian recurrence</option>
+      <option value="A104684">A104684 &mdash; bilateral Schr&ouml;der paths</option>
+      <option value="A108558">A108558 &mdash; type-D lattice differences</option>
+      <option value="A110319">A110319 &mdash; RNA structures by blocks</option>
+      <option value="A120987">A120987 &mdash; ternary-word increasing runs</option>
+      <option value="A126216">A126216 &mdash; Schr&ouml;der paths / two-pattern parking descents</option>
+      <option value="A134434">A134434 &mdash; descents with even top</option>
+      <option value="A141689">A141689 &mdash; Eulerian&ndash;Pascal average</option>
+      <option value="A155495">A155495 &mdash; a binomial-product triangle</option>
+      <option value="A156289">A156289 &mdash; even-line rhyme patterns</option>
+      <option value="A166073">A166073 &mdash; 123-avoiding descents</option>
+      <option value="A219836">A219836 &mdash; derangement descents</option>
+      <option value="A321331">A321331 &mdash; distinguished-block partitions</option>
+      <option value="A348576">A348576 &mdash; ordered partitions, first block non-singleton</option>
+      <option value="A390883">A390883 &mdash; associahedron toric g-vectors</option>
     </select>
   </label>
 </div>
@@ -1872,9 +1839,19 @@ function abbreviatePoly(full) {
   if (!terms) return full;
   const clean = terms.map(t => t.trim()).filter(t => t);
   if (clean.length <= 5) return full;
-  const first3 = clean.slice(0, 3).join(' + ').replace(/\+ -/g, '- ');
-  const last = clean[clean.length - 1];
-  return first3 + ' + \u2026 + ' + last;
+
+  const joinSignedTerms = items => items.map((raw, idx) => {
+    let term = raw.trim();
+    let sign = '+';
+    if (term.startsWith('+') || term.startsWith('-')) {
+      sign = term[0];
+      term = term.slice(1).trim();
+    }
+    if (idx === 0) return sign === '-' ? '- ' + term : term;
+    return (sign === '-' ? ' - ' : ' + ') + term;
+  }).join('');
+
+  return joinSignedTerms([...clean.slice(0, 3), '\u2026', clean[clean.length - 1]]);
 }
 
 function polyTooltip(full, abbrev) {

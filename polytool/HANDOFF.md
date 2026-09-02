@@ -1,41 +1,34 @@
 # Polytool handoff
 
-## Thirty-sequence web catalogue (2026-09-02)
+## Web example catalogue (2026-09-02)
 
-The host supervisor owns `web/index.html` and this handoff on isolated branch
-`feature/polytool-sequence-picker` in
-`/mnt/2TB-Babel/ai-storage/worktrees/polytool-sequence-picker`. The dirty
-shared Rust checkout and the website deployment directory remain untouched.
+The web UI presents one flat menu of 34 distinct OEIS-labelled polynomial
+families. It absorbs the former eight example buttons, removes the four
+families duplicated between those buttons and the 30-entry OEIS menu, and
+removes the category groups.
 
-The examples row now has a responsive dropdown containing exactly thirty
-coefficient triangles represented in `real-rooted-oeis-proofs`. The catalogue
-is divided into four parking-function families, four Eulerian-compendium
-families, and twenty-two classical or SymCat-related families. Each selection
-loads a short description, its OEIS URL, and trusted coefficient rows. Existing
-featured buttons remain available.
+All 30 imported OEIS entries have recursive definitions in the corresponding
+`ProofsOeis/A*.lean` files. The four additional distinct built-in families
+(derangement excedances, Fibonacci matchings, Touchard polynomials, and Simsun
+descents) also carry explicit recurrences. This does not imply that the web
+recurrence search will rediscover every formula under its default bounds.
 
-Rows were taken from the existing polytool recurrence fixtures and examples
-when available. The remaining prefixes were checked against the current OEIS
-records, with row boundaries also checked against the Parking Functions and
-Eulerian compendium manuscripts for their eight highlighted families. Neither
-research project nor the OEIS proof repository was edited.
+Long polynomial previews now parse and rejoin term signs before inserting the
+ellipsis, so positive terms no longer render as `+ +` and a negative final term
+renders with `-` rather than `+ -`.
 
 Verification:
 
 ```text
 inline JavaScript parse                                      passed
-dropdown count and uniqueness                               30/30
-loadExample textarea/status checks                          30/30
-polytool exact property parser                              30/30
-desktop and 390px-wide headless-Chrome inspection           passed
-wasm-pack release build                                      passed
-git diff --check                                             passed
+flat picker count, uniqueness, and key resolution           34/34
+loadExample textarea/status checks                          34/34
+recurrence provenance audit                                 34/34
+positive/negative abbreviation regression cases              passed
+desktop and 390px-wide headless-Chrome inspection            passed
+standalone wasm-pack release build                            passed
+git diff --check                                              passed
 ```
-
-The ignored `web/pkg/` output was rebuilt only for local verification. Commit
-`3654ad5` was fast-forwarded to monorepo `master` and synchronized to the
-generated standalone `main` branch with `scripts/sync-polytool-main.sh`. The
-deployment repository and live website remain unchanged.
 
 ## Uspensky/Descartes comparison
 
