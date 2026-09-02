@@ -30,6 +30,12 @@ standalone wasm-pack release build                            passed
 git diff --check                                              passed
 ```
 
+Commit `108916e` was pushed to monorepo `master`, projected to standalone
+`main` as `fe697ec`, and deployed to `poly.symmetricfunctions.com` on
+2026-09-02. Cache-busted public fetches matched the staged HTML, JavaScript,
+and WASM byte for byte; a live headless-Chrome load reported no WASM or
+JavaScript error.
+
 ## Uspensky/Descartes comparison
 
 The main Rust worker owns these files:
