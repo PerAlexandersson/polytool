@@ -72,7 +72,10 @@ antidiagonals, whose row polynomials satisfy
 `P(n) = (1 + t) P(n-1) + t P(n-2)`. A focused browser-crate regression test
 checks that the full adaptive configuration finds this recurrence within ten
 candidates. All remaining `Related project` comments were removed at the same
-time.
+time. Commit `ccc9bf1` was pushed to monorepo `master`, projected to standalone
+`main` as `d9f7361`, and deployed on 2026-09-02. Cache-busted public HTML,
+JavaScript, and WASM matched the staged bundle byte for byte; a live
+headless-Chrome load also passed.
 
 ## Uspensky/Descartes comparison
 
