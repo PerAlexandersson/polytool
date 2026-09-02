@@ -509,6 +509,20 @@ mod tests {
 2, 508, 8814, 45096, 103326, 119964, 69298, 15872
 2, 1020, 27472, 201060, 650892, 1106820, 1034992, 505500, 101042";
 
+    const DELANNOY_INPUT: &str = "\
+1
+1, 1
+1, 3, 1
+1, 5, 5, 1
+1, 7, 13, 7, 1
+1, 9, 25, 25, 9, 1
+1, 11, 41, 63, 41, 11, 1
+1, 13, 61, 129, 129, 61, 13, 1
+1, 15, 85, 231, 321, 231, 85, 15, 1
+1, 17, 113, 377, 681, 681, 377, 113, 17, 1
+1, 19, 145, 575, 1289, 1683, 1289, 575, 145, 19, 1
+1, 21, 181, 833, 2241, 3653, 3653, 2241, 833, 181, 21, 1";
+
     #[test]
     fn recurrence_export_handles_eulerian_example() {
         let raw = find_recurrence(EULERIAN_INPUT, 3, 2, 2, 1, false, false, false);
@@ -554,5 +568,17 @@ mod tests {
             .as_str()
             .expect("found recurrence has text")
             .contains("t^3"));
+    }
+
+    #[test]
+    fn recurrence_export_finds_delannoy_example_quickly() {
+        let raw = find_recurrence(DELANNOY_INPUT, 10, 5, 5, 5, false, false, false);
+        let value: Value = serde_json::from_str(&raw).expect("recurrence result is valid JSON");
+        assert_eq!(value["found"], true);
+        assert_eq!(
+            value["recurrence"],
+            "P(n) = (1 + t) P(n-1) + t P(n-2)"
+        );
+        assert!(value["candidates_tried"].as_u64().unwrap() <= 10);
     }
 }
