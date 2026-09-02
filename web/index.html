@@ -142,6 +142,42 @@ button.example:hover {
   color: var(--c-link);
   border-color: var(--c-link);
 }
+.sequence-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+  font-family: 'Raleway', system-ui, sans-serif;
+  font-size: 0.8rem;
+  color: var(--c-text-sub);
+}
+.sequence-picker select {
+  max-width: min(32rem, 70vw);
+  padding: 0.3rem 2rem 0.3rem 0.55rem;
+  border: 1px solid var(--c-border);
+  border-radius: 4px;
+  background: var(--c-bg-surface);
+  color: var(--c-text-main);
+  font: inherit;
+  cursor: pointer;
+}
+.sequence-picker select:hover,
+.sequence-picker select:focus {
+  border-color: var(--c-link);
+}
+@media (max-width: 760px) {
+  .sequence-picker {
+    flex: 1 0 100%;
+    flex-direction: column;
+    align-items: stretch;
+    margin-left: 0;
+  }
+  .sequence-picker select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
 
 /* Input */
 textarea {
@@ -784,6 +820,48 @@ footer {
   <button class="example" onclick="loadExample('touchard')">Touchard</button>
   <button class="example" onclick="loadExample('simsun')">Simsun</button>
   <button class="example" onclick="loadExample('stirling_permutations')">Stirling perm.</button>
+  <label class="sequence-picker" for="sequencePicker">
+    <span>More sequences:</span>
+    <select id="sequencePicker" onchange="loadExample(this.value)">
+      <option value="">Choose from 30 OEIS triangles&hellip;</option>
+      <optgroup label="Parking functions">
+        <option value="A001263">A001263 &mdash; Narayana numbers</option>
+        <option value="A033282">A033282 &mdash; polygon dissections / two-pattern parking ascents</option>
+        <option value="A126216">A126216 &mdash; Schr&ouml;der paths / two-pattern parking descents</option>
+        <option value="A390883">A390883 &mdash; associahedron toric g-vectors</option>
+      </optgroup>
+      <optgroup label="Eulerian variations">
+        <option value="A120987">A120987 &mdash; ternary-word increasing runs</option>
+        <option value="A134434">A134434 &mdash; descents with even top</option>
+        <option value="A166073">A166073 &mdash; 123-avoiding descents</option>
+        <option value="A219836">A219836 &mdash; derangement descents</option>
+      </optgroup>
+      <optgroup label="Classical and SymCat families">
+        <option value="A008292">A008292 &mdash; Eulerian numbers</option>
+        <option value="A008517">A008517 &mdash; second-order Eulerian numbers</option>
+        <option value="A008303">A008303 &mdash; permutation peaks</option>
+        <option value="A019538">A019538 &mdash; ordered set partitions</option>
+        <option value="A035607">A035607 &mdash; cubic-lattice L1 spheres</option>
+        <option value="A039755">A039755 &mdash; type-B Stirling numbers</option>
+        <option value="A046739">A046739 &mdash; no-successions rises</option>
+        <option value="A055151">A055151 &mdash; Motzkin polynomials</option>
+        <option value="A059427">A059427 &mdash; alternating runs</option>
+        <option value="A060187">A060187 &mdash; type-B Eulerian numbers</option>
+        <option value="A065826">A065826 &mdash; weighted Eulerian numbers</option>
+        <option value="A089627">A089627 &mdash; a binomial-product triangle</option>
+        <option value="A091044">A091044 &mdash; selected Pascal entries</option>
+        <option value="A099759">A099759 &mdash; doubled Eulerian recurrence</option>
+        <option value="A104684">A104684 &mdash; bilateral Schr&ouml;der paths</option>
+        <option value="A108558">A108558 &mdash; type-D lattice differences</option>
+        <option value="A110319">A110319 &mdash; RNA structures by blocks</option>
+        <option value="A141689">A141689 &mdash; Eulerian&ndash;Pascal average</option>
+        <option value="A155495">A155495 &mdash; a binomial-product triangle</option>
+        <option value="A156289">A156289 &mdash; even-line rhyme patterns</option>
+        <option value="A321331">A321331 &mdash; distinguished-block partitions</option>
+        <option value="A348576">A348576 &mdash; ordered partitions, first block non-singleton</option>
+      </optgroup>
+    </select>
+  </label>
 </div>
 <textarea id="input" spellcheck="false" placeholder="Enter polynomials, one per line. Accepted formats:
 
@@ -1040,8 +1118,507 @@ const EXAMPLES = {
   },
 };
 
+const SEQUENCE_CATALOG = {
+  A001263: {
+    label: 'A001263 — Narayana numbers — peaks on Dyck paths and parking-function refinements',
+    lines: EXAMPLES.narayana.lines
+  },
+  A033282: {
+    label: 'A033282 — Polygon dissections and two-pattern-avoiding parking-function ascents',
+    lines: [
+      '# A033282: Polygon dissections and two-pattern-avoiding parking-function ascents.',
+      '# OEIS: https://oeis.org/A033282. Included in real-rooted-oeis-proofs. Related project: Parking functions.',
+      '1',
+      '1, 2',
+      '1, 5, 5',
+      '1, 9, 21, 14',
+      '1, 14, 56, 84, 42',
+      '1, 20, 120, 300, 330, 132',
+      '1, 27, 225, 825, 1485, 1287, 429',
+      '1, 35, 385, 1925, 5005, 7007, 5005, 1430',
+      '1, 44, 616, 4004, 14014, 28028, 32032, 19448, 4862',
+      '1, 54, 936, 7644, 34398, 91728, 148512, 143208, 75582, 16796'
+    ]
+  },
+  A126216: {
+    label: 'A126216 — Schröder paths and reciprocal two-pattern-avoiding parking-function descents',
+    lines: [
+      '# A126216: Schröder paths and reciprocal two-pattern-avoiding parking-function descents.',
+      '# OEIS: https://oeis.org/A126216. Included in real-rooted-oeis-proofs. Related project: Parking functions.',
+      '1',
+      '2, 1',
+      '5, 5, 1',
+      '14, 21, 9, 1',
+      '42, 84, 56, 14, 1',
+      '132, 330, 300, 120, 20, 1',
+      '429, 1287, 1485, 825, 225, 27, 1',
+      '1430, 5005, 7007, 5005, 1925, 385, 35, 1',
+      '4862, 19448, 32032, 28028, 14014, 4004, 616, 44, 1',
+      '16796, 75582, 143208, 148512, 91728, 34398, 7644, 936, 54, 1'
+    ]
+  },
+  A390883: {
+    label: 'A390883 — Toric g-vectors of associahedra and weak parking-function ascents',
+    lines: [
+      '# A390883: Toric g-vectors of associahedra and weak parking-function ascents.',
+      '# OEIS: https://oeis.org/A390883. Included in real-rooted-oeis-proofs. Related project: Parking functions.',
+      '1',
+      '1',
+      '1, 2',
+      '1, 10',
+      '1, 37, 10',
+      '1, 126, 105',
+      '1, 422, 714, 70',
+      '1, 1422, 4032, 1176',
+      '1, 4853, 20628, 11928, 588',
+      '1, 16786, 99495, 95040, 13860',
+      '1, 58775, 461945, 656205, 189090, 5544',
+      '1, 208000, 2089230, 4121260, 1958385, 169884'
+    ]
+  },
+  A120987: {
+    label: 'A120987 — Ternary words by number of strictly increasing runs',
+    lines: [
+      '# A120987: Ternary words by number of strictly increasing runs.',
+      '# OEIS: https://oeis.org/A120987. Included in real-rooted-oeis-proofs. Related project: Eulerian variations.',
+      '1',
+      '0, 3',
+      '0, 3, 6',
+      '0, 1, 16, 10',
+      '0, 0, 15, 51, 15',
+      '0, 0, 6, 90, 126, 21',
+      '0, 0, 1, 77, 357, 266, 28',
+      '0, 0, 0, 36, 504, 1107, 504, 36',
+      '0, 0, 0, 9, 414, 2304, 2907, 882, 45',
+      '0, 0, 0, 1, 210, 2850, 8350, 6765, 1452, 55',
+      '0, 0, 0, 0, 66, 2277, 14355, 25653, 14355, 2277, 66'
+    ]
+  },
+  A134434: {
+    label: 'A134434 — Permutations by descents whose top entry is even',
+    lines: [
+      '# A134434: Permutations by descents whose top entry is even.',
+      '# OEIS: https://oeis.org/A134434. Included in real-rooted-oeis-proofs. Related project: Eulerian variations.',
+      '1',
+      '1',
+      '1, 1',
+      '4, 2',
+      '4, 16, 4',
+      '36, 72, 12',
+      '36, 324, 324, 36',
+      '576, 2592, 1728, 144',
+      '576, 9216, 20736, 9216, 576',
+      '14400, 115200, 172800, 57600, 2880',
+      '14400, 360000, 1440000, 1440000, 360000, 14400',
+      '518400, 6480000, 17280000, 12960000, 2592000, 86400'
+    ]
+  },
+  A166073: {
+    label: 'A166073 — 123-avoiding permutations by number of descents',
+    lines: [
+      '# A166073: 123-avoiding permutations by number of descents.',
+      '# OEIS: https://oeis.org/A166073. Included in real-rooted-oeis-proofs. Related project: Eulerian variations.',
+      '1',
+      '1',
+      '1, 1',
+      '0, 4, 1',
+      '0, 2, 11, 1',
+      '0, 0, 15, 26, 1',
+      '0, 0, 5, 69, 57, 1',
+      '0, 0, 0, 56, 252, 120, 1',
+      '0, 0, 0, 14, 364, 804, 247, 1',
+      '0, 0, 0, 0, 210, 1800, 2349, 502, 1',
+      '0, 0, 0, 0, 42, 1770, 7515, 6455, 1013, 1',
+      '0, 0, 0, 0, 0, 792, 11055, 27940, 16962, 2036, 1'
+    ]
+  },
+  A219836: {
+    label: 'A219836 — Derangements by number of descents',
+    lines: [
+      '# A219836: Derangements by number of descents.',
+      '# OEIS: https://oeis.org/A219836. Included in real-rooted-oeis-proofs. Related project: Eulerian variations.',
+      '1',
+      '0, 0',
+      '0, 1, 0',
+      '0, 2, 0, 0',
+      '0, 4, 4, 1, 0',
+      '0, 8, 24, 12, 0, 0',
+      '0, 16, 104, 120, 24, 1, 0',
+      '0, 32, 392, 896, 480, 54, 0, 0',
+      '0, 64, 1368, 5544, 5984, 1764, 108, 1, 0',
+      '0, 128, 4552, 30384, 57640, 34520, 6048, 224, 0, 0',
+      '0, 256, 14680, 153400, 470504, 495320, 180416, 19936, 448, 1, 0',
+      '0, 512, 46344, 731040, 3426320, 5794944, 3739512, 881152, 63840, 906, 0, 0'
+    ]
+  },
+  A008292: {
+    label: 'A008292 — Eulerian numbers — permutations by number of descents',
+    lines: EXAMPLES.eulerian.lines
+  },
+  A008517: {
+    label: 'A008517 — Second-order Eulerian numbers — Stirling-permutation descents',
+    lines: EXAMPLES.stirling_permutations.lines
+  },
+  A008303: {
+    label: 'A008303 — Permutations by number of peaks',
+    lines: [
+      '# A008303: Permutations by number of peaks.',
+      '# OEIS: https://oeis.org/A008303. Included in real-rooted-oeis-proofs.',
+      '1',
+      '2',
+      '4, 2',
+      '8, 16',
+      '16, 88, 16',
+      '32, 416, 272',
+      '64, 1824, 2880, 272',
+      '128, 7680, 24576, 7936',
+      '256, 31616, 185856, 137216, 7936',
+      '512, 128512, 1304832, 1841152, 353792',
+      '1024, 518656, 8728576, 21253376, 9061376, 353792',
+      '2048, 2084864, 56520704, 222398464, 175627264, 22368256'
+    ]
+  },
+  A019538: {
+    label: 'A019538 — Ordered set partitions by number of blocks',
+    lines: [
+      '# A019538: Ordered set partitions by number of blocks.',
+      '# OEIS: https://oeis.org/A019538. Included in real-rooted-oeis-proofs.',
+      '1',
+      '1, 2',
+      '1, 6, 6',
+      '1, 14, 36, 24',
+      '1, 30, 150, 240, 120',
+      '1, 62, 540, 1560, 1800, 720',
+      '1, 126, 1806, 8400, 16800, 15120, 5040',
+      '1, 254, 5796, 40824, 126000, 191520, 141120, 40320',
+      '1, 510, 18150, 186480, 834120, 1905120, 2328480, 1451520, 362880',
+      '1, 1022, 55980, 818520, 5103000, 16435440, 29635200, 30240000, 16329600, 3628800',
+      '1, 2046, 171006, 3498000, 29607600, 129230640, 322494480, 479001600, 419126400, 199584000, 39916800',
+      '1, 4094, 519156, 14676024, 165528000, 953029440, 3162075840, 6411968640, 8083152000, 6187104000, 2634508800, 479001600'
+    ]
+  },
+  A035607: {
+    label: 'A035607 — Cubic-lattice points by L1 norm',
+    lines: [
+      '# A035607: Cubic-lattice points by L1 norm.',
+      '# OEIS: https://oeis.org/A035607. Included in real-rooted-oeis-proofs.',
+      '1',
+      '1, 2',
+      '1, 4, 2',
+      '1, 6, 8, 2',
+      '1, 8, 18, 12, 2',
+      '1, 10, 32, 38, 16, 2',
+      '1, 12, 50, 88, 66, 20, 2',
+      '1, 14, 72, 170, 192, 102, 24, 2',
+      '1, 16, 98, 292, 450, 360, 146, 28, 2',
+      '1, 18, 128, 462, 912, 1002, 608, 198, 32, 2',
+      '1, 20, 162, 688, 1666, 2364, 1970, 952, 258, 36, 2',
+      '1, 22, 200, 978, 2816, 4942, 5336, 3530, 1408, 326, 40, 2'
+    ]
+  },
+  A039755: {
+    label: 'A039755 — Type-B Stirling numbers of the second kind',
+    lines: [
+      '# A039755: Type-B Stirling numbers of the second kind.',
+      '# OEIS: https://oeis.org/A039755. Included in real-rooted-oeis-proofs.',
+      '1',
+      '1, 1',
+      '1, 4, 1',
+      '1, 13, 9, 1',
+      '1, 40, 58, 16, 1',
+      '1, 121, 330, 170, 25, 1',
+      '1, 364, 1771, 1520, 395, 36, 1',
+      '1, 1093, 9219, 12411, 5075, 791, 49, 1',
+      '1, 3280, 47188, 96096, 58086, 13776, 1428, 64, 1',
+      '1, 9841, 239220, 719860, 618870, 209622, 32340, 2388, 81, 1'
+    ]
+  },
+  A046739: {
+    label: 'A046739 — Permutations with no successions, by number of rises',
+    lines: [
+      '# A046739: Permutations with no successions, by number of rises.',
+      '# OEIS: https://oeis.org/A046739. Included in real-rooted-oeis-proofs.',
+      '1, 7, 1',
+      '1, 21, 21, 1',
+      '1, 51, 161, 51, 1',
+      '1, 113, 813, 813, 113, 1',
+      '1, 239, 3361, 7631, 3361, 239, 1',
+      '1, 493, 12421, 53833, 53833, 12421, 493, 1',
+      '1, 1003, 42865, 320107, 607009, 320107, 42865, 1003, 1',
+      '1, 2025, 141549, 1704693, 5494017, 5494017, 1704693, 141549, 2025, 1',
+      '1, 4071, 453905, 8422679, 42924113, 72605303, 42924113, 8422679, 453905, 4071, 1',
+      '1, 8165, 1426725, 39474449, 302458313, 802028813, 802028813, 302458313, 39474449, 1426725, 8165, 1',
+      '1, 16355, 4422913, 178065811, 1977056433, 7789852851, 12172272321, 7789852851, 1977056433, 178065811, 4422913, 16355, 1',
+      '1, 32737, 13579309, 780889437, 12218582561, 68767041385, 158753132437, 158753132437, 68767041385, 12218582561, 780889437, 13579309, 32737, 1'
+    ]
+  },
+  A055151: {
+    label: 'A055151 — Motzkin polynomials — noncrossing matchings by number of edges',
+    lines: EXAMPLES.motzkin.lines
+  },
+  A059427: {
+    label: 'A059427 — Permutations by number of alternating runs',
+    lines: [
+      '# A059427: Permutations by number of alternating runs.',
+      '# OEIS: https://oeis.org/A059427. Included in real-rooted-oeis-proofs.',
+      '2',
+      '2, 4',
+      '2, 12, 10',
+      '2, 28, 58, 32',
+      '2, 60, 236, 300, 122',
+      '2, 124, 836, 1852, 1682, 544',
+      '2, 252, 2766, 9576, 14622, 10332, 2770',
+      '2, 508, 8814, 45096, 103326, 119964, 69298, 15872',
+      '2, 1020, 27472, 201060, 650892, 1106820, 1034992, 505500, 101042'
+    ]
+  },
+  A060187: {
+    label: 'A060187 — Type-B Eulerian numbers — signed permutations by descents',
+    lines: [
+      '# A060187: Type-B Eulerian numbers — signed permutations by descents.',
+      '# OEIS: https://oeis.org/A060187. Included in real-rooted-oeis-proofs.',
+      '1',
+      '1, 1',
+      '1, 6, 1',
+      '1, 23, 23, 1',
+      '1, 76, 230, 76, 1',
+      '1, 237, 1682, 1682, 237, 1',
+      '1, 722, 10543, 23548, 10543, 722, 1',
+      '1, 2179, 60657, 259723, 259723, 60657, 2179, 1',
+      '1, 6552, 331612, 2485288, 4675014, 2485288, 331612, 6552, 1',
+      '1, 19673, 1756340, 21707972, 69413294, 69413294, 21707972, 1756340, 19673, 1'
+    ]
+  },
+  A065826: {
+    label: 'A065826 — Eulerian numbers weighted by the number of rises',
+    lines: [
+      '# A065826: Eulerian numbers weighted by the number of rises.',
+      '# OEIS: https://oeis.org/A065826. Included in real-rooted-oeis-proofs.',
+      '1, 8, 3',
+      '1, 22, 33, 4',
+      '1, 52, 198, 104, 5',
+      '1, 114, 906, 1208, 285, 6',
+      '1, 240, 3573, 9664, 5955, 720, 7',
+      '1, 494, 12879, 62476, 78095, 25758, 1729, 8',
+      '1, 1004, 43824, 352936, 780950, 529404, 102256, 4016, 9',
+      '1, 2026, 143520, 1820768, 6551770, 7862124, 3186344, 382720, 9117, 10',
+      '1, 4072, 457911, 8813952, 48690570, 94345488, 68166798, 17627904, 1373733, 20360, 11',
+      '1, 8166, 1434813, 40750740, 331592370, 975073716, 1137586002, 530547792, 91689165, 4782710, 44913, 12',
+      '1, 16356, 4439178, 182133800, 2116407675, 9033729048, 15926204028, 12044972064, 3809533815, 455334500, 16276986, 98136, 13',
+      '1, 32738, 13611942, 793643144, 12858710875, 77059577178, 195798232644, 223769408736, 115589365767, 25717421750, 2182518646, 54447768, 212797, 14'
+    ]
+  },
+  A089627: {
+    label: 'A089627 — The binomial-product triangle C(n,2k)C(2k,k)',
+    lines: [
+      '# A089627: The binomial-product triangle C(n,2k)C(2k,k).',
+      '# OEIS: https://oeis.org/A089627. Included in real-rooted-oeis-proofs.',
+      '1',
+      '1, 0',
+      '1, 2, 0',
+      '1, 6, 0, 0',
+      '1, 12, 6, 0, 0',
+      '1, 20, 30, 0, 0, 0',
+      '1, 30, 90, 20, 0, 0, 0',
+      '1, 42, 210, 140, 0, 0, 0, 0',
+      '1, 56, 420, 560, 70, 0, 0, 0, 0',
+      '1, 72, 756, 1680, 630, 0, 0, 0, 0, 0',
+      '1, 90, 1260, 4200, 3150, 252, 0, 0, 0, 0, 0',
+      '1, 110, 1980, 9240, 11550, 2772, 0, 0, 0, 0, 0, 0'
+    ]
+  },
+  A091044: {
+    label: 'A091044 — Odd entries in even rows of Pascal’s triangle',
+    lines: [
+      '# A091044: Odd entries in even rows of Pascal’s triangle.',
+      '# OEIS: https://oeis.org/A091044. Included in real-rooted-oeis-proofs.',
+      '1',
+      '2, 2',
+      '3, 10, 3',
+      '4, 28, 28, 4',
+      '5, 60, 126, 60, 5',
+      '6, 110, 396, 396, 110, 6',
+      '7, 182, 1001, 1716, 1001, 182, 7',
+      '8, 280, 2184, 5720, 5720, 2184, 280, 8',
+      '9, 408, 4284, 15912, 24310, 15912, 4284, 408, 9',
+      '10, 570, 7752, 38760, 83980, 83980, 38760, 7752, 570, 10'
+    ]
+  },
+  A099759: {
+    label: 'A099759 — A doubled Eulerian recurrence',
+    lines: [
+      '# A099759: A doubled Eulerian recurrence.',
+      '# OEIS: https://oeis.org/A099759. Included in real-rooted-oeis-proofs.',
+      '1, 4, 1',
+      '1, 12, 12, 1',
+      '1, 30, 96, 30, 1',
+      '1, 68, 564, 564, 68, 1',
+      '1, 146, 2800, 6768, 2800, 146, 1',
+      '1, 304, 12660, 63008, 63008, 12660, 304, 1',
+      '1, 622, 54288, 504648, 1008128, 504648, 54288, 622, 1',
+      '1, 1260, 225860, 3679344, 13111504, 13111504, 3679344, 225860, 1260, 1',
+      '1, 2538, 923600, 25238104, 149044160, 262230080, 149044160, 25238104, 923600, 2538, 1',
+      '1, 5096, 3740084, 166206224, 1545686736, 4410830720, 4410830720, 1545686736, 166206224, 3740084, 5096, 1',
+      '1, 10214, 15062256, 1064558856, 15024793472, 65747921504, 105859937280, 65747921504, 15024793472, 1064558856, 15062256, 10214, 1',
+      '1, 20452, 60473732, 6688598256, 139360407184, 897875910592, 2190790148416, 2190790148416, 897875910592, 139360407184, 6688598256, 60473732, 20452, 1'
+    ]
+  },
+  A104684: {
+    label: 'A104684 — Bilateral Schröder paths by number of diagonal steps',
+    lines: [
+      '# A104684: Bilateral Schröder paths by number of diagonal steps.',
+      '# OEIS: https://oeis.org/A104684. Included in real-rooted-oeis-proofs.',
+      '1',
+      '2, 1',
+      '6, 6, 1',
+      '20, 30, 12, 1',
+      '70, 140, 90, 20, 1',
+      '252, 630, 560, 210, 30, 1',
+      '924, 2772, 3150, 1680, 420, 42, 1',
+      '3432, 12012, 16632, 11550, 4200, 756, 56, 1',
+      '12870, 51480, 84084, 72072, 34650, 9240, 1260, 72, 1',
+      '48620, 218790, 411840, 420420, 252252, 90090, 18480, 1980, 90, 1',
+      '184756, 923780, 1969110, 2333760, 1681680, 756756, 210210, 34320, 2970, 110, 1',
+      '705432, 3879876, 9237800, 12471030, 10501920, 5717712, 2018016, 450450, 60060, 4290, 132, 1'
+    ]
+  },
+  A108558: {
+    label: 'A108558 — Type-D lattice crystal-ball differences',
+    lines: [
+      '# A108558: Type-D lattice crystal-ball differences.',
+      '# OEIS: https://oeis.org/A108558. Included in real-rooted-oeis-proofs.',
+      '1',
+      '1, 1',
+      '1, 2, 1',
+      '1, 9, 9, 1',
+      '1, 20, 54, 20, 1',
+      '1, 35, 180, 180, 35, 1',
+      '1, 54, 447, 852, 447, 54, 1',
+      '1, 77, 931, 2863, 2863, 931, 77, 1',
+      '1, 104, 1724, 7768, 12550, 7768, 1724, 104, 1',
+      '1, 135, 2934, 18186, 43128, 43128, 18186, 2934, 135, 1',
+      '1, 170, 4685, 38200, 124850, 183356, 124850, 38200, 4685, 170, 1',
+      '1, 209, 7117, 73821, 317922, 643874, 643874, 317922, 73821, 7117, 209, 1'
+    ]
+  },
+  A110319: {
+    label: 'A110319 — RNA secondary structures by number of blocks',
+    lines: [
+      '# A110319: RNA secondary structures by number of blocks.',
+      '# OEIS: https://oeis.org/A110319. Included in real-rooted-oeis-proofs.',
+      '1',
+      '0, 1',
+      '0, 1, 1',
+      '0, 0, 3, 1',
+      '0, 0, 1, 6, 1',
+      '0, 0, 0, 6, 10, 1',
+      '0, 0, 0, 1, 20, 15, 1',
+      '0, 0, 0, 0, 10, 50, 21, 1',
+      '0, 0, 0, 0, 1, 50, 105, 28, 1',
+      '0, 0, 0, 0, 0, 15, 175, 196, 36, 1',
+      '0, 0, 0, 0, 0, 1, 105, 490, 336, 45, 1',
+      '0, 0, 0, 0, 0, 0, 21, 490, 1176, 540, 55, 1'
+    ]
+  },
+  A141689: {
+    label: 'A141689 — The average of the Eulerian and Pascal triangles',
+    lines: [
+      '# A141689: The average of the Eulerian and Pascal triangles.',
+      '# OEIS: https://oeis.org/A141689. Included in real-rooted-oeis-proofs.',
+      '1, 3, 1',
+      '1, 7, 7, 1',
+      '1, 15, 36, 15, 1',
+      '1, 31, 156, 156, 31, 1',
+      '1, 63, 603, 1218, 603, 63, 1',
+      '1, 127, 2157, 7827, 7827, 2157, 127, 1',
+      '1, 255, 7318, 44145, 78130, 44145, 7318, 255, 1',
+      '1, 511, 23938, 227638, 655240, 655240, 227638, 23938, 511, 1',
+      '1, 1023, 76341, 1101804, 4869162, 7862250, 4869162, 1101804, 76341, 1023, 1',
+      '1, 2047, 239163, 5093925, 33159402, 81256374, 81256374, 33159402, 5093925, 239163, 2047, 1',
+      '1, 4095, 739896, 22766835, 211641015, 752811150, 1137586464, 752811150, 211641015, 22766835, 739896, 4095, 1',
+      '1, 8191, 2268696, 99205536, 1285871445, 6421632075, 13985588904, 13985588904, 6421632075, 1285871445, 99205536, 2268696, 8191, 1'
+    ]
+  },
+  A155495: {
+    label: 'A155495 — The binomial-product triangle C(2n,2k)C(n,k)',
+    lines: [
+      '# A155495: The binomial-product triangle C(2n,2k)C(n,k).',
+      '# OEIS: https://oeis.org/A155495. Included in real-rooted-oeis-proofs.',
+      '1, 12, 1',
+      '1, 45, 45, 1',
+      '1, 112, 420, 112, 1',
+      '1, 225, 2100, 2100, 225, 1',
+      '1, 396, 7425, 18480, 7425, 396, 1',
+      '1, 637, 21021, 105105, 105105, 21021, 637, 1',
+      '1, 960, 50960, 448448, 900900, 448448, 50960, 960, 1',
+      '1, 1377, 110160, 1559376, 5513508, 5513508, 1559376, 110160, 1377, 1',
+      '1, 1900, 218025, 4651200, 26453700, 46558512, 26453700, 4651200, 218025, 1900, 1',
+      '1, 2541, 402325, 12311145, 105524100, 298750452, 298750452, 105524100, 12311145, 402325, 2541, 1',
+      '1, 3312, 701316, 29611120, 364058145, 1553314752, 2498640144, 1553314752, 364058145, 29611120, 701316, 3312, 1',
+      '1, 4225, 1166100, 65845780, 1117026625, 6836202945, 16572613200, 16572613200, 6836202945, 1117026625, 65845780, 1166100, 4225, 1'
+    ]
+  },
+  A156289: {
+    label: 'A156289 — Even-line rhyme patterns by number of rhymed sounds',
+    lines: [
+      '# A156289: Even-line rhyme patterns by number of rhymed sounds.',
+      '# OEIS: https://oeis.org/A156289. Included in real-rooted-oeis-proofs.',
+      '1',
+      '1, 3',
+      '1, 15, 15',
+      '1, 63, 210, 105',
+      '1, 255, 2205, 3150, 945',
+      '1, 1023, 21120, 65835, 51975, 10395',
+      '1, 4095, 195195, 1201200, 1891890, 945945, 135135',
+      '1, 16383, 1777230, 20585565, 58108050, 54864810, 18918900, 2027025',
+      '1, 65535, 16076985, 341809650, 1637971335, 2614321710, 1640268630, 413513100, 34459425',
+      '1, 262143, 145020540, 5581493295, 44025570225, 112133266245, 114359345100, 51068867850, 9820936125, 654729075',
+      '1, 1048575, 1306495575, 90319036500, 1150872695280, 4521078857295, 7061340371085, 4983797718900, 1663666579575, 252070693875, 13749310575',
+      '1, 4194303, 11763703050, 1454250053025, 29584688710500, 175418438510700, 404779703328000, 424883159575875, 219481554166875, 56816734399425, 6957151150950, 316234143225'
+    ]
+  },
+  A321331: {
+    label: 'A321331 — Stirling set partitions with a distinguished block',
+    lines: [
+      '# A321331: Stirling set partitions with a distinguished block.',
+      '# OEIS: https://oeis.org/A321331. Included in real-rooted-oeis-proofs.',
+      '1',
+      '1, 2',
+      '1, 6, 3',
+      '1, 14, 18, 4',
+      '1, 30, 75, 40, 5',
+      '1, 62, 270, 260, 75, 6',
+      '1, 126, 903, 1400, 700, 126, 7',
+      '1, 254, 2898, 6804, 5250, 1596, 196, 8',
+      '1, 510, 9075, 31080, 34755, 15876, 3234, 288, 9',
+      '1, 1022, 27990, 136420, 212625, 136962, 41160, 6000, 405, 10',
+      '1, 2046, 85503, 583000, 1233650, 1076922, 447909, 95040, 10395, 550, 11',
+      '1, 4094, 259578, 2446004, 6897000, 7941912, 4391772, 1272216, 200475, 17050, 726, 12'
+    ]
+  },
+  A348576: {
+    label: 'A348576 — Ordered set partitions whose first block has size at least two',
+    lines: [
+      '# A348576: Ordered set partitions whose first block has size at least two.',
+      '# OEIS: https://oeis.org/A348576. Included in real-rooted-oeis-proofs.',
+      '1, 3, 0',
+      '1, 10, 12, 0',
+      '1, 25, 80, 60, 0',
+      '1, 56, 360, 660, 360, 0',
+      '1, 119, 1372, 4620, 5880, 2520, 0',
+      '1, 246, 4788, 26376, 58800, 57120, 20160, 0',
+      '1, 501, 15864, 134316, 466704, 771120, 604800, 181440, 0',
+      '1, 1012, 50880, 637020, 3238200, 8094240, 10584000, 6955200, 1814400, 0',
+      '1, 2035, 159764, 2882220, 20603880, 73097640, 141704640, 153014400, 86486400, 19958400, 0',
+      '1, 4082, 494604, 12623952, 123552000, 597738240, 1611308160, 2542034880, 2335132800, 1157587200, 239500800, 0',
+      '1, 8177, 1516528, 54031692, 710231808, 4559480640, 16416354240, 35485369920, 47100493440, 37621584000, 16605388800, 3113510400, 0',
+      '1, 16368, 4619160, 227425380, 3958074120, 33059906880, 154660746240, 439904424960, 791142992640, 905201256960, 639307468800, 254270016000, 43589145600, 0'
+    ]
+  },
+};
+
 function loadExample(name) {
-  const ex = EXAMPLES[name];
+  const ex = EXAMPLES[name] || SEQUENCE_CATALOG[name];
   if (!ex) return;
   document.getElementById('input').value = ex.lines.join('\n');
   setStatus('Loaded: ' + ex.label);
