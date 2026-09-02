@@ -60,6 +60,9 @@ original tooltip nodes and to the floating tooltip layer; the alternating-sign
 label and tooltip therefore display `(-1)^n` with an actual superscript.
 The two focused web-crate tests, standalone WASM build, JavaScript parse,
 code-card checks, and a headless-browser KaTeX/WASM load all pass.
+Commit `1e8b865` was pushed to monorepo `master`, projected to standalone
+`main` as `931a4e1`, and deployed on 2026-09-02. Cache-busted public files
+matched the staged bundle byte for byte, and the live browser check passed.
 
 ## Uspensky/Descartes comparison
 
