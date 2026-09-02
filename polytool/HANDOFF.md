@@ -37,8 +37,9 @@ and WASM byte for byte; a live headless-Chrome load reported no WASM or
 JavaScript error.
 
 The private proof-repository name was subsequently removed from all 26
-imported-sequence comments before publication; the public examples retain only
-their OEIS URLs and, where relevant, a broad project description.
+imported-sequence comments before publication. The public examples now retain
+only their mathematical descriptions and OEIS URLs; they do not mention the
+author's related projects.
 
 The recurrence-result page no longer generates or displays the bulky standalone
 Python export. It keeps the compact recurrence JSON and links directly to the
@@ -63,6 +64,15 @@ code-card checks, and a headless-browser KaTeX/WASM load all pass.
 Commit `1e8b865` was pushed to monorepo `master`, projected to standalone
 `main` as `931a4e1`, and deployed on 2026-09-02. Cache-busted public files
 matched the staged bundle byte for byte, and the live browser check passed.
+
+A166073 was removed from the example picker because adaptive recurrence search
+had to explore too much of the enlarged search space before finding its more
+complicated recurrence. It was replaced by A008288, the Delannoy array read by
+antidiagonals, whose row polynomials satisfy
+`P(n) = (1 + t) P(n-1) + t P(n-2)`. A focused browser-crate regression test
+checks that the full adaptive configuration finds this recurrence within ten
+candidates. All remaining `Related project` comments were removed at the same
+time.
 
 ## Uspensky/Descartes comparison
 
