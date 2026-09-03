@@ -96,6 +96,53 @@ fn circular_hrv_expansion_matches_four_generic_rank_eight_vertical_strip_example
     }
 }
 
+#[test]
+fn manuscript_rank_eight_circular_vertical_strip_example() {
+    // In one-based notation the strict corners are 8 -> 2, 2 -> 4, and 4 -> 6.
+    let area = [1, 2, 1, 2, 1, 2, 1, 2];
+    let strict_edges = [(7, 1), (1, 3), (3, 5)];
+    assert_hrv_matches_direct_strict_llt(&area, &strict_edges);
+
+    // The displayed orientation additionally ascends along
+    // 8 -> 1, 1 -> 2, 2 -> 3, 4 -> 5, 5 -> 6, and 6 -> 7.
+    let reachability_edges = [
+        (7, 1),
+        (1, 3),
+        (3, 5),
+        (7, 0),
+        (0, 1),
+        (1, 2),
+        (3, 4),
+        (4, 5),
+        (5, 6),
+    ];
+    assert_eq!(
+        circular_highest_reachable_vertices(8, &reachability_edges),
+        Some(vec![6, 6, 2, 6, 6, 6, 6, 6])
+    );
+
+    let expansion = circular_vertical_strip_llt_hrv_e_expansion(&area, &strict_edges).unwrap();
+    let expected_coefficients = [
+        (&[4, 1, 1, 1, 1][..], &[1, 3, 3, 1][..]),
+        (&[5, 1, 1, 1][..], &[0, 5, 15, 15, 5][..]),
+        (&[6, 1, 1][..], &[0, 0, 9, 27, 27, 9][..]),
+        (&[7, 1][..], &[0, 0, 0, 7, 21, 21, 7][..]),
+        (&[8][..], &[0, 0, 0, 0, 2, 6, 6, 2][..]),
+    ];
+    assert_eq!(expansion.terms().len(), expected_coefficients.len());
+    for (parts, coefficients) in expected_coefficients {
+        assert_eq!(
+            expansion
+                .terms()
+                .get(&Partition::new(parts.to_vec()))
+                .unwrap()
+                .coeffs(),
+            coefficients,
+            "partition {parts:?}"
+        );
+    }
+}
+
 fn assert_hrv_matches_direct_strict_llt(area: &[u8], strict_edges: &[(usize, usize)]) {
     let directed_edges = Graph::circular_unit_interval_directed_edges(area).unwrap();
     let direct = substitute_q_plus_one_symmetric_function(
