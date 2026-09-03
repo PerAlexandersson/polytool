@@ -147,6 +147,217 @@ pub fn circular_unicellular_llt_q_plus_one_is_e_positive(area: &[u8]) -> Option<
     )
 }
 
+/// Highest reachable vertex for every vertex of a finite directed acyclic graph.
+///
+/// Vertices are `0, ..., n - 1`, and the maximum is taken in this ordinary
+/// linear order. A path of length zero is allowed. The function returns
+/// `None` when an endpoint is out of range or the directed graph has a cycle.
+/// Passing only the increasing edges recovers `EdgesHRVRule` from the
+/// Mathematica package `UnicellularChromatics.m`.
+pub fn highest_reachable_vertices(
+    n: usize,
+    directed_edges: &[(usize, usize)],
+) -> Option<Vec<usize>> {
+    let adjacency = directed_adjacency(n, directed_edges)?;
+    let mut state = vec![0u8; n];
+    let mut memo = vec![None; n];
+
+    (0..n)
+        .map(|vertex| highest_reachable_vertex_dfs(vertex, &adjacency, &mut state, &mut memo))
+        .collect()
+}
+
+/// Circular highest reachable vertex for every residue class.
+///
+/// Each edge is given in its natural circular direction. Its lift from `u`
+/// advances by `(v - u) mod n`, so reachability is compared by position in the
+/// universal cover and only then projected back to `0, ..., n - 1`. This is
+/// the `hrv` statistic used for circular vertical-strip LLT polynomials.
+/// The function returns `None` for invalid endpoints, loops, or directed
+/// cycles; a cycle would make lifted reachability unbounded.
+pub fn circular_highest_reachable_vertices(
+    n: usize,
+    directed_edges: &[(usize, usize)],
+) -> Option<Vec<usize>> {
+    if n == 0 {
+        return directed_edges.is_empty().then(Vec::new);
+    }
+
+    let adjacency = directed_adjacency(n, directed_edges)?;
+    let mut state = vec![0u8; n];
+    let mut memo = vec![None; n];
+
+    (0..n)
+        .map(|vertex| {
+            circular_highest_reachable_vertex_dfs(vertex, n, &adjacency, &mut state, &mut memo)
+                .map(|(_, terminal)| terminal)
+        })
+        .collect()
+}
+
+/// HRV elementary expansion of a circular vertical-strip LLT polynomial.
+///
+/// The directed edges selected by `strict_edges` are always imposed. Every
+/// other edge of the circular unit-arc digraph is independently oriented; it
+/// contributes an ascent exactly when it is oriented in its natural circular
+/// direction. Cyclic reachability orientations contribute zero. The result is
+///
+/// `sum_theta q^asc(theta) e_{lambda(theta)}`,
+///
+/// which equals `G_{a,S}(x; q + 1)` in the circular vertical-strip formula.
+/// The return value is `None` if `area` is invalid or a strict edge is not an
+/// edge of its circular unit-arc digraph.
+pub fn circular_vertical_strip_llt_hrv_e_expansion(
+    area: &[u8],
+    strict_edges: &[(usize, usize)],
+) -> Option<SymmetricFunction<UnivariatePolynomial<i64>>> {
+    let n = area.len();
+    u32::try_from(n).ok()?;
+    let natural_edges = Graph::circular_unit_interval_directed_edges(area)?;
+    let natural_edge_set: std::collections::BTreeSet<_> = natural_edges.iter().copied().collect();
+    let mut strict_edge_set = std::collections::BTreeSet::new();
+    for &edge in strict_edges {
+        if !natural_edge_set.contains(&edge) {
+            return None;
+        }
+        strict_edge_set.insert(edge);
+    }
+
+    let non_strict_edges: Vec<_> = natural_edges
+        .into_iter()
+        .filter(|edge| !strict_edge_set.contains(edge))
+        .collect();
+    let mut reachability_edges: Vec<_> = strict_edge_set.into_iter().collect();
+    let mut terms = BTreeMap::new();
+    enumerate_circular_hrv_orientations(
+        0,
+        n,
+        &non_strict_edges,
+        &mut reachability_edges,
+        0,
+        &mut terms,
+    );
+
+    Some(SymmetricFunction::from_terms(Basis::Elementary, terms))
+}
+
+fn directed_adjacency(n: usize, directed_edges: &[(usize, usize)]) -> Option<Vec<Vec<usize>>> {
+    let mut adjacency = vec![Vec::new(); n];
+    for &(source, target) in directed_edges {
+        if source >= n || target >= n {
+            return None;
+        }
+        adjacency[source].push(target);
+    }
+    for targets in &mut adjacency {
+        targets.sort_unstable();
+        targets.dedup();
+    }
+    Some(adjacency)
+}
+
+fn highest_reachable_vertex_dfs(
+    vertex: usize,
+    adjacency: &[Vec<usize>],
+    state: &mut [u8],
+    memo: &mut [Option<usize>],
+) -> Option<usize> {
+    match state[vertex] {
+        1 => return None,
+        2 => return memo[vertex],
+        _ => {}
+    }
+
+    state[vertex] = 1;
+    let mut highest = vertex;
+    for &next in &adjacency[vertex] {
+        highest = highest.max(highest_reachable_vertex_dfs(next, adjacency, state, memo)?);
+    }
+    state[vertex] = 2;
+    memo[vertex] = Some(highest);
+    Some(highest)
+}
+
+fn circular_highest_reachable_vertex_dfs(
+    vertex: usize,
+    n: usize,
+    adjacency: &[Vec<usize>],
+    state: &mut [u8],
+    memo: &mut [Option<(usize, usize)>],
+) -> Option<(usize, usize)> {
+    match state[vertex] {
+        1 => return None,
+        2 => return memo[vertex],
+        _ => {}
+    }
+
+    state[vertex] = 1;
+    let mut highest = (0usize, vertex);
+    for &next in &adjacency[vertex] {
+        let step = (next + n - vertex) % n;
+        if step == 0 {
+            return None;
+        }
+        let (tail_distance, terminal) =
+            circular_highest_reachable_vertex_dfs(next, n, adjacency, state, memo)?;
+        let distance = step.checked_add(tail_distance)?;
+        if distance > highest.0 {
+            highest = (distance, terminal);
+        }
+    }
+    state[vertex] = 2;
+    memo[vertex] = Some(highest);
+    Some(highest)
+}
+
+fn enumerate_circular_hrv_orientations(
+    edge_index: usize,
+    n: usize,
+    non_strict_edges: &[(usize, usize)],
+    reachability_edges: &mut Vec<(usize, usize)>,
+    ascents: usize,
+    terms: &mut BTreeMap<Partition, UnivariatePolynomial<i64>>,
+) {
+    if edge_index == non_strict_edges.len() {
+        let Some(hrv) = circular_highest_reachable_vertices(n, reachability_edges) else {
+            return;
+        };
+        let mut fiber_sizes = vec![0u32; n];
+        for terminal in hrv {
+            fiber_sizes[terminal] += 1;
+        }
+        fiber_sizes.retain(|&size| size != 0);
+        fiber_sizes.sort_unstable_by(|left, right| right.cmp(left));
+        let lambda = Partition::new(fiber_sizes);
+        let contribution = UnivariatePolynomial::monomial(ascents, 1);
+        let coefficient = terms
+            .entry(lambda)
+            .or_insert_with(UnivariatePolynomial::zero);
+        *coefficient = coefficient.clone() + contribution;
+        return;
+    }
+
+    enumerate_circular_hrv_orientations(
+        edge_index + 1,
+        n,
+        non_strict_edges,
+        reachability_edges,
+        ascents,
+        terms,
+    );
+
+    reachability_edges.push(non_strict_edges[edge_index]);
+    enumerate_circular_hrv_orientations(
+        edge_index + 1,
+        n,
+        non_strict_edges,
+        reachability_edges,
+        ascents + 1,
+        terms,
+    );
+    reachability_edges.pop();
+}
+
 /// Degree-wise Schur expansion of the unicellular LLT Frobenius target.
 ///
 /// The output maps a `q`-degree to the corresponding Schur-positive symmetric
