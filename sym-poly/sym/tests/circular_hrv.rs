@@ -60,6 +60,67 @@ fn circular_hrv_expansion_matches_direct_strict_llt() {
     assert!(circular_vertical_strip_llt_hrv_e_expansion(&area, &[(0, 2)]).is_none());
 }
 
+#[test]
+fn circular_hrv_expansion_matches_four_generic_rank_eight_unicellular_examples() {
+    let areas = [
+        [1, 1, 1, 1, 1, 1, 1, 1],
+        [2, 2, 1, 2, 2, 1, 2, 1],
+        [3, 2, 2, 3, 2, 2, 1, 2],
+        [2, 3, 3, 2, 1, 2, 2, 1],
+    ];
+
+    for area in areas {
+        assert!(area.iter().all(|&entry| entry > 0));
+        assert!(Graph::is_circular_unit_interval_area_sequence(&area));
+        let hrv = circular_vertical_strip_llt_hrv_e_expansion(&area, &[]).unwrap();
+        let direct = circular_unicellular_llt_q_plus_one_e_expansion(&area).unwrap();
+        assert_eq!(hrv, direct, "area {area:?}");
+    }
+}
+
+#[test]
+fn circular_hrv_expansion_matches_four_generic_rank_eight_vertical_strip_examples() {
+    let areas_and_corner_indices: [([u8; 8], &[usize]); 4] = [
+        ([1, 2, 2, 1, 1, 2, 2, 1], &[0, 3]),
+        ([2, 1, 2, 3, 2, 1, 2, 2], &[1, 4]),
+        ([3, 3, 2, 1, 2, 2, 3, 2], &[0, 3, 4]),
+        ([2, 2, 3, 2, 3, 2, 1, 1], &[1, 3, 4]),
+    ];
+
+    for (area, corner_indices) in areas_and_corner_indices {
+        assert!(area.iter().all(|&entry| entry > 0));
+        assert!(Graph::is_circular_unit_interval_area_sequence(&area));
+        let corners = admissible_circular_corner_edges(&area);
+        let strict_edges: Vec<_> = corner_indices.iter().map(|&index| corners[index]).collect();
+        assert_hrv_matches_direct_strict_llt(&area, &strict_edges);
+    }
+}
+
+fn assert_hrv_matches_direct_strict_llt(area: &[u8], strict_edges: &[(usize, usize)]) {
+    let directed_edges = Graph::circular_unit_interval_directed_edges(area).unwrap();
+    let direct = substitute_q_plus_one_symmetric_function(
+        &directed_graph_llt_symmetric(area.len(), &directed_edges, strict_edges, &[]).unwrap(),
+    )
+    .to_elementary_basis();
+    let hrv = circular_vertical_strip_llt_hrv_e_expansion(area, strict_edges).unwrap();
+    assert!(
+        !direct.terms().is_empty(),
+        "strict-edge example is vacuous: area {area:?}, strict edges {strict_edges:?}"
+    );
+    assert_eq!(hrv, direct, "area {area:?}, strict edges {strict_edges:?}");
+}
+
+fn admissible_circular_corner_edges(area: &[u8]) -> Vec<(usize, usize)> {
+    let n = area.len();
+    (0..n)
+        .filter(|&target| area[target] > 0 && area[(target + 1) % n] <= area[target])
+        .map(|target| {
+            let source = (target + n - usize::from(area[target])) % n;
+            (source, target)
+        })
+        .collect()
+}
+
 fn substitute_q_plus_one_symmetric_function(
     function: &SymmetricFunction<UnivariatePolynomial<i64>>,
 ) -> SymmetricFunction<UnivariatePolynomial<i64>> {
