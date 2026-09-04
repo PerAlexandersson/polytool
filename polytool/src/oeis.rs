@@ -19,6 +19,8 @@ use std::fmt;
 pub enum OeisSequenceStatus {
     /// The recurrence was checked on rows excluded from fitting.
     Verified,
+    /// The recurrence matches a current OEIS prefix, but fitting provenance is unavailable.
+    Validated,
     /// The recurrence generates known rows but still lacks a genuine holdout.
     Experimental,
 }
@@ -28,6 +30,7 @@ impl OeisSequenceStatus {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Verified => "verified",
+            Self::Validated => "validated",
             Self::Experimental => "experimental",
         }
     }
@@ -295,7 +298,10 @@ impl OeisSequenceDefinition {
                         }
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                if self.bfile_prefix_verified && index >= prefix_count {
+                if self.bfile_prefix_verified
+                    && self.layout == OeisLayout::RegularTriangle
+                    && index >= prefix_count
+                {
                     let recurrence_index = index - prefix_count;
                     let expected_width = self
                         .recurrence_first_width
@@ -377,13 +383,27 @@ mod tests {
 
     #[test]
     fn catalog_is_sorted_unique_and_decodable() {
-        assert_eq!(catalog().len(), 145);
+        assert_eq!(catalog().len(), 785);
         assert_eq!(
             catalog()
                 .iter()
                 .filter(|entry| entry.status == OeisSequenceStatus::Verified)
                 .count(),
             125
+        );
+        assert_eq!(
+            catalog()
+                .iter()
+                .filter(|entry| entry.status == OeisSequenceStatus::Validated)
+                .count(),
+            630
+        );
+        assert_eq!(
+            catalog()
+                .iter()
+                .filter(|entry| entry.status == OeisSequenceStatus::Experimental)
+                .count(),
+            30
         );
         for pair in catalog().windows(2) {
             assert!(pair[0].id < pair[1].id);
@@ -466,6 +486,22 @@ mod tests {
                 .collect::<Vec<_>>();
             let expected = expected.into_iter().map(trim).collect::<Vec<_>>();
             assert_eq!(actual, expected, "{}", sequence.id);
+        }
+    }
+
+    #[test]
+    fn every_imported_lean_definition_reproduces_its_validation_row() {
+        for (id, row_index, expected) in OEIS_IMPORTED_VALIDATION_ROWS {
+            let generated = by_id(id)
+                .unwrap()
+                .generate_rows(row_index + 1)
+                .unwrap_or_else(|error| panic!("{id}: {error}"));
+            let actual = &generated[*row_index];
+            let expected = expected
+                .iter()
+                .map(|value| value.parse::<BigInt>().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(actual, &expected, "{id} row {row_index}");
         }
     }
 }
