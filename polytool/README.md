@@ -237,6 +237,34 @@ Supported sequence names are `eulerian`, `narayana`, `type-b-eulerian`,
 `chebyshev-t`, `chebyshev-u`, and `hermite`.
 Generated coefficients use arbitrary-size integers.
 
+### Generate recurrence-backed OEIS families
+
+The bundled OEIS catalog exposes one Rust function per A-number, for example
+`polytool::oeis::A008292()`, together with dynamic lookup by identifier.  Each
+entry is generated from a sparse exact recurrence description and its initial
+rows; installed binaries do not need an OEIS database, Python, or SymPy.
+
+```sh
+polytool oeis list
+polytool oeis info A008292 --json
+polytool oeis generate A008292 --rows 8
+polytool oeis generate A008292 --rows 8 --format triangle
+polytool oeis generate A008292 --rows 40 --format bfile --max-terms 1000
+```
+
+Generation formats are `rows`, `triangle`, `polynomial`, `json`, `jsonl`,
+`csv`, and `bfile`.  `--start-row` selects a later displayed OEIS row.  Strict
+b-file output is enabled only when the bundled complete-row prefix has been
+matched against OEIS data; `--max-terms` stops before a row that would cross
+the cap.  Experimental short-prefix fits are hidden by default and require
+`--include-experimental`.
+
+The source generator is `scripts/build_oeis_catalog.py`.  It imports the
+machine-readable recurrence benchmark fixtures, supplements them from the
+curated `OEIS-polynomials/sequences` queue, rejects recurrences that do not
+reproduce their cached rows, and emits `src/oeis_catalog_generated.rs`.  Run
+the generator with `--check` in verification jobs to detect drift.
+
 ### Check Family H PF/Jensen pencils
 
 ```sh
@@ -644,6 +672,56 @@ if let Some(rec) = find_polynomial_recurrence(&polys, &opts) {
     println!("{}", rec);
 }
 ```
+
+### Coupled Weyl-matrix recurrences
+
+The library also fits exact first-order systems
+
+```text
+F_(n+1) = M(n,x,D_x) F_n + G(n,x),
+```
+
+where `F_n` is a vector of polynomials. Every matrix entry is stored in the
+normal form `sum_d c_d(n,x) D_x^d`; this is general for the Weyl algebra because
+`D_x x = x D_x + 1`. Input has shape
+`states[index][component][x_degree]`, and `first_index` explicitly fixes the
+meaning of `n`:
+
+```rust
+use polytool::recurrence::{find_vector_recurrence, VectorRecurrenceOptions};
+
+// F_n = [n]_x, including [0]_x = 0.  The affine recurrence is
+// F_(n+1) = x F_n + 1.
+let states = (0..=9)
+    .map(|n| vec![if n == 0 { vec![0] } else { vec![1; n] }])
+    .collect::<Vec<_>>();
+let options = VectorRecurrenceOptions {
+    var_deg: 1,
+    idx_deg: 0,
+    homogeneous: false,
+    forcing_var_deg: 0,
+    forcing_idx_deg: 0,
+    held_out_transitions: 2,
+    ..Default::default()
+};
+let fit = find_vector_recurrence(&states, 0, &options)?;
+assert_eq!(fit.rows[0].rank, fit.rows[0].unknowns);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Rows of `M` are solved independently over exact rationals. The result reports
+the exact rank and nullity of each row; `require_unique` defaults to `true`, so
+cross-component dependencies are rejected instead of being hidden by an
+arbitrary choice of free parameters. Final complete transitions are held out
+of the fit and then verified exactly.
+
+For a lag-`r` system, `find_companion_vector_recurrence` returns the first-order
+recurrence on `(F_(n-r+1), ..., F_n)`. It fits only the unknown final block row
+and inserts the shift-identity rows directly. Unit tests recover two published
+systems: the up-down-run Eulerian pair of
+[Ma--Ma--Yeh--Yeh (2022)](https://doi.org/10.1016/j.disc.2021.112716), and the
+lag-two type-B `1/k`-Eulerian system of
+[Ma et al. (2020)](https://doi.org/10.37236/9089), specialized to `k=1`.
 
 ### Other properties
 

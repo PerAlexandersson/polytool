@@ -79,6 +79,7 @@
 //! - [`sturm`] — Sturm chains for exact root isolation (used internally)
 //! - [`sturm_cf`] — signed Euclidean/Sturm continued-fraction certificates
 //! - [`recurrence`] — Adaptive recurrence search for polynomial sequences
+//! - [`oeis`] — Bundled recurrence-backed OEIS polynomial families
 //! - [`sequences`] — Standard sequences: Eulerian, Narayana, type B Eulerian,
 //!   Chebyshev T/U, Hermite
 //! - [`parse`] — Flexible polynomial parsing (comma/space-separated, bracketed,
@@ -105,6 +106,7 @@ pub mod decomposition;
 pub mod hstar_inequalities;
 pub mod interlacing_matrix;
 pub mod linalg;
+pub mod oeis;
 pub mod polynomial;
 pub mod sturm;
 pub mod sturm_cf;
