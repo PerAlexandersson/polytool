@@ -13,17 +13,22 @@ fn oeis_list_contains_verified_catalog() {
     assert!(output.status.success());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["schema"], "polytool.oeis-catalog.v1");
-    assert_eq!(value["count"], 125);
+    assert_eq!(value["count"], 755);
     assert!(value["sequences"]
         .as_array()
         .unwrap()
         .iter()
         .any(|entry| entry["id"] == "A008292"));
+    assert!(value["sequences"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry["id"] == "A390883" && entry["status"] == "validated"));
 
     let all = run_polytool(&["oeis", "list", "--json", "--include-experimental"]);
     assert!(all.status.success());
     let all_value: serde_json::Value = serde_json::from_slice(&all.stdout).unwrap();
-    assert_eq!(all_value["count"], 145);
+    assert_eq!(all_value["count"], 785);
 }
 
 #[test]
@@ -70,6 +75,18 @@ fn oeis_bfile_uses_flattened_indices_and_whole_rows() {
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
         "1 1\n2 1\n3 1\n4 1\n5 4\n6 1\n"
+    );
+}
+
+#[test]
+fn oeis_bfile_preserves_irregular_row_widths() {
+    let output = run_polytool(&[
+        "oeis", "generate", "A390883", "--rows", "6", "--format", "bfile",
+    ]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "0 1\n1 1\n2 1\n3 2\n4 1\n5 10\n6 1\n7 37\n8 10\n9 1\n10 126\n11 105\n"
     );
 }
 

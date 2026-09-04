@@ -1937,7 +1937,7 @@ fn cmd_oeis_list(args: &[String]) {
     let entries = polytool::oeis::catalog()
         .iter()
         .filter(|entry| {
-            include_experimental || entry.status == polytool::oeis::OeisSequenceStatus::Verified
+            include_experimental || entry.status != polytool::oeis::OeisSequenceStatus::Experimental
         })
         .collect::<Vec<_>>();
     if json_output {

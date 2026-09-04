@@ -256,14 +256,21 @@ Generation formats are `rows`, `triangle`, `polynomial`, `json`, `jsonl`,
 `csv`, and `bfile`.  `--start-row` selects a later displayed OEIS row.  Strict
 b-file output is enabled only when the bundled complete-row prefix has been
 matched against OEIS data; `--max-terms` stops before a row that would cross
-the cap.  Experimental short-prefix fits are hidden by default and require
-`--include-experimental`.
+the cap.  The catalog distinguishes holdout-`verified` recurrences from
+`validated` recurrences whose generated rows match the current OEIS prefix but
+whose original fitting/holdout provenance is unavailable.  Both are enabled by
+default.  Entries without a safe prefix or row-layout match are `experimental`,
+hidden by default, and require `--include-experimental`.
 
 The source generator is `scripts/build_oeis_catalog.py`.  It imports the
 machine-readable recurrence benchmark fixtures, supplements them from the
-curated `OEIS-polynomials/sequences` queue, rejects recurrences that do not
-reproduce their cached rows, and emits `src/oeis_catalog_generated.rs`.  Run
-the generator with `--check` in verification jobs to detect drift.
+curated `OEIS-polynomials/sequences` queue, and imports the 728 canonical
+generated definitions in `real-rooted-oeis-proofs`.  The latter are converted
+from their restricted Lean expression grammar into the same sparse exact
+representation and replayed against local OEIS data.  The generator rejects
+queue recurrences that do not reproduce their cached rows and emits
+`src/oeis_catalog_generated.rs`.  Run it with `--check` in verification jobs
+to detect drift.
 
 ### Check Family H PF/Jensen pencils
 

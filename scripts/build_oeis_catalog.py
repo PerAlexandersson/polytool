@@ -29,6 +29,9 @@ DEFAULT_OUTPUT = PROJECT_ROOT / "src" / "oeis_catalog_generated.rs"
 DEFAULT_SEQUENCE_LIBRARY = Path(
     "/home/paxinum/Dropbox/AI-projects/projects/OEIS-polynomials/sequences"
 )
+DEFAULT_LEAN_SEQUENCE_REPOSITORY = Path(
+    "/home/paxinum/Dropbox/AI-projects/projects/real-rooted-oeis-proofs/ProofsOeis"
+)
 
 # The source queue lives in a Dropbox-synced tree where generated cache files
 # are intentionally forbidden.
@@ -40,6 +43,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fixtures", type=Path, default=DEFAULT_FIXTURES)
     parser.add_argument("--oeis-data", type=Path, default=DEFAULT_OEIS_DATA)
     parser.add_argument("--sequence-library", type=Path, default=DEFAULT_SEQUENCE_LIBRARY)
+    parser.add_argument(
+        "--lean-sequences", type=Path, default=DEFAULT_LEAN_SEQUENCE_REPOSITORY
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
     return parser.parse_args()
@@ -107,6 +113,46 @@ def sympy_sparse(poly: Any, n_symbol: Any, t_symbol: Any) -> list[tuple[int, int
         if coefficient != 0
     ]
     return sorted(terms)
+
+
+def lean_generated_expression(text: str, oeis_id: str, sympy: Any) -> tuple[Any, set[str]]:
+    """Parse the deliberately small expression grammar emitted by the Lean generator."""
+    n_symbol, t_symbol = sympy.symbols("N T")
+    text = re.sub(
+        rf"{oeis_id} \(n \+ (\d+)\)",
+        lambda match: f"Y{match.group(1)}D0",
+        text,
+    )
+    text = re.sub(rf"{oeis_id} n\b", "Y0D0", text)
+    derivative = re.compile(r"\((Y\d+D\d+)\)\.derivative")
+    while derivative.search(text):
+        text = derivative.sub(
+            lambda match: re.sub(
+                r"D(\d+)$",
+                lambda order: f"D{int(order.group(1)) + 1}",
+                match.group(1),
+            ),
+            text,
+        )
+    text = text.replace("(n : ℝ)", "N").replace("X", "T").replace("^", "**")
+    placeholders = set(re.findall(r"Y\d+D\d+", text))
+    local_symbols = {
+        "N": n_symbol,
+        "T": t_symbol,
+        "C": lambda value: value,
+        **{name: sympy.Symbol(name) for name in placeholders},
+    }
+    unknown = set(re.findall(r"[A-Za-z_][A-Za-z_0-9]*", text)) - set(local_symbols)
+    if unknown:
+        raise ValueError(f"{oeis_id}: unsupported Lean identifiers {sorted(unknown)}")
+    return sympy.sympify(text, locals=local_symbols), placeholders
+
+
+def sympy_polynomial_row(poly: Any, t_symbol: Any, sympy: Any) -> list[str]:
+    expanded = sympy.Poly(sympy.expand(poly), t_symbol, domain=sympy.QQ)
+    if expanded.is_zero:
+        return ["0"]
+    return [rational_text(expanded.nth(index)) for index in range(expanded.degree() + 1)]
 
 
 def trim_fraction_row(row: list[Fraction]) -> list[Fraction]:
@@ -200,6 +246,248 @@ def recurrence_matches_rows(
         return False
     expected = [trim_fraction_row([Fraction(value) for value in row]) for row in rows]
     return generated == expected
+
+
+def generate_sparse_rows(
+    initial_rows: list[list[str]],
+    first_index: int,
+    total_rows: int,
+    terms: list[dict[str, Any]],
+    denominator: list[tuple[int, int, str]] | None,
+    inhomogeneous: list[tuple[int, int, str]] | None,
+) -> list[list[Fraction]]:
+    generated = [trim_fraction_row([Fraction(value) for value in row]) for row in initial_rows]
+    while len(generated) < total_rows:
+        n = first_index + len(generated)
+        value = [Fraction(0)]
+        for term in terms:
+            source = generated[len(generated) - int(term["offset"])]
+            derivative = derivative_fraction_row(source, int(term["derivative"]))
+            coefficient = evaluate_sparse(term["coefficient"], n)
+            value = add_fraction_rows(value, multiply_fraction_rows(coefficient, derivative))
+        if inhomogeneous is not None:
+            value = add_fraction_rows(value, evaluate_sparse(inhomogeneous, n))
+        if denominator is not None:
+            value = divide_fraction_rows_exact(value, evaluate_sparse(denominator, n))
+        generated.append(value)
+    return generated[:total_rows]
+
+
+def matched_prefix_length(left: list[int], right: list[int], position: int) -> int:
+    checked = min(len(left), len(right) - position)
+    if checked < 20 or left[:checked] != right[position : position + checked]:
+        return 0
+    return checked
+
+
+def complete_rows_in_prefix(rows: list[list[int]], term_count: int) -> int:
+    used = 0
+    count = 0
+    for row in rows:
+        if used + len(row) > term_count:
+            break
+        used += len(row)
+        count += 1
+    return count
+
+
+def lean_sequence_entries(
+    lean_sequences: Path,
+    oeis_data: Path,
+    existing_ids: set[str],
+) -> list[dict[str, Any]]:
+    """Import canonical generated recurrences from real-rooted-oeis-proofs."""
+    import sympy as sp
+
+    n_symbol, t_symbol = sp.symbols("N T")
+    entries: list[dict[str, Any]] = []
+    paths = [
+        path
+        for path in sorted(lean_sequences.glob("A*.lean"))
+        if re.fullmatch(r"A\d{6}\.lean", path.name)
+    ]
+    for path in paths:
+        oeis_id = path.stem
+        if oeis_id in existing_ids:
+            continue
+        source = path.read_text(encoding="utf-8")
+        definition = re.search(
+            rf"^def {oeis_id} : ℕ → ℝ\[X\]\n(.*?)(?=\n\nexample :)",
+            source,
+            re.MULTILINE | re.DOTALL,
+        )
+        if definition is None:
+            raise ValueError(f"{oeis_id}: generated definition not found")
+
+        clauses: list[tuple[str, Any, set[str]]] = []
+        for line in definition.group(1).splitlines():
+            left, right = line.strip().removeprefix("|").split("=>", 1)
+            expression, placeholders = lean_generated_expression(right.strip(), oeis_id, sp)
+            clauses.append((left.strip(), expression, placeholders))
+        recurrence_match = re.fullmatch(r"n \+ (\d+)", clauses[-1][0])
+        if recurrence_match is None:
+            raise ValueError(f"{oeis_id}: unsupported recurrence clause {clauses[-1][0]}")
+        initial_count = int(recurrence_match.group(1))
+        if initial_count != len(clauses) - 1:
+            raise ValueError(f"{oeis_id}: noncontiguous generated base clauses")
+
+        initial_rows: list[list[str]] = []
+        for index, (left, expression, placeholders) in enumerate(clauses[:-1]):
+            if left != str(index) or placeholders or n_symbol in expression.free_symbols:
+                raise ValueError(f"{oeis_id}: unsupported base clause {left}")
+            initial_rows.append(sympy_polynomial_row(expression, t_symbol, sp))
+
+        expression = clauses[-1][1]
+        placeholders = sorted(clauses[-1][2])
+        placeholder_symbols = [sp.Symbol(name) for name in placeholders]
+        constant = sp.expand(
+            expression.subs({symbol: 0 for symbol in placeholder_symbols})
+        )
+        coefficients: dict[str, Any] = {}
+        reconstructed = constant
+        denominators: list[Any] = []
+        for name, symbol in zip(placeholders, placeholder_symbols):
+            coefficient = sp.cancel(sp.diff(expression, symbol))
+            if any(other in coefficient.free_symbols for other in placeholder_symbols):
+                raise ValueError(f"{oeis_id}: nonlinear generated recurrence")
+            coefficients[name] = coefficient
+            reconstructed += coefficient * symbol
+            denominators.append(sp.denom(coefficient))
+        if sp.simplify(expression - reconstructed) != 0:
+            raise ValueError(f"{oeis_id}: recurrence is not linear in earlier rows")
+        if constant != 0:
+            denominators.append(sp.denom(sp.cancel(constant)))
+
+        common_denominator = sp.Integer(1)
+        for denominator in denominators:
+            common_denominator = sp.lcm(common_denominator, denominator)
+        output_substitution = {n_symbol: n_symbol - initial_count}
+        terms: list[dict[str, Any]] = []
+        for name, coefficient in coefficients.items():
+            parsed_name = re.fullmatch(r"Y(\d+)D(\d+)", name)
+            assert parsed_name is not None
+            source_shift = int(parsed_name.group(1))
+            offset = initial_count - source_shift
+            if offset <= 0:
+                raise ValueError(f"{oeis_id}: recurrence refers to its output row")
+            numerator = sp.cancel(coefficient * common_denominator).subs(output_substitution)
+            terms.append(
+                {
+                    "offset": offset,
+                    "derivative": int(parsed_name.group(2)),
+                    "alternating": False,
+                    "coefficient": sympy_sparse(numerator, n_symbol, t_symbol),
+                }
+            )
+        terms.sort(key=lambda term: (term["offset"], term["derivative"]))
+        denominator = sp.cancel(common_denominator).subs(output_substitution)
+        sparse_denominator = sympy_sparse(denominator, n_symbol, t_symbol)
+        if sparse_denominator == [(0, 0, "1")]:
+            sparse_denominator = None
+        inhomogeneous = None
+        if constant != 0:
+            inhomogeneous = sympy_sparse(
+                sp.cancel(constant * common_denominator).subs(output_substitution),
+                n_symbol,
+                t_symbol,
+            )
+
+        generated = generate_sparse_rows(
+            initial_rows,
+            0,
+            16,
+            terms,
+            sparse_denominator,
+            inhomogeneous,
+        )
+        integer_rows: list[list[int]] = []
+        for row in generated:
+            if any(value.denominator != 1 for value in row):
+                raise ValueError(f"{oeis_id}: nonintegral validation row")
+            integer_rows.append([value.numerator for value in row])
+
+        record = oeis_record(oeis_data, oeis_id)
+        layout = "RegularTriangle" if "tabl" in record["keywords"] else "Table"
+        prefix_rows: list[list[str]] = []
+        bfile_verified = False
+        matched_terms = 0
+        recurrence_first_width = len(integer_rows[0])
+        row_start = 0
+        flattened_offset = record["offset"]
+        compared_rows = integer_rows
+
+        if layout == "RegularTriangle":
+            prefix_count = 0
+            while prefix_count * (prefix_count + 1) // 2 < len(record["data"]):
+                padded_rows: list[list[int]] = []
+                for index, row in enumerate(integer_rows):
+                    width = prefix_count + index + 1
+                    if len(row) > width:
+                        padded_rows = []
+                        break
+                    padded_rows.append(row + [0] * (width - len(row)))
+                position = prefix_count * (prefix_count + 1) // 2
+                flattened = [value for row in padded_rows for value in row]
+                checked = matched_prefix_length(flattened, record["data"], position)
+                if checked:
+                    bfile_verified = True
+                    matched_terms = checked
+                    recurrence_first_width = prefix_count + 1
+                    row_start = record["offset"]
+                    compared_rows = padded_rows
+                    cursor = 0
+                    for width in range(1, prefix_count + 1):
+                        prefix_rows.append(
+                            [str(value) for value in record["data"][cursor : cursor + width]]
+                        )
+                        cursor += width
+                    break
+                prefix_count += 1
+        else:
+            flattened = [value for row in integer_rows for value in row]
+            for position in range(len(record["data"])):
+                checked = matched_prefix_length(flattened, record["data"], position)
+                if checked:
+                    bfile_verified = True
+                    matched_terms = checked
+                    flattened_offset = record["offset"] + position
+                    break
+
+        matched_rows = complete_rows_in_prefix(compared_rows, matched_terms)
+        validation_row_index = None
+        validation_row = None
+        if matched_rows:
+            validation_row_index = len(prefix_rows) + matched_rows - 1
+            validation_row = [str(value) for value in compared_rows[matched_rows - 1]]
+        rows_hash = hashlib.sha256(
+            ",".join(str(value) for value in record["data"]).encode("utf-8")
+        ).hexdigest()
+        entries.append(
+            {
+                "id": oeis_id,
+                "name": record["name"],
+                "status": "Validated" if bfile_verified else "Experimental",
+                "layout": layout,
+                "row_start": row_start,
+                "flattened_offset": flattened_offset,
+                "bfile_verified": bfile_verified,
+                "fixture_slug": "",
+                "fixture_row_offset": len(prefix_rows),
+                "prefix_rows": prefix_rows,
+                "recurrence_first_index": 0,
+                "recurrence_first_width": recurrence_first_width,
+                "initial_rows": initial_rows,
+                "terms": terms,
+                "denominator": sparse_denominator,
+                "inhomogeneous": inhomogeneous,
+                "source_rows": matched_rows,
+                "verification_rows": 0,
+                "rows_sha256": rows_hash,
+                "validation_row_index": validation_row_index,
+                "validation_row": validation_row,
+            }
+        )
+    return entries
 
 
 def load_rows_jsonl(path: Path) -> list[tuple[int, list[str]]]:
@@ -388,11 +676,18 @@ def render_rows(rows: list[list[str]], indent: str) -> str:
     return "&[\n" + ",\n".join(rendered_rows) + f",\n{indent}]"
 
 
-def render_catalog(fixtures: Path, oeis_data: Path, sequence_library: Path) -> str:
+def render_catalog(
+    fixtures: Path,
+    oeis_data: Path,
+    sequence_library: Path,
+    lean_sequences: Path,
+) -> str:
     if not sequence_library.is_dir():
         raise SystemExit(f"OEIS sequence library not found: {sequence_library}")
     if not oeis_data.is_dir():
         raise SystemExit(f"OEIS data directory not found: {oeis_data}")
+    if not lean_sequences.is_dir():
+        raise SystemExit(f"Lean OEIS sequence directory not found: {lean_sequences}")
     with (fixtures / "manifest.tsv").open(encoding="utf-8", newline="") as handle:
         manifest = list(csv.DictReader(handle, delimiter="\t"))
 
@@ -443,6 +738,13 @@ def render_catalog(fixtures: Path, oeis_data: Path, sequence_library: Path) -> s
         )
 
     entries.extend(queue_entries(sequence_library, oeis_data, {entry["id"] for entry in entries}))
+    entries.extend(
+        lean_sequence_entries(
+            lean_sequences,
+            oeis_data,
+            {entry["id"] for entry in entries},
+        )
+    )
     entries.sort(key=lambda entry: entry["id"])
     lines = [
         "// @generated by scripts/build_oeis_catalog.py; do not edit by hand.",
@@ -494,6 +796,21 @@ def render_catalog(fixtures: Path, oeis_data: Path, sequence_library: Path) -> s
             ]
         )
     lines.append("];\n")
+    lines.extend(
+        [
+            "#[cfg(test)]",
+            "pub static OEIS_IMPORTED_VALIDATION_ROWS: &[(&str, usize, &[&str])] = &[",
+        ]
+    )
+    for entry in entries:
+        validation_row = entry.get("validation_row")
+        if validation_row is None:
+            continue
+        values = ", ".join(rust_string(value) for value in validation_row)
+        lines.append(
+            f'    ({rust_string(entry["id"])}, {entry["validation_row_index"]}, &[{values}]),'
+        )
+    lines.extend(["];", ""])
     for index, entry in enumerate(entries):
         lines.extend(
             [
@@ -522,7 +839,14 @@ def rustfmt(source: str) -> str:
 
 def main() -> int:
     args = parse_args()
-    rendered = rustfmt(render_catalog(args.fixtures, args.oeis_data, args.sequence_library))
+    rendered = rustfmt(
+        render_catalog(
+            args.fixtures,
+            args.oeis_data,
+            args.sequence_library,
+            args.lean_sequences,
+        )
+    )
     if args.check:
         if not args.output.exists() or args.output.read_text(encoding="utf-8") != rendered:
             raise SystemExit(f"generated catalog is stale: {args.output}")

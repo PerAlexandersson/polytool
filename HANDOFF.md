@@ -2,9 +2,10 @@
 
 ## OEIS recurrence catalog
 
-The host Codex supervisor completed the OEIS catalog increment at the user's
-request.  No Rust worker is active and no catalog file ownership remains.
-Files changed by the completed task are:
+The host Codex supervisor completed the OEIS catalog expansion at the user's
+request.  No Rust worker is active and catalog file ownership is released.
+Unrelated dirty Rust-workspace files remain untouched.  Files changed by the
+completed task are:
 
 - `src/oeis.rs` (new);
 - `src/lib.rs`;
@@ -22,34 +23,39 @@ data there and in `projects/OEIS-polynomials` but does not edit either project.
 
 Implementation status on 2026-09-04:
 
-- `polytool::oeis` contains 145 recurrence-backed A-number functions, exact
+- `polytool::oeis` contains 785 recurrence-backed A-number functions, exact
   sparse recurrence decoding, dynamic lookup, row-range generation, and
   structural-zero restoration for OEIS output;
-- 125 holdout-backed entries are available by default and 20 short-prefix
-  entries require `--include-experimental`;
-- 137 entries have a locally verified OEIS flattened-prefix mapping and support
-  strict b-file output; the remaining 8 still support rows, triangles,
+- 125 holdout-backed entries and 630 OEIS-prefix-validated entries are
+  available by default; 30 entries require `--include-experimental`;
+- 767 entries have a locally validated OEIS flattened-prefix mapping and
+  support strict b-file output; the remaining 18 still support rows, triangles,
   polynomials, JSON, JSONL, and CSV;
 - CLI commands are `polytool oeis list`, `polytool oeis info`, and
   `polytool oeis generate`; MCP tools are `list_oeis_sequences`,
   `get_oeis_sequence`, and `generate_oeis_rows`;
-- `scripts/build_oeis_catalog.py` imports the 73 machine recurrence fixtures
-  and the plain-file OEIS queue, validates queue recurrences against cached
-  rows, emits exact sparse Rust definitions, and supports `--check` drift
-  detection.
+- `scripts/build_oeis_catalog.py` imports the 73 machine recurrence fixtures,
+  the plain-file OEIS queue, and all 728 generated recurrence definitions from
+  `projects/real-rooted-oeis-proofs/ProofsOeis`.  Every Lean definition fits
+  the supported canonical grammar (maximum lag 5 and derivative order 2).
+  The importer clears rational recurrence denominators, converts index
+  conventions exactly, validates generated rows against local OEIS data, emits
+  one embedded Rust replay row for each of the 630 new validated entries, and
+  supports `--check` drift detection.
 
-Seven unsafe queue entries are excluded.  `A123125` was already tagged
-`invalid_recurrence`.  Independent replay additionally found that `A102413`,
-`A153520`, `A153521`, `A201701`, `A271704`, and `A285066` do not reproduce their
-cached rows; the first three currently have stale holdout-verification tags in
-the source queue.
+The unsafe plain-file queue recurrences remain rejected.  Where the Lean proof
+repository contains an independently generated definition, it is imported and
+validated on its own merits; for example, its A102413 recurrence does match the
+current OEIS prefix.  Ten newly imported definitions lack a safe row-layout
+alignment and therefore remain experimental: A099040, A103451, A105278,
+A144217, A145677, A158821, A185740, A185911, A225117, and A258993.
 
 Verification:
 
 ```text
 python3 scripts/build_oeis_catalog.py --check                 passed
-cargo test -q -p polytool --lib                              307 passed
-cargo test -q -p polytool --test cli_oeis                      6 passed
+cargo test -q -p polytool --lib                              308 passed
+cargo test -q -p polytool --test cli_oeis                      7 passed
 cargo test -q -p polytool-mcp                                 22 passed
 cargo test -q -p polytool --doc                                5 passed
 cargo test -q -p polytool --test cli_bigint                   16 passed

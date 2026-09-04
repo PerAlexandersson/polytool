@@ -2878,7 +2878,8 @@ impl PolynomialToolsServer {
         let sequences = polytool::oeis::catalog()
             .iter()
             .filter(|entry| {
-                include_experimental || entry.status == polytool::oeis::OeisSequenceStatus::Verified
+                include_experimental
+                    || entry.status != polytool::oeis::OeisSequenceStatus::Experimental
             })
             .map(oeis_sequence_summary)
             .collect::<Vec<_>>();
@@ -3273,8 +3274,12 @@ mod tests {
         let Json(list) = server
             .list_oeis_sequences(Parameters(ListOeisSequencesRequest::default()))
             .unwrap();
-        assert_eq!(list.count, 125);
+        assert_eq!(list.count, 755);
         assert!(list.sequences.iter().any(|entry| entry.id == "A008292"));
+        assert!(list
+            .sequences
+            .iter()
+            .any(|entry| entry.id == "A390883" && entry.status == "validated"));
 
         let Json(response) = server
             .generate_oeis_rows(Parameters(GenerateOeisRowsRequest {
