@@ -1,5 +1,125 @@
 # Polytool handoff
 
+## OEIS recurrence catalog
+
+The host Codex supervisor completed the OEIS catalog increment at the user's
+request.  No Rust worker is active and no catalog file ownership remains.
+Files changed by the completed task are:
+
+- `src/oeis.rs` (new);
+- `src/lib.rs`;
+- `src/bin/polytool.rs`;
+- `mcp/src/lib.rs`;
+- `tests/cli_oeis.rs` (new);
+- `scripts/build_oeis_catalog.py` and generated catalog files (new);
+- additive documentation in `README.md` and this `HANDOFF.md`.
+
+The pre-existing coupled-recurrence changes in `src/recurrence.rs` and
+`src/linalg.rs` are adopted as dependencies but will not be mixed into the
+catalog implementation without a separate verified checkpoint.  The active
+`real-rooted-oeis` worker owns its checkout; this task reads recurrence and row
+data there and in `projects/OEIS-polynomials` but does not edit either project.
+
+Implementation status on 2026-09-04:
+
+- `polytool::oeis` contains 145 recurrence-backed A-number functions, exact
+  sparse recurrence decoding, dynamic lookup, row-range generation, and
+  structural-zero restoration for OEIS output;
+- 125 holdout-backed entries are available by default and 20 short-prefix
+  entries require `--include-experimental`;
+- 137 entries have a locally verified OEIS flattened-prefix mapping and support
+  strict b-file output; the remaining 8 still support rows, triangles,
+  polynomials, JSON, JSONL, and CSV;
+- CLI commands are `polytool oeis list`, `polytool oeis info`, and
+  `polytool oeis generate`; MCP tools are `list_oeis_sequences`,
+  `get_oeis_sequence`, and `generate_oeis_rows`;
+- `scripts/build_oeis_catalog.py` imports the 73 machine recurrence fixtures
+  and the plain-file OEIS queue, validates queue recurrences against cached
+  rows, emits exact sparse Rust definitions, and supports `--check` drift
+  detection.
+
+Seven unsafe queue entries are excluded.  `A123125` was already tagged
+`invalid_recurrence`.  Independent replay additionally found that `A102413`,
+`A153520`, `A153521`, `A201701`, `A271704`, and `A285066` do not reproduce their
+cached rows; the first three currently have stale holdout-verification tags in
+the source queue.
+
+Verification:
+
+```text
+python3 scripts/build_oeis_catalog.py --check                 passed
+cargo test -q -p polytool --lib                              307 passed
+cargo test -q -p polytool --test cli_oeis                      6 passed
+cargo test -q -p polytool-mcp                                 22 passed
+cargo test -q -p polytool --doc                                5 passed
+cargo test -q -p polytool --test cli_bigint                   16 passed
+cargo test -q -p polytool --test interlacing_api               5 passed
+cargo clippy -q -p polytool -p polytool-mcp --all-targets --
+  -D warnings -A clippy::manual-is-multiple-of
+  -A clippy::needless-range-loop -A clippy::bool-assert-comparison
+                                                               passed
+```
+
+The full library replay takes about 75 seconds because it regenerates every
+row of all 73 benchmark recurrences.  A combined legacy recurrence-fixture
+integration run reached its 180-second cap without reporting a failure; the
+new independent sparse-definition replay completed successfully.
+
+## Coupled Weyl recurrences
+
+The main Rust worker owns these files for the current task:
+
+- `src/recurrence.rs`
+- `src/linalg.rs`
+- `README.md`
+- `HANDOFF.md`
+
+The first library slice is implemented in `recurrence.rs`:
+
+- `WeylOperator` stores `sum_d c_d(n,x) D_x^d` in normal order;
+- `VectorRecurrence` represents
+  `F_(n+1) = M(n,x,D_x) F_n + G(n,x)`;
+- `find_vector_recurrence[_rational]` performs fixed-bound exact fitting;
+- each output row is solved separately and reports its exact rank/nullity;
+- non-identifiable rows are rejected by default (`require_unique = true`);
+- final complete transitions are excluded from fitting and verified exactly;
+- affine polynomial forcing is supported distinctly from the matrix state;
+- `find_companion_vector_recurrence[_rational]` handles larger index lags,
+  fitting only the final block row and inserting shift identities directly.
+
+The convention is explicit: `states[k] = F_(first_index+k)`, and coefficients
+in the transition `F_n -> F_(n+1)` are evaluated at the source index `n`.
+
+Exact regression fixtures recover:
+
+- the even/odd up-down-run Eulerian pair from Ma--Ma--Yeh--Yeh, Discrete Math.
+  345 (2022), 112716;
+- the lag-two type-B `1/k`-Eulerian system from Ma et al., EJC 27(3) (2020),
+  P3.27, specialized to `k=1`;
+- the affine q-integer recurrence `[n+1]_x = x[n]_x + 1`.
+
+Verification on 2026-08-18:
+
+```text
+cargo test -q -p polytool --lib                 302 passed
+cargo test -q -p polytool --lib recurrence::tests
+                                                   51 passed
+cargo test -q -p polytool --doc                   5 passed
+cargo clippy -q -p polytool --lib -- -D warnings \
+  -A clippy::manual-is-multiple-of \
+  -A clippy::needless-range-loop                  passed
+```
+
+Potential follow-ups are an adaptive bound search, modular prefiltering for the
+vector systems, JSON/CLI support, and optional nullspace-basis output for
+exploratory non-identifiable fits. None is required for the fixed-bound exact
+library API.
+
+External review status: a read-only Claude Code review was attempted on
+2026-08-18 at 08:34 UTC, but Claude exited before reading the diff because the
+account session limit was reached (reported reset: 10:40 UTC). No review edits
+were made.
+
 ## Uspensky/Descartes comparison
 
 The main Rust worker owns these files:

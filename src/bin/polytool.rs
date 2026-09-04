@@ -135,6 +135,7 @@ fn print_top_level_help() {
     println!("  gamma-expansion   Expand palindromic polynomials in the gamma basis");
     println!("  family-check      Check properties and consecutive interlacing together");
     println!("  sequence          Generate standard polynomial sequences");
+    println!("  oeis              List and generate recurrence-backed OEIS families");
     println!("  pf-pencil         Check built-in PF/Jensen endpoint pencils");
     println!("  recurrence        Search for a polynomial recurrence");
     println!("  recurrence-generate");
@@ -282,6 +283,28 @@ fn print_sequence_help() {
     println!();
     println!("Example:");
     println!("  polytool sequence eulerian 5");
+}
+
+fn print_oeis_help() {
+    println!("Usage:");
+    println!("  polytool oeis list [--json] [--include-experimental]");
+    println!("  polytool oeis info <A-number> [--json]");
+    println!("  polytool oeis generate <A-number> --rows <n> [options]");
+    println!("  polytool oeis --help");
+    println!();
+    println!("Generate OEIS polynomial rows from bundled exact recurrences.");
+    println!();
+    println!("Generation options:");
+    println!("  --rows <n>             Number of complete rows to emit");
+    println!("  --start-row <n>         First displayed OEIS row (default: catalog start)");
+    println!("  --format <format>       rows, triangle, polynomial, json, jsonl, csv, bfile");
+    println!("                          (default: polynomial)");
+    println!("  --max-terms <n>         B-file cap; never splits a row");
+    println!("  --include-experimental  Permit an experimental catalog entry");
+    println!();
+    println!("Examples:");
+    println!("  polytool oeis generate A008292 --rows 6 --format triangle");
+    println!("  polytool oeis generate A008292 --rows 30 --format bfile");
 }
 
 fn print_pf_pencil_help() {
@@ -1010,6 +1033,7 @@ fn print_command_help(command: &str) -> bool {
         ),
         "family-check" => print_family_check_help(),
         "sequence" => print_sequence_help(),
+        "oeis" => print_oeis_help(),
         "pf-pencil" | "pf-bidiagonal-pencil" => print_pf_pencil_help(),
         "recurrence" => print_recurrence_help(),
         "recurrence-generate" => print_recurrence_generate_help(),
@@ -1853,6 +1877,368 @@ fn cmd_sequence(args: &[String]) {
     for (index, coeffs) in polynomials.iter().enumerate() {
         let c = strip_trailing_zeros_bigint(coeffs);
         println!("{} = {}", kind.label(index), format_poly_bigint_coeffs(c));
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OeisOutputFormat {
+    Rows,
+    Triangle,
+    Polynomial,
+    Json,
+    JsonLines,
+    Csv,
+    BFile,
+}
+
+impl OeisOutputFormat {
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "rows" | "coefficients" | "text" => Ok(Self::Rows),
+            "triangle" | "table" => Ok(Self::Triangle),
+            "polynomial" | "polynomials" | "poly" => Ok(Self::Polynomial),
+            "json" => Ok(Self::Json),
+            "jsonl" | "json-lines" => Ok(Self::JsonLines),
+            "csv" => Ok(Self::Csv),
+            "bfile" | "b-file" => Ok(Self::BFile),
+            other => Err(format!("unknown OEIS output format: {other}")),
+        }
+    }
+}
+
+fn oeis_entry_json(entry: &polytool::oeis::OeisSequenceDefinition) -> Value {
+    json!({
+        "id": entry.id,
+        "name": entry.name,
+        "status": entry.status.as_str(),
+        "layout": entry.layout.as_str(),
+        "first_row": entry.first_row,
+        "flattened_offset": entry.flattened_offset,
+        "bfile_available": entry.bfile_prefix_verified,
+        "source_rows": entry.source_rows,
+        "verification_rows": entry.verification_rows,
+        "rows_sha256": entry.rows_sha256,
+    })
+}
+
+fn cmd_oeis_list(args: &[String]) {
+    let mut json_output = false;
+    let mut include_experimental = false;
+    for arg in args {
+        match arg.as_str() {
+            "--json" => json_output = true,
+            "--include-experimental" => include_experimental = true,
+            other => {
+                eprintln!("unknown oeis list option: {other}");
+                std::process::exit(2);
+            }
+        }
+    }
+    let entries = polytool::oeis::catalog()
+        .iter()
+        .filter(|entry| {
+            include_experimental || entry.status == polytool::oeis::OeisSequenceStatus::Verified
+        })
+        .collect::<Vec<_>>();
+    if json_output {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "schema": "polytool.oeis-catalog.v1",
+                "count": entries.len(),
+                "sequences": entries.iter().map(|entry| oeis_entry_json(entry)).collect::<Vec<_>>(),
+            }))
+            .unwrap()
+        );
+    } else {
+        for entry in entries {
+            let bfile = if entry.bfile_prefix_verified {
+                "bfile"
+            } else {
+                "no-bfile"
+            };
+            println!(
+                "{}\t{}\t{}\t{}",
+                entry.id,
+                entry.status.as_str(),
+                bfile,
+                entry.name
+            );
+        }
+    }
+}
+
+fn cmd_oeis_info(args: &[String]) {
+    let mut json_output = false;
+    let mut id: Option<&str> = None;
+    for arg in args {
+        match arg.as_str() {
+            "--json" => json_output = true,
+            other if id.is_none() => id = Some(other),
+            other => {
+                eprintln!("unknown oeis info option: {other}");
+                std::process::exit(2);
+            }
+        }
+    }
+    let Some(id) = id else {
+        eprintln!("oeis info needs an A-number");
+        std::process::exit(2);
+    };
+    let Some(entry) = polytool::oeis::by_id(id) else {
+        eprintln!("unknown bundled OEIS sequence: {id}");
+        std::process::exit(2);
+    };
+    let (recurrence, initial_rows) = entry.recurrence_parts().unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    });
+    if json_output {
+        let mut value = oeis_entry_json(entry);
+        let object = value.as_object_mut().unwrap();
+        object.insert("recurrence".to_string(), json!(recurrence.to_string()));
+        object.insert("latex".to_string(), json!(recurrence.to_latex()));
+        object.insert(
+            "mathematica".to_string(),
+            json!(recurrence.to_mathematica_definition_rational(&initial_rows)),
+        );
+        object.insert(
+            "sage".to_string(),
+            json!(recurrence.to_sage_definition_rational(&initial_rows)),
+        );
+        object.insert(
+            "python".to_string(),
+            json!(recurrence.to_python_definition_rational(&initial_rows)),
+        );
+        println!("{}", serde_json::to_string_pretty(&value).unwrap());
+    } else {
+        println!("{}: {}", entry.id, entry.name);
+        println!("status: {}", entry.status.as_str());
+        println!("layout: {}", entry.layout.as_str());
+        println!("first row: {}", entry.first_row);
+        println!("flattened offset: {}", entry.flattened_offset);
+        println!(
+            "b-file: {}",
+            if entry.bfile_prefix_verified {
+                "available"
+            } else {
+                "disabled (prefix mapping not verified)"
+            }
+        );
+        println!("held-out verification rows: {}", entry.verification_rows);
+        println!("recurrence: {recurrence}");
+    }
+}
+
+fn bigint_rows_json(rows: &[Vec<BigInt>]) -> Vec<Vec<String>> {
+    rows.iter()
+        .map(|row| row.iter().map(ToString::to_string).collect())
+        .collect()
+}
+
+fn cmd_oeis_generate(args: &[String]) {
+    let mut id: Option<&str> = None;
+    let mut row_count: Option<usize> = None;
+    let mut first_row: Option<i64> = None;
+    let mut format = OeisOutputFormat::Polynomial;
+    let mut max_terms: Option<usize> = None;
+    let mut include_experimental = false;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--rows" => {
+                row_count = Some(
+                    parse_usize_option(args, &mut index, "--rows").unwrap_or_else(|error| {
+                        eprintln!("{error}");
+                        std::process::exit(2);
+                    }),
+                );
+            }
+            "--start-row" => {
+                index += 1;
+                let Some(value) = args.get(index) else {
+                    eprintln!("--start-row expects a value");
+                    std::process::exit(2);
+                };
+                first_row = Some(value.parse().unwrap_or_else(|_| {
+                    eprintln!("--start-row expects an integer, got '{value}'");
+                    std::process::exit(2);
+                }));
+            }
+            "--format" => {
+                index += 1;
+                let Some(value) = args.get(index) else {
+                    eprintln!("--format expects a value");
+                    std::process::exit(2);
+                };
+                format = OeisOutputFormat::parse(value).unwrap_or_else(|error| {
+                    eprintln!("{error}");
+                    std::process::exit(2);
+                });
+            }
+            "--json" => format = OeisOutputFormat::Json,
+            "--max-terms" => {
+                max_terms = Some(
+                    parse_usize_option(args, &mut index, "--max-terms").unwrap_or_else(|error| {
+                        eprintln!("{error}");
+                        std::process::exit(2);
+                    }),
+                );
+            }
+            "--include-experimental" => include_experimental = true,
+            other if id.is_none() => id = Some(other),
+            other => {
+                eprintln!("unknown oeis generate option: {other}");
+                std::process::exit(2);
+            }
+        }
+        index += 1;
+    }
+    let Some(id) = id else {
+        eprintln!("oeis generate needs an A-number");
+        std::process::exit(2);
+    };
+    let Some(row_count) = row_count else {
+        eprintln!("oeis generate needs --rows <n>");
+        std::process::exit(2);
+    };
+    let Some(entry) = polytool::oeis::by_id(id) else {
+        eprintln!("unknown bundled OEIS sequence: {id}");
+        std::process::exit(2);
+    };
+    if entry.status == polytool::oeis::OeisSequenceStatus::Experimental && !include_experimental {
+        eprintln!(
+            "{} is experimental; pass --include-experimental to generate it",
+            entry.id
+        );
+        std::process::exit(2);
+    }
+    let first_row = first_row.unwrap_or(entry.first_row);
+    if format == OeisOutputFormat::BFile && first_row != entry.first_row {
+        eprintln!("strict b-file output must begin at row {}", entry.first_row);
+        std::process::exit(2);
+    }
+    if format != OeisOutputFormat::BFile && max_terms.is_some() {
+        eprintln!("--max-terms is only valid with --format bfile");
+        std::process::exit(2);
+    }
+    let rows = entry
+        .generate_rows_from(first_row, row_count)
+        .unwrap_or_else(|error| {
+            eprintln!("{error}");
+            std::process::exit(2);
+        });
+
+    match format {
+        OeisOutputFormat::Rows => {
+            for row in &rows {
+                println!(
+                    "{}",
+                    row.iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+        OeisOutputFormat::Triangle => {
+            for (offset, row) in rows.iter().enumerate() {
+                println!(
+                    "{}: {}",
+                    first_row + offset as i64,
+                    row.iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                );
+            }
+        }
+        OeisOutputFormat::Polynomial => {
+            for (offset, row) in rows.iter().enumerate() {
+                println!(
+                    "P_{}(t) = {}",
+                    first_row + offset as i64,
+                    format_poly_bigint_coeffs(row)
+                );
+            }
+        }
+        OeisOutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "schema": "polytool.oeis-rows.v1",
+                    "id": entry.id,
+                    "first_row": first_row,
+                    "row_count": rows.len(),
+                    "rows": bigint_rows_json(&rows),
+                }))
+                .unwrap()
+            );
+        }
+        OeisOutputFormat::JsonLines => {
+            for (offset, row) in rows.iter().enumerate() {
+                println!(
+                    "{}",
+                    json!({
+                        "id": entry.id,
+                        "n": first_row + offset as i64,
+                        "coefficients": row.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                    })
+                );
+            }
+        }
+        OeisOutputFormat::Csv => {
+            println!("n,k,value");
+            for (row_offset, row) in rows.iter().enumerate() {
+                for (column, value) in row.iter().enumerate() {
+                    println!("{},{},{}", first_row + row_offset as i64, column, value);
+                }
+            }
+        }
+        OeisOutputFormat::BFile => {
+            if !entry.bfile_prefix_verified {
+                eprintln!(
+                    "strict b-file output for {} is disabled because its OEIS prefix mapping is not verified",
+                    entry.id
+                );
+                std::process::exit(2);
+            }
+            let mut included_terms = 0usize;
+            let mut flattened_index = entry.flattened_offset;
+            let mut included_rows = 0usize;
+            for row in &rows {
+                if max_terms.is_some_and(|limit| included_terms + row.len() > limit) {
+                    break;
+                }
+                for value in row {
+                    println!("{flattened_index} {value}");
+                    flattened_index += 1;
+                }
+                included_terms += row.len();
+                included_rows += 1;
+            }
+            if row_count > 0 && included_rows == 0 {
+                eprintln!("--max-terms is smaller than the first complete row");
+                std::process::exit(2);
+            }
+        }
+    }
+}
+
+fn cmd_oeis(args: &[String]) {
+    let Some((subcommand, rest)) = args.split_first() else {
+        print_oeis_help();
+        std::process::exit(2);
+    };
+    match subcommand.as_str() {
+        "list" => cmd_oeis_list(rest),
+        "info" => cmd_oeis_info(rest),
+        "generate" => cmd_oeis_generate(rest),
+        other => {
+            eprintln!("unknown oeis subcommand: {other}");
+            print_oeis_help();
+            std::process::exit(2);
+        }
     }
 }
 
@@ -5047,6 +5433,7 @@ fn main() {
         "gamma-expansion" | "gamma" => cmd_gamma_expansion(rest),
         "family-check" => cmd_family_check(rest),
         "sequence" => cmd_sequence(rest),
+        "oeis" => cmd_oeis(rest),
         "pf-pencil" | "pf-bidiagonal-pencil" => cmd_pf_pencil(rest),
         "recurrence" => cmd_recurrence(rest),
         "recurrence-generate" => cmd_recurrence_generate(rest),

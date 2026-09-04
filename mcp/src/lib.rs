@@ -333,6 +333,27 @@ pub struct GenerateSequenceRequest {
     pub max_n: usize,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ListOeisSequencesRequest {
+    pub include_experimental: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GetOeisSequenceRequest {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GenerateOeisRowsRequest {
+    pub id: String,
+    pub rows: usize,
+    pub first_row: Option<i64>,
+    pub include_experimental: Option<bool>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SequenceKind {
@@ -356,6 +377,50 @@ pub struct BigIntNormalizedPolynomial {
     pub polynomial: String,
     pub coefficients: Vec<String>,
     pub degree: usize,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct OeisSequenceSummary {
+    pub id: String,
+    pub name: String,
+    pub status: String,
+    pub layout: String,
+    pub first_row: i64,
+    pub flattened_offset: i64,
+    pub bfile_available: bool,
+    pub source_rows: usize,
+    pub verification_rows: usize,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct ListOeisSequencesResponse {
+    pub count: usize,
+    pub sequences: Vec<OeisSequenceSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct GetOeisSequenceResponse {
+    pub sequence: OeisSequenceSummary,
+    pub recurrence: String,
+    pub latex: String,
+    pub mathematica: String,
+    pub sage: String,
+    pub python: String,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct OeisPolynomialRow {
+    pub n: i64,
+    pub polynomial: String,
+    pub coefficients: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct GenerateOeisRowsResponse {
+    pub id: String,
+    pub first_row: i64,
+    pub row_count: usize,
+    pub rows: Vec<OeisPolynomialRow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1605,6 +1670,20 @@ fn generated_sequence_polynomials_bigint(
     }
 }
 
+fn oeis_sequence_summary(entry: &polytool::oeis::OeisSequenceDefinition) -> OeisSequenceSummary {
+    OeisSequenceSummary {
+        id: entry.id.to_string(),
+        name: entry.name.to_string(),
+        status: entry.status.as_str().to_string(),
+        layout: entry.layout.as_str().to_string(),
+        first_row: entry.first_row,
+        flattened_offset: entry.flattened_offset,
+        bfile_available: entry.bfile_prefix_verified,
+        source_rows: entry.source_rows,
+        verification_rows: entry.verification_rows,
+    }
+}
+
 fn check_family_lace(
     polynomials: &[NormalizedPolynomial],
     request: &LaceCheckRequest,
@@ -2790,6 +2869,93 @@ impl PolynomialToolsServer {
         Ok(Json(DecompositionResponse { items }))
     }
 
+    #[tool(description = "List bundled recurrence-backed OEIS polynomial families.")]
+    pub fn list_oeis_sequences(
+        &self,
+        Parameters(input): Parameters<ListOeisSequencesRequest>,
+    ) -> Result<Json<ListOeisSequencesResponse>, McpError> {
+        let include_experimental = input.include_experimental.unwrap_or(false);
+        let sequences = polytool::oeis::catalog()
+            .iter()
+            .filter(|entry| {
+                include_experimental || entry.status == polytool::oeis::OeisSequenceStatus::Verified
+            })
+            .map(oeis_sequence_summary)
+            .collect::<Vec<_>>();
+        Ok(Json(ListOeisSequencesResponse {
+            count: sequences.len(),
+            sequences,
+        }))
+    }
+
+    #[tool(
+        description = "Get metadata and exact recurrence exports for one bundled OEIS polynomial family."
+    )]
+    pub fn get_oeis_sequence(
+        &self,
+        Parameters(input): Parameters<GetOeisSequenceRequest>,
+    ) -> Result<Json<GetOeisSequenceResponse>, McpError> {
+        let entry = polytool::oeis::by_id(&input.id).ok_or_else(|| {
+            invalid_params(format!("unknown bundled OEIS sequence: {}", input.id))
+        })?;
+        let (recurrence, initial_rows) = entry
+            .recurrence_parts()
+            .map_err(|error| invalid_params(error.to_string()))?;
+        Ok(Json(GetOeisSequenceResponse {
+            sequence: oeis_sequence_summary(entry),
+            recurrence: recurrence.to_string(),
+            latex: recurrence.to_latex(),
+            mathematica: recurrence.to_mathematica_definition_rational(&initial_rows),
+            sage: recurrence.to_sage_definition_rational(&initial_rows),
+            python: recurrence.to_python_definition_rational(&initial_rows),
+        }))
+    }
+
+    #[tool(
+        description = "Generate exact polynomial coefficient rows for one bundled recurrence-backed OEIS family."
+    )]
+    pub fn generate_oeis_rows(
+        &self,
+        Parameters(input): Parameters<GenerateOeisRowsRequest>,
+    ) -> Result<Json<GenerateOeisRowsResponse>, McpError> {
+        const MAX_ROWS: usize = 200;
+        if input.rows > MAX_ROWS {
+            return Err(invalid_params(format!(
+                "rows must be at most {MAX_ROWS} for MCP generation"
+            )));
+        }
+        let entry = polytool::oeis::by_id(&input.id).ok_or_else(|| {
+            invalid_params(format!("unknown bundled OEIS sequence: {}", input.id))
+        })?;
+        if entry.status == polytool::oeis::OeisSequenceStatus::Experimental
+            && !input.include_experimental.unwrap_or(false)
+        {
+            return Err(invalid_params(format!(
+                "{} is experimental; set include_experimental to true",
+                entry.id
+            )));
+        }
+        let first_row = input.first_row.unwrap_or(entry.first_row);
+        let generated = entry
+            .generate_rows_from(first_row, input.rows)
+            .map_err(|error| invalid_params(error.to_string()))?;
+        let rows = generated
+            .into_iter()
+            .enumerate()
+            .map(|(offset, coefficients)| OeisPolynomialRow {
+                n: first_row + offset as i64,
+                polynomial: format_poly_bigint_coeffs(&coefficients),
+                coefficients: coefficients.iter().map(ToString::to_string).collect(),
+            })
+            .collect::<Vec<_>>();
+        Ok(Json(GenerateOeisRowsResponse {
+            id: entry.id.to_string(),
+            first_row,
+            row_count: rows.len(),
+            rows,
+        }))
+    }
+
     #[tool(description = "Generate standard polynomial sequences.")]
     pub fn generate_sequence(
         &self,
@@ -3099,6 +3265,28 @@ mod tests {
             last.coefficients.last().map(String::as_str),
             Some("9223372036854775808")
         );
+    }
+
+    #[test]
+    fn lists_and_generates_oeis_catalog_rows() {
+        let server = PolynomialToolsServer::new();
+        let Json(list) = server
+            .list_oeis_sequences(Parameters(ListOeisSequencesRequest::default()))
+            .unwrap();
+        assert_eq!(list.count, 125);
+        assert!(list.sequences.iter().any(|entry| entry.id == "A008292"));
+
+        let Json(response) = server
+            .generate_oeis_rows(Parameters(GenerateOeisRowsRequest {
+                id: "a008292".to_string(),
+                rows: 3,
+                first_row: None,
+                include_experimental: None,
+            }))
+            .unwrap();
+        assert_eq!(response.first_row, 1);
+        assert_eq!(response.rows[2].n, 3);
+        assert_eq!(response.rows[2].coefficients, vec!["1", "4", "1"]);
     }
 
     #[test]
