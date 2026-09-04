@@ -1,4 +1,4 @@
-//! Find linear recurrences among sequences of polynomials.
+//! Find scalar and coupled linear recurrences among polynomial sequences.
 //!
 //! Given polynomials P_1(t), P_2(t), ..., P_m(t), searches for a recurrence:
 //!
@@ -9,7 +9,13 @@
 //! `alternating_sign` is enabled, the search also allows terms of the form
 //! (-1)^n c_{r,d}(n,t) D^d P_{n-r}(t).
 //!
-//! This reduces to solving a linear system over the rationals.
+//! Coupled states `F_n = (P_n, Q_n, ...)^T` can also be fitted to a first-order
+//! affine system `F_{n+1} = M(n,t,D) F_n + G(n,t)`. Matrix entries use the
+//! normal-ordered Weyl form `sum_d c_d(n,t) D^d`; exact row ranks and nullities
+//! are reported, and complete final transitions can be held out for exact
+//! verification.
+//!
+//! Both searches reduce to solving linear systems over the rationals.
 
 use num_bigint::BigInt;
 use num_integer::lcm;
@@ -95,7 +101,7 @@ impl RecurrenceOptions {
 /// A polynomial in two variables (n, t).
 ///
 /// Stored as `coeffs[i][j]` = coefficient of n^i t^j.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BivarPoly {
     pub coeffs: Vec<Vec<BigRational>>,
 }
@@ -166,6 +172,218 @@ pub struct Recurrence {
     /// Inhomogeneous additive term g(n,t), if present.
     pub inhomogeneous: Option<BivarPoly>,
 }
+
+/// A Weyl-algebra operator in normal order,
+/// `sum_d coefficients[d](n,x) D_x^d`.
+///
+/// Putting every derivative to the right is no loss of generality because
+/// `D_x x = x D_x + 1`.  The representation is therefore directly usable by
+/// exact linear recurrence fitting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WeylOperator {
+    /// Polynomial coefficient multiplying each derivative order.
+    pub coefficients: Vec<BivarPoly>,
+}
+
+impl WeylOperator {
+    /// Construct a normal-ordered Weyl operator.
+    pub fn new(coefficients: Vec<BivarPoly>) -> Self {
+        Self { coefficients }
+    }
+
+    /// The zero operator.
+    pub fn zero() -> Self {
+        Self {
+            coefficients: Vec::new(),
+        }
+    }
+
+    /// The identity operator.
+    pub fn identity() -> Self {
+        Self {
+            coefficients: vec![BivarPoly {
+                coeffs: vec![vec![BigRational::one()]],
+            }],
+        }
+    }
+
+    /// True when all normal-form coefficients vanish.
+    pub fn is_zero(&self) -> bool {
+        self.coefficients.iter().all(BivarPoly::is_zero)
+    }
+}
+
+/// A first-order affine vector recurrence
+/// `F_{n+1} = matrix(n, x, D_x) F_n + forcing(n, x)`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VectorRecurrence {
+    /// Row-major operator matrix: target component, then source component.
+    pub matrix: Vec<Vec<WeylOperator>>,
+    /// Optional additive polynomial vector. `None` means a homogeneous system.
+    pub forcing: Option<Vec<BivarPoly>>,
+}
+
+impl VectorRecurrence {
+    /// Number of source and target components in the square system.
+    pub fn dimension(&self) -> usize {
+        self.matrix.len()
+    }
+}
+
+/// Fixed search bounds for a first-order vector Weyl recurrence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VectorRecurrenceOptions {
+    /// Maximum degree in `x` of every matrix-entry coefficient.
+    pub var_deg: usize,
+    /// Maximum degree in the source index `n` of every matrix entry.
+    pub idx_deg: usize,
+    /// Maximum derivative order in every matrix entry.
+    pub diff_deg: usize,
+    /// If false, fit an additive polynomial forcing vector.
+    pub homogeneous: bool,
+    /// Maximum degree in `x` of each forcing component.
+    pub forcing_var_deg: usize,
+    /// Maximum degree in `n` of each forcing component.
+    pub forcing_idx_deg: usize,
+    /// Number of final complete transitions excluded from fitting and checked
+    /// independently.
+    pub held_out_transitions: usize,
+    /// Reject non-identifiable rows instead of returning an arbitrary
+    /// particular solution with free parameters set to zero.
+    pub require_unique: bool,
+}
+
+impl Default for VectorRecurrenceOptions {
+    fn default() -> Self {
+        Self {
+            var_deg: 1,
+            idx_deg: 1,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 1,
+            forcing_idx_deg: 1,
+            held_out_transitions: 2,
+            require_unique: true,
+        }
+    }
+}
+
+/// Rank information for one independently fitted output row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VectorRecurrenceRowDiagnostics {
+    /// Target component fitted by this linear system.
+    pub output_component: usize,
+    /// Number of coefficient equations used for fitting.
+    pub equations: usize,
+    /// Number of unknown normal-form coefficients.
+    pub unknowns: usize,
+    /// Exact rank of the coefficient matrix.
+    pub rank: usize,
+    /// `unknowns - rank`; zero means the row is identifiable in this model.
+    pub nullity: usize,
+}
+
+/// A fitted recurrence and the diagnostics used to accept it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VectorRecurrenceFit {
+    pub recurrence: VectorRecurrence,
+    pub rows: Vec<VectorRecurrenceRowDiagnostics>,
+    pub fit_transitions: usize,
+    pub held_out_transitions: usize,
+}
+
+/// Why a fixed-bound vector recurrence search could not return a model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VectorRecurrenceFitError {
+    EmptyStateVector,
+    InvalidLag,
+    NotEnoughTransitions {
+        transitions: usize,
+        held_out: usize,
+    },
+    InconsistentStateDimension {
+        state: usize,
+        expected: usize,
+        found: usize,
+    },
+    NoSolution {
+        output_component: usize,
+    },
+    Underdetermined {
+        output_component: usize,
+        rank: usize,
+        unknowns: usize,
+    },
+    HeldOutVerificationFailed {
+        transition: usize,
+    },
+}
+
+impl fmt::Display for VectorRecurrenceFitError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyStateVector => write!(f, "vector states must have at least one component"),
+            Self::InvalidLag => write!(f, "companion lag must be at least one"),
+            Self::NotEnoughTransitions {
+                transitions,
+                held_out,
+            } => write!(
+                f,
+                "need at least one fitting transition in addition to {held_out} held-out transitions; got {transitions} total"
+            ),
+            Self::InconsistentStateDimension {
+                state,
+                expected,
+                found,
+            } => write!(
+                f,
+                "state {state} has {found} components; expected {expected}"
+            ),
+            Self::NoSolution { output_component } => write!(
+                f,
+                "no recurrence in the requested search space for output component {output_component}"
+            ),
+            Self::Underdetermined {
+                output_component,
+                rank,
+                unknowns,
+            } => write!(
+                f,
+                "output component {output_component} is not identifiable: rank {rank} for {unknowns} unknowns"
+            ),
+            Self::HeldOutVerificationFailed { transition } => write!(
+                f,
+                "fitted recurrence failed exact held-out transition {transition}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for VectorRecurrenceFitError {}
+
+/// Errors from applying a vector recurrence to one state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VectorRecurrenceEvaluationError {
+    NonSquareMatrix,
+    StateDimension { expected: usize, found: usize },
+    ForcingDimension { expected: usize, found: usize },
+}
+
+impl fmt::Display for VectorRecurrenceEvaluationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonSquareMatrix => write!(f, "vector recurrence matrix must be square"),
+            Self::StateDimension { expected, found } => {
+                write!(f, "state has {found} components; expected {expected}")
+            }
+            Self::ForcingDimension { expected, found } => {
+                write!(f, "forcing has {found} components; expected {expected}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for VectorRecurrenceEvaluationError {}
 
 // ---------------------------------------------------------------------------
 // Polynomial helpers (univariate, coefficient-vector representation)
@@ -2249,6 +2467,487 @@ pub fn find_polynomial_recurrence(
 ) -> Option<Recurrence> {
     let rational_polys = i64_polys_to_rational(polys);
     find_polynomial_recurrence_rational(&rational_polys, opts)
+}
+
+// ---------------------------------------------------------------------------
+// First-order vector recurrences over the Weyl algebra
+// ---------------------------------------------------------------------------
+
+fn validate_vector_states<C>(states: &[Vec<Vec<C>>]) -> Result<usize, VectorRecurrenceFitError> {
+    let dimension = states.first().map_or(0, Vec::len);
+    if dimension == 0 {
+        return Err(VectorRecurrenceFitError::EmptyStateVector);
+    }
+    for (state, components) in states.iter().enumerate() {
+        if components.len() != dimension {
+            return Err(VectorRecurrenceFitError::InconsistentStateDimension {
+                state,
+                expected: dimension,
+                found: components.len(),
+            });
+        }
+    }
+    Ok(dimension)
+}
+
+fn i64_vector_states_to_rational(states: &[Vec<Vec<i64>>]) -> Vec<Vec<Vec<BigRational>>> {
+    states
+        .iter()
+        .map(|state| {
+            state
+                .iter()
+                .map(|poly| i64_poly_to_rational(poly))
+                .collect()
+        })
+        .collect()
+}
+
+fn zero_bivar() -> BivarPoly {
+    BivarPoly {
+        coeffs: vec![vec![BigRational::zero()]],
+    }
+}
+
+fn extract_vector_bivar(
+    solution: &[BigRational],
+    start: usize,
+    idx_deg: usize,
+    var_deg: usize,
+) -> BivarPoly {
+    let width = var_deg + 1;
+    BivarPoly {
+        coeffs: (0..=idx_deg)
+            .map(|i| {
+                (0..=var_deg)
+                    .map(|j| solution[start + i * width + j].clone())
+                    .collect()
+            })
+            .collect(),
+    }
+}
+
+fn apply_weyl_operator_rational(
+    operator: &WeylOperator,
+    source: &[BigRational],
+    source_index: usize,
+) -> Vec<BigRational> {
+    let mut result = rational_zero_poly();
+    for (deriv_order, coeff) in operator.coefficients.iter().enumerate() {
+        if coeff.is_zero() {
+            continue;
+        }
+        let derivative = poly_nth_derivative_rational(source, deriv_order);
+        let evaluated_coeff = bivar_eval_n(coeff, source_index);
+        let term = poly_mul_rational(&evaluated_coeff, &derivative);
+        poly_add_scaled_assign(&mut result, &term, &BigRational::one());
+    }
+    trim_poly_rational(result)
+}
+
+fn evaluate_rectangular_vector_map_rational(
+    matrix: &[Vec<WeylOperator>],
+    forcing: Option<&[BivarPoly]>,
+    state: &[Vec<BigRational>],
+    source_index: usize,
+) -> Result<Vec<Vec<BigRational>>, VectorRecurrenceEvaluationError> {
+    if matrix.iter().any(|row| row.len() != state.len()) {
+        return Err(VectorRecurrenceEvaluationError::StateDimension {
+            expected: matrix.first().map_or(0, Vec::len),
+            found: state.len(),
+        });
+    }
+    if let Some(forcing) = forcing {
+        if forcing.len() != matrix.len() {
+            return Err(VectorRecurrenceEvaluationError::ForcingDimension {
+                expected: matrix.len(),
+                found: forcing.len(),
+            });
+        }
+    }
+
+    let mut result = Vec::with_capacity(matrix.len());
+    for (output, row) in matrix.iter().enumerate() {
+        let mut polynomial = rational_zero_poly();
+        for (operator, source) in row.iter().zip(state) {
+            let term = apply_weyl_operator_rational(operator, source, source_index);
+            poly_add_scaled_assign(&mut polynomial, &term, &BigRational::one());
+        }
+        if let Some(forcing) = forcing {
+            let term = bivar_eval_n(&forcing[output], source_index);
+            poly_add_scaled_assign(&mut polynomial, &term, &BigRational::one());
+        }
+        result.push(trim_poly_rational(polynomial));
+    }
+    Ok(result)
+}
+
+impl VectorRecurrence {
+    /// Evaluate `F_{n+1}` from `F_n`, with matrix coefficients evaluated at
+    /// the supplied source index `n`.
+    pub fn evaluate_next_rational(
+        &self,
+        state: &[Vec<BigRational>],
+        source_index: usize,
+    ) -> Result<Vec<Vec<BigRational>>, VectorRecurrenceEvaluationError> {
+        let dimension = self.dimension();
+        if self.matrix.iter().any(|row| row.len() != dimension) {
+            return Err(VectorRecurrenceEvaluationError::NonSquareMatrix);
+        }
+        if state.len() != dimension {
+            return Err(VectorRecurrenceEvaluationError::StateDimension {
+                expected: dimension,
+                found: state.len(),
+            });
+        }
+        evaluate_rectangular_vector_map_rational(
+            &self.matrix,
+            self.forcing.as_deref(),
+            state,
+            source_index,
+        )
+    }
+
+    /// Check one exact transition `F_n -> F_{n+1}`.
+    pub fn holds_transition_rational(
+        &self,
+        state: &[Vec<BigRational>],
+        next_state: &[Vec<BigRational>],
+        source_index: usize,
+    ) -> bool {
+        self.evaluate_next_rational(state, source_index)
+            .is_ok_and(|actual| vector_states_equal(&actual, next_state))
+    }
+}
+
+fn vector_states_equal(lhs: &[Vec<BigRational>], rhs: &[Vec<BigRational>]) -> bool {
+    lhs.len() == rhs.len()
+        && lhs.iter().zip(rhs).all(|(left, right)| {
+            trim_poly_rational(left.clone()) == trim_poly_rational(right.clone())
+        })
+}
+
+struct RectangularVectorFit {
+    matrix: Vec<Vec<WeylOperator>>,
+    forcing: Option<Vec<BivarPoly>>,
+    diagnostics: Vec<VectorRecurrenceRowDiagnostics>,
+}
+
+fn fit_rectangular_vector_map_rational(
+    source_states: &[Vec<Vec<BigRational>>],
+    target_states: &[Vec<Vec<BigRational>>],
+    source_indices: &[usize],
+    fit_transitions: usize,
+    opts: &VectorRecurrenceOptions,
+    output_component_offset: usize,
+) -> Result<RectangularVectorFit, VectorRecurrenceFitError> {
+    let source_dimension = source_states.first().map_or(0, Vec::len);
+    let output_dimension = target_states.first().map_or(0, Vec::len);
+    let vars_per_bivar = (opts.idx_deg + 1) * (opts.var_deg + 1);
+    let matrix_unknowns = source_dimension * (opts.diff_deg + 1) * vars_per_bivar;
+    let forcing_unknowns = if opts.homogeneous {
+        0
+    } else {
+        (opts.forcing_idx_deg + 1) * (opts.forcing_var_deg + 1)
+    };
+    let unknowns = matrix_unknowns + forcing_unknowns;
+
+    let derivatives = source_states
+        .iter()
+        .map(|state| {
+            state
+                .iter()
+                .map(|poly| {
+                    (0..=opts.diff_deg)
+                        .map(|d| poly_nth_derivative_rational(poly, d))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    let matrix_col = |source: usize, d: usize, i: usize, j: usize| {
+        ((source * (opts.diff_deg + 1) + d) * (opts.idx_deg + 1) + i) * (opts.var_deg + 1) + j
+    };
+    let forcing_col = |i: usize, j: usize| matrix_unknowns + i * (opts.forcing_var_deg + 1) + j;
+
+    let mut fitted_matrix = Vec::with_capacity(output_dimension);
+    let mut fitted_forcing = (!opts.homogeneous).then(Vec::new);
+    let mut diagnostics = Vec::with_capacity(output_dimension);
+
+    for output in 0..output_dimension {
+        let target_degree = target_states[..fit_transitions]
+            .iter()
+            .map(|state| poly_degree_rational(&state[output]))
+            .max()
+            .unwrap_or(0);
+        let source_degree = derivatives[..fit_transitions]
+            .iter()
+            .flat_map(|state| state.iter())
+            .flat_map(|orders| orders.iter())
+            .map(|poly| poly_degree_rational(poly))
+            .max()
+            .unwrap_or(0)
+            + opts.var_deg;
+        let forcing_degree = if opts.homogeneous {
+            0
+        } else {
+            opts.forcing_var_deg
+        };
+        let max_degree = target_degree.max(source_degree).max(forcing_degree);
+        let equations_per_transition = max_degree + 1;
+        let equations = fit_transitions * equations_per_transition;
+        let mut matrix = vec![vec![BigRational::zero(); unknowns]; equations];
+        let mut rhs = vec![BigRational::zero(); equations];
+
+        for transition in 0..fit_transitions {
+            let n_powers = rational_index_powers(
+                source_indices[transition],
+                opts.idx_deg.max(opts.forcing_idx_deg),
+            );
+            for degree in 0..=max_degree {
+                let row = transition * equations_per_transition + degree;
+                rhs[row] = poly_coeff_rational(&target_states[transition][output], degree);
+                for source in 0..source_dimension {
+                    for d in 0..=opts.diff_deg {
+                        let derivative = &derivatives[transition][source][d];
+                        for i in 0..=opts.idx_deg {
+                            for j in 0..=opts.var_deg {
+                                if degree < j {
+                                    continue;
+                                }
+                                let coefficient = poly_coeff_rational(derivative, degree - j);
+                                if !coefficient.is_zero() {
+                                    matrix[row][matrix_col(source, d, i, j)] +=
+                                        coefficient * n_powers[i].clone();
+                                }
+                            }
+                        }
+                    }
+                }
+                if !opts.homogeneous && degree <= opts.forcing_var_deg {
+                    for i in 0..=opts.forcing_idx_deg {
+                        matrix[row][forcing_col(i, degree)] += n_powers[i].clone();
+                    }
+                }
+            }
+        }
+
+        let Some(solution) = linalg::solve_linear_system_with_rank(&matrix, &rhs) else {
+            return Err(VectorRecurrenceFitError::NoSolution {
+                output_component: output_component_offset + output,
+            });
+        };
+        if opts.require_unique && solution.nullity != 0 {
+            return Err(VectorRecurrenceFitError::Underdetermined {
+                output_component: output_component_offset + output,
+                rank: solution.rank,
+                unknowns,
+            });
+        }
+
+        let mut operator_row = Vec::with_capacity(source_dimension);
+        for source in 0..source_dimension {
+            let mut coefficients = Vec::with_capacity(opts.diff_deg + 1);
+            for d in 0..=opts.diff_deg {
+                let start = matrix_col(source, d, 0, 0);
+                coefficients.push(extract_vector_bivar(
+                    &solution.particular,
+                    start,
+                    opts.idx_deg,
+                    opts.var_deg,
+                ));
+            }
+            operator_row.push(WeylOperator::new(coefficients));
+        }
+        fitted_matrix.push(operator_row);
+        if let Some(forcing) = &mut fitted_forcing {
+            forcing.push(extract_vector_bivar(
+                &solution.particular,
+                matrix_unknowns,
+                opts.forcing_idx_deg,
+                opts.forcing_var_deg,
+            ));
+        }
+        diagnostics.push(VectorRecurrenceRowDiagnostics {
+            output_component: output_component_offset + output,
+            equations,
+            unknowns,
+            rank: solution.rank,
+            nullity: solution.nullity,
+        });
+    }
+
+    for transition in 0..source_states.len() {
+        let actual = evaluate_rectangular_vector_map_rational(
+            &fitted_matrix,
+            fitted_forcing.as_deref(),
+            &source_states[transition],
+            source_indices[transition],
+        )
+        .expect("fitted rectangular map has consistent dimensions");
+        if !vector_states_equal(&actual, &target_states[transition]) {
+            if transition >= fit_transitions {
+                return Err(VectorRecurrenceFitError::HeldOutVerificationFailed {
+                    transition: source_indices[transition],
+                });
+            }
+            return Err(VectorRecurrenceFitError::NoSolution {
+                output_component: output_component_offset,
+            });
+        }
+    }
+
+    Ok(RectangularVectorFit {
+        matrix: fitted_matrix,
+        forcing: fitted_forcing,
+        diagnostics,
+    })
+}
+
+/// Find an exact first-order vector recurrence from consecutive states.
+///
+/// `states[k]` is `F_{first_index+k}`. Matrix and forcing coefficients are
+/// evaluated at the source index, so the returned convention is
+/// `F_{n+1} = M(n,x,D_x) F_n + G(n,x)`. Each output row is solved separately;
+/// by default every row must have full column rank, and the final transitions
+/// are reserved for independent exact verification.
+pub fn find_vector_recurrence_rational(
+    states: &[Vec<Vec<BigRational>>],
+    first_index: usize,
+    opts: &VectorRecurrenceOptions,
+) -> Result<VectorRecurrenceFit, VectorRecurrenceFitError> {
+    let dimension = validate_vector_states(states)?;
+    let transitions = states.len().saturating_sub(1);
+    if transitions <= opts.held_out_transitions {
+        return Err(VectorRecurrenceFitError::NotEnoughTransitions {
+            transitions,
+            held_out: opts.held_out_transitions,
+        });
+    }
+    let fit_transitions = transitions - opts.held_out_transitions;
+    let sources = states[..transitions].to_vec();
+    let targets = states[1..].to_vec();
+    let source_indices = (0..transitions)
+        .map(|offset| first_index + offset)
+        .collect::<Vec<_>>();
+    let fitted = fit_rectangular_vector_map_rational(
+        &sources,
+        &targets,
+        &source_indices,
+        fit_transitions,
+        opts,
+        0,
+    )?;
+    debug_assert_eq!(fitted.matrix.len(), dimension);
+    Ok(VectorRecurrenceFit {
+        recurrence: VectorRecurrence {
+            matrix: fitted.matrix,
+            forcing: fitted.forcing,
+        },
+        rows: fitted.diagnostics,
+        fit_transitions,
+        held_out_transitions: opts.held_out_transitions,
+    })
+}
+
+/// Integer-coefficient convenience wrapper for
+/// [`find_vector_recurrence_rational`].
+pub fn find_vector_recurrence(
+    states: &[Vec<Vec<i64>>],
+    first_index: usize,
+    opts: &VectorRecurrenceOptions,
+) -> Result<VectorRecurrenceFit, VectorRecurrenceFitError> {
+    find_vector_recurrence_rational(&i64_vector_states_to_rational(states), first_index, opts)
+}
+
+/// Find a lag-`lag` recurrence and return it as a first-order companion system.
+///
+/// Only the genuinely unknown final block row is fitted. The preceding block
+/// rows are exact identity shifts, so their coefficients do not consume linear
+/// unknowns or create artificial rank deficiencies. The companion state is
+/// `(F_{n-lag+1}, ..., F_n)`.
+pub fn find_companion_vector_recurrence_rational(
+    states: &[Vec<Vec<BigRational>>],
+    first_index: usize,
+    lag: usize,
+    opts: &VectorRecurrenceOptions,
+) -> Result<VectorRecurrenceFit, VectorRecurrenceFitError> {
+    if lag == 0 {
+        return Err(VectorRecurrenceFitError::InvalidLag);
+    }
+    let component_dimension = validate_vector_states(states)?;
+    let transitions = states.len().saturating_sub(lag);
+    if transitions <= opts.held_out_transitions {
+        return Err(VectorRecurrenceFitError::NotEnoughTransitions {
+            transitions,
+            held_out: opts.held_out_transitions,
+        });
+    }
+    let fit_transitions = transitions - opts.held_out_transitions;
+    let mut sources = Vec::with_capacity(transitions);
+    let mut targets = Vec::with_capacity(transitions);
+    let mut source_indices = Vec::with_capacity(transitions);
+    for latest in lag - 1..states.len() - 1 {
+        let mut companion = Vec::with_capacity(lag * component_dimension);
+        for state in &states[latest + 1 - lag..=latest] {
+            companion.extend(state.iter().cloned());
+        }
+        sources.push(companion);
+        targets.push(states[latest + 1].clone());
+        source_indices.push(first_index + latest);
+    }
+
+    let output_offset = (lag - 1) * component_dimension;
+    let fitted = fit_rectangular_vector_map_rational(
+        &sources,
+        &targets,
+        &source_indices,
+        fit_transitions,
+        opts,
+        output_offset,
+    )?;
+    let companion_dimension = lag * component_dimension;
+    let mut matrix = vec![vec![WeylOperator::zero(); companion_dimension]; companion_dimension];
+    for block in 0..lag - 1 {
+        for component in 0..component_dimension {
+            let row = block * component_dimension + component;
+            let column = (block + 1) * component_dimension + component;
+            matrix[row][column] = WeylOperator::identity();
+        }
+    }
+    for (component, fitted_row) in fitted.matrix.into_iter().enumerate() {
+        matrix[output_offset + component] = fitted_row;
+    }
+    let forcing = fitted.forcing.map(|fitted_forcing| {
+        let mut forcing = vec![zero_bivar(); companion_dimension];
+        for (component, polynomial) in fitted_forcing.into_iter().enumerate() {
+            forcing[output_offset + component] = polynomial;
+        }
+        forcing
+    });
+
+    Ok(VectorRecurrenceFit {
+        recurrence: VectorRecurrence { matrix, forcing },
+        rows: fitted.diagnostics,
+        fit_transitions,
+        held_out_transitions: opts.held_out_transitions,
+    })
+}
+
+/// Integer-coefficient convenience wrapper for
+/// [`find_companion_vector_recurrence_rational`].
+pub fn find_companion_vector_recurrence(
+    states: &[Vec<Vec<i64>>],
+    first_index: usize,
+    lag: usize,
+    opts: &VectorRecurrenceOptions,
+) -> Result<VectorRecurrenceFit, VectorRecurrenceFitError> {
+    find_companion_vector_recurrence_rational(
+        &i64_vector_states_to_rational(states),
+        first_index,
+        lag,
+        opts,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -5693,6 +6392,228 @@ mod tests {
 
         assert_eq!(recurrence.generation_initial_count(1, 7), 5);
         assert_eq!(recurrence.generation_initial_count(1, 4), 4);
+    }
+
+    fn bounded_bivar(idx_deg: usize, var_deg: usize, terms: &[(usize, usize, i64)]) -> BivarPoly {
+        let mut coeffs = vec![vec![BigRational::zero(); var_deg + 1]; idx_deg + 1];
+        for &(i, j, coefficient) in terms {
+            coeffs[i][j] = BigRational::from_integer(BigInt::from(coefficient));
+        }
+        BivarPoly { coeffs }
+    }
+
+    fn bounded_weyl(
+        idx_deg: usize,
+        var_deg: usize,
+        diff_deg: usize,
+        terms: &[(usize, usize, usize, i64)],
+    ) -> WeylOperator {
+        let mut coefficients = (0..=diff_deg)
+            .map(|_| bounded_bivar(idx_deg, var_deg, &[]))
+            .collect::<Vec<_>>();
+        for &(d, i, j, coefficient) in terms {
+            coefficients[d].coeffs[i][j] = BigRational::from_integer(BigInt::from(coefficient));
+        }
+        WeylOperator::new(coefficients)
+    }
+
+    #[test]
+    fn vector_affine_finder_recovers_q_integer_recurrence() {
+        // [n+1]_x = x [n]_x + 1.
+        let states = (0..=9)
+            .map(|n| {
+                let polynomial = if n == 0 { vec![0] } else { vec![1; n] };
+                vec![polynomial]
+            })
+            .collect::<Vec<_>>();
+        let opts = VectorRecurrenceOptions {
+            var_deg: 1,
+            idx_deg: 0,
+            diff_deg: 0,
+            homogeneous: false,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 2,
+            require_unique: true,
+        };
+
+        let fit = find_vector_recurrence(&states, 0, &opts).unwrap();
+        assert_eq!(fit.rows[0].nullity, 0);
+        assert_eq!(
+            fit.recurrence.matrix[0][0],
+            bounded_weyl(0, 1, 0, &[(0, 0, 1, 1)])
+        );
+        assert_eq!(
+            fit.recurrence.forcing,
+            Some(vec![bounded_bivar(0, 0, &[(0, 0, 1)])])
+        );
+    }
+
+    #[test]
+    fn vector_finder_checks_complete_held_out_transitions() {
+        let mut states = (0..=9)
+            .map(|n| {
+                let polynomial = if n == 0 { vec![0] } else { vec![1; n] };
+                vec![polynomial]
+            })
+            .collect::<Vec<_>>();
+        states[9][0][0] = 2;
+        let opts = VectorRecurrenceOptions {
+            var_deg: 1,
+            idx_deg: 0,
+            diff_deg: 0,
+            homogeneous: false,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 2,
+            require_unique: true,
+        };
+
+        assert_eq!(
+            find_vector_recurrence(&states, 0, &opts),
+            Err(VectorRecurrenceFitError::HeldOutVerificationFailed { transition: 8 })
+        );
+    }
+
+    #[test]
+    fn vector_finder_rejects_nonidentifiable_duplicate_channels() {
+        let states = (0..=7)
+            .map(|n| {
+                let value = 1_i64 << n;
+                vec![vec![value], vec![value]]
+            })
+            .collect::<Vec<_>>();
+        let opts = VectorRecurrenceOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            held_out_transitions: 2,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            find_vector_recurrence(&states, 0, &opts),
+            Err(VectorRecurrenceFitError::Underdetermined {
+                output_component: 0,
+                rank: 1,
+                unknowns: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn vector_finder_recovers_published_eulerian_pair() {
+        // Ma--Ma--Yeh--Yeh, Discrete Math. 345 (2022), Eq. (8): the
+        // even/odd up-down-run polynomials form this Eulerian pair.
+        let expected = VectorRecurrence {
+            matrix: vec![
+                vec![
+                    bounded_weyl(1, 2, 1, &[(0, 1, 1, 1), (1, 0, 1, 2), (1, 0, 2, -2)]),
+                    bounded_weyl(1, 2, 1, &[(0, 0, 1, 1)]),
+                ],
+                vec![
+                    bounded_weyl(1, 2, 1, &[(0, 0, 0, 1)]),
+                    bounded_weyl(
+                        1,
+                        2,
+                        1,
+                        &[
+                            (0, 0, 0, 1),
+                            (0, 0, 1, -1),
+                            (0, 1, 1, 1),
+                            (1, 0, 1, 2),
+                            (1, 0, 2, -2),
+                        ],
+                    ),
+                ],
+            ],
+            forcing: None,
+        };
+        let mut states = vec![vec![vec![BigRational::zero()], vec![BigRational::one()]]];
+        for n in 1..=18 {
+            let next = expected
+                .evaluate_next_rational(states.last().unwrap(), n)
+                .unwrap();
+            states.push(next);
+        }
+        let opts = VectorRecurrenceOptions {
+            var_deg: 2,
+            idx_deg: 1,
+            diff_deg: 1,
+            held_out_transitions: 3,
+            ..Default::default()
+        };
+
+        let fit = find_vector_recurrence_rational(&states, 1, &opts).unwrap();
+        assert!(fit.rows.iter().all(|row| row.nullity == 0));
+        assert_eq!(fit.recurrence, expected);
+    }
+
+    #[test]
+    fn companion_finder_recovers_published_type_b_lag_two_system() {
+        // Ma et al., EJC 27(3) (2020), Eq. (12), specialized to k=1.
+        // The state order is (P_{n-1}, Q_{n-1}, P_n, Q_n).
+        let z = || bounded_weyl(1, 2, 1, &[]);
+        let expected = VectorRecurrence {
+            matrix: vec![
+                vec![z(), z(), WeylOperator::identity(), z()],
+                vec![z(), z(), z(), WeylOperator::identity()],
+                vec![
+                    bounded_weyl(1, 2, 1, &[(0, 1, 1, 2)]),
+                    z(),
+                    bounded_weyl(
+                        1,
+                        2,
+                        1,
+                        &[
+                            (0, 0, 0, 1),
+                            (0, 0, 1, -1),
+                            (0, 1, 1, 2),
+                            (1, 0, 1, 2),
+                            (1, 0, 2, -2),
+                        ],
+                    ),
+                    bounded_weyl(1, 2, 1, &[(0, 0, 0, 1)]),
+                ],
+                vec![
+                    z(),
+                    bounded_weyl(1, 2, 1, &[(0, 1, 1, 2)]),
+                    bounded_weyl(1, 2, 1, &[(0, 0, 1, 1)]),
+                    bounded_weyl(1, 2, 1, &[(0, 1, 1, 2), (1, 0, 1, 2), (1, 0, 2, -2)]),
+                ],
+            ],
+            forcing: None,
+        };
+        let mut states = vec![
+            vec![vec![BigRational::zero()], vec![BigRational::one()]],
+            vec![vec![BigRational::one()], vec![BigRational::zero()]],
+        ];
+        for n in 1..=20 {
+            let companion = vec![
+                states[n - 1][0].clone(),
+                states[n - 1][1].clone(),
+                states[n][0].clone(),
+                states[n][1].clone(),
+            ];
+            let next = expected.evaluate_next_rational(&companion, n).unwrap();
+            states.push(vec![next[2].clone(), next[3].clone()]);
+        }
+        let opts = VectorRecurrenceOptions {
+            var_deg: 2,
+            idx_deg: 1,
+            diff_deg: 1,
+            held_out_transitions: 3,
+            ..Default::default()
+        };
+
+        let fit = find_companion_vector_recurrence_rational(&states, 0, 2, &opts).unwrap();
+        assert!(fit.rows.iter().all(|row| row.nullity == 0));
+        assert_eq!(fit.rows.len(), 2, "only the final block row is fitted");
+        assert_eq!(fit.recurrence.matrix[0][2], WeylOperator::identity());
+        assert_eq!(fit.recurrence.matrix[1][3], WeylOperator::identity());
+        for row in 2..4 {
+            assert_eq!(fit.recurrence.matrix[row], expected.matrix[row]);
+        }
     }
 
     #[test]

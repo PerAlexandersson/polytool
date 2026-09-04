@@ -1693,17 +1693,34 @@ fn exact_div_polynomial_bigint(
     }
 }
 
-/// Solve Ax = b via Gaussian elimination with full pivoting over ℚ.
+/// A particular solution of a consistent exact linear system, together with
+/// the rank information needed to decide whether it is identifiable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinearSystemSolution {
+    /// One solution, with every free variable set to zero.
+    pub particular: Vec<Q>,
+    /// Rank of the coefficient matrix.
+    pub rank: usize,
+    /// Dimension of the solution space of the associated homogeneous system.
+    pub nullity: usize,
+}
+
+/// Solve `Ax = b` over ℚ and report the rank and nullity of `A`.
 ///
-/// Returns `None` if the system is inconsistent.
-/// For underdetermined systems, free variables are set to zero.
-pub fn solve_linear_system(a: &[Vec<Q>], b: &[Q]) -> Option<Vec<Q>> {
+/// Returns `None` if the dimensions are invalid or the system is
+/// inconsistent. For an underdetermined consistent system, free variables in
+/// [`LinearSystemSolution::particular`] are set to zero.
+pub fn solve_linear_system_with_rank(a: &[Vec<Q>], b: &[Q]) -> Option<LinearSystemSolution> {
     let num_rows = a.len();
     if b.len() != num_rows {
         return None;
     }
     if num_rows == 0 {
-        return Some(vec![]);
+        return Some(LinearSystemSolution {
+            particular: vec![],
+            rank: 0,
+            nullity: 0,
+        });
     }
     let num_cols = a[0].len();
     if a.iter().any(|row| row.len() != num_cols) {
@@ -1766,7 +1783,22 @@ pub fn solve_linear_system(a: &[Vec<Q>], b: &[Q]) -> Option<Vec<Q>> {
     for &(pr, pc) in &pivot_cols {
         x[pc] = aug[pr][num_cols].clone() / aug[pr][pc].clone();
     }
-    Some(x)
+    let rank = pivot_cols.len();
+    Some(LinearSystemSolution {
+        particular: x,
+        rank,
+        nullity: num_cols - rank,
+    })
+}
+
+/// Solve Ax = b via Gaussian elimination over ℚ.
+///
+/// Returns `None` if the system is inconsistent. For underdetermined systems,
+/// free variables are set to zero. Use [`solve_linear_system_with_rank`] when
+/// the caller needs to distinguish a unique solution from an arbitrary
+/// particular solution.
+pub fn solve_linear_system(a: &[Vec<Q>], b: &[Q]) -> Option<Vec<Q>> {
+    solve_linear_system_with_rank(a, b).map(|solution| solution.particular)
 }
 
 /// Solve a nonsingular square system `Ax = b` over `Q`.
@@ -2506,6 +2538,24 @@ mod tests {
     // -----------------------------------------------------------------------
     // Solve linear system
     // -----------------------------------------------------------------------
+
+    #[test]
+    fn linear_system_reports_rank_and_nullity() {
+        let a = vec![
+            vec![Q::one(), Q::one(), Q::zero()],
+            vec![
+                Q::from_integer(BigInt::from(2)),
+                Q::from_integer(BigInt::from(2)),
+                Q::zero(),
+            ],
+        ];
+        let b = vec![Q::one(), Q::from_integer(BigInt::from(2))];
+        let solution = solve_linear_system_with_rank(&a, &b).unwrap();
+
+        assert_eq!(solution.rank, 1);
+        assert_eq!(solution.nullity, 2);
+        assert_eq!(solution.particular, vec![Q::one(), Q::zero(), Q::zero()]);
+    }
 
     #[test]
     fn test_solve_identity() {
