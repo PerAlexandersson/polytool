@@ -34,6 +34,12 @@ combpoly poly --content 2,2,1 --board 22233 --stat asc --real-rooted
 # Parking functions of size 5
 combpoly poly --parking 5 --stat des
 
+# Noncrossing Chow polynomial: descents on tieless parking functions
+combpoly poly --parking 5 --tieless --stat des
+
+# Narayana polynomial: descents on strict-peakless, tieless parking functions
+combpoly poly --parking 4 --strict-peakless --tieless --stat des
+
 # Words on a skew board
 combpoly poly --content 2,2,1 --board 33333 --skew 11 --stat asc
 ```
@@ -127,15 +133,22 @@ combpoly lpm-hyperplanes --area 0,1,1,2
 
 Permutations can be specified as `321` or `3,2,1` (use commas for entries >= 10).
 
-## Filters (for permutations)
+## Filters
 
 | Flag | Description |
 |------|-------------|
 | `--avoiding PAT` | Avoid pattern PAT (repeatable) |
+| `--arrow-avoiding PATTERN` | Avoid an arrow pattern (repeatable) |
 | `--alternating` | Only alternating (up-down) permutations |
 | `--derangement` | Only derangements (no fixed points) |
 | `--starts-with V` | First element is V |
 | `--ends-with V` | Last element is V |
+| `--tieless` | No equal adjacent letters |
+| `--strict-peakless` | No indices with w_{i-1} < w_i > w_{i+1} |
+| `--weak-peakless` | No indices with w_{i-1} <= w_i > w_{i+1} |
+
+The first six filters are primarily permutation filters.  The last three are
+word filters and are especially useful with `--parking`.
 
 ## Statistics
 
@@ -143,8 +156,10 @@ Permutations can be specified as `321` or `3,2,1` (use commas for entries >= 10)
 |------|-------------|
 | `des` | Descents: #{i : w_i > w_{i+1}} |
 | `asc` | Ascents: #{i : w_i < w_{i+1}} |
+| `tie` | Ties: #{i : w_i = w_{i+1}} |
 | `exc` | Excedances: #{i : w_i > i} |
-| `peak` | Peaks: #{i : w_{i-1} < w_i > w_{i+1}} |
+| `peak` | Strict peaks: #{i : w_{i-1} < w_i > w_{i+1}} |
+| `weak-peak` | Weak-left peaks: #{i : w_{i-1} <= w_i > w_{i+1}} |
 | `valley` | Valleys: #{i : w_{i-1} > w_i < w_{i+1}} |
 | `inv` | Inversions: #{(i,j) : i < j, w_i > w_j} |
 | `coinv` | Coinversions: #{(i,j) : i < j, w_i < w_j} |

@@ -3,13 +3,19 @@
 //! This module currently implements the discrete graph-coloring model in the
 //! monomial basis. Coefficients are polynomials in `q`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use combinatoric_core::Graph;
 use sym_poly_core::{Partition, Ring, UnivariatePolynomial};
 
 use crate::kostka::sn_character;
 use crate::{Basis, SymmetricFunction};
+
+pub(crate) type QPolynomial = UnivariatePolynomial<i64>;
+pub(crate) type QSymmetricFunction = SymmetricFunction<QPolynomial>;
+
+const DYCK_NORTH: u8 = 1;
+const DYCK_EAST: u8 = 0;
 
 /// Compute the graph LLT polynomial in the monomial basis.
 ///
@@ -104,9 +110,278 @@ pub fn directed_graph_llt_symmetric(
 }
 
 /// The unicellular LLT polynomial attached to a unit-interval area sequence.
-pub fn unicellular_llt(area: &[u8]) -> SymmetricFunction<UnivariatePolynomial<i64>> {
+pub fn unicellular_llt(area: &[u8]) -> QSymmetricFunction {
     let edges = unit_interval_edges(area);
     graph_llt_symmetric(area.len(), &edges, &[], &[])
+}
+
+/// The unicellular LLT polynomial after substituting `q -> q + 1`.
+pub fn unicellular_llt_q_plus_one(area: &[u8]) -> Option<QSymmetricFunction> {
+    if !is_area_sequence(area) {
+        return None;
+    }
+
+    Some(substitute_q_plus_one_symmetric_function(&unicellular_llt(
+        area,
+    )))
+}
+
+/// Elementary-basis expansion of the unicellular LLT after `q -> q + 1`.
+pub fn unicellular_llt_q_plus_one_e_expansion(area: &[u8]) -> Option<QSymmetricFunction> {
+    Some(unicellular_llt_q_plus_one(area)?.to_elementary_basis())
+}
+
+/// In-memory cache for the Dyck-only recursion for unicellular LLT polynomials.
+///
+/// Values are stored after the shift `q -> q + 1` and in the elementary basis.
+/// The recursion uses only Dyck paths, via the Dyck-path relations of
+/// Alexandersson--Sulzgruber, Theorem 3.5.
+#[derive(Debug, Default, Clone)]
+pub struct UnicellularLltDyckCache {
+    memo: BTreeMap<Vec<u8>, QSymmetricFunction>,
+}
+
+impl UnicellularLltDyckCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn len(&self) -> usize {
+        self.memo.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.memo.is_empty()
+    }
+
+    /// Compute the shifted elementary expansion from an area sequence.
+    pub fn expansion_from_area_sequence(&mut self, area: &[u8]) -> Option<QSymmetricFunction> {
+        let q_plus_two = QPolynomial::new(vec![2, 1]);
+        let q_plus_one = QPolynomial::new(vec![1, 1]);
+        dyck_recursive_e_expansion_from_area(
+            area,
+            &mut self.memo,
+            &q_plus_two,
+            &q_plus_one,
+            &mut shifted_llt_dyck_base,
+        )
+    }
+
+    /// Compute the shifted elementary expansion from a Dyck word in `{N,E}`.
+    pub fn expansion_from_dyck_word(&mut self, word: &str) -> Option<QSymmetricFunction> {
+        let path = dyck_word_to_steps(word)?;
+        let q_plus_two = QPolynomial::new(vec![2, 1]);
+        let q_plus_one = QPolynomial::new(vec![1, 1]);
+        let mut active = BTreeSet::new();
+        dyck_recursive_e_expansion_from_steps(
+            &path,
+            &mut self.memo,
+            &mut active,
+            &q_plus_two,
+            &q_plus_one,
+            &mut shifted_llt_dyck_base,
+        )
+    }
+}
+
+/// Recursive shifted elementary expansion of a unicellular LLT polynomial.
+///
+/// This is a convenience wrapper around [`UnicellularLltDyckCache`]. Use the
+/// cache directly when computing many paths of the same size.
+pub fn unicellular_llt_q_plus_one_e_expansion_recursive(area: &[u8]) -> Option<QSymmetricFunction> {
+    UnicellularLltDyckCache::new().expansion_from_area_sequence(area)
+}
+
+pub(crate) fn dyck_recursive_e_expansion_from_area<F>(
+    area: &[u8],
+    memo: &mut BTreeMap<Vec<u8>, QSymmetricFunction>,
+    three_middle_coeff: &QPolynomial,
+    three_low_coeff: &QPolynomial,
+    base: &mut F,
+) -> Option<QSymmetricFunction>
+where
+    F: FnMut(&[u8]) -> Option<QSymmetricFunction>,
+{
+    let path = area_sequence_to_dyck_steps(area)?;
+    let mut active = BTreeSet::new();
+    dyck_recursive_e_expansion_from_steps(
+        &path,
+        memo,
+        &mut active,
+        three_middle_coeff,
+        three_low_coeff,
+        base,
+    )
+}
+
+fn dyck_recursive_e_expansion_from_steps<F>(
+    path: &[u8],
+    memo: &mut BTreeMap<Vec<u8>, QSymmetricFunction>,
+    active: &mut BTreeSet<Vec<u8>>,
+    three_middle_coeff: &QPolynomial,
+    three_low_coeff: &QPolynomial,
+    base: &mut F,
+) -> Option<QSymmetricFunction>
+where
+    F: FnMut(&[u8]) -> Option<QSymmetricFunction>,
+{
+    if let Some(cached) = memo.get(path) {
+        return Some(cached.clone());
+    }
+    if !is_dyck_steps(path) {
+        return None;
+    }
+
+    let key = path.to_vec();
+    if !active.insert(key.clone()) {
+        return None;
+    }
+
+    let expansion = if let Some(base_expansion) = base(path) {
+        Some(base_expansion)
+    } else if let Some(split) = first_dyck_return(path) {
+        match (
+            dyck_recursive_e_expansion_from_steps(
+                &path[..split],
+                memo,
+                active,
+                three_middle_coeff,
+                three_low_coeff,
+                base,
+            ),
+            dyck_recursive_e_expansion_from_steps(
+                &path[split..],
+                memo,
+                active,
+                three_middle_coeff,
+                three_low_coeff,
+                base,
+            ),
+        ) {
+            (Some(left), Some(right)) => Some(left.multiply(&right)),
+            _ => None,
+        }
+    } else if let Some(expansion) = try_three_term_reductions(
+        path,
+        memo,
+        active,
+        three_middle_coeff,
+        three_low_coeff,
+        base,
+    ) {
+        Some(expansion)
+    } else {
+        try_six_term_reductions(
+            path,
+            memo,
+            active,
+            three_middle_coeff,
+            three_low_coeff,
+            base,
+        )
+    };
+
+    let Some(expansion) = expansion else {
+        active.remove(&key);
+        return None;
+    };
+
+    active.remove(&key);
+    memo.insert(key, expansion.clone());
+    Some(expansion)
+}
+
+fn shifted_llt_dyck_base(path: &[u8]) -> Option<QSymmetricFunction> {
+    if path.is_empty() {
+        return Some(SymmetricFunction::basis_element(
+            Basis::Elementary,
+            Partition::empty(),
+        ));
+    }
+    let n = dyck_initial_size(path)?;
+    Some(shifted_initial_dyck_expansion(n))
+}
+
+pub(crate) fn dyck_initial_size(path: &[u8]) -> Option<usize> {
+    is_initial_dyck_path(path).then_some(path.len() / 2)
+}
+
+fn try_three_term_reductions<F>(
+    path: &[u8],
+    memo: &mut BTreeMap<Vec<u8>, QSymmetricFunction>,
+    active: &mut BTreeSet<Vec<u8>>,
+    three_middle_coeff: &QPolynomial,
+    three_low_coeff: &QPolynomial,
+    base: &mut F,
+) -> Option<QSymmetricFunction>
+where
+    F: FnMut(&[u8]) -> Option<QSymmetricFunction>,
+{
+    for (middle, low) in find_three_term_reductions(path) {
+        let Some(middle_expansion) = dyck_recursive_e_expansion_from_steps(
+            &middle,
+            memo,
+            active,
+            three_middle_coeff,
+            three_low_coeff,
+            base,
+        ) else {
+            continue;
+        };
+        let Some(low_expansion) = dyck_recursive_e_expansion_from_steps(
+            &low,
+            memo,
+            active,
+            three_middle_coeff,
+            three_low_coeff,
+            base,
+        ) else {
+            continue;
+        };
+        return Some(
+            middle_expansion.scale(three_middle_coeff) - low_expansion.scale(three_low_coeff),
+        );
+    }
+    None
+}
+
+fn try_six_term_reductions<F>(
+    path: &[u8],
+    memo: &mut BTreeMap<Vec<u8>, QSymmetricFunction>,
+    active: &mut BTreeSet<Vec<u8>>,
+    three_middle_coeff: &QPolynomial,
+    three_low_coeff: &QPolynomial,
+    base: &mut F,
+) -> Option<QSymmetricFunction>
+where
+    F: FnMut(&[u8]) -> Option<QSymmetricFunction>,
+{
+    for reduction in find_six_term_reductions(path) {
+        let mut total = SymmetricFunction::zero(Basis::Elementary);
+        let mut failed = false;
+        for (sign, term) in reduction {
+            let Some(expansion) = dyck_recursive_e_expansion_from_steps(
+                &term,
+                memo,
+                active,
+                three_middle_coeff,
+                three_low_coeff,
+                base,
+            ) else {
+                failed = true;
+                break;
+            };
+            total = if sign > 0 {
+                total + expansion
+            } else {
+                total - expansion
+            };
+        }
+        if !failed {
+            return Some(total);
+        }
+    }
+    None
 }
 
 /// The circular unicellular LLT polynomial attached to a circular area sequence.
@@ -470,6 +745,272 @@ fn is_area_sequence(area: &[u8]) -> bool {
         && area
             .windows(2)
             .all(|w| usize::from(w[1]) <= usize::from(w[0]) + 1)
+}
+
+fn area_sequence_to_dyck_steps(area: &[u8]) -> Option<Vec<u8>> {
+    if !is_area_sequence(area) {
+        return None;
+    }
+
+    let n = area.len();
+    let mut north_counts = vec![0usize; n];
+    for (i, &value) in area.iter().enumerate() {
+        let east_before = i.checked_sub(value as usize)?;
+        north_counts[east_before] += 1;
+    }
+
+    let mut path = Vec::with_capacity(2 * n);
+    for count in north_counts {
+        path.extend(std::iter::repeat(DYCK_NORTH).take(count));
+        path.push(DYCK_EAST);
+    }
+    Some(path)
+}
+
+fn dyck_word_to_steps(word: &str) -> Option<Vec<u8>> {
+    let mut steps = Vec::with_capacity(word.len());
+    for ch in word.chars() {
+        match ch {
+            'N' | 'n' => steps.push(DYCK_NORTH),
+            'E' | 'e' => steps.push(DYCK_EAST),
+            _ => return None,
+        }
+    }
+    is_dyck_steps(&steps).then_some(steps)
+}
+
+fn is_dyck_steps(path: &[u8]) -> bool {
+    let mut height = 0isize;
+    for &step in path {
+        match step {
+            DYCK_NORTH => height += 1,
+            DYCK_EAST => height -= 1,
+            _ => return false,
+        }
+        if height < 0 {
+            return false;
+        }
+    }
+    height == 0
+}
+
+fn first_dyck_return(path: &[u8]) -> Option<usize> {
+    let mut height = 0isize;
+    for (idx, &step) in path.iter().enumerate() {
+        height += if step == DYCK_NORTH { 1 } else { -1 };
+        if height == 0 && idx + 1 < path.len() {
+            return Some(idx + 1);
+        }
+    }
+    None
+}
+
+fn is_initial_dyck_path(path: &[u8]) -> bool {
+    if path.len() % 2 != 0 || path.is_empty() {
+        return false;
+    }
+    if path[0] != DYCK_NORTH || *path.last().unwrap() != DYCK_EAST {
+        return false;
+    }
+    path[1..path.len() - 1]
+        .chunks(2)
+        .all(|chunk| chunk == [DYCK_NORTH, DYCK_EAST])
+}
+
+fn shifted_initial_dyck_expansion(n: usize) -> QSymmetricFunction {
+    let mut terms = BTreeMap::new();
+    let mut composition = Vec::new();
+    add_shifted_initial_compositions(n as u32, n, &mut composition, &mut terms);
+    SymmetricFunction::from_terms(Basis::Elementary, terms)
+}
+
+fn add_shifted_initial_compositions(
+    remaining: u32,
+    total: usize,
+    composition: &mut Vec<u32>,
+    terms: &mut BTreeMap<Partition, QPolynomial>,
+) {
+    if remaining == 0 {
+        let degree = total - composition.len();
+        let partition = Partition::new(composition.clone());
+        let entry = terms.entry(partition).or_insert_with(QPolynomial::zero);
+        *entry = entry.clone() + QPolynomial::monomial(degree, 1);
+        return;
+    }
+
+    for part in 1..=remaining {
+        composition.push(part);
+        add_shifted_initial_compositions(remaining - part, total, composition, terms);
+        composition.pop();
+    }
+}
+
+fn find_three_term_reductions(path: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
+    let mut reductions = Vec::new();
+    for start in 2..path.len() {
+        if path[start] != DYCK_EAST || path[start - 1] != DYCK_EAST || path[start - 2] != DYCK_NORTH
+        {
+            continue;
+        }
+
+        let Some(endpoint) = bounce_endpoint(path, start) else {
+            continue;
+        };
+        if endpoint == 0
+            || endpoint >= path.len()
+            || path[endpoint - 1] != DYCK_NORTH
+            || path[endpoint] != DYCK_NORTH
+            || endpoint + 1 > start - 2
+        {
+            continue;
+        }
+
+        let middle = dyck_splice(
+            path,
+            endpoint - 1,
+            start + 1,
+            &[DYCK_NORTH, DYCK_NORTH],
+            &path[endpoint + 1..start - 2],
+            &[DYCK_EAST, DYCK_NORTH, DYCK_EAST],
+        );
+        let low = dyck_splice(
+            path,
+            endpoint - 1,
+            start + 1,
+            &[DYCK_NORTH, DYCK_NORTH],
+            &path[endpoint + 1..start - 2],
+            &[DYCK_EAST, DYCK_EAST, DYCK_NORTH],
+        );
+        if is_dyck_steps(&middle) && is_dyck_steps(&low) {
+            reductions.push((middle, low));
+        }
+    }
+    reductions
+}
+
+fn find_six_term_reductions(path: &[u8]) -> Vec<Vec<(i8, Vec<u8>)>> {
+    let mut reductions = Vec::new();
+    for start in 2..path.len() {
+        if path[start] != DYCK_EAST || path[start - 1] != DYCK_EAST || path[start - 2] != DYCK_NORTH
+        {
+            continue;
+        }
+
+        let Some(endpoint) = bounce_endpoint(path, start) else {
+            continue;
+        };
+        if endpoint < 2
+            || endpoint >= path.len()
+            || path[endpoint - 2] != DYCK_NORTH
+            || path[endpoint - 1] != DYCK_EAST
+            || path[endpoint] != DYCK_NORTH
+            || endpoint + 1 > start - 2
+        {
+            continue;
+        }
+
+        let v = &path[endpoint + 1..start - 2];
+        let t1 = dyck_splice(
+            path,
+            endpoint - 2,
+            start + 1,
+            &[DYCK_EAST, DYCK_NORTH, DYCK_NORTH],
+            v,
+            &[DYCK_EAST, DYCK_NORTH, DYCK_EAST],
+        );
+        let t3 = dyck_splice(
+            path,
+            endpoint - 2,
+            start + 1,
+            &[DYCK_NORTH, DYCK_NORTH, DYCK_EAST],
+            v,
+            &[DYCK_EAST, DYCK_EAST, DYCK_NORTH],
+        );
+        let t4 = dyck_splice(
+            path,
+            endpoint - 2,
+            start + 1,
+            &[DYCK_EAST, DYCK_NORTH, DYCK_NORTH],
+            v,
+            &[DYCK_NORTH, DYCK_EAST, DYCK_EAST],
+        );
+        let t5 = dyck_splice(
+            path,
+            endpoint - 2,
+            start + 1,
+            &[DYCK_NORTH, DYCK_EAST, DYCK_NORTH],
+            v,
+            &[DYCK_EAST, DYCK_EAST, DYCK_NORTH],
+        );
+        let t6 = dyck_splice(
+            path,
+            endpoint - 2,
+            start + 1,
+            &[DYCK_NORTH, DYCK_NORTH, DYCK_EAST],
+            v,
+            &[DYCK_EAST, DYCK_NORTH, DYCK_EAST],
+        );
+        if [&t1, &t3, &t4, &t5, &t6]
+            .iter()
+            .all(|term| is_dyck_steps(term))
+        {
+            reductions.push(vec![(1, t4), (1, t5), (1, t6), (-1, t1), (-1, t3)]);
+        }
+    }
+    reductions
+}
+
+fn bounce_endpoint(path: &[u8], start: usize) -> Option<usize> {
+    let coordinates = dyck_coordinates(path);
+    let (x, z) = coordinates[start];
+    if x + 1 >= z {
+        return None;
+    }
+
+    let mut best = None;
+    for (idx, &(east, north)) in coordinates[..start].iter().enumerate() {
+        if north == x && (x == 0 || east < x) {
+            match best {
+                None => best = Some((idx, east)),
+                Some((_, best_east)) if east > best_east => best = Some((idx, east)),
+                _ => {}
+            }
+        }
+    }
+    best.map(|(idx, _)| idx)
+}
+
+fn dyck_coordinates(path: &[u8]) -> Vec<(usize, usize)> {
+    let mut coordinates = Vec::with_capacity(path.len() + 1);
+    let mut east = 0usize;
+    let mut north = 0usize;
+    coordinates.push((east, north));
+    for &step in path {
+        if step == DYCK_NORTH {
+            north += 1;
+        } else {
+            east += 1;
+        }
+        coordinates.push((east, north));
+    }
+    coordinates
+}
+
+fn dyck_splice(
+    path: &[u8],
+    start: usize,
+    end: usize,
+    prefix: &[u8],
+    middle: &[u8],
+    suffix: &[u8],
+) -> Vec<u8> {
+    let mut result = Vec::with_capacity(path.len());
+    result.extend_from_slice(&path[..start]);
+    result.extend_from_slice(prefix);
+    result.extend_from_slice(middle);
+    result.extend_from_slice(suffix);
+    result.extend_from_slice(&path[end..]);
+    result
 }
 
 fn count_llt_colorings_of_type(
@@ -853,6 +1394,52 @@ mod tests {
     }
 
     #[test]
+    fn test_unicellular_llt_q_plus_one_e_expansion_path_graph_s3() {
+        let e_expansion = unicellular_llt_q_plus_one_e_expansion(&[0, 1, 1]).unwrap();
+
+        assert_eq!(
+            e_expansion.coefficient(&Partition::new(vec![1, 1, 1])),
+            UnivariatePolynomial::new(vec![1])
+        );
+        assert_eq!(
+            e_expansion.coefficient(&Partition::new(vec![2, 1])),
+            UnivariatePolynomial::new(vec![0, 2])
+        );
+        assert_eq!(
+            e_expansion.coefficient(&Partition::new(vec![3])),
+            UnivariatePolynomial::new(vec![0, 0, 1])
+        );
+    }
+
+    #[test]
+    fn test_recursive_unicellular_llt_q_plus_one_matches_direct_rank_up_to_5() {
+        let mut cache = UnicellularLltDyckCache::new();
+        for n in 0..=5 {
+            for area in all_area_sequences(n) {
+                let recursive = cache
+                    .expansion_from_area_sequence(&area)
+                    .unwrap_or_else(|| panic!("recursion did not cover area {area:?}"));
+                let direct = unicellular_llt_q_plus_one_e_expansion(&area).unwrap();
+                assert_eq!(recursive, direct, "area {area:?}");
+            }
+        }
+        assert!(!cache.is_empty());
+    }
+
+    #[test]
+    fn test_recursive_unicellular_llt_q_plus_one_covers_rank_7() {
+        let mut cache = UnicellularLltDyckCache::new();
+        for n in 0..=7 {
+            for area in all_area_sequences(n) {
+                assert!(
+                    cache.expansion_from_area_sequence(&area).is_some(),
+                    "area {area:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_unicellular_llt_frobenius_target_edgeless_s3() {
         let target = unicellular_llt_frobenius_target(&[0, 0, 0]).unwrap();
 
@@ -967,6 +1554,30 @@ mod tests {
         for value in 0..current.len() {
             current[index] = value as u8;
             circular_area_sequences_rec(index + 1, current, result);
+        }
+    }
+
+    fn all_area_sequences(n: usize) -> Vec<Vec<u8>> {
+        if n == 0 {
+            return vec![Vec::new()];
+        }
+
+        let mut result = Vec::new();
+        let mut current = vec![0u8; n];
+        area_sequences_rec(1, &mut current, &mut result);
+        result
+    }
+
+    fn area_sequences_rec(index: usize, current: &mut [u8], result: &mut Vec<Vec<u8>>) {
+        if index == current.len() {
+            result.push(current.to_vec());
+            return;
+        }
+
+        let max_value = (current[index - 1] + 1).min(index as u8);
+        for value in 0..=max_value {
+            current[index] = value;
+            area_sequences_rec(index + 1, current, result);
         }
     }
 }

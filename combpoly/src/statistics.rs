@@ -15,10 +15,14 @@ pub enum Stat {
     Des,
     /// Number of ascents
     Asc,
+    /// Number of adjacent ties
+    Tie,
     /// Number of excedances (w_i > i)
     Exc,
-    /// Number of peaks
+    /// Number of strict peaks: w_{i-1} < w_i > w_{i+1}
     Peak,
+    /// Number of weak-left peaks: w_{i-1} <= w_i > w_{i+1}
+    WeakPeak,
     /// Number of inversions
     Inv,
     /// Major index (sum of descent positions)
@@ -58,8 +62,10 @@ impl fmt::Display for Stat {
         match self {
             Stat::Des => write!(f, "des"),
             Stat::Asc => write!(f, "asc"),
+            Stat::Tie => write!(f, "tie"),
             Stat::Exc => write!(f, "exc"),
             Stat::Peak => write!(f, "peak"),
+            Stat::WeakPeak => write!(f, "weak_peak"),
             Stat::Inv => write!(f, "inv"),
             Stat::Maj => write!(f, "maj"),
             Stat::Comaj => write!(f, "comaj"),
@@ -85,8 +91,10 @@ pub fn compute(w: &[u8], stat: Stat) -> usize {
     match stat {
         Stat::Des => descents(w),
         Stat::Asc => ascents(w),
+        Stat::Tie => ties(w),
         Stat::Exc => excedances(w),
         Stat::Peak => peaks(w),
+        Stat::WeakPeak => weak_left_peaks(w),
         Stat::Inv => inversions(w),
         Stat::Maj => major_index(w),
         Stat::Comaj => comajor_index(w),
@@ -119,6 +127,8 @@ pub enum SetStat {
     DesSet,
     /// Ascent set {i : w_i < w_{i+1}}, 1-indexed positions
     AscSet,
+    /// Tie set {i : w_i = w_{i+1}}, 1-indexed positions
+    TieSet,
     /// Descent bottom set {w_{i+1} : i in Des(w)}, values at bottom of descents
     DesBottomSet,
     /// Descent top set {w_i : i in Des(w)}, values at top of descents
@@ -127,8 +137,10 @@ pub enum SetStat {
     ExcSet,
     /// Fixed-point set {i : w_i = i}, 1-indexed positions
     FixSet,
-    /// Peak set {i in {2,..,n-1} : w_{i-1} < w_i > w_{i+1}}, 1-indexed positions
+    /// Strict peak set {i in {2,..,n-1} : w_{i-1} < w_i > w_{i+1}}
     PeakSet,
+    /// Weak-left peak set {i in {2,..,n-1} : w_{i-1} <= w_i > w_{i+1}}
+    WeakPeakSet,
     /// Valley set {i in {2,..,n-1} : w_{i-1} > w_i < w_{i+1}}, 1-indexed positions
     ValleySet,
     /// Left-to-right minima positions, 1-indexed
@@ -148,11 +160,13 @@ impl fmt::Display for SetStat {
         match self {
             SetStat::DesSet => write!(f, "des_set"),
             SetStat::AscSet => write!(f, "asc_set"),
+            SetStat::TieSet => write!(f, "tie_set"),
             SetStat::DesBottomSet => write!(f, "des_bottom_set"),
             SetStat::DesTopSet => write!(f, "des_top_set"),
             SetStat::ExcSet => write!(f, "exc_set"),
             SetStat::FixSet => write!(f, "fix_set"),
             SetStat::PeakSet => write!(f, "peak_set"),
+            SetStat::WeakPeakSet => write!(f, "weak_peak_set"),
             SetStat::ValleySet => write!(f, "valley_set"),
             SetStat::LrminSet => write!(f, "lrmin_set"),
             SetStat::LrmaxSet => write!(f, "lrmax_set"),
@@ -171,11 +185,13 @@ pub fn compute_set(w: &[u8], stat: SetStat) -> BTreeSet<usize> {
     match stat {
         SetStat::DesSet => descent_set(w),
         SetStat::AscSet => ascent_set(w),
+        SetStat::TieSet => tie_set(w),
         SetStat::DesBottomSet => descent_bottom_set(w),
         SetStat::DesTopSet => descent_top_set(w),
         SetStat::ExcSet => excedance_set(w),
         SetStat::FixSet => fixed_point_set(w),
         SetStat::PeakSet => peak_set(w),
+        SetStat::WeakPeakSet => weak_left_peak_set(w),
         SetStat::ValleySet => valley_set(w),
         SetStat::LrminSet => lrmin_set(w),
         SetStat::LrmaxSet => lrmax_set(w),
@@ -191,6 +207,10 @@ fn descent_set(w: &[u8]) -> BTreeSet<usize> {
 
 fn ascent_set(w: &[u8]) -> BTreeSet<usize> {
     (1..w.len()).filter(|&i| w[i - 1] < w[i]).collect()
+}
+
+fn tie_set(w: &[u8]) -> BTreeSet<usize> {
+    (1..w.len()).filter(|&i| w[i - 1] == w[i]).collect()
 }
 
 fn descent_bottom_set(w: &[u8]) -> BTreeSet<usize> {
@@ -228,6 +248,16 @@ fn peak_set(w: &[u8]) -> BTreeSet<usize> {
     (1..w.len() - 1)
         .filter(|&i| w[i - 1] < w[i] && w[i] > w[i + 1])
         .map(|i| i + 1) // 1-indexed
+        .collect()
+}
+
+fn weak_left_peak_set(w: &[u8]) -> BTreeSet<usize> {
+    if w.len() < 3 {
+        return BTreeSet::new();
+    }
+    (1..w.len() - 1)
+        .filter(|&i| w[i - 1] <= w[i] && w[i] > w[i + 1])
+        .map(|i| i + 1)
         .collect()
 }
 
@@ -337,14 +367,32 @@ fn long_swaps_set(w: &[u8]) -> BTreeSet<usize> {
 /// corresponding to a descent at 1-indexed position j+1.
 ///
 /// This is efficient for grouping permutations by descent set.
+///
+/// # Panics
+///
+/// Panics if `w` has a descent beyond the 64 positions representable by a
+/// `u64`. Use [`checked_descent_set_bitmask`] when this is not known in
+/// advance.
 pub fn descent_set_bitmask(w: &[u8]) -> u64 {
+    checked_descent_set_bitmask(w)
+        .expect("descent at position 65 or later cannot be represented by a u64 bitmask")
+}
+
+/// Descent set as a `u64` bitmask, returning `None` if it does not fit.
+///
+/// A word longer than 65 entries can still be represented when all of its
+/// descents occur among the first 64 positions.
+pub fn checked_descent_set_bitmask(w: &[u8]) -> Option<u64> {
     let mut s = 0u64;
     for i in 0..w.len().saturating_sub(1) {
         if w[i] > w[i + 1] {
+            if i >= u64::BITS as usize {
+                return None;
+            }
             s |= 1 << i;
         }
     }
-    s
+    Some(s)
 }
 
 // --- Basic statistics ---
@@ -355,6 +403,10 @@ fn descents(w: &[u8]) -> usize {
 
 fn ascents(w: &[u8]) -> usize {
     (1..w.len()).filter(|&i| w[i - 1] < w[i]).count()
+}
+
+fn ties(w: &[u8]) -> usize {
+    (1..w.len()).filter(|&i| w[i - 1] == w[i]).count()
 }
 
 fn excedances(w: &[u8]) -> usize {
@@ -371,6 +423,20 @@ pub fn peaks(w: &[u8]) -> usize {
     }
     (1..w.len() - 1)
         .filter(|&i| w[i - 1] < w[i] && w[i] > w[i + 1])
+        .count()
+}
+
+/// Number of weak-left peaks in a word.
+///
+/// A weak-left peak is an index `i` with `1 < i < n` such that
+/// `w[i - 1] <= w[i] > w[i + 1]`.  Unlike a strict peak, it is determined by
+/// the descent set.
+pub fn weak_left_peaks(w: &[u8]) -> usize {
+    if w.len() < 3 {
+        return 0;
+    }
+    (1..w.len() - 1)
+        .filter(|&i| w[i - 1] <= w[i] && w[i] > w[i + 1])
         .count()
 }
 
@@ -568,6 +634,13 @@ mod tests {
     }
 
     #[test]
+    fn test_ties() {
+        assert_eq!(compute(&[1, 1, 2, 2, 1], Stat::Tie), 2);
+        assert_eq!(compute(&[1, 2, 1], Stat::Tie), 0);
+        assert_eq!(compute_set(&[1, 1, 2, 2, 1], SetStat::TieSet), set(&[1, 3]));
+    }
+
+    #[test]
     fn test_inversions_and_coinversions() {
         assert_eq!(compute(&[1, 2, 3], Stat::Inv), 0);
         assert_eq!(compute(&[3, 2, 1], Stat::Inv), 3);
@@ -604,6 +677,12 @@ mod tests {
         assert_eq!(compute(&[1, 2, 3], Stat::Peak), 0);
         assert_eq!(compute(&[3, 1, 2], Stat::Valley), 1);
         assert_eq!(compute(&[1, 2, 3], Stat::Valley), 0);
+
+        // Ties distinguish strict peaks from weak-left peaks.
+        assert_eq!(compute(&[1, 2, 2, 1], Stat::Peak), 0);
+        assert_eq!(compute(&[1, 2, 2, 1], Stat::WeakPeak), 1);
+        assert_eq!(compute(&[1, 1, 2, 1], Stat::Peak), 1);
+        assert_eq!(compute(&[1, 1, 2, 1], Stat::WeakPeak), 1);
     }
 
     #[test]
@@ -721,6 +800,8 @@ mod tests {
         assert_eq!(compute_set(&[1, 2, 3], SetStat::PeakSet), set(&[]));
         // [2,4,1,3,5]: peak at position 2 (2<4>1)
         assert_eq!(compute_set(&[2, 4, 1, 3, 5], SetStat::PeakSet), set(&[2]));
+        assert_eq!(compute_set(&[1, 2, 2, 1], SetStat::PeakSet), set(&[]));
+        assert_eq!(compute_set(&[1, 2, 2, 1], SetStat::WeakPeakSet), set(&[3]));
     }
 
     #[test]
@@ -820,6 +901,28 @@ mod tests {
     }
 
     #[test]
+    fn test_checked_descent_set_bitmask_rejects_unrepresentable_descents() {
+        let mut high_descent = vec![1; 66];
+        high_descent[64] = 2;
+        assert_eq!(checked_descent_set_bitmask(&high_descent), None);
+
+        let mut long_but_representable = vec![1; 66];
+        long_but_representable[0] = 2;
+        assert_eq!(
+            checked_descent_set_bitmask(&long_but_representable),
+            Some(1)
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "descent at position 65 or later")]
+    fn test_descent_set_bitmask_reports_unrepresentable_descent() {
+        let mut word = vec![1; 66];
+        word[64] = 2;
+        descent_set_bitmask(&word);
+    }
+
+    #[test]
     fn test_swaps_known_alternating_polys() {
         // From the paper: H_n(t) coefficient vectors for alternating perms by swaps
         // H_4 = [1, 3, 1], H_5 = [1, 7, 7, 1]
@@ -869,8 +972,16 @@ mod tests {
                 compute(pi, Stat::Des)
             );
             assert_eq!(
+                compute_set(pi, SetStat::TieSet).len(),
+                compute(pi, Stat::Tie)
+            );
+            assert_eq!(
                 compute_set(pi, SetStat::PeakSet).len(),
                 compute(pi, Stat::Peak)
+            );
+            assert_eq!(
+                compute_set(pi, SetStat::WeakPeakSet).len(),
+                compute(pi, Stat::WeakPeak)
             );
             assert_eq!(
                 compute_set(pi, SetStat::ExcSet).len(),

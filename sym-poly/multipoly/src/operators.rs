@@ -3,6 +3,8 @@
 //! - `partial_i(f)` = (f - s_i(f)) / (x_i - x_{i+1})  (simple divided difference)
 //! - `pi_i(f)` = partial_i(x_i * f)  (isobaric/Demazure operator)
 //! - `theta_i(f)` = pi_i(f) - f      (Demazure atom operator)
+//! - `demazure_lascoux_partial_i(f)` = partial_i((1 + beta*x_{i+1}) * f)
+//! - `demazure_lascoux_pi_i(f)` = partial_i(x_i * (1 + beta*x_{i+1}) * f)
 //!
 //! Both always produce polynomials when applied to polynomials.
 
@@ -51,6 +53,25 @@ pub fn theta_i<C: Ring>(f: &MultiPoly<C>, i: usize) -> MultiPoly<C> {
     pi_i(f, i) - f.clone()
 }
 
+/// Connective-K divided difference
+/// `partial_i^beta(f) = partial_i((1 + beta*x_{i+1}) * f)`.
+///
+/// This specializes to [`partial_i`] at `beta = 0` and satisfies
+/// `(partial_i^beta)^2 = -beta * partial_i^beta`.
+pub fn demazure_lascoux_partial_i<C: Ring>(f: &MultiPoly<C>, i: usize, beta: &C) -> MultiPoly<C> {
+    let deformed = f.clone() + f.mul_var(i + 1).scale(beta);
+    partial_i(&deformed, i)
+}
+
+/// Connective-K isobaric divided difference
+/// `pi_i^beta(f) = partial_i^beta(x_i * f)`.
+///
+/// This specializes to [`pi_i`] at `beta = 0` and is the operator defining
+/// Lascoux polynomials.
+pub fn demazure_lascoux_pi_i<C: Ring>(f: &MultiPoly<C>, i: usize, beta: &C) -> MultiPoly<C> {
+    demazure_lascoux_partial_i(&f.mul_var(i), i, beta)
+}
+
 /// t-deformed Demazure operator:
 /// (1 - t) π_i(f) + t s_i(f).
 ///
@@ -81,6 +102,27 @@ pub fn pi_word<C: Ring>(f: &MultiPoly<C>, word: &[usize]) -> MultiPoly<C> {
 /// Apply atom operators in the given order.
 pub fn theta_word<C: Ring>(f: &MultiPoly<C>, word: &[usize]) -> MultiPoly<C> {
     word.iter().fold(f.clone(), |acc, &i| theta_i(&acc, i))
+}
+
+/// Apply connective-K divided differences in the given order.
+pub fn demazure_lascoux_partial_word<C: Ring>(
+    f: &MultiPoly<C>,
+    word: &[usize],
+    beta: &C,
+) -> MultiPoly<C> {
+    word.iter().fold(f.clone(), |acc, &i| {
+        demazure_lascoux_partial_i(&acc, i, beta)
+    })
+}
+
+/// Apply connective-K isobaric divided differences in the given order.
+pub fn demazure_lascoux_pi_word<C: Ring>(
+    f: &MultiPoly<C>,
+    word: &[usize],
+    beta: &C,
+) -> MultiPoly<C> {
+    word.iter()
+        .fold(f.clone(), |acc, &i| demazure_lascoux_pi_i(&acc, i, beta))
 }
 
 /// Apply t-deformed Demazure operators in the given order.
@@ -183,6 +225,53 @@ mod tests {
         assert_eq!(result.coefficient(&[2, 0]), 0);
         assert_eq!(result.coefficient(&[1, 1]), 1);
         assert_eq!(result.coefficient(&[0, 2]), 1);
+    }
+
+    #[test]
+    fn test_demazure_lascoux_specializations() {
+        let f: MultiPoly<i64> = MultiPoly::x_power(2, vec![2, 0]);
+        assert_eq!(demazure_lascoux_partial_i(&f, 0, &0), partial_i(&f, 0));
+        assert_eq!(demazure_lascoux_pi_i(&f, 0, &0), pi_i(&f, 0));
+    }
+
+    #[test]
+    fn test_demazure_lascoux_pi_on_x1() {
+        let x1: MultiPoly<i64> = MultiPoly::var(2, 0);
+        let result = demazure_lascoux_pi_i(&x1, 0, &2);
+        assert_eq!(result.coefficient(&[1, 0]), 1);
+        assert_eq!(result.coefficient(&[0, 1]), 1);
+        assert_eq!(result.coefficient(&[1, 1]), 2);
+        assert_eq!(result.terms().len(), 3);
+    }
+
+    #[test]
+    fn test_demazure_lascoux_quadratic_relations() {
+        let beta = 2;
+        let f: MultiPoly<i64> = MultiPoly::x_power(3, vec![3, 1, 0]);
+        let partial_once = demazure_lascoux_partial_i(&f, 0, &beta);
+        let partial_twice = demazure_lascoux_partial_i(&partial_once, 0, &beta);
+        assert_eq!(partial_twice, partial_once.scale(&(-beta)));
+
+        let pi_once = demazure_lascoux_pi_i(&f, 0, &beta);
+        let pi_twice = demazure_lascoux_pi_i(&pi_once, 0, &beta);
+        assert_eq!(pi_twice, pi_once);
+    }
+
+    #[test]
+    fn test_demazure_lascoux_braid_relation() {
+        let beta = 2;
+        let f: MultiPoly<i64> = MultiPoly::x_power(3, vec![3, 1, 0]);
+        let lhs = demazure_lascoux_pi_i(
+            &demazure_lascoux_pi_i(&demazure_lascoux_pi_i(&f, 0, &beta), 1, &beta),
+            0,
+            &beta,
+        );
+        let rhs = demazure_lascoux_pi_i(
+            &demazure_lascoux_pi_i(&demazure_lascoux_pi_i(&f, 1, &beta), 0, &beta),
+            1,
+            &beta,
+        );
+        assert_eq!(lhs, rhs);
     }
 
     #[test]

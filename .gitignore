@@ -1,4 +1,14 @@
 /target/
 /documents/
-/experiments/
+# Keep the experiments crate loadable in a clean workspace while leaving
+# disposable binaries and generated research output untracked.
+/experiments/*
+!/experiments/Cargo.toml
+!/experiments/src/
+/experiments/src/*
+!/experiments/src/lib.rs
+!/experiments/src/matroids.rs
+!/experiments/src/nn_rook_utils.rs
+!/experiments/src/peak_utils.rs
+/ehrcalc/
 .codex

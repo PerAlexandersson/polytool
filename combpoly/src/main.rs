@@ -230,6 +230,18 @@ struct Source {
     #[arg(long)]
     parking: Option<u8>,
 
+    /// Keep only words with no equal adjacent letters
+    #[arg(long)]
+    tieless: bool,
+
+    /// Keep only words with no strict peaks w_{i-1} < w_i > w_{i+1}
+    #[arg(long)]
+    strict_peakless: bool,
+
+    /// Keep only words with no weak-left peaks w_{i-1} <= w_i > w_{i+1}
+    #[arg(long)]
+    weak_peakless: bool,
+
     /// Bruhat lower ideal of a permutation (e.g., 321 or 3,2,1)
     #[arg(long, value_name = "PERM")]
     bruhat_ideal: Option<String>,
@@ -321,7 +333,13 @@ fn get_objects(source: &Source) -> Vec<Vec<u8>> {
         };
         perms
     } else if let Some(n) = source.parking {
-        parking::all_parking_functions(n)
+        let mut parking_functions = parking::all_parking_functions(n);
+        parking_functions.retain(|word| {
+            (!source.tieless || word.windows(2).all(|pair| pair[0] != pair[1]))
+                && (!source.strict_peakless || statistics::peaks(word) == 0)
+                && (!source.weak_peakless || statistics::weak_left_peaks(word) == 0)
+        });
+        parking_functions
     } else if let Some(ref s) = source.bruhat_ideal {
         let perm = permutation::parse_sequence(s);
         order::bruhat_lower_ideal(&perm)
