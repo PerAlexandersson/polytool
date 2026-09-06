@@ -1,5 +1,31 @@
 # Polytool handoff
 
+## Final monorepo integration (2026-09-06)
+
+The completed review-fix history was integrated with clean local monorepo
+`master` by merge commit `a801eb1`. The merge preserves parent `41d57bd` with
+all Polytool fixes and parent `29c075e` with all audited monorepo changes. It
+merged without textual conflicts, so no LLT or handoff content was discarded.
+
+Post-merge verification used external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`:
+
+- the Polytool non-OEIS library suite passed 312 tests;
+- focused recurrence, linear-algebra, and parser coverage is included, with 57
+  recurrence and 62 linear-algebra tests passing independently;
+- CLI BigInt, recurrence-overfit, interlacing API, documentation, and the
+  focused imported-OEIS validation replay passed;
+- Polytool MCP passed all library, binary, and documentation targets;
+- strict Clippy for Polytool and Polytool MCP passed;
+- the other changed monorepo packages and tracked experiment binaries passed
+  their proportional checks;
+- Cargo metadata and `git diff --check` passed.
+
+This handoff is part of the user-authorized final monorepo publication and
+standalone `polytool/` subtree projection. Integration ownership is released
+after remote-ref verification. Ehrcalc is outside this operation and remains
+untouched.
+
 ## Completed review fixes (2026-09-06)
 
 The review-fix worker used the regular isolated worktree
@@ -68,8 +94,9 @@ Two unchanged exhaustive fixture replays exceeded the required 60-second cap:
 `timeout` with status 124 and emitted no failure before termination. Their
 focused recurrence paths and the other 312 library tests pass.
 
-Nothing was pushed. The canonical `/workspace/rust` checkout remains on
-`master` at `d0a1ca3` with its pre-existing dirty files untouched.
+That checkpoint itself was not pushed and left the canonical checkout at
+`d0a1ca3`; the later final-integration section above supersedes that historical
+state while preserving the original verification record.
 
 ## OEIS recurrence catalog
 
