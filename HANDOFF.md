@@ -1,23 +1,75 @@
 # Polytool handoff
 
-## Active review-fix work (2026-09-06)
+## Completed review fixes (2026-09-06)
 
-The Codex worker on branch `fix/polytool-review-20260906` owns the following
-files in the isolated worktree `/tmp/polytool-review-fixes-20260906`:
+The review-fix worker used the regular isolated worktree
+`/tmp/polytool-review-fixes-20260906` on branch
+`fix/polytool-review-20260906`. Ownership covered `src/parse.rs`, `src/lib.rs`,
+`src/real_rootedness.rs`, `src/recurrence.rs`, `src/linalg.rs`,
+`src/bin/polytool.rs`, `mcp/src/lib.rs`, `tests/cli_bigint.rs`, focused inline
+tests, and this handoff. The implementation is complete and that ownership is
+released after the final handoff commit.
 
-- `src/parse.rs`;
-- `src/real_rootedness.rs`;
-- `src/recurrence.rs`;
-- `src/linalg.rs`;
-- `src/bin/polytool.rs`;
-- `mcp/src/lib.rs`;
-- focused tests under `tests/` as needed;
-- this `HANDOFF.md`.
+History and implementation checkpoints:
 
-The task covers the confirmed correctness and boundary bugs from the
-2026-09-06 read-only review, plus lazy total-positivity minor enumeration and
-lazy score-ordered recurrence candidate search. The dirty canonical checkout
-at `/workspace/rust` is out of scope and must remain untouched.
+- `76e3b0c` merges `origin/master` into local master `d0a1ca3`; its two parents
+  preserve both the six local-only and nine remote-only commits;
+- `6ca87f6` records initial isolated-worktree ownership;
+- `ffa4ad4` implements all confirmed review fixes and both requested lazy
+  iteration improvements.
+
+The implementation makes modular recurrence rejection exact by requiring a
+full-column-rank modular certificate and otherwise falling back to rational
+solving. It checks exponent and recurrence-index arithmetic, bounds dense
+parser allocation and CLI/MCP input, caps MCP sequence, recurrence, and finite
+Lace workloads, replaces Ehrhart and modular-row panics with structured errors,
+and validates ragged total-positivity matrices. Bivariate recurrence
+coefficients tolerate the existing public ragged representation without
+panicking or dropping terms and are normalized at the JSON boundary. Total
+positivity combinations and score-ordered recurrence candidates are now lazy;
+equivalence tests compare both iterators with their previous eager order.
+
+Compatibility choices: `BivarPoly::coeffs` remains public, so existing struct
+literals continue to compile. Ragged rows are interpreted with missing exact
+zeros and JSON round-trips become rectangular. The Ehrhart conversion and
+public `SparseModRow` construction/update APIs now return typed `Result`s; this
+source-level change is intentional because those APIs previously panicked on
+invalid exact input or modulus zero. Existing valid arithmetic and recurrence
+ordering are unchanged.
+
+Verification used external `CARGO_TARGET_DIR=/cargo-target/ai-projects` and
+60-second, reduced-priority Rust commands:
+
+```text
+cargo test -q -p polytool --lib -- --skip oeis                 312 passed
+cargo test -q -p polytool --lib recurrence::tests               57 passed
+cargo test -q -p polytool --lib linalg::tests                   62 passed
+cargo test -q -p polytool --lib parse::tests                    17 passed
+cargo test -q -p polytool --lib real_rootedness::tests::test_ehrhart
+                                                                  4 passed
+cargo test -q -p polytool --test cli_bigint                     19 passed
+cargo test -q -p polytool --test recurrence_overfit_fixtures     2 passed
+cargo test -q -p polytool --test interlacing_api                 5 passed
+cargo test -q -p polytool --doc                                  5 passed
+cargo test -q -p polytool-mcp                         21 + 2 + 1 passed
+cargo test -q -p polytool --lib \
+  oeis::tests::every_imported_lean_definition_reproduces_its_validation_row
+                                                                  1 passed
+cargo clippy -q -p polytool -p polytool-mcp --all-targets --
+  -D warnings -A clippy::manual-is-multiple-of
+  -A clippy::needless-range-loop -A clippy::bool-assert-comparison
+                                                                  passed
+git diff --check                                                 passed
+```
+
+Two unchanged exhaustive fixture replays exceeded the required 60-second cap:
+`oeis::tests::every_sparse_definition_reproduces_its_fixture_rows` and
+`recurrence_json_fixtures_regenerate_raw_rows`. Each was terminated by
+`timeout` with status 124 and emitted no failure before termination. Their
+focused recurrence paths and the other 312 library tests pass.
+
+Nothing was pushed. The canonical `/workspace/rust` checkout remains on
+`master` at `d0a1ca3` with its pre-existing dirty files untouched.
 
 ## OEIS recurrence catalog
 
