@@ -1,5 +1,24 @@
 # Polytool handoff
 
+## Active review-fix work (2026-09-06)
+
+The Codex worker on branch `fix/polytool-review-20260906` owns the following
+files in the isolated worktree `/tmp/polytool-review-fixes-20260906`:
+
+- `src/parse.rs`;
+- `src/real_rootedness.rs`;
+- `src/recurrence.rs`;
+- `src/linalg.rs`;
+- `src/bin/polytool.rs`;
+- `mcp/src/lib.rs`;
+- focused tests under `tests/` as needed;
+- this `HANDOFF.md`.
+
+The task covers the confirmed correctness and boundary bugs from the
+2026-09-06 read-only review, plus lazy total-positivity minor enumeration and
+lazy score-ordered recurrence candidate search. The dirty canonical checkout
+at `/workspace/rust` is out of scope and must remain untouched.
+
 ## OEIS recurrence catalog
 
 The host Codex supervisor completed the OEIS catalog expansion at the user's
