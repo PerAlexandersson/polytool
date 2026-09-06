@@ -1,0 +1,23 @@
+[package]
+name = "experiments"
+version = "0.1.0"
+edition = "2021"
+description = "Research exploration binaries for combinatorial polynomial conjectures"
+
+[dependencies]
+combpoly = { path = "../combpoly" }
+combinatoric-core = { path = "../combinatoric-core" }
+kostka = { path = "../kostka" }
+polytool = { path = "../polytool" }
+sym-poly-multipoly = { path = "../sym-poly/multipoly" }
+sym-poly-core = { path = "../sym-poly/core" }
+sym-poly-sym = { path = "../sym-poly/sym" }
+sym-poly-qsym = { path = "../sym-poly/qsym" }
+num = "0.4"
+num-bigint = "0.4"
+num-rational = "0.4"
+num-traits = "0.2"
+rayon = "1.10"
+clap = { version = "4", features = ["derive", "env"] }
+dotenv = "0.15.0"
+mysql = { version = "27.0.0", default-features = false, features = ["default-rust"] }
