@@ -1,5 +1,29 @@
 # Handoff
 
+## Final Polytool integration (2026-09-06)
+
+The final integration worker merged clean local `master` commit `29c075e` into
+`fix/polytool-review-20260906` at merge commit `a801eb1`. Its parents are
+`41d57bd` (all review fixes plus the earlier `origin/master` merge) and
+`29c075e` (all monorepo audit checkpoints), so both histories are preserved.
+No textual conflict occurred: the Polytool handoff and root handoff are distinct
+files, and the other LLT work is under `sym-poly/sym`.
+
+Integrated verification used external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`.
+The Polytool 312-test non-OEIS library suite, 57 recurrence tests, 62 linear
+algebra tests, focused OEIS validation replay, CLI/fixture/interlacing tests,
+documentation tests, all Polytool MCP targets, and strict Clippy passed. The
+changed Combpoly, Multipoly, Sym, Kostka, and experiments packages also passed
+their focused suites; all five tracked experiment binaries compiled. Root
+Cargo metadata and `git diff --check` passed.
+
+This handoff accompanies the user-authorized publication of the integrated
+branch to monorepo `master` and the subsequent standalone Polytool `main`
+projection. Exact final remote commit identities are recorded in this root
+handoff after publication. Integration ownership is released after the final
+verification; Ehrcalc remains untouched.
+
 ## Completed monorepo integration audit (2026-09-06)
 
 The user-authorized audit adopted the pre-existing dirty checkout on local
