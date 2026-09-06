@@ -50,6 +50,23 @@ current OEIS prefix.  Ten newly imported definitions lack a safe row-layout
 alignment and therefore remain experimental: A099040, A103451, A105278,
 A144217, A145677, A158821, A185740, A185911, A225117, and A258993.
 
+## Web example catalogue (2026-09-02)
+
+The web UI presents one flat menu of 34 distinct OEIS-labelled polynomial
+families. It absorbs the former eight example buttons, removes the four
+families duplicated between those buttons and the 30-entry OEIS menu, and
+removes the category groups.
+
+All 30 imported OEIS entries have recursive definitions in the corresponding
+`ProofsOeis/A*.lean` files. The four additional distinct built-in families
+(derangement excedances, Fibonacci matchings, Touchard polynomials, and Simsun
+descents) also carry explicit recurrences. This does not imply that the web
+recurrence search will rediscover every formula under its default bounds.
+
+Long polynomial previews now parse and rejoin term signs before inserting the
+ellipsis, so positive terms no longer render as `+ +` and a negative final term
+renders with `-` rather than `+ -`.
+
 Verification:
 
 ```text
@@ -125,6 +142,66 @@ External review status: a read-only Claude Code review was attempted on
 2026-08-18 at 08:34 UTC, but Claude exited before reading the diff because the
 account session limit was reached (reported reset: 10:40 UTC). No review edits
 were made.
+
+## Web catalogue verification and deployment history
+
+```text
+inline JavaScript parse                                      passed
+flat picker count, uniqueness, and key resolution           34/34
+loadExample textarea/status checks                          34/34
+recurrence provenance audit                                 34/34
+positive/negative abbreviation regression cases              passed
+desktop and 390px-wide headless-Chrome inspection            passed
+standalone wasm-pack release build                            passed
+git diff --check                                              passed
+```
+
+Commit `108916e` was pushed to monorepo `master`, projected to standalone
+`main` as `fe697ec`, and deployed to `poly.symmetricfunctions.com` on
+2026-09-02. Cache-busted public fetches matched the staged HTML, JavaScript,
+and WASM byte for byte; a live headless-Chrome load reported no WASM or
+JavaScript error.
+
+The private proof-repository name was subsequently removed from all 26
+imported-sequence comments before publication. The public examples now retain
+only their mathematical descriptions and OEIS URLs; they do not mention the
+author's related projects.
+
+The recurrence-result page no longer generates or displays the bulky standalone
+Python export. It keeps the compact recurrence JSON and links directly to the
+documented `polytool recurrence-generate` command, which reconstructs exact
+rows from that JSON. The library and CLI Python exporter remain available for
+backward compatibility; only the browser payload and UI were simplified.
+
+The browser's adaptive bounds are now recurrence depth 10, `t`-degree 5,
+`n`-degree 5, and derivative order 5. In particular, this includes A059427's
+cubic derivative coefficient `t - t^3`; a regression test confirms that degree
+two fails and degree three finds the recurrence. The adaptive-mode tooltip
+states that there is no elapsed-time or candidate-count cutoff: the search
+stops only on a match, user cancellation, or exhaustion of its finite bounds,
+and a failed exhaustive search may therefore take a long time.
+
+Recurrence-option tooltips now mark their formulas with `data-tex` and render
+them through the already loaded KaTeX runtime. Rendering is applied both to the
+original tooltip nodes and to the floating tooltip layer; the alternating-sign
+label and tooltip therefore display `(-1)^n` with an actual superscript.
+The two focused web-crate tests, standalone WASM build, JavaScript parse,
+code-card checks, and a headless-browser KaTeX/WASM load all pass.
+Commit `1e8b865` was pushed to monorepo `master`, projected to standalone
+`main` as `931a4e1`, and deployed on 2026-09-02. Cache-busted public files
+matched the staged bundle byte for byte, and the live browser check passed.
+
+A166073 was removed from the example picker because adaptive recurrence search
+had to explore too much of the enlarged search space before finding its more
+complicated recurrence. It was replaced by A008288, the Delannoy array read by
+antidiagonals, whose row polynomials satisfy
+`P(n) = (1 + t) P(n-1) + t P(n-2)`. A focused browser-crate regression test
+checks that the full adaptive configuration finds this recurrence within ten
+candidates. All remaining `Related project` comments were removed at the same
+time. Commit `ccc9bf1` was pushed to monorepo `master`, projected to standalone
+`main` as `d9f7361`, and deployed on 2026-09-02. Cache-busted public HTML,
+JavaScript, and WASM matched the staged bundle byte for byte; a live
+headless-Chrome load also passed.
 
 ## Uspensky/Descartes comparison
 
