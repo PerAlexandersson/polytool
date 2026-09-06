@@ -24,6 +24,15 @@ projection. Exact final remote commit identities are recorded in this root
 handoff after publication. Integration ownership is released after the final
 verification; Ehrcalc remains untouched.
 
+Publication completed successfully. The integrated code and Polytool handoff
+were pushed non-forced to monorepo `origin/master` at `93b3971`, and canonical
+`/workspace/rust` was fast-forwarded to the same commit without changing any
+ignored experiment or nested Ehrcalc file. Running
+`scripts/sync-polytool-main.sh` projected `polytool/` to standalone
+`origin/main` commit `fed0702`. This root-only publication record does not alter
+the projected subtree; current local and remote refs are verified again after
+this handoff checkpoint is pushed. No force push was used.
+
 ## Completed monorepo integration audit (2026-09-06)
 
 The user-authorized audit adopted the pre-existing dirty checkout on local
