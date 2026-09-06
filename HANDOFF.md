@@ -1,38 +1,56 @@
 # Handoff
 
-## Active monorepo integration audit (2026-09-06)
+## Completed monorepo integration audit (2026-09-06)
 
-The current Codex worker is adopting the pre-existing dirty monorepo checkout
-on local `master` at `d0a1ca3` for the user-authorized integration audit. The
-owned integration batches are:
+The user-authorized audit adopted the pre-existing dirty checkout on local
+`master` at `d0a1ca3`. Ownership is now released. The focused checkpoints are:
 
-- the parent snapshot of `combpoly/README.md` and
-  `combpoly/src/{main,parking,permutation,statistics}.rs`, whose provenance is
-  the clean nested `combpoly` repository commits `b42aecf`, `c6c13c3`, and
-  `56bc239`;
-- `sym-poly/README.md`, `sym-poly/multipoly/src/{lib,operators}.rs`, the new
-  `grothendieck_polynomial.rs`, and the three new multipoly probe examples;
-- `sym-poly/sym/src/{chromatic,lib,llt}.rs` and the new `petrie.rs`;
-- the parent `kostka` gitlink only; the submodule itself is clean at published
-  `origin/main` commit `2481c97` and will not be edited;
-- root workspace metadata needed to make the tracked `experiments` member load
-  from a clean checkout, plus only the stable experiment manifest/helper files
-  required by its already tracked binaries;
-- this `HANDOFF.md`.
+- `cd34ef3` records ownership and provenance;
+- `3f755f8` synchronizes the clean nested `combpoly` commits `b42aecf`,
+  `c6c13c3`, and `56bc239` into the parent snapshot;
+- `33c2fb0` adds connective-K Grothendieck/Lascoux operators and expansions;
+- `65a1cfc` preserves three reproducible multipoly source probes;
+- `19c5435` adds the LLT/chromatic Dyck recursions and Petrie functions;
+- `5297104` advances only the `kostka` gitlink to clean published
+  `origin/main` commit `2481c97`;
+- `dd47899` restores the `experiments` manifest and stable shared helpers so a
+  clean workspace loads and its five tracked binaries compile, while retaining
+  the disposable experiment tree as ignored material.
 
-The standalone `ehrcalc/` directory is explicitly excluded from the monorepo
-integration: it has its own `.git`, upstream, guide, dirty formatting changes,
-and an untracked `ktt-search/` tree containing generated JSON scan reports.
-Those nested-repository files and results remain untouched and must be reviewed
-and committed in the Ehrcalc repository, not copied into this monorepo. All
-other ignored experiment binaries and outputs, including the currently owned
-`derangement_index_parity_recurrence.rs`, also remain untouched and untracked.
+The standalone `ehrcalc/` directory was deliberately excluded and is now
+ignored by the parent repository. It has its own `.git`, upstream, guide, dirty
+formatting changes, and an untracked `ktt-search/` tree containing generated
+JSON reports. Those nested-repository files and results remain untouched and
+must be reviewed and committed in Ehrcalc itself. Other generated logs/results,
+all disposable experiment binaries, the actively owned
+`derangement_index_parity_recurrence.rs`, and the separately owned SymCat
+example also remain untouched and untracked.
 
-The required supervisor ownership check was attempted, but
-`supervisor-tool report` cannot run in this container because the Docker
-executable is unavailable. The handoff identifies no active ownership of the
-adopted files; the separately owned SymCat example and active derangement probe
-are outside this integration set.
+The supervisor ownership check was attempted, but `supervisor-tool report`
+could not run because this container has no Docker executable. No handoff entry
+claimed active ownership of the adopted files. The audit used external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`.
+Verification completed as follows:
+
+- `cargo test -q -p combpoly`: 194 passed;
+- `cargo test -q -p sym-poly-multipoly --lib`: 198 passed;
+- all three multipoly probes ran successfully, and all multipoly examples
+  compiled;
+- `cargo test -q -p sym-poly-sym`: all unit, integration, example, and doctest
+  targets passed;
+- `cargo test -q -p kostka`: 34 passed;
+- `cargo test -q -p experiments --lib`: 19 passed, strict library Clippy
+  passed, and all five tracked experiment binaries compiled;
+- a detached clean worktree initialized the Kostka submodule, loaded the root
+  manifest, and compiled all five tracked experiment binaries;
+- the broad `cargo test --workspace --lib` attempt passed every preceding
+  package and reached 307 of 308 Polytool tests before the 60-second guard;
+  the focused owned-package suites above completed independently.
+
+Strict Clippy passed on the adopted multipoly, sym, and experiments code after
+allowing only known warnings in pre-existing files. The combpoly strict-Clippy
+attempt was blocked by unrelated existing warnings in `catalan.rs` and
+`lattice_path_matroid.rs`; its full test suite passed. Nothing was pushed.
 
 ## Circular LLT highest-reachable-vertex expansion
 
@@ -69,8 +87,9 @@ polynomial method to `BasisMatroid`; the binary uses these to test small
 graphic and transversal matroids.  All 17 focused `matroids` library tests
 pass.  The completed search ranges and exact commands are recorded in
 `../projects/matroid-contingency-arrays/notes/initial-graphic-transversal-scan.md`.
-Both experiment files remain intentionally ignored/disposable.  No active file
-ownership remains from this task.
+The reusable `experiments/src/matroids.rs` helper is now tracked so the workspace
+member builds from a clean checkout; the scan binary remains intentionally
+ignored/disposable. No active file ownership remains from this task.
 
 The same scanner now also has a `catalan` mode, and `BasisMatroid::catalan`
 constructs the standard Dyck-path transversal matroid.  The completed Catalan
@@ -83,8 +102,9 @@ orbit-compressed Catalan orthant recurrence.  All 19 focused matroid tests
 pass.  The exact recurrence, completed class-level checks, and next proof
 lemma are recorded in
 `../projects/matroid-contingency-arrays/notes/catalan-core-proof-search.md`.
-Both Rust files remain intentionally ignored/disposable, and no active file
-ownership remains from this task.
+The shared matroid helper is tracked; the scanner and its generated output
+remain intentionally ignored/disposable. No active file ownership remains from
+this task.
 
 ## Derangement index-parity recurrence search
 
@@ -159,9 +179,10 @@ The main website worker owns only
 the weighted-bond recurrence locally to verify the (P_3) and (K_3) examples
 used on `symmetricfunctions.com`; it does not change the public Rust API.
 
-Other modified Rust files predate this task and remain owned by their existing
-workers.  In particular, this work does not edit `sym-poly/sym/src/chromatic.rs`
-or `sym-poly/sym/src/lib.rs`.
+At the time of this website task, the other modified Rust files remained owned
+by their existing workers. The later monorepo audit adopted and committed the
+previously unowned `chromatic.rs` and `lib.rs` changes; it did not touch this
+separately owned example.
 
 Verification:
 
