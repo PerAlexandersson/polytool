@@ -19,6 +19,8 @@
 //! - [`nonsymmetric_macdonald`] — nonsymmetric Macdonald filling formulas
 //!   and the operator-side `q = 0` Hall-Littlewood specialization
 //! - [`schubert_polynomial`] — Schubert polynomials via divided differences
+//! - [`beta_grothendieck_polynomial`] — connective-K Grothendieck polynomials
+//! - [`grothendieck_to_lascoux`] — Grothendieck-to-Lascoux expansion
 //! - [`slide_polynomial`] — monomial slide, fundamental slide, and glide polynomials
 
 pub mod atom_polynomial;
@@ -28,6 +30,7 @@ pub mod division;
 pub mod flagged_schur;
 pub mod graded_quotient;
 pub mod groebner;
+pub mod grothendieck_polynomial;
 pub mod indexed_variables;
 pub mod key_polynomial;
 pub mod kohnert;
@@ -68,6 +71,11 @@ pub use groebner::{
     is_groebner_basis, make_monic, reduced_groebner_basis, reduced_groebner_basis_with_options,
     reduced_groebner_basis_with_stats, s_polynomial, BuchbergerStats, GroebnerBasis,
     GroebnerComputation, GroebnerOptions,
+};
+pub use grothendieck_polynomial::{
+    beta_grothendieck_polynomial, beta_grothendieck_to_lascoux, grothendieck_polynomial,
+    grothendieck_to_lascoux, lascoux_polynomial_by_operators, polynomial_to_lascoux,
+    LascouxExpansion,
 };
 pub use indexed_variables::{
     ideal_generators_are_invariant_under_index_permutation, ideal_generators_are_sn_invariant,
@@ -117,8 +125,9 @@ pub use nonsymmetric_macdonald::{
     nonsymmetric_macdonald_q0, permuted_basement_macdonald_filling_formula,
 };
 pub use operators::{
-    partial_i, partial_word, pi_i, pi_word, theta_i, theta_word, tpi_i, tpi_word, ttheta_i,
-    ttheta_word,
+    demazure_lascoux_partial_i, demazure_lascoux_partial_word, demazure_lascoux_pi_i,
+    demazure_lascoux_pi_word, partial_i, partial_word, pi_i, pi_word, theta_i, theta_word, tpi_i,
+    tpi_word, ttheta_i, ttheta_word,
 };
 pub use quotient::{
     is_degree_preserving_action_matrix, normal_form_in_basis, permute_monomial, permute_variables,

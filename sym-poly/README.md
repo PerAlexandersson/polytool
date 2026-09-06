@@ -27,7 +27,8 @@ examples on `symmetricfunctions.com`.
   Hall-Littlewood specialization.
 - `multipoly/src/slide_polynomial.rs`, `multipoly/src/lock_polynomial.rs`, and
   `multipoly/src/kohnert.rs` contain slide/glide polynomials, finite lock
-  polynomials, and Kohnert/Lascoux weight enumerators.
+  polynomials, Kohnert/Lascoux weight enumerators, connective-K Grothendieck
+  polynomials, and Grothendieck-to-Lascoux expansions.
 
 When adding website examples, prefer a small checked Rust example under the
 relevant crate's `examples/` directory and cite it from TeX with a short
