@@ -18,6 +18,7 @@ pub mod lah;
 pub mod llt;
 pub mod macdonald;
 pub mod p_grothendieck;
+pub mod petrie;
 pub mod shifted_lr;
 pub mod symmetric_function;
 pub mod transition;
@@ -26,7 +27,18 @@ pub mod twin_gkm;
 pub use basis::Basis;
 pub use chromatic::{
     chromatic_symmetric, circular_area_dot_frobenius_target, first_bad_edge_symmetric,
-    hessenberg_area_dot_frobenius_target, q_chromatic_symmetric_with_ascent_edges,
+    hessenberg_area_dot_frobenius_target, hessenberg_q_chromatic_elementary_coefficient,
+    hessenberg_q_chromatic_elementary_coefficient_recursive,
+    hessenberg_q_chromatic_elementary_expansion,
+    hessenberg_q_chromatic_elementary_expansion_recursive,
+    hessenberg_q_chromatic_rectangular_elementary_coefficient,
+    hessenberg_q_chromatic_rectangular_elementary_coefficient_recursive,
+    hessenberg_q_chromatic_symmetric_function, hessenberg_rectangular_powerful_tableau_powers,
+    q_chromatic_elementary_coefficient, q_chromatic_elementary_expansion,
+    q_chromatic_rectangular_elementary_coefficient, q_chromatic_symmetric_function,
+    q_chromatic_symmetric_function_with_ascent_edges, q_chromatic_symmetric_with_ascent_edges,
+    rectangular_powerful_tableau_powers, ChromaticQuasisymmetricDyckCache,
+    RectangularPowerfulTableauPowers,
 };
 pub use frobenius::{
     frobenius_from_character_values, frobenius_from_trace_matrices,
@@ -56,7 +68,9 @@ pub use llt::{
     circular_unicellular_llt_q_plus_one_e_expansion,
     circular_unicellular_llt_q_plus_one_is_e_positive, directed_graph_llt_symmetric,
     graph_llt_symmetric, unicellular_llt, unicellular_llt_character_values_by_degree,
-    unicellular_llt_frobenius_target, unit_interval_edges,
+    unicellular_llt_frobenius_target, unicellular_llt_q_plus_one,
+    unicellular_llt_q_plus_one_e_expansion, unicellular_llt_q_plus_one_e_expansion_recursive,
+    unit_interval_edges, UnicellularLltDyckCache,
 };
 pub use macdonald::{
     delta_eigenvalue, delta_modified_macdonald, delta_prime_eigenvalue,
@@ -67,6 +81,7 @@ pub use macdonald::{
 pub use p_grothendieck::{
     shifted_multiset_tableau_distribution, ShiftedMultisetEntry, ShiftedMultisetTableau,
 };
+pub use petrie::petrie_symmetric;
 pub use shifted_lr::{
     shifted_littlewood_richardson_coefficient, shifted_littlewood_richardson_stats,
     shifted_schur_evaluation, ShiftedLrError, ShiftedLrStats,
