@@ -24,8 +24,16 @@ copies and `2792` ladder moves.  Its per-type TSV agrees with the independent
 Python trace on all `27` rows and `13` compared columns.  The architecture and
 next finite-state-transducer increment are recorded in
 `../projects/Line-graph-chromatics/crystal-wall-rust-tool-plan-2026-09-06.md`.
-Ownership is released after this checkpoint; no unrelated experiment binary
-or library module was changed.
+Follow-up normalization shows that every participating ladder begins with
+adjacent active/source letters `AS`, never contains the distinguished maximum,
+and has no `AA`.  In the row-two-starts-three obstruction its merge word is
+strictly alternating.  In the multiple-row-one-twos obstruction it has at
+most one `SS`; only `90/7852` incidences use that exceptional transition.
+Ladder copy/move is exactly whether the merge ends in `A`/`S`.  These regular
+languages are now asserted by the driver and reduce the transducer to an
+alternating state plus one optional source-doubling state.  Ownership is
+released after the follow-up checkpoint; no unrelated experiment binary or
+library module was changed.
 
 ## Final Polytool integration (2026-09-06)
 

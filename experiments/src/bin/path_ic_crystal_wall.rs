@@ -11,8 +11,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use sym_poly_core::{
-    inverse_column_step_with_trace, reverse_complement, InverseColumnEventKind, InverseColumnStep,
-    PInsertionOrder, Partition, Tableau,
+    inverse_column_step_with_trace, reverse_complement, InverseColumnEvent, InverseColumnEventKind,
+    InverseColumnStep, PInsertionOrder, Partition, Tableau,
 };
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -88,6 +88,8 @@ struct TypeSummary {
     starts_at_boundary: usize,
     starts_before_boundary: usize,
     boundary_signature_classes: usize,
+    merge_patterns: BTreeSet<String>,
+    double_source_merges: usize,
     q_coefficient: String,
 }
 
@@ -101,6 +103,8 @@ struct TotalSummary {
     ladder_move: usize,
     starts_at_boundary: usize,
     starts_before_boundary: usize,
+    merge_pattern_classes: usize,
+    double_source_merges: usize,
 }
 
 fn intrinsic_words(s: usize, r: usize, d: usize) -> Vec<Vec<u8>> {
@@ -363,6 +367,91 @@ fn q_coefficient(words: &[Vec<u8>]) -> String {
         .join("+")
 }
 
+fn ladder_merge_pattern(
+    event: &InverseColumnEvent,
+    distinguished_maximum: u32,
+) -> Result<String, DynError> {
+    let first_source = *event
+        .source
+        .first()
+        .ok_or_else(|| "a ladder event has no source letter".to_string())?;
+    let row = event
+        .active_before
+        .iter()
+        .rposition(|&active| active < first_source)
+        .ok_or_else(|| "a ladder source has no active predecessor".to_string())?;
+    if event.active_before[row] + 1 != first_source {
+        return Err(format!(
+            "ladder does not start with adjacent active/source letters: {event:?}"
+        )
+        .into());
+    }
+
+    let height = (0..event.active_before.len() - row)
+        .filter(|&height| {
+            let mut values = event.active_before[row..=row + height].to_vec();
+            values.extend(&event.source);
+            PathOrder.is_ladder(&values)
+        })
+        .max()
+        .ok_or_else(|| "the traced ladder has no participating active interval".to_string())?;
+    let participating_active = &event.active_before[row..=row + height];
+    if participating_active.contains(&distinguished_maximum) {
+        return Err("the distinguished maximum participates in the boundary ladder".into());
+    }
+
+    let mut tagged_values: Vec<(u32, char)> = participating_active
+        .iter()
+        .copied()
+        .map(|value| (value, 'A'))
+        .chain(event.source.iter().copied().map(|value| (value, 'S')))
+        .collect();
+    tagged_values.sort_unstable();
+    if tagged_values
+        .windows(2)
+        .any(|pair| pair[0].0 + 1 != pair[1].0)
+    {
+        return Err("the normalized boundary merge is not consecutive".into());
+    }
+    Ok(tagged_values.into_iter().map(|(_, tag)| tag).collect())
+}
+
+fn check_merge_language(
+    pattern: &str,
+    reason: RejectionReason,
+    kind: InverseColumnEventKind,
+) -> Result<bool, DynError> {
+    if !pattern.starts_with("AS") || pattern.as_bytes().windows(2).any(|pair| pair == b"AA") {
+        return Err(format!("invalid active/source ladder language: {pattern}").into());
+    }
+    let double_sources = pattern
+        .as_bytes()
+        .windows(2)
+        .filter(|pair| *pair == b"SS")
+        .count();
+    match reason {
+        RejectionReason::RowTwoStartsThree if double_sources != 0 => {
+            return Err(format!("row-two-starts-three merge is not alternating: {pattern}").into());
+        }
+        RejectionReason::RowOneHasMultipleTwos if double_sources > 1 => {
+            return Err(format!("multiple-two merge has two source doublings: {pattern}").into());
+        }
+        _ => {}
+    }
+    let expected_last = match kind {
+        InverseColumnEventKind::LadderCopy => 'A',
+        InverseColumnEventKind::LadderMove => 'S',
+        _ => return Err("merge-language check requires a ladder event".into()),
+    };
+    if !pattern.ends_with(expected_last) {
+        return Err(format!(
+            "ladder branch and final merge letter disagree: kind={kind:?}, pattern={pattern}"
+        )
+        .into());
+    }
+    Ok(double_sources == 1)
+}
+
 fn verify_type(
     n: usize,
     s: usize,
@@ -417,8 +506,17 @@ fn verify_type(
                 )
                 .into());
             }
+            let event = &final_stage.events[certificate.event_index];
+            let merge_pattern = ladder_merge_pattern(event, n as u32)?;
+            let has_double_source = check_merge_language(
+                &merge_pattern,
+                rejected_tableau.reason,
+                certificate.event_kind,
+            )?;
 
             summary.excluded_incidences += 1;
+            summary.double_source_merges += usize::from(has_double_source);
+            summary.merge_patterns.insert(merge_pattern);
             match rejected_tableau.reason {
                 RejectionReason::RowTwoStartsThree => summary.row_two_starts_three += 1,
                 RejectionReason::RowOneHasMultipleTwos => {
@@ -454,12 +552,12 @@ fn write_tsv(path: &PathBuf, summaries: &[TypeSummary]) -> Result<(), DynError> 
     let mut output = BufWriter::new(File::create(path)?);
     writeln!(
         output,
-        "n\ts\tr\td\tinsertion_words\texcluded_tableaux\texcluded_incidences\trow_two_starts_three\trow_one_has_multiple_twos\tladder_copy\tladder_move\tstarts_at_boundary\tstarts_before_boundary\tboundary_signature_classes\tq_coefficient\tmaximum_active_through_boundary\tposition_strictly_delayed\tfailures"
+        "n\ts\tr\td\tinsertion_words\texcluded_tableaux\texcluded_incidences\trow_two_starts_three\trow_one_has_multiple_twos\tladder_copy\tladder_move\tstarts_at_boundary\tstarts_before_boundary\tboundary_signature_classes\tmerge_pattern_classes\tdouble_source_merges\tq_coefficient\tmaximum_active_through_boundary\tposition_strictly_delayed\tfailures"
     )?;
     for row in summaries {
         writeln!(
             output,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\ttrue\ttrue\t0",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\ttrue\ttrue\t0",
             row.n,
             row.s,
             row.r,
@@ -474,6 +572,8 @@ fn write_tsv(path: &PathBuf, summaries: &[TypeSummary]) -> Result<(), DynError> 
             row.starts_at_boundary,
             row.starts_before_boundary,
             row.boundary_signature_classes,
+            row.merge_patterns.len(),
+            row.double_source_merges,
             row.q_coefficient,
         )?;
     }
@@ -488,6 +588,14 @@ fn print_json(total: &TotalSummary, summaries: &[TypeSummary]) {
     println!("  \"excluded_incidences\": {},", total.excluded_incidences);
     println!("  \"ladder_copy\": {},", total.ladder_copy);
     println!("  \"ladder_move\": {},", total.ladder_move);
+    println!(
+        "  \"merge_pattern_classes\": {},",
+        total.merge_pattern_classes
+    );
+    println!(
+        "  \"double_source_merges\": {},",
+        total.double_source_merges
+    );
     println!("  \"maximum_active_through_boundary\": true,");
     println!("  \"position_strictly_delayed\": true,");
     println!("  \"types\": [");
@@ -498,7 +606,7 @@ fn print_json(total: &TotalSummary, summaries: &[TypeSummary]) {
             ","
         };
         println!(
-            "    {{\"n\":{},\"s\":{},\"r\":{},\"d\":{},\"insertion_words\":{},\"excluded_tableaux\":{},\"excluded_incidences\":{},\"ladder_copy\":{},\"ladder_move\":{},\"q_coefficient\":\"{}\"}}{}",
+            "    {{\"n\":{},\"s\":{},\"r\":{},\"d\":{},\"insertion_words\":{},\"excluded_tableaux\":{},\"excluded_incidences\":{},\"ladder_copy\":{},\"ladder_move\":{},\"merge_pattern_classes\":{},\"double_source_merges\":{},\"q_coefficient\":\"{}\"}}{}",
             row.n,
             row.s,
             row.r,
@@ -508,6 +616,8 @@ fn print_json(total: &TotalSummary, summaries: &[TypeSummary]) {
             row.excluded_incidences,
             row.ladder_copy,
             row.ladder_move,
+            row.merge_patterns.len(),
+            row.double_source_merges,
             row.q_coefficient,
             comma,
         );
@@ -525,6 +635,7 @@ fn main() -> Result<(), DynError> {
 
     let mut summaries = Vec::new();
     let mut total = TotalSummary::default();
+    let mut merge_patterns = BTreeSet::new();
     for n in 6..=arguments.max_n {
         for s in 2..n {
             for r in 2..=s {
@@ -547,10 +658,13 @@ fn main() -> Result<(), DynError> {
                 total.ladder_move += summary.ladder_move;
                 total.starts_at_boundary += summary.starts_at_boundary;
                 total.starts_before_boundary += summary.starts_before_boundary;
+                total.double_source_merges += summary.double_source_merges;
+                merge_patterns.extend(summary.merge_patterns.iter().cloned());
                 summaries.push(summary);
             }
         }
     }
+    total.merge_pattern_classes = merge_patterns.len();
 
     if arguments.max_n == 17 {
         assert_eq!(total.length_types, 27);
@@ -561,6 +675,8 @@ fn main() -> Result<(), DynError> {
         assert_eq!(total.ladder_move, 2792);
         assert_eq!(total.starts_at_boundary, 4002);
         assert_eq!(total.starts_before_boundary, 3850);
+        assert_eq!(total.merge_pattern_classes, 27);
+        assert_eq!(total.double_source_merges, 90);
     }
 
     if let Some(path) = &arguments.tsv_out {
@@ -568,13 +684,14 @@ fn main() -> Result<(), DynError> {
     }
     match arguments.format {
         OutputFormat::Text => println!(
-            "path_ic_crystal_wall\tlength_types={}\tinsertion_words={}\texcluded_tableaux={}\texcluded_incidences={}\tladder_copy_move={}/{}\tmaximum_active_through_boundary=all\tposition_strictly_delayed=all\tfailures=0",
+            "path_ic_crystal_wall\tlength_types={}\tinsertion_words={}\texcluded_tableaux={}\texcluded_incidences={}\tladder_copy_move={}/{}\tdouble_source_merges={}\tmaximum_active_through_boundary=all\tposition_strictly_delayed=all\tfailures=0",
             total.length_types,
             total.insertion_words,
             total.excluded_tableaux,
             total.excluded_incidences,
             total.ladder_copy,
             total.ladder_move,
+            total.double_source_merges,
         ),
         OutputFormat::Json => print_json(&total, &summaries),
     }
@@ -614,5 +731,7 @@ mod tests {
         assert_eq!(summary.ladder_move, 1);
         assert_eq!(summary.starts_at_boundary, 1);
         assert_eq!(summary.q_coefficient, "q^2");
+        assert_eq!(summary.merge_patterns.len(), 1);
+        assert_eq!(summary.double_source_merges, 0);
     }
 }
