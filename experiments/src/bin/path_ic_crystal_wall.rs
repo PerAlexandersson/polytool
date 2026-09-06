@@ -5,7 +5,7 @@
 //! grammar, the four-color duplicate carry, and the local excluded-wall test.
 
 use clap::{Parser, ValueEnum};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -35,6 +35,10 @@ struct Arguments {
     /// Optional detailed per-length-type TSV output.
     #[arg(long)]
     tsv_out: Option<PathBuf>,
+
+    /// Also certify insertion-word independence of vertices 1, 2, and 3.
+    #[arg(long)]
+    verify_frozen_core: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -107,6 +111,41 @@ struct TotalSummary {
     double_source_merges: usize,
 }
 
+#[derive(Debug, Default)]
+struct FrozenCoreSummary {
+    length_types: usize,
+    insertion_words: usize,
+    source_tableaux: usize,
+    repair_tableaux: usize,
+    source_incidences: usize,
+    repair_incidences: usize,
+    positioned_core_checks: usize,
+    core_emission_checks: usize,
+    standard_max_n: usize,
+    source_standard_tableaux: usize,
+    repair_standard_tableaux: usize,
+    source_standard_incidences: usize,
+    repair_standard_incidences: usize,
+    local_move_edges: usize,
+    local_move_types: BTreeSet<LocalMove>,
+    max_canonical_distance: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FrozenCoreSignature {
+    positioned_core: [usize; 3],
+    emissions: Vec<(u32, usize, InverseColumnEventKind, usize, usize)>,
+}
+
+type LocalMove = (Vec<u8>, Vec<u8>);
+
+#[derive(Debug)]
+struct LocalMoveGraphSummary {
+    edges: usize,
+    move_types: BTreeSet<LocalMove>,
+    max_canonical_distance: usize,
+}
+
 fn intrinsic_words(s: usize, r: usize, d: usize) -> Vec<Vec<u8>> {
     if d == 0 {
         return Vec::new();
@@ -150,6 +189,94 @@ fn intrinsic_words_recursive(
     }
 }
 
+fn canonical_word(s: usize, r: usize, d: usize) -> Vec<u8> {
+    let t = s - r;
+    let p = r + t - d - 1;
+    let u = d - t - 1;
+    let mut word = vec![2, 1, 0];
+    for _ in 0..p {
+        word.extend([1, 0]);
+    }
+    for _ in 0..t {
+        word.extend([2, 0]);
+    }
+    for _ in 0..u {
+        word.extend([2, 1, 0]);
+    }
+    word
+}
+
+fn local_move_window(left: &[u8], right: &[u8]) -> Option<LocalMove> {
+    let differing: Vec<_> = left
+        .iter()
+        .zip(right)
+        .enumerate()
+        .filter_map(|(index, (a, b))| (a != b).then_some(index))
+        .collect();
+    let (&first, &last) = (differing.first()?, differing.last()?);
+    if first == 0 || last - first + 1 > 3 {
+        return None;
+    }
+    let mut left_sorted = left[first..=last].to_vec();
+    let mut right_sorted = right[first..=last].to_vec();
+    left_sorted.sort_unstable();
+    right_sorted.sort_unstable();
+    if left_sorted != right_sorted {
+        return None;
+    }
+    let blocks = (left[first..=last].to_vec(), right[first..=last].to_vec());
+    Some(if blocks.0 < blocks.1 {
+        blocks
+    } else {
+        (blocks.1, blocks.0)
+    })
+}
+
+fn local_move_graph(
+    words: &[Vec<u8>],
+    canonical: &[u8],
+) -> Result<LocalMoveGraphSummary, DynError> {
+    let root = words
+        .iter()
+        .position(|word| word == canonical)
+        .ok_or_else(|| format!("canonical word {canonical:?} is not intrinsic"))?;
+    let mut adjacency = vec![Vec::new(); words.len()];
+    let mut move_types = BTreeSet::new();
+    let mut edges = 0;
+    for left in 0..words.len() {
+        for right in left + 1..words.len() {
+            if let Some(move_type) = local_move_window(&words[left], &words[right]) {
+                adjacency[left].push(right);
+                adjacency[right].push(left);
+                move_types.insert(move_type);
+                edges += 1;
+            }
+        }
+    }
+    let mut distances = vec![None; words.len()];
+    distances[root] = Some(0usize);
+    let mut queue = VecDeque::from([root]);
+    while let Some(current) = queue.pop_front() {
+        let next_distance = distances[current].expect("a queued word has a distance") + 1;
+        for &next in &adjacency[current] {
+            if distances[next].is_none() {
+                distances[next] = Some(next_distance);
+                queue.push_back(next);
+            }
+        }
+    }
+    if distances.iter().any(Option::is_none) {
+        return Err(
+            format!("intrinsic words are disconnected from canonical word {canonical:?}").into(),
+        );
+    }
+    Ok(LocalMoveGraphSummary {
+        edges,
+        move_types,
+        max_canonical_distance: distances.into_iter().flatten().max().unwrap_or(0),
+    })
+}
+
 fn repair_insertion(word: &[u8], n: usize) -> Insertion {
     let mut groups = vec![vec![1], Vec::new(), Vec::new()];
     for (label, &group) in (4..=n as u32).zip(word) {
@@ -162,6 +289,22 @@ fn repair_insertion(word: &[u8], n: usize) -> Insertion {
         groups[0].clone(),
         groups[1].iter().copied().chain([3]).collect(),
         groups[2].iter().copied().chain([2]).collect(),
+    ]
+}
+
+fn source_insertion(word: &[u8], n: usize) -> Insertion {
+    let mut groups = vec![vec![1], Vec::new(), Vec::new()];
+    for (label, &group) in (4..=n as u32).zip(word) {
+        groups[group as usize].push(label);
+    }
+    for group in &mut groups {
+        group.sort_unstable_by(|left, right| right.cmp(left));
+    }
+    vec![
+        groups[0].clone(),
+        groups[1].iter().copied().chain([2]).collect(),
+        groups[2].clone(),
+        vec![3],
     ]
 }
 
@@ -345,6 +488,175 @@ fn inverse_with_trace(
         stages.push(stage);
     }
     Ok((current, stages))
+}
+
+fn frozen_core_signature(
+    insertion: &Insertion,
+    recording: &Insertion,
+    n: usize,
+    core_columns: &[(usize, u32); 3],
+) -> Result<FrozenCoreSignature, DynError> {
+    let (inverse_word, stages) = inverse_with_trace(insertion, recording, n)?;
+    let mut positioned_core = [0; 3];
+    for vertex in 1..=3u32 {
+        positioned_core[vertex as usize - 1] = inverse_word
+            .iter()
+            .position(|&entry| entry == Some(vertex))
+            .map(|position| position + 1)
+            .ok_or_else(|| format!("inverse word does not contain core vertex {vertex}"))?;
+    }
+
+    let mut emissions = Vec::new();
+    for &(column, vertex) in core_columns {
+        let stage_index = insertion.len() - 1 - column;
+        let distinguished = n as u32 + 1 - vertex;
+        let event = stages[stage_index]
+            .events
+            .iter()
+            .find(|event| event.emitted.contains(&distinguished))
+            .ok_or_else(|| {
+                format!("column {column} never emits complemented core vertex {distinguished}")
+            })?;
+        emissions.push((
+            vertex,
+            column,
+            event.kind,
+            event.first_position,
+            event.last_position,
+        ));
+    }
+    emissions.sort_unstable();
+    Ok(FrozenCoreSignature {
+        positioned_core,
+        emissions,
+    })
+}
+
+fn verify_frozen_core_tableaux(
+    n: usize,
+    shape: &Partition,
+    tableaux: &[Tableau],
+    insertions: &[Insertion],
+    core_columns: &[(usize, u32); 3],
+    side: &str,
+) -> Result<usize, DynError> {
+    for tableau in tableaux {
+        let recording = raw_recording(tableau);
+        let expected = frozen_core_signature(&insertions[0], &recording, n, core_columns)?;
+        for insertion in insertions.iter().skip(1) {
+            let actual = frozen_core_signature(insertion, &recording, n, core_columns)?;
+            if actual != expected {
+                return Err(format!(
+                    "frozen-core failure on {side}: n={n}, shape={:?}, tableau={:?}, expected={expected:?}, actual={actual:?}",
+                    shape.parts(),
+                    tableau.rows(),
+                )
+                .into());
+            }
+        }
+    }
+    Ok(tableaux.len() * insertions.len())
+}
+
+fn verify_frozen_core(max_n: usize) -> Result<FrozenCoreSummary, DynError> {
+    let mut summary = FrozenCoreSummary {
+        standard_max_n: max_n.min(11),
+        ..FrozenCoreSummary::default()
+    };
+    for n in 6..=max_n {
+        for s in 2..n {
+            for r in 2..=s {
+                let Some(d) = n.checked_sub(1 + s + r) else {
+                    continue;
+                };
+                if d == 0 || d >= r {
+                    continue;
+                }
+                let words = intrinsic_words(s, r, d);
+                if words.is_empty() {
+                    continue;
+                }
+                let local_moves = local_move_graph(&words, &canonical_word(s, r, d))?;
+                let sources: Vec<_> = words.iter().map(|word| source_insertion(word, n)).collect();
+                let repairs: Vec<_> = words.iter().map(|word| repair_insertion(word, n)).collect();
+                let source_shape = Partition::from_sorted(vec![s as u32, r as u32, d as u32, 1]);
+                let repair_shape = Partition::from_sorted(vec![s as u32, r as u32, d as u32 + 1]);
+                let source_tableaux = Tableau::semistandard_tableaux(&source_shape, 4);
+                let repair_tableaux = Tableau::semistandard_tableaux(&repair_shape, 4);
+                let source_incidences = verify_frozen_core_tableaux(
+                    n,
+                    &source_shape,
+                    &source_tableaux,
+                    &sources,
+                    &[(0, 1), (1, 2), (3, 3)],
+                    "source",
+                )?;
+                let repair_incidences = verify_frozen_core_tableaux(
+                    n,
+                    &repair_shape,
+                    &repair_tableaux,
+                    &repairs,
+                    &[(0, 1), (1, 3), (2, 2)],
+                    "repair",
+                )?;
+                summary.length_types += 1;
+                summary.insertion_words += words.len();
+                summary.local_move_edges += local_moves.edges;
+                summary.local_move_types.extend(local_moves.move_types);
+                summary.max_canonical_distance = summary
+                    .max_canonical_distance
+                    .max(local_moves.max_canonical_distance);
+                summary.source_tableaux += source_tableaux.len();
+                summary.repair_tableaux += repair_tableaux.len();
+                summary.source_incidences += source_incidences;
+                summary.repair_incidences += repair_incidences;
+
+                if n <= summary.standard_max_n {
+                    let source_standard = Tableau::standard_tableaux(&source_shape);
+                    let repair_standard = Tableau::standard_tableaux(&repair_shape);
+                    summary.source_standard_incidences += verify_frozen_core_tableaux(
+                        n,
+                        &source_shape,
+                        &source_standard,
+                        &sources,
+                        &[(0, 1), (1, 2), (3, 3)],
+                        "standard source",
+                    )?;
+                    summary.repair_standard_incidences += verify_frozen_core_tableaux(
+                        n,
+                        &repair_shape,
+                        &repair_standard,
+                        &repairs,
+                        &[(0, 1), (1, 3), (2, 2)],
+                        "standard repair",
+                    )?;
+                    summary.source_standard_tableaux += source_standard.len();
+                    summary.repair_standard_tableaux += repair_standard.len();
+                }
+            }
+        }
+    }
+    summary.positioned_core_checks = summary.source_incidences + summary.repair_incidences;
+    summary.core_emission_checks = 3 * summary.positioned_core_checks;
+    if max_n == 17 {
+        assert_eq!(summary.length_types, 27);
+        assert_eq!(summary.insertion_words, 282);
+        assert_eq!(summary.source_tableaux, 6_915);
+        assert_eq!(summary.repair_tableaux, 9_991);
+        assert_eq!(summary.source_incidences, 91_115);
+        assert_eq!(summary.repair_incidences, 107_697);
+        assert_eq!(summary.positioned_core_checks, 198_812);
+        assert_eq!(summary.core_emission_checks, 596_436);
+        assert_eq!(summary.standard_max_n, 11);
+        assert_eq!(summary.source_standard_tableaux, 2_621);
+        assert_eq!(summary.repair_standard_tableaux, 1_013);
+        assert_eq!(summary.source_standard_incidences, 6_749);
+        assert_eq!(summary.repair_standard_incidences, 2_441);
+        assert_eq!(summary.local_move_edges, 528);
+        assert_eq!(summary.local_move_types.len(), 12);
+        assert_eq!(summary.max_canonical_distance, 6);
+    }
+    Ok(summary)
 }
 
 fn q_coefficient(words: &[Vec<u8>]) -> String {
@@ -580,7 +892,11 @@ fn write_tsv(path: &PathBuf, summaries: &[TypeSummary]) -> Result<(), DynError> 
     Ok(())
 }
 
-fn print_json(total: &TotalSummary, summaries: &[TypeSummary]) {
+fn print_json(
+    total: &TotalSummary,
+    summaries: &[TypeSummary],
+    frozen_core: Option<&FrozenCoreSummary>,
+) {
     println!("{{");
     println!("  \"length_types\": {},", total.length_types);
     println!("  \"insertion_words\": {},", total.insertion_words);
@@ -623,6 +939,47 @@ fn print_json(total: &TotalSummary, summaries: &[TypeSummary]) {
         );
     }
     println!("  ],");
+    if let Some(core) = frozen_core {
+        println!("  \"frozen_core\": {{");
+        println!("    \"length_types\": {},", core.length_types);
+        println!("    \"insertion_words\": {},", core.insertion_words);
+        println!("    \"source_tableaux\": {},", core.source_tableaux);
+        println!("    \"repair_tableaux\": {},", core.repair_tableaux);
+        println!("    \"source_incidences\": {},", core.source_incidences);
+        println!("    \"repair_incidences\": {},", core.repair_incidences);
+        println!(
+            "    \"positioned_core_checks\": {},",
+            core.positioned_core_checks
+        );
+        println!(
+            "    \"core_emission_checks\": {},",
+            core.core_emission_checks
+        );
+        println!("    \"standard_max_n\": {},", core.standard_max_n);
+        println!(
+            "    \"source_standard_tableaux\": {},",
+            core.source_standard_tableaux
+        );
+        println!(
+            "    \"repair_standard_tableaux\": {},",
+            core.repair_standard_tableaux
+        );
+        println!(
+            "    \"source_standard_incidences\": {},",
+            core.source_standard_incidences
+        );
+        println!(
+            "    \"repair_standard_incidences\": {},",
+            core.repair_standard_incidences
+        );
+        println!("    \"local_move_edges\": {},", core.local_move_edges);
+        println!("    \"local_move_types\": {},", core.local_move_types.len());
+        println!(
+            "    \"max_canonical_distance\": {}",
+            core.max_canonical_distance
+        );
+        println!("  }},");
+    }
     println!("  \"failures\": 0");
     println!("}}");
 }
@@ -679,21 +1036,49 @@ fn main() -> Result<(), DynError> {
         assert_eq!(total.double_source_merges, 90);
     }
 
+    let frozen_core = arguments
+        .verify_frozen_core
+        .then(|| verify_frozen_core(arguments.max_n))
+        .transpose()?;
+
     if let Some(path) = &arguments.tsv_out {
         write_tsv(path, &summaries)?;
     }
     match arguments.format {
-        OutputFormat::Text => println!(
-            "path_ic_crystal_wall\tlength_types={}\tinsertion_words={}\texcluded_tableaux={}\texcluded_incidences={}\tladder_copy_move={}/{}\tdouble_source_merges={}\tmaximum_active_through_boundary=all\tposition_strictly_delayed=all\tfailures=0",
-            total.length_types,
-            total.insertion_words,
-            total.excluded_tableaux,
-            total.excluded_incidences,
-            total.ladder_copy,
-            total.ladder_move,
-            total.double_source_merges,
-        ),
-        OutputFormat::Json => print_json(&total, &summaries),
+        OutputFormat::Text => {
+            println!(
+                "path_ic_crystal_wall\tlength_types={}\tinsertion_words={}\texcluded_tableaux={}\texcluded_incidences={}\tladder_copy_move={}/{}\tdouble_source_merges={}\tmaximum_active_through_boundary=all\tposition_strictly_delayed=all\tfailures=0",
+                total.length_types,
+                total.insertion_words,
+                total.excluded_tableaux,
+                total.excluded_incidences,
+                total.ladder_copy,
+                total.ladder_move,
+                total.double_source_merges,
+            );
+            if let Some(core) = &frozen_core {
+                println!(
+                    "path_ic_frozen_core\tlength_types={}\tinsertion_words={}\tsource_tableaux={}\trepair_tableaux={}\tsource_incidences={}\trepair_incidences={}\tpositioned_core_checks={}\tcore_emission_checks={}\tstandard_max_n={}\tsource_standard_tableaux={}\trepair_standard_tableaux={}\tsource_standard_incidences={}\trepair_standard_incidences={}\tlocal_move_edges={}\tlocal_move_types={}\tmax_canonical_distance={}\tfailures=0",
+                    core.length_types,
+                    core.insertion_words,
+                    core.source_tableaux,
+                    core.repair_tableaux,
+                    core.source_incidences,
+                    core.repair_incidences,
+                    core.positioned_core_checks,
+                    core.core_emission_checks,
+                    core.standard_max_n,
+                    core.source_standard_tableaux,
+                    core.repair_standard_tableaux,
+                    core.source_standard_incidences,
+                    core.repair_standard_incidences,
+                    core.local_move_edges,
+                    core.local_move_types.len(),
+                    core.max_canonical_distance,
+                );
+            }
+        }
+        OutputFormat::Json => print_json(&total, &summaries, frozen_core.as_ref()),
     }
     Ok(())
 }
@@ -733,5 +1118,44 @@ mod tests {
         assert_eq!(summary.q_coefficient, "q^2");
         assert_eq!(summary.merge_patterns.len(), 1);
         assert_eq!(summary.double_source_merges, 0);
+    }
+
+    #[test]
+    fn diagonal_ic_words_have_the_same_positioned_core() {
+        let words = intrinsic_words(3, 3, 2);
+        assert_eq!(words.len(), 2);
+        let tableau = Tableau::new(vec![vec![1, 1, 1], vec![2, 2, 2], vec![3, 3, 3]]);
+        let recording = raw_recording(&tableau);
+
+        let repair_signatures: Vec<_> = words
+            .iter()
+            .map(|word| {
+                frozen_core_signature(
+                    &repair_insertion(word, 9),
+                    &recording,
+                    9,
+                    &[(0, 1), (1, 3), (2, 2)],
+                )
+                .unwrap()
+            })
+            .collect();
+        assert_eq!(repair_signatures[0], repair_signatures[1]);
+        assert_eq!(repair_signatures[0].positioned_core, [3, 9, 6]);
+
+        let source_tableau = Tableau::new(vec![vec![1, 1, 1], vec![2, 2, 2], vec![3, 3], vec![4]]);
+        let source_recording = raw_recording(&source_tableau);
+        let source_signatures: Vec<_> = words
+            .iter()
+            .map(|word| {
+                frozen_core_signature(
+                    &source_insertion(word, 9),
+                    &source_recording,
+                    9,
+                    &[(0, 1), (1, 2), (3, 3)],
+                )
+                .unwrap()
+            })
+            .collect();
+        assert_eq!(source_signatures[0], source_signatures[1]);
     }
 }

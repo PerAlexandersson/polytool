@@ -1,5 +1,21 @@
 # Handoff
 
+## Path-IC frozen-core certificate (2026-09-06)
+
+The optional `--verify-frozen-core` scan in
+`experiments/src/bin/path_ic_crystal_wall.rs` tests insertion-word
+independence of the positioned subword on vertices `1,2,3` and the
+inverse-column event which emits each complemented core vertex.  Through
+`P_17`, all `198812` four-color source/repair incidences and `596436` event
+signatures agree within each length type and recording tableau.  An
+independent all-standard-recording audit through `P_11` covers `9190`
+incidences.  The same scan verifies that all `27` forced-debt word graphs are
+connected to the explicit canonical word by `528` legal length-two/three
+edges of `12` types, with maximum distance six.  Four focused binary tests,
+strict target-only Clippy with `--no-deps`, JSON parsing, and the calibrated
+release run pass.  No reusable API changed.  Ownership is released after the
+checkpoint commit.
+
 ## Path-IC crystal-wall tool (2026-09-06)
 
 Reusable checkpoint `6ddb666` adds `sym-poly-core::p_rs`: an abstract
