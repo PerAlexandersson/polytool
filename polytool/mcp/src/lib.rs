@@ -1,14 +1,13 @@
 use num_bigint::BigInt;
 use polytool::recurrence::{
-    find_recurrence_adaptive, find_recurrence_adaptive_rational, format_rational_coeff,
-    parse_rational_coeff, AdaptiveSearchOptions, AdaptiveSearchResult, BigRational, RecurrenceJson,
-    RecurrenceJsonSearch, RecurrenceOptionsJson,
+    candidate_complexity, find_recurrence_adaptive, find_recurrence_adaptive_rational,
+    format_rational_coeff, parse_rational_coeff, AdaptiveSearchOptions, AdaptiveSearchResult,
+    BigRational, BivarPoly, Recurrence, RecurrenceJson, RecurrenceJsonSearch, RecurrenceOptions,
+    RecurrenceOptionsJson,
 };
 use polytool::sequences::{
-    chebyshev_polynomials_t, chebyshev_polynomials_t_bigint, chebyshev_polynomials_u,
-    chebyshev_polynomials_u_bigint, eulerian_polynomials, eulerian_polynomials_bigint,
-    hermite_polynomials, hermite_polynomials_bigint, narayana_polynomials,
-    narayana_polynomials_bigint, type_b_eulerian_polynomials, type_b_eulerian_polynomials_bigint,
+    chebyshev_polynomials_t_bigint, chebyshev_polynomials_u_bigint, eulerian_polynomials_bigint,
+    hermite_polynomials_bigint, narayana_polynomials_bigint, type_b_eulerian_polynomials_bigint,
 };
 use polytool::*;
 use rmcp::{
@@ -21,6 +20,21 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+
+const MCP_MAX_TEXT_BYTES: usize = 1_048_576;
+const MCP_MAX_BATCH_POLYNOMIALS: usize = 512;
+const MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL: usize = 4_096;
+const MCP_MAX_TOTAL_COEFFICIENTS: usize = 65_536;
+const MCP_MAX_COEFFICIENT_TEXT_BYTES: usize = 16_384;
+const MCP_MAX_SEQUENCE_N: usize = 200;
+const MCP_MAX_RECURRENCE_ROWS: usize = 200;
+const MCP_MAX_RECURRENCE_INPUT_ROWS: usize = 256;
+const MCP_MAX_RECURRENCE_DEGREE: usize = 16;
+const MCP_MAX_RECURRENCE_LENGTH: usize = 32;
+const MCP_MAX_RECURRENCE_CANDIDATES: usize = 50_000;
+const MCP_MAX_RECURRENCE_UNKNOWNS: usize = 20_000;
+const MCP_MAX_LACE_MATRIX_CELLS: usize = 16_384;
+const MCP_MAX_LACE_MINORS: usize = 250_000;
 
 #[derive(Debug, Clone)]
 pub struct PolynomialToolsServer {
@@ -897,10 +911,42 @@ fn invalid_params(message: impl Into<String>) -> McpError {
     McpError::invalid_params(message.into(), None)
 }
 
+fn validate_mcp_text(text: &str, description: &str) -> Result<(), String> {
+    if text.len() > MCP_MAX_TEXT_BYTES {
+        return Err(format!(
+            "{description} is {} bytes; the MCP limit is {MCP_MAX_TEXT_BYTES}",
+            text.len()
+        ));
+    }
+    Ok(())
+}
+
+fn validate_mcp_polynomial_length<T>(coefficients: Vec<T>) -> Result<Vec<T>, String> {
+    if coefficients.len() > MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL {
+        return Err(format!(
+            "polynomial has {} coefficients; the MCP limit is {MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL}",
+            coefficients.len()
+        ));
+    }
+    Ok(coefficients)
+}
+
+fn validate_mcp_batch_size(item_count: usize) -> Result<(), McpError> {
+    if item_count > MCP_MAX_BATCH_POLYNOMIALS {
+        return Err(invalid_params(format!(
+            "batch has {item_count} polynomials; the MCP limit is {MCP_MAX_BATCH_POLYNOMIALS}"
+        )));
+    }
+    Ok(())
+}
+
 fn parse_polynomial_input(input: &PolynomialInput) -> Result<Vec<i64>, String> {
     match (&input.coefficients, &input.expression) {
-        (Some(coefficients), None) => Ok(coefficients.clone()),
-        (None, Some(expression)) => parse_polynomial(expression),
+        (Some(coefficients), None) => validate_mcp_polynomial_length(coefficients.clone()),
+        (None, Some(expression)) => {
+            validate_mcp_text(expression, "polynomial expression")?;
+            validate_mcp_polynomial_length(parse_polynomial(expression)?)
+        }
         (Some(_), Some(_)) => {
             Err("expected exactly one of `coefficients` or `expression`, got both".to_string())
         }
@@ -911,13 +957,27 @@ fn parse_polynomial_input(input: &PolynomialInput) -> Result<Vec<i64>, String> {
 fn parse_bigint_coefficient(input: &BigIntCoefficientInput) -> Result<BigInt, String> {
     match input {
         BigIntCoefficientInput::Integer(value) => Ok(BigInt::from(*value)),
-        BigIntCoefficientInput::Text(value) => value
-            .parse::<BigInt>()
-            .map_err(|e| format!("invalid integer '{}': {}", value, e)),
+        BigIntCoefficientInput::Text(value) => {
+            if value.len() > MCP_MAX_COEFFICIENT_TEXT_BYTES {
+                return Err(format!(
+                    "integer coefficient is {} bytes; the MCP limit is {MCP_MAX_COEFFICIENT_TEXT_BYTES}",
+                    value.len()
+                ));
+            }
+            value
+                .parse::<BigInt>()
+                .map_err(|e| format!("invalid integer '{}': {}", value, e))
+        }
     }
 }
 
 fn parse_bigint_coefficients(input: &[BigIntCoefficientInput]) -> Result<Vec<BigInt>, McpError> {
+    if input.len() > MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL {
+        return Err(invalid_params(format!(
+            "polynomial has {} coefficients; the MCP limit is {MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL}",
+            input.len()
+        )));
+    }
     input
         .iter()
         .map(parse_bigint_coefficient)
@@ -927,15 +987,20 @@ fn parse_bigint_coefficients(input: &[BigIntCoefficientInput]) -> Result<Vec<Big
 
 fn parse_bigint_polynomial_input(input: &BigIntPolynomialInput) -> Result<Vec<BigInt>, String> {
     match (&input.coefficients, &input.expression) {
-        (Some(coefficients), None) => coefficients
-            .iter()
-            .enumerate()
-            .map(|(index, coefficient)| {
-                parse_bigint_coefficient(coefficient)
-                    .map_err(|error| format!("coefficient {index}: {error}"))
-            })
-            .collect(),
-        (None, Some(expression)) => parse_polynomial_bigint(expression),
+        (Some(coefficients), None) => validate_mcp_polynomial_length(
+            coefficients
+                .iter()
+                .enumerate()
+                .map(|(index, coefficient)| {
+                    parse_bigint_coefficient(coefficient)
+                        .map_err(|error| format!("coefficient {index}: {error}"))
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+        (None, Some(expression)) => {
+            validate_mcp_text(expression, "polynomial expression")?;
+            validate_mcp_polynomial_length(parse_polynomial_bigint(expression)?)
+        }
         (Some(_), Some(_)) => {
             Err("expected exactly one of `coefficients` or `expression`, got both".to_string())
         }
@@ -1018,41 +1083,103 @@ fn normalize_bigint_polynomial(coefficients: Vec<BigInt>) -> NormalizedBigIntPol
 }
 
 fn parse_batch(input: &PolynomialBatchInput) -> Result<ParsedBatch, McpError> {
-    match (&input.polynomials, &input.text) {
-        (Some(polynomials), None) => Ok(polynomials
-            .iter()
-            .map(|p| parse_polynomial_input(p).map(normalize_polynomial))
-            .collect()),
-        (None, Some(text)) => Ok(parse_polynomials(text)
-            .into_iter()
-            .map(|r| r.map(normalize_polynomial))
-            .collect()),
+    let parsed: ParsedBatch = match (&input.polynomials, &input.text) {
+        (Some(polynomials), None) => {
+            validate_mcp_batch_size(polynomials.len())?;
+            polynomials
+                .iter()
+                .map(|p| parse_polynomial_input(p).map(normalize_polynomial))
+                .collect()
+        }
+        (None, Some(text)) => {
+            validate_mcp_text(text, "polynomial batch").map_err(invalid_params)?;
+            validate_mcp_batch_size(
+                text.lines()
+                    .filter(|line| {
+                        let line = line.trim();
+                        !line.is_empty() && !line.starts_with('#')
+                    })
+                    .count(),
+            )?;
+            parse_polynomials(text)
+                .into_iter()
+                .map(|result| {
+                    result
+                        .and_then(validate_mcp_polynomial_length)
+                        .map(normalize_polynomial)
+                })
+                .collect()
+        }
         (Some(_), Some(_)) => Err(invalid_params(
             "expected exactly one of `polynomials` or `text`, got both",
-        )),
+        ))?,
         (None, None) => Err(invalid_params(
             "expected exactly one of `polynomials` or `text`",
-        )),
+        ))?,
+    };
+    let total = parsed
+        .iter()
+        .filter_map(|item| item.as_ref().ok())
+        .try_fold(0usize, |total, polynomial| {
+            total.checked_add(polynomial.coefficients.len())
+        });
+    let total = total.ok_or_else(|| invalid_params("total coefficient count overflow"))?;
+    if total > MCP_MAX_TOTAL_COEFFICIENTS {
+        return Err(invalid_params(format!(
+            "batch has {total} coefficients; the MCP limit is {MCP_MAX_TOTAL_COEFFICIENTS}"
+        )));
     }
+    Ok(parsed)
 }
 
 fn parse_bigint_batch(input: &BigIntPolynomialBatchInput) -> Result<BigIntParsedBatch, McpError> {
-    match (&input.polynomials, &input.text) {
-        (Some(polynomials), None) => Ok(polynomials
-            .iter()
-            .map(|p| parse_bigint_polynomial_input(p).map(normalize_bigint_polynomial))
-            .collect()),
-        (None, Some(text)) => Ok(parse_polynomials_bigint(text)
-            .into_iter()
-            .map(|r| r.map(normalize_bigint_polynomial))
-            .collect()),
+    let parsed: BigIntParsedBatch = match (&input.polynomials, &input.text) {
+        (Some(polynomials), None) => {
+            validate_mcp_batch_size(polynomials.len())?;
+            polynomials
+                .iter()
+                .map(|p| parse_bigint_polynomial_input(p).map(normalize_bigint_polynomial))
+                .collect()
+        }
+        (None, Some(text)) => {
+            validate_mcp_text(text, "polynomial batch").map_err(invalid_params)?;
+            validate_mcp_batch_size(
+                text.lines()
+                    .filter(|line| {
+                        let line = line.trim();
+                        !line.is_empty() && !line.starts_with('#')
+                    })
+                    .count(),
+            )?;
+            parse_polynomials_bigint(text)
+                .into_iter()
+                .map(|result| {
+                    result
+                        .and_then(validate_mcp_polynomial_length)
+                        .map(normalize_bigint_polynomial)
+                })
+                .collect()
+        }
         (Some(_), Some(_)) => Err(invalid_params(
             "expected exactly one of `polynomials` or `text`, got both",
-        )),
+        ))?,
         (None, None) => Err(invalid_params(
             "expected exactly one of `polynomials` or `text`",
-        )),
+        ))?,
+    };
+    let total = parsed
+        .iter()
+        .filter_map(|item| item.as_ref().ok())
+        .try_fold(0usize, |total, polynomial| {
+            total.checked_add(polynomial.coefficients.len())
+        });
+    let total = total.ok_or_else(|| invalid_params("total coefficient count overflow"))?;
+    if total > MCP_MAX_TOTAL_COEFFICIENTS {
+        return Err(invalid_params(format!(
+            "batch has {total} coefficients; the MCP limit is {MCP_MAX_TOTAL_COEFFICIENTS}"
+        )));
     }
+    Ok(parsed)
 }
 
 fn i64_coefficients_to_rational(coefficients: &[i64]) -> Vec<BigRational> {
@@ -1065,13 +1192,27 @@ fn i64_coefficients_to_rational(coefficients: &[i64]) -> Vec<BigRational> {
 fn parse_rational_coefficient(input: &RationalCoefficientInput) -> Result<BigRational, String> {
     match input {
         RationalCoefficientInput::Integer(value) => parse_rational(&value.to_string()),
-        RationalCoefficientInput::Text(value) => parse_rational(value),
+        RationalCoefficientInput::Text(value) => {
+            if value.len() > MCP_MAX_COEFFICIENT_TEXT_BYTES {
+                return Err(format!(
+                    "rational coefficient is {} bytes; the MCP limit is {MCP_MAX_COEFFICIENT_TEXT_BYTES}",
+                    value.len()
+                ));
+            }
+            parse_rational(value)
+        }
     }
 }
 
 fn parse_rational_coefficients(
     coefficients: &[RationalCoefficientInput],
 ) -> Result<Vec<BigRational>, String> {
+    if coefficients.len() > MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL {
+        return Err(format!(
+            "polynomial has {} coefficients; the MCP limit is {MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL}",
+            coefficients.len()
+        ));
+    }
     coefficients
         .iter()
         .enumerate()
@@ -1081,6 +1222,28 @@ fn parse_rational_coefficients(
         })
         .collect::<Result<Vec<_>, _>>()
         .map(normalize_rational_coefficients)
+}
+
+fn validate_recurrence_batch(batch: RationalParsedBatch) -> Result<RationalParsedBatch, McpError> {
+    if batch.len() > MCP_MAX_RECURRENCE_INPUT_ROWS {
+        return Err(invalid_params(format!(
+            "recurrence input has {} rows; the MCP limit is {MCP_MAX_RECURRENCE_INPUT_ROWS}",
+            batch.len()
+        )));
+    }
+    let total = batch
+        .iter()
+        .filter_map(|item| item.as_ref().ok())
+        .try_fold(0usize, |total, polynomial| {
+            total.checked_add(polynomial.len())
+        })
+        .ok_or_else(|| invalid_params("total recurrence coefficient count overflow"))?;
+    if total > MCP_MAX_TOTAL_COEFFICIENTS {
+        return Err(invalid_params(format!(
+            "recurrence input has {total} coefficients; the MCP limit is {MCP_MAX_TOTAL_COEFFICIENTS}"
+        )));
+    }
+    Ok(batch)
 }
 
 fn parse_recurrence_batch_rational(
@@ -1103,26 +1266,57 @@ fn parse_recurrence_batch_rational(
     }
 
     if let Some(polynomials) = &input.polynomials {
+        if polynomials.len() > MCP_MAX_RECURRENCE_INPUT_ROWS {
+            return Err(invalid_params(format!(
+                "recurrence input has {} rows; the MCP limit is {MCP_MAX_RECURRENCE_INPUT_ROWS}",
+                polynomials.len()
+            )));
+        }
         let batch = parse_batch(&PolynomialBatchInput {
             polynomials: Some(polynomials.clone()),
             text: None,
         })?;
-        return Ok(batch
-            .into_iter()
-            .map(|item| {
-                item.map(|polynomial| i64_coefficients_to_rational(&polynomial.coefficients))
-            })
-            .collect());
+        return validate_recurrence_batch(
+            batch
+                .into_iter()
+                .map(|item| {
+                    item.map(|polynomial| i64_coefficients_to_rational(&polynomial.coefficients))
+                })
+                .collect(),
+        );
     }
 
     if let Some(coefficients) = &input.coefficients {
-        return Ok(coefficients
+        if coefficients.len() > MCP_MAX_RECURRENCE_INPUT_ROWS {
+            return Err(invalid_params(format!(
+                "recurrence input has {} rows; the MCP limit is {MCP_MAX_RECURRENCE_INPUT_ROWS}",
+                coefficients.len()
+            )));
+        }
+        let total = coefficients
             .iter()
-            .map(|coefficients| parse_rational_coefficients(coefficients))
-            .collect());
+            .try_fold(0usize, |total, row| total.checked_add(row.len()))
+            .ok_or_else(|| invalid_params("total recurrence coefficient count overflow"))?;
+        if total > MCP_MAX_TOTAL_COEFFICIENTS {
+            return Err(invalid_params(format!(
+                "recurrence input has {total} coefficients; the MCP limit is {MCP_MAX_TOTAL_COEFFICIENTS}"
+            )));
+        }
+        return validate_recurrence_batch(
+            coefficients
+                .iter()
+                .map(|coefficients| parse_rational_coefficients(coefficients))
+                .collect(),
+        );
     }
 
     if let Some(expressions) = &input.expressions {
+        if expressions.len() > MCP_MAX_RECURRENCE_INPUT_ROWS {
+            return Err(invalid_params(format!(
+                "recurrence input has {} rows; the MCP limit is {MCP_MAX_RECURRENCE_INPUT_ROWS}",
+                expressions.len()
+            )));
+        }
         let polynomials = expressions
             .iter()
             .cloned()
@@ -1135,22 +1329,43 @@ fn parse_recurrence_batch_rational(
             polynomials: Some(polynomials),
             text: None,
         })?;
-        return Ok(batch
-            .into_iter()
-            .map(|item| {
-                item.map(|polynomial| i64_coefficients_to_rational(&polynomial.coefficients))
-            })
-            .collect());
+        return validate_recurrence_batch(
+            batch
+                .into_iter()
+                .map(|item| {
+                    item.map(|polynomial| i64_coefficients_to_rational(&polynomial.coefficients))
+                })
+                .collect(),
+        );
     }
 
+    if let Some(text) = &input.text {
+        validate_mcp_text(text, "recurrence polynomial batch").map_err(invalid_params)?;
+        let row_count = text
+            .lines()
+            .filter(|line| {
+                let line = line.trim();
+                !line.is_empty() && !line.starts_with('#')
+            })
+            .count();
+        if row_count > MCP_MAX_RECURRENCE_INPUT_ROWS {
+            return Err(invalid_params(format!(
+                "recurrence input has {row_count} rows; the MCP limit is {MCP_MAX_RECURRENCE_INPUT_ROWS}"
+            )));
+        }
+    }
     let batch = parse_batch(&PolynomialBatchInput {
         polynomials: None,
         text: input.text.clone(),
     })?;
-    Ok(batch
-        .into_iter()
-        .map(|item| item.map(|polynomial| i64_coefficients_to_rational(&polynomial.coefficients)))
-        .collect())
+    validate_recurrence_batch(
+        batch
+            .into_iter()
+            .map(|item| {
+                item.map(|polynomial| i64_coefficients_to_rational(&polynomial.coefficients))
+            })
+            .collect(),
+    )
 }
 
 fn parse_items(batch: &ParsedBatch) -> Vec<ParsePolynomialItem> {
@@ -1617,10 +1832,27 @@ fn family_source_and_polynomials(
         let max_n = input
             .max_n
             .ok_or_else(|| invalid_params("`max_n` is required with `sequence`"))?;
-        let polynomials = generated_sequence_polynomials(&sequence, max_n)
+        if max_n > MCP_MAX_SEQUENCE_N {
+            return Err(invalid_params(format!(
+                "max_n must be at most {MCP_MAX_SEQUENCE_N} for MCP sequence generation"
+            )));
+        }
+        let bigint_polynomials = generated_sequence_polynomials_bigint(&sequence, max_n);
+        let polynomials = bigint_polynomials
             .into_iter()
-            .map(normalize_polynomial)
-            .collect();
+            .map(|row| {
+                row.into_iter()
+                    .map(|coefficient| {
+                        i64::try_from(&coefficient).map_err(|_| {
+                            invalid_params(format!(
+                                "sequence {sequence:?} at max_n={max_n} exceeds the i64 coefficient range supported by check_polynomial_family"
+                            ))
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .map(normalize_polynomial)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         return Ok((
             format!("sequence:{sequence:?}, max_n={max_n}"),
             Ok(polynomials),
@@ -1643,17 +1875,6 @@ fn family_source_and_polynomials(
         "polynomials".to_string()
     };
     Ok((source, collect_polynomials_or_errors(batch)))
-}
-
-fn generated_sequence_polynomials(sequence: &SequenceKind, max_n: usize) -> Vec<Vec<i64>> {
-    match sequence {
-        SequenceKind::Eulerian => eulerian_polynomials(max_n),
-        SequenceKind::Narayana => narayana_polynomials(max_n),
-        SequenceKind::TypeBEulerian => type_b_eulerian_polynomials(max_n),
-        SequenceKind::ChebyshevT => chebyshev_polynomials_t(max_n),
-        SequenceKind::ChebyshevU => chebyshev_polynomials_u(max_n),
-        SequenceKind::Hermite => hermite_polynomials(max_n),
-    }
 }
 
 fn generated_sequence_polynomials_bigint(
@@ -1696,14 +1917,52 @@ fn check_family_lace(
     let block_cols = request
         .block_cols
         .unwrap_or_else(|| block_rows + max_degree + 1);
+    let rows = match polynomials.len().checked_mul(block_rows) {
+        Some(rows) => rows,
+        None => {
+            return LaceCheckResponse {
+                block_rows,
+                block_cols,
+                max_minor_size: request.max_minor_size.unwrap_or(0),
+                rows: 0,
+                columns: block_cols,
+                tnn: false,
+                error: Some("finite Lace matrix row count overflow".to_string()),
+                matrix: None,
+            };
+        }
+    };
+    let max_minor_size = request
+        .max_minor_size
+        .unwrap_or_else(|| rows.min(block_cols).min(4));
+    let cells = rows.checked_mul(block_cols);
+    let minor_count =
+        (1..=max_minor_size.min(rows).min(block_cols)).try_fold(0usize, |total, size| {
+            binomial_capped(rows, size, MCP_MAX_LACE_MINORS)
+                .checked_mul(binomial_capped(block_cols, size, MCP_MAX_LACE_MINORS))
+                .and_then(|count| total.checked_add(count))
+        });
+    if cells.is_none_or(|cells| cells > MCP_MAX_LACE_MATRIX_CELLS)
+        || minor_count.is_none_or(|count| count > MCP_MAX_LACE_MINORS)
+    {
+        return LaceCheckResponse {
+            block_rows,
+            block_cols,
+            max_minor_size,
+            rows,
+            columns: block_cols,
+            tnn: false,
+            error: Some(format!(
+                "finite Lace request exceeds MCP limits ({MCP_MAX_LACE_MATRIX_CELLS} matrix cells and {MCP_MAX_LACE_MINORS} checked minors)"
+            )),
+            matrix: None,
+        };
+    }
 
     match lace_matrix_sequence_i64(&coefficients, block_rows, block_cols) {
         Ok(matrix) => {
             let rows = matrix.len();
             let columns = matrix.first().map(Vec::len).unwrap_or(0);
-            let max_minor_size = request
-                .max_minor_size
-                .unwrap_or_else(|| rows.min(columns).min(4));
             let check = check_lace_sequence_total_nonnegative_i64(
                 &coefficients,
                 block_rows,
@@ -1734,9 +1993,27 @@ fn check_family_lace(
     }
 }
 
+fn binomial_capped(n: usize, k: usize, cap: usize) -> usize {
+    if k > n {
+        return 0;
+    }
+    let k = k.min(n - k);
+    let mut result = 1usize;
+    for divisor in 1..=k {
+        result = result
+            .checked_mul(n - k + divisor)
+            .and_then(|value| value.checked_div(divisor))
+            .unwrap_or(cap.saturating_add(1));
+        if result > cap {
+            return cap.saturating_add(1);
+        }
+    }
+    result
+}
+
 fn family_recurrence_response(
     coefficients: &[Vec<i64>],
-    options: Option<RecurrenceSearchOptionsInput>,
+    search: &AdaptiveSearchOptions,
 ) -> FindRecurrenceResponse {
     if coefficients.len() < 3 {
         return FindRecurrenceResponse {
@@ -1758,8 +2035,7 @@ fn family_recurrence_response(
         };
     }
 
-    let search = apply_recurrence_options(options);
-    match find_recurrence_adaptive(coefficients, &search) {
+    match find_recurrence_adaptive(coefficients, search) {
         Some(result) => {
             let rational_polys = integer_polys_to_rational(coefficients);
             FindRecurrenceResponse {
@@ -1772,7 +2048,7 @@ fn family_recurrence_response(
                 recurrence_json: Some(recurrence_json_string(
                     &result,
                     &rational_polys,
-                    &search,
+                    search,
                     coefficients.len(),
                 )),
                 unknowns: Some(result.num_unknowns),
@@ -2019,11 +2295,254 @@ fn parse_rational(input: &str) -> Result<BigRational, String> {
         .map_err(|e| format!("invalid rational `{input}`: {e}"))
 }
 
-fn apply_recurrence_options(input: Option<RecurrenceSearchOptionsInput>) -> AdaptiveSearchOptions {
+fn inclusive_option_count(minimum: usize, maximum: usize) -> Result<usize, McpError> {
+    maximum
+        .checked_sub(minimum)
+        .and_then(|difference| difference.checked_add(1))
+        .ok_or_else(|| invalid_params(format!("invalid recurrence range {minimum}..={maximum}")))
+}
+
+fn validate_recurrence_options(options: &AdaptiveSearchOptions) -> Result<(), McpError> {
+    let ranges = [
+        (
+            "recurrence length",
+            options.min_rec_len,
+            options.max_rec_len,
+        ),
+        ("variable degree", options.min_var_deg, options.max_var_deg),
+        ("index degree", options.min_idx_deg, options.max_idx_deg),
+        (
+            "derivative degree",
+            options.min_diff_deg,
+            options.max_diff_deg,
+        ),
+        (
+            "inhomogeneous variable degree",
+            options.min_inhomo_var_deg,
+            options.max_inhomo_var_deg,
+        ),
+        (
+            "inhomogeneous index degree",
+            options.min_inhomo_idx_deg,
+            options.max_inhomo_idx_deg,
+        ),
+    ];
+    for (name, minimum, maximum) in ranges {
+        if minimum > maximum {
+            return Err(invalid_params(format!(
+                "minimum {name} {minimum} exceeds maximum {maximum}"
+            )));
+        }
+    }
+    if options.max_rec_len > MCP_MAX_RECURRENCE_LENGTH {
+        return Err(invalid_params(format!(
+            "maximum recurrence length {} exceeds the MCP limit {MCP_MAX_RECURRENCE_LENGTH}",
+            options.max_rec_len
+        )));
+    }
+    let degree_bounds = [
+        ("variable", options.max_var_deg),
+        ("index", options.max_idx_deg),
+        ("derivative", options.max_diff_deg),
+        ("inhomogeneous variable", options.max_inhomo_var_deg),
+        ("inhomogeneous index", options.max_inhomo_idx_deg),
+        ("denominator variable", options.max_denom_var_deg),
+        ("denominator index", options.max_denom_idx_deg),
+    ];
+    for (name, degree) in degree_bounds {
+        if degree > MCP_MAX_RECURRENCE_DEGREE {
+            return Err(invalid_params(format!(
+                "maximum {name} degree {degree} exceeds the MCP limit {MCP_MAX_RECURRENCE_DEGREE}"
+            )));
+        }
+    }
+    if options.skip_prefix > MCP_MAX_RECURRENCE_INPUT_ROWS
+        || options.fit_extra_rows > MCP_MAX_RECURRENCE_INPUT_ROWS
+    {
+        return Err(invalid_params(format!(
+            "skip_prefix and fit_extra_rows must be at most {MCP_MAX_RECURRENCE_INPUT_ROWS}"
+        )));
+    }
+    if options.min_margin > MCP_MAX_RECURRENCE_UNKNOWNS {
+        return Err(invalid_params(format!(
+            "min_margin {} exceeds the MCP limit {MCP_MAX_RECURRENCE_UNKNOWNS}",
+            options.min_margin
+        )));
+    }
+
+    let base_count = inclusive_option_count(options.min_rec_len.max(1), options.max_rec_len)?
+        .checked_mul(inclusive_option_count(
+            options.min_diff_deg,
+            options.max_diff_deg,
+        )?)
+        .and_then(|count| {
+            count
+                .checked_mul(inclusive_option_count(options.min_idx_deg, options.max_idx_deg).ok()?)
+        })
+        .and_then(|count| {
+            count
+                .checked_mul(inclusive_option_count(options.min_var_deg, options.max_var_deg).ok()?)
+        })
+        .and_then(|count| count.checked_mul(if options.try_alternating_sign { 2 } else { 1 }))
+        .ok_or_else(|| invalid_params("recurrence candidate count overflow"))?;
+    let inhomogeneous_count = if options.try_inhomogeneous {
+        inclusive_option_count(options.min_inhomo_idx_deg, options.max_inhomo_idx_deg)?
+            .checked_mul(inclusive_option_count(
+                options.min_inhomo_var_deg,
+                options.max_inhomo_var_deg,
+            )?)
+            .ok_or_else(|| invalid_params("inhomogeneous candidate count overflow"))?
+    } else {
+        0
+    };
+    let denominator_count = if options.try_denominator {
+        options
+            .max_denom_idx_deg
+            .checked_add(1)
+            .and_then(|count| count.checked_mul(options.max_denom_var_deg.checked_add(1)?))
+            .and_then(|count| count.checked_sub(1))
+            .ok_or_else(|| invalid_params("denominator candidate count overflow"))?
+    } else {
+        0
+    };
+    let candidate_count = 1usize
+        .checked_add(inhomogeneous_count)
+        .and_then(|count| count.checked_add(denominator_count))
+        .and_then(|count| count.checked_mul(base_count))
+        .ok_or_else(|| invalid_params("recurrence candidate count overflow"))?;
+    if candidate_count > MCP_MAX_RECURRENCE_CANDIDATES {
+        return Err(invalid_params(format!(
+            "recurrence search requests {candidate_count} candidates; the MCP limit is {MCP_MAX_RECURRENCE_CANDIDATES}"
+        )));
+    }
+
+    let base_options = RecurrenceOptions {
+        rec_len: options.max_rec_len,
+        var_deg: options.max_var_deg,
+        idx_deg: options.max_idx_deg,
+        diff_deg: options.max_diff_deg,
+        homogeneous: true,
+        inhomo_var_deg: 0,
+        inhomo_idx_deg: 0,
+        denom_var_deg: 0,
+        denom_idx_deg: 0,
+        alternating_sign: options.try_alternating_sign,
+        modular_prefilter: options.modular_prefilter,
+    };
+    let mut maximum_unknowns = candidate_complexity(&base_options).raw_unknowns;
+    if options.try_inhomogeneous {
+        maximum_unknowns = maximum_unknowns.max(
+            candidate_complexity(&RecurrenceOptions {
+                homogeneous: false,
+                inhomo_var_deg: options.max_inhomo_var_deg,
+                inhomo_idx_deg: options.max_inhomo_idx_deg,
+                ..base_options.clone()
+            })
+            .raw_unknowns,
+        );
+    }
+    if options.try_denominator {
+        maximum_unknowns = maximum_unknowns.max(
+            candidate_complexity(&RecurrenceOptions {
+                denom_var_deg: options.max_denom_var_deg,
+                denom_idx_deg: options.max_denom_idx_deg,
+                ..base_options
+            })
+            .raw_unknowns,
+        );
+    }
+    if maximum_unknowns > MCP_MAX_RECURRENCE_UNKNOWNS {
+        return Err(invalid_params(format!(
+            "recurrence search may create {maximum_unknowns} unknowns; the MCP limit is {MCP_MAX_RECURRENCE_UNKNOWNS}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_recurrence_for_generation(
+    recurrence: &Recurrence,
+    initial_polys: &[Vec<BigRational>],
+) -> Result<(), McpError> {
+    if recurrence.terms.len() > MCP_MAX_RECURRENCE_LENGTH {
+        return Err(invalid_params(format!(
+            "recurrence has {} terms; the MCP limit is {MCP_MAX_RECURRENCE_LENGTH}",
+            recurrence.terms.len()
+        )));
+    }
+    let mut total_cells = initial_polys
+        .iter()
+        .try_fold(0usize, |total, row| total.checked_add(row.len()))
+        .ok_or_else(|| invalid_params("recurrence coefficient count overflow"))?;
+    if initial_polys.len() > MCP_MAX_RECURRENCE_INPUT_ROWS {
+        return Err(invalid_params(format!(
+            "recurrence JSON has {} initial rows; the MCP limit is {MCP_MAX_RECURRENCE_INPUT_ROWS}",
+            initial_polys.len()
+        )));
+    }
+    if initial_polys
+        .iter()
+        .any(|row| row.len() > MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL)
+    {
+        return Err(invalid_params(format!(
+            "an initial polynomial exceeds the MCP limit of {MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL} coefficients"
+        )));
+    }
+
+    let mut validate_bivar = |name: &str, polynomial: &BivarPoly| -> Result<(), McpError> {
+        if polynomial.coeffs.len() > MCP_MAX_RECURRENCE_DEGREE + 1
+            || polynomial
+                .coeffs
+                .iter()
+                .any(|row| row.len() > MCP_MAX_RECURRENCE_DEGREE + 1)
+        {
+            return Err(invalid_params(format!(
+                "{name} exceeds the MCP bivariate degree limit {MCP_MAX_RECURRENCE_DEGREE}"
+            )));
+        }
+        for row in &polynomial.coeffs {
+            total_cells = total_cells
+                .checked_add(row.len())
+                .ok_or_else(|| invalid_params("recurrence coefficient count overflow"))?;
+        }
+        Ok(())
+    };
+    for (index, term) in recurrence.terms.iter().enumerate() {
+        if term.offset > MCP_MAX_RECURRENCE_LENGTH {
+            return Err(invalid_params(format!(
+                "recurrence term {index} has offset {}; the MCP limit is {MCP_MAX_RECURRENCE_LENGTH}",
+                term.offset
+            )));
+        }
+        if term.deriv_order > MCP_MAX_RECURRENCE_DEGREE {
+            return Err(invalid_params(format!(
+                "recurrence term {index} has derivative order {}; the MCP limit is {MCP_MAX_RECURRENCE_DEGREE}",
+                term.deriv_order
+            )));
+        }
+        validate_bivar(&format!("recurrence term {index}"), &term.coeff)?;
+    }
+    if let Some(denominator) = &recurrence.denominator {
+        validate_bivar("recurrence denominator", denominator)?;
+    }
+    if let Some(inhomogeneous) = &recurrence.inhomogeneous {
+        validate_bivar("recurrence inhomogeneous term", inhomogeneous)?;
+    }
+    if total_cells > MCP_MAX_TOTAL_COEFFICIENTS {
+        return Err(invalid_params(format!(
+            "recurrence JSON has {total_cells} stored coefficients; the MCP limit is {MCP_MAX_TOTAL_COEFFICIENTS}"
+        )));
+    }
+    Ok(())
+}
+
+fn apply_recurrence_options(
+    input: Option<RecurrenceSearchOptionsInput>,
+) -> Result<AdaptiveSearchOptions, McpError> {
     let mut options = AdaptiveSearchOptions::default();
     let Some(input) = input else {
         options.verbose = false;
-        return options;
+        validate_recurrence_options(&options)?;
+        return Ok(options);
     };
 
     if let Some(value) = input.skip_prefix {
@@ -2099,7 +2618,8 @@ fn apply_recurrence_options(input: Option<RecurrenceSearchOptionsInput>) -> Adap
         options.modular_prefilter = value;
     }
     options.verbose = false;
-    options
+    validate_recurrence_options(&options)?;
+    Ok(options)
 }
 
 #[tool_router(router = tool_router)]
@@ -2162,10 +2682,15 @@ impl PolynomialToolsServer {
         };
 
         let options = input.options.as_ref();
+        let find_recurrence = options.and_then(|o| o.find_recurrence).unwrap_or(false);
+        let recurrence_search = if find_recurrence {
+            Some(apply_recurrence_options(input.recurrence_options.clone())?)
+        } else {
+            None
+        };
         let check_consecutive_interlacing = options
             .and_then(|o| o.check_consecutive_interlacing)
             .unwrap_or(true);
-        let find_recurrence = options.and_then(|o| o.find_recurrence).unwrap_or(false);
 
         let items: Vec<_> = polynomials
             .iter()
@@ -2198,8 +2723,9 @@ impl PolynomialToolsServer {
 
         let coefficients: Vec<Vec<i64>> =
             polynomials.iter().map(|p| p.coefficients.clone()).collect();
-        let recurrence = find_recurrence
-            .then(|| family_recurrence_response(&coefficients, input.recurrence_options.clone()));
+        let recurrence = recurrence_search
+            .as_ref()
+            .map(|search| family_recurrence_response(&coefficients, search));
 
         let first_failure = first_family_failure(
             &items,
@@ -2501,7 +3027,7 @@ impl PolynomialToolsServer {
                 parse_errors: Vec::new(),
             }));
         }
-        let search = apply_recurrence_options(input.options);
+        let search = apply_recurrence_options(input.options)?;
         match find_recurrence_adaptive_rational(&polynomials, &search) {
             Some(result) => Ok(Json(FindRecurrenceResponse {
                 found: true,
@@ -2563,6 +3089,7 @@ impl PolynomialToolsServer {
         if input.rows.is_some() == input.additional.is_some() {
             return Err(invalid_params("provide exactly one of rows or additional"));
         }
+        validate_mcp_text(&input.recurrence_json, "recurrence JSON").map_err(invalid_params)?;
         let recurrence_json: RecurrenceJson = serde_json::from_str(&input.recurrence_json)
             .map_err(|error| invalid_params(format!("failed to parse recurrence JSON: {error}")))?;
         let (recurrence, first_index, initial_polys) = recurrence_json
@@ -2570,9 +3097,21 @@ impl PolynomialToolsServer {
             .map_err(|error| invalid_params(format!("invalid recurrence JSON: {error}")))?;
         let row_count = match (input.rows, input.additional) {
             (Some(rows), None) => rows,
-            (None, Some(additional)) => initial_polys.len() + additional,
+            (None, Some(additional)) => initial_polys
+                .len()
+                .checked_add(additional)
+                .ok_or_else(|| invalid_params("recurrence row count overflow"))?,
             _ => unreachable!("validated exactly one row-count option"),
         };
+        if row_count > MCP_MAX_RECURRENCE_ROWS {
+            return Err(invalid_params(format!(
+                "requested {row_count} recurrence rows; the MCP limit is {MCP_MAX_RECURRENCE_ROWS}"
+            )));
+        }
+        first_index
+            .checked_add(row_count)
+            .ok_or_else(|| invalid_params("recurrence index range overflow"))?;
+        validate_recurrence_for_generation(&recurrence, &initial_polys)?;
         let generated = recurrence
             .generate_rows_rational(&initial_polys, first_index, row_count)
             .map_err(|error| invalid_params(format!("failed to generate rows: {error}")))?;
@@ -2664,9 +3203,24 @@ impl PolynomialToolsServer {
                     input.denominator,
                 ) {
                     (Some(coefficients), None, None) => {
+                        if coefficients.len() > MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL {
+                            return Err(invalid_params(format!(
+                                "Ehrhart polynomial has {} coefficients; the MCP limit is {MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL}",
+                                coefficients.len()
+                            )));
+                        }
+                        for coefficient in &coefficients {
+                            if coefficient.len() > MCP_MAX_COEFFICIENT_TEXT_BYTES {
+                                return Err(invalid_params(format!(
+                                    "Ehrhart coefficient is {} bytes; the MCP limit is {MCP_MAX_COEFFICIENT_TEXT_BYTES}",
+                                    coefficient.len()
+                                )));
+                            }
+                        }
                         let coefficients: Result<Vec<_>, _> =
                             coefficients.iter().map(|c| parse_rational(c)).collect();
                         ehrhart_to_hstar_bigint(&coefficients.map_err(invalid_params)?)
+                            .map_err(|error| invalid_params(error.to_string()))?
                     }
                     (None, Some(numerator_coefficients), Some(denominator)) => {
                         let numerator_coefficients =
@@ -2681,6 +3235,7 @@ impl PolynomialToolsServer {
                             .map(|numerator| BigRational::new(numerator, denominator.clone()))
                             .collect::<Vec<_>>();
                         ehrhart_to_hstar_bigint(&coefficients)
+                            .map_err(|error| invalid_params(error.to_string()))?
                     }
                     _ => {
                         return Err(invalid_params(
@@ -2943,12 +3498,19 @@ impl PolynomialToolsServer {
         let rows = generated
             .into_iter()
             .enumerate()
-            .map(|(offset, coefficients)| OeisPolynomialRow {
-                n: first_row + offset as i64,
-                polynomial: format_poly_bigint_coeffs(&coefficients),
-                coefficients: coefficients.iter().map(ToString::to_string).collect(),
+            .map(|(offset, coefficients)| {
+                let offset = i64::try_from(offset)
+                    .map_err(|_| invalid_params("OEIS row offset does not fit in i64"))?;
+                let n = first_row
+                    .checked_add(offset)
+                    .ok_or_else(|| invalid_params("OEIS row index overflow"))?;
+                Ok(OeisPolynomialRow {
+                    n,
+                    polynomial: format_poly_bigint_coeffs(&coefficients),
+                    coefficients: coefficients.iter().map(ToString::to_string).collect(),
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, McpError>>()?;
         Ok(Json(GenerateOeisRowsResponse {
             id: entry.id.to_string(),
             first_row,
@@ -2962,6 +3524,11 @@ impl PolynomialToolsServer {
         &self,
         Parameters(input): Parameters<GenerateSequenceRequest>,
     ) -> Result<Json<GenerateSequenceResponse>, McpError> {
+        if input.max_n > MCP_MAX_SEQUENCE_N {
+            return Err(invalid_params(format!(
+                "max_n must be at most {MCP_MAX_SEQUENCE_N} for MCP sequence generation"
+            )));
+        }
         let polynomials = generated_sequence_polynomials_bigint(&input.sequence, input.max_n)
             .into_iter()
             .map(|coefficients| normalize_bigint_polynomial(coefficients).display)
@@ -3682,5 +4249,117 @@ mod tests {
             .unwrap();
         let value = serde_json::to_value(ehrhart).unwrap();
         assert_eq!(value["ehrhart_coefficients"][1], "3/2");
+    }
+
+    #[test]
+    fn mcp_rejects_oversized_polynomial_and_recurrence_inputs() {
+        let oversized_expression = PolynomialInput {
+            coefficients: None,
+            expression: Some(format!("x^{MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL}")),
+        };
+        assert!(parse_polynomial_input(&oversized_expression)
+            .unwrap_err()
+            .contains("MCP limit"));
+
+        let oversized_batch = PolynomialBatchInput {
+            polynomials: Some(vec![coeffs(&[1]); MCP_MAX_BATCH_POLYNOMIALS + 1]),
+            text: None,
+        };
+        assert!(format!("{:?}", parse_batch(&oversized_batch).unwrap_err()).contains("MCP limit"));
+
+        let oversized_recurrence_batch = FindRecurrenceRequest {
+            polynomials: None,
+            coefficients: Some(vec![
+                vec![RationalCoefficientInput::from(1)];
+                MCP_MAX_RECURRENCE_INPUT_ROWS + 1
+            ]),
+            expressions: None,
+            text: None,
+            options: None,
+        };
+        assert!(format!(
+            "{:?}",
+            parse_recurrence_batch_rational(&oversized_recurrence_batch).unwrap_err()
+        )
+        .contains("MCP limit"));
+
+        let excessive_length: RecurrenceSearchOptionsInput =
+            serde_json::from_value(json!({ "max_rec_len": MCP_MAX_RECURRENCE_LENGTH + 1 }))
+                .unwrap();
+        assert!(format!(
+            "{:?}",
+            apply_recurrence_options(Some(excessive_length)).unwrap_err()
+        )
+        .contains("maximum recurrence length"));
+
+        let excessive_grid: RecurrenceSearchOptionsInput = serde_json::from_value(json!({
+            "max_rec_len": MCP_MAX_RECURRENCE_LENGTH,
+            "max_var_deg": MCP_MAX_RECURRENCE_DEGREE,
+            "max_idx_deg": MCP_MAX_RECURRENCE_DEGREE,
+            "max_diff_deg": MCP_MAX_RECURRENCE_DEGREE
+        }))
+        .unwrap();
+        assert!(format!(
+            "{:?}",
+            apply_recurrence_options(Some(excessive_grid)).unwrap_err()
+        )
+        .contains("candidates"));
+    }
+
+    #[test]
+    fn mcp_bounds_generation_and_reports_exact_conversion_errors() {
+        let server = PolynomialToolsServer::new();
+        assert!(server
+            .generate_sequence(Parameters(GenerateSequenceRequest {
+                sequence: SequenceKind::Eulerian,
+                max_n: MCP_MAX_SEQUENCE_N + 1,
+            }))
+            .is_err());
+
+        let nonintegral = server.ehrhart_hstar(Parameters(EhrhartHstarRequest {
+            mode: EhrhartHstarMode::EhrhartToHstar,
+            hstar: None,
+            ehrhart_coefficients: Some(vec!["1/2".to_string()]),
+            numerator_coefficients: None,
+            denominator: None,
+        }));
+        assert!(
+            format!("{:?}", nonintegral.err().expect("nonintegral error"))
+                .contains("not an integer")
+        );
+
+        let Json(found) = server
+            .find_recurrence(Parameters(FindRecurrenceRequest {
+                polynomials: Some(vec![coeffs(&[1]), coeffs(&[2]), coeffs(&[4]), coeffs(&[8])]),
+                coefficients: None,
+                expressions: None,
+                text: None,
+                options: None,
+            }))
+            .unwrap();
+        let recurrence_json = found.recurrence_json.expect("small recurrence found");
+        let too_many_rows =
+            server.generate_recurrence_rows(Parameters(GenerateRecurrenceRowsRequest {
+                recurrence_json,
+                rows: Some(MCP_MAX_RECURRENCE_ROWS + 1),
+                additional: None,
+            }));
+        assert!(
+            format!("{:?}", too_many_rows.err().expect("row limit error")).contains("MCP limit")
+        );
+
+        let oversized_lace = check_family_lace(
+            &vec![normalize_polynomial(vec![1]); 4],
+            &LaceCheckRequest {
+                block_rows: Some(MCP_MAX_LACE_MATRIX_CELLS),
+                block_cols: Some(2),
+                max_minor_size: Some(1),
+                include_matrix: Some(false),
+            },
+        );
+        assert!(!oversized_lace.tnn);
+        assert!(oversized_lace
+            .error
+            .is_some_and(|error| error.contains("exceeds MCP limits")));
     }
 }

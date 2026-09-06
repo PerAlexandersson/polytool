@@ -22,6 +22,8 @@ use num_integer::lcm;
 use num_rational::Ratio;
 use num_traits::{One, ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashSet};
 use std::fmt;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -61,9 +63,8 @@ pub struct RecurrenceOptions {
     pub alternating_sign: bool,
     /// Use modular consistency checks to reject candidates before exact solving.
     ///
-    /// This is a probabilistic prefilter: bad primes can make a rationally
-    /// solvable system look inconsistent modulo every tested prime. Disable it
-    /// only when comparing against the exact-only search path.
+    /// Modular rejection is used only with a full-column-rank certificate;
+    /// rank-deficient images fall back to exact rational solving.
     pub modular_prefilter: bool,
 }
 
@@ -104,6 +105,33 @@ impl RecurrenceOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BivarPoly {
     pub coeffs: Vec<Vec<BigRational>>,
+}
+
+impl BivarPoly {
+    /// Construct a rectangular coefficient matrix, padding ragged rows with
+    /// exact zeros. Empty input is normalized to the zero polynomial.
+    pub fn from_coefficients_normalized(mut coeffs: Vec<Vec<BigRational>>) -> Self {
+        let width = coeffs.iter().map(Vec::len).max().unwrap_or(0).max(1);
+        if coeffs.is_empty() {
+            coeffs.push(Vec::new());
+        }
+        for row in &mut coeffs {
+            row.resize(width, BigRational::zero());
+        }
+        Self { coeffs }
+    }
+
+    fn coefficient(&self, i: usize, j: usize) -> Option<&BigRational> {
+        self.coeffs.get(i).and_then(|row| row.get(j))
+    }
+
+    fn coefficient_width(&self) -> usize {
+        self.coeffs.iter().map(Vec::len).max().unwrap_or(0)
+    }
+
+    fn normalized_coefficients(&self) -> Vec<Vec<BigRational>> {
+        Self::from_coefficients_normalized(self.coeffs.clone()).coeffs
+    }
 }
 
 /// Extra sign factor attached to one recurrence term.
@@ -317,6 +345,10 @@ pub enum VectorRecurrenceFitError {
     HeldOutVerificationFailed {
         transition: usize,
     },
+    IndexOverflow {
+        first_index: usize,
+        offset: usize,
+    },
 }
 
 impl fmt::Display for VectorRecurrenceFitError {
@@ -354,6 +386,13 @@ impl fmt::Display for VectorRecurrenceFitError {
             Self::HeldOutVerificationFailed { transition } => write!(
                 f,
                 "fitted recurrence failed exact held-out transition {transition}"
+            ),
+            Self::IndexOverflow {
+                first_index,
+                offset,
+            } => write!(
+                f,
+                "source index overflow: {first_index} + {offset} does not fit in usize"
             ),
         }
     }
@@ -1046,7 +1085,6 @@ fn scaled_rational_recurrence_holds_at_with_derivs(
 use crate::linalg;
 
 const MODULAR_PREFILTER_PRIMES: [i64; 3] = [1_000_000_007, 1_000_000_009, 998_244_353];
-const MODULAR_PREFILTER_INCONSISTENT_PRIMES_TO_REJECT: usize = 2;
 const MODULAR_PREFILTER_PRECOMPUTED_PRIMES: usize = 2;
 // Full-rank modular fits first check one held-out row, which cheaply rejects
 // many false prefix fits.  A full held-out sweep is reserved for larger spaces.
@@ -1286,6 +1324,7 @@ struct ModularImageView<'a> {
 
 struct ModularSystemResult {
     consistent: bool,
+    coefficient_full_rank: bool,
     full_rank_pivot_rows: Option<Vec<usize>>,
     modular_solution: Option<Vec<u64>>,
 }
@@ -1353,6 +1392,7 @@ fn recurrence_system_consistent_mod_supports(
     if m <= opts.rec_len {
         return ModularSystemResult {
             consistent: true,
+            coefficient_full_rank: false,
             full_rank_pivot_rows: None,
             modular_solution: None,
         };
@@ -1390,6 +1430,7 @@ fn recurrence_system_consistent_mod_supports(
     if num_vars == 0 {
         return ModularSystemResult {
             consistent: true,
+            coefficient_full_rank: true,
             full_rank_pivot_rows: None,
             modular_solution: None,
         };
@@ -1543,6 +1584,7 @@ fn recurrence_system_consistent_mod_supports(
         if row.is_contradiction() {
             return ModularSystemResult {
                 consistent: false,
+                coefficient_full_rank: false,
                 full_rank_pivot_rows: None,
                 modular_solution: None,
             };
@@ -1563,16 +1605,20 @@ fn recurrence_system_consistent_mod_supports(
             solve_request.solution_mode(),
         )
         .expect("recurrence modular prefilter builds a well-formed prime-field system");
-    let full_rank = result.consistent && result.rank == num_vars;
-    let full_rank_pivot_rows = (solve_request.needs_solution_data() && full_rank).then(|| {
-        result
-            .pivot_rows
-            .iter()
-            .map(|&row| row_indices[row])
-            .collect()
-    });
+    let coefficient_full_rank = result.rank == num_vars;
+    let full_rank_pivot_rows = (solve_request.needs_solution_data()
+        && result.consistent
+        && coefficient_full_rank)
+        .then(|| {
+            result
+                .pivot_rows
+                .iter()
+                .map(|&row| row_indices[row])
+                .collect()
+        });
     ModularSystemResult {
         consistent: result.consistent,
+        coefficient_full_rank,
         full_rank_pivot_rows,
         modular_solution: result.solution,
     }
@@ -1737,25 +1783,22 @@ fn recurrence_solution_holds_from_mod_images(
     true
 }
 
-fn recurrence_system_consistent_mod_prime(
+fn recurrence_system_mod_prime(
     polys: &[Vec<BigRational>],
     derivs: &[Vec<Vec<BigRational>>],
     opts: &RecurrenceOptions,
     modulus: i64,
-) -> Option<bool> {
+) -> Option<ModularSystemResult> {
     let polys_mod = rational_polys_mod_prime(polys, modulus)?;
     let derivs_mod = rational_derivs_mod_prime(derivs, modulus, opts.diff_deg)?;
-    Some(
-        recurrence_system_consistent_mod_images(
-            polys,
-            &polys_mod,
-            &derivs_mod,
-            opts,
-            modulus,
-            ModularSolveRequest::ConsistencyOnly,
-        )
-        .consistent,
-    )
+    Some(recurrence_system_consistent_mod_images(
+        polys,
+        &polys_mod,
+        &derivs_mod,
+        opts,
+        modulus,
+        ModularSolveRequest::ConsistencyOnly,
+    ))
 }
 
 struct ModularPrefilterPrimeImages {
@@ -1802,15 +1845,14 @@ fn modular_prefilter_rejects(
         return false;
     }
 
-    let mut inconsistent_primes = 0;
     for &prime in &MODULAR_PREFILTER_PRIMES {
-        if let Some(consistent) = recurrence_system_consistent_mod_prime(polys, derivs, opts, prime)
-        {
-            if !consistent {
-                inconsistent_primes += 1;
-                if inconsistent_primes >= MODULAR_PREFILTER_INCONSISTENT_PRIMES_TO_REJECT {
-                    return true;
-                }
+        if let Some(result) = recurrence_system_mod_prime(polys, derivs, opts, prime) {
+            // Inconsistency is a sound certificate over Q only when the
+            // coefficient matrix retains full column rank modulo this prime.
+            // Otherwise the prime may divide a denominator of the rational
+            // solution, so exact solving must remain the fallback.
+            if !result.consistent && result.coefficient_full_rank {
+                return true;
             }
         }
     }
@@ -1846,7 +1888,6 @@ fn modular_prefilter_with_cache(
         };
 
     let mut rank_deficient_candidate = None;
-    let mut inconsistent_primes = 0;
     for prime_images in &cache.primes {
         if fit_len > polys.len()
             || polys.len() > prime_images.polys.len()
@@ -1905,8 +1946,7 @@ fn modular_prefilter_with_cache(
             };
         }
         if !result.consistent {
-            inconsistent_primes += 1;
-            if inconsistent_primes >= MODULAR_PREFILTER_INCONSISTENT_PRIMES_TO_REJECT {
+            if result.coefficient_full_rank {
                 return ModularPrefilterResult {
                     rejected: true,
                     full_rank_pivot_rows: None,
@@ -1944,15 +1984,12 @@ fn modular_prefilter_with_cache(
                         prime_images.modulus,
                         ModularSolveRequest::ConsistencyOnly,
                     );
-                    if !extended.consistent {
-                        inconsistent_primes += 1;
-                        if inconsistent_primes >= MODULAR_PREFILTER_INCONSISTENT_PRIMES_TO_REJECT {
-                            return ModularPrefilterResult {
-                                rejected: true,
-                                full_rank_pivot_rows: None,
-                                modular_solution: None,
-                            };
-                        }
+                    if !extended.consistent && extended.coefficient_full_rank {
+                        return ModularPrefilterResult {
+                            rejected: true,
+                            full_rank_pivot_rows: None,
+                            modular_solution: None,
+                        };
                     }
                 }
             }
@@ -2828,8 +2865,15 @@ pub fn find_vector_recurrence_rational(
     let sources = states[..transitions].to_vec();
     let targets = states[1..].to_vec();
     let source_indices = (0..transitions)
-        .map(|offset| first_index + offset)
-        .collect::<Vec<_>>();
+        .map(|offset| {
+            first_index
+                .checked_add(offset)
+                .ok_or(VectorRecurrenceFitError::IndexOverflow {
+                    first_index,
+                    offset,
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let fitted = fit_rectangular_vector_map_rational(
         &sources,
         &targets,
@@ -2894,7 +2938,12 @@ pub fn find_companion_vector_recurrence_rational(
         }
         sources.push(companion);
         targets.push(states[latest + 1].clone());
-        source_indices.push(first_index + latest);
+        source_indices.push(first_index.checked_add(latest).ok_or(
+            VectorRecurrenceFitError::IndexOverflow {
+                first_index,
+                offset: latest,
+            },
+        )?);
     }
 
     let output_offset = (lag - 1) * component_dimension;
@@ -2986,6 +3035,9 @@ impl BivarPoly {
 
     /// True when the polynomial equals the constant 1.
     pub fn is_one(&self) -> bool {
+        if !self.coefficient(0, 0).is_some_and(|c| c.is_one()) {
+            return false;
+        }
         for (i, row) in self.coeffs.iter().enumerate() {
             for (j, c) in row.iter().enumerate() {
                 if i == 0 && j == 0 {
@@ -3091,11 +3143,17 @@ impl fmt::Display for BivarPoly {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut terms: Vec<String> = Vec::new();
         // Iterate j (t-power) first, then i (n-power), for natural ordering.
-        let max_j = self.coeffs.first().map_or(0, |r| r.len().saturating_sub(1));
+        let width = self.coefficient_width();
+        if width == 0 {
+            return write!(f, "0");
+        }
+        let max_j = width - 1;
         let max_i = self.coeffs.len().saturating_sub(1);
         for j in 0..=max_j {
             for i in 0..=max_i {
-                let c = &self.coeffs[i][j];
+                let Some(c) = self.coefficient(i, j) else {
+                    continue;
+                };
                 if c.is_zero() {
                     continue;
                 }
@@ -3155,11 +3213,17 @@ impl BivarPoly {
     /// Format as a LaTeX expression.
     pub fn to_latex(&self) -> String {
         let mut terms: Vec<String> = Vec::new();
-        let max_j = self.coeffs.first().map_or(0, |r| r.len().saturating_sub(1));
+        let width = self.coefficient_width();
+        if width == 0 {
+            return "0".into();
+        }
+        let max_j = width - 1;
         let max_i = self.coeffs.len().saturating_sub(1);
         for j in 0..=max_j {
             for i in 0..=max_i {
-                let c = &self.coeffs[i][j];
+                let Some(c) = self.coefficient(i, j) else {
+                    continue;
+                };
                 if c.is_zero() {
                     continue;
                 }
@@ -3396,7 +3460,9 @@ impl Recurrence {
         let mut required = count;
         if let Some(denominator) = &self.denominator {
             for offset in count..available_rows {
-                let n = first_index + offset;
+                let Some(n) = first_index.checked_add(offset) else {
+                    return available_rows;
+                };
                 if poly_is_zero_rational(&bivar_eval_n(denominator, n)) {
                     required = offset + 1;
                 }
@@ -3780,11 +3846,17 @@ impl Recurrence {
 impl BivarPoly {
     fn to_code(&self, style: CodeStyle) -> String {
         let mut terms: Vec<(bool, String)> = Vec::new();
-        let max_j = self.coeffs.first().map_or(0, |r| r.len().saturating_sub(1));
+        let width = self.coefficient_width();
+        if width == 0 {
+            return "0".into();
+        }
+        let max_j = width - 1;
         let max_i = self.coeffs.len().saturating_sub(1);
         for j in 0..=max_j {
             for i in 0..=max_i {
-                let c = &self.coeffs[i][j];
+                let Some(c) = self.coefficient(i, j) else {
+                    continue;
+                };
                 if c.is_zero() {
                     continue;
                 }
@@ -3896,6 +3968,11 @@ pub enum RecurrenceEvaluationError {
     ZeroDenominator,
     /// A denominator recurrence produced a rational function rather than a polynomial.
     NonPolynomialQuotient,
+    /// The requested row index cannot be represented by `usize`.
+    IndexOverflow {
+        first_index: usize,
+        row_offset: usize,
+    },
 }
 
 impl fmt::Display for RecurrenceEvaluationError {
@@ -3918,6 +3995,13 @@ impl fmt::Display for RecurrenceEvaluationError {
                 f,
                 "recurrence evaluation did not divide exactly to a polynomial"
             ),
+            Self::IndexOverflow {
+                first_index,
+                row_offset,
+            } => write!(
+                f,
+                "row index overflow: {first_index} + {row_offset} does not fit in usize"
+            ),
         }
     }
 }
@@ -3939,7 +4023,12 @@ impl Recurrence {
             });
         }
 
-        let n = first_index + rows.len();
+        let n = first_index.checked_add(rows.len()).ok_or(
+            RecurrenceEvaluationError::IndexOverflow {
+                first_index,
+                row_offset: rows.len(),
+            },
+        )?;
         let mut rhs = rational_zero_poly();
 
         for term in &self.terms {
@@ -4250,7 +4339,7 @@ impl BivarPolyJson {
     fn from_bivar(poly: &BivarPoly) -> Self {
         Self {
             coeffs: poly
-                .coeffs
+                .normalized_coefficients()
                 .iter()
                 .map(|row| row.iter().map(format_rational_coeff).collect())
                 .collect(),
@@ -4273,7 +4362,7 @@ impl BivarPolyJson {
                     .collect::<Result<Vec<_>, _>>()
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(BivarPoly { coeffs })
+        Ok(BivarPoly::from_coefficients_normalized(coeffs))
     }
 }
 
@@ -4430,37 +4519,51 @@ pub struct CandidateComplexity {
 /// denominator parameters count double, alternating parameters are delayed, and
 /// inhomogeneous parameters are delayed further.
 pub fn candidate_complexity(opts: &RecurrenceOptions) -> CandidateComplexity {
-    let denominator_unknowns = (opts.denom_idx_deg + 1) * (opts.denom_var_deg + 1) - 1;
-    let vars_per_coeff = (opts.idx_deg + 1) * (opts.var_deg + 1);
-    let ordinary_unknowns = opts.rec_len * vars_per_coeff;
-    let derivative_unknowns = opts.rec_len * opts.diff_deg * vars_per_coeff;
+    let denominator_unknowns = opts
+        .denom_idx_deg
+        .saturating_add(1)
+        .saturating_mul(opts.denom_var_deg.saturating_add(1))
+        .saturating_sub(1);
+    let vars_per_coeff = opts
+        .idx_deg
+        .saturating_add(1)
+        .saturating_mul(opts.var_deg.saturating_add(1));
+    let ordinary_unknowns = opts.rec_len.saturating_mul(vars_per_coeff);
+    let derivative_unknowns = opts
+        .rec_len
+        .saturating_mul(opts.diff_deg)
+        .saturating_mul(vars_per_coeff);
     let alternating_unknowns = if opts.alternating_sign {
-        opts.rec_len * vars_per_coeff
+        opts.rec_len.saturating_mul(vars_per_coeff)
     } else {
         0
     };
     let alternating_derivative_unknowns = if opts.alternating_sign {
-        opts.rec_len * opts.diff_deg * vars_per_coeff
+        opts.rec_len
+            .saturating_mul(opts.diff_deg)
+            .saturating_mul(vars_per_coeff)
     } else {
         0
     };
     let inhomogeneous_unknowns = if opts.homogeneous {
         0
     } else {
-        (opts.inhomo_idx_deg + 1) * (opts.inhomo_var_deg + 1)
+        opts.inhomo_idx_deg
+            .saturating_add(1)
+            .saturating_mul(opts.inhomo_var_deg.saturating_add(1))
     };
     let raw_unknowns = ordinary_unknowns
-        + derivative_unknowns
-        + alternating_unknowns
-        + alternating_derivative_unknowns
-        + denominator_unknowns
-        + inhomogeneous_unknowns;
+        .saturating_add(derivative_unknowns)
+        .saturating_add(alternating_unknowns)
+        .saturating_add(alternating_derivative_unknowns)
+        .saturating_add(denominator_unknowns)
+        .saturating_add(inhomogeneous_unknowns);
     let weighted_unknowns = ordinary_unknowns
-        + 2 * derivative_unknowns
-        + 3 * alternating_unknowns
-        + 4 * alternating_derivative_unknowns
-        + 2 * denominator_unknowns
-        + 4 * inhomogeneous_unknowns;
+        .saturating_add(derivative_unknowns.saturating_mul(2))
+        .saturating_add(alternating_unknowns.saturating_mul(3))
+        .saturating_add(alternating_derivative_unknowns.saturating_mul(4))
+        .saturating_add(denominator_unknowns.saturating_mul(2))
+        .saturating_add(inhomogeneous_unknowns.saturating_mul(4));
     CandidateComplexity {
         raw_unknowns,
         weighted_unknowns,
@@ -4597,8 +4700,8 @@ pub struct AdaptiveSearchOptions {
     pub no_verify: bool,
     /// Extra rows to add after the first prefix that clears `min_margin`.
     pub fit_extra_rows: usize,
-    /// Probabilistically reject inconsistent candidates modulo large primes
-    /// before exact rational solving.
+    /// Reject inconsistent candidates modulo large primes only when full
+    /// modular column rank certifies the rejection over the rationals.
     pub modular_prefilter: bool,
     /// Print each candidate tried to stderr.
     pub verbose: bool,
@@ -4669,7 +4772,7 @@ pub struct AdaptiveSearchResult {
 /// Counters describing how adaptive recurrence search reached a result.
 #[derive(Debug, Clone, Default)]
 pub struct AdaptiveSearchDiagnostics {
-    /// Number of parameter candidates generated in the searched candidate lists.
+    /// Number of parameter candidates represented by the searched lazy iterators.
     pub generated_candidates: usize,
     /// Number of candidates inspected before the search returned.
     pub considered_candidates: usize,
@@ -4701,7 +4804,7 @@ pub struct AdaptiveSearchDiagnostics {
     pub derivative_precompute_ms: f64,
     /// Time spent building modular-prefilter cache data.
     pub modular_cache_build_ms: f64,
-    /// Time spent generating and sorting candidate parameter sets.
+    /// Time spent constructing score-ordered candidate iterators.
     pub candidate_generation_ms: f64,
     /// Time spent selecting fit prefixes.
     pub fit_selection_ms: f64,
@@ -4748,99 +4851,291 @@ fn elapsed_ms(_: RecurrenceTimer) -> f64 {
     0.0
 }
 
-/// Generate candidate parameter sets.
-///
-/// Candidates are sorted by weighted parameter count. The raw parameter count
-/// is still used later for the linear-algebra solvability check; this ordering
-/// only delays more complicated explanations such as derivatives,
-/// alternating-sign terms, denominators, and inhomogeneous terms.
-fn generate_candidates(m: usize, search: &AdaptiveSearchOptions) -> Vec<RecurrenceOptions> {
-    let min_rl = search.min_rec_len.max(1).min(m.saturating_sub(1));
-    let max_rl = search.max_rec_len.min(m.saturating_sub(1));
-    let mut candidates = Vec::new();
+type CandidateSortKey = (
+    usize,
+    usize,
+    bool,
+    bool,
+    bool,
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+    u128,
+);
 
-    if min_rl > max_rl {
-        return candidates;
-    }
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+enum CandidateKind {
+    Ordinary,
+    Inhomogeneous,
+    DenominatorIndexOnly,
+    DenominatorPositiveVariableDegree,
+}
 
-    for rec_len in min_rl..=max_rl {
-        for diff_deg in search.min_diff_deg..=search.max_diff_deg {
-            for idx_deg in search.min_idx_deg..=search.max_idx_deg {
-                for var_deg in search.min_var_deg..=search.max_var_deg {
-                    let alternating_choices = if search.try_alternating_sign {
-                        vec![false, true]
-                    } else {
-                        vec![false]
-                    };
-                    for alternating_sign in alternating_choices {
-                        candidates.push(RecurrenceOptions {
-                            rec_len,
-                            var_deg,
-                            idx_deg,
-                            diff_deg,
-                            homogeneous: true,
-                            inhomo_var_deg: 0,
-                            inhomo_idx_deg: 0,
-                            denom_var_deg: 0,
-                            denom_idx_deg: 0,
-                            alternating_sign,
-                            modular_prefilter: search.modular_prefilter,
-                        });
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+struct CandidateNode {
+    kind: CandidateKind,
+    rec_len: usize,
+    diff_deg: usize,
+    idx_deg: usize,
+    var_deg: usize,
+    alternating_sign: bool,
+    extra_idx_deg: usize,
+    extra_var_deg: usize,
+}
 
-                        if search.try_inhomogeneous {
-                            for inhomo_idx_deg in
-                                search.min_inhomo_idx_deg..=search.max_inhomo_idx_deg
-                            {
-                                for inhomo_var_deg in
-                                    search.min_inhomo_var_deg..=search.max_inhomo_var_deg
-                                {
-                                    candidates.push(RecurrenceOptions {
-                                        rec_len,
-                                        var_deg,
-                                        idx_deg,
-                                        diff_deg,
-                                        homogeneous: false,
-                                        inhomo_var_deg,
-                                        inhomo_idx_deg,
-                                        denom_var_deg: 0,
-                                        denom_idx_deg: 0,
-                                        alternating_sign,
-                                        modular_prefilter: search.modular_prefilter,
-                                    });
-                                }
-                            }
-                        }
+struct CandidateIterator<'a> {
+    search: &'a AdaptiveSearchOptions,
+    min_rec_len: usize,
+    max_rec_len: usize,
+    heap: BinaryHeap<Reverse<(CandidateSortKey, CandidateNode)>>,
+    visited: HashSet<CandidateNode>,
+    total_candidates: usize,
+}
 
-                        if search.try_denominator {
-                            for dvd in 0..=search.max_denom_var_deg {
-                                for did in 0..=search.max_denom_idx_deg {
-                                    if dvd == 0 && did == 0 {
-                                        continue; // already covered above
-                                    }
-                                    candidates.push(RecurrenceOptions {
-                                        rec_len,
-                                        var_deg,
-                                        idx_deg,
-                                        diff_deg,
-                                        homogeneous: true,
-                                        inhomo_var_deg: 0,
-                                        inhomo_idx_deg: 0,
-                                        denom_var_deg: dvd,
-                                        denom_idx_deg: did,
-                                        alternating_sign,
-                                        modular_prefilter: search.modular_prefilter,
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
+fn inclusive_count(minimum: usize, maximum: usize) -> usize {
+    maximum
+        .checked_sub(minimum)
+        .and_then(|difference| difference.checked_add(1))
+        .unwrap_or(0)
+}
+
+impl CandidateNode {
+    fn to_options(self, modular_prefilter: bool) -> RecurrenceOptions {
+        let (homogeneous, inhomo_idx_deg, inhomo_var_deg, denom_idx_deg, denom_var_deg) = match self
+            .kind
+        {
+            CandidateKind::Ordinary => (true, 0, 0, 0, 0),
+            CandidateKind::Inhomogeneous => (false, self.extra_idx_deg, self.extra_var_deg, 0, 0),
+            CandidateKind::DenominatorIndexOnly
+            | CandidateKind::DenominatorPositiveVariableDegree => {
+                (true, 0, 0, self.extra_idx_deg, self.extra_var_deg)
             }
+        };
+        RecurrenceOptions {
+            rec_len: self.rec_len,
+            var_deg: self.var_deg,
+            idx_deg: self.idx_deg,
+            diff_deg: self.diff_deg,
+            homogeneous,
+            inhomo_var_deg,
+            inhomo_idx_deg,
+            denom_var_deg,
+            denom_idx_deg,
+            alternating_sign: self.alternating_sign,
+            modular_prefilter,
         }
     }
+}
 
-    candidates.sort_by_key(|opts| {
-        let complexity = candidate_complexity(opts);
+impl<'a> CandidateIterator<'a> {
+    fn new(m: usize, search: &'a AdaptiveSearchOptions) -> Self {
+        let min_rec_len = search.min_rec_len.max(1).min(m.saturating_sub(1));
+        let max_rec_len = search.max_rec_len.min(m.saturating_sub(1));
+        let base_count = inclusive_count(min_rec_len, max_rec_len)
+            .saturating_mul(inclusive_count(search.min_diff_deg, search.max_diff_deg))
+            .saturating_mul(inclusive_count(search.min_idx_deg, search.max_idx_deg))
+            .saturating_mul(inclusive_count(search.min_var_deg, search.max_var_deg))
+            .saturating_mul(if search.try_alternating_sign { 2 } else { 1 });
+        let inhomogeneous_count = if search.try_inhomogeneous {
+            inclusive_count(search.min_inhomo_idx_deg, search.max_inhomo_idx_deg).saturating_mul(
+                inclusive_count(search.min_inhomo_var_deg, search.max_inhomo_var_deg),
+            )
+        } else {
+            0
+        };
+        let denominator_count = if search.try_denominator {
+            search
+                .max_denom_idx_deg
+                .saturating_add(1)
+                .saturating_mul(search.max_denom_var_deg.saturating_add(1))
+                .saturating_sub(1)
+        } else {
+            0
+        };
+        let total_candidates = base_count.saturating_mul(
+            1usize
+                .saturating_add(inhomogeneous_count)
+                .saturating_add(denominator_count),
+        );
+        let mut iterator = Self {
+            search,
+            min_rec_len,
+            max_rec_len,
+            heap: BinaryHeap::new(),
+            visited: HashSet::new(),
+            total_candidates,
+        };
+        if total_candidates == 0 {
+            return iterator;
+        }
+
+        iterator.push(CandidateNode {
+            kind: CandidateKind::Ordinary,
+            rec_len: min_rec_len,
+            diff_deg: search.min_diff_deg,
+            idx_deg: search.min_idx_deg,
+            var_deg: search.min_var_deg,
+            alternating_sign: false,
+            extra_idx_deg: 0,
+            extra_var_deg: 0,
+        });
+        if inhomogeneous_count > 0 {
+            iterator.push(CandidateNode {
+                kind: CandidateKind::Inhomogeneous,
+                rec_len: min_rec_len,
+                diff_deg: search.min_diff_deg,
+                idx_deg: search.min_idx_deg,
+                var_deg: search.min_var_deg,
+                alternating_sign: false,
+                extra_idx_deg: search.min_inhomo_idx_deg,
+                extra_var_deg: search.min_inhomo_var_deg,
+            });
+        }
+        if denominator_count > 0 && search.max_denom_idx_deg > 0 {
+            iterator.push(CandidateNode {
+                kind: CandidateKind::DenominatorIndexOnly,
+                rec_len: min_rec_len,
+                diff_deg: search.min_diff_deg,
+                idx_deg: search.min_idx_deg,
+                var_deg: search.min_var_deg,
+                alternating_sign: false,
+                extra_idx_deg: 1,
+                extra_var_deg: 0,
+            });
+        }
+        if denominator_count > 0 && search.max_denom_var_deg > 0 {
+            iterator.push(CandidateNode {
+                kind: CandidateKind::DenominatorPositiveVariableDegree,
+                rec_len: min_rec_len,
+                diff_deg: search.min_diff_deg,
+                idx_deg: search.min_idx_deg,
+                var_deg: search.min_var_deg,
+                alternating_sign: false,
+                extra_idx_deg: 0,
+                extra_var_deg: 1,
+            });
+        }
+        iterator
+    }
+
+    fn total_candidates(&self) -> usize {
+        self.total_candidates
+    }
+
+    fn denominator_candidates(&self) -> usize {
+        if !self.search.try_denominator {
+            return 0;
+        }
+        let base_count = inclusive_count(self.min_rec_len, self.max_rec_len)
+            .saturating_mul(inclusive_count(
+                self.search.min_diff_deg,
+                self.search.max_diff_deg,
+            ))
+            .saturating_mul(inclusive_count(
+                self.search.min_idx_deg,
+                self.search.max_idx_deg,
+            ))
+            .saturating_mul(inclusive_count(
+                self.search.min_var_deg,
+                self.search.max_var_deg,
+            ))
+            .saturating_mul(if self.search.try_alternating_sign {
+                2
+            } else {
+                1
+            });
+        let denominator_count = self
+            .search
+            .max_denom_idx_deg
+            .saturating_add(1)
+            .saturating_mul(self.search.max_denom_var_deg.saturating_add(1))
+            .saturating_sub(1);
+        base_count.saturating_mul(denominator_count)
+    }
+
+    fn raw_ordinal(&self, node: CandidateNode) -> u128 {
+        let diff_count =
+            inclusive_count(self.search.min_diff_deg, self.search.max_diff_deg) as u128;
+        let idx_count = inclusive_count(self.search.min_idx_deg, self.search.max_idx_deg) as u128;
+        let var_count = inclusive_count(self.search.min_var_deg, self.search.max_var_deg) as u128;
+        let alternating_count = if self.search.try_alternating_sign {
+            2
+        } else {
+            1
+        };
+        let inhomogeneous_count = if self.search.try_inhomogeneous {
+            inclusive_count(
+                self.search.min_inhomo_idx_deg,
+                self.search.max_inhomo_idx_deg,
+            )
+            .saturating_mul(inclusive_count(
+                self.search.min_inhomo_var_deg,
+                self.search.max_inhomo_var_deg,
+            ))
+        } else {
+            0
+        };
+        let denominator_count = if self.search.try_denominator {
+            self.search
+                .max_denom_idx_deg
+                .saturating_add(1)
+                .saturating_mul(self.search.max_denom_var_deg.saturating_add(1))
+                .saturating_sub(1)
+        } else {
+            0
+        };
+        let block_count = 1usize
+            .saturating_add(inhomogeneous_count)
+            .saturating_add(denominator_count) as u128;
+        let mut base = node.rec_len.saturating_sub(self.min_rec_len) as u128;
+        base = base
+            .saturating_mul(diff_count)
+            .saturating_add(node.diff_deg.saturating_sub(self.search.min_diff_deg) as u128);
+        base = base
+            .saturating_mul(idx_count)
+            .saturating_add(node.idx_deg.saturating_sub(self.search.min_idx_deg) as u128);
+        base = base
+            .saturating_mul(var_count)
+            .saturating_add(node.var_deg.saturating_sub(self.search.min_var_deg) as u128);
+        base = base
+            .saturating_mul(alternating_count)
+            .saturating_add(u128::from(node.alternating_sign));
+        let within = match node.kind {
+            CandidateKind::Ordinary => 0,
+            CandidateKind::Inhomogeneous => {
+                let variable_count = inclusive_count(
+                    self.search.min_inhomo_var_deg,
+                    self.search.max_inhomo_var_deg,
+                ) as u128;
+                1u128
+                    .saturating_add(
+                        ((node.extra_idx_deg - self.search.min_inhomo_idx_deg) as u128)
+                            .saturating_mul(variable_count),
+                    )
+                    .saturating_add((node.extra_var_deg - self.search.min_inhomo_var_deg) as u128)
+            }
+            CandidateKind::DenominatorIndexOnly
+            | CandidateKind::DenominatorPositiveVariableDegree => {
+                let index_count = self.search.max_denom_idx_deg.saturating_add(1) as u128;
+                1u128
+                    .saturating_add(inhomogeneous_count as u128)
+                    .saturating_add(
+                        (node.extra_var_deg as u128)
+                            .saturating_mul(index_count)
+                            .saturating_add(node.extra_idx_deg as u128)
+                            .saturating_sub(1),
+                    )
+            }
+        };
+        base.saturating_mul(block_count).saturating_add(within)
+    }
+
+    fn key(&self, node: CandidateNode) -> CandidateSortKey {
+        let opts = node.to_options(self.search.modular_prefilter);
+        let complexity = candidate_complexity(&opts);
         let has_denominator = opts.denom_var_deg > 0 || opts.denom_idx_deg > 0;
         (
             complexity.weighted_unknowns,
@@ -4852,11 +5147,87 @@ fn generate_candidates(m: usize, search: &AdaptiveSearchOptions) -> Vec<Recurren
             opts.rec_len,
             opts.idx_deg,
             opts.var_deg,
-            opts.denom_idx_deg + opts.denom_var_deg,
-            opts.inhomo_idx_deg + opts.inhomo_var_deg,
+            opts.denom_idx_deg.saturating_add(opts.denom_var_deg),
+            opts.inhomo_idx_deg.saturating_add(opts.inhomo_var_deg),
+            self.raw_ordinal(node),
         )
-    });
-    candidates
+    }
+
+    fn push(&mut self, node: CandidateNode) {
+        if self.visited.insert(node) {
+            self.heap.push(Reverse((self.key(node), node)));
+        }
+    }
+
+    fn push_neighbors(&mut self, node: CandidateNode) {
+        let mut neighbor = node;
+        if node.rec_len < self.max_rec_len {
+            neighbor.rec_len += 1;
+            self.push(neighbor);
+        }
+        neighbor = node;
+        if node.diff_deg < self.search.max_diff_deg {
+            neighbor.diff_deg += 1;
+            self.push(neighbor);
+        }
+        neighbor = node;
+        if node.idx_deg < self.search.max_idx_deg {
+            neighbor.idx_deg += 1;
+            self.push(neighbor);
+        }
+        neighbor = node;
+        if node.var_deg < self.search.max_var_deg {
+            neighbor.var_deg += 1;
+            self.push(neighbor);
+        }
+        neighbor = node;
+        if !node.alternating_sign && self.search.try_alternating_sign {
+            neighbor.alternating_sign = true;
+            self.push(neighbor);
+        }
+        neighbor = node;
+        match node.kind {
+            CandidateKind::Ordinary => {}
+            CandidateKind::Inhomogeneous => {
+                if node.extra_idx_deg < self.search.max_inhomo_idx_deg {
+                    neighbor.extra_idx_deg += 1;
+                    self.push(neighbor);
+                }
+                neighbor = node;
+                if node.extra_var_deg < self.search.max_inhomo_var_deg {
+                    neighbor.extra_var_deg += 1;
+                    self.push(neighbor);
+                }
+            }
+            CandidateKind::DenominatorIndexOnly => {
+                if node.extra_idx_deg < self.search.max_denom_idx_deg {
+                    neighbor.extra_idx_deg += 1;
+                    self.push(neighbor);
+                }
+            }
+            CandidateKind::DenominatorPositiveVariableDegree => {
+                if node.extra_idx_deg < self.search.max_denom_idx_deg {
+                    neighbor.extra_idx_deg += 1;
+                    self.push(neighbor);
+                }
+                neighbor = node;
+                if node.extra_var_deg < self.search.max_denom_var_deg {
+                    neighbor.extra_var_deg += 1;
+                    self.push(neighbor);
+                }
+            }
+        }
+    }
+}
+
+impl Iterator for CandidateIterator<'_> {
+    type Item = RecurrenceOptions;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Reverse((_key, node)) = self.heap.pop()?;
+        self.push_neighbors(node);
+        Some(node.to_options(self.search.modular_prefilter))
+    }
 }
 
 fn fitting_polynomial_count_with_prefix_degrees(
@@ -5254,10 +5625,10 @@ pub fn find_recurrence_adaptive_rational(
 
     // First pass: use the options as given.
     let timer = timer_now();
-    let candidates = generate_candidates(m, search);
+    let candidates = CandidateIterator::new(m, search);
     diagnostics.candidate_generation_ms += elapsed_ms(timer);
     let mut tried = 0;
-    diagnostics.generated_candidates = candidates.len();
+    diagnostics.generated_candidates = candidates.total_candidates();
 
     let primary_context = AdaptiveCandidateContext {
         polys,
@@ -5268,9 +5639,9 @@ pub fn find_recurrence_adaptive_rational(
         fit_search: search,
         pass_label: None,
     };
-    for opts in &candidates {
+    for opts in candidates {
         if let Some(found) =
-            evaluate_adaptive_candidate(&primary_context, opts, &mut diagnostics, &mut tried)
+            evaluate_adaptive_candidate(&primary_context, &opts, &mut diagnostics, &mut tried)
         {
             return Some(found.into_result(diagnostics));
         }
@@ -5288,13 +5659,12 @@ pub fn find_recurrence_adaptive_rational(
         }
 
         let timer = timer_now();
-        let rational_candidates = generate_candidates(m, &rational_search);
+        let rational_candidates = CandidateIterator::new(m, &rational_search);
         diagnostics.candidate_generation_ms += elapsed_ms(timer);
         diagnostics.denominator_escalation_entered = true;
-        diagnostics.generated_candidates += rational_candidates
-            .iter()
-            .filter(|opts| opts.denom_var_deg > 0 || opts.denom_idx_deg > 0)
-            .count();
+        diagnostics.generated_candidates = diagnostics
+            .generated_candidates
+            .saturating_add(rational_candidates.denominator_candidates());
         let rational_context = AdaptiveCandidateContext {
             polys,
             derivs: &derivs,
@@ -5304,14 +5674,14 @@ pub fn find_recurrence_adaptive_rational(
             fit_search: &rational_search,
             pass_label: Some("rational"),
         };
-        for opts in &rational_candidates {
+        for opts in rational_candidates {
             // Skip candidates without a denominator (already tried above).
             if opts.denom_var_deg == 0 && opts.denom_idx_deg == 0 {
                 continue;
             }
 
             if let Some(found) =
-                evaluate_adaptive_candidate(&rational_context, opts, &mut diagnostics, &mut tried)
+                evaluate_adaptive_candidate(&rational_context, &opts, &mut diagnostics, &mut tried)
             {
                 return Some(found.into_result(diagnostics));
             }
@@ -5471,6 +5841,201 @@ mod tests {
     }
 
     #[test]
+    fn modular_prefilter_falls_back_exactly_at_bad_primes() {
+        let denominator =
+            BigInt::from(MODULAR_PREFILTER_PRIMES[0]) * BigInt::from(MODULAR_PREFILTER_PRIMES[1]);
+        let polys = vec![
+            vec![BigRational::from_integer(denominator.pow(3))],
+            vec![BigRational::from_integer(denominator.pow(2))],
+            vec![BigRational::from_integer(denominator.clone())],
+            vec![BigRational::one()],
+        ];
+        let derivs = rational_derivatives_up_to(&polys, 0);
+        let opts = RecurrenceOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            rec_len: 1,
+            homogeneous: true,
+            modular_prefilter: true,
+            ..Default::default()
+        };
+
+        for &prime in &MODULAR_PREFILTER_PRIMES[..2] {
+            let result = recurrence_system_mod_prime(&polys, &derivs, &opts, prime).unwrap();
+            assert!(!result.consistent);
+            assert!(!result.coefficient_full_rank);
+        }
+        let recurrence = find_polynomial_recurrence_rational(&polys, &opts).unwrap();
+        assert_eq!(
+            recurrence.to_string(),
+            format!("P(n) = 1/{denominator} P(n-1)")
+        );
+
+        let search = AdaptiveSearchOptions {
+            min_rec_len: 1,
+            max_rec_len: 1,
+            min_var_deg: 0,
+            max_var_deg: 0,
+            min_idx_deg: 0,
+            max_idx_deg: 0,
+            min_diff_deg: 0,
+            max_diff_deg: 0,
+            min_margin: 0,
+            no_verify: true,
+            modular_prefilter: true,
+            ..Default::default()
+        };
+        let adaptive = find_recurrence_adaptive_rational(&polys, &search).unwrap();
+        assert_eq!(adaptive.recurrence.to_string(), recurrence.to_string());
+    }
+
+    #[test]
+    fn lazy_candidate_iterator_matches_eager_stable_order() {
+        fn eager(m: usize, search: &AdaptiveSearchOptions) -> Vec<RecurrenceOptions> {
+            let min_rec_len = search.min_rec_len.max(1).min(m.saturating_sub(1));
+            let max_rec_len = search.max_rec_len.min(m.saturating_sub(1));
+            let mut candidates = Vec::new();
+            if min_rec_len > max_rec_len {
+                return candidates;
+            }
+            for rec_len in min_rec_len..=max_rec_len {
+                for diff_deg in search.min_diff_deg..=search.max_diff_deg {
+                    for idx_deg in search.min_idx_deg..=search.max_idx_deg {
+                        for var_deg in search.min_var_deg..=search.max_var_deg {
+                            for alternating_sign in [false, true]
+                                .into_iter()
+                                .take(if search.try_alternating_sign { 2 } else { 1 })
+                            {
+                                candidates.push(RecurrenceOptions {
+                                    rec_len,
+                                    var_deg,
+                                    idx_deg,
+                                    diff_deg,
+                                    homogeneous: true,
+                                    inhomo_var_deg: 0,
+                                    inhomo_idx_deg: 0,
+                                    denom_var_deg: 0,
+                                    denom_idx_deg: 0,
+                                    alternating_sign,
+                                    modular_prefilter: search.modular_prefilter,
+                                });
+                                if search.try_inhomogeneous {
+                                    for inhomo_idx_deg in
+                                        search.min_inhomo_idx_deg..=search.max_inhomo_idx_deg
+                                    {
+                                        for inhomo_var_deg in
+                                            search.min_inhomo_var_deg..=search.max_inhomo_var_deg
+                                        {
+                                            candidates.push(RecurrenceOptions {
+                                                rec_len,
+                                                var_deg,
+                                                idx_deg,
+                                                diff_deg,
+                                                homogeneous: false,
+                                                inhomo_var_deg,
+                                                inhomo_idx_deg,
+                                                denom_var_deg: 0,
+                                                denom_idx_deg: 0,
+                                                alternating_sign,
+                                                modular_prefilter: search.modular_prefilter,
+                                            });
+                                        }
+                                    }
+                                }
+                                if search.try_denominator {
+                                    for denom_var_deg in 0..=search.max_denom_var_deg {
+                                        for denom_idx_deg in 0..=search.max_denom_idx_deg {
+                                            if denom_var_deg == 0 && denom_idx_deg == 0 {
+                                                continue;
+                                            }
+                                            candidates.push(RecurrenceOptions {
+                                                rec_len,
+                                                var_deg,
+                                                idx_deg,
+                                                diff_deg,
+                                                homogeneous: true,
+                                                inhomo_var_deg: 0,
+                                                inhomo_idx_deg: 0,
+                                                denom_var_deg,
+                                                denom_idx_deg,
+                                                alternating_sign,
+                                                modular_prefilter: search.modular_prefilter,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            candidates.sort_by_key(|opts| {
+                let complexity = candidate_complexity(opts);
+                (
+                    complexity.weighted_unknowns,
+                    complexity.raw_unknowns,
+                    opts.alternating_sign,
+                    opts.denom_var_deg > 0 || opts.denom_idx_deg > 0,
+                    !opts.homogeneous,
+                    opts.diff_deg,
+                    opts.rec_len,
+                    opts.idx_deg,
+                    opts.var_deg,
+                    opts.denom_idx_deg.saturating_add(opts.denom_var_deg),
+                    opts.inhomo_idx_deg.saturating_add(opts.inhomo_var_deg),
+                )
+            });
+            candidates
+        }
+
+        fn signatures(candidates: impl IntoIterator<Item = RecurrenceOptions>) -> Vec<String> {
+            candidates
+                .into_iter()
+                .map(|opts| {
+                    format!(
+                        "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+                        opts.rec_len,
+                        opts.diff_deg,
+                        opts.idx_deg,
+                        opts.var_deg,
+                        opts.alternating_sign,
+                        opts.homogeneous,
+                        opts.inhomo_idx_deg,
+                        opts.inhomo_var_deg,
+                        opts.denom_idx_deg,
+                        opts.denom_var_deg,
+                    )
+                })
+                .collect()
+        }
+
+        let search = AdaptiveSearchOptions {
+            min_rec_len: 1,
+            max_rec_len: 3,
+            min_var_deg: 0,
+            max_var_deg: 2,
+            min_idx_deg: 0,
+            max_idx_deg: 2,
+            min_diff_deg: 0,
+            max_diff_deg: 1,
+            try_inhomogeneous: true,
+            min_inhomo_var_deg: 0,
+            max_inhomo_var_deg: 2,
+            min_inhomo_idx_deg: 0,
+            max_inhomo_idx_deg: 2,
+            try_denominator: true,
+            try_alternating_sign: true,
+            max_denom_var_deg: 2,
+            max_denom_idx_deg: 2,
+            ..Default::default()
+        };
+        let lazy = CandidateIterator::new(8, &search);
+        assert_eq!(lazy.total_candidates(), eager(8, &search).len());
+        assert_eq!(signatures(lazy), signatures(eager(8, &search)));
+    }
+
+    #[test]
     fn modular_tail_verification_checks_solution_on_heldout_rows() {
         let polys = i64_polys_to_rational(&[
             vec![1],
@@ -5517,7 +6082,7 @@ mod tests {
     }
 
     #[test]
-    fn modular_prefilter_rejects_rank_deficient_prefix_with_bad_heldout_row() {
+    fn modular_prefilter_falls_back_for_rank_deficient_bad_heldout_row() {
         let polys = i64_polys_to_rational(&[vec![0], vec![0], vec![0], vec![1]]);
         let cache = ModularPrefilterCache::new(&polys, 0);
         let opts = RecurrenceOptions {
@@ -5531,8 +6096,9 @@ mod tests {
         };
 
         let prefilter = modular_prefilter_with_cache(&polys, 3, &opts, &cache);
-        assert!(prefilter.rejected);
+        assert!(!prefilter.rejected);
         assert!(prefilter.full_rank_pivot_rows.is_none());
+        assert!(find_polynomial_recurrence_rational(&polys, &opts).is_none());
     }
 
     #[test]
@@ -6346,6 +6912,52 @@ mod tests {
     }
 
     #[test]
+    fn ragged_bivariate_polynomials_format_without_loss_or_panics() {
+        let wider_later_row = BivarPoly {
+            coeffs: vec![vec![br(1, 1)], vec![br(0, 1), br(1, 1)]],
+        };
+        assert_eq!(wider_later_row.to_string(), "1 + nt");
+        assert_eq!(wider_later_row.to_latex(), "1 + nt");
+        assert_eq!(wider_later_row.to_mathematica_code(), "1 + n*t");
+
+        let shorter_later_row = BivarPoly {
+            coeffs: vec![vec![br(1, 1), br(2, 1)], vec![br(3, 1)]],
+        };
+        assert_eq!(shorter_later_row.to_string(), "1 + 3n + 2t");
+
+        let empty = BivarPoly { coeffs: vec![] };
+        assert!(empty.is_zero());
+        assert!(!empty.is_one());
+        assert_eq!(empty.to_string(), "0");
+        assert_eq!(empty.to_mathematica_code(), "0");
+    }
+
+    #[test]
+    fn recurrence_json_normalizes_ragged_bivariate_coefficients() {
+        let decoded = BivarPolyJson {
+            coeffs: vec![
+                vec!["1".to_string()],
+                vec!["0".to_string(), "1".to_string()],
+            ],
+        }
+        .to_bivar()
+        .unwrap();
+        assert_eq!(
+            decoded.coeffs.iter().map(Vec::len).collect::<Vec<_>>(),
+            [2, 2]
+        );
+        assert_eq!(decoded.to_string(), "1 + nt");
+
+        let encoded = BivarPolyJson::from_bivar(&BivarPoly {
+            coeffs: vec![vec![br(1, 1)], vec![br(0, 1), br(1, 1)]],
+        });
+        assert_eq!(
+            encoded.coeffs.iter().map(Vec::len).collect::<Vec<_>>(),
+            [2, 2]
+        );
+    }
+
+    #[test]
     fn recurrence_json_generates_denominator_rows() {
         let mut polys: Vec<Vec<BigRational>> = vec![vec![BigRational::one()]];
         for n in 2..=8 {
@@ -6392,6 +7004,46 @@ mod tests {
 
         assert_eq!(recurrence.generation_initial_count(1, 7), 5);
         assert_eq!(recurrence.generation_initial_count(1, 4), 4);
+    }
+
+    #[test]
+    fn recurrence_generation_reports_index_overflow() {
+        let recurrence = Recurrence {
+            terms: vec![RecurrenceTerm::new(
+                1,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![BigRational::one()]]),
+            )],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        assert_eq!(
+            recurrence.evaluate_next_rational(&[vec![BigRational::one()]], usize::MAX),
+            Err(RecurrenceEvaluationError::IndexOverflow {
+                first_index: usize::MAX,
+                row_offset: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn vector_recurrence_fitting_reports_index_overflow() {
+        let states = vec![
+            vec![vec![br(1, 1)]],
+            vec![vec![br(2, 1)]],
+            vec![vec![br(4, 1)]],
+        ];
+        let options = VectorRecurrenceOptions {
+            held_out_transitions: 0,
+            ..Default::default()
+        };
+        assert_eq!(
+            find_vector_recurrence_rational(&states, usize::MAX, &options),
+            Err(VectorRecurrenceFitError::IndexOverflow {
+                first_index: usize::MAX,
+                offset: 1,
+            })
+        );
     }
 
     fn bounded_bivar(idx_deg: usize, var_deg: usize, terms: &[(usize, usize, i64)]) -> BivarPoly {

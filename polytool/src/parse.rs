@@ -13,6 +13,15 @@
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
+/// Largest textual polynomial accepted by the general parser.
+pub const MAX_POLYNOMIAL_INPUT_BYTES: usize = 1_048_576;
+
+/// Largest dense coefficient vector produced by the general parser.
+///
+/// Polytool stores polynomials densely, so accepting a larger exponent would
+/// allocate every intervening zero coefficient as well.
+pub const MAX_POLYNOMIAL_COEFFICIENTS: usize = 100_001;
+
 /// Parse a single line into polynomial coefficients (ascending degree).
 ///
 /// Tries expanded polynomial format first (if a letter is found),
@@ -34,6 +43,12 @@ pub fn parse_polynomial(input: &str) -> Result<Vec<i64>, String> {
 /// Tries expanded polynomial format first (if a letter is found),
 /// then falls back to coefficient list parsing.
 pub fn parse_polynomial_bigint(input: &str) -> Result<Vec<BigInt>, String> {
+    if input.len() > MAX_POLYNOMIAL_INPUT_BYTES {
+        return Err(format!(
+            "polynomial input is {} bytes; the limit is {MAX_POLYNOMIAL_INPUT_BYTES}",
+            input.len()
+        ));
+    }
     let s = input.trim();
     if s.is_empty() {
         return Err("empty input".to_string());
@@ -94,6 +109,13 @@ fn parse_coeff_list_bigint(s: &str) -> Result<Vec<BigInt>, String> {
         s.split_whitespace().collect()
     };
 
+    if parts.len() > MAX_POLYNOMIAL_COEFFICIENTS {
+        return Err(format!(
+            "polynomial has {} coefficients; the limit is {MAX_POLYNOMIAL_COEFFICIENTS}",
+            parts.len()
+        ));
+    }
+
     let coeffs: Result<Vec<BigInt>, _> = parts
         .iter()
         .map(|p| {
@@ -147,8 +169,17 @@ fn parse_expanded_bigint(s: &str) -> Result<Vec<BigInt>, String> {
         let (coeff, deg) = parse_term_bigint(term, var)?;
 
         // Extend coefficient vector if needed
-        if deg >= coeffs.len() {
-            coeffs.resize(deg + 1, BigInt::from(0));
+        let required_len = deg
+            .checked_add(1)
+            .ok_or_else(|| format!("polynomial exponent {deg} is too large"))?;
+        if required_len > MAX_POLYNOMIAL_COEFFICIENTS {
+            return Err(format!(
+                "polynomial exponent {deg} exceeds the maximum supported degree {}",
+                MAX_POLYNOMIAL_COEFFICIENTS - 1
+            ));
+        }
+        if required_len > coeffs.len() {
+            coeffs.resize(required_len, BigInt::from(0));
         }
         coeffs[deg] += coeff;
     }
@@ -338,6 +369,31 @@ mod tests {
             parse_polynomial_bigint(&format!("{big}t^2 + 2t + 1")).unwrap(),
             vec![BigInt::from(1), BigInt::from(2), big]
         );
+    }
+
+    #[test]
+    fn rejects_exponents_that_cannot_be_allocated_safely() {
+        let error = parse_polynomial_bigint(&format!("t^{}", usize::MAX)).unwrap_err();
+        assert!(error.contains("too large"));
+
+        let error =
+            parse_polynomial_bigint(&format!("t^{}", MAX_POLYNOMIAL_COEFFICIENTS)).unwrap_err();
+        assert!(error.contains("maximum supported degree"));
+    }
+
+    #[test]
+    fn rejects_oversized_text_and_coefficient_lists() {
+        let oversized_text = "1".repeat(MAX_POLYNOMIAL_INPUT_BYTES + 1);
+        assert!(parse_polynomial_bigint(&oversized_text)
+            .unwrap_err()
+            .contains("bytes"));
+
+        let oversized_list = std::iter::repeat_n("0", MAX_POLYNOMIAL_COEFFICIENTS + 1)
+            .collect::<Vec<_>>()
+            .join(",");
+        assert!(parse_polynomial_bigint(&oversized_list)
+            .unwrap_err()
+            .contains("coefficients"));
     }
 
     #[test]

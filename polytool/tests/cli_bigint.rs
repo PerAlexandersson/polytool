@@ -42,6 +42,37 @@ fn malformed_polynomial_input_is_fatal() {
 }
 
 #[test]
+fn huge_exponents_are_rejected_without_panicking() {
+    let output = run_polytool(&["real-rooted"], &format!("t^{}\n", usize::MAX));
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).expect("stderr is utf8");
+    assert!(stderr.contains("too large"));
+}
+
+#[test]
+fn cli_rejects_oversized_standard_input() {
+    const LIMIT: usize = 16 * 1024 * 1024;
+    let mut input = "1,".repeat(LIMIT / 2);
+    input.push_str("1\n");
+    let output = run_polytool(&["real-rooted"], &input);
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).expect("stderr is utf8");
+    assert!(stderr.contains("CLI input limit"));
+}
+
+#[test]
+fn nonintegral_ehrhart_conversion_is_a_clean_error() {
+    let output = run_polytool(&["ehrhart-to-hstar"], "1/2\n");
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).expect("stderr is utf8");
+    assert!(stderr.contains("not an integer"));
+}
+
+#[test]
 fn explicit_hstar_dimension_reports_degree_violation() {
     let output = run_polytool(
         &["hstar-inequalities", "--dimension", "1", "--json"],

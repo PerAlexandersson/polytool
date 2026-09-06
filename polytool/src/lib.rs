@@ -122,8 +122,8 @@ pub use linalg::{
     modular_leading_principal_minors_bigint, sparse_modular_linear_system_consistency,
     sparse_modular_linear_system_consistency_with_options, sparse_modular_linear_system_consistent,
     sparse_modular_linear_system_solution, SparseModEliminationError, SparseModEliminationOptions,
-    SparseModEliminationResult, SparseModEliminationStats, SparseModRow, SparseModRowOrder,
-    MODULAR_POSITIVE_DEFINITE_DIMENSION_THRESHOLD,
+    SparseModEliminationResult, SparseModEliminationStats, SparseModRow, SparseModRowError,
+    SparseModRowOrder, TotalPositivityError, MODULAR_POSITIVE_DEFINITE_DIMENSION_THRESHOLD,
 };
 
 pub mod parse;
@@ -172,6 +172,7 @@ pub use interlacing_matrix::{
 };
 pub use parse::{
     parse_polynomial, parse_polynomial_bigint, parse_polynomials, parse_polynomials_bigint,
+    MAX_POLYNOMIAL_COEFFICIENTS, MAX_POLYNOMIAL_INPUT_BYTES,
 };
 pub use polynomial::{CoeffRing, FieldRing, Polynomial};
 pub use real_rootedness::{
