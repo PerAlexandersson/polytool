@@ -1,16 +1,31 @@
 # Handoff
 
-## Active path-IC crystal-wall tool (2026-09-06)
+## Path-IC crystal-wall tool (2026-09-06)
 
-The flagged-UIG academic worker owns the new reusable module
-`sym-poly/core/src/p_rs.rs`, its `lib.rs` export/tests, the clean
-`Tableau::evacuation` correction and regression test in
-`sym-poly/core/src/tableau.rs`, and the separate research driver
-`experiments/src/bin/path_ic_crystal_wall.rs`.  The user explicitly requested
-this cross-project work.  The architecture and exact MVP gates are recorded in
+Reusable checkpoint `6ddb666` adds `sym-poly-core::p_rs`: an abstract
+`PInsertionOrder`, one exact traced implementation of inverse column
+Algorithm 2, six event kinds, boundary certificates, reverse complement, and
+six focused tests.  It also corrects `Tableau::evacuation` to the direct
+shape-preserving jeu-de-taquin algorithm; the old RSK shortcut transposed
+non-self-conjugate shapes.  Two regression tests cover that correction.  All
+`123` `sym-poly-core` tests pass.  Strict whole-crate Clippy is blocked by
+pre-existing warnings in unrelated core/dependency modules; ordinary Clippy
+reports no warning in the new `p_rs.rs` or changed `tableau.rs` code.
+
+The separate tracked research driver
+`experiments/src/bin/path_ic_crystal_wall.rs` supplies only path-IC data:
+the forced-debt ternary word grammar, path order/ladders, duplicate carry,
+raw recording reconstruction, and the excluded wall census.  Its three unit
+tests and strict target-only Clippy pass.  The release scan through `P_17`
+finds exactly `27` types, `282` insertion words, `989` distinct rejected
+tableaux, and `7852` incidences; all keep the complemented maximum active
+through a boundary ladder and have `p_Q(1)>m_1(Q)`, split into `5060` ladder
+copies and `2792` ladder moves.  Its per-type TSV agrees with the independent
+Python trace on all `27` rows and `13` compared columns.  The architecture and
+next finite-state-transducer increment are recorded in
 `../projects/Line-graph-chromatics/crystal-wall-rust-tool-plan-2026-09-06.md`.
-No existing experiment binary or unrelated library module is owned by this
-task.
+Ownership is released after this checkpoint; no unrelated experiment binary
+or library module was changed.
 
 ## Final Polytool integration (2026-09-06)
 
