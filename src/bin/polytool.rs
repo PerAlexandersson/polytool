@@ -15,6 +15,32 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+const MAX_CLI_INPUT_BYTES: usize = 16 * 1024 * 1024;
+
+fn read_limited_text(reader: impl Read, description: &str) -> Result<String, String> {
+    let mut input = String::new();
+    let mut limited = reader.take((MAX_CLI_INPUT_BYTES as u64) + 1);
+    limited
+        .read_to_string(&mut input)
+        .map_err(|error| format!("failed to read {description}: {error}"))?;
+    if input.len() > MAX_CLI_INPUT_BYTES {
+        return Err(format!(
+            "{description} exceeds the {MAX_CLI_INPUT_BYTES}-byte CLI input limit"
+        ));
+    }
+    Ok(input)
+}
+
+fn read_stdin_or_exit() -> String {
+    match read_limited_text(io::stdin(), "stdin") {
+        Ok(input) => input,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+    }
+}
+
 fn is_help_arg(arg: &str) -> bool {
     matches!(arg, "-h" | "--help" | "help")
 }
@@ -1102,8 +1128,7 @@ fn print_command_help(command: &str) -> bool {
 }
 
 fn read_polys_bigint() -> Vec<Vec<BigInt>> {
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input).unwrap();
+    let input = read_stdin_or_exit();
     parse_polynomials_bigint(&input)
         .into_iter()
         .map(|result| match result {
@@ -1117,14 +1142,12 @@ fn read_polys_bigint() -> Vec<Vec<BigInt>> {
 }
 
 fn read_poly_parse_results_bigint() -> Vec<Result<Vec<BigInt>, String>> {
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input).unwrap();
+    let input = read_stdin_or_exit();
     parse_polynomials_bigint(&input)
 }
 
 fn read_polys_rational() -> Vec<Vec<RecurrenceBigRational>> {
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input).unwrap();
+    let input = read_stdin_or_exit();
     input
         .lines()
         .filter(|l| {
@@ -1159,6 +1182,12 @@ fn parse_coeff_list_rational(input: &str) -> Result<Vec<RecurrenceBigRational>, 
     } else {
         s.split_whitespace().collect()
     };
+    if parts.len() > MAX_POLYNOMIAL_COEFFICIENTS {
+        return Err(format!(
+            "polynomial has {} coefficients; the limit is {MAX_POLYNOMIAL_COEFFICIENTS}",
+            parts.len()
+        ));
+    }
 
     parts
         .iter()
@@ -2556,15 +2585,13 @@ fn format_rational_row(coeffs: &[RecurrenceBigRational]) -> String {
 }
 
 fn read_recurrence_json(path: &str) -> Result<RecurrenceJson, String> {
-    let mut input = String::new();
-    if path == "-" {
-        io::stdin()
-            .read_to_string(&mut input)
-            .map_err(|e| format!("failed to read recurrence JSON from stdin: {e}"))?;
+    let input = if path == "-" {
+        read_limited_text(io::stdin(), "recurrence JSON from stdin")?
     } else {
-        input = fs::read_to_string(path)
-            .map_err(|e| format!("failed to read recurrence JSON `{path}`: {e}"))?;
-    }
+        let file = fs::File::open(path)
+            .map_err(|e| format!("failed to open recurrence JSON `{path}`: {e}"))?;
+        read_limited_text(file, &format!("recurrence JSON `{path}`"))?
+    };
     serde_json::from_str(&input).map_err(|e| format!("failed to parse recurrence JSON: {e}"))
 }
 
@@ -2632,7 +2659,13 @@ fn cmd_recurrence_generate(args: &[String]) {
     let total_rows = if let Some(rows) = rows {
         rows
     } else if let Some(additional) = additional {
-        initial_polys.len() + additional
+        match initial_polys.len().checked_add(additional) {
+            Some(total) => total,
+            None => {
+                eprintln!("recurrence row count overflow");
+                return;
+            }
+        }
     } else {
         eprintln!("recurrence-generate needs --rows <n> or --additional <n>");
         return;
@@ -3977,7 +4010,13 @@ fn cmd_ehrhart_to_hstar(args: &[String]) {
     };
     let mut json_items = Vec::new();
     for (index, coeffs) in read_polys_rational().into_iter().enumerate() {
-        let hstar = ehrhart_to_hstar_bigint(&coeffs);
+        let hstar = match ehrhart_to_hstar_bigint(&coeffs) {
+            Ok(hstar) => hstar,
+            Err(error) => {
+                eprintln!("Invalid Ehrhart polynomial at input {index}: {error}");
+                std::process::exit(2);
+            }
+        };
         let display: Vec<String> = coeffs.iter().map(ToString::to_string).collect();
         if format == OutputFormat::Json {
             json_items.push(format!(
@@ -5226,11 +5265,13 @@ fn cmd_bkw_scout(args: &[String]) {
 
     let input = match symbol_input {
         Some(s) => s,
-        None => {
-            let mut input = String::new();
-            io::stdin().read_to_string(&mut input).unwrap();
-            input
-        }
+        None => match read_limited_text(io::stdin(), "BKW symbol from stdin") {
+            Ok(input) => input,
+            Err(error) => {
+                eprintln!("{error}");
+                return;
+            }
+        },
     };
     let symbol = match BkwSymbol::parse_z_coefficient_symbol(&input) {
         Ok(symbol) => symbol,

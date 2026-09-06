@@ -507,6 +507,22 @@ fn signed_mod_u64(value: i64, prime: u64) -> u64 {
     (i128::from(value).rem_euclid(i128::from(prime))) as u64
 }
 
+/// Errors raised while constructing or updating a sparse modular row.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SparseModRowError {
+    ZeroModulus,
+}
+
+impl std::fmt::Display for SparseModRowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ZeroModulus => write!(f, "sparse modular row modulus must be nonzero"),
+        }
+    }
+}
+
+impl std::error::Error for SparseModRowError {}
+
 /// Sparse augmented row over the prime field `F_p`.
 ///
 /// The row represents
@@ -526,14 +542,18 @@ impl SparseModRow {
     /// Create an empty sparse row with right-hand side `rhs mod prime`.
     ///
     /// The `prime` argument is not stored; it is used only to normalize input.
-    pub fn new(rhs: u64, prime: u64) -> Self {
-        Self {
+    pub fn new(rhs: u64, prime: u64) -> Result<Self, SparseModRowError> {
+        if prime == 0 {
+            return Err(SparseModRowError::ZeroModulus);
+        }
+        Ok(Self {
             entries: Vec::new(),
             rhs: rhs % prime,
-        }
+        })
     }
 
     pub(crate) fn with_capacity(rhs: u64, prime: u64, capacity: usize) -> Self {
+        debug_assert_ne!(prime, 0);
         Self {
             entries: Vec::with_capacity(capacity),
             rhs: rhs % prime,
@@ -544,38 +564,45 @@ impl SparseModRow {
     ///
     /// Duplicate columns are combined modulo `prime`, and zero coefficients are
     /// removed.
-    pub fn from_entries<I>(entries: I, rhs: u64, prime: u64) -> Self
+    pub fn from_entries<I>(entries: I, rhs: u64, prime: u64) -> Result<Self, SparseModRowError>
     where
         I: IntoIterator<Item = (usize, u64)>,
     {
-        let mut row = Self::new(rhs, prime);
+        let mut row = Self::new(rhs, prime)?;
         for (col, value) in entries {
-            row.add_entry(col, value, prime);
+            row.add_entry_unchecked(col, value, prime);
         }
-        row
+        Ok(row)
     }
 
     /// Create an empty sparse row with a signed right-hand side.
-    pub fn from_signed_rhs(rhs: i64, prime: u64) -> Self {
-        Self {
+    pub fn from_signed_rhs(rhs: i64, prime: u64) -> Result<Self, SparseModRowError> {
+        if prime == 0 {
+            return Err(SparseModRowError::ZeroModulus);
+        }
+        Ok(Self {
             entries: Vec::new(),
             rhs: signed_mod_u64(rhs, prime),
-        }
+        })
     }
 
     /// Create a sparse row from signed `(column, value)` entries.
     ///
     /// Duplicate columns are combined modulo `prime`, and zero coefficients are
     /// removed.
-    pub fn from_signed_entries<I>(entries: I, rhs: i64, prime: u64) -> Self
+    pub fn from_signed_entries<I>(
+        entries: I,
+        rhs: i64,
+        prime: u64,
+    ) -> Result<Self, SparseModRowError>
     where
         I: IntoIterator<Item = (usize, i64)>,
     {
-        let mut row = Self::from_signed_rhs(rhs, prime);
+        let mut row = Self::from_signed_rhs(rhs, prime)?;
         for (col, value) in entries {
-            row.add_signed_entry(col, value, prime);
+            row.add_entry_unchecked(col, signed_mod_u64(value, prime), prime);
         }
-        row
+        Ok(row)
     }
 
     /// Return the nonzero column/value entries, sorted by column.
@@ -589,15 +616,18 @@ impl SparseModRow {
     }
 
     /// Return true if `solution` satisfies this augmented row over `F_p`.
-    pub fn is_satisfied_by(&self, solution: &[u64], prime: u64) -> bool {
+    pub fn is_satisfied_by(&self, solution: &[u64], prime: u64) -> Result<bool, SparseModRowError> {
+        if prime == 0 {
+            return Err(SparseModRowError::ZeroModulus);
+        }
         let mut lhs = 0;
         for &(col, coeff) in &self.entries {
             let Some(&value) = solution.get(col) else {
-                return false;
+                return Ok(false);
             };
             lhs = add_mod_u64(lhs, mul_mod_u64(coeff, value, prime), prime);
         }
-        lhs == self.rhs
+        Ok(lhs == self.rhs)
     }
 
     fn is_satisfied_by_validated_solution(&self, solution: &[u64], prime: u64) -> bool {
@@ -610,7 +640,21 @@ impl SparseModRow {
     }
 
     /// Add `value` to the coefficient of `col`, reducing modulo `prime`.
-    pub fn add_entry(&mut self, col: usize, value: u64, prime: u64) {
+    pub fn add_entry(
+        &mut self,
+        col: usize,
+        value: u64,
+        prime: u64,
+    ) -> Result<(), SparseModRowError> {
+        if prime == 0 {
+            return Err(SparseModRowError::ZeroModulus);
+        }
+        self.add_entry_unchecked(col, value, prime);
+        Ok(())
+    }
+
+    fn add_entry_unchecked(&mut self, col: usize, value: u64, prime: u64) {
+        debug_assert_ne!(prime, 0);
         let value = value % prime;
         if value == 0 {
             return;
@@ -629,8 +673,17 @@ impl SparseModRow {
     }
 
     /// Add a signed value to the coefficient of `col`.
-    pub fn add_signed_entry(&mut self, col: usize, value: i64, prime: u64) {
-        self.add_entry(col, signed_mod_u64(value, prime), prime);
+    pub fn add_signed_entry(
+        &mut self,
+        col: usize,
+        value: i64,
+        prime: u64,
+    ) -> Result<(), SparseModRowError> {
+        if prime == 0 {
+            return Err(SparseModRowError::ZeroModulus);
+        }
+        self.add_entry_unchecked(col, signed_mod_u64(value, prime), prime);
+        Ok(())
     }
 
     pub(crate) fn add_reduced_entry_sorted(&mut self, col: usize, value: u64, prime: u64) {
@@ -645,7 +698,7 @@ impl SparseModRow {
         if col > last_col {
             self.entries.push((col, value));
         } else {
-            self.add_entry(col, value, prime);
+            self.add_entry_unchecked(col, value, prime);
         }
     }
 
@@ -1948,6 +2001,61 @@ fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option
 // Total positivity
 // ---------------------------------------------------------------------------
 
+/// Exact failure reported by brute-force total-positivity checking.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TotalPositivityError {
+    RaggedMatrix {
+        row: usize,
+        expected_columns: usize,
+        found_columns: usize,
+    },
+    NegativeMinor {
+        size: usize,
+        rows: Vec<usize>,
+        columns: Vec<usize>,
+        determinant: BigInt,
+    },
+    ZeroMinor {
+        size: usize,
+        rows: Vec<usize>,
+        columns: Vec<usize>,
+    },
+}
+
+impl std::fmt::Display for TotalPositivityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RaggedMatrix {
+                row,
+                expected_columns,
+                found_columns,
+            } => write!(
+                f,
+                "matrix row {row} has {found_columns} columns; expected {expected_columns}"
+            ),
+            Self::NegativeMinor {
+                size,
+                rows,
+                columns,
+                determinant,
+            } => write!(
+                f,
+                "{size}x{size} minor rows {rows:?} cols {columns:?} has det = {determinant} < 0"
+            ),
+            Self::ZeroMinor {
+                size,
+                rows,
+                columns,
+            } => write!(
+                f,
+                "{size}x{size} minor rows {rows:?} cols {columns:?} has det = 0 (strict mode)"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for TotalPositivityError {}
+
 /// Check if an integer matrix is totally positive (all minors strictly positive,
 /// except those that are trivially zero due to zero rows/columns).
 ///
@@ -1955,8 +2063,8 @@ fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option
 /// Set `strict` to require all non-trivially-zero minors to be strictly positive.
 ///
 /// `max_minor_size` limits the largest minor checked. For a full check, pass
-/// `min(nrows, ncols)`. Returns `Ok(())` if all minors pass, or `Err(msg)`
-/// describing the first violation found.
+/// `min(nrows, ncols)`. Returns `Ok(())` if all minors pass, or a structured
+/// [`TotalPositivityError`] describing ragged input or the first violation.
 ///
 /// # Example
 /// ```
@@ -1975,35 +2083,47 @@ pub fn check_total_positivity(
     mat: &[Vec<i64>],
     max_minor_size: usize,
     strict: bool,
-) -> Result<(), String> {
+) -> Result<(), TotalPositivityError> {
     let nrows = mat.len();
     if nrows == 0 {
         return Ok(());
     }
     let ncols = mat[0].len();
+    if let Some((row, found_columns)) = mat
+        .iter()
+        .enumerate()
+        .find_map(|(row, values)| (values.len() != ncols).then_some((row, values.len())))
+    {
+        return Err(TotalPositivityError::RaggedMatrix {
+            row,
+            expected_columns: ncols,
+            found_columns,
+        });
+    }
     let max_k = max_minor_size.min(nrows).min(ncols);
 
     for k in 1..=max_k {
-        let row_combos = combinations_usize(nrows, k);
-        let col_combos = combinations_usize(ncols, k);
-        for rows in &row_combos {
-            for cols in &col_combos {
-                let sub = extract_submatrix_i64(mat, rows, cols);
+        for rows in CombinationIterator::new(nrows, k) {
+            for cols in CombinationIterator::new(ncols, k) {
+                let sub = extract_submatrix_i64(mat, &rows, &cols);
                 let det = determinant(&sub);
                 if det < BigInt::zero() {
-                    return Err(format!(
-                        "{}x{} minor rows {:?} cols {:?} has det = {} < 0",
-                        k, k, rows, cols, det
-                    ));
+                    return Err(TotalPositivityError::NegativeMinor {
+                        size: k,
+                        rows,
+                        columns: cols,
+                        determinant: det,
+                    });
                 }
                 if strict && det.is_zero() {
                     // Check if this is a non-trivial zero
                     let all_zero = rows.iter().all(|&r| cols.iter().all(|&c| mat[r][c] == 0));
                     if !all_zero {
-                        return Err(format!(
-                            "{}x{} minor rows {:?} cols {:?} has det = 0 (strict mode)",
-                            k, k, rows, cols
-                        ));
+                        return Err(TotalPositivityError::ZeroMinor {
+                            size: k,
+                            rows,
+                            columns: cols,
+                        });
                     }
                 }
             }
@@ -2188,28 +2308,40 @@ fn extract_submatrix_i64(mat: &[Vec<i64>], rows: &[usize], cols: &[usize]) -> Ve
         .collect()
 }
 
-fn combinations_usize(n: usize, k: usize) -> Vec<Vec<usize>> {
-    let mut result = Vec::new();
-    let mut combo = vec![0usize; k];
-    fn gen(
-        pos: usize,
-        start: usize,
-        n: usize,
-        k: usize,
-        combo: &mut Vec<usize>,
-        result: &mut Vec<Vec<usize>>,
-    ) {
-        if pos == k {
-            result.push(combo.clone());
-            return;
-        }
-        for i in start..n {
-            combo[pos] = i;
-            gen(pos + 1, i + 1, n, k, combo, result);
-        }
+struct CombinationIterator {
+    n: usize,
+    current: Option<Vec<usize>>,
+}
+
+impl CombinationIterator {
+    fn new(n: usize, k: usize) -> Self {
+        let current = (k <= n).then(|| (0..k).collect());
+        Self { n, current }
     }
-    gen(0, 0, n, k, &mut combo, &mut result);
-    result
+}
+
+impl Iterator for CombinationIterator {
+    type Item = Vec<usize>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.current.clone()?;
+        let k = result.len();
+        if k == 0 {
+            self.current = None;
+            return Some(result);
+        }
+
+        let current = self.current.as_mut().expect("combination exists");
+        let Some(index) = (0..k).rev().find(|&i| current[i] < self.n - k + i) else {
+            self.current = None;
+            return Some(result);
+        };
+        current[index] += 1;
+        for i in index + 1..k {
+            current[i] = current[i - 1] + 1;
+        }
+        Some(result)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2719,9 +2851,9 @@ mod tests {
     ) -> Vec<SparseModRow> {
         aug.iter()
             .map(|dense_row| {
-                let mut row = SparseModRow::new(dense_row[num_vars], prime);
+                let mut row = SparseModRow::new(dense_row[num_vars], prime).unwrap();
                 for (col, &value) in dense_row.iter().take(num_vars).enumerate() {
-                    row.add_entry(col, value, prime);
+                    row.add_entry(col, value, prime).unwrap();
                 }
                 row
             })
@@ -2750,28 +2882,28 @@ mod tests {
     #[test]
     fn test_sparse_mod_row_normalizes_and_cancels_entries() {
         let prime = 101;
-        let mut row = SparseModRow::from_signed_rhs(-3, prime);
-        row.add_signed_entry(2, -2, prime);
-        row.add_entry(2, 103, prime);
-        row.add_signed_entry(1, -1, prime);
+        let mut row = SparseModRow::from_signed_rhs(-3, prime).unwrap();
+        row.add_signed_entry(2, -2, prime).unwrap();
+        row.add_entry(2, 103, prime).unwrap();
+        row.add_signed_entry(1, -1, prime).unwrap();
 
         assert_eq!(row.rhs(), 98);
         assert_eq!(row.entries(), &[(1, 100)]);
 
-        let row = SparseModRow::from_entries([(2, 5), (1, 3), (2, 96)], 204, prime);
+        let row = SparseModRow::from_entries([(2, 5), (1, 3), (2, 96)], 204, prime).unwrap();
         assert_eq!(row.rhs(), 2);
         assert_eq!(row.entries(), &[(1, 3)]);
         assert!(!row.is_tautology());
         assert!(!row.is_contradiction());
 
-        let row = SparseModRow::new(7, prime);
+        let row = SparseModRow::new(7, prime).unwrap();
         assert!(row.is_contradiction());
     }
 
     #[test]
     fn test_sparse_mod_sorted_add_fast_path_and_fallback() {
         let prime = 101;
-        let mut row = SparseModRow::new(0, prime);
+        let mut row = SparseModRow::new(0, prime).unwrap();
 
         row.add_reduced_entry_sorted(1, 4, prime);
         row.add_reduced_entry_sorted(3, 8, prime);
@@ -2784,8 +2916,8 @@ mod tests {
     #[test]
     fn test_sparse_mod_small_pivot_reduction_cancels_in_place() {
         let prime = 101;
-        let pivot = SparseModRow::from_entries([(0, 1), (2, 4)], 7, prime);
-        let mut row = SparseModRow::from_entries([(0, 5), (1, 3), (2, 20)], 9, prime);
+        let pivot = SparseModRow::from_entries([(0, 1), (2, 4)], 7, prime).unwrap();
+        let mut row = SparseModRow::from_entries([(0, 5), (1, 3), (2, 20)], 9, prime).unwrap();
 
         row.subtract_scaled(&pivot, 5, prime);
 
@@ -2983,11 +3115,11 @@ mod tests {
         let prime = 101;
         let num_vars = 5;
         let rows = vec![
-            SparseModRow::from_entries([(0, 1), (3, 1)], 1, prime),
-            SparseModRow::from_entries([(0, 1), (4, 1)], 2, prime),
-            SparseModRow::from_entries([(1, 1), (3, 1)], 3, prime),
-            SparseModRow::from_entries([(1, 1), (4, 1)], 4, prime),
-            SparseModRow::from_entries([(2, 1), (3, 1)], 5, prime),
+            SparseModRow::from_entries([(0, 1), (3, 1)], 1, prime).unwrap(),
+            SparseModRow::from_entries([(0, 1), (4, 1)], 2, prime).unwrap(),
+            SparseModRow::from_entries([(1, 1), (3, 1)], 3, prime).unwrap(),
+            SparseModRow::from_entries([(1, 1), (4, 1)], 4, prime).unwrap(),
+            SparseModRow::from_entries([(2, 1), (3, 1)], 5, prime).unwrap(),
         ];
         let result = sparse_modular_linear_system_consistency_with_options(
             rows,
@@ -3087,8 +3219,8 @@ mod tests {
     #[test]
     fn test_sparse_modular_solver_rejects_bad_inputs() {
         let row = {
-            let mut row = SparseModRow::new(0, 101);
-            row.add_entry(3, 1, 101);
+            let mut row = SparseModRow::new(0, 101).unwrap();
+            row.add_entry(3, 1, 101).unwrap();
             row
         };
         assert_eq!(
@@ -3103,6 +3235,13 @@ mod tests {
             sparse_modular_linear_system_consistency(Vec::new(), 3, 100),
             Err(SparseModEliminationError::ModulusNotPrime { modulus: 100 })
         );
+        assert_eq!(SparseModRow::new(1, 0), Err(SparseModRowError::ZeroModulus));
+        assert_eq!(
+            SparseModRow::from_signed_rhs(-1, 0),
+            Err(SparseModRowError::ZeroModulus)
+        );
+        let mut row = SparseModRow::new(0, 101).unwrap();
+        assert_eq!(row.add_entry(0, 1, 0), Err(SparseModRowError::ZeroModulus));
     }
 
     // -----------------------------------------------------------------------
@@ -3150,8 +3289,55 @@ mod tests {
 
     #[test]
     fn test_tnn_rejects_ragged_matrices() {
+        assert_eq!(
+            check_total_positivity(&[vec![1, 0], vec![1]], 2, false),
+            Err(TotalPositivityError::RaggedMatrix {
+                row: 1,
+                expected_columns: 2,
+                found_columns: 1,
+            })
+        );
         assert!(check_tnn_neville(&[vec![1, 0], vec![1]]).is_err());
         assert!(check_tnn_neville_bigint(&[vec![bi(1), bi(0)], vec![bi(1)]]).is_err());
+    }
+
+    #[test]
+    fn lazy_combinations_match_eager_reference() {
+        fn eager(n: usize, k: usize) -> Vec<Vec<usize>> {
+            fn generate(
+                start: usize,
+                remaining: usize,
+                current: &mut Vec<usize>,
+                output: &mut Vec<Vec<usize>>,
+                n: usize,
+            ) {
+                if remaining == 0 {
+                    output.push(current.clone());
+                    return;
+                }
+                for value in start..=n - remaining {
+                    current.push(value);
+                    generate(value + 1, remaining - 1, current, output, n);
+                    current.pop();
+                }
+            }
+
+            if k > n {
+                return Vec::new();
+            }
+            let mut output = Vec::new();
+            generate(0, k, &mut Vec::new(), &mut output, n);
+            output
+        }
+
+        for n in 0..=9 {
+            for k in 0..=n + 1 {
+                assert_eq!(
+                    CombinationIterator::new(n, k).collect::<Vec<_>>(),
+                    eager(n, k)
+                );
+            }
+        }
     }
 
     #[test]
