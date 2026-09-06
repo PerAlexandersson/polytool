@@ -1,5 +1,17 @@
 # Handoff
 
+## Active path-IC crystal-wall tool (2026-09-06)
+
+The flagged-UIG academic worker owns the new reusable module
+`sym-poly/core/src/p_rs.rs`, its `lib.rs` export/tests, the clean
+`Tableau::evacuation` correction and regression test in
+`sym-poly/core/src/tableau.rs`, and the separate research driver
+`experiments/src/bin/path_ic_crystal_wall.rs`.  The user explicitly requested
+this cross-project work.  The architecture and exact MVP gates are recorded in
+`../projects/Line-graph-chromatics/crystal-wall-rust-tool-plan-2026-09-06.md`.
+No existing experiment binary or unrelated library module is owned by this
+task.
+
 ## Final Polytool integration (2026-09-06)
 
 The final integration worker merged clean local `master` commit `29c075e` into

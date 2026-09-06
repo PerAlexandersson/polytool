@@ -7,6 +7,7 @@
 //! - [`Partition`] and [`Composition`] types for basis indexing
 //! - [`UnivariatePolynomial`] for polynomial-valued coefficients
 //! - [`Tableau`], [`SkewTableau`], and their lazy standard-tableau iterators
+//! - traced inverse `P`-RS column insertion for abstract ordered alphabets
 //! - [`BasisIndex`] trait abstracting over index types
 //! - [`PrimeField`] for modular computations over finite prime fields
 //! - [`FormalSum`] for generic linear combinations of basis elements
@@ -31,6 +32,7 @@ pub mod hamel_goulden;
 pub mod index;
 pub mod linear_algebra;
 pub mod matrix;
+pub mod p_rs;
 pub mod packed_sparse_linear_algebra;
 pub mod partition {
     pub use combinatoric_core::partition::*;
@@ -60,6 +62,11 @@ pub use finite_sn_module::{
 pub use formal_sum::FormalSum;
 pub use hamel_goulden::{ContentInterval, CuttingStripSegment, OutsideDecomposition};
 pub use index::BasisIndex;
+pub use p_rs::{
+    inverse_column_step, inverse_column_step_with_trace, reverse_complement, BoundaryCertificate,
+    InverseColumnEvent, InverseColumnEventKind, InverseColumnStep, PInsertionError,
+    PInsertionOrder,
+};
 pub use polynomial::UnivariatePolynomial;
 pub use rational_function::{
     qt_coefficient, qt_constant, qt_monomial, qt_polynomial_constant, qt_rational_monomial,

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::{Composition, Partition, Ssaf, WeakComposition};
@@ -903,11 +903,59 @@ impl Tableau {
         if n == 0 {
             return self.clone();
         }
-        // Evacuation = read reverse reading word, complement entries, apply RSK
-        let rw = self.reverse_row_reading_word();
-        let complemented: Vec<u32> = rw.iter().map(|&v| n + 1 - v).collect();
-        let (p, _) = Tableau::rsk(&complemented);
-        p
+        assert!(self.is_standard(), "evacuation requires a standard tableau");
+
+        // Repeatedly remove 1, slide the hole southeast by jeu de taquin,
+        // place the descending output label in the final corner, and subtract
+        // one from the surviving labels.  Keeping the active and output
+        // diagrams as maps makes the shrinking outer shape explicit.
+        let mut current: BTreeMap<(usize, usize), u32> = self
+            .rows
+            .iter()
+            .enumerate()
+            .flat_map(|(row, entries)| {
+                entries
+                    .iter()
+                    .enumerate()
+                    .map(move |(column, &value)| ((row, column), value))
+            })
+            .collect();
+        let mut output = BTreeMap::new();
+        for label in (1..=n).rev() {
+            let mut hole = *current
+                .iter()
+                .find_map(|(cell, &value)| (value == 1).then_some(cell))
+                .expect("a standard active tableau contains 1");
+            current.remove(&hole);
+            loop {
+                let candidates = [(hole.0, hole.1 + 1), (hole.0 + 1, hole.1)];
+                let Some((&chosen, &value)) = candidates
+                    .iter()
+                    .filter_map(|cell| current.get_key_value(cell))
+                    .min_by_key(|(_, value)| *value)
+                else {
+                    break;
+                };
+                current.insert(hole, value);
+                current.remove(&chosen);
+                hole = chosen;
+            }
+            output.insert(hole, label);
+            for value in current.values_mut() {
+                *value -= 1;
+            }
+        }
+        Tableau::new(
+            self.rows
+                .iter()
+                .enumerate()
+                .map(|(row, entries)| {
+                    (0..entries.len())
+                        .map(|column| output[&(row, column)])
+                        .collect()
+                })
+                .collect(),
+        )
     }
 
     // ── Crystal operators ───────────────────────────────────────────
@@ -1531,6 +1579,18 @@ mod tests {
         assert!(e.is_standard());
         let ee = e.evacuation();
         assert_eq!(ee, syt, "evacuation^2 should be identity");
+    }
+
+    #[test]
+    fn test_evacuation_preserves_a_non_self_conjugate_shape() {
+        let fixed = Tableau::new(vec![vec![1, 3, 5], vec![2, 4, 6]]);
+        assert_eq!(fixed.evacuation(), fixed);
+
+        let syt = Tableau::new(vec![vec![1, 2, 5], vec![3, 4]]);
+        let evacuated = syt.evacuation();
+        assert_eq!(evacuated.rows(), &[vec![1, 2, 3], vec![4, 5]]);
+        assert_eq!(evacuated.shape(), syt.shape());
+        assert_eq!(evacuated.evacuation(), syt);
     }
 
     // ── Crystal operator tests ─────────────────────────────────────
