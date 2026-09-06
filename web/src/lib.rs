@@ -43,8 +43,6 @@ struct RecurrenceResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     sage: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    python: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     recurrence_json: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     unknowns: Option<usize>,
@@ -312,7 +310,6 @@ pub fn find_recurrence(
             latex: None,
             mathematica: None,
             sage: None,
-            python: None,
             recurrence_json: None,
             unknowns: None,
             weighted_unknowns: None,
@@ -343,7 +340,6 @@ pub fn find_recurrence(
             latex: Some(res.recurrence.to_latex()),
             mathematica: Some(res.recurrence.to_mathematica_definition(&polys)),
             sage: Some(res.recurrence.to_sage_definition(&polys)),
-            python: Some(res.recurrence.to_python_definition(&polys)),
             recurrence_json: Some(recurrence_json_output(&res, &polys, &search)),
             unknowns: Some(res.num_unknowns),
             weighted_unknowns: Some(res.weighted_unknowns),
@@ -360,7 +356,6 @@ pub fn find_recurrence(
             latex: None,
             mathematica: None,
             sage: None,
-            python: None,
             recurrence_json: None,
             unknowns: None,
             weighted_unknowns: None,
@@ -503,6 +498,31 @@ mod tests {
 1, 8178, 1479726, 45533450, 423281535, 1505621508, 2275172004, 1505621508, 423281535, 45533450, 1479726, 8178, 1
 1, 16369, 4537314, 198410786, 2571742175, 12843262863, 27971176092, 27971176092, 12843262863, 2571742175, 198410786, 4537314, 16369, 1";
 
+    const ALTERNATING_RUN_INPUT: &str = "\
+2
+2, 4
+2, 12, 10
+2, 28, 58, 32
+2, 60, 236, 300, 122
+2, 124, 836, 1852, 1682, 544
+2, 252, 2766, 9576, 14622, 10332, 2770
+2, 508, 8814, 45096, 103326, 119964, 69298, 15872
+2, 1020, 27472, 201060, 650892, 1106820, 1034992, 505500, 101042";
+
+    const DELANNOY_INPUT: &str = "\
+1
+1, 1
+1, 3, 1
+1, 5, 5, 1
+1, 7, 13, 7, 1
+1, 9, 25, 25, 9, 1
+1, 11, 41, 63, 41, 11, 1
+1, 13, 61, 129, 129, 61, 13, 1
+1, 15, 85, 231, 321, 231, 85, 15, 1
+1, 17, 113, 377, 681, 681, 377, 113, 17, 1
+1, 19, 145, 575, 1289, 1683, 1289, 575, 145, 19, 1
+1, 21, 181, 833, 2241, 3653, 3653, 2241, 833, 181, 21, 1";
+
     #[test]
     fn recurrence_export_handles_eulerian_example() {
         let raw = find_recurrence(EULERIAN_INPUT, 3, 2, 2, 1, false, false, false);
@@ -512,5 +532,53 @@ mod tests {
             value["recurrence"],
             "P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)"
         );
+        assert!(value.get("python").is_none());
+        assert!(value["recurrence_json"].is_string());
+    }
+
+    #[test]
+    fn recurrence_export_finds_alternating_runs_at_cubic_variable_degree() {
+        let too_small = find_recurrence(
+            ALTERNATING_RUN_INPUT,
+            3,
+            2,
+            2,
+            1,
+            false,
+            false,
+            false,
+        );
+        let too_small: Value =
+            serde_json::from_str(&too_small).expect("recurrence result is valid JSON");
+        assert_eq!(too_small["found"], false);
+
+        let raw = find_recurrence(
+            ALTERNATING_RUN_INPUT,
+            10,
+            5,
+            5,
+            5,
+            false,
+            false,
+            false,
+        );
+        let value: Value = serde_json::from_str(&raw).expect("recurrence result is valid JSON");
+        assert_eq!(value["found"], true);
+        assert!(value["recurrence"]
+            .as_str()
+            .expect("found recurrence has text")
+            .contains("t^3"));
+    }
+
+    #[test]
+    fn recurrence_export_finds_delannoy_example_quickly() {
+        let raw = find_recurrence(DELANNOY_INPUT, 10, 5, 5, 5, false, false, false);
+        let value: Value = serde_json::from_str(&raw).expect("recurrence result is valid JSON");
+        assert_eq!(value["found"], true);
+        assert_eq!(
+            value["recurrence"],
+            "P(n) = (1 + t) P(n-1) + t P(n-2)"
+        );
+        assert!(value["candidates_tried"].as_u64().unwrap() <= 10);
     }
 }
