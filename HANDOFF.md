@@ -1,5 +1,27 @@
 # Handoff
 
+## Active Polytool GitHub issues #1 and #2 (2026-09-06)
+
+The coding worker owns the Polytool issue implementation in the isolated
+worktree `/tmp/polytool-issues-1-2-20260906` on branch
+`fix/polytool-issues-1-2-20260906`, based on freshly fetched
+`origin/master` commit `6486f93`.  The shared `/workspace/rust` checkout and
+its four local-only commits remain untouched.
+
+Ownership is limited to `HANDOFF.md`, `polytool/HANDOFF.md`,
+`polytool/build.rs`, `polytool/src/version.rs`, `polytool/src/lib.rs`,
+`polytool/src/recurrence.rs`, `polytool/src/bin/polytool.rs`, focused new or
+existing tests under `polytool/tests/`, `polytool/README.md`,
+`polytool/mcp/src/lib.rs`, and `polytool/mcp/README.md`.  No other worker
+currently claims these files.  The separately owned derangement experiment
+and SymCat weighted-bond example will not be touched.
+
+The task is to implement deterministic CLI build-version reporting and an
+exact candidate budget for adaptive recurrence finding, keep library/CLI/MCP
+outcomes aligned, verify the canonical branch, publish it without including
+the shared checkout's local-only history, project `polytool/` to standalone
+`main`, and close GitHub issues #1 and #2 only after green CI.
+
 ## Final Polytool integration (2026-09-06)
 
 The final integration worker merged clean local `master` commit `29c075e` into
