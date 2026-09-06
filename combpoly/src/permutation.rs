@@ -560,13 +560,13 @@ fn build_filtered(
         if constraints.alternating && pos >= 1 {
             let prev = *current.last().unwrap();
             if pos % 2 == 1 {
-                // odd position (1-indexed: even): should be a descent (prev > v)
-                if prev <= v {
+                // odd position (1-indexed: even): should be an ascent (prev < v)
+                if prev >= v {
                     continue;
                 }
             } else {
-                // even position (1-indexed: odd): should be an ascent (prev < v)
-                if prev >= v {
+                // even position (1-indexed: odd): should be a descent (prev > v)
+                if prev <= v {
                     continue;
                 }
             }
@@ -1365,12 +1365,18 @@ fn subsets_rec(
 /// Special cases:
 /// - k=1: only the decreasing permutation [n, n-1, ..., 1]
 /// - k=2: standard alternating (up-down) permutations
+/// - n=0 and k>0: the unique empty permutation
+///
+/// # Panics
+///
+/// Panics if `k=0`, since divisibility by zero does not define a descent set.
 pub fn k_alternating_permutations(n: u8, k: u8) -> Vec<Vec<u8>> {
+    assert!(k > 0, "k must be positive for k-alternating permutations");
     if n == 0 {
         return vec![vec![]];
     }
-    if k == 0 || k > n {
-        // k=0 undefined; k>n means no descents, so just increasing permutations
+    if k > n {
+        // No positions are divisible by k, so the permutation is increasing.
         return vec![(1..=n).collect()];
     }
 
@@ -2365,6 +2371,21 @@ mod tests {
             let expected: Vec<u8> = (1..=n).rev().collect();
             assert_eq!(k1[0], expected);
         }
+    }
+
+    #[test]
+    fn test_k_alt_empty_permutation() {
+        assert_eq!(k_alternating_permutations(0, 1), vec![Vec::<u8>::new()]);
+        assert_eq!(
+            k_alternating_permutations(0, u8::MAX),
+            vec![Vec::<u8>::new()]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "k must be positive")]
+    fn test_k_alt_rejects_zero_k() {
+        k_alternating_permutations(0, 0);
     }
 
     #[test]
