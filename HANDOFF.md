@@ -36,6 +36,15 @@ tests; 22 MCP library tests plus its binary and documentation targets; 5
 Polytool doctests; the focused imported-OEIS validation replay; strict
 Polytool/MCP Clippy; Cargo metadata; formatting; and `git diff --check`.
 
+Branch publication is at PR #3.  A local standalone subtree preflight at
+split commit `a7bcd0a` passes all six version/budget CLI tests and reports
+`polytool 0.2.1-rc.5 (git a7bcd0abf054)`.  GitHub reports no checks because
+the repository contains no `.github` workflow and `master` has no required
+status checks.  Per the user's green-CI condition, PR #3 has not been merged,
+standalone `main` has not been updated, and issues #1/#2 remain open pending
+authorization to treat the comprehensive local checks as the merge gate or
+to add CI outside the task's allowed file scope.
+
 ## Final Polytool integration (2026-09-06)
 
 The final integration worker merged clean local `master` commit `29c075e` into
