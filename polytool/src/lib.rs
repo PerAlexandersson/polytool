@@ -157,9 +157,10 @@ pub use cyclic_sieving::{
     CyclicSievingReport, CyclicSievingSequenceItem, RootOfUnityEvaluation,
 };
 pub use decomposition::{
-    analyze_symmetric_decomposition_i64, f_polynomial, f_polynomial_i64,
-    is_alternatingly_increasing, r_decomposition, r_decomposition_i64, r_transform,
-    r_transform_i64, SymmetricDecompositionAnalysis,
+    analyze_symmetric_decomposition_bigint, analyze_symmetric_decomposition_i64, f_polynomial,
+    f_polynomial_i64, is_alternatingly_increasing, is_alternatingly_increasing_bigint,
+    r_decomposition, r_decomposition_i64, r_transform, r_transform_i64,
+    SymmetricDecompositionAnalysis, SymmetricDecompositionAnalysisBigInt,
 };
 pub use hstar_inequalities::{
     hstar_inequality_report_bigint, HStarInequalityCheck, HStarInequalityReport,
