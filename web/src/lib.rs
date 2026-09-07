@@ -1,3 +1,4 @@
+use num_bigint::BigInt;
 use polytool::recurrence::BigRational as RecurrenceBigRational;
 use polytool::recurrence::*;
 use polytool::*;
@@ -12,12 +13,12 @@ use wasm_bindgen::prelude::*;
 struct PolyProps {
     polynomial: String,
     degree: usize,
-    coefficients: Vec<i64>,
+    coefficients: Vec<String>,
     real_rooted: bool,
     palindromic: bool,
     gamma_positive: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    gamma_coefficients: Option<Vec<i64>>,
+    gamma_coefficients: Option<Vec<String>>,
     log_concave: bool,
     ultra_log_concave: bool,
 }
@@ -65,7 +66,7 @@ struct RecurrenceResult {
 enum ParsedOrError {
     Ok {
         polynomial: String,
-        coefficients: Vec<i64>,
+        coefficients: Vec<String>,
     },
     Err {
         error: String,
@@ -75,7 +76,7 @@ enum ParsedOrError {
 #[derive(Serialize)]
 struct DisplayedPoly {
     polynomial: String,
-    coefficients: Vec<i64>,
+    coefficients: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -92,7 +93,7 @@ struct MagicBasisReport {
 struct DecompositionResult {
     polynomial: String,
     degree: usize,
-    coefficients: Vec<i64>,
+    coefficients: Vec<String>,
     reciprocal: DisplayedPoly,
     a: DisplayedPoly,
     b: DisplayedPoly,
@@ -116,24 +117,27 @@ struct DecompositionResult {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn strip_trailing_zeros(coeffs: &[i64]) -> &[i64] {
-    let end = coeffs.iter().rposition(|&c| c != 0).map_or(0, |i| i + 1);
+fn strip_trailing_zeros(coeffs: &[BigInt]) -> &[BigInt] {
+    let zero = BigInt::from(0);
+    let end = coeffs.iter().rposition(|c| c != &zero).map_or(0, |i| i + 1);
     if end == 0 {
-        &[0i64; 0]
+        &[]
     } else {
         &coeffs[..end]
     }
 }
 
-fn integer_polys_to_rational(polys: &[Vec<i64>]) -> Vec<Vec<RecurrenceBigRational>> {
+fn decimal_coefficients(coeffs: &[BigInt]) -> Vec<String> {
+    coeffs.iter().map(ToString::to_string).collect()
+}
+
+fn integer_polys_to_rational(polys: &[Vec<BigInt>]) -> Vec<Vec<RecurrenceBigRational>> {
     polys
         .iter()
         .map(|row| {
             row.iter()
-                .map(|coeff| {
-                    parse_rational_coeff(&coeff.to_string())
-                        .expect("integer coefficients parse as rationals")
-                })
+                .cloned()
+                .map(RecurrenceBigRational::from_integer)
                 .collect()
         })
         .collect()
@@ -141,7 +145,7 @@ fn integer_polys_to_rational(polys: &[Vec<i64>]) -> Vec<Vec<RecurrenceBigRationa
 
 fn recurrence_json_output(
     result: &AdaptiveSearchResult,
-    polys: &[Vec<i64>],
+    polys: &[Vec<BigInt>],
     search: &AdaptiveSearchOptions,
 ) -> String {
     let rational_polys = integer_polys_to_rational(polys);
@@ -167,11 +171,11 @@ fn recurrence_json_output(
     serde_json::to_string_pretty(&recurrence_json).expect("serialize recurrence JSON")
 }
 
-fn parse_input(input: &str) -> Vec<Result<Vec<i64>, String>> {
-    parse_polynomials(input)
+fn parse_input(input: &str) -> Vec<Result<Vec<BigInt>, String>> {
+    parse_polynomials_bigint(input)
 }
 
-fn parse_ok(input: &str) -> (Vec<Vec<i64>>, Vec<String>) {
+fn parse_ok(input: &str) -> (Vec<Vec<BigInt>>, Vec<String>) {
     let mut polys = Vec::new();
     let mut errors = Vec::new();
     for r in parse_input(input) {
@@ -183,11 +187,38 @@ fn parse_ok(input: &str) -> (Vec<Vec<i64>>, Vec<String>) {
     (polys, errors)
 }
 
-fn display_poly(coeffs: &[i64]) -> DisplayedPoly {
+fn display_poly(coeffs: &[BigInt]) -> DisplayedPoly {
     DisplayedPoly {
-        polynomial: format_poly(coeffs),
-        coefficients: coeffs.to_vec(),
+        polynomial: format_poly_bigint_coeffs(coeffs),
+        coefficients: decimal_coefficients(coeffs),
     }
+}
+
+fn parse_coefficient_array_json(input: &str) -> Result<Vec<BigInt>, String> {
+    let value: serde_json::Value = serde_json::from_str(input)
+        .map_err(|error| format!("invalid coefficient JSON: {error}"))?;
+    let values = value
+        .as_array()
+        .ok_or_else(|| "coefficient JSON must be an array".to_string())?;
+
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let decimal = match value {
+                serde_json::Value::String(value) => value.clone(),
+                serde_json::Value::Number(value) => value.to_string(),
+                _ => {
+                    return Err(format!(
+                        "coefficient {index} must be a decimal string or JSON integer"
+                    ));
+                }
+            };
+            decimal
+                .parse::<BigInt>()
+                .map_err(|_| format!("coefficient {index} is not an integer: {decimal}"))
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -202,17 +233,19 @@ pub fn check_properties(input: &str) -> String {
         match r {
             Ok(coeffs) => {
                 let c = strip_trailing_zeros(&coeffs);
-                let deg = c.iter().rposition(|&x| x != 0).unwrap_or(0);
+                let zero = BigInt::from(0);
+                let deg = c.iter().rposition(|x| x != &zero).unwrap_or(0);
                 let props = PolyProps {
-                    polynomial: format_poly(c),
+                    polynomial: format_poly_bigint_coeffs(c),
                     degree: deg,
-                    coefficients: c.to_vec(),
-                    real_rooted: is_real_rooted(c),
-                    palindromic: is_palindromic_ignoring_initial_zeros(c),
-                    gamma_positive: is_gamma_positive_ignoring_initial_zeros(c),
-                    gamma_coefficients: gamma_coefficients_ignoring_initial_zeros(c),
-                    log_concave: is_log_concave(c),
-                    ultra_log_concave: is_ultra_log_concave(c),
+                    coefficients: decimal_coefficients(c),
+                    real_rooted: is_real_rooted_bigint_coeffs(c),
+                    palindromic: is_palindromic_ignoring_initial_zeros_bigint_coeffs(c),
+                    gamma_positive: is_gamma_positive_ignoring_initial_zeros_bigint_coeffs(c),
+                    gamma_coefficients: gamma_coefficients_ignoring_initial_zeros_bigint_coeffs(c)
+                        .map(|coefficients| decimal_coefficients(&coefficients)),
+                    log_concave: is_log_concave_bigint_coeffs(c),
+                    ultra_log_concave: is_ultra_log_concave_bigint_coeffs(c),
                 };
                 results.push(serde_json::to_value(&props).unwrap());
             }
@@ -233,8 +266,8 @@ pub fn check_interlacing_pairs(input: &str) -> String {
     for pair in polys.windows(2) {
         let p = strip_trailing_zeros(&pair[0]);
         let q = strip_trailing_zeros(&pair[1]);
-        let strict = check_interlacing(p, q) == Some(true);
-        let weak = check_weak_interlacing(p, q) == Some(true);
+        let strict = check_interlacing_bigint_coeffs(p, q) == Some(true);
+        let weak = check_weak_interlacing_bigint_coeffs(p, q) == Some(true);
         let status = if strict {
             "strictly interlace".to_string()
         } else if weak {
@@ -243,8 +276,8 @@ pub fn check_interlacing_pairs(input: &str) -> String {
             "do NOT interlace".to_string()
         };
         results.push(InterlacingResult {
-            p: format_poly(p),
-            q: format_poly(q),
+            p: format_poly_bigint_coeffs(p),
+            q: format_poly_bigint_coeffs(q),
             strict,
             weak,
             status,
@@ -260,10 +293,10 @@ pub fn compute_resultant(input: &str) -> String {
     if polys.len() < 2 {
         return serde_json::json!({"error": "need exactly two polynomials"}).to_string();
     }
-    let r = resultant(&polys[0], &polys[1]);
+    let r = resultant_bigint_coeffs(&polys[0], &polys[1]);
     serde_json::json!({
-        "p": format_poly(&polys[0]),
-        "q": format_poly(&polys[1]),
+        "p": format_poly_bigint_coeffs(&polys[0]),
+        "q": format_poly_bigint_coeffs(&polys[1]),
         "resultant": r.to_string()
     })
     .to_string()
@@ -276,9 +309,9 @@ pub fn compute_discriminant(input: &str) -> String {
         match r {
             Ok(coeffs) => {
                 let c = strip_trailing_zeros(&coeffs);
-                let d = discriminant(c);
+                let d = discriminant_bigint_coeffs(c);
                 results.push(serde_json::json!({
-                    "polynomial": format_poly(c),
+                    "polynomial": format_poly_bigint_coeffs(c),
                     "discriminant": d.to_string()
                 }));
             }
@@ -333,13 +366,17 @@ pub fn find_recurrence(
         ..Default::default()
     };
 
-    match find_recurrence_adaptive(&polys, &search) {
+    let rational_polys = integer_polys_to_rational(&polys);
+    match find_recurrence_adaptive_rational(&rational_polys, &search) {
         Some(res) => serde_json::to_string(&RecurrenceResult {
             found: true,
             recurrence: Some(format!("{}", res.recurrence)),
             latex: Some(res.recurrence.to_latex()),
-            mathematica: Some(res.recurrence.to_mathematica_definition(&polys)),
-            sage: Some(res.recurrence.to_sage_definition(&polys)),
+            mathematica: Some(
+                res.recurrence
+                    .to_mathematica_definition_rational(&rational_polys),
+            ),
+            sage: Some(res.recurrence.to_sage_definition_rational(&rational_polys)),
             recurrence_json: Some(recurrence_json_output(&res, &polys, &search)),
             unknowns: Some(res.num_unknowns),
             weighted_unknowns: Some(res.weighted_unknowns),
@@ -377,12 +414,12 @@ pub fn analyze_decompositions(input: &str) -> String {
         match r {
             Ok(coeffs) => {
                 let c = strip_trailing_zeros(&coeffs);
-                match analyze_symmetric_decomposition_i64(c) {
+                match analyze_symmetric_decomposition_bigint(c) {
                     Ok(analysis) => {
                         let report = DecompositionResult {
-                            polynomial: format_poly(c),
+                            polynomial: format_poly_bigint_coeffs(c),
                             degree: analysis.degree,
-                            coefficients: c.to_vec(),
+                            coefficients: decimal_coefficients(c),
                             reciprocal: display_poly(&analysis.reciprocal),
                             a: display_poly(&analysis.a),
                             b: display_poly(&analysis.b),
@@ -442,17 +479,24 @@ pub fn analyze_decompositions(input: &str) -> String {
     serde_json::to_string(&results).unwrap()
 }
 
-/// Check interlacing between two polynomials given as JSON arrays of i64.
+/// Check interlacing between two polynomials given as JSON arrays of decimal
+/// strings. Ordinary JSON integer arrays remain accepted for compatibility.
 /// Returns JSON: {"strict": bool, "weak": bool}
 #[wasm_bindgen]
 pub fn check_interlacing_pair(p_json: &str, q_json: &str) -> String {
-    let p: Vec<i64> = serde_json::from_str(p_json).unwrap_or_default();
-    let q: Vec<i64> = serde_json::from_str(q_json).unwrap_or_default();
-    let strict = check_interlacing(&p, &q) == Some(true);
+    let p = match parse_coefficient_array_json(p_json) {
+        Ok(coefficients) => coefficients,
+        Err(error) => return serde_json::json!({"error": error}).to_string(),
+    };
+    let q = match parse_coefficient_array_json(q_json) {
+        Ok(coefficients) => coefficients,
+        Err(error) => return serde_json::json!({"error": error}).to_string(),
+    };
+    let strict = check_interlacing_bigint_coeffs(&p, &q) == Some(true);
     let weak = if strict {
         true
     } else {
-        check_weak_interlacing(&p, &q) == Some(true)
+        check_weak_interlacing_bigint_coeffs(&p, &q) == Some(true)
     };
     serde_json::json!({"strict": strict, "weak": weak}).to_string()
 }
@@ -465,8 +509,8 @@ pub fn parse_and_format(input: &str) -> String {
             Ok(coeffs) => {
                 let c = strip_trailing_zeros(&coeffs);
                 results.push(ParsedOrError::Ok {
-                    polynomial: format_poly(c),
-                    coefficients: c.to_vec(),
+                    polynomial: format_poly_bigint_coeffs(c),
+                    coefficients: decimal_coefficients(c),
                 });
             }
             Err(e) => {
@@ -479,8 +523,18 @@ pub fn parse_and_format(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::find_recurrence;
+    use super::{
+        analyze_decompositions, check_interlacing_pair, check_interlacing_pairs, check_properties,
+        compute_discriminant, compute_resultant, find_recurrence, parse_and_format,
+    };
+    use num_bigint::BigInt;
     use serde_json::Value;
+
+    const HUGE: &str = "1000000000000000000000000000000";
+
+    fn scaled_huge(factor: i64) -> String {
+        (HUGE.parse::<BigInt>().unwrap() * BigInt::from(factor)).to_string()
+    }
 
     const EULERIAN_INPUT: &str = "\
 1
@@ -538,30 +592,12 @@ mod tests {
 
     #[test]
     fn recurrence_export_finds_alternating_runs_at_cubic_variable_degree() {
-        let too_small = find_recurrence(
-            ALTERNATING_RUN_INPUT,
-            3,
-            2,
-            2,
-            1,
-            false,
-            false,
-            false,
-        );
+        let too_small = find_recurrence(ALTERNATING_RUN_INPUT, 3, 2, 2, 1, false, false, false);
         let too_small: Value =
             serde_json::from_str(&too_small).expect("recurrence result is valid JSON");
         assert_eq!(too_small["found"], false);
 
-        let raw = find_recurrence(
-            ALTERNATING_RUN_INPUT,
-            10,
-            5,
-            5,
-            5,
-            false,
-            false,
-            false,
-        );
+        let raw = find_recurrence(ALTERNATING_RUN_INPUT, 10, 5, 5, 5, false, false, false);
         let value: Value = serde_json::from_str(&raw).expect("recurrence result is valid JSON");
         assert_eq!(value["found"], true);
         assert!(value["recurrence"]
@@ -575,10 +611,111 @@ mod tests {
         let raw = find_recurrence(DELANNOY_INPUT, 10, 5, 5, 5, false, false, false);
         let value: Value = serde_json::from_str(&raw).expect("recurrence result is valid JSON");
         assert_eq!(value["found"], true);
-        assert_eq!(
-            value["recurrence"],
-            "P(n) = (1 + t) P(n-1) + t P(n-2)"
-        );
+        assert_eq!(value["recurrence"], "P(n) = (1 + t) P(n-1) + t P(n-2)");
         assert!(value["candidates_tried"].as_u64().unwrap() <= 10);
+    }
+
+    #[test]
+    fn ordinary_coefficients_are_returned_as_compatible_decimal_strings() {
+        let parsed: Value = serde_json::from_str(&parse_and_format("1, 2, 1")).unwrap();
+        assert_eq!(
+            parsed[0]["coefficients"],
+            serde_json::json!(["1", "2", "1"])
+        );
+        assert_eq!(parsed[0]["polynomial"], "1 + 2t + t^2");
+
+        let interlacing: Value =
+            serde_json::from_str(&check_interlacing_pair("[-2,1]", "[3,-4,1]")).unwrap();
+        assert_eq!(interlacing["strict"], true);
+        assert_eq!(interlacing["weak"], true);
+    }
+
+    #[test]
+    fn property_and_interlacing_exports_accept_coefficients_above_i64() {
+        let input = format!("{HUGE}, {}, {HUGE}", scaled_huge(2));
+        let properties: Value = serde_json::from_str(&check_properties(&input)).unwrap();
+        assert_eq!(
+            properties[0]["coefficients"],
+            serde_json::json!([HUGE, scaled_huge(2), HUGE])
+        );
+        assert_eq!(
+            properties[0]["gamma_coefficients"],
+            serde_json::json!([HUGE, "0"])
+        );
+        assert_eq!(properties[0]["real_rooted"], true);
+        assert_eq!(properties[0]["palindromic"], true);
+        assert_eq!(properties[0]["gamma_positive"], true);
+        assert_eq!(properties[0]["log_concave"], true);
+        assert_eq!(properties[0]["ultra_log_concave"], true);
+
+        let interlacing_input = format!(
+            "{}, {HUGE}\n{}, {}, {HUGE}",
+            scaled_huge(-2),
+            scaled_huge(3),
+            scaled_huge(-4)
+        );
+        let pairs: Value =
+            serde_json::from_str(&check_interlacing_pairs(&interlacing_input)).unwrap();
+        assert_eq!(pairs[0]["strict"], true);
+        assert_eq!(pairs[0]["weak"], true);
+
+        let pair: Value = serde_json::from_str(&check_interlacing_pair(
+            &serde_json::json!([scaled_huge(-2), HUGE]).to_string(),
+            &serde_json::json!([scaled_huge(3), scaled_huge(-4), HUGE]).to_string(),
+        ))
+        .unwrap();
+        assert_eq!(pair["strict"], true);
+    }
+
+    #[test]
+    fn resultant_discriminant_and_decomposition_stay_exact_above_i64() {
+        let resultant_input = format!("-{HUGE}, {HUGE}\n-2, 1");
+        let resultant: Value = serde_json::from_str(&compute_resultant(&resultant_input)).unwrap();
+        assert_eq!(resultant["resultant"], scaled_huge(-1));
+
+        let discriminant_input = format!("{}, {}, {HUGE}", scaled_huge(2), scaled_huge(-3));
+        let discriminant: Value =
+            serde_json::from_str(&compute_discriminant(&discriminant_input)).unwrap();
+        assert_eq!(
+            discriminant[0]["discriminant"],
+            (HUGE.parse::<BigInt>().unwrap().pow(2)).to_string()
+        );
+
+        let decomposition_input = format!("{HUGE}, {}, {}", scaled_huge(4), scaled_huge(2));
+        let decomposition: Value =
+            serde_json::from_str(&analyze_decompositions(&decomposition_input)).unwrap();
+        assert_eq!(
+            decomposition[0]["coefficients"],
+            serde_json::json!([HUGE, scaled_huge(4), scaled_huge(2)])
+        );
+        assert_eq!(
+            decomposition[0]["a"]["coefficients"],
+            serde_json::json!([HUGE, scaled_huge(3), HUGE])
+        );
+        assert_eq!(
+            decomposition[0]["magic"]["coordinates"],
+            serde_json::json!([HUGE, scaled_huge(2), scaled_huge(-1)])
+        );
+    }
+
+    #[test]
+    fn recurrence_search_uses_big_rationals_for_huge_input() {
+        let input = format!(
+            "{HUGE}\n{}\n{}\n{}\n{}\n{}",
+            scaled_huge(2),
+            scaled_huge(4),
+            scaled_huge(8),
+            scaled_huge(16),
+            scaled_huge(32)
+        );
+        let result: Value =
+            serde_json::from_str(&find_recurrence(&input, 1, 0, 0, 0, false, false, false))
+                .unwrap();
+        assert_eq!(result["found"], true, "{result:#}");
+        assert_eq!(result["recurrence"], "P(n) = 2 P(n-1)");
+
+        let recurrence_json: Value =
+            serde_json::from_str(result["recurrence_json"].as_str().unwrap()).unwrap();
+        assert_eq!(recurrence_json["initial_polynomials"][0][0], HUGE);
     }
 }
