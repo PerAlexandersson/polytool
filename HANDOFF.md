@@ -22,6 +22,20 @@ outcomes aligned, verify the canonical branch, publish it without including
 the shared checkout's local-only history, project `polytool/` to standalone
 `main`, and close GitHub issues #1 and #2 only after green CI.
 
+Implementation checkpoints `92f7612` and `87ef7f8` add the reproducible
+12-hex-digit build commit with an honest `git unavailable` fallback, plus an
+outer-candidate recurrence budget and distinct found/search-space-exhausted/
+budget-exhausted library, CLI, and MCP outcomes.  Focused zero, small,
+exact-boundary, success, fallback, and unbounded regressions pass.
+
+Established verification is green with external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`:
+318 non-OEIS library tests; 61 recurrence tests; 19 CLI BigInt tests; 7 CLI
+OEIS tests; 6 version/budget CLI tests; 2 overfit fixtures; 5 interlacing API
+tests; 22 MCP library tests plus its binary and documentation targets; 5
+Polytool doctests; the focused imported-OEIS validation replay; strict
+Polytool/MCP Clippy; Cargo metadata; formatting; and `git diff --check`.
+
 ## Final Polytool integration (2026-09-06)
 
 The final integration worker merged clean local `master` commit `29c075e` into
