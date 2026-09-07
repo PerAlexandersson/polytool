@@ -20,7 +20,7 @@ The task is to implement deterministic CLI build-version reporting and an
 exact candidate budget for adaptive recurrence finding, keep library/CLI/MCP
 outcomes aligned, verify the canonical branch, publish it without including
 the shared checkout's local-only history, project `polytool/` to standalone
-`main`, and close GitHub issues #1 and #2 only after green CI.
+`main`, and close GitHub issues #1 and #2 after the accepted verification gate.
 
 Implementation checkpoints `92f7612` and `87ef7f8` add the reproducible
 12-hex-digit build commit with an honest `git unavailable` fallback, plus an
@@ -40,10 +40,13 @@ Branch publication is at PR #3.  A local standalone subtree preflight at
 split commit `a7bcd0a` passes all six version/budget CLI tests and reports
 `polytool 0.2.1-rc.5 (git a7bcd0abf054)`.  GitHub reports no checks because
 the repository contains no `.github` workflow and `master` has no required
-status checks.  Per the user's green-CI condition, PR #3 has not been merged,
-standalone `main` has not been updated, and issues #1/#2 remain open pending
-authorization to treat the comprehensive local checks as the merge gate or
-to add CI outside the task's allowed file scope.
+status checks.
+
+On 2026-09-07 the user clarified that the earlier green-CI wording reflected
+supervisor caution, not a user-imposed condition, and accepted the complete
+local monorepo and standalone-subtree checks as the merge gate.  The earlier
+claim that user authorization was still required was therefore incorrect;
+publication through PR #3 and the documented subtree workflow is proceeding.
 
 ## Final Polytool integration (2026-09-06)
 
