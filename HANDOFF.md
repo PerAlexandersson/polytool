@@ -1,5 +1,30 @@
 # Polytool handoff
 
+## Active web arbitrary-precision coefficient work (2026-09-07)
+
+The coding worker owns the isolated monorepo worktree
+`/tmp/polytool-web-bigint-20260907` on branch
+`fix/polytool-web-bigint-20260907`, based exactly on freshly fetched
+`origin/master` commit `5da03fea23eb55a37e46025a4ca8ad21e96a8b9a`.
+The shared `/workspace/rust` checkout remains untouched on its intentionally
+divergent local `master` (ahead 4, behind 9).  The supervisor ownership report
+could not run in this container because the `docker` executable is absent; no
+active ownership is recorded for the files below in the current root or
+Polytool handoffs.
+
+Ownership is limited to `polytool/HANDOFF.md`, `polytool/README.md`,
+`polytool/src/decomposition.rs`, `polytool/src/lib.rs`,
+`polytool/web/Cargo.toml`, `polytool/web/src/lib.rs`,
+`polytool/web/index.html`, and root `Cargo.lock` if Cargo must record the web
+crate's direct `num-bigint` dependency.  The task is to make the browser WASM
+boundary arbitrary-precision end to end, including exact recurrence and
+symmetric-decomposition paths, decimal-string JSON coefficients, string-safe
+browser operations, regression coverage, and safe deployment documentation.
+No deployment, push, merge, standalone projection, or edit beneath
+`/home/paxinum/Dropbox/webpages` is authorized.  The separately named
+derangement experiment and SymCat weighted-bond example remain outside this
+ownership and will not be touched.
+
 ## Completed GitHub issues #1 and #2 (2026-09-07)
 
 The coding worker implemented the issues in the isolated monorepo
