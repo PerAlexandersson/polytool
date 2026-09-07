@@ -56,9 +56,15 @@ documented sync script produced the first published standalone projection
 `polytool 0.2.1-rc.5 (git 0675132a0408)`, while the standalone binary reported
 `polytool 0.2.1-rc.5 (git 49fff5546586)`.  Both returned structured
 `budget_exhausted` output with exact zero/one candidate counts and exit status
-3; boundary success also passed, as did all six standalone CLI tests.  A
-root-only publication follow-up records the final remote refs after this
-release handoff is pushed and projected.
+3; boundary success also passed, as did all six standalone CLI tests.
+
+Release handoff commit `8245e3a` was pushed non-forced to canonical
+`origin/master`, and the documented sync script projected it to standalone
+`origin/main` commit `7e4ac54`.  GitHub issues #1 and #2 were then closed as
+completed with separate notes citing PR #3, implementation checkpoints,
+published refs, and verified behavior.  This root-only final-ref record does
+not alter `polytool/`, so the standalone split remains `7e4ac54`.  Ownership
+is fully released.
 
 ## Final Polytool integration (2026-09-06)
 
