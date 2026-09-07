@@ -1,5 +1,22 @@
 # Polytool handoff
 
+## Active BigInt web publication and deployment (2026-09-07)
+
+The user has explicitly authorized publication of the verified local branch
+and deployment of its web bundle.  The coding worker again owns only this
+handoff in the monorepo plus the publication/deployment operations from the
+existing isolated worktree `/tmp/polytool-web-bigint-20260907`.  The verified
+implementation remains commits `d7d2adb` and `fcc2c73`; no implementation file
+is being reopened.  Before publication, freshly fetched `origin/master` is
+still exactly `5da03fea23eb55a37e46025a4ca8ad21e96a8b9a` and is an ancestor of
+the task branch.  The divergent shared `/workspace/rust` checkout remains
+outside ownership and must not be updated.
+
+Website ownership and deployment state are recorded separately in
+`/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/HANDOFF.md` because
+that project currently has no Git repository or pre-existing handoff.  No
+website Makefile edit is claimed; its legacy assembly paths will not be used.
+
 ## Completed web arbitrary-precision coefficient work (2026-09-07)
 
 The coding worker used the isolated monorepo worktree
