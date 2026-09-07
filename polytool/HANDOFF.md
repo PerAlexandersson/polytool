@@ -1,20 +1,21 @@
 # Polytool handoff
 
-## Active GitHub issues #1 and #2 (2026-09-06)
+## Completed GitHub issues #1 and #2 (2026-09-07)
 
-The coding worker owns the issue implementation in the isolated monorepo
+The coding worker implemented the issues in the isolated monorepo
 worktree `/tmp/polytool-issues-1-2-20260906` on branch
 `fix/polytool-issues-1-2-20260906`, starting at freshly fetched
 `origin/master` commit `6486f93`.  No open pull request existed when work
 started.
 
-Owned files are `build.rs`, `src/version.rs`, `src/lib.rs`,
+Owned files were `build.rs`, `src/version.rs`, `src/lib.rs`,
 `src/recurrence.rs`, `src/bin/polytool.rs`, focused new or existing tests under
 `tests/`, `README.md`, `mcp/src/lib.rs`, `mcp/README.md`, this handoff, and the
 root `HANDOFF.md`.  Ownership covers only GitHub #1 (`polytool --version` with
 honest reproducible Git metadata) and #2 (an exact recurrence-candidate
 budget with distinct exhaustion).  Standalone `main` remains a generated
-subtree projection and will not be edited directly.
+subtree projection and was not edited directly.  Ownership is released by
+this final handoff after canonical and standalone publication verification.
 
 Checkpoint `92f7612` implements the crate-version plus lowercase 12-digit Git
 commit line, with build-time ref tracking, an explicit reproducible-build
@@ -43,8 +44,17 @@ actual version is `polytool 0.2.1-rc.5 (git a7bcd0abf054)`.
 On 2026-09-07 the user clarified that the green-CI wording came from
 supervisor caution rather than an explicit user constraint and accepted the
 complete local monorepo and standalone checks as the merge gate.  The earlier
-blocker wording was therefore incorrect.  PR #3 publication, standalone
-projection, issue closure, and ownership release are proceeding.
+blocker wording was therefore incorrect.
+
+PR #3 merged without force as canonical monorepo commit `0675132`, containing
+only prior `origin/master` plus the task branch.  The documented sync script
+published standalone projection `49fff55`.  The actual binaries reported
+`polytool 0.2.1-rc.5 (git 0675132a0408)` on monorepo `master` and
+`polytool 0.2.1-rc.5 (git 49fff5546586)` on standalone `main`.  Exact
+zero/one-candidate exhaustion returned JSON status `budget_exhausted` and
+exit code 3, success on the budget boundary passed, and all six standalone
+CLI version/budget tests passed.  The final projected commit after this
+handoff is included is recorded in the root publication follow-up.
 
 ## Final monorepo integration (2026-09-06)
 

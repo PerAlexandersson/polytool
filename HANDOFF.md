@@ -1,20 +1,21 @@
 # Handoff
 
-## Active Polytool GitHub issues #1 and #2 (2026-09-06)
+## Completed Polytool GitHub issues #1 and #2 (2026-09-07)
 
-The coding worker owns the Polytool issue implementation in the isolated
+The coding worker implemented the Polytool issues in the isolated
 worktree `/tmp/polytool-issues-1-2-20260906` on branch
 `fix/polytool-issues-1-2-20260906`, based on freshly fetched
 `origin/master` commit `6486f93`.  The shared `/workspace/rust` checkout and
 its four local-only commits remain untouched.
 
-Ownership is limited to `HANDOFF.md`, `polytool/HANDOFF.md`,
+Implementation ownership was limited to `HANDOFF.md`, `polytool/HANDOFF.md`,
 `polytool/build.rs`, `polytool/src/version.rs`, `polytool/src/lib.rs`,
 `polytool/src/recurrence.rs`, `polytool/src/bin/polytool.rs`, focused new or
 existing tests under `polytool/tests/`, `polytool/README.md`,
 `polytool/mcp/src/lib.rs`, and `polytool/mcp/README.md`.  No other worker
-currently claims these files.  The separately owned derangement experiment
-and SymCat weighted-bond example will not be touched.
+claimed these files.  The separately owned derangement experiment and SymCat
+weighted-bond example were not touched.  Ownership is released by this final
+handoff after canonical and standalone publication verification.
 
 The task is to implement deterministic CLI build-version reporting and an
 exact candidate budget for adaptive recurrence finding, keep library/CLI/MCP
@@ -45,8 +46,19 @@ status checks.
 On 2026-09-07 the user clarified that the earlier green-CI wording reflected
 supervisor caution, not a user-imposed condition, and accepted the complete
 local monorepo and standalone-subtree checks as the merge gate.  The earlier
-claim that user authorization was still required was therefore incorrect;
-publication through PR #3 and the documented subtree workflow is proceeding.
+claim that user authorization was still required was therefore incorrect.
+
+PR #3 merged without force as canonical monorepo commit `0675132`, whose
+parents are prior `origin/master` `6486f93` and task head `b5c7976`; none of
+the shared checkout's four local-only commits entered the merge.  The
+documented sync script produced the first published standalone projection
+`49fff55`.  The actual monorepo binary reported
+`polytool 0.2.1-rc.5 (git 0675132a0408)`, while the standalone binary reported
+`polytool 0.2.1-rc.5 (git 49fff5546586)`.  Both returned structured
+`budget_exhausted` output with exact zero/one candidate counts and exit status
+3; boundary success also passed, as did all six standalone CLI tests.  A
+root-only publication follow-up records the final remote refs after this
+release handoff is pushed and projected.
 
 ## Final Polytool integration (2026-09-06)
 
