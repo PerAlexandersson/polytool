@@ -1,21 +1,41 @@
 # Polytool handoff
 
-## Active BigInt web publication and deployment (2026-09-07)
+## Completed BigInt web publication and deployment (2026-09-07)
 
-The user has explicitly authorized publication of the verified local branch
-and deployment of its web bundle.  The coding worker again owns only this
-handoff in the monorepo plus the publication/deployment operations from the
-existing isolated worktree `/tmp/polytool-web-bigint-20260907`.  The verified
-implementation remains commits `d7d2adb` and `fcc2c73`; no implementation file
-is being reopened.  Before publication, freshly fetched `origin/master` is
-still exactly `5da03fea23eb55a37e46025a4ca8ad21e96a8b9a` and is an ancestor of
-the task branch.  The divergent shared `/workspace/rust` checkout remains
-outside ownership and must not be updated.
+The verified isolated branch was published without force from original
+`origin/master` `5da03fea23eb55a37e46025a4ca8ad21e96a8b9a`, after confirming that
+commit was still the remote tip and an ancestor of the branch.  The first
+canonical publication tip was `56e6745a1ade17b7f7ff92be62969d42f35715c8`;
+the documented `scripts/sync-polytool-main.sh` workflow then advanced the
+standalone projection from `7e4ac54ee531d768a5dfd25f520e39ca4de6b84c` to
+`a0d66877e71822455891ef509621ff7074fbd7df`, also by verified fast-forward.
+The divergent shared `/workspace/rust` checkout was not changed or used for
+either push.
 
-Website ownership and deployment state are recorded separately in
-`/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/HANDOFF.md` because
-that project currently has no Git repository or pre-existing handoff.  No
-website Makefile edit is claimed; its legacy assembly paths will not be used.
+After publication, the release WASM bundle was rebuilt from the isolated
+worktree and its browser string-safety test plus actual-WASM huge-coefficient
+smoke passed.  Exactly four files were staged and deployed; their SHA-256
+digests are:
+
+- `index.html`: `a3da0ed60490dc8a2a7f4e11f77467f31c257fe5c707db3ecb930710bb5b9fa3`;
+- `favicon.svg`: `c5908fa0143e43e6be3106531a9720960874ae5be9fb6fe1ba8442bca666dcfb`;
+- `pkg/polytool_web.js`: `9d6b33464995cfcc00f15f7248e779b988515ebb07392e0efd211d69fcbf6773`;
+- `pkg/polytool_web_bg.wasm`: `6448551d93d61377e21623cb1c1c392afa00227cf94566faeba7ced2b569923e`.
+
+The server lacks `rsync`, so the attempted exact-file `rsync` exited 127
+without transferring anything; the same explicit four files were then copied
+with `scp`, without deletion.  Remote byte hashes match the staged files.
+Cache-busted requests return HTTP 200 for the page, favicon, JavaScript, and
+WASM, and the live page identifies asset version `20260907a`.  A live Node
+smoke loaded the public WASM, retained `1000000000000000000000000000000`
+exactly in property JSON, and found `P(n) = 2 P(n-1)` from its scaled sequence
+while retaining the huge initial coefficient in recurrence JSON.
+
+Website details are recorded separately in
+`/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/HANDOFF.md`.  That
+directory has no Git repository, so there was no website commit to make.  Its
+stale legacy Makefile and unrelated local files were not changed.  Publication
+and deployment ownership is released by this handoff.
 
 ## Completed web arbitrary-precision coefficient work (2026-09-07)
 
