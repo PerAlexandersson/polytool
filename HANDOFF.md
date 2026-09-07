@@ -35,6 +35,14 @@ strict Polytool/MCP Clippy, Cargo metadata, formatting, and
 `git diff --check`.  All Rust commands used external
 `CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`.
 
+The task branch is published as PR #3.  The repository has no GitHub Actions
+workflow and unprotected `master` reports no status checks, so the requested
+green-CI merge gate cannot currently be observed.  A local projected-subtree
+preflight at `a7bcd0a` passes all six CLI tests and its actual version is
+`polytool 0.2.1-rc.5 (git a7bcd0abf054)`.  PR #3 remains open, `master` and
+standalone `main` are unchanged, and issues #1/#2 remain open until the CI
+condition is resolved.
+
 ## Final monorepo integration (2026-09-06)
 
 The completed review-fix history was integrated with clean local monorepo
