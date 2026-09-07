@@ -1,9 +1,10 @@
 use num_bigint::BigInt;
 use polytool::recurrence::{
-    candidate_complexity, find_recurrence_adaptive, find_recurrence_adaptive_rational,
-    format_rational_coeff, parse_rational_coeff, AdaptiveSearchOptions, AdaptiveSearchResult,
-    BigRational, BivarPoly, Recurrence, RecurrenceJson, RecurrenceJsonSearch, RecurrenceOptions,
-    RecurrenceOptionsJson,
+    candidate_complexity, find_recurrence_adaptive_rational_with_budget,
+    find_recurrence_adaptive_with_budget, format_rational_coeff, parse_rational_coeff,
+    AdaptiveSearchBudget, AdaptiveSearchOptions, AdaptiveSearchOutcome, AdaptiveSearchResult,
+    AdaptiveSearchSummary, BigRational, BivarPoly, Recurrence, RecurrenceJson,
+    RecurrenceJsonSearch, RecurrenceOptions, RecurrenceOptionsJson,
 };
 use polytool::sequences::{
     chebyshev_polynomials_t_bigint, chebyshev_polynomials_u_bigint, eulerian_polynomials_bigint,
@@ -213,6 +214,9 @@ pub struct RecurrenceSearchOptionsInput {
     pub no_verify: Option<bool>,
     pub fit_extra_rows: Option<usize>,
     pub modular_prefilter: Option<bool>,
+    /// Inspect at most this many adaptive candidate configurations. Zero
+    /// returns budget exhaustion before the first candidate.
+    pub max_candidates: Option<usize>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -573,7 +577,17 @@ pub struct RealRootsResponse {
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RecurrenceSearchStatus {
+    Found,
+    NotFound,
+    BudgetExhausted,
+    InvalidInput,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct FindRecurrenceResponse {
+    pub status: RecurrenceSearchStatus,
     pub found: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recurrence: Option<String>,
@@ -599,6 +613,8 @@ pub struct FindRecurrenceResponse {
     pub verification_polynomials: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidates_tried: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidates_considered: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -2011,34 +2027,58 @@ fn binomial_capped(n: usize, k: usize, cap: usize) -> usize {
     result
 }
 
+fn recurrence_failure_response(
+    status: RecurrenceSearchStatus,
+    error: impl Into<String>,
+    summary: Option<AdaptiveSearchSummary>,
+    parse_errors: Vec<ParsePolynomialItem>,
+) -> FindRecurrenceResponse {
+    let (candidates_tried, candidates_considered) = summary.map_or((None, None), |summary| {
+        (
+            Some(summary.candidates_tried),
+            Some(summary.diagnostics.considered_candidates),
+        )
+    });
+    FindRecurrenceResponse {
+        status,
+        found: false,
+        recurrence: None,
+        latex: None,
+        mathematica: None,
+        sage: None,
+        python: None,
+        recurrence_json: None,
+        unknowns: None,
+        weighted_unknowns: None,
+        equations: None,
+        fit_polynomials: None,
+        verification_polynomials: None,
+        candidates_tried,
+        candidates_considered,
+        error: Some(error.into()),
+        parse_errors,
+    }
+}
+
 fn family_recurrence_response(
     coefficients: &[Vec<i64>],
     search: &AdaptiveSearchOptions,
+    budget: AdaptiveSearchBudget,
 ) -> FindRecurrenceResponse {
     if coefficients.len() < 3 {
-        return FindRecurrenceResponse {
-            found: false,
-            recurrence: None,
-            latex: None,
-            mathematica: None,
-            sage: None,
-            python: None,
-            recurrence_json: None,
-            unknowns: None,
-            weighted_unknowns: None,
-            equations: None,
-            fit_polynomials: None,
-            verification_polynomials: None,
-            candidates_tried: None,
-            error: Some("need at least 3 polynomials".to_string()),
-            parse_errors: Vec::new(),
-        };
+        return recurrence_failure_response(
+            RecurrenceSearchStatus::InvalidInput,
+            "need at least 3 polynomials",
+            None,
+            Vec::new(),
+        );
     }
 
-    match find_recurrence_adaptive(coefficients, search) {
-        Some(result) => {
+    match find_recurrence_adaptive_with_budget(coefficients, search, budget) {
+        AdaptiveSearchOutcome::Found(result) => {
             let rational_polys = integer_polys_to_rational(coefficients);
             FindRecurrenceResponse {
+                status: RecurrenceSearchStatus::Found,
                 found: true,
                 recurrence: Some(format!("{}", result.recurrence)),
                 latex: Some(result.recurrence.to_latex()),
@@ -2057,27 +2097,26 @@ fn family_recurrence_response(
                 fit_polynomials: Some(result.fit_polynomials),
                 verification_polynomials: Some(result.verification_polynomials),
                 candidates_tried: Some(result.candidates_tried),
+                candidates_considered: Some(result.diagnostics.considered_candidates),
                 error: None,
                 parse_errors: Vec::new(),
             }
         }
-        None => FindRecurrenceResponse {
-            found: false,
-            recurrence: None,
-            latex: None,
-            mathematica: None,
-            sage: None,
-            python: None,
-            recurrence_json: None,
-            unknowns: None,
-            weighted_unknowns: None,
-            equations: None,
-            fit_polynomials: None,
-            verification_polynomials: None,
-            candidates_tried: None,
-            error: Some("no recurrence found within the search bounds".to_string()),
-            parse_errors: Vec::new(),
-        },
+        AdaptiveSearchOutcome::NoRecurrence(summary) => recurrence_failure_response(
+            RecurrenceSearchStatus::NotFound,
+            "no recurrence found within the search bounds",
+            Some(summary),
+            Vec::new(),
+        ),
+        AdaptiveSearchOutcome::BudgetExhausted(summary) => recurrence_failure_response(
+            RecurrenceSearchStatus::BudgetExhausted,
+            format!(
+                "recurrence candidate budget exhausted after {} candidates; unsearched candidates remain",
+                summary.diagnostics.considered_candidates
+            ),
+            Some(summary),
+            Vec::new(),
+        ),
     }
 }
 
@@ -2302,7 +2341,10 @@ fn inclusive_option_count(minimum: usize, maximum: usize) -> Result<usize, McpEr
         .ok_or_else(|| invalid_params(format!("invalid recurrence range {minimum}..={maximum}")))
 }
 
-fn validate_recurrence_options(options: &AdaptiveSearchOptions) -> Result<(), McpError> {
+fn validate_recurrence_options(
+    options: &AdaptiveSearchOptions,
+    budget: AdaptiveSearchBudget,
+) -> Result<(), McpError> {
     let ranges = [
         (
             "recurrence length",
@@ -2410,9 +2452,12 @@ fn validate_recurrence_options(options: &AdaptiveSearchOptions) -> Result<(), Mc
         .and_then(|count| count.checked_add(denominator_count))
         .and_then(|count| count.checked_mul(base_count))
         .ok_or_else(|| invalid_params("recurrence candidate count overflow"))?;
-    if candidate_count > MCP_MAX_RECURRENCE_CANDIDATES {
+    let effective_candidate_count = budget
+        .max_candidates
+        .map_or(candidate_count, |limit| candidate_count.min(limit));
+    if effective_candidate_count > MCP_MAX_RECURRENCE_CANDIDATES {
         return Err(invalid_params(format!(
-            "recurrence search requests {candidate_count} candidates; the MCP limit is {MCP_MAX_RECURRENCE_CANDIDATES}"
+            "recurrence search may inspect {effective_candidate_count} candidates; the MCP limit is {MCP_MAX_RECURRENCE_CANDIDATES}"
         )));
     }
 
@@ -2537,12 +2582,16 @@ fn validate_recurrence_for_generation(
 
 fn apply_recurrence_options(
     input: Option<RecurrenceSearchOptionsInput>,
-) -> Result<AdaptiveSearchOptions, McpError> {
+) -> Result<(AdaptiveSearchOptions, AdaptiveSearchBudget), McpError> {
     let mut options = AdaptiveSearchOptions::default();
     let Some(input) = input else {
         options.verbose = false;
-        validate_recurrence_options(&options)?;
-        return Ok(options);
+        let budget = AdaptiveSearchBudget::unbounded();
+        validate_recurrence_options(&options, budget)?;
+        return Ok((options, budget));
+    };
+    let budget = AdaptiveSearchBudget {
+        max_candidates: input.max_candidates,
     };
 
     if let Some(value) = input.skip_prefix {
@@ -2618,8 +2667,8 @@ fn apply_recurrence_options(
         options.modular_prefilter = value;
     }
     options.verbose = false;
-    validate_recurrence_options(&options)?;
-    Ok(options)
+    validate_recurrence_options(&options, budget)?;
+    Ok((options, budget))
 }
 
 #[tool_router(router = tool_router)]
@@ -2725,7 +2774,7 @@ impl PolynomialToolsServer {
             polynomials.iter().map(|p| p.coefficients.clone()).collect();
         let recurrence = recurrence_search
             .as_ref()
-            .map(|search| family_recurrence_response(&coefficients, search));
+            .map(|(search, budget)| family_recurrence_response(&coefficients, search, *budget));
 
         let first_failure = first_family_failure(
             &items,
@@ -2989,47 +3038,26 @@ impl PolynomialToolsServer {
         let polynomials = match collect_rational_polynomials_or_errors(batch) {
             Ok(polynomials) => polynomials,
             Err(parse_errors) => {
-                return Ok(Json(FindRecurrenceResponse {
-                    found: false,
-                    recurrence: None,
-                    latex: None,
-                    mathematica: None,
-                    sage: None,
-                    python: None,
-                    recurrence_json: None,
-                    unknowns: None,
-                    weighted_unknowns: None,
-                    equations: None,
-                    fit_polynomials: None,
-                    verification_polynomials: None,
-                    candidates_tried: None,
-                    error: Some("one or more polynomials failed to parse".to_string()),
+                return Ok(Json(recurrence_failure_response(
+                    RecurrenceSearchStatus::InvalidInput,
+                    "one or more polynomials failed to parse",
+                    None,
                     parse_errors,
-                }));
+                )));
             }
         };
         if polynomials.len() < 3 {
-            return Ok(Json(FindRecurrenceResponse {
-                found: false,
-                recurrence: None,
-                latex: None,
-                mathematica: None,
-                sage: None,
-                python: None,
-                recurrence_json: None,
-                unknowns: None,
-                weighted_unknowns: None,
-                equations: None,
-                fit_polynomials: None,
-                verification_polynomials: None,
-                candidates_tried: None,
-                error: Some("need at least 3 polynomials".to_string()),
-                parse_errors: Vec::new(),
-            }));
+            return Ok(Json(recurrence_failure_response(
+                RecurrenceSearchStatus::InvalidInput,
+                "need at least 3 polynomials",
+                None,
+                Vec::new(),
+            )));
         }
-        let search = apply_recurrence_options(input.options)?;
-        match find_recurrence_adaptive_rational(&polynomials, &search) {
-            Some(result) => Ok(Json(FindRecurrenceResponse {
+        let (search, budget) = apply_recurrence_options(input.options)?;
+        match find_recurrence_adaptive_rational_with_budget(&polynomials, &search, budget) {
+            AdaptiveSearchOutcome::Found(result) => Ok(Json(FindRecurrenceResponse {
+                status: RecurrenceSearchStatus::Found,
                 found: true,
                 recurrence: Some(format!("{}", result.recurrence)),
                 latex: Some(result.recurrence.to_latex()),
@@ -3056,26 +3084,28 @@ impl PolynomialToolsServer {
                 fit_polynomials: Some(result.fit_polynomials),
                 verification_polynomials: Some(result.verification_polynomials),
                 candidates_tried: Some(result.candidates_tried),
+                candidates_considered: Some(result.diagnostics.considered_candidates),
                 error: None,
                 parse_errors: Vec::new(),
             })),
-            None => Ok(Json(FindRecurrenceResponse {
-                found: false,
-                recurrence: None,
-                latex: None,
-                mathematica: None,
-                sage: None,
-                python: None,
-                recurrence_json: None,
-                unknowns: None,
-                weighted_unknowns: None,
-                equations: None,
-                fit_polynomials: None,
-                verification_polynomials: None,
-                candidates_tried: None,
-                error: Some("no recurrence found within the search bounds".to_string()),
-                parse_errors: Vec::new(),
-            })),
+            AdaptiveSearchOutcome::NoRecurrence(summary) => Ok(Json(recurrence_failure_response(
+                RecurrenceSearchStatus::NotFound,
+                "no recurrence found within the search bounds",
+                Some(summary),
+                Vec::new(),
+            ))),
+            AdaptiveSearchOutcome::BudgetExhausted(summary) => {
+                let error = format!(
+                    "recurrence candidate budget exhausted after {} candidates; unsearched candidates remain",
+                    summary.diagnostics.considered_candidates
+                );
+                Ok(Json(recurrence_failure_response(
+                    RecurrenceSearchStatus::BudgetExhausted,
+                    error,
+                    Some(summary),
+                    Vec::new(),
+                )))
+            }
         }
     }
 
@@ -4142,6 +4172,72 @@ mod tests {
         })
         .unwrap_err();
         assert!(format!("{conflict:?}").contains("expected exactly one"));
+    }
+
+    #[test]
+    fn recurrence_candidate_budget_has_distinct_mcp_outcomes() {
+        let server = PolynomialToolsServer::new();
+        let fibonacci = || FindRecurrenceRequest {
+            polynomials: None,
+            coefficients: Some(vec![
+                vec![1.into()],
+                vec![1.into()],
+                vec![2.into()],
+                vec![3.into()],
+                vec![5.into()],
+            ]),
+            expressions: None,
+            text: None,
+            options: None,
+        };
+
+        let mut zero_budget = fibonacci();
+        zero_budget.options = Some(
+            serde_json::from_value(json!({ "max_candidates": 0 }))
+                .expect("valid recurrence options"),
+        );
+        let Json(exhausted) = server.find_recurrence(Parameters(zero_budget)).unwrap();
+        assert_eq!(exhausted.status, RecurrenceSearchStatus::BudgetExhausted);
+        assert!(!exhausted.found);
+        assert_eq!(exhausted.candidates_considered, Some(0));
+        assert_eq!(exhausted.candidates_tried, Some(0));
+
+        let mut exact_space = fibonacci();
+        exact_space.options = Some(
+            serde_json::from_value(json!({
+                "max_candidates": 1,
+                "min_rec_len": 1,
+                "max_rec_len": 1,
+                "max_var_deg": 0,
+                "max_idx_deg": 0,
+                "max_diff_deg": 0
+            }))
+            .expect("valid recurrence options"),
+        );
+        let Json(not_found) = server.find_recurrence(Parameters(exact_space)).unwrap();
+        assert_eq!(not_found.status, RecurrenceSearchStatus::NotFound);
+        assert_eq!(not_found.candidates_considered, Some(1));
+
+        let Json(found) = server
+            .find_recurrence(Parameters(FindRecurrenceRequest {
+                polynomials: None,
+                coefficients: Some(vec![
+                    vec![1.into()],
+                    vec![2.into()],
+                    vec![4.into()],
+                    vec![8.into()],
+                    vec![16.into()],
+                ]),
+                expressions: None,
+                text: None,
+                options: Some(
+                    serde_json::from_value(json!({ "max_candidates": 1 }))
+                        .expect("valid recurrence options"),
+                ),
+            }))
+            .unwrap();
+        assert_eq!(found.status, RecurrenceSearchStatus::Found);
+        assert_eq!(found.candidates_considered, Some(1));
     }
 
     #[test]

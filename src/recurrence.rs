@@ -4769,6 +4769,59 @@ pub struct AdaptiveSearchResult {
     pub diagnostics: AdaptiveSearchDiagnostics,
 }
 
+/// Deterministic limit for an adaptive recurrence search.
+///
+/// A candidate is counted when its parameter configuration is taken from the
+/// adaptive iterator, before fit-row, structural, modular, or exact-solve
+/// filtering.  This bounds the same outer search loop on every machine.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AdaptiveSearchBudget {
+    /// Maximum number of candidate configurations to inspect. `None` preserves
+    /// the historical unbounded behavior; `Some(0)` inspects none.
+    pub max_candidates: Option<usize>,
+}
+
+impl AdaptiveSearchBudget {
+    /// An unbounded search, equivalent to the historical adaptive API.
+    pub const fn unbounded() -> Self {
+        Self {
+            max_candidates: None,
+        }
+    }
+
+    /// Inspect at most `max_candidates` candidate configurations.
+    pub const fn limited(max_candidates: usize) -> Self {
+        Self {
+            max_candidates: Some(max_candidates),
+        }
+    }
+
+    fn allows_candidate(self, candidates_considered: usize) -> bool {
+        self.max_candidates
+            .is_none_or(|limit| candidates_considered < limit)
+    }
+}
+
+/// Search counters returned when no recurrence result is available.
+#[derive(Debug, Clone)]
+pub struct AdaptiveSearchSummary {
+    /// Number of candidates that reached modular or exact solving.
+    pub candidates_tried: usize,
+    /// Counters for every adaptive-search stage reached before termination.
+    pub diagnostics: AdaptiveSearchDiagnostics,
+}
+
+/// Exact termination outcome for a budget-aware adaptive search.
+#[derive(Debug, Clone)]
+pub enum AdaptiveSearchOutcome {
+    /// A recurrence was found within the configured search and budget.
+    Found(AdaptiveSearchResult),
+    /// The complete configured search space was checked without a recurrence.
+    NoRecurrence(AdaptiveSearchSummary),
+    /// The candidate budget was consumed and at least one candidate remained.
+    BudgetExhausted(AdaptiveSearchSummary),
+}
+
 /// Counters describing how adaptive recurrence search reached a result.
 #[derive(Debug, Clone, Default)]
 pub struct AdaptiveSearchDiagnostics {
@@ -5601,16 +5654,31 @@ fn evaluate_adaptive_candidate(
 
 /// Search for the simplest polynomial recurrence by trying parameter
 /// combinations in order of ascending complexity.
-pub fn find_recurrence_adaptive_rational(
+pub fn find_recurrence_adaptive_rational_with_budget(
     polys: &[Vec<BigRational>],
     search: &AdaptiveSearchOptions,
-) -> Option<AdaptiveSearchResult> {
+    budget: AdaptiveSearchBudget,
+) -> AdaptiveSearchOutcome {
     let polys = polys.get(search.skip_prefix..).unwrap_or(&[]);
     let m = polys.len();
     if m < 2 {
-        return None;
+        return AdaptiveSearchOutcome::NoRecurrence(AdaptiveSearchSummary {
+            candidates_tried: 0,
+            diagnostics: AdaptiveSearchDiagnostics::default(),
+        });
     }
     let mut diagnostics = AdaptiveSearchDiagnostics::default();
+    let timer = timer_now();
+    let candidates = CandidateIterator::new(m, search);
+    diagnostics.candidate_generation_ms += elapsed_ms(timer);
+    diagnostics.generated_candidates = candidates.total_candidates();
+    if budget.max_candidates == Some(0) && diagnostics.generated_candidates > 0 {
+        return AdaptiveSearchOutcome::BudgetExhausted(AdaptiveSearchSummary {
+            candidates_tried: 0,
+            diagnostics,
+        });
+    }
+
     let prefix_max_degrees = prefix_max_degrees_rational(polys);
     let timer = timer_now();
     let derivs = rational_derivatives_up_to(polys, search.max_diff_deg);
@@ -5624,11 +5692,7 @@ pub fn find_recurrence_adaptive_rational(
     diagnostics.modular_cache_build_ms += elapsed_ms(timer);
 
     // First pass: use the options as given.
-    let timer = timer_now();
-    let candidates = CandidateIterator::new(m, search);
-    diagnostics.candidate_generation_ms += elapsed_ms(timer);
     let mut tried = 0;
-    diagnostics.generated_candidates = candidates.total_candidates();
 
     let primary_context = AdaptiveCandidateContext {
         polys,
@@ -5640,10 +5704,16 @@ pub fn find_recurrence_adaptive_rational(
         pass_label: None,
     };
     for opts in candidates {
+        if !budget.allows_candidate(diagnostics.considered_candidates) {
+            return AdaptiveSearchOutcome::BudgetExhausted(AdaptiveSearchSummary {
+                candidates_tried: tried,
+                diagnostics,
+            });
+        }
         if let Some(found) =
             evaluate_adaptive_candidate(&primary_context, &opts, &mut diagnostics, &mut tried)
         {
-            return Some(found.into_result(diagnostics));
+            return AdaptiveSearchOutcome::Found(found.into_result(diagnostics));
         }
     }
 
@@ -5680,15 +5750,43 @@ pub fn find_recurrence_adaptive_rational(
                 continue;
             }
 
+            if !budget.allows_candidate(diagnostics.considered_candidates) {
+                return AdaptiveSearchOutcome::BudgetExhausted(AdaptiveSearchSummary {
+                    candidates_tried: tried,
+                    diagnostics,
+                });
+            }
             if let Some(found) =
                 evaluate_adaptive_candidate(&rational_context, &opts, &mut diagnostics, &mut tried)
             {
-                return Some(found.into_result(diagnostics));
+                return AdaptiveSearchOutcome::Found(found.into_result(diagnostics));
             }
         }
     }
 
-    None
+    AdaptiveSearchOutcome::NoRecurrence(AdaptiveSearchSummary {
+        candidates_tried: tried,
+        diagnostics,
+    })
+}
+
+/// Search without a candidate limit, preserving the historical optional
+/// result API.
+pub fn find_recurrence_adaptive_rational(
+    polys: &[Vec<BigRational>],
+    search: &AdaptiveSearchOptions,
+) -> Option<AdaptiveSearchResult> {
+    match find_recurrence_adaptive_rational_with_budget(
+        polys,
+        search,
+        AdaptiveSearchBudget::unbounded(),
+    ) {
+        AdaptiveSearchOutcome::Found(result) => Some(result),
+        AdaptiveSearchOutcome::NoRecurrence(_) => None,
+        AdaptiveSearchOutcome::BudgetExhausted(_) => {
+            unreachable!("an unbounded search cannot exhaust its candidate budget")
+        }
+    }
 }
 
 /// Search for the simplest polynomial recurrence for an integer-coefficient
@@ -5701,6 +5799,17 @@ pub fn find_recurrence_adaptive(
 ) -> Option<AdaptiveSearchResult> {
     let rational_polys = i64_polys_to_rational(polys);
     find_recurrence_adaptive_rational(&rational_polys, search)
+}
+
+/// Integer-coefficient convenience wrapper for
+/// [`find_recurrence_adaptive_rational_with_budget`].
+pub fn find_recurrence_adaptive_with_budget(
+    polys: &[Vec<i64>],
+    search: &AdaptiveSearchOptions,
+    budget: AdaptiveSearchBudget,
+) -> AdaptiveSearchOutcome {
+    let rational_polys = i64_polys_to_rational(polys);
+    find_recurrence_adaptive_rational_with_budget(&rational_polys, search, budget)
 }
 
 // ---------------------------------------------------------------------------
@@ -7266,6 +7375,106 @@ mod tests {
         for row in 2..4 {
             assert_eq!(fit.recurrence.matrix[row], expected.matrix[row]);
         }
+    }
+
+    fn fixed_adaptive_search(max_rec_len: usize) -> AdaptiveSearchOptions {
+        AdaptiveSearchOptions {
+            min_rec_len: 1,
+            max_rec_len,
+            min_var_deg: 0,
+            max_var_deg: 0,
+            min_idx_deg: 0,
+            max_idx_deg: 0,
+            min_diff_deg: 0,
+            max_diff_deg: 0,
+            try_denominator: false,
+            try_inhomogeneous: false,
+            try_alternating_sign: false,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn adaptive_budget_zero_stops_before_the_first_candidate() {
+        let polys = vec![vec![1], vec![2], vec![4], vec![8], vec![16]];
+        let outcome = find_recurrence_adaptive_with_budget(
+            &polys,
+            &fixed_adaptive_search(2),
+            AdaptiveSearchBudget::limited(0),
+        );
+
+        let AdaptiveSearchOutcome::BudgetExhausted(summary) = outcome else {
+            panic!("zero budget must stop a nonempty search");
+        };
+        assert_eq!(summary.diagnostics.considered_candidates, 0);
+        assert_eq!(summary.candidates_tried, 0);
+    }
+
+    #[test]
+    fn adaptive_budget_allows_success_on_the_exact_boundary() {
+        let polys = vec![vec![1], vec![2], vec![4], vec![8], vec![16]];
+        let outcome = find_recurrence_adaptive_with_budget(
+            &polys,
+            &fixed_adaptive_search(2),
+            AdaptiveSearchBudget::limited(1),
+        );
+
+        let AdaptiveSearchOutcome::Found(result) = outcome else {
+            panic!("the first candidate should be allowed to succeed");
+        };
+        assert_eq!(result.recurrence.to_string(), "P(n) = 2 P(n-1)");
+        assert_eq!(result.diagnostics.considered_candidates, 1);
+        assert_eq!(result.candidates_tried, 1);
+    }
+
+    #[test]
+    fn adaptive_budget_distinguishes_exhaustion_from_complete_failure() {
+        let polys = vec![vec![1], vec![1], vec![2], vec![3], vec![5]];
+
+        let complete = find_recurrence_adaptive_with_budget(
+            &polys,
+            &fixed_adaptive_search(1),
+            AdaptiveSearchBudget::limited(1),
+        );
+        let AdaptiveSearchOutcome::NoRecurrence(summary) = complete else {
+            panic!("one allowed candidate should exhaust a one-candidate search space");
+        };
+        assert_eq!(summary.diagnostics.considered_candidates, 1);
+
+        let truncated = find_recurrence_adaptive_with_budget(
+            &polys,
+            &fixed_adaptive_search(2),
+            AdaptiveSearchBudget::limited(1),
+        );
+        let AdaptiveSearchOutcome::BudgetExhausted(summary) = truncated else {
+            panic!("a second uninspected candidate must produce budget exhaustion");
+        };
+        assert_eq!(summary.diagnostics.considered_candidates, 1);
+    }
+
+    #[test]
+    fn unbounded_budget_preserves_the_existing_search_result() {
+        let polys = vec![vec![1], vec![2], vec![4], vec![8], vec![16]];
+        let search = fixed_adaptive_search(2);
+        let legacy = find_recurrence_adaptive(&polys, &search).unwrap();
+        let outcome = find_recurrence_adaptive_with_budget(
+            &polys,
+            &search,
+            AdaptiveSearchBudget::unbounded(),
+        );
+        let AdaptiveSearchOutcome::Found(unbounded) = outcome else {
+            panic!("unbounded outcome API must find the legacy recurrence");
+        };
+
+        assert_eq!(
+            unbounded.recurrence.to_string(),
+            legacy.recurrence.to_string()
+        );
+        assert_eq!(unbounded.candidates_tried, legacy.candidates_tried);
+        assert_eq!(
+            unbounded.diagnostics.considered_candidates,
+            legacy.diagnostics.considered_candidates
+        );
     }
 
     #[test]
