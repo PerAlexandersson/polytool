@@ -21,6 +21,19 @@ cargo build --release -p polytool
 
 The CLI binary is at `target/release/polytool`.
 
+Use `polytool --version` (or `polytool -V`) for a single deterministic line:
+
+```text
+polytool 0.2.1-rc.5 (git 0123456789ab)
+```
+
+The version comes from the crate manifest and the lowercase 12-hex-digit Git
+commit is captured at build time.  If the source is built without trustworthy
+Git metadata, the suffix is `(git unavailable)` rather than a fabricated
+revision.  Reproducible packaging environments may set `POLYTOOL_GIT_COMMIT`
+to a full or at least 12-digit hexadecimal revision; an empty or malformed
+value deliberately selects the unavailable form.
+
 On the generated standalone `main` branch, the equivalent command is:
 
 ```sh

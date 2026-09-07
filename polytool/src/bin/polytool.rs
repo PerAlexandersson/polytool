@@ -144,7 +144,7 @@ fn print_rational_coefficient_input_help() {
 }
 
 fn print_top_level_help() {
-    println!("polytool {}", env!("CARGO_PKG_VERSION"));
+    println!("{}", polytool::version::build_version());
     println!("Dense univariate polytool for combinatorial research.");
     println!();
     println!("Usage:");
@@ -182,6 +182,7 @@ fn print_top_level_help() {
     println!();
     println!("Options:");
     println!("  -h, --help        Print help text");
+    println!("  -V, --version     Print version and build commit");
     println!();
     println!("Run `polytool help <command>` for command-specific help.");
 }
@@ -5445,6 +5446,10 @@ fn main() {
 
     let cmd = &args[1];
     let rest = &args[2..];
+    if matches!(cmd.as_str(), "-V" | "--version") {
+        println!("{}", polytool::version::build_version());
+        return;
+    }
     if is_help_arg(cmd) {
         if cmd == "help" && !rest.is_empty() {
             if is_help_arg(&rest[0]) {
