@@ -144,7 +144,7 @@ fn print_rational_coefficient_input_help() {
 }
 
 fn print_top_level_help() {
-    println!("polytool {}", env!("CARGO_PKG_VERSION"));
+    println!("{}", polytool::version::build_version());
     println!("Dense univariate polytool for combinatorial research.");
     println!();
     println!("Usage:");
@@ -182,6 +182,7 @@ fn print_top_level_help() {
     println!();
     println!("Options:");
     println!("  -h, --help        Print help text");
+    println!("  -V, --version     Print version and build commit");
     println!();
     println!("Run `polytool help <command>` for command-specific help.");
 }
@@ -236,6 +237,7 @@ fn print_recurrence_help() {
     println!("  --fit-extra-rows <n>       Extra rows beyond the first solvable prefix");
     println!("  --no-verify                Use all input rows for fitting");
     println!("  --no-modular-prefilter     Disable default modular candidate rejection");
+    println!("  --max-candidates <n>       Inspect at most n candidate configurations");
     println!("  --json                     Emit recurrence JSON with initial conditions");
     println!("  --format json              Alias for --json");
     println!("  --python                   Emit exact Python code for the recurrence");
@@ -2285,6 +2287,7 @@ fn cmd_recurrence(args: &[String]) {
     }
 
     let mut search = AdaptiveSearchOptions::default();
+    let mut budget = AdaptiveSearchBudget::unbounded();
     let mut format = RecurrenceOutputFormat::Text;
 
     let mut i = 0;
@@ -2497,6 +2500,15 @@ fn cmd_recurrence(args: &[String]) {
             "--modular-prefilter" => {
                 search.modular_prefilter = true;
             }
+            "--max-candidates" => {
+                budget.max_candidates = match parse_usize_option(args, &mut i, "--max-candidates") {
+                    Ok(value) => Some(value),
+                    Err(error) => {
+                        eprintln!("{error}");
+                        return;
+                    }
+                };
+            }
             "--verbose" => {
                 search.verbose = true;
             }
@@ -2518,8 +2530,8 @@ fn cmd_recurrence(args: &[String]) {
         "Searching for recurrence among {} polynomials...",
         polys.len()
     );
-    match find_recurrence_adaptive_rational(&polys, &search) {
-        Some(res) => {
+    match find_recurrence_adaptive_rational_with_budget(&polys, &search, budget) {
+        AdaptiveSearchOutcome::Found(res) => {
             let searched_polys = polys.get(search.skip_prefix..).unwrap_or(&[]);
             let initial_count = res
                 .recurrence
@@ -2570,8 +2582,40 @@ fn cmd_recurrence(args: &[String]) {
                 res.candidates_tried
             );
         }
-        None => {
+        AdaptiveSearchOutcome::NoRecurrence(summary) => {
+            if format == RecurrenceOutputFormat::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json!({
+                        "status": "not_found",
+                        "candidates_considered": summary.diagnostics.considered_candidates,
+                        "candidates_tried": summary.candidates_tried,
+                        "max_candidates": budget.max_candidates,
+                    }))
+                    .unwrap()
+                );
+            }
             eprintln!("No recurrence found within the search bounds.");
+        }
+        AdaptiveSearchOutcome::BudgetExhausted(summary) => {
+            if format == RecurrenceOutputFormat::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json!({
+                        "status": "budget_exhausted",
+                        "candidates_considered": summary.diagnostics.considered_candidates,
+                        "candidates_tried": summary.candidates_tried,
+                        "max_candidates": budget.max_candidates,
+                    }))
+                    .unwrap()
+                );
+            }
+            eprintln!(
+                "Recurrence search exhausted its candidate budget after {} candidates; \
+                 unsearched candidates remain.",
+                summary.diagnostics.considered_candidates
+            );
+            std::process::exit(3);
         }
     }
 }
@@ -5445,6 +5489,10 @@ fn main() {
 
     let cmd = &args[1];
     let rest = &args[2..];
+    if matches!(cmd.as_str(), "-V" | "--version") {
+        println!("{}", polytool::version::build_version());
+        return;
+    }
     if is_help_arg(cmd) {
         if cmd == "help" && !rest.is_empty() {
             if is_help_arg(&rest[0]) {

@@ -112,6 +112,7 @@ pub mod sturm;
 pub mod sturm_cf;
 pub mod tnn_network;
 pub mod vec_poly;
+pub mod version;
 
 pub use linalg::{
     bareiss_determinant_bigint, bareiss_determinant_polynomial_bigint,

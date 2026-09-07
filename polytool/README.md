@@ -21,6 +21,19 @@ cargo build --release -p polytool
 
 The CLI binary is at `target/release/polytool`.
 
+Use `polytool --version` (or `polytool -V`) for a single deterministic line:
+
+```text
+polytool 0.2.1-rc.5 (git 0123456789ab)
+```
+
+The version comes from the crate manifest and the lowercase 12-hex-digit Git
+commit is captured at build time.  If the source is built without trustworthy
+Git metadata, the suffix is `(git unavailable)` rather than a fabricated
+revision.  Reproducible packaging environments may set `POLYTOOL_GIT_COMMIT`
+to a full or at least 12-digit hexadecimal revision; an empty or malformed
+value deliberately selects the unavailable form.
+
 On the generated standalone `main` branch, the equivalent command is:
 
 ```sh
@@ -372,6 +385,7 @@ Options:
 --no-verify          Fit all rows instead of reserving held-out verification rows
 --no-modular-prefilter
                       Disable default modular candidate rejection
+--max-candidates <n> Inspect at most n adaptive candidate configurations
 --json               Emit recurrence JSON with initial conditions
 --python             Emit exact standalone Python code using Fraction arithmetic
 --format json        Alias for --json
@@ -383,6 +397,17 @@ The modular prefilter is enabled by default. It is often much faster on false
 candidates because it rejects a candidate when every usable fixed large-prime
 reduction is inconsistent. Use `--no-modular-prefilter` only when comparing
 against the exact-only search path.
+
+`--max-candidates N` is a deterministic iteration budget, not a wall-clock
+timeout. A candidate is counted as soon as its parameter configuration is
+taken from the adaptive iterator, before fit-row, structural, modular, or
+exact-solve filtering. Thus `0` evaluates no candidates, candidate `N` may
+still succeed, and budget exhaustion is reported only when an `(N+1)`st
+candidate exists. In text mode exhaustion is a distinct diagnostic and exit
+status `3`; with `--format json`, the JSON status is `budget_exhausted` and
+includes `candidates_considered`, `candidates_tried`, and `max_candidates`.
+If all configured candidates have been checked, the JSON status is instead
+`not_found`. Omitting the option preserves the unbounded behavior.
 
 #### Machine-readable recurrence JSON and row generation
 
@@ -670,6 +695,21 @@ let polys: Vec<Vec<i64>> = vec![
 let result = find_recurrence_adaptive(&polys, &AdaptiveSearchOptions::default());
 if let Some(res) = result {
     println!("{}", res.recurrence);
+}
+
+// Deterministic candidate budget with an exact termination reason.
+let outcome = find_recurrence_adaptive_with_budget(
+    &polys,
+    &AdaptiveSearchOptions::default(),
+    AdaptiveSearchBudget::limited(100),
+);
+match outcome {
+    AdaptiveSearchOutcome::Found(result) => println!("{}", result.recurrence),
+    AdaptiveSearchOutcome::NoRecurrence(_) => println!("search space exhausted"),
+    AdaptiveSearchOutcome::BudgetExhausted(summary) => println!(
+        "budget exhausted after {} candidates",
+        summary.diagnostics.considered_candidates
+    ),
 }
 
 // Or search with specific parameters

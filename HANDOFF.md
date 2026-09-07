@@ -1,5 +1,53 @@
 # Handoff
 
+## Active Polytool GitHub issues #1 and #2 (2026-09-06)
+
+The coding worker owns the Polytool issue implementation in the isolated
+worktree `/tmp/polytool-issues-1-2-20260906` on branch
+`fix/polytool-issues-1-2-20260906`, based on freshly fetched
+`origin/master` commit `6486f93`.  The shared `/workspace/rust` checkout and
+its four local-only commits remain untouched.
+
+Ownership is limited to `HANDOFF.md`, `polytool/HANDOFF.md`,
+`polytool/build.rs`, `polytool/src/version.rs`, `polytool/src/lib.rs`,
+`polytool/src/recurrence.rs`, `polytool/src/bin/polytool.rs`, focused new or
+existing tests under `polytool/tests/`, `polytool/README.md`,
+`polytool/mcp/src/lib.rs`, and `polytool/mcp/README.md`.  No other worker
+currently claims these files.  The separately owned derangement experiment
+and SymCat weighted-bond example will not be touched.
+
+The task is to implement deterministic CLI build-version reporting and an
+exact candidate budget for adaptive recurrence finding, keep library/CLI/MCP
+outcomes aligned, verify the canonical branch, publish it without including
+the shared checkout's local-only history, project `polytool/` to standalone
+`main`, and close GitHub issues #1 and #2 after the accepted verification gate.
+
+Implementation checkpoints `92f7612` and `87ef7f8` add the reproducible
+12-hex-digit build commit with an honest `git unavailable` fallback, plus an
+outer-candidate recurrence budget and distinct found/search-space-exhausted/
+budget-exhausted library, CLI, and MCP outcomes.  Focused zero, small,
+exact-boundary, success, fallback, and unbounded regressions pass.
+
+Established verification is green with external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`:
+318 non-OEIS library tests; 61 recurrence tests; 19 CLI BigInt tests; 7 CLI
+OEIS tests; 6 version/budget CLI tests; 2 overfit fixtures; 5 interlacing API
+tests; 22 MCP library tests plus its binary and documentation targets; 5
+Polytool doctests; the focused imported-OEIS validation replay; strict
+Polytool/MCP Clippy; Cargo metadata; formatting; and `git diff --check`.
+
+Branch publication is at PR #3.  A local standalone subtree preflight at
+split commit `a7bcd0a` passes all six version/budget CLI tests and reports
+`polytool 0.2.1-rc.5 (git a7bcd0abf054)`.  GitHub reports no checks because
+the repository contains no `.github` workflow and `master` has no required
+status checks.
+
+On 2026-09-07 the user clarified that the earlier green-CI wording reflected
+supervisor caution, not a user-imposed condition, and accepted the complete
+local monorepo and standalone-subtree checks as the merge gate.  The earlier
+claim that user authorization was still required was therefore incorrect;
+publication through PR #3 and the documented subtree workflow is proceeding.
+
 ## Final Polytool integration (2026-09-06)
 
 The final integration worker merged clean local `master` commit `29c075e` into
