@@ -430,11 +430,16 @@ Important option fields:
 - `fit_extra_rows`
 - `no_verify`
 - `modular_prefilter`
+- `max_candidates`
 
 `verbose` is intentionally not exposed through MCP, so the server never writes
 search traces into the stdio protocol stream.
 `modular_prefilter` defaults to `true`; set it to `false` only when comparing
 against the slower exact-only search path.
+`max_candidates` is the same deterministic outer-candidate budget as the CLI
+option: zero evaluates no candidates, the Nth candidate may succeed, and
+exhaustion is returned only if another candidate remains. Omitting it preserves
+the unbounded search.
 
 When a recurrence is found, the response includes:
 
@@ -446,7 +451,11 @@ When a recurrence is found, the response includes:
 - `recurrence_json`: a saved recurrence record with initial values, suitable
   for `generate_recurrence_rows` or `polytool recurrence-generate`
 - search metadata such as `unknowns`, `equations`, `fit_polynomials`,
-  `verification_polynomials`, and `candidates_tried`
+  `verification_polynomials`, `candidates_tried`, and `candidates_considered`
+
+Every response includes a `status`: `found`, `not_found`,
+`budget_exhausted`, or `invalid_input`. In particular, `budget_exhausted` is
+distinct from completing the configured search space with `not_found`.
 
 ### `generate_recurrence_rows`
 
