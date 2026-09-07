@@ -16,6 +16,25 @@ honest reproducible Git metadata) and #2 (an exact recurrence-candidate
 budget with distinct exhaustion).  Standalone `main` remains a generated
 subtree projection and will not be edited directly.
 
+Checkpoint `92f7612` implements the crate-version plus lowercase 12-digit Git
+commit line, with build-time ref tracking, an explicit reproducible-build
+override, and `(git unavailable)` for missing or invalid metadata.  Checkpoint
+`87ef7f8` adds `AdaptiveSearchBudget`, `AdaptiveSearchOutcome`, exact
+candidate counting before all filters, `--max-candidates`, JSON/exit-status
+termination reporting, and matching MCP options/status/counters.  Existing
+unbounded entry points remain unchanged wrappers.
+
+Focused tests cover normal/fallback version formatting and the real CLI, zero
+and one-candidate budgets, success on the exact boundary, full search-space
+failure at the boundary, distinct exhaustion, MCP parity, and unchanged
+unbounded behavior.  Established verification passes: 318 non-OEIS library
+tests, all 61 recurrence tests, 19 CLI BigInt tests, 7 CLI OEIS tests, 6 new
+CLI tests, 2 overfit fixtures, 5 interlacing API tests, 22 MCP tests plus its
+binary/docs targets, 5 Polytool doctests, focused imported-OEIS validation,
+strict Polytool/MCP Clippy, Cargo metadata, formatting, and
+`git diff --check`.  All Rust commands used external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`.
+
 ## Final monorepo integration (2026-09-06)
 
 The completed review-fix history was integrated with clean local monorepo
