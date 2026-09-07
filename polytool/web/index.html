@@ -906,9 +906,9 @@ Lines starting with # are ignored."></textarea>
   Source code: <a href="https://github.com/PerAlexandersson/polytool">polytool</a>.
 </footer>
 
-<script src="pkg/polytool_web.js?v=20260902a"></script>
+<script src="pkg/polytool_web.js?v=20260907a"></script>
 <script>
-const ASSET_VERSION = '20260902a';
+const ASSET_VERSION = '20260907a';
 const EXAMPLES = {
   eulerian: {
     label: 'Eulerian polynomials A_n(t) \u2014 descent generating function on S_n',
@@ -1978,22 +1978,29 @@ function propsForRows(rows) {
   return JSON.parse(check_properties(lines));
 }
 
+function normalizeIntegerString(value) {
+  const match = String(value).trim().match(/^([+-]?)(\d+)$/);
+  if (!match) return null;
+  const digits = match[2].replace(/^0+(?=\d)/, '');
+  return digits === '0' ? '0' : (match[1] === '-' ? '-' : '') + digits;
+}
+
 function coeffsToPolyText(coeffs, variable) {
   if (!coeffs || !coeffs.length) return '0';
   const terms = [];
   for (let i = 0; i < coeffs.length; i++) {
-    const c = coeffs[i];
-    if (c === 0) continue;
-    const sign = c < 0 ? '-' : '+';
-    const abs = Math.abs(c);
+    const coefficient = normalizeIntegerString(coeffs[i]);
+    if (coefficient === null || coefficient === '0') continue;
+    const negative = coefficient.startsWith('-');
+    const abs = negative ? coefficient.slice(1) : coefficient;
     let term = '';
     if (i === 0) {
-      term = String(abs);
+      term = abs;
     } else {
-      const coeffPart = abs === 1 ? '' : String(abs);
+      const coeffPart = abs === '1' ? '' : abs;
       term = coeffPart + variable + (i === 1 ? '' : '^' + i);
     }
-    terms.push((sign === '-' ? '- ' : '+ ') + term);
+    terms.push((negative ? '- ' : '+ ') + term);
   }
   if (!terms.length) return '0';
   return terms.map((term, idx) => idx === 0 ? term.replace(/^\+\s/, '') : term).join(' ');
@@ -2208,8 +2215,8 @@ function iconRow(items) {
 
 function mergeDecompositionData(decompRows, inputText) {
   const inputProps = JSON.parse(check_properties(inputText));
-  const aProps = propsForRows(decompRows.map(item => item.error ? [0] : (item.a.coefficients || [0])));
-  const bProps = propsForRows(decompRows.map(item => item.error ? [0] : (item.b.coefficients || [0])));
+  const aProps = propsForRows(decompRows.map(item => item.error ? ['0'] : (item.a.coefficients || ['0'])));
+  const bProps = propsForRows(decompRows.map(item => item.error ? ['0'] : (item.b.coefficients || ['0'])));
 
   return decompRows.map((item, idx) => {
     if (item.error) return item;
@@ -2495,29 +2502,23 @@ function cancelRecurrence() {
 // --- OEIS lookup ---
 
 function isZeroValue(value) {
-  return String(value) === '0';
+  return normalizeIntegerString(value) === '0';
 }
 
 function stripLeadingZeros(seq) {
   let i = 0;
   while (i < seq.length && isZeroValue(seq[i])) i++;
-  if (i >= seq.length) return seq.length ? [0] : [];
+  if (i >= seq.length) return seq.length ? ['0'] : [];
   return seq.slice(i);
 }
 
 function firstDifferences(seq) {
-  const allIntegers = seq.every(value => /^-?\d+$/.test(String(value).trim()));
-  if (allIntegers) {
-    const out = [];
-    for (let i = 1; i < seq.length; i++) {
-      out.push((BigInt(String(seq[i]).trim()) - BigInt(String(seq[i - 1]).trim())).toString());
-    }
-    return out;
-  }
-  const allFiniteNumbers = seq.every(value => Number.isFinite(Number(value)));
-  if (!allFiniteNumbers) return [];
+  const integers = seq.map(normalizeIntegerString);
+  if (integers.some(value => value === null)) return [];
   const out = [];
-  for (let i = 1; i < seq.length; i++) out.push(seq[i] - seq[i - 1]);
+  for (let i = 1; i < integers.length; i++) {
+    out.push((BigInt(integers[i]) - BigInt(integers[i - 1])).toString());
+  }
   return out;
 }
 
@@ -2533,22 +2534,24 @@ function oeisSearchHref(seq) {
 }
 
 function flattenRows(rows) {
-  return rows.flatMap(row => row && row.length ? row : [0]);
+  return rows.flatMap(row => row && row.length ? row : ['0']);
+}
+
+function sumIntegerRow(row, alternating) {
+  const safeRow = row && row.length ? row : ['0'];
+  let sum = 0n;
+  for (let i = 0; i < safeRow.length; i++) {
+    const term = normalizeIntegerString(safeRow[i]);
+    if (term === null) return null;
+    const value = BigInt(term);
+    sum += alternating && i % 2 === 1 ? -value : value;
+  }
+  return sum.toString();
 }
 
 function rowSumsOfRows(rows) {
-  const sums = [];
-  for (const row of rows) {
-    const safeRow = row && row.length ? row : [0];
-    let sum = 0n;
-    for (const value of safeRow) {
-      const term = String(value).trim();
-      if (!/^-?\d+$/.test(term)) return null;
-      sum += BigInt(term);
-    }
-    sums.push(sum.toString());
-  }
-  return sums;
+  const sums = rows.map(row => sumIntegerRow(row, false));
+  return sums.some(value => value === null) ? null : sums;
 }
 
 function copyData(btn) {
@@ -2868,7 +2871,7 @@ function renderSheetOeisHelpers(view, data) {
       noteHtml: 'Row sums of the symmetric parts ' + katexInline('a(t)') + '. Triangle actions search the displayed triangle.',
       slotId: slotBase + '-1',
     }));
-    groups.push(renderSheetOeisGroup('gamma(a)', clean.map(item => item.gamma_a_coefficients || [0]), {
+    groups.push(renderSheetOeisGroup('gamma(a)', clean.map(item => item.gamma_a_coefficients || ['0']), {
       titleHtml: katexInline('\\gamma_a(z)'),
       noteHtml: 'Row sums of the gamma-coefficient rows for ' + katexInline('\\gamma_a(z)') + '. Triangle actions search the displayed triangle.',
       slotId: slotBase + '-2',
@@ -2878,7 +2881,7 @@ function renderSheetOeisHelpers(view, data) {
       noteHtml: 'Row sums of the companion parts ' + katexInline('b(t)') + '. Triangle actions search the displayed triangle.',
       slotId: slotBase + '-3',
     }));
-    groups.push(renderSheetOeisGroup('gamma(b)', clean.map(item => item.gamma_b_coefficients || [0]), {
+    groups.push(renderSheetOeisGroup('gamma(b)', clean.map(item => item.gamma_b_coefficients || ['0']), {
       titleHtml: katexInline('\\gamma_b(z)'),
       noteHtml: 'Row sums of the gamma-coefficient rows for ' + katexInline('\\gamma_b(z)') + '. Triangle actions search the displayed triangle.',
       slotId: slotBase + '-4',
@@ -2927,16 +2930,14 @@ async function runOeis() {
   if (polys.length === 0) { setResult('<span class="err">No valid polynomials found.</span>'); return; }
 
   // Row sums: evaluate each polynomial at t=1 (sum of coefficients)
-  const rowSums = polys.map(d => d.coefficients.reduce((a, b) => a + b, 0));
+  const rowSums = polys.map(d => sumIntegerRow(d.coefficients, false));
 
   // Full triangle: read coefficients row by row
   const triangle = polys.flatMap(d => d.coefficients);
   let html = '';
 
   // Alternating row sums: evaluate each at t=-1
-  const altRowSums = polys.map(d =>
-    d.coefficients.reduce((a, c, i) => a + c * (i % 2 === 0 ? 1 : -1), 0)
-  );
+  const altRowSums = polys.map(d => sumIntegerRow(d.coefficients, true));
 
   const token = ++oeisLookupToken;
   const sections = [
