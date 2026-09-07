@@ -1,8 +1,8 @@
 # Polytool handoff
 
-## Active web arbitrary-precision coefficient work (2026-09-07)
+## Completed web arbitrary-precision coefficient work (2026-09-07)
 
-The coding worker owns the isolated monorepo worktree
+The coding worker used the isolated monorepo worktree
 `/tmp/polytool-web-bigint-20260907` on branch
 `fix/polytool-web-bigint-20260907`, based exactly on freshly fetched
 `origin/master` commit `5da03fea23eb55a37e46025a4ca8ad21e96a8b9a`.
@@ -12,18 +12,65 @@ could not run in this container because the `docker` executable is absent; no
 active ownership is recorded for the files below in the current root or
 Polytool handoffs.
 
-Ownership is limited to `polytool/HANDOFF.md`, `polytool/README.md`,
+Ownership was limited to `polytool/HANDOFF.md`, `polytool/README.md`,
 `polytool/src/decomposition.rs`, `polytool/src/lib.rs`,
 `polytool/web/Cargo.toml`, `polytool/web/src/lib.rs`,
-`polytool/web/index.html`, and root `Cargo.lock` if Cargo must record the web
-crate's direct `num-bigint` dependency.  The task is to make the browser WASM
-boundary arbitrary-precision end to end, including exact recurrence and
-symmetric-decomposition paths, decimal-string JSON coefficients, string-safe
-browser operations, regression coverage, and safe deployment documentation.
-No deployment, push, merge, standalone projection, or edit beneath
-`/home/paxinum/Dropbox/webpages` is authorized.  The separately named
-derangement experiment and SymCat weighted-bond example remain outside this
-ownership and will not be touched.
+`polytool/web/index.html`, focused browser regression
+`polytool/web/tests/string_safety.mjs`, and root `Cargo.lock` if Cargo must
+record the web crate's direct `num-bigint` dependency.  No other path changed,
+and ownership is released by this handoff.
+
+Focused commits are:
+
+- `9f744dc`, recording isolated ownership;
+- `d7d2adb`, adding the exact `BigInt` symmetric-decomposition report and
+  regression;
+- `fcc2c73`, converting the WASM boundary, recurrence path, JSON contract, and
+  browser arithmetic to arbitrary precision;
+- `0ed7a2e`, documenting the JSON contract and recoverable deployment-staging
+  copy.
+
+The web input path now uses `parse_polynomials_bigint`.  All requested property,
+interlacing, resultant, discriminant, and decomposition calculations call
+their `BigInt` APIs.  Recurrence search converts the parsed integers directly
+to `BigRational` and uses `find_recurrence_adaptive_rational`; its Mathematica,
+Sage, and recurrence-JSON exports stay exact.  Coefficient-like JSON values are
+canonical decimal strings, including ordinary small values.  The existing
+string-based WASM export names are unchanged, and the pairwise interlacing
+export accepts both the new decimal-string arrays and legacy ordinary JSON
+integer arrays.
+
+Browser polynomial rendering, decomposition merging and copying, interlacing,
+OEIS row sums, alternating sums, leading-zero handling, and first differences
+now retain strings or use JavaScript `BigInt`; none uses `Number` for exact
+coefficient arithmetic.  The page asset key is `20260907a`.
+
+Verification used external `CARGO_TARGET_DIR=/cargo-target/ai-projects`,
+`timeout 60s`, and `nice -n 10` for all Rust and WASM work:
+
+- 7 `polytool-web` tests passed, including ordinary compatibility and inputs
+  above `2^53` and `i64` for properties, interlacing, resultants,
+  discriminants, decomposition, and recurrence;
+- the browser string-safety Node regression and full inline-JavaScript syntax
+  parse passed;
+- 319 non-OEIS Polytool library tests, 19 CLI BigInt tests, 5 interlacing API
+  tests, 6 CLI version/budget tests, and 5 doctests passed;
+- Polytool MCP passed 22 library tests, 2 binary tests, and 1 documentation
+  test;
+- strict Clippy for Polytool, web, and MCP, workspace Cargo metadata, formatting,
+  and `git diff --check` passed;
+- the release no-modules `wasm-pack` build produced ignored artifacts
+  `web/pkg/polytool_web.js` (13 KiB) and
+  `web/pkg/polytool_web_bg.wasm` (538 KiB); loading that actual WASM in Node
+  passed huge-coefficient property and recurrence smoke checks.
+
+Per the task boundary, nothing was pushed, merged, projected to standalone
+`main`, deployed, or changed under `/home/paxinum/Dropbox/webpages`.  The exact
+future staging copy and byte-comparison commands are in `README.md`.  The
+website checkout's legacy Makefile still names `polynomial_tools_web*`, so its
+assembly target must not be used for this `polytool_web*` bundle without a
+separate reviewed website change.  The separately owned derangement experiment
+and SymCat weighted-bond example were not touched.
 
 ## Completed GitHub issues #1 and #2 (2026-09-07)
 
