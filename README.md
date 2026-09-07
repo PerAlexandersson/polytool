@@ -879,7 +879,49 @@ Run the web wrapper tests:
 
 ```sh
 cargo test -p polytool-web
+node web/tests/string_safety.mjs
 ```
+
+### Web arbitrary-precision contract and deployment staging
+
+The browser wrapper parses polynomial input with `parse_polynomials_bigint`.
+Every integer coefficient returned across its string-based WASM/JSON boundary
+is a canonical decimal string, including input, gamma, decomposition, and
+recurrence-initial coefficients. Resultants and discriminants are decimal
+strings as well. Browser code must keep these values as strings or convert
+them to JavaScript `BigInt` for exact arithmetic; converting them to `Number`
+can round values above `2^53`.
+
+Build the deployable no-modules bundle from the monorepo root with an external
+target directory:
+
+```sh
+CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
+  wasm-pack build polytool/web --target no-modules --release \
+  --out-dir pkg
+```
+
+After review and explicit deployment authorization, stage exactly the files
+referenced by `web/index.html` into the website checkout. The backup option
+keeps replaced files recoverable, and these commands deliberately do not use
+the website's historical `--delete` deployment target:
+
+```sh
+site_stage=/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/www
+install -d "$site_stage/pkg"
+cp --backup=numbered web/index.html "$site_stage/index.html"
+cp --backup=numbered web/favicon.svg "$site_stage/favicon.svg"
+cp --backup=numbered web/pkg/polytool_web.js "$site_stage/pkg/polytool_web.js"
+cp --backup=numbered web/pkg/polytool_web_bg.wasm \
+  "$site_stage/pkg/polytool_web_bg.wasm"
+cmp web/index.html "$site_stage/index.html"
+cmp web/pkg/polytool_web.js "$site_stage/pkg/polytool_web.js"
+cmp web/pkg/polytool_web_bg.wasm "$site_stage/pkg/polytool_web_bg.wasm"
+```
+
+The legacy website Makefile still names `polynomial_tools_web*`; do not use
+that stale assembly rule for the current `polytool_web*` bundle without first
+updating and reviewing the website repository itself.
 
 The repository's `main` branch is generated from this directory with
 `git subtree split`; the monorepo `master` branch remains canonical. The core
