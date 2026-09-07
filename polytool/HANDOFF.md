@@ -22,9 +22,10 @@ digests are:
 - `pkg/polytool_web.js`: `9d6b33464995cfcc00f15f7248e779b988515ebb07392e0efd211d69fcbf6773`;
 - `pkg/polytool_web_bg.wasm`: `6448551d93d61377e21623cb1c1c392afa00227cf94566faeba7ced2b569923e`.
 
-The server lacks `rsync`, so the attempted exact-file `rsync` exited 127
-without transferring anything; the same explicit four files were then copied
-with `scp`, without deletion.  Remote byte hashes match the staged files.
+The deployment environment lacks `rsync`, so the attempted exact-file `rsync`
+exited 127 without transferring anything; the same explicit four files were
+then copied with `scp`, without deletion.  Remote byte hashes match the staged
+files.
 Cache-busted requests return HTTP 200 for the page, favicon, JavaScript, and
 WASM, and the live page identifies asset version `20260907a`.  A live Node
 smoke loaded the public WASM, retained `1000000000000000000000000000000`
