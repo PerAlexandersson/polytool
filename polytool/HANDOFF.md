@@ -39,9 +39,10 @@ pass.
 The worktree's recorded `kostka` submodule revision was initialized only so
 Cargo could load the isolated workspace; its gitlink and contents were not
 changed.  The divergent shared checkout and OEIS-export branch were not
-touched.  No unclaimed source, generated artifact, remote, publication,
-deployment, or GitHub issue state changed; nothing was pushed or closed.
-Ownership of all six claimed files is released.
+touched.  After verification, commits `b076098` through `4444fde` were pushed
+without force as a fast-forward of `origin/master`, and GitHub issue #4 was
+closed with a summary of the implementation.  No generated artifact or
+deployment changed.  Ownership of all six claimed files is released.
 
 ## Completed BigInt web publication and deployment (2026-09-07)
 
