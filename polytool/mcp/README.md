@@ -390,11 +390,18 @@ Provide exactly one input source:
 - `polynomials`: explicit `PolynomialInput` objects;
 - `text`: newline-separated polynomial data.
 
-Compact coefficient example:
+Flat compact-result example (all search controls are top-level):
 
 ```json
 {
-  "coefficients": [[1], [1], [2], [3], [5], [8]]
+  "coefficients": [[1], [2], [4], [8], [16]],
+  "min_rec_len": 1,
+  "max_rec_len": 1,
+  "max_var_deg": 0,
+  "max_idx_deg": 0,
+  "max_diff_deg": 0,
+  "max_candidates": 1,
+  "include_code": false
 }
 ```
 
@@ -413,24 +420,36 @@ Explicit polynomial example:
 }
 ```
 
-Important option fields:
+The raw `tools/list` schema exposes every search control as an ordinary
+top-level property:
 
-- `skip_prefix`
-- `min_rec_len`, `max_rec_len`
-- `min_var_deg`, `max_var_deg`
-- `min_idx_deg`, `max_idx_deg`
-- `min_diff_deg`, `max_diff_deg`
-- `try_inhomogeneous`
-- `min_inhomo_var_deg`, `max_inhomo_var_deg`
-- `min_inhomo_idx_deg`, `max_inhomo_idx_deg`
-- `try_denominator`
-- `try_alternating_sign`
-- `max_denom_var_deg`, `max_denom_idx_deg`
-- `min_margin`
-- `fit_extra_rows`
-- `no_verify`
-- `modular_prefilter`
-- `max_candidates`
+- `skip_prefix`: ignore leading input rows;
+- `min_rec_len`, `max_rec_len`: recurrence-length bounds;
+- `min_var_deg`, `max_var_deg`: polynomial-variable degree bounds;
+- `min_idx_deg`, `max_idx_deg`: recurrence-index degree bounds;
+- `min_diff_deg`, `max_diff_deg`: derivative-order bounds;
+- `try_inhomogeneous`: search for an additive inhomogeneous term;
+- `min_inhomo_var_deg`, `max_inhomo_var_deg`: its variable-degree bounds;
+- `min_inhomo_idx_deg`, `max_inhomo_idx_deg`: its index-degree bounds;
+- `try_denominator`: search for a nonconstant left-hand denominator;
+- `try_alternating_sign`: search terms multiplied by `(-1)^n`;
+- `max_denom_var_deg`, `max_denom_idx_deg`: denominator degree bounds;
+- `min_margin`: minimum excess of equations over unknowns;
+- `fit_extra_rows`: add rows to the fit before holdout verification;
+- `no_verify`: disable holdout verification;
+- `modular_prefilter`: enable the modular inconsistency prefilter;
+- `max_candidates`: deterministic outer-candidate budget.
+
+For compatibility, the same search controls may still be nested under
+`options`. If a field is supplied in both places, its top-level value wins:
+
+```json
+{
+  "coefficients": [[1], [2], [4], [8], [16]],
+  "options": { "max_rec_len": 3, "max_var_deg": 0 },
+  "max_rec_len": 1
+}
+```
 
 `verbose` is intentionally not exposed through MCP, so the server never writes
 search traces into the stdio protocol stream.
@@ -452,6 +471,11 @@ When a recurrence is found, the response includes:
   for `generate_recurrence_rows` or `polytool recurrence-generate`
 - search metadata such as `unknowns`, `equations`, `fit_polynomials`,
   `verification_polynomials`, `candidates_tried`, and `candidates_considered`
+
+The default `include_code: true` preserves this full response. Set
+`include_code: false` to omit `mathematica`, `sage`, `python`, and
+`recurrence_json`; `recurrence`, `latex`, status, and all search statistics
+remain present.
 
 Every response includes a `status`: `found`, `not_found`,
 `budget_exhausted`, or `invalid_input`. In particular, `budget_exhausted` is

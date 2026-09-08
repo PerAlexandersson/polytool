@@ -858,6 +858,24 @@ sequence-generation, and recurrence tools accept arbitrary-size integer
 coefficients. JSON integers may be provided directly when they fit the client
 stack, and larger exact integers should be sent as strings.
 
+`find_recurrence` exposes all adaptive-search controls as top-level MCP
+arguments. For example, a compact exact search can use:
+
+```json
+{
+  "coefficients": [[1], [2], [4], [8], [16]],
+  "max_rec_len": 1,
+  "max_var_deg": 0,
+  "max_idx_deg": 0,
+  "max_diff_deg": 0,
+  "include_code": false
+}
+```
+
+The legacy nested `options` object remains accepted, with top-level values
+taking precedence. Omitting `include_code` preserves the full generated-code
+response.
+
 See [`mcp/README.md`](mcp/README.md) for request schemas, examples, and
 development notes.
 
