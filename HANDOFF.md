@@ -1,5 +1,29 @@
 # Polytool handoff
 
+## Active MCP `find_recurrence` compatibility work (GitHub #4, 2026-09-08)
+
+The coding worker owns only `HANDOFF.md`, `mcp/src/lib.rs`, `mcp/src/main.rs`,
+`mcp/tests/stdio_smoke.rs`, `mcp/README.md`, and `README.md` in the regular
+isolated worktree `/tmp/polytool-mcp-issue-4-20260908`, on branch
+`fix/polytool-mcp-issue-4-20260908` based exactly on current published
+`origin/master` `ca0771bfe1c5b1755d3b61f7c3eead7ede1e0f1b`.  The divergent shared
+checkout, OEIS-export branch/worktree, all other source, generated artifacts,
+remotes, deployments, and GitHub issue state are out of scope and untouched.
+
+Plan: replace the `find_recurrence` raw input schema's top-level union with an
+ordinary object whose top-level properties document all four input forms,
+every adaptive search control, legacy `options`, and `include_code`; accept
+flat controls at runtime while merging legacy nested controls with documented
+top-level precedence; retain runtime exactly-one-input validation; make
+`include_code: false` omit Mathematica, Python, Sage, and recurrence JSON while
+preserving the default full result, recurrence, LaTeX, and search statistics;
+then add direct schema/runtime and stdio coverage.  Update only the existing
+MCP help and README surfaces (no MCP man page or generated reference file
+exists), checkpoint implementation/tests and documentation separately, run
+focused/full MCP and proportional Polytool verification with external build
+output, and finally record results and release ownership.  Nothing will be
+pushed, published, deployed, or closed.
+
 ## Completed BigInt web publication and deployment (2026-09-07)
 
 The verified isolated branch was published without force from original
