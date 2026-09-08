@@ -1,28 +1,47 @@
 # Polytool handoff
 
-## Active MCP `find_recurrence` compatibility work (GitHub #4, 2026-09-08)
+## Completed MCP `find_recurrence` compatibility work (GitHub #4, 2026-09-08)
 
-The coding worker owns only `HANDOFF.md`, `mcp/src/lib.rs`, `mcp/src/main.rs`,
-`mcp/tests/stdio_smoke.rs`, `mcp/README.md`, and `README.md` in the regular
-isolated worktree `/tmp/polytool-mcp-issue-4-20260908`, on branch
-`fix/polytool-mcp-issue-4-20260908` based exactly on current published
-`origin/master` `ca0771bfe1c5b1755d3b61f7c3eead7ede1e0f1b`.  The divergent shared
-checkout, OEIS-export branch/worktree, all other source, generated artifacts,
-remotes, deployments, and GitHub issue state are out of scope and untouched.
+The coding worker completed this focused change in the regular isolated
+worktree `/tmp/polytool-mcp-issue-4-20260908`, on branch
+`fix/polytool-mcp-issue-4-20260908` based exactly on published `origin/master`
+`ca0771bfe1c5b1755d3b61f7c3eead7ede1e0f1b`.  Checkpoint `b076098` records
+the exact ownership and plan, `2797b23` implements the schema/runtime/test
+change, and `19b779d` updates the existing help and README surfaces.
 
-Plan: replace the `find_recurrence` raw input schema's top-level union with an
-ordinary object whose top-level properties document all four input forms,
-every adaptive search control, legacy `options`, and `include_code`; accept
-flat controls at runtime while merging legacy nested controls with documented
-top-level precedence; retain runtime exactly-one-input validation; make
-`include_code: false` omit Mathematica, Python, Sage, and recurrence JSON while
-preserving the default full result, recurrence, LaTeX, and search statistics;
-then add direct schema/runtime and stdio coverage.  Update only the existing
-MCP help and README surfaces (no MCP man page or generated reference file
-exists), checkpoint implementation/tests and documentation separately, run
-focused/full MCP and proportional Polytool verification with external build
-output, and finally record results and release ownership.  Nothing will be
-pushed, published, deployed, or closed.
+The raw `tools/list` schema for `find_recurrence` is now an ordinary object
+with no top-level `oneOf`.  It exposes and describes all four input forms,
+every recurrence search control, legacy `options`, and `include_code` as
+top-level properties.  Runtime still requires exactly one input form.  Flat
+controls are canonical; legacy nested controls remain accepted, and a
+top-level value wins when the same field appears in both places.
+
+`include_code` defaults to true, preserving the full historical result.  When
+false, successful results omit Mathematica, Python, Sage, and recurrence JSON
+without computing them, while retaining plaintext recurrence, LaTeX, status,
+and all search statistics.  Direct and stdio tests cover schema shape and
+descriptions, flat and legacy calls, conflicting control precedence, missing
+or multiple inputs, compact serialization, and default full serialization.
+The tool description, `polytool-mcp --help`, the MCP reference/example, and the
+top-level Polytool README all document the same interface.  No MCP man page or
+generated reference file exists, so none was invented.
+
+Verification used external `CARGO_TARGET_DIR=/cargo-target/ai-projects`,
+`timeout 60s`, and `nice -n 10` for Rust commands.  All 26 MCP library tests,
+2 MCP binary/help tests, the stdio smoke test, and the MCP documentation target
+pass.  Proportional Polytool regressions pass: 319 non-OEIS library tests, all
+61 recurrence tests, 19 BigInt CLI tests, 6 version/budget CLI tests, 5
+interlacing tests, 2 recurrence-overfit tests, and all 5 doctests.  Strict
+Clippy for Polytool and MCP passes with only the established allowances for
+pre-existing warnings; Cargo formatting, metadata, and `git diff --check` also
+pass.
+
+The worktree's recorded `kostka` submodule revision was initialized only so
+Cargo could load the isolated workspace; its gitlink and contents were not
+changed.  The divergent shared checkout and OEIS-export branch were not
+touched.  No unclaimed source, generated artifact, remote, publication,
+deployment, or GitHub issue state changed; nothing was pushed or closed.
+Ownership of all six claimed files is released.
 
 ## Completed BigInt web publication and deployment (2026-09-07)
 
