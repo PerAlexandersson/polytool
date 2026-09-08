@@ -883,11 +883,11 @@ Lines starting with # are ignored."></textarea>
     <span class="info">i<span class="tip">Maximum order of the derivative operator <span data-tex="D=d/dt">D = d/dt</span> applied to terms. Allows recurrences involving <span data-tex="P(n-k),\,P'(n-k),\,P''(n-k),\,\ldots">P(n&minus;k), P&prime;(n&minus;k), P&Prime;(n&minus;k), &hellip;</span></span></span>
   </div>
   <div class="options">
+    <label><input type="checkbox" id="tryDenominator" checked> rational coefficients</label>
+    <span class="info">i<span class="tip">Allow a common denominator on the left-hand side: <span data-tex="f(n,t)P(n)=\sum_k a_k(n,t)P(n-k)">f(n, t) P(n) = &sum; a_k(n, t) P(n&minus;k)</span>. Finds recurrences with rational function coefficients in <span data-tex="n">n</span> and <span data-tex="t">t</span>.</span></span>
+
     <label><input type="checkbox" id="tryInhomogeneous"> non-homogeneous</label>
     <span class="info">i<span class="tip">Allow an additive term <span data-tex="g(n,t)">g(n, t)</span> on the right-hand side: <span data-tex="\sum_k a_k(n,t)P(n-k)=g(n,t)">&sum; a_k(n,t) P(n&minus;k) = g(n, t)</span>. Slower search but finds more recurrences.</span></span>
-
-    <label><input type="checkbox" id="tryDenominator"> rational coefficients</label>
-    <span class="info">i<span class="tip">Allow a common denominator on the left-hand side: <span data-tex="f(n,t)P(n)=\sum_k a_k(n,t)P(n-k)">f(n, t) P(n) = &sum; a_k(n, t) P(n&minus;k)</span>. Finds recurrences with rational function coefficients in <span data-tex="n">n</span> and <span data-tex="t">t</span>.</span></span>
 
     <label><input type="checkbox" id="tryAlternatingSign"> <span data-tex="(-1)^n">(-1)<sup>n</sup></span> terms</label>
     <span class="info">i<span class="tip">Also allow right-hand-side terms multiplied by <span data-tex="(-1)^n">(-1)<sup>n</sup></span>, such as <span data-tex="(-1)^n a_k(n,t)P(n-k)">(-1)<sup>n</sup> a_k(n, t) P(n&minus;k)</span>. Useful for alternating or parity-sensitive sequences.</span></span>

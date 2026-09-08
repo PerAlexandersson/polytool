@@ -1,5 +1,16 @@
 # Polytool handoff
 
+## Recurrence rational-coefficient default (2026-09-08)
+
+The recurrence-search controls now put `rational coefficients` before
+`non-homogeneous` and enable rational coefficients by default. The same
+two-line UI change is staged independently in
+`/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/www/index.html`;
+the newer unrelated staged OEIS-export content was preserved. Static HTML and
+inline-JavaScript parsing, unique-control, checked-default, DOM-order, and
+whitespace checks pass for both copies. Ownership is released. Nothing has
+been deployed or pushed.
+
 ## Final monorepo integration (2026-09-06)
 
 The completed review-fix history was integrated with clean local monorepo
