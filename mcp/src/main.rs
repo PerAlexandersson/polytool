@@ -46,6 +46,18 @@ MCP usage:
   exposes tools only; it does not provide resources, prompts, sampling, HTTP, or
   filesystem access.
 
+find_recurrence arguments:
+  Provide exactly one of polynomials, coefficients, expressions, or text.
+  Search controls are top-level: skip_prefix; min_rec_len; max_rec_len;
+  min_var_deg; max_var_deg; min_idx_deg; max_idx_deg; min_diff_deg;
+  max_diff_deg; try_inhomogeneous; min_inhomo_var_deg; max_inhomo_var_deg;
+  min_inhomo_idx_deg; max_inhomo_idx_deg; try_denominator;
+  try_alternating_sign; max_denom_var_deg; max_denom_idx_deg; min_margin;
+  no_verify; fit_extra_rows; modular_prefilter; and max_candidates.
+  Legacy nested options remain accepted; top-level values take precedence.
+  Set include_code=false to omit Mathematica, Python, Sage, and recurrence JSON.
+  Omitting include_code preserves the full response.
+
 Contact:
   Report issues in the Git repository, or contact {contact}.
 ",
@@ -112,6 +124,9 @@ mod tests {
     fn help_mentions_transport_and_contact() {
         let help = help_text();
         assert!(help.contains("stdio transport"));
+        assert!(help.contains("Search controls are top-level"));
+        assert!(help.contains("max_candidates"));
+        assert!(help.contains("include_code=false"));
         assert!(help.contains(CONTACT));
     }
 }
