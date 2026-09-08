@@ -86,8 +86,52 @@ fn lists_tools_and_calls_properties() {
         .iter()
         .find(|tool| tool["name"] == "find_recurrence")
         .expect("find_recurrence tool")["inputSchema"];
-    assert!(recurrence_schema["oneOf"].is_array());
-    assert!(recurrence_schema["properties"]["coefficients"].is_object());
+    assert_eq!(recurrence_schema["type"], "object");
+    assert!(recurrence_schema.get("oneOf").is_none());
+    let recurrence_properties = recurrence_schema["properties"]
+        .as_object()
+        .expect("find_recurrence properties");
+    for name in [
+        "coefficients",
+        "polynomials",
+        "expressions",
+        "text",
+        "options",
+        "include_code",
+        "skip_prefix",
+        "min_rec_len",
+        "max_rec_len",
+        "min_var_deg",
+        "max_var_deg",
+        "min_idx_deg",
+        "max_idx_deg",
+        "min_diff_deg",
+        "max_diff_deg",
+        "try_inhomogeneous",
+        "min_inhomo_var_deg",
+        "max_inhomo_var_deg",
+        "min_inhomo_idx_deg",
+        "max_inhomo_idx_deg",
+        "try_denominator",
+        "try_alternating_sign",
+        "max_denom_var_deg",
+        "max_denom_idx_deg",
+        "min_margin",
+        "no_verify",
+        "fit_extra_rows",
+        "modular_prefilter",
+        "max_candidates",
+    ] {
+        let property = recurrence_properties
+            .get(name)
+            .unwrap_or_else(|| panic!("missing {name}"));
+        assert!(
+            property["description"]
+                .as_str()
+                .is_some_and(|description| !description.is_empty()),
+            "{name} lacks a description: {property}"
+        );
+    }
 
     send(
         &mut stdin,
@@ -147,7 +191,13 @@ fn lists_tools_and_calls_properties() {
             "params": {
                 "name": "find_recurrence",
                 "arguments": {
-                    "coefficients": [[1], [1], [2], [3], [5], [8]]
+                    "coefficients": [[1], [1], [2], [3], [5], [8]],
+                    "min_rec_len": 1,
+                    "max_rec_len": 2,
+                    "max_var_deg": 0,
+                    "max_idx_deg": 0,
+                    "max_diff_deg": 0,
+                    "include_code": false
                 }
             }
         }),
@@ -156,6 +206,59 @@ fn lists_tools_and_calls_properties() {
     let structured = &recurrence["result"]["structuredContent"];
     assert_eq!(structured["found"], true);
     assert_eq!(structured["recurrence"], "P(n) = P(n-1) + P(n-2)");
+    assert!(structured["latex"].is_string());
+    assert!(structured["candidates_considered"].is_number());
+    for absent in ["mathematica", "python", "sage", "recurrence_json"] {
+        assert!(structured.get(absent).is_none(), "unexpected {absent}");
+    }
+
+    send(
+        &mut stdin,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+                "name": "find_recurrence",
+                "arguments": {
+                    "coefficients": [[1], [2], [4], [8], [16]],
+                    "options": {
+                        "min_rec_len": 1,
+                        "max_rec_len": 1,
+                        "max_var_deg": 0,
+                        "max_idx_deg": 0,
+                        "max_diff_deg": 0
+                    }
+                }
+            }
+        }),
+    );
+    let legacy = read_response(&mut stdout, 6);
+    assert_eq!(
+        legacy["result"]["structuredContent"]["recurrence"],
+        "P(n) = 2 P(n-1)"
+    );
+    assert!(legacy["result"]["structuredContent"]["python"].is_string());
+
+    send(
+        &mut stdin,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "find_recurrence",
+                "arguments": {
+                    "coefficients": [[1], [2], [4]],
+                    "expressions": ["1", "2", "4"]
+                }
+            }
+        }),
+    );
+    let invalid = read_response(&mut stdout, 7);
+    assert!(invalid["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("expected exactly one")));
 
     drop(stdin);
     let _ = child.kill();

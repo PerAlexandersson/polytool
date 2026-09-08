@@ -189,30 +189,52 @@ pub struct BigIntPolynomialPairRequest {
     pub q: BigIntPolynomialInput,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RecurrenceSearchOptionsInput {
+    /// Ignore this many leading polynomial rows before searching.
     pub skip_prefix: Option<usize>,
+    /// Minimum recurrence length (largest lag).
     pub min_rec_len: Option<usize>,
+    /// Maximum recurrence length (largest lag).
     pub max_rec_len: Option<usize>,
+    /// Minimum degree in the polynomial variable.
     pub min_var_deg: Option<usize>,
+    /// Maximum degree in the polynomial variable.
     pub max_var_deg: Option<usize>,
+    /// Minimum degree in the recurrence index.
     pub min_idx_deg: Option<usize>,
+    /// Maximum degree in the recurrence index.
     pub max_idx_deg: Option<usize>,
+    /// Minimum derivative order allowed in recurrence terms.
     pub min_diff_deg: Option<usize>,
+    /// Maximum derivative order allowed in recurrence terms.
     pub max_diff_deg: Option<usize>,
+    /// Search for an additive inhomogeneous term.
     pub try_inhomogeneous: Option<bool>,
+    /// Minimum polynomial-variable degree of the inhomogeneous term.
     pub min_inhomo_var_deg: Option<usize>,
+    /// Maximum polynomial-variable degree of the inhomogeneous term.
     pub max_inhomo_var_deg: Option<usize>,
+    /// Minimum recurrence-index degree of the inhomogeneous term.
     pub min_inhomo_idx_deg: Option<usize>,
+    /// Maximum recurrence-index degree of the inhomogeneous term.
     pub max_inhomo_idx_deg: Option<usize>,
+    /// Search for a nonconstant denominator on the left-hand side.
     pub try_denominator: Option<bool>,
+    /// Search recurrence terms multiplied by `(-1)^n`.
     pub try_alternating_sign: Option<bool>,
+    /// Maximum polynomial-variable degree of the denominator.
     pub max_denom_var_deg: Option<usize>,
+    /// Maximum recurrence-index degree of the denominator.
     pub max_denom_idx_deg: Option<usize>,
+    /// Minimum excess of equations over unknowns.
     pub min_margin: Option<usize>,
+    /// Disable holdout verification of fitted recurrences.
     pub no_verify: Option<bool>,
+    /// Add this many rows to the fit before holdout verification.
     pub fit_extra_rows: Option<usize>,
+    /// Use the modular inconsistency prefilter (default `true`).
     pub modular_prefilter: Option<bool>,
     /// Inspect at most this many adaptive candidate configurations. Zero
     /// returns budget exhaustion before the first candidate.
@@ -251,45 +273,106 @@ impl JsonSchema for RationalCoefficientInput {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FindRecurrenceRequest {
+    /// Polynomial objects; provide exactly one polynomial input form.
     pub polynomials: Option<Vec<PolynomialInput>>,
+    /// Dense exact rational coefficient rows; integers or rational strings.
     pub coefficients: Option<Vec<Vec<RationalCoefficientInput>>>,
+    /// Polynomial expressions, one expression per sequence row.
     pub expressions: Option<Vec<String>>,
+    /// Newline-separated polynomial expressions or coefficient rows.
     pub text: Option<String>,
+    /// Legacy nested search controls. Top-level controls take precedence.
     pub options: Option<RecurrenceSearchOptionsInput>,
+    /// Omit generated Mathematica, Python, Sage, and recurrence JSON when false.
+    /// Defaults to true for backward compatibility.
+    pub include_code: Option<bool>,
+    /// Ignore this many leading polynomial rows before searching.
+    pub skip_prefix: Option<usize>,
+    /// Minimum recurrence length (largest lag).
+    pub min_rec_len: Option<usize>,
+    /// Maximum recurrence length (largest lag).
+    pub max_rec_len: Option<usize>,
+    /// Minimum degree in the polynomial variable.
+    pub min_var_deg: Option<usize>,
+    /// Maximum degree in the polynomial variable.
+    pub max_var_deg: Option<usize>,
+    /// Minimum degree in the recurrence index.
+    pub min_idx_deg: Option<usize>,
+    /// Maximum degree in the recurrence index.
+    pub max_idx_deg: Option<usize>,
+    /// Minimum derivative order allowed in recurrence terms.
+    pub min_diff_deg: Option<usize>,
+    /// Maximum derivative order allowed in recurrence terms.
+    pub max_diff_deg: Option<usize>,
+    /// Search for an additive inhomogeneous term.
+    pub try_inhomogeneous: Option<bool>,
+    /// Minimum polynomial-variable degree of the inhomogeneous term.
+    pub min_inhomo_var_deg: Option<usize>,
+    /// Maximum polynomial-variable degree of the inhomogeneous term.
+    pub max_inhomo_var_deg: Option<usize>,
+    /// Minimum recurrence-index degree of the inhomogeneous term.
+    pub min_inhomo_idx_deg: Option<usize>,
+    /// Maximum recurrence-index degree of the inhomogeneous term.
+    pub max_inhomo_idx_deg: Option<usize>,
+    /// Search for a nonconstant denominator on the left-hand side.
+    pub try_denominator: Option<bool>,
+    /// Search recurrence terms multiplied by `(-1)^n`.
+    pub try_alternating_sign: Option<bool>,
+    /// Maximum polynomial-variable degree of the denominator.
+    pub max_denom_var_deg: Option<usize>,
+    /// Maximum recurrence-index degree of the denominator.
+    pub max_denom_idx_deg: Option<usize>,
+    /// Minimum excess of equations over unknowns.
+    pub min_margin: Option<usize>,
+    /// Disable holdout verification of fitted recurrences.
+    pub no_verify: Option<bool>,
+    /// Add this many rows to the fit before holdout verification.
+    pub fit_extra_rows: Option<usize>,
+    /// Use the modular inconsistency prefilter (default `true`).
+    pub modular_prefilter: Option<bool>,
+    /// Inspect at most this many adaptive candidate configurations.
+    pub max_candidates: Option<usize>,
 }
 
-impl JsonSchema for FindRecurrenceRequest {
-    fn schema_name() -> Cow<'static, str> {
-        "FindRecurrenceRequest".into()
-    }
-
-    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
-        Schema::try_from(json!({
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "polynomials": <Vec<PolynomialInput>>::json_schema(generator),
-                "coefficients": <Vec<Vec<RationalCoefficientInput>>>::json_schema(generator),
-                "expressions": <Vec<String>>::json_schema(generator),
-                "text": String::json_schema(generator),
-                "options": {
-                    "anyOf": [
-                        generator.subschema_for::<RecurrenceSearchOptionsInput>(),
-                        { "type": "null" }
-                    ]
+impl FindRecurrenceRequest {
+    fn effective_options(&self) -> Option<RecurrenceSearchOptionsInput> {
+        let mut options = self.options.clone().unwrap_or_default();
+        let mut present = self.options.is_some();
+        macro_rules! prefer_top_level {
+            ($field:ident) => {
+                if let Some(value) = self.$field {
+                    options.$field = Some(value);
+                    present = true;
                 }
-            },
-            "oneOf": [
-                { "required": ["polynomials"] },
-                { "required": ["coefficients"] },
-                { "required": ["expressions"] },
-                { "required": ["text"] }
-            ]
-        }))
-        .expect("valid FindRecurrenceRequest schema")
+            };
+        }
+        prefer_top_level!(skip_prefix);
+        prefer_top_level!(min_rec_len);
+        prefer_top_level!(max_rec_len);
+        prefer_top_level!(min_var_deg);
+        prefer_top_level!(max_var_deg);
+        prefer_top_level!(min_idx_deg);
+        prefer_top_level!(max_idx_deg);
+        prefer_top_level!(min_diff_deg);
+        prefer_top_level!(max_diff_deg);
+        prefer_top_level!(try_inhomogeneous);
+        prefer_top_level!(min_inhomo_var_deg);
+        prefer_top_level!(max_inhomo_var_deg);
+        prefer_top_level!(min_inhomo_idx_deg);
+        prefer_top_level!(max_inhomo_idx_deg);
+        prefer_top_level!(try_denominator);
+        prefer_top_level!(try_alternating_sign);
+        prefer_top_level!(max_denom_var_deg);
+        prefer_top_level!(max_denom_idx_deg);
+        prefer_top_level!(min_margin);
+        prefer_top_level!(no_verify);
+        prefer_top_level!(fit_extra_rows);
+        prefer_top_level!(modular_prefilter);
+        prefer_top_level!(max_candidates);
+        present.then_some(options)
     }
 }
 
@@ -3028,12 +3111,14 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Search adaptively for a polynomial recurrence. Provide exactly one of `polynomials`, `coefficients`, `expressions`, or `text`."
+        description = "Search adaptively for a polynomial recurrence. Provide exactly one of `polynomials`, `coefficients`, `expressions`, or `text`. Pass search controls such as `min_rec_len`, `max_rec_len`, degree bounds, `try_denominator`, `fit_extra_rows`, `modular_prefilter`, and `max_candidates` as top-level arguments. Legacy nested `options` is accepted; a top-level control wins when both are supplied. Set `include_code` to false for a compact result without Mathematica, Python, Sage, or recurrence JSON."
     )]
     pub fn find_recurrence(
         &self,
         Parameters(input): Parameters<FindRecurrenceRequest>,
     ) -> Result<Json<FindRecurrenceResponse>, McpError> {
+        let recurrence_options = input.effective_options();
+        let include_code = input.include_code.unwrap_or(true);
         let batch = parse_recurrence_batch_rational(&input)?;
         let polynomials = match collect_rational_polynomials_or_errors(batch) {
             Ok(polynomials) => polynomials,
@@ -3054,30 +3139,28 @@ impl PolynomialToolsServer {
                 Vec::new(),
             )));
         }
-        let (search, budget) = apply_recurrence_options(input.options)?;
+        let (search, budget) = apply_recurrence_options(recurrence_options)?;
         match find_recurrence_adaptive_rational_with_budget(&polynomials, &search, budget) {
             AdaptiveSearchOutcome::Found(result) => Ok(Json(FindRecurrenceResponse {
                 status: RecurrenceSearchStatus::Found,
                 found: true,
                 recurrence: Some(format!("{}", result.recurrence)),
                 latex: Some(result.recurrence.to_latex()),
-                mathematica: Some(
+                mathematica: include_code.then(|| {
                     result
                         .recurrence
-                        .to_mathematica_definition_rational(&polynomials),
-                ),
-                sage: Some(result.recurrence.to_sage_definition_rational(&polynomials)),
-                python: Some(
+                        .to_mathematica_definition_rational(&polynomials)
+                }),
+                sage: include_code
+                    .then(|| result.recurrence.to_sage_definition_rational(&polynomials)),
+                python: include_code.then(|| {
                     result
                         .recurrence
-                        .to_python_definition_rational(&polynomials),
-                ),
-                recurrence_json: Some(recurrence_json_string(
-                    &result,
-                    &polynomials,
-                    &search,
-                    polynomials.len(),
-                )),
+                        .to_python_definition_rational(&polynomials)
+                }),
+                recurrence_json: include_code.then(|| {
+                    recurrence_json_string(&result, &polynomials, &search, polynomials.len())
+                }),
                 unknowns: Some(result.num_unknowns),
                 weighted_unknowns: Some(result.weighted_unknowns),
                 equations: Some(result.num_equations),
@@ -3970,6 +4053,163 @@ mod tests {
     }
 
     #[test]
+    fn find_recurrence_schema_is_flat_and_documents_every_control() {
+        let schema = serde_json::to_value(schemars::schema_for!(FindRecurrenceRequest)).unwrap();
+        assert_eq!(schema["type"], "object");
+        assert!(schema.get("oneOf").is_none());
+        assert_eq!(schema["additionalProperties"], false);
+        let properties = schema["properties"].as_object().expect("schema properties");
+        for name in [
+            "polynomials",
+            "coefficients",
+            "expressions",
+            "text",
+            "options",
+            "include_code",
+            "skip_prefix",
+            "min_rec_len",
+            "max_rec_len",
+            "min_var_deg",
+            "max_var_deg",
+            "min_idx_deg",
+            "max_idx_deg",
+            "min_diff_deg",
+            "max_diff_deg",
+            "try_inhomogeneous",
+            "min_inhomo_var_deg",
+            "max_inhomo_var_deg",
+            "min_inhomo_idx_deg",
+            "max_inhomo_idx_deg",
+            "try_denominator",
+            "try_alternating_sign",
+            "max_denom_var_deg",
+            "max_denom_idx_deg",
+            "min_margin",
+            "no_verify",
+            "fit_extra_rows",
+            "modular_prefilter",
+            "max_candidates",
+        ] {
+            let property = properties
+                .get(name)
+                .unwrap_or_else(|| panic!("missing {name}"));
+            assert!(
+                property["description"]
+                    .as_str()
+                    .is_some_and(|text| !text.is_empty()),
+                "{name} lacks a description: {property}"
+            );
+        }
+    }
+
+    #[test]
+    fn flat_and_legacy_recurrence_controls_work_with_top_level_precedence() {
+        let server = PolynomialToolsServer::new();
+        let flat: FindRecurrenceRequest = serde_json::from_value(json!({
+            "coefficients": [[1], [2], [4], [8], [16]],
+            "min_rec_len": 1,
+            "max_rec_len": 1,
+            "max_var_deg": 0,
+            "max_idx_deg": 0,
+            "max_diff_deg": 0,
+            "max_candidates": 1
+        }))
+        .unwrap();
+        let Json(flat_result) = server.find_recurrence(Parameters(flat)).unwrap();
+        assert_eq!(flat_result.status, RecurrenceSearchStatus::Found);
+        assert_eq!(flat_result.candidates_considered, Some(1));
+
+        let legacy: FindRecurrenceRequest = serde_json::from_value(json!({
+            "coefficients": [[1], [2], [4], [8], [16]],
+            "options": {
+                "min_rec_len": 1,
+                "max_rec_len": 1,
+                "max_var_deg": 0,
+                "max_idx_deg": 0,
+                "max_diff_deg": 0,
+                "max_candidates": 1
+            }
+        }))
+        .unwrap();
+        let Json(legacy_result) = server.find_recurrence(Parameters(legacy)).unwrap();
+        assert_eq!(legacy_result.status, RecurrenceSearchStatus::Found);
+
+        let conflict: FindRecurrenceRequest = serde_json::from_value(json!({
+            "coefficients": [[1], [2], [4], [8], [16]],
+            "max_candidates": 1,
+            "max_rec_len": 1,
+            "options": { "max_candidates": 0, "max_rec_len": 7 }
+        }))
+        .unwrap();
+        let effective = conflict.effective_options().unwrap();
+        assert_eq!(effective.max_candidates, Some(1));
+        assert_eq!(effective.max_rec_len, Some(1));
+        let Json(conflict_result) = server.find_recurrence(Parameters(conflict)).unwrap();
+        assert_eq!(conflict_result.status, RecurrenceSearchStatus::Found);
+        assert_eq!(conflict_result.candidates_considered, Some(1));
+    }
+
+    #[test]
+    fn compact_recurrence_result_omits_code_and_default_result_remains_full() {
+        let server = PolynomialToolsServer::new();
+        let request = || {
+            json!({
+                "coefficients": [[1], [2], [4], [8], [16]],
+                "max_rec_len": 1,
+                "max_var_deg": 0,
+                "max_idx_deg": 0,
+                "max_diff_deg": 0
+            })
+        };
+
+        let full: FindRecurrenceRequest = serde_json::from_value(request()).unwrap();
+        let Json(full) = server.find_recurrence(Parameters(full)).unwrap();
+        assert!(full.recurrence.is_some());
+        assert!(full.latex.is_some());
+        assert!(full.mathematica.is_some());
+        assert!(full.python.is_some());
+        assert!(full.sage.is_some());
+        assert!(full.recurrence_json.is_some());
+
+        let mut compact_request = request();
+        compact_request["include_code"] = json!(false);
+        let compact: FindRecurrenceRequest = serde_json::from_value(compact_request).unwrap();
+        let Json(compact) = server.find_recurrence(Parameters(compact)).unwrap();
+        assert!(compact.recurrence.is_some());
+        assert!(compact.latex.is_some());
+        assert!(compact.unknowns.is_some());
+        assert!(compact.candidates_considered.is_some());
+        assert!(compact.mathematica.is_none());
+        assert!(compact.python.is_none());
+        assert!(compact.sage.is_none());
+        assert!(compact.recurrence_json.is_none());
+        let serialized = serde_json::to_value(compact).unwrap();
+        for absent in ["mathematica", "python", "sage", "recurrence_json"] {
+            assert!(serialized.get(absent).is_none(), "unexpected {absent}");
+        }
+    }
+
+    #[test]
+    fn recurrence_input_exclusivity_remains_runtime_validated() {
+        let empty = FindRecurrenceRequest::default();
+        assert!(
+            format!("{:?}", parse_recurrence_batch_rational(&empty).unwrap_err())
+                .contains("expected exactly one")
+        );
+
+        let conflict: FindRecurrenceRequest = serde_json::from_value(json!({
+            "coefficients": [[1], [2], [4]],
+            "expressions": ["1", "2", "4"]
+        }))
+        .unwrap();
+        assert!(format!(
+            "{:?}",
+            parse_recurrence_batch_rational(&conflict).unwrap_err()
+        )
+        .contains("expected exactly one"));
+    }
+
+    #[test]
     fn recurrence_search_examples() {
         let server = PolynomialToolsServer::new();
         let Json(geometric) = server
@@ -3985,6 +4225,7 @@ mod tests {
                 expressions: None,
                 text: None,
                 options: None,
+                ..Default::default()
             }))
             .unwrap();
         assert_eq!(geometric.recurrence.as_deref(), Some("P(n) = 2 P(n-1)"));
@@ -4029,6 +4270,7 @@ mod tests {
                 expressions: None,
                 text: None,
                 options: None,
+                ..Default::default()
             }))
             .unwrap();
         assert_eq!(
@@ -4049,6 +4291,7 @@ mod tests {
                 ]),
                 text: None,
                 options: None,
+                ..Default::default()
             }))
             .unwrap();
         assert_eq!(
@@ -4069,6 +4312,7 @@ mod tests {
                 expressions: None,
                 text: None,
                 options: None,
+                ..Default::default()
             }))
             .unwrap();
         assert_eq!(
@@ -4097,6 +4341,7 @@ mod tests {
                 expressions: None,
                 text: None,
                 options: None,
+                ..Default::default()
             }))
             .unwrap();
         assert_eq!(
@@ -4133,6 +4378,7 @@ mod tests {
                     }))
                     .unwrap(),
                 ),
+                ..Default::default()
             }))
             .unwrap();
         assert_eq!(
@@ -4159,6 +4405,7 @@ mod tests {
                 expressions: None,
                 text: None,
                 options: None,
+                ..Default::default()
             }))
             .unwrap();
         assert!(eulerian_result.found);
@@ -4169,6 +4416,7 @@ mod tests {
             expressions: None,
             text: None,
             options: None,
+            ..Default::default()
         })
         .unwrap_err();
         assert!(format!("{conflict:?}").contains("expected exactly one"));
@@ -4189,6 +4437,7 @@ mod tests {
             expressions: None,
             text: None,
             options: None,
+            ..Default::default()
         };
 
         let mut zero_budget = fibonacci();
@@ -4234,6 +4483,7 @@ mod tests {
                     serde_json::from_value(json!({ "max_candidates": 1 }))
                         .expect("valid recurrence options"),
                 ),
+                ..Default::default()
             }))
             .unwrap();
         assert_eq!(found.status, RecurrenceSearchStatus::Found);
@@ -4372,6 +4622,7 @@ mod tests {
             expressions: None,
             text: None,
             options: None,
+            ..Default::default()
         };
         assert!(format!(
             "{:?}",
@@ -4431,6 +4682,7 @@ mod tests {
                 expressions: None,
                 text: None,
                 options: None,
+                ..Default::default()
             }))
             .unwrap();
         let recurrence_json = found.recurrence_json.expect("small recurrence found");
