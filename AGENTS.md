@@ -149,7 +149,7 @@ Located in `~/AI-projects/combinatoric-tools/mathematica-packages/` (shared, rea
 - `CombinatoricTools.m` (~1600 lines) — partitions, compositions, tableaux, charge
 - `NewTableaux.m` — SSYT/SYT generation, cylindric tableaux
 
-Also: `~/Dropbox/AI-projects/INTERLACING.md` has Mathematica code for the Bézout
+Also: `~/Dropbox/AI-projects/docs/research/INTERLACING.md` has Mathematica code for the Bézout
 interlacing algorithm, ready to add to the symmetric functions package.
 
 ## Non-nesting rook polynomial paper
