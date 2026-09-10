@@ -78,3 +78,11 @@ then passed (240 tests). This is the final resolved review finding.
 Claude's final micro-review of `d29227c` returned no blocker: it independently
 confirmed the complete witness bound, the pseudoprime rejection, and the
 M61 positive control. Log: `/tmp/principal-stratum-claude-primality-d29227c.log`.
+
+## Missing-map resource review
+
+Claude Opus reviewed `a56ac68` read-only and found no blocker: absent maps are
+correctly treated as zero without allocation, checked retrieval handles
+`i32::MIN`, and Smith/homology logic is unchanged. Its suggested huge-metadata
+validation regression was added in `4d22c7e`. Log:
+`/tmp/principal-stratum-claude-missing-map-a56ac68.log`.

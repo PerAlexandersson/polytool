@@ -2,7 +2,7 @@
 
 ## Sparse integral homology — completed 2026-09-10
 
-Owner released task files after commits `63e9861`, `5bd050b`, and `d29227c`; no push was
+Owner retains task-file ownership through host acceptance after commits `63e9861`, `5bd050b`, `d29227c`, `a56ac68`, and `4d22c7e`; no push was
 made. Shared CSR/mutable sparse storage, bounded cancellation, bounded exact
 Smith replay/verification, and compatibility re-exports are in
 `combinatoric-core`; the principal-stratum automaton, count DP, streamed
@@ -13,7 +13,7 @@ groups. Resource guards cover cells, boundary terms, mutable shape slots,
 NNZ, coefficient bits, dense Smith entries/shape/operations/bits, and invalid
 finite-field/UCT moduli.
 
-Verification: `cargo test -p combinatoric-core --lib` (240 passed),
+Verification: `cargo test -p combinatoric-core --lib` (241 passed),
 `cargo test -p sym-poly-core --lib` (123 passed before final API-only fixes),
 `cargo test -p experiments --lib` (25 passed), and target-only
 `cargo check -p experiments --bin principal_stratum_homology`, all with
@@ -31,7 +31,18 @@ u64-primality witness defect. Results and resolutions are in
 also returned no blocker. Unrelated ignored
 `polytool/scripts/__pycache__/` remains untouched.
 
-## Sparse integral homology implementation — active 2026-09-10
+The final missing-map fix avoids allocating absent shaped-zero differentials in
+validation and Smith assembly; `differential_or_zero_with_limits` provides
+checked zero retrieval, and metadata-only complexes with `10^12` generators
+are covered without generator allocation. Focused `chain_complex` tests pass
+(7 tests). Claude's narrow review of `a56ac68` found no blocker; its suggested
+validation-path regression is included in `4d22c7e`.
+
+Host direct-executable measurements supersede earlier worker timing claims:
+d18/d24/d26 integral-and-replay elapsed 0.131/2.452/10.787 seconds; d26 peak
+RSS was 482912 KiB. The host observed no source edits or Cargo builds.
+
+## Historical sparse integral homology checkpoint — superseded
 
 The assigned implementation worker owns the task's shared library modules,
 model driver, exact tests, narrowly required registrations and this opening
