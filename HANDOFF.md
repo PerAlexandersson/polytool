@@ -2,16 +2,16 @@
 
 ## Sparse integral homology implementation — active 2026-09-10
 
-The user approved implementation of the principal-stratum plan using Terra or
-Luna, followed by a patient Claude review. A Terra Docker worker is being
-launched with docs/PRINCIPAL_STRATUM_IMPLEMENTATION_BRIEF.md. That worker owns
-the task's shared library modules, model driver, exact tests, narrowly required
-registrations and this opening entry; the host supervisor performs read-only
-coordination and verification. The worker must record its session ID here.
-No task source files were dirty at launch; unrelated polytool/scripts/__pycache__
-is preserved. Claude review is mandatory, read-only, and starts with a monitored
-30-minute allowance. Its launching worker owns the child process. No pushes,
-publications or Abacus jobs are authorized.
+The assigned implementation worker owns the task's shared library modules,
+model driver, exact tests, narrowly required registrations and this opening
+entry; the host supervisor performs read-only coordination and verification.
+Checkpoint 1 is in progress: `combinatoric-core::sparse_matrix` now provides
+generic shape-preserving CSR and a bidirectionally indexed mutable `BigInt`
+form; focused storage tests pass.  No task source files were dirty at launch;
+unrelated `polytool/scripts/__pycache__/` is preserved. Claude review is
+mandatory, read-only, and starts with a monitored 30-minute allowance after
+the implementation is frozen. Its launching worker owns the child process. No
+pushes, publications or Abacus jobs are authorized.
 
 ## Principal-stratum homology plan (2026-09-10)
 

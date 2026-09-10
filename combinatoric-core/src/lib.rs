@@ -10,6 +10,7 @@ pub mod permutation;
 pub mod poset;
 pub mod ring;
 pub mod set_partition;
+pub mod sparse_matrix;
 
 // Top-level re-exports for convenience
 pub use composition::{Composition, WeakComposition};
@@ -29,6 +30,7 @@ pub use permutation::{
     reduced_word, stable_standardization, unfixed_standardization,
 };
 pub use ring::Ring;
+pub use sparse_matrix::{MutableSparseMatrix, SparseMatrix, SparseMatrixBuilder, SparseMatrixError};
 pub use set_partition::{
     ordered_set_partitions, set_partitions, OrderedSetPartition, SetPartition,
 };
