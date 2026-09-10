@@ -1,8 +1,8 @@
 //! Shared library for foundational combinatorics: partitions, set partitions,
 //! compositions, permutations, graphs, posets, and related utilities.
 
-pub mod composition;
 pub mod chain_complex;
+pub mod composition;
 pub mod graph;
 pub mod integer_linear_algebra;
 pub mod key_polynomial;
@@ -15,13 +15,19 @@ pub mod set_partition;
 pub mod sparse_matrix;
 
 // Top-level re-exports for convenience
-pub use composition::{Composition, WeakComposition};
 pub use chain_complex::{
-    cancel_units, field_betti_number, integral_homology, replay_unit_cancellation, AbelianGroup,
-    universal_coefficient_dimension, ChainComplexError, FiniteChainComplex, UnitCancellationCertificate, UnitPivot,
+    cancel_units, field_betti_number, integral_homology, replay_unit_cancellation,
+    replay_unit_cancellation_and_verify, universal_coefficient_dimension, AbelianGroup,
+    ChainComplexError, FiniteChainComplex, UnitCancellationCertificate, UnitPivot,
     UnitReductionOptions, UnitReductionResult, UnitReductionStats,
 };
+pub use composition::{Composition, WeakComposition};
 pub use graph::Graph;
+pub use integer_linear_algebra::{
+    replay_smith_operations, replay_smith_operations_bounded, smith_normal_form,
+    verify_smith_certificate, SmithError, SmithLimit, SmithNormalForm, SmithOperation,
+    SmithOptions, SmithReplayOptions,
+};
 pub use meander::{
     is_connected_arch_pair, noncrossing_perfect_matchings, rooted_meandric_permutation_count,
     rooted_meandric_permutation_from_arch_pair, rooted_meandric_permutations,
@@ -37,11 +43,9 @@ pub use permutation::{
     reduced_word, stable_standardization, unfixed_standardization,
 };
 pub use ring::Ring;
-pub use sparse_matrix::{MutableSparseMatrix, SparseMatrix, SparseMatrixBuilder, SparseMatrixError};
-pub use integer_linear_algebra::{
-    replay_smith_operations, smith_normal_form, SmithError, SmithLimit, SmithNormalForm,
-    SmithOperation, SmithOptions,
-};
 pub use set_partition::{
     ordered_set_partitions, set_partitions, OrderedSetPartition, SetPartition,
+};
+pub use sparse_matrix::{
+    MutableSparseMatrix, SparseMatrix, SparseMatrixBuilder, SparseMatrixError, SparseMatrixLimits,
 };

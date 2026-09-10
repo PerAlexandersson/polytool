@@ -9,11 +9,37 @@ use std::ops::{Add, Mul};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SparseMatrixError {
-    RowOutOfRange { row: usize, rows: usize },
-    ColumnOutOfRange { column: usize, columns: usize },
-    RaggedRow { row: usize, expected: usize, actual: usize },
-    DimensionMismatch { left: (usize, usize), right: (usize, usize) },
-    DenseBudgetExceeded { entries: usize, budget: usize },
+    RowOutOfRange {
+        row: usize,
+        rows: usize,
+    },
+    ColumnOutOfRange {
+        column: usize,
+        columns: usize,
+    },
+    RaggedRow {
+        row: usize,
+        expected: usize,
+        actual: usize,
+    },
+    DimensionMismatch {
+        left: (usize, usize),
+        right: (usize, usize),
+    },
+    DenseBudgetExceeded {
+        entries: usize,
+        budget: usize,
+    },
+    ShapeBudgetExceeded {
+        rows: usize,
+        columns: usize,
+        slots: usize,
+        budget: usize,
+    },
+    NnzBudgetExceeded {
+        nnz: usize,
+        budget: usize,
+    },
     AllocationOverflow,
 }
 
@@ -36,7 +62,32 @@ impl fmt::Display for SparseMatrixError {
                 f,
                 "dense conversion needs {entries} entries, above budget {budget}"
             ),
+            Self::ShapeBudgetExceeded { rows, columns, slots, budget } => write!(
+                f,
+                "matrix shape ({rows}, {columns}) needs {slots} allocation slots, above budget {budget}"
+            ),
+            Self::NnzBudgetExceeded { nnz, budget } => {
+                write!(f, "matrix has {nnz} nonzero entries, above budget {budget}")
+            }
             Self::AllocationOverflow => write!(f, "matrix dimensions overflow usize"),
+        }
+    }
+}
+
+/// Explicit allocation limits for checked sparse construction.  `max_shape_slots`
+/// bounds the CSR row-offset allocation (`rows + 1`), so an all-zero tall
+/// matrix cannot evade a resource limit merely by having no nonzero entries.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SparseMatrixLimits {
+    pub max_shape_slots: usize,
+    pub max_nnz: usize,
+}
+
+impl Default for SparseMatrixLimits {
+    fn default() -> Self {
+        Self {
+            max_shape_slots: usize::MAX,
+            max_nnz: usize::MAX,
         }
     }
 }
@@ -55,14 +106,25 @@ pub struct SparseMatrix<C> {
 }
 
 impl<C> SparseMatrix<C> {
-    pub fn rows(&self) -> usize { self.rows }
-    pub fn columns(&self) -> usize { self.columns }
-    pub fn shape(&self) -> (usize, usize) { (self.rows, self.columns) }
-    pub fn nnz(&self) -> usize { self.values.len() }
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+    pub fn columns(&self) -> usize {
+        self.columns
+    }
+    pub fn shape(&self) -> (usize, usize) {
+        (self.rows, self.columns)
+    }
+    pub fn nnz(&self) -> usize {
+        self.values.len()
+    }
 
     pub fn row(&self, row: usize) -> Result<impl Iterator<Item = (usize, &C)>, SparseMatrixError> {
         if row >= self.rows {
-            return Err(SparseMatrixError::RowOutOfRange { row, rows: self.rows });
+            return Err(SparseMatrixError::RowOutOfRange {
+                row,
+                rows: self.rows,
+            });
         }
         let start = self.row_offsets[row];
         let end = self.row_offsets[row + 1];
@@ -102,6 +164,17 @@ where
         }
     }
 
+    /// Checked shaped zero constructor.  Use this rather than `from_dense`
+    /// when preserving the number of columns of a `0`-row matrix matters.
+    pub fn zero_with_limits(
+        rows: usize,
+        columns: usize,
+        limits: SparseMatrixLimits,
+    ) -> Result<Self, SparseMatrixError> {
+        check_shape_limits(rows, columns, limits)?;
+        Ok(Self::zero(rows, columns))
+    }
+
     pub fn from_dense(dense: &[Vec<C>]) -> Result<Self, SparseMatrixError> {
         let rows = dense.len();
         let columns = dense.first().map_or(0, Vec::len);
@@ -121,12 +194,38 @@ where
         Ok(builder.finish())
     }
 
+    /// Checked dense conversion with an explicit shape for the otherwise
+    /// ambiguous `[]` case.
+    pub fn from_dense_with_shape_and_limits(
+        dense: &[Vec<C>],
+        columns: usize,
+        limits: SparseMatrixLimits,
+    ) -> Result<Self, SparseMatrixError> {
+        check_shape_limits(dense.len(), columns, limits)?;
+        let mut builder = Self::builder(dense.len(), columns);
+        for (row, values) in dense.iter().enumerate() {
+            if values.len() != columns {
+                return Err(SparseMatrixError::RaggedRow {
+                    row,
+                    expected: columns,
+                    actual: values.len(),
+                });
+            }
+            for (column, value) in values.iter().enumerate() {
+                builder.add(row, column, value.clone())?;
+            }
+        }
+        builder.finish_with_limits(limits)
+    }
+
     pub fn transpose(&self) -> Self {
         let mut builder = Self::builder(self.columns, self.rows);
         for (row, entries) in self.rows_iter().enumerate() {
             for (column, value) in entries {
                 // Original indices are valid by the CSR invariant.
-                builder.add(column, row, value.clone()).expect("valid transpose index");
+                builder
+                    .add(column, row, value.clone())
+                    .expect("valid transpose index");
             }
         }
         builder.finish()
@@ -142,15 +241,21 @@ where
                 right: (vector.len(), 1),
             });
         }
-        Ok(self.rows_iter()
-            .map(|row| row.fold(C::zero(), |sum, (column, value)| {
-                sum + value.clone() * vector[column].clone()
-            }))
+        Ok(self
+            .rows_iter()
+            .map(|row| {
+                row.fold(C::zero(), |sum, (column, value)| {
+                    sum + value.clone() * vector[column].clone()
+                })
+            })
             .collect())
     }
 
     pub fn to_dense_with_budget(&self, budget: usize) -> Result<Vec<Vec<C>>, SparseMatrixError> {
-        let entries = self.rows.checked_mul(self.columns).ok_or(SparseMatrixError::AllocationOverflow)?;
+        let entries = self
+            .rows
+            .checked_mul(self.columns)
+            .ok_or(SparseMatrixError::AllocationOverflow)?;
         if entries > budget {
             return Err(SparseMatrixError::DenseBudgetExceeded { entries, budget });
         }
@@ -197,7 +302,6 @@ where
         }
         Ok(Ok(()))
     }
-
 }
 
 /// Deterministic triplet builder.  Duplicate coefficients are summed and
@@ -214,15 +318,25 @@ where
     C: Clone + Zero + Add<Output = C>,
 {
     pub fn new(rows: usize, columns: usize) -> Self {
-        Self { rows, columns, entries: BTreeMap::new() }
+        Self {
+            rows,
+            columns,
+            entries: BTreeMap::new(),
+        }
     }
 
     pub fn add(&mut self, row: usize, column: usize, value: C) -> Result<(), SparseMatrixError> {
         if row >= self.rows {
-            return Err(SparseMatrixError::RowOutOfRange { row, rows: self.rows });
+            return Err(SparseMatrixError::RowOutOfRange {
+                row,
+                rows: self.rows,
+            });
         }
         if column >= self.columns {
-            return Err(SparseMatrixError::ColumnOutOfRange { column, columns: self.columns });
+            return Err(SparseMatrixError::ColumnOutOfRange {
+                column,
+                columns: self.columns,
+            });
         }
         let old = self.entries.remove(&(row, column)).unwrap_or_else(C::zero);
         let sum = old + value;
@@ -233,6 +347,21 @@ where
     }
 
     pub fn finish(self) -> SparseMatrix<C> {
+        self.finish_with_limits(SparseMatrixLimits::default())
+            .expect("unbounded sparse construction is representable")
+    }
+
+    pub fn finish_with_limits(
+        self,
+        limits: SparseMatrixLimits,
+    ) -> Result<SparseMatrix<C>, SparseMatrixError> {
+        check_shape_limits(self.rows, self.columns, limits)?;
+        if self.entries.len() > limits.max_nnz {
+            return Err(SparseMatrixError::NnzBudgetExceeded {
+                nnz: self.entries.len(),
+                budget: limits.max_nnz,
+            });
+        }
         let mut row_offsets = vec![0; self.rows + 1];
         for &(row, _) in self.entries.keys() {
             row_offsets[row + 1] += 1;
@@ -246,8 +375,33 @@ where
             column_indices.push(column);
             values.push(value);
         }
-        SparseMatrix { rows: self.rows, columns: self.columns, row_offsets, column_indices, values }
+        Ok(SparseMatrix {
+            rows: self.rows,
+            columns: self.columns,
+            row_offsets,
+            column_indices,
+            values,
+        })
     }
+}
+
+fn check_shape_limits(
+    rows: usize,
+    columns: usize,
+    limits: SparseMatrixLimits,
+) -> Result<(), SparseMatrixError> {
+    let slots = rows
+        .checked_add(1)
+        .ok_or(SparseMatrixError::AllocationOverflow)?;
+    if slots > limits.max_shape_slots {
+        return Err(SparseMatrixError::ShapeBudgetExceeded {
+            rows,
+            columns,
+            slots,
+            budget: limits.max_shape_slots,
+        });
+    }
+    Ok(())
 }
 
 /// Mutable sparse BigInt matrix with row maps and reverse column incidence.
@@ -277,36 +431,66 @@ impl MutableSparseMatrix {
         let mut result = Self::new(matrix.rows, matrix.columns);
         for (row, entries) in matrix.rows_iter().enumerate() {
             for (column, value) in entries {
-                result.set(row, column, value.clone()).expect("valid CSR index");
+                result
+                    .set(row, column, value.clone())
+                    .expect("valid CSR index");
             }
         }
         result
     }
 
-    pub fn rows(&self) -> usize { self.rows }
-    pub fn columns(&self) -> usize { self.columns }
-    pub fn nnz(&self) -> usize { self.nnz }
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+    pub fn columns(&self) -> usize {
+        self.columns
+    }
+    pub fn nnz(&self) -> usize {
+        self.nnz
+    }
 
     pub fn get(&self, row: usize, column: usize) -> Result<BigInt, SparseMatrixError> {
         self.check_index(row, column)?;
-        Ok(self.row_maps[row].get(&column).cloned().unwrap_or_else(BigInt::zero))
+        Ok(self.row_maps[row]
+            .get(&column)
+            .cloned()
+            .unwrap_or_else(BigInt::zero))
     }
 
-    pub fn row_entries(&self, row: usize) -> Result<impl Iterator<Item = (usize, &BigInt)>, SparseMatrixError> {
+    pub fn row_entries(
+        &self,
+        row: usize,
+    ) -> Result<impl Iterator<Item = (usize, &BigInt)>, SparseMatrixError> {
         if row >= self.rows {
-            return Err(SparseMatrixError::RowOutOfRange { row, rows: self.rows });
+            return Err(SparseMatrixError::RowOutOfRange {
+                row,
+                rows: self.rows,
+            });
         }
-        Ok(self.row_maps[row].iter().map(|(&column, value)| (column, value)))
+        Ok(self.row_maps[row]
+            .iter()
+            .map(|(&column, value)| (column, value)))
     }
 
-    pub fn column_rows(&self, column: usize) -> Result<impl Iterator<Item = usize> + '_, SparseMatrixError> {
+    pub fn column_rows(
+        &self,
+        column: usize,
+    ) -> Result<impl Iterator<Item = usize> + '_, SparseMatrixError> {
         if column >= self.columns {
-            return Err(SparseMatrixError::ColumnOutOfRange { column, columns: self.columns });
+            return Err(SparseMatrixError::ColumnOutOfRange {
+                column,
+                columns: self.columns,
+            });
         }
         Ok(self.column_rows[column].iter().copied())
     }
 
-    pub fn set(&mut self, row: usize, column: usize, value: BigInt) -> Result<(), SparseMatrixError> {
+    pub fn set(
+        &mut self,
+        row: usize,
+        column: usize,
+        value: BigInt,
+    ) -> Result<(), SparseMatrixError> {
         self.check_index(row, column)?;
         let existed = self.row_maps[row].contains_key(&column);
         if value.is_zero() {
@@ -325,20 +509,32 @@ impl MutableSparseMatrix {
         Ok(())
     }
 
-    pub fn add_to(&mut self, row: usize, column: usize, value: &BigInt) -> Result<(), SparseMatrixError> {
+    pub fn add_to(
+        &mut self,
+        row: usize,
+        column: usize,
+        value: &BigInt,
+    ) -> Result<(), SparseMatrixError> {
         let next = self.get(row, column)? + value;
         self.set(row, column, next)
     }
 
     pub fn clear_row(&mut self, row: usize) -> Result<(), SparseMatrixError> {
-        let columns = self.row_entries(row)?.map(|(column, _)| column).collect::<Vec<_>>();
-        for column in columns { self.set(row, column, BigInt::zero())?; }
+        let columns = self
+            .row_entries(row)?
+            .map(|(column, _)| column)
+            .collect::<Vec<_>>();
+        for column in columns {
+            self.set(row, column, BigInt::zero())?;
+        }
         Ok(())
     }
 
     pub fn clear_column(&mut self, column: usize) -> Result<(), SparseMatrixError> {
         let rows = self.column_rows(column)?.collect::<Vec<_>>();
-        for row in rows { self.set(row, column, BigInt::zero())?; }
+        for row in rows {
+            self.set(row, column, BigInt::zero())?;
+        }
         Ok(())
     }
 
@@ -346,7 +542,9 @@ impl MutableSparseMatrix {
         let mut builder = SparseMatrix::builder(self.rows, self.columns);
         for (row, entries) in self.row_maps.iter().enumerate() {
             for (&column, value) in entries {
-                builder.add(row, column, value.clone()).expect("mutable indices are valid");
+                builder
+                    .add(row, column, value.clone())
+                    .expect("mutable indices are valid");
             }
         }
         builder.finish()
@@ -356,13 +554,18 @@ impl MutableSparseMatrix {
         let mut counted = 0;
         for (row, entries) in self.row_maps.iter().enumerate() {
             for (&column, value) in entries {
-                if value.is_zero() || column >= self.columns || !self.column_rows[column].contains(&row) {
+                if value.is_zero()
+                    || column >= self.columns
+                    || !self.column_rows[column].contains(&row)
+                {
                     return Err(format!("invalid sparse edge ({row}, {column})"));
                 }
                 counted += 1;
             }
         }
-        if counted != self.nnz { return Err("nnz counter is inconsistent".into()); }
+        if counted != self.nnz {
+            return Err("nnz counter is inconsistent".into());
+        }
         for (column, rows) in self.column_rows.iter().enumerate() {
             for &row in rows {
                 if row >= self.rows || !self.row_maps[row].contains_key(&column) {
@@ -374,8 +577,18 @@ impl MutableSparseMatrix {
     }
 
     fn check_index(&self, row: usize, column: usize) -> Result<(), SparseMatrixError> {
-        if row >= self.rows { return Err(SparseMatrixError::RowOutOfRange { row, rows: self.rows }); }
-        if column >= self.columns { return Err(SparseMatrixError::ColumnOutOfRange { column, columns: self.columns }); }
+        if row >= self.rows {
+            return Err(SparseMatrixError::RowOutOfRange {
+                row,
+                rows: self.rows,
+            });
+        }
+        if column >= self.columns {
+            return Err(SparseMatrixError::ColumnOutOfRange {
+                column,
+                columns: self.columns,
+            });
+        }
         Ok(())
     }
 }
@@ -392,15 +605,60 @@ mod tests {
         builder.add(1, 2, 4.into()).unwrap();
         builder.add(1, 2, (-4).into()).unwrap();
         assert_eq!(builder.finish().nnz(), 0);
+        assert_eq!(
+            SparseMatrix::<BigInt>::zero_with_limits(
+                0,
+                7,
+                SparseMatrixLimits {
+                    max_shape_slots: 1,
+                    max_nnz: 0
+                }
+            )
+            .unwrap()
+            .shape(),
+            (0, 7)
+        );
+        assert!(matches!(
+            SparseMatrix::<BigInt>::zero_with_limits(
+                8,
+                0,
+                SparseMatrixLimits {
+                    max_shape_slots: 8,
+                    max_nnz: 0
+                }
+            ),
+            Err(SparseMatrixError::ShapeBudgetExceeded { .. })
+        ));
     }
 
     #[test]
     fn transpose_apply_and_composition_are_exact() {
-        let matrix = SparseMatrix::<BigInt>::from_dense(&vec![vec![1.into(), 2.into()], vec![0.into(), 3.into()]]).unwrap();
-        assert_eq!(matrix.apply(&[4.into(), 5.into()]).unwrap(), vec![14.into(), 15.into()]);
+        let matrix = SparseMatrix::<BigInt>::from_dense(&vec![
+            vec![1.into(), 2.into()],
+            vec![0.into(), 3.into()],
+        ])
+        .unwrap();
+        assert_eq!(
+            matrix.apply(&[4.into(), 5.into()]).unwrap(),
+            vec![14.into(), 15.into()]
+        );
         assert_eq!(matrix.transpose().transpose(), matrix);
         let zero = SparseMatrix::zero(2, 2);
-        assert_eq!(SparseMatrix::compose_is_zero(&matrix, &zero).unwrap(), Ok(()));
+        assert_eq!(
+            SparseMatrix::compose_is_zero(&matrix, &zero).unwrap(),
+            Ok(())
+        );
+        let left = SparseMatrix::<BigInt>::from_dense(&vec![
+            vec![1.into(), 2.into()],
+            vec![3.into(), 4.into()],
+        ])
+        .unwrap();
+        let right =
+            SparseMatrix::<BigInt>::from_dense(&vec![vec![2.into()], vec![(-1).into()]]).unwrap();
+        assert_eq!(
+            SparseMatrix::compose_is_zero(&left, &right).unwrap(),
+            Err((1, 0, 2.into()))
+        );
     }
 
     #[test]
@@ -414,5 +672,38 @@ mod tests {
         matrix.clear_column(0).unwrap();
         assert_eq!(matrix.nnz(), 0);
         matrix.validate().unwrap();
+    }
+
+    #[test]
+    fn mutable_random_updates_match_dense_reference() {
+        let mut state = 0x5eed_u64;
+        let mut sparse = MutableSparseMatrix::new(4, 5);
+        let mut dense = vec![vec![BigInt::zero(); 5]; 4];
+        for _ in 0..300 {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let row = (state as usize) % 4;
+            let column = ((state >> 8) as usize) % 5;
+            let value = BigInt::from(((state >> 16) % 9) as i64 - 4);
+            if state & 1 == 0 {
+                sparse.set(row, column, value.clone()).unwrap();
+                dense[row][column] = value;
+            } else {
+                sparse.add_to(row, column, &value).unwrap();
+                dense[row][column] += value;
+            }
+            sparse.validate().unwrap();
+            assert_eq!(
+                sparse.to_sparse(),
+                SparseMatrix::from_dense(&dense).unwrap()
+            );
+            assert_eq!(
+                sparse.nnz(),
+                dense
+                    .iter()
+                    .flatten()
+                    .filter(|value| !value.is_zero())
+                    .count()
+            );
+        }
     }
 }

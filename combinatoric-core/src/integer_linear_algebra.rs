@@ -56,7 +56,9 @@ impl fmt::Display for SmithError {
 impl std::error::Error for SmithError {}
 
 impl From<SparseMatrixError> for SmithError {
-    fn from(value: SparseMatrixError) -> Self { Self::Sparse(value) }
+    fn from(value: SparseMatrixError) -> Self {
+        Self::Sparse(value)
+    }
 }
 
 /// A verifiable elementary unimodular operation.  `RowBezout` and
@@ -64,12 +66,30 @@ impl From<SparseMatrixError> for SmithError {
 /// extended Euclidean step; their four coefficients are recorded explicitly.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SmithOperation {
-    SwapRows { first: usize, second: usize },
-    SwapColumns { first: usize, second: usize },
-    NegateRow { row: usize },
-    NegateColumn { column: usize },
-    AddRowMultiple { target: usize, source: usize, multiple: BigInt },
-    AddColumnMultiple { target: usize, source: usize, multiple: BigInt },
+    SwapRows {
+        first: usize,
+        second: usize,
+    },
+    SwapColumns {
+        first: usize,
+        second: usize,
+    },
+    NegateRow {
+        row: usize,
+    },
+    NegateColumn {
+        column: usize,
+    },
+    AddRowMultiple {
+        target: usize,
+        source: usize,
+        multiple: BigInt,
+    },
+    AddColumnMultiple {
+        target: usize,
+        source: usize,
+        multiple: BigInt,
+    },
     RowBezout {
         first: usize,
         second: usize,
@@ -100,6 +120,26 @@ pub struct SmithNormalForm {
     pub operations: Option<Vec<SmithOperation>>,
 }
 
+/// Bounds used while replaying a Smith operation certificate.  They are
+/// deliberately separate from the reducing options: a verifier must never
+/// infer an unlimited dense allocation from the input shape.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SmithReplayOptions {
+    pub max_dense_entries: usize,
+    pub max_operations: usize,
+    pub max_entry_bits: u64,
+}
+
+impl From<&SmithOptions> for SmithReplayOptions {
+    fn from(options: &SmithOptions) -> Self {
+        Self {
+            max_dense_entries: options.max_dense_entries,
+            max_operations: options.max_operations,
+            max_entry_bits: options.max_entry_bits,
+        }
+    }
+}
+
 /// Compute Smith invariant factors exactly, subject to explicit dense, work,
 /// and coefficient-growth limits.
 pub fn smith_normal_form(
@@ -107,7 +147,10 @@ pub fn smith_normal_form(
     options: SmithOptions,
 ) -> Result<SmithNormalForm, SmithError> {
     let entries = matrix.rows().checked_mul(matrix.columns()).ok_or_else(|| {
-        SmithError::Limit(SmithLimit::DenseEntries { entries: usize::MAX, budget: options.max_dense_entries })
+        SmithError::Limit(SmithLimit::DenseEntries {
+            entries: usize::MAX,
+            budget: options.max_dense_entries,
+        })
     })?;
     if entries > options.max_dense_entries {
         return Err(SmithError::Limit(SmithLimit::DenseEntries {
@@ -115,14 +158,27 @@ pub fn smith_normal_form(
             budget: options.max_dense_entries,
         }));
     }
+    let initial_bits = max_sparse_bits(matrix);
+    if initial_bits > options.max_entry_bits {
+        return Err(SmithError::Limit(SmithLimit::EntryBits {
+            bits: initial_bits,
+            budget: options.max_entry_bits,
+        }));
+    }
     let mut dense = matrix.to_dense_with_budget(options.max_dense_entries)?;
-    let mut recorder = Recorder::new(options);
+    let mut recorder = Recorder::new(options, initial_bits);
     let diagonal = dense.len().min(matrix.columns());
     let mut pivot = 0;
     while pivot < diagonal {
-        let Some((row, column)) = smallest_nonzero(&dense, pivot, matrix.columns()) else { break; };
-        if row != pivot { recorder.swap_rows(&mut dense, pivot, row)?; }
-        if column != pivot { recorder.swap_columns(&mut dense, pivot, column)?; }
+        let Some((row, column)) = smallest_nonzero(&dense, pivot, matrix.columns()) else {
+            break;
+        };
+        if row != pivot {
+            recorder.swap_rows(&mut dense, pivot, row)?;
+        }
+        if column != pivot {
+            recorder.swap_columns(&mut dense, pivot, column)?;
+        }
 
         loop {
             let pivot_value = dense[pivot][pivot].clone();
@@ -130,7 +186,9 @@ pub fn smith_normal_form(
             let mut restarted = false;
             for row in pivot + 1..matrix.rows() {
                 let value = dense[row][pivot].clone();
-                if value.is_zero() { continue; }
+                if value.is_zero() {
+                    continue;
+                }
                 if value.mod_floor(&pivot_value).is_zero() {
                     recorder.add_row_multiple(&mut dense, row, pivot, -(value / &pivot_value))?;
                 } else {
@@ -139,19 +197,30 @@ pub fn smith_normal_form(
                 restarted = true;
                 break;
             }
-            if restarted { continue; }
+            if restarted {
+                continue;
+            }
             for column in pivot + 1..matrix.columns() {
                 let value = dense[pivot][column].clone();
-                if value.is_zero() { continue; }
+                if value.is_zero() {
+                    continue;
+                }
                 if value.mod_floor(&pivot_value).is_zero() {
-                    recorder.add_column_multiple(&mut dense, column, pivot, -(value / &pivot_value))?;
+                    recorder.add_column_multiple(
+                        &mut dense,
+                        column,
+                        pivot,
+                        -(value / &pivot_value),
+                    )?;
                 } else {
                     recorder.column_bezout(&mut dense, pivot, column)?;
                 }
                 restarted = true;
                 break;
             }
-            if restarted { continue; }
+            if restarted {
+                continue;
+            }
 
             let violating = (pivot + 1..matrix.rows()).find_map(|row| {
                 (pivot + 1..matrix.columns()).find_map(|column| {
@@ -165,14 +234,20 @@ pub fn smith_normal_form(
                 recorder.add_row_multiple(&mut dense, pivot, row, BigInt::one())?;
                 continue;
             }
-            if dense[pivot][pivot].is_negative() { recorder.negate_row(&mut dense, pivot)?; }
+            if dense[pivot][pivot].is_negative() {
+                recorder.negate_row(&mut dense, pivot)?;
+            }
             break;
         }
         pivot += 1;
     }
-    let invariant_factors = (0..pivot).map(|index| dense[index][index].clone()).collect::<Vec<_>>();
+    let invariant_factors = (0..pivot)
+        .map(|index| dense[index][index].clone())
+        .collect::<Vec<_>>();
     debug_assert!(invariant_factors.iter().all(|factor| factor.is_positive()));
-    debug_assert!(invariant_factors.windows(2).all(|pair| pair[1].mod_floor(&pair[0]).is_zero()));
+    debug_assert!(invariant_factors
+        .windows(2)
+        .all(|pair| pair[1].mod_floor(&pair[0]).is_zero()));
     Ok(SmithNormalForm {
         rows: matrix.rows(),
         columns: matrix.columns(),
@@ -189,93 +264,285 @@ pub fn replay_smith_operations(
     operations: &[SmithOperation],
     max_operations: usize,
 ) -> Result<Vec<Vec<BigInt>>, SmithError> {
-    if operations.len() > max_operations {
-        return Err(SmithError::Limit(SmithLimit::Operations { operations: operations.len(), budget: max_operations }));
-    }
     let entries = matrix.rows().checked_mul(matrix.columns()).ok_or_else(|| {
-        SmithError::Limit(SmithLimit::DenseEntries { entries: usize::MAX, budget: usize::MAX })
+        SmithError::Limit(SmithLimit::DenseEntries {
+            entries: usize::MAX,
+            budget: usize::MAX,
+        })
     })?;
-    let mut dense = matrix.to_dense_with_budget(entries)?;
+    replay_smith_operations_bounded(
+        matrix,
+        operations,
+        SmithReplayOptions {
+            max_dense_entries: entries,
+            max_operations,
+            max_entry_bits: u64::MAX,
+        },
+    )
+}
+
+/// Replay within explicit dense, operation and coefficient bounds.
+pub fn replay_smith_operations_bounded(
+    matrix: &SparseMatrix<BigInt>,
+    operations: &[SmithOperation],
+    options: SmithReplayOptions,
+) -> Result<Vec<Vec<BigInt>>, SmithError> {
+    if operations.len() > options.max_operations {
+        return Err(SmithError::Limit(SmithLimit::Operations {
+            operations: operations.len(),
+            budget: options.max_operations,
+        }));
+    }
+    let initial_bits = max_sparse_bits(matrix);
+    if initial_bits > options.max_entry_bits {
+        return Err(SmithError::Limit(SmithLimit::EntryBits {
+            bits: initial_bits,
+            budget: options.max_entry_bits,
+        }));
+    }
+    let mut dense = matrix.to_dense_with_budget(options.max_dense_entries)?;
+    let mut observed_bits = initial_bits;
     for operation in operations {
-        apply_operation(&mut dense, matrix.columns(), operation)?;
+        observed_bits =
+            observed_bits.max(apply_operation(&mut dense, matrix.columns(), operation)?);
+        if observed_bits > options.max_entry_bits {
+            return Err(SmithError::Limit(SmithLimit::EntryBits {
+                bits: observed_bits,
+                budget: options.max_entry_bits,
+            }));
+        }
     }
     Ok(dense)
 }
 
-fn smallest_nonzero(matrix: &[Vec<BigInt>], start: usize, columns: usize) -> Option<(usize, usize)> {
+/// Replay a certificate and bind it to claimed Smith factors, rather than
+/// merely checking that its operations are syntactically unimodular.
+pub fn verify_smith_certificate(
+    matrix: &SparseMatrix<BigInt>,
+    operations: &[SmithOperation],
+    claimed_factors: &[BigInt],
+    options: SmithReplayOptions,
+) -> Result<(), SmithError> {
+    if claimed_factors.iter().any(|factor| !factor.is_positive())
+        || claimed_factors
+            .windows(2)
+            .any(|pair| !pair[1].mod_floor(&pair[0]).is_zero())
+    {
+        return Err(SmithError::InvalidCertificate(
+            "claimed factors are not positive Smith invariants".into(),
+        ));
+    }
+    let dense = replay_smith_operations_bounded(matrix, operations, options)?;
+    for (row, values) in dense.iter().enumerate() {
+        for (column, value) in values.iter().enumerate() {
+            let expected = (row == column)
+                .then(|| claimed_factors.get(row))
+                .flatten()
+                .cloned()
+                .unwrap_or_else(BigInt::zero);
+            if *value != expected {
+                return Err(SmithError::InvalidCertificate(
+                    "replay does not equal claimed Smith diagonal".into(),
+                ));
+            }
+        }
+    }
+    if claimed_factors.len() > dense.len().min(matrix.columns()) {
+        return Err(SmithError::InvalidCertificate(
+            "too many claimed factors for matrix shape".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn smallest_nonzero(
+    matrix: &[Vec<BigInt>],
+    start: usize,
+    columns: usize,
+) -> Option<(usize, usize)> {
     let mut best: Option<(u64, usize, usize)> = None;
     for row in start..matrix.len() {
         for column in start..columns {
-            if matrix[row][column].is_zero() { continue; }
+            if matrix[row][column].is_zero() {
+                continue;
+            }
             let candidate = (matrix[row][column].bits(), row, column);
-            if best.is_none_or(|current| candidate < current) { best = Some(candidate); }
+            if best.is_none_or(|current| candidate < current) {
+                best = Some(candidate);
+            }
         }
     }
     best.map(|(_, row, column)| (row, column))
+}
+
+fn max_sparse_bits(matrix: &SparseMatrix<BigInt>) -> u64 {
+    matrix
+        .rows_iter()
+        .flatten()
+        .map(|(_, value)| value.bits())
+        .max()
+        .unwrap_or(0)
+}
+
+fn max_bits<'a>(values: impl IntoIterator<Item = &'a BigInt>) -> u64 {
+    values.into_iter().map(BigInt::bits).max().unwrap_or(0)
 }
 
 struct Recorder {
     options: SmithOptions,
     operations: Vec<SmithOperation>,
     operation_count: usize,
+    observed_bits: u64,
 }
 
 impl Recorder {
-    fn new(options: SmithOptions) -> Self { Self { options, operations: Vec::new(), operation_count: 0 } }
-    fn finish(self) -> Option<Vec<SmithOperation>> { self.options.record_operations.then_some(self.operations) }
+    fn new(options: SmithOptions, observed_bits: u64) -> Self {
+        Self {
+            options,
+            operations: Vec::new(),
+            operation_count: 0,
+            observed_bits,
+        }
+    }
+    fn finish(self) -> Option<Vec<SmithOperation>> {
+        self.options.record_operations.then_some(self.operations)
+    }
 
-    fn record(&mut self, matrix: &[Vec<BigInt>], operation: SmithOperation) -> Result<(), SmithError> {
+    fn record(&mut self, changed_bits: u64, operation: SmithOperation) -> Result<(), SmithError> {
         self.operation_count += 1;
         if self.operation_count > self.options.max_operations {
-            return Err(SmithError::Limit(SmithLimit::Operations { operations: self.operation_count, budget: self.options.max_operations }));
+            return Err(SmithError::Limit(SmithLimit::Operations {
+                operations: self.operation_count,
+                budget: self.options.max_operations,
+            }));
         }
-        let bits = matrix.iter().flatten().map(BigInt::bits).max().unwrap_or(0);
-        if bits > self.options.max_entry_bits {
-            return Err(SmithError::Limit(SmithLimit::EntryBits { bits, budget: self.options.max_entry_bits }));
+        self.observed_bits = self.observed_bits.max(changed_bits);
+        if self.observed_bits > self.options.max_entry_bits {
+            return Err(SmithError::Limit(SmithLimit::EntryBits {
+                bits: self.observed_bits,
+                budget: self.options.max_entry_bits,
+            }));
         }
-        if self.options.record_operations { self.operations.push(operation); }
+        if self.options.record_operations {
+            self.operations.push(operation);
+        }
         Ok(())
     }
 
-    fn swap_rows(&mut self, matrix: &mut [Vec<BigInt>], first: usize, second: usize) -> Result<(), SmithError> {
+    fn swap_rows(
+        &mut self,
+        matrix: &mut [Vec<BigInt>],
+        first: usize,
+        second: usize,
+    ) -> Result<(), SmithError> {
         matrix.swap(first, second);
-        self.record(matrix, SmithOperation::SwapRows { first, second })
+        self.record(0, SmithOperation::SwapRows { first, second })
     }
-    fn swap_columns(&mut self, matrix: &mut [Vec<BigInt>], first: usize, second: usize) -> Result<(), SmithError> {
-        for row in matrix.iter_mut() { row.swap(first, second); }
-        self.record(matrix, SmithOperation::SwapColumns { first, second })
+    fn swap_columns(
+        &mut self,
+        matrix: &mut [Vec<BigInt>],
+        first: usize,
+        second: usize,
+    ) -> Result<(), SmithError> {
+        for row in matrix.iter_mut() {
+            row.swap(first, second);
+        }
+        self.record(0, SmithOperation::SwapColumns { first, second })
     }
     fn negate_row(&mut self, matrix: &mut [Vec<BigInt>], row: usize) -> Result<(), SmithError> {
-        for value in &mut matrix[row] { *value = -value.clone(); }
-        self.record(matrix, SmithOperation::NegateRow { row })
+        for value in &mut matrix[row] {
+            *value = -value.clone();
+        }
+        self.record(
+            max_bits(matrix[row].iter()),
+            SmithOperation::NegateRow { row },
+        )
     }
-    fn add_row_multiple(&mut self, matrix: &mut [Vec<BigInt>], target: usize, source: usize, multiple: BigInt) -> Result<(), SmithError> {
+    fn add_row_multiple(
+        &mut self,
+        matrix: &mut [Vec<BigInt>],
+        target: usize,
+        source: usize,
+        multiple: BigInt,
+    ) -> Result<(), SmithError> {
         let source_row = matrix[source].clone();
         for (value, source_value) in matrix[target].iter_mut().zip(source_row) {
             *value += &multiple * source_value;
         }
-        self.record(matrix, SmithOperation::AddRowMultiple { target, source, multiple })
+        self.record(
+            max_bits(matrix[target].iter()),
+            SmithOperation::AddRowMultiple {
+                target,
+                source,
+                multiple,
+            },
+        )
     }
-    fn add_column_multiple(&mut self, matrix: &mut [Vec<BigInt>], target: usize, source: usize, multiple: BigInt) -> Result<(), SmithError> {
+    fn add_column_multiple(
+        &mut self,
+        matrix: &mut [Vec<BigInt>],
+        target: usize,
+        source: usize,
+        multiple: BigInt,
+    ) -> Result<(), SmithError> {
         for row in matrix.iter_mut() {
             let source_value = row[source].clone();
             row[target] += &multiple * source_value;
         }
-        self.record(matrix, SmithOperation::AddColumnMultiple { target, source, multiple })
+        self.record(
+            max_bits(matrix.iter().map(|row| &row[target])),
+            SmithOperation::AddColumnMultiple {
+                target,
+                source,
+                multiple,
+            },
+        )
     }
-    fn row_bezout(&mut self, matrix: &mut [Vec<BigInt>], first: usize, second: usize) -> Result<(), SmithError> {
+    fn row_bezout(
+        &mut self,
+        matrix: &mut [Vec<BigInt>],
+        first: usize,
+        second: usize,
+    ) -> Result<(), SmithError> {
         let a = matrix[first][first].clone();
         let b = matrix[second][first].clone();
         let (gcd, x, y) = extended_gcd(&a, &b);
         bezout_rows(matrix, first, second, &a, &b, &gcd, &x, &y);
-        self.record(matrix, SmithOperation::RowBezout { first, second, a, b, x, y, gcd })
+        self.record(
+            max_bits(matrix[first].iter()).max(max_bits(matrix[second].iter())),
+            SmithOperation::RowBezout {
+                first,
+                second,
+                a,
+                b,
+                x,
+                y,
+                gcd,
+            },
+        )
     }
-    fn column_bezout(&mut self, matrix: &mut [Vec<BigInt>], first: usize, second: usize) -> Result<(), SmithError> {
+    fn column_bezout(
+        &mut self,
+        matrix: &mut [Vec<BigInt>],
+        first: usize,
+        second: usize,
+    ) -> Result<(), SmithError> {
         let a = matrix[first][first].clone();
         let b = matrix[first][second].clone();
         let (gcd, x, y) = extended_gcd(&a, &b);
         bezout_columns(matrix, first, second, &a, &b, &gcd, &x, &y);
-        self.record(matrix, SmithOperation::ColumnBezout { first, second, a, b, x, y, gcd })
+        self.record(
+            max_bits(matrix.iter().flat_map(|row| [&row[first], &row[second]])),
+            SmithOperation::ColumnBezout {
+                first,
+                second,
+                a,
+                b,
+                x,
+                y,
+                gcd,
+            },
+        )
     }
 }
 
@@ -289,10 +556,23 @@ fn extended_gcd(a: &BigInt, b: &BigInt) -> (BigInt, BigInt, BigInt) {
         (old_s, s) = (s.clone(), old_s - &quotient * s);
         (old_t, t) = (t.clone(), old_t - quotient * t);
     }
-    if old_r.is_negative() { (-old_r, -old_s, -old_t) } else { (old_r, old_s, old_t) }
+    if old_r.is_negative() {
+        (-old_r, -old_s, -old_t)
+    } else {
+        (old_r, old_s, old_t)
+    }
 }
 
-fn bezout_rows(matrix: &mut [Vec<BigInt>], first: usize, second: usize, a: &BigInt, b: &BigInt, gcd: &BigInt, x: &BigInt, y: &BigInt) {
+fn bezout_rows(
+    matrix: &mut [Vec<BigInt>],
+    first: usize,
+    second: usize,
+    a: &BigInt,
+    b: &BigInt,
+    gcd: &BigInt,
+    x: &BigInt,
+    y: &BigInt,
+) {
     let old_first = matrix[first].clone();
     let old_second = matrix[second].clone();
     for column in 0..old_first.len() {
@@ -301,7 +581,16 @@ fn bezout_rows(matrix: &mut [Vec<BigInt>], first: usize, second: usize, a: &BigI
     }
 }
 
-fn bezout_columns(matrix: &mut [Vec<BigInt>], first: usize, second: usize, a: &BigInt, b: &BigInt, gcd: &BigInt, x: &BigInt, y: &BigInt) {
+fn bezout_columns(
+    matrix: &mut [Vec<BigInt>],
+    first: usize,
+    second: usize,
+    a: &BigInt,
+    b: &BigInt,
+    gcd: &BigInt,
+    x: &BigInt,
+    y: &BigInt,
+) {
     for row in matrix {
         let old_first = row[first].clone();
         let old_second = row[second].clone();
@@ -310,44 +599,121 @@ fn bezout_columns(matrix: &mut [Vec<BigInt>], first: usize, second: usize, a: &B
     }
 }
 
-fn apply_operation(matrix: &mut [Vec<BigInt>], columns: usize, operation: &SmithOperation) -> Result<(), SmithError> {
+fn apply_operation(
+    matrix: &mut [Vec<BigInt>],
+    columns: usize,
+    operation: &SmithOperation,
+) -> Result<u64, SmithError> {
     let rows = matrix.len();
     let valid_row = |row| row < rows;
     let valid_column = |column| column < columns;
     match operation {
-        SmithOperation::SwapRows { first, second } if valid_row(*first) && valid_row(*second) => matrix.swap(*first, *second),
-        SmithOperation::SwapColumns { first, second } if valid_column(*first) && valid_column(*second) => for row in matrix.iter_mut() { row.swap(*first, *second); },
-        SmithOperation::NegateRow { row } if valid_row(*row) => for value in &mut matrix[*row] { *value = -value.clone(); },
-        SmithOperation::NegateColumn { column } if valid_column(*column) => for row in matrix.iter_mut() { row[*column] = -row[*column].clone(); },
-        SmithOperation::AddRowMultiple { target, source, multiple } if valid_row(*target) && valid_row(*source) && target != source => {
-            let source_row = matrix[*source].clone();
-            for (value, source_value) in matrix[*target].iter_mut().zip(source_row) { *value += multiple * source_value; }
+        SmithOperation::SwapRows { first, second } if valid_row(*first) && valid_row(*second) => {
+            matrix.swap(*first, *second);
+            return Ok(0);
         }
-        SmithOperation::AddColumnMultiple { target, source, multiple } if valid_column(*target) && valid_column(*source) && target != source => {
+        SmithOperation::SwapColumns { first, second }
+            if valid_column(*first) && valid_column(*second) =>
+        {
+            for row in matrix.iter_mut() {
+                row.swap(*first, *second);
+            }
+            return Ok(0);
+        }
+        SmithOperation::NegateRow { row } if valid_row(*row) => {
+            for value in &mut matrix[*row] {
+                *value = -value.clone();
+            }
+            return Ok(max_bits(matrix[*row].iter()));
+        }
+        SmithOperation::NegateColumn { column } if valid_column(*column) => {
+            for row in matrix.iter_mut() {
+                row[*column] = -row[*column].clone();
+            }
+            return Ok(max_bits(matrix.iter().map(|row| &row[*column])));
+        }
+        SmithOperation::AddRowMultiple {
+            target,
+            source,
+            multiple,
+        } if valid_row(*target) && valid_row(*source) && target != source => {
+            let source_row = matrix[*source].clone();
+            for (value, source_value) in matrix[*target].iter_mut().zip(source_row) {
+                *value += multiple * source_value;
+            }
+            return Ok(max_bits(matrix[*target].iter()));
+        }
+        SmithOperation::AddColumnMultiple {
+            target,
+            source,
+            multiple,
+        } if valid_column(*target) && valid_column(*source) && target != source => {
             for row in matrix.iter_mut() {
                 let source_value = row[*source].clone();
                 row[*target] += multiple * source_value;
             }
+            return Ok(max_bits(matrix.iter().map(|row| &row[*target])));
         }
-        SmithOperation::RowBezout { first, second, a, b, x, y, gcd }
-            if first != second && valid_row(*first) && valid_row(*second) && valid_column(*first) => {
-            if gcd.is_zero() || !gcd.is_positive() || !a.mod_floor(gcd).is_zero() || !b.mod_floor(gcd).is_zero()
-                || x * a + y * b != *gcd || matrix[*first][*first] != *a || matrix[*second][*first] != *b {
-                return Err(SmithError::InvalidCertificate("invalid row Bezout operation".into()));
+        SmithOperation::RowBezout {
+            first,
+            second,
+            a,
+            b,
+            x,
+            y,
+            gcd,
+        } if first != second && valid_row(*first) && valid_row(*second) && valid_column(*first) => {
+            if gcd.is_zero()
+                || !gcd.is_positive()
+                || !a.mod_floor(gcd).is_zero()
+                || !b.mod_floor(gcd).is_zero()
+                || x * a + y * b != *gcd
+                || matrix[*first][*first] != *a
+                || matrix[*second][*first] != *b
+            {
+                return Err(SmithError::InvalidCertificate(
+                    "invalid row Bezout operation".into(),
+                ));
             }
             bezout_rows(matrix, *first, *second, a, b, gcd, x, y);
+            return Ok(max_bits(matrix[*first].iter()).max(max_bits(matrix[*second].iter())));
         }
-        SmithOperation::ColumnBezout { first, second, a, b, x, y, gcd }
-            if first != second && valid_column(*first) && valid_column(*second) && valid_row(*first) => {
-            if gcd.is_zero() || !gcd.is_positive() || !a.mod_floor(gcd).is_zero() || !b.mod_floor(gcd).is_zero()
-                || x * a + y * b != *gcd || matrix[*first][*first] != *a || matrix[*first][*second] != *b {
-                return Err(SmithError::InvalidCertificate("invalid column Bezout operation".into()));
+        SmithOperation::ColumnBezout {
+            first,
+            second,
+            a,
+            b,
+            x,
+            y,
+            gcd,
+        } if first != second
+            && valid_column(*first)
+            && valid_column(*second)
+            && valid_row(*first) =>
+        {
+            if gcd.is_zero()
+                || !gcd.is_positive()
+                || !a.mod_floor(gcd).is_zero()
+                || !b.mod_floor(gcd).is_zero()
+                || x * a + y * b != *gcd
+                || matrix[*first][*first] != *a
+                || matrix[*first][*second] != *b
+            {
+                return Err(SmithError::InvalidCertificate(
+                    "invalid column Bezout operation".into(),
+                ));
             }
             bezout_columns(matrix, *first, *second, a, b, gcd, x, y);
+            return Ok(max_bits(
+                matrix.iter().flat_map(|row| [&row[*first], &row[*second]]),
+            ));
         }
-        _ => return Err(SmithError::InvalidCertificate("operation has an out-of-range index".into())),
+        _ => {
+            return Err(SmithError::InvalidCertificate(
+                "operation has an out-of-range index".into(),
+            ))
+        }
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -356,16 +722,33 @@ mod tests {
     use crate::SparseMatrix;
 
     fn matrix(rows: &[&[i64]]) -> SparseMatrix<BigInt> {
-        SparseMatrix::from_dense(&rows.iter().map(|row| row.iter().map(|value| BigInt::from(*value)).collect()).collect::<Vec<Vec<BigInt>>>()).unwrap()
+        SparseMatrix::from_dense(
+            &rows
+                .iter()
+                .map(|row| row.iter().map(|value| BigInt::from(*value)).collect())
+                .collect::<Vec<Vec<BigInt>>>(),
+        )
+        .unwrap()
     }
 
     #[test]
     fn smith_normalizes_nondividing_diagonal_and_replays_certificate() {
         let input = matrix(&[&[2, 0], &[0, 3]]);
-        let result = smith_normal_form(&input, SmithOptions { record_operations: true, ..SmithOptions::default() }).unwrap();
+        let result = smith_normal_form(
+            &input,
+            SmithOptions {
+                record_operations: true,
+                ..SmithOptions::default()
+            },
+        )
+        .unwrap();
         assert_eq!(result.invariant_factors, vec![1.into(), 6.into()]);
-        let replayed = replay_smith_operations(&input, result.operations.as_deref().unwrap(), 10_000).unwrap();
-        assert_eq!(replayed, vec![vec![1.into(), 0.into()], vec![0.into(), 6.into()]]);
+        let replayed =
+            replay_smith_operations(&input, result.operations.as_deref().unwrap(), 10_000).unwrap();
+        assert_eq!(
+            replayed,
+            vec![vec![1.into(), 0.into()], vec![0.into(), 6.into()]]
+        );
     }
 
     #[test]
@@ -376,24 +759,198 @@ mod tests {
         let huge = BigInt::one() << 150usize;
         let mut builder = SparseMatrix::builder(1, 1);
         builder.add(0, 0, huge.clone()).unwrap();
-        assert_eq!(smith_normal_form(&builder.finish(), SmithOptions::default()).unwrap().invariant_factors, vec![huge]);
+        assert_eq!(
+            smith_normal_form(&builder.finish(), SmithOptions::default())
+                .unwrap()
+                .invariant_factors,
+            vec![huge]
+        );
     }
 
     #[test]
     fn smith_respects_dense_and_certificate_limits() {
         let input = SparseMatrix::<BigInt>::zero(3, 3);
-        assert!(matches!(smith_normal_form(&input, SmithOptions { max_dense_entries: 8, ..SmithOptions::default() }), Err(SmithError::Limit(SmithLimit::DenseEntries { .. }))));
-        assert!(matches!(replay_smith_operations(&input, &[SmithOperation::NegateRow { row: 9 }], 1), Err(SmithError::InvalidCertificate(_))));
+        assert!(matches!(
+            smith_normal_form(
+                &input,
+                SmithOptions {
+                    max_dense_entries: 8,
+                    ..SmithOptions::default()
+                }
+            ),
+            Err(SmithError::Limit(SmithLimit::DenseEntries { .. }))
+        ));
+        assert!(matches!(
+            replay_smith_operations(&input, &[SmithOperation::NegateRow { row: 9 }], 1),
+            Err(SmithError::InvalidCertificate(_))
+        ));
         let malicious = SmithOperation::RowBezout {
-            first: 0, second: 1, a: 7.into(), b: 8.into(), x: (-3).into(), y: 3.into(), gcd: 3.into(),
+            first: 0,
+            second: 1,
+            a: 7.into(),
+            b: 8.into(),
+            x: (-3).into(),
+            y: 3.into(),
+            gcd: 3.into(),
         };
-        assert!(matches!(replay_smith_operations(&matrix(&[&[7], &[8]]), &[malicious], 1), Err(SmithError::InvalidCertificate(_))));
+        assert!(matches!(
+            replay_smith_operations(&matrix(&[&[7], &[8]]), &[malicious], 1),
+            Err(SmithError::InvalidCertificate(_))
+        ));
         let same_index = SmithOperation::RowBezout {
-            first: 0, second: 0, a: 2.into(), b: 2.into(), x: 1.into(), y: 0.into(), gcd: 2.into(),
+            first: 0,
+            second: 0,
+            a: 2.into(),
+            b: 2.into(),
+            x: 1.into(),
+            y: 0.into(),
+            gcd: 2.into(),
         };
-        assert!(matches!(replay_smith_operations(&matrix(&[&[2]]), &[same_index], 1), Err(SmithError::InvalidCertificate(_))));
-        assert!(matches!(replay_smith_operations(&matrix(&[&[2]]), &[SmithOperation::AddRowMultiple { target: 0, source: 0, multiple: 1.into() }], 1), Err(SmithError::InvalidCertificate(_))));
-        assert!(matches!(replay_smith_operations(&matrix(&[&[2], &[3]]), &[SmithOperation::RowBezout { first: 1, second: 0, a: 3.into(), b: 2.into(), x: 1.into(), y: (-1).into(), gcd: 1.into() }], 1), Err(SmithError::InvalidCertificate(_))));
-        assert!(matches!(replay_smith_operations(&matrix(&[&[2, 3]]), &[SmithOperation::ColumnBezout { first: 1, second: 0, a: 3.into(), b: 2.into(), x: 1.into(), y: (-1).into(), gcd: 1.into() }], 1), Err(SmithError::InvalidCertificate(_))));
+        assert!(matches!(
+            replay_smith_operations(&matrix(&[&[2]]), &[same_index], 1),
+            Err(SmithError::InvalidCertificate(_))
+        ));
+        assert!(matches!(
+            replay_smith_operations(
+                &matrix(&[&[2]]),
+                &[SmithOperation::AddRowMultiple {
+                    target: 0,
+                    source: 0,
+                    multiple: 1.into()
+                }],
+                1
+            ),
+            Err(SmithError::InvalidCertificate(_))
+        ));
+        assert!(matches!(
+            replay_smith_operations(
+                &matrix(&[&[2], &[3]]),
+                &[SmithOperation::RowBezout {
+                    first: 1,
+                    second: 0,
+                    a: 3.into(),
+                    b: 2.into(),
+                    x: 1.into(),
+                    y: (-1).into(),
+                    gcd: 1.into()
+                }],
+                1
+            ),
+            Err(SmithError::InvalidCertificate(_))
+        ));
+        assert!(matches!(
+            replay_smith_operations(
+                &matrix(&[&[2, 3]]),
+                &[SmithOperation::ColumnBezout {
+                    first: 1,
+                    second: 0,
+                    a: 3.into(),
+                    b: 2.into(),
+                    x: 1.into(),
+                    y: (-1).into(),
+                    gcd: 1.into()
+                }],
+                1
+            ),
+            Err(SmithError::InvalidCertificate(_))
+        ));
+    }
+
+    #[test]
+    fn smith_matches_fixed_seed_minor_gcd_oracle_and_bounded_replay() {
+        fn gcd(mut left: BigInt, mut right: BigInt) -> BigInt {
+            while !right.is_zero() {
+                let next = left.mod_floor(&right);
+                left = right;
+                right = next;
+            }
+            left.abs()
+        }
+        fn minor_gcd(matrix: &[Vec<BigInt>], size: usize) -> BigInt {
+            if size == 1 {
+                return matrix
+                    .iter()
+                    .flatten()
+                    .fold(BigInt::zero(), |g, value| gcd(g, value.clone()));
+            }
+            if size == 3 {
+                let a = matrix;
+                return (a[0][0].clone() * (&a[1][1] * &a[2][2] - &a[1][2] * &a[2][1])
+                    - a[0][1].clone() * (&a[1][0] * &a[2][2] - &a[1][2] * &a[2][0])
+                    + a[0][2].clone() * (&a[1][0] * &a[2][1] - &a[1][1] * &a[2][0]))
+                    .abs();
+            }
+            let mut answer = BigInt::zero();
+            for rows in [[0usize, 1], [0, 2], [1, 2]] {
+                for cols in [[0usize, 1], [0, 2], [1, 2]] {
+                    let determinant = &matrix[rows[0]][cols[0]] * &matrix[rows[1]][cols[1]]
+                        - &matrix[rows[0]][cols[1]] * &matrix[rows[1]][cols[0]];
+                    answer = gcd(answer, determinant);
+                }
+            }
+            answer
+        }
+        let mut seed = 0x51_17_u64;
+        for _ in 0..8 {
+            let dense = (0..3)
+                .map(|_| {
+                    (0..3)
+                        .map(|_| {
+                            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                            BigInt::from(((seed >> 32) % 11) as i64 - 5)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            let input = SparseMatrix::from_dense(&dense).unwrap();
+            let result = smith_normal_form(
+                &input,
+                SmithOptions {
+                    record_operations: true,
+                    ..SmithOptions::default()
+                },
+            )
+            .unwrap();
+            let mut product = BigInt::one();
+            for (index, factor) in result.invariant_factors.iter().enumerate() {
+                product *= factor;
+                assert_eq!(product, minor_gcd(&dense, index + 1));
+            }
+            let replay_options = SmithReplayOptions {
+                max_dense_entries: 9,
+                max_operations: 100_000,
+                max_entry_bits: 16_384,
+            };
+            verify_smith_certificate(
+                &input,
+                result.operations.as_deref().unwrap(),
+                &result.invariant_factors,
+                replay_options,
+            )
+            .unwrap();
+        }
+        let diagonal = matrix(&[&[1 << 20]]);
+        assert!(matches!(
+            smith_normal_form(
+                &diagonal,
+                SmithOptions {
+                    max_entry_bits: 8,
+                    ..SmithOptions::default()
+                }
+            ),
+            Err(SmithError::Limit(SmithLimit::EntryBits { .. }))
+        ));
+        assert!(matches!(
+            replay_smith_operations_bounded(
+                &diagonal,
+                &[],
+                SmithReplayOptions {
+                    max_dense_entries: 1,
+                    max_operations: 0,
+                    max_entry_bits: 8
+                }
+            ),
+            Err(SmithError::Limit(SmithLimit::EntryBits { .. }))
+        ));
     }
 }
