@@ -66,3 +66,11 @@ its NNZ count; and the membership automaton is cross-checked against move
 closure on the nontrivial `(3,1,1,3)` prefixes. Focused suites passed after
 the fixes. The remaining implementation limits are the documented explicit
 budgets; no larger calibration was run.
+
+## Focused re-review resolution
+
+The focused Opus re-review of `5bd050b` found that its first seven-base
+Miller--Rabin set was not deterministic for all `u64`, exhibiting
+`341550071728321`. Commit `d29227c` uses the full witness set through 37 and
+adds both that composite and a large-prime regression; the focused core suite
+then passed (240 tests). This is the final resolved review finding.
