@@ -331,6 +331,14 @@ Apply `check_interlacing_pair` to consecutive pairs in a batch.
 This tool accepts arbitrary-size integer coefficients and returns normalized
 polynomials with string coefficients.
 
+Clients implemented in JavaScript should quote coefficients outside
+`[-9007199254740991, 9007199254740991]`.  An unquoted larger value may already
+have been rounded before the MCP request reaches Rust; the server rejects a
+floating-point JSON value with an actionable diagnostic instead of treating it
+as exact.  For large local batches, the compiled `polytool interlacing` CLI can
+also read comma-separated arbitrary-size integers directly from standard
+input, avoiding JSON serialization entirely.
+
 Example arguments:
 
 ```json

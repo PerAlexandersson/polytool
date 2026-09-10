@@ -16,7 +16,7 @@ use rmcp::{
     tool, tool_handler, tool_router, ErrorData as McpError, Json, ServerHandler,
 };
 use schemars::{JsonSchema, Schema, SchemaGenerator};
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -70,11 +70,63 @@ impl JsonSchema for PolynomialInput {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum BigIntCoefficientInput {
     Integer(i64),
     Text(String),
+}
+
+impl<'de> Deserialize<'de> for BigIntCoefficientInput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct BigIntCoefficientVisitor;
+
+        impl de::Visitor<'_> for BigIntCoefficientVisitor {
+            type Value = BigIntCoefficientInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("an integer or an exact integer encoded as a decimal string")
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+                Ok(BigIntCoefficientInput::Integer(value))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E> {
+                Ok(i64::try_from(value).map_or_else(
+                    |_| BigIntCoefficientInput::Text(value.to_string()),
+                    BigIntCoefficientInput::Integer,
+                ))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Err(E::custom(format!(
+                    "integer coefficient was received as the floating-point JSON number {value}; \
+                     send exact coefficients as quoted decimal strings, especially outside the \
+                     JavaScript safe-integer range [-9007199254740991, 9007199254740991]"
+                )))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(BigIntCoefficientInput::Text(value.to_string()))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+                Ok(BigIntCoefficientInput::Text(value))
+            }
+        }
+
+        deserializer.deserialize_any(BigIntCoefficientVisitor)
+    }
 }
 
 impl From<i64> for BigIntCoefficientInput {
@@ -94,7 +146,7 @@ impl JsonSchema for BigIntCoefficientInput {
                 { "type": "integer" },
                 {
                     "type": "string",
-                    "description": "Exact integer coefficient, e.g. \"42\" or \"1267650600228229401496703205376\"."
+                    "description": "Exact integer coefficient. Use decimal strings for values outside a client's safe integer range, e.g. \"42\" or \"1267650600228229401496703205376\"."
                 }
             ]
         }))
@@ -3597,6 +3649,30 @@ mod tests {
             ),
             expression: None,
         }
+    }
+
+    #[test]
+    fn bigint_json_rejects_floating_point_with_actionable_message() {
+        let error = serde_json::from_value::<BigIntPolynomialInput>(json!({
+            "coefficients": [1.2345678901234568e20]
+        }))
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("floating-point JSON number"), "{error}");
+        assert!(error.contains("quoted decimal strings"), "{error}");
+        assert!(error.contains("9007199254740991"), "{error}");
+    }
+
+    #[test]
+    fn bigint_json_preserves_unsigned_integers_beyond_i64() {
+        let input = serde_json::from_value::<BigIntPolynomialInput>(json!({
+            "coefficients": [u64::MAX]
+        }))
+        .unwrap();
+        let parsed = parse_bigint_polynomial_input(&input).unwrap();
+
+        assert_eq!(parsed, vec![BigInt::from(u64::MAX)]);
     }
 
     #[test]

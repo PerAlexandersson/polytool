@@ -1,5 +1,26 @@
 # Polytool handoff
 
+## Completed: actionable MCP diagnostics for unsafe JSON integers (2026-09-10)
+
+Worker `/root` completed and released ownership of `mcp/src/lib.rs`,
+`mcp/README.md`, and this handoff in the isolated worktree
+`/tmp/polytool-mcp-bigint-diagnostic-20260910`.  Exact coefficients which
+arrive as floating-point JSON numbers are now rejected with instructions to
+use quoted decimal strings and the JavaScript safe-integer bound.  Exact
+unsigned JSON integers through `u64` are preserved, including values above
+`i64::MAX`.  The CLI and exact arithmetic are unchanged; the documentation
+also points large local batches to the compiled stdin CLI so they can bypass
+JSON serialization.
+
+Verification used the external Cargo target and reduced priority:
+
+```text
+rustfmt --edition 2021 --check polytool/mcp/src/lib.rs     passed
+cargo test -q -p polytool-mcp                         26 passed
+cargo clippy -q -p polytool-mcp --all-targets -- -D warnings
+                                                            passed
+```
+
 ## Completed: shared-denominator vector recurrences (2026-09-10)
 
 Worker `/root/vector_denominator_luna` completed and released ownership of
