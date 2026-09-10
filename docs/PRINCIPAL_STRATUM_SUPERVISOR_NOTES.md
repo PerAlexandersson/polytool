@@ -129,3 +129,43 @@ Completion-pass observations (11:09 UTC; recheck after edits settle):
 18. The new digest has section counts and value byte lengths, but still needs
     each differential's NNZ/entry count before its variable entry sequence.
     A one-byte D marker alone is not a delimiter for arbitrary binary indices.
+
+## Independent release-binary calibration checks
+
+Host verification on 2026-09-10 during the completion pass. These invoked the
+worker-built release executable directly; the host did not run Cargo or edit
+source. Elapsed times are Bash `time`, exclude compilation, and include field
+ranks, integral computation, UCT comparison and cancellation-certificate replay.
+The existing release binary passed all three and replay matched each residual.
+
+| omega | d | cells | nonzero integral groups | elapsed seconds |
+|---|---:|---:|---|---:|
+| (3,1,1,3) | 18 | 8,280 | H7 = Z^2 | 0.131 |
+| (3,1,1,5) | 24 | 76,384 | H7 = Z, H8 = Z | 2.452 |
+| (3,1,1,5) | 26 | 212,900 | H8 = Z, H9 = Z | 10.787 |
+
+All groups listed were torsion-free; all other returned degrees were zero.
+d26 field-only independently completed in 5.981 s. Its first construction
+attempt with max-nnz=2000000 returned an orderly upper-bound-budget error;
+max-nnz=3000000 allowed completion with canonical NNZ=1706568. This limit
+counts a conservative contribution bound, not final aggregated NNZ.
+
+Each run used `docker exec docker-setup-app-1 bash -c` with Bash `time`,
+`timeout 60s nice -n 10`, and executable
+`/cargo-target/ai-projects/release/principal_stratum_homology`.
+Exact arguments for the integral-and-replay runs were:
+
+```text
+--omega 3,1,1,3 --d 18 --max-cells 10000 --max-nnz 250000 --max-reduction-nnz 1000000 --max-pivots 10000 --record-certificate
+--omega 3,1,1,5 --d 24 --max-cells 80000 --max-nnz 1000000 --max-reduction-nnz 3000000 --max-pivots 100000 --record-certificate
+--omega 3,1,1,5 --d 26 --max-cells 220000 --max-nnz 3000000 --max-reduction-nnz 4000000 --max-pivots 110000 --record-certificate
+```
+
+d24 stage times (ms): enumeration 18, assembly/validation 625, field 665,
+unit reduction 737, Smith below 1. NNZ initial/peak/final=561173/561173/20;
+38187 pivots; residual has five generators each in degrees 7 and 8.
+d26 stage times (ms): enumeration 52, assembly/validation 2193, field 3577,
+unit reduction 3307, Smith 1. NNZ initial/peak/final=1706568/1706568/90;
+106440 pivots; residual has ten generators each in degrees 8 and 9.
+Smith reduction was therefore exercised on nonzero residuals in these two
+research calibrations, not only on synthetic torsion fixtures.
