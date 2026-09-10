@@ -86,7 +86,8 @@ q(n,x) F_(n+1) = M(n,x,D_x) F_n + G(n,x).
 Use `VectorRecurrenceDenominatorOptions` to set the matrix, forcing, and
 common-factor degree bounds.  The returned
 `SharedDenominatorVectorRecurrence` evaluates by exact polynomial division and
-reports zero denominators or non-polynomial quotients as errors.  The
+returns `SharedDenominatorVectorRecurrenceEvaluationError` for dimension,
+zero-denominator, or non-polynomial-quotient failures.  The
 `find_companion_vector_recurrence_with_denominator[_rational]` variants support
 lagged systems; companion shift rows contain `q(n,x) I` in the numerator.
 

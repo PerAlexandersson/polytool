@@ -9,18 +9,22 @@ Worker `/root/vector_denominator_luna` completed and released ownership of
 including companion-lag fitting. Existing normalized `q=1` APIs are unchanged.
 
 Public additions include `VectorRecurrenceDenominatorOptions`,
-`SharedDenominatorVectorRecurrence`,
+`SharedDenominatorVectorRecurrence`, and
+`SharedDenominatorVectorRecurrenceEvaluationError`,
 `find_vector_recurrence_with_denominator[_rational]`, and companion variants.
 The first nonzero denominator monomial is normalized to one; unique searches
-reject both linear nullity and competing normalized pivots. Evaluation reports
-zero denominators and non-polynomial quotients exactly. Focused tests cover
-`q(n)`, `q(x)`, held-out tampering, ambiguity, and companion shift rows.
+reject both linear nullity and competing normalized pivots. Fitting rejects
+denominators that evaluate to zero at any observed source index, while
+evaluation reports zero denominators and non-polynomial quotients through the
+separate denominator-aware error type. Focused tests cover `q(n)`, `q(x)`,
+affine forcing, a two-component system with distinct rows, q=1 compatibility,
+held-out tampering, ambiguity, and companion shift rows.
 
 Verification in a standalone copy used external
 `CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`:
 
-- recurrence module: 62 passed;
-- non-OEIS Polytool library: 317 passed, 6 filtered;
+- recurrence module: 65 passed;
+- non-OEIS Polytool library: 320 passed, 6 filtered;
 - Clippy all targets passed with the repository's existing three lint exceptions.
 
 The focused checkpoint is committed in this worktree; no push or publication
