@@ -181,7 +181,7 @@ where
         for column in 0..right.columns {
             let mut accum: BTreeMap<usize, C> = BTreeMap::new();
             for (middle, coefficient) in right.column_entries(column) {
-                for (row, left_coefficient) in left.row(middle)? {
+                for (row, left_coefficient) in left.column_entries(middle) {
                     let old = accum.remove(&row).unwrap_or_else(C::zero);
                     let value = old + left_coefficient.clone() * coefficient.clone();
                     if !value.is_zero() {

@@ -5,9 +5,14 @@
 The assigned implementation worker owns the task's shared library modules,
 model driver, exact tests, narrowly required registrations and this opening
 entry; the host supervisor performs read-only coordination and verification.
-Checkpoint 1 is in progress: `combinatoric-core::sparse_matrix` now provides
-generic shape-preserving CSR and a bidirectionally indexed mutable `BigInt`
-form; focused storage tests pass.  No task source files were dirty at launch;
+Checkpoints 1, 3, and 4 now have their first verified shared implementation:
+`combinatoric-core::sparse_matrix` provides generic shape-preserving CSR and a
+bidirectionally indexed mutable `BigInt` form; `chain_complex` provides
+graded unit cancellation with independently replayable SHA-256-bound pivot
+certificates; and `integer_linear_algebra` provides a bounded exact BigInt
+Smith reducer whose optional operation certificate is replayed in tests.
+The full `combinatoric-core --lib` suite (235 tests) passes. No task source
+files were dirty at launch;
 unrelated `polytool/scripts/__pycache__/` is preserved. Claude review is
 mandatory, read-only, and starts with a monitored 30-minute allowance after
 the implementation is frozen. Its launching worker owns the child process. No

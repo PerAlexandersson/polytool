@@ -2,7 +2,9 @@
 //! compositions, permutations, graphs, posets, and related utilities.
 
 pub mod composition;
+pub mod chain_complex;
 pub mod graph;
+pub mod integer_linear_algebra;
 pub mod key_polynomial;
 pub mod meander;
 pub mod partition;
@@ -14,6 +16,11 @@ pub mod sparse_matrix;
 
 // Top-level re-exports for convenience
 pub use composition::{Composition, WeakComposition};
+pub use chain_complex::{
+    cancel_units, field_betti_number, integral_homology, replay_unit_cancellation, AbelianGroup,
+    ChainComplexError, FiniteChainComplex, UnitCancellationCertificate, UnitPivot,
+    UnitReductionOptions, UnitReductionResult, UnitReductionStats,
+};
 pub use graph::Graph;
 pub use meander::{
     is_connected_arch_pair, noncrossing_perfect_matchings, rooted_meandric_permutation_count,
@@ -31,6 +38,10 @@ pub use permutation::{
 };
 pub use ring::Ring;
 pub use sparse_matrix::{MutableSparseMatrix, SparseMatrix, SparseMatrixBuilder, SparseMatrixError};
+pub use integer_linear_algebra::{
+    replay_smith_operations, smith_normal_form, SmithError, SmithLimit, SmithNormalForm,
+    SmithOperation, SmithOptions,
+};
 pub use set_partition::{
     ordered_set_partitions, set_partitions, OrderedSetPartition, SetPartition,
 };
