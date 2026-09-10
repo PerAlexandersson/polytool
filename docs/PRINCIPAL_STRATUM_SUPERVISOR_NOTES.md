@@ -110,3 +110,15 @@ the old row-index check. The actual regression should be a 2-by-1 matrix,
 first=1, second=0, a=b=g=2, x=1,y=0; the old code accepts both row indices
 then panics reading column 1. Include the dual ColumnBezout 1-by-2 case and
 test both column and row self-add/Bezout rejection.
+
+Completion-pass observations (11:09 UTC; recheck after edits settle):
+
+17. The new UCT prime check trial-divides up to sqrt(n). A valid large u64
+    prime can require billions of divisions per homology degree. Use bounded
+    fast validation or a documented validated-prime API; do not add this cost
+    after the existing modular solver already handled the same input quickly.
+    The existing Polytool linalg validator uses modular exponentiation, not
+    trial division. Preserve standalone Polytool packaging if reusing code.
+18. The new digest has section counts and value byte lengths, but still needs
+    each differential's NNZ/entry count before its variable entry sequence.
+    A one-byte D marker alone is not a delimiter for arbitrary binary indices.
