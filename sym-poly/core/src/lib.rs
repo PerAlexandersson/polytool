@@ -23,6 +23,18 @@
 pub mod composition {
     pub use combinatoric_core::composition::*;
 }
+/// Compatibility adapter for shared shape-preserving sparse matrices.
+pub mod sparse_matrix {
+    pub use combinatoric_core::sparse_matrix::*;
+}
+/// Compatibility adapter for bounded exact Smith reduction.
+pub mod integer_linear_algebra {
+    pub use combinatoric_core::integer_linear_algebra::*;
+}
+/// Compatibility adapter for finite integral chain complexes.
+pub mod chain_complex {
+    pub use combinatoric_core::chain_complex::*;
+}
 pub mod crt;
 pub mod field;
 pub mod finite_field;

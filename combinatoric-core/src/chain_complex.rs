@@ -132,7 +132,6 @@ struct PivotCandidate {
     degree: i32,
     row: usize,
     column: usize,
-    epoch: usize,
 }
 
 /// Cancel unit entries in a graded complex.  Generator IDs remain stable while
@@ -150,14 +149,8 @@ pub fn cancel_units(
         input_sha256: complex_sha256(complex),
         pivots: Vec::new(),
     });
-    let mut queue = candidate_queue(&state, 0);
-    let mut epoch = 0usize;
+    let mut queue = candidate_queue(&state);
     while let Some(Reverse(candidate)) = queue.pop() {
-        if candidate.epoch != epoch {
-            stats.stale_queue_entries += 1;
-            queue = candidate_queue(&state, epoch);
-            continue;
-        }
         let pivot = UnitPivot {
             degree: candidate.degree,
             row: candidate.row,
@@ -171,7 +164,7 @@ pub fn cancel_units(
         if stats.pivot_updates == options.max_pivots {
             return Err(ChainComplexError::ReductionLimit { kind: "unit pivot", observed: stats.pivot_updates + 1, budget: options.max_pivots });
         }
-        state.apply_pivot(&pivot)?;
+        let (changed_rows, changed_columns) = state.apply_pivot(&pivot)?;
         stats.pivot_updates += 1;
         stats.peak_nnz = stats.peak_nnz.max(state.nnz());
         if state.nnz() > options.max_nnz {
@@ -182,9 +175,8 @@ pub fn cancel_units(
         if bits > options.max_entry_bits {
             return Err(ChainComplexError::ReductionLimit { kind: "coefficient bit length", observed: bits as usize, budget: options.max_entry_bits as usize });
         }
+        enqueue_changed_candidates(&state, &mut queue, pivot.degree, &changed_rows, &changed_columns);
         if let Some(certificate) = &mut certificate { certificate.pivots.push(pivot); }
-        epoch += 1;
-        queue = candidate_queue(&state, epoch);
     }
     stats.final_nnz = state.nnz();
     let reduced = state.compact()?;
@@ -273,7 +265,7 @@ impl ReductionState {
         self.active.get(&pivot.degree).and_then(|v| v.get(pivot.column)).copied().unwrap_or(false)
             && self.active.get(&(pivot.degree - 1)).and_then(|v| v.get(pivot.row)).copied().unwrap_or(false)
     }
-    fn apply_pivot(&mut self, pivot: &UnitPivot) -> Result<(), ChainComplexError> {
+    fn apply_pivot(&mut self, pivot: &UnitPivot) -> Result<(Vec<usize>, Vec<usize>), ChainComplexError> {
         if !is_unit(&pivot.value) { return Err(ChainComplexError::NonUnitPivot { degree: pivot.degree, row: pivot.row, column: pivot.column, value: pivot.value.clone() }); }
         let row_entries = self.matrix(pivot.degree)?.row_entries(pivot.row).map_err(to_certificate_error)?.filter(|(column, _)| *column != pivot.column && self.active[&pivot.degree][*column]).map(|(column, value)| (column, value.clone())).collect::<Vec<_>>();
         let column_entries = self.matrix(pivot.degree)?.column_rows(pivot.column).map_err(to_certificate_error)?.filter(|row| *row != pivot.row && self.active[&(pivot.degree - 1)][*row]).map(|row| (row, self.matrix(pivot.degree).expect("known matrix").get(row, pivot.column).expect("valid index"))).collect::<Vec<_>>();
@@ -291,7 +283,7 @@ impl ReductionState {
         if let Some(next) = self.matrices.get_mut(&(pivot.degree + 1)) { next.clear_row(pivot.column).map_err(to_certificate_error)?; }
         self.active.get_mut(&pivot.degree).ok_or(ChainComplexError::MissingDegree { degree: pivot.degree })?[pivot.column] = false;
         self.active.get_mut(&(pivot.degree - 1)).ok_or(ChainComplexError::MissingDegree { degree: pivot.degree - 1 })?[pivot.row] = false;
-        Ok(())
+        Ok((column_entries.into_iter().map(|(row, _)| row).collect(), row_entries.into_iter().map(|(column, _)| column).collect()))
     }
     fn nnz(&self) -> usize { self.matrices.values().map(MutableSparseMatrix::nnz).sum() }
     fn max_bits(&self) -> u64 { self.matrices.values().flat_map(|matrix| (0..matrix.rows()).flat_map(|row| matrix.row_entries(row).expect("valid row").map(|(_, value)| value.bits()))).max().unwrap_or(0) }
@@ -315,7 +307,7 @@ impl ReductionState {
     }
 }
 
-fn candidate_queue(state: &ReductionState, epoch: usize) -> BinaryHeap<Reverse<PivotCandidate>> {
+fn candidate_queue(state: &ReductionState) -> BinaryHeap<Reverse<PivotCandidate>> {
     let mut queue = BinaryHeap::new();
     for (&degree, matrix) in &state.matrices {
         for row in 0..matrix.rows() {
@@ -324,12 +316,34 @@ fn candidate_queue(state: &ReductionState, epoch: usize) -> BinaryHeap<Reverse<P
             for (column, value) in matrix.row_entries(row).expect("valid row") {
                 if is_unit(value) && state.active[&degree][column] {
                     let column_degree = matrix.column_rows(column).expect("valid column").filter(|candidate_row| state.active[&(degree - 1)][*candidate_row]).count();
-                    queue.push(Reverse(PivotCandidate { score: row_degree.saturating_sub(1).saturating_mul(column_degree.saturating_sub(1)), degree, row, column, epoch }));
+                    queue.push(Reverse(PivotCandidate { score: row_degree.saturating_sub(1).saturating_mul(column_degree.saturating_sub(1)), degree, row, column }));
                 }
             }
         }
     }
     queue
+}
+
+fn enqueue_changed_candidates(
+    state: &ReductionState,
+    queue: &mut BinaryHeap<Reverse<PivotCandidate>>,
+    degree: i32,
+    rows: &[usize],
+    columns: &[usize],
+) {
+    let Ok(matrix) = state.matrix(degree) else { return; };
+    for &row in rows {
+        if !state.active.get(&(degree - 1)).and_then(|active| active.get(row)).copied().unwrap_or(false) { continue; }
+        let row_degree = matrix.row_entries(row).expect("valid changed row").filter(|(column, _)| state.active[&degree][*column]).count();
+        for &column in columns {
+            if !state.active[&degree].get(column).copied().unwrap_or(false) { continue; }
+            let value = matrix.get(row, column).expect("valid changed coordinate");
+            if is_unit(&value) {
+                let column_degree = matrix.column_rows(column).expect("valid changed column").filter(|candidate_row| state.active[&(degree - 1)][*candidate_row]).count();
+                queue.push(Reverse(PivotCandidate { score: row_degree.saturating_sub(1).saturating_mul(column_degree.saturating_sub(1)), degree, row, column }));
+            }
+        }
+    }
 }
 
 fn is_unit(value: &BigInt) -> bool { value.abs() == BigInt::one() }

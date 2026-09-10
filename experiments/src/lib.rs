@@ -7,3 +7,4 @@
 pub mod matroids;
 pub mod nn_rook_utils;
 pub mod peak_utils;
+pub mod principal_stratum;
