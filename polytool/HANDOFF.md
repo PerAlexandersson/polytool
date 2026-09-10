@@ -34,8 +34,11 @@ Verification in a standalone copy used external
 - non-OEIS Polytool library: 320 passed, 6 filtered;
 - Clippy all targets passed with the repository's existing three lint exceptions.
 
-The focused checkpoint is committed in this worktree; no push or publication
-was performed.
+The focused checkpoints were integrated into the populated monorepo checkout
+as `4998ff0`, `6d89e0d`, and `becf507`. Independent post-integration checks
+again passed 65 recurrence tests, 320 non-OEIS library tests (6 filtered), and
+strict Clippy with the repository's three existing lint exceptions. No push or
+publication was performed.
 
 ## Recurrence rational-coefficient default (2026-09-08)
 
