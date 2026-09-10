@@ -18,6 +18,22 @@ mandatory, read-only, and starts with a monitored 30-minute allowance after
 the implementation is frozen. Its launching worker owns the child process. No
 pushes, publications or Abacus jobs are authorized.
 
+The frozen implementation checkpoints are `cc0dbf7` (CSR/mutable sparse
+storage), `c21e104` (bounded BigInt Smith forms and integral cancellation),
+and `75eb540` (principal-stratum driver, field baseline, compatibility
+adapters). Focused verification passed: 235 `combinatoric-core` library tests,
+123 `sym-poly-core` library tests, and 21 `experiments` library tests. The
+driver exactly reproduces the small d=4 calibration and the d=18 target:
+8,280 cells, Euler -2, and residual integral `H_7 = Z^2` after 4,139 unit
+pivots in 8.6 seconds. The bounded d=24 field run completed: 76,384 cells,
+Euler 0, and exact F_251 dimensions `b_7=b_8=1`; the integral reducer stayed
+at roughly 163 MiB RSS but hit its 10-minute cap before producing a result.
+The d=26 field-only attempt stayed below roughly 290 MiB RSS but likewise hit
+its 10-minute cap during validation without output. These are resource-limited
+incomplete runs, not negative results or homology claims. A read-only Claude
+review is now required before release; see
+`docs/PRINCIPAL_STRATUM_HOMOLOGY_REVIEW.md`.
+
 ## Principal-stratum homology plan (2026-09-10)
 
 The user requested a careful plan, with reusable sparse matrices and Smith
