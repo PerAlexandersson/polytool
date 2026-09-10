@@ -47,3 +47,22 @@ exercise either new transverse guard. That test coverage was corrected with a
 2-by-1 row-Bézout and 1-by-2 column-Bézout rejection case; the focused Smith
 and principal-stratum suites passed afterward. No repository file was edited
 by Claude.
+
+## Completion review (2026-09-10)
+
+- Reviewer: Claude Code 2.1.267, requested `opus`, read-only plan mode.
+- Reviewed checkpoint: `63e9861`; log retained outside Dropbox at
+  `/tmp/principal-stratum-claude-63e9861.log`.
+- Result: no blocking correctness finding. Claude independently ran the fixed
+  d=18/d=24/d=26 inputs and confirmed the count, Euler, field/UCT and integral
+  outputs, plus cancellation replay.
+
+The review found and the follow-up `5bd050b` resolves these material issues:
+bounded deterministic Miller--Rabin is now shared in combinatoric-core;
+cancellation and Smith replay have explicit shape limits; default Smith replay
+does not infer unlimited limits; integral assembly verifies recorded Smith
+operations against claimed factors; the digest frames each differential with
+its NNZ count; and the membership automaton is cross-checked against move
+closure on the nontrivial `(3,1,1,3)` prefixes. Focused suites passed after
+the fixes. The remaining implementation limits are the documented explicit
+budgets; no larger calibration was run.

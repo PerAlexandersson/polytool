@@ -1,5 +1,34 @@
 # Handoff
 
+## Sparse integral homology — completed 2026-09-10
+
+Owner released task files after commits `63e9861` and `5bd050b`; no push was
+made. Shared CSR/mutable sparse storage, bounded cancellation, bounded exact
+Smith replay/verification, and compatibility re-exports are in
+`combinatoric-core`; the principal-stratum automaton, count DP, streamed
+input-order modular boundary path and driver are in `experiments`. The driver
+records/replays cancellation certificates against the residual and, with its
+recorded Smith operations, verifies claimed Smith factors before printing
+groups. Resource guards cover cells, boundary terms, mutable shape slots,
+NNZ, coefficient bits, dense Smith entries/shape/operations/bits, and invalid
+finite-field/UCT moduli.
+
+Verification: `cargo test -p combinatoric-core --lib` (239 passed),
+`cargo test -p sym-poly-core --lib` (123 passed before final API-only fixes),
+`cargo test -p experiments --lib` (25 passed), and target-only
+`cargo check -p experiments --bin principal_stratum_homology`, all with
+`CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10`.
+Release calibrations, guarded and without larger cases: d18 `(3,1,1,3)` gave
+8280 cells, Euler -2, `H7=Z^2`, 41ms cancellation; d24 `(3,1,1,5)` gave
+76384, Euler 0, `H7=H8=Z`, 829ms cancellation; d26 gave 212900, Euler 0,
+`H8=H9=Z`, 3628ms cancellation. d26 first correctly rejected a 2,000,000
+boundary-term guard; its actual initial NNZ was 1,706,568 under a 4,000,000
+guard. Claude Code 2.1.267/Opus completed a read-only review of `63e9861`
+over 15 minutes; its no-blocker result and resolutions are in
+`docs/PRINCIPAL_STRATUM_HOMOLOGY_REVIEW.md`, with log
+`/tmp/principal-stratum-claude-63e9861.log`. Unrelated ignored
+`polytool/scripts/__pycache__/` remains untouched.
+
 ## Sparse integral homology implementation — active 2026-09-10
 
 The assigned implementation worker owns the task's shared library modules,
