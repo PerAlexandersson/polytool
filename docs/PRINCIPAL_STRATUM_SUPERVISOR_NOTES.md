@@ -4,6 +4,16 @@
 in source/tests, not edit this note. These are observations of in-progress
 code, not findings against a final reviewed release. Recheck before closing.
 
+Review continuation note (10:32 UTC): the first Claude run DID inspect source
+and run independent tests. Its empty final-report file was not evidence of a
+read-permission failure. Its session is
+`328b0217-1a44-4d3b-ae9b-51909d779e73`; the transcript is under
+`/home/dev/.claude/projects/-workspace-rust/` in Docker. It spent considerable
+time searching over omega to infer undocumented command parameters, despite
+those parameters already being in the plan. Prefer resuming its context and
+requesting findings over repeating that search. Host observation only: the
+host did not kill, restart, or signal the reviewer or its Python child.
+
 Calibration inputs (also specified in the plan): d=18 uses omega=(3,1,1,3);
 d=24 and d=26 use omega=(3,1,1,5). There is no need to search over omega to
 recover these parameters. The observed d=24 debug timings were enumeration
