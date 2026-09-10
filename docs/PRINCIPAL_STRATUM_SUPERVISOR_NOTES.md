@@ -52,3 +52,19 @@ Further observations at the first model implementation (~12 minutes):
    planned boundary-on-demand baseline. Implement the stream or document and
    justify measured limits, and enforce cell/NNZ limits during generation,
    not only after building the entire complex.
+
+Further observations (~24 minutes):
+
+10. Validate the modulus before converting coefficients: bigint_mod_u64 uses
+    mod_floor(prime) before the existing solver checks primality, so prime=0
+    can panic on a nonzero boundary. Reject invalid/composite moduli with a
+    clear error, including zero, one and four regression tests.
+11. Initial reducer/replay NNZ and coefficient budgets must be checked even
+    when there are no unit pivots. Check limits before cloning/allocating where
+    possible. max_cells=0 must reject the initial BFS cell as well.
+12. Canonical digest encoding should be unambiguous: prefix sections, counts
+    and BigInt byte lengths rather than separating arbitrary integer bytes
+    with a zero byte (which can occur inside their representation).
+13. Grading arithmetic degree +/- 1 (including in errors/certificates) must
+    not panic or wrap at i32 extrema. Decide a checked supported range at
+    construction and reject hostile out-of-range certificate degrees.
