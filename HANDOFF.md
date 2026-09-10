@@ -1,5 +1,20 @@
 # Handoff
 
+## Principal-stratum conjecture checks — 2026-09-10
+
+Host read-only computation found a counterexample to the draft's
+`eq:H-repeat3`: for `(3,1,1,3,1,1,3)` at d=23, exact integral homology is
+`H_8=Z^7`, `H_9=Z^2`, with no other groups or torsion. The formula predicts
+`7s^8+3s^9+s^10`, rather than the computed `7s^8+2s^9`.
+Integral cancellation/Smith replay and unreduced ranks over F_251 and F_2
+agree. The d=21 calibration matches; `(3,3,1,5)` at d=28 is integrally
+acyclic as predicted. General resonance and torsion-freeness remain open.
+Part (i) of the absorption conjecture follows from later draft theorems.
+See `docs/PRINCIPAL_STRATUM_CONJECTURE_CHECK.md` for proof, qualifications,
+commands, and next targets. Host owns this note/entry through the focused
+documentation checkpoint, then releases them. No source edits, worker
+launches, remote jobs, manuscript changes, or outbound mail.
+
 ## Sparse integral homology — completed 2026-09-10
 
 Task ownership is released following host review closure `c853ea7`; no push was
