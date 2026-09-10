@@ -152,6 +152,14 @@ Completion-pass observations (11:09 UTC; recheck after edits settle):
     does not protect this independent public method argument from degree-1
     overflow; a checked/bounded retrieval path should cover it.
 
+Final retrieval-API consistency check on a56ac68: the new
+differential_or_zero_with_limits returns matrix.clone() immediately for a
+stored map, ignoring both supplied limits. Enforce shape and NNZ budgets before
+that clone too. Concrete cheap regressions: a stored nonzero 1-by-1 map with
+max_nnz=0, and a stored zero 9-by-0 map with max_shape_slots=8, should both
+return structured limits rather than Ok. This is the stored-map half of the
+bounded retrieval API, not a change to the trusted infallible convenience API.
+
 ## Independent release-binary calibration checks
 
 Host verification on 2026-09-10 during the completion pass. These invoked the
