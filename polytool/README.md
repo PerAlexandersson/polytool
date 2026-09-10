@@ -88,6 +88,9 @@ common-factor degree bounds.  The returned
 `SharedDenominatorVectorRecurrence` evaluates by exact polynomial division and
 returns `SharedDenominatorVectorRecurrenceEvaluationError` for dimension,
 zero-denominator, or non-polynomial-quotient failures.  The
+fitting functions return `SharedDenominatorVectorRecurrenceFitError` and
+joint diagnostics rather than the per-row diagnostics used by the normalized
+vector API.  The
 `find_companion_vector_recurrence_with_denominator[_rational]` variants support
 lagged systems; companion shift rows contain `q(n,x) I` in the numerator.
 

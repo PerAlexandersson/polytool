@@ -462,7 +462,7 @@ fn evaluate_shared_denominator_rectangular_rational(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SharedDenominatorVectorRecurrenceFit {
     pub recurrence: SharedDenominatorVectorRecurrence,
-    pub rows: Vec<VectorRecurrenceRowDiagnostics>,
+    pub diagnostics: SharedDenominatorVectorRecurrenceDiagnostics,
     pub fit_transitions: usize,
     pub held_out_transitions: usize,
     /// Rank after fixing the canonical denominator pivot to one.
@@ -470,6 +470,19 @@ pub struct SharedDenominatorVectorRecurrenceFit {
     /// Nullity after fixing the canonical denominator pivot.
     pub nullity: usize,
     pub denominator_pivot: (usize, usize),
+}
+
+/// Diagnostics for the joint shared-denominator solve.  Unlike
+/// [`VectorRecurrenceRowDiagnostics`], these values describe one global linear
+/// system, not independently fitted output rows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedDenominatorVectorRecurrenceDiagnostics {
+    pub total_equations: usize,
+    pub equations_by_output: Vec<usize>,
+    pub unknowns: usize,
+    pub rank: usize,
+    pub nullity: usize,
+    pub output_components: Vec<usize>,
 }
 
 pub type VectorRecurrenceWithDenominatorFit = SharedDenominatorVectorRecurrenceFit;
@@ -503,11 +516,6 @@ pub enum VectorRecurrenceFitError {
         first_index: usize,
         offset: usize,
     },
-    NoSharedDenominator,
-    SharedDenominatorUnderdetermined {
-        rank: usize,
-        unknowns: usize,
-    },
 }
 
 impl fmt::Display for VectorRecurrenceFitError {
@@ -520,7 +528,8 @@ impl fmt::Display for VectorRecurrenceFitError {
                 held_out,
             } => write!(
                 f,
-                "need at least one fitting transition in addition to {held_out} held-out transitions; got {transitions} total"
+                "need at least one fitting transition in addition to {held_out} held-out \
+                 transitions; got {transitions} total"
             ),
             Self::InconsistentStateDimension {
                 state,
@@ -532,7 +541,8 @@ impl fmt::Display for VectorRecurrenceFitError {
             ),
             Self::NoSolution { output_component } => write!(
                 f,
-                "no recurrence in the requested search space for output component {output_component}"
+                "no recurrence in the requested search space for output component \
+                 {output_component}"
             ),
             Self::Underdetermined {
                 output_component,
@@ -540,7 +550,8 @@ impl fmt::Display for VectorRecurrenceFitError {
                 unknowns,
             } => write!(
                 f,
-                "output component {output_component} is not identifiable: rank {rank} for {unknowns} unknowns"
+                "output component {output_component} is not identifiable: rank {rank} for \
+                 {unknowns} unknowns"
             ),
             Self::HeldOutVerificationFailed { transition } => write!(
                 f,
@@ -553,16 +564,49 @@ impl fmt::Display for VectorRecurrenceFitError {
                 f,
                 "source index overflow: {first_index} + {offset} does not fit in usize"
             ),
-            Self::NoSharedDenominator => write!(f, "no nonzero shared denominator recurrence in the requested search space"),
-            Self::SharedDenominatorUnderdetermined { rank, unknowns } => write!(
-                f,
-                "shared-denominator recurrence is not identifiable: rank {rank} for {unknowns} unknowns"
-            ),
         }
     }
 }
 
 impl std::error::Error for VectorRecurrenceFitError {}
+
+/// Why a shared-denominator vector recurrence search could not return a model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SharedDenominatorVectorRecurrenceFitError {
+    Base(VectorRecurrenceFitError),
+    NoSharedDenominator,
+    SharedDenominatorUnderdetermined { rank: usize, unknowns: usize },
+    HeldOutVerificationFailed { transition: usize },
+}
+
+impl From<VectorRecurrenceFitError> for SharedDenominatorVectorRecurrenceFitError {
+    fn from(error: VectorRecurrenceFitError) -> Self {
+        Self::Base(error)
+    }
+}
+
+impl fmt::Display for SharedDenominatorVectorRecurrenceFitError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Base(error) => error.fmt(f),
+            Self::NoSharedDenominator => write!(
+                f,
+                "no nonzero shared denominator recurrence in the requested search space"
+            ),
+            Self::SharedDenominatorUnderdetermined { rank, unknowns } => write!(
+                f,
+                "shared-denominator recurrence is not identifiable: rank {rank} for \
+                 {unknowns} unknowns"
+            ),
+            Self::HeldOutVerificationFailed { transition } => write!(
+                f,
+                "shared-denominator recurrence failed exact held-out transition {transition}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for SharedDenominatorVectorRecurrenceFitError {}
 
 /// Errors from applying a vector recurrence to one state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3207,7 +3251,7 @@ fn fit_shared_denominator_map_rational(
     fit_transitions: usize,
     opts: &VectorRecurrenceDenominatorOptions,
     output_component_offset: usize,
-) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+) -> Result<SharedDenominatorVectorRecurrenceFit, SharedDenominatorVectorRecurrenceFitError> {
     let source_dimension = source_states.first().map_or(0, Vec::len);
     let output_dimension = target_states.first().map_or(0, Vec::len);
     let denom_width = opts.denominator_var_deg + 1;
@@ -3383,8 +3427,7 @@ fn fit_shared_denominator_map_rational(
         }
         let mut fitted_matrix = Vec::with_capacity(output_dimension);
         let mut fitted_forcing = (!opts.homogeneous).then(Vec::new);
-        let mut diagnostics = Vec::with_capacity(output_dimension);
-        for (output, &equations) in equations_by_output.iter().enumerate() {
+        for output in 0..output_dimension {
             let output_start = denominator_unknowns + output * row_unknowns;
             let mut operator_row = Vec::with_capacity(source_dimension);
             for source in 0..source_dimension {
@@ -3406,13 +3449,6 @@ fn fit_shared_denominator_map_rational(
                     opts.forcing_var_deg,
                 ));
             }
-            diagnostics.push(VectorRecurrenceRowDiagnostics {
-                output_component: output_component_offset + output,
-                equations,
-                unknowns: kept_columns.len(),
-                rank: solution.rank,
-                nullity: solution.nullity,
-            });
         }
         let recurrence = SharedDenominatorVectorRecurrence {
             denominator: denominator.clone(),
@@ -3438,7 +3474,16 @@ fn fit_shared_denominator_map_rational(
         }
         let candidate = SharedDenominatorVectorRecurrenceFit {
             recurrence,
-            rows: diagnostics,
+            diagnostics: SharedDenominatorVectorRecurrenceDiagnostics {
+                total_equations: equations_by_output.iter().sum(),
+                equations_by_output: equations_by_output.clone(),
+                unknowns: kept_columns.len(),
+                rank: solution.rank,
+                nullity: solution.nullity,
+                output_components: (0..output_dimension)
+                    .map(|output| output_component_offset + output)
+                    .collect(),
+            },
             fit_transitions,
             held_out_transitions: source_states.len() - fit_transitions,
             rank: solution.rank,
@@ -3457,10 +3502,12 @@ fn fit_shared_denominator_map_rational(
             continue;
         }
         if opts.require_unique && accepted.is_some() {
-            return Err(VectorRecurrenceFitError::SharedDenominatorUnderdetermined {
-                rank: solution.rank,
-                unknowns: kept_columns.len(),
-            });
+            return Err(
+                SharedDenominatorVectorRecurrenceFitError::SharedDenominatorUnderdetermined {
+                    rank: solution.rank,
+                    unknowns: kept_columns.len(),
+                },
+            );
         }
         if !opts.require_unique {
             return Ok(candidate);
@@ -3469,22 +3516,31 @@ fn fit_shared_denominator_map_rational(
     }
     if let Some((rank, unknowns)) = underdetermined {
         if opts.require_unique && accepted.is_some() {
-            return Err(VectorRecurrenceFitError::SharedDenominatorUnderdetermined {
-                rank,
-                unknowns,
-            });
+            return Err(
+                SharedDenominatorVectorRecurrenceFitError::SharedDenominatorUnderdetermined {
+                    rank,
+                    unknowns,
+                },
+            );
         }
     }
     if let Some(candidate) = accepted {
         return Ok(candidate);
     }
     if let Some(transition) = held_out_failure {
-        return Err(VectorRecurrenceFitError::HeldOutVerificationFailed { transition });
+        return Err(
+            SharedDenominatorVectorRecurrenceFitError::HeldOutVerificationFailed { transition },
+        );
     }
     if let Some((rank, unknowns)) = underdetermined {
-        return Err(VectorRecurrenceFitError::SharedDenominatorUnderdetermined { rank, unknowns });
+        return Err(
+            SharedDenominatorVectorRecurrenceFitError::SharedDenominatorUnderdetermined {
+                rank,
+                unknowns,
+            },
+        );
     }
-    Err(VectorRecurrenceFitError::NoSharedDenominator)
+    Err(SharedDenominatorVectorRecurrenceFitError::NoSharedDenominator)
 }
 
 /// Find a first-order vector recurrence with one common polynomial factor
@@ -3495,14 +3551,15 @@ pub fn find_vector_recurrence_with_denominator_rational(
     states: &[Vec<Vec<BigRational>>],
     first_index: usize,
     opts: &VectorRecurrenceDenominatorOptions,
-) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+) -> Result<SharedDenominatorVectorRecurrenceFit, SharedDenominatorVectorRecurrenceFitError> {
     let dimension = validate_vector_states(states)?;
     let transitions = states.len().saturating_sub(1);
     if transitions <= opts.held_out_transitions {
         return Err(VectorRecurrenceFitError::NotEnoughTransitions {
             transitions,
             held_out: opts.held_out_transitions,
-        });
+        }
+        .into());
     }
     let fit_transitions = transitions - opts.held_out_transitions;
     let source_indices = (0..transitions)
@@ -3533,7 +3590,7 @@ pub fn find_vector_recurrence_with_denominator(
     states: &[Vec<Vec<i64>>],
     first_index: usize,
     opts: &VectorRecurrenceDenominatorOptions,
-) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+) -> Result<SharedDenominatorVectorRecurrenceFit, SharedDenominatorVectorRecurrenceFitError> {
     find_vector_recurrence_with_denominator_rational(
         &i64_vector_states_to_rational(states),
         first_index,
@@ -3549,9 +3606,9 @@ pub fn find_companion_vector_recurrence_with_denominator_rational(
     first_index: usize,
     lag: usize,
     opts: &VectorRecurrenceDenominatorOptions,
-) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+) -> Result<SharedDenominatorVectorRecurrenceFit, SharedDenominatorVectorRecurrenceFitError> {
     if lag == 0 {
-        return Err(VectorRecurrenceFitError::InvalidLag);
+        return Err(VectorRecurrenceFitError::InvalidLag.into());
     }
     let component_dimension = validate_vector_states(states)?;
     let transitions = states.len().saturating_sub(lag);
@@ -3559,7 +3616,8 @@ pub fn find_companion_vector_recurrence_with_denominator_rational(
         return Err(VectorRecurrenceFitError::NotEnoughTransitions {
             transitions,
             held_out: opts.held_out_transitions,
-        });
+        }
+        .into());
     }
     let fit_transitions = transitions - opts.held_out_transitions;
     let mut sources = Vec::with_capacity(transitions);
@@ -3614,7 +3672,7 @@ pub fn find_companion_vector_recurrence_with_denominator_rational(
             matrix,
             forcing,
         },
-        rows: fitted.rows,
+        diagnostics: fitted.diagnostics,
         fit_transitions,
         held_out_transitions: opts.held_out_transitions,
         rank: fitted.rank,
@@ -3630,7 +3688,7 @@ pub fn find_companion_vector_recurrence_with_denominator(
     first_index: usize,
     lag: usize,
     opts: &VectorRecurrenceDenominatorOptions,
-) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+) -> Result<SharedDenominatorVectorRecurrenceFit, SharedDenominatorVectorRecurrenceFitError> {
     find_companion_vector_recurrence_with_denominator_rational(
         &i64_vector_states_to_rational(states),
         first_index,
@@ -7938,7 +7996,7 @@ mod tests {
             bounded_bivar(1, 0, &[(0, 0, 1), (1, 0, 1)])
         );
         assert_eq!(fit.recurrence.forcing, None);
-        assert!(fit.rows.iter().all(|row| row.nullity == 0));
+        assert_eq!(fit.diagnostics.nullity, 0);
     }
 
     #[test]
@@ -7977,7 +8035,11 @@ mod tests {
         tampered[9][0][0] += BigRational::one();
         assert_eq!(
             find_vector_recurrence_with_denominator_rational(&tampered, 0, &opts),
-            Err(VectorRecurrenceFitError::HeldOutVerificationFailed { transition: 8 })
+            Err(
+                SharedDenominatorVectorRecurrenceFitError::HeldOutVerificationFailed {
+                    transition: 8,
+                }
+            )
         );
     }
 
@@ -8085,7 +8147,7 @@ mod tests {
         };
         assert_eq!(
             find_vector_recurrence_with_denominator_rational(&states, 0, &opts),
-            Err(VectorRecurrenceFitError::NoSharedDenominator)
+            Err(SharedDenominatorVectorRecurrenceFitError::NoSharedDenominator)
         );
     }
 
@@ -8150,7 +8212,7 @@ mod tests {
         let result = find_vector_recurrence_with_denominator_rational(&states, 1, &opts);
         assert!(matches!(
             result,
-            Err(VectorRecurrenceFitError::SharedDenominatorUnderdetermined { .. })
+            Err(SharedDenominatorVectorRecurrenceFitError::SharedDenominatorUnderdetermined { .. })
         ));
     }
 
