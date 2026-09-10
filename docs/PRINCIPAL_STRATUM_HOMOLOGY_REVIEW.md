@@ -86,3 +86,15 @@ correctly treated as zero without allocation, checked retrieval handles
 `i32::MIN`, and Smith/homology logic is unchanged. Its suggested huge-metadata
 validation regression was added in `4d22c7e`. Log:
 `/tmp/principal-stratum-claude-missing-map-a56ac68.log`.
+
+## Stored bounded-retrieval review
+
+Claude Code 2.1.267, requested `opus` in read-only plan mode, reviewed
+`b134824` without editing files. It found no correctness blocker: the bounded
+retrieval API checks `rows + 1` against the CSR shape-slot limit and NNZ
+against its limit before cloning a stored matrix, returns the established
+structured `ReductionLimit` errors, and leaves the trusted infallible helper
+unchanged. The review independently ran the focused chain-complex suite (7
+passed). Its minor notes were documentation/coverage polish only, so no source
+change was warranted for this deliberately narrow completion pass. Log:
+`/tmp/principal-stratum-claude-stored-retrieval-b134824-retry.log`.

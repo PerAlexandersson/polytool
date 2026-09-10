@@ -2,7 +2,7 @@
 
 ## Sparse integral homology — completed 2026-09-10
 
-Owner retains task-file ownership through host acceptance after commits `63e9861`, `5bd050b`, `d29227c`, `a56ac68`, and `4d22c7e`; no push was
+Owner retains task-file ownership through host acceptance after commits `63e9861`, `5bd050b`, `d29227c`, `a56ac68`, `4d22c7e`, and `b134824`; no push was
 made. Shared CSR/mutable sparse storage, bounded cancellation, bounded exact
 Smith replay/verification, and compatibility re-exports are in
 `combinatoric-core`; the principal-stratum automaton, count DP, streamed
@@ -13,11 +13,15 @@ groups. Resource guards cover cells, boundary terms, mutable shape slots,
 NNZ, coefficient bits, dense Smith entries/shape/operations/bits, and invalid
 finite-field/UCT moduli.
 
-Verification: `cargo test -p combinatoric-core --lib` (241 passed),
-`cargo test -p sym-poly-core --lib` (123 passed before final API-only fixes),
-`cargo test -p experiments --lib` (25 passed), and target-only
-`cargo check -p experiments --bin principal_stratum_homology`, all with
-`CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10`.
+Final verification after `b134824`: `cargo test -p combinatoric-core --lib`
+(241 passed), `cargo test -p sym-poly-core --lib` (123 passed), and
+`cargo test -p experiments --lib` (25 passed), all with
+`CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10`. The
+same command prefix also ran the release driver smoke:
+`cargo run --release -q -p experiments --bin principal_stratum_homology --
+--omega 1,1 --d 4 --max-cells 20 --max-nnz 100 --max-reduction-nnz 100
+--max-pivots 20 --record-certificate`; it reported 9 cells, Euler -1,
+`H_3 = Z`, and a matching residual certificate.
 Release calibrations, guarded and without larger cases: d18 `(3,1,1,3)` gave
 8280 cells, Euler -2, `H7=Z^2`, 41ms cancellation; d24 `(3,1,1,5)` gave
 76384, Euler 0, `H7=H8=Z`, 829ms cancellation; d26 gave 212900, Euler 0,
@@ -34,80 +38,16 @@ also returned no blocker. Unrelated ignored
 The final missing-map fix avoids allocating absent shaped-zero differentials in
 validation and Smith assembly; `differential_or_zero_with_limits` provides
 checked zero retrieval, and metadata-only complexes with `10^12` generators
-are covered without generator allocation. Focused `chain_complex` tests pass
-(7 tests). Claude's narrow review of `a56ac68` found no blocker; its suggested
-validation-path regression is included in `4d22c7e`.
+are covered without generator allocation. Commit `b134824` also checks shape
+slots and NNZ before cloning a stored map, with 1-by-1/nonzero and 9-by-0
+stored-map budget regressions; the trusted infallible helper is retained.
+Focused `chain_complex` tests pass (7 tests). Claude Code 2.1.267/Opus
+reviewed `b134824` read-only in plan mode and found no correctness blocker;
+log: `/tmp/principal-stratum-claude-stored-retrieval-b134824-retry.log`.
 
 Host direct-executable measurements supersede earlier worker timing claims:
 d18/d24/d26 integral-and-replay elapsed 0.131/2.452/10.787 seconds; d26 peak
 RSS was 482912 KiB. The host observed no source edits or Cargo builds.
-
-## Historical sparse integral homology checkpoint — superseded
-
-The assigned implementation worker owns the task's shared library modules,
-model driver, exact tests, narrowly required registrations and this opening
-entry; the host supervisor performs read-only coordination and verification.
-Checkpoints 1, 3, and 4 now have their first verified shared implementation:
-`combinatoric-core::sparse_matrix` provides generic shape-preserving CSR and a
-bidirectionally indexed mutable `BigInt` form; `chain_complex` provides
-graded unit cancellation with independently replayable SHA-256-bound pivot
-certificates; and `integer_linear_algebra` provides a bounded exact BigInt
-Smith reducer whose optional operation certificate is replayed in tests.
-The full `combinatoric-core --lib` suite (235 tests) passes. No task source
-files were dirty at launch;
-unrelated `polytool/scripts/__pycache__/` is preserved. Claude review is
-mandatory, read-only, and starts with a monitored 30-minute allowance after
-the implementation is frozen. Its launching worker owns the child process. No
-pushes, publications or Abacus jobs are authorized.
-
-The frozen implementation checkpoints are `cc0dbf7` (CSR/mutable sparse
-storage), `c21e104` (bounded BigInt Smith forms and integral cancellation),
-and `75eb540` (principal-stratum driver, field baseline, compatibility
-adapters). Focused verification passed: 235 `combinatoric-core` library tests,
-123 `sym-poly-core` library tests, and 21 `experiments` library tests. The
-driver exactly reproduces the small d=4 calibration and the d=18 target:
-8,280 cells, Euler -2, and residual integral `H_7 = Z^2` after 4,139 unit
-pivots in 8.6 seconds. The bounded d=24 field run completed: 76,384 cells,
-Euler 0, and exact F_251 dimensions `b_7=b_8=1`; the integral reducer stayed
-at roughly 163 MiB RSS but hit its 10-minute cap before producing a result.
-The d=26 field-only attempt stayed below roughly 290 MiB RSS but likewise hit
-its 10-minute cap during validation without output. These are resource-limited
-incomplete runs, not negative results or homology claims. A read-only Claude
-review is now required before release; see
-`docs/PRINCIPAL_STRATUM_HOMOLOGY_REVIEW.md`.
-
-Claude's completed read-only Opus review found and the implementation worker
-fixed a malformed-Smith-certificate acceptance bug, a quadratic sparse
-composition validation path, and missing user-visible cancellation-certificate
-and universal-coefficient checks. The malicious Bézout certificate now has a
-regression test. A focused Claude re-review of this material correction is in
-progress; do not treat this paragraph as final review clearance yet.
-
-That focused re-review found same-index Bézout, self-add and rectangular-index
-certificate edge cases; all are now guarded with regression tests. A final
-guard-only Claude confirmation remains the last review action.
-
-Final Claude confirmation found the guards correct and only asked for two
-rectangular rejection tests, which were added and passed. Review is complete:
-Claude Code 2.1.267 requested `opus` in read-only plan mode reviewed commits
-through `bc70287`; no reviewer edits occurred. The implementation worker has
-released ownership of all task files. Remaining limits are intentional: dense
-Smith is budgeted, d=24 integral cancellation and d=26 field validation hit
-their 10-minute resource caps, and benchmark logs are under `/tmp`, not
-Dropbox. Exact successful commands include:
-
-```text
-CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
-  cargo test -p combinatoric-core --lib       # 235 passed
-CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
-  cargo test -p sym-poly-core --lib           # 123 passed
-CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
-  cargo test -p experiments --lib             # 21 passed
-CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
-  cargo run -q -p experiments --bin principal_stratum_homology -- \
-  --omega 3,1,1,3 --d 18 --max-cells 10000 --max-nnz 250000 \
-  --max-reduction-nnz 1000000 --max-pivots 10000
-```
 
 ## Principal-stratum homology plan (2026-09-10)
 
