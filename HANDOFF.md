@@ -45,6 +45,28 @@ That focused re-review found same-index Bézout, self-add and rectangular-index
 certificate edge cases; all are now guarded with regression tests. A final
 guard-only Claude confirmation remains the last review action.
 
+Final Claude confirmation found the guards correct and only asked for two
+rectangular rejection tests, which were added and passed. Review is complete:
+Claude Code 2.1.267 requested `opus` in read-only plan mode reviewed commits
+through `bc70287`; no reviewer edits occurred. The implementation worker has
+released ownership of all task files. Remaining limits are intentional: dense
+Smith is budgeted, d=24 integral cancellation and d=26 field validation hit
+their 10-minute resource caps, and benchmark logs are under `/tmp`, not
+Dropbox. Exact successful commands include:
+
+```text
+CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
+  cargo test -p combinatoric-core --lib       # 235 passed
+CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
+  cargo test -p sym-poly-core --lib           # 123 passed
+CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
+  cargo test -p experiments --lib             # 21 passed
+CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
+  cargo run -q -p experiments --bin principal_stratum_homology -- \
+  --omega 3,1,1,3 --d 18 --max-cells 10000 --max-nnz 250000 \
+  --max-reduction-nnz 1000000 --max-pivots 10000
+```
+
 ## Principal-stratum homology plan (2026-09-10)
 
 The user requested a careful plan, with reusable sparse matrices and Smith

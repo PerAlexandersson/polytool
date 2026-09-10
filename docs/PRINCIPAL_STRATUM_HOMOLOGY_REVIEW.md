@@ -38,3 +38,12 @@ certificate-replay edge cases: same-index Bézout operations, self-addition
 operations, and rectangular transverse indexing. The final guard patch rejects
 all three and adds regression tests. A final targeted confirmation has been
 requested on that guard-only patch.
+
+## Final targeted confirmation
+
+Claude found the final guards sound and valid recorder-produced certificates
+still replay. It noted only that the initial rectangular rejection test did not
+exercise either new transverse guard. That test coverage was corrected with a
+2-by-1 row-Bézout and 1-by-2 column-Bézout rejection case; the focused Smith
+and principal-stratum suites passed afterward. No repository file was edited
+by Claude.

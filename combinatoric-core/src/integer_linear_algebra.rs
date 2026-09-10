@@ -393,6 +393,7 @@ mod tests {
         };
         assert!(matches!(replay_smith_operations(&matrix(&[&[2]]), &[same_index], 1), Err(SmithError::InvalidCertificate(_))));
         assert!(matches!(replay_smith_operations(&matrix(&[&[2]]), &[SmithOperation::AddRowMultiple { target: 0, source: 0, multiple: 1.into() }], 1), Err(SmithError::InvalidCertificate(_))));
-        assert!(matches!(replay_smith_operations(&matrix(&[&[2, 0]]), &[SmithOperation::RowBezout { first: 1, second: 0, a: 0.into(), b: 2.into(), x: 0.into(), y: 1.into(), gcd: 2.into() }], 1), Err(SmithError::InvalidCertificate(_))));
+        assert!(matches!(replay_smith_operations(&matrix(&[&[2], &[3]]), &[SmithOperation::RowBezout { first: 1, second: 0, a: 3.into(), b: 2.into(), x: 1.into(), y: (-1).into(), gcd: 1.into() }], 1), Err(SmithError::InvalidCertificate(_))));
+        assert!(matches!(replay_smith_operations(&matrix(&[&[2, 3]]), &[SmithOperation::ColumnBezout { first: 1, second: 0, a: 3.into(), b: 2.into(), x: 1.into(), y: (-1).into(), gcd: 1.into() }], 1), Err(SmithError::InvalidCertificate(_))));
     }
 }
