@@ -119,6 +119,13 @@ Completion-pass observations (11:09 UTC; recheck after edits settle):
     after the existing modular solver already handled the same input quickly.
     The existing Polytool linalg validator uses modular exponentiation, not
     trial division. Preserve standalone Polytool packaging if reusing code.
+    The experiment has a second copy of the same trial-division helper. A
+    host smoke check on the release binary, omega=(1,1), d=4,
+    prime=18446744073709551557, hit a deliberately short two-second guard
+    before field output. This is only nine cells; the check should be cheap.
+    The host's normal small run passed integral/rational/field agreement and
+    replay. Zero cell/NNZ budgets, moduli 0 and 4, and d=2147483648 all returned
+    clean errors. No Cargo build or source edit was run by the host.
 18. The new digest has section counts and value byte lengths, but still needs
     each differential's NNZ/entry count before its variable entry sequence.
     A one-byte D marker alone is not a delimiter for arbitrary binary indices.
