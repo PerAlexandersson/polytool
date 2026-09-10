@@ -1,10 +1,24 @@
 # Independent supervisor review notes
 
 2026-09-10. Owner: host supervisor; implementation worker should return fixes
-in source/tests, not edit this note. These are observations of in-progress
-code, not findings against a final reviewed release. Recheck before closing.
+in source/tests, not edit this note.
 
-Review continuation note (10:32 UTC): the first Claude run DID inspect source
+Final status: accepted through source commit `b134824`. The blocking findings
+below were resolved and regression-tested. Claude Opus's final narrow review
+of stored-map retrieval returned no correctness blocker; its log is
+`/tmp/principal-stratum-claude-stored-retrieval-b134824-retry.log` in Docker.
+The remaining comments are documentation and test-organization polish.
+Trusted infallible helpers remain available; shape/NNZ limits are not byte or
+BigInt coefficient-bit limits. The integral driver uses the separate reduction
+and Smith budgets. This implementation reports abstract homology groups, not
+explicit cycle representatives, and uses bounded dense Smith reduction after
+sparse unit cancellation.
+
+The following is a historical review ledger, not a list of open release
+blockers. The direct release measurements later in this note supersede early
+debug timings and timeouts.
+
+Historical review continuation note (10:32 UTC): the first Claude run DID inspect source
 and run independent tests. Its empty final-report file was not evidence of a
 read-permission failure. Its session is
 `328b0217-1a44-4d3b-ae9b-51909d779e73`; the transcript is under
