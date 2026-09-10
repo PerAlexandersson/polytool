@@ -1,5 +1,31 @@
 # Polytool handoff
 
+## Completed: shared-denominator vector recurrences (2026-09-10)
+
+Worker `/root/vector_denominator_luna` completed and released ownership of
+`src/recurrence.rs`, `README.md`, and this handoff in isolated worktree
+`/tmp/polytool-vector-denominator-20260910`. The new exact APIs fit and evaluate
+`q(n,x) F_(n+1) = M(n,x,D_x) F_n + G(n,x)` with one common polynomial factor,
+including companion-lag fitting. Existing normalized `q=1` APIs are unchanged.
+
+Public additions include `VectorRecurrenceDenominatorOptions`,
+`SharedDenominatorVectorRecurrence`,
+`find_vector_recurrence_with_denominator[_rational]`, and companion variants.
+The first nonzero denominator monomial is normalized to one; unique searches
+reject both linear nullity and competing normalized pivots. Evaluation reports
+zero denominators and non-polynomial quotients exactly. Focused tests cover
+`q(n)`, `q(x)`, held-out tampering, ambiguity, and companion shift rows.
+
+Verification in a standalone copy used external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`:
+
+- recurrence module: 62 passed;
+- non-OEIS Polytool library: 317 passed, 6 filtered;
+- Clippy all targets passed with the repository's existing three lint exceptions.
+
+The focused checkpoint is committed in this worktree; no push or publication
+was performed.
+
 ## Recurrence rational-coefficient default (2026-09-08)
 
 The recurrence-search controls now put `rational coefficients` before
