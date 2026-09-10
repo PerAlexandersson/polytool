@@ -103,3 +103,10 @@ Recheck after 19632cb (first review-fix checkpoint):
 16. universal_coefficient_dimension now exposes another public prime=0 panic
     through mod_floor. Validate its input or accept an already validated field
     type; test the previous-degree torsion term, not only current torsion.
+
+After bc70287, the new guards look correct, but its purported rectangular
+RowBezout regression uses a 1-by-2 matrix with first=1: that already failed
+the old row-index check. The actual regression should be a 2-by-1 matrix,
+first=1, second=0, a=b=g=2, x=1,y=0; the old code accepts both row indices
+then panics reading column 1. Include the dual ColumnBezout 1-by-2 case and
+test both column and row self-add/Bezout rejection.
