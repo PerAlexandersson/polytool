@@ -130,6 +130,15 @@ Completion-pass observations (11:09 UTC; recheck after edits settle):
     each differential's NNZ/entry count before its variable entry sequence.
     A one-byte D marker alone is not a delimiter for arbitrary binary indices.
 
+19. Blocking check on the new Miller--Rabin draft: bases 2,3,5,7,11,13,17
+    do NOT suffice for all u64 inputs. Exact independently checked witness:
+    341550071728321 = 10670053 * 32010157. It passes all seven chosen strong
+    probable-prime tests (also base 19) and is not divisible by the trial
+    primes through 37. Base 23 rejects it. The existing Polytool implementation
+    tests all twelve prime bases through 37, not only the first seven. Restore
+    a genuinely complete u64 witness set and add this composite regression,
+    along with a large valid prime, before calling the public check exact.
+
 ## Independent release-binary calibration checks
 
 Host verification on 2026-09-10 during the completion pass. These invoked the
