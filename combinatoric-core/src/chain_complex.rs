@@ -874,7 +874,7 @@ pub fn is_prime_u64(n: u64) -> bool {
         d /= 2;
         s += 1;
     }
-    for base in [2u64, 3, 5, 7, 11, 13, 17] {
+    for base in [2u64, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37] {
         let mut x = pow_mod_u64(base, d, n);
         if x == 1 || x == n - 1 {
             continue;
@@ -1123,5 +1123,11 @@ mod tests {
             FiniteChainComplex::new([(i32::MIN, 0)].into_iter().collect(), BTreeMap::new()),
             Err(ChainComplexError::UnsupportedDegree { .. })
         ));
+    }
+
+    #[test]
+    fn deterministic_u64_primality_rejects_known_strong_pseudoprime() {
+        assert!(!is_prime_u64(341_550_071_728_321));
+        assert!(is_prime_u64(2_305_843_009_213_693_951));
     }
 }
