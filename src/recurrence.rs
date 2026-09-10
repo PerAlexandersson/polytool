@@ -385,10 +385,10 @@ impl SharedDenominatorVectorRecurrence {
         &self,
         state: &[Vec<BigRational>],
         source_index: usize,
-    ) -> Result<Vec<Vec<BigRational>>, VectorRecurrenceEvaluationError> {
+    ) -> Result<Vec<Vec<BigRational>>, SharedDenominatorVectorRecurrenceEvaluationError> {
         let dimension = self.dimension();
         if self.matrix.iter().any(|row| row.len() != dimension) {
-            return Err(VectorRecurrenceEvaluationError::NonSquareMatrix);
+            return Err(VectorRecurrenceEvaluationError::NonSquareMatrix.into());
         }
         evaluate_shared_denominator_rectangular_rational(self, state, source_index)
     }
@@ -431,7 +431,7 @@ fn evaluate_shared_denominator_rectangular_rational(
     recurrence: &SharedDenominatorVectorRecurrence,
     state: &[Vec<BigRational>],
     source_index: usize,
-) -> Result<Vec<Vec<BigRational>>, VectorRecurrenceEvaluationError> {
+) -> Result<Vec<Vec<BigRational>>, SharedDenominatorVectorRecurrenceEvaluationError> {
     let numerator = evaluate_rectangular_vector_map_rational(
         &recurrence.matrix,
         recurrence.forcing.as_deref(),
@@ -440,19 +440,19 @@ fn evaluate_shared_denominator_rectangular_rational(
     )?;
     let denominator = bivar_eval_n(&recurrence.denominator, source_index);
     if poly_is_zero_rational(&denominator) {
-        return Err(VectorRecurrenceEvaluationError::ZeroDenominator);
+        return Err(SharedDenominatorVectorRecurrenceEvaluationError::ZeroDenominator);
     }
     numerator
         .iter()
         .map(|component| {
             poly_div_exact_rational(component, &denominator).map_err(|error| match error {
                 RecurrenceEvaluationError::ZeroDenominator => {
-                    VectorRecurrenceEvaluationError::ZeroDenominator
+                    SharedDenominatorVectorRecurrenceEvaluationError::ZeroDenominator
                 }
                 RecurrenceEvaluationError::NonPolynomialQuotient => {
-                    VectorRecurrenceEvaluationError::NonPolynomialQuotient
+                    SharedDenominatorVectorRecurrenceEvaluationError::NonPolynomialQuotient
                 }
-                _ => VectorRecurrenceEvaluationError::NonPolynomialQuotient,
+                _ => SharedDenominatorVectorRecurrenceEvaluationError::NonPolynomialQuotient,
             })
         })
         .collect()
@@ -570,8 +570,6 @@ pub enum VectorRecurrenceEvaluationError {
     NonSquareMatrix,
     StateDimension { expected: usize, found: usize },
     ForcingDimension { expected: usize, found: usize },
-    ZeroDenominator,
-    NonPolynomialQuotient,
 }
 
 impl fmt::Display for VectorRecurrenceEvaluationError {
@@ -584,6 +582,32 @@ impl fmt::Display for VectorRecurrenceEvaluationError {
             Self::ForcingDimension { expected, found } => {
                 write!(f, "forcing has {found} components; expected {expected}")
             }
+        }
+    }
+}
+
+impl std::error::Error for VectorRecurrenceEvaluationError {}
+
+/// Errors from applying a recurrence with a shared polynomial denominator.
+/// The dimension and forcing errors retain the unchanged base vector error
+/// type, while denominator-specific failures are represented separately.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SharedDenominatorVectorRecurrenceEvaluationError {
+    Base(VectorRecurrenceEvaluationError),
+    ZeroDenominator,
+    NonPolynomialQuotient,
+}
+
+impl From<VectorRecurrenceEvaluationError> for SharedDenominatorVectorRecurrenceEvaluationError {
+    fn from(error: VectorRecurrenceEvaluationError) -> Self {
+        Self::Base(error)
+    }
+}
+
+impl fmt::Display for SharedDenominatorVectorRecurrenceEvaluationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Base(error) => error.fmt(f),
             Self::ZeroDenominator => {
                 write!(f, "evaluated shared denominator is the zero polynomial")
             }
@@ -595,7 +619,7 @@ impl fmt::Display for VectorRecurrenceEvaluationError {
     }
 }
 
-impl std::error::Error for VectorRecurrenceEvaluationError {}
+impl std::error::Error for SharedDenominatorVectorRecurrenceEvaluationError {}
 
 // ---------------------------------------------------------------------------
 // Polynomial helpers (univariate, coefficient-vector representation)
@@ -3346,6 +3370,15 @@ fn fit_shared_denominator_map_rational(
             opts.denominator_var_deg,
         );
         if denominator.is_zero() {
+            continue;
+        }
+        // A zero evaluated denominator makes the undivided identity vacuous
+        // and cannot determine the next state.  Such candidates are not
+        // usable recurrences, even when they fit the algebraic identity.
+        if source_indices
+            .iter()
+            .any(|&source_index| poly_is_zero_rational(&bivar_eval_n(&denominator, source_index)))
+        {
             continue;
         }
         let mut fitted_matrix = Vec::with_capacity(output_dimension);
@@ -7983,6 +8016,121 @@ mod tests {
     }
 
     #[test]
+    fn shared_denominator_finder_recovers_two_distinct_rows() {
+        let states = (0..=9)
+            .map(|n| {
+                let degree = 9 - n;
+                let mut first = vec![BigRational::zero(); degree + 1];
+                first[degree] = BigRational::one();
+                let mut second = first.clone();
+                second[degree] *= BigRational::from_integer(BigInt::from(2_i64.pow(n as u32)));
+                vec![first, second]
+            })
+            .collect::<Vec<_>>();
+        let opts = VectorRecurrenceDenominatorOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 2,
+            require_unique: true,
+            denominator_var_deg: 1,
+            denominator_idx_deg: 0,
+        };
+        let fit = find_vector_recurrence_with_denominator_rational(&states, 0, &opts).unwrap();
+        assert_eq!(
+            fit.recurrence.denominator,
+            bounded_bivar(0, 1, &[(0, 1, 1)])
+        );
+        assert_eq!(
+            fit.recurrence.matrix[0][0].coefficients[0],
+            bounded_bivar(0, 0, &[(0, 0, 1)])
+        );
+        assert_eq!(
+            fit.recurrence.matrix[1][1].coefficients[0],
+            bounded_bivar(0, 0, &[(0, 0, 2)])
+        );
+        assert!(fit
+            .recurrence
+            .holds_transition_rational(&states[7], &states[8], 7));
+        assert!(fit
+            .recurrence
+            .holds_transition_rational(&states[8], &states[9], 8));
+    }
+
+    #[test]
+    fn shared_denominator_finder_rejects_zero_at_observed_index() {
+        // q(n)=n would make the n=0 identity vacuous and hide the arbitrary
+        // transition 1 -> 2.  Such a candidate is not evaluable and must be
+        // rejected rather than accepted from the undivided equations.
+        let states = vec![
+            vec![vec![br(1, 1)]],
+            vec![vec![br(2, 1)]],
+            vec![vec![br(0, 1)]],
+            vec![vec![br(0, 1)]],
+        ];
+        let opts = VectorRecurrenceDenominatorOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 1,
+            require_unique: true,
+            denominator_var_deg: 0,
+            denominator_idx_deg: 1,
+        };
+        assert_eq!(
+            find_vector_recurrence_with_denominator_rational(&states, 0, &opts),
+            Err(VectorRecurrenceFitError::NoSharedDenominator)
+        );
+    }
+
+    #[test]
+    fn shared_denominator_q_one_matches_normalized_vector_fit() {
+        let states = (0..=8)
+            .map(|n| {
+                vec![vec![BigRational::from_integer(BigInt::from(
+                    2_i64.pow(n as u32),
+                ))]]
+            })
+            .collect::<Vec<_>>();
+        let normalized_opts = VectorRecurrenceOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            homogeneous: true,
+            held_out_transitions: 2,
+            require_unique: true,
+            ..Default::default()
+        };
+        let denominator_opts = VectorRecurrenceDenominatorOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 2,
+            require_unique: true,
+            denominator_var_deg: 0,
+            denominator_idx_deg: 0,
+        };
+        let normalized = find_vector_recurrence_rational(&states, 0, &normalized_opts).unwrap();
+        let denominator =
+            find_vector_recurrence_with_denominator_rational(&states, 0, &denominator_opts)
+                .unwrap();
+        assert!(denominator.recurrence.denominator.is_one());
+        assert_eq!(denominator.recurrence.matrix, normalized.recurrence.matrix);
+        assert!(denominator
+            .recurrence
+            .holds_transition_rational(&states[7], &states[8], 7));
+    }
+
+    #[test]
     fn shared_denominator_finder_reports_underdetermination() {
         let states = (1..=6)
             .map(|n| vec![vec![br(n as i64, 1)]])
@@ -8003,7 +8151,6 @@ mod tests {
         assert!(matches!(
             result,
             Err(VectorRecurrenceFitError::SharedDenominatorUnderdetermined { .. })
-                | Err(VectorRecurrenceFitError::NoSharedDenominator)
         ));
     }
 
