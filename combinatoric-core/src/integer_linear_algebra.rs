@@ -319,24 +319,26 @@ fn apply_operation(matrix: &mut [Vec<BigInt>], columns: usize, operation: &Smith
         SmithOperation::SwapColumns { first, second } if valid_column(*first) && valid_column(*second) => for row in matrix.iter_mut() { row.swap(*first, *second); },
         SmithOperation::NegateRow { row } if valid_row(*row) => for value in &mut matrix[*row] { *value = -value.clone(); },
         SmithOperation::NegateColumn { column } if valid_column(*column) => for row in matrix.iter_mut() { row[*column] = -row[*column].clone(); },
-        SmithOperation::AddRowMultiple { target, source, multiple } if valid_row(*target) && valid_row(*source) => {
+        SmithOperation::AddRowMultiple { target, source, multiple } if valid_row(*target) && valid_row(*source) && target != source => {
             let source_row = matrix[*source].clone();
             for (value, source_value) in matrix[*target].iter_mut().zip(source_row) { *value += multiple * source_value; }
         }
-        SmithOperation::AddColumnMultiple { target, source, multiple } if valid_column(*target) && valid_column(*source) => {
+        SmithOperation::AddColumnMultiple { target, source, multiple } if valid_column(*target) && valid_column(*source) && target != source => {
             for row in matrix.iter_mut() {
                 let source_value = row[*source].clone();
                 row[*target] += multiple * source_value;
             }
         }
-        SmithOperation::RowBezout { first, second, a, b, x, y, gcd } if valid_row(*first) && valid_row(*second) => {
+        SmithOperation::RowBezout { first, second, a, b, x, y, gcd }
+            if first != second && valid_row(*first) && valid_row(*second) && valid_column(*first) => {
             if gcd.is_zero() || !gcd.is_positive() || !a.mod_floor(gcd).is_zero() || !b.mod_floor(gcd).is_zero()
                 || x * a + y * b != *gcd || matrix[*first][*first] != *a || matrix[*second][*first] != *b {
                 return Err(SmithError::InvalidCertificate("invalid row Bezout operation".into()));
             }
             bezout_rows(matrix, *first, *second, a, b, gcd, x, y);
         }
-        SmithOperation::ColumnBezout { first, second, a, b, x, y, gcd } if valid_column(*first) && valid_column(*second) => {
+        SmithOperation::ColumnBezout { first, second, a, b, x, y, gcd }
+            if first != second && valid_column(*first) && valid_column(*second) && valid_row(*first) => {
             if gcd.is_zero() || !gcd.is_positive() || !a.mod_floor(gcd).is_zero() || !b.mod_floor(gcd).is_zero()
                 || x * a + y * b != *gcd || matrix[*first][*first] != *a || matrix[*first][*second] != *b {
                 return Err(SmithError::InvalidCertificate("invalid column Bezout operation".into()));
@@ -386,5 +388,11 @@ mod tests {
             first: 0, second: 1, a: 7.into(), b: 8.into(), x: (-3).into(), y: 3.into(), gcd: 3.into(),
         };
         assert!(matches!(replay_smith_operations(&matrix(&[&[7], &[8]]), &[malicious], 1), Err(SmithError::InvalidCertificate(_))));
+        let same_index = SmithOperation::RowBezout {
+            first: 0, second: 0, a: 2.into(), b: 2.into(), x: 1.into(), y: 0.into(), gcd: 2.into(),
+        };
+        assert!(matches!(replay_smith_operations(&matrix(&[&[2]]), &[same_index], 1), Err(SmithError::InvalidCertificate(_))));
+        assert!(matches!(replay_smith_operations(&matrix(&[&[2]]), &[SmithOperation::AddRowMultiple { target: 0, source: 0, multiple: 1.into() }], 1), Err(SmithError::InvalidCertificate(_))));
+        assert!(matches!(replay_smith_operations(&matrix(&[&[2, 0]]), &[SmithOperation::RowBezout { first: 1, second: 0, a: 0.into(), b: 2.into(), x: 0.into(), y: 1.into(), gcd: 2.into() }], 1), Err(SmithError::InvalidCertificate(_))));
     }
 }

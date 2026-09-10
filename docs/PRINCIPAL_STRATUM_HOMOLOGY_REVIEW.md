@@ -29,3 +29,12 @@ Bézout replay (with a malicious certificate regression), uses CSR transposes
 on both inputs for composition checking, exposes `--record-certificate`, and
 checks field dimensions against the integral groups through universal
 coefficients. A focused Claude re-review is required for this patch.
+
+## Focused re-review
+
+Claude confirmed the transpose-based composition check and the
+universal-coefficient/certificate-driver changes, then found three further
+certificate-replay edge cases: same-index Bézout operations, self-addition
+operations, and rectangular transverse indexing. The final guard patch rejects
+all three and adds regression tests. A final targeted confirmation has been
+requested on that guard-only patch.

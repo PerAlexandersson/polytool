@@ -41,6 +41,10 @@ and universal-coefficient checks. The malicious Bézout certificate now has a
 regression test. A focused Claude re-review of this material correction is in
 progress; do not treat this paragraph as final review clearance yet.
 
+That focused re-review found same-index Bézout, self-add and rectangular-index
+certificate edge cases; all are now guarded with regression tests. A final
+guard-only Claude confirmation remains the last review action.
+
 ## Principal-stratum homology plan (2026-09-10)
 
 The user requested a careful plan, with reusable sparse matrices and Smith
