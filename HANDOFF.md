@@ -2,7 +2,7 @@
 
 ## Sparse integral homology — completed 2026-09-10
 
-Owner retains task-file ownership through host acceptance after commits `63e9861`, `5bd050b`, `d29227c`, `a56ac68`, `4d22c7e`, and `b134824`; no push was
+Task ownership is released following host review closure `c853ea7`; no push was
 made. Shared CSR/mutable sparse storage, bounded cancellation, bounded exact
 Smith replay/verification, and compatibility re-exports are in
 `combinatoric-core`; the principal-stratum automaton, count DP, streamed
