@@ -20,6 +20,13 @@ separate denominator-aware error type. Focused tests cover `q(n)`, `q(x)`,
 affine forcing, a two-component system with distinct rows, q=1 compatibility,
 held-out tampering, ambiguity, and companion shift rows.
 
+The new fitting functions return `SharedDenominatorVectorRecurrenceFitError`
+and joint diagnostics (total/equations-by-output, global rank, nullity, and
+output list). The existing `VectorRecurrenceFitError`,
+`VectorRecurrenceEvaluationError`, and per-row diagnostics remain unchanged.
+The legacy public enums were checked against the pre-extension definitions for
+source-compatible exhaustive matching.
+
 Verification in a standalone copy used external
 `CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`:
 
