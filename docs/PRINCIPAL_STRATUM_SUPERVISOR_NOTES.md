@@ -85,3 +85,21 @@ Further observations (~24 minutes):
 13. Grading arithmetic degree +/- 1 (including in errors/certificates) must
     not panic or wrap at i32 extrema. Decide a checked supported range at
     construction and reject hostile out-of-range certificate degrees.
+
+Recheck after 19632cb (first review-fix checkpoint):
+
+14. The new replay current-entry checks index matrix[first][first]. RowBezout
+    validates first as a row, not as a column, so a tall rectangular input can
+    panic there; ColumnBezout has the dual wide-matrix problem. Enforce every
+    accessed index, or verify the genuinely general unimodular operation
+    without requiring pivot-specific entries. Same-index additive and Bezout
+    operations from point 2 still need rejection. Add adversarial rectangular
+    and zero-shape tests; valid generated operation logs must still replay.
+15. --record-certificate currently prints only an input digest and pivot count,
+    then discards the actual pivot sequence. That is not a production replay
+    artifact. Provide bounded emission/reloading and an independent replay
+    command (or explicit in-run replay plus a documented artifact API). Bind
+    claimed residual/Smith factors to replay, not just record an unused log.
+16. universal_coefficient_dimension now exposes another public prime=0 panic
+    through mod_floor. Validate its input or accept an already validated field
+    type; test the previous-degree torsion term, not only current torsion.
