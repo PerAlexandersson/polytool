@@ -1,5 +1,19 @@
 # Handoff
 
+## Principal-stratum homology plan (2026-09-10)
+
+The user requested a careful plan, with reusable sparse matrices and Smith
+normal form in the shared library. See docs/PRINCIPAL_STRATUM_HOMOLOGY_PLAN.md.
+Planning only: no code, dependencies, builds, workers or profiles changed.
+The plan uses additive combinatoric-core modules and a separate model driver,
+reuses existing modular solvers, and preserves standalone Polytool packaging.
+It specifies exact unit cancellation, bounded Smith fallback, certificate
+replay, torsion tests, and separate timing/memory measurements for each stage.
+Original computation scripts were not attached to Boris's forwarded email;
+the reported homology remains an independent-reproduction target. The
+supervisor's small automaton DP verified cell counts only. Ownership of this
+entry and the plan is released after the documentation checkpoint.
+
 ## Path-IC frozen-core certificate (2026-09-06)
 
 The optional `--verify-frozen-core` scan in
