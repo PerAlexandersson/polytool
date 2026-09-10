@@ -74,6 +74,28 @@ functions accept `&[i64]`; use the `*_bigint_coeffs` variants when coefficients
 may exceed `i64`. Interlacing functions return `Option<bool>`: `None` means the
 directed degree relation is not valid for that test, not that interlacing failed.
 
+### Shared-denominator vector recurrences
+
+`find_vector_recurrence_with_denominator_rational` (and its integer wrapper)
+searches exact polynomial-vector transitions of the form
+
+```text
+q(n,x) F_(n+1) = M(n,x,D_x) F_n + G(n,x).
+```
+
+Use `VectorRecurrenceDenominatorOptions` to set the matrix, forcing, and
+common-factor degree bounds.  The returned
+`SharedDenominatorVectorRecurrence` evaluates by exact polynomial division and
+reports zero denominators or non-polynomial quotients as errors.  The
+`find_companion_vector_recurrence_with_denominator[_rational]` variants support
+lagged systems; companion shift rows contain `q(n,x) I` in the numerator.
+
+The denominator is normalized canonically: its first nonzero coefficient in
+`n^0 x^0, n^0 x^1, ..., n^1 x^0, ...` order is one.  With
+`require_unique = true`, all possible normalized pivots are checked and an
+ambiguous projective fit is rejected.  Existing `q = 1` vector APIs and their
+options are unchanged.
+
 For Hermite--Biehler or Euclidean-chain experiments, the library also exposes a
 signed Sturm continued-fraction certificate checker over exact rationals:
 

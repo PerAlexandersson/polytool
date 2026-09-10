@@ -281,6 +281,49 @@ pub struct VectorRecurrenceOptions {
     pub require_unique: bool,
 }
 
+/// Search bounds for a vector recurrence with one common polynomial factor on
+/// the left hand side.  The fitted identity is
+/// `q(n,x) F_(n+1) = M(n,x,D_x) F_n + G(n,x)`.
+///
+/// This is deliberately a separate options type: adding fields to
+/// [`VectorRecurrenceOptions`] would break downstream struct literals using
+/// the original, normalized (`q = 1`) API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VectorRecurrenceDenominatorOptions {
+    pub var_deg: usize,
+    pub idx_deg: usize,
+    pub diff_deg: usize,
+    pub homogeneous: bool,
+    pub forcing_var_deg: usize,
+    pub forcing_idx_deg: usize,
+    pub held_out_transitions: usize,
+    pub require_unique: bool,
+    /// Maximum degree in `x` of the common factor `q`.
+    pub denominator_var_deg: usize,
+    /// Maximum degree in the source index `n` of `q`.
+    pub denominator_idx_deg: usize,
+}
+
+/// Alias emphasizing that the denominator is shared by every output row.
+pub type SharedDenominatorVectorRecurrenceOptions = VectorRecurrenceDenominatorOptions;
+
+impl Default for VectorRecurrenceDenominatorOptions {
+    fn default() -> Self {
+        Self {
+            var_deg: 1,
+            idx_deg: 1,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 1,
+            forcing_idx_deg: 1,
+            held_out_transitions: 2,
+            require_unique: true,
+            denominator_var_deg: 0,
+            denominator_idx_deg: 0,
+        }
+    }
+}
+
 impl Default for VectorRecurrenceOptions {
     fn default() -> Self {
         Self {
@@ -320,6 +363,117 @@ pub struct VectorRecurrenceFit {
     pub held_out_transitions: usize,
 }
 
+/// A vector recurrence with a common polynomial denominator on its left.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedDenominatorVectorRecurrence {
+    pub denominator: BivarPoly,
+    pub matrix: Vec<Vec<WeylOperator>>,
+    pub forcing: Option<Vec<BivarPoly>>,
+}
+
+/// Shorter compatibility name for [`SharedDenominatorVectorRecurrence`].
+pub type VectorRecurrenceWithDenominator = SharedDenominatorVectorRecurrence;
+
+impl SharedDenominatorVectorRecurrence {
+    pub fn dimension(&self) -> usize {
+        self.matrix.len()
+    }
+
+    /// Evaluate the recurrence exactly, dividing every numerator component by
+    /// the common evaluated denominator.
+    pub fn evaluate_next_rational(
+        &self,
+        state: &[Vec<BigRational>],
+        source_index: usize,
+    ) -> Result<Vec<Vec<BigRational>>, VectorRecurrenceEvaluationError> {
+        let dimension = self.dimension();
+        if self.matrix.iter().any(|row| row.len() != dimension) {
+            return Err(VectorRecurrenceEvaluationError::NonSquareMatrix);
+        }
+        evaluate_shared_denominator_rectangular_rational(self, state, source_index)
+    }
+
+    fn holds_rectangular_identity_rational(
+        &self,
+        state: &[Vec<BigRational>],
+        next_state: &[Vec<BigRational>],
+        source_index: usize,
+    ) -> bool {
+        let Ok(numerator) = evaluate_rectangular_vector_map_rational(
+            &self.matrix,
+            self.forcing.as_deref(),
+            state,
+            source_index,
+        ) else {
+            return false;
+        };
+        let denominator = bivar_eval_n(&self.denominator, source_index);
+        numerator.len() == next_state.len()
+            && numerator.iter().zip(next_state).all(|(lhs, target)| {
+                trim_poly_rational(poly_mul_rational(&denominator, target))
+                    == trim_poly_rational(lhs.clone())
+            })
+    }
+
+    /// Check one exact square-system transition.
+    pub fn holds_transition_rational(
+        &self,
+        state: &[Vec<BigRational>],
+        next_state: &[Vec<BigRational>],
+        source_index: usize,
+    ) -> bool {
+        self.evaluate_next_rational(state, source_index)
+            .is_ok_and(|actual| vector_states_equal(&actual, next_state))
+    }
+}
+
+fn evaluate_shared_denominator_rectangular_rational(
+    recurrence: &SharedDenominatorVectorRecurrence,
+    state: &[Vec<BigRational>],
+    source_index: usize,
+) -> Result<Vec<Vec<BigRational>>, VectorRecurrenceEvaluationError> {
+    let numerator = evaluate_rectangular_vector_map_rational(
+        &recurrence.matrix,
+        recurrence.forcing.as_deref(),
+        state,
+        source_index,
+    )?;
+    let denominator = bivar_eval_n(&recurrence.denominator, source_index);
+    if poly_is_zero_rational(&denominator) {
+        return Err(VectorRecurrenceEvaluationError::ZeroDenominator);
+    }
+    numerator
+        .iter()
+        .map(|component| {
+            poly_div_exact_rational(component, &denominator).map_err(|error| match error {
+                RecurrenceEvaluationError::ZeroDenominator => {
+                    VectorRecurrenceEvaluationError::ZeroDenominator
+                }
+                RecurrenceEvaluationError::NonPolynomialQuotient => {
+                    VectorRecurrenceEvaluationError::NonPolynomialQuotient
+                }
+                _ => VectorRecurrenceEvaluationError::NonPolynomialQuotient,
+            })
+        })
+        .collect()
+}
+
+/// Result of a shared-denominator vector recurrence search.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedDenominatorVectorRecurrenceFit {
+    pub recurrence: SharedDenominatorVectorRecurrence,
+    pub rows: Vec<VectorRecurrenceRowDiagnostics>,
+    pub fit_transitions: usize,
+    pub held_out_transitions: usize,
+    /// Rank after fixing the canonical denominator pivot to one.
+    pub rank: usize,
+    /// Nullity after fixing the canonical denominator pivot.
+    pub nullity: usize,
+    pub denominator_pivot: (usize, usize),
+}
+
+pub type VectorRecurrenceWithDenominatorFit = SharedDenominatorVectorRecurrenceFit;
+
 /// Why a fixed-bound vector recurrence search could not return a model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorRecurrenceFitError {
@@ -348,6 +502,11 @@ pub enum VectorRecurrenceFitError {
     IndexOverflow {
         first_index: usize,
         offset: usize,
+    },
+    NoSharedDenominator,
+    SharedDenominatorUnderdetermined {
+        rank: usize,
+        unknowns: usize,
     },
 }
 
@@ -394,6 +553,11 @@ impl fmt::Display for VectorRecurrenceFitError {
                 f,
                 "source index overflow: {first_index} + {offset} does not fit in usize"
             ),
+            Self::NoSharedDenominator => write!(f, "no nonzero shared denominator recurrence in the requested search space"),
+            Self::SharedDenominatorUnderdetermined { rank, unknowns } => write!(
+                f,
+                "shared-denominator recurrence is not identifiable: rank {rank} for {unknowns} unknowns"
+            ),
         }
     }
 }
@@ -406,6 +570,8 @@ pub enum VectorRecurrenceEvaluationError {
     NonSquareMatrix,
     StateDimension { expected: usize, found: usize },
     ForcingDimension { expected: usize, found: usize },
+    ZeroDenominator,
+    NonPolynomialQuotient,
 }
 
 impl fmt::Display for VectorRecurrenceEvaluationError {
@@ -418,6 +584,13 @@ impl fmt::Display for VectorRecurrenceEvaluationError {
             Self::ForcingDimension { expected, found } => {
                 write!(f, "forcing has {found} components; expected {expected}")
             }
+            Self::ZeroDenominator => {
+                write!(f, "evaluated shared denominator is the zero polynomial")
+            }
+            Self::NonPolynomialQuotient => write!(
+                f,
+                "shared-denominator recurrence did not divide exactly to a polynomial"
+            ),
         }
     }
 }
@@ -2992,6 +3165,440 @@ pub fn find_companion_vector_recurrence(
     opts: &VectorRecurrenceOptions,
 ) -> Result<VectorRecurrenceFit, VectorRecurrenceFitError> {
     find_companion_vector_recurrence_rational(
+        &i64_vector_states_to_rational(states),
+        first_index,
+        lag,
+        opts,
+    )
+}
+
+/// Fit a common-denominator vector map from already aligned source and target
+/// states.  The equations for all output components are solved jointly: the
+/// denominator coefficients are shared, while matrix and forcing coefficients
+/// are row-local.
+fn fit_shared_denominator_map_rational(
+    source_states: &[Vec<Vec<BigRational>>],
+    target_states: &[Vec<Vec<BigRational>>],
+    source_indices: &[usize],
+    fit_transitions: usize,
+    opts: &VectorRecurrenceDenominatorOptions,
+    output_component_offset: usize,
+) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+    let source_dimension = source_states.first().map_or(0, Vec::len);
+    let output_dimension = target_states.first().map_or(0, Vec::len);
+    let denom_width = opts.denominator_var_deg + 1;
+    let denominator_unknowns = (opts.denominator_idx_deg + 1) * denom_width;
+    let vars_per_bivar = (opts.idx_deg + 1) * (opts.var_deg + 1);
+    let matrix_unknowns = source_dimension * (opts.diff_deg + 1) * vars_per_bivar;
+    let forcing_unknowns = if opts.homogeneous {
+        0
+    } else {
+        (opts.forcing_idx_deg + 1) * (opts.forcing_var_deg + 1)
+    };
+    let row_unknowns = matrix_unknowns + forcing_unknowns;
+    let unknowns = denominator_unknowns + output_dimension * row_unknowns;
+
+    let derivatives = source_states
+        .iter()
+        .map(|state| {
+            state
+                .iter()
+                .map(|poly| {
+                    (0..=opts.diff_deg)
+                        .map(|d| poly_nth_derivative_rational(poly, d))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    let local_matrix_col = |source: usize, d: usize, i: usize, j: usize| {
+        ((source * (opts.diff_deg + 1) + d) * (opts.idx_deg + 1) + i) * (opts.var_deg + 1) + j
+    };
+    let local_forcing_col =
+        |i: usize, j: usize| matrix_unknowns + i * (opts.forcing_var_deg + 1) + j;
+    let denominator_col = |i: usize, j: usize| i * denom_width + j;
+    let global_local_col =
+        |output: usize, local: usize| denominator_unknowns + output * row_unknowns + local;
+
+    let mut rows = Vec::<Vec<BigRational>>::new();
+    let mut rhs = Vec::<BigRational>::new();
+    let mut equations_by_output = Vec::with_capacity(output_dimension);
+    for output in 0..output_dimension {
+        let target_degree = target_states[..fit_transitions]
+            .iter()
+            .map(|state| poly_degree_rational(&state[output]))
+            .max()
+            .unwrap_or(0)
+            + opts.denominator_var_deg;
+        let source_degree = derivatives[..fit_transitions]
+            .iter()
+            .flat_map(|state| state.iter())
+            .flat_map(|orders| orders.iter())
+            .map(|poly| poly_degree_rational(poly))
+            .max()
+            .unwrap_or(0)
+            + opts.var_deg;
+        let forcing_degree = if opts.homogeneous {
+            0
+        } else {
+            opts.forcing_var_deg
+        };
+        let max_degree = target_degree.max(source_degree).max(forcing_degree);
+        let equations_per_transition = max_degree + 1;
+        equations_by_output.push(fit_transitions * equations_per_transition);
+        for transition in 0..fit_transitions {
+            let n_powers = rational_index_powers(
+                source_indices[transition],
+                opts.denominator_idx_deg
+                    .max(opts.idx_deg)
+                    .max(opts.forcing_idx_deg),
+            );
+            for degree in 0..=max_degree {
+                let mut row = vec![BigRational::zero(); unknowns];
+                // q(n,x) * target(x), with q on the left of the identity.
+                for i in 0..=opts.denominator_idx_deg {
+                    for j in 0..=opts.denominator_var_deg {
+                        if degree < j {
+                            continue;
+                        }
+                        let coefficient =
+                            poly_coeff_rational(&target_states[transition][output], degree - j);
+                        if !coefficient.is_zero() {
+                            row[denominator_col(i, j)] += coefficient * n_powers[i].clone();
+                        }
+                    }
+                }
+                // Subtract the Weyl operator action.
+                for source in 0..source_dimension {
+                    for d in 0..=opts.diff_deg {
+                        let derivative = &derivatives[transition][source][d];
+                        for i in 0..=opts.idx_deg {
+                            for j in 0..=opts.var_deg {
+                                if degree < j {
+                                    continue;
+                                }
+                                let coefficient = poly_coeff_rational(derivative, degree - j);
+                                if !coefficient.is_zero() {
+                                    row[global_local_col(
+                                        output,
+                                        local_matrix_col(source, d, i, j),
+                                    )] -= coefficient * n_powers[i].clone();
+                                }
+                            }
+                        }
+                    }
+                }
+                if !opts.homogeneous && degree <= opts.forcing_var_deg {
+                    for i in 0..=opts.forcing_idx_deg {
+                        row[global_local_col(output, local_forcing_col(i, degree))] -=
+                            n_powers[i].clone();
+                    }
+                }
+                rows.push(row);
+                rhs.push(BigRational::zero());
+            }
+        }
+    }
+
+    let mut underdetermined = None;
+    let mut accepted = None;
+    let mut held_out_failure = None;
+    for pivot in 0..denominator_unknowns {
+        // Fix the first nonzero denominator monomial to one.  Earlier
+        // denominator coefficients are fixed to zero; this removes the
+        // homogeneous scale ambiguity without choosing a coefficient in
+        // advance.
+        let mut kept_columns = Vec::with_capacity(unknowns - pivot - 1);
+        for column in pivot + 1..unknowns {
+            kept_columns.push(column);
+        }
+        let mut constrained = Vec::with_capacity(rows.len());
+        let mut constrained_rhs = Vec::with_capacity(rhs.len());
+        for row in &rows {
+            constrained.push(
+                kept_columns
+                    .iter()
+                    .map(|&column| row[column].clone())
+                    .collect::<Vec<_>>(),
+            );
+            constrained_rhs.push(-row[pivot].clone());
+        }
+        let Some(solution) = linalg::solve_linear_system_with_rank(&constrained, &constrained_rhs)
+        else {
+            continue;
+        };
+        if opts.require_unique && solution.nullity != 0 {
+            underdetermined = Some((solution.rank, kept_columns.len()));
+            continue;
+        }
+
+        let mut full_solution = vec![BigRational::zero(); unknowns];
+        full_solution[pivot] = BigRational::one();
+        for (value, &column) in solution.particular.iter().zip(&kept_columns) {
+            full_solution[column] = value.clone();
+        }
+
+        let denominator = extract_vector_bivar(
+            &full_solution,
+            0,
+            opts.denominator_idx_deg,
+            opts.denominator_var_deg,
+        );
+        if denominator.is_zero() {
+            continue;
+        }
+        let mut fitted_matrix = Vec::with_capacity(output_dimension);
+        let mut fitted_forcing = (!opts.homogeneous).then(Vec::new);
+        let mut diagnostics = Vec::with_capacity(output_dimension);
+        for (output, &equations) in equations_by_output.iter().enumerate() {
+            let output_start = denominator_unknowns + output * row_unknowns;
+            let mut operator_row = Vec::with_capacity(source_dimension);
+            for source in 0..source_dimension {
+                let coefficients = (0..=opts.diff_deg)
+                    .map(|d| {
+                        let start = output_start + local_matrix_col(source, d, 0, 0);
+                        extract_vector_bivar(&full_solution, start, opts.idx_deg, opts.var_deg)
+                    })
+                    .collect();
+                operator_row.push(WeylOperator::new(coefficients));
+            }
+            fitted_matrix.push(operator_row);
+            if let Some(forcing) = &mut fitted_forcing {
+                let start = output_start + matrix_unknowns;
+                forcing.push(extract_vector_bivar(
+                    &full_solution,
+                    start,
+                    opts.forcing_idx_deg,
+                    opts.forcing_var_deg,
+                ));
+            }
+            diagnostics.push(VectorRecurrenceRowDiagnostics {
+                output_component: output_component_offset + output,
+                equations,
+                unknowns: kept_columns.len(),
+                rank: solution.rank,
+                nullity: solution.nullity,
+            });
+        }
+        let recurrence = SharedDenominatorVectorRecurrence {
+            denominator: denominator.clone(),
+            matrix: fitted_matrix,
+            forcing: fitted_forcing,
+        };
+        let mut candidate_failure = None;
+        let mut fit_failure = false;
+        for transition in 0..source_states.len() {
+            if !recurrence.holds_rectangular_identity_rational(
+                &source_states[transition],
+                &target_states[transition],
+                source_indices[transition],
+            ) {
+                if transition >= fit_transitions {
+                    candidate_failure.get_or_insert(source_indices[transition]);
+                } else {
+                    // The coefficient equations should already imply the
+                    // fitted transitions; reject any truncation mistake.
+                    fit_failure = true;
+                }
+            }
+        }
+        let candidate = SharedDenominatorVectorRecurrenceFit {
+            recurrence,
+            rows: diagnostics,
+            fit_transitions,
+            held_out_transitions: source_states.len() - fit_transitions,
+            rank: solution.rank,
+            nullity: solution.nullity,
+            denominator_pivot: {
+                let i = pivot / denom_width;
+                let j = pivot % denom_width;
+                (i, j)
+            },
+        };
+        if fit_failure {
+            continue;
+        }
+        if let Some(transition) = candidate_failure {
+            held_out_failure.get_or_insert(transition);
+            continue;
+        }
+        if opts.require_unique && accepted.is_some() {
+            return Err(VectorRecurrenceFitError::SharedDenominatorUnderdetermined {
+                rank: solution.rank,
+                unknowns: kept_columns.len(),
+            });
+        }
+        if !opts.require_unique {
+            return Ok(candidate);
+        }
+        accepted = Some(candidate);
+    }
+    if let Some((rank, unknowns)) = underdetermined {
+        if opts.require_unique && accepted.is_some() {
+            return Err(VectorRecurrenceFitError::SharedDenominatorUnderdetermined {
+                rank,
+                unknowns,
+            });
+        }
+    }
+    if let Some(candidate) = accepted {
+        return Ok(candidate);
+    }
+    if let Some(transition) = held_out_failure {
+        return Err(VectorRecurrenceFitError::HeldOutVerificationFailed { transition });
+    }
+    if let Some((rank, unknowns)) = underdetermined {
+        return Err(VectorRecurrenceFitError::SharedDenominatorUnderdetermined { rank, unknowns });
+    }
+    Err(VectorRecurrenceFitError::NoSharedDenominator)
+}
+
+/// Find a first-order vector recurrence with one common polynomial factor
+/// `q(n,x)` on the left.  The denominator's leading nonzero monomial in the
+/// coefficient ordering `(n^0 x^0, n^0 x^1, ..., n^1 x^0, ...)` is normalized
+/// to one; this is the only normalization imposed on the returned model.
+pub fn find_vector_recurrence_with_denominator_rational(
+    states: &[Vec<Vec<BigRational>>],
+    first_index: usize,
+    opts: &VectorRecurrenceDenominatorOptions,
+) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+    let dimension = validate_vector_states(states)?;
+    let transitions = states.len().saturating_sub(1);
+    if transitions <= opts.held_out_transitions {
+        return Err(VectorRecurrenceFitError::NotEnoughTransitions {
+            transitions,
+            held_out: opts.held_out_transitions,
+        });
+    }
+    let fit_transitions = transitions - opts.held_out_transitions;
+    let source_indices = (0..transitions)
+        .map(|offset| {
+            first_index
+                .checked_add(offset)
+                .ok_or(VectorRecurrenceFitError::IndexOverflow {
+                    first_index,
+                    offset,
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let fitted = fit_shared_denominator_map_rational(
+        &states[..transitions],
+        &states[1..],
+        &source_indices,
+        fit_transitions,
+        opts,
+        0,
+    )?;
+    debug_assert_eq!(fitted.recurrence.dimension(), dimension);
+    Ok(fitted)
+}
+
+/// Integer-coefficient convenience wrapper for
+/// [`find_vector_recurrence_with_denominator_rational`].
+pub fn find_vector_recurrence_with_denominator(
+    states: &[Vec<Vec<i64>>],
+    first_index: usize,
+    opts: &VectorRecurrenceDenominatorOptions,
+) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+    find_vector_recurrence_with_denominator_rational(
+        &i64_vector_states_to_rational(states),
+        first_index,
+        opts,
+    )
+}
+
+/// Fit a lagged recurrence and return the corresponding companion system with
+/// a common denominator.  Shift rows use `q(n,x) I`, since the denominator
+/// multiplies every output component of the companion state.
+pub fn find_companion_vector_recurrence_with_denominator_rational(
+    states: &[Vec<Vec<BigRational>>],
+    first_index: usize,
+    lag: usize,
+    opts: &VectorRecurrenceDenominatorOptions,
+) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+    if lag == 0 {
+        return Err(VectorRecurrenceFitError::InvalidLag);
+    }
+    let component_dimension = validate_vector_states(states)?;
+    let transitions = states.len().saturating_sub(lag);
+    if transitions <= opts.held_out_transitions {
+        return Err(VectorRecurrenceFitError::NotEnoughTransitions {
+            transitions,
+            held_out: opts.held_out_transitions,
+        });
+    }
+    let fit_transitions = transitions - opts.held_out_transitions;
+    let mut sources = Vec::with_capacity(transitions);
+    let mut targets = Vec::with_capacity(transitions);
+    let mut source_indices = Vec::with_capacity(transitions);
+    for latest in lag - 1..states.len() - 1 {
+        let mut companion = Vec::with_capacity(lag * component_dimension);
+        for state in &states[latest + 1 - lag..=latest] {
+            companion.extend(state.iter().cloned());
+        }
+        sources.push(companion);
+        targets.push(states[latest + 1].clone());
+        source_indices.push(first_index.checked_add(latest).ok_or(
+            VectorRecurrenceFitError::IndexOverflow {
+                first_index,
+                offset: latest,
+            },
+        )?);
+    }
+    let output_offset = (lag - 1) * component_dimension;
+    let fitted = fit_shared_denominator_map_rational(
+        &sources,
+        &targets,
+        &source_indices,
+        fit_transitions,
+        opts,
+        output_offset,
+    )?;
+    let companion_dimension = lag * component_dimension;
+    let denominator = fitted.recurrence.denominator.clone();
+    let mut matrix = vec![vec![WeylOperator::zero(); companion_dimension]; companion_dimension];
+    for block in 0..lag - 1 {
+        for component in 0..component_dimension {
+            let row = block * component_dimension + component;
+            let column = (block + 1) * component_dimension + component;
+            matrix[row][column] = WeylOperator::new(vec![denominator.clone()]);
+        }
+    }
+    for (component, fitted_row) in fitted.recurrence.matrix.into_iter().enumerate() {
+        matrix[output_offset + component] = fitted_row;
+    }
+    let forcing = fitted.recurrence.forcing.map(|fitted_forcing| {
+        let mut forcing = vec![zero_bivar(); companion_dimension];
+        for (component, polynomial) in fitted_forcing.into_iter().enumerate() {
+            forcing[output_offset + component] = polynomial;
+        }
+        forcing
+    });
+    Ok(SharedDenominatorVectorRecurrenceFit {
+        recurrence: SharedDenominatorVectorRecurrence {
+            denominator,
+            matrix,
+            forcing,
+        },
+        rows: fitted.rows,
+        fit_transitions,
+        held_out_transitions: opts.held_out_transitions,
+        rank: fitted.rank,
+        nullity: fitted.nullity,
+        denominator_pivot: fitted.denominator_pivot,
+    })
+}
+
+/// Integer-coefficient convenience wrapper for
+/// [`find_companion_vector_recurrence_with_denominator_rational`].
+pub fn find_companion_vector_recurrence_with_denominator(
+    states: &[Vec<Vec<i64>>],
+    first_index: usize,
+    lag: usize,
+    opts: &VectorRecurrenceDenominatorOptions,
+) -> Result<SharedDenominatorVectorRecurrenceFit, VectorRecurrenceFitError> {
+    find_companion_vector_recurrence_with_denominator_rational(
         &i64_vector_states_to_rational(states),
         first_index,
         lag,
@@ -7266,6 +7873,172 @@ mod tests {
         for row in 2..4 {
             assert_eq!(fit.recurrence.matrix[row], expected.matrix[row]);
         }
+    }
+
+    #[test]
+    fn shared_denominator_finder_recovers_n_dependent_factor_and_forcing() {
+        // n P_(n+1) = (n+1) P_n, with P_n = n.  The normalized recurrence
+        // has q(n) = n; q = 1 would require a non-polynomial coefficient.
+        let states = (1..=12)
+            .map(|n| vec![vec![br(n as i64, 1)]])
+            .collect::<Vec<_>>();
+        let opts = VectorRecurrenceDenominatorOptions {
+            var_deg: 0,
+            idx_deg: 1,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 2,
+            require_unique: true,
+            denominator_var_deg: 0,
+            denominator_idx_deg: 1,
+        };
+        let fit = find_vector_recurrence_with_denominator_rational(&states, 1, &opts).unwrap();
+        assert_eq!(fit.denominator_pivot, (1, 0));
+        assert_eq!(
+            fit.recurrence.denominator,
+            bounded_bivar(1, 0, &[(1, 0, 1)])
+        );
+        assert_eq!(
+            fit.recurrence.matrix[0][0].coefficients[0],
+            bounded_bivar(1, 0, &[(0, 0, 1), (1, 0, 1)])
+        );
+        assert_eq!(fit.recurrence.forcing, None);
+        assert!(fit.rows.iter().all(|row| row.nullity == 0));
+    }
+
+    #[test]
+    fn shared_denominator_finder_recovers_x_factor_and_rejects_tampering() {
+        // x P_(n+1) = P_n for P_n = x^(N-n), so no normalized q=1 model
+        // exists with a degree-zero matrix coefficient.
+        let states = (0..=10)
+            .map(|n| {
+                let mut polynomial = vec![BigRational::zero(); 11 - n];
+                polynomial[10 - n] = BigRational::one();
+                vec![polynomial]
+            })
+            .collect::<Vec<_>>();
+        let opts = VectorRecurrenceDenominatorOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 2,
+            require_unique: true,
+            denominator_var_deg: 1,
+            denominator_idx_deg: 0,
+        };
+        let fit = find_vector_recurrence_with_denominator_rational(&states, 0, &opts).unwrap();
+        assert_eq!(fit.denominator_pivot, (0, 1));
+        assert_eq!(
+            fit.recurrence.denominator,
+            bounded_bivar(0, 1, &[(0, 1, 1)])
+        );
+        assert!(fit
+            .recurrence
+            .holds_transition_rational(&states[0], &states[1], 0));
+        let mut tampered = states.clone();
+        tampered[9][0][0] += BigRational::one();
+        assert_eq!(
+            find_vector_recurrence_with_denominator_rational(&tampered, 0, &opts),
+            Err(VectorRecurrenceFitError::HeldOutVerificationFailed { transition: 8 })
+        );
+    }
+
+    #[test]
+    fn shared_denominator_finder_supports_affine_forcing() {
+        // For P_n = 1 + x^(N-n), x P_(n+1) = P_n + (x - 1).
+        let states = (0..=9)
+            .map(|n| {
+                let mut polynomial = vec![BigRational::zero(); 11 - n];
+                polynomial[0] = BigRational::one();
+                polynomial[10 - n] = BigRational::one();
+                vec![polynomial]
+            })
+            .collect::<Vec<_>>();
+        let opts = VectorRecurrenceDenominatorOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            homogeneous: false,
+            forcing_var_deg: 1,
+            forcing_idx_deg: 0,
+            held_out_transitions: 2,
+            require_unique: true,
+            denominator_var_deg: 1,
+            denominator_idx_deg: 0,
+        };
+        let fit = find_vector_recurrence_with_denominator_rational(&states, 0, &opts).unwrap();
+        assert_eq!(
+            fit.recurrence.denominator,
+            bounded_bivar(0, 1, &[(0, 1, 1)])
+        );
+        assert_eq!(
+            fit.recurrence.forcing,
+            Some(vec![bounded_bivar(0, 1, &[(0, 0, -1), (0, 1, 1)])])
+        );
+    }
+
+    #[test]
+    fn shared_denominator_finder_reports_underdetermination() {
+        let states = (1..=6)
+            .map(|n| vec![vec![br(n as i64, 1)]])
+            .collect::<Vec<_>>();
+        let opts = VectorRecurrenceDenominatorOptions {
+            var_deg: 0,
+            idx_deg: 2,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 0,
+            require_unique: true,
+            denominator_var_deg: 1,
+            denominator_idx_deg: 2,
+        };
+        let result = find_vector_recurrence_with_denominator_rational(&states, 1, &opts);
+        assert!(matches!(
+            result,
+            Err(VectorRecurrenceFitError::SharedDenominatorUnderdetermined { .. })
+                | Err(VectorRecurrenceFitError::NoSharedDenominator)
+        ));
+    }
+
+    #[test]
+    fn shared_denominator_companion_uses_q_times_shift_identity() {
+        let states = (0..=9)
+            .map(|n| {
+                let mut polynomial = vec![BigRational::zero(); 10 - n];
+                polynomial[9 - n] = BigRational::one();
+                vec![polynomial]
+            })
+            .collect::<Vec<_>>();
+        let opts = VectorRecurrenceDenominatorOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 0,
+            require_unique: true,
+            denominator_var_deg: 1,
+            denominator_idx_deg: 0,
+        };
+        let fit = find_companion_vector_recurrence_with_denominator_rational(&states, 0, 2, &opts)
+            .unwrap();
+        assert_eq!(
+            fit.recurrence.matrix[0][1].coefficients[0],
+            fit.recurrence.denominator
+        );
+        assert!(fit.recurrence.holds_transition_rational(
+            &[states[0][0].clone(), states[1][0].clone()],
+            &[states[1][0].clone(), states[2][0].clone()],
+            1,
+        ));
     }
 
     #[test]
