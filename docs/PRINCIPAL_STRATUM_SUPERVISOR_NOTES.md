@@ -35,3 +35,20 @@ code, not findings against a final reviewed release. Recheck before closing.
 
 The host did not run concurrent Cargo builds or edit the worker's source.
 These notes supplement, and do not replace, the required Claude review.
+
+Further observations at the first model implementation (~12 minutes):
+
+7. Unit cancellation currently rebuilds candidate_queue over the entire
+   complex after every pivot. That is not the planned local/lazy update and
+   will multiply work by tens of thousands of pivots. Profile and replace;
+   merely having a BinaryHeap does not make this an incremental scheduler.
+8. The model currently uses BFS production and DFS closure as its second
+   enumerator. Different traversal order of the same moves is not the planned
+   independent membership-automaton validation. Add the actual subset automaton
+   and test accepted words independently; do not describe closure DFS as that
+   oracle. Cell-count-only DP should independently confirm the large counts.
+9. The modular path currently materializes/transposes every boundary and
+   collects all rows before invoking the streaming solver. This is not the
+   planned boundary-on-demand baseline. Implement the stream or document and
+   justify measured limits, and enforce cell/NNZ limits during generation,
+   not only after building the entire complex.
