@@ -3,7 +3,8 @@
 
 use crate::{smith_normal_form, MutableSparseMatrix, SmithError, SmithOptions, SparseMatrix};
 use num_bigint::BigInt;
-use num_traits::{One, Signed};
+use num_integer::Integer;
+use num_traits::{One, Signed, Zero};
 use sha2::{Digest, Sha256};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BinaryHeap};
@@ -245,6 +246,18 @@ pub fn field_betti_number(generator_count: usize, rank_out: usize, rank_in: usiz
     generator_count.checked_sub(rank_out)?.checked_sub(rank_in)
 }
 
+/// The universal-coefficient dimension predicted by an exact integral group.
+pub fn universal_coefficient_dimension(
+    current: &AbelianGroup,
+    previous: Option<&AbelianGroup>,
+    prime: u64,
+) -> usize {
+    let prime = BigInt::from(prime);
+    current.free_rank
+        + current.torsion_invariants.iter().filter(|factor| factor.mod_floor(&prime).is_zero()).count()
+        + previous.into_iter().flat_map(|group| group.torsion_invariants.iter()).filter(|factor| factor.mod_floor(&prime).is_zero()).count()
+}
+
 struct ReductionState {
     matrices: BTreeMap<i32, MutableSparseMatrix>,
     active: BTreeMap<i32, Vec<bool>>,
@@ -399,6 +412,8 @@ mod tests {
         assert_eq!(groups[&0], AbelianGroup { free_rank: 0, torsion_invariants: vec![6.into()] });
         let free = complex(&[(0, 1), (1, 1)], &[(1, &[&[0]])]);
         assert_eq!(integral_homology(&free, SmithOptions::default()).unwrap()[&1].free_rank, 1);
+        assert_eq!(universal_coefficient_dimension(&groups[&0], None, 2), 1);
+        assert_eq!(universal_coefficient_dimension(&groups[&0], None, 5), 0);
     }
 
     #[test]

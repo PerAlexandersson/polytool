@@ -330,11 +330,17 @@ fn apply_operation(matrix: &mut [Vec<BigInt>], columns: usize, operation: &Smith
             }
         }
         SmithOperation::RowBezout { first, second, a, b, x, y, gcd } if valid_row(*first) && valid_row(*second) => {
-            if gcd.is_zero() || x * a + y * b != *gcd { return Err(SmithError::InvalidCertificate("invalid row Bezout identity".into())); }
+            if gcd.is_zero() || !gcd.is_positive() || !a.mod_floor(gcd).is_zero() || !b.mod_floor(gcd).is_zero()
+                || x * a + y * b != *gcd || matrix[*first][*first] != *a || matrix[*second][*first] != *b {
+                return Err(SmithError::InvalidCertificate("invalid row Bezout operation".into()));
+            }
             bezout_rows(matrix, *first, *second, a, b, gcd, x, y);
         }
         SmithOperation::ColumnBezout { first, second, a, b, x, y, gcd } if valid_column(*first) && valid_column(*second) => {
-            if gcd.is_zero() || x * a + y * b != *gcd { return Err(SmithError::InvalidCertificate("invalid column Bezout identity".into())); }
+            if gcd.is_zero() || !gcd.is_positive() || !a.mod_floor(gcd).is_zero() || !b.mod_floor(gcd).is_zero()
+                || x * a + y * b != *gcd || matrix[*first][*first] != *a || matrix[*first][*second] != *b {
+                return Err(SmithError::InvalidCertificate("invalid column Bezout operation".into()));
+            }
             bezout_columns(matrix, *first, *second, a, b, gcd, x, y);
         }
         _ => return Err(SmithError::InvalidCertificate("operation has an out-of-range index".into())),
@@ -376,5 +382,9 @@ mod tests {
         let input = SparseMatrix::<BigInt>::zero(3, 3);
         assert!(matches!(smith_normal_form(&input, SmithOptions { max_dense_entries: 8, ..SmithOptions::default() }), Err(SmithError::Limit(SmithLimit::DenseEntries { .. }))));
         assert!(matches!(replay_smith_operations(&input, &[SmithOperation::NegateRow { row: 9 }], 1), Err(SmithError::InvalidCertificate(_))));
+        let malicious = SmithOperation::RowBezout {
+            first: 0, second: 1, a: 7.into(), b: 8.into(), x: (-3).into(), y: 3.into(), gcd: 3.into(),
+        };
+        assert!(matches!(replay_smith_operations(&matrix(&[&[7], &[8]]), &[malicious], 1), Err(SmithError::InvalidCertificate(_))));
     }
 }

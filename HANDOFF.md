@@ -34,6 +34,13 @@ incomplete runs, not negative results or homology claims. A read-only Claude
 review is now required before release; see
 `docs/PRINCIPAL_STRATUM_HOMOLOGY_REVIEW.md`.
 
+Claude's completed read-only Opus review found and the implementation worker
+fixed a malformed-Smith-certificate acceptance bug, a quadratic sparse
+composition validation path, and missing user-visible cancellation-certificate
+and universal-coefficient checks. The malicious Bézout certificate now has a
+regression test. A focused Claude re-review of this material correction is in
+progress; do not treat this paragraph as final review clearance yet.
+
 ## Principal-stratum homology plan (2026-09-10)
 
 The user requested a careful plan, with reusable sparse matrices and Smith

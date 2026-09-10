@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use combinatoric_core::{cancel_units, integral_homology, UnitReductionOptions};
+use combinatoric_core::{cancel_units, integral_homology, universal_coefficient_dimension, UnitReductionOptions};
 use experiments::principal_stratum::{modular_field_betti, rational_field_betti, PrincipalStratumModel};
 use polytool::SparseModRowOrder;
 
@@ -28,6 +28,7 @@ struct Args {
     #[arg(long, default_value_t = 1_000_000)] max_pivots: usize,
     #[arg(long, default_value_t = 0, help = "Run a bounded rational oracle only when nonzero")] rational_dense_budget: usize,
     #[arg(long, help = "Skip unit cancellation and integral assembly")] field_only: bool,
+    #[arg(long, help = "Keep the replayable unit-cancellation certificate in the run result")] record_certificate: bool,
 }
 
 fn main() -> Result<(), String> {
@@ -44,10 +45,17 @@ fn main() -> Result<(), String> {
     if args.rational_dense_budget > 0 { println!("rational_oracle={:?}", rational_field_betti(&model, args.rational_dense_budget).map_err(|error| error.to_string())?); }
     if args.field_only { return Ok(()); }
     let reduction_started = std::time::Instant::now();
-    let reduction = cancel_units(model.complex(), UnitReductionOptions { max_pivots: args.max_pivots, max_nnz: args.max_reduction_nnz, record_certificate: false, ..UnitReductionOptions::default() }).map_err(|error| error.to_string())?;
+    let reduction = cancel_units(model.complex(), UnitReductionOptions { max_pivots: args.max_pivots, max_nnz: args.max_reduction_nnz, record_certificate: args.record_certificate, ..UnitReductionOptions::default() }).map_err(|error| error.to_string())?;
     println!("unit_reduction_ms={} pivots={} initial_peak_final_nnz=({},{},{}) residual_counts={:?}", reduction_started.elapsed().as_millis(), reduction.stats.pivot_updates, reduction.stats.initial_nnz, reduction.stats.peak_nnz, reduction.stats.final_nnz, reduction.reduced.generator_counts());
     let smith_started = std::time::Instant::now();
     let groups = integral_homology(&reduction.reduced, Default::default()).map_err(|error| error.to_string())?;
+    for (&degree, group) in &groups {
+        let predicted = universal_coefficient_dimension(group, groups.get(&(degree - 1)), args.prime);
+        if modular.betti_numbers.get(&degree).copied().unwrap_or(0) != predicted {
+            return Err(format!("universal-coefficient mismatch at degree {degree}: F_{} gives {}, integral groups predict {predicted}", args.prime, modular.betti_numbers[&degree]));
+        }
+    }
     println!("integral_groups={groups:?} smith_ms={}", smith_started.elapsed().as_millis());
+    if let Some(certificate) = &reduction.certificate { println!("unit_certificate_sha256={} pivots={}", certificate.input_sha256, certificate.pivots.len()); }
     Ok(())
 }

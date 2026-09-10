@@ -18,7 +18,7 @@ pub mod sparse_matrix;
 pub use composition::{Composition, WeakComposition};
 pub use chain_complex::{
     cancel_units, field_betti_number, integral_homology, replay_unit_cancellation, AbelianGroup,
-    ChainComplexError, FiniteChainComplex, UnitCancellationCertificate, UnitPivot,
+    universal_coefficient_dimension, ChainComplexError, FiniteChainComplex, UnitCancellationCertificate, UnitPivot,
     UnitReductionOptions, UnitReductionResult, UnitReductionStats,
 };
 pub use graph::Graph;

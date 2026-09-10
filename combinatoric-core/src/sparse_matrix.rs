@@ -179,9 +179,10 @@ where
             });
         }
         let left_transpose = left.transpose();
+        let right_transpose = right.transpose();
         for column in 0..right.columns {
             let mut accum: BTreeMap<usize, C> = BTreeMap::new();
-            for (middle, coefficient) in right.column_entries(column) {
+            for (middle, coefficient) in right_transpose.row(column)? {
                 for (row, left_coefficient) in left_transpose.row(middle)? {
                     let old = accum.remove(&row).unwrap_or_else(C::zero);
                     let value = old + left_coefficient.clone() * coefficient.clone();
@@ -197,18 +198,6 @@ where
         Ok(Ok(()))
     }
 
-    fn column_entries(&self, column: usize) -> Vec<(usize, &C)> {
-        let mut entries = Vec::new();
-        for (row, row_entries) in self.rows_iter().enumerate() {
-            for (candidate, value) in row_entries {
-                if candidate == column {
-                    entries.push((row, value));
-                    break;
-                }
-            }
-        }
-        entries
-    }
 }
 
 /// Deterministic triplet builder.  Duplicate coefficients are summed and
