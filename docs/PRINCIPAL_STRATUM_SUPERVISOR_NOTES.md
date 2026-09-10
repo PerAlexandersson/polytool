@@ -169,3 +169,10 @@ unit reduction 3307, Smith 1. NNZ initial/peak/final=1706568/1706568/90;
 106440 pivots; residual has ten generators each in degrees 8 and 9.
 Smith reduction was therefore exercised on nonzero residuals in these two
 research calibrations, not only on synthetic torsion fixtures.
+
+A second d26 integer/replay run sampled its own process VmHWM from
+`/proc/<pid>/status` every 50 ms under the same 60-second outer guard.
+Observed peak RSS was 482912 KiB (about 472 MiB); exit status was zero and
+the groups/replay agreed again. Reduction reported maximum coefficient size
+13 bits, 3498762 stale candidates and 134599 score revalidations. This was
+an ephemeral read-only monitoring shell, not a new source or artifact file.
