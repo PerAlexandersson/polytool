@@ -4,6 +4,13 @@
 in source/tests, not edit this note. These are observations of in-progress
 code, not findings against a final reviewed release. Recheck before closing.
 
+Calibration inputs (also specified in the plan): d=18 uses omega=(3,1,1,3);
+d=24 and d=26 use omega=(3,1,1,5). There is no need to search over omega to
+recover these parameters. The observed d=24 debug timings were enumeration
+0.75 s, assembly plus validation 122 s, and field ranks 5.9 s; an incomplete
+ten-minute d=26 validation should prompt fixing the repeated column scans,
+not treating generation or modular elimination as the measured bottleneck.
+
 1. Initial compose_is_zero used left.row(middle) rather than its column.
    That orientation is now corrected in the working tree, but column_entries
    scans the entire matrix for each requested column. Use rowwise sparse
