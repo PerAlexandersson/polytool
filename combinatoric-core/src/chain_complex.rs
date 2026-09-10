@@ -149,8 +149,18 @@ impl FiniteChainComplex {
         let previous = degree
             .checked_sub(1)
             .ok_or(ChainComplexError::UnsupportedDegree { degree })?;
-        SparseMatrix::zero_with_limits(self.count(previous), self.count(degree), limits)
-            .map_err(|error| ChainComplexError::Certificate(error.to_string()))
+        SparseMatrix::zero_with_limits(self.count(previous), self.count(degree), limits).map_err(
+            |error| match error {
+                crate::SparseMatrixError::ShapeBudgetExceeded { slots, budget, .. } => {
+                    ChainComplexError::ReductionLimit {
+                        kind: "matrix shape slots",
+                        observed: slots,
+                        budget,
+                    }
+                }
+                error => ChainComplexError::Certificate(error.to_string()),
+            },
+        )
     }
     pub fn degrees(&self) -> impl Iterator<Item = i32> + '_ {
         self.generator_counts.keys().copied()
@@ -1073,13 +1083,25 @@ mod tests {
                     max_nnz: 0
                 }
             ),
-            Err(ChainComplexError::Certificate(_))
+            Err(ChainComplexError::ReductionLimit { .. })
         ));
         assert_eq!(complex.differential_or_zero(i32::MIN).shape(), (0, 0));
         assert!(matches!(
             complex.differential_or_zero_with_limits(i32::MIN, SparseMatrixLimits::default()),
             Err(ChainComplexError::UnsupportedDegree { .. })
         ));
+
+        // The stored D_2 is tiny, while validation must recognize absent D_1
+        // as zero without allocating its 10^12-by-1 shaped representation.
+        let mut differentials = BTreeMap::new();
+        differentials.insert(2, SparseMatrix::zero(1, 1));
+        let validation_only = FiniteChainComplex::new(
+            [(0, 1_000_000_000_000usize), (1, 1), (2, 1)]
+                .into_iter()
+                .collect(),
+            differentials,
+        );
+        assert!(validation_only.is_ok());
     }
 
     #[test]
