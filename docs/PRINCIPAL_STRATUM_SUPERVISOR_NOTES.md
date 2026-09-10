@@ -139,6 +139,19 @@ Completion-pass observations (11:09 UTC; recheck after edits settle):
     a genuinely complete u64 witness set and add this composite regression,
     along with a large valid prime, before calling the public check exact.
 
+20. Missing-zero materialization still bypasses resource budgets before the
+    bounded Smith call. With counts {0:10^12,1:0}, no stored differentials,
+    construction is cheap, but integral_homology calls differential_or_zero(1)
+    and tries to allocate 10^12 row offsets before Smith sees its limits.
+    validate() likewise materializes a missing adjacent map unnecessarily.
+    Treat absent maps as rank/factors zero and skip products with absent maps,
+    borrowing stored matrices instead of allocating shaped zeros/clones.
+    Add metadata-only large-free-complex tests that allocate no generators.
+    Do not execute an allocation-bomb reproduction before fixing this.
+    Also check differential_or_zero(i32::MIN): constructor grade validation
+    does not protect this independent public method argument from degree-1
+    overflow; a checked/bounded retrieval path should cover it.
+
 ## Independent release-binary calibration checks
 
 Host verification on 2026-09-10 during the completion pass. These invoked the
