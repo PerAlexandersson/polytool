@@ -13,6 +13,7 @@ use std::fmt;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SmithOptions {
     pub max_dense_entries: usize,
+    pub max_shape_slots: usize,
     pub max_operations: usize,
     pub max_entry_bits: u64,
     pub record_operations: bool,
@@ -22,6 +23,7 @@ impl Default for SmithOptions {
     fn default() -> Self {
         Self {
             max_dense_entries: 40_000,
+            max_shape_slots: 40_001,
             max_operations: 1_000_000,
             max_entry_bits: 16_384,
             record_operations: false,
@@ -32,6 +34,7 @@ impl Default for SmithOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SmithLimit {
     DenseEntries { entries: usize, budget: usize },
+    ShapeSlots { slots: usize, budget: usize },
     Operations { operations: usize, budget: usize },
     EntryBits { bits: u64, budget: u64 },
 }
@@ -126,6 +129,7 @@ pub struct SmithNormalForm {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SmithReplayOptions {
     pub max_dense_entries: usize,
+    pub max_shape_slots: usize,
     pub max_operations: usize,
     pub max_entry_bits: u64,
 }
@@ -134,6 +138,7 @@ impl From<&SmithOptions> for SmithReplayOptions {
     fn from(options: &SmithOptions) -> Self {
         Self {
             max_dense_entries: options.max_dense_entries,
+            max_shape_slots: options.max_shape_slots,
             max_operations: options.max_operations,
             max_entry_bits: options.max_entry_bits,
         }
@@ -146,6 +151,7 @@ pub fn smith_normal_form(
     matrix: &SparseMatrix<BigInt>,
     options: SmithOptions,
 ) -> Result<SmithNormalForm, SmithError> {
+    check_dense_shape(matrix, options.max_shape_slots)?;
     let entries = matrix.rows().checked_mul(matrix.columns()).ok_or_else(|| {
         SmithError::Limit(SmithLimit::DenseEntries {
             entries: usize::MAX,
@@ -274,7 +280,8 @@ pub fn replay_smith_operations(
         matrix,
         operations,
         SmithReplayOptions {
-            max_dense_entries: entries,
+            max_dense_entries: entries.min(SmithOptions::default().max_dense_entries),
+            max_shape_slots: SmithOptions::default().max_shape_slots,
             max_operations,
             max_entry_bits: u64::MAX,
         },
@@ -287,6 +294,7 @@ pub fn replay_smith_operations_bounded(
     operations: &[SmithOperation],
     options: SmithReplayOptions,
 ) -> Result<Vec<Vec<BigInt>>, SmithError> {
+    check_dense_shape(matrix, options.max_shape_slots)?;
     if operations.len() > options.max_operations {
         return Err(SmithError::Limit(SmithLimit::Operations {
             operations: operations.len(),
@@ -313,6 +321,20 @@ pub fn replay_smith_operations_bounded(
         }
     }
     Ok(dense)
+}
+
+fn check_dense_shape(matrix: &SparseMatrix<BigInt>, budget: usize) -> Result<(), SmithError> {
+    let slots = matrix
+        .rows()
+        .checked_add(1)
+        .ok_or(SmithError::Limit(SmithLimit::ShapeSlots {
+            slots: usize::MAX,
+            budget,
+        }))?;
+    if slots > budget {
+        return Err(SmithError::Limit(SmithLimit::ShapeSlots { slots, budget }));
+    }
+    Ok(())
 }
 
 /// Replay a certificate and bind it to claimed Smith factors, rather than
@@ -918,6 +940,7 @@ mod tests {
             }
             let replay_options = SmithReplayOptions {
                 max_dense_entries: 9,
+                max_shape_slots: 4,
                 max_operations: 100_000,
                 max_entry_bits: 16_384,
             };
@@ -946,6 +969,7 @@ mod tests {
                 &[],
                 SmithReplayOptions {
                     max_dense_entries: 1,
+                    max_shape_slots: 2,
                     max_operations: 0,
                     max_entry_bits: 8
                 }

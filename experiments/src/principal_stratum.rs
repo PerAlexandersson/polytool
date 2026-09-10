@@ -5,7 +5,7 @@
 //! crates.  Reported manuscript groups are calibration targets, never inputs.
 
 use combinatoric_core::{
-    field_betti_number, FiniteChainComplex, SparseMatrixBuilder, SparseMatrixError,
+    field_betti_number, is_prime_u64, FiniteChainComplex, SparseMatrixBuilder, SparseMatrixError,
 };
 use num_bigint::BigInt;
 use num_rational::Ratio;
@@ -729,23 +729,6 @@ fn cell_degree_from_weight_and_length(
         .ok_or(PrincipalStratumError::WeightOverflow)
 }
 
-fn is_prime_u64(n: u64) -> bool {
-    if n < 2 {
-        return false;
-    }
-    if n.is_multiple_of(2) {
-        return n == 2;
-    }
-    let mut divisor = 3u64;
-    while divisor <= n / divisor {
-        if n.is_multiple_of(divisor) {
-            return false;
-        }
-        divisor += 2;
-    }
-    true
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -829,8 +812,27 @@ mod tests {
         ] {
             let counts = automaton_cell_counts(&omega, d).unwrap();
             assert_eq!(counts.values().sum::<usize>(), expected_cells);
-            let euler = counts.into_iter().map(|(degree, count)| if degree.rem_euclid(2) == 0 { count as i64 } else { -(count as i64) }).sum::<i64>();
+            let euler = counts
+                .into_iter()
+                .map(|(degree, count)| {
+                    if degree.rem_euclid(2) == 0 {
+                        count as i64
+                    } else {
+                        -(count as i64)
+                    }
+                })
+                .sum::<i64>();
             assert_eq!(euler, expected_euler);
+        }
+    }
+
+    #[test]
+    fn large_omega_membership_language_matches_independent_move_closure() {
+        for d in [8, 10, 12] {
+            let production = PrincipalStratumModel::build(vec![3, 1, 1, 3], d).unwrap();
+            let closure =
+                PrincipalStratumModel::build_with_bfs_oracle(vec![3, 1, 1, 3], d).unwrap();
+            assert_eq!(production.cells_by_degree, closure.cells_by_degree);
         }
     }
 

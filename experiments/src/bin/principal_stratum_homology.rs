@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 use combinatoric_core::{
     cancel_units, integral_homology, replay_unit_cancellation_and_verify,
-    universal_coefficient_dimension, UnitReductionOptions,
+    universal_coefficient_dimension, SmithOptions, UnitReductionOptions,
 };
 use experiments::principal_stratum::{
     modular_field_betti, rational_field_betti, PrincipalStratumBuildLimits, PrincipalStratumModel,
@@ -149,8 +149,14 @@ fn main() -> Result<(), String> {
         reduction.reduced.generator_counts()
     );
     let smith_started = std::time::Instant::now();
-    let groups = integral_homology(&reduction.reduced, Default::default())
-        .map_err(|error| error.to_string())?;
+    let groups = integral_homology(
+        &reduction.reduced,
+        SmithOptions {
+            record_operations: true,
+            ..SmithOptions::default()
+        },
+    )
+    .map_err(|error| error.to_string())?;
     for (&degree, group) in &groups {
         let predicted =
             universal_coefficient_dimension(group, groups.get(&(degree - 1)), args.prime)

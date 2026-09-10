@@ -16,7 +16,7 @@ pub mod sparse_matrix;
 
 // Top-level re-exports for convenience
 pub use chain_complex::{
-    cancel_units, field_betti_number, integral_homology, replay_unit_cancellation,
+    cancel_units, field_betti_number, integral_homology, is_prime_u64, replay_unit_cancellation,
     replay_unit_cancellation_and_verify, universal_coefficient_dimension, AbelianGroup,
     ChainComplexError, FiniteChainComplex, UnitCancellationCertificate, UnitPivot,
     UnitReductionOptions, UnitReductionResult, UnitReductionStats,

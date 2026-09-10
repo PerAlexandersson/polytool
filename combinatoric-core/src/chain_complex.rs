@@ -1,7 +1,10 @@
 //! Finite based integer chain complexes, unit cancellation, and abstract
 //! integral homology groups.
 
-use crate::{smith_normal_form, MutableSparseMatrix, SmithError, SmithOptions, SparseMatrix};
+use crate::{
+    smith_normal_form, verify_smith_certificate, MutableSparseMatrix, SmithError, SmithOptions,
+    SmithReplayOptions, SparseMatrix,
+};
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
@@ -174,6 +177,7 @@ impl FiniteChainComplex {
 pub struct UnitReductionOptions {
     pub max_pivots: usize,
     pub max_nnz: usize,
+    pub max_shape_slots: usize,
     pub max_entry_bits: u64,
     pub record_certificate: bool,
 }
@@ -182,6 +186,7 @@ impl Default for UnitReductionOptions {
         Self {
             max_pivots: usize::MAX,
             max_nnz: usize::MAX,
+            max_shape_slots: usize::MAX,
             max_entry_bits: 16_384,
             record_certificate: false,
         }
@@ -235,8 +240,8 @@ pub fn cancel_units(
     complex: &FiniteChainComplex,
     options: UnitReductionOptions,
 ) -> Result<UnitReductionResult, ChainComplexError> {
-    let (initial_nnz, initial_bits) = complex_resource_usage(complex);
-    check_reduction_resources(initial_nnz, initial_bits, &options)?;
+    let (initial_nnz, initial_bits, shape_slots) = complex_resource_usage(complex);
+    check_reduction_resources(initial_nnz, initial_bits, shape_slots, &options)?;
     let mut state = ReductionState::from_complex(complex);
     let mut stats = UnitReductionStats::default();
     stats.initial_nnz = initial_nnz;
@@ -340,8 +345,8 @@ pub fn replay_unit_cancellation(
             "pivot count exceeds replay limit".into(),
         ));
     }
-    let (initial_nnz, initial_bits) = complex_resource_usage(complex);
-    check_reduction_resources(initial_nnz, initial_bits, options)?;
+    let (initial_nnz, initial_bits, shape_slots) = complex_resource_usage(complex);
+    check_reduction_resources(initial_nnz, initial_bits, shape_slots, options)?;
     let mut state = ReductionState::from_complex(complex);
     for pivot in &certificate.pivots {
         if !state.is_active_pivot(pivot)
@@ -400,8 +405,16 @@ pub fn integral_homology(
     let mut ranks = BTreeMap::new();
     let mut factors = BTreeMap::new();
     for &degree in complex.generator_counts.keys() {
-        let smith =
-            smith_normal_form(&complex.differential_or_zero(degree), smith_options.clone())?;
+        let boundary = complex.differential_or_zero(degree);
+        let smith = smith_normal_form(&boundary, smith_options.clone())?;
+        if let Some(operations) = &smith.operations {
+            verify_smith_certificate(
+                &boundary,
+                operations,
+                &smith.invariant_factors,
+                SmithReplayOptions::from(&smith_options),
+            )?;
+        }
         ranks.insert(degree, smith.rank);
         factors.insert(degree, smith.invariant_factors);
     }
@@ -787,11 +800,18 @@ fn to_certificate_error(error: crate::SparseMatrixError) -> ChainComplexError {
     ChainComplexError::Certificate(error.to_string())
 }
 
-fn complex_resource_usage(complex: &FiniteChainComplex) -> (usize, u64) {
+fn complex_resource_usage(complex: &FiniteChainComplex) -> (usize, u64, usize) {
     let mut nnz = 0usize;
     let mut bits = 0u64;
+    let mut shape_slots = 0usize;
+    for &count in complex.generator_counts.values() {
+        shape_slots = shape_slots.saturating_add(count);
+    }
     for matrix in complex.differentials.values() {
         nnz = nnz.saturating_add(matrix.nnz());
+        shape_slots = shape_slots
+            .saturating_add(matrix.rows())
+            .saturating_add(matrix.columns());
         bits = bits.max(
             matrix
                 .rows_iter()
@@ -801,14 +821,22 @@ fn complex_resource_usage(complex: &FiniteChainComplex) -> (usize, u64) {
                 .unwrap_or(0),
         );
     }
-    (nnz, bits)
+    (nnz, bits, shape_slots)
 }
 
 fn check_reduction_resources(
     nnz: usize,
     bits: u64,
+    shape_slots: usize,
     options: &UnitReductionOptions,
 ) -> Result<(), ChainComplexError> {
+    if shape_slots > options.max_shape_slots {
+        return Err(ChainComplexError::ReductionLimit {
+            kind: "matrix shape slots",
+            observed: shape_slots,
+            budget: options.max_shape_slots,
+        });
+    }
     if nnz > options.max_nnz {
         return Err(ChainComplexError::ReductionLimit {
             kind: "NNZ",
@@ -826,21 +854,59 @@ fn check_reduction_resources(
     Ok(())
 }
 
-fn is_prime_u64(n: u64) -> bool {
+/// Deterministic Miller--Rabin for `u64`; kept here so combinatoric-core
+/// remains independent of standalone Polytool packaging.
+pub fn is_prime_u64(n: u64) -> bool {
     if n < 2 {
         return false;
     }
-    if n.is_multiple_of(2) {
-        return n == 2;
-    }
-    let mut divisor = 3u64;
-    while divisor <= n / divisor {
-        if n.is_multiple_of(divisor) {
+    for p in [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37] {
+        if n == p {
+            return true;
+        }
+        if n.is_multiple_of(p) {
             return false;
         }
-        divisor += 2;
+    }
+    let mut d = n - 1;
+    let mut s = 0;
+    while d.is_multiple_of(2) {
+        d /= 2;
+        s += 1;
+    }
+    for base in [2u64, 3, 5, 7, 11, 13, 17] {
+        let mut x = pow_mod_u64(base, d, n);
+        if x == 1 || x == n - 1 {
+            continue;
+        }
+        let mut passed = false;
+        for _ in 1..s {
+            x = mul_mod_u64(x, x, n);
+            if x == n - 1 {
+                passed = true;
+                break;
+            }
+        }
+        if !passed {
+            return false;
+        }
     }
     true
+}
+
+fn mul_mod_u64(left: u64, right: u64, modulus: u64) -> u64 {
+    ((left as u128 * right as u128) % modulus as u128) as u64
+}
+fn pow_mod_u64(mut base: u64, mut exponent: u64, modulus: u64) -> u64 {
+    let mut result = 1;
+    while exponent > 0 {
+        if exponent & 1 == 1 {
+            result = mul_mod_u64(result, base, modulus);
+        }
+        base = mul_mod_u64(base, base, modulus);
+        exponent >>= 1;
+    }
+    result
 }
 
 fn complex_sha256(complex: &FiniteChainComplex) -> String {
@@ -858,6 +924,7 @@ fn complex_sha256(complex: &FiniteChainComplex) -> String {
         hasher.update(degree.to_le_bytes());
         hasher.update((matrix.rows() as u64).to_le_bytes());
         hasher.update((matrix.columns() as u64).to_le_bytes());
+        hasher.update((matrix.nnz() as u64).to_le_bytes());
         for row in 0..matrix.rows() {
             for (column, value) in matrix.row(row).expect("valid row") {
                 let bytes = value.to_signed_bytes_le();
@@ -909,11 +976,9 @@ mod tests {
                 .unwrap(),
             result.reduced
         );
-        let wrong_residual = FiniteChainComplex::new(
-            [(0, 1), (1, 0)].into_iter().collect(),
-            BTreeMap::new(),
-        )
-        .unwrap();
+        let wrong_residual =
+            FiniteChainComplex::new([(0, 1), (1, 0)].into_iter().collect(), BTreeMap::new())
+                .unwrap();
         assert!(matches!(
             replay_unit_cancellation_and_verify(
                 &input,
