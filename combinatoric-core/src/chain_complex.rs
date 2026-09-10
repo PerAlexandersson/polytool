@@ -144,6 +144,28 @@ impl FiniteChainComplex {
         limits: SparseMatrixLimits,
     ) -> Result<SparseMatrix<BigInt>, ChainComplexError> {
         if let Some(matrix) = self.differentials.get(&degree) {
+            let slots = matrix
+                .rows()
+                .checked_add(1)
+                .ok_or(ChainComplexError::ReductionLimit {
+                    kind: "matrix shape slots",
+                    observed: usize::MAX,
+                    budget: limits.max_shape_slots,
+                })?;
+            if slots > limits.max_shape_slots {
+                return Err(ChainComplexError::ReductionLimit {
+                    kind: "matrix shape slots",
+                    observed: slots,
+                    budget: limits.max_shape_slots,
+                });
+            }
+            if matrix.nnz() > limits.max_nnz {
+                return Err(ChainComplexError::ReductionLimit {
+                    kind: "NNZ",
+                    observed: matrix.nnz(),
+                    budget: limits.max_nnz,
+                });
+            }
             return Ok(matrix.clone());
         }
         let previous = degree
@@ -1067,16 +1089,16 @@ mod tests {
 
     #[test]
     fn metadata_only_huge_free_complex_never_materializes_missing_zero_maps() {
-        let complex = FiniteChainComplex::new(
+        let metadata_complex = FiniteChainComplex::new(
             [(0, 1_000_000_000_000usize), (1, 0)].into_iter().collect(),
             BTreeMap::new(),
         )
         .unwrap();
-        let groups = integral_homology(&complex, SmithOptions::default()).unwrap();
+        let groups = integral_homology(&metadata_complex, SmithOptions::default()).unwrap();
         assert_eq!(groups[&0].free_rank, 1_000_000_000_000);
         assert_eq!(groups[&1].free_rank, 0);
         assert!(matches!(
-            complex.differential_or_zero_with_limits(
+            metadata_complex.differential_or_zero_with_limits(
                 1,
                 SparseMatrixLimits {
                     max_shape_slots: 8,
@@ -1085,9 +1107,13 @@ mod tests {
             ),
             Err(ChainComplexError::ReductionLimit { .. })
         ));
-        assert_eq!(complex.differential_or_zero(i32::MIN).shape(), (0, 0));
+        assert_eq!(
+            metadata_complex.differential_or_zero(i32::MIN).shape(),
+            (0, 0)
+        );
         assert!(matches!(
-            complex.differential_or_zero_with_limits(i32::MIN, SparseMatrixLimits::default()),
+            metadata_complex
+                .differential_or_zero_with_limits(i32::MIN, SparseMatrixLimits::default()),
             Err(ChainComplexError::UnsupportedDegree { .. })
         ));
 
@@ -1102,6 +1128,36 @@ mod tests {
             differentials,
         );
         assert!(validation_only.is_ok());
+
+        let stored_nonzero = complex(&[(0, 1), (1, 1)], &[(1, &[&[1]])]);
+        assert!(matches!(
+            stored_nonzero.differential_or_zero_with_limits(
+                1,
+                SparseMatrixLimits {
+                    max_shape_slots: 2,
+                    max_nnz: 0
+                }
+            ),
+            Err(ChainComplexError::ReductionLimit { kind: "NNZ", .. })
+        ));
+        let stored_tall = FiniteChainComplex::new(
+            [(0, 9), (1, 0)].into_iter().collect(),
+            [(1, SparseMatrix::zero(9, 0))].into_iter().collect(),
+        )
+        .unwrap();
+        assert!(matches!(
+            stored_tall.differential_or_zero_with_limits(
+                1,
+                SparseMatrixLimits {
+                    max_shape_slots: 8,
+                    max_nnz: 0
+                }
+            ),
+            Err(ChainComplexError::ReductionLimit {
+                kind: "matrix shape slots",
+                ..
+            })
+        ));
     }
 
     #[test]
