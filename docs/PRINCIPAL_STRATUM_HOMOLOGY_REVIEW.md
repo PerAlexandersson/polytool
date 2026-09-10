@@ -74,3 +74,7 @@ Miller--Rabin set was not deterministic for all `u64`, exhibiting
 `341550071728321`. Commit `d29227c` uses the full witness set through 37 and
 adds both that composite and a large-prime regression; the focused core suite
 then passed (240 tests). This is the final resolved review finding.
+
+Claude's final micro-review of `d29227c` returned no blocker: it independently
+confirmed the complete witness bound, the pseudoprime rejection, and the
+M61 positive control. Log: `/tmp/principal-stratum-claude-primality-d29227c.log`.

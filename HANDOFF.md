@@ -27,7 +27,8 @@ guard. Claude Code 2.1.267/Opus completed a read-only review of `63e9861`
 over 15 minutes; its focused re-review found and `d29227c` resolved one
 u64-primality witness defect. Results and resolutions are in
 `docs/PRINCIPAL_STRATUM_HOMOLOGY_REVIEW.md`, with log
-`/tmp/principal-stratum-claude-63e9861.log`. Unrelated ignored
+`/tmp/principal-stratum-claude-63e9861.log`; the final `d29227c` micro-review
+also returned no blocker. Unrelated ignored
 `polytool/scripts/__pycache__/` remains untouched.
 
 ## Sparse integral homology implementation — active 2026-09-10
