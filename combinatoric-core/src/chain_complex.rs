@@ -3,7 +3,7 @@
 
 use crate::{
     smith_normal_form, verify_smith_certificate, MutableSparseMatrix, SmithError, SmithOptions,
-    SmithReplayOptions, SparseMatrix,
+    SmithReplayOptions, SparseMatrix, SparseMatrixLimits,
 };
 use num_bigint::BigInt;
 use num_integer::Integer;
@@ -130,10 +130,27 @@ impl FiniteChainComplex {
         self.differentials.get(&degree)
     }
     pub fn differential_or_zero(&self, degree: i32) -> SparseMatrix<BigInt> {
-        self.differentials
-            .get(&degree)
-            .cloned()
-            .unwrap_or_else(|| SparseMatrix::zero(self.count(degree - 1), self.count(degree)))
+        self.differentials.get(&degree).cloned().unwrap_or_else(|| {
+            let previous = degree.checked_sub(1).map_or(0, |value| self.count(value));
+            SparseMatrix::zero(previous, self.count(degree))
+        })
+    }
+    /// Budgeted shaped-zero retrieval for callers handling untrusted degrees or
+    /// metadata-only complexes.  Stored matrices retain their existing shape;
+    /// missing maps are allocated only after the CSR shape budget is checked.
+    pub fn differential_or_zero_with_limits(
+        &self,
+        degree: i32,
+        limits: SparseMatrixLimits,
+    ) -> Result<SparseMatrix<BigInt>, ChainComplexError> {
+        if let Some(matrix) = self.differentials.get(&degree) {
+            return Ok(matrix.clone());
+        }
+        let previous = degree
+            .checked_sub(1)
+            .ok_or(ChainComplexError::UnsupportedDegree { degree })?;
+        SparseMatrix::zero_with_limits(self.count(previous), self.count(degree), limits)
+            .map_err(|error| ChainComplexError::Certificate(error.to_string()))
     }
     pub fn degrees(&self) -> impl Iterator<Item = i32> + '_ {
         self.generator_counts.keys().copied()
@@ -141,12 +158,15 @@ impl FiniteChainComplex {
 
     pub fn validate(&self) -> Result<(), ChainComplexError> {
         for (&degree, differential) in &self.differentials {
+            let Some(previous) = degree.checked_sub(1) else {
+                return Err(ChainComplexError::UnsupportedDegree { degree });
+            };
             if !self.generator_counts.contains_key(&degree)
-                || !self.generator_counts.contains_key(&(degree - 1))
+                || !self.generator_counts.contains_key(&previous)
             {
                 return Err(ChainComplexError::MissingDegree { degree });
             }
-            let expected = (self.count(degree - 1), self.count(degree));
+            let expected = (self.count(previous), self.count(degree));
             if differential.shape() != expected {
                 return Err(ChainComplexError::DifferentialShape {
                     degree,
@@ -156,13 +176,20 @@ impl FiniteChainComplex {
             }
         }
         for &degree in self.differentials.keys() {
-            let left = self.differential_or_zero(degree - 1);
-            let right = self.differential_or_zero(degree);
-            if let Err((row, column, value)) = SparseMatrix::compose_is_zero(&left, &right)
+            let Some(previous) = degree.checked_sub(1) else {
+                return Err(ChainComplexError::UnsupportedDegree { degree });
+            };
+            let (Some(left), Some(right)) = (
+                self.differentials.get(&previous),
+                self.differentials.get(&degree),
+            ) else {
+                continue;
+            };
+            if let Err((row, column, value)) = SparseMatrix::compose_is_zero(left, right)
                 .expect("adjacent differential shapes agree")
             {
                 return Err(ChainComplexError::DifferentialDoesNotSquare {
-                    left_degree: degree - 1,
+                    left_degree: previous,
                     row,
                     column,
                     value,
@@ -405,18 +432,24 @@ pub fn integral_homology(
     let mut ranks = BTreeMap::new();
     let mut factors = BTreeMap::new();
     for &degree in complex.generator_counts.keys() {
-        let boundary = complex.differential_or_zero(degree);
-        let smith = smith_normal_form(&boundary, smith_options.clone())?;
-        if let Some(operations) = &smith.operations {
-            verify_smith_certificate(
-                &boundary,
-                operations,
-                &smith.invariant_factors,
-                SmithReplayOptions::from(&smith_options),
-            )?;
+        if let Some(boundary) = complex.differential(degree) {
+            let smith = smith_normal_form(boundary, smith_options.clone())?;
+            if let Some(operations) = &smith.operations {
+                verify_smith_certificate(
+                    boundary,
+                    operations,
+                    &smith.invariant_factors,
+                    SmithReplayOptions::from(&smith_options),
+                )?;
+            }
+            ranks.insert(degree, smith.rank);
+            factors.insert(degree, smith.invariant_factors);
+        } else {
+            // An absent boundary is mathematically the shaped zero map.  Its
+            // rank and Smith factors are known without materializing CSR rows.
+            ranks.insert(degree, 0);
+            factors.insert(degree, Vec::new());
         }
-        ranks.insert(degree, smith.rank);
-        factors.insert(degree, smith.invariant_factors);
     }
     Ok(complex
         .generator_counts
@@ -1020,6 +1053,33 @@ mod tests {
             universal_coefficient_dimension(&groups[&0], None, 5).unwrap(),
             0
         );
+    }
+
+    #[test]
+    fn metadata_only_huge_free_complex_never_materializes_missing_zero_maps() {
+        let complex = FiniteChainComplex::new(
+            [(0, 1_000_000_000_000usize), (1, 0)].into_iter().collect(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let groups = integral_homology(&complex, SmithOptions::default()).unwrap();
+        assert_eq!(groups[&0].free_rank, 1_000_000_000_000);
+        assert_eq!(groups[&1].free_rank, 0);
+        assert!(matches!(
+            complex.differential_or_zero_with_limits(
+                1,
+                SparseMatrixLimits {
+                    max_shape_slots: 8,
+                    max_nnz: 0
+                }
+            ),
+            Err(ChainComplexError::Certificate(_))
+        ));
+        assert_eq!(complex.differential_or_zero(i32::MIN).shape(), (0, 0));
+        assert!(matches!(
+            complex.differential_or_zero_with_limits(i32::MIN, SparseMatrixLimits::default()),
+            Err(ChainComplexError::UnsupportedDegree { .. })
+        ));
     }
 
     #[test]
