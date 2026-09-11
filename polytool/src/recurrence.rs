@@ -132,6 +132,41 @@ impl BivarPoly {
     fn normalized_coefficients(&self) -> Vec<Vec<BigRational>> {
         Self::from_coefficients_normalized(self.coeffs.clone()).coeffs
     }
+
+    /// Substitute `n + shift` for the recurrence index `n`.
+    pub fn shift_index(&self, shift: i64) -> Self {
+        let width = self.coefficient_width().max(1);
+        let mut shifted = vec![vec![BigRational::zero(); width]; self.coeffs.len().max(1)];
+        let shift = BigRational::from_integer(BigInt::from(shift));
+        let mut power = vec![BigRational::one()];
+
+        for (n_degree, row) in self.coeffs.iter().enumerate() {
+            debug_assert_eq!(power.len(), n_degree + 1);
+            for (variable_degree, coefficient) in row.iter().enumerate() {
+                for (new_n_degree, factor) in power.iter().enumerate() {
+                    shifted[new_n_degree][variable_degree] += coefficient * factor;
+                }
+            }
+
+            let mut next_power = vec![BigRational::zero(); power.len() + 1];
+            for (degree, coefficient) in power.iter().enumerate() {
+                next_power[degree] += coefficient * &shift;
+                next_power[degree + 1] += coefficient;
+            }
+            power = next_power;
+        }
+
+        Self::from_coefficients_normalized(shifted)
+    }
+
+    fn negated(mut self) -> Self {
+        for row in &mut self.coeffs {
+            for coefficient in row {
+                *coefficient = -coefficient.clone();
+            }
+        }
+        self
+    }
 }
 
 /// Extra sign factor attached to one recurrence term.
@@ -4169,6 +4204,40 @@ impl Recurrence {
         required
     }
 
+    /// Substitute `n + shift` for every occurrence of the recurrence index.
+    ///
+    /// Polynomial references keep the same offsets.  Alternating factors are
+    /// adjusted as `(-1)^(n + shift) = (-1)^shift (-1)^n`.
+    pub fn shift_index(&self, shift: i64) -> Self {
+        let odd_shift = shift.rem_euclid(2) == 1;
+        Self {
+            terms: self
+                .terms
+                .iter()
+                .map(|term| {
+                    let mut coefficient = term.coeff.shift_index(shift);
+                    if odd_shift && term.sign == RecurrenceSign::AlternatingN {
+                        coefficient = coefficient.negated();
+                    }
+                    RecurrenceTerm {
+                        offset: term.offset,
+                        deriv_order: term.deriv_order,
+                        sign: term.sign,
+                        coeff: coefficient,
+                    }
+                })
+                .collect(),
+            denominator: self
+                .denominator
+                .as_ref()
+                .map(|polynomial| polynomial.shift_index(shift)),
+            inhomogeneous: self
+                .inhomogeneous
+                .as_ref()
+                .map(|polynomial| polynomial.shift_index(shift)),
+        }
+    }
+
     fn term_to_mathematica_code(&self, term: &RecurrenceTerm) -> String {
         let coeff = term.coeff.to_mathematica_code();
         let idx = if term.offset == 0 {
@@ -4281,14 +4350,18 @@ impl Recurrence {
         }
     }
 
-    pub fn to_mathematica_definition_rational(&self, initial_polys: &[Vec<BigRational>]) -> String {
-        let base_count = self.max_offset().min(initial_polys.len());
-        let start_n = base_count + 1;
+    fn to_mathematica_definition_rational_indexed_prefix(
+        &self,
+        initial_polys: &[Vec<BigRational>],
+        first_index: i64,
+        base_count: usize,
+    ) -> String {
+        let start_n = i128::from(first_index) + base_count as i128;
         let mut lines = vec!["ClearAll[P];".to_string()];
         for (idx, coeffs) in initial_polys.iter().take(base_count).enumerate() {
             lines.push(format!(
                 "P[{}, t_] := {};",
-                idx + 1,
+                i128::from(first_index) + idx as i128,
                 fmt_univariate_poly_rational_code(CodeStyle::Mathematica, coeffs)
             ));
         }
@@ -4297,8 +4370,30 @@ impl Recurrence {
             self.rhs_to_mathematica_code()
         ));
         lines.push(String::new());
-        lines.push("(* Example: Table[P[n, t], {n, 1, 10}] *)".to_string());
+        lines.push(format!(
+            "(* Example: Table[P[n, t], {{n, {}, {}}}] *)",
+            first_index,
+            i128::from(first_index) + 9
+        ));
         lines.join("\n")
+    }
+
+    pub fn to_mathematica_definition_rational(&self, initial_polys: &[Vec<BigRational>]) -> String {
+        let base_count = self.max_offset().min(initial_polys.len());
+        self.to_mathematica_definition_rational_indexed_prefix(initial_polys, 1, base_count)
+    }
+
+    /// Export an indexed definition which retains every supplied initial row.
+    pub fn to_mathematica_definition_rational_indexed(
+        &self,
+        initial_polys: &[Vec<BigRational>],
+        first_index: i64,
+    ) -> String {
+        self.to_mathematica_definition_rational_indexed_prefix(
+            initial_polys,
+            first_index,
+            initial_polys.len(),
+        )
     }
 
     pub fn to_mathematica_definition(&self, initial_polys: &[Vec<i64>]) -> String {
@@ -4306,8 +4401,12 @@ impl Recurrence {
         self.to_mathematica_definition_rational(&rational_polys)
     }
 
-    pub fn to_sage_definition_rational(&self, initial_polys: &[Vec<BigRational>]) -> String {
-        let base_count = self.max_offset().min(initial_polys.len());
+    fn to_sage_definition_rational_indexed_prefix(
+        &self,
+        initial_polys: &[Vec<BigRational>],
+        first_index: i64,
+        base_count: usize,
+    ) -> String {
         let mut lines = vec![
             "R.<t> = PolynomialRing(QQ)".to_string(),
             "K = R.fraction_field()".to_string(),
@@ -4319,21 +4418,49 @@ impl Recurrence {
                 .map(|coeff| fmt_rational_code(CodeStyle::Sage, coeff))
                 .collect::<Vec<_>>()
                 .join(", ");
-            lines.push(format!("    {}: R([{}]),", idx + 1, coeff_list));
+            lines.push(format!(
+                "    {}: R([{}]),",
+                i128::from(first_index) + idx as i128,
+                coeff_list
+            ));
         }
         lines.push("}".to_string());
         lines.push(String::new());
         lines.push("def P(n):".to_string());
-        lines.push("    if n < 1:".to_string());
-        lines.push("        raise ValueError(\"n must be a positive integer\")".to_string());
+        lines.push(format!("    if n < {first_index}:"));
+        lines.push(format!(
+            "        raise ValueError(\"n must be at least {first_index}\")"
+        ));
         lines.push("    if n in _P_cache:".to_string());
         lines.push("        return _P_cache[n]".to_string());
         lines.push(format!("    value = {}", self.rhs_to_sage_code()));
         lines.push("    _P_cache[n] = value".to_string());
         lines.push("    return value".to_string());
         lines.push(String::new());
-        lines.push("# Example: [P(n) for n in range(1, 11)]".to_string());
+        lines.push(format!(
+            "# Example: [P(n) for n in range({}, {})]",
+            first_index,
+            i128::from(first_index) + 10
+        ));
         lines.join("\n")
+    }
+
+    pub fn to_sage_definition_rational(&self, initial_polys: &[Vec<BigRational>]) -> String {
+        let base_count = self.max_offset().min(initial_polys.len());
+        self.to_sage_definition_rational_indexed_prefix(initial_polys, 1, base_count)
+    }
+
+    /// Export an indexed definition which retains every supplied initial row.
+    pub fn to_sage_definition_rational_indexed(
+        &self,
+        initial_polys: &[Vec<BigRational>],
+        first_index: i64,
+    ) -> String {
+        self.to_sage_definition_rational_indexed_prefix(
+            initial_polys,
+            first_index,
+            initial_polys.len(),
+        )
     }
 
     pub fn to_sage_definition(&self, initial_polys: &[Vec<i64>]) -> String {
@@ -4341,8 +4468,12 @@ impl Recurrence {
         self.to_sage_definition_rational(&rational_polys)
     }
 
-    pub fn to_python_definition_rational(&self, initial_polys: &[Vec<BigRational>]) -> String {
-        let base_count = self.max_offset().min(initial_polys.len());
+    fn to_python_definition_rational_indexed_prefix(
+        &self,
+        initial_polys: &[Vec<BigRational>],
+        first_index: i64,
+        base_count: usize,
+    ) -> String {
         let mut lines = vec![
             "from fractions import Fraction".to_string(),
             String::new(),
@@ -4422,7 +4553,7 @@ impl Recurrence {
         for (idx, coeffs) in initial_polys.iter().take(base_count).enumerate() {
             lines.push(format!(
                 "    {}: {},",
-                idx + 1,
+                i128::from(first_index) + idx as i128,
                 fmt_python_poly_literal(coeffs)
             ));
         }
@@ -4451,11 +4582,15 @@ impl Recurrence {
         ));
         lines.push(String::new());
         lines.push("def P(n):".to_string());
-        lines.push("    if n < 1:".to_string());
-        lines.push("        raise ValueError(\"n must be a positive integer\")".to_string());
+        lines.push(format!("    if n < {first_index}:"));
+        lines.push(format!(
+            "        raise ValueError(\"n must be at least {first_index}\")"
+        ));
         lines.push("    if n in _P_cache:".to_string());
         lines.push("        return _P_cache[n]".to_string());
-        lines.push("    start = max(_P_cache) + 1 if _P_cache else 1".to_string());
+        lines.push(format!(
+            "    start = max(_P_cache) + 1 if _P_cache else {first_index}"
+        ));
         lines.push("    for k in range(start, n + 1):".to_string());
         lines.push("        rhs = [0]".to_string());
         lines.push("        for term in _terms:".to_string());
@@ -4476,8 +4611,30 @@ impl Recurrence {
         lines.push("        _P_cache[k] = rhs".to_string());
         lines.push("    return _P_cache[n]".to_string());
         lines.push(String::new());
-        lines.push("# Example: [P(n) for n in range(1, 11)]".to_string());
+        lines.push(format!(
+            "# Example: [P(n) for n in range({}, {})]",
+            first_index,
+            i128::from(first_index) + 10
+        ));
         lines.join("\n")
+    }
+
+    pub fn to_python_definition_rational(&self, initial_polys: &[Vec<BigRational>]) -> String {
+        let base_count = self.max_offset().min(initial_polys.len());
+        self.to_python_definition_rational_indexed_prefix(initial_polys, 1, base_count)
+    }
+
+    /// Export an indexed definition which retains every supplied initial row.
+    pub fn to_python_definition_rational_indexed(
+        &self,
+        initial_polys: &[Vec<BigRational>],
+        first_index: i64,
+    ) -> String {
+        self.to_python_definition_rational_indexed_prefix(
+            initial_polys,
+            first_index,
+            initial_polys.len(),
+        )
     }
 
     pub fn to_python_definition(&self, initial_polys: &[Vec<i64>]) -> String {

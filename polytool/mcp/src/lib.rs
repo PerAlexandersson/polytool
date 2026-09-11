@@ -3506,16 +3506,17 @@ impl PolynomialToolsServer {
         let entry = polytool::oeis::by_id(&input.id).ok_or_else(|| {
             invalid_params(format!("unknown bundled OEIS sequence: {}", input.id))
         })?;
-        let (recurrence, initial_rows) = entry
-            .recurrence_parts()
+        let (recurrence, initial_rows, first_index) = entry
+            .recurrence_export_parts()
             .map_err(|error| invalid_params(error.to_string()))?;
         Ok(Json(GetOeisSequenceResponse {
             sequence: oeis_sequence_summary(entry),
             recurrence: recurrence.to_string(),
             latex: recurrence.to_latex(),
-            mathematica: recurrence.to_mathematica_definition_rational(&initial_rows),
-            sage: recurrence.to_sage_definition_rational(&initial_rows),
-            python: recurrence.to_python_definition_rational(&initial_rows),
+            mathematica: recurrence
+                .to_mathematica_definition_rational_indexed(&initial_rows, first_index),
+            sage: recurrence.to_sage_definition_rational_indexed(&initial_rows, first_index),
+            python: recurrence.to_python_definition_rational_indexed(&initial_rows, first_index),
         }))
     }
 
@@ -3935,6 +3936,17 @@ mod tests {
         assert_eq!(response.first_row, 1);
         assert_eq!(response.rows[2].n, 3);
         assert_eq!(response.rows[2].coefficients, vec!["1", "4", "1"]);
+
+        let Json(export) = server
+            .get_oeis_sequence(Parameters(GetOeisSequenceRequest {
+                id: "A166345".to_string(),
+            }))
+            .unwrap();
+        assert_eq!(
+            export.recurrence,
+            "P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)"
+        );
+        assert!(export.python.contains("    3: [1, 2, 1],"));
     }
 
     #[test]

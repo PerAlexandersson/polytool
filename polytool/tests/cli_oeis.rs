@@ -115,6 +115,22 @@ fn oeis_info_exports_recurrence_dialects() {
 }
 
 #[test]
+fn a166345_info_exports_the_exact_displayed_sequence() {
+    let output = run_polytool(&["oeis", "info", "A166345", "--json"]);
+    assert!(output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        value["recurrence"],
+        "P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)"
+    );
+    let python = value["python"].as_str().unwrap();
+    assert!(python.contains("    1: [1],"));
+    assert!(python.contains("    2: [1, 1],"));
+    assert!(python.contains("    3: [1, 2, 1],"));
+    assert!(python.contains("\"coeff\": [[1, -1], [0, 1]]"));
+}
+
+#[test]
 fn experimental_oeis_entries_require_an_explicit_flag() {
     let rejected = run_polytool(&["oeis", "generate", "A035469", "--rows", "2"]);
     assert_eq!(rejected.status.code(), Some(2));

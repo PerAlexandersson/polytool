@@ -2018,10 +2018,11 @@ fn cmd_oeis_info(args: &[String]) {
         eprintln!("unknown bundled OEIS sequence: {id}");
         std::process::exit(2);
     };
-    let (recurrence, initial_rows) = entry.recurrence_parts().unwrap_or_else(|error| {
-        eprintln!("{error}");
-        std::process::exit(2);
-    });
+    let (recurrence, initial_rows, first_index) =
+        entry.recurrence_export_parts().unwrap_or_else(|error| {
+            eprintln!("{error}");
+            std::process::exit(2);
+        });
     if json_output {
         let mut value = oeis_entry_json(entry);
         let object = value.as_object_mut().unwrap();
@@ -2029,15 +2030,16 @@ fn cmd_oeis_info(args: &[String]) {
         object.insert("latex".to_string(), json!(recurrence.to_latex()));
         object.insert(
             "mathematica".to_string(),
-            json!(recurrence.to_mathematica_definition_rational(&initial_rows)),
+            json!(recurrence
+                .to_mathematica_definition_rational_indexed(&initial_rows, first_index)),
         );
         object.insert(
             "sage".to_string(),
-            json!(recurrence.to_sage_definition_rational(&initial_rows)),
+            json!(recurrence.to_sage_definition_rational_indexed(&initial_rows, first_index)),
         );
         object.insert(
             "python".to_string(),
-            json!(recurrence.to_python_definition_rational(&initial_rows)),
+            json!(recurrence.to_python_definition_rational_indexed(&initial_rows, first_index)),
         );
         println!("{}", serde_json::to_string_pretty(&value).unwrap());
     } else {
