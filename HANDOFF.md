@@ -19,7 +19,13 @@ set POLYTOOL_HTML to the staged www/index.html to check that copy.
 git diff --check passes. No Rust/WASM changes, build or dependencies needed.
 Focused patch mirrored into staging without replacing its newer OEIS export
 or rational defaults. Existing untracked scripts/__pycache__ is untouched.
-No Git push or live deployment; live page still needs this input patch.
+Source checkpoint: 0320319. User subsequently authorized commit and deploy;
+the input-only HTML patch is live on poly.symmetricfunctions.com. All 38
+tests pass against freshly fetched public HTML/JS/WASM, including both user
+examples and exact large integers. Only index.html was replaced; its SHA-256
+is 4f7e1bc07c68f972f2ab6411d5ee6530cdfc0a89e2d0189821c08e2c01ff4d85.
+Existing JS/WASM and unrelated staged features were not deployed. Rollback
+HTML: /tmp/poly-input-deploy-20260911.X0LxbH/before.html. No Git push.
 
 ## Completed: actionable MCP diagnostics for unsafe JSON integers (2026-09-10)
 
