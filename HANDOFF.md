@@ -1,6 +1,6 @@
 # Handoff
 
-## Active: Delannoy claw-free graph search — 2026-09-11
+## Completed: Delannoy claw-free graph search — 2026-09-11
 
 Worker `agent-research-delann-p-39629cb1` owns only
 `polytool/Cargo.toml`, its one-line generated `Cargo.lock` dependency update, new
@@ -13,9 +13,22 @@ the example's dev-dependency. The worker also owns new
 `polytool/examples/delannoy_matching_search.rs` for the explicitly authorized,
 separate matching-graph search. No `graph.rs` edit is currently planned.
 
-The unrelated untracked `polytool/scripts/__pycache__/` and all other active
-or historical worker files remain untouched. Results belong in
-`/workspace/research/notes/delannoy-clawfree/`. No push is authorized.
+Code checkpoint `389222e` adds the two streaming examples. The direct
+claw-free scan is exhaustive through n=4 (315 witnesses at n=4), and the
+isolate-free matching scan is exhaustive through n=4 (six matching witnesses
+at n=4). A restricted n=5 scan checked all 12,413,039 connected graphs with 18
+edges and 17--19 vertices and found one exact matching witness; its line graph
+is an independently checked claw-free witness. Results and exact scope are in
+research commit `82bce66` under
+`/workspace/research/notes/delannoy-clawfree/`.
+
+Both focused example test suites and `git diff --check` pass. Strict Clippy is
+blocked by unrelated preexisting warnings in `combinatoric-core` and
+`polytool`; whole-workspace rustfmt checking is blocked by unrelated existing
+formatting in an experiment and `polytool/web`. The two new examples were
+formatted directly. The unrelated untracked
+`polytool/scripts/__pycache__/` and all other worker files remain untouched.
+Ownership is released. No push was made.
 
 ## Completed: explicit literature polynomial generators — 2026-09-11
 
