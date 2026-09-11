@@ -263,6 +263,47 @@ impl OeisSequenceDefinition {
         ))
     }
 
+    /// Decode a recurrence for export at the displayed OEIS row indices.
+    ///
+    /// Catalog recurrence indices may begin before or after the displayed
+    /// sequence, and some recurrences are valid only after an authoritative
+    /// prefix.  The returned recurrence has its `n` variable shifted to the
+    /// displayed index, while the returned initial rows contain both the
+    /// prefix and every delayed recurrence initial row.
+    pub fn recurrence_export_parts(
+        &self,
+    ) -> Result<(Recurrence, Vec<Vec<BigRational>>, i64), OeisSequenceError> {
+        let (recurrence, initial_rows) = self.recurrence_parts()?;
+        let mut rows = decode_rows(self.id, self.prefix_rows)?;
+        let prefix_count =
+            i64::try_from(rows.len()).map_err(|_| OeisSequenceError::InvalidDefinition {
+                id: self.id,
+                message: "prefix row count does not fit in i64".to_string(),
+            })?;
+        let displayed_recurrence_start =
+            self.first_row.checked_add(prefix_count).ok_or_else(|| {
+                OeisSequenceError::InvalidDefinition {
+                    id: self.id,
+                    message: "displayed recurrence index overflows i64".to_string(),
+                }
+            })?;
+        let internal_recurrence_start =
+            i64::try_from(self.recurrence_first_index).map_err(|_| {
+                OeisSequenceError::InvalidDefinition {
+                    id: self.id,
+                    message: "recurrence first index does not fit in i64".to_string(),
+                }
+            })?;
+        let shift = internal_recurrence_start
+            .checked_sub(displayed_recurrence_start)
+            .ok_or_else(|| OeisSequenceError::InvalidDefinition {
+                id: self.id,
+                message: "recurrence export index shift overflows i64".to_string(),
+            })?;
+        rows.extend(initial_rows);
+        Ok((recurrence.shift_index(shift), rows, self.first_row))
+    }
+
     /// Generate the first `row_count` complete rows in catalog order.
     pub fn generate_rows(&self, row_count: usize) -> Result<Vec<Vec<BigInt>>, OeisSequenceError> {
         let prefix = decode_rows(self.id, self.prefix_rows)?;
@@ -437,6 +478,92 @@ mod tests {
                 vec![1.into(), 11.into(), 11.into(), 1.into()],
             ]
         );
+    }
+
+    #[test]
+    fn a166345_export_preserves_delayed_rows_and_displayed_indices() {
+        let sequence = A166345();
+        let (recurrence, initial_rows, first_index) = sequence.recurrence_export_parts().unwrap();
+        assert_eq!(first_index, 1);
+        assert_eq!(initial_rows.len(), 3);
+        assert_eq!(
+            recurrence.to_string(),
+            "P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)"
+        );
+
+        let exported = recurrence
+            .generate_rows_rational(&initial_rows, first_index as usize, 8)
+            .unwrap();
+        let expected = sequence
+            .generate_rows(8)
+            .unwrap()
+            .into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .map(BigRational::from_integer)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(exported, expected);
+    }
+
+    #[test]
+    fn oeis_export_includes_prefix_rows_before_recurrence_initial_rows() {
+        let sequence = A166344();
+        let (recurrence, initial_rows, first_index) = sequence.recurrence_export_parts().unwrap();
+        assert_eq!(first_index, 1);
+        assert_eq!(initial_rows.len(), 3);
+
+        let exported = recurrence
+            .generate_rows_rational(&initial_rows, first_index as usize, 8)
+            .unwrap();
+        let expected = sequence
+            .generate_rows(8)
+            .unwrap()
+            .into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .map(BigRational::from_integer)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(exported, expected);
+    }
+
+    #[test]
+    fn every_oeis_export_reproduces_displayed_rows_past_its_initial_prefix() {
+        fn trim(mut row: Vec<BigRational>) -> Vec<BigRational> {
+            while row.len() > 1 && row.last().is_some_and(num_traits::Zero::is_zero) {
+                row.pop();
+            }
+            row
+        }
+
+        for sequence in catalog() {
+            let (recurrence, initial_rows, first_index) = sequence
+                .recurrence_export_parts()
+                .unwrap_or_else(|error| panic!("{}: {error}", sequence.id));
+            let row_count = initial_rows.len() + 2;
+            let exported = recurrence
+                .generate_rows_rational(&initial_rows, first_index as usize, row_count)
+                .unwrap_or_else(|error| panic!("{}: {error}", sequence.id));
+            let expected = sequence
+                .generate_rows(row_count)
+                .unwrap_or_else(|error| panic!("{}: {error}", sequence.id))
+                .into_iter()
+                .map(|row| {
+                    row.into_iter()
+                        .map(BigRational::from_integer)
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                exported.into_iter().map(trim).collect::<Vec<_>>(),
+                expected.into_iter().map(trim).collect::<Vec<_>>(),
+                "{}",
+                sequence.id
+            );
+        }
     }
 
     #[test]

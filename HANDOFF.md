@@ -1,5 +1,33 @@
 # Polytool handoff
 
+## Completed: exact OEIS recurrence exports (2026-09-11)
+
+Worker `/root` completed and released ownership of `src/recurrence.rs`,
+`src/oeis.rs`, `src/bin/polytool.rs`, `mcp/src/lib.rs`, `tests/cli_oeis.rs`, and
+this handoff on branch `fix/polytool-oeis-export-20260911`.  OEIS exports now
+retain every authoritative initial row, include any pre-recurrence prefix, and
+translate the catalog's internal recurrence index to the displayed OEIS row
+index.  Generic recurrence-search exports keep their prior minimal-base
+behavior.  A166345 now exports rows 1--3 as `1`, `1+t`, `(1+t)^2` and the exact
+displayed-index recurrence
+`P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)`.
+
+An all-catalog regression regenerated two rows beyond the complete exported
+prefix for all 785 entries and matched their exact catalog polynomials.  Other
+verification, in a standalone regular-file copy with the external Cargo target
+and reduced priority:
+
+- recurrence tests: 65 passed;
+- focused A166345 and prefixed-family export tests: 2 passed;
+- OEIS CLI tests: 8 passed;
+- MCP tests: 23 library, 2 binary, and 1 documentation test passed;
+- strict Clippy passed for Polytool and the MCP package;
+- the emitted A166345 Python program reproduced exact rows 1--8;
+- rustfmt and `git diff --check` passed.
+
+The canonical checkout and its unrelated `scripts/__pycache__/` were untouched
+while developing the patch.
+
 ## Completed: forgiving browser coefficient input (2026-09-11)
 
 Host completed web/index.html and new web/input-normalization.test.cjs;
