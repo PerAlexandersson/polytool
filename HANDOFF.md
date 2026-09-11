@@ -1,5 +1,22 @@
 # Handoff
 
+## Active: Delannoy claw-free graph search — 2026-09-11
+
+Worker `agent-research-delann-p-39629cb1` owns only
+`polytool/Cargo.toml`, its one-line generated `Cargo.lock` dependency update, new
+`polytool/examples/delannoy_clawfree_search.rs`, and this handoff entry for
+research issue PerAlexandersson/research#24. The example will stream graph6
+input, obtain reversed Delannoy-square targets from the existing canonical
+`polytool` generator, and verify claw-freeness plus exact independence
+coefficients through `combinatoric-core::Graph`. The Cargo edit is limited to
+the example's dev-dependency. The worker also owns new
+`polytool/examples/delannoy_matching_search.rs` for the explicitly authorized,
+separate matching-graph search. No `graph.rs` edit is currently planned.
+
+The unrelated untracked `polytool/scripts/__pycache__/` and all other active
+or historical worker files remain untouched. Results belong in
+`/workspace/research/notes/delannoy-clawfree/`. No push is authorized.
+
 ## Completed: explicit literature polynomial generators — 2026-09-11
 
 Host supervisor owns `polytool/src/sequences.rs` (one module declaration),
