@@ -1,5 +1,22 @@
 # Handoff
 
+## Completed: factored Delannoy rank-six search — 2026-09-11
+
+Worker `agent-research-delann-p-39629cb1` reclaims only
+`polytool/examples/delannoy_matching_search.rs` and this handoff entry for the
+user-requested continuation of research issue PerAlexandersson/research#24.
+The example now has a narrow tested `--divide-one-plus-t` option, allowing the
+newly found
+`R_6=(1+t)Q_5` decomposition to reuse the existing streamed Graph matching
+search. No library module, Cargo manifest, or graph implementation is claimed.
+The focused example test suite passes (3 tests), and the release example
+builds with `CARGO_TARGET_DIR=/cargo-target/ai-projects`. It exhaustively
+checked 5,596,003 trees at quotient-root order 22 and 57,359,412 unicyclic
+graphs at order 21, finding no exact root. Research details are recorded under
+`/workspace/research/notes/delannoy-clawfree/`. Ownership is released after
+the focused checkpoint. The unrelated untracked
+`polytool/scripts/__pycache__/` remains untouched; no Rust push was made.
+
 ## Completed: Delannoy claw-free graph search — 2026-09-11
 
 Worker `agent-research-delann-p-39629cb1` owns only
