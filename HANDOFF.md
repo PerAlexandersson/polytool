@@ -1,6 +1,6 @@
 # Handoff
 
-## Active: explicit literature polynomial generators — 2026-09-11
+## Completed: explicit literature polynomial generators — 2026-09-11
 
 Host supervisor owns `polytool/src/sequences.rs` (one module declaration),
 new `polytool/src/sequences/literature.rs`, new
@@ -10,6 +10,13 @@ independent small tests for the user-requested research screen. No other
 worker owns these files; preserve unrelated `polytool/scripts/__pycache__/`.
 No public push or changes to other crates, shared Lean builds or worker
 profiles. Research evidence belongs in the separate private research repo.
+Initial APIs committed as `8a3443e`. Follow-up exact regression tests check
+the Hoggatt rank-shift identity (including the missing leading-term boundary)
+and a Delannoy three-lag differential identity through degree120. All 23
+sequence tests pass (312 other library tests filtered). The private research
+note also verifies the differential identity by rational generating-function
+algebra; no real-rootedness conjecture is claimed proved. Ownership released
+after this focused checkpoint. No public push.
 
 ## Principal-stratum conjecture checks — 2026-09-10
 

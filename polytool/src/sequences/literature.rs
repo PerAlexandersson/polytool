@@ -172,6 +172,35 @@ mod tests {
     }
 
     #[test]
+    fn delannoy_square_three_lag_differential_identity() {
+        let rows = delannoy_square_polynomials_bigint(120);
+        for n in 1..=120 {
+            let mut right = vec![BigInt::zero(); n + 1];
+            let n_i = n as i32;
+            for (j, constant, linear, derivative) in [
+                (1, 3 - n_i, 1, [4_i64, 11, 1]),
+                (2, 3 * n_i - 2, -2, [-4, -6, -2]),
+                (3, 5 - n_i, -1, [0, 5, -1]),
+            ] {
+                if n < j {
+                    continue;
+                }
+                let previous = &rows[n - j];
+                add_linear_multiple(&mut right, previous, constant, linear);
+                for k in 1..previous.len() {
+                    for (ell, factor) in derivative.iter().enumerate() {
+                        if *factor != 0 {
+                            right[k - 1 + ell] += &previous[k] * BigInt::from(k) * factor;
+                        }
+                    }
+                }
+            }
+            let left: Vec<BigInt> = rows[n].iter().map(|c| c * n_i).collect();
+            assert_eq!(left, right, "n={n}");
+        }
+    }
+
+    #[test]
     fn eulerian_square_retains_paper_indexing() {
         let a = eulerian_square_polynomials_bigint(4);
         assert_eq!(a[0], big(&[1]));
@@ -241,6 +270,33 @@ mod tests {
         assert_eq!(hoggatt_polynomials_bigint(1, 3, 2), vec![big(&[1])]);
         assert_eq!(delannoy_square_polynomials_bigint(0), vec![big(&[1])]);
         assert_eq!(eulerian_square_polynomials_bigint(0), vec![big(&[1])]);
+    }
+
+    #[test]
+    fn hoggatt_rank_shift_identity_including_vanishing_top_coefficient() {
+        // Product_j [n-k+j]_q * c_(n+1,k) = Product_j [n+j]_q * c_(n,k).
+        // At k=n, the first product vanishes; the new leading term is separate.
+        for m in 1..=4 {
+            for q in [1, 2, 3, 11] {
+                let rows = hoggatt_polynomials_bigint(25, m, q);
+                let q_integer = |r: usize| -> BigInt {
+                    if q == 1 {
+                        BigInt::from(r)
+                    } else {
+                        (pow_usize(&BigInt::from(q), r) - 1) / (q - 1)
+                    }
+                };
+                for n in 1..25 {
+                    let right_factor: BigInt = (0..m).map(|j| q_integer(n + j)).product();
+                    for k in 0..=n {
+                        let left_factor: BigInt = (0..m).map(|j| q_integer(n - k + j)).product();
+                        let previous = rows[n - 1].get(k).cloned().unwrap_or_else(BigInt::zero);
+                        assert_eq!(left_factor * &rows[n][k], &right_factor * previous);
+                    }
+                    assert_eq!(rows[n][n], pow_usize(&BigInt::from(q), m * n * (n + 1) / 2));
+                }
+            }
+        }
     }
 
     #[test]
