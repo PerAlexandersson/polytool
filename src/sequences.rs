@@ -15,6 +15,8 @@
 
 use num_bigint::BigInt;
 
+pub mod literature;
+
 /// Compute Eulerian polynomials A_1(t), A_2(t), ..., A_n(t).
 ///
 /// The Eulerian polynomial A_n(t) = sum_{k=0}^{n-1} A(n,k) t^k where A(n,k) is
