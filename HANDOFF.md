@@ -1,5 +1,21 @@
 # Handoff
 
+## Completed: A144438 quasisymmetric-refinement test — 2026-09-11
+
+Worker `/root` owned only new
+`experiments/src/bin/a144438_deco_qsym.rs` and this handoff entry for the
+user-authorized test of the decorated-permutation descent-set refinement in
+the shared QSym library.  No existing Rust source, Cargo manifest, generated
+cache, or unrelated experiment is owned.  The pre-existing untracked
+`polytool/scripts/__pycache__/` remains untouched.  The exact computation
+finds the first symmetry failure in degree three, where the monomial
+coefficients at `(1,2)` and `(2,1)` are `4` and `3`.  Quasisymmetric Schur
+positivity holds through degree five and fails in degree six, with coefficient
+`-8` at `(1,1,2,1,1)`.  All three focused binary tests pass with the external
+target directory and reduced priority; the bounded scan stopped at degree
+eight.  Results are recorded in the separate A144438 project.  Ownership is
+released after the focused checkpoint; no push or publication was made.
+
 ## Completed: factored Delannoy rank-six search — 2026-09-11
 
 Worker `agent-research-delann-p-39629cb1` reclaims only
