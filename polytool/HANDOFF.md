@@ -1,5 +1,26 @@
 # Polytool handoff
 
+## Completed: forgiving browser coefficient input (2026-09-11)
+
+Host completed web/index.html and new web/input-normalization.test.cjs;
+ownership released at checkpoint. Accept OEIS semicolon/newline rows,
+brace/bracket/tuple lists, wrapped bracket rows, trailing row commas, and
+Unicode minus/space/line-ending artifacts. Preserve exact integer strings,
+row order and trailing zeros. Malformed entries pass through to the existing
+error path; no numeric scraping. Nesting is capped before recursive descent.
+The user's exact OEIS sample gives 13 rows; the nested-list example gives four.
+
+38 tests pass against both canonical and staged HTML, including all rows
+through the actual staged WASM engine, a >2^53 integer, 20,000 coefficients,
+20,000-level malformed nesting, input-boundary wiring and inline JS syntax.
+Command: `POLYTOOL_WASM_DIR=/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/www/pkg
+node --test polytool/web/input-normalization.test.cjs` from the Rust root;
+set POLYTOOL_HTML to the staged www/index.html to check that copy.
+git diff --check passes. No Rust/WASM changes, build or dependencies needed.
+Focused patch mirrored into staging without replacing its newer OEIS export
+or rational defaults. Existing untracked scripts/__pycache__ is untouched.
+No Git push or live deployment; live page still needs this input patch.
+
 ## Completed: actionable MCP diagnostics for unsafe JSON integers (2026-09-10)
 
 Worker `/root` completed and released ownership of `mcp/src/lib.rs`,
