@@ -19,6 +19,18 @@ fn target(rank: usize) -> Vec<BigInt> {
         .collect()
 }
 
+fn divide_by_one_plus_t(polynomial: &[BigInt]) -> Option<Vec<BigInt>> {
+    if polynomial.len() < 2 {
+        return None;
+    }
+    let mut quotient = Vec::with_capacity(polynomial.len() - 1);
+    quotient.push(polynomial[0].clone());
+    for coefficient in polynomial.iter().skip(1).take(polynomial.len() - 2) {
+        quotient.push(coefficient - quotient.last().expect("quotient is nonempty"));
+    }
+    (quotient.last()? == polynomial.last()?).then_some(quotient)
+}
+
 fn candidate_polynomial(graph: &Graph) -> Vec<BigInt> {
     graph
         .matching_polynomial()
@@ -41,7 +53,10 @@ fn two_matching_count(graph: &Graph) -> usize {
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() || args[0] == "--help" || args[0] == "-h" {
-        eprintln!("Usage: delannoy_matching_search RANK [--witness-limit N] < graphs.g6");
+        eprintln!(
+            "Usage: delannoy_matching_search RANK [--divide-one-plus-t] \
+             [--witness-limit N] < graphs.g6"
+        );
         eprintln!("Input is streamed; blank lines and graph6 headers are skipped.");
         std::process::exit(if args.len() == 1 { 0 } else { 2 });
     }
@@ -49,17 +64,33 @@ fn main() {
         .parse::<usize>()
         .expect("RANK must be a positive integer");
     assert!(rank >= 1, "RANK must be positive");
-    let witness_limit = match args.as_slice() {
-        [_] => usize::MAX,
-        [_, flag, limit] if flag == "--witness-limit" => limit
-            .parse::<usize>()
-            .expect("witness limit must be a nonnegative integer"),
-        _ => {
-            eprintln!("Unknown arguments; use --help");
-            std::process::exit(2);
+    let mut witness_limit = usize::MAX;
+    let mut divide_target = false;
+    let mut index = 1;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--divide-one-plus-t" if !divide_target => {
+                divide_target = true;
+                index += 1;
+            }
+            "--witness-limit" if index + 1 < args.len() => {
+                witness_limit = args[index + 1]
+                    .parse::<usize>()
+                    .expect("witness limit must be a nonnegative integer");
+                index += 2;
+            }
+            _ => {
+                eprintln!("Unknown or repeated arguments; use --help");
+                std::process::exit(2);
+            }
         }
+    }
+    let wanted = if divide_target {
+        divide_by_one_plus_t(&target(rank))
+            .unwrap_or_else(|| panic!("rank-{rank} target is not divisible by 1+t"))
+    } else {
+        target(rank)
     };
-    let wanted = target(rank);
     let expected_edges = usize::try_from(&wanted[1]).expect("target edge count does not fit usize");
     assert!(
         expected_edges <= 62,
@@ -125,6 +156,7 @@ fn main() {
         "{}",
         serde_json::to_string_pretty(&json!({
             "rank": rank,
+            "divided_by_one_plus_t": divide_target,
             "target": wanted.iter().map(ToString::to_string).collect::<Vec<_>>(),
             "expected_edges": expected_edges,
             "counts": {
@@ -162,5 +194,19 @@ mod tests {
     fn two_disjoint_edges_calibrate_rank_one() {
         let path_three = Graph::path(3);
         assert_eq!(candidate_polynomial(&path_three), target(1));
+    }
+
+    #[test]
+    fn rank_six_has_the_stated_one_plus_t_quotient() {
+        assert_eq!(
+            divide_by_one_plus_t(&target(6)),
+            Some(
+                vec![1, 21, 160, 528, 677, 169]
+                    .into_iter()
+                    .map(BigInt::from)
+                    .collect()
+            )
+        );
+        assert_eq!(divide_by_one_plus_t(&target(5)), None);
     }
 }
