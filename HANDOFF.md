@@ -1,5 +1,16 @@
 # Handoff
 
+## Active: explicit literature polynomial generators — 2026-09-11
+
+Host supervisor owns `polytool/src/sequences.rs` (one module declaration),
+new `polytool/src/sequences/literature.rs`, new
+`polytool/examples/literature_sequence_rows.rs`, and this entry. Implement
+exact reusable Eulerian/Delannoy matrix-square and Hoggatt family APIs with
+independent small tests for the user-requested research screen. No other
+worker owns these files; preserve unrelated `polytool/scripts/__pycache__/`.
+No public push or changes to other crates, shared Lean builds or worker
+profiles. Research evidence belongs in the separate private research repo.
+
 ## Principal-stratum conjecture checks — 2026-09-10
 
 Host read-only computation found a counterexample to the draft's
