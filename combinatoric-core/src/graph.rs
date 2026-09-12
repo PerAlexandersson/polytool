@@ -16,7 +16,7 @@
 //! assert_eq!(k4.matching_polynomial(), vec![1, 6, 3]);
 //! ```
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use num_bigint::BigInt;
 
@@ -1015,6 +1015,79 @@ impl Graph {
         Graph::new(m, &lg_edges)
     }
 
+    /// Whether this graph is the line graph of a simple undirected graph.
+    ///
+    /// This uses Krausz's characterization: the edges can be partitioned into
+    /// cliques so that every vertex belongs to at most two partition cliques.
+    /// It searches the maximal cliques of size at least three together with
+    /// all two-vertex edge cliques.  Those candidates are sufficient because,
+    /// in the star-clique partition of a line graph, every nonmaximal clique
+    /// has size two.
+    ///
+    /// The maximal-clique enumeration is worst-case exponential, although the
+    /// initial claw-free check and the exact-cover search make the method
+    /// practical for the small and medium combinatorial graphs used here.
+    pub fn is_line_graph(&self) -> bool {
+        if !self.is_claw_free() {
+            return false;
+        }
+        if self.edges.is_empty() {
+            return true;
+        }
+
+        let edge_indices: BTreeMap<_, _> = self
+            .edges
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, edge)| (edge, index))
+            .collect();
+
+        let mut candidates = Vec::new();
+        for vertices in maximal_cliques(self) {
+            if vertices.len() < 3 {
+                continue;
+            }
+            let mut edges = Vec::with_capacity(vertices.len() * (vertices.len() - 1) / 2);
+            for (offset, &u) in vertices.iter().enumerate() {
+                for &v in &vertices[(offset + 1)..] {
+                    let edge = if u < v { (u, v) } else { (v, u) };
+                    edges.push(edge_indices[&edge]);
+                }
+            }
+            candidates.push(KrauszClique { vertices, edges });
+        }
+        for (edge_index, &(u, v)) in self.edges.iter().enumerate() {
+            candidates.push(KrauszClique {
+                vertices: vec![u, v],
+                edges: vec![edge_index],
+            });
+        }
+
+        let mut candidates_by_edge = vec![Vec::new(); self.edges.len()];
+        for (candidate_index, candidate) in candidates.iter().enumerate() {
+            for &edge_index in &candidate.edges {
+                candidates_by_edge[edge_index].push(candidate_index);
+            }
+        }
+        for edge_candidates in &mut candidates_by_edge {
+            edge_candidates
+                .sort_unstable_by_key(|&index| std::cmp::Reverse(candidates[index].edges.len()));
+        }
+
+        let mut uncovered = vec![true; self.edges.len()];
+        let mut memberships = vec![0u8; self.n];
+        let mut rejected_states = HashSet::new();
+        krausz_partition_exists(
+            &candidates,
+            &candidates_by_edge,
+            &mut uncovered,
+            self.edges.len(),
+            &mut memberships,
+            &mut rejected_states,
+        )
+    }
+
     // -- Predicates ---------------------------------------------------------
 
     /// Is the graph connected?
@@ -1922,6 +1995,148 @@ impl Graph {
     }
 }
 
+#[derive(Debug)]
+struct KrauszClique {
+    vertices: Vec<usize>,
+    edges: Vec<usize>,
+}
+
+fn maximal_cliques(graph: &Graph) -> Vec<Vec<usize>> {
+    fn visit(
+        graph: &Graph,
+        clique: &mut Vec<usize>,
+        mut candidates: BTreeSet<usize>,
+        mut excluded: BTreeSet<usize>,
+        result: &mut Vec<Vec<usize>>,
+    ) {
+        if candidates.is_empty() && excluded.is_empty() {
+            result.push(clique.clone());
+            return;
+        }
+
+        let pivot = candidates
+            .iter()
+            .chain(excluded.iter())
+            .copied()
+            .max_by_key(|&vertex| candidates.intersection(graph.neighbors(vertex)).count());
+        let extension_vertices: Vec<_> = match pivot {
+            Some(vertex) => candidates
+                .difference(graph.neighbors(vertex))
+                .copied()
+                .collect(),
+            None => candidates.iter().copied().collect(),
+        };
+
+        for vertex in extension_vertices {
+            clique.push(vertex);
+            let next_candidates = candidates
+                .intersection(graph.neighbors(vertex))
+                .copied()
+                .collect();
+            let next_excluded = excluded
+                .intersection(graph.neighbors(vertex))
+                .copied()
+                .collect();
+            visit(graph, clique, next_candidates, next_excluded, result);
+            clique.pop();
+            candidates.remove(&vertex);
+            excluded.insert(vertex);
+        }
+    }
+
+    let mut result = Vec::new();
+    visit(
+        graph,
+        &mut Vec::new(),
+        (0..graph.n).collect(),
+        BTreeSet::new(),
+        &mut result,
+    );
+    result
+}
+
+fn krausz_partition_exists(
+    candidates: &[KrauszClique],
+    candidates_by_edge: &[Vec<usize>],
+    uncovered: &mut [bool],
+    uncovered_count: usize,
+    memberships: &mut [u8],
+    rejected_states: &mut HashSet<Vec<u8>>,
+) -> bool {
+    if uncovered_count == 0 {
+        return true;
+    }
+
+    let mut state = memberships.to_vec();
+    for edge_chunk in uncovered.chunks(8) {
+        let mut byte = 0u8;
+        for (bit, &is_uncovered) in edge_chunk.iter().enumerate() {
+            if is_uncovered {
+                byte |= 1 << bit;
+            }
+        }
+        state.push(byte);
+    }
+    if !rejected_states.insert(state) {
+        return false;
+    }
+
+    let feasible = |candidate: &KrauszClique, uncovered: &[bool], memberships: &[u8]| {
+        candidate.edges.iter().all(|&edge| uncovered[edge])
+            && candidate
+                .vertices
+                .iter()
+                .all(|&vertex| memberships[vertex] < 2)
+    };
+
+    let mut best_candidates = Vec::new();
+    for edge_index in 0..uncovered.len() {
+        if !uncovered[edge_index] {
+            continue;
+        }
+        let edge_candidates: Vec<_> = candidates_by_edge[edge_index]
+            .iter()
+            .copied()
+            .filter(|&index| feasible(&candidates[index], uncovered, memberships))
+            .collect();
+        if edge_candidates.is_empty() {
+            return false;
+        }
+        if best_candidates.is_empty() || edge_candidates.len() < best_candidates.len() {
+            best_candidates = edge_candidates;
+        }
+    }
+
+    for candidate_index in best_candidates {
+        let candidate = &candidates[candidate_index];
+        for &edge in &candidate.edges {
+            uncovered[edge] = false;
+        }
+        for &vertex in &candidate.vertices {
+            memberships[vertex] += 1;
+        }
+
+        if krausz_partition_exists(
+            candidates,
+            candidates_by_edge,
+            uncovered,
+            uncovered_count - candidate.edges.len(),
+            memberships,
+            rejected_states,
+        ) {
+            return true;
+        }
+
+        for &vertex in &candidate.vertices {
+            memberships[vertex] -= 1;
+        }
+        for &edge in &candidate.edges {
+            uncovered[edge] = true;
+        }
+    }
+    false
+}
+
 impl std::fmt::Display for Graph {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Graph(n={}, |E|={})", self.n, self.edges.len())
@@ -2591,5 +2806,53 @@ mod tests {
         let g = Graph::path(5);
         let lg = g.line_graph();
         assert_eq!(g.matching_polynomial(), lg.independence_polynomial());
+    }
+
+    #[test]
+    fn test_is_line_graph_basic_examples() {
+        assert!(Graph::empty(0).is_line_graph());
+        assert!(Graph::empty(5).is_line_graph());
+        assert!(Graph::complete(7).is_line_graph());
+        assert!(Graph::cycle(7).is_line_graph());
+
+        let claw = Graph::new(4, &[(0, 1), (0, 2), (0, 3)]);
+        assert!(!claw.is_line_graph());
+
+        // This unit interval graph is claw-free, but not a line graph.  It
+        // exercises the Krausz search rather than the quick claw rejection.
+        let claw_free_non_line_graph = Graph::unit_interval(&[0, 1, 2, 3, 3]);
+        assert!(claw_free_non_line_graph.is_claw_free());
+        assert!(!claw_free_non_line_graph.is_line_graph());
+
+        // The root contains a triangle and a pendant edge. Its line graph has
+        // overlapping maximal cliques, so recognizing it needs two-vertex
+        // Krausz cliques as well as the maximal ones.
+        let triangle_with_leaf = Graph::new(4, &[(0, 1), (1, 2), (0, 2), (0, 3)]);
+        assert!(triangle_with_leaf.line_graph().is_line_graph());
+    }
+
+    #[test]
+    fn test_is_line_graph_for_deterministic_random_roots() {
+        let mut state = 0x4d595df4d0f33173u64;
+        for vertices in 1..=8 {
+            for _ in 0..16 {
+                let mut edges = Vec::new();
+                for u in 0..vertices {
+                    for v in (u + 1)..vertices {
+                        state = state
+                            .wrapping_mul(6364136223846793005)
+                            .wrapping_add(1442695040888963407);
+                        if state >> 63 == 1 {
+                            edges.push((u, v));
+                        }
+                    }
+                }
+                let root = Graph::new(vertices, &edges);
+                assert!(
+                    root.line_graph().is_line_graph(),
+                    "failed for root graph with {vertices} vertices and edges {edges:?}"
+                );
+            }
+        }
     }
 }
