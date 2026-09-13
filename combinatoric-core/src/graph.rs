@@ -957,6 +957,26 @@ impl Graph {
 
     // -- Graph operations ---------------------------------------------------
 
+    /// Disjoint union of two graphs.
+    ///
+    /// Vertices of `self` retain their labels.  Vertices of `other` are
+    /// shifted upward by `self.num_vertices()`.
+    pub fn disjoint_union(&self, other: &Self) -> Self {
+        let n = self
+            .n
+            .checked_add(other.n)
+            .expect("disjoint-union vertex count overflow");
+        let mut edges = Vec::with_capacity(self.edges.len() + other.edges.len());
+        edges.extend(self.edges.iter().copied());
+        edges.extend(
+            other
+                .edges
+                .iter()
+                .map(|&(left, right)| (self.n + left, self.n + right)),
+        );
+        Graph::new(n, &edges)
+    }
+
     /// Complement graph: edge (u,v) iff (u,v) is NOT in self.
     pub fn complement(&self) -> Self {
         let mut edges = Vec::new();
@@ -2996,6 +3016,26 @@ mod tests {
         let comp = p3.complement(); // 0-2
         assert_eq!(comp.num_edges(), 1);
         assert!(comp.has_edge(0, 2));
+    }
+
+    #[test]
+    fn test_disjoint_union() {
+        let graph = Graph::path(2).disjoint_union(&Graph::complete(3));
+        assert_eq!(graph.num_vertices(), 5);
+        assert_eq!(graph.num_edges(), 4);
+        assert!(graph.has_edge(0, 1));
+        assert!(graph.has_edge(2, 4));
+        assert!(!graph.has_edge(1, 2));
+        assert!(!graph.is_connected());
+        assert!(graph.is_chordal());
+        assert!(graph.is_claw_free());
+        assert_eq!(
+            graph.acyclic_sink_polynomial_chordal().unwrap(),
+            vec![0, 0, 12]
+        );
+
+        assert_eq!(graph.disjoint_union(&Graph::empty(0)), graph.clone());
+        assert_eq!(Graph::empty(0).disjoint_union(&graph), graph);
     }
 
     #[test]
