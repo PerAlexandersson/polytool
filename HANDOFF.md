@@ -1,5 +1,43 @@
 # Handoff
 
+## Completed: chordal graph API and reusable family generators — 2026-09-13
+
+Commit `aedd875` promotes reusable code from the chordal claw-free sink project
+to `combinatoric-core/src/graph.rs`: maximum-cardinality-search perfect
+elimination certificates and `is_chordal`; exact `BigInt` and checked `i64`
+chordal acyclic-sink generators using the proved independent-set expansion;
+generic Cartesian products; path powers; rook and triangular graphs; and a
+validated edge/triangle block-tree root constructor.  Documentation marks the
+rook and triangular families as generally nonchordal.
+
+All 251 library tests and both documentation tests pass with the external
+target directory.  New exhaustive tests compare the chordality result with an
+independent simplicial-deletion implementation and compare the new sink method
+with direct orientation enumeration on every labeled graph through five
+vertices.  Closed-form tests cover paths, `K_n-e`, balanced double-star line
+graphs, and friendship line graphs.  Strict whole-crate Clippy remains blocked
+by 40 unrelated pre-existing warnings; it reported no warning in the newly
+added code.  The clean feature branch was fast-forwarded into local `master`.
+No push, PR, or publication was made.  Ownership is released.  The unrelated
+untracked `polytool/scripts/__pycache__/` remains untouched.
+
+## Completed: frozen chordal claw-free sink scan — 2026-09-12
+
+Worker `/root` owned only the new ignored experiment
+`experiments/src/bin/frozen_chordal_clawfree_sinks.rs` and this handoff entry.
+The exact scan verifies two order-six frozen counterexamples, checks all
+`105398` frozen states on all `64` natural unit interval area sequences through
+order five, and checks the unfrozen polynomial on all `1291` connected chordal
+claw-free graphs among the `273193` connected unlabelled graphs through order
+nine.  The three focused tests pass, and the bounded release scans completed.
+The experiment uses the existing
+`Graph::acyclic_sink_polynomial_with_frozen_edges` and `polytool` exact
+real-rootedness checks.
+No shared library source, manifest, lockfile, or unrelated dirty file is
+owned; in particular `combinatoric-core/src/graph.rs` remains untouched.  The
+pre-existing untracked `polytool/scripts/__pycache__/` remains untouched.
+Ownership is released; no push or publication was made.
+
 ## Completed: A144438 quasisymmetric-refinement test — 2026-09-11
 
 Worker `/root` owned only new
