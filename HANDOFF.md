@@ -1,5 +1,19 @@
 # Handoff
 
+## Completed: standard graph-family acyclic-sink sequences — 2026-09-13
+
+This batch adds a documented geometric triangular-lattice patch constructor,
+an exact deletion-contraction acyclic-orientation count, and an exact general
+acyclic sink-polynomial generator using the sink-set identity and a shared
+cache.  The exhaustive test agrees with direct orientation enumeration for
+every labeled graph through five vertices; all 253 library tests and both
+documentation tests pass.  Strict whole-crate Clippy remains blocked by 39
+unrelated pre-existing warnings and reports no warning in the new code.  The
+focused standard-family binary also passes strict Clippy.  The accidental
+workspace-formatter touch to `polytool/web/src/lib.rs` was reversed exactly.
+The pre-existing untracked `polytool/scripts/__pycache__/` remains untouched.
+Ownership is released; no push, PR, or publication was made.
+
 ## Completed: edge/triangle block-tree documentation correction — 2026-09-13
 
 This documentation-only follow-up qualifies that the constructor covers the

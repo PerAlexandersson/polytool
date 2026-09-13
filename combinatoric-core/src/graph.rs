@@ -22,6 +22,8 @@ use num_bigint::BigInt;
 
 use crate::partition::Partition;
 
+type GraphCacheKey = (usize, Vec<(usize, usize)>);
+
 // ---------------------------------------------------------------------------
 // Polynomial helpers (Vec<i64> arithmetic for chromatic polynomial)
 // ---------------------------------------------------------------------------
@@ -555,6 +557,37 @@ impl Graph {
     /// Ladder graph `P_rungs x P_2`.
     pub fn ladder(rungs: usize) -> Self {
         Self::cartesian_product_paths(rungs, 2)
+    }
+
+    /// Triangular-lattice patch with `side_length` vertices on each side.
+    ///
+    /// Row `r` has vertices `(r, 0), ..., (r, r)`.  Consecutive vertices in a
+    /// row are adjacent, and `(r, c)` is adjacent to `(r + 1, c)` and
+    /// `(r + 1, c + 1)`.  Thus side lengths zero, one, and two give the empty
+    /// graph, `K_1`, and `K_3`, respectively.  This geometric family is
+    /// distinct from [`Graph::triangular_graph`], the line graph of `K_n`.
+    pub fn triangular_grid(side_length: usize) -> Self {
+        let successor = side_length
+            .checked_add(1)
+            .expect("triangular-grid side length overflow");
+        let vertex_count = side_length
+            .checked_mul(successor)
+            .and_then(|product| product.checked_div(2))
+            .expect("triangular-grid vertex count overflow");
+        let vertex = |row: usize, column: usize| row * (row + 1) / 2 + column;
+        let mut edges = Vec::new();
+        for row in 0..side_length {
+            for column in 0..row {
+                edges.push((vertex(row, column), vertex(row, column + 1)));
+            }
+            if row + 1 < side_length {
+                for column in 0..=row {
+                    edges.push((vertex(row, column), vertex(row + 1, column)));
+                    edges.push((vertex(row, column), vertex(row + 1, column + 1)));
+                }
+            }
+        }
+        Graph::new(vertex_count, &edges)
     }
 
     /// Fan graph: a path on `path_vertices` vertices plus one universal apex.
@@ -1696,6 +1729,37 @@ impl Graph {
         self.num_acyclic_orientations_with_frozen_edges(&[])
     }
 
+    /// Exact number of acyclic orientations, computed by deletion-contraction.
+    ///
+    /// This avoids enumerating all `2^|E|` orientations and can be useful for
+    /// moderate nonchordal graph families.  The recurrence is still
+    /// exponential in the worst case.
+    pub fn num_acyclic_orientations_bigint(&self) -> BigInt {
+        let mut cache = std::collections::HashMap::new();
+        self.num_acyclic_orientations_dc(&mut cache)
+    }
+
+    fn num_acyclic_orientations_dc(
+        &self,
+        cache: &mut std::collections::HashMap<GraphCacheKey, BigInt>,
+    ) -> BigInt {
+        let key = (self.n, self.edges.clone());
+        if let Some(count) = cache.get(&key) {
+            return count.clone();
+        }
+        let count = if let Some(&(left, right)) = self.edges.first() {
+            self.delete_edge(left, right)
+                .num_acyclic_orientations_dc(cache)
+                + self
+                    .contract_edge(left, right)
+                    .num_acyclic_orientations_dc(cache)
+        } else {
+            big(1)
+        };
+        cache.insert(key, count.clone());
+        count
+    }
+
     /// Number of acyclic orientations extending the directions in `frozen_edges`.
     pub fn num_acyclic_orientations_with_frozen_edges(
         &self,
@@ -1712,6 +1776,53 @@ impl Graph {
     /// A sink is a vertex with no outgoing edges in the orientation.
     pub fn acyclic_sink_polynomial(&self) -> Vec<i64> {
         self.acyclic_sink_polynomial_with_frozen_edges(&[])
+    }
+
+    /// Exact acyclic-orientation sink polynomial by deletion-contraction.
+    ///
+    /// Coefficients are in ascending powers of `t`.  For every graph `H`, the
+    /// method uses the sink-set identity
+    ///
+    /// `S_H(1 + x) = sum_I ao(H - I) x^|I|`,
+    ///
+    /// where `I` ranges over independent vertex sets and `ao` denotes the
+    /// number of acyclic orientations.  The orientation counts share a
+    /// deletion-contraction cache.  This is exact for arbitrary graphs, but
+    /// remains exponential in the worst case; chordal callers should prefer
+    /// [`Graph::acyclic_sink_polynomial_chordal_bigint`].
+    pub fn acyclic_sink_polynomial_bigint(&self) -> Vec<BigInt> {
+        let mut cache = std::collections::HashMap::new();
+        let mut shifted_coefficients = vec![big_zero(); self.n + 1];
+        for independent_set in self.all_independent_sets() {
+            let removed = independent_set.iter().copied().collect::<BTreeSet<_>>();
+            let remaining = (0..self.n)
+                .filter(|vertex| !removed.contains(vertex))
+                .collect::<Vec<_>>();
+            let induced = self.induced_subgraph(&remaining);
+            shifted_coefficients[independent_set.len()] +=
+                induced.num_acyclic_orientations_dc(&mut cache);
+        }
+
+        let mut coefficients = vec![big_zero(); self.n + 1];
+        for (degree, shifted_coefficient) in shifted_coefficients.iter().enumerate() {
+            let mut binomial = big(1);
+            for (exponent, coefficient) in coefficients.iter_mut().enumerate().take(degree + 1) {
+                let term = shifted_coefficient * &binomial;
+                if (degree - exponent) % 2 == 0 {
+                    *coefficient += term;
+                } else {
+                    *coefficient -= term;
+                }
+                if exponent < degree {
+                    binomial *= BigInt::from(degree - exponent);
+                    binomial /= BigInt::from(exponent + 1);
+                }
+            }
+        }
+        while coefficients.len() > 1 && coefficients.last() == Some(&big_zero()) {
+            coefficients.pop();
+        }
+        coefficients
     }
 
     /// Exact sink polynomial of a chordal graph, using the independent-set
@@ -1756,12 +1867,12 @@ impl Graph {
         let mut coefficients = vec![big_zero(); self.n + 1];
         for (degree, shifted_coefficient) in shifted_coefficients.iter().enumerate() {
             let mut binomial = big(1);
-            for exponent in 0..=degree {
+            for (exponent, coefficient) in coefficients.iter_mut().enumerate().take(degree + 1) {
                 let term = shifted_coefficient * &binomial;
                 if (degree - exponent) % 2 == 0 {
-                    coefficients[exponent] += term;
+                    *coefficient += term;
                 } else {
-                    coefficients[exponent] -= term;
+                    *coefficient -= term;
                 }
                 if exponent < degree {
                     binomial *= BigInt::from(degree - exponent);
@@ -1832,14 +1943,14 @@ impl Graph {
     ///
     /// Uses memoization keyed on canonical edge sets.
     pub fn chromatic_polynomial(&self) -> Vec<i64> {
-        let mut cache: std::collections::HashMap<(usize, Vec<(usize, usize)>), Vec<i64>> =
+        let mut cache: std::collections::HashMap<GraphCacheKey, Vec<i64>> =
             std::collections::HashMap::new();
         self.chromatic_poly_dc(&mut cache)
     }
 
     fn chromatic_poly_dc(
         &self,
-        cache: &mut std::collections::HashMap<(usize, Vec<(usize, usize)>), Vec<i64>>,
+        cache: &mut std::collections::HashMap<GraphCacheKey, Vec<i64>>,
     ) -> Vec<i64> {
         let key = (self.n, self.edges.clone());
         if let Some(cached) = cache.get(&key) {
@@ -2716,6 +2827,22 @@ mod tests {
         assert_eq!(underlying, Graph::cycle(3));
     }
 
+    #[test]
+    fn test_triangular_grid_generator() {
+        assert_eq!(Graph::triangular_grid(0), Graph::empty(0));
+        assert_eq!(Graph::triangular_grid(1), Graph::empty(1));
+        assert_eq!(Graph::triangular_grid(2), Graph::complete(3));
+        for side_length in 0..=8 {
+            let graph = Graph::triangular_grid(side_length);
+            assert_eq!(graph.num_vertices(), side_length * (side_length + 1) / 2);
+            assert_eq!(
+                graph.num_edges(),
+                3 * side_length * side_length.saturating_sub(1) / 2
+            );
+        }
+        assert_ne!(Graph::triangular_grid(4), Graph::triangular_graph(4));
+    }
+
     // -- Predicate tests --
 
     #[test]
@@ -2795,6 +2922,18 @@ mod tests {
                     .collect::<Vec<_>>();
                 let graph = Graph::new(n, &edges);
                 assert_eq!(graph.is_chordal(), naive_is_chordal(&graph));
+                assert_eq!(
+                    graph.acyclic_sink_polynomial_bigint(),
+                    graph
+                        .acyclic_sink_polynomial()
+                        .into_iter()
+                        .map(BigInt::from)
+                        .collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    graph.num_acyclic_orientations_bigint(),
+                    BigInt::from(graph.num_acyclic_orientations())
+                );
                 if graph.is_chordal() {
                     assert_eq!(
                         graph.acyclic_sink_polynomial_chordal().unwrap(),
