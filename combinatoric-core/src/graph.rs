@@ -736,9 +736,10 @@ impl Graph {
     /// `attachment_vertices` must have length `block_sizes.len() - 1`.
     /// Every block size must be two or three.
     ///
-    /// These are exactly the connected simple graphs with no cycle of length
-    /// at least four.  Consequently, the line graph of every graph returned
-    /// by this constructor is chordal and claw-free.
+    /// Apart from the one-vertex graph, these are exactly the connected simple
+    /// graphs with no cycle of length at least four.  Consequently, the line
+    /// graph of every graph returned by this constructor is chordal and
+    /// claw-free.
     pub fn edge_triangle_block_tree(
         block_sizes: &[usize],
         attachment_vertices: &[usize],

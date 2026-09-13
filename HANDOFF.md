@@ -1,5 +1,12 @@
 # Handoff
 
+## Completed: edge/triangle block-tree documentation correction — 2026-09-13
+
+This documentation-only follow-up qualifies that the constructor covers the
+nontrivial connected graphs in the stated class, while the one-vertex graph is
+the sole degenerate exception.  Rustfmt and the documentation tests pass.  No
+remote action was taken, and ownership is released.
+
 ## Completed: disjoint-union graph operation — 2026-09-13
 
 Commit `f74c2be` adds the missing generic disjoint-union operation required by
