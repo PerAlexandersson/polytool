@@ -1,9 +1,9 @@
 //! Simple undirected graphs on vertex set {0, 1, ..., n-1}.
 //!
 //! Provides a [`Graph`] type with adjacency-list representation, standard graph
-//! generators (complete, bipartite, path, cycle, grid, tree families,
-//! Ferrers board, unit interval), and combinatorial algorithms (matchings,
-//! independence sets, acyclic orientations).
+//! generators (complete, bipartite, path, cycle, graph products, tree
+//! families, Ferrers board, unit interval), and combinatorial algorithms
+//! (matchings, independence sets, chordality, acyclic orientations).
 //!
 //! # Examples
 //!
@@ -522,23 +522,27 @@ impl Graph {
         Graph::new(n, &edges)
     }
 
+    /// Power `P_n^power` of the path on `n` vertices.
+    ///
+    /// Vertices `i` and `j` are adjacent exactly when
+    /// `0 < |i - j| <= power`.  In particular, power zero gives an edgeless
+    /// graph and every power at least `n - 1` gives the complete graph.
+    pub fn path_power(n: usize, power: usize) -> Self {
+        let mut edges = Vec::new();
+        for i in 0..n {
+            let end = i.saturating_add(power).min(n.saturating_sub(1));
+            for j in (i + 1)..=end {
+                edges.push((i, j));
+            }
+        }
+        Graph::new(n, &edges)
+    }
+
     /// Cartesian product `P_rows x P_cols`, also called the rectangular grid.
     ///
     /// Vertices are numbered row-major: `(r, c)` has index `r * cols + c`.
     pub fn cartesian_product_paths(rows: usize, cols: usize) -> Self {
-        let mut edges = Vec::new();
-        for r in 0..rows {
-            for c in 0..cols {
-                let v = r * cols + c;
-                if r + 1 < rows {
-                    edges.push((v, (r + 1) * cols + c));
-                }
-                if c + 1 < cols {
-                    edges.push((v, r * cols + c + 1));
-                }
-            }
-        }
-        Graph::new(rows * cols, &edges)
+        Self::path(rows).cartesian_product(&Self::path(cols))
     }
 
     /// Rectangular grid graph with `rows` rows and `cols` columns.
@@ -722,6 +726,61 @@ impl Graph {
             edges.push((a, b));
         }
         Graph::new(2 * triangles + 1, &edges)
+    }
+
+    /// Connected graph whose blocks are prescribed copies of `K_2` or `K_3`.
+    ///
+    /// The first entry of `block_sizes` creates the first block.  Every later
+    /// block is attached at the corresponding existing vertex in
+    /// `attachment_vertices` and introduces one or two new vertices.  Thus
+    /// `attachment_vertices` must have length `block_sizes.len() - 1`.
+    /// Every block size must be two or three.
+    ///
+    /// These are exactly the connected simple graphs with no cycle of length
+    /// at least four.  Consequently, the line graph of every graph returned
+    /// by this constructor is chordal and claw-free.
+    pub fn edge_triangle_block_tree(
+        block_sizes: &[usize],
+        attachment_vertices: &[usize],
+    ) -> Result<Self, String> {
+        if block_sizes.is_empty() {
+            return if attachment_vertices.is_empty() {
+                Ok(Graph::empty(0))
+            } else {
+                Err("an empty block list cannot have attachment vertices".to_string())
+            };
+        }
+        if attachment_vertices.len() + 1 != block_sizes.len() {
+            return Err(
+                "one attachment vertex is required for each block after the first".to_string(),
+            );
+        }
+        if block_sizes.iter().any(|&size| size != 2 && size != 3) {
+            return Err("edge-triangle block sizes must be two or three".to_string());
+        }
+
+        let mut next_vertex = block_sizes[0];
+        let mut edges = if block_sizes[0] == 2 {
+            vec![(0, 1)]
+        } else {
+            vec![(0, 1), (0, 2), (1, 2)]
+        };
+        for (&size, &attachment) in block_sizes[1..].iter().zip(attachment_vertices.iter()) {
+            if attachment >= next_vertex {
+                return Err(format!(
+                    "attachment vertex {attachment} is not present before its block"
+                ));
+            }
+            let new_vertices = (next_vertex..next_vertex + size - 1).collect::<Vec<_>>();
+            for &vertex in &new_vertices {
+                edges.push((attachment, vertex));
+            }
+            if size == 3 {
+                edges.push((new_vertices[0], new_vertices[1]));
+            }
+            next_vertex += size - 1;
+        }
+        Ok(Graph::new(next_vertex, &edges))
     }
 
     /// Complete bipartite graph K_{a,b}.
@@ -1015,6 +1074,48 @@ impl Graph {
         Graph::new(m, &lg_edges)
     }
 
+    /// Cartesian product of two graphs.
+    ///
+    /// Vertex `(u, v)` is encoded as `u * other.num_vertices() + v`.
+    /// Two product vertices are adjacent when one coordinate agrees and the
+    /// other pair is adjacent in the corresponding factor.
+    pub fn cartesian_product(&self, other: &Self) -> Self {
+        let n = self
+            .n
+            .checked_mul(other.n)
+            .expect("Cartesian-product vertex count overflow");
+        let mut edges = Vec::new();
+        for &(u, v) in &self.edges {
+            for w in 0..other.n {
+                edges.push((u * other.n + w, v * other.n + w));
+            }
+        }
+        for u in 0..self.n {
+            for &(v, w) in &other.edges {
+                edges.push((u * other.n + v, u * other.n + w));
+            }
+        }
+        Graph::new(n, &edges)
+    }
+
+    /// Rook graph on a `rows` by `cols` rectangular board.
+    ///
+    /// Vertices are board cells, with two cells adjacent exactly when they
+    /// share a row or column.  Equivalently, this is `L(K_{rows, cols})`.
+    /// It is claw-free, but is not chordal when `rows, cols >= 2`.
+    pub fn rook_graph(rows: usize, cols: usize) -> Self {
+        Self::complete_bipartite(rows, cols).line_graph()
+    }
+
+    /// Triangular graph `T(n)`, whose vertices are the two-element subsets of
+    /// `0..n` and whose edges join intersecting subsets.
+    ///
+    /// Equivalently, this is `L(K_n)`.  It is claw-free, but is not chordal
+    /// for `n >= 4`.
+    pub fn triangular_graph(n: usize) -> Self {
+        Self::complete(n).line_graph()
+    }
+
     /// Whether this graph is the line graph of a simple undirected graph.
     ///
     /// This uses Krausz's characterization: the edges can be partitioned into
@@ -1089,6 +1190,75 @@ impl Graph {
     }
 
     // -- Predicates ---------------------------------------------------------
+
+    /// Whether `order` is a perfect elimination order for this graph.
+    ///
+    /// The order must contain every vertex exactly once.  For every vertex,
+    /// its neighbors occurring later in the order must form a clique.
+    pub fn is_perfect_elimination_order(&self, order: &[usize]) -> bool {
+        if order.len() != self.n {
+            return false;
+        }
+        let mut position = vec![usize::MAX; self.n];
+        for (index, &vertex) in order.iter().enumerate() {
+            if vertex >= self.n || position[vertex] != usize::MAX {
+                return false;
+            }
+            position[vertex] = index;
+        }
+        for (index, &vertex) in order.iter().enumerate() {
+            let later_neighbors = self.adj[vertex]
+                .iter()
+                .copied()
+                .filter(|&neighbor| position[neighbor] > index)
+                .collect::<Vec<_>>();
+            for (offset, &left) in later_neighbors.iter().enumerate() {
+                if later_neighbors[(offset + 1)..]
+                    .iter()
+                    .any(|&right| !self.has_edge(left, right))
+                {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// Return a perfect elimination order, or `None` if the graph is not
+    /// chordal.
+    ///
+    /// This uses maximum-cardinality search and validates the resulting order
+    /// as a certificate.  Ties are resolved by vertex number, so the result is
+    /// deterministic.
+    pub fn perfect_elimination_order(&self) -> Option<Vec<usize>> {
+        let mut selected = vec![false; self.n];
+        let mut weight = vec![0usize; self.n];
+        let mut selection_order = Vec::with_capacity(self.n);
+        for _ in 0..self.n {
+            let vertex = (0..self.n)
+                .filter(|&candidate| !selected[candidate])
+                .max_by_key(|&candidate| (weight[candidate], std::cmp::Reverse(candidate)))
+                .expect("an unselected vertex must remain");
+            selected[vertex] = true;
+            selection_order.push(vertex);
+            for &neighbor in &self.adj[vertex] {
+                if !selected[neighbor] {
+                    weight[neighbor] += 1;
+                }
+            }
+        }
+        selection_order.reverse();
+        self.is_perfect_elimination_order(&selection_order)
+            .then_some(selection_order)
+    }
+
+    /// Whether this graph is chordal.
+    ///
+    /// A graph is chordal when it has no induced cycle of length at least
+    /// four, equivalently when it has a perfect elimination order.
+    pub fn is_chordal(&self) -> bool {
+        self.perfect_elimination_order().is_some()
+    }
 
     /// Is the graph connected?
     pub fn is_connected(&self) -> bool {
@@ -1519,9 +1689,86 @@ impl Graph {
     /// acyclic orientations with exactly k sinks.
     ///
     /// A sink is a vertex with no outgoing edges in the orientation.
-    /// This equals the chromatic polynomial evaluated at -t (up to sign).
     pub fn acyclic_sink_polynomial(&self) -> Vec<i64> {
         self.acyclic_sink_polynomial_with_frozen_edges(&[])
+    }
+
+    /// Exact sink polynomial of a chordal graph, using the independent-set
+    /// expansion rather than enumerating orientations.
+    ///
+    /// Returns `None` when the graph is not chordal.  Coefficients are in
+    /// ascending powers of `t`.  For a chordal graph `H`, the method uses
+    ///
+    /// `S_H(1 + x) = sum_I ao(H - I) x^|I|`,
+    ///
+    /// where the sum is over independent sets and each acyclic-orientation
+    /// count is obtained from a restricted perfect elimination order.  Its
+    /// running time is governed by the number of independent sets, rather
+    /// than by `2^|E(H)|` orientations.
+    pub fn acyclic_sink_polynomial_chordal_bigint(&self) -> Option<Vec<BigInt>> {
+        let order = self.perfect_elimination_order()?;
+        let mut position = vec![0usize; self.n];
+        for (index, &vertex) in order.iter().enumerate() {
+            position[vertex] = index;
+        }
+
+        let mut shifted_coefficients = vec![big_zero(); self.n + 1];
+        for independent_set in self.all_independent_sets() {
+            let mut removed = vec![false; self.n];
+            for &vertex in &independent_set {
+                removed[vertex] = true;
+            }
+            let mut acyclic_orientations = big(1);
+            for (index, &vertex) in order.iter().enumerate() {
+                if removed[vertex] {
+                    continue;
+                }
+                let later_degree = self.adj[vertex]
+                    .iter()
+                    .filter(|&&neighbor| !removed[neighbor] && position[neighbor] > index)
+                    .count();
+                acyclic_orientations *= BigInt::from(later_degree + 1);
+            }
+            shifted_coefficients[independent_set.len()] += acyclic_orientations;
+        }
+
+        let mut coefficients = vec![big_zero(); self.n + 1];
+        for (degree, shifted_coefficient) in shifted_coefficients.iter().enumerate() {
+            let mut binomial = big(1);
+            for exponent in 0..=degree {
+                let term = shifted_coefficient * &binomial;
+                if (degree - exponent) % 2 == 0 {
+                    coefficients[exponent] += term;
+                } else {
+                    coefficients[exponent] -= term;
+                }
+                if exponent < degree {
+                    binomial *= BigInt::from(degree - exponent);
+                    binomial /= BigInt::from(exponent + 1);
+                }
+            }
+        }
+        while coefficients.len() > 1 && coefficients.last() == Some(&big_zero()) {
+            coefficients.pop();
+        }
+        Some(coefficients)
+    }
+
+    /// Checked `i64` wrapper for
+    /// [`acyclic_sink_polynomial_chordal_bigint`](Self::acyclic_sink_polynomial_chordal_bigint).
+    pub fn acyclic_sink_polynomial_chordal(&self) -> Option<Vec<i64>> {
+        use num_traits::ToPrimitive;
+        self.acyclic_sink_polynomial_chordal_bigint()
+            .map(|coefficients| {
+                coefficients
+                    .iter()
+                    .map(|coefficient| {
+                        coefficient
+                            .to_i64()
+                            .expect("coefficient overflow in acyclic_sink_polynomial_chordal")
+                    })
+                    .collect()
+            })
     }
 
     /// Sink polynomial of acyclic orientations extending the directions in
@@ -2151,6 +2398,45 @@ impl std::fmt::Display for Graph {
 mod tests {
     use super::*;
 
+    fn naive_is_chordal(graph: &Graph) -> bool {
+        let mut active = vec![true; graph.num_vertices()];
+        for _ in 0..graph.num_vertices() {
+            let simplicial = (0..graph.num_vertices()).find(|&vertex| {
+                if !active[vertex] {
+                    return false;
+                }
+                let neighbors = graph
+                    .neighbors(vertex)
+                    .iter()
+                    .copied()
+                    .filter(|&neighbor| active[neighbor])
+                    .collect::<Vec<_>>();
+                neighbors.iter().enumerate().all(|(offset, &left)| {
+                    neighbors[(offset + 1)..]
+                        .iter()
+                        .all(|&right| graph.has_edge(left, right))
+                })
+            });
+            let Some(vertex) = simplicial else {
+                return false;
+            };
+            active[vertex] = false;
+        }
+        true
+    }
+
+    fn binomial_i64(n: usize, k: usize) -> i64 {
+        let mut value = 1_i64;
+        for index in 0..k {
+            value = value * (n - index) as i64 / (index + 1) as i64;
+        }
+        value
+    }
+
+    fn factorial_i64(n: usize) -> i64 {
+        (1..=n).map(|factor| factor as i64).product()
+    }
+
     // -- Generator tests --
 
     #[test]
@@ -2211,6 +2497,24 @@ mod tests {
     }
 
     #[test]
+    fn test_path_power() {
+        assert_eq!(Graph::path_power(5, 0), Graph::empty(5));
+        assert_eq!(Graph::path_power(5, 1), Graph::path(5));
+        assert_eq!(Graph::path_power(5, 10), Graph::complete(5));
+
+        let square = Graph::path_power(6, 2);
+        assert_eq!(square.num_edges(), 9);
+        assert!(square.has_edge(1, 3));
+        assert!(!square.has_edge(1, 4));
+        let unit_interval = Graph::unit_interval(&[0, 1, 2, 2, 2, 2]);
+        assert_eq!(square.num_vertices(), unit_interval.num_vertices());
+        assert!(square
+            .edges()
+            .iter()
+            .all(|&(left, right)| unit_interval.has_edge(left, right)));
+    }
+
+    #[test]
     fn test_grid_and_ladder() {
         let grid = Graph::grid(3, 4);
         assert_eq!(grid.num_vertices(), 12);
@@ -2224,6 +2528,22 @@ mod tests {
         assert_eq!(ladder.num_edges(), 10);
         assert!(ladder.has_edge(0, 1));
         assert!(ladder.has_edge(0, 2));
+    }
+
+    #[test]
+    fn test_cartesian_product() {
+        assert_eq!(
+            Graph::path(3).cartesian_product(&Graph::path(4)),
+            Graph::grid(3, 4)
+        );
+        assert_eq!(
+            Graph::cycle(3).cartesian_product(&Graph::empty(1)),
+            Graph::cycle(3)
+        );
+        assert_eq!(
+            Graph::cycle(3).cartesian_product(&Graph::empty(0)),
+            Graph::empty(0)
+        );
     }
 
     #[test]
@@ -2246,6 +2566,48 @@ mod tests {
         assert!(friendship.has_edge(1, 2));
         assert!(friendship.has_edge(5, 6));
         assert!(!friendship.has_edge(1, 3));
+    }
+
+    #[test]
+    fn test_rook_and_triangular_graphs() {
+        let rook = Graph::rook_graph(3, 4);
+        assert_eq!(rook.num_vertices(), 12);
+        assert_eq!(rook.num_edges(), 30);
+        assert_eq!(rook, Graph::complete_bipartite(3, 4).line_graph());
+        assert!(rook.is_claw_free());
+        assert!(!rook.is_chordal());
+
+        let triangular = Graph::triangular_graph(5);
+        assert_eq!(triangular.num_vertices(), 10);
+        assert_eq!(triangular.num_edges(), 30);
+        assert_eq!(triangular, Graph::complete(5).line_graph());
+        assert!(triangular.is_claw_free());
+        assert!(!triangular.is_chordal());
+    }
+
+    #[test]
+    fn test_edge_triangle_block_tree() {
+        let root = Graph::edge_triangle_block_tree(&[3, 2, 3, 3], &[0, 3, 5]).unwrap();
+        assert_eq!(root.num_vertices(), 8);
+        assert_eq!(root.num_edges(), 10);
+        assert!(root.is_connected());
+        assert!(root.has_edge(0, 1));
+        assert!(root.has_edge(0, 2));
+        assert!(root.has_edge(0, 3));
+        assert!(root.has_edge(3, 4));
+        assert!(root.has_edge(3, 5));
+        assert!(root.has_edge(5, 6));
+        assert!(root.has_edge(5, 7));
+        assert!(root.line_graph().is_chordal());
+        assert!(root.line_graph().is_claw_free());
+
+        assert_eq!(
+            Graph::edge_triangle_block_tree(&[], &[]).unwrap(),
+            Graph::empty(0)
+        );
+        assert!(Graph::edge_triangle_block_tree(&[3, 4], &[0]).is_err());
+        assert!(Graph::edge_triangle_block_tree(&[3, 2], &[]).is_err());
+        assert!(Graph::edge_triangle_block_tree(&[2, 3], &[2]).is_err());
     }
 
     #[test]
@@ -2363,6 +2725,126 @@ mod tests {
         // Star K_{1,3} is NOT claw-free
         let star = Graph::new(4, &[(0, 1), (0, 2), (0, 3)]);
         assert!(!star.is_claw_free());
+    }
+
+    #[test]
+    fn test_chordal_and_perfect_elimination_order() {
+        for graph in [
+            Graph::empty(0),
+            Graph::empty(4),
+            Graph::complete(6),
+            Graph::path(7),
+            Graph::path_power(8, 3),
+            Graph::unit_interval(&[0, 1, 2, 2, 3, 1]),
+        ] {
+            let order = graph
+                .perfect_elimination_order()
+                .expect("known chordal graph should have a certificate");
+            assert!(graph.is_perfect_elimination_order(&order));
+            assert!(graph.is_chordal());
+        }
+
+        for graph in [Graph::cycle(4), Graph::cycle(5), Graph::grid(2, 3)] {
+            assert_eq!(graph.perfect_elimination_order(), None);
+            assert!(!graph.is_chordal());
+        }
+    }
+
+    #[test]
+    fn test_perfect_elimination_order_validation() {
+        let path = Graph::path(4);
+        assert!(path.is_perfect_elimination_order(&[0, 1, 2, 3]));
+        assert!(!path.is_perfect_elimination_order(&[1, 0, 2, 3]));
+        assert!(!path.is_perfect_elimination_order(&[0, 1, 2]));
+        assert!(!path.is_perfect_elimination_order(&[0, 1, 2, 4]));
+        assert!(!path.is_perfect_elimination_order(&[0, 1, 1, 3]));
+    }
+
+    #[test]
+    fn test_chordality_and_sink_formula_exhaustively_through_five_vertices() {
+        for n in 0..=5 {
+            let possible_edges = (0..n)
+                .flat_map(|left| ((left + 1)..n).map(move |right| (left, right)))
+                .collect::<Vec<_>>();
+            for mask in 0..(1_usize << possible_edges.len()) {
+                let edges = possible_edges
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, &edge)| ((mask >> index) & 1 == 1).then_some(edge))
+                    .collect::<Vec<_>>();
+                let graph = Graph::new(n, &edges);
+                assert_eq!(graph.is_chordal(), naive_is_chordal(&graph));
+                if graph.is_chordal() {
+                    assert_eq!(
+                        graph.acyclic_sink_polynomial_chordal().unwrap(),
+                        graph.acyclic_sink_polynomial()
+                    );
+                } else {
+                    assert_eq!(graph.acyclic_sink_polynomial_chordal(), None);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_chordal_sink_family_formulas() {
+        for n in 1..=9 {
+            assert_eq!(
+                Graph::path(n).acyclic_sink_polynomial_chordal().unwrap(),
+                (0..=n.div_ceil(2))
+                    .map(|sinks| {
+                        if sinks == 0 {
+                            0
+                        } else {
+                            binomial_i64(n, 2 * sinks - 1)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        for n in 2..=9 {
+            let graph = Graph::complete(n).delete_edge(0, 1);
+            let factorial = factorial_i64(n - 2);
+            assert_eq!(
+                graph.acyclic_sink_polynomial_chordal().unwrap(),
+                vec![0, factorial * (n * (n - 2)) as i64, factorial]
+            );
+        }
+
+        for leaves in 0..=8 {
+            let factorial_squared = factorial_i64(leaves).pow(2);
+            let mut expected = vec![0, factorial_squared * (2 * leaves + 1) as i64];
+            if leaves > 0 {
+                expected.push(factorial_squared * (leaves * leaves) as i64);
+            }
+            assert_eq!(
+                Graph::balanced_double_star(leaves)
+                    .line_graph()
+                    .acyclic_sink_polynomial_chordal()
+                    .unwrap(),
+                expected
+            );
+        }
+
+        for triangles in 1..=5 {
+            let scale = 3 * factorial_i64(2 * triangles);
+            let mut expected = vec![0];
+            for sinks in 1..=triangles {
+                expected.push(
+                    scale
+                        * binomial_i64(triangles - 1, sinks - 1)
+                        * 2_i64.pow((triangles - sinks) as u32),
+                );
+            }
+            assert_eq!(
+                Graph::friendship(triangles)
+                    .line_graph()
+                    .acyclic_sink_polynomial_chordal()
+                    .unwrap(),
+                expected
+            );
+        }
     }
 
     // -- Matching tests (verified against Mathematica) --
