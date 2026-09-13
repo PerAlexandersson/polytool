@@ -1,5 +1,13 @@
 # Handoff
 
+## Completed: disjoint-union graph operation — 2026-09-13
+
+Commit `f74c2be` adds the missing generic disjoint-union operation required by
+the componentwise OEIS families, with exact graph and chordal-sink
+multiplicativity tests.  It was fast-forwarded into local `master`.  All 252
+library tests and both documentation tests pass with the external target
+directory.  No remote action was taken, and ownership is released.
+
 ## Completed: chordal graph API and reusable family generators — 2026-09-13
 
 Commit `aedd875` promotes reusable code from the chordal claw-free sink project
