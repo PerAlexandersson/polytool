@@ -24,7 +24,9 @@ MCP binary tests, the MCP stdio smoke test, and seven web tests pass.  Strict
 target-only Clippy passes with the documented pre-existing warning classes
 allowed; unqualified strict Clippy still reports those existing warnings.
 Formatting and `git diff --check` pass.  The pre-existing untracked
-`polytool/scripts/__pycache__/` remains untouched.  Ownership is released.
+`polytool/scripts/__pycache__/` remains untouched.  Merge commit `e76bda9`
+was pushed non-forced to canonical `origin/master` over authenticated HTTPS;
+the configured SSH remote was not changed.  Ownership is released.
 
 ## Completed: standard graph-family acyclic-sink sequences — 2026-09-13
 
