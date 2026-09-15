@@ -7,7 +7,9 @@ conversion APIs, with wrappers for integer coefficient rows and support for
 degree elevation.  The `bernstein-expansion`/`bernstein` CLI accepts exact
 rational input and emits text or JSON.  The README documents the normalized
 basis convention.  All 353 library tests and all 22 `cli_bigint` tests pass;
-strict Clippy passes for the library and binary.  Ownership is released.
+strict Clippy passes for the library and binary.  The local checkpoint is commit
+`04d647f`; pushing from this container is blocked by missing GitHub SSH
+authentication.  Ownership is released.
 
 ## Completed: exact OEIS recurrence exports (2026-09-11)
 
