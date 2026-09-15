@@ -1,5 +1,19 @@
 # Handoff
 
+## Completed: flagged chordal claw-free atom scan — 2026-09-15
+
+Worker `/root` owns only the new ignored experiment
+`experiments/src/bin/chordal_clawfree_flagged_atom_tests.rs` and this opening
+entry.  The binary reuses the existing graph predicates and multivariate
+Demazure-atom machinery to test both monotone flag directions along a fixed
+reverse perfect-elimination order.  Its three tests, rustfmt, and target
+Clippy pass.  Unqualified strict Clippy is blocked by pre-existing warnings in
+dependency crates and the experiments library.  Exact results and compact TSV
+certificates are recorded in the separate `Line-graph-chromatics` project.
+No shared library source, manifest, lockfile, or unrelated dirty file was
+changed; the pre-existing untracked `polytool/scripts/__pycache__/` remains
+untouched.  Ownership is released.
+
 ## Completed: exact Bernstein-basis conversion — 2026-09-15
 
 Worker `/root` added exact standard Bernstein-basis construction and coordinate
