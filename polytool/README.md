@@ -21,6 +21,19 @@ cargo build --release -p polytool
 
 The CLI binary is at `target/release/polytool`.
 
+Use `polytool --version` (or `polytool -V`) for a single deterministic line:
+
+```text
+polytool 0.2.1-rc.5 (git 0123456789ab)
+```
+
+The version comes from the crate manifest and the lowercase 12-hex-digit Git
+commit is captured at build time.  If the source is built without trustworthy
+Git metadata, the suffix is `(git unavailable)` rather than a fabricated
+revision.  Reproducible packaging environments may set `POLYTOOL_GIT_COMMIT`
+to a full or at least 12-digit hexadecimal revision; an empty or malformed
+value deliberately selects the unavailable form.
+
 On the generated standalone `main` branch, the equivalent command is:
 
 ```sh
@@ -398,6 +411,7 @@ Options:
 --no-verify          Fit all rows instead of reserving held-out verification rows
 --no-modular-prefilter
                       Disable default modular candidate rejection
+--max-candidates <n> Inspect at most n adaptive candidate configurations
 --json               Emit recurrence JSON with initial conditions
 --python             Emit exact standalone Python code using Fraction arithmetic
 --format json        Alias for --json
@@ -409,6 +423,17 @@ The modular prefilter is enabled by default. It is often much faster on false
 candidates because it rejects a candidate when every usable fixed large-prime
 reduction is inconsistent. Use `--no-modular-prefilter` only when comparing
 against the exact-only search path.
+
+`--max-candidates N` is a deterministic iteration budget, not a wall-clock
+timeout. A candidate is counted as soon as its parameter configuration is
+taken from the adaptive iterator, before fit-row, structural, modular, or
+exact-solve filtering. Thus `0` evaluates no candidates, candidate `N` may
+still succeed, and budget exhaustion is reported only when an `(N+1)`st
+candidate exists. In text mode exhaustion is a distinct diagnostic and exit
+status `3`; with `--format json`, the JSON status is `budget_exhausted` and
+includes `candidates_considered`, `candidates_tried`, and `max_candidates`.
+If all configured candidates have been checked, the JSON status is instead
+`not_found`. Omitting the option preserves the unbounded behavior.
 
 #### Machine-readable recurrence JSON and row generation
 
@@ -698,6 +723,21 @@ if let Some(res) = result {
     println!("{}", res.recurrence);
 }
 
+// Deterministic candidate budget with an exact termination reason.
+let outcome = find_recurrence_adaptive_with_budget(
+    &polys,
+    &AdaptiveSearchOptions::default(),
+    AdaptiveSearchBudget::limited(100),
+);
+match outcome {
+    AdaptiveSearchOutcome::Found(result) => println!("{}", result.recurrence),
+    AdaptiveSearchOutcome::NoRecurrence(_) => println!("search space exhausted"),
+    AdaptiveSearchOutcome::BudgetExhausted(summary) => println!(
+        "budget exhausted after {} candidates",
+        summary.diagnostics.considered_candidates
+    ),
+}
+
 // Or search with specific parameters
 let opts = RecurrenceOptions {
     rec_len: 2,
@@ -844,6 +884,24 @@ sequence-generation, and recurrence tools accept arbitrary-size integer
 coefficients. JSON integers may be provided directly when they fit the client
 stack, and larger exact integers should be sent as strings.
 
+`find_recurrence` exposes all adaptive-search controls as top-level MCP
+arguments. For example, a compact exact search can use:
+
+```json
+{
+  "coefficients": [[1], [2], [4], [8], [16]],
+  "max_rec_len": 1,
+  "max_var_deg": 0,
+  "max_idx_deg": 0,
+  "max_diff_deg": 0,
+  "include_code": false
+}
+```
+
+The legacy nested `options` object remains accepted, with top-level values
+taking precedence. Omitting `include_code` preserves the full generated-code
+response.
+
 See [`mcp/README.md`](mcp/README.md) for request schemas, examples, and
 development notes.
 
@@ -865,7 +923,49 @@ Run the web wrapper tests:
 
 ```sh
 cargo test -p polytool-web
+node web/tests/string_safety.mjs
 ```
+
+### Web arbitrary-precision contract and deployment staging
+
+The browser wrapper parses polynomial input with `parse_polynomials_bigint`.
+Every integer coefficient returned across its string-based WASM/JSON boundary
+is a canonical decimal string, including input, gamma, decomposition, and
+recurrence-initial coefficients. Resultants and discriminants are decimal
+strings as well. Browser code must keep these values as strings or convert
+them to JavaScript `BigInt` for exact arithmetic; converting them to `Number`
+can round values above `2^53`.
+
+Build the deployable no-modules bundle from the monorepo root with an external
+target directory:
+
+```sh
+CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
+  wasm-pack build polytool/web --target no-modules --release \
+  --out-dir pkg
+```
+
+After review and explicit deployment authorization, stage exactly the files
+referenced by `web/index.html` into the website checkout. The backup option
+keeps replaced files recoverable, and these commands deliberately do not use
+the website's historical `--delete` deployment target:
+
+```sh
+site_stage=/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/www
+install -d "$site_stage/pkg"
+cp --backup=numbered web/index.html "$site_stage/index.html"
+cp --backup=numbered web/favicon.svg "$site_stage/favicon.svg"
+cp --backup=numbered web/pkg/polytool_web.js "$site_stage/pkg/polytool_web.js"
+cp --backup=numbered web/pkg/polytool_web_bg.wasm \
+  "$site_stage/pkg/polytool_web_bg.wasm"
+cmp web/index.html "$site_stage/index.html"
+cmp web/pkg/polytool_web.js "$site_stage/pkg/polytool_web.js"
+cmp web/pkg/polytool_web_bg.wasm "$site_stage/pkg/polytool_web_bg.wasm"
+```
+
+The legacy website Makefile still names `polynomial_tools_web*`; do not use
+that stale assembly rule for the current `polytool_web*` bundle without first
+updating and reviewing the website repository itself.
 
 The repository's `main` branch is generated from this directory with
 `git subtree split`; the monorepo `master` branch remains canonical. The core

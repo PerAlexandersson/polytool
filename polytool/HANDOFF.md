@@ -126,7 +126,215 @@ the newer unrelated staged OEIS-export content was preserved. Static HTML and
 inline-JavaScript parsing, unique-control, checked-default, DOM-order, and
 whitespace checks pass for both copies. Ownership is released. Nothing has
 been deployed or pushed.
+## Completed MCP `find_recurrence` compatibility work (GitHub #4, 2026-09-08)
 
+The coding worker completed this focused change in the regular isolated
+worktree `/tmp/polytool-mcp-issue-4-20260908`, on branch
+`fix/polytool-mcp-issue-4-20260908` based exactly on published `origin/master`
+`ca0771bfe1c5b1755d3b61f7c3eead7ede1e0f1b`.  Checkpoint `b076098` records
+the exact ownership and plan, `2797b23` implements the schema/runtime/test
+change, and `19b779d` updates the existing help and README surfaces.
+
+The raw `tools/list` schema for `find_recurrence` is now an ordinary object
+with no top-level `oneOf`.  It exposes and describes all four input forms,
+every recurrence search control, legacy `options`, and `include_code` as
+top-level properties.  Runtime still requires exactly one input form.  Flat
+controls are canonical; legacy nested controls remain accepted, and a
+top-level value wins when the same field appears in both places.
+
+`include_code` defaults to true, preserving the full historical result.  When
+false, successful results omit Mathematica, Python, Sage, and recurrence JSON
+without computing them, while retaining plaintext recurrence, LaTeX, status,
+and all search statistics.  Direct and stdio tests cover schema shape and
+descriptions, flat and legacy calls, conflicting control precedence, missing
+or multiple inputs, compact serialization, and default full serialization.
+The tool description, `polytool-mcp --help`, the MCP reference/example, and the
+top-level Polytool README all document the same interface.  No MCP man page or
+generated reference file exists, so none was invented.
+
+Verification used external `CARGO_TARGET_DIR=/cargo-target/ai-projects`,
+`timeout 60s`, and `nice -n 10` for Rust commands.  All 26 MCP library tests,
+2 MCP binary/help tests, the stdio smoke test, and the MCP documentation target
+pass.  Proportional Polytool regressions pass: 319 non-OEIS library tests, all
+61 recurrence tests, 19 BigInt CLI tests, 6 version/budget CLI tests, 5
+interlacing tests, 2 recurrence-overfit tests, and all 5 doctests.  Strict
+Clippy for Polytool and MCP passes with only the established allowances for
+pre-existing warnings; Cargo formatting, metadata, and `git diff --check` also
+pass.
+
+The worktree's recorded `kostka` submodule revision was initialized only so
+Cargo could load the isolated workspace; its gitlink and contents were not
+changed.  The divergent shared checkout and OEIS-export branch were not
+touched.  After verification, commits `b076098` through `4444fde` were pushed
+without force as a fast-forward of `origin/master`, and GitHub issue #4 was
+closed with a summary of the implementation.  No generated artifact or
+deployment changed.  Ownership of all six claimed files is released.
+
+## Completed BigInt web publication and deployment (2026-09-07)
+
+The verified isolated branch was published without force from original
+`origin/master` `5da03fea23eb55a37e46025a4ca8ad21e96a8b9a`, after confirming that
+commit was still the remote tip and an ancestor of the branch.  The first
+canonical publication tip was `56e6745a1ade17b7f7ff92be62969d42f35715c8`;
+the documented `scripts/sync-polytool-main.sh` workflow then advanced the
+standalone projection from `7e4ac54ee531d768a5dfd25f520e39ca4de6b84c` to
+`a0d66877e71822455891ef509621ff7074fbd7df`, also by verified fast-forward.
+The divergent shared `/workspace/rust` checkout was not changed or used for
+either push.
+
+After publication, the release WASM bundle was rebuilt from the isolated
+worktree and its browser string-safety test plus actual-WASM huge-coefficient
+smoke passed.  Exactly four files were staged and deployed; their SHA-256
+digests are:
+
+- `index.html`: `a3da0ed60490dc8a2a7f4e11f77467f31c257fe5c707db3ecb930710bb5b9fa3`;
+- `favicon.svg`: `c5908fa0143e43e6be3106531a9720960874ae5be9fb6fe1ba8442bca666dcfb`;
+- `pkg/polytool_web.js`: `9d6b33464995cfcc00f15f7248e779b988515ebb07392e0efd211d69fcbf6773`;
+- `pkg/polytool_web_bg.wasm`: `6448551d93d61377e21623cb1c1c392afa00227cf94566faeba7ced2b569923e`.
+
+The deployment environment lacks `rsync`, so the attempted exact-file `rsync`
+exited 127 without transferring anything; the same explicit four files were
+then copied with `scp`, without deletion.  Remote byte hashes match the staged
+files.
+Cache-busted requests return HTTP 200 for the page, favicon, JavaScript, and
+WASM, and the live page identifies asset version `20260907a`.  A live Node
+smoke loaded the public WASM, retained `1000000000000000000000000000000`
+exactly in property JSON, and found `P(n) = 2 P(n-1)` from its scaled sequence
+while retaining the huge initial coefficient in recurrence JSON.
+
+Website details are recorded separately in
+`/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/HANDOFF.md`.  That
+directory has no Git repository, so there was no website commit to make.  Its
+stale legacy Makefile and unrelated local files were not changed.  Publication
+and deployment ownership is released by this handoff.
+
+## Completed web arbitrary-precision coefficient work (2026-09-07)
+
+The coding worker used the isolated monorepo worktree
+`/tmp/polytool-web-bigint-20260907` on branch
+`fix/polytool-web-bigint-20260907`, based exactly on freshly fetched
+`origin/master` commit `5da03fea23eb55a37e46025a4ca8ad21e96a8b9a`.
+The shared `/workspace/rust` checkout remains untouched on its intentionally
+divergent local `master` (ahead 4, behind 9).  The supervisor ownership report
+could not run in this container because the `docker` executable is absent; no
+active ownership is recorded for the files below in the current root or
+Polytool handoffs.
+
+Ownership was limited to `polytool/HANDOFF.md`, `polytool/README.md`,
+`polytool/src/decomposition.rs`, `polytool/src/lib.rs`,
+`polytool/web/Cargo.toml`, `polytool/web/src/lib.rs`,
+`polytool/web/index.html`, focused browser regression
+`polytool/web/tests/string_safety.mjs`, and root `Cargo.lock` if Cargo must
+record the web crate's direct `num-bigint` dependency.  No other path changed,
+and ownership is released by this handoff.
+
+Focused commits are:
+
+- `9f744dc`, recording isolated ownership;
+- `d7d2adb`, adding the exact `BigInt` symmetric-decomposition report and
+  regression;
+- `fcc2c73`, converting the WASM boundary, recurrence path, JSON contract, and
+  browser arithmetic to arbitrary precision;
+- `0ed7a2e`, documenting the JSON contract and recoverable deployment-staging
+  copy.
+
+The web input path now uses `parse_polynomials_bigint`.  All requested property,
+interlacing, resultant, discriminant, and decomposition calculations call
+their `BigInt` APIs.  Recurrence search converts the parsed integers directly
+to `BigRational` and uses `find_recurrence_adaptive_rational`; its Mathematica,
+Sage, and recurrence-JSON exports stay exact.  Coefficient-like JSON values are
+canonical decimal strings, including ordinary small values.  The existing
+string-based WASM export names are unchanged, and the pairwise interlacing
+export accepts both the new decimal-string arrays and legacy ordinary JSON
+integer arrays.
+
+Browser polynomial rendering, decomposition merging and copying, interlacing,
+OEIS row sums, alternating sums, leading-zero handling, and first differences
+now retain strings or use JavaScript `BigInt`; none uses `Number` for exact
+coefficient arithmetic.  The page asset key is `20260907a`.
+
+Verification used external `CARGO_TARGET_DIR=/cargo-target/ai-projects`,
+`timeout 60s`, and `nice -n 10` for all Rust and WASM work:
+
+- 7 `polytool-web` tests passed, including ordinary compatibility and inputs
+  above `2^53` and `i64` for properties, interlacing, resultants,
+  discriminants, decomposition, and recurrence;
+- the browser string-safety Node regression and full inline-JavaScript syntax
+  parse passed;
+- 319 non-OEIS Polytool library tests, 19 CLI BigInt tests, 5 interlacing API
+  tests, 6 CLI version/budget tests, and 5 doctests passed;
+- Polytool MCP passed 22 library tests, 2 binary tests, and 1 documentation
+  test;
+- strict Clippy for Polytool, web, and MCP, workspace Cargo metadata, formatting,
+  and `git diff --check` passed;
+- the release no-modules `wasm-pack` build produced ignored artifacts
+  `web/pkg/polytool_web.js` (13 KiB) and
+  `web/pkg/polytool_web_bg.wasm` (538 KiB); loading that actual WASM in Node
+  passed huge-coefficient property and recurrence smoke checks.
+
+Per the task boundary, nothing was pushed, merged, projected to standalone
+`main`, deployed, or changed under `/home/paxinum/Dropbox/webpages`.  The exact
+future staging copy and byte-comparison commands are in `README.md`.  The
+website checkout's legacy Makefile still names `polynomial_tools_web*`, so its
+assembly target must not be used for this `polytool_web*` bundle without a
+separate reviewed website change.  The separately owned derangement experiment
+and SymCat weighted-bond example were not touched.
+
+## Completed GitHub issues #1 and #2 (2026-09-07)
+
+The coding worker implemented the issues in the isolated monorepo
+worktree `/tmp/polytool-issues-1-2-20260906` on branch
+`fix/polytool-issues-1-2-20260906`, starting at freshly fetched
+`origin/master` commit `6486f93`.  No open pull request existed when work
+started.
+
+Owned files were `build.rs`, `src/version.rs`, `src/lib.rs`,
+`src/recurrence.rs`, `src/bin/polytool.rs`, focused new or existing tests under
+`tests/`, `README.md`, `mcp/src/lib.rs`, `mcp/README.md`, this handoff, and the
+root `HANDOFF.md`.  Ownership covers only GitHub #1 (`polytool --version` with
+honest reproducible Git metadata) and #2 (an exact recurrence-candidate
+budget with distinct exhaustion).  Standalone `main` remains a generated
+subtree projection and was not edited directly.  Ownership is released by
+this final handoff after canonical and standalone publication verification.
+
+Checkpoint `92f7612` implements the crate-version plus lowercase 12-digit Git
+commit line, with build-time ref tracking, an explicit reproducible-build
+override, and `(git unavailable)` for missing or invalid metadata.  Checkpoint
+`87ef7f8` adds `AdaptiveSearchBudget`, `AdaptiveSearchOutcome`, exact
+candidate counting before all filters, `--max-candidates`, JSON/exit-status
+termination reporting, and matching MCP options/status/counters.  Existing
+unbounded entry points remain unchanged wrappers.
+
+Focused tests cover normal/fallback version formatting and the real CLI, zero
+and one-candidate budgets, success on the exact boundary, full search-space
+failure at the boundary, distinct exhaustion, MCP parity, and unchanged
+unbounded behavior.  Established verification passes: 318 non-OEIS library
+tests, all 61 recurrence tests, 19 CLI BigInt tests, 7 CLI OEIS tests, 6 new
+CLI tests, 2 overfit fixtures, 5 interlacing API tests, 22 MCP tests plus its
+binary/docs targets, 5 Polytool doctests, focused imported-OEIS validation,
+strict Polytool/MCP Clippy, Cargo metadata, formatting, and
+`git diff --check`.  All Rust commands used external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`.
+
+The task branch is published as PR #3.  The repository has no GitHub Actions
+workflow and unprotected `master` reports no status checks.  A local
+projected-subtree preflight at `a7bcd0a` passes all six CLI tests and its
+actual version is `polytool 0.2.1-rc.5 (git a7bcd0abf054)`.
+
+On 2026-09-07 the user clarified that the green-CI wording came from
+supervisor caution rather than an explicit user constraint and accepted the
+complete local monorepo and standalone checks as the merge gate.  The earlier
+blocker wording was therefore incorrect.
+
+PR #3 merged without force as canonical monorepo commit `0675132`, containing
+only prior `origin/master` plus the task branch.  The documented sync script
+published standalone projection `49fff55`.  The actual binaries reported
+`polytool 0.2.1-rc.5 (git 0675132a0408)` on monorepo `master` and
+`polytool 0.2.1-rc.5 (git 49fff5546586)` on standalone `main`.  Exact
+zero/one-candidate exhaustion returned JSON status `budget_exhausted` and
+exit code 3, success on the budget boundary passed, and all six standalone
+CLI version/budget tests passed.  The final projected commit after this
+handoff is included is recorded in the root publication follow-up.
 ## Final monorepo integration (2026-09-06)
 
 The completed review-fix history was integrated with clean local monorepo

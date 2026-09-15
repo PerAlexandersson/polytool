@@ -9,15 +9,22 @@ histograms, the uniform `w`-specializations, fixed eligible-site and selected-
 join layers, and the proved gamma recurrence.  Tests recover the ordinary
 Eulerian family at `w=0`, the first deco rows at `w=1`, the first layer rows,
 and verify gamma expansion against independent coefficient extraction through
-size 20.  All 343 library tests and all five documentation tests pass.  Strict
-whole-crate Clippy is blocked only by three unrelated pre-existing warnings;
-after allowing those two warning classes, strict Clippy passes.  No CLI,
-manifest, lockfile, other Rust source, manuscript, Lean file, or publication
-file was changed.  The pre-existing untracked
-`polytool/scripts/__pycache__/` remains untouched.  Ownership is released;
-the source commit is `5e07336`, and the research project records that exact
-revision.  Local `master` is 65 commits ahead and 24 behind `origin/master`,
-so this checkpoint was not pushed as an unsafe stacked update.
+size 20.  The source commit is `5e07336`, and the research project records that
+exact revision.
+
+At the user's request, the formerly divergent local `master` was integrated
+with the 24 newer commits from `origin/master` by a non-rewriting merge; local
+recovery branch `backup/pre-origin-sync-20260915-55f9546` preserves the
+pre-merge tip.  Both chronological handoff conflicts retain both sides, and
+the graph conflict retains the local Cartesian/rook/triangular constructors
+beside the incoming line-graph recognizer.  On the merged tree, all 253
+`combinatoric-core` tests, 350 Polytool library tests, five Polytool
+documentation tests, six version/budget CLI tests, 28 MCP library tests, two
+MCP binary tests, the MCP stdio smoke test, and seven web tests pass.  Strict
+target-only Clippy passes with the documented pre-existing warning classes
+allowed; unqualified strict Clippy still reports those existing warnings.
+Formatting and `git diff --check` pass.  The pre-existing untracked
+`polytool/scripts/__pycache__/` remains untouched.  Ownership is released.
 
 ## Completed: standard graph-family acyclic-sink sequences — 2026-09-13
 
@@ -295,7 +302,71 @@ languages are now asserted by the driver and reduce the transducer to an
 alternating state plus one optional source-doubling state.  Ownership is
 released after the follow-up checkpoint; no unrelated experiment binary or
 library module was changed.
+## Completed Polytool GitHub issues #1 and #2 (2026-09-07)
 
+The coding worker implemented the Polytool issues in the isolated
+worktree `/tmp/polytool-issues-1-2-20260906` on branch
+`fix/polytool-issues-1-2-20260906`, based on freshly fetched
+`origin/master` commit `6486f93`.  The shared `/workspace/rust` checkout and
+its four local-only commits remain untouched.
+
+Implementation ownership was limited to `HANDOFF.md`, `polytool/HANDOFF.md`,
+`polytool/build.rs`, `polytool/src/version.rs`, `polytool/src/lib.rs`,
+`polytool/src/recurrence.rs`, `polytool/src/bin/polytool.rs`, focused new or
+existing tests under `polytool/tests/`, `polytool/README.md`,
+`polytool/mcp/src/lib.rs`, and `polytool/mcp/README.md`.  No other worker
+claimed these files.  The separately owned derangement experiment and SymCat
+weighted-bond example were not touched.  Ownership is released by this final
+handoff after canonical and standalone publication verification.
+
+The task is to implement deterministic CLI build-version reporting and an
+exact candidate budget for adaptive recurrence finding, keep library/CLI/MCP
+outcomes aligned, verify the canonical branch, publish it without including
+the shared checkout's local-only history, project `polytool/` to standalone
+`main`, and close GitHub issues #1 and #2 after the accepted verification gate.
+
+Implementation checkpoints `92f7612` and `87ef7f8` add the reproducible
+12-hex-digit build commit with an honest `git unavailable` fallback, plus an
+outer-candidate recurrence budget and distinct found/search-space-exhausted/
+budget-exhausted library, CLI, and MCP outcomes.  Focused zero, small,
+exact-boundary, success, fallback, and unbounded regressions pass.
+
+Established verification is green with external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`:
+318 non-OEIS library tests; 61 recurrence tests; 19 CLI BigInt tests; 7 CLI
+OEIS tests; 6 version/budget CLI tests; 2 overfit fixtures; 5 interlacing API
+tests; 22 MCP library tests plus its binary and documentation targets; 5
+Polytool doctests; the focused imported-OEIS validation replay; strict
+Polytool/MCP Clippy; Cargo metadata; formatting; and `git diff --check`.
+
+Branch publication is at PR #3.  A local standalone subtree preflight at
+split commit `a7bcd0a` passes all six version/budget CLI tests and reports
+`polytool 0.2.1-rc.5 (git a7bcd0abf054)`.  GitHub reports no checks because
+the repository contains no `.github` workflow and `master` has no required
+status checks.
+
+On 2026-09-07 the user clarified that the earlier green-CI wording reflected
+supervisor caution, not a user-imposed condition, and accepted the complete
+local monorepo and standalone-subtree checks as the merge gate.  The earlier
+claim that user authorization was still required was therefore incorrect.
+
+PR #3 merged without force as canonical monorepo commit `0675132`, whose
+parents are prior `origin/master` `6486f93` and task head `b5c7976`; none of
+the shared checkout's four local-only commits entered the merge.  The
+documented sync script produced the first published standalone projection
+`49fff55`.  The actual monorepo binary reported
+`polytool 0.2.1-rc.5 (git 0675132a0408)`, while the standalone binary reported
+`polytool 0.2.1-rc.5 (git 49fff5546586)`.  Both returned structured
+`budget_exhausted` output with exact zero/one candidate counts and exit status
+3; boundary success also passed, as did all six standalone CLI tests.
+
+Release handoff commit `8245e3a` was pushed non-forced to canonical
+`origin/master`, and the documented sync script projected it to standalone
+`origin/main` commit `7e4ac54`.  GitHub issues #1 and #2 were then closed as
+completed with separate notes citing PR #3, implementation checkpoints,
+published refs, and verified behavior.  This root-only final-ref record does
+not alter `polytool/`, so the standalone split remains `7e4ac54`.  Ownership
+is fully released.
 ## Final Polytool integration (2026-09-06)
 
 The final integration worker merged clean local `master` commit `29c075e` into

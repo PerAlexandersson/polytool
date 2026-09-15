@@ -1145,6 +1145,7 @@ dependencies = [
 name = "polytool-web"
 version = "0.2.1-rc.5"
 dependencies = [
+ "num-bigint",
  "polytool",
  "serde",
  "serde_json",
