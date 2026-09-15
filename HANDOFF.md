@@ -15,7 +15,9 @@ after allowing those two warning classes, strict Clippy passes.  No CLI,
 manifest, lockfile, other Rust source, manuscript, Lean file, or publication
 file was changed.  The pre-existing untracked
 `polytool/scripts/__pycache__/` remains untouched.  Ownership is released;
-the research project will record the source commit separately.
+the source commit is `5e07336`, and the research project records that exact
+revision.  Local `master` is 65 commits ahead and 24 behind `origin/master`,
+so this checkpoint was not pushed as an unsafe stacked update.
 
 ## Completed: standard graph-family acyclic-sink sequences — 2026-09-13
 
