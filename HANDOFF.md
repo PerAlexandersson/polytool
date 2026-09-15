@@ -12,8 +12,10 @@ documented pre-existing lint classes are allowed.  Unqualified strict Clippy
 still reports 38 pre-existing warnings outside this increment.  No manifest,
 lockfile, other crate, experiment, or generated file changed.  The unrelated
 untracked `polytool/scripts/__pycache__/` remains untouched, and ownership is
-released.  The focused commit is `48543b5`; the routine push to
-`origin/master` failed because this environment has no accepted GitHub SSH key.
+released.  The focused commit is `48543b5`.  After the configured SSH
+transport was rejected, commits through `eb47505` were pushed non-forced to
+canonical `master` over authenticated HTTPS through `gh`; the SSH remote was
+not changed.
 
 ## Completed: connected-PEO flagged extension — 2026-09-15
 
