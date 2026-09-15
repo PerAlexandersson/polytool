@@ -1,5 +1,16 @@
 # Handoff
 
+## Completed: connected-PEO flagged extension — 2026-09-15
+
+Worker `/root` reclaims only the ignored experiment
+`experiments/src/bin/chordal_clawfree_flagged_atom_tests.rs` and this opening
+entry for higher-color stress tests of the corrected connected-PEO flag
+direction.  The binary now supports bounded graph-id ranges.  Four exact
+chunks exhaust all `7449` ordered graphs at order seven with flags at most
+five: all `2458170` graph/flag rows are atom-positive.  Focused tests, rustfmt,
+and target Clippy pass.  No shared library source, manifest, lockfile, or
+unrelated dirty file was changed.  Ownership is released.
+
 ## Completed: flagged chordal claw-free atom scan — 2026-09-15
 
 Worker `/root` owns only the new ignored experiment
