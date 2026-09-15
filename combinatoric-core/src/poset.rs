@@ -1,7 +1,7 @@
 //! Partially ordered sets (posets) on vertex set {0, 1, ..., n-1}.
 //!
 //! A [`Poset`] is stored as a Hasse diagram (cover relations). It supports
-//! enumeration of linear extensions, order ideals, rowmotion, chain
+//! enumeration of linear extensions, promotion, order ideals, rowmotion, chain
 //! polynomials, order-preserving maps (backtracking and frontier DP), order
 //! polytope Ehrhart polynomials and h*-vectors, and P-Eulerian polynomials.
 //!
@@ -327,6 +327,131 @@ impl Poset {
     /// Number of linear extensions.
     pub fn num_linear_extensions(&self) -> usize {
         self.linear_extensions().len()
+    }
+
+    // -- Promotion on linear extensions ------------------------------------
+
+    /// Check whether `extension` is a linear extension of the poset.
+    ///
+    /// A linear extension is represented as a word containing every vertex
+    /// exactly once, with smaller elements occurring before larger elements.
+    /// Returns `false` if a vertex is missing, repeated, or out of range.
+    pub fn is_linear_extension(&self, extension: &[usize]) -> bool {
+        if extension.len() != self.n {
+            return false;
+        }
+
+        let mut positions = vec![0; self.n];
+        let mut seen = vec![false; self.n];
+        for (position, &vertex) in extension.iter().enumerate() {
+            if vertex >= self.n || seen[vertex] {
+                return false;
+            }
+            seen[vertex] = true;
+            positions[vertex] = position;
+        }
+
+        self.covers
+            .iter()
+            .all(|&(lower, upper)| positions[lower] < positions[upper])
+    }
+
+    /// Schützenberger promotion on a linear extension.
+    ///
+    /// Starting at the left end of the word, adjacent entries are swapped in
+    /// positions `0,1`, then `1,2`, and so on whenever the two elements are
+    /// incomparable.  Equivalently, this applies the adjacent involutions
+    /// `tau_1, tau_2, ..., tau_(n-1)` in that order.
+    ///
+    /// Panics if `extension` is not a linear extension of this poset.
+    pub fn promotion_linear_extension(&self, extension: &[usize]) -> Vec<usize> {
+        assert!(
+            self.is_linear_extension(extension),
+            "promotion input must be a linear extension"
+        );
+
+        let reach = self.reachability_matrix();
+        self.promote_with_reachability(extension, &reach)
+    }
+
+    fn promote_with_reachability(&self, extension: &[usize], reach: &[Vec<bool>]) -> Vec<usize> {
+        let mut promoted = extension.to_vec();
+        for i in 0..self.n.saturating_sub(1) {
+            let left = promoted[i];
+            let right = promoted[i + 1];
+            if !reach[left][right] && !reach[right][left] {
+                promoted.swap(i, i + 1);
+            }
+        }
+        promoted
+    }
+
+    /// The promotion orbit containing a linear extension.
+    ///
+    /// The returned orbit starts with `extension` and does not repeat it at
+    /// the end.
+    ///
+    /// Panics if `extension` is not a linear extension of this poset.
+    pub fn promotion_orbit(&self, extension: &[usize]) -> Vec<Vec<usize>> {
+        assert!(
+            self.is_linear_extension(extension),
+            "promotion input must be a linear extension"
+        );
+
+        let start = extension.to_vec();
+        let mut current = start.clone();
+        let mut orbit = Vec::new();
+        let reach = self.reachability_matrix();
+        loop {
+            orbit.push(current.clone());
+            current = self.promote_with_reachability(&current, &reach);
+            if current == start {
+                break;
+            }
+        }
+        orbit
+    }
+
+    /// The promotion orbits on all linear extensions.
+    pub fn promotion_orbits(&self) -> Vec<Vec<Vec<usize>>> {
+        use std::collections::BTreeMap;
+
+        let extensions = self.linear_extensions();
+        let index: BTreeMap<Vec<usize>, usize> = extensions
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(i, extension)| (extension, i))
+            .collect();
+        let mut seen = vec![false; extensions.len()];
+        let mut orbits = Vec::new();
+        let reach = self.reachability_matrix();
+
+        for (i, extension) in extensions.iter().enumerate() {
+            if seen[i] {
+                continue;
+            }
+
+            let start = extension.clone();
+            let mut current = start.clone();
+            let mut orbit = Vec::new();
+            loop {
+                orbit.push(current.clone());
+                current = self.promote_with_reachability(&current, &reach);
+                if current == start {
+                    break;
+                }
+            }
+            for member in &orbit {
+                let j = *index
+                    .get(member)
+                    .expect("promotion image should be a linear extension");
+                seen[j] = true;
+            }
+            orbits.push(orbit);
+        }
+
+        orbits
     }
 
     // -- Order ideals and rowmotion -----------------------------------------
@@ -1322,6 +1447,55 @@ mod tests {
         // Fence 4: 0<1, 2<1, 2<3 → 5 linear extensions
         let p = Poset::new(4, &[(0, 1), (2, 1), (2, 3)]);
         assert_eq!(p.num_linear_extensions(), 5);
+    }
+
+    // -- Linear extension promotion tests --
+
+    #[test]
+    fn test_is_linear_extension() {
+        let p = Poset::new(3, &[(0, 2), (1, 2)]);
+        assert!(p.is_linear_extension(&[0, 1, 2]));
+        assert!(p.is_linear_extension(&[1, 0, 2]));
+        assert!(!p.is_linear_extension(&[0, 2, 1]));
+        assert!(!p.is_linear_extension(&[0, 0, 2]));
+        assert!(!p.is_linear_extension(&[0, 1]));
+        assert!(!p.is_linear_extension(&[0, 1, 3]));
+    }
+
+    #[test]
+    fn test_promotion_v_poset_orbit() {
+        let p = Poset::new(3, &[(0, 2), (1, 2)]);
+        assert_eq!(p.promotion_linear_extension(&[0, 1, 2]), vec![1, 0, 2]);
+        assert_eq!(p.promotion_linear_extension(&[1, 0, 2]), vec![0, 1, 2]);
+        assert_eq!(
+            p.promotion_orbit(&[0, 1, 2]),
+            vec![vec![0, 1, 2], vec![1, 0, 2]]
+        );
+        assert_eq!(
+            p.promotion_orbits(),
+            vec![vec![vec![0, 1, 2], vec![1, 0, 2]]]
+        );
+    }
+
+    #[test]
+    fn test_promotion_chain_and_antichain() {
+        let chain = Poset::chain(3);
+        assert_eq!(chain.promotion_orbit(&[0, 1, 2]), vec![vec![0, 1, 2]]);
+
+        let antichain = Poset::antichain(3);
+        assert_eq!(
+            antichain.promotion_orbit(&[0, 1, 2]),
+            vec![vec![0, 1, 2], vec![1, 2, 0], vec![2, 0, 1]]
+        );
+    }
+
+    #[test]
+    fn test_promotion_empty_poset() {
+        let p = Poset::new(0, &[]);
+        assert!(p.is_linear_extension(&[]));
+        assert_eq!(p.promotion_linear_extension(&[]), Vec::<usize>::new());
+        assert_eq!(p.promotion_orbit(&[]), vec![Vec::<usize>::new()]);
+        assert_eq!(p.promotion_orbits(), vec![vec![Vec::<usize>::new()]]);
     }
 
     // -- Order ideal and rowmotion tests --

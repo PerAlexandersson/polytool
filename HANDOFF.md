@@ -1,5 +1,19 @@
 # Handoff
 
+## Completed: linear-extension promotion — 2026-09-15
+
+`combinatoric-core::Poset` now validates linear extensions and computes
+Schützenberger promotion, individual promotion orbits, and the complete orbit
+decomposition.  Orbit computations reuse one reachability matrix, and tests
+cover invalid words, the two-extension V-poset orbit, chains, antichains, and
+the empty poset.  All 257 crate unit tests and two documentation tests pass;
+rustfmt, `git diff --check`, and strict target Clippy pass when the crate's
+documented pre-existing lint classes are allowed.  Unqualified strict Clippy
+still reports 38 pre-existing warnings outside this increment.  No manifest,
+lockfile, other crate, experiment, or generated file changed.  The unrelated
+untracked `polytool/scripts/__pycache__/` remains untouched, and ownership is
+released.
+
 ## Completed: connected-PEO flagged extension — 2026-09-15
 
 Worker `/root` reclaims only the ignored experiment
