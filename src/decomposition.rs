@@ -11,10 +11,15 @@
 //! so the web frontend can inspect the full package of decomposition data for a
 //! given polynomial in one shot.
 
-use crate::basis::{analyze_magic_basis_i64, BasisError, MagicBasisAnalysis};
+use crate::basis::{
+    analyze_magic_basis_bigint, analyze_magic_basis_i64, BasisError, MagicBasisAnalysis,
+};
 use crate::polynomial::CoeffRing;
 use crate::polynomial::Polynomial;
-use crate::real_rootedness::{check_weak_interlacing, is_real_rooted};
+use crate::real_rootedness::{
+    check_weak_interlacing, check_weak_interlacing_bigint_coeffs, is_real_rooted,
+    is_real_rooted_bigint_coeffs,
+};
 use num_bigint::BigInt;
 use num_rational::Ratio;
 
@@ -37,6 +42,30 @@ pub struct SymmetricDecompositionAnalysis {
     pub r_transform_of_f: Vec<i64>,
     pub r_a: Vec<i64>,
     pub r_b: Vec<i64>,
+    pub r_interlaces_f: Option<bool>,
+    pub magic: MagicBasisAnalysis<BigRational>,
+}
+
+/// A structured view of the `I_d` / `R_d` decomposition data of a `BigInt`
+/// polynomial.
+///
+/// This is the arbitrary-precision counterpart of
+/// [`SymmetricDecompositionAnalysis`]. No coefficient is narrowed to `i64`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymmetricDecompositionAnalysisBigInt {
+    pub degree: usize,
+    pub reciprocal: Vec<BigInt>,
+    pub a: Vec<BigInt>,
+    pub b: Vec<BigInt>,
+    pub a_real_rooted: bool,
+    pub b_real_rooted: bool,
+    pub b_interlaces_a: Option<bool>,
+    pub reciprocal_interlaces_input: Option<bool>,
+    pub alternatingly_increasing: bool,
+    pub f_polynomial: Vec<BigInt>,
+    pub r_transform_of_f: Vec<BigInt>,
+    pub r_a: Vec<BigInt>,
+    pub r_b: Vec<BigInt>,
     pub r_interlaces_f: Option<bool>,
     pub magic: MagicBasisAnalysis<BigRational>,
 }
@@ -151,6 +180,26 @@ pub fn is_alternatingly_increasing(coeffs: &[i64]) -> bool {
     zigzag.windows(2).all(|w| w[0] <= w[1])
 }
 
+/// Check whether arbitrary-precision integer coefficients are alternatingly
+/// increasing.
+pub fn is_alternatingly_increasing_bigint(coeffs: &[BigInt]) -> bool {
+    let d = match coeffs.iter().rposition(|c| c != &BigInt::from(0)) {
+        Some(d) => d,
+        None => return true,
+    };
+
+    let mut zigzag = Vec::with_capacity(d + 1);
+    for j in 0..=d / 2 {
+        zigzag.push(&coeffs[j]);
+        let mirror = d - j;
+        if mirror != j {
+            zigzag.push(&coeffs[mirror]);
+        }
+    }
+
+    zigzag.windows(2).all(|w| w[0] <= w[1])
+}
+
 /// Analyze the decomposition data of an `i64`-coefficient polynomial with
 /// respect to its actual degree.
 pub fn analyze_symmetric_decomposition_i64(
@@ -189,6 +238,51 @@ pub fn analyze_symmetric_decomposition_i64(
         r_a: r_a.coeffs().to_vec(),
         r_b: r_b.coeffs().to_vec(),
         r_interlaces_f: check_weak_interlacing(r_of_f.coeffs(), f.coeffs()),
+        magic,
+    })
+}
+
+/// Analyze the decomposition data of a `BigInt`-coefficient polynomial with
+/// respect to its actual degree, without narrowing any coefficient.
+pub fn analyze_symmetric_decomposition_bigint(
+    coeffs: &[BigInt],
+) -> Result<SymmetricDecompositionAnalysisBigInt, BasisError> {
+    let p = Polynomial::<BigInt>::new(coeffs.to_vec());
+    let degree = p.degree().unwrap_or(0);
+    let input = p.coeffs().to_vec();
+
+    let reciprocal = p
+        .reverse_with_degree(degree)
+        .expect("actual degree should always be a valid bound");
+    let (a, b) = p
+        .stapledon_decomposition(degree)
+        .expect("actual degree should always be a valid bound");
+
+    let f = f_polynomial(&p, degree).expect("actual degree should always be a valid bound");
+    let r_of_f = r_transform(&f, degree).expect("actual degree should always be a valid bound");
+    let (r_a, r_b) =
+        r_decomposition(&f, degree).expect("actual degree should always be a valid bound");
+
+    let magic = analyze_magic_basis_bigint(p.coeffs(), degree)?;
+
+    Ok(SymmetricDecompositionAnalysisBigInt {
+        degree,
+        reciprocal: reciprocal.coeffs().to_vec(),
+        a: a.coeffs().to_vec(),
+        b: b.coeffs().to_vec(),
+        a_real_rooted: is_real_rooted_bigint_coeffs(a.coeffs()),
+        b_real_rooted: is_real_rooted_bigint_coeffs(b.coeffs()),
+        b_interlaces_a: check_weak_interlacing_bigint_coeffs(b.coeffs(), a.coeffs()),
+        reciprocal_interlaces_input: check_weak_interlacing_bigint_coeffs(
+            reciprocal.coeffs(),
+            &input,
+        ),
+        alternatingly_increasing: is_alternatingly_increasing_bigint(&input),
+        f_polynomial: f.coeffs().to_vec(),
+        r_transform_of_f: r_of_f.coeffs().to_vec(),
+        r_a: r_a.coeffs().to_vec(),
+        r_b: r_b.coeffs().to_vec(),
+        r_interlaces_f: check_weak_interlacing_bigint_coeffs(r_of_f.coeffs(), f.coeffs()),
         magic,
     })
 }
@@ -270,5 +364,46 @@ mod tests {
             ]
         );
         assert!(!analysis.magic.left_leq_right);
+    }
+
+    #[test]
+    fn test_bigint_symmetric_decomposition_preserves_huge_coefficients() {
+        let scale = BigInt::from(10u8).pow(40);
+        let h = [1_i64, 4, 2]
+            .into_iter()
+            .map(|coefficient| BigInt::from(coefficient) * &scale)
+            .collect::<Vec<_>>();
+        let analysis = analyze_symmetric_decomposition_bigint(&h).unwrap();
+
+        assert_eq!(analysis.degree, 2);
+        assert_eq!(
+            analysis.reciprocal,
+            [2_i64, 4, 1]
+                .into_iter()
+                .map(|coefficient| BigInt::from(coefficient) * &scale)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            analysis.a,
+            [1_i64, 3, 1]
+                .into_iter()
+                .map(|coefficient| BigInt::from(coefficient) * &scale)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            analysis.b,
+            [1_i64, 1]
+                .into_iter()
+                .map(|coefficient| BigInt::from(coefficient) * &scale)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            analysis.magic.coordinates[0],
+            BigRational::from_integer(scale)
+        );
+        assert!(analysis.a_real_rooted);
+        assert!(analysis.b_real_rooted);
+        assert_eq!(analysis.b_interlaces_a, Some(true));
+        assert!(analysis.alternatingly_increasing);
     }
 }
