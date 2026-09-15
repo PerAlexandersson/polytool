@@ -6,6 +6,8 @@ Worker `/root` added exact standard Bernstein-basis construction and coordinate
 conversion to Polytool, including rational coefficients, degree elevation, and
 the `bernstein-expansion`/`bernstein` CLI with text and JSON output.  Focused and
 full library/CLI tests pass, as does strict Clippy on the library and binary.
+The local checkpoint is commit `04d647f`; `git push origin master` was attempted
+but the container has no GitHub SSH key (`Permission denied (publickey)`).
 Ownership is released.  The pre-existing untracked
 `polytool/scripts/__pycache__/` remains untouched.
 
