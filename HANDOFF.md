@@ -1,5 +1,22 @@
 # Handoff
 
+## Completed: deco subexceedant polynomial generators — 2026-09-15
+
+The recurrence-backed joint block/eligible-site distribution from the A144438
+project now has canonical exact generators in `polytool::sequences::deco`.
+The module provides `BigInt` APIs and checked `i64` wrappers for the joint
+histograms, the uniform `w`-specializations, fixed eligible-site and selected-
+join layers, and the proved gamma recurrence.  Tests recover the ordinary
+Eulerian family at `w=0`, the first deco rows at `w=1`, the first layer rows,
+and verify gamma expansion against independent coefficient extraction through
+size 20.  All 343 library tests and all five documentation tests pass.  Strict
+whole-crate Clippy is blocked only by three unrelated pre-existing warnings;
+after allowing those two warning classes, strict Clippy passes.  No CLI,
+manifest, lockfile, other Rust source, manuscript, Lean file, or publication
+file was changed.  The pre-existing untracked
+`polytool/scripts/__pycache__/` remains untouched.  Ownership is released;
+the research project will record the source commit separately.
+
 ## Completed: standard graph-family acyclic-sink sequences — 2026-09-13
 
 This batch adds a documented geometric triangular-lattice patch constructor,

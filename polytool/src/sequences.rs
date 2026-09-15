@@ -15,6 +15,7 @@
 
 use num_bigint::BigInt;
 
+pub mod deco;
 pub mod literature;
 
 /// Compute Eulerian polynomials A_1(t), A_2(t), ..., A_n(t).
