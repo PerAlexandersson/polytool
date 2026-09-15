@@ -159,6 +159,8 @@ fn print_top_level_help() {
     println!("                    Count consecutive previous interlacings until first fail");
     println!("  properties        Show real-rootedness, unimodality, and related properties");
     println!("  gamma-expansion   Expand palindromic polynomials in the gamma basis");
+    println!("  bernstein-expansion");
+    println!("                    Expand polynomials in a fixed-degree Bernstein basis");
     println!("  family-check      Check properties and consecutive interlacing together");
     println!("  sequence          Generate standard polynomial sequences");
     println!("  oeis              List and generate recurrence-backed OEIS families");
@@ -1059,6 +1061,24 @@ fn print_command_help(command: &str) -> bool {
                 "  echo '1, 11, 11, 1' | polytool gamma-expansion",
             ],
         ),
+        "bernstein-expansion" | "bernstein" => {
+            println!("Usage:");
+            println!("  polytool bernstein-expansion [--degree <n>] [--json]");
+            println!("  polytool bernstein --degree <n>");
+            println!();
+            println!("Expand each input polynomial in the standard Bernstein basis");
+            println!("  binomial(n,j) t^j (1-t)^(n-j),  0 <= j <= n.");
+            println!();
+            print_rational_coefficient_input_help();
+            println!();
+            println!("Options:");
+            println!("  --degree <n>  Use ambient degree n for every row");
+            println!("                (default: the degree of each input polynomial)");
+            println!("  --json        Emit machine-readable JSON with rational strings");
+            println!();
+            println!("Example:");
+            println!("  echo '1, 2, 3' | polytool bernstein --degree 3");
+        }
         "family-check" => print_family_check_help(),
         "sequence" => print_sequence_help(),
         "oeis" => print_oeis_help(),
@@ -1725,6 +1745,89 @@ fn cmd_gamma_expansion(args: &[String]) {
             "{{\"ok\":{},\"items\":[{}]}}",
             !had_error,
             json_items.join(",")
+        );
+    }
+    if had_error {
+        std::process::exit(1);
+    }
+}
+
+fn cmd_bernstein_expansion(args: &[String]) {
+    let mut format = OutputFormat::Text;
+    let mut ambient_degree = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--json" => format = OutputFormat::Json,
+            "--degree" => {
+                ambient_degree = Some(
+                    parse_usize_option(args, &mut index, "--degree").unwrap_or_else(|error| {
+                        eprintln!("{error}");
+                        std::process::exit(2);
+                    }),
+                );
+            }
+            other => {
+                eprintln!("unknown option: {other}");
+                std::process::exit(2);
+            }
+        }
+        index += 1;
+    }
+
+    let mut items = Vec::new();
+    let mut had_error = false;
+    for (row_index, coefficients) in read_polys_rational().into_iter().enumerate() {
+        let polynomial = Polynomial::new(coefficients.clone());
+        let degree = ambient_degree.unwrap_or_else(|| polynomial.degree().unwrap_or(0));
+        match bernstein_basis_coordinates(&polynomial, degree) {
+            Ok(coordinates) => {
+                if format == OutputFormat::Json {
+                    items.push(json!({
+                        "index": row_index,
+                        "ok": true,
+                        "coefficients": coefficients
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>(),
+                        "degree": degree,
+                        "coordinates": coordinates
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>(),
+                    }));
+                } else {
+                    println!("{}", format_rational_row(&coordinates));
+                }
+            }
+            Err(error) => {
+                had_error = true;
+                if format == OutputFormat::Json {
+                    items.push(json!({
+                        "index": row_index,
+                        "ok": false,
+                        "coefficients": coefficients
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>(),
+                        "degree": degree,
+                        "error": error.to_string(),
+                    }));
+                } else {
+                    eprintln!("row {row_index}: {error}");
+                }
+            }
+        }
+    }
+    if format == OutputFormat::Json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "ok": !had_error,
+                "basis": "binomial(n,j) t^j (1-t)^(n-j)",
+                "items": items,
+            }))
+            .unwrap()
         );
     }
     if had_error {
@@ -5522,6 +5625,7 @@ fn main() {
         "interlacing-profile" => cmd_interlacing_profile(rest),
         "properties" => cmd_properties(rest),
         "gamma-expansion" | "gamma" => cmd_gamma_expansion(rest),
+        "bernstein-expansion" | "bernstein" => cmd_bernstein_expansion(rest),
         "family-check" => cmd_family_check(rest),
         "sequence" => cmd_sequence(rest),
         "oeis" => cmd_oeis(rest),

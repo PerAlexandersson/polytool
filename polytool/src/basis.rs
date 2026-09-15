@@ -4,6 +4,8 @@
 //!
 //! - a general exact routine for expressing a polynomial in a prescribed basis of
 //!   `Pol_{\le n}`,
+//! - the standard Bernstein basis
+//!   `{ binomial(n,j) t^j (1-t)^(n-j) }_{j=0}^n`,
 //! - the "magic basis"
 //!   `{ t^i (1+t)^{d-i} }_{i=0}^d`,
 //! - convenience helpers for checking magic positivity.
@@ -125,6 +127,83 @@ pub fn coordinates_in_basis_bigint(
     let target_q = polynomial_bigint_to_q(target);
     let basis_q: Vec<_> = basis.iter().map(polynomial_bigint_to_q).collect();
     coordinates_in_basis(&target_q, &basis_q)
+}
+
+/// Build the standard Bernstein basis of degree `degree`:
+///
+/// ```text
+/// binomial(degree,j) t^j (1-t)^(degree-j),  0 <= j <= degree.
+/// ```
+pub fn bernstein_basis_bigint(degree: usize) -> Vec<Polynomial<BigInt>> {
+    let t = Polynomial::variable();
+    let one_minus_t = Polynomial::from_i64_coeffs(&[1, -1]);
+    (0..=degree)
+        .map(|j| {
+            let polynomial = poly_pow(&t, j) * poly_pow(&one_minus_t, degree - j);
+            polynomial.scale(&binomial_bigint(degree, j))
+        })
+        .collect()
+}
+
+/// Express a rational polynomial in the standard Bernstein basis of a fixed
+/// ambient degree.
+///
+/// If `target = sum_i a_i t^i`, the returned coordinates are
+///
+/// ```text
+/// b_j = sum_{i=0}^j a_i binomial(j,i) / binomial(degree,i).
+/// ```
+///
+/// The ambient degree may exceed the degree of the target; this is the usual
+/// Bernstein degree-elevation operation.
+pub fn bernstein_basis_coordinates(
+    target: &Polynomial<BigRational>,
+    degree: usize,
+) -> Result<Vec<BigRational>, BasisError> {
+    if let Some(target_degree) = target.degree() {
+        if target_degree > degree {
+            return Err(BasisError::TargetDegreeTooLarge {
+                degree: target_degree,
+                basis_degree_bound: degree,
+            });
+        }
+    }
+
+    Ok((0..=degree)
+        .map(|j| {
+            (0..=j.min(target.coeffs().len().saturating_sub(1)))
+                .map(|i| {
+                    let numerator = binomial_bigint(j, i);
+                    let denominator = binomial_bigint(degree, i);
+                    target.coeff(i) * BigRational::new(numerator, denominator)
+                })
+                .fold(BigRational::from_integer(BigInt::from(0)), |sum, term| {
+                    sum + term
+                })
+        })
+        .collect())
+}
+
+/// Express an integer polynomial in the standard Bernstein basis exactly.
+pub fn bernstein_basis_coordinates_bigint(
+    coeffs: &[BigInt],
+    degree: usize,
+) -> Result<Vec<BigRational>, BasisError> {
+    bernstein_basis_coordinates(
+        &polynomial_bigint_to_q(&Polynomial::new(coeffs.to_vec())),
+        degree,
+    )
+}
+
+/// Express an `i64` polynomial in the standard Bernstein basis exactly.
+pub fn bernstein_basis_coordinates_i64(
+    coeffs: &[i64],
+    degree: usize,
+) -> Result<Vec<BigRational>, BasisError> {
+    bernstein_basis_coordinates(
+        &polynomial_i64_to_q(&Polynomial::from_i64_coeffs(coeffs)),
+        degree,
+    )
 }
 
 /// Build the magic basis of `Pol_{\le degree}`:
@@ -286,6 +365,18 @@ fn poly_pow<C: CoeffRing>(base: &Polynomial<C>, exp: usize) -> Polynomial<C> {
     result
 }
 
+fn binomial_bigint(n: usize, k: usize) -> BigInt {
+    if k > n {
+        return BigInt::from(0);
+    }
+    let k = k.min(n - k);
+    let mut value = BigInt::from(1);
+    for j in 0..k {
+        value = value * BigInt::from(n - j) / BigInt::from(j + 1);
+    }
+    value
+}
+
 fn solve_square_linear_system<C: FieldRing>(a: &[Vec<C>], b: &[C]) -> Option<Vec<C>> {
     let n = a.len();
     if n == 0 || b.len() != n || a.iter().any(|row| row.len() != n) {
@@ -358,6 +449,52 @@ mod tests {
         assert_eq!(basis[0], Polynomial::from_i64_coeffs(&[1, 2, 1]));
         assert_eq!(basis[1], Polynomial::from_i64_coeffs(&[0, 1, 1]));
         assert_eq!(basis[2], Polynomial::from_i64_coeffs(&[0, 0, 1]));
+    }
+
+    #[test]
+    fn test_bernstein_basis_degree_two() {
+        let basis = bernstein_basis_bigint(2);
+        assert_eq!(basis[0], Polynomial::from_i64_coeffs(&[1, -2, 1]));
+        assert_eq!(basis[1], Polynomial::from_i64_coeffs(&[0, 2, -2]));
+        assert_eq!(basis[2], Polynomial::from_i64_coeffs(&[0, 0, 1]));
+    }
+
+    #[test]
+    fn test_bernstein_coordinates_and_degree_elevation() {
+        assert_eq!(
+            bernstein_basis_coordinates_i64(&[1, 2, 3], 2).unwrap(),
+            vec![br(1), br(2), br(6)]
+        );
+        assert_eq!(
+            bernstein_basis_coordinates_i64(&[1, 2, 3], 3).unwrap(),
+            vec![
+                br(1),
+                BigRational::new(bi(5), bi(3)),
+                BigRational::new(bi(10), bi(3)),
+                br(6),
+            ]
+        );
+        assert_eq!(
+            bernstein_basis_coordinates_i64(&[0, 0, 1], 4).unwrap(),
+            vec![
+                br(0),
+                br(0),
+                BigRational::new(bi(1), bi(6)),
+                BigRational::new(bi(1), bi(2)),
+                br(1),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bernstein_coordinates_reject_small_ambient_degree() {
+        assert_eq!(
+            bernstein_basis_coordinates_i64(&[1, 2, 3], 1),
+            Err(BasisError::TargetDegreeTooLarge {
+                degree: 2,
+                basis_degree_bound: 1,
+            })
+        );
     }
 
     #[test]

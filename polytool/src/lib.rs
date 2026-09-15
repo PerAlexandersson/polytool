@@ -134,10 +134,11 @@ pub mod root_count;
 pub mod sequences;
 
 pub use basis::{
-    analyze_magic_basis_bigint, analyze_magic_basis_i64, coordinates_in_basis,
-    coordinates_in_basis_bigint, coordinates_in_basis_i64, is_magic_positive_bigint,
-    is_magic_positive_i64, magic_basis, magic_basis_coordinates_bigint,
-    magic_basis_coordinates_i64, BasisError, MagicBasisAnalysis,
+    analyze_magic_basis_bigint, analyze_magic_basis_i64, bernstein_basis_bigint,
+    bernstein_basis_coordinates, bernstein_basis_coordinates_bigint,
+    bernstein_basis_coordinates_i64, coordinates_in_basis, coordinates_in_basis_bigint,
+    coordinates_in_basis_i64, is_magic_positive_bigint, is_magic_positive_i64, magic_basis,
+    magic_basis_coordinates_bigint, magic_basis_coordinates_i64, BasisError, MagicBasisAnalysis,
 };
 pub use bkw::{
     BkwError, BkwRootComputation, BkwRootInfo, BkwRootOptions, BkwScoutCandidate, BkwScoutOptions,

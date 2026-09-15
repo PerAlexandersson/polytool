@@ -1,5 +1,14 @@
 # Handoff
 
+## Completed: exact Bernstein-basis conversion — 2026-09-15
+
+Worker `/root` added exact standard Bernstein-basis construction and coordinate
+conversion to Polytool, including rational coefficients, degree elevation, and
+the `bernstein-expansion`/`bernstein` CLI with text and JSON output.  Focused and
+full library/CLI tests pass, as does strict Clippy on the library and binary.
+Ownership is released.  The pre-existing untracked
+`polytool/scripts/__pycache__/` remains untouched.
+
 ## Completed: deco subexceedant polynomial generators — 2026-09-15
 
 The recurrence-backed joint block/eligible-site distribution from the A144438
