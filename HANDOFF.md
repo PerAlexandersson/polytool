@@ -1,5 +1,14 @@
 # Polytool handoff
 
+## Completed: exact Bernstein-basis conversion (2026-09-15)
+
+Worker `/root` added `bernstein_basis_bigint` and exact rational coordinate
+conversion APIs, with wrappers for integer coefficient rows and support for
+degree elevation.  The `bernstein-expansion`/`bernstein` CLI accepts exact
+rational input and emits text or JSON.  The README documents the normalized
+basis convention.  All 353 library tests and all 22 `cli_bigint` tests pass;
+strict Clippy passes for the library and binary.  Ownership is released.
+
 ## Completed: exact OEIS recurrence exports (2026-09-11)
 
 Worker `/root` completed and released ownership of `src/recurrence.rs`,

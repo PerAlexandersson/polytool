@@ -105,6 +105,41 @@ fn gamma_expansion_json_accepts_bigint_coefficients() {
 }
 
 #[test]
+fn bernstein_expansion_supports_degree_elevation_and_rationals() {
+    let output = run_polytool(&["bernstein", "--degree", "3"], "1,2,3\n1/2,1\n");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"1, 5/3, 10/3, 6\n1/2, 5/6, 7/6, 3/2\n");
+}
+
+#[test]
+fn bernstein_expansion_json_reports_exact_strings() {
+    let output = run_polytool(
+        &["bernstein-expansion", "--degree", "4", "--json"],
+        "0,0,1\n",
+    );
+
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["items"][0]["degree"], 4);
+    assert_eq!(
+        json["items"][0]["coordinates"],
+        serde_json::json!(["0", "0", "1/6", "1/2", "1"])
+    );
+}
+
+#[test]
+fn bernstein_expansion_rejects_too_small_degree() {
+    let output = run_polytool(&["bernstein", "--degree", "1"], "1,2,3\n");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).expect("stderr is utf8");
+    assert!(stderr.contains("degree 2"));
+    assert!(stderr.contains("degree at most 1"));
+}
+
+#[test]
 fn sequence_json_generates_bigint_coefficients() {
     let output = run_polytool(&["sequence", "chebyshev-t", "64", "--json"], "");
 

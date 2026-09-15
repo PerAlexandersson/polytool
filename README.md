@@ -167,7 +167,7 @@ A text file `polys.txt` might look like:
 ```
 
 The commands `interlacing`, `interlacing-profile`, `properties`,
-`gamma-expansion`, `family-check`, `sequence`, `coefficient-tests`,
+`gamma-expansion`, `bernstein-expansion`, `family-check`, `sequence`, `coefficient-tests`,
 `hstar-to-ehrhart`, `ehrhart-to-hstar`, `hstar-inequalities`,
 `cyclic-sieving`, and `cyclic-sieving-sequence` also accept `--json` for
 machine-readable output.
@@ -253,6 +253,29 @@ Example output:
 
 ```text
 1 + 11t + 11t^2 + t^3: gamma [1, 8]; expansion: (1+t)^3 + 8 t (1+t)
+```
+
+### Expand in the Bernstein basis
+
+The standard degree-$n$ Bernstein basis is
+
+```text
+binomial(n,j) t^j (1-t)^(n-j),  0 <= j <= n.
+```
+
+The command uses the input polynomial's degree by default.  Pass `--degree`
+to elevate every input row to a common ambient degree.  Inputs and outputs may
+have arbitrary-size exact rational coefficients.
+
+```sh
+echo '1, 2, 3' | polytool bernstein-expansion --degree 3
+echo '1, 2, 3' | polytool bernstein --degree 3 --json
+```
+
+The text output is the exact Bernstein coordinate row:
+
+```text
+1, 5/3, 10/3, 6
 ```
 
 ### Coefficient-only real-rootedness tests
