@@ -52,11 +52,13 @@ cargo check --locked --manifest-path KTT-search/Cargo.toml
 ```
 
 The root GitHub workflow tests each maintained package separately and verifies
-the tracked experiment artifacts in a clean checkout. Retired Kostka/KTT code
-is intentionally outside routine CI. The workflow also checks the declared
-Polytool library/web MSRV (Rust 1.82) and MCP MSRV (Rust 1.88), and treats Rust
-documentation warnings as errors. Standalone workspace lockfiles are committed
-at `experiments/Cargo.lock`, `kostka/Cargo.lock`, and `KTT-search/Cargo.lock`.
+the tracked experiment artifacts in a clean checkout. There is no dedicated
+Kostka/KTT job; the experiment job alone checks out the frozen Kostka submodule
+because a few retained GT experiments consume it for reproducibility. The
+workflow also checks the declared Polytool library/web MSRV (Rust 1.82) and MCP
+MSRV (Rust 1.88), and treats Rust documentation warnings as errors. Standalone
+workspace lockfiles are committed at `experiments/Cargo.lock`,
+`kostka/Cargo.lock`, and `KTT-search/Cargo.lock`.
 
 ## Polytool standalone branch
 

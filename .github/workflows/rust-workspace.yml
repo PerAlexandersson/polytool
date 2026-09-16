@@ -83,6 +83,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # A few frozen GT experiments still consume the retired Kostka
+          # submodule for reproducibility. No maintained job checks it.
+          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

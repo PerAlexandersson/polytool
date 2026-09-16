@@ -13,9 +13,11 @@ Commits `4a897bf`, `e777c57`, and `f7d136f` are pushed on `master`.
 Kostka retirement is now the active maintenance increment. The historical
 `kostka` submodule and database-backed `KTT-search` application remain in Git
 for reproducibility, but are excluded from the maintained root workspace and
-routine CI. New GT/Ehrhart work routes to Ehrcalc; LR/Kostka/Schur compatibility
-work routes to lrcalc-rs. The Kostka repository README and GitHub description
-identify both successors.
+have no dedicated CI job. New GT/Ehrhart work routes to Ehrcalc;
+LR/Kostka/Schur compatibility work routes to lrcalc-rs. The Kostka repository
+README and GitHub description identify both successors. The tracked-experiments
+CI job still checks out the frozen submodule because four retained GT
+experiment binaries consume it.
 
 The final performance follow-up streams Combpoly permutation statistics,
 flagged-tableau weights, QSym quasi-shuffle multiplicities, and both general

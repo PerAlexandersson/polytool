@@ -79,8 +79,9 @@ combinatoric-core
   historical reproduction, pass the explicit `experiments/Cargo.toml`,
   `kostka/Cargo.toml`, or `KTT-search/Cargo.toml` manifest and preserve its
   committed standalone lockfile. CI tests tracked experiments only from a clean
-  checkout; it does not test the retired Kostka/KTT code or treat the ignored
-  local forest as a maintained suite.
+  checkout; that job checks out the frozen Kostka submodule only because a few
+  retained GT experiments still consume it. There is no dedicated Kostka/KTT
+  job, and CI does not treat the ignored local forest as a maintained suite.
 - Stage and commit only task-owned files after relevant checks; do not absorb
   generated files or another worker's changes. Follow the workspace's normal
   checkpoint/push policy unless the task says otherwise.
