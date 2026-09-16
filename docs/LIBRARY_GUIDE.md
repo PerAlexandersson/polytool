@@ -16,7 +16,9 @@ or examples.
 | Exact univariate root/interlacing, recurrence, h* and standard sequences | `polytool` | `Polynomial`, `is_real_rooted`, `check_weak_interlacing`, `find_recurrence_adaptive`, `eulerian_polynomials_bigint`; `polytool/examples/bench_bezout_vs_sturm.rs` |
 | Permutation/word/parking-function generating polynomials and CLI scans | `combpoly` | `build_generating_polynomial` and the `combpoly` CLI; see `combpoly/README.md` |
 | Structured evidence, counterexamples, and proof-search records | `polynomial-lab` | `PolynomialFamilyRegistry`, `real_rooted_evidence_id`, and the `poly-lab` CLI; see `polynomial-lab/tests/fixtures/minimal_lab/` |
-| Historical GT/Ehrhart, Kostka, and LR reproducibility | `kostka` | its CLI and modules `kostka_dp`, `ehrhart`, `lr`; read `kostka/README.md` first because new feature work belongs in Ehrcalc |
+| GT/Ehrhart, h*, flagged Kostka, flows, keys, and order polytopes | [Ehrcalc](https://github.com/PerAlexandersson/ehrcalc) | standalone maintained library, CLI, and MCP server; see its README and generated CLI reference |
+| LR/Kostka/Schur/Schubert computation and classic lrcalc compatibility | [lrcalc-rs](https://github.com/PerAlexandersson/lrcalc-rs) | standalone high-performance Rust library, CLI, and C ABI replacement |
+| Historical GT/Ehrhart, Kostka, and LR reproduction only | `kostka` | retired submodule excluded from the workspace and routine CI; do not add features |
 
 `experiments/` is for bounded, use-once research probes. Its large ignored
 binary collection is intentional. Do not attempt to track, rename, test, or
@@ -24,8 +26,9 @@ catalogue it wholesale. When a result becomes reusable, promote its stable core
 to the owning library with tests; add a tracked example only when it is a useful
 canonical demonstration. It is a standalone Cargo workspace: use
 `--manifest-path experiments/Cargo.toml` for intentional runs. The retired
-database-backed `KTT-search` application is likewise isolated behind its own
-manifest and lockfile; new GT/Ehrhart work belongs in Ehrcalc.
+database-backed `KTT-search` application and `kostka` submodule are likewise
+isolated behind their own manifests and lockfiles. Route new work to Ehrcalc or
+lrcalc-rs according to the table above.
 
 ## Architecture and names that must not be conflated
 
@@ -36,8 +39,8 @@ re-exports canonical foundation types; it does not supply them to
 
 - `Partition` and `Composition`: use `combinatoric_core::{Partition,
   Composition}` as the canonical types, or the compatible re-exports from
-  `sym_poly_core`. `kostka::Partition` is a legacy, separate type: convert at
-  its boundary rather than mixing the APIs.
+  `sym_poly_core`. `kostka::Partition` is a retired, separate type and must not
+  enter new maintained code.
 - `Ring`: `combinatoric_core::Ring` (also re-exported by `sym_poly_core`) is
   for the symmetric-polynomial stack. `polytool::{CoeffRing, FieldRing}` are
   its separate univariate coefficient traits.

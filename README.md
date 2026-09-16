@@ -22,9 +22,12 @@ and agents live in [AGENTS.md](AGENTS.md).
   polynomial exploration on top of `polytool`.
 - `polynomial-lab`: structured evidence ledger for real-rootedness and
   interlacing projects, also backed by `polytool`.
-- `kostka`: legacy reproducibility implementation; see its README for the
-  maintained successor and new-work policy. The retired, database-backed
-  `KTT-search` application consumes it from a separate Cargo workspace.
+- `kostka`: retired historical submodule, excluded from the maintained Cargo
+  workspace and CI. Use [Ehrcalc](https://github.com/PerAlexandersson/ehrcalc)
+  for GT/Ehrhart and related exact workflows, or
+  [lrcalc-rs](https://github.com/PerAlexandersson/lrcalc-rs) for the
+  LR/Kostka/Schur compatibility surface. The old database-backed `KTT-search`
+  application is retained only for reproducibility.
 - `flagged-lorentzian`: targeted research crate using `sym-poly-core`.
 - `experiments`: deliberately disposable research binaries consuming the
   reusable crates. Most are intentionally ignored; promote only stable library
@@ -37,24 +40,23 @@ The dependency direction begins with `combinatoric-core`, then
 
 ## Cargo and CI boundaries
 
-The root workspace contains the maintained libraries, adapters, and legacy
-`kostka` library. Ordinary root commands therefore do not discover the large
-local experiment forest or pull the retired KTT application's MySQL dependency
-graph into maintained checks. Use the explicit standalone manifests when one
-of those areas is genuinely the target:
+The root workspace contains only maintained libraries and adapters. Ordinary
+root commands do not discover the large local experiment forest, the retired
+Kostka submodule, or the retired KTT application's MySQL dependency graph. Use
+an explicit standalone manifest only when reproducing a historical result:
 
 ```sh
 cargo test --locked --manifest-path experiments/Cargo.toml --bin <name>
+cargo test --locked --manifest-path kostka/Cargo.toml --lib
 cargo check --locked --manifest-path KTT-search/Cargo.toml
 ```
 
-The root GitHub workflow tests each maintained package separately, verifies the
-tracked experiment artifacts in a clean checkout, and keeps the database-backed
-legacy check in its own job. It also checks the declared Polytool library/web
-MSRV (Rust 1.82) and MCP MSRV (Rust 1.88), and treats Rust documentation
-warnings as errors. Standalone workspace lockfiles are committed at
-`experiments/Cargo.lock` and `KTT-search/Cargo.lock`; do not replace them with
-a crate-local lockfile inside a root-workspace member.
+The root GitHub workflow tests each maintained package separately and verifies
+the tracked experiment artifacts in a clean checkout. Retired Kostka/KTT code
+is intentionally outside routine CI. The workflow also checks the declared
+Polytool library/web MSRV (Rust 1.82) and MCP MSRV (Rust 1.88), and treats Rust
+documentation warnings as errors. Standalone workspace lockfiles are committed
+at `experiments/Cargo.lock`, `kostka/Cargo.lock`, and `KTT-search/Cargo.lock`.
 
 ## Polytool standalone branch
 

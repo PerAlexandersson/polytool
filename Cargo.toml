@@ -5,7 +5,6 @@ members = [
     "polytool/mcp",
     "combinatoric-core",
     "combpoly",
-    "kostka",
     "flagged-lorentzian",
     "polynomial-lab",
     "polynomial-lab/mcp",
@@ -14,7 +13,7 @@ members = [
     "sym-poly/qsym",
     "sym-poly/multipoly",
 ]
-exclude = ["experiments", "KTT-search"]
+exclude = ["experiments", "KTT-search", "kostka"]
 default-members = [
     "polytool",
     "polytool/web",

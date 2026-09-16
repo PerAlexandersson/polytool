@@ -10,6 +10,13 @@ suggestions, and this handoff. All bounded source workers have completed and
 released their files; there is no active source ownership in this repository.
 Commits `4a897bf`, `e777c57`, and `f7d136f` are pushed on `master`.
 
+Kostka retirement is now the active maintenance increment. The historical
+`kostka` submodule and database-backed `KTT-search` application remain in Git
+for reproducibility, but are excluded from the maintained root workspace and
+routine CI. New GT/Ehrhart work routes to Ehrcalc; LR/Kostka/Schur compatibility
+work routes to lrcalc-rs. The Kostka repository README and GitHub description
+identify both successors.
+
 The final performance follow-up streams Combpoly permutation statistics,
 flagged-tableau weights, QSym quasi-shuffle multiplicities, and both general
 and chordal graph sink-polynomial independent sets. Noncrossing and nonnesting

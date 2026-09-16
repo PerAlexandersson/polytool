@@ -20,8 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -55,8 +53,6 @@ jobs:
           - polynomial-lab-mcp
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Test ${{ matrix.package }}
@@ -76,8 +72,6 @@ jobs:
             toolchain: "1.88"
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: recursive
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -89,24 +83,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: experiments -> target
       - name: Test tracked experiment artifacts
         run: cargo test --locked --manifest-path experiments/Cargo.toml --all-targets
-
-  legacy-kostka:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Test retired Kostka library
-        run: cargo test --locked -p kostka --lib
-      - name: Check legacy KTT search
-        run: cargo check --locked --manifest-path KTT-search/Cargo.toml
