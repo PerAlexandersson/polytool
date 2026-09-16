@@ -1,7 +1,7 @@
 //! Stream an isomorph-free graph6 search for reversed Delannoy-square rows.
 //!
 //! Typical use with nauty is
-//! `nauty-geng -q -l -F 10 20:20 | cargo run -q -p polytool --example
+//! `nauty-geng -q -l -F 10 20:20 | cargo run -q -p experiments --bin
 //! delannoy_clawfree_search -- 3`.
 
 use combinatoric_core::Graph;

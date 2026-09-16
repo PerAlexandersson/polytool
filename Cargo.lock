@@ -468,6 +468,7 @@ dependencies = [
  "num-traits",
  "polytool",
  "rayon",
+ "serde_json",
  "sym-poly-core",
  "sym-poly-multipoly",
  "sym-poly-qsym",
@@ -1118,7 +1119,6 @@ dependencies = [
 name = "polytool"
 version = "0.2.1-rc.5"
 dependencies = [
- "combinatoric-core",
  "num-bigint",
  "num-integer",
  "num-rational",

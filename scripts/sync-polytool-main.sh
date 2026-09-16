@@ -22,6 +22,18 @@ if [[ $(git rev-parse master) != $(git rev-parse origin/master) ]]; then
 fi
 
 split_commit=$(git subtree split --prefix=polytool master)
+
+validation_dir=$(mktemp -d /tmp/polytool-standalone.XXXXXX)
+cleanup_validation_dir() {
+    rm -rf -- "$validation_dir"
+}
+trap cleanup_validation_dir EXIT
+
+git archive "$split_commit" | tar -x -C "$validation_dir"
+CARGO_TARGET_DIR="$validation_dir/target" \
+    cargo metadata --locked --manifest-path "$validation_dir/Cargo.toml" --format-version 1 --no-deps \
+    >/dev/null
+
 git push origin "$split_commit:refs/heads/main"
 git fetch origin main:refs/remotes/origin/main
 
