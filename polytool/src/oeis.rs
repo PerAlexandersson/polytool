@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn catalog_is_sorted_unique_and_decodable() {
-        assert_eq!(catalog().len(), 785);
+        assert_eq!(catalog().len(), 774);
         assert_eq!(
             catalog()
                 .iter()
@@ -437,14 +437,14 @@ mod tests {
                 .iter()
                 .filter(|entry| entry.status == OeisSequenceStatus::Validated)
                 .count(),
-            630
+            649
         );
         assert_eq!(
             catalog()
                 .iter()
                 .filter(|entry| entry.status == OeisSequenceStatus::Experimental)
                 .count(),
-            30
+            0
         );
         for pair in catalog().windows(2) {
             assert!(pair[0].id < pair[1].id);

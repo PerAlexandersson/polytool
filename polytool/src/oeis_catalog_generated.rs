@@ -2339,7 +2339,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A035469",
         name: "Triangle read by rows, the Bell transform of the triple factorial numbers A007559(n+1) without column 0.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 1,
         flattened_offset: 1,
@@ -4378,7 +4378,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A049029",
         name: "Triangle read by rows, the Bell transform of the quartic factorial numbers A007696(n+1) without column 0.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 1,
         flattened_offset: 1,
@@ -5752,98 +5752,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         rows_sha256: "4b19f3a28a068610dd4886bd550140eaac5a6522c1c2cfdcd96240229d4a80eb",
     },
     OeisSequenceDefinition {
-        id: "A062154",
-        name: "Number T(n,m) of n X m matrices over {0,1,2} with all row and column sums equal to 1 or 2, m=0,..,2*n.",
-        status: OeisSequenceStatus::Validated,
-        layout: OeisLayout::Table,
-        first_row: 0,
-        flattened_offset: 0,
-        bfile_prefix_verified: true,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 1,
-        initial_rows: &[
-            &["1"],
-            &["0", "2", "1"],
-            &["0", "1", "13", "18", "6"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(1, 0, "1"),
-                        SparseCoefficient::new(1, 1, "3"),
-                        SparseCoefficient::new(1, 2, "1"),
-                        SparseCoefficient::new(2, 1, "-1"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 1,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(1, 2, "2"),
-                        SparseCoefficient::new(1, 3, "1"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(1, 1, "-1/2"),
-                        SparseCoefficient::new(1, 2, "1/2"),
-                        SparseCoefficient::new(2, 1, "3/2"),
-                        SparseCoefficient::new(2, 2, "-1/2"),
-                        SparseCoefficient::new(3, 1, "-1"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 1,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(1, 3, "1/2"),
-                        SparseCoefficient::new(2, 3, "-1/2"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 3,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(1, 1, "-1"),
-                        SparseCoefficient::new(1, 2, "1"),
-                        SparseCoefficient::new(2, 1, "3/2"),
-                        SparseCoefficient::new(2, 2, "-3/2"),
-                        SparseCoefficient::new(3, 1, "-1/2"),
-                        SparseCoefficient::new(3, 2, "1/2"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 3,
-                    derivative_order: 1,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(1, 3, "1"),
-                        SparseCoefficient::new(2, 3, "-3/2"),
-                        SparseCoefficient::new(3, 3, "1/2"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 6,
-        verification_rows: 0,
-        rows_sha256: "5a0f6c8ab67ec4909360826671bd7e9cf2b95fa82a8163984cf291587f452a1b",
-    },
-    OeisSequenceDefinition {
         id: "A062190",
         name: "Coefficient triangle of certain polynomials N(5; m,x).",
         status: OeisSequenceStatus::Validated,
@@ -6052,7 +5960,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A063967",
         name: "Triangle read by rows, T(n,k) = T(n-1,k) + T(n-2,k) + T(n-1,k-1) + T(n-2,k-1) and T(0,0) = 1.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -9133,7 +9041,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A094816",
         name: "Triangle read by rows: T(n,k) are the coefficients of Charlier polynomials: A046716 transposed, for 0 <= k <= n.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -9535,19 +9443,19 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A099040",
         name: "Riordan array (1, 2+2x).",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
-        bfile_prefix_verified: false,
+        bfile_prefix_verified: true,
         fixture_slug: "",
         fixture_row_offset: 0,
         prefix_rows: &[],
         recurrence_first_index: 0,
-        recurrence_first_width: 3,
+        recurrence_first_width: 1,
         initial_rows: &[
-            &["0", "8", "8"],
-            &["0", "4", "24", "16"],
+            &["1"],
+            &["0", "2"],
         ],
         recurrence: SparseRecurrence {
             terms: &[
@@ -9571,7 +9479,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
             denominator: None,
             inhomogeneous: None,
         },
-        source_rows: 0,
+        source_rows: 12,
         verification_rows: 0,
         rows_sha256: "6ddfcb83d32d7c1e3e872e2e63d225b66a58adc8d74a6c41f3cf689e2650def8",
     },
@@ -10386,52 +10294,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         rows_sha256: "286e7b97c49186ab107598799cef4b4841b132d25cd3897c2f18b2a5411332d3",
     },
     OeisSequenceDefinition {
-        id: "A103328",
-        name: "Triangle T(n, k) read by rows: binomial(2n, 2k+1).",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::RegularTriangle,
-        first_row: 1,
-        flattened_offset: 0,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 1,
-        recurrence_first_width: 2,
-        initial_rows: &[
-            &["0", "2"],
-            &["0", "4", "4"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 0, "2"),
-                        SparseCoefficient::new(0, 1, "2"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 0, "-1"),
-                        SparseCoefficient::new(0, 1, "2"),
-                        SparseCoefficient::new(0, 2, "-1"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 9,
-        verification_rows: 0,
-        rows_sha256: "e491e003bbc00020eab43abd5293fc457cd77d63a9d0700f588361e32d921f50",
-    },
-    OeisSequenceDefinition {
         id: "A103406",
         name: "Triangle read by rows: n-th row = unsigned coefficients of the characteristic polynomials of an n X n matrix with 2's on the diagonal and 1's elsewhere.",
         status: OeisSequenceStatus::Validated,
@@ -10523,40 +10385,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         source_rows: 12,
         verification_rows: 0,
         rows_sha256: "30d2da3255d3889ad3a60f7ab619373bc0fe8b2703e0f9e0b8dd3565c9c69fb5",
-    },
-    OeisSequenceDefinition {
-        id: "A103451",
-        name: "Triangular array T read by rows: T(n, 0) = T(n, n) = 1, T(n, k) = 0 for 0 < k < n.",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::RegularTriangle,
-        first_row: 0,
-        flattened_offset: 0,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 3,
-        initial_rows: &[
-            &["0", "1", "1"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 1, "1"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 0,
-        verification_rows: 0,
-        rows_sha256: "0ef45afb26e7a84a203fa55d40d2ddd2a2ac97ce33eb1d3e4850d0857b5589c2",
     },
     OeisSequenceDefinition {
         id: "A103633",
@@ -10846,7 +10674,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A105278",
         name: "Triangle read by rows: T(n,k) = binomial(n,k)*(n-1)!/(k-1)!.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 1,
         flattened_offset: 1,
@@ -12197,7 +12025,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A111577",
         name: "Galton triangle T(n, k) = T(n-1, k-1) + (3k-2)*T(n-1, k) read by rows.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 1,
         flattened_offset: 1,
@@ -12445,7 +12273,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A112493",
         name: "Triangle read by rows, T(n, k) = Sum_{j=0..n} C(n-j, n-k)*E2(n, j), where E2 are the second-order Eulerian numbers A201637, for n >= 0 and 0 <= k <= n.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -18900,7 +18728,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A143494",
         name: "Triangle read by rows: 2-Stirling numbers of the second kind.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 2,
         flattened_offset: 2,
@@ -18943,7 +18771,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A143495",
         name: "Triangle read by rows: 3-Stirling numbers of the second kind.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 3,
         flattened_offset: 3,
@@ -19301,49 +19129,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         source_rows: 9,
         verification_rows: 0,
         rows_sha256: "ef9b08d7723736329d1e60bbb1f0c08af35c885a3be667dc48122134e0495563",
-    },
-    OeisSequenceDefinition {
-        id: "A144217",
-        name: "Weight array of A144216: a rectangular array by antidiagonals.",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::RegularTriangle,
-        first_row: 0,
-        flattened_offset: 1,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 3,
-        initial_rows: &[
-            &["0", "2", "3"],
-            &["0", "0", "3", "4"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 1, "2"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 2, "-1"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 0,
-        verification_rows: 0,
-        rows_sha256: "674382de83730bb23dac4b7c56be99d902b7ad20878724c62b94c9b5c29cc514",
     },
     OeisSequenceDefinition {
         id: "A144299",
@@ -20162,49 +19947,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         source_rows: 9,
         verification_rows: 0,
         rows_sha256: "1f6e88ff82467a1fccf888254dd5de72b5313ab7fced9f80eadc31e39d7cdcb7",
-    },
-    OeisSequenceDefinition {
-        id: "A145677",
-        name: "Triangle T(n, k) read by rows: T(n, 0) = 1, T(n, n) = n, n>0, T(n,k) = 0, 0 < k < n-1.",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::RegularTriangle,
-        first_row: 0,
-        flattened_offset: 0,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 3,
-        initial_rows: &[
-            &["0", "2", "1"],
-            &["0", "0", "3", "1"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 1, "2"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 2, "-1"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 0,
-        verification_rows: 0,
-        rows_sha256: "0c43e6b8eefd8dc454ca8d093ae97ebe6a8b71e46a2f1cf4b16f182ff2aec543",
     },
     OeisSequenceDefinition {
         id: "A146986",
@@ -23201,49 +22943,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         source_rows: 10,
         verification_rows: 0,
         rows_sha256: "d6701cb7636e6cab4032a9a7e40ee5ea148643b1c12e9ce03c34c98f58339f84",
-    },
-    OeisSequenceDefinition {
-        id: "A158821",
-        name: "Triangle read by rows: row n (n>=0) ends with 1, and for n>=1 begins with n; other entries are zero.",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::RegularTriangle,
-        first_row: 0,
-        flattened_offset: 0,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 3,
-        initial_rows: &[
-            &["0", "1", "3"],
-            &["0", "0", "1", "4"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 1, "2"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 2, "-1"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 0,
-        verification_rows: 0,
-        rows_sha256: "ce6e4e36acb52c34aa0d1c92e316b4062cdf349e0574bc1530f6a13fc971c2b4",
     },
     OeisSequenceDefinition {
         id: "A158909",
@@ -26827,49 +26526,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         rows_sha256: "9faf5c8a901945b0d69fbc153bb6730bbf96b2a815cdde1615dc950bb8281bc6",
     },
     OeisSequenceDefinition {
-        id: "A185740",
-        name: "Weight array of A185738, by antidiagonals.",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::RegularTriangle,
-        first_row: 0,
-        flattened_offset: 1,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 3,
-        initial_rows: &[
-            &["0", "4", "1"],
-            &["0", "0", "8", "1"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 1, "3"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 2, "-2"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 0,
-        verification_rows: 0,
-        rows_sha256: "03e2bee91495c7b4f46f062d6379b8a29c6bcd3f3c8a79bcfc7b3f47239a3abb",
-    },
-    OeisSequenceDefinition {
         id: "A185778",
         name: "Second weight array of Pascal's triangle (formatted as a rectangle), by antidiagonals.",
         status: OeisSequenceStatus::Validated,
@@ -26909,49 +26565,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         source_rows: 12,
         verification_rows: 0,
         rows_sha256: "e989fbba2bf1ef48ebd23083ebefe567373a7b3424cc942606f1404ea12ec72e",
-    },
-    OeisSequenceDefinition {
-        id: "A185911",
-        name: "Weight array of A185910, by antidiagonals.",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::RegularTriangle,
-        first_row: 0,
-        flattened_offset: 1,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 3,
-        initial_rows: &[
-            &["0", "5", "1"],
-            &["0", "0", "7", "1"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 1, "2"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 2, "-1"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 0,
-        verification_rows: 0,
-        rows_sha256: "fce1690e76a610ab8e062cc8ca387726d68e91ea8de13e69ba78dace6320684d",
     },
     OeisSequenceDefinition {
         id: "A186370",
@@ -28159,7 +27772,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A201730",
         name: "Triangle T(n,k), read by rows, given by (2,1/2,3/2,0,0,0,0,0,0,0,...) DELTA (0,1/2,-1/2,0,0,0,0,0,0,0,...) where DELTA is the operator defined in A084938.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -29223,7 +28836,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A225117",
         name: "Triangle read by rows, coefficients of the generalized Eulerian polynomials A_{n, 3}(x) in descending order.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -31801,60 +31414,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         rows_sha256: "374fb8e1c7eee6cca3860548c4899b8045c24aed57c1fb31d032e8e63b6a2ff3",
     },
     OeisSequenceDefinition {
-        id: "A258993",
-        name: "Triangle read by rows: T(n,k) = binomial(n+k,n-k), k = 0..n-1.",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::RegularTriangle,
-        first_row: 0,
-        flattened_offset: 1,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 3,
-        initial_rows: &[
-            &["6", "5", "1"],
-            &["10", "15", "7", "1"],
-            &["15", "35", "28", "9", "1"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 0, "3"),
-                        SparseCoefficient::new(0, 1, "1"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 0, "-3"),
-                        SparseCoefficient::new(0, 1, "-1"),
-                    ],
-                },
-                SparseRecurrenceTerm {
-                    offset: 3,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 0, "1"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 0,
-        verification_rows: 0,
-        rows_sha256: "d48c65ec4a5751beb5167afab27c1c98fc3d7606fcef6f0427c047fb498f3716",
-    },
-    OeisSequenceDefinition {
         id: "A259454",
         name: "Triangle T(n,k) (0 <= k <= n) read by rows, arising from the study of rook polynomials.",
         status: OeisSequenceStatus::Verified,
@@ -32349,41 +31908,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         rows_sha256: "741c2507d027251a0931bbbd0d87909ac5febfac56f7a70c4fd9814b35f2b7d5",
     },
     OeisSequenceDefinition {
-        id: "A266178",
-        name: "Triangle read by rows giving successive states of cellular automaton generated by \"Rule 6\" initiated with a single ON (black) cell.",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::Table,
-        first_row: 0,
-        flattened_offset: 0,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 1,
-        initial_rows: &[
-            &["1"],
-            &["1", "1"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 2,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 0, "1"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 0,
-        verification_rows: 0,
-        rows_sha256: "f4faa61864dabf159dc8a73e1a3b1c3ee4d435953abd8be584ce1368ec90b033",
-    },
-    OeisSequenceDefinition {
         id: "A266213",
         name: "Square array A(n,r), the number of neighbors at a sharp Manhattan distance r in a finite n-hypercube lattice, read by upwards antidiagonals; A(n,r) = Sum_{k=0..min(n,r)} binomial(r-1,k-1)*binomial(n,k)* 2^k.",
         status: OeisSequenceStatus::Validated,
@@ -32426,41 +31950,6 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
         source_rows: 11,
         verification_rows: 0,
         rows_sha256: "8dfcc566838eb50990ebeccc9155abf554c88b8d4413a7bc44986d1cc64cf87f",
-    },
-    OeisSequenceDefinition {
-        id: "A266298",
-        name: "Triangle read by rows giving successive states of cellular automaton generated by \"Rule 14\" initiated with a single ON (black) cell.",
-        status: OeisSequenceStatus::Experimental,
-        layout: OeisLayout::Table,
-        first_row: 0,
-        flattened_offset: 0,
-        bfile_prefix_verified: false,
-        fixture_slug: "",
-        fixture_row_offset: 0,
-        prefix_rows: &[],
-        recurrence_first_index: 0,
-        recurrence_first_width: 1,
-        initial_rows: &[
-            &["1"],
-            &["1", "1"],
-        ],
-        recurrence: SparseRecurrence {
-            terms: &[
-                SparseRecurrenceTerm {
-                    offset: 1,
-                    derivative_order: 0,
-                    alternating_sign: false,
-                    coefficient: &[
-                        SparseCoefficient::new(0, 0, "1"),
-                    ],
-                },
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        },
-        source_rows: 0,
-        verification_rows: 0,
-        rows_sha256: "4c1bfd7cf51636fe12e74a6fe24511ceb480dbf6418fe3ec55bd8d84613cd673",
     },
     OeisSequenceDefinition {
         id: "A266326",
@@ -32827,7 +32316,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A269951",
         name: "Triangle read by rows, T(n,k) = Sum_{j=0..n} (-1)^(n-j)*C(-j,-n)*S1(j,k), S1 the Stirling cycle numbers A132393, for n>=0 and 0<=k<=n.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -33647,7 +33136,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A286724",
         name: "Triangle read by rows. A generalization of unsigned Lah numbers, called L[2,1].",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -33800,7 +33289,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A290315",
         name: "Triangle T(n, k) read by rows: row n gives the coefficients of the numerator polynomials of the o.g.f. of the (n+1)-th diagonal of the Sheffer triangle A154537 (S2[2,1] generalized Stirling2), for n >= 0.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -33845,7 +33334,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A290316",
         name: "Triangle T(n, k) read by rows: row n gives the coefficients of the numerator polynomials of the o.g.f. of the (n+1)-th diagonal of the Sheffer triangle A282629 (S2[3,1] generalized Stirling2), for n >= 0.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -34006,7 +33495,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A290595",
         name: "Triangle T(n, k) read by rows: row n gives the coefficients of the numerator polynomials of the o.g.f. of the (n+1)-th diagonal of the Sheffer triangle A286718 (|S1hat[3,1]| generalized Stirling 1), for n >= 0.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -34052,7 +33541,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A290596",
         name: "Triangle read by rows. A generalization of unsigned Lah numbers, called L[3,1].",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -34104,7 +33593,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A290598",
         name: "Triangle read by rows. A generalization of unsigned Lah numbers, called L[3,2].",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -35334,7 +34823,7 @@ pub static OEIS_CATALOG: &[OeisSequenceDefinition] = &[
     OeisSequenceDefinition {
         id: "A322944",
         name: "Coefficients of a family of orthogonal polynomials. Triangle read by rows, T(n, k) for 0 <= k <= n.",
-        status: OeisSequenceStatus::Experimental,
+        status: OeisSequenceStatus::Validated,
         layout: OeisLayout::RegularTriangle,
         first_row: 0,
         flattened_offset: 0,
@@ -39623,14 +39112,6 @@ pub static OEIS_IMPORTED_VALIDATION_ROWS: &[(&str, usize, &[&str])] = &[
         ],
     ),
     (
-        "A062154",
-        5,
-        &[
-            "0", "0", "0", "360", "16380", "190080", "832950", "1631700", "1537200", "680400",
-            "113400",
-        ],
-    ),
-    (
         "A062190",
         9,
         &[
@@ -40110,6 +39591,13 @@ pub static OEIS_IMPORTED_VALIDATION_ROWS: &[(&str, usize, &[&str])] = &[
         12,
         &[
             "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "1", "1",
+        ],
+    ),
+    (
+        "A099040",
+        11,
+        &[
+            "0", "0", "0", "0", "0", "0", "384", "4480", "14336", "18432", "10240", "2048",
         ],
     ),
     (
@@ -44360,3246 +43848,3191 @@ pub fn A062145() -> &'static OeisSequenceDefinition {
 }
 
 #[allow(non_snake_case)]
-pub fn A062154() -> &'static OeisSequenceDefinition {
+pub fn A062190() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[136]
 }
 
 #[allow(non_snake_case)]
-pub fn A062190() -> &'static OeisSequenceDefinition {
+pub fn A062196() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[137]
 }
 
 #[allow(non_snake_case)]
-pub fn A062196() -> &'static OeisSequenceDefinition {
+pub fn A062264() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[138]
 }
 
 #[allow(non_snake_case)]
-pub fn A062264() -> &'static OeisSequenceDefinition {
+pub fn A063007() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[139]
 }
 
 #[allow(non_snake_case)]
-pub fn A063007() -> &'static OeisSequenceDefinition {
+pub fn A063967() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[140]
 }
 
 #[allow(non_snake_case)]
-pub fn A063967() -> &'static OeisSequenceDefinition {
+pub fn A064861() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[141]
 }
 
 #[allow(non_snake_case)]
-pub fn A064861() -> &'static OeisSequenceDefinition {
+pub fn A065826() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[142]
 }
 
 #[allow(non_snake_case)]
-pub fn A065826() -> &'static OeisSequenceDefinition {
+pub fn A069138() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[143]
 }
 
 #[allow(non_snake_case)]
-pub fn A069138() -> &'static OeisSequenceDefinition {
+pub fn A069466() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[144]
 }
 
 #[allow(non_snake_case)]
-pub fn A069466() -> &'static OeisSequenceDefinition {
+pub fn A071919() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[145]
 }
 
 #[allow(non_snake_case)]
-pub fn A071919() -> &'static OeisSequenceDefinition {
+pub fn A071951() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[146]
 }
 
 #[allow(non_snake_case)]
-pub fn A071951() -> &'static OeisSequenceDefinition {
+pub fn A073423() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[147]
 }
 
 #[allow(non_snake_case)]
-pub fn A073423() -> &'static OeisSequenceDefinition {
+pub fn A073424() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[148]
 }
 
 #[allow(non_snake_case)]
-pub fn A073424() -> &'static OeisSequenceDefinition {
+pub fn A074246() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[149]
 }
 
 #[allow(non_snake_case)]
-pub fn A074246() -> &'static OeisSequenceDefinition {
+pub fn A075497() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[150]
 }
 
 #[allow(non_snake_case)]
-pub fn A075497() -> &'static OeisSequenceDefinition {
+pub fn A075498() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[151]
 }
 
 #[allow(non_snake_case)]
-pub fn A075498() -> &'static OeisSequenceDefinition {
+pub fn A075499() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[152]
 }
 
 #[allow(non_snake_case)]
-pub fn A075499() -> &'static OeisSequenceDefinition {
+pub fn A075500() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[153]
 }
 
 #[allow(non_snake_case)]
-pub fn A075500() -> &'static OeisSequenceDefinition {
+pub fn A075501() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[154]
 }
 
 #[allow(non_snake_case)]
-pub fn A075501() -> &'static OeisSequenceDefinition {
+pub fn A075502() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[155]
 }
 
 #[allow(non_snake_case)]
-pub fn A075502() -> &'static OeisSequenceDefinition {
+pub fn A075503() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[156]
 }
 
 #[allow(non_snake_case)]
-pub fn A075503() -> &'static OeisSequenceDefinition {
+pub fn A075504() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[157]
 }
 
 #[allow(non_snake_case)]
-pub fn A075504() -> &'static OeisSequenceDefinition {
+pub fn A075505() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[158]
 }
 
 #[allow(non_snake_case)]
-pub fn A075505() -> &'static OeisSequenceDefinition {
+pub fn A078812() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[159]
 }
 
 #[allow(non_snake_case)]
-pub fn A078812() -> &'static OeisSequenceDefinition {
+pub fn A079508() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[160]
 }
 
 #[allow(non_snake_case)]
-pub fn A079508() -> &'static OeisSequenceDefinition {
+pub fn A079510() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[161]
 }
 
 #[allow(non_snake_case)]
-pub fn A079510() -> &'static OeisSequenceDefinition {
+pub fn A079621() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[162]
 }
 
 #[allow(non_snake_case)]
-pub fn A079621() -> &'static OeisSequenceDefinition {
+pub fn A079638() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[163]
 }
 
 #[allow(non_snake_case)]
-pub fn A079638() -> &'static OeisSequenceDefinition {
+pub fn A080248() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[164]
 }
 
 #[allow(non_snake_case)]
-pub fn A080248() -> &'static OeisSequenceDefinition {
+pub fn A080721() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[165]
 }
 
 #[allow(non_snake_case)]
-pub fn A080721() -> &'static OeisSequenceDefinition {
+pub fn A081577() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[166]
 }
 
 #[allow(non_snake_case)]
-pub fn A081577() -> &'static OeisSequenceDefinition {
+pub fn A081578() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[167]
 }
 
 #[allow(non_snake_case)]
-pub fn A081578() -> &'static OeisSequenceDefinition {
+pub fn A081579() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[168]
 }
 
 #[allow(non_snake_case)]
-pub fn A081579() -> &'static OeisSequenceDefinition {
+pub fn A081580() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[169]
 }
 
 #[allow(non_snake_case)]
-pub fn A081580() -> &'static OeisSequenceDefinition {
+pub fn A081581() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[170]
 }
 
 #[allow(non_snake_case)]
-pub fn A081581() -> &'static OeisSequenceDefinition {
+pub fn A081582() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[171]
 }
 
 #[allow(non_snake_case)]
-pub fn A081582() -> &'static OeisSequenceDefinition {
+pub fn A082649() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[172]
 }
 
 #[allow(non_snake_case)]
-pub fn A082649() -> &'static OeisSequenceDefinition {
+pub fn A082985() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[173]
 }
 
 #[allow(non_snake_case)]
-pub fn A082985() -> &'static OeisSequenceDefinition {
+pub fn A084534() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[174]
 }
 
 #[allow(non_snake_case)]
-pub fn A084534() -> &'static OeisSequenceDefinition {
+pub fn A084950() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[175]
 }
 
 #[allow(non_snake_case)]
-pub fn A084950() -> &'static OeisSequenceDefinition {
+pub fn A085478() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[176]
 }
 
 #[allow(non_snake_case)]
-pub fn A085478() -> &'static OeisSequenceDefinition {
+pub fn A085841() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[177]
 }
 
 #[allow(non_snake_case)]
-pub fn A085841() -> &'static OeisSequenceDefinition {
+pub fn A085881() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[178]
 }
 
 #[allow(non_snake_case)]
-pub fn A085881() -> &'static OeisSequenceDefinition {
+pub fn A086645() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[179]
 }
 
 #[allow(non_snake_case)]
-pub fn A086645() -> &'static OeisSequenceDefinition {
+pub fn A086915() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[180]
 }
 
 #[allow(non_snake_case)]
-pub fn A086915() -> &'static OeisSequenceDefinition {
+pub fn A087727() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[181]
 }
 
 #[allow(non_snake_case)]
-pub fn A087727() -> &'static OeisSequenceDefinition {
+pub fn A088729() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[182]
 }
 
 #[allow(non_snake_case)]
-pub fn A088729() -> &'static OeisSequenceDefinition {
+pub fn A088996() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[183]
 }
 
 #[allow(non_snake_case)]
-pub fn A088996() -> &'static OeisSequenceDefinition {
+pub fn A089231() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[184]
 }
 
 #[allow(non_snake_case)]
-pub fn A089231() -> &'static OeisSequenceDefinition {
+pub fn A089503() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[185]
 }
 
 #[allow(non_snake_case)]
-pub fn A089503() -> &'static OeisSequenceDefinition {
+pub fn A089627() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[186]
 }
 
 #[allow(non_snake_case)]
-pub fn A089627() -> &'static OeisSequenceDefinition {
+pub fn A090452() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[187]
 }
 
 #[allow(non_snake_case)]
-pub fn A090452() -> &'static OeisSequenceDefinition {
+pub fn A090582() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[188]
 }
 
 #[allow(non_snake_case)]
-pub fn A090582() -> &'static OeisSequenceDefinition {
+pub fn A091042() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[189]
 }
 
 #[allow(non_snake_case)]
-pub fn A091042() -> &'static OeisSequenceDefinition {
+pub fn A091044() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[190]
 }
 
 #[allow(non_snake_case)]
-pub fn A091044() -> &'static OeisSequenceDefinition {
+pub fn A092879() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[191]
 }
 
 #[allow(non_snake_case)]
-pub fn A092879() -> &'static OeisSequenceDefinition {
+pub fn A093127() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[192]
 }
 
 #[allow(non_snake_case)]
-pub fn A093127() -> &'static OeisSequenceDefinition {
+pub fn A093375() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[193]
 }
 
 #[allow(non_snake_case)]
-pub fn A093375() -> &'static OeisSequenceDefinition {
+pub fn A093560() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[194]
 }
 
 #[allow(non_snake_case)]
-pub fn A093560() -> &'static OeisSequenceDefinition {
+pub fn A093561() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[195]
 }
 
 #[allow(non_snake_case)]
-pub fn A093561() -> &'static OeisSequenceDefinition {
+pub fn A093562() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[196]
 }
 
 #[allow(non_snake_case)]
-pub fn A093562() -> &'static OeisSequenceDefinition {
+pub fn A093563() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[197]
 }
 
 #[allow(non_snake_case)]
-pub fn A093563() -> &'static OeisSequenceDefinition {
+pub fn A093564() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[198]
 }
 
 #[allow(non_snake_case)]
-pub fn A093564() -> &'static OeisSequenceDefinition {
+pub fn A093565() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[199]
 }
 
 #[allow(non_snake_case)]
-pub fn A093565() -> &'static OeisSequenceDefinition {
+pub fn A093644() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[200]
 }
 
 #[allow(non_snake_case)]
-pub fn A093644() -> &'static OeisSequenceDefinition {
+pub fn A093645() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[201]
 }
 
 #[allow(non_snake_case)]
-pub fn A093645() -> &'static OeisSequenceDefinition {
+pub fn A094262() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[202]
 }
 
 #[allow(non_snake_case)]
-pub fn A094262() -> &'static OeisSequenceDefinition {
+pub fn A094305() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[203]
 }
 
 #[allow(non_snake_case)]
-pub fn A094305() -> &'static OeisSequenceDefinition {
+pub fn A094503() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[204]
 }
 
 #[allow(non_snake_case)]
-pub fn A094503() -> &'static OeisSequenceDefinition {
+pub fn A094638() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[205]
 }
 
 #[allow(non_snake_case)]
-pub fn A094638() -> &'static OeisSequenceDefinition {
+pub fn A094816() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[206]
 }
 
 #[allow(non_snake_case)]
-pub fn A094816() -> &'static OeisSequenceDefinition {
+pub fn A095660() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[207]
 }
 
 #[allow(non_snake_case)]
-pub fn A095660() -> &'static OeisSequenceDefinition {
+pub fn A095666() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[208]
 }
 
 #[allow(non_snake_case)]
-pub fn A095666() -> &'static OeisSequenceDefinition {
+pub fn A095704() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[209]
 }
 
 #[allow(non_snake_case)]
-pub fn A095704() -> &'static OeisSequenceDefinition {
+pub fn A096940() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[210]
 }
 
 #[allow(non_snake_case)]
-pub fn A096940() -> &'static OeisSequenceDefinition {
+pub fn A096956() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[211]
 }
 
 #[allow(non_snake_case)]
-pub fn A096956() -> &'static OeisSequenceDefinition {
+pub fn A097805() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[212]
 }
 
 #[allow(non_snake_case)]
-pub fn A097805() -> &'static OeisSequenceDefinition {
+pub fn A097806() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[213]
 }
 
 #[allow(non_snake_case)]
-pub fn A097806() -> &'static OeisSequenceDefinition {
+pub fn A098158() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[214]
 }
 
 #[allow(non_snake_case)]
-pub fn A098158() -> &'static OeisSequenceDefinition {
+pub fn A098172() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[215]
 }
 
 #[allow(non_snake_case)]
-pub fn A098172() -> &'static OeisSequenceDefinition {
+pub fn A099040() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[216]
 }
 
 #[allow(non_snake_case)]
-pub fn A099040() -> &'static OeisSequenceDefinition {
+pub fn A099097() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[217]
 }
 
 #[allow(non_snake_case)]
-pub fn A099097() -> &'static OeisSequenceDefinition {
+pub fn A099605() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[218]
 }
 
 #[allow(non_snake_case)]
-pub fn A099605() -> &'static OeisSequenceDefinition {
+pub fn A099759() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[219]
 }
 
 #[allow(non_snake_case)]
-pub fn A099759() -> &'static OeisSequenceDefinition {
+pub fn A100861() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[220]
 }
 
 #[allow(non_snake_case)]
-pub fn A100861() -> &'static OeisSequenceDefinition {
+pub fn A100862() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[221]
 }
 
 #[allow(non_snake_case)]
-pub fn A100862() -> &'static OeisSequenceDefinition {
+pub fn A100898() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[222]
 }
 
 #[allow(non_snake_case)]
-pub fn A100898() -> &'static OeisSequenceDefinition {
+pub fn A101280() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[223]
 }
 
 #[allow(non_snake_case)]
-pub fn A101280() -> &'static OeisSequenceDefinition {
+pub fn A101343() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[224]
 }
 
 #[allow(non_snake_case)]
-pub fn A101343() -> &'static OeisSequenceDefinition {
+pub fn A101350() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[225]
 }
 
 #[allow(non_snake_case)]
-pub fn A101350() -> &'static OeisSequenceDefinition {
+pub fn A101842() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[226]
 }
 
 #[allow(non_snake_case)]
-pub fn A101842() -> &'static OeisSequenceDefinition {
+pub fn A101920() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[227]
 }
 
 #[allow(non_snake_case)]
-pub fn A101920() -> &'static OeisSequenceDefinition {
+pub fn A102365() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[228]
 }
 
 #[allow(non_snake_case)]
-pub fn A102365() -> &'static OeisSequenceDefinition {
+pub fn A102413() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[229]
 }
 
 #[allow(non_snake_case)]
-pub fn A102413() -> &'static OeisSequenceDefinition {
+pub fn A102547() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[230]
 }
 
 #[allow(non_snake_case)]
-pub fn A102547() -> &'static OeisSequenceDefinition {
+pub fn A102662() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[231]
 }
 
 #[allow(non_snake_case)]
-pub fn A102662() -> &'static OeisSequenceDefinition {
+pub fn A103327() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[232]
 }
 
 #[allow(non_snake_case)]
-pub fn A103327() -> &'static OeisSequenceDefinition {
+pub fn A103406() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[233]
 }
 
 #[allow(non_snake_case)]
-pub fn A103328() -> &'static OeisSequenceDefinition {
+pub fn A103450() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[234]
 }
 
 #[allow(non_snake_case)]
-pub fn A103406() -> &'static OeisSequenceDefinition {
+pub fn A103633() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[235]
 }
 
 #[allow(non_snake_case)]
-pub fn A103450() -> &'static OeisSequenceDefinition {
+pub fn A104029() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[236]
 }
 
 #[allow(non_snake_case)]
-pub fn A103451() -> &'static OeisSequenceDefinition {
+pub fn A104416() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[237]
 }
 
 #[allow(non_snake_case)]
-pub fn A103633() -> &'static OeisSequenceDefinition {
+pub fn A104684() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[238]
 }
 
 #[allow(non_snake_case)]
-pub fn A104029() -> &'static OeisSequenceDefinition {
+pub fn A104978() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[239]
 }
 
 #[allow(non_snake_case)]
-pub fn A104416() -> &'static OeisSequenceDefinition {
+pub fn A105070() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[240]
 }
 
 #[allow(non_snake_case)]
-pub fn A104684() -> &'static OeisSequenceDefinition {
+pub fn A105278() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[241]
 }
 
 #[allow(non_snake_case)]
-pub fn A104978() -> &'static OeisSequenceDefinition {
+pub fn A105868() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[242]
 }
 
 #[allow(non_snake_case)]
-pub fn A105070() -> &'static OeisSequenceDefinition {
+pub fn A106246() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[243]
 }
 
 #[allow(non_snake_case)]
-pub fn A105278() -> &'static OeisSequenceDefinition {
+pub fn A106800() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[244]
 }
 
 #[allow(non_snake_case)]
-pub fn A105868() -> &'static OeisSequenceDefinition {
+pub fn A106828() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[245]
 }
 
 #[allow(non_snake_case)]
-pub fn A106246() -> &'static OeisSequenceDefinition {
+pub fn A107131() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[246]
 }
 
 #[allow(non_snake_case)]
-pub fn A106800() -> &'static OeisSequenceDefinition {
+pub fn A108426() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[247]
 }
 
 #[allow(non_snake_case)]
-pub fn A106828() -> &'static OeisSequenceDefinition {
+pub fn A108558() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[248]
 }
 
 #[allow(non_snake_case)]
-pub fn A107131() -> &'static OeisSequenceDefinition {
+pub fn A108838() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[249]
 }
 
 #[allow(non_snake_case)]
-pub fn A108426() -> &'static OeisSequenceDefinition {
+pub fn A109446() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[250]
 }
 
 #[allow(non_snake_case)]
-pub fn A108558() -> &'static OeisSequenceDefinition {
+pub fn A109447() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[251]
 }
 
 #[allow(non_snake_case)]
-pub fn A108838() -> &'static OeisSequenceDefinition {
+pub fn A109692() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[252]
 }
 
 #[allow(non_snake_case)]
-pub fn A109446() -> &'static OeisSequenceDefinition {
+pub fn A109954() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[253]
 }
 
 #[allow(non_snake_case)]
-pub fn A109447() -> &'static OeisSequenceDefinition {
+pub fn A109955() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[254]
 }
 
 #[allow(non_snake_case)]
-pub fn A109692() -> &'static OeisSequenceDefinition {
+pub fn A109960() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[255]
 }
 
 #[allow(non_snake_case)]
-pub fn A109954() -> &'static OeisSequenceDefinition {
+pub fn A109983() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[256]
 }
 
 #[allow(non_snake_case)]
-pub fn A109955() -> &'static OeisSequenceDefinition {
+pub fn A110200() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[257]
 }
 
 #[allow(non_snake_case)]
-pub fn A109960() -> &'static OeisSequenceDefinition {
+pub fn A110205() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[258]
 }
 
 #[allow(non_snake_case)]
-pub fn A109983() -> &'static OeisSequenceDefinition {
+pub fn A110319() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[259]
 }
 
 #[allow(non_snake_case)]
-pub fn A110200() -> &'static OeisSequenceDefinition {
+pub fn A110441() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[260]
 }
 
 #[allow(non_snake_case)]
-pub fn A110205() -> &'static OeisSequenceDefinition {
+pub fn A110552() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[261]
 }
 
 #[allow(non_snake_case)]
-pub fn A110319() -> &'static OeisSequenceDefinition {
+pub fn A110608() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[262]
 }
 
 #[allow(non_snake_case)]
-pub fn A110441() -> &'static OeisSequenceDefinition {
+pub fn A111006() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[263]
 }
 
 #[allow(non_snake_case)]
-pub fn A110552() -> &'static OeisSequenceDefinition {
+pub fn A111049() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[264]
 }
 
 #[allow(non_snake_case)]
-pub fn A110608() -> &'static OeisSequenceDefinition {
+pub fn A111125() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[265]
 }
 
 #[allow(non_snake_case)]
-pub fn A111006() -> &'static OeisSequenceDefinition {
+pub fn A111577() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[266]
 }
 
 #[allow(non_snake_case)]
-pub fn A111049() -> &'static OeisSequenceDefinition {
+pub fn A111910() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[267]
 }
 
 #[allow(non_snake_case)]
-pub fn A111125() -> &'static OeisSequenceDefinition {
+pub fn A112007() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[268]
 }
 
 #[allow(non_snake_case)]
-pub fn A111577() -> &'static OeisSequenceDefinition {
+pub fn A112227() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[269]
 }
 
 #[allow(non_snake_case)]
-pub fn A111910() -> &'static OeisSequenceDefinition {
+pub fn A112486() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[270]
 }
 
 #[allow(non_snake_case)]
-pub fn A112007() -> &'static OeisSequenceDefinition {
+pub fn A112493() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[271]
 }
 
 #[allow(non_snake_case)]
-pub fn A112227() -> &'static OeisSequenceDefinition {
+pub fn A113214() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[272]
 }
 
 #[allow(non_snake_case)]
-pub fn A112486() -> &'static OeisSequenceDefinition {
+pub fn A113413() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[273]
 }
 
 #[allow(non_snake_case)]
-pub fn A112493() -> &'static OeisSequenceDefinition {
+pub fn A113953() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[274]
 }
 
 #[allow(non_snake_case)]
-pub fn A113214() -> &'static OeisSequenceDefinition {
+pub fn A114123() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[275]
 }
 
 #[allow(non_snake_case)]
-pub fn A113413() -> &'static OeisSequenceDefinition {
+pub fn A114580() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[276]
 }
 
 #[allow(non_snake_case)]
-pub fn A113953() -> &'static OeisSequenceDefinition {
+pub fn A114655() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[277]
 }
 
 #[allow(non_snake_case)]
-pub fn A114123() -> &'static OeisSequenceDefinition {
+pub fn A114656() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[278]
 }
 
 #[allow(non_snake_case)]
-pub fn A114580() -> &'static OeisSequenceDefinition {
+pub fn A114687() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[279]
 }
 
 #[allow(non_snake_case)]
-pub fn A114655() -> &'static OeisSequenceDefinition {
+pub fn A114690() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[280]
 }
 
 #[allow(non_snake_case)]
-pub fn A114656() -> &'static OeisSequenceDefinition {
+pub fn A115951() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[281]
 }
 
 #[allow(non_snake_case)]
-pub fn A114687() -> &'static OeisSequenceDefinition {
+pub fn A116088() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[282]
 }
 
 #[allow(non_snake_case)]
-pub fn A114690() -> &'static OeisSequenceDefinition {
+pub fn A116089() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[283]
 }
 
 #[allow(non_snake_case)]
-pub fn A115951() -> &'static OeisSequenceDefinition {
+pub fn A116412() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[284]
 }
 
 #[allow(non_snake_case)]
-pub fn A116088() -> &'static OeisSequenceDefinition {
+pub fn A116414() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[285]
 }
 
 #[allow(non_snake_case)]
-pub fn A116089() -> &'static OeisSequenceDefinition {
+pub fn A116666() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[286]
 }
 
 #[allow(non_snake_case)]
-pub fn A116412() -> &'static OeisSequenceDefinition {
+pub fn A117317() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[287]
 }
 
 #[allow(non_snake_case)]
-pub fn A116414() -> &'static OeisSequenceDefinition {
+pub fn A118394() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[288]
 }
 
 #[allow(non_snake_case)]
-pub fn A116666() -> &'static OeisSequenceDefinition {
+pub fn A118424() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[289]
 }
 
 #[allow(non_snake_case)]
-pub fn A117317() -> &'static OeisSequenceDefinition {
+pub fn A118433() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[290]
 }
 
 #[allow(non_snake_case)]
-pub fn A118394() -> &'static OeisSequenceDefinition {
+pub fn A118884() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[291]
 }
 
 #[allow(non_snake_case)]
-pub fn A118424() -> &'static OeisSequenceDefinition {
+pub fn A118931() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[292]
 }
 
 #[allow(non_snake_case)]
-pub fn A118433() -> &'static OeisSequenceDefinition {
+pub fn A118933() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[293]
 }
 
 #[allow(non_snake_case)]
-pub fn A118884() -> &'static OeisSequenceDefinition {
+pub fn A119307() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[294]
 }
 
 #[allow(non_snake_case)]
-pub fn A118931() -> &'static OeisSequenceDefinition {
+pub fn A119308() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[295]
 }
 
 #[allow(non_snake_case)]
-pub fn A118933() -> &'static OeisSequenceDefinition {
+pub fn A119462() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[296]
 }
 
 #[allow(non_snake_case)]
-pub fn A119307() -> &'static OeisSequenceDefinition {
+pub fn A119808() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[297]
 }
 
 #[allow(non_snake_case)]
-pub fn A119308() -> &'static OeisSequenceDefinition {
+pub fn A119900() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[298]
 }
 
 #[allow(non_snake_case)]
-pub fn A119462() -> &'static OeisSequenceDefinition {
+pub fn A120095() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[299]
 }
 
 #[allow(non_snake_case)]
-pub fn A119808() -> &'static OeisSequenceDefinition {
+pub fn A120909() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[300]
 }
 
 #[allow(non_snake_case)]
-pub fn A119900() -> &'static OeisSequenceDefinition {
+pub fn A120910() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[301]
 }
 
 #[allow(non_snake_case)]
-pub fn A120095() -> &'static OeisSequenceDefinition {
+pub fn A120987() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[302]
 }
 
 #[allow(non_snake_case)]
-pub fn A120909() -> &'static OeisSequenceDefinition {
+pub fn A121314() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[303]
 }
 
 #[allow(non_snake_case)]
-pub fn A120910() -> &'static OeisSequenceDefinition {
+pub fn A121574() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[304]
 }
 
 #[allow(non_snake_case)]
-pub fn A120987() -> &'static OeisSequenceDefinition {
+pub fn A122076() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[305]
 }
 
 #[allow(non_snake_case)]
-pub fn A121314() -> &'static OeisSequenceDefinition {
+pub fn A122431() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[306]
 }
 
 #[allow(non_snake_case)]
-pub fn A121574() -> &'static OeisSequenceDefinition {
+pub fn A122542() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[307]
 }
 
 #[allow(non_snake_case)]
-pub fn A122076() -> &'static OeisSequenceDefinition {
+pub fn A122848() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[308]
 }
 
 #[allow(non_snake_case)]
-pub fn A122431() -> &'static OeisSequenceDefinition {
+pub fn A123097() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[309]
 }
 
 #[allow(non_snake_case)]
-pub fn A122542() -> &'static OeisSequenceDefinition {
+pub fn A123125() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[310]
 }
 
 #[allow(non_snake_case)]
-pub fn A122848() -> &'static OeisSequenceDefinition {
+pub fn A123160() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[311]
 }
 
 #[allow(non_snake_case)]
-pub fn A123097() -> &'static OeisSequenceDefinition {
+pub fn A123382() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[312]
 }
 
 #[allow(non_snake_case)]
-pub fn A123125() -> &'static OeisSequenceDefinition {
+pub fn A123519() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[313]
 }
 
 #[allow(non_snake_case)]
-pub fn A123160() -> &'static OeisSequenceDefinition {
+pub fn A124324() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[314]
 }
 
 #[allow(non_snake_case)]
-pub fn A123382() -> &'static OeisSequenceDefinition {
+pub fn A124376() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[315]
 }
 
 #[allow(non_snake_case)]
-pub fn A123519() -> &'static OeisSequenceDefinition {
+pub fn A124848() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[316]
 }
 
 #[allow(non_snake_case)]
-pub fn A124324() -> &'static OeisSequenceDefinition {
+pub fn A124860() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[317]
 }
 
 #[allow(non_snake_case)]
-pub fn A124376() -> &'static OeisSequenceDefinition {
+pub fn A124932() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[318]
 }
 
 #[allow(non_snake_case)]
-pub fn A124848() -> &'static OeisSequenceDefinition {
+pub fn A125092() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[319]
 }
 
 #[allow(non_snake_case)]
-pub fn A124860() -> &'static OeisSequenceDefinition {
+pub fn A125662() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[320]
 }
 
 #[allow(non_snake_case)]
-pub fn A124932() -> &'static OeisSequenceDefinition {
+pub fn A126216() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[321]
 }
 
 #[allow(non_snake_case)]
-pub fn A125092() -> &'static OeisSequenceDefinition {
+pub fn A126351() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[322]
 }
 
 #[allow(non_snake_case)]
-pub fn A125662() -> &'static OeisSequenceDefinition {
+pub fn A127647() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[323]
 }
 
 #[allow(non_snake_case)]
-pub fn A126216() -> &'static OeisSequenceDefinition {
+pub fn A127648() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[324]
 }
 
 #[allow(non_snake_case)]
-pub fn A126351() -> &'static OeisSequenceDefinition {
+pub fn A127733() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[325]
 }
 
 #[allow(non_snake_case)]
-pub fn A127647() -> &'static OeisSequenceDefinition {
+pub fn A127773() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[326]
 }
 
 #[allow(non_snake_case)]
-pub fn A127648() -> &'static OeisSequenceDefinition {
+pub fn A127893() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[327]
 }
 
 #[allow(non_snake_case)]
-pub fn A127733() -> &'static OeisSequenceDefinition {
+pub fn A127952() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[328]
 }
 
 #[allow(non_snake_case)]
-pub fn A127773() -> &'static OeisSequenceDefinition {
+pub fn A128099() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[329]
 }
 
 #[allow(non_snake_case)]
-pub fn A127893() -> &'static OeisSequenceDefinition {
+pub fn A128100() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[330]
 }
 
 #[allow(non_snake_case)]
-pub fn A127952() -> &'static OeisSequenceDefinition {
+pub fn A128540() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[331]
 }
 
 #[allow(non_snake_case)]
-pub fn A128099() -> &'static OeisSequenceDefinition {
+pub fn A128541() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[332]
 }
 
 #[allow(non_snake_case)]
-pub fn A128100() -> &'static OeisSequenceDefinition {
+pub fn A128813() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[333]
 }
 
 #[allow(non_snake_case)]
-pub fn A128540() -> &'static OeisSequenceDefinition {
+pub fn A128908() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[334]
 }
 
 #[allow(non_snake_case)]
-pub fn A128541() -> &'static OeisSequenceDefinition {
+pub fn A128966() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[335]
 }
 
 #[allow(non_snake_case)]
-pub fn A128813() -> &'static OeisSequenceDefinition {
+pub fn A129184() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[336]
 }
 
 #[allow(non_snake_case)]
-pub fn A128908() -> &'static OeisSequenceDefinition {
+pub fn A129186() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[337]
 }
 
 #[allow(non_snake_case)]
-pub fn A128966() -> &'static OeisSequenceDefinition {
+pub fn A129533() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[338]
 }
 
 #[allow(non_snake_case)]
-pub fn A129184() -> &'static OeisSequenceDefinition {
+pub fn A129710() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[339]
 }
 
 #[allow(non_snake_case)]
-pub fn A129186() -> &'static OeisSequenceDefinition {
+pub fn A129718() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[340]
 }
 
 #[allow(non_snake_case)]
-pub fn A129533() -> &'static OeisSequenceDefinition {
+pub fn A130123() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[341]
 }
 
 #[allow(non_snake_case)]
-pub fn A129710() -> &'static OeisSequenceDefinition {
+pub fn A130534() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[342]
 }
 
 #[allow(non_snake_case)]
-pub fn A129718() -> &'static OeisSequenceDefinition {
+pub fn A130749() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[343]
 }
 
 #[allow(non_snake_case)]
-pub fn A130123() -> &'static OeisSequenceDefinition {
+pub fn A130850() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[344]
 }
 
 #[allow(non_snake_case)]
-pub fn A130534() -> &'static OeisSequenceDefinition {
+pub fn A131222() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[345]
 }
 
 #[allow(non_snake_case)]
-pub fn A130749() -> &'static OeisSequenceDefinition {
+pub fn A131431() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[346]
 }
 
 #[allow(non_snake_case)]
-pub fn A130850() -> &'static OeisSequenceDefinition {
+pub fn A131436() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[347]
 }
 
 #[allow(non_snake_case)]
-pub fn A131222() -> &'static OeisSequenceDefinition {
+pub fn A131689() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[348]
 }
 
 #[allow(non_snake_case)]
-pub fn A131431() -> &'static OeisSequenceDefinition {
+pub fn A132166() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[349]
 }
 
 #[allow(non_snake_case)]
-pub fn A131436() -> &'static OeisSequenceDefinition {
+pub fn A132200() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[350]
 }
 
 #[allow(non_snake_case)]
-pub fn A131689() -> &'static OeisSequenceDefinition {
+pub fn A132393() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[351]
 }
 
 #[allow(non_snake_case)]
-pub fn A132166() -> &'static OeisSequenceDefinition {
+pub fn A132440() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[352]
 }
 
 #[allow(non_snake_case)]
-pub fn A132200() -> &'static OeisSequenceDefinition {
+pub fn A132774() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[353]
 }
 
 #[allow(non_snake_case)]
-pub fn A132393() -> &'static OeisSequenceDefinition {
+pub fn A132812() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[354]
 }
 
 #[allow(non_snake_case)]
-pub fn A132440() -> &'static OeisSequenceDefinition {
+pub fn A132885() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[355]
 }
 
 #[allow(non_snake_case)]
-pub fn A132774() -> &'static OeisSequenceDefinition {
+pub fn A132918() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[356]
 }
 
 #[allow(non_snake_case)]
-pub fn A132812() -> &'static OeisSequenceDefinition {
+pub fn A133080() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[357]
 }
 
 #[allow(non_snake_case)]
-pub fn A132885() -> &'static OeisSequenceDefinition {
+pub fn A133081() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[358]
 }
 
 #[allow(non_snake_case)]
-pub fn A132918() -> &'static OeisSequenceDefinition {
+pub fn A133087() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[359]
 }
 
 #[allow(non_snake_case)]
-pub fn A133080() -> &'static OeisSequenceDefinition {
+pub fn A133109() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[360]
 }
 
 #[allow(non_snake_case)]
-pub fn A133081() -> &'static OeisSequenceDefinition {
+pub fn A133214() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[361]
 }
 
 #[allow(non_snake_case)]
-pub fn A133087() -> &'static OeisSequenceDefinition {
+pub fn A134058() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[362]
 }
 
 #[allow(non_snake_case)]
-pub fn A133109() -> &'static OeisSequenceDefinition {
+pub fn A134059() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[363]
 }
 
 #[allow(non_snake_case)]
-pub fn A133214() -> &'static OeisSequenceDefinition {
+pub fn A134082() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[364]
 }
 
 #[allow(non_snake_case)]
-pub fn A134058() -> &'static OeisSequenceDefinition {
+pub fn A134239() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[365]
 }
 
 #[allow(non_snake_case)]
-pub fn A134059() -> &'static OeisSequenceDefinition {
+pub fn A134309() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[366]
 }
 
 #[allow(non_snake_case)]
-pub fn A134082() -> &'static OeisSequenceDefinition {
+pub fn A134346() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[367]
 }
 
 #[allow(non_snake_case)]
-pub fn A134239() -> &'static OeisSequenceDefinition {
+pub fn A134434() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[368]
 }
 
 #[allow(non_snake_case)]
-pub fn A134309() -> &'static OeisSequenceDefinition {
+pub fn A134991() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[369]
 }
 
 #[allow(non_snake_case)]
-pub fn A134346() -> &'static OeisSequenceDefinition {
+pub fn A135065() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[370]
 }
 
 #[allow(non_snake_case)]
-pub fn A134434() -> &'static OeisSequenceDefinition {
+pub fn A135089() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[371]
 }
 
 #[allow(non_snake_case)]
-pub fn A134991() -> &'static OeisSequenceDefinition {
+pub fn A135838() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[372]
 }
 
 #[allow(non_snake_case)]
-pub fn A135065() -> &'static OeisSequenceDefinition {
+pub fn A136011() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[373]
 }
 
 #[allow(non_snake_case)]
-pub fn A135089() -> &'static OeisSequenceDefinition {
+pub fn A136124() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[374]
 }
 
 #[allow(non_snake_case)]
-pub fn A135838() -> &'static OeisSequenceDefinition {
+pub fn A136157() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[375]
 }
 
 #[allow(non_snake_case)]
-pub fn A136011() -> &'static OeisSequenceDefinition {
+pub fn A136158() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[376]
 }
 
 #[allow(non_snake_case)]
-pub fn A136124() -> &'static OeisSequenceDefinition {
+pub fn A136394() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[377]
 }
 
 #[allow(non_snake_case)]
-pub fn A136157() -> &'static OeisSequenceDefinition {
+pub fn A136521() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[378]
 }
 
 #[allow(non_snake_case)]
-pub fn A136158() -> &'static OeisSequenceDefinition {
+pub fn A136532() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[379]
 }
 
 #[allow(non_snake_case)]
-pub fn A136394() -> &'static OeisSequenceDefinition {
+pub fn A136572() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[380]
 }
 
 #[allow(non_snake_case)]
-pub fn A136521() -> &'static OeisSequenceDefinition {
+pub fn A136668() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[381]
 }
 
 #[allow(non_snake_case)]
-pub fn A136532() -> &'static OeisSequenceDefinition {
+pub fn A137374() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[382]
 }
 
 #[allow(non_snake_case)]
-pub fn A136572() -> &'static OeisSequenceDefinition {
+pub fn A137477() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[383]
 }
 
 #[allow(non_snake_case)]
-pub fn A136668() -> &'static OeisSequenceDefinition {
+pub fn A137597() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[384]
 }
 
 #[allow(non_snake_case)]
-pub fn A137374() -> &'static OeisSequenceDefinition {
+pub fn A139548() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[385]
 }
 
 #[allow(non_snake_case)]
-pub fn A137477() -> &'static OeisSequenceDefinition {
+pub fn A141611() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[386]
 }
 
 #[allow(non_snake_case)]
-pub fn A137597() -> &'static OeisSequenceDefinition {
+pub fn A141689() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[387]
 }
 
 #[allow(non_snake_case)]
-pub fn A139548() -> &'static OeisSequenceDefinition {
+pub fn A141690() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[388]
 }
 
 #[allow(non_snake_case)]
-pub fn A141611() -> &'static OeisSequenceDefinition {
+pub fn A141696() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[389]
 }
 
 #[allow(non_snake_case)]
-pub fn A141689() -> &'static OeisSequenceDefinition {
+pub fn A141697() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[390]
 }
 
 #[allow(non_snake_case)]
-pub fn A141690() -> &'static OeisSequenceDefinition {
+pub fn A142071() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[391]
 }
 
 #[allow(non_snake_case)]
-pub fn A141696() -> &'static OeisSequenceDefinition {
+pub fn A142075() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[392]
 }
 
 #[allow(non_snake_case)]
-pub fn A141697() -> &'static OeisSequenceDefinition {
+pub fn A142458() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[393]
 }
 
 #[allow(non_snake_case)]
-pub fn A142071() -> &'static OeisSequenceDefinition {
+pub fn A142459() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[394]
 }
 
 #[allow(non_snake_case)]
-pub fn A142075() -> &'static OeisSequenceDefinition {
+pub fn A142460() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[395]
 }
 
 #[allow(non_snake_case)]
-pub fn A142458() -> &'static OeisSequenceDefinition {
+pub fn A142461() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[396]
 }
 
 #[allow(non_snake_case)]
-pub fn A142459() -> &'static OeisSequenceDefinition {
+pub fn A142462() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[397]
 }
 
 #[allow(non_snake_case)]
-pub fn A142460() -> &'static OeisSequenceDefinition {
+pub fn A142706() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[398]
 }
 
 #[allow(non_snake_case)]
-pub fn A142461() -> &'static OeisSequenceDefinition {
+pub fn A142963() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[399]
 }
 
 #[allow(non_snake_case)]
-pub fn A142462() -> &'static OeisSequenceDefinition {
+pub fn A143007() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[400]
 }
 
 #[allow(non_snake_case)]
-pub fn A142706() -> &'static OeisSequenceDefinition {
+pub fn A143395() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[401]
 }
 
 #[allow(non_snake_case)]
-pub fn A142963() -> &'static OeisSequenceDefinition {
+pub fn A143491() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[402]
 }
 
 #[allow(non_snake_case)]
-pub fn A143007() -> &'static OeisSequenceDefinition {
+pub fn A143494() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[403]
 }
 
 #[allow(non_snake_case)]
-pub fn A143395() -> &'static OeisSequenceDefinition {
+pub fn A143495() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[404]
 }
 
 #[allow(non_snake_case)]
-pub fn A143491() -> &'static OeisSequenceDefinition {
+pub fn A143497() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[405]
 }
 
 #[allow(non_snake_case)]
-pub fn A143494() -> &'static OeisSequenceDefinition {
+pub fn A143683() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[406]
 }
 
 #[allow(non_snake_case)]
-pub fn A143495() -> &'static OeisSequenceDefinition {
+pub fn A143685() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[407]
 }
 
 #[allow(non_snake_case)]
-pub fn A143497() -> &'static OeisSequenceDefinition {
+pub fn A143858() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[408]
 }
 
 #[allow(non_snake_case)]
-pub fn A143683() -> &'static OeisSequenceDefinition {
+pub fn A144084() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[409]
 }
 
 #[allow(non_snake_case)]
-pub fn A143685() -> &'static OeisSequenceDefinition {
+pub fn A144090() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[410]
 }
 
 #[allow(non_snake_case)]
-pub fn A143858() -> &'static OeisSequenceDefinition {
+pub fn A144299() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[411]
 }
 
 #[allow(non_snake_case)]
-pub fn A144084() -> &'static OeisSequenceDefinition {
+pub fn A144436() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[412]
 }
 
 #[allow(non_snake_case)]
-pub fn A144090() -> &'static OeisSequenceDefinition {
+pub fn A144438() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[413]
 }
 
 #[allow(non_snake_case)]
-pub fn A144217() -> &'static OeisSequenceDefinition {
+pub fn A144439() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[414]
 }
 
 #[allow(non_snake_case)]
-pub fn A144299() -> &'static OeisSequenceDefinition {
+pub fn A144440() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[415]
 }
 
 #[allow(non_snake_case)]
-pub fn A144436() -> &'static OeisSequenceDefinition {
+pub fn A144441() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[416]
 }
 
 #[allow(non_snake_case)]
-pub fn A144438() -> &'static OeisSequenceDefinition {
+pub fn A144442() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[417]
 }
 
 #[allow(non_snake_case)]
-pub fn A144439() -> &'static OeisSequenceDefinition {
+pub fn A144443() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[418]
 }
 
 #[allow(non_snake_case)]
-pub fn A144440() -> &'static OeisSequenceDefinition {
+pub fn A144445() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[419]
 }
 
 #[allow(non_snake_case)]
-pub fn A144441() -> &'static OeisSequenceDefinition {
+pub fn A144696() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[420]
 }
 
 #[allow(non_snake_case)]
-pub fn A144442() -> &'static OeisSequenceDefinition {
+pub fn A144697() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[421]
 }
 
 #[allow(non_snake_case)]
-pub fn A144443() -> &'static OeisSequenceDefinition {
+pub fn A144698() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[422]
 }
 
 #[allow(non_snake_case)]
-pub fn A144445() -> &'static OeisSequenceDefinition {
+pub fn A144699() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[423]
 }
 
 #[allow(non_snake_case)]
-pub fn A144696() -> &'static OeisSequenceDefinition {
+pub fn A145324() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[424]
 }
 
 #[allow(non_snake_case)]
-pub fn A144697() -> &'static OeisSequenceDefinition {
+pub fn A145596() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[425]
 }
 
 #[allow(non_snake_case)]
-pub fn A144698() -> &'static OeisSequenceDefinition {
+pub fn A145597() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[426]
 }
 
 #[allow(non_snake_case)]
-pub fn A144699() -> &'static OeisSequenceDefinition {
+pub fn A146986() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[427]
 }
 
 #[allow(non_snake_case)]
-pub fn A145324() -> &'static OeisSequenceDefinition {
+pub fn A146987() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[428]
 }
 
 #[allow(non_snake_case)]
-pub fn A145596() -> &'static OeisSequenceDefinition {
+pub fn A146988() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[429]
 }
 
 #[allow(non_snake_case)]
-pub fn A145597() -> &'static OeisSequenceDefinition {
+pub fn A147565() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[430]
 }
 
 #[allow(non_snake_case)]
-pub fn A145677() -> &'static OeisSequenceDefinition {
+pub fn A147644() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[431]
 }
 
 #[allow(non_snake_case)]
-pub fn A146986() -> &'static OeisSequenceDefinition {
+pub fn A147716() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[432]
 }
 
 #[allow(non_snake_case)]
-pub fn A146987() -> &'static OeisSequenceDefinition {
+pub fn A151509() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[433]
 }
 
 #[allow(non_snake_case)]
-pub fn A146988() -> &'static OeisSequenceDefinition {
+pub fn A151511() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[434]
 }
 
 #[allow(non_snake_case)]
-pub fn A147565() -> &'static OeisSequenceDefinition {
+pub fn A151775() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[435]
 }
 
 #[allow(non_snake_case)]
-pub fn A147644() -> &'static OeisSequenceDefinition {
+pub fn A152198() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[436]
 }
 
 #[allow(non_snake_case)]
-pub fn A147716() -> &'static OeisSequenceDefinition {
+pub fn A152815() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[437]
 }
 
 #[allow(non_snake_case)]
-pub fn A151509() -> &'static OeisSequenceDefinition {
+pub fn A152828() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[438]
 }
 
 #[allow(non_snake_case)]
-pub fn A151511() -> &'static OeisSequenceDefinition {
+pub fn A152830() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[439]
 }
 
 #[allow(non_snake_case)]
-pub fn A151775() -> &'static OeisSequenceDefinition {
+pub fn A152842() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[440]
 }
 
 #[allow(non_snake_case)]
-pub fn A152198() -> &'static OeisSequenceDefinition {
+pub fn A153516() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[441]
 }
 
 #[allow(non_snake_case)]
-pub fn A152815() -> &'static OeisSequenceDefinition {
+pub fn A153518() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[442]
 }
 
 #[allow(non_snake_case)]
-pub fn A152828() -> &'static OeisSequenceDefinition {
+pub fn A153520() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[443]
 }
 
 #[allow(non_snake_case)]
-pub fn A152830() -> &'static OeisSequenceDefinition {
+pub fn A153521() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[444]
 }
 
 #[allow(non_snake_case)]
-pub fn A152842() -> &'static OeisSequenceDefinition {
+pub fn A153648() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[445]
 }
 
 #[allow(non_snake_case)]
-pub fn A153516() -> &'static OeisSequenceDefinition {
+pub fn A153649() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[446]
 }
 
 #[allow(non_snake_case)]
-pub fn A153518() -> &'static OeisSequenceDefinition {
+pub fn A153650() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[447]
 }
 
 #[allow(non_snake_case)]
-pub fn A153520() -> &'static OeisSequenceDefinition {
+pub fn A153651() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[448]
 }
 
 #[allow(non_snake_case)]
-pub fn A153521() -> &'static OeisSequenceDefinition {
+pub fn A153652() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[449]
 }
 
 #[allow(non_snake_case)]
-pub fn A153648() -> &'static OeisSequenceDefinition {
+pub fn A153653() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[450]
 }
 
 #[allow(non_snake_case)]
-pub fn A153649() -> &'static OeisSequenceDefinition {
+pub fn A153654() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[451]
 }
 
 #[allow(non_snake_case)]
-pub fn A153650() -> &'static OeisSequenceDefinition {
+pub fn A153655() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[452]
 }
 
 #[allow(non_snake_case)]
-pub fn A153651() -> &'static OeisSequenceDefinition {
+pub fn A153656() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[453]
 }
 
 #[allow(non_snake_case)]
-pub fn A153652() -> &'static OeisSequenceDefinition {
+pub fn A153657() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[454]
 }
 
 #[allow(non_snake_case)]
-pub fn A153653() -> &'static OeisSequenceDefinition {
+pub fn A154227() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[455]
 }
 
 #[allow(non_snake_case)]
-pub fn A153654() -> &'static OeisSequenceDefinition {
+pub fn A154228() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[456]
 }
 
 #[allow(non_snake_case)]
-pub fn A153655() -> &'static OeisSequenceDefinition {
+pub fn A154233() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[457]
 }
 
 #[allow(non_snake_case)]
-pub fn A153656() -> &'static OeisSequenceDefinition {
+pub fn A154602() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[458]
 }
 
 #[allow(non_snake_case)]
-pub fn A153657() -> &'static OeisSequenceDefinition {
+pub fn A154929() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[459]
 }
 
 #[allow(non_snake_case)]
-pub fn A154227() -> &'static OeisSequenceDefinition {
+pub fn A154986() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[460]
 }
 
 #[allow(non_snake_case)]
-pub fn A154228() -> &'static OeisSequenceDefinition {
+pub fn A155112() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[461]
 }
 
 #[allow(non_snake_case)]
-pub fn A154233() -> &'static OeisSequenceDefinition {
+pub fn A155495() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[462]
 }
 
 #[allow(non_snake_case)]
-pub fn A154602() -> &'static OeisSequenceDefinition {
+pub fn A156289() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[463]
 }
 
 #[allow(non_snake_case)]
-pub fn A154929() -> &'static OeisSequenceDefinition {
+pub fn A156308() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[464]
 }
 
 #[allow(non_snake_case)]
-pub fn A154986() -> &'static OeisSequenceDefinition {
+pub fn A156319() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[465]
 }
 
 #[allow(non_snake_case)]
-pub fn A155112() -> &'static OeisSequenceDefinition {
+pub fn A156365() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[466]
 }
 
 #[allow(non_snake_case)]
-pub fn A155495() -> &'static OeisSequenceDefinition {
+pub fn A156366() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[467]
 }
 
 #[allow(non_snake_case)]
-pub fn A156289() -> &'static OeisSequenceDefinition {
+pub fn A156654() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[468]
 }
 
 #[allow(non_snake_case)]
-pub fn A156308() -> &'static OeisSequenceDefinition {
+pub fn A156992() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[469]
 }
 
 #[allow(non_snake_case)]
-pub fn A156319() -> &'static OeisSequenceDefinition {
+pub fn A157012() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[470]
 }
 
 #[allow(non_snake_case)]
-pub fn A156365() -> &'static OeisSequenceDefinition {
+pub fn A157147() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[471]
 }
 
 #[allow(non_snake_case)]
-pub fn A156366() -> &'static OeisSequenceDefinition {
+pub fn A157148() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[472]
 }
 
 #[allow(non_snake_case)]
-pub fn A156654() -> &'static OeisSequenceDefinition {
+pub fn A157149() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[473]
 }
 
 #[allow(non_snake_case)]
-pub fn A156992() -> &'static OeisSequenceDefinition {
+pub fn A157150() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[474]
 }
 
 #[allow(non_snake_case)]
-pub fn A157012() -> &'static OeisSequenceDefinition {
+pub fn A157151() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[475]
 }
 
 #[allow(non_snake_case)]
-pub fn A157147() -> &'static OeisSequenceDefinition {
+pub fn A157153() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[476]
 }
 
 #[allow(non_snake_case)]
-pub fn A157148() -> &'static OeisSequenceDefinition {
+pub fn A157154() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[477]
 }
 
 #[allow(non_snake_case)]
-pub fn A157149() -> &'static OeisSequenceDefinition {
+pub fn A157155() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[478]
 }
 
 #[allow(non_snake_case)]
-pub fn A157150() -> &'static OeisSequenceDefinition {
+pub fn A157156() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[479]
 }
 
 #[allow(non_snake_case)]
-pub fn A157151() -> &'static OeisSequenceDefinition {
+pub fn A157169() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[480]
 }
 
 #[allow(non_snake_case)]
-pub fn A157153() -> &'static OeisSequenceDefinition {
+pub fn A157171() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[481]
 }
 
 #[allow(non_snake_case)]
-pub fn A157154() -> &'static OeisSequenceDefinition {
+pub fn A157637() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[482]
 }
 
 #[allow(non_snake_case)]
-pub fn A157155() -> &'static OeisSequenceDefinition {
+pub fn A158909() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[483]
 }
 
 #[allow(non_snake_case)]
-pub fn A157156() -> &'static OeisSequenceDefinition {
+pub fn A159854() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[484]
 }
 
 #[allow(non_snake_case)]
-pub fn A157169() -> &'static OeisSequenceDefinition {
+pub fn A160562() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[485]
 }
 
 #[allow(non_snake_case)]
-pub fn A157171() -> &'static OeisSequenceDefinition {
+pub fn A162303() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[486]
 }
 
 #[allow(non_snake_case)]
-pub fn A157637() -> &'static OeisSequenceDefinition {
+pub fn A163932() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[487]
 }
 
 #[allow(non_snake_case)]
-pub fn A158821() -> &'static OeisSequenceDefinition {
+pub fn A163936() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[488]
 }
 
 #[allow(non_snake_case)]
-pub fn A158909() -> &'static OeisSequenceDefinition {
+pub fn A163937() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[489]
 }
 
 #[allow(non_snake_case)]
-pub fn A159854() -> &'static OeisSequenceDefinition {
+pub fn A165253() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[490]
 }
 
 #[allow(non_snake_case)]
-pub fn A160562() -> &'static OeisSequenceDefinition {
+pub fn A165891() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[491]
 }
 
 #[allow(non_snake_case)]
-pub fn A162303() -> &'static OeisSequenceDefinition {
+pub fn A166073() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[492]
 }
 
 #[allow(non_snake_case)]
-pub fn A163932() -> &'static OeisSequenceDefinition {
+pub fn A166340() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[493]
 }
 
 #[allow(non_snake_case)]
-pub fn A163936() -> &'static OeisSequenceDefinition {
+pub fn A166341() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[494]
 }
 
 #[allow(non_snake_case)]
-pub fn A163937() -> &'static OeisSequenceDefinition {
+pub fn A166343() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[495]
 }
 
 #[allow(non_snake_case)]
-pub fn A165253() -> &'static OeisSequenceDefinition {
+pub fn A166344() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[496]
 }
 
 #[allow(non_snake_case)]
-pub fn A165891() -> &'static OeisSequenceDefinition {
+pub fn A166345() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[497]
 }
 
 #[allow(non_snake_case)]
-pub fn A166073() -> &'static OeisSequenceDefinition {
+pub fn A166960() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[498]
 }
 
 #[allow(non_snake_case)]
-pub fn A166340() -> &'static OeisSequenceDefinition {
+pub fn A166961() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[499]
 }
 
 #[allow(non_snake_case)]
-pub fn A166341() -> &'static OeisSequenceDefinition {
+pub fn A166962() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[500]
 }
 
 #[allow(non_snake_case)]
-pub fn A166343() -> &'static OeisSequenceDefinition {
+pub fn A166972() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[501]
 }
 
 #[allow(non_snake_case)]
-pub fn A166344() -> &'static OeisSequenceDefinition {
+pub fn A166973() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[502]
 }
 
 #[allow(non_snake_case)]
-pub fn A166345() -> &'static OeisSequenceDefinition {
+pub fn A166979() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[503]
 }
 
 #[allow(non_snake_case)]
-pub fn A166960() -> &'static OeisSequenceDefinition {
+pub fn A167194() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[504]
 }
 
 #[allow(non_snake_case)]
-pub fn A166961() -> &'static OeisSequenceDefinition {
+pub fn A167884() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[505]
 }
 
 #[allow(non_snake_case)]
-pub fn A166962() -> &'static OeisSequenceDefinition {
+pub fn A168287() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[506]
 }
 
 #[allow(non_snake_case)]
-pub fn A166972() -> &'static OeisSequenceDefinition {
+pub fn A168288() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[507]
 }
 
 #[allow(non_snake_case)]
-pub fn A166973() -> &'static OeisSequenceDefinition {
+pub fn A168289() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[508]
 }
 
 #[allow(non_snake_case)]
-pub fn A166979() -> &'static OeisSequenceDefinition {
+pub fn A168290() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[509]
 }
 
 #[allow(non_snake_case)]
-pub fn A167194() -> &'static OeisSequenceDefinition {
+pub fn A169803() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[510]
 }
 
 #[allow(non_snake_case)]
-pub fn A167884() -> &'static OeisSequenceDefinition {
+pub fn A171608() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[511]
 }
 
 #[allow(non_snake_case)]
-pub fn A168287() -> &'static OeisSequenceDefinition {
+pub fn A172106() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[512]
 }
 
 #[allow(non_snake_case)]
-pub fn A168288() -> &'static OeisSequenceDefinition {
+pub fn A172107() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[513]
 }
 
 #[allow(non_snake_case)]
-pub fn A168289() -> &'static OeisSequenceDefinition {
+pub fn A172108() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[514]
 }
 
 #[allow(non_snake_case)]
-pub fn A168290() -> &'static OeisSequenceDefinition {
+pub fn A172185() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[515]
 }
 
 #[allow(non_snake_case)]
-pub fn A169803() -> &'static OeisSequenceDefinition {
+pub fn A172431() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[516]
 }
 
 #[allow(non_snake_case)]
-pub fn A171608() -> &'static OeisSequenceDefinition {
+pub fn A173018() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[517]
 }
 
 #[allow(non_snake_case)]
-pub fn A172106() -> &'static OeisSequenceDefinition {
+pub fn A173882() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[518]
 }
 
 #[allow(non_snake_case)]
-pub fn A172107() -> &'static OeisSequenceDefinition {
+pub fn A174148() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[519]
 }
 
 #[allow(non_snake_case)]
-pub fn A172108() -> &'static OeisSequenceDefinition {
+pub fn A176200() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[520]
 }
 
 #[allow(non_snake_case)]
-pub fn A172185() -> &'static OeisSequenceDefinition {
+pub fn A176204() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[521]
 }
 
 #[allow(non_snake_case)]
-pub fn A172431() -> &'static OeisSequenceDefinition {
+pub fn A176230() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[522]
 }
 
 #[allow(non_snake_case)]
-pub fn A173018() -> &'static OeisSequenceDefinition {
+pub fn A176231() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[523]
 }
 
 #[allow(non_snake_case)]
-pub fn A173882() -> &'static OeisSequenceDefinition {
+pub fn A176331() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[524]
 }
 
 #[allow(non_snake_case)]
-pub fn A174148() -> &'static OeisSequenceDefinition {
+pub fn A177040() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[525]
 }
 
 #[allow(non_snake_case)]
-pub fn A176200() -> &'static OeisSequenceDefinition {
+pub fn A177267() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[526]
 }
 
 #[allow(non_snake_case)]
-pub fn A176204() -> &'static OeisSequenceDefinition {
+pub fn A177970() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[527]
 }
 
 #[allow(non_snake_case)]
-pub fn A176230() -> &'static OeisSequenceDefinition {
+pub fn A178820() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[528]
 }
 
 #[allow(non_snake_case)]
-pub fn A176231() -> &'static OeisSequenceDefinition {
+pub fn A178821() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[529]
 }
 
 #[allow(non_snake_case)]
-pub fn A176331() -> &'static OeisSequenceDefinition {
+pub fn A178822() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[530]
 }
 
 #[allow(non_snake_case)]
-pub fn A177040() -> &'static OeisSequenceDefinition {
+pub fn A180013() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[531]
 }
 
 #[allow(non_snake_case)]
-pub fn A177267() -> &'static OeisSequenceDefinition {
+pub fn A180047() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[532]
 }
 
 #[allow(non_snake_case)]
-pub fn A177970() -> &'static OeisSequenceDefinition {
+pub fn A181289() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[533]
 }
 
 #[allow(non_snake_case)]
-pub fn A178820() -> &'static OeisSequenceDefinition {
+pub fn A181327() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[534]
 }
 
 #[allow(non_snake_case)]
-pub fn A178821() -> &'static OeisSequenceDefinition {
+pub fn A181371() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[535]
 }
 
 #[allow(non_snake_case)]
-pub fn A178822() -> &'static OeisSequenceDefinition {
+pub fn A181543() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[536]
 }
 
 #[allow(non_snake_case)]
-pub fn A180013() -> &'static OeisSequenceDefinition {
+pub fn A184883() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[537]
 }
 
 #[allow(non_snake_case)]
-pub fn A180047() -> &'static OeisSequenceDefinition {
+pub fn A185263() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[538]
 }
 
 #[allow(non_snake_case)]
-pub fn A181289() -> &'static OeisSequenceDefinition {
+pub fn A185410() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[539]
 }
 
 #[allow(non_snake_case)]
-pub fn A181327() -> &'static OeisSequenceDefinition {
+pub fn A185411() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[540]
 }
 
 #[allow(non_snake_case)]
-pub fn A181371() -> &'static OeisSequenceDefinition {
+pub fn A185778() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[541]
 }
 
 #[allow(non_snake_case)]
-pub fn A181543() -> &'static OeisSequenceDefinition {
+pub fn A186370() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[542]
 }
 
 #[allow(non_snake_case)]
-pub fn A184883() -> &'static OeisSequenceDefinition {
+pub fn A187660() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[543]
 }
 
 #[allow(non_snake_case)]
-pub fn A185263() -> &'static OeisSequenceDefinition {
+pub fn A188440() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[544]
 }
 
 #[allow(non_snake_case)]
-pub fn A185410() -> &'static OeisSequenceDefinition {
+pub fn A190088() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[545]
 }
 
 #[allow(non_snake_case)]
-pub fn A185411() -> &'static OeisSequenceDefinition {
+pub fn A190152() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[546]
 }
 
 #[allow(non_snake_case)]
-pub fn A185740() -> &'static OeisSequenceDefinition {
+pub fn A191935() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[547]
 }
 
 #[allow(non_snake_case)]
-pub fn A185778() -> &'static OeisSequenceDefinition {
+pub fn A193636() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[548]
 }
 
 #[allow(non_snake_case)]
-pub fn A185911() -> &'static OeisSequenceDefinition {
+pub fn A193685() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[549]
 }
 
 #[allow(non_snake_case)]
-pub fn A186370() -> &'static OeisSequenceDefinition {
+pub fn A193722() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[550]
 }
 
 #[allow(non_snake_case)]
-pub fn A187660() -> &'static OeisSequenceDefinition {
+pub fn A193726() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[551]
 }
 
 #[allow(non_snake_case)]
-pub fn A188440() -> &'static OeisSequenceDefinition {
+pub fn A193727() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[552]
 }
 
 #[allow(non_snake_case)]
-pub fn A190088() -> &'static OeisSequenceDefinition {
+pub fn A193728() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[553]
 }
 
 #[allow(non_snake_case)]
-pub fn A190152() -> &'static OeisSequenceDefinition {
+pub fn A193729() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[554]
 }
 
 #[allow(non_snake_case)]
-pub fn A191935() -> &'static OeisSequenceDefinition {
+pub fn A193730() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[555]
 }
 
 #[allow(non_snake_case)]
-pub fn A193636() -> &'static OeisSequenceDefinition {
+pub fn A193731() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[556]
 }
 
 #[allow(non_snake_case)]
-pub fn A193685() -> &'static OeisSequenceDefinition {
+pub fn A193734() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[557]
 }
 
 #[allow(non_snake_case)]
-pub fn A193722() -> &'static OeisSequenceDefinition {
+pub fn A193735() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[558]
 }
 
 #[allow(non_snake_case)]
-pub fn A193726() -> &'static OeisSequenceDefinition {
+pub fn A196347() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[559]
 }
 
 #[allow(non_snake_case)]
-pub fn A193727() -> &'static OeisSequenceDefinition {
+pub fn A197208() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[560]
 }
 
 #[allow(non_snake_case)]
-pub fn A193728() -> &'static OeisSequenceDefinition {
+pub fn A198954() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[561]
 }
 
 #[allow(non_snake_case)]
-pub fn A193729() -> &'static OeisSequenceDefinition {
+pub fn A199221() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[562]
 }
 
 #[allow(non_snake_case)]
-pub fn A193730() -> &'static OeisSequenceDefinition {
+pub fn A199478() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[563]
 }
 
 #[allow(non_snake_case)]
-pub fn A193731() -> &'static OeisSequenceDefinition {
+pub fn A199881() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[564]
 }
 
 #[allow(non_snake_case)]
-pub fn A193734() -> &'static OeisSequenceDefinition {
+pub fn A200091() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[565]
 }
 
 #[allow(non_snake_case)]
-pub fn A193735() -> &'static OeisSequenceDefinition {
+pub fn A200536() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[566]
 }
 
 #[allow(non_snake_case)]
-pub fn A196347() -> &'static OeisSequenceDefinition {
+pub fn A201013() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[567]
 }
 
 #[allow(non_snake_case)]
-pub fn A197208() -> &'static OeisSequenceDefinition {
+pub fn A201637() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[568]
 }
 
 #[allow(non_snake_case)]
-pub fn A198954() -> &'static OeisSequenceDefinition {
+pub fn A201730() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[569]
 }
 
 #[allow(non_snake_case)]
-pub fn A199221() -> &'static OeisSequenceDefinition {
+pub fn A201972() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[570]
 }
 
 #[allow(non_snake_case)]
-pub fn A199478() -> &'static OeisSequenceDefinition {
+pub fn A202023() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[571]
 }
 
 #[allow(non_snake_case)]
-pub fn A199881() -> &'static OeisSequenceDefinition {
+pub fn A202064() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[572]
 }
 
 #[allow(non_snake_case)]
-pub fn A200091() -> &'static OeisSequenceDefinition {
+pub fn A202241() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[573]
 }
 
 #[allow(non_snake_case)]
-pub fn A200536() -> &'static OeisSequenceDefinition {
+pub fn A204420() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[574]
 }
 
 #[allow(non_snake_case)]
-pub fn A201013() -> &'static OeisSequenceDefinition {
+pub fn A206294() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[575]
 }
 
 #[allow(non_snake_case)]
-pub fn A201637() -> &'static OeisSequenceDefinition {
+pub fn A206306() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[576]
 }
 
 #[allow(non_snake_case)]
-pub fn A201730() -> &'static OeisSequenceDefinition {
+pub fn A207606() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[577]
 }
 
 #[allow(non_snake_case)]
-pub fn A201972() -> &'static OeisSequenceDefinition {
+pub fn A207607() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[578]
 }
 
 #[allow(non_snake_case)]
-pub fn A202023() -> &'static OeisSequenceDefinition {
+pub fn A207824() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[579]
 }
 
 #[allow(non_snake_case)]
-pub fn A202064() -> &'static OeisSequenceDefinition {
+pub fn A208509() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[580]
 }
 
 #[allow(non_snake_case)]
-pub fn A202241() -> &'static OeisSequenceDefinition {
+pub fn A208513() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[581]
 }
 
 #[allow(non_snake_case)]
-pub fn A204420() -> &'static OeisSequenceDefinition {
+pub fn A209414() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[582]
 }
 
 #[allow(non_snake_case)]
-pub fn A206294() -> &'static OeisSequenceDefinition {
+pub fn A209599() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[583]
 }
 
 #[allow(non_snake_case)]
-pub fn A206306() -> &'static OeisSequenceDefinition {
+pub fn A210039() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[584]
 }
 
 #[allow(non_snake_case)]
-pub fn A207606() -> &'static OeisSequenceDefinition {
+pub fn A211956() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[585]
 }
 
 #[allow(non_snake_case)]
-pub fn A207607() -> &'static OeisSequenceDefinition {
+pub fn A216118() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[586]
 }
 
 #[allow(non_snake_case)]
-pub fn A207824() -> &'static OeisSequenceDefinition {
+pub fn A216182() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[587]
 }
 
 #[allow(non_snake_case)]
-pub fn A208509() -> &'static OeisSequenceDefinition {
+pub fn A216973() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[588]
 }
 
 #[allow(non_snake_case)]
-pub fn A208513() -> &'static OeisSequenceDefinition {
+pub fn A219570() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[589]
 }
 
 #[allow(non_snake_case)]
-pub fn A209414() -> &'static OeisSequenceDefinition {
+pub fn A219836() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[590]
 }
 
 #[allow(non_snake_case)]
-pub fn A209599() -> &'static OeisSequenceDefinition {
+pub fn A223168() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[591]
 }
 
 #[allow(non_snake_case)]
-pub fn A210039() -> &'static OeisSequenceDefinition {
+pub fn A225117() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[592]
 }
 
 #[allow(non_snake_case)]
-pub fn A211956() -> &'static OeisSequenceDefinition {
+pub fn A225466() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[593]
 }
 
 #[allow(non_snake_case)]
-pub fn A216118() -> &'static OeisSequenceDefinition {
+pub fn A225467() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[594]
 }
 
 #[allow(non_snake_case)]
-pub fn A216182() -> &'static OeisSequenceDefinition {
+pub fn A225468() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[595]
 }
 
 #[allow(non_snake_case)]
-pub fn A216973() -> &'static OeisSequenceDefinition {
+pub fn A225469() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[596]
 }
 
 #[allow(non_snake_case)]
-pub fn A219570() -> &'static OeisSequenceDefinition {
+pub fn A225472() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[597]
 }
 
 #[allow(non_snake_case)]
-pub fn A219836() -> &'static OeisSequenceDefinition {
+pub fn A225473() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[598]
 }
 
 #[allow(non_snake_case)]
-pub fn A223168() -> &'static OeisSequenceDefinition {
+pub fn A225476() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[599]
 }
 
 #[allow(non_snake_case)]
-pub fn A225117() -> &'static OeisSequenceDefinition {
+pub fn A225678() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[600]
 }
 
 #[allow(non_snake_case)]
-pub fn A225466() -> &'static OeisSequenceDefinition {
+pub fn A227450() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[601]
 }
 
 #[allow(non_snake_case)]
-pub fn A225467() -> &'static OeisSequenceDefinition {
+pub fn A228955() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[602]
 }
 
 #[allow(non_snake_case)]
-pub fn A225468() -> &'static OeisSequenceDefinition {
+pub fn A229032() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[603]
 }
 
 #[allow(non_snake_case)]
-pub fn A225469() -> &'static OeisSequenceDefinition {
+pub fn A232535() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[604]
 }
 
 #[allow(non_snake_case)]
-pub fn A225472() -> &'static OeisSequenceDefinition {
+pub fn A235706() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[605]
 }
 
 #[allow(non_snake_case)]
-pub fn A225473() -> &'static OeisSequenceDefinition {
+pub fn A236076() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[606]
 }
 
 #[allow(non_snake_case)]
-pub fn A225476() -> &'static OeisSequenceDefinition {
+pub fn A236471() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[607]
 }
 
 #[allow(non_snake_case)]
-pub fn A225678() -> &'static OeisSequenceDefinition {
+pub fn A237765() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[608]
 }
 
 #[allow(non_snake_case)]
-pub fn A227450() -> &'static OeisSequenceDefinition {
+pub fn A241171() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[609]
 }
 
 #[allow(non_snake_case)]
-pub fn A228955() -> &'static OeisSequenceDefinition {
+pub fn A245962() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[610]
 }
 
 #[allow(non_snake_case)]
-pub fn A229032() -> &'static OeisSequenceDefinition {
+pub fn A245963() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[611]
 }
 
 #[allow(non_snake_case)]
-pub fn A232535() -> &'static OeisSequenceDefinition {
+pub fn A245964() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[612]
 }
 
 #[allow(non_snake_case)]
-pub fn A235706() -> &'static OeisSequenceDefinition {
+pub fn A249139() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[613]
 }
 
 #[allow(non_snake_case)]
-pub fn A236076() -> &'static OeisSequenceDefinition {
+pub fn A249247() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[614]
 }
 
 #[allow(non_snake_case)]
-pub fn A236471() -> &'static OeisSequenceDefinition {
+pub fn A249248() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[615]
 }
 
 #[allow(non_snake_case)]
-pub fn A237765() -> &'static OeisSequenceDefinition {
+pub fn A249250() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[616]
 }
 
 #[allow(non_snake_case)]
-pub fn A241171() -> &'static OeisSequenceDefinition {
+pub fn A249251() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[617]
 }
 
 #[allow(non_snake_case)]
-pub fn A245962() -> &'static OeisSequenceDefinition {
+pub fn A249252() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[618]
 }
 
 #[allow(non_snake_case)]
-pub fn A245963() -> &'static OeisSequenceDefinition {
+pub fn A249253() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[619]
 }
 
 #[allow(non_snake_case)]
-pub fn A245964() -> &'static OeisSequenceDefinition {
+pub fn A253283() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[620]
 }
 
 #[allow(non_snake_case)]
-pub fn A249139() -> &'static OeisSequenceDefinition {
+pub fn A253284() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[621]
 }
 
 #[allow(non_snake_case)]
-pub fn A249247() -> &'static OeisSequenceDefinition {
+pub fn A256890() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[622]
 }
 
 #[allow(non_snake_case)]
-pub fn A249248() -> &'static OeisSequenceDefinition {
+pub fn A257142() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[623]
 }
 
 #[allow(non_snake_case)]
-pub fn A249250() -> &'static OeisSequenceDefinition {
+pub fn A257180() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[624]
 }
 
 #[allow(non_snake_case)]
-pub fn A249251() -> &'static OeisSequenceDefinition {
+pub fn A257606() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[625]
 }
 
 #[allow(non_snake_case)]
-pub fn A249252() -> &'static OeisSequenceDefinition {
+pub fn A257607() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[626]
 }
 
 #[allow(non_snake_case)]
-pub fn A249253() -> &'static OeisSequenceDefinition {
+pub fn A257608() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[627]
 }
 
 #[allow(non_snake_case)]
-pub fn A253283() -> &'static OeisSequenceDefinition {
+pub fn A257609() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[628]
 }
 
 #[allow(non_snake_case)]
-pub fn A253284() -> &'static OeisSequenceDefinition {
+pub fn A257610() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[629]
 }
 
 #[allow(non_snake_case)]
-pub fn A256890() -> &'static OeisSequenceDefinition {
+pub fn A257611() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[630]
 }
 
 #[allow(non_snake_case)]
-pub fn A257142() -> &'static OeisSequenceDefinition {
+pub fn A257612() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[631]
 }
 
 #[allow(non_snake_case)]
-pub fn A257180() -> &'static OeisSequenceDefinition {
+pub fn A257613() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[632]
 }
 
 #[allow(non_snake_case)]
-pub fn A257606() -> &'static OeisSequenceDefinition {
+pub fn A257614() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[633]
 }
 
 #[allow(non_snake_case)]
-pub fn A257607() -> &'static OeisSequenceDefinition {
+pub fn A257615() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[634]
 }
 
 #[allow(non_snake_case)]
-pub fn A257608() -> &'static OeisSequenceDefinition {
+pub fn A257616() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[635]
 }
 
 #[allow(non_snake_case)]
-pub fn A257609() -> &'static OeisSequenceDefinition {
+pub fn A257617() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[636]
 }
 
 #[allow(non_snake_case)]
-pub fn A257610() -> &'static OeisSequenceDefinition {
+pub fn A257618() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[637]
 }
 
 #[allow(non_snake_case)]
-pub fn A257611() -> &'static OeisSequenceDefinition {
+pub fn A257619() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[638]
 }
 
 #[allow(non_snake_case)]
-pub fn A257612() -> &'static OeisSequenceDefinition {
+pub fn A257620() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[639]
 }
 
 #[allow(non_snake_case)]
-pub fn A257613() -> &'static OeisSequenceDefinition {
+pub fn A257621() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[640]
 }
 
 #[allow(non_snake_case)]
-pub fn A257614() -> &'static OeisSequenceDefinition {
+pub fn A257622() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[641]
 }
 
 #[allow(non_snake_case)]
-pub fn A257615() -> &'static OeisSequenceDefinition {
+pub fn A257623() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[642]
 }
 
 #[allow(non_snake_case)]
-pub fn A257616() -> &'static OeisSequenceDefinition {
+pub fn A257624() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[643]
 }
 
 #[allow(non_snake_case)]
-pub fn A257617() -> &'static OeisSequenceDefinition {
+pub fn A257625() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[644]
 }
 
 #[allow(non_snake_case)]
-pub fn A257618() -> &'static OeisSequenceDefinition {
+pub fn A257626() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[645]
 }
 
 #[allow(non_snake_case)]
-pub fn A257619() -> &'static OeisSequenceDefinition {
+pub fn A257627() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[646]
 }
 
 #[allow(non_snake_case)]
-pub fn A257620() -> &'static OeisSequenceDefinition {
+pub fn A258758() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[647]
 }
 
 #[allow(non_snake_case)]
-pub fn A257621() -> &'static OeisSequenceDefinition {
+pub fn A259454() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[648]
 }
 
 #[allow(non_snake_case)]
-pub fn A257622() -> &'static OeisSequenceDefinition {
+pub fn A261139() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[649]
 }
 
 #[allow(non_snake_case)]
-pub fn A257623() -> &'static OeisSequenceDefinition {
+pub fn A261318() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[650]
 }
 
 #[allow(non_snake_case)]
-pub fn A257624() -> &'static OeisSequenceDefinition {
+pub fn A261711() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[651]
 }
 
 #[allow(non_snake_case)]
-pub fn A257625() -> &'static OeisSequenceDefinition {
+pub fn A262226() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[652]
 }
 
 #[allow(non_snake_case)]
-pub fn A257626() -> &'static OeisSequenceDefinition {
+pub fn A262704() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[653]
 }
 
 #[allow(non_snake_case)]
-pub fn A257627() -> &'static OeisSequenceDefinition {
+pub fn A263789() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[654]
 }
 
 #[allow(non_snake_case)]
-pub fn A258758() -> &'static OeisSequenceDefinition {
+pub fn A265644() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[655]
 }
 
 #[allow(non_snake_case)]
-pub fn A258993() -> &'static OeisSequenceDefinition {
+pub fn A266213() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[656]
 }
 
 #[allow(non_snake_case)]
-pub fn A259454() -> &'static OeisSequenceDefinition {
+pub fn A266326() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[657]
 }
 
 #[allow(non_snake_case)]
-pub fn A261139() -> &'static OeisSequenceDefinition {
+pub fn A267006() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[658]
 }
 
 #[allow(non_snake_case)]
-pub fn A261318() -> &'static OeisSequenceDefinition {
+pub fn A268434() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[659]
 }
 
 #[allow(non_snake_case)]
-pub fn A261711() -> &'static OeisSequenceDefinition {
+pub fn A268647() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[660]
 }
 
 #[allow(non_snake_case)]
-pub fn A262226() -> &'static OeisSequenceDefinition {
+pub fn A269939() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[661]
 }
 
 #[allow(non_snake_case)]
-pub fn A262704() -> &'static OeisSequenceDefinition {
+pub fn A269944() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[662]
 }
 
 #[allow(non_snake_case)]
-pub fn A263789() -> &'static OeisSequenceDefinition {
+pub fn A269945() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[663]
 }
 
 #[allow(non_snake_case)]
-pub fn A265644() -> &'static OeisSequenceDefinition {
+pub fn A269947() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[664]
 }
 
 #[allow(non_snake_case)]
-pub fn A266178() -> &'static OeisSequenceDefinition {
+pub fn A269951() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[665]
 }
 
 #[allow(non_snake_case)]
-pub fn A266213() -> &'static OeisSequenceDefinition {
+pub fn A271697() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[666]
 }
 
 #[allow(non_snake_case)]
-pub fn A266298() -> &'static OeisSequenceDefinition {
+pub fn A271703() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[667]
 }
 
 #[allow(non_snake_case)]
-pub fn A266326() -> &'static OeisSequenceDefinition {
+pub fn A271705() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[668]
 }
 
 #[allow(non_snake_case)]
-pub fn A267006() -> &'static OeisSequenceDefinition {
+pub fn A272471() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[669]
 }
 
 #[allow(non_snake_case)]
-pub fn A268434() -> &'static OeisSequenceDefinition {
+pub fn A272866() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[670]
 }
 
 #[allow(non_snake_case)]
-pub fn A268647() -> &'static OeisSequenceDefinition {
+pub fn A272867() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[671]
 }
 
 #[allow(non_snake_case)]
-pub fn A269939() -> &'static OeisSequenceDefinition {
+pub fn A273717() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[672]
 }
 
 #[allow(non_snake_case)]
-pub fn A269944() -> &'static OeisSequenceDefinition {
+pub fn A274496() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[673]
 }
 
 #[allow(non_snake_case)]
-pub fn A269945() -> &'static OeisSequenceDefinition {
+pub fn A274498() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[674]
 }
 
 #[allow(non_snake_case)]
-pub fn A269947() -> &'static OeisSequenceDefinition {
+pub fn A275442() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[675]
 }
 
 #[allow(non_snake_case)]
-pub fn A269951() -> &'static OeisSequenceDefinition {
+pub fn A277513() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[676]
 }
 
 #[allow(non_snake_case)]
-pub fn A271697() -> &'static OeisSequenceDefinition {
+pub fn A277627() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[677]
 }
 
 #[allow(non_snake_case)]
-pub fn A271703() -> &'static OeisSequenceDefinition {
+pub fn A281260() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[678]
 }
 
 #[allow(non_snake_case)]
-pub fn A271705() -> &'static OeisSequenceDefinition {
+pub fn A282629() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[679]
 }
 
 #[allow(non_snake_case)]
-pub fn A272471() -> &'static OeisSequenceDefinition {
+pub fn A285061() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[680]
 }
 
 #[allow(non_snake_case)]
-pub fn A272866() -> &'static OeisSequenceDefinition {
+pub fn A286100() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[681]
 }
 
 #[allow(non_snake_case)]
-pub fn A272867() -> &'static OeisSequenceDefinition {
+pub fn A286724() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[682]
 }
 
 #[allow(non_snake_case)]
-pub fn A273717() -> &'static OeisSequenceDefinition {
+pub fn A286785() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[683]
 }
 
 #[allow(non_snake_case)]
-pub fn A274496() -> &'static OeisSequenceDefinition {
+pub fn A288874() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[684]
 }
 
 #[allow(non_snake_case)]
-pub fn A274498() -> &'static OeisSequenceDefinition {
+pub fn A290315() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[685]
 }
 
 #[allow(non_snake_case)]
-pub fn A275442() -> &'static OeisSequenceDefinition {
+pub fn A290316() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[686]
 }
 
 #[allow(non_snake_case)]
-pub fn A277513() -> &'static OeisSequenceDefinition {
+pub fn A290319() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[687]
 }
 
 #[allow(non_snake_case)]
-pub fn A277627() -> &'static OeisSequenceDefinition {
+pub fn A290448() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[688]
 }
 
 #[allow(non_snake_case)]
-pub fn A281260() -> &'static OeisSequenceDefinition {
+pub fn A290595() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[689]
 }
 
 #[allow(non_snake_case)]
-pub fn A282629() -> &'static OeisSequenceDefinition {
+pub fn A290596() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[690]
 }
 
 #[allow(non_snake_case)]
-pub fn A285061() -> &'static OeisSequenceDefinition {
+pub fn A290598() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[691]
 }
 
 #[allow(non_snake_case)]
-pub fn A286100() -> &'static OeisSequenceDefinition {
+pub fn A291977() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[692]
 }
 
 #[allow(non_snake_case)]
-pub fn A286724() -> &'static OeisSequenceDefinition {
+pub fn A292219() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[693]
 }
 
 #[allow(non_snake_case)]
-pub fn A286785() -> &'static OeisSequenceDefinition {
+pub fn A297191() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[694]
 }
 
 #[allow(non_snake_case)]
-pub fn A288874() -> &'static OeisSequenceDefinition {
+pub fn A298668() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[695]
 }
 
 #[allow(non_snake_case)]
-pub fn A290315() -> &'static OeisSequenceDefinition {
+pub fn A299989() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[696]
 }
 
 #[allow(non_snake_case)]
-pub fn A290316() -> &'static OeisSequenceDefinition {
+pub fn A304236() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[697]
 }
 
 #[allow(non_snake_case)]
-pub fn A290319() -> &'static OeisSequenceDefinition {
+pub fn A304330() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[698]
 }
 
 #[allow(non_snake_case)]
-pub fn A290448() -> &'static OeisSequenceDefinition {
+pub fn A304334() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[699]
 }
 
 #[allow(non_snake_case)]
-pub fn A290595() -> &'static OeisSequenceDefinition {
+pub fn A304429() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[700]
 }
 
 #[allow(non_snake_case)]
-pub fn A290596() -> &'static OeisSequenceDefinition {
+pub fn A305540() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[701]
 }
 
 #[allow(non_snake_case)]
-pub fn A290598() -> &'static OeisSequenceDefinition {
+pub fn A306364() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[702]
 }
 
 #[allow(non_snake_case)]
-pub fn A291977() -> &'static OeisSequenceDefinition {
+pub fn A307419() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[703]
 }
 
 #[allow(non_snake_case)]
-pub fn A292219() -> &'static OeisSequenceDefinition {
+pub fn A308737() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[704]
 }
 
 #[allow(non_snake_case)]
-pub fn A297191() -> &'static OeisSequenceDefinition {
+pub fn A316649() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[705]
 }
 
 #[allow(non_snake_case)]
-pub fn A298668() -> &'static OeisSequenceDefinition {
+pub fn A317496() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[706]
 }
 
 #[allow(non_snake_case)]
-pub fn A299989() -> &'static OeisSequenceDefinition {
+pub fn A317497() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[707]
 }
 
 #[allow(non_snake_case)]
-pub fn A304236() -> &'static OeisSequenceDefinition {
+pub fn A318107() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[708]
 }
 
 #[allow(non_snake_case)]
-pub fn A304330() -> &'static OeisSequenceDefinition {
+pub fn A318397() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[709]
 }
 
 #[allow(non_snake_case)]
-pub fn A304334() -> &'static OeisSequenceDefinition {
+pub fn A318772() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[710]
 }
 
 #[allow(non_snake_case)]
-pub fn A304429() -> &'static OeisSequenceDefinition {
+pub fn A318773() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[711]
 }
 
 #[allow(non_snake_case)]
-pub fn A305540() -> &'static OeisSequenceDefinition {
+pub fn A319251() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[712]
 }
 
 #[allow(non_snake_case)]
-pub fn A306364() -> &'static OeisSequenceDefinition {
+pub fn A321331() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[713]
 }
 
 #[allow(non_snake_case)]
-pub fn A307419() -> &'static OeisSequenceDefinition {
+pub fn A321434() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[714]
 }
 
 #[allow(non_snake_case)]
-pub fn A308737() -> &'static OeisSequenceDefinition {
+pub fn A322944() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[715]
 }
 
 #[allow(non_snake_case)]
-pub fn A316649() -> &'static OeisSequenceDefinition {
+pub fn A327997() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[716]
 }
 
 #[allow(non_snake_case)]
-pub fn A317496() -> &'static OeisSequenceDefinition {
+pub fn A330381() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[717]
 }
 
 #[allow(non_snake_case)]
-pub fn A317497() -> &'static OeisSequenceDefinition {
+pub fn A330509() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[718]
 }
 
 #[allow(non_snake_case)]
-pub fn A318107() -> &'static OeisSequenceDefinition {
+pub fn A330510() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[719]
 }
 
 #[allow(non_snake_case)]
-pub fn A318397() -> &'static OeisSequenceDefinition {
+pub fn A330609() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[720]
 }
 
 #[allow(non_snake_case)]
-pub fn A318772() -> &'static OeisSequenceDefinition {
+pub fn A330798() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[721]
 }
 
 #[allow(non_snake_case)]
-pub fn A318773() -> &'static OeisSequenceDefinition {
+pub fn A331333() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[722]
 }
 
 #[allow(non_snake_case)]
-pub fn A319251() -> &'static OeisSequenceDefinition {
+pub fn A332496() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[723]
 }
 
 #[allow(non_snake_case)]
-pub fn A321331() -> &'static OeisSequenceDefinition {
+pub fn A334009() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[724]
 }
 
 #[allow(non_snake_case)]
-pub fn A321434() -> &'static OeisSequenceDefinition {
+pub fn A334218() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[725]
 }
 
 #[allow(non_snake_case)]
-pub fn A322944() -> &'static OeisSequenceDefinition {
+pub fn A339000() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[726]
 }
 
 #[allow(non_snake_case)]
-pub fn A327997() -> &'static OeisSequenceDefinition {
+pub fn A340556() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[727]
 }
 
 #[allow(non_snake_case)]
-pub fn A330381() -> &'static OeisSequenceDefinition {
+pub fn A340620() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[728]
 }
 
 #[allow(non_snake_case)]
-pub fn A330509() -> &'static OeisSequenceDefinition {
+pub fn A344565() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[729]
 }
 
 #[allow(non_snake_case)]
-pub fn A330510() -> &'static OeisSequenceDefinition {
+pub fn A345013() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[730]
 }
 
 #[allow(non_snake_case)]
-pub fn A330609() -> &'static OeisSequenceDefinition {
+pub fn A347056() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[731]
 }
 
 #[allow(non_snake_case)]
-pub fn A330798() -> &'static OeisSequenceDefinition {
+pub fn A347823() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[732]
 }
 
 #[allow(non_snake_case)]
-pub fn A331333() -> &'static OeisSequenceDefinition {
+pub fn A348576() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[733]
 }
 
 #[allow(non_snake_case)]
-pub fn A332496() -> &'static OeisSequenceDefinition {
+pub fn A350512() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[734]
 }
 
 #[allow(non_snake_case)]
-pub fn A334009() -> &'static OeisSequenceDefinition {
+pub fn A352880() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[735]
 }
 
 #[allow(non_snake_case)]
-pub fn A334218() -> &'static OeisSequenceDefinition {
+pub fn A355144() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[736]
 }
 
 #[allow(non_snake_case)]
-pub fn A339000() -> &'static OeisSequenceDefinition {
+pub fn A356546() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[737]
 }
 
 #[allow(non_snake_case)]
-pub fn A340556() -> &'static OeisSequenceDefinition {
+pub fn A357367() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[738]
 }
 
 #[allow(non_snake_case)]
-pub fn A340620() -> &'static OeisSequenceDefinition {
+pub fn A357613() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[739]
 }
 
 #[allow(non_snake_case)]
-pub fn A344565() -> &'static OeisSequenceDefinition {
+pub fn A358622() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[740]
 }
 
 #[allow(non_snake_case)]
-pub fn A345013() -> &'static OeisSequenceDefinition {
+pub fn A358623() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[741]
 }
 
 #[allow(non_snake_case)]
-pub fn A347056() -> &'static OeisSequenceDefinition {
+pub fn A358628() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[742]
 }
 
 #[allow(non_snake_case)]
-pub fn A347823() -> &'static OeisSequenceDefinition {
+pub fn A358735() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[743]
 }
 
 #[allow(non_snake_case)]
-pub fn A348576() -> &'static OeisSequenceDefinition {
+pub fn A359363() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[744]
 }
 
 #[allow(non_snake_case)]
-pub fn A350512() -> &'static OeisSequenceDefinition {
+pub fn A360282() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[745]
 }
 
 #[allow(non_snake_case)]
-pub fn A352880() -> &'static OeisSequenceDefinition {
+pub fn A361357() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[746]
 }
 
 #[allow(non_snake_case)]
-pub fn A355144() -> &'static OeisSequenceDefinition {
+pub fn A366159() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[747]
 }
 
 #[allow(non_snake_case)]
-pub fn A356546() -> &'static OeisSequenceDefinition {
+pub fn A367177() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[748]
 }
 
 #[allow(non_snake_case)]
-pub fn A357367() -> &'static OeisSequenceDefinition {
+pub fn A367270() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[749]
 }
 
 #[allow(non_snake_case)]
-pub fn A357613() -> &'static OeisSequenceDefinition {
+pub fn A367873() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[750]
 }
 
 #[allow(non_snake_case)]
-pub fn A358622() -> &'static OeisSequenceDefinition {
+pub fn A370258() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[751]
 }
 
 #[allow(non_snake_case)]
-pub fn A358623() -> &'static OeisSequenceDefinition {
+pub fn A371080() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[752]
 }
 
 #[allow(non_snake_case)]
-pub fn A358628() -> &'static OeisSequenceDefinition {
+pub fn A371898() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[753]
 }
 
 #[allow(non_snake_case)]
-pub fn A358735() -> &'static OeisSequenceDefinition {
+pub fn A372868() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[754]
 }
 
 #[allow(non_snake_case)]
-pub fn A359363() -> &'static OeisSequenceDefinition {
+pub fn A372873() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[755]
 }
 
 #[allow(non_snake_case)]
-pub fn A360282() -> &'static OeisSequenceDefinition {
+pub fn A375853() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[756]
 }
 
 #[allow(non_snake_case)]
-pub fn A361357() -> &'static OeisSequenceDefinition {
+pub fn A376827() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[757]
 }
 
 #[allow(non_snake_case)]
-pub fn A366159() -> &'static OeisSequenceDefinition {
+pub fn A380114() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[758]
 }
 
 #[allow(non_snake_case)]
-pub fn A367177() -> &'static OeisSequenceDefinition {
+pub fn A380570() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[759]
 }
 
 #[allow(non_snake_case)]
-pub fn A367270() -> &'static OeisSequenceDefinition {
+pub fn A380860() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[760]
 }
 
 #[allow(non_snake_case)]
-pub fn A367873() -> &'static OeisSequenceDefinition {
+pub fn A383348() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[761]
 }
 
 #[allow(non_snake_case)]
-pub fn A370258() -> &'static OeisSequenceDefinition {
+pub fn A386789() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[762]
 }
 
 #[allow(non_snake_case)]
-pub fn A371080() -> &'static OeisSequenceDefinition {
+pub fn A390433() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[763]
 }
 
 #[allow(non_snake_case)]
-pub fn A371898() -> &'static OeisSequenceDefinition {
+pub fn A390883() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[764]
 }
 
 #[allow(non_snake_case)]
-pub fn A372868() -> &'static OeisSequenceDefinition {
+pub fn A391403() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[765]
 }
 
 #[allow(non_snake_case)]
-pub fn A372873() -> &'static OeisSequenceDefinition {
+pub fn A391533() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[766]
 }
 
 #[allow(non_snake_case)]
-pub fn A375853() -> &'static OeisSequenceDefinition {
+pub fn A394446() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[767]
 }
 
 #[allow(non_snake_case)]
-pub fn A376827() -> &'static OeisSequenceDefinition {
+pub fn A394813() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[768]
 }
 
 #[allow(non_snake_case)]
-pub fn A380114() -> &'static OeisSequenceDefinition {
+pub fn A395326() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[769]
 }
 
 #[allow(non_snake_case)]
-pub fn A380570() -> &'static OeisSequenceDefinition {
+pub fn A395454() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[770]
 }
 
 #[allow(non_snake_case)]
-pub fn A380860() -> &'static OeisSequenceDefinition {
+pub fn A395497() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[771]
 }
 
 #[allow(non_snake_case)]
-pub fn A383348() -> &'static OeisSequenceDefinition {
+pub fn A395972() -> &'static OeisSequenceDefinition {
     &OEIS_CATALOG[772]
 }
 
 #[allow(non_snake_case)]
-pub fn A386789() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[773]
-}
-
-#[allow(non_snake_case)]
-pub fn A390433() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[774]
-}
-
-#[allow(non_snake_case)]
-pub fn A390883() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[775]
-}
-
-#[allow(non_snake_case)]
-pub fn A391403() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[776]
-}
-
-#[allow(non_snake_case)]
-pub fn A391533() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[777]
-}
-
-#[allow(non_snake_case)]
-pub fn A394446() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[778]
-}
-
-#[allow(non_snake_case)]
-pub fn A394813() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[779]
-}
-
-#[allow(non_snake_case)]
-pub fn A395326() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[780]
-}
-
-#[allow(non_snake_case)]
-pub fn A395454() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[781]
-}
-
-#[allow(non_snake_case)]
-pub fn A395497() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[782]
-}
-
-#[allow(non_snake_case)]
-pub fn A395972() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[783]
-}
-
-#[allow(non_snake_case)]
 pub fn A397048() -> &'static OeisSequenceDefinition {
-    &OEIS_CATALOG[784]
+    &OEIS_CATALOG[773]
 }

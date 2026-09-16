@@ -58,10 +58,18 @@ Polytool's `oeis info <A-number> --json` now embeds `recurrence_data`, the
 standard `polytool.recurrence.v1` object with exact coefficients and initial
 polynomials, while preserving the existing human-readable recurrence and
 language exports. Focused CLI tests, recurrence JSON fixture replay, formatting,
-and strict binary Clippy pass. The 30 experimental OEIS entries were also
-classified: 19 already have a verified b-file alignment but are not promoted by
-the queue importer's current status rule; the remaining 11 need row-layout or
-formula-level validation against their OEIS definitions before promotion.
+and strict binary Clippy pass.
+
+The OEIS catalog's former 30 experimental entries are now reconciled. Nineteen
+queue recurrences with complete OEIS-row alignment are correctly `validated`;
+the corrected A099040 import is also validated. Ten entries that cannot align
+to complete OEIS rows are no longer bundled: A103328 has reversed structural
+zeros and already has its valid recurrence in OEIS, seven are stale row-boundary
+artifacts, and A266178/A266298 lost cellular-automaton zero positions. The
+generator now rejects unaligned queue and Lean imports. Regeneration also drops
+the corrected-away A062154 entry. The catalog contains 774 entries (125
+verified, 649 validated, zero experimental). Generator checks, 9 focused OEIS
+library tests, 8 CLI tests, formatting, and strict all-target Clippy pass.
 
 ## Durable policy
 

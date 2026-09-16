@@ -460,6 +460,13 @@ def lean_sequence_entries(
                     flattened_offset = record["offset"] + position
                     break
 
+        if not bfile_verified:
+            print(
+                f"skipping {oeis_id}: generated rows do not align with complete OEIS rows",
+                file=sys.stderr,
+            )
+            continue
+
         matched_rows = complete_rows_in_prefix(compared_rows, matched_terms)
         validation_row_index = None
         validation_row = None
@@ -473,7 +480,7 @@ def lean_sequence_entries(
             {
                 "id": oeis_id,
                 "name": record["name"],
-                "status": "Validated" if bfile_verified else "Experimental",
+                "status": "Validated",
                 "layout": layout,
                 "row_start": row_start,
                 "flattened_offset": flattened_offset,
@@ -593,10 +600,13 @@ def queue_entries(
 
         record = oeis_record(oeis_data, oeis_id)
         missing_prefix, bfile_verified = find_prefix_alignment(rows, record)
-        if bfile_verified:
-            first_row = record["offset"]
-        else:
-            first_row = int(manifest["row_convention"]["start_n"])
+        if not bfile_verified:
+            print(
+                f"skipping {oeis_id}: cached rows do not align with complete OEIS rows",
+                file=sys.stderr,
+            )
+            continue
+        first_row = record["offset"]
         holdout_tag = (sequence_dir / "tags" / "recurrence_verified_holdout").exists()
         rows_used = int(recurrence_data.get("rows_used_to_find") or 0)
         verification_rows = max(0, len(rows) - rows_used) if holdout_tag else 0
@@ -604,7 +614,7 @@ def queue_entries(
             {
                 "id": oeis_id,
                 "name": record["name"],
-                "status": "Verified" if holdout_tag else "Experimental",
+                "status": "Verified" if holdout_tag else "Validated",
                 "layout": "RegularTriangle" if "tabl" in record["keywords"] else "Table",
                 "row_start": first_row,
                 "flattened_offset": record["offset"],
