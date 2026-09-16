@@ -369,6 +369,25 @@ fn get_objects(source: &Source) -> Vec<Vec<u8>> {
     }
 }
 
+/// Accumulate a statistic in ascending-degree coefficient order.
+fn stream_permutation_polynomial(
+    n: u8,
+    constraints: &permutation::PermConstraints,
+    stat: Stat,
+) -> (usize, Vec<i64>) {
+    let mut object_count = 0;
+    let mut coeffs = vec![0i64];
+    permutation::for_each_filtered_permutation(n, constraints, &mut |permutation| {
+        let value = statistics::compute(permutation, stat);
+        if coeffs.len() <= value {
+            coeffs.resize(value + 1, 0);
+        }
+        coeffs[value] += 1;
+        object_count += 1;
+    });
+    (object_count, coeffs)
+}
+
 fn format_obj(p: &[u8]) -> String {
     if p.iter().all(|&x| x < 10) {
         p.iter().map(|x| x.to_string()).collect::<String>()
@@ -388,10 +407,17 @@ fn main() {
             real_rooted,
             log_concave,
         } => {
-            let objects = get_objects(&source);
-            let coeffs = polynomial_builder::build_generating_polynomial(&objects, stat);
+            let (object_count, coeffs) = if let Some(n) = source.perms {
+                let constraints = build_constraints(&source.filters);
+                stream_permutation_polynomial(n, &constraints, stat)
+            } else {
+                let objects = get_objects(&source);
+                let object_count = objects.len();
+                let coeffs = polynomial_builder::build_generating_polynomial(&objects, stat);
+                (object_count, coeffs)
+            };
 
-            println!("Objects: {}", objects.len());
+            println!("Objects: {}", object_count);
             println!("Stat: {}", stat);
             println!("Polynomial: {}", format_poly(&coeffs));
             println!("Coefficients: {:?}", coeffs);
@@ -506,8 +532,7 @@ fn main() {
             let mut polys: Vec<Vec<i64>> = Vec::new();
             for n in min_n..=max_n {
                 let constraints = build_constraints(&filters);
-                let perms = permutation::filtered_permutations(n, &constraints);
-                let coeffs = polynomial_builder::build_generating_polynomial(&perms, stat);
+                let (_, coeffs) = stream_permutation_polynomial(n, &constraints, stat);
                 eprintln!(
                     "P_{}(t) = {}  (coeffs: {:?})",
                     n,
@@ -1069,4 +1094,66 @@ fn format_basis_json(bases: &[Vec<usize>]) -> String {
             .collect::<Vec<_>>()
             .join(",")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn streamed_objects(n: u8, constraints: &permutation::PermConstraints) -> Vec<Vec<u8>> {
+        let mut objects = Vec::new();
+        permutation::for_each_filtered_permutation(n, constraints, &mut |permutation| {
+            objects.push(permutation.to_vec());
+        });
+        objects
+    }
+
+    #[test]
+    fn streamed_permutations_match_eager_generator() {
+        let cases = [
+            permutation::PermConstraints::default(),
+            permutation::PermConstraints {
+                avoiding: vec![vec![3, 1, 2]],
+                ..Default::default()
+            },
+            permutation::PermConstraints {
+                avoiding: vec![vec![2, 1, 3]],
+                derangement: true,
+                alternating: true,
+                starts_with: Some(2),
+                ..Default::default()
+            },
+            permutation::PermConstraints {
+                avoiding_arrow: vec![permutation::parse_arrow_pattern("12;1->2")],
+                ends_with: Some(1),
+                ..Default::default()
+            },
+        ];
+
+        for (n, constraints) in (0..=5).flat_map(|n| {
+            cases
+                .iter()
+                .map(move |constraints| (n, constraints.clone()))
+        }) {
+            assert_eq!(
+                streamed_objects(n, &constraints),
+                permutation::filtered_permutations(n, &constraints),
+                "streaming order differs for n={n}"
+            );
+        }
+    }
+
+    #[test]
+    fn streamed_polynomial_matches_eager_builder() {
+        let constraints = permutation::PermConstraints {
+            avoiding: vec![vec![3, 1, 2]],
+            derangement: true,
+            ..Default::default()
+        };
+        let eager_objects = permutation::filtered_permutations(6, &constraints);
+        let expected = polynomial_builder::build_generating_polynomial(&eager_objects, Stat::Inv);
+        let (count, actual) = stream_permutation_polynomial(6, &constraints, Stat::Inv);
+        assert_eq!(count, eager_objects.len());
+        assert_eq!(actual, expected);
+    }
 }

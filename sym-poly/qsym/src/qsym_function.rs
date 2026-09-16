@@ -286,12 +286,19 @@ impl<C: Ring> QSymFunction<C> {
         for (alpha, ca) in &a.terms {
             for (beta, cb) in &b.terms {
                 let coeff = ca.clone() * cb.clone();
-                // M_α * M_β = Σ_{γ} c_{α,β}^γ M_γ
-                // where sum is over quasi-shuffles of α and β
-                for gamma in quasi_shuffles(alpha, beta) {
-                    let entry = result_terms.entry(gamma).or_insert_with(C::zero);
-                    *entry = entry.clone() + coeff.clone();
-                }
+                // M_α * M_β = Σ_{γ} c_{α,β}^γ M_γ, where the coefficient
+                // counts quasi-shuffles.  Accumulate paths directly: distinct
+                // paths can yield the same composition, so building a vector of
+                // all paths first needlessly allocates duplicate compositions.
+                accumulate_quasi_shuffles(
+                    alpha.parts(),
+                    0,
+                    beta.parts(),
+                    0,
+                    &mut Vec::with_capacity(alpha.num_parts() + beta.num_parts()),
+                    &coeff,
+                    &mut result_terms,
+                );
             }
         }
 
@@ -339,49 +346,50 @@ fn psi_on_composition(alpha: &Composition) -> Composition {
     Composition::from_descent_set(&complemented, n)
 }
 
-/// Compute all quasi-shuffles of compositions α and β.
+/// Add all quasi-shuffle paths of the two remaining composition suffixes.
 ///
-/// A quasi-shuffle of (α_1,...,α_k) and (β_1,...,β_l) interleaves the parts
-/// with the option of combining adjacent α_i and β_j into α_i + β_j.
-fn quasi_shuffles(alpha: &Composition, beta: &Composition) -> Vec<Composition> {
-    let a = alpha.parts();
-    let b = beta.parts();
-    let mut results = Vec::new();
-    quasi_shuffle_helper(a, 0, b, 0, &mut Vec::new(), &mut results);
-    results
-}
-
-fn quasi_shuffle_helper(
+/// A quasi-shuffle interleaves parts, with a third option to combine the next
+/// part from each side.  The output map records multiplicities, which matters
+/// whenever different paths have equal resulting parts.
+fn accumulate_quasi_shuffles<C: Ring>(
     a: &[u32],
     ai: usize,
     b: &[u32],
     bi: usize,
     current: &mut Vec<u32>,
-    results: &mut Vec<Composition>,
+    coefficient: &C,
+    output: &mut BTreeMap<Composition, C>,
 ) {
     if ai >= a.len() && bi >= b.len() {
-        results.push(Composition::new(current.clone()));
+        let entry = output
+            .entry(Composition::new(current.clone()))
+            .or_insert_with(C::zero);
+        *entry = entry.clone() + coefficient.clone();
         return;
     }
 
     // Option 1: take next from a
     if ai < a.len() {
         current.push(a[ai]);
-        quasi_shuffle_helper(a, ai + 1, b, bi, current, results);
+        accumulate_quasi_shuffles(a, ai + 1, b, bi, current, coefficient, output);
         current.pop();
     }
 
     // Option 2: take next from b
     if bi < b.len() {
         current.push(b[bi]);
-        quasi_shuffle_helper(a, ai, b, bi + 1, current, results);
+        accumulate_quasi_shuffles(a, ai, b, bi + 1, current, coefficient, output);
         current.pop();
     }
 
     // Option 3: combine a[ai] + b[bi]
     if ai < a.len() && bi < b.len() {
-        current.push(a[ai] + b[bi]);
-        quasi_shuffle_helper(a, ai + 1, b, bi + 1, current, results);
+        current.push(
+            a[ai]
+                .checked_add(b[bi])
+                .expect("quasi-shuffle part sum exceeds u32"),
+        );
+        accumulate_quasi_shuffles(a, ai + 1, b, bi + 1, current, coefficient, output);
         current.pop();
     }
 }
@@ -455,6 +463,62 @@ impl<C: Ring> fmt::Display for QSymFunction<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_bigint::BigInt;
+
+    /// Deliberately naive reference implementation: it materializes every
+    /// path, including duplicate compositions, before counting them.
+    fn naive_quasi_shuffles(alpha: &Composition, beta: &Composition) -> Vec<Composition> {
+        fn visit(
+            a: &[u32],
+            ai: usize,
+            b: &[u32],
+            bi: usize,
+            current: &mut Vec<u32>,
+            output: &mut Vec<Composition>,
+        ) {
+            if ai == a.len() && bi == b.len() {
+                output.push(Composition::new(current.clone()));
+                return;
+            }
+            if ai < a.len() {
+                current.push(a[ai]);
+                visit(a, ai + 1, b, bi, current, output);
+                current.pop();
+            }
+            if bi < b.len() {
+                current.push(b[bi]);
+                visit(a, ai, b, bi + 1, current, output);
+                current.pop();
+            }
+            if ai < a.len() && bi < b.len() {
+                current.push(a[ai] + b[bi]);
+                visit(a, ai + 1, b, bi + 1, current, output);
+                current.pop();
+            }
+        }
+
+        let mut output = Vec::new();
+        visit(
+            alpha.parts(),
+            0,
+            beta.parts(),
+            0,
+            &mut Vec::new(),
+            &mut output,
+        );
+        output
+    }
+
+    fn naive_monomial_product(
+        alpha: &Composition,
+        beta: &Composition,
+    ) -> BTreeMap<Composition, i64> {
+        let mut output = BTreeMap::new();
+        for gamma in naive_quasi_shuffles(alpha, beta) {
+            *output.entry(gamma).or_insert(0) += 1;
+        }
+        output
+    }
 
     #[test]
     fn test_basic() {
@@ -482,9 +546,54 @@ mod tests {
         // QShuffle of (1) and (1): (1,1), (1,1), (2)
         let a = Composition::new(vec![1]);
         let b = Composition::new(vec![1]);
-        let shuffles = quasi_shuffles(&a, &b);
+        let shuffles = naive_quasi_shuffles(&a, &b);
         // (1,1) appears twice (a first, b first) and (2) once
         assert_eq!(shuffles.len(), 3);
+    }
+
+    #[test]
+    fn test_monomial_product_accumulates_quasi_shuffle_multiplicities() {
+        // Equal adjacent parts produce several paths with the same output.
+        // Empty compositions are the multiplicative identity boundary case.
+        let cases = [
+            (vec![], vec![]),
+            (vec![], vec![2, 1]),
+            (vec![2, 1], vec![]),
+            (vec![1], vec![1]),
+            (vec![1, 1], vec![1]),
+            (vec![2, 2], vec![2, 2]),
+        ];
+
+        for (left, right) in cases {
+            let alpha = Composition::new(left);
+            let beta = Composition::new(right);
+            let product = QSymFunction::<i64>::monomial_qsym(alpha.clone())
+                .multiply(&QSymFunction::monomial_qsym(beta.clone()));
+            assert_eq!(product.terms(), &naive_monomial_product(&alpha, &beta));
+        }
+    }
+
+    #[test]
+    fn test_monomial_product_keeps_bigint_coefficients_exact() {
+        let alpha = Composition::new(vec![1]);
+        let coefficient: BigInt = BigInt::from(1_u8) << 100_u32;
+        let product = QSymFunction::scaled_basis_element(
+            QSymBasis::Monomial,
+            alpha.clone(),
+            coefficient.clone(),
+        )
+        .multiply(&QSymFunction::scaled_basis_element(
+            QSymBasis::Monomial,
+            alpha,
+            coefficient.clone(),
+        ));
+        let square = coefficient.clone() * coefficient;
+
+        assert_eq!(
+            product.coefficient(&Composition::new(vec![1, 1])),
+            BigInt::from(2_u8) * square.clone()
+        );
+        assert_eq!(product.coefficient(&Composition::new(vec![2])), square);
     }
 
     #[test]

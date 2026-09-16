@@ -137,19 +137,31 @@ pub struct PermConstraints {
 /// This is much faster than generating all of S_n and filtering,
 /// especially for pattern-avoiding classes (Catalan-sized output vs n!).
 pub fn filtered_permutations(n: u8, constraints: &PermConstraints) -> Vec<Vec<u8>> {
-    if n == 0 {
-        return vec![vec![]];
-    }
     let mut result = Vec::new();
-    let available: Vec<u8> = (1..=n).collect();
-    build_filtered(
-        n,
-        constraints,
-        &mut Vec::with_capacity(n as usize),
-        &available,
-        &mut result,
-    );
+    for_each_filtered_permutation(n, constraints, &mut |permutation| {
+        result.push(permutation.to_vec());
+    });
     result
+}
+
+/// Visit permutations in the same order as [`filtered_permutations`], without
+/// retaining the generated family.
+///
+/// The callback receives a borrowed permutation that remains valid only until
+/// the callback returns.  This is useful for accumulating statistics or other
+/// summaries whose memory usage should not grow with the number of objects.
+pub fn for_each_filtered_permutation(
+    n: u8,
+    constraints: &PermConstraints,
+    callback: &mut impl FnMut(&[u8]),
+) {
+    if n == 0 {
+        callback(&[]);
+        return;
+    }
+    let available: Vec<u8> = (1..=n).collect();
+    let mut current = Vec::with_capacity(n as usize);
+    build_filtered(n, constraints, &mut current, &available, callback);
 }
 
 /// Convenience wrapper: generate all τ-avoiding permutations of \[1..n\].
@@ -501,7 +513,7 @@ fn build_filtered(
     constraints: &PermConstraints,
     current: &mut Vec<u8>,
     available: &[u8],
-    result: &mut Vec<Vec<u8>>,
+    callback: &mut impl FnMut(&[u8]),
 ) {
     let pos = current.len(); // 0-indexed position being filled
 
@@ -511,7 +523,7 @@ fn build_filtered(
             .iter()
             .all(|pat| avoids_arrow_pattern(current, pat))
         {
-            result.push(current.clone());
+            callback(current);
         }
         return;
     }
@@ -586,7 +598,7 @@ fn build_filtered(
             // (This is handled by the check above when we reach position v.)
             let mut remaining = available.to_vec();
             remaining.remove(i);
-            build_filtered(n, constraints, current, &remaining, result);
+            build_filtered(n, constraints, current, &remaining, callback);
         }
         current.pop();
     }

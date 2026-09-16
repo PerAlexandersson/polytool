@@ -1539,21 +1539,38 @@ impl Graph {
     /// A matching is non-crossing if no two edges (a,b) and (c,d) satisfy
     /// a < c < b < d (when endpoints are ordered on a line 0,1,...,n-1).
     pub fn non_crossing_matchings(&self) -> Vec<Vec<(usize, usize)>> {
-        self.all_matchings()
-            .into_iter()
-            .filter(|m| {
-                for i in 0..m.len() {
-                    for j in (i + 1)..m.len() {
-                        let (a, b) = m[i]; // a < b guaranteed by edge ordering
-                        let (c, d) = m[j];
-                        if (a < c && c < b && b < d) || (c < a && a < d && d < b) {
-                            return false;
-                        }
-                    }
-                }
-                true
-            })
-            .collect()
+        let mut result = Vec::new();
+        let mut current = Vec::new();
+        let mut used = vec![false; self.n];
+        self.non_crossing_matchings_rec(0, &mut current, &mut used, &mut result);
+        result
+    }
+
+    fn non_crossing_matchings_rec(
+        &self,
+        edge_idx: usize,
+        current: &mut Vec<(usize, usize)>,
+        used: &mut [bool],
+        result: &mut Vec<Vec<(usize, usize)>>,
+    ) {
+        result.push(current.clone());
+        for i in edge_idx..self.edges.len() {
+            let (u, v) = self.edges[i];
+            if !used[u]
+                && !used[v]
+                && current
+                    .iter()
+                    .all(|&(a, b)| !((a < u && u < b && b < v) || (u < a && a < v && v < b)))
+            {
+                used[u] = true;
+                used[v] = true;
+                current.push((u, v));
+                self.non_crossing_matchings_rec(i + 1, current, used, result);
+                current.pop();
+                used[u] = false;
+                used[v] = false;
+            }
+        }
     }
 
     /// All non-nesting matchings.
@@ -1561,21 +1578,38 @@ impl Graph {
     /// A matching is non-nesting if no two edges (a,b) and (c,d) satisfy
     /// a < c < d < b (one edge nested inside the other).
     pub fn non_nesting_matchings(&self) -> Vec<Vec<(usize, usize)>> {
-        self.all_matchings()
-            .into_iter()
-            .filter(|m| {
-                for i in 0..m.len() {
-                    for j in (i + 1)..m.len() {
-                        let (a, b) = m[i];
-                        let (c, d) = m[j];
-                        if (a < c && d < b) || (c < a && b < d) {
-                            return false;
-                        }
-                    }
-                }
-                true
-            })
-            .collect()
+        let mut result = Vec::new();
+        let mut current = Vec::new();
+        let mut used = vec![false; self.n];
+        self.non_nesting_matchings_rec(0, &mut current, &mut used, &mut result);
+        result
+    }
+
+    fn non_nesting_matchings_rec(
+        &self,
+        edge_idx: usize,
+        current: &mut Vec<(usize, usize)>,
+        used: &mut [bool],
+        result: &mut Vec<Vec<(usize, usize)>>,
+    ) {
+        result.push(current.clone());
+        for i in edge_idx..self.edges.len() {
+            let (u, v) = self.edges[i];
+            if !used[u]
+                && !used[v]
+                && current
+                    .iter()
+                    .all(|&(a, b)| !((a < u && v < b) || (u < a && b < v)))
+            {
+                used[u] = true;
+                used[v] = true;
+                current.push((u, v));
+                self.non_nesting_matchings_rec(i + 1, current, used, result);
+                current.pop();
+                used[u] = false;
+                used[v] = false;
+            }
+        }
     }
 
     // -- Triangles and cliques ----------------------------------------------
@@ -1651,6 +1685,29 @@ impl Graph {
             if current.iter().all(|&u| !self.has_edge(u, v)) {
                 current.push(v);
                 self.indep_rec(v + 1, current, result);
+                current.pop();
+            }
+        }
+    }
+
+    /// Visit independent sets without materializing the whole family.
+    fn for_each_independent_set<F>(&self, mut visit: F)
+    where
+        F: FnMut(&[usize]),
+    {
+        let mut current: Vec<usize> = Vec::new();
+        self.independent_sets_rec(0, &mut current, &mut visit);
+    }
+
+    fn independent_sets_rec<F>(&self, start: usize, current: &mut Vec<usize>, visit: &mut F)
+    where
+        F: FnMut(&[usize]),
+    {
+        visit(current);
+        for v in start..self.n {
+            if current.iter().all(|&u| !self.has_edge(u, v)) {
+                current.push(v);
+                self.independent_sets_rec(v + 1, current, visit);
                 current.pop();
             }
         }
@@ -1906,7 +1963,7 @@ impl Graph {
     pub fn acyclic_sink_polynomial_bigint(&self) -> Vec<BigInt> {
         let mut cache = std::collections::HashMap::new();
         let mut shifted_coefficients = vec![big_zero(); self.n + 1];
-        for independent_set in self.all_independent_sets() {
+        self.for_each_independent_set(|independent_set| {
             let removed = independent_set.iter().copied().collect::<BTreeSet<_>>();
             let remaining = (0..self.n)
                 .filter(|vertex| !removed.contains(vertex))
@@ -1914,7 +1971,7 @@ impl Graph {
             let induced = self.induced_subgraph(&remaining);
             shifted_coefficients[independent_set.len()] +=
                 induced.num_acyclic_orientations_dc(&mut cache);
-        }
+        });
 
         let mut coefficients = vec![big_zero(); self.n + 1];
         for (degree, shifted_coefficient) in shifted_coefficients.iter().enumerate() {
@@ -1958,9 +2015,9 @@ impl Graph {
         }
 
         let mut shifted_coefficients = vec![big_zero(); self.n + 1];
-        for independent_set in self.all_independent_sets() {
+        self.for_each_independent_set(|independent_set| {
             let mut removed = vec![false; self.n];
-            for &vertex in &independent_set {
+            for &vertex in independent_set {
                 removed[vertex] = true;
             }
             let mut acyclic_orientations = big(1);
@@ -1975,7 +2032,7 @@ impl Graph {
                 acyclic_orientations *= BigInt::from(later_degree + 1);
             }
             shifted_coefficients[independent_set.len()] += acyclic_orientations;
-        }
+        });
 
         let mut coefficients = vec![big_zero(); self.n + 1];
         for (degree, shifted_coefficient) in shifted_coefficients.iter().enumerate() {
@@ -2661,6 +2718,102 @@ mod tests {
         coefficients
     }
 
+    fn eager_non_crossing_oracle(graph: &Graph) -> Vec<Vec<(usize, usize)>> {
+        graph
+            .all_matchings()
+            .into_iter()
+            .filter(|matching| {
+                matching.iter().enumerate().all(|(left_index, &(a, b))| {
+                    matching[(left_index + 1)..]
+                        .iter()
+                        .all(|&(c, d)| !(a < c && c < b && b < d || c < a && a < d && d < b))
+                })
+            })
+            .collect()
+    }
+
+    fn eager_non_nesting_oracle(graph: &Graph) -> Vec<Vec<(usize, usize)>> {
+        graph
+            .all_matchings()
+            .into_iter()
+            .filter(|matching| {
+                matching.iter().enumerate().all(|(left_index, &(a, b))| {
+                    matching[(left_index + 1)..]
+                        .iter()
+                        .all(|&(c, d)| !(a < c && d < b || c < a && b < d))
+                })
+            })
+            .collect()
+    }
+
+    fn sink_polynomial_from_shifted(shifted_coefficients: &[BigInt]) -> Vec<BigInt> {
+        let mut coefficients = vec![big_zero(); shifted_coefficients.len()];
+        for (degree, shifted_coefficient) in shifted_coefficients.iter().enumerate() {
+            let mut binomial = big(1);
+            for (exponent, coefficient) in coefficients.iter_mut().enumerate().take(degree + 1) {
+                let term = shifted_coefficient * &binomial;
+                if (degree - exponent) % 2 == 0 {
+                    *coefficient += term;
+                } else {
+                    *coefficient -= term;
+                }
+                if exponent < degree {
+                    binomial *= BigInt::from(degree - exponent);
+                    binomial /= BigInt::from(exponent + 1);
+                }
+            }
+        }
+        while coefficients.len() > 1 && coefficients.last() == Some(&big_zero()) {
+            coefficients.pop();
+        }
+        coefficients
+    }
+
+    fn eager_sink_polynomial_oracle(graph: &Graph) -> Vec<BigInt> {
+        let mut cache = std::collections::HashMap::new();
+        let mut shifted_coefficients = vec![big_zero(); graph.num_vertices() + 1];
+        for independent_set in graph.all_independent_sets() {
+            let removed = independent_set.iter().copied().collect::<BTreeSet<_>>();
+            let remaining = (0..graph.num_vertices())
+                .filter(|vertex| !removed.contains(vertex))
+                .collect::<Vec<_>>();
+            let induced = graph.induced_subgraph(&remaining);
+            shifted_coefficients[independent_set.len()] +=
+                induced.num_acyclic_orientations_dc(&mut cache);
+        }
+        sink_polynomial_from_shifted(&shifted_coefficients)
+    }
+
+    fn eager_chordal_sink_polynomial_oracle(graph: &Graph) -> Option<Vec<BigInt>> {
+        let order = graph.perfect_elimination_order()?;
+        let mut position = vec![0usize; graph.num_vertices()];
+        for (index, &vertex) in order.iter().enumerate() {
+            position[vertex] = index;
+        }
+
+        let mut shifted_coefficients = vec![big_zero(); graph.num_vertices() + 1];
+        for independent_set in graph.all_independent_sets() {
+            let removed: BTreeSet<_> = independent_set.iter().copied().collect();
+            let acyclic_orientations = order
+                .iter()
+                .enumerate()
+                .filter(|(_, vertex)| !removed.contains(vertex))
+                .map(|(index, &vertex)| {
+                    graph.adj[vertex]
+                        .iter()
+                        .filter(|&&neighbor| {
+                            !removed.contains(&neighbor) && position[neighbor] > index
+                        })
+                        .count()
+                        + 1
+                })
+                .map(BigInt::from)
+                .product::<BigInt>();
+            shifted_coefficients[independent_set.len()] += acyclic_orientations;
+        }
+        Some(sink_polynomial_from_shifted(&shifted_coefficients))
+    }
+
     fn naive_is_chordal(graph: &Graph) -> bool {
         let mut active = vec![true; graph.num_vertices()];
         for _ in 0..graph.num_vertices() {
@@ -3308,6 +3461,37 @@ mod tests {
     }
 
     #[test]
+    fn test_sink_polynomial_streaming_independent_sets_matches_eager_oracles() {
+        for n in 0..=5 {
+            let possible_edges: Vec<_> = (0..n)
+                .flat_map(|u| ((u + 1)..n).map(move |v| (u, v)))
+                .collect();
+            for mask in 0..(1u64 << possible_edges.len()) {
+                let edges: Vec<_> = possible_edges
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, &edge)| (mask & (1u64 << index) != 0).then_some(edge))
+                    .collect();
+                let graph = Graph::new(n, &edges);
+                assert_eq!(
+                    graph.acyclic_sink_polynomial_bigint(),
+                    eager_sink_polynomial_oracle(&graph),
+                    "sink polynomial mismatch for n={n}, edges={edges:?}"
+                );
+                if graph.is_chordal() {
+                    assert_eq!(
+                        graph.acyclic_sink_polynomial_chordal_bigint(),
+                        eager_chordal_sink_polynomial_oracle(&graph),
+                        "chordal sink polynomial mismatch for n={n}, edges={edges:?}"
+                    );
+                } else {
+                    assert_eq!(graph.acyclic_sink_polynomial_chordal_bigint(), None);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_for_each_orientation_matches_all_orientations() {
         let g = Graph::path(3);
         let mut count = 0;
@@ -3596,6 +3780,73 @@ mod tests {
         let nc = Graph::complete(4).non_crossing_matchings();
         let nc2: Vec<_> = nc.iter().filter(|m| m.len() == 2).collect();
         assert_eq!(nc2.len(), 2); // {0-1,2-3} and {0-3,1-2}
+    }
+
+    #[test]
+    fn test_pruned_matching_traversals_match_eager_oracles_on_small_graphs() {
+        // Comparing vectors (rather than sets) also checks that the direct
+        // traversal preserves all_matchings' edge-list order and labels.
+        for n in 0..=5 {
+            let possible_edges: Vec<_> = (0..n)
+                .flat_map(|u| ((u + 1)..n).map(move |v| (u, v)))
+                .collect();
+            for mask in 0..(1u64 << possible_edges.len()) {
+                let edges: Vec<_> = possible_edges
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, &edge)| (mask & (1u64 << index) != 0).then_some(edge))
+                    .collect();
+                let graph = Graph::new(n, &edges);
+                assert_eq!(
+                    graph.non_crossing_matchings(),
+                    eager_non_crossing_oracle(&graph),
+                    "non-crossing mismatch for n={n}, edges={edges:?}"
+                );
+                assert_eq!(
+                    graph.non_nesting_matchings(),
+                    eager_non_nesting_oracle(&graph),
+                    "non-nesting mismatch for n={n}, edges={edges:?}"
+                );
+            }
+        }
+
+        // Graph::new retains insertion order. This catches accidental
+        // canonical sorting of the edge labels in the pruned traversal.
+        let graph = Graph::new(6, &[(2, 5), (0, 4), (1, 3), (0, 1), (3, 5)]);
+        assert_eq!(
+            graph.non_crossing_matchings(),
+            eager_non_crossing_oracle(&graph)
+        );
+        assert_eq!(
+            graph.non_nesting_matchings(),
+            eager_non_nesting_oracle(&graph)
+        );
+    }
+
+    #[test]
+    fn test_pruned_matching_traversals_skip_invalid_subtrees() {
+        let graph = Graph::complete(6);
+        let eager_count = graph.all_matchings().len();
+
+        let mut non_crossing = Vec::new();
+        let mut used = vec![false; graph.num_vertices()];
+        graph.non_crossing_matchings_rec(0, &mut Vec::new(), &mut used, &mut non_crossing);
+        assert_eq!(non_crossing, graph.non_crossing_matchings());
+        assert!(
+            non_crossing.len() < eager_count,
+            "non-crossing traversal visited {} states, but eager enumeration has {eager_count}",
+            non_crossing.len()
+        );
+
+        let mut non_nesting = Vec::new();
+        let mut used = vec![false; graph.num_vertices()];
+        graph.non_nesting_matchings_rec(0, &mut Vec::new(), &mut used, &mut non_nesting);
+        assert_eq!(non_nesting, graph.non_nesting_matchings());
+        assert!(
+            non_nesting.len() < eager_count,
+            "non-nesting traversal visited {} states, but eager enumeration has {eager_count}",
+            non_nesting.len()
+        );
     }
 
     // -- Non-nesting matchings --

@@ -62,8 +62,26 @@ pub fn row_interval_flagged_schur<C: Ring>(
     upper_flags: &[u32],
     num_vars: usize,
 ) -> MultiPoly<C> {
-    let tableaux = row_interval_flagged_tableaux(lambda, lower_flags, upper_flags);
-    tableau_weight_enumerator(&tableaux, num_vars)
+    validate_shape(lambda);
+    validate_row_intervals(lambda.len(), lower_flags, upper_flags, None);
+
+    let mut filling = lambda
+        .iter()
+        .map(|&row_len| vec![0u32; row_len as usize])
+        .collect::<Vec<_>>();
+    let mut exponents = vec![0u32; num_vars];
+    let mut terms = BTreeMap::new();
+    accumulate_tableau_weights_cell(
+        lambda,
+        lower_flags,
+        upper_flags,
+        &mut filling,
+        0,
+        0,
+        &mut exponents,
+        &mut terms,
+    );
+    MultiPoly::from_terms(num_vars, terms)
 }
 
 /// Enumerate semistandard skew tableaux of shape `lambda / mu` with row
@@ -139,8 +157,33 @@ pub fn row_interval_flagged_skew_schur<C: Ring>(
     upper_flags: &[u32],
     num_vars: usize,
 ) -> MultiPoly<C> {
-    let tableaux = row_interval_flagged_skew_tableaux(lambda, mu, lower_flags, upper_flags);
-    skew_tableau_weight_enumerator(&tableaux, num_vars)
+    validate_skew_shape(lambda, mu);
+    validate_row_intervals(lambda.len(), lower_flags, upper_flags, None);
+
+    let max_width = lambda.iter().copied().max().unwrap_or(0) as usize;
+    let mut filling = vec![vec![0u32; max_width]; lambda.len()];
+    let mut cells = Vec::new();
+    for row in 0..lambda.len() {
+        let inner = part(mu, row) as usize;
+        for col in inner..lambda[row] as usize {
+            cells.push((row, col));
+        }
+    }
+
+    let mut exponents = vec![0u32; num_vars];
+    let mut terms = BTreeMap::new();
+    accumulate_skew_tableau_weights_cell(
+        lambda,
+        mu,
+        lower_flags,
+        upper_flags,
+        &cells,
+        &mut filling,
+        0,
+        &mut exponents,
+        &mut terms,
+    );
+    MultiPoly::from_terms(num_vars, terms)
 }
 
 fn enumerate_tableaux_cell(
@@ -177,6 +220,74 @@ fn enumerate_tableaux_cell(
     for entry in min_entry..=upper_flags[row] {
         filling[row][col] = entry;
         enumerate_tableaux_cell(lambda, lower_flags, upper_flags, filling, row, col + 1, out);
+    }
+    filling[row][col] = 0;
+}
+
+#[allow(clippy::too_many_arguments)]
+fn accumulate_tableau_weights_cell<C: Ring>(
+    lambda: &[u32],
+    lower_flags: &[u32],
+    upper_flags: &[u32],
+    filling: &mut [Vec<u32>],
+    row: usize,
+    col: usize,
+    exponents: &mut [u32],
+    terms: &mut BTreeMap<Vec<u32>, C>,
+) {
+    if row == lambda.len() {
+        add_weight(exponents, terms);
+        return;
+    }
+
+    if col == lambda[row] as usize {
+        accumulate_tableau_weights_cell(
+            lambda,
+            lower_flags,
+            upper_flags,
+            filling,
+            row + 1,
+            0,
+            exponents,
+            terms,
+        );
+        return;
+    }
+
+    let row_min = if col == 0 {
+        lower_flags[row]
+    } else {
+        filling[row][col - 1]
+    };
+    let col_min = if row == 0 || col >= lambda[row - 1] as usize {
+        lower_flags[row]
+    } else {
+        filling[row - 1][col] + 1
+    };
+    let min_entry = row_min.max(col_min);
+
+    for entry in min_entry..=upper_flags[row] {
+        let exponent_index = entry as usize - 1;
+        assert!(
+            exponent_index < exponents.len(),
+            "num_vars ({}) must be at least the maximum tableau entry",
+            exponents.len()
+        );
+        filling[row][col] = entry;
+        exponents[exponent_index] = exponents[exponent_index]
+            .checked_add(1)
+            .expect("tableau weight exponent exceeds u32");
+        accumulate_tableau_weights_cell(
+            lambda,
+            lower_flags,
+            upper_flags,
+            filling,
+            row,
+            col + 1,
+            exponents,
+            terms,
+        );
+        exponents[exponent_index] -= 1;
     }
     filling[row][col] = 0;
 }
@@ -238,6 +349,70 @@ fn enumerate_skew_cell(
     filling[row][col] = 0;
 }
 
+#[allow(clippy::too_many_arguments)]
+fn accumulate_skew_tableau_weights_cell<C: Ring>(
+    lambda: &[u32],
+    mu: &[u32],
+    lower_flags: &[u32],
+    upper_flags: &[u32],
+    cells: &[(usize, usize)],
+    filling: &mut [Vec<u32>],
+    cell_index: usize,
+    exponents: &mut [u32],
+    terms: &mut BTreeMap<Vec<u32>, C>,
+) {
+    if cell_index == cells.len() {
+        add_weight(exponents, terms);
+        return;
+    }
+
+    let (row, col) = cells[cell_index];
+    let row_min = if col == part(mu, row) as usize {
+        lower_flags[row]
+    } else {
+        filling[row][col - 1]
+    };
+    let col_min = if row == 0 || col < part(mu, row - 1) as usize || lambda[row - 1] as usize <= col
+    {
+        lower_flags[row]
+    } else {
+        filling[row - 1][col] + 1
+    };
+    let min_entry = row_min.max(col_min);
+
+    for entry in min_entry..=upper_flags[row] {
+        let exponent_index = entry as usize - 1;
+        assert!(
+            exponent_index < exponents.len(),
+            "num_vars ({}) must be at least the maximum tableau entry",
+            exponents.len()
+        );
+        filling[row][col] = entry;
+        exponents[exponent_index] = exponents[exponent_index]
+            .checked_add(1)
+            .expect("tableau weight exponent exceeds u32");
+        accumulate_skew_tableau_weights_cell(
+            lambda,
+            mu,
+            lower_flags,
+            upper_flags,
+            cells,
+            filling,
+            cell_index + 1,
+            exponents,
+            terms,
+        );
+        exponents[exponent_index] -= 1;
+    }
+    filling[row][col] = 0;
+}
+
+fn add_weight<C: Ring>(exponents: &[u32], terms: &mut BTreeMap<Vec<u32>, C>) {
+    let coefficient = terms.entry(exponents.to_vec()).or_insert_with(C::zero);
+    *coefficient = coefficient.clone() + C::one();
+}
+
+#[cfg(test)]
 fn tableau_weight_enumerator<C: Ring>(tableaux: &[Tableau], num_vars: usize) -> MultiPoly<C> {
     let mut terms = BTreeMap::new();
     for tableau in tableaux {
@@ -258,6 +433,7 @@ fn tableau_weight_enumerator<C: Ring>(tableaux: &[Tableau], num_vars: usize) -> 
     MultiPoly::from_terms(num_vars, terms)
 }
 
+#[cfg(test)]
 fn skew_tableau_weight_enumerator<C: Ring>(
     tableaux: &[SkewTableau],
     num_vars: usize,
@@ -334,6 +510,33 @@ mod tests {
 
     use super::*;
 
+    fn assert_straight_weights_match_materialized_tableaux(
+        lambda: &[u32],
+        lower_flags: &[u32],
+        upper_flags: &[u32],
+        num_vars: usize,
+    ) {
+        let tableaux = row_interval_flagged_tableaux(lambda, lower_flags, upper_flags);
+        let expected: MultiPoly<i64> = tableau_weight_enumerator(&tableaux, num_vars);
+        let actual: MultiPoly<i64> =
+            row_interval_flagged_schur(lambda, lower_flags, upper_flags, num_vars);
+        assert_eq!(actual.terms(), expected.terms());
+    }
+
+    fn assert_skew_weights_match_materialized_tableaux(
+        lambda: &[u32],
+        mu: &[u32],
+        lower_flags: &[u32],
+        upper_flags: &[u32],
+        num_vars: usize,
+    ) {
+        let tableaux = row_interval_flagged_skew_tableaux(lambda, mu, lower_flags, upper_flags);
+        let expected: MultiPoly<i64> = skew_tableau_weight_enumerator(&tableaux, num_vars);
+        let actual: MultiPoly<i64> =
+            row_interval_flagged_skew_schur(lambda, mu, lower_flags, upper_flags, num_vars);
+        assert_eq!(actual.terms(), expected.terms());
+    }
+
     #[test]
     fn flagged_schur_shape_21_flags_23() {
         let f: MultiPoly<i64> = flagged_schur(&[2, 1], &[2, 3], 3);
@@ -356,6 +559,14 @@ mod tests {
     }
 
     #[test]
+    fn streamed_straight_weights_match_public_materialized_enumeration() {
+        assert_straight_weights_match_materialized_tableaux(&[2, 1], &[1, 1], &[2, 3], 3);
+        assert_straight_weights_match_materialized_tableaux(&[3, 1], &[2, 1], &[3, 4], 4);
+        assert_straight_weights_match_materialized_tableaux(&[], &[], &[], 0);
+        assert_straight_weights_match_materialized_tableaux(&[0], &[1], &[1], 1);
+    }
+
+    #[test]
     fn ordinary_skew_schur_specialization_shape_32_1() {
         let f: MultiPoly<i64> = flagged_skew_schur(&[3, 2], &[1], &[3, 3], 3);
         let expected = BTreeMap::from([
@@ -373,6 +584,14 @@ mod tests {
             (vec![3, 1, 0], 1),
         ]);
         assert_eq!(f.terms(), &expected);
+    }
+
+    #[test]
+    fn streamed_skew_weights_match_public_materialized_enumeration() {
+        assert_skew_weights_match_materialized_tableaux(&[3, 2], &[1], &[1, 2], &[2, 3], 3);
+        assert_skew_weights_match_materialized_tableaux(&[3, 2], &[1, 1], &[2, 1], &[3, 3], 3);
+        assert_skew_weights_match_materialized_tableaux(&[], &[], &[], &[], 0);
+        assert_skew_weights_match_materialized_tableaux(&[2, 1], &[2, 1], &[1, 1], &[2, 2], 2);
     }
 
     #[test]
