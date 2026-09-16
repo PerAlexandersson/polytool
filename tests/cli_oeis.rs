@@ -13,7 +13,7 @@ fn oeis_list_contains_verified_catalog() {
     assert!(output.status.success());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["schema"], "polytool.oeis-catalog.v1");
-    assert_eq!(value["count"], 755);
+    assert_eq!(value["count"], 774);
     assert!(value["sequences"]
         .as_array()
         .unwrap()
@@ -28,7 +28,7 @@ fn oeis_list_contains_verified_catalog() {
     let all = run_polytool(&["oeis", "list", "--json", "--include-experimental"]);
     assert!(all.status.success());
     let all_value: serde_json::Value = serde_json::from_slice(&all.stdout).unwrap();
-    assert_eq!(all_value["count"], 785);
+    assert_eq!(all_value["count"], 774);
 }
 
 #[test]
@@ -142,20 +142,32 @@ fn a166345_info_exports_the_exact_displayed_sequence() {
 }
 
 #[test]
-fn experimental_oeis_entries_require_an_explicit_flag() {
-    let rejected = run_polytool(&["oeis", "generate", "A035469", "--rows", "2"]);
-    assert_eq!(rejected.status.code(), Some(2));
-    assert!(String::from_utf8(rejected.stderr)
-        .unwrap()
-        .contains("is experimental"));
+fn a099040_uses_complete_oeis_rows() {
+    let info = run_polytool(&["oeis", "info", "A099040", "--json"]);
+    assert!(info.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&info.stdout).unwrap();
+    assert_eq!(value["status"], "validated");
+    assert_eq!(value["bfile_available"], true);
+    assert_eq!(
+        value["recurrence_data"]["initial_polynomials"],
+        serde_json::json!([["1"], ["0", "2"]])
+    );
 
-    let accepted = run_polytool(&[
-        "oeis",
-        "generate",
-        "A035469",
-        "--rows",
-        "2",
-        "--include-experimental",
+    let rows = run_polytool(&[
+        "oeis", "generate", "A099040", "--rows", "5", "--format", "triangle",
     ]);
-    assert!(accepted.status.success());
+    assert!(rows.status.success());
+    assert_eq!(
+        String::from_utf8(rows.stdout).unwrap(),
+        "0: 1\n1: 0 2\n2: 0 2 4\n3: 0 0 8 8\n4: 0 0 4 24 16\n"
+    );
+}
+
+#[test]
+fn unaligned_oeis_entries_are_not_bundled() {
+    let output = run_polytool(&["oeis", "generate", "A103328", "--rows", "2"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8(output.stderr)
+        .unwrap()
+        .contains("unknown bundled OEIS sequence"));
 }

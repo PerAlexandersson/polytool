@@ -326,8 +326,12 @@ so this embedded object omits the optional `search` member.  The catalog
 distinguishes holdout-`verified` recurrences from
 `validated` recurrences whose generated rows match the current OEIS prefix but
 whose original fitting/holdout provenance is unavailable.  Both are enabled by
-default.  Entries without a safe prefix or row-layout match are `experimental`,
-hidden by default, and require `--include-experimental`.
+default. The source generator rejects imported queue and Lean definitions that
+cannot be aligned with complete OEIS rows; in particular, it does not publish a
+recurrence fitted to a row fragment or to coefficient data with positional
+zeros removed. The `experimental` status and `--include-experimental` option
+remain available for explicitly curated future entries, but the current
+bundled catalog contains none.
 
 The source generator is `scripts/build_oeis_catalog.py`.  It imports the
 machine-readable recurrence benchmark fixtures, supplements them from the
@@ -335,7 +339,8 @@ curated `OEIS-polynomials/sequences` queue, and imports the 728 canonical
 generated definitions in `real-rooted-oeis-proofs`.  The latter are converted
 from their restricted Lean expression grammar into the same sparse exact
 representation and replayed against local OEIS data.  The generator rejects
-queue recurrences that do not reproduce their cached rows and emits
+queue recurrences that do not reproduce their cached rows or cannot be aligned
+with complete OEIS rows, and emits
 `src/oeis_catalog_generated.rs`.  Run it with `--check` in verification jobs
 that have the external source repositories to detect semantic drift. Standalone
 CI runs `--check-bundled`, which needs no external data and verifies the
