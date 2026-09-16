@@ -10,8 +10,9 @@ suggestions, and this handoff. All bounded source workers have completed and
 released their files; there is no active source ownership in this repository.
 Commits `4a897bf`, `e777c57`, and `f7d136f` are pushed on `master`.
 
-Kostka retirement is now the active maintenance increment. The historical
-`kostka` submodule and database-backed `KTT-search` application remain in Git
+Kostka retirement is complete in standalone commit `95cc655` and workspace
+commits `b4f1174` and `06340f3`; GitHub Actions run `35095705694` passed. The
+historical `kostka` submodule and database-backed `KTT-search` application remain in Git
 for reproducibility, but are excluded from the maintained root workspace and
 have no dedicated CI job. New GT/Ehrhart work routes to Ehrcalc;
 LR/Kostka/Schur compatibility work routes to lrcalc-rs. The Kostka repository
