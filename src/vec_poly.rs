@@ -116,31 +116,65 @@ pub fn neg(p: &[i64]) -> Vec<i64> {
 
 /// Permanent of a matrix whose entries are polynomials (stored as `Vec<i64>`).
 ///
-/// The matrix is `mat[row][col]`, where each entry is a polynomial.
-/// Uses expansion by minors (Laplace expansion along the first row).
+/// The matrix is `mat[row][col]`, where each entry is a polynomial. The
+/// permanent is defined for square matrices; a nonempty matrix must therefore
+/// have exactly as many columns as rows, and every row must have the same
+/// length. A rectangular or ragged matrix causes a panic. The empty matrix has
+/// permanent one, represented by the constant polynomial `[1]`.
+///
+/// The computation uses the standard subset dynamic program: after processing
+/// row `r`, the entry for a column subset records the sum of products obtained
+/// by assigning rows `0..=r` to those columns. This avoids the factorial work
+/// of a Laplace expansion while retaining exact integer arithmetic.
 pub fn permanent(mat: &[Vec<Vec<i64>>]) -> Vec<i64> {
     let n = mat.len();
     if n == 0 {
         return vec![1];
     }
-    let m = mat[0].len();
-    let mut result = vec![0i64];
-    for j in 0..m {
-        if is_zero(&mat[0][j]) {
-            continue;
+
+    let columns = mat[0].len();
+    assert!(
+        mat.iter().all(|row| row.len() == columns),
+        "permanent requires a rectangular matrix"
+    );
+    assert_eq!(
+        n, columns,
+        "permanent requires a square matrix (got {n} rows and {columns} columns)"
+    );
+    assert!(
+        n < usize::BITS as usize,
+        "permanent matrix is too large for subset dynamic programming"
+    );
+
+    let subset_count = 1usize << n;
+    let full_mask = subset_count - 1;
+    let mut current: Vec<Option<Vec<i64>>> = vec![None; subset_count];
+    current[0] = Some(vec![1]);
+
+    for row in mat {
+        let mut next: Vec<Option<Vec<i64>>> = vec![None; subset_count];
+        for (used_columns, partial) in current.into_iter().enumerate() {
+            let Some(partial) = partial else {
+                continue;
+            };
+            for (column, entry) in row.iter().enumerate() {
+                let bit = 1usize << column;
+                if used_columns & bit != 0 {
+                    continue;
+                }
+                let mask = used_columns | bit;
+                let term = mul(entry, &partial);
+                if let Some(existing) = next[mask].as_mut() {
+                    *existing = add(existing, &term);
+                } else {
+                    next[mask] = Some(term);
+                }
+            }
         }
-        let sub: Vec<Vec<Vec<i64>>> = (1..n)
-            .map(|i| {
-                (0..m)
-                    .filter(|&jj| jj != j)
-                    .map(|jj| mat[i][jj].clone())
-                    .collect()
-            })
-            .collect();
-        let term = mul(&mat[0][j], &permanent(&sub));
-        result = add(&result, &term);
+        current = next;
     }
-    trim(&result)
+
+    current[full_mask].take().unwrap_or_else(|| vec![0])
 }
 
 #[cfg(test)]
@@ -250,5 +284,62 @@ mod tests {
     fn test_permanent_empty() {
         let mat: Vec<Vec<Vec<i64>>> = vec![];
         assert_eq!(permanent(&mat), vec![1]);
+    }
+
+    fn naive_permanent(mat: &[Vec<Vec<i64>>]) -> Vec<i64> {
+        if mat.is_empty() {
+            return vec![1];
+        }
+        let columns = mat[0].len();
+        let mut result = vec![0];
+        for column in 0..columns {
+            let sub: Vec<Vec<Vec<i64>>> = mat[1..]
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .enumerate()
+                        .filter_map(|(index, entry)| (index != column).then_some(entry.clone()))
+                        .collect()
+                })
+                .collect();
+            result = add(&result, &mul(&mat[0][column], &naive_permanent(&sub)));
+        }
+        result
+    }
+
+    #[test]
+    fn test_permanent_matches_small_naive_oracle() {
+        for size in 0..=4 {
+            let mat: Vec<Vec<Vec<i64>>> = (0..size)
+                .map(|row| {
+                    (0..size)
+                        .map(|column| {
+                            let constant = ((3 * row + 5 * column + 1) % 7) as i64 - 3;
+                            let linear = ((row + 2 * column) % 3) as i64 - 1;
+                            vec![constant, linear]
+                        })
+                        .collect()
+                })
+                .collect();
+            assert_eq!(permanent(&mat), naive_permanent(&mat), "size {size}");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "permanent requires a square matrix")]
+    fn test_permanent_rejects_rectangular_matrix() {
+        let mat = vec![
+            vec![vec![1], vec![2]],
+            vec![vec![3], vec![4]],
+            vec![vec![5], vec![6]],
+        ];
+        let _ = permanent(&mat);
+    }
+
+    #[test]
+    #[should_panic(expected = "permanent requires a rectangular matrix")]
+    fn test_permanent_rejects_ragged_matrix() {
+        let mat = vec![vec![vec![1]], vec![vec![2], vec![3]]];
+        let _ = permanent(&mat);
     }
 }
