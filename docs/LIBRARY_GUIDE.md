@@ -22,7 +22,10 @@ or examples.
 binary collection is intentional. Do not attempt to track, rename, test, or
 catalogue it wholesale. When a result becomes reusable, promote its stable core
 to the owning library with tests; add a tracked example only when it is a useful
-canonical demonstration.
+canonical demonstration. It is a standalone Cargo workspace: use
+`--manifest-path experiments/Cargo.toml` for intentional runs. The retired
+database-backed `KTT-search` application is likewise isolated behind its own
+manifest and lockfile; new GT/Ehrhart work belongs in Ehrcalc.
 
 ## Architecture and names that must not be conflated
 

@@ -2,7 +2,10 @@
 name = "sym-poly-qsym"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Quasisymmetric functions: monomial, fundamental, power sum, Young quasisymmetric Schur bases"
+readme = "README.md"
+publish = false
 
 [dependencies]
 combinatoric-core = { path = "../../combinatoric-core" }

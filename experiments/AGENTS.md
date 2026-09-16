@@ -5,6 +5,17 @@
 This crate is a scratch surface for bounded research computations. Most files
 under `src/bin/` are deliberately ignored and use-once. Do not force-add them,
 catalogue the whole local forest, or treat an ignored path as a durable API.
+It is deliberately a standalone Cargo workspace excluded from the maintained
+root workspace, with its own committed lockfile. Invoke a local binary with an
+explicit manifest from the repository root, for example:
+
+```sh
+cargo run --locked --manifest-path experiments/Cargo.toml --bin <name>
+```
+
+Do not add it back to the root workspace: Cargo auto-discovers every ignored
+`src/bin/*.rs` file on this workstation, so doing so makes local and clean-clone
+target graphs disagree.
 
 Tracked experiment binaries are exceptional. Track one only when it is a
 reproducibility artifact, an independent oracle for a maintained library, or a
@@ -71,3 +82,7 @@ stay local and ignored.
 For a tracked experiment, record the exact command, bounds, source commit, and
 result location in the relevant research project rather than growing this
 guide into a chronological ledger.
+
+Only the narrowly tracked artifacts are exercised by CI, and CI does that from
+a clean checkout. A failure in an ignored use-once binary is local maintenance,
+not a reason to catalogue or repair the entire scratch forest.

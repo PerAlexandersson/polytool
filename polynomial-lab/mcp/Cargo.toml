@@ -6,6 +6,7 @@ license = "MIT"
 authors = ["Per Alexandersson <per.w.alexandersson@gmail.com>"]
 description = "Model Context Protocol server for polynomial-lab"
 readme = "README.md"
+publish = false
 
 [[bin]]
 name = "poly-lab-mcp"

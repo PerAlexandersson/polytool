@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT"
 description = "Shared library for foundational combinatorics: partitions, compositions, permutations, graphs, and posets"
 readme = "README.md"
+publish = false
 
 [dependencies]
 num-bigint = "0.4"

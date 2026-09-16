@@ -3,6 +3,8 @@ name = "experiments"
 version = "0.1.0"
 edition = "2021"
 description = "Research exploration binaries for combinatorial polynomial conjectures"
+license = "MIT"
+publish = false
 
 [dependencies]
 combpoly = { path = "../combpoly" }
@@ -22,3 +24,9 @@ rayon = "1.10"
 clap = { version = "4", features = ["derive", "env"] }
 dotenv = "0.15.0"
 mysql = { version = "27.0.0", default-features = false, features = ["default-rust"] }
+
+# This is deliberately a standalone scratch workspace. Keeping it outside the
+# maintained root workspace prevents hundreds of ignored local binaries from
+# changing the root Cargo target graph while preserving `cargo run --bin ...`
+# for local experiments.
+[workspace]

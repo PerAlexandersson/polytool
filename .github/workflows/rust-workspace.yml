@@ -1,0 +1,85 @@
+name: Rust workspace
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-workspace-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  format-and-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate locked workspace metadata
+        run: cargo metadata --locked --no-deps --format-version 1 > /dev/null
+      - name: Check maintained workspace formatting
+        run: cargo fmt --all -- --check
+
+  maintained-crates:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - polytool
+          - polytool-mcp
+          - polytool-web
+          - combinatoric-core
+          - combpoly
+          - sym-poly-core
+          - sym-poly-multipoly
+          - sym-poly-sym
+          - sym-poly-qsym
+          - flagged-lorentzian
+          - polynomial-lab
+          - polynomial-lab-mcp
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test ${{ matrix.package }}
+        run: cargo test --locked -p "${{ matrix.package }}" --all-targets
+
+  tracked-experiments:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: experiments -> target
+      - name: Test tracked experiment artifacts
+        run: cargo test --locked --manifest-path experiments/Cargo.toml --all-targets
+
+  legacy-kostka:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test retired Kostka library
+        run: cargo test --locked -p kostka --lib
+      - name: Check legacy KTT search
+        run: cargo check --locked --manifest-path KTT-search/Cargo.toml

@@ -8,6 +8,7 @@ license = "MIT"
 keywords = ["combinatorics", "polynomials", "permutations", "real-rootedness", "pattern-avoidance"]
 categories = ["command-line-utilities", "mathematics", "science"]
 readme = "README.md"
+publish = false
 
 # The main CLI binary
 [[bin]]

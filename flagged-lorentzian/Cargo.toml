@@ -2,7 +2,9 @@
 name = "flagged-lorentzian"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Reusable tools for the flagged skew Schur Lorentzian conjecture"
+publish = false
 
 [dependencies]
 sym-poly-core = { path = "../sym-poly/core" }

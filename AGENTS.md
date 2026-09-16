@@ -41,10 +41,13 @@ combinatoric-core
   `sym-poly-qsym` uses `sym-poly-sym`.
 - `polytool`, `kostka`, and `combinatoric-core` are separate library roots.
   `combpoly` and `polynomial-lab` consume `polytool`; their MCP/web siblings
-  are adapters, not duplicate libraries. `KTT-search` consumes `kostka`, and
-  `flagged-lorentzian` consumes `sym-poly-core`.
-- `experiments` is a consumer of the reusable crates. It is intentionally a
-  disposable, often ignored staging area, not a catalog to complete or clean.
+  are adapters, not duplicate libraries. The retired standalone `KTT-search`
+  application consumes `kostka`, and `flagged-lorentzian` consumes
+  `sym-poly-core`.
+- `experiments` is a standalone consumer workspace for the reusable crates. It
+  is intentionally a disposable, often ignored staging area, not a catalog to
+  complete or clean. Its ignored local binaries must not enter the maintained
+  root target graph.
 
 ## Implementation conventions
 
@@ -70,6 +73,11 @@ combinatoric-core
   crate/workspace. For a new potentially unbounded executable, start with
   `timeout 60s nice -n 10 cargo ...`; use a proportionate monitored timeout
   for established Cargo work.
+- Root Cargo commands cover maintained members. For a deliberate experiment or
+  legacy KTT check, pass `--manifest-path experiments/Cargo.toml` or
+  `--manifest-path KTT-search/Cargo.toml`; preserve their committed standalone
+  lockfiles. CI tests tracked experiments only from a clean checkout and never
+  treats the ignored local forest as a maintained suite.
 - Stage and commit only task-owned files after relevant checks; do not absorb
   generated files or another worker's changes. Follow the workspace's normal
   checkpoint/push policy unless the task says otherwise.

@@ -2,7 +2,11 @@
 name = "polytool-web"
 version = "0.2.1-rc.5"
 edition = "2021"
+rust-version = "1.82"
+license = "MIT"
 description = "WebAssembly interface for polytool"
+repository = "https://github.com/PerAlexandersson/polytool"
+publish = false
 
 [lib]
 crate-type = ["cdylib"]

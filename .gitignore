@@ -5,6 +5,7 @@
 /experiments/*
 !/experiments/AGENTS.md
 !/experiments/Cargo.toml
+!/experiments/Cargo.lock
 !/experiments/src/
 /experiments/src/*
 !/experiments/src/lib.rs

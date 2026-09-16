@@ -2,7 +2,9 @@
 name = "ktt-search"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Adaptive search for GT polytopes with negative Ehrhart coefficients"
+publish = false
 
 [[bin]]
 name = "ktt-search"
@@ -17,3 +19,7 @@ hashbrown    = "0.15"
 clap         = { version = "4", features = ["derive", "env"] }
 dotenv       = "0.15.0"
 mysql        = { version = "27.0.0", default-features = false, features = ["default-rust"] }
+
+# Retired database-backed search application. Keep its dependency graph and
+# lockfile separate from the maintained combinatorics workspace.
+[workspace]

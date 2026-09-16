@@ -332,7 +332,14 @@ from their restricted Lean expression grammar into the same sparse exact
 representation and replayed against local OEIS data.  The generator rejects
 queue recurrences that do not reproduce their cached rows and emits
 `src/oeis_catalog_generated.rs`.  Run it with `--check` in verification jobs
-to detect drift.
+that have the external source repositories to detect semantic drift. Standalone
+CI runs `--check-bundled`, which needs no external data and verifies the
+committed generated source against `src/oeis_catalog_generated.sha256`.
+
+Release packages omit repository-only agent notes, handoffs, CI configuration,
+benchmark output, and catalog-generation tooling. The recurrence fixtures stay
+in the package deliberately: the installed CLI's `bench recurrence-fixtures`
+command uses them as its default self-contained corpus.
 
 ### Check Family H PF/Jensen pencils
 

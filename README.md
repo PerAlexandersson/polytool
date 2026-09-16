@@ -23,15 +23,36 @@ and agents live in [AGENTS.md](AGENTS.md).
 - `polynomial-lab`: structured evidence ledger for real-rootedness and
   interlacing projects, also backed by `polytool`.
 - `kostka`: legacy reproducibility implementation; see its README for the
-  maintained successor and new-work policy. `KTT-search` consumes it.
+  maintained successor and new-work policy. The retired, database-backed
+  `KTT-search` application consumes it from a separate Cargo workspace.
 - `flagged-lorentzian`: targeted research crate using `sym-poly-core`.
 - `experiments`: deliberately disposable research binaries consuming the
   reusable crates. Most are intentionally ignored; promote only stable library
-  cores and selected canonical examples.
+  cores and selected canonical examples. It is a separate Cargo workspace so
+  local ignored probes cannot alter the maintained root target graph.
 
 The dependency direction begins with `combinatoric-core`, then
 `sym-poly-core`, then `sym-poly-multipoly`/`sym-poly-sym`/`sym-poly-qsym`.
 `combinatoric-core` is not a facade over `sym-poly`.
+
+## Cargo and CI boundaries
+
+The root workspace contains the maintained libraries, adapters, and legacy
+`kostka` library. Ordinary root commands therefore do not discover the large
+local experiment forest or pull the retired KTT application's MySQL dependency
+graph into maintained checks. Use the explicit standalone manifests when one
+of those areas is genuinely the target:
+
+```sh
+cargo test --locked --manifest-path experiments/Cargo.toml --bin <name>
+cargo check --locked --manifest-path KTT-search/Cargo.toml
+```
+
+The root GitHub workflow tests each maintained package separately, verifies the
+tracked experiment artifacts in a clean checkout, and keeps the database-backed
+legacy check in its own job. Standalone workspace lockfiles are committed at
+`experiments/Cargo.lock` and `KTT-search/Cargo.lock`; do not replace them with a
+crate-local lockfile inside a root-workspace member.
 
 ## Polytool standalone branch
 

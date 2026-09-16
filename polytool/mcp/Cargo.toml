@@ -2,10 +2,13 @@
 name = "polytool-mcp"
 version = "0.2.1-rc.5"
 edition = "2021"
+rust-version = "1.88"
 license = "MIT"
 authors = ["Per Alexandersson <per.w.alexandersson@gmail.com>"]
 description = "Model Context Protocol server for polytool"
 readme = "README.md"
+repository = "https://github.com/PerAlexandersson/polytool"
+publish = false
 
 [[bin]]
 name = "polytool-mcp"
