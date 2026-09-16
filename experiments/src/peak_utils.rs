@@ -1,4 +1,4 @@
-use combpoly::statistics::peaks;
+use combpoly::{permutation::contains_pattern, statistics::peaks};
 
 /// Trim trailing zero coefficients, keeping at least one entry.
 pub fn pt(p: &[i64]) -> Vec<i64> {
@@ -55,17 +55,7 @@ pub fn board_to_perm(board: &[u8]) -> Vec<u8> {
 
 /// Test whether a permutation avoids the classical pattern 312.
 pub fn is_312_avoiding(perm: &[u8]) -> bool {
-    let n = perm.len();
-    for i in 0..n {
-        for j in i + 1..n {
-            for k in j + 1..n {
-                if perm[k] < perm[i] && perm[i] < perm[j] {
-                    return false;
-                }
-            }
-        }
-    }
-    true
+    !contains_pattern(perm, &[3, 1, 2])
 }
 
 /// Count peaks in a permutation.
@@ -90,5 +80,16 @@ fn gb(n: usize, mx: usize, d: usize, current: &mut Vec<u8>, result: &mut Vec<Vec
         current.push(v as u8);
         gb(n, mx, d + 1, current, result);
         current.pop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_312_avoiding;
+
+    #[test]
+    fn distinguishes_312_from_231() {
+        assert!(!is_312_avoiding(&[3, 1, 2]));
+        assert!(is_312_avoiding(&[2, 3, 1]));
     }
 }
