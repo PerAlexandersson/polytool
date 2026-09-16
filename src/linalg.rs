@@ -1572,7 +1572,7 @@ fn previous_prime_at_or_below(mut n: u64) -> Option<u64> {
     if n == 2 {
         return Some(2);
     }
-    if n.is_multiple_of(2) {
+    if n & 1 == 0 {
         n -= 1;
     }
     while n >= 3 {
@@ -1592,14 +1592,15 @@ fn is_prime_u64(n: u64) -> bool {
         if n == p {
             return true;
         }
-        if n.is_multiple_of(p) {
+        #[allow(clippy::manual_is_multiple_of)]
+        if n % p == 0 {
             return false;
         }
     }
 
     let mut d = n - 1;
     let mut s = 0;
-    while d.is_multiple_of(2) {
+    while d & 1 == 0 {
         d /= 2;
         s += 1;
     }

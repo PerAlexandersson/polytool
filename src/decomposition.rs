@@ -120,7 +120,7 @@ pub fn r_transform<C: CoeffRing>(p: &Polynomial<C>, degree: usize) -> Option<Pol
     }
 
     let minus_one = C::from_i64(-1);
-    let sign = if degree.is_multiple_of(2) {
+    let sign = if degree & 1 == 0 {
         C::one()
     } else {
         C::from_i64(-1)
