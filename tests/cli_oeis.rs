@@ -108,6 +108,17 @@ fn oeis_info_exports_recurrence_dialects() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["id"], "A008292");
     assert!(value["recurrence"].as_str().unwrap().contains("P(n-1)"));
+    assert_eq!(value["recurrence_data"]["schema"], "polytool.recurrence.v1");
+    assert_eq!(value["recurrence_data"]["first_index"], 1);
+    assert_eq!(
+        value["recurrence_data"]["initial_polynomials"],
+        serde_json::json!([["1"]])
+    );
+    assert_eq!(
+        value["recurrence_data"]["recurrence"]["terms"][0]["offset"],
+        1
+    );
+    assert!(value["recurrence_data"].get("search").is_none());
     assert!(value["latex"].as_str().unwrap().contains("P(n-1)"));
     assert!(value["mathematica"].as_str().unwrap().contains("P["));
     assert!(value["sage"].as_str().unwrap().contains("def P"));
