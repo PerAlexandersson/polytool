@@ -3,6 +3,7 @@ name = "sym-poly-core"
 version = "0.1.0"
 edition = "2021"
 description = "Shared foundation for symmetric polynomial algebras: Ring trait, partitions, compositions, basis indexing, formal sums, transition matrix caching"
+readme = "README.md"
 
 [dependencies]
 combinatoric-core = { path = "../../combinatoric-core" }

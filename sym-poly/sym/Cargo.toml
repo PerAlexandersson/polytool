@@ -2,7 +2,8 @@
 name = "sym-poly-sym"
 version = "0.1.0"
 edition = "2021"
-description = "Symmetric functions in the six classical bases with generic coefficients"
+description = "Generic symmetric functions in six classical bases, tableaux, characters, chromatic functions, LLT, and Macdonald computations"
+readme = "README.md"
 
 [dependencies]
 combinatoric-core = { path = "../../combinatoric-core" }

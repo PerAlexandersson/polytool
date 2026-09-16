@@ -2,7 +2,8 @@
 name = "sym-poly-multipoly"
 version = "0.1.0"
 edition = "2021"
-description = "Multivariate polynomials with divided difference operators and key polynomials"
+description = "Generic sparse multivariate polynomials, divided differences, Gröbner and quotient tools, and nonsymmetric polynomial families"
+readme = "README.md"
 
 [dependencies]
 combinatoric-core = { path = "../../combinatoric-core" }

@@ -14,6 +14,27 @@ cargo build --release
 
 The binary is at `target/release/combpoly`.
 
+## Library API
+
+The maintained library exposes the same combinatorial building blocks used by
+the CLI:
+
+| Module | Purpose |
+| --- | --- |
+| `permutation` | Generation, classical-pattern tests, and filtered iterators |
+| `statistics` | Permutation and word statistics |
+| `polynomial_builder` | Ascending-degree generating-polynomial construction |
+| `order` | Bruhat and weak-order ideals |
+| `word`, `parking`, `catalan`, `cayley` | Word and classical object families |
+| `fixed_descent` | Fixed-descent insertion and transfer data |
+| `lattice_path_matroid` | Lattice-path-matroid h* computations |
+| `rook_placements` | Ordinary and non-nesting rook generators and packets |
+
+Polynomial root, interlacing, and recurrence algorithms belong to `polytool`;
+general graphs, posets, partitions, and compositions belong to
+`combinatoric-core`. See `../docs/LIBRARY_GUIDE.md` before adding another
+implementation.
+
 ## Subcommands
 
 ### `poly` -- Compute a generating polynomial
@@ -183,25 +204,13 @@ word filters and are especially useful with `--parking`.
 | `--real-rooted` | Check if polynomial has only real roots (Sturm chains, exact arithmetic) |
 | `--log-concave` | Check if coefficient sequence is log-concave |
 
-## Exploration binaries
+## Research experiments
 
-The `src/bin/` directory contains research exploration tools:
-
-| Binary | Purpose |
-|--------|---------|
-| `backtrack_explore` | Backtrack polynomials for all (pattern, stat) pairs |
-| `backtrack_len4` | Length-4 pattern systematic study |
-| `backtrack_len45` | Length-4 and length-5 pattern study |
-| `catalan_backtrack` | Catalan search orders exploration |
-| `catalan_verify` | Fast Catalan verification (n <= 11+) |
-| `peak_*` | Various peak statistic explorations |
-| `exc_*` | Excedance explorations |
-| `pf_*` | Parking function explorations |
-| `multiset_explore` | Multiset rook-Eulerian polynomials |
-
-Build all binaries: `cargo build --release`
-
-Run a specific binary: `cargo run --release --bin backtrack_explore -- 9 -r`
+Use-once scans live in the workspace's deliberately ignored `experiments/`
+area, not in this crate. They are not a maintained catalogue. Promote only a
+stable reusable kernel into this library, with a documented contract, exact
+tests, and a small independent oracle; leave the surrounding parameter scan
+local and disposable.
 
 ## Research context
 

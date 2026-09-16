@@ -15,7 +15,7 @@ Core operation: given a set of objects and a statistic,
 cargo run --release -- poly --perms 7 --avoiding 312 --stat des --real-rooted
 cargo run --release -- scan --size 7 --avoiding 312 --ideal bruhat --stat exc
 cargo run --release -- list --perms 5 --avoiding 312
-cargo run --release -- recurrence --perms 3:12 --avoiding 312 --stat des --auto
+cargo run --release -- recurrence --perms --max-n 12 --avoiding 312 --stat des --auto
 ```
 
 ## Library modules (`src/`)
@@ -30,15 +30,48 @@ cargo run --release -- recurrence --perms 3:12 --avoiding 312 --stat des --auto
 | `parking.rs` | Parking functions, run-sorted variants |
 | `catalan.rs` | Catalan/Dyck path utilities |
 | `cayley.rs` | Cayley permutations |
+| `fixed_descent.rs` | Fixed-descent insertion and transfer data |
+| `lattice_path_matroid.rs` | Lattice-path-matroid h* computations |
+| `rook_placements.rs` | Ordinary and non-nesting rook generators and packets |
 
 ## Dependencies
 
-- `polytool` for real-rootedness, interlacing, format_poly, recurrence search
-- Polynomial analysis is NOT in this crate — use `polytool` directly
+- `polytool` owns real-rootedness, interlacing, coefficient-vector analysis,
+  formatting, and recurrence search. Reuse it instead of adding a second
+  polynomial implementation here.
+- `combinatoric-core` owns general foundational graph, poset, partition, and
+  permutation structures. Do not create a reverse dependency from that crate
+  to Combpoly.
+- `sym-poly-*` owns symmetric, quasisymmetric, and multivariate function
+  algebras. Combpoly should produce combinatorial data rather than duplicate
+  those algebra types.
 
 ## Exploration binaries
 
-Research binaries are in the `experiments/` crate (workspace sibling), not here.
+Research binaries are in the `experiments/` crate (workspace sibling), not
+here. Most are deliberately ignored and use-once. Promote a generally useful
+generator into this library only with a documented contract, exact tests, and
+an independent small-instance check; do not move the surrounding scan loop.
+
+## Implementation conventions
+
+- Search this crate and `../docs/LIBRARY_GUIDE.md` before adding enumeration,
+  pattern, statistic, rook, polynomial, or interpolation helpers.
+- State whether permutations are zero- or one-indexed and use the shared
+  pattern APIs. Do not encode a named pattern through an undocumented custom
+  inequality.
+- Coefficient vectors use ascending degree. Trim only when trailing zeros are
+  mathematically inessential; h* dimension padding is an important exception.
+- For coefficients that can grow, implement a `BigInt` API as the canonical
+  routine and make any `i64` API a checked convenience wrapper.
+- Prefer iterators or callbacks for large object families. Do not require full
+  materialization merely to compute a distribution.
+- Public APIs need rustdoc covering the mathematical definition, empty input,
+  invalid input, indexing, arithmetic limits, and complexity.
+- Add known examples plus an independent implementation or exhaustive small
+  comparison. A research observation alone is not a regression oracle.
+- Update `README.md`, `../docs/LIBRARY_GUIDE.md`, and a runnable example when
+  adding a named public family.
 
 ## Paper: Backtrack permutations
 
