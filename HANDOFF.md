@@ -54,6 +54,15 @@ also passes for Polytool and its MCP companion. The full 356-test Polytool
 library suite passes after those changes, as does an all-target check on the
 exact Rust 1.82.0 toolchain for Polytool and its web companion.
 
+Polytool's `oeis info <A-number> --json` now embeds `recurrence_data`, the
+standard `polytool.recurrence.v1` object with exact coefficients and initial
+polynomials, while preserving the existing human-readable recurrence and
+language exports. Focused CLI tests, recurrence JSON fixture replay, formatting,
+and strict binary Clippy pass. The 30 experimental OEIS entries were also
+classified: 19 already have a verified b-file alignment but are not promoted by
+the queue importer's current status rule; the remaining 11 need row-layout or
+formula-level validation against their OEIS definitions before promotion.
+
 ## Durable policy
 
 - `master` is the canonical monorepo branch; `polytool/main` is generated only

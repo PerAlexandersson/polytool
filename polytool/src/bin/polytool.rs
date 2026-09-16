@@ -2132,6 +2132,23 @@ fn cmd_oeis_info(args: &[String]) {
         let mut value = oeis_entry_json(entry);
         let object = value.as_object_mut().unwrap();
         object.insert("recurrence".to_string(), json!(recurrence.to_string()));
+        let recurrence_first_index = usize::try_from(first_index).unwrap_or_else(|_| {
+            eprintln!(
+                "{} has a negative displayed recurrence index, which cannot be represented by {}",
+                entry.id, RECURRENCE_JSON_SCHEMA
+            );
+            std::process::exit(2);
+        });
+        object.insert(
+            "recurrence_data".to_string(),
+            serde_json::to_value(RecurrenceJson::from_recurrence_rational(
+                &recurrence,
+                recurrence_first_index,
+                &initial_rows,
+                None,
+            ))
+            .unwrap(),
+        );
         object.insert("latex".to_string(), json!(recurrence.to_latex()));
         object.insert(
             "mathematica".to_string(),

@@ -318,7 +318,12 @@ Generation formats are `rows`, `triangle`, `polynomial`, `json`, `jsonl`,
 `csv`, and `bfile`.  `--start-row` selects a later displayed OEIS row.  Strict
 b-file output is enabled only when the bundled complete-row prefix has been
 matched against OEIS data; `--max-terms` stops before a row that would cross
-the cap.  The catalog distinguishes holdout-`verified` recurrences from
+the cap.  The JSON returned by `oeis info` keeps the human-readable
+`recurrence` string and also includes `recurrence_data`, a directly consumable
+`polytool.recurrence.v1` object with exact rational coefficients and initial
+polynomials.  Catalog entries do not fabricate recurrence-search diagnostics,
+so this embedded object omits the optional `search` member.  The catalog
+distinguishes holdout-`verified` recurrences from
 `validated` recurrences whose generated rows match the current OEIS prefix but
 whose original fitting/holdout provenance is unavailable.  Both are enabled by
 default.  Entries without a safe prefix or row-layout match are `experimental`,
