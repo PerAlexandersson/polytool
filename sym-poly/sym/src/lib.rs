@@ -23,6 +23,7 @@ pub mod shifted_lr;
 pub mod symmetric_function;
 pub mod transition;
 pub mod twin_gkm;
+pub mod weighted_bond;
 
 pub use basis::Basis;
 pub use chromatic::{
@@ -90,6 +91,10 @@ pub use symmetric_function::SymmetricFunction;
 pub use twin_gkm::{
     twin_gkm_dagger_action_matrices, twin_gkm_dagger_character_values_by_degree,
     twin_gkm_dagger_frobenius,
+};
+pub use weighted_bond::{
+    bond_set_partitions, chromatic_mobius_symmetric_function, graph_mobius_symmetric_function,
+    WeightedBondError,
 };
 
 pub(crate) fn z_coefficient_i64(partition: &Partition) -> i64 {
