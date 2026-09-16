@@ -103,6 +103,11 @@ fn modular_inverse_big(value: &BigInt, modulus: &BigInt) -> Option<BigInt> {
     (gcd == BigInt::one()).then(|| residue_mod_big(&inverse, modulus))
 }
 
+#[cfg(test)]
+fn modular_inverse(value: i128, modulus: i128) -> Option<i128> {
+    modular_inverse_big(&BigInt::from(value), &BigInt::from(modulus))?.to_i128()
+}
+
 fn residue_mod(value: i128, modulus: i128) -> i128 {
     residue_mod_big(&BigInt::from(value), &BigInt::from(modulus))
         .to_i128()
