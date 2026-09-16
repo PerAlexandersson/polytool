@@ -69,7 +69,8 @@ artifacts, and A266178/A266298 lost cellular-automaton zero positions. The
 generator now rejects unaligned queue and Lean imports. Regeneration also drops
 the corrected-away A062154 entry. The catalog contains 774 entries (125
 verified, 649 validated, zero experimental). Generator checks, 9 focused OEIS
-library tests, 8 CLI tests, formatting, and strict all-target Clippy pass.
+library tests, 9 CLI tests, all 31 MCP tests, formatting, and strict all-target
+Clippy pass.
 
 ## Durable policy
 
