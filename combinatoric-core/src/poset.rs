@@ -134,7 +134,7 @@ impl Poset {
     /// `0, 1, ..., n`.  At position `i`, the letters `R`, `1`, and `<`
     /// mean `i < i+1`, while `L`, `0`, and `>` mean `i+1 < i`.
     ///
-    /// Thus `zig_zag_from_word("RLR")` is the same as [`Poset::fence(4)`].
+    /// Thus `zig_zag_from_word("RLR")` is the same as [`Poset::fence`] with argument 4.
     pub fn zig_zag_from_word(word: &str) -> Result<Self, String> {
         let mut covers = Vec::with_capacity(word.chars().count());
         for (i, ch) in word.chars().enumerate() {
@@ -729,7 +729,7 @@ impl Poset {
     /// The order polynomial Ω(P, k) counts these maps.
     ///
     /// Automatically relabels to natural labeling if needed. For better
-    /// performance on larger posets, use [`count_weak_order_preserving_dp`].
+    /// performance on larger posets, use [`Self::count_weak_order_preserving_dp`].
     pub fn count_weak_order_preserving(&self, k: usize) -> usize {
         let p = self.natural_relabeling();
         if p.n == 0 {
@@ -747,7 +747,7 @@ impl Poset {
     /// The strict order polynomial Ω̄(P, k) counts these maps.
     ///
     /// Automatically relabels to natural labeling if needed. For better
-    /// performance on larger posets, use [`count_strict_order_preserving_dp`].
+    /// performance on larger posets, use [`Self::count_strict_order_preserving_dp`].
     pub fn count_strict_order_preserving(&self, k: usize) -> usize {
         let p = self.natural_relabeling();
         if p.n == 0 {
@@ -1097,7 +1097,7 @@ impl Poset {
 
     /// Compute the Ehrhart polynomial of the order polytope O(P).
     ///
-    /// The order polytope O(P) ⊂ [0,1]^n has the property that its
+    /// The order polytope `O(P) ⊂ [0,1]^n` has the property that its
     /// lattice points at dilation t are order-preserving maps P → {0,...,t},
     /// so Ehr(O(P), t) = Ω(P, t+1) (the order polynomial shifted by 1).
     ///
@@ -1209,14 +1209,14 @@ impl Poset {
     // -- k-alternating poset --------------------------------------------------
 
     /// Construct the poset whose linear extensions are exactly the
-    /// k-alternating permutations of [n].
+    /// k-alternating permutations of `[n]`.
     ///
     /// A k-alternating permutation has descents exactly at positions
     /// divisible by k. The poset enforces:
     /// - At ascent positions j (k ∤ j): element at position j < element at position j+1
     /// - At descent positions j (k | j): element at position j > element at position j+1
     ///
-    /// This is NOT a poset on [n] directly; it's the "zig-zag" poset
+    /// This is NOT a poset on `[n]` directly; it's the "zig-zag" poset
     /// on positions {1,...,n} where covers encode the required comparisons.
     /// Linear extensions of this poset correspond to k-alternating permutations.
     pub fn k_alternating(n: usize, k: usize) -> Self {

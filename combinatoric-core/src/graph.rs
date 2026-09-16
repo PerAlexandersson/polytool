@@ -831,7 +831,7 @@ impl Graph {
         Graph::new(n, &edges)
     }
 
-    /// Complete multipartite graph K_{sizes[0], sizes[1], ...}.
+    /// Complete multipartite graph `K_{sizes[0], sizes[1], ...}`.
     ///
     /// Vertices are numbered contiguously within each part.
     pub fn complete_multipartite(sizes: &[usize]) -> Self {
@@ -1473,7 +1473,7 @@ impl Graph {
         }
     }
 
-    /// Matching polynomial: coefficients[k] = number of matchings with k edges.
+    /// Matching polynomial: `coefficients[k]` is the number of matchings with k edges.
     ///
     /// Counts matchings in place, using `O(n + m)` auxiliary space rather than
     /// materializing the potentially much larger list of all matchings.
@@ -1751,7 +1751,7 @@ impl Graph {
         }
     }
 
-    /// Independence polynomial: coefficients[k] = number of independent sets of size k.
+    /// Independence polynomial: `coefficients[k]` is the number of independent sets of size k.
     ///
     /// Counts by include/exclude recursion in place, using `O(n)` auxiliary
     /// space rather than materializing every independent set.
@@ -1940,7 +1940,7 @@ impl Graph {
         count
     }
 
-    /// Sink polynomial of acyclic orientations: coefficients[k] = number of
+    /// Sink polynomial of acyclic orientations: `coefficients[k]` is the number of
     /// acyclic orientations with exactly k sinks.
     ///
     /// A sink is a vertex with no outgoing edges in the orientation.
@@ -2149,7 +2149,7 @@ impl Graph {
     /// Sink polynomial over ALL orientations (not just acyclic ones).
     ///
     /// For each of the 2^|E| orientations, count sinks (vertices with out-degree 0).
-    /// Note: orientations with cycles may have zero sinks, contributing to coeff[0].
+    /// Note: orientations with cycles may have zero sinks, contributing to `coeff[0]`.
     pub fn sink_polynomial_all_orientations(&self) -> Vec<i64> {
         let mut coeffs = vec![0i64; self.n + 1];
         self.for_each_orientation_with_state(&mut |_, has_outgoing| {
@@ -2195,9 +2195,9 @@ impl Graph {
     /// Return the per-vertex (A_v, B_v) polynomials from the tree recursion.
     ///
     /// Returns (order, parent, a_polys, b_polys) where:
-    /// - order[i] is the vertex in BFS order (root = order[0])
-    /// - parent[v] is the parent of v (usize::MAX for root)
-    /// - a_polys[v] = A_v(t), b_polys[v] = B_v(t)
+    /// - `order[i]` is the vertex in BFS order (root = `order[0]`)
+    /// - `parent[v]` is the parent of v (`usize::MAX` for root)
+    /// - `a_polys[v] = A_v(t)`, `b_polys[v] = B_v(t)`
     pub fn tree_ab_polynomials(
         &self,
     ) -> (Vec<usize>, Vec<usize>, Vec<Vec<BigInt>>, Vec<Vec<BigInt>>) {

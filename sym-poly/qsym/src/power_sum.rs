@@ -89,7 +89,7 @@ pub fn phi_to_monomial<C: Ring>(f: &QSymFunction<C>) -> QSymFunction<C> {
 /// Convert a QSymFunction from M basis to Ψ basis.
 ///
 /// Uses per-degree rational matrix inversion.
-/// Requires rational coefficients (Ratio<BigInt>, Ratio<i64>).
+/// Requires rational coefficients (`Ratio<BigInt>`, `Ratio<i64>`).
 pub fn monomial_to_psi<C: Ring>(f: &QSymFunction<C>) -> QSymFunction<C> {
     monomial_to_power_sum(f, QSymBasis::PowerSumPsi, BlockWeight::Pi)
 }
@@ -97,7 +97,7 @@ pub fn monomial_to_psi<C: Ring>(f: &QSymFunction<C>) -> QSymFunction<C> {
 /// Convert a QSymFunction from M basis to Φ basis.
 ///
 /// Uses per-degree rational matrix inversion.
-/// Requires rational coefficients (Ratio<BigInt>, Ratio<i64>).
+/// Requires rational coefficients (`Ratio<BigInt>`, `Ratio<i64>`).
 pub fn monomial_to_phi<C: Ring>(f: &QSymFunction<C>) -> QSymFunction<C> {
     monomial_to_power_sum(f, QSymBasis::PowerSumPhi, BlockWeight::Sp)
 }

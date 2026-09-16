@@ -30,11 +30,11 @@ use num_traits::{One, Zero};
 use std::collections::{BTreeMap, HashSet};
 
 /// A GT-pattern for shape λ with n = λ.num_parts().
-/// Stored as rows[i] = entries of row i+1 (0-indexed), so rows[n-1] = λ.
+/// Stored as `rows[i]` = entries of row i+1 (0-indexed), so `rows[n-1] = λ`.
 /// Row i (1-indexed) has i entries.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GtPattern {
-    /// rows[i] has i+1 entries (row i+1 in 1-indexed notation).
+    /// `rows[i]` has i+1 entries (row i+1 in 1-indexed notation).
     pub rows: Vec<Vec<u32>>,
 }
 
@@ -253,7 +253,7 @@ fn enumerate_gt_entries(
 
 /// All reduced words for a permutation σ (given in one-line notation, 1-indexed).
 ///
-/// Uses the standard algorithm: for each descent position i (σ[i] > σ[i+1]),
+/// Uses the standard algorithm: for each descent position i (`σ[i] > σ[i+1]`),
 /// apply s_i and recursively find reduced words for s_i · σ, prepending i.
 pub fn reduced_words(perm: &[usize]) -> Vec<Vec<usize>> {
     let n = perm.len();
@@ -437,7 +437,7 @@ pub fn key_kostka(lambda: &Partition, sigma: &[usize], mu: &[u32]) -> u64 {
 /// of rational polytopes). This computes the polynomial by evaluating at
 /// enough positive dilations and interpolating.
 pub struct KeyEhrhartPoly {
-    /// Coefficients: poly[i] = coefficient of k^i.
+    /// Coefficients: `poly[i]` is the coefficient of `k^i`.
     pub coeffs: Vec<BigRational>,
     /// Degree.
     pub degree: usize,

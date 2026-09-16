@@ -34,6 +34,10 @@ upgrade the isolated experiments/KTT MySQL chain when its upstream
 future-incompatibility warning is resolved. See
 [`suggestions/rust-repository-health-2026-09-16.md`](suggestions/rust-repository-health-2026-09-16.md).
 
+The complete workspace documentation builds with `RUSTDOCFLAGS="-D warnings"`;
+the root CI enforces this alongside the declared Polytool MSRVs. Kostka's two
+documentation repairs are pushed separately as `ec1383c`.
+
 ## Durable policy
 
 - `master` is the canonical monorepo branch; `polytool/main` is generated only

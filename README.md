@@ -50,9 +50,11 @@ cargo check --locked --manifest-path KTT-search/Cargo.toml
 
 The root GitHub workflow tests each maintained package separately, verifies the
 tracked experiment artifacts in a clean checkout, and keeps the database-backed
-legacy check in its own job. Standalone workspace lockfiles are committed at
-`experiments/Cargo.lock` and `KTT-search/Cargo.lock`; do not replace them with a
-crate-local lockfile inside a root-workspace member.
+legacy check in its own job. It also checks the declared Polytool library/web
+MSRV (Rust 1.82) and MCP MSRV (Rust 1.88), and treats Rust documentation
+warnings as errors. Standalone workspace lockfiles are committed at
+`experiments/Cargo.lock` and `KTT-search/Cargo.lock`; do not replace them with
+a crate-local lockfile inside a root-workspace member.
 
 ## Polytool standalone branch
 

@@ -21,7 +21,7 @@
 //!
 //! Additional features:
 //! - [`p_partition`]: Stanley's (P,w)-partition generating functions (Ψ̃-positive for naturally labeled posets)
-//! - [`chromatic_qsym`]: chromatic quasisymmetric functions, including an
+//! - [`mod@chromatic_qsym`]: chromatic quasisymmetric functions, including an
 //!   asc-weighted Shareshian--Wachs style refinement
 //! - [`sym_qsym`]: maps between Sym and QSym
 //! - [`power_sum`]: normalized Ψ̃ = Ψ/z and Φ̃ = Φ/z utilities, plus

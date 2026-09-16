@@ -160,9 +160,9 @@ fn gen_pf(
 /// How to break a word into maximal ascending runs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RunBreak {
-    /// Strictly ascending: break when w[i] >= w[i+1] (ties break the run).
+    /// Strictly ascending: break when `w[i] >= w[i+1]` (ties break the run).
     StrictAsc,
-    /// Non-decreasing: break when w[i] > w[i+1] (ties continue the run).
+    /// Non-decreasing: break when `w[i] > w[i+1]` (ties continue the run).
     NonDecr,
 }
 

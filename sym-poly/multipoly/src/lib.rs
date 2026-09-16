@@ -9,16 +9,16 @@
 //! - [`groebner`] — basic Buchberger algorithm for small exact quotients
 //! - [`quotient`] — finite standard-monomial quotient bases
 //! - [`operators`] — simple, Demazure, and t-deformed operators (∂_i, π_i, θ_i)
-//! - [`key_polynomial`] — Demazure characters via π operators
-//! - [`atom_polynomial`] — Demazure atoms via θ operators
+//! - [`mod@key_polynomial`] — Demazure characters via π operators
+//! - [`mod@atom_polynomial`] — Demazure atoms via θ operators
 //! - [`borodin_wheeler`] — local weights for the Borodin--Wheeler vertex model
-//! - [`flagged_schur`] — flagged Schur and flagged skew Schur polynomials
+//! - [`mod@flagged_schur`] — flagged Schur and flagged skew Schur polynomials
 //! - [`kohnert`] — Kohnert diagrams and Assaf Yamanouchi tests
-//! - [`lock_polynomial`] — finite lock polynomials from lock fillings
+//! - [`mod@lock_polynomial`] — finite lock polynomials from lock fillings
 //! - [`multiline_queue`] — multiline queues and Ferrari--Martin labelings
 //! - [`nonsymmetric_macdonald`] — nonsymmetric Macdonald filling formulas
 //!   and the operator-side `q = 0` Hall-Littlewood specialization
-//! - [`schubert_polynomial`] — Schubert polynomials via divided differences
+//! - [`mod@schubert_polynomial`] — Schubert polynomials via divided differences
 //! - [`beta_grothendieck_polynomial`] — connective-K Grothendieck polynomials
 //! - [`grothendieck_to_lascoux`] — Grothendieck-to-Lascoux expansion
 //! - [`slide_polynomial`] — monomial slide, fundamental slide, and glide polynomials

@@ -104,6 +104,8 @@ targets from a clean checkout.
 ## Audit evidence
 
 - `cargo fmt --all -- --check` passed for the completed checkpoints.
+- `cargo doc --locked --workspace --no-deps` passes with
+  `RUSTDOCFLAGS="-D warnings"`; root CI now keeps rustdoc links warning-free.
 - The standalone Polytool export is byte-identical to `origin/main` and passes
   locked standalone metadata without sibling dependencies.
 - Every maintained package passed its focused suite; the long Polytool library
