@@ -64,7 +64,7 @@ pub fn eulerian_square_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     square_triangle(&triangle)
 }
 
-/// Hoggatt polynomials H_1^[m](q,t), ..., H_max_n^[m](q,t), exact integer q>=1.
+/// Hoggatt polynomials `H_1^[m](q,t), ..., H_max_n^[m](q,t)`, exact integer q>=1.
 ///
 /// The coefficient of t^k in row n (1<=n<=max_n, 0<=k<n) is
 /// q^(m*k*(k+1)/2) times the volume generating function of plane partitions
