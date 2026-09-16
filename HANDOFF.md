@@ -1,5 +1,31 @@
 # Handoff
 
+## Completed: library boundaries, experiment policy, and first promotion — 2026-09-16
+
+The maintainability audit is integrated in root commits `1733b3e`, `b91a74f`,
+`6c6e644`, and `d3d852c`; the nested Combpoly documentation checkpoint is
+`0ec87e1` (that nested repository has no remote). Root and crate-local guides
+now document actual dependency direction, public API ownership, exactness
+limits, find-before-write expectations, and the deliberately ignored/use-once
+experiment policy. The local experiment forest was not catalogued or added.
+
+Polytool no longer has a sibling path dependency: the two cross-crate
+Delannoy graph drivers are narrowly tracked under `experiments`, and the
+subtree publishing script validates an archived standalone checkout before
+pushing. The weighted-bond recurrence was promoted from its checked example
+to `sym_poly_sym::weighted_bond` with generic exact coefficients, canonical
+graph-key memoization, boundary tests, and the example retained as a consumer.
+The shared experiment helper now uses Combpoly's canonical test for the 312
+pattern; the old handwritten inequality had tested 231.
+
+Verified in Docker with the external Cargo cache: locked workspace and copied
+standalone Polytool metadata; ShellCheck and Bash syntax; three weighted-bond
+unit tests and its runnable example; the Peak-utils regression; and the two
+Delannoy binaries' 2 + 3 tests. Rustfmt and `git diff --check` pass. The next
+promotion candidates remain in `docs/EXPERIMENT_PROMOTION.md`; matroid work
+must first decide checked versus explicitly unchecked basis construction.
+The pre-existing untracked `polytool/scripts/__pycache__/` remains untouched.
+
 ## Completed: linear-extension promotion — 2026-09-15
 
 `combinatoric-core::Poset` now validates linear extensions and computes
