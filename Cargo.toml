@@ -2,13 +2,24 @@
 name = "polytool"
 version = "0.2.1-rc.5"
 edition = "2021"
+rust-version = "1.82"
 license = "MIT"
 authors = ["Per Alexandersson <per.w.alexandersson@gmail.com>"]
 description = "Univariate polynomial toolkit: exact real-rootedness, interlacing, gamma-positivity, resultants, Ehrhart/h*-vectors, recurrence search, standard sequences"
 readme = "README.md"
 documentation = "https://docs.rs/polytool"
+repository = "https://github.com/PerAlexandersson/polytool"
 keywords = ["polynomials", "real-rootedness", "interlacing", "combinatorics"]
 categories = ["mathematics", "science"]
+exclude = [
+    "/.github/",
+    "/AGENTS.md",
+    "/HANDOFF.md",
+    "/bench-results/",
+    "/doc/HANDOFF_ARCHIVE*.md",
+    "/doc/refactoring-notes.md",
+    "/scripts/",
+]
 
 [dependencies]
 num-bigint = "0.4"

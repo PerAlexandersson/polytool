@@ -26,6 +26,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURES = PROJECT_ROOT / "fixtures" / "recurrence-benchmarks"
 DEFAULT_OEIS_DATA = Path("/home/paxinum/OEIS-data/seq")
 DEFAULT_OUTPUT = PROJECT_ROOT / "src" / "oeis_catalog_generated.rs"
+DEFAULT_CHECKSUM = PROJECT_ROOT / "src" / "oeis_catalog_generated.sha256"
 DEFAULT_SEQUENCE_LIBRARY = Path(
     "/home/paxinum/Dropbox/AI-projects/projects/OEIS-polynomials/sequences"
 )
@@ -48,6 +49,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument(
+        "--check-bundled",
+        action="store_true",
+        help="verify the bundled generated catalog against its committed checksum without external inputs",
+    )
+    parser.add_argument("--checksum", type=Path, default=DEFAULT_CHECKSUM)
     return parser.parse_args()
 
 
@@ -839,6 +846,18 @@ def rustfmt(source: str) -> str:
 
 def main() -> int:
     args = parse_args()
+    if args.check_bundled:
+        if not args.output.exists() or not args.checksum.exists():
+            raise SystemExit("bundled catalog or checksum is missing")
+        expected = args.checksum.read_text(encoding="utf-8").strip()
+        actual = hashlib.sha256(args.output.read_bytes()).hexdigest()
+        if not re.fullmatch(r"[0-9a-f]{64}", expected):
+            raise SystemExit(f"invalid generated catalog checksum: {args.checksum}")
+        if actual != expected:
+            raise SystemExit(
+                f"bundled generated catalog checksum mismatch: expected {expected}, got {actual}"
+            )
+        return 0
     rendered = rustfmt(
         render_catalog(
             args.fixtures,

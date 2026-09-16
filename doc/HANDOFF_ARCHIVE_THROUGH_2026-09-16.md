@@ -1,0 +1,730 @@
+# Polytool handoff archive through 2026-09-16
+
+## Completed: exact Bernstein-basis conversion (2026-09-15)
+
+Worker `/root` added `bernstein_basis_bigint` and exact rational coordinate
+conversion APIs, with wrappers for integer coefficient rows and support for
+degree elevation.  The `bernstein-expansion`/`bernstein` CLI accepts exact
+rational input and emits text or JSON.  The README documents the normalized
+basis convention.  All 353 library tests and all 22 `cli_bigint` tests pass;
+strict Clippy passes for the library and binary.  The local checkpoint is commit
+`04d647f`; pushing from this container is blocked by missing GitHub SSH
+authentication.  Ownership is released.
+
+## Completed: exact OEIS recurrence exports (2026-09-11)
+
+Worker `/root` completed and released ownership of `src/recurrence.rs`,
+`src/oeis.rs`, `src/bin/polytool.rs`, `mcp/src/lib.rs`, `tests/cli_oeis.rs`, and
+this handoff on branch `fix/polytool-oeis-export-20260911`.  OEIS exports now
+retain every authoritative initial row, include any pre-recurrence prefix, and
+translate the catalog's internal recurrence index to the displayed OEIS row
+index.  Generic recurrence-search exports keep their prior minimal-base
+behavior.  A166345 now exports rows 1--3 as `1`, `1+t`, `(1+t)^2` and the exact
+displayed-index recurrence
+`P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)`.
+
+An all-catalog regression regenerated two rows beyond the complete exported
+prefix for all 785 entries and matched their exact catalog polynomials.  Other
+verification, in a standalone regular-file copy with the external Cargo target
+and reduced priority:
+
+- recurrence tests: 65 passed;
+- focused A166345 and prefixed-family export tests: 2 passed;
+- OEIS CLI tests: 8 passed;
+- MCP tests: 23 library, 2 binary, and 1 documentation test passed;
+- strict Clippy passed for Polytool and the MCP package;
+- the emitted A166345 Python program reproduced exact rows 1--8;
+- rustfmt and `git diff --check` passed.
+
+The canonical checkout and its unrelated `scripts/__pycache__/` were untouched
+while developing the patch.
+
+## Completed: forgiving browser coefficient input (2026-09-11)
+
+Host completed web/index.html and new web/input-normalization.test.cjs;
+ownership released at checkpoint. Accept OEIS semicolon/newline rows,
+brace/bracket/tuple lists, wrapped bracket rows, trailing row commas, and
+Unicode minus/space/line-ending artifacts. Preserve exact integer strings,
+row order and trailing zeros. Malformed entries pass through to the existing
+error path; no numeric scraping. Nesting is capped before recursive descent.
+The user's exact OEIS sample gives 13 rows; the nested-list example gives four.
+
+38 tests pass against both canonical and staged HTML, including all rows
+through the actual staged WASM engine, a >2^53 integer, 20,000 coefficients,
+20,000-level malformed nesting, input-boundary wiring and inline JS syntax.
+Command: `POLYTOOL_WASM_DIR=/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/www/pkg
+node --test polytool/web/input-normalization.test.cjs` from the Rust root;
+set POLYTOOL_HTML to the staged www/index.html to check that copy.
+git diff --check passes. No Rust/WASM changes, build or dependencies needed.
+Focused patch mirrored into staging without replacing its newer OEIS export
+or rational defaults. Existing untracked scripts/__pycache__ is untouched.
+Source checkpoint: 0320319. User subsequently authorized commit and deploy;
+the input-only HTML patch is live on poly.symmetricfunctions.com. All 38
+tests pass against freshly fetched public HTML/JS/WASM, including both user
+examples and exact large integers. Only index.html was replaced; its SHA-256
+is 4f7e1bc07c68f972f2ab6411d5ee6530cdfc0a89e2d0189821c08e2c01ff4d85.
+Existing JS/WASM and unrelated staged features were not deployed. Rollback
+HTML: /tmp/poly-input-deploy-20260911.X0LxbH/before.html. No Git push.
+
+## Completed: actionable MCP diagnostics for unsafe JSON integers (2026-09-10)
+
+Worker `/root` completed and released ownership of `mcp/src/lib.rs`,
+`mcp/README.md`, and this handoff in the isolated worktree
+`/tmp/polytool-mcp-bigint-diagnostic-20260910`.  Exact coefficients which
+arrive as floating-point JSON numbers are now rejected with instructions to
+use quoted decimal strings and the JavaScript safe-integer bound.  Exact
+unsigned JSON integers through `u64` are preserved, including values above
+`i64::MAX`.  The CLI and exact arithmetic are unchanged; the documentation
+also points large local batches to the compiled stdin CLI so they can bypass
+JSON serialization.
+
+Verification used the external Cargo target and reduced priority:
+
+```text
+rustfmt --edition 2021 --check polytool/mcp/src/lib.rs     passed
+cargo test -q -p polytool-mcp                         26 passed
+cargo clippy -q -p polytool-mcp --all-targets -- -D warnings
+                                                            passed
+```
+
+## Completed: shared-denominator vector recurrences (2026-09-10)
+
+Worker `/root/vector_denominator_luna` completed and released ownership of
+`src/recurrence.rs`, `README.md`, and this handoff in isolated worktree
+`/tmp/polytool-vector-denominator-20260910`. The new exact APIs fit and evaluate
+`q(n,x) F_(n+1) = M(n,x,D_x) F_n + G(n,x)` with one common polynomial factor,
+including companion-lag fitting. Existing normalized `q=1` APIs are unchanged.
+
+Public additions include `VectorRecurrenceDenominatorOptions`,
+`SharedDenominatorVectorRecurrence`, and
+`SharedDenominatorVectorRecurrenceEvaluationError`,
+`find_vector_recurrence_with_denominator[_rational]`, and companion variants.
+The first nonzero denominator monomial is normalized to one; unique searches
+reject both linear nullity and competing normalized pivots. Fitting rejects
+denominators that evaluate to zero at any observed source index, while
+evaluation reports zero denominators and non-polynomial quotients through the
+separate denominator-aware error type. Focused tests cover `q(n)`, `q(x)`,
+affine forcing, a two-component system with distinct rows, q=1 compatibility,
+held-out tampering, ambiguity, and companion shift rows.
+
+The new fitting functions return `SharedDenominatorVectorRecurrenceFitError`
+and joint diagnostics (total/equations-by-output, global rank, nullity, and
+output list). The existing `VectorRecurrenceFitError`,
+`VectorRecurrenceEvaluationError`, and per-row diagnostics remain unchanged.
+The legacy public enums were checked against the pre-extension definitions for
+source-compatible exhaustive matching.
+
+Verification in a standalone copy used external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`:
+
+- recurrence module: 65 passed;
+- non-OEIS Polytool library: 320 passed, 6 filtered;
+- Clippy all targets passed with the repository's existing three lint exceptions.
+
+The focused checkpoints were integrated into the populated monorepo checkout
+as `4998ff0`, `6d89e0d`, and `becf507`. Independent post-integration checks
+again passed 65 recurrence tests, 320 non-OEIS library tests (6 filtered), and
+strict Clippy with the repository's three existing lint exceptions. No push or
+publication was performed.
+
+## Recurrence rational-coefficient default (2026-09-08)
+
+The recurrence-search controls now put `rational coefficients` before
+`non-homogeneous` and enable rational coefficients by default. The same
+two-line UI change is staged independently in
+`/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/www/index.html`;
+the newer unrelated staged OEIS-export content was preserved. Static HTML and
+inline-JavaScript parsing, unique-control, checked-default, DOM-order, and
+whitespace checks pass for both copies. Ownership is released. Nothing has
+been deployed or pushed.
+## Completed MCP `find_recurrence` compatibility work (GitHub #4, 2026-09-08)
+
+The coding worker completed this focused change in the regular isolated
+worktree `/tmp/polytool-mcp-issue-4-20260908`, on branch
+`fix/polytool-mcp-issue-4-20260908` based exactly on published `origin/master`
+`ca0771bfe1c5b1755d3b61f7c3eead7ede1e0f1b`.  Checkpoint `b076098` records
+the exact ownership and plan, `2797b23` implements the schema/runtime/test
+change, and `19b779d` updates the existing help and README surfaces.
+
+The raw `tools/list` schema for `find_recurrence` is now an ordinary object
+with no top-level `oneOf`.  It exposes and describes all four input forms,
+every recurrence search control, legacy `options`, and `include_code` as
+top-level properties.  Runtime still requires exactly one input form.  Flat
+controls are canonical; legacy nested controls remain accepted, and a
+top-level value wins when the same field appears in both places.
+
+`include_code` defaults to true, preserving the full historical result.  When
+false, successful results omit Mathematica, Python, Sage, and recurrence JSON
+without computing them, while retaining plaintext recurrence, LaTeX, status,
+and all search statistics.  Direct and stdio tests cover schema shape and
+descriptions, flat and legacy calls, conflicting control precedence, missing
+or multiple inputs, compact serialization, and default full serialization.
+The tool description, `polytool-mcp --help`, the MCP reference/example, and the
+top-level Polytool README all document the same interface.  No MCP man page or
+generated reference file exists, so none was invented.
+
+Verification used external `CARGO_TARGET_DIR=/cargo-target/ai-projects`,
+`timeout 60s`, and `nice -n 10` for Rust commands.  All 26 MCP library tests,
+2 MCP binary/help tests, the stdio smoke test, and the MCP documentation target
+pass.  Proportional Polytool regressions pass: 319 non-OEIS library tests, all
+61 recurrence tests, 19 BigInt CLI tests, 6 version/budget CLI tests, 5
+interlacing tests, 2 recurrence-overfit tests, and all 5 doctests.  Strict
+Clippy for Polytool and MCP passes with only the established allowances for
+pre-existing warnings; Cargo formatting, metadata, and `git diff --check` also
+pass.
+
+The worktree's recorded `kostka` submodule revision was initialized only so
+Cargo could load the isolated workspace; its gitlink and contents were not
+changed.  The divergent shared checkout and OEIS-export branch were not
+touched.  After verification, commits `b076098` through `4444fde` were pushed
+without force as a fast-forward of `origin/master`, and GitHub issue #4 was
+closed with a summary of the implementation.  No generated artifact or
+deployment changed.  Ownership of all six claimed files is released.
+
+## Completed BigInt web publication and deployment (2026-09-07)
+
+The verified isolated branch was published without force from original
+`origin/master` `5da03fea23eb55a37e46025a4ca8ad21e96a8b9a`, after confirming that
+commit was still the remote tip and an ancestor of the branch.  The first
+canonical publication tip was `56e6745a1ade17b7f7ff92be62969d42f35715c8`;
+the documented `scripts/sync-polytool-main.sh` workflow then advanced the
+standalone projection from `7e4ac54ee531d768a5dfd25f520e39ca4de6b84c` to
+`a0d66877e71822455891ef509621ff7074fbd7df`, also by verified fast-forward.
+The divergent shared `/workspace/rust` checkout was not changed or used for
+either push.
+
+After publication, the release WASM bundle was rebuilt from the isolated
+worktree and its browser string-safety test plus actual-WASM huge-coefficient
+smoke passed.  Exactly four files were staged and deployed; their SHA-256
+digests are:
+
+- `index.html`: `a3da0ed60490dc8a2a7f4e11f77467f31c257fe5c707db3ecb930710bb5b9fa3`;
+- `favicon.svg`: `c5908fa0143e43e6be3106531a9720960874ae5be9fb6fe1ba8442bca666dcfb`;
+- `pkg/polytool_web.js`: `9d6b33464995cfcc00f15f7248e779b988515ebb07392e0efd211d69fcbf6773`;
+- `pkg/polytool_web_bg.wasm`: `6448551d93d61377e21623cb1c1c392afa00227cf94566faeba7ced2b569923e`.
+
+The deployment environment lacks `rsync`, so the attempted exact-file `rsync`
+exited 127 without transferring anything; the same explicit four files were
+then copied with `scp`, without deletion.  Remote byte hashes match the staged
+files.
+Cache-busted requests return HTTP 200 for the page, favicon, JavaScript, and
+WASM, and the live page identifies asset version `20260907a`.  A live Node
+smoke loaded the public WASM, retained `1000000000000000000000000000000`
+exactly in property JSON, and found `P(n) = 2 P(n-1)` from its scaled sequence
+while retaining the huge initial coefficient in recurrence JSON.
+
+Website details are recorded separately in
+`/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/HANDOFF.md`.  That
+directory has no Git repository, so there was no website commit to make.  Its
+stale legacy Makefile and unrelated local files were not changed.  Publication
+and deployment ownership is released by this handoff.
+
+## Completed web arbitrary-precision coefficient work (2026-09-07)
+
+The coding worker used the isolated monorepo worktree
+`/tmp/polytool-web-bigint-20260907` on branch
+`fix/polytool-web-bigint-20260907`, based exactly on freshly fetched
+`origin/master` commit `5da03fea23eb55a37e46025a4ca8ad21e96a8b9a`.
+The shared `/workspace/rust` checkout remains untouched on its intentionally
+divergent local `master` (ahead 4, behind 9).  The supervisor ownership report
+could not run in this container because the `docker` executable is absent; no
+active ownership is recorded for the files below in the current root or
+Polytool handoffs.
+
+Ownership was limited to `polytool/HANDOFF.md`, `polytool/README.md`,
+`polytool/src/decomposition.rs`, `polytool/src/lib.rs`,
+`polytool/web/Cargo.toml`, `polytool/web/src/lib.rs`,
+`polytool/web/index.html`, focused browser regression
+`polytool/web/tests/string_safety.mjs`, and root `Cargo.lock` if Cargo must
+record the web crate's direct `num-bigint` dependency.  No other path changed,
+and ownership is released by this handoff.
+
+Focused commits are:
+
+- `9f744dc`, recording isolated ownership;
+- `d7d2adb`, adding the exact `BigInt` symmetric-decomposition report and
+  regression;
+- `fcc2c73`, converting the WASM boundary, recurrence path, JSON contract, and
+  browser arithmetic to arbitrary precision;
+- `0ed7a2e`, documenting the JSON contract and recoverable deployment-staging
+  copy.
+
+The web input path now uses `parse_polynomials_bigint`.  All requested property,
+interlacing, resultant, discriminant, and decomposition calculations call
+their `BigInt` APIs.  Recurrence search converts the parsed integers directly
+to `BigRational` and uses `find_recurrence_adaptive_rational`; its Mathematica,
+Sage, and recurrence-JSON exports stay exact.  Coefficient-like JSON values are
+canonical decimal strings, including ordinary small values.  The existing
+string-based WASM export names are unchanged, and the pairwise interlacing
+export accepts both the new decimal-string arrays and legacy ordinary JSON
+integer arrays.
+
+Browser polynomial rendering, decomposition merging and copying, interlacing,
+OEIS row sums, alternating sums, leading-zero handling, and first differences
+now retain strings or use JavaScript `BigInt`; none uses `Number` for exact
+coefficient arithmetic.  The page asset key is `20260907a`.
+
+Verification used external `CARGO_TARGET_DIR=/cargo-target/ai-projects`,
+`timeout 60s`, and `nice -n 10` for all Rust and WASM work:
+
+- 7 `polytool-web` tests passed, including ordinary compatibility and inputs
+  above `2^53` and `i64` for properties, interlacing, resultants,
+  discriminants, decomposition, and recurrence;
+- the browser string-safety Node regression and full inline-JavaScript syntax
+  parse passed;
+- 319 non-OEIS Polytool library tests, 19 CLI BigInt tests, 5 interlacing API
+  tests, 6 CLI version/budget tests, and 5 doctests passed;
+- Polytool MCP passed 22 library tests, 2 binary tests, and 1 documentation
+  test;
+- strict Clippy for Polytool, web, and MCP, workspace Cargo metadata, formatting,
+  and `git diff --check` passed;
+- the release no-modules `wasm-pack` build produced ignored artifacts
+  `web/pkg/polytool_web.js` (13 KiB) and
+  `web/pkg/polytool_web_bg.wasm` (538 KiB); loading that actual WASM in Node
+  passed huge-coefficient property and recurrence smoke checks.
+
+Per the task boundary, nothing was pushed, merged, projected to standalone
+`main`, deployed, or changed under `/home/paxinum/Dropbox/webpages`.  The exact
+future staging copy and byte-comparison commands are in `README.md`.  The
+website checkout's legacy Makefile still names `polynomial_tools_web*`, so its
+assembly target must not be used for this `polytool_web*` bundle without a
+separate reviewed website change.  The separately owned derangement experiment
+and SymCat weighted-bond example were not touched.
+
+## Completed GitHub issues #1 and #2 (2026-09-07)
+
+The coding worker implemented the issues in the isolated monorepo
+worktree `/tmp/polytool-issues-1-2-20260906` on branch
+`fix/polytool-issues-1-2-20260906`, starting at freshly fetched
+`origin/master` commit `6486f93`.  No open pull request existed when work
+started.
+
+Owned files were `build.rs`, `src/version.rs`, `src/lib.rs`,
+`src/recurrence.rs`, `src/bin/polytool.rs`, focused new or existing tests under
+`tests/`, `README.md`, `mcp/src/lib.rs`, `mcp/README.md`, this handoff, and the
+root `HANDOFF.md`.  Ownership covers only GitHub #1 (`polytool --version` with
+honest reproducible Git metadata) and #2 (an exact recurrence-candidate
+budget with distinct exhaustion).  Standalone `main` remains a generated
+subtree projection and was not edited directly.  Ownership is released by
+this final handoff after canonical and standalone publication verification.
+
+Checkpoint `92f7612` implements the crate-version plus lowercase 12-digit Git
+commit line, with build-time ref tracking, an explicit reproducible-build
+override, and `(git unavailable)` for missing or invalid metadata.  Checkpoint
+`87ef7f8` adds `AdaptiveSearchBudget`, `AdaptiveSearchOutcome`, exact
+candidate counting before all filters, `--max-candidates`, JSON/exit-status
+termination reporting, and matching MCP options/status/counters.  Existing
+unbounded entry points remain unchanged wrappers.
+
+Focused tests cover normal/fallback version formatting and the real CLI, zero
+and one-candidate budgets, success on the exact boundary, full search-space
+failure at the boundary, distinct exhaustion, MCP parity, and unchanged
+unbounded behavior.  Established verification passes: 318 non-OEIS library
+tests, all 61 recurrence tests, 19 CLI BigInt tests, 7 CLI OEIS tests, 6 new
+CLI tests, 2 overfit fixtures, 5 interlacing API tests, 22 MCP tests plus its
+binary/docs targets, 5 Polytool doctests, focused imported-OEIS validation,
+strict Polytool/MCP Clippy, Cargo metadata, formatting, and
+`git diff --check`.  All Rust commands used external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`.
+
+The task branch is published as PR #3.  The repository has no GitHub Actions
+workflow and unprotected `master` reports no status checks.  A local
+projected-subtree preflight at `a7bcd0a` passes all six CLI tests and its
+actual version is `polytool 0.2.1-rc.5 (git a7bcd0abf054)`.
+
+On 2026-09-07 the user clarified that the green-CI wording came from
+supervisor caution rather than an explicit user constraint and accepted the
+complete local monorepo and standalone checks as the merge gate.  The earlier
+blocker wording was therefore incorrect.
+
+PR #3 merged without force as canonical monorepo commit `0675132`, containing
+only prior `origin/master` plus the task branch.  The documented sync script
+published standalone projection `49fff55`.  The actual binaries reported
+`polytool 0.2.1-rc.5 (git 0675132a0408)` on monorepo `master` and
+`polytool 0.2.1-rc.5 (git 49fff5546586)` on standalone `main`.  Exact
+zero/one-candidate exhaustion returned JSON status `budget_exhausted` and
+exit code 3, success on the budget boundary passed, and all six standalone
+CLI version/budget tests passed.  The final projected commit after this
+handoff is included is recorded in the root publication follow-up.
+## Final monorepo integration (2026-09-06)
+
+The completed review-fix history was integrated with clean local monorepo
+`master` by merge commit `a801eb1`. The merge preserves parent `41d57bd` with
+all Polytool fixes and parent `29c075e` with all audited monorepo changes. It
+merged without textual conflicts, so no LLT or handoff content was discarded.
+
+Post-merge verification used external
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`, `timeout 60s`, and `nice -n 10`:
+
+- the Polytool non-OEIS library suite passed 312 tests;
+- focused recurrence, linear-algebra, and parser coverage is included, with 57
+  recurrence and 62 linear-algebra tests passing independently;
+- CLI BigInt, recurrence-overfit, interlacing API, documentation, and the
+  focused imported-OEIS validation replay passed;
+- Polytool MCP passed all library, binary, and documentation targets;
+- strict Clippy for Polytool and Polytool MCP passed;
+- the other changed monorepo packages and tracked experiment binaries passed
+  their proportional checks;
+- Cargo metadata and `git diff --check` passed.
+
+This handoff is part of the user-authorized final monorepo publication and
+standalone `polytool/` subtree projection. Integration ownership is released
+after remote-ref verification. Ehrcalc is outside this operation and remains
+untouched.
+
+## Completed review fixes (2026-09-06)
+
+The review-fix worker used the regular isolated worktree
+`/tmp/polytool-review-fixes-20260906` on branch
+`fix/polytool-review-20260906`. Ownership covered `src/parse.rs`, `src/lib.rs`,
+`src/real_rootedness.rs`, `src/recurrence.rs`, `src/linalg.rs`,
+`src/bin/polytool.rs`, `mcp/src/lib.rs`, `tests/cli_bigint.rs`, focused inline
+tests, and this handoff. The implementation is complete and that ownership is
+released after the final handoff commit.
+
+History and implementation checkpoints:
+
+- `76e3b0c` merges `origin/master` into local master `d0a1ca3`; its two parents
+  preserve both the six local-only and nine remote-only commits;
+- `6ca87f6` records initial isolated-worktree ownership;
+- `ffa4ad4` implements all confirmed review fixes and both requested lazy
+  iteration improvements.
+
+The implementation makes modular recurrence rejection exact by requiring a
+full-column-rank modular certificate and otherwise falling back to rational
+solving. It checks exponent and recurrence-index arithmetic, bounds dense
+parser allocation and CLI/MCP input, caps MCP sequence, recurrence, and finite
+Lace workloads, replaces Ehrhart and modular-row panics with structured errors,
+and validates ragged total-positivity matrices. Bivariate recurrence
+coefficients tolerate the existing public ragged representation without
+panicking or dropping terms and are normalized at the JSON boundary. Total
+positivity combinations and score-ordered recurrence candidates are now lazy;
+equivalence tests compare both iterators with their previous eager order.
+
+Compatibility choices: `BivarPoly::coeffs` remains public, so existing struct
+literals continue to compile. Ragged rows are interpreted with missing exact
+zeros and JSON round-trips become rectangular. The Ehrhart conversion and
+public `SparseModRow` construction/update APIs now return typed `Result`s; this
+source-level change is intentional because those APIs previously panicked on
+invalid exact input or modulus zero. Existing valid arithmetic and recurrence
+ordering are unchanged.
+
+Verification used external `CARGO_TARGET_DIR=/cargo-target/ai-projects` and
+60-second, reduced-priority Rust commands:
+
+```text
+cargo test -q -p polytool --lib -- --skip oeis                 312 passed
+cargo test -q -p polytool --lib recurrence::tests               57 passed
+cargo test -q -p polytool --lib linalg::tests                   62 passed
+cargo test -q -p polytool --lib parse::tests                    17 passed
+cargo test -q -p polytool --lib real_rootedness::tests::test_ehrhart
+                                                                  4 passed
+cargo test -q -p polytool --test cli_bigint                     19 passed
+cargo test -q -p polytool --test recurrence_overfit_fixtures     2 passed
+cargo test -q -p polytool --test interlacing_api                 5 passed
+cargo test -q -p polytool --doc                                  5 passed
+cargo test -q -p polytool-mcp                         21 + 2 + 1 passed
+cargo test -q -p polytool --lib \
+  oeis::tests::every_imported_lean_definition_reproduces_its_validation_row
+                                                                  1 passed
+cargo clippy -q -p polytool -p polytool-mcp --all-targets --
+  -D warnings -A clippy::manual-is-multiple-of
+  -A clippy::needless-range-loop -A clippy::bool-assert-comparison
+                                                                  passed
+git diff --check                                                 passed
+```
+
+Two unchanged exhaustive fixture replays exceeded the required 60-second cap:
+`oeis::tests::every_sparse_definition_reproduces_its_fixture_rows` and
+`recurrence_json_fixtures_regenerate_raw_rows`. Each was terminated by
+`timeout` with status 124 and emitted no failure before termination. Their
+focused recurrence paths and the other 312 library tests pass.
+
+That checkpoint itself was not pushed and left the canonical checkout at
+`d0a1ca3`; the later final-integration section above supersedes that historical
+state while preserving the original verification record.
+
+## OEIS recurrence catalog
+
+The host Codex supervisor completed the OEIS catalog expansion at the user's
+request.  No Rust worker is active and catalog file ownership is released.
+Unrelated dirty Rust-workspace files remain untouched.  Files changed by the
+completed task are:
+
+- `src/oeis.rs` (new);
+- `src/lib.rs`;
+- `src/bin/polytool.rs`;
+- `mcp/src/lib.rs`;
+- `tests/cli_oeis.rs` (new);
+- `scripts/build_oeis_catalog.py` and generated catalog files (new);
+- additive documentation in `README.md` and this `HANDOFF.md`.
+
+The pre-existing coupled-recurrence changes in `src/recurrence.rs` and
+`src/linalg.rs` are adopted as dependencies but will not be mixed into the
+catalog implementation without a separate verified checkpoint.  The active
+`real-rooted-oeis` worker owns its checkout; this task reads recurrence and row
+data there and in `projects/OEIS-polynomials` but does not edit either project.
+
+Implementation status on 2026-09-04:
+
+- `polytool::oeis` contains 785 recurrence-backed A-number functions, exact
+  sparse recurrence decoding, dynamic lookup, row-range generation, and
+  structural-zero restoration for OEIS output;
+- 125 holdout-backed entries and 630 OEIS-prefix-validated entries are
+  available by default; 30 entries require `--include-experimental`;
+- 767 entries have a locally validated OEIS flattened-prefix mapping and
+  support strict b-file output; the remaining 18 still support rows, triangles,
+  polynomials, JSON, JSONL, and CSV;
+- CLI commands are `polytool oeis list`, `polytool oeis info`, and
+  `polytool oeis generate`; MCP tools are `list_oeis_sequences`,
+  `get_oeis_sequence`, and `generate_oeis_rows`;
+- `scripts/build_oeis_catalog.py` imports the 73 machine recurrence fixtures,
+  the plain-file OEIS queue, and all 728 generated recurrence definitions from
+  `projects/real-rooted-oeis-proofs/ProofsOeis`.  Every Lean definition fits
+  the supported canonical grammar (maximum lag 5 and derivative order 2).
+  The importer clears rational recurrence denominators, converts index
+  conventions exactly, validates generated rows against local OEIS data, emits
+  one embedded Rust replay row for each of the 630 new validated entries, and
+  supports `--check` drift detection.
+
+The unsafe plain-file queue recurrences remain rejected.  Where the Lean proof
+repository contains an independently generated definition, it is imported and
+validated on its own merits; for example, its A102413 recurrence does match the
+current OEIS prefix.  Ten newly imported definitions lack a safe row-layout
+alignment and therefore remain experimental: A099040, A103451, A105278,
+A144217, A145677, A158821, A185740, A185911, A225117, and A258993.
+
+## Web example catalogue (2026-09-02)
+
+The web UI presents one flat menu of 34 distinct OEIS-labelled polynomial
+families. It absorbs the former eight example buttons, removes the four
+families duplicated between those buttons and the 30-entry OEIS menu, and
+removes the category groups.
+
+All 30 imported OEIS entries have recursive definitions in the corresponding
+`ProofsOeis/A*.lean` files. The four additional distinct built-in families
+(derangement excedances, Fibonacci matchings, Touchard polynomials, and Simsun
+descents) also carry explicit recurrences. This does not imply that the web
+recurrence search will rediscover every formula under its default bounds.
+
+Long polynomial previews now parse and rejoin term signs before inserting the
+ellipsis, so positive terms no longer render as `+ +` and a negative final term
+renders with `-` rather than `+ -`.
+
+Verification:
+
+```text
+python3 scripts/build_oeis_catalog.py --check                 passed
+cargo test -q -p polytool --lib                              308 passed
+cargo test -q -p polytool --test cli_oeis                      7 passed
+cargo test -q -p polytool-mcp                                 22 passed
+cargo test -q -p polytool --doc                                5 passed
+cargo test -q -p polytool --test cli_bigint                   16 passed
+cargo test -q -p polytool --test interlacing_api               5 passed
+cargo clippy -q -p polytool -p polytool-mcp --all-targets --
+  -D warnings -A clippy::manual-is-multiple-of
+  -A clippy::needless-range-loop -A clippy::bool-assert-comparison
+                                                               passed
+```
+
+The full library replay takes about 75 seconds because it regenerates every
+row of all 73 benchmark recurrences.  A combined legacy recurrence-fixture
+integration run reached its 180-second cap without reporting a failure; the
+new independent sparse-definition replay completed successfully.
+
+## Coupled Weyl recurrences
+
+The main Rust worker owns these files for the current task:
+
+- `src/recurrence.rs`
+- `src/linalg.rs`
+- `README.md`
+- `HANDOFF.md`
+
+The first library slice is implemented in `recurrence.rs`:
+
+- `WeylOperator` stores `sum_d c_d(n,x) D_x^d` in normal order;
+- `VectorRecurrence` represents
+  `F_(n+1) = M(n,x,D_x) F_n + G(n,x)`;
+- `find_vector_recurrence[_rational]` performs fixed-bound exact fitting;
+- each output row is solved separately and reports its exact rank/nullity;
+- non-identifiable rows are rejected by default (`require_unique = true`);
+- final complete transitions are excluded from fitting and verified exactly;
+- affine polynomial forcing is supported distinctly from the matrix state;
+- `find_companion_vector_recurrence[_rational]` handles larger index lags,
+  fitting only the final block row and inserting shift identities directly.
+
+The convention is explicit: `states[k] = F_(first_index+k)`, and coefficients
+in the transition `F_n -> F_(n+1)` are evaluated at the source index `n`.
+
+Exact regression fixtures recover:
+
+- the even/odd up-down-run Eulerian pair from Ma--Ma--Yeh--Yeh, Discrete Math.
+  345 (2022), 112716;
+- the lag-two type-B `1/k`-Eulerian system from Ma et al., EJC 27(3) (2020),
+  P3.27, specialized to `k=1`;
+- the affine q-integer recurrence `[n+1]_x = x[n]_x + 1`.
+
+Verification on 2026-08-18:
+
+```text
+cargo test -q -p polytool --lib                 302 passed
+cargo test -q -p polytool --lib recurrence::tests
+                                                   51 passed
+cargo test -q -p polytool --doc                   5 passed
+cargo clippy -q -p polytool --lib -- -D warnings \
+  -A clippy::manual-is-multiple-of \
+  -A clippy::needless-range-loop                  passed
+```
+
+Potential follow-ups are an adaptive bound search, modular prefiltering for the
+vector systems, JSON/CLI support, and optional nullspace-basis output for
+exploratory non-identifiable fits. None is required for the fixed-bound exact
+library API.
+
+External review status: a read-only Claude Code review was attempted on
+2026-08-18 at 08:34 UTC, but Claude exited before reading the diff because the
+account session limit was reached (reported reset: 10:40 UTC). No review edits
+were made.
+
+## Web catalogue verification and deployment history
+
+```text
+inline JavaScript parse                                      passed
+flat picker count, uniqueness, and key resolution           34/34
+loadExample textarea/status checks                          34/34
+recurrence provenance audit                                 34/34
+positive/negative abbreviation regression cases              passed
+desktop and 390px-wide headless-Chrome inspection            passed
+standalone wasm-pack release build                            passed
+git diff --check                                              passed
+```
+
+Commit `108916e` was pushed to monorepo `master`, projected to standalone
+`main` as `fe697ec`, and deployed to `poly.symmetricfunctions.com` on
+2026-09-02. Cache-busted public fetches matched the staged HTML, JavaScript,
+and WASM byte for byte; a live headless-Chrome load reported no WASM or
+JavaScript error.
+
+The private proof-repository name was subsequently removed from all 26
+imported-sequence comments before publication. The public examples now retain
+only their mathematical descriptions and OEIS URLs; they do not mention the
+author's related projects.
+
+The recurrence-result page no longer generates or displays the bulky standalone
+Python export. It keeps the compact recurrence JSON and links directly to the
+documented `polytool recurrence-generate` command, which reconstructs exact
+rows from that JSON. The library and CLI Python exporter remain available for
+backward compatibility; only the browser payload and UI were simplified.
+
+The browser's adaptive bounds are now recurrence depth 10, `t`-degree 5,
+`n`-degree 5, and derivative order 5. In particular, this includes A059427's
+cubic derivative coefficient `t - t^3`; a regression test confirms that degree
+two fails and degree three finds the recurrence. The adaptive-mode tooltip
+states that there is no elapsed-time or candidate-count cutoff: the search
+stops only on a match, user cancellation, or exhaustion of its finite bounds,
+and a failed exhaustive search may therefore take a long time.
+
+Recurrence-option tooltips now mark their formulas with `data-tex` and render
+them through the already loaded KaTeX runtime. Rendering is applied both to the
+original tooltip nodes and to the floating tooltip layer; the alternating-sign
+label and tooltip therefore display `(-1)^n` with an actual superscript.
+The two focused web-crate tests, standalone WASM build, JavaScript parse,
+code-card checks, and a headless-browser KaTeX/WASM load all pass.
+Commit `1e8b865` was pushed to monorepo `master`, projected to standalone
+`main` as `931a4e1`, and deployed on 2026-09-02. Cache-busted public files
+matched the staged bundle byte for byte, and the live browser check passed.
+
+A166073 was removed from the example picker because adaptive recurrence search
+had to explore too much of the enlarged search space before finding its more
+complicated recurrence. It was replaced by A008288, the Delannoy array read by
+antidiagonals, whose row polynomials satisfy
+`P(n) = (1 + t) P(n-1) + t P(n-2)`. A focused browser-crate regression test
+checks that the full adaptive configuration finds this recurrence within ten
+candidates. All remaining `Related project` comments were removed at the same
+time. Commit `ccc9bf1` was pushed to monorepo `master`, projected to standalone
+`main` as `d9f7361`, and deployed on 2026-09-02. Cache-busted public HTML,
+JavaScript, and WASM matched the staged bundle byte for byte; a live
+headless-Chrome load also passed.
+
+## Uspensky/Descartes comparison
+
+The main Rust worker owns these files:
+
+- `src/root_count.rs`
+- `src/lib.rs`
+- `examples/bench_positive_real_rooted.rs`
+- `README.md`
+- `HANDOFF.md`
+
+The exact Uspensky/Descartes comparison path is implemented and public. It
+uses a strict Fujiwara bound, dyadic magnitude bands, reciprocal reduction
+below `1`, homographic subdivision, and exact `BigInt` sign variations.  It
+uses no finite fields or floating point.
+
+The default one-signed real-rootedness path is now adaptive. It runs the cheap
+Kurtz/Newton filters first, uses PRS generally, and selects Uspensky only when:
+
+- the degree after stripping zero roots is at least 35;
+- the two endpoint coefficients are equal; and
+- an interior coefficient is at least `4^degree` times an endpoint.
+
+The last two exact tests are invariant under scalar multiplication. This
+conservative signature was chosen because degree or palindromicity alone
+regressed important families. Square-free preprocessing is now shared with the
+selected counter, avoiding a duplicate polynomial GCD in both the adaptive and
+explicit PRS real-rootedness paths.
+
+Release benchmark highlights from 2026-08-17 (single-process runs, so treat
+sub-millisecond differences as noise):
+
+```text
+family                              primitive PRS    Uspensky
+prod_{a=1}^{30} (x+a)                   0.88 ms       2.61 ms
+prod_{a=1}^{80} (x+a)                  15.14 ms      82.43 ms
+Eulerian (degree 35)                   45.82 ms      39.18 ms
+Eulerian (degree 79)                    9.83 s        5.15 s
+Narayana (degree 40)                    1.24 ms       9.41 ms
+type-B Eulerian (degree 40)           182.37 ms     151.77 ms
+Touchard (degree 40)                   55.54 ms      45.80 ms
+Chebyshev T (degree 40)                 0.43 ms      61.05 ms
+Chebyshev U (degree 40)                 0.43 ms      36.03 ms
+Hermite (degree 40)                     0.33 ms      10.46 ms
+```
+
+These fair timings include the shared square-free preprocessing only once.
+Eulerian, type-B Eulerian, and Touchard cross over around degree 35, while
+Narayana, Chebyshev, Hermite, and evenly spaced linear-factor products strongly
+favor PRS in the tested range. The benchmark example now covers all of these
+families; Touchard is generated locally by its standard recurrence.
+
+Verification:
+
+```text
+cargo test -q -p polytool --lib                 296 passed
+cargo test -q -p polytool --test cli_bigint      16 passed
+cargo test -q -p polytool --test interlacing_api  5 passed
+cargo test -q -p polytool --doc                   5 passed
+cargo clippy -q -p polytool --lib --examples -- \
+  -D warnings -A clippy::manual-is-multiple-of \
+  -A clippy::needless-range-loop                  passed
+```
+
+The two allowed Clippy lints are pre-existing in `cyclic_sieving.rs` and
+`hstar_inequalities.rs`; neither file is part of this work.
+
+## Repository ownership
+
+- `/workspace/rust` branch `master` is the canonical monorepo history.
+- All polytool changes are made under `polytool/` on `master`.
+- Repository branch `main` is a generated standalone projection of this
+  directory. Do not commit to it directly.
+- After tested polytool changes have been committed and pushed on `master`, run
+  `./scripts/sync-polytool-main.sh` from the monorepo root.
+
+## Current state
+
+The former independently rooted standalone history was backed up before
+`main` was replaced by a `git subtree split --prefix=polytool` projection.
+The projected tree includes the crate rename to `polytool` and all correctness
+fixes from the August 2026 Rust review.
