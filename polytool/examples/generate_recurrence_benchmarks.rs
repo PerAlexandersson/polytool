@@ -151,7 +151,7 @@ fn nth_derivative(p: &[Rat], order: usize) -> Poly {
 }
 
 fn alternating_sign(n: usize) -> Rat {
-    if n.is_multiple_of(2) {
+    if n & 1 == 0 {
         Rat::one()
     } else {
         -Rat::one()

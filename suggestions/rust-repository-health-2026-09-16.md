@@ -111,5 +111,7 @@ targets from a clean checkout.
 - Every maintained package passed its focused suite; the long Polytool library
   suite passed locally. Root CI separately covers each maintained package,
   tracked experiments, and legacy Kostka/KTT.
+- Strict Clippy passes for the public Polytool crate and its MCP companion;
+  declared-MSRV CI caught and prompted removal of post-1.82 integer APIs.
 - No `unsafe` blocks, `todo!`, or `unimplemented!` branches were found in the
   audited maintained libraries.

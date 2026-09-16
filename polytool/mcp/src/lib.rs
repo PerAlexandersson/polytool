@@ -3871,8 +3871,8 @@ mod tests {
             .unwrap();
         let item = &response.items[0];
         assert!(item.ok);
-        assert_eq!(item.kurtz.as_ref().unwrap().holds, true);
-        assert_eq!(item.kurtz.as_ref().unwrap().implies_real_rooted, true);
+        assert!(item.kurtz.as_ref().unwrap().holds);
+        assert!(item.kurtz.as_ref().unwrap().implies_real_rooted);
     }
 
     #[test]

@@ -38,6 +38,12 @@ The complete workspace documentation builds with `RUSTDOCFLAGS="-D warnings"`;
 the root CI enforces this alongside the declared Polytool MSRVs. Kostka's two
 documentation repairs are pushed separately as `ec1383c`.
 
+The first MSRV run found post-1.82 `is_multiple_of` calls in Polytool; all
+library, CLI, and example occurrences are now 1.82-compatible. Strict Clippy
+also passes for Polytool and its MCP companion. The full 356-test Polytool
+library suite passes after those changes, as does an all-target check on the
+exact Rust 1.82.0 toolchain for Polytool and its web companion.
+
 ## Durable policy
 
 - `master` is the canonical monorepo branch; `polytool/main` is generated only

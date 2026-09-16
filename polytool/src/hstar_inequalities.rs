@@ -128,14 +128,14 @@ fn solve_linear_rational(rows: Vec<Vec<Q>>, variables: usize) -> Option<Vec<Q>> 
         for entry in matrix[pivot_row].iter_mut().skip(col) {
             *entry = entry.clone() / pivot.clone();
         }
-        for row in 0..matrix.len() {
-            if row == pivot_row || matrix[row][col].is_zero() {
+        let normalized_pivot = matrix[pivot_row].clone();
+        for (row_index, row) in matrix.iter_mut().enumerate() {
+            if row_index == pivot_row || row[col].is_zero() {
                 continue;
             }
-            let factor = matrix[row][col].clone();
-            for c in col..=variables {
-                matrix[row][c] =
-                    matrix[row][c].clone() - factor.clone() * matrix[pivot_row][c].clone();
+            let factor = row[col].clone();
+            for (entry, pivot_entry) in row.iter_mut().zip(&normalized_pivot).skip(col) {
+                *entry = entry.clone() - factor.clone() * pivot_entry.clone();
             }
         }
         pivot_cols.push(col);
@@ -177,7 +177,7 @@ fn stapledon_decomposition_shifted(
     let variables = a_vars + b_vars;
     let mut rows = Vec::with_capacity(dimension + 1);
 
-    for i in 0..=dimension {
+    for (i, coefficient) in g.iter().enumerate().take(dimension + 1) {
         let mut row = vec![q(0); variables + 1];
         let a_col = i.min(dimension - i);
         row[a_col] = q(1);
@@ -190,7 +190,7 @@ fn stapledon_decomposition_shifted(
                 }
             }
         }
-        row[variables] = Q::from_integer(g[i].clone());
+        row[variables] = Q::from_integer(coefficient.clone());
         rows.push(row);
     }
 
