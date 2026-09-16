@@ -1,3 +1,4 @@
 /target
+__pycache__/
 web/pkg/
 examples/ferrers_nofactor_interlace.rs
