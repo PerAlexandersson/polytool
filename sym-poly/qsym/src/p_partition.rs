@@ -66,9 +66,7 @@ pub fn p_partition_generating_function_with_labels<C: Ring>(
 
     let (children, parents) = adjacency_from_covers(n, covers);
 
-    // Enumerate linear extensions via backtracking
-    let extensions = enumerate_linear_extensions(n, &children, &parents);
-    p_partition_from_extensions(n, &extensions, labels)
+    p_partition_from_traversal(n, &children, &parents, labels)
 }
 
 /// Return the linear extensions and descent compositions used in
@@ -120,27 +118,112 @@ pub fn strict_p_partition_generating_function<C: Ring>(
     }
 
     let (children, parents) = adjacency_from_covers(n, covers);
-    let extensions = enumerate_linear_extensions(n, &children, &parents);
-    let first_extension = extensions
-        .first()
+    let first_extension = first_linear_extension(n, &children, &parents)
         .expect("a finite acyclic poset has a linear extension");
-    let labels = anti_natural_labels(n, first_extension);
-    p_partition_from_extensions(n, &extensions, &labels)
+    let labels = anti_natural_labels(n, &first_extension);
+    p_partition_from_traversal(n, &children, &parents, &labels)
 }
 
-fn p_partition_from_extensions<C: Ring>(
+/// Accumulate fundamental-basis coefficients while traversing linear
+/// extensions. This retains just one partial extension's descent composition,
+/// rather than materializing every completed extension.
+fn p_partition_from_traversal<C: Ring>(
     n: usize,
-    extensions: &[Vec<usize>],
+    children: &[Vec<usize>],
+    parents: &[Vec<usize>],
     labels: &[usize],
 ) -> QSymFunction<C> {
     let mut terms: BTreeMap<Composition, C> = BTreeMap::new();
-    for sigma in extensions {
-        let des_comp = descent_composition_with_labels(sigma, n, labels);
-        let entry = terms.entry(des_comp).or_insert_with(C::zero);
-        *entry = entry.clone() + C::one();
-    }
+    let mut in_degree: Vec<usize> = parents.iter().map(Vec::len).collect();
+    let mut available: BTreeSet<usize> = (0..n).filter(|&v| in_degree[v] == 0).collect();
+    let mut completed_parts = Vec::new();
+
+    accumulate_descent_compositions(
+        n,
+        children,
+        &mut in_degree,
+        &mut available,
+        labels,
+        None,
+        0,
+        0,
+        &mut completed_parts,
+        &mut terms,
+    );
 
     QSymFunction::from_terms(QSymBasis::Fundamental, terms)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn accumulate_descent_compositions<C: Ring>(
+    n: usize,
+    children: &[Vec<usize>],
+    in_degree: &mut [usize],
+    available: &mut BTreeSet<usize>,
+    labels: &[usize],
+    previous: Option<usize>,
+    depth: usize,
+    current_part: u32,
+    completed_parts: &mut Vec<u32>,
+    terms: &mut BTreeMap<Composition, C>,
+) {
+    if depth == n {
+        let mut parts = completed_parts.clone();
+        parts.push(current_part);
+        let entry = terms.entry(Composition::new(parts)).or_insert_with(C::zero);
+        *entry = entry.clone() + C::one();
+        return;
+    }
+
+    let choices: Vec<usize> = available.iter().copied().collect();
+    for v in choices {
+        available.remove(&v);
+
+        let is_descent = previous.is_some_and(|previous| labels[previous] > labels[v]);
+        if is_descent {
+            completed_parts.push(current_part);
+        }
+        let next_current_part = if is_descent {
+            1
+        } else {
+            current_part
+                .checked_add(1)
+                .expect("P-partition degree exceeds u32")
+        };
+
+        let mut newly_available = Vec::new();
+        for &child in &children[v] {
+            in_degree[child] -= 1;
+            if in_degree[child] == 0 {
+                available.insert(child);
+                newly_available.push(child);
+            }
+        }
+
+        accumulate_descent_compositions(
+            n,
+            children,
+            in_degree,
+            available,
+            labels,
+            Some(v),
+            depth + 1,
+            next_current_part,
+            completed_parts,
+            terms,
+        );
+
+        for &child in &children[v] {
+            in_degree[child] += 1;
+        }
+        for child in newly_available {
+            available.remove(&child);
+        }
+        if is_descent {
+            completed_parts.pop();
+        }
+        available.insert(v);
+    }
 }
 
 fn adjacency_from_covers(
@@ -203,6 +286,30 @@ fn enumerate_linear_extensions(
     results
 }
 
+/// Return the first extension in the same lexicographic order as
+/// [`enumerate_linear_extensions`], without retaining the rest.
+fn first_linear_extension(
+    n: usize,
+    children: &[Vec<usize>],
+    parents: &[Vec<usize>],
+) -> Option<Vec<usize>> {
+    let mut in_degree: Vec<usize> = parents.iter().map(Vec::len).collect();
+    let mut available: BTreeSet<usize> = (0..n).filter(|&v| in_degree[v] == 0).collect();
+    let mut extension = Vec::with_capacity(n);
+
+    while let Some(v) = available.pop_first() {
+        extension.push(v);
+        for &child in &children[v] {
+            in_degree[child] -= 1;
+            if in_degree[child] == 0 {
+                available.insert(child);
+            }
+        }
+    }
+
+    (extension.len() == n).then_some(extension)
+}
+
 fn backtrack_extensions(
     n: usize,
     children: &[Vec<usize>],
@@ -248,6 +355,7 @@ fn backtrack_extensions(
 /// Compute the descent composition of a labeled linear extension σ.
 ///
 /// The descent set is {i : labels[σ[i]] > labels[σ[i+1]]}.
+#[cfg(test)]
 fn descent_composition_with_labels(sigma: &[usize], n: usize, labels: &[usize]) -> Composition {
     let des_set = descent_set_with_labels(sigma, labels);
     Composition::from_descent_set(&des_set, n as u32)
@@ -362,5 +470,45 @@ mod tests {
         assert_eq!(f.coefficient(&Composition::new(vec![2, 1])), 1);
         assert_eq!(f.coefficient(&Composition::new(vec![1, 2])), 1);
         assert_eq!(f.terms().len(), 2);
+    }
+
+    #[test]
+    fn test_streaming_p_partition_matches_materialized_extensions() {
+        let cases = [
+            (0, vec![], vec![]),
+            (3, vec![(0, 2), (1, 2)], vec![2, 0, 1]),
+            (4, vec![(0, 2), (1, 2), (1, 3)], vec![1, 3, 0, 2]),
+        ];
+
+        for (n, covers, labels) in cases {
+            let mut expected = BTreeMap::new();
+            for data in p_partition_linear_extensions_with_labels(n, &covers, &labels) {
+                *expected.entry(data.descent_composition).or_insert(0i64) += 1;
+            }
+
+            let actual: QSymFunction<i64> =
+                p_partition_generating_function_with_labels(n, &covers, &labels);
+            assert_eq!(actual.basis(), QSymBasis::Fundamental);
+            assert_eq!(actual.terms(), &expected);
+        }
+    }
+
+    #[test]
+    fn test_streaming_strict_p_partition_matches_materialized_extensions() {
+        let n = 4;
+        let covers = vec![(0, 2), (1, 2), (1, 3)];
+        let (children, parents) = adjacency_from_covers(n, &covers);
+        let extensions = enumerate_linear_extensions(n, &children, &parents);
+        let labels = anti_natural_labels(n, extensions.first().unwrap());
+        let mut expected = BTreeMap::new();
+        for extension in extensions {
+            *expected
+                .entry(descent_composition_with_labels(&extension, n, &labels))
+                .or_insert(0i64) += 1;
+        }
+
+        let actual: QSymFunction<i64> = strict_p_partition_generating_function(n, &covers);
+        assert_eq!(actual.basis(), QSymBasis::Fundamental);
+        assert_eq!(actual.terms(), &expected);
     }
 }

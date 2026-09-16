@@ -325,8 +325,43 @@ impl Poset {
     }
 
     /// Number of linear extensions.
+    ///
+    /// This traverses the same Kahn-style search tree as
+    /// [`Self::linear_extensions`] but counts its leaves directly, so it does
+    /// not retain all extensions in memory. The return type is deliberately
+    /// bounded by [`usize`]; this method panics if the exact count exceeds
+    /// that type.
     pub fn num_linear_extensions(&self) -> usize {
-        self.linear_extensions().len()
+        let mut in_deg: Vec<usize> = self.parents.iter().map(Vec::len).collect();
+        let mut used = vec![false; self.n];
+        self.linext_count_rec(&mut in_deg, &mut used, 0)
+    }
+
+    fn linext_count_rec(&self, in_deg: &mut [usize], used: &mut [bool], depth: usize) -> usize {
+        if depth == self.n {
+            return 1;
+        }
+
+        let mut count = 0usize;
+        for v in 0..self.n {
+            if !used[v] && in_deg[v] == 0 {
+                used[v] = true;
+                for &child in &self.children[v] {
+                    in_deg[child] -= 1;
+                }
+
+                let branch_count = self.linext_count_rec(in_deg, used, depth + 1);
+                count = count
+                    .checked_add(branch_count)
+                    .expect("number of linear extensions exceeds usize");
+
+                for &child in &self.children[v] {
+                    in_deg[child] += 1;
+                }
+                used[v] = false;
+            }
+        }
+        count
     }
 
     // -- Promotion on linear extensions ------------------------------------
@@ -1447,6 +1482,26 @@ mod tests {
         // Fence 4: 0<1, 2<1, 2<3 → 5 linear extensions
         let p = Poset::new(4, &[(0, 1), (2, 1), (2, 3)]);
         assert_eq!(p.num_linear_extensions(), 5);
+    }
+
+    #[test]
+    fn test_linear_extension_count_matches_materialized_extensions() {
+        let examples = [
+            Poset::new(0, &[]),
+            Poset::chain(5),
+            Poset::antichain(4),
+            Poset::new(4, &[(0, 2), (1, 2), (1, 3)]),
+            // The public constructor permits a cyclic input; both APIs have
+            // historically reported no linear extensions in that case.
+            Poset::new(3, &[(0, 1), (1, 2), (2, 0)]),
+        ];
+
+        for poset in examples {
+            assert_eq!(
+                poset.num_linear_extensions(),
+                poset.linear_extensions().len()
+            );
+        }
     }
 
     // -- Linear extension promotion tests --

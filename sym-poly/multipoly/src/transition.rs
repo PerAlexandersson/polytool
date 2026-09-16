@@ -5,10 +5,10 @@
 //! then apply it via matrix-vector multiplication.
 
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use combinatoric_core::WeakComposition;
-use sym_poly_core::matrix::invert_integer_matrix;
+use sym_poly_core::matrix::{invert_integer_matrix, mat_mul};
 use sym_poly_core::Ring;
 
 use crate::atom_polynomial::atom_polynomial;
@@ -25,33 +25,31 @@ use crate::slide_polynomial::{fundamental_slide_polynomial, monomial_slide_polyn
 /// Cache key: (source_basis, target_basis, degree, num_vars).
 type CacheKey = (MultiPolyBasis, MultiPolyBasis, u32, usize);
 
-static CACHE: Mutex<BTreeMap<CacheKey, Vec<Vec<i64>>>> = Mutex::new(BTreeMap::new());
+static CACHE: Mutex<BTreeMap<CacheKey, Arc<Vec<Vec<i64>>>>> = Mutex::new(BTreeMap::new());
 
 fn cached_matrix(
     source: MultiPolyBasis,
     target: MultiPolyBasis,
     degree: u32,
     num_vars: usize,
-) -> Vec<Vec<i64>> {
+) -> Arc<Vec<Vec<i64>>> {
     let key = (source, target, degree, num_vars);
 
     // Fast path
     {
         let guard = CACHE.lock().unwrap();
         if let Some(mat) = guard.get(&key) {
-            return mat.clone();
+            return Arc::clone(mat);
         }
     }
 
     // Compute outside the lock
-    let mat = compute_transition_matrix(source, target, degree, num_vars);
+    let mat = Arc::new(compute_transition_matrix(source, target, degree, num_vars));
 
     {
         let mut guard = CACHE.lock().unwrap();
-        guard.insert(key, mat.clone());
+        return Arc::clone(guard.entry(key).or_insert(mat));
     }
-
-    mat
 }
 
 // =========================================================================
@@ -150,27 +148,6 @@ fn identity(n: usize) -> Vec<Vec<i64>> {
     m
 }
 
-fn mat_mul(a: &[Vec<i64>], b: &[Vec<i64>]) -> Vec<Vec<i64>> {
-    if a.is_empty() || b.is_empty() {
-        return vec![];
-    }
-    let rows = a.len();
-    let inner = b.len();
-    let cols = b[0].len();
-    let mut result = vec![vec![0i64; cols]; rows];
-    for i in 0..rows {
-        for k in 0..inner {
-            if a[i][k] == 0 {
-                continue;
-            }
-            for j in 0..cols {
-                result[i][j] += a[i][k] * b[k][j];
-            }
-        }
-    }
-    result
-}
-
 // =========================================================================
 // Conversion
 // =========================================================================
@@ -265,6 +242,16 @@ mod tests {
         let f = MultiPolyFunction::<i64>::key(&[1, 0, 2]);
         let same = f.to_basis(Key);
         assert_eq!(f, same);
+    }
+
+    #[test]
+    fn test_transition_cache_reuses_matrix_allocation() {
+        // Use a degree/variable count not used by the conversion tests below,
+        // so this checks the first computation and the warm-cache path.
+        let first = cached_matrix(Key, Monomial, 3, 7);
+        let second = cached_matrix(Key, Monomial, 3, 7);
+        assert_eq!(&*first, &*second);
+        assert!(Arc::ptr_eq(&first, &second));
     }
 
     #[test]

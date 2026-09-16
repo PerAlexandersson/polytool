@@ -178,6 +178,9 @@ fn assemble_alphabet_monomials(
 }
 
 fn weak_compositions(total: u32, length: usize) -> Vec<Vec<u32>> {
+    if length == 0 {
+        return if total == 0 { vec![vec![]] } else { vec![] };
+    }
     let mut result = Vec::new();
     let mut current = vec![0u32; length];
     weak_compositions_rec(total, 0, &mut current, &mut result);
@@ -233,7 +236,7 @@ fn multiply_polynomial_by_monomial<C: Ring>(
                 exponents
                     .iter()
                     .zip(monomial.iter())
-                    .map(|(&a, &b)| a + b)
+                    .map(|(&a, &b)| a.checked_add(b).expect("monomial exponent overflow"))
                     .collect(),
                 coeff.clone(),
             )
@@ -309,6 +312,37 @@ mod tests {
 
         assert_eq!(component.ambient_monomials.len(), 2);
         assert_eq!(component.dimension(), 1);
+    }
+
+    #[test]
+    fn test_public_zero_index_graded_quotient_paths() {
+        let variables = crate::IndexedVariables::new(2, 0);
+
+        assert_eq!(
+            crate::monomials_with_multidegree(&variables, &[0, 0]),
+            vec![vec![]]
+        );
+        assert!(crate::monomials_with_multidegree(&variables, &[1, 0]).is_empty());
+
+        let component = crate::graded_quotient_component::<Q>(&variables, &[], &[0, 0]);
+        assert_eq!(component.ambient_monomials, vec![vec![]]);
+        assert_eq!(component.dimension(), 1);
+        assert_eq!(
+            component.action_matrix_by_index_permutation(&variables, &[]),
+            vec![vec![q(1)]]
+        );
+
+        let positive_degree = crate::graded_quotient_component::<Q>(&variables, &[], &[1, 0]);
+        assert!(positive_degree.ambient_monomials.is_empty());
+        assert_eq!(positive_degree.dimension(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "monomial exponent overflow")]
+    fn test_relation_monomial_shift_rejects_overflow() {
+        let polynomial = mono(&[u32::MAX], 1);
+
+        let _ = multiply_polynomial_by_monomial(&polynomial, &[1]);
     }
 
     #[test]

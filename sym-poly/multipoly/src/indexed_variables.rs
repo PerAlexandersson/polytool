@@ -43,13 +43,18 @@ impl IndexedVariables {
     }
 
     pub fn num_vars(&self) -> usize {
-        self.num_alphabets * self.num_indices
+        self.num_alphabets
+            .checked_mul(self.num_indices)
+            .expect("indexed variable count overflow")
     }
 
     pub fn variable_index(&self, alphabet: usize, index: usize) -> usize {
         assert!(alphabet < self.num_alphabets, "alphabet out of range");
         assert!(index < self.num_indices, "index out of range");
-        alphabet * self.num_indices + index
+        alphabet
+            .checked_mul(self.num_indices)
+            .and_then(|offset| offset.checked_add(index))
+            .expect("indexed variable index overflow")
     }
 
     pub fn alphabet_and_index(&self, variable: usize) -> (usize, usize) {
@@ -89,7 +94,9 @@ impl IndexedVariables {
         let mut degrees = vec![0u32; self.num_alphabets];
         for (variable, &exponent) in exponents.iter().enumerate() {
             let (alphabet, _) = self.alphabet_and_index(variable);
-            degrees[alphabet] += exponent;
+            degrees[alphabet] = degrees[alphabet]
+                .checked_add(exponent)
+                .expect("monomial multidegree overflow");
         }
         degrees
     }
@@ -288,6 +295,14 @@ mod tests {
             variables.permute_polynomial(&f, &[1, 0]),
             MultiPoly::monomial(4, vec![0, 1, 2, 0], q(1))
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "monomial multidegree overflow")]
+    fn test_monomial_multidegree_rejects_overflow() {
+        let variables = IndexedVariables::new(1, 2);
+
+        let _ = variables.monomial_multidegree(&[u32::MAX, 1]);
     }
 
     #[test]

@@ -325,14 +325,13 @@ impl<C: Ring> SymmetricFunction<C> {
             let mut indices = Vec::with_capacity(n);
             let mut valid = true;
             for i in 0..n {
-                let val =
-                    lambda.part(i) as i32 - mu.part(sigma[i]) as i32 - i as i32 + sigma[i] as i32;
-                if val < 0 {
+                let Some(val) = jacobi_trudi_index(lambda.part(i), mu.part(sigma[i]), i, sigma[i])
+                else {
                     valid = false;
                     break;
-                }
+                };
                 if val > 0 {
-                    indices.push(val as u32);
+                    indices.push(val);
                 }
             }
             if !valid {
@@ -371,14 +370,14 @@ impl<C: Ring> SymmetricFunction<C> {
             let mut indices = Vec::with_capacity(n);
             let mut valid = true;
             for i in 0..n {
-                let val = lam_conj.part(i) as i32 - mu_conj.part(sigma[i]) as i32 - i as i32
-                    + sigma[i] as i32;
-                if val < 0 {
+                let Some(val) =
+                    jacobi_trudi_index(lam_conj.part(i), mu_conj.part(sigma[i]), i, sigma[i])
+                else {
                     valid = false;
                     break;
-                }
+                };
                 if val > 0 {
-                    indices.push(val as u32);
+                    indices.push(val);
                 }
             }
             if !valid {
@@ -429,16 +428,31 @@ impl<C: Ring> SymmetricFunction<C> {
     ///
     /// The result is returned in the power-sum basis.
     pub fn plethysm_power_sum(&self, k: u32) -> Self {
-        assert!(k >= 1, "plethysm_power_sum requires k >= 1");
+        self.checked_plethysm_power_sum(k)
+            .expect("plethysm_power_sum requires k >= 1 and scaled parts to fit in u32")
+    }
+
+    /// Compute `self[p_k]`, returning `None` when `k` is zero or scaling a
+    /// power-sum part would exceed the `u32` partition-index representation.
+    ///
+    /// The result is returned in the power-sum basis.
+    pub fn checked_plethysm_power_sum(&self, k: u32) -> Option<Self> {
+        if k == 0 {
+            return None;
+        }
         let f_p = self.to_power_sum_basis();
         let mut result_terms = BTreeMap::new();
         for (partition, coeff) in &f_p.terms {
-            let new_parts: Vec<u32> = partition.parts().iter().map(|&p| k * p).collect();
+            let new_parts: Vec<u32> = partition
+                .parts()
+                .iter()
+                .map(|&p| p.checked_mul(k))
+                .collect::<Option<_>>()?;
             let new_partition = Partition::from_sorted(new_parts);
             let entry = result_terms.entry(new_partition).or_insert_with(C::zero);
             *entry = entry.clone() + coeff.clone();
         }
-        Self::from_terms(Basis::PowerSum, result_terms)
+        Some(Self::from_terms(Basis::PowerSum, result_terms))
     }
 
     // -----------------------------------------------------------------------
@@ -752,6 +766,21 @@ pub(crate) fn all_permutations(n: usize) -> Vec<(Vec<usize>, i8)> {
     result
 }
 
+/// Return the nonnegative Jacobi--Trudi matrix index, if it is valid.
+///
+/// Partition parts use the full `u32` range, so this calculation must not use
+/// a narrower signed type merely to account for the row and column shifts.
+fn jacobi_trudi_index(lambda_part: u32, mu_part: u32, row: usize, column: usize) -> Option<u32> {
+    let row = i128::try_from(row).expect("Jacobi--Trudi row index exceeds i128");
+    let column = i128::try_from(column).expect("Jacobi--Trudi column index exceeds i128");
+    let index = i128::from(lambda_part) - i128::from(mu_part) - row + column;
+    if index < 0 {
+        None
+    } else {
+        Some(u32::try_from(index).expect("Jacobi--Trudi index exceeds u32"))
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Arithmetic trait impls
 // ---------------------------------------------------------------------------
@@ -884,6 +913,17 @@ mod tests {
     }
 
     #[test]
+    fn test_skew_schur_jacobi_trudi_accepts_full_u32_parts() {
+        let skew: SymmetricFunction<i64> = SymmetricFunction::skew_schur_function(
+            &Partition::new(vec![u32::MAX]),
+            &Partition::new(vec![1]),
+        );
+
+        assert_eq!(skew.basis(), Basis::CompleteH);
+        assert_eq!(skew.coefficient(&Partition::new(vec![u32::MAX - 1])), 1);
+    }
+
+    #[test]
     fn test_trivial_specialization() {
         let s: SymmetricFunction<i64> =
             SymmetricFunction::schur_symmetric(Partition::new(vec![2, 1]));
@@ -928,6 +968,23 @@ mod tests {
         let half = Q::new(1, 2);
         assert_eq!(result.coefficient(&Partition::new(vec![2, 2])), half);
         assert_eq!(result.coefficient(&Partition::new(vec![4])), half);
+    }
+
+    #[test]
+    fn test_checked_plethysm_power_sum_rejects_part_overflow() {
+        let p_max: SymmetricFunction<i64> =
+            SymmetricFunction::power_sum_symmetric(Partition::new(vec![u32::MAX]));
+
+        assert!(p_max.checked_plethysm_power_sum(2).is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "scaled parts to fit in u32")]
+    fn test_plethysm_power_sum_panics_on_part_overflow() {
+        let p_max: SymmetricFunction<i64> =
+            SymmetricFunction::power_sum_symmetric(Partition::new(vec![u32::MAX]));
+
+        let _ = p_max.plethysm_power_sum(2);
     }
 
     #[test]

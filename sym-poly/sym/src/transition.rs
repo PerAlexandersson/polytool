@@ -4,6 +4,7 @@
 //! one basis to another using precomputed transition matrices per degree.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use sym_poly_core::matrix::{identity_matrix, invert_integer_matrix, mat_mul, transpose};
 use sym_poly_core::{Partition, Ring, TransitionCache};
@@ -24,7 +25,7 @@ fn cached_transition_matrix(
     target: Basis,
     partitions: &[Partition],
     deg: u32,
-) -> Vec<Vec<i64>> {
+) -> Arc<Vec<Vec<i64>>> {
     SYM_CACHE.get_or_compute(source, target, deg, |s, t, _| {
         transition_matrix(s, t, partitions)
     })
@@ -61,7 +62,7 @@ pub fn convert<C: Ring>(sf: &SymmetricFunction<C>, target: Basis) -> SymmetricFu
         if to_power_sum {
             // source -> Schur (integer), then Schur -> PowerSum with z_μ division
             let schur_trans = if sf.basis() == Basis::Schur {
-                identity_matrix(k)
+                Arc::new(identity_matrix(k))
             } else {
                 cached_transition_matrix(sf.basis(), Basis::Schur, &partitions, deg)
             };
@@ -346,6 +347,15 @@ mod tests {
         assert_eq!(m.basis(), Basis::Monomial);
         assert_eq!(m.coefficient(&Partition::new(vec![2, 1])), 1);
         assert_eq!(m.coefficient(&Partition::new(vec![1, 1, 1])), 2);
+    }
+
+    #[test]
+    fn test_transition_cache_reuses_matrix_allocation() {
+        let partitions = Partition::all_of_size(0);
+        let first = cached_transition_matrix(Basis::Schur, Basis::Monomial, &partitions, 0);
+        let second = cached_transition_matrix(Basis::Schur, Basis::Monomial, &partitions, 0);
+        assert_eq!(&*first, &*second);
+        assert!(Arc::ptr_eq(&first, &second));
     }
 
     #[test]

@@ -1113,18 +1113,30 @@ impl Graph {
     /// adjacent iff the corresponding edges in G share an endpoint.
     ///
     /// Vertex i of L(G) corresponds to `self.edges()[i]`.
+    /// The construction takes `O(m + \sum_v deg(v)^2)` candidate generation
+    /// steps, plus ordered-set insertion, instead of scanning all `O(m^2)`
+    /// edge pairs.  The resulting edge list retains the lexicographic order
+    /// of edge-index pairs.
     pub fn line_graph(&self) -> Self {
         let m = self.edges.len();
-        let mut lg_edges = Vec::new();
-        for i in 0..m {
-            let (a, b) = self.edges[i];
-            for j in (i + 1)..m {
-                let (c, d) = self.edges[j];
-                if a == c || a == d || b == c || b == d {
-                    lg_edges.push((i, j));
+        let mut incident = vec![Vec::new(); self.n];
+        for (edge_index, &(u, v)) in self.edges.iter().enumerate() {
+            incident[u].push(edge_index);
+            incident[v].push(edge_index);
+        }
+
+        // BTreeSet enforces uniqueness and restores the lexicographic order
+        // produced by the old all-edge-pairs scan, preserving the labeled
+        // output exactly.
+        let mut lg_edges = BTreeSet::new();
+        for edge_indices in incident {
+            for (offset, &left) in edge_indices.iter().enumerate() {
+                for &right in &edge_indices[(offset + 1)..] {
+                    lg_edges.insert((left, right));
                 }
             }
         }
+        let lg_edges: Vec<_> = lg_edges.into_iter().collect();
         Graph::new(m, &lg_edges)
     }
 
@@ -1439,27 +1451,87 @@ impl Graph {
         }
     }
 
+    fn matching_counts_rec(
+        &self,
+        edge_idx: usize,
+        size: usize,
+        used: &mut [bool],
+        coefficients: &mut [i64],
+    ) {
+        coefficients[size] = coefficients[size]
+            .checked_add(1)
+            .expect("coefficient overflow in matching_polynomial");
+        for i in edge_idx..self.edges.len() {
+            let (u, v) = self.edges[i];
+            if !used[u] && !used[v] {
+                used[u] = true;
+                used[v] = true;
+                self.matching_counts_rec(i + 1, size + 1, used, coefficients);
+                used[u] = false;
+                used[v] = false;
+            }
+        }
+    }
+
     /// Matching polynomial: coefficients[k] = number of matchings with k edges.
+    ///
+    /// Counts matchings in place, using `O(n + m)` auxiliary space rather than
+    /// materializing the potentially much larger list of all matchings.
     pub fn matching_polynomial(&self) -> Vec<i64> {
-        let matchings = self.all_matchings();
-        let max_k = matchings.iter().map(|m| m.len()).max().unwrap_or(0);
-        let mut coeffs = vec![0i64; max_k + 1];
-        for m in &matchings {
-            coeffs[m.len()] += 1;
+        let mut coeffs = vec![0i64; self.n / 2 + 1];
+        let mut used = vec![false; self.n];
+        self.matching_counts_rec(0, 0, &mut used, &mut coeffs);
+        while coeffs.len() > 1 && coeffs.last() == Some(&0) {
+            coeffs.pop();
         }
         coeffs
     }
 
     /// All perfect matchings (matchings that cover every vertex).
+    ///
+    /// A dedicated traversal pairs the first uncovered vertex and therefore
+    /// does not construct non-perfect matchings before filtering them.
     pub fn perfect_matchings(&self) -> Vec<Vec<(usize, usize)>> {
         if self.n % 2 != 0 {
             return vec![]; // odd number of vertices → no perfect matching
         }
-        let target = self.n / 2;
-        self.all_matchings()
-            .into_iter()
-            .filter(|m| m.len() == target)
-            .collect()
+        let mut incident = vec![Vec::new(); self.n];
+        for (edge_index, &(u, v)) in self.edges.iter().enumerate() {
+            incident[u].push(edge_index);
+            incident[v].push(edge_index);
+        }
+        let mut used = vec![false; self.n];
+        let mut current = Vec::with_capacity(self.n / 2);
+        let mut result = Vec::new();
+        self.perfect_matchings_rec(&incident, &mut used, &mut current, &mut result);
+        result
+    }
+
+    fn perfect_matchings_rec(
+        &self,
+        incident: &[Vec<usize>],
+        used: &mut [bool],
+        current: &mut Vec<(usize, usize)>,
+        result: &mut Vec<Vec<(usize, usize)>>,
+    ) {
+        let Some(vertex) = (0..self.n).find(|&vertex| !used[vertex]) else {
+            result.push(current.clone());
+            return;
+        };
+        for &edge_index in &incident[vertex] {
+            let (u, v) = self.edges[edge_index];
+            let other = if u == vertex { v } else { u };
+            if used[other] {
+                continue;
+            }
+            used[vertex] = true;
+            used[other] = true;
+            current.push(self.edges[edge_index]);
+            self.perfect_matchings_rec(incident, used, current, result);
+            current.pop();
+            used[other] = false;
+            used[vertex] = false;
+        }
     }
 
     /// All non-crossing matchings.
@@ -1584,13 +1656,54 @@ impl Graph {
         }
     }
 
+    fn independence_counts_rec(
+        &self,
+        vertex: usize,
+        selected: usize,
+        blocked: &mut [bool],
+        coefficients: &mut [i64],
+    ) {
+        if vertex == self.n {
+            coefficients[selected] = coefficients[selected]
+                .checked_add(1)
+                .expect("coefficient overflow in independence_polynomial");
+            return;
+        }
+
+        // Excluding a vertex leaves the state unchanged.
+        self.independence_counts_rec(vertex + 1, selected, blocked, coefficients);
+
+        if blocked[vertex] {
+            return;
+        }
+
+        // Include the vertex and block it and all of its neighbors.  Track
+        // only newly blocked vertices so the state can be restored in O(deg).
+        blocked[vertex] = true;
+        let mut newly_blocked = Vec::with_capacity(self.adj[vertex].len() + 1);
+        newly_blocked.push(vertex);
+        for &neighbor in &self.adj[vertex] {
+            if !blocked[neighbor] {
+                blocked[neighbor] = true;
+                newly_blocked.push(neighbor);
+            }
+        }
+        self.independence_counts_rec(vertex + 1, selected + 1, blocked, coefficients);
+        for blocked_vertex in newly_blocked {
+            blocked[blocked_vertex] = false;
+        }
+    }
+
     /// Independence polynomial: coefficients[k] = number of independent sets of size k.
+    ///
+    /// Counts by include/exclude recursion in place, using `O(n)` auxiliary
+    /// space rather than materializing every independent set.
     pub fn independence_polynomial(&self) -> Vec<i64> {
-        let sets = self.all_independent_sets();
-        let max_k = sets.iter().map(|s| s.len()).max().unwrap_or(0);
-        let mut coeffs = vec![0i64; max_k + 1];
-        for s in &sets {
-            coeffs[s.len()] += 1;
+        let mut coeffs = vec![0i64; self.n + 1];
+        let mut blocked = vec![false; self.n];
+        self.independence_counts_rec(0, 0, &mut blocked, &mut coeffs);
+        while coeffs.len() > 1 && coeffs.last() == Some(&0) {
+            coeffs.pop();
         }
         coeffs
     }
@@ -2530,6 +2643,24 @@ impl std::fmt::Display for Graph {
 mod tests {
     use super::*;
 
+    fn polynomial_from_matchings(matchings: &[Vec<(usize, usize)>]) -> Vec<i64> {
+        let max_size = matchings.iter().map(Vec::len).max().unwrap_or(0);
+        let mut coefficients = vec![0; max_size + 1];
+        for matching in matchings {
+            coefficients[matching.len()] += 1;
+        }
+        coefficients
+    }
+
+    fn polynomial_from_independent_sets(sets: &[Vec<usize>]) -> Vec<i64> {
+        let max_size = sets.iter().map(Vec::len).max().unwrap_or(0);
+        let mut coefficients = vec![0; max_size + 1];
+        for set in sets {
+            coefficients[set.len()] += 1;
+        }
+        coefficients
+    }
+
     fn naive_is_chordal(graph: &Graph) -> bool {
         let mut active = vec![true; graph.num_vertices()];
         for _ in 0..graph.num_vertices() {
@@ -3039,6 +3170,53 @@ mod tests {
         assert_eq!(Graph::path(5).matching_polynomial(), vec![1, 4, 3]);
     }
 
+    #[test]
+    fn test_streaming_polynomials_match_enumerators_exhaustively() {
+        // Every labeled simple graph through five vertices is small enough to
+        // compare the streaming counters with the object-producing APIs.
+        for n in 0..=5 {
+            let possible_edges: Vec<_> = (0..n)
+                .flat_map(|u| ((u + 1)..n).map(move |v| (u, v)))
+                .collect();
+            for mask in 0..(1u64 << possible_edges.len()) {
+                let edges: Vec<_> = possible_edges
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, &edge)| (mask & (1u64 << index) != 0).then_some(edge))
+                    .collect();
+                let graph = Graph::new(n, &edges);
+                assert_eq!(
+                    graph.matching_polynomial(),
+                    polynomial_from_matchings(&graph.all_matchings()),
+                    "matching polynomial mismatch for n={n}, edges={edges:?}"
+                );
+                assert_eq!(
+                    graph.independence_polynomial(),
+                    polynomial_from_independent_sets(&graph.all_independent_sets()),
+                    "independence polynomial mismatch for n={n}, edges={edges:?}"
+                );
+            }
+        }
+
+        for graph in [
+            Graph::complete(6),
+            Graph::cycle(7),
+            Graph::path(8),
+            Graph::star(7),
+            Graph::grid(3, 3),
+            Graph::complete_bipartite(3, 4),
+        ] {
+            assert_eq!(
+                graph.matching_polynomial(),
+                polynomial_from_matchings(&graph.all_matchings())
+            );
+            assert_eq!(
+                graph.independence_polynomial(),
+                polynomial_from_independent_sets(&graph.all_independent_sets())
+            );
+        }
+    }
+
     // -- Independence polynomial tests --
 
     #[test]
@@ -3380,6 +3558,30 @@ mod tests {
         assert_eq!(Graph::complete(3).perfect_matchings().len(), 0);
     }
 
+    #[test]
+    fn test_perfect_matchings_pruned_traversal_matches_enumerator() {
+        for graph in [
+            Graph::complete(4),
+            Graph::cycle(6),
+            Graph::path(6),
+            Graph::complete_bipartite(3, 3),
+            Graph::new(6, &[(0, 2), (3, 4), (1, 5), (0, 1), (2, 3), (4, 5)]),
+        ] {
+            let expected: BTreeSet<_> = graph
+                .all_matchings()
+                .into_iter()
+                .filter(|matching| matching.len() == graph.num_vertices() / 2)
+                .map(|matching| matching.into_iter().collect::<BTreeSet<_>>())
+                .collect();
+            let actual: BTreeSet<_> = graph
+                .perfect_matchings()
+                .into_iter()
+                .map(|matching| matching.into_iter().collect::<BTreeSet<_>>())
+                .collect();
+            assert_eq!(actual, expected);
+        }
+    }
+
     // -- Non-crossing matchings --
 
     #[test]
@@ -3468,6 +3670,38 @@ mod tests {
         let g = Graph::path(5);
         let lg = g.line_graph();
         assert_eq!(g.matching_polynomial(), lg.independence_polynomial());
+    }
+
+    #[test]
+    fn test_line_graph_incident_construction_preserves_labels() {
+        let graph = Graph::new(6, &[(0, 1), (2, 3), (1, 2), (3, 4), (0, 5)]);
+        let expected: Vec<_> = graph
+            .edges()
+            .iter()
+            .enumerate()
+            .flat_map(|(left, &(a, b))| {
+                graph.edges()[left + 1..]
+                    .iter()
+                    .enumerate()
+                    .filter_map(move |(offset, &(c, d))| {
+                        (a == c || a == d || b == c || b == d).then_some((left, left + 1 + offset))
+                    })
+            })
+            .collect();
+        assert_eq!(graph.line_graph().edges(), expected.as_slice());
+    }
+
+    #[test]
+    fn test_line_graph_sparse_path() {
+        let root = Graph::path(2048);
+        let line = root.line_graph();
+        assert_eq!(line.num_vertices(), 2047);
+        assert_eq!(line.num_edges(), 2046);
+        assert!(line
+            .edges()
+            .iter()
+            .copied()
+            .eq((0..2046).map(|index| (index, index + 1))));
     }
 
     #[test]
