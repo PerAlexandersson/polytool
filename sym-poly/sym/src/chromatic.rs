@@ -48,37 +48,92 @@ use crate::{Basis, SymmetricFunction};
 // Chromatic symmetric function
 // ---------------------------------------------------------------------------
 
-/// Compute the chromatic symmetric function X_G in the monomial basis.
+/// Compute the chromatic symmetric function `X_G` in the monomial basis.
 ///
-/// For a graph G on n vertices, X_G = Σ c_λ m_λ where c_λ counts the number
-/// of proper colorings of G with color type λ (i.e., the sorted tuple of
-/// color multiplicities equals λ), multiplied by the number of distinct
-/// monomial assignments for that type.
-///
-/// The coefficient of m_λ equals the number of proper colorings κ: V → ℤ₊
-/// whose sorted color-frequency vector is λ, divided by the number of
-/// permutations of equal parts (the automorphism factor), then multiplied
-/// back — but since we enumerate all labeled colorings with n colors, the
-/// coefficient is simply the count of proper colorings with type λ times
-/// the number of ways to assign the actual color values (which is
-/// n! / (m_1! m_2! ··· aut(λ)) — but we take the direct approach instead.
+/// This visits each stable set partition of the vertex set exactly once,
+/// rather than enumerating colorings separately for every integer partition.
+/// If a stable set partition has block-size partition `lambda`, it contributes
+/// `prod_s m_s(lambda)!` to the coefficient of `m_lambda`, since blocks of
+/// each common size can be assigned independently to the corresponding color
+/// variables.  The traversal is exponential in the number of vertices, as an
+/// exact chromatic-symmetric-function computation must be in general, but it
+/// shares all work between the different monomial types.
 pub fn chromatic_symmetric<C: Ring>(g: &Graph) -> SymmetricFunction<C> {
-    let n = g.num_vertices();
+    let terms = stable_set_partition_type_counts(g)
+        .into_iter()
+        .map(|(partition, count)| {
+            let coefficient = count
+                .checked_mul(equal_part_permutation_factor(&partition))
+                .expect("chromatic symmetric coefficient does not fit in i64");
+            (partition, C::from_i64(coefficient))
+        })
+        .collect();
+    SymmetricFunction::from_terms(Basis::Monomial, terms)
+}
 
-    // For each partition λ of n, generate all distinct permutations of a
-    // coloring vector with color frequencies λ, and count proper ones.
-    // This is much faster than iterating over all k^n colorings.
-    let partitions = Partition::all_of_size(n as u32);
-    let mut terms: BTreeMap<Partition, C> = BTreeMap::new();
-
-    for lambda in &partitions {
-        let count = count_proper_colorings_of_type(g, lambda);
-        if count != 0 {
-            terms.insert(lambda.clone(), C::from_i64(count as i64));
+fn stable_set_partition_type_counts(g: &Graph) -> BTreeMap<Partition, i64> {
+    fn visit(
+        g: &Graph,
+        vertex: usize,
+        blocks: &mut Vec<Vec<usize>>,
+        counts: &mut BTreeMap<Partition, i64>,
+    ) {
+        if vertex == g.num_vertices() {
+            let partition = Partition::new(
+                blocks
+                    .iter()
+                    .map(|block| {
+                        u32::try_from(block.len()).expect("stable block size does not fit in u32")
+                    })
+                    .collect(),
+            );
+            let count = counts.entry(partition).or_default();
+            *count = count
+                .checked_add(1)
+                .expect("stable set partition count does not fit in i64");
+            return;
         }
+
+        for block_index in 0..blocks.len() {
+            if blocks[block_index]
+                .iter()
+                .all(|&other| !g.has_edge(vertex, other))
+            {
+                blocks[block_index].push(vertex);
+                visit(g, vertex + 1, blocks, counts);
+                blocks[block_index].pop();
+            }
+        }
+
+        blocks.push(vec![vertex]);
+        visit(g, vertex + 1, blocks, counts);
+        blocks.pop();
     }
 
-    SymmetricFunction::from_terms(Basis::Monomial, terms)
+    let mut counts = BTreeMap::new();
+    visit(g, 0, &mut Vec::new(), &mut counts);
+    counts
+}
+
+fn equal_part_permutation_factor(partition: &Partition) -> i64 {
+    let mut factor = 1i64;
+    let mut index = 0usize;
+    while index < partition.num_parts() {
+        let part = partition.part(index);
+        let mut multiplicity = 1usize;
+        while index + multiplicity < partition.num_parts()
+            && partition.part(index + multiplicity) == part
+        {
+            multiplicity += 1;
+        }
+        for value in 2..=multiplicity {
+            factor = factor
+                .checked_mul(i64::try_from(value).expect("part multiplicity does not fit in i64"))
+                .expect("equal-part permutation factor does not fit in i64");
+        }
+        index += multiplicity;
+    }
+    factor
 }
 
 /// Compute the ordered non-proper coloring symmetric function `f_(G, Ω)`.
@@ -148,89 +203,6 @@ fn normalize_edge((u, v): (usize, usize)) -> (usize, usize) {
     } else {
         (v, u)
     }
-}
-
-/// Count proper colorings whose sorted color-frequency vector equals λ,
-/// divided by the number of monomials of type λ (giving the m_λ coefficient).
-///
-/// Strategy: build a coloring vector with frequencies λ (e.g., [1,1,2,3,3,3]
-/// for λ = (3,2,1)), generate all distinct permutations, and count those that
-/// are proper colorings of g. The count per monomial is this divided by the
-/// number of distinct rearrangements of λ-with-zeros, but since we use exactly
-/// ℓ(λ) colors, each valid coloring maps to exactly one monomial, so the
-/// coefficient = (number of proper permutations) / (number of distinct
-/// rearrangements of λ padded to ℓ(λ) colors).
-///
-/// Actually, with ℓ(λ) colors (no unused colors), every rearrangement of the
-/// frequency vector uses all colors, so the number of rearrangements equals
-/// ℓ(λ)! / ∏ m_i! where m_i is the multiplicity of part i in λ. But we need
-/// to account for ALL possible number of colors (not just ℓ(λ)), since a
-/// coloring with unused colors also contributes.
-///
-/// The simplest correct approach: use the multiset permutation enumeration.
-/// For a fixed composition α (like (3,2,1)), the coloring vector [1,1,1,2,2,3]
-/// has n!/∏(α_i!) distinct permutations. We test each for properness. The
-/// coefficient of m_λ is the count of proper ones divided by ℓ(λ)!/∏ m_i!
-/// (the number of relabelings of colors that preserve the type).
-fn count_proper_colorings_of_type(g: &Graph, lambda: &Partition) -> i64 {
-    let n = g.num_vertices();
-    let parts = lambda.parts();
-
-    // Build the canonical coloring vector: color 0 appears λ_1 times,
-    // color 1 appears λ_2 times, etc.
-    let mut base_coloring = Vec::with_capacity(n);
-    for (color, &freq) in parts.iter().enumerate() {
-        for _ in 0..freq {
-            base_coloring.push(color);
-        }
-    }
-    assert_eq!(base_coloring.len(), n);
-
-    // Generate all distinct permutations (multiset permutations) and count
-    // those that are proper colorings. Each proper permutation maps to
-    // exactly one monomial x₀^{λ₁} x₁^{λ₂} ···, and the coefficient of
-    // m_λ is this count (no division needed — we fix one composition).
-    let mut count = 0i64;
-    let mut perm = base_coloring;
-    perm.sort();
-    loop {
-        let proper = g.edges().iter().all(|&(u, v)| perm[u] != perm[v]);
-        if proper {
-            count += 1;
-        }
-        if !next_multiset_perm(&mut perm) {
-            break;
-        }
-    }
-
-    count
-}
-
-/// Next lexicographic permutation of a slice (handles duplicates correctly).
-fn next_multiset_perm(perm: &mut [usize]) -> bool {
-    let n = perm.len();
-    if n <= 1 {
-        return false;
-    }
-    // Find largest i such that perm[i] < perm[i+1]
-    let mut i = n - 2;
-    loop {
-        if perm[i] < perm[i + 1] {
-            break;
-        }
-        if i == 0 {
-            return false;
-        }
-        i -= 1;
-    }
-    // Find largest j such that perm[i] < perm[j]
-    let mut j = n - 1;
-    while perm[j] <= perm[i] {
-        j -= 1;
-    }
-    perm.swap(i, j);
-    perm[i + 1..].reverse();
-    true
 }
 
 // ---------------------------------------------------------------------------
@@ -787,6 +759,29 @@ fn is_area_sequence(area: &[u8]) -> bool {
             .all(|w| usize::from(w[1]) <= usize::from(w[0]) + 1)
 }
 
+fn next_multiset_perm(perm: &mut [usize]) -> bool {
+    if perm.len() <= 1 {
+        return false;
+    }
+    let mut left = perm.len() - 2;
+    loop {
+        if perm[left] < perm[left + 1] {
+            break;
+        }
+        if left == 0 {
+            return false;
+        }
+        left -= 1;
+    }
+    let mut right = perm.len() - 1;
+    while perm[right] <= perm[left] {
+        right -= 1;
+    }
+    perm.swap(left, right);
+    perm[left + 1..].reverse();
+    true
+}
+
 fn count_proper_colorings_of_type_q_with_ascent_edges(
     g: &Graph,
     ascent_edges: &[(usize, usize)],
@@ -945,6 +940,35 @@ mod tests {
         let g = Graph::empty(3);
         let x = chromatic_symmetric::<i64>(&g);
         assert_eq!(x.trivial_specialization(3), 27);
+    }
+
+    #[test]
+    fn test_stable_partition_chromatic_matches_q_specialization() {
+        for n in 0..=4 {
+            let possible_edges = (0..n)
+                .flat_map(|left| ((left + 1)..n).map(move |right| (left, right)))
+                .collect::<Vec<_>>();
+            for mask in 0..(1usize << possible_edges.len()) {
+                let edges = possible_edges
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, &edge)| ((mask >> index) & 1 == 1).then_some(edge))
+                    .collect::<Vec<_>>();
+                let graph = Graph::new(n, &edges);
+                let actual = chromatic_symmetric::<i64>(&graph);
+                let q_terms = q_chromatic_symmetric(&graph);
+                for partition in Partition::all_of_size(n as u32) {
+                    let expected = q_terms
+                        .get(&partition)
+                        .map_or(0, |polynomial| polynomial.iter().sum());
+                    assert_eq!(
+                        actual.coefficient(&partition),
+                        expected,
+                        "graph edges={edges:?}, partition={partition}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

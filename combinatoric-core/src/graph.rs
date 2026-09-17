@@ -24,6 +24,14 @@ use crate::partition::Partition;
 
 type GraphCacheKey = (usize, Vec<(usize, usize)>);
 
+fn add_clique_edges(vertices: &[usize], edges: &mut Vec<(usize, usize)>) {
+    for (offset, &left) in vertices.iter().enumerate() {
+        for &right in &vertices[(offset + 1)..] {
+            edges.push((left, right));
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Polynomial helpers (Vec<i64> arithmetic for chromatic polynomial)
 // ---------------------------------------------------------------------------
@@ -584,6 +592,46 @@ impl Graph {
                 for column in 0..=row {
                     edges.push((vertex(row, column), vertex(row + 1, column)));
                     edges.push((vertex(row, column), vertex(row + 1, column + 1)));
+                }
+            }
+        }
+        Graph::new(vertex_count, &edges)
+    }
+
+    /// Clique blow-up of the complete `3`-sun (the trampoline).
+    ///
+    /// The three central modules `A12,A13,A23`, with sizes given by
+    /// `central`, form one clique.  The private clique `P1` is complete to
+    /// `A12 union A13`, `P2` is complete to `A12 union A23`, and `P3` is
+    /// complete to `A13 union A23`; distinct private cliques are anticomplete.
+    /// Vertices are numbered module by module in the order
+    /// `A12,A13,A23,P1,P2,P3`.  Zero module sizes are allowed.
+    pub fn complete_three_sun_clique_blowup(central: [usize; 3], private: [usize; 3]) -> Self {
+        let sizes = [
+            central[0], central[1], central[2], private[0], private[1], private[2],
+        ];
+        let mut modules = Vec::with_capacity(sizes.len());
+        let mut vertex_count = 0usize;
+        for size in sizes {
+            let end = vertex_count
+                .checked_add(size)
+                .expect("complete 3-sun blow-up vertex count overflow");
+            modules.push((vertex_count..end).collect::<Vec<_>>());
+            vertex_count = end;
+        }
+
+        let central_vertices = modules[..3].iter().flatten().copied().collect::<Vec<_>>();
+        let mut edges = Vec::new();
+        add_clique_edges(&central_vertices, &mut edges);
+        for private_module in &modules[3..] {
+            add_clique_edges(private_module, &mut edges);
+        }
+        for (private_index, central_indices) in [(3, [0, 1]), (4, [0, 2]), (5, [1, 2])] {
+            for &private_vertex in &modules[private_index] {
+                for central_index in central_indices {
+                    for &central_vertex in &modules[central_index] {
+                        edges.push((central_vertex, private_vertex));
+                    }
                 }
             }
         }
@@ -1316,6 +1364,54 @@ impl Graph {
         selection_order.reverse();
         self.is_perfect_elimination_order(&selection_order)
             .then_some(selection_order)
+    }
+
+    /// Return a perfect elimination order whose final vertices are `clique`.
+    ///
+    /// The vertices in the requested final clique appear in the supplied
+    /// order.  Returns `None` if the list has repetitions or out-of-range
+    /// vertices, is not a clique, or no such perfect elimination order exists.
+    /// Ties among eligible simplicial vertices are resolved by vertex number.
+    pub fn perfect_elimination_order_ending_with(&self, clique: &[usize]) -> Option<Vec<usize>> {
+        let mut in_clique = vec![false; self.n];
+        for &vertex in clique {
+            if vertex >= self.n || in_clique[vertex] {
+                return None;
+            }
+            in_clique[vertex] = true;
+        }
+        for (offset, &left) in clique.iter().enumerate() {
+            if clique[(offset + 1)..]
+                .iter()
+                .any(|&right| !self.has_edge(left, right))
+            {
+                return None;
+            }
+        }
+
+        let mut remaining = (0..self.n).collect::<BTreeSet<_>>();
+        let mut order = Vec::with_capacity(self.n);
+        while remaining.len() > clique.len() {
+            let chosen = remaining
+                .iter()
+                .copied()
+                .filter(|&vertex| !in_clique[vertex])
+                .find(|&vertex| {
+                    let neighbors = remaining
+                        .intersection(self.neighbors(vertex))
+                        .copied()
+                        .collect::<Vec<_>>();
+                    neighbors.iter().enumerate().all(|(offset, &left)| {
+                        neighbors[(offset + 1)..]
+                            .iter()
+                            .all(|&right| self.has_edge(left, right))
+                    })
+                })?;
+            remaining.remove(&chosen);
+            order.push(chosen);
+        }
+        order.extend_from_slice(clique);
+        self.is_perfect_elimination_order(&order).then_some(order)
     }
 
     /// Whether this graph is chordal.
@@ -3127,6 +3223,30 @@ mod tests {
         assert_ne!(Graph::triangular_grid(4), Graph::triangular_graph(4));
     }
 
+    #[test]
+    fn test_complete_three_sun_clique_blowup() {
+        let sun = Graph::complete_three_sun_clique_blowup([1, 1, 1], [1, 1, 1]);
+        assert_eq!(sun.num_vertices(), 6);
+        assert_eq!(sun.num_edges(), 9);
+        assert!(sun.is_chordal());
+        assert!(sun.is_claw_free());
+
+        let blowup = Graph::complete_three_sun_clique_blowup([2, 1, 1], [1, 2, 1]);
+        assert_eq!(blowup.num_vertices(), 8);
+        assert_eq!(blowup.num_edges(), 18);
+        assert!(blowup.has_edge(0, 4));
+        assert!(blowup.has_edge(3, 7));
+        assert!(!blowup.has_edge(4, 5));
+        assert!(!blowup.has_edge(5, 7));
+        assert!(blowup.is_chordal());
+        assert!(blowup.is_claw_free());
+
+        assert_eq!(
+            Graph::complete_three_sun_clique_blowup([0, 0, 0], [0, 0, 0]),
+            Graph::empty(0)
+        );
+    }
+
     // -- Predicate tests --
 
     #[test]
@@ -3190,6 +3310,30 @@ mod tests {
         assert!(!path.is_perfect_elimination_order(&[0, 1, 2]));
         assert!(!path.is_perfect_elimination_order(&[0, 1, 2, 4]));
         assert!(!path.is_perfect_elimination_order(&[0, 1, 1, 3]));
+    }
+
+    #[test]
+    fn test_perfect_elimination_order_ending_with_clique() {
+        let sun = Graph::complete_three_sun_clique_blowup([1, 1, 1], [1, 1, 1]);
+        for clique in [vec![0, 1, 2], vec![3], vec![4], vec![5]] {
+            let order = sun
+                .perfect_elimination_order_ending_with(&clique)
+                .expect("complete 3-sun should eliminate toward the chosen clique");
+            assert_eq!(&order[order.len() - clique.len()..], clique);
+            assert!(sun.is_perfect_elimination_order(&order));
+        }
+
+        let path = Graph::path(4);
+        assert!(path
+            .perfect_elimination_order_ending_with(&[2, 3])
+            .is_some());
+        assert!(path
+            .perfect_elimination_order_ending_with(&[0, 3])
+            .is_none());
+        assert!(path
+            .perfect_elimination_order_ending_with(&[1, 1])
+            .is_none());
+        assert!(path.perfect_elimination_order_ending_with(&[4]).is_none());
     }
 
     #[test]

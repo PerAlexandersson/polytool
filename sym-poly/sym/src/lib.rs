@@ -10,6 +10,7 @@ use sym_poly_core::Partition;
 
 pub mod basis;
 pub mod chromatic;
+pub mod clique_boundary;
 pub mod frobenius;
 pub mod hessenberg_gkm;
 pub mod hook_schur;
@@ -40,6 +41,9 @@ pub use chromatic::{
     q_chromatic_symmetric_function_with_ascent_edges, q_chromatic_symmetric_with_ascent_edges,
     rectangular_powerful_tableau_powers, ChromaticQuasisymmetricDyckCache,
     RectangularPowerfulTableauPowers,
+};
+pub use clique_boundary::{
+    chordal_clique_boundary_schur_channels, CliqueBoundaryError, MAX_EXACT_CLIQUE_BOUNDARY_ORDER,
 };
 pub use frobenius::{
     frobenius_from_character_values, frobenius_from_trace_matrices,

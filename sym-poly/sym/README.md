@@ -13,6 +13,7 @@ support. `sym-poly-qsym` is downstream of this crate.
 | Core algebra | `SymmetricFunction<C>`, `Basis`, all basis conversions, products, omega, Hall product |
 | Tableaux and characters | `hook_schur`, Kostka/character/Frobenius, shifted LR |
 | Graph/chromatic families | `chromatic`, `weighted_bond`, q-chromatic and Hessenberg/GKM routines |
+| Chordal clique boundaries | `chordal_clique_boundary_schur_channels`; `examples/clique_boundary_channels.rs` |
 | q,t families | `llt`, `macdonald`, Petrie and shifted/Grothendieck routines |
 | Additional constructions | `lah`, twin GKM, circular/affine helpers |
 

@@ -5,6 +5,28 @@ Full chronology through the start of the current repository-health batch is in
 
 ## Active: repository health remediation — 2026-09-16
 
+The chordal-claw-free Schur project has released all Rust file ownership after
+promoting its reusable core.  `combinatoric-core` now provides the complete
+`3`-sun clique-blowup generator and clique-rooted perfect elimination orders;
+`sym-poly-sym` now provides exact cleared chordal clique-boundary Schur
+channels through order nine.  `chromatic_symmetric` uses one stable-set-
+partition traversal shared by all monomial types.  The checked example and
+library guide expose the new boundary API.  The family-specific scan remains
+an ignored driver at
+`experiments/src/bin/chordal_clawfree_boundary_scan.rs`, outside the maintained
+workspace.
+
+Verification passed: all 268 `combinatoric-core` tests, all 134
+`sym-poly-sym` unit tests plus its integration and documentation tests, strict
+Rustdoc for `sym-poly-sym`, the checked boundary example, and the explicit
+negative-intermediate/positive-completion cross-check.  Focused Clippy adds no
+warning in the new module; its 36 reports are pre-existing elsewhere in
+`sym-poly-sym`.  The project scan found no negative outer-private-clique
+channel through total order eight (28 blowups, 243 nonzero coefficients),
+whereas the overlapping central boundary is already negative for the bare
+`3`-sun.  This sharply identifies the outer private clique as the viable
+interface for the next proof.
+
 The host supervisor owns final integration, CI observation, documentation,
 suggestions, and this handoff. All bounded source workers have completed and
 released their files; there is no active source ownership in this repository.
