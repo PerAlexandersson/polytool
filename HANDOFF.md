@@ -37,8 +37,8 @@ routes.  Its
 all fourteen matrices through order five have full input rank, and every
 negative entry has an outer source shape of first row at least three.  The
 same statement now holds for the full-rank order-seven spanning
-reconstructions at boundary sizes two and three (`28` and `19` input
-coordinates, respectively).  The ignored driver permits these bounded
+reconstructions at boundary sizes two, three, and four (`28`, `19`, and `10`
+input coordinates, respectively).  The ignored driver permits these bounded
 order-seven runs; this project-specific cap change is not maintained-library
 functionality.  The
 order-six unlabeled universal-clique audit covered 17 relevant graphs and 361
