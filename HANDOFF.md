@@ -12,6 +12,9 @@ permutations, cycle indices, and character tables in the exact clique-boundary
 routine.  The universal-vertex API documents and tests its exact positive
 action on every two-column Schur function.  The family-specific scan remains in the ignored
 `experiments/src/bin/chordal_clawfree_boundary_scan.rs` consumer.  Its new
+`positive-compression` mode refutes the naive model obtained by leaving the
+new universal label unused in the old harmonic module; that model cannot
+produce the lower outer two-row shapes present in the true transfer.  Its
 `cone-transform` mode reconstructs exact rational candidate transfer matrices:
 all fourteen matrices through order five have full input rank, and every
 negative entry has an outer source shape of first row at least three.  The
