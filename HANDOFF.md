@@ -5,6 +5,11 @@ Full chronology through the start of the current repository-health batch is in
 
 ## Active: repository health remediation — 2026-09-16
 
+`/root` (2026-09-17) has released this handoff and the ignored project
+consumer `experiments/src/bin/chordal_clawfree_boundary_scan.rs` after a
+bounded higher-rank transfer run.  No maintained library source was owned or
+changed.
+
 The chordal-claw-free Schur project has released all Rust files.  Reusable
 work now includes `Graph::join`, the monomial-basis universal-vertex operator
 `chromatic_symmetric_add_universal_vertex`, and cached degree-dependent
@@ -31,6 +36,11 @@ routes.  Its
 `cone-transform` mode reconstructs exact rational candidate transfer matrices:
 all fourteen matrices through order five have full input rank, and every
 negative entry has an outer source shape of first row at least three.  The
+same statement now holds for the full-rank order-seven spanning
+reconstructions at boundary sizes two and three (`28` and `19` input
+coordinates, respectively).  The ignored driver permits these bounded
+order-seven runs; this project-specific cap change is not maintained-library
+functionality.  The
 order-six unlabeled universal-clique audit covered 17 relevant graphs and 361
 positive boundary states without a failure; the attempted order-seven audit
 was interrupted before completion and has no claimed result.
