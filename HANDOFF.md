@@ -5,6 +5,15 @@ Full chronology through the start of the current repository-health batch is in
 
 ## Active: repository health remediation — 2026-09-16
 
+The chordal-claw-free Schur project has again released its ignored experiment
+driver.  `experiments/src/bin/chordal_clawfree_boundary_scan.rs` now has a
+`detail` mode for individual channel tables and a `universal` mode for the
+universal-vertex preservation probe.  The latter finds the unrestricted claim
+false (the edgeless three-vertex graph cones to a claw), but finds no failure
+among 3,181 boundary-positive chordal claw-free inputs through order five when
+the cone also remains claw-free.  These are project-specific proof-search
+checks and remain outside the maintained workspace.
+
 The chordal-claw-free Schur project has released all Rust file ownership after
 promoting its reusable core.  `combinatoric-core` now provides the complete
 `3`-sun clique-blowup generator and clique-rooted perfect elimination orders;
@@ -26,6 +35,9 @@ channel through total order eight (28 blowups, 243 nonzero coefficients),
 whereas the overlapping central boundary is already negative for the bare
 `3`-sun.  This sharply identifies the outer private clique as the viable
 interface for the next proof.
+The shared-library checkpoint is committed locally.  Its routine push to the
+existing SSH remote failed because this environment has no usable public-key
+authentication; no remote or credential configuration was changed.
 
 The host supervisor owns final integration, CI observation, documentation,
 suggestions, and this handoff. All bounded source workers have completed and
