@@ -5,6 +5,26 @@ Full chronology through the start of the current repository-health batch is in
 
 ## Active: repository health remediation — 2026-09-16
 
+The chordal-claw-free Schur project has released all Rust files.  Reusable
+work now includes `Graph::join`, the monomial-basis universal-vertex operator
+`chromatic_symmetric_add_universal_vertex`, and cached degree-dependent
+permutations, cycle indices, and character tables in the exact clique-boundary
+routine.  The family-specific scan remains in the ignored
+`experiments/src/bin/chordal_clawfree_boundary_scan.rs` consumer.  Its new
+`cone-transform` mode reconstructs exact rational candidate transfer matrices:
+all fourteen matrices through order five have full input rank, and every
+negative entry has an outer source shape of first row at least three.  The
+order-six unlabeled universal-clique audit covered 17 relevant graphs and 361
+positive boundary states without a failure; the attempted order-seven audit
+was interrupted before completion and has no claimed result.
+
+Verification passed: 269 `combinatoric-core` tests, 135 `sym-poly-sym` unit
+tests plus all integration and documentation tests, strict Rustdoc, the
+checked universal-vertex example, and the project-specific exact transform
+sweeps.  Focused strict Clippy reports only the 38 pre-existing
+`combinatoric-core` findings and 36 pre-existing `sym-poly-sym` findings; the
+changed source files add none.
+
 The chordal-claw-free Schur project has again released its ignored experiment
 driver.  `experiments/src/bin/chordal_clawfree_boundary_scan.rs` now has a
 `detail` mode for individual channel tables and a `universal` mode for the

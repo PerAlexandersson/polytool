@@ -71,6 +71,41 @@ pub fn chromatic_symmetric<C: Ring>(g: &Graph) -> SymmetricFunction<C> {
     SymmetricFunction::from_terms(Basis::Monomial, terms)
 }
 
+/// Add a universal vertex to a chromatic symmetric function.
+///
+/// If `chromatic` is `X_G`, the result is `X_(G * K_1)`, where `*` denotes
+/// graph join.  The result is returned in the monomial basis.  More generally,
+/// this is the linear operator
+///
+/// ```text
+/// m_lambda -> (multiplicity of 1 in lambda + 1) m_(lambda union 1).
+/// ```
+///
+/// Indeed, a universal vertex must form a singleton block in every stable-set
+/// partition.  The factor accounts for the ordinary monomial-basis
+/// normalization among equal singleton blocks.
+pub fn chromatic_symmetric_add_universal_vertex<C: Ring>(
+    chromatic: &SymmetricFunction<C>,
+) -> SymmetricFunction<C> {
+    let monomial = chromatic.to_monomial_basis();
+    let terms = monomial
+        .terms()
+        .iter()
+        .map(|(shape, coefficient)| {
+            let singleton_multiplicity = shape.parts().iter().filter(|&&part| part == 1).count();
+            let factor = i64::try_from(singleton_multiplicity + 1)
+                .expect("singleton multiplicity does not fit in i64");
+            let mut extended_parts = shape.parts().to_vec();
+            extended_parts.push(1);
+            (
+                Partition::from_sorted(extended_parts),
+                coefficient.clone() * C::from_i64(factor),
+            )
+        })
+        .collect();
+    SymmetricFunction::from_terms(Basis::Monomial, terms)
+}
+
 fn stable_set_partition_type_counts(g: &Graph) -> BTreeMap<Partition, i64> {
     fn visit(
         g: &Graph,
@@ -886,6 +921,16 @@ mod tests {
         assert_eq!(m.coefficient(&Partition::new(vec![2, 1])), 1);
         assert_eq!(m.coefficient(&Partition::new(vec![1, 1, 1])), 6);
         assert_eq!(m.coefficient(&Partition::new(vec![3])), 0);
+    }
+
+    #[test]
+    fn test_add_universal_vertex_matches_graph_join() {
+        for graph in [Graph::empty(0), Graph::empty(3), Graph::path(4)] {
+            let chromatic = chromatic_symmetric::<i64>(&graph).to_schur_basis();
+            let extended = chromatic_symmetric_add_universal_vertex(&chromatic);
+            let cone = graph.join(&Graph::complete(1));
+            assert_eq!(extended, chromatic_symmetric::<i64>(&cone));
+        }
     }
 
     #[test]

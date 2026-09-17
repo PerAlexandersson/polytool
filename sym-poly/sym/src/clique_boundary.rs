@@ -27,6 +27,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use combinatoric_core::{all_permutations_zero_indexed, Graph, Partition};
 use num_bigint::BigInt;
@@ -67,6 +68,21 @@ impl fmt::Display for CliqueBoundaryError {
 impl std::error::Error for CliqueBoundaryError {}
 
 type GroupElement = HashMap<Vec<usize>, i64>;
+type Permutations = Arc<Vec<Vec<usize>>>;
+type PermutationCache = Mutex<HashMap<usize, Permutations>>;
+type SymmetricGroupDataCache = Mutex<HashMap<usize, Arc<SymmetricGroupDegreeData>>>;
+
+#[derive(Debug)]
+struct SymmetricGroupDegreeData {
+    shapes: Vec<Partition>,
+    cycle_indices: HashMap<u64, usize>,
+    permutations: Permutations,
+    permutation_cycle_indices: Vec<usize>,
+    characters: Vec<Vec<i64>>,
+}
+
+static PERMUTATIONS_BY_DEGREE: OnceLock<PermutationCache> = OnceLock::new();
+static SYMMETRIC_GROUP_DATA_BY_DEGREE: OnceLock<SymmetricGroupDataCache> = OnceLock::new();
 
 /// Compute all cleared clique-boundary Pieri channels in the Schur basis.
 ///
@@ -100,79 +116,51 @@ pub fn chordal_clique_boundary_schur_channels(
 
     let relative = relative_chordal_operator(graph, boundary.len(), &peo);
     let full = left_antisymmetrize(relative, boundary, order);
-    let interior_shapes = Partition::all_of_size(interior.len() as u32);
-    let outer_shapes = Partition::all_of_size(order as u32);
-    let interior_cycle_indices = interior_shapes
-        .iter()
-        .enumerate()
-        .map(|(index, shape)| (cycle_type_code(shape), index))
-        .collect::<HashMap<_, _>>();
-    let outer_cycle_indices = outer_shapes
-        .iter()
-        .enumerate()
-        .map(|(index, shape)| (cycle_type_code(shape), index))
-        .collect::<HashMap<_, _>>();
-    let local_permutations = all_permutations_zero_indexed(interior.len())
-        .into_iter()
-        .map(|permutation| {
-            let cycle_index = interior_cycle_indices[&permutation_cycle_type_code(&permutation)];
-            (permutation, cycle_index)
-        })
-        .collect::<Vec<_>>();
+    let interior_data = symmetric_group_degree_data(interior.len());
+    let outer_data = symmetric_group_degree_data(order);
     let mut interior_position = vec![usize::MAX; order];
     for (index, &vertex) in interior.iter().enumerate() {
         interior_position[vertex] = index;
     }
-    let mut cycle_pair_weights = vec![vec![0i64; outer_shapes.len()]; interior_shapes.len()];
+    let mut cycle_pair_weights =
+        vec![vec![0i64; outer_data.shapes.len()]; interior_data.shapes.len()];
     for (permutation, coefficient) in &full {
-        for (local, interior_cycle_index) in &local_permutations {
+        for (local, &interior_cycle_index) in interior_data
+            .permutations
+            .iter()
+            .zip(&interior_data.permutation_cycle_indices)
+        {
             let outer_code = right_composition_cycle_type_code(
                 permutation,
                 local,
                 &interior,
                 &interior_position,
             );
-            let outer_cycle_index = outer_cycle_indices[&outer_code];
-            let entry = &mut cycle_pair_weights[*interior_cycle_index][outer_cycle_index];
+            let outer_cycle_index = outer_data.cycle_indices[&outer_code];
+            let entry = &mut cycle_pair_weights[interior_cycle_index][outer_cycle_index];
             *entry = entry
                 .checked_add(*coefficient)
                 .expect("order-nine cycle-pair weight fits in i64");
         }
     }
 
-    let inner_characters = interior_shapes
-        .iter()
-        .map(|shape| {
-            interior_shapes
-                .iter()
-                .map(|cycle| sn_character(shape, cycle))
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    let outer_characters = outer_shapes
-        .iter()
-        .map(|shape| {
-            outer_shapes
-                .iter()
-                .map(|cycle| sn_character(shape, cycle))
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
     let mut channels = BTreeMap::new();
-    for (interior_shape_index, interior_shape) in interior_shapes.iter().enumerate() {
+    for (interior_shape_index, interior_shape) in interior_data.shapes.iter().enumerate() {
         let mut schur_terms = BTreeMap::new();
-        for (outer_shape_index, outer_shape) in outer_shapes.iter().enumerate() {
+        for (outer_shape_index, outer_shape) in outer_data.shapes.iter().enumerate() {
             if !is_vertical_strip(outer_shape, interior_shape, boundary.len()) {
                 continue;
             }
             let mut coefficient = 0i128;
             for (interior_cycle_index, row) in cycle_pair_weights.iter().enumerate() {
-                let inner_character = inner_characters[interior_shape_index][interior_cycle_index];
+                let inner_character =
+                    interior_data.characters[interior_shape_index][interior_cycle_index];
                 if inner_character == 0 {
                     continue;
                 }
                 for (outer_cycle_index, &weight) in row.iter().enumerate() {
-                    let outer_character = outer_characters[outer_shape_index][outer_cycle_index];
+                    let outer_character =
+                        outer_data.characters[outer_shape_index][outer_cycle_index];
                     if weight != 0 && outer_character != 0 {
                         let contribution = i128::from(weight)
                             * i128::from(inner_character)
@@ -193,6 +181,71 @@ pub fn chordal_clique_boundary_schur_channels(
         );
     }
     Ok(channels)
+}
+
+fn permutations_of_degree(degree: usize) -> Permutations {
+    let cache = PERMUTATIONS_BY_DEGREE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(permutations) = cache
+        .lock()
+        .expect("permutation cache lock poisoned")
+        .get(&degree)
+        .cloned()
+    {
+        return permutations;
+    }
+
+    let permutations = Arc::new(all_permutations_zero_indexed(degree));
+    let mut guard = cache.lock().expect("permutation cache lock poisoned");
+    guard
+        .entry(degree)
+        .or_insert_with(|| Arc::clone(&permutations))
+        .clone()
+}
+
+fn symmetric_group_degree_data(degree: usize) -> Arc<SymmetricGroupDegreeData> {
+    let cache = SYMMETRIC_GROUP_DATA_BY_DEGREE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(data) = cache
+        .lock()
+        .expect("symmetric-group cache lock poisoned")
+        .get(&degree)
+        .cloned()
+    {
+        return data;
+    }
+
+    let shapes = Partition::all_of_size(degree as u32);
+    let cycle_indices = shapes
+        .iter()
+        .enumerate()
+        .map(|(index, shape)| (cycle_type_code(shape), index))
+        .collect::<HashMap<_, _>>();
+    let permutations = permutations_of_degree(degree);
+    let permutation_cycle_indices = permutations
+        .iter()
+        .map(|permutation| cycle_indices[&permutation_cycle_type_code(permutation)])
+        .collect::<Vec<_>>();
+    let characters = shapes
+        .iter()
+        .map(|shape| {
+            shapes
+                .iter()
+                .map(|cycle| sn_character(shape, cycle))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let data = Arc::new(SymmetricGroupDegreeData {
+        shapes,
+        cycle_indices,
+        permutations,
+        permutation_cycle_indices,
+        characters,
+    });
+
+    let mut guard = cache.lock().expect("symmetric-group cache lock poisoned");
+    guard
+        .entry(degree)
+        .or_insert_with(|| Arc::clone(&data))
+        .clone()
 }
 
 fn cycle_type_code(shape: &Partition) -> u64 {
@@ -292,8 +345,8 @@ fn relative_chordal_operator(graph: &Graph, boundary_size: usize, peo: &[usize])
 
 fn left_antisymmetrize(element: GroupElement, boundary: &[usize], order: usize) -> GroupElement {
     let mut result = HashMap::new();
-    for local in all_permutations_zero_indexed(boundary.len()) {
-        let sign = if ((boundary.len() - cycle_type(&local).num_parts()) & 1) == 0 {
+    for local in permutations_of_degree(boundary.len()).iter() {
+        let sign = if ((boundary.len() - cycle_type(local).num_parts()) & 1) == 0 {
             1i64
         } else {
             -1i64

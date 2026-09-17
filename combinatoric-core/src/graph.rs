@@ -1059,6 +1059,41 @@ impl Graph {
         Graph::new(n, &edges)
     }
 
+    /// Join of two graphs.
+    ///
+    /// Vertices of `self` retain their labels, vertices of `other` are shifted
+    /// upward by `self.num_vertices()`, and every vertex of `self` is joined
+    /// to every vertex of `other`.  In particular, `graph.join(&Graph::complete(1))`
+    /// adds one universal vertex.
+    pub fn join(&self, other: &Self) -> Self {
+        let n = self
+            .n
+            .checked_add(other.n)
+            .expect("graph-join vertex count overflow");
+        let cross_edges = self
+            .n
+            .checked_mul(other.n)
+            .expect("graph-join edge count overflow");
+        let capacity = self
+            .edges
+            .len()
+            .checked_add(other.edges.len())
+            .and_then(|count| count.checked_add(cross_edges))
+            .expect("graph-join edge count overflow");
+        let mut edges = Vec::with_capacity(capacity);
+        edges.extend(self.edges.iter().copied());
+        edges.extend(
+            other
+                .edges
+                .iter()
+                .map(|&(left, right)| (self.n + left, self.n + right)),
+        );
+        edges.extend(
+            (0..self.n).flat_map(|left| (0..other.n).map(move |right| (left, self.n + right))),
+        );
+        Graph::new(n, &edges)
+    }
+
     /// Complement graph: edge (u,v) iff (u,v) is NOT in self.
     pub fn complement(&self) -> Self {
         let mut edges = Vec::new();
@@ -3682,6 +3717,30 @@ mod tests {
 
         assert_eq!(graph.disjoint_union(&Graph::empty(0)), graph.clone());
         assert_eq!(Graph::empty(0).disjoint_union(&graph), graph);
+    }
+
+    #[test]
+    fn test_join() {
+        let graph = Graph::path(3).join(&Graph::empty(2));
+        assert_eq!(graph.num_vertices(), 5);
+        assert_eq!(graph.num_edges(), 8);
+        assert!(graph.has_edge(0, 1));
+        assert!(!graph.has_edge(3, 4));
+        for left in 0..3 {
+            for right in 3..5 {
+                assert!(graph.has_edge(left, right));
+            }
+        }
+
+        assert_eq!(graph.join(&Graph::empty(0)), graph);
+        assert_eq!(Graph::empty(0).join(&graph), graph);
+        let cone = Graph::path(3).join(&Graph::complete(1));
+        assert_eq!(
+            (0..cone.num_vertices())
+                .map(|vertex| cone.degree(vertex))
+                .collect::<Vec<_>>(),
+            vec![2, 3, 2, 3]
+        );
     }
 
     #[test]

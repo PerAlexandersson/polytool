@@ -28,7 +28,8 @@ pub mod weighted_bond;
 
 pub use basis::Basis;
 pub use chromatic::{
-    chromatic_symmetric, circular_area_dot_frobenius_target, first_bad_edge_symmetric,
+    chromatic_symmetric, chromatic_symmetric_add_universal_vertex,
+    circular_area_dot_frobenius_target, first_bad_edge_symmetric,
     hessenberg_area_dot_frobenius_target, hessenberg_q_chromatic_elementary_coefficient,
     hessenberg_q_chromatic_elementary_coefficient_recursive,
     hessenberg_q_chromatic_elementary_expansion,

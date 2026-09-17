@@ -12,7 +12,7 @@ support. `sym-poly-qsym` is downstream of this crate.
 | --- | --- |
 | Core algebra | `SymmetricFunction<C>`, `Basis`, all basis conversions, products, omega, Hall product |
 | Tableaux and characters | `hook_schur`, Kostka/character/Frobenius, shifted LR |
-| Graph/chromatic families | `chromatic`, `weighted_bond`, q-chromatic and Hessenberg/GKM routines |
+| Graph/chromatic families | `chromatic`, universal-vertex extension, `weighted_bond`, q-chromatic and Hessenberg/GKM routines |
 | Chordal clique boundaries | `chordal_clique_boundary_schur_channels`; `examples/clique_boundary_channels.rs` |
 | q,t families | `llt`, `macdonald`, Petrie and shifted/Grothendieck routines |
 | Additional constructions | `lah`, twin GKM, circular/affine helpers |
@@ -39,6 +39,8 @@ assert_eq!(monomial.coefficient(&Partition::new(vec![1, 1, 1])), 2);
 
 For a q-polynomial-valued family, run the checked LLT example with
 `cargo run -p sym-poly-sym --example llt_site_example`.
+The checked `chromatic_universal_vertex` example verifies the monomial-basis
+universal-vertex operator against `Graph::join`.
 
 ## Exactness and limits
 
