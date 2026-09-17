@@ -84,6 +84,20 @@ pub fn chromatic_symmetric<C: Ring>(g: &Graph) -> SymmetricFunction<C> {
 /// Indeed, a universal vertex must form a singleton block in every stable-set
 /// partition.  The factor accounts for the ordinary monomial-basis
 /// normalization among equal singleton blocks.
+///
+/// On the two-column Schur sector this operator is explicitly positive:
+///
+/// ```text
+/// U(s_(2^c,1^a))
+///   = (a + 1) sum_(j=0)^c s_(2^j,1^(a + 2(c-j) + 1)).
+/// ```
+///
+/// Write `U = sum_(r>=0) (-1)^r p_(r+1) e_r^perp`.  Conjugating by omega gives
+/// `D = sum_(r>=0) p_(r+1) h_r^perp`, while dual Jacobi--Trudi writes the
+/// conjugate source as `h_A h_B - h_(A+1) h_(B-1)`, where `A = a+c` and
+/// `B = c`.  The two double sums telescope, and Newton's identity leaves
+/// `(A-B+1) h_(A+1) h_B`.  The displayed formula is then the Pieri rule,
+/// conjugated back by omega.
 pub fn chromatic_symmetric_add_universal_vertex<C: Ring>(
     chromatic: &SymmetricFunction<C>,
 ) -> SymmetricFunction<C> {
@@ -930,6 +944,31 @@ mod tests {
             let extended = chromatic_symmetric_add_universal_vertex(&chromatic);
             let cone = graph.join(&Graph::complete(1));
             assert_eq!(extended, chromatic_symmetric::<i64>(&cone));
+        }
+    }
+
+    #[test]
+    fn test_add_universal_vertex_two_column_schur_formula() {
+        for twos in 0..=4usize {
+            for ones in 0..=5usize {
+                let mut source_parts = vec![2; twos];
+                source_parts.extend(vec![1; ones]);
+                let source = Partition::new(source_parts);
+                let schur = SymmetricFunction::<i64>::schur_symmetric(source);
+                let actual = chromatic_symmetric_add_universal_vertex(&schur).to_schur_basis();
+
+                let coefficient = i64::try_from(ones + 1).unwrap();
+                let expected_terms = (0..=twos)
+                    .map(|output_twos| {
+                        let output_ones = ones + 2 * (twos - output_twos) + 1;
+                        let mut output_parts = vec![2; output_twos];
+                        output_parts.extend(vec![1; output_ones]);
+                        (Partition::new(output_parts), coefficient)
+                    })
+                    .collect();
+                let expected = SymmetricFunction::from_terms(Basis::Schur, expected_terms);
+                assert_eq!(actual, expected, "twos={twos}, ones={ones}");
+            }
         }
     }
 

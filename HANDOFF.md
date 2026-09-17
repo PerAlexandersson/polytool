@@ -9,7 +9,8 @@ The chordal-claw-free Schur project has released all Rust files.  Reusable
 work now includes `Graph::join`, the monomial-basis universal-vertex operator
 `chromatic_symmetric_add_universal_vertex`, and cached degree-dependent
 permutations, cycle indices, and character tables in the exact clique-boundary
-routine.  The family-specific scan remains in the ignored
+routine.  The universal-vertex API documents and tests its exact positive
+action on every two-column Schur function.  The family-specific scan remains in the ignored
 `experiments/src/bin/chordal_clawfree_boundary_scan.rs` consumer.  Its new
 `cone-transform` mode reconstructs exact rational candidate transfer matrices:
 all fourteen matrices through order five have full input rank, and every
