@@ -14,7 +14,11 @@ action on every two-column Schur function.  The family-specific scan remains in 
 `experiments/src/bin/chordal_clawfree_boundary_scan.rs` consumer.  Its new
 `positive-compression` mode refutes the naive model obtained by leaving the
 new universal label unused in the old harmonic module; that model cannot
-produce the lower outer two-row shapes present in the true transfer.  Its
+produce the lower outer two-row shapes present in the true transfer.  The
+`algebra-cone` mode implements exact insertion of the universal choice in
+each PEO transposition code and shows that applying this map to the naive
+orthogonal primitive-idempotent section also gives the wrong refined kernel.
+Both are project-specific refuted routes.  Its
 `cone-transform` mode reconstructs exact rational candidate transfer matrices:
 all fourteen matrices through order five have full input rank, and every
 negative entry has an outer source shape of first row at least three.  The
