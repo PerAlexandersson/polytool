@@ -18,7 +18,16 @@ produce the lower outer two-row shapes present in the true transfer.  The
 `algebra-cone` mode implements exact insertion of the universal choice in
 each PEO transposition code and shows that applying this map to the naive
 orthogonal primitive-idempotent section also gives the wrong refined kernel.
-Both are project-specific refuted routes.  Its
+The further `orbit-compression` mode tests a diagonal projector onto
+`c`-subsets containing exactly `c-b` boundary labels.  It matches all `29`
+endpoint columns through order five and all `18` endpoint columns in the
+order-six spanning samples, but fails for mixed boundary content already at
+`(n,k,c,b)=(5,2,2,1)`: at `C=1` it gives `(1,9)/10`, rather than the exact
+`(7,9)/16`.  This is project-specific finite evidence and a refuted general
+model, not shared-library functionality.  During this checkpoint `/root`
+temporarily owned only this handoff and the ignored experiment driver; both
+are released.  The failed compression models are project-specific refuted
+routes.  Its
 `cone-transform` mode reconstructs exact rational candidate transfer matrices:
 all fourteen matrices through order five have full input rank, and every
 negative entry has an outer source shape of first row at least three.  The
