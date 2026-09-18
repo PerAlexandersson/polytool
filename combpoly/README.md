@@ -25,6 +25,7 @@ the CLI:
 | `statistics` | Permutation and word statistics |
 | `polynomial_builder` | Ascending-degree generating-polynomial construction |
 | `order` | Bruhat and weak-order ideals |
+| `parity_pattern` | Exact count-only parity-oriented `321`/`123` avoidance |
 | `word`, `parking`, `catalan`, `cayley` | Word and classical object families |
 | `fixed_descent` | Fixed-descent insertion and transfer data |
 | `lattice_path_matroid` | Lattice-path-matroid h* computations |
@@ -34,6 +35,14 @@ Polynomial root, interlacing, and recurrence algorithms belong to `polytool`;
 general graphs, posets, partitions, and compositions belong to
 `combinatoric-core`. See `../docs/LIBRARY_GUIDE.md` before adding another
 implementation.
+
+The named A355089 kernel uses exact integers and boundary-state memoization;
+it does not enumerate the avoiding permutations:
+
+```bash
+CARGO_TARGET_DIR=/cargo-target/ai-projects \
+  cargo run --release -p combpoly --example a355089 -- 40
+```
 
 ## Subcommands
 

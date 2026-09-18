@@ -1,5 +1,20 @@
 # Handoff
 
+## Completed: parity-alternating 123-avoidance DP — 2026-09-18
+
+`combpoly::parity_pattern` now provides an exact `BigUint`, count-only memoized
+DP for both parity orientations of `321`-avoidance and the canonical A355089
+generator obtained by value complement. The checked `a355089` example
+reproduces generation. Its independent brute-force test covers `n <= 9`, all
+published A355089 terms through `n=30` are regression-tested, and the preserving
+orientation agrees with A354208 through `n=20`. All 197 Combpoly library tests,
+the example target, strict Rustdoc, formatting, and focused Clippy pass. Strict
+whole-crate Clippy initially reported only 14 pre-existing findings outside the
+owned files; allowing precisely those existing lint classes exposed no new
+finding. The ignored `experiments/src/bin/parity_123.rs` and generic
+`combpoly/src/permutation.rs` were profiled/read but not modified. All files
+from this task are released.
+
 Full chronology through the start of the current repository-health batch is in
 [`docs/HANDOFF_ARCHIVE_THROUGH_2026-09-16.md`](docs/HANDOFF_ARCHIVE_THROUGH_2026-09-16.md).
 
