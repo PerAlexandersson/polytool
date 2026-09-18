@@ -430,6 +430,9 @@ pub enum Parity123Statistic {
 /// `len-suffix_len`; each peeled maximum contributes one left-to-right maximum.
 /// Value complement turns descents into ascents, major index into complementary
 /// major index, and left-to-right maxima into left-to-right minima.
+/// At even lengths the left-to-right-minimum rows are palindromic: reverse
+/// complement preserves the class and exchanges `k` left-to-right minima with
+/// `n-k` of them. See the project documentation for the disjoint-record proof.
 ///
 /// # Panics
 ///
@@ -672,6 +675,18 @@ mod tests {
                     "{statistic:?}, n={n}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn even_left_to_right_minimum_rows_are_palindromic() {
+        let rows =
+            parity_preserving_123_statistic_polynomials(20, Parity123Statistic::LeftToRightMinima);
+        for n in (0..=20usize).step_by(2) {
+            assert!(
+                rows[n].iter().eq(rows[n].iter().rev()),
+                "left-to-right minima, n={n}"
+            );
         }
     }
 }

@@ -9,7 +9,10 @@ index, ascent-major index, and left-to-right minima. The public
 `BigUint` rows, and the checked `a355089_statistics` example emits rows in
 Polytool's input format. Independent permutation generation verifies every
 refinement through `n=8`; specialization at `t=1` verifies all five through
-`n=20`. All 199 Combpoly library tests, both examples, strict Rustdoc,
+`n=20`. Reverse-complement and the disjoint record-set decomposition prove
+that the left-to-right-minimum polynomial is palindromic at every even length;
+this has a focused regression through `n=20`. All 200 Combpoly library tests,
+both examples, strict Rustdoc,
 formatting, and focused strict Clippy pass.
 
 Project-local Polytool searches found no scalar or even/odd-vector recurrence
