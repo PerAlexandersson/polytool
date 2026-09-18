@@ -1,5 +1,23 @@
 # Handoff
 
+## Completed: A355089 statistic refinements — 2026-09-18
+
+`combpoly::parity_pattern` now uses one generic maximum-and-gap traversal for
+exact counts and five exact polynomial refinements: descents, ascents, major
+index, ascent-major index, and left-to-right minima. The public
+`parity_preserving_123_statistic_polynomials` API returns ascending-degree
+`BigUint` rows, and the checked `a355089_statistics` example emits rows in
+Polytool's input format. Independent permutation generation verifies every
+refinement through `n=8`; specialization at `t=1` verifies all five through
+`n=20`. All 199 Combpoly library tests, both examples, strict Rustdoc,
+formatting, and focused strict Clippy pass.
+
+Project-local Polytool searches found no scalar or even/odd-vector recurrence
+in the recorded bounded spaces. The ignored
+`experiments/src/bin/a355089_stat_recurrence.rs` remains a use-once search
+driver, not maintained library functionality. No generic permutation or
+Polytool source was changed. All files from this batch are released.
+
 ## Completed: parity-alternating 123-avoidance DP — 2026-09-18
 
 `combpoly::parity_pattern` now provides an exact `BigUint`, count-only memoized

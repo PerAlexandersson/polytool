@@ -25,7 +25,7 @@ the CLI:
 | `statistics` | Permutation and word statistics |
 | `polynomial_builder` | Ascending-degree generating-polynomial construction |
 | `order` | Bruhat and weak-order ideals |
-| `parity_pattern` | Exact count-only parity-oriented `321`/`123` avoidance |
+| `parity_pattern` | Exact parity-oriented `321`/`123` counts and statistic distributions |
 | `word`, `parking`, `catalan`, `cayley` | Word and classical object families |
 | `fixed_descent` | Fixed-descent insertion and transfer data |
 | `lattice_path_matroid` | Lattice-path-matroid h* computations |
@@ -42,6 +42,15 @@ it does not enumerate the avoiding permutations:
 ```bash
 CARGO_TARGET_DIR=/cargo-target/ai-projects \
   cargo run --release -p combpoly --example a355089 -- 40
+```
+
+The same states give exact descent, ascent, major-index, ascent-major-index,
+and left-to-right-minimum polynomials. Rows are printed in ascending
+coefficient order for direct use by Polytool:
+
+```bash
+CARGO_TARGET_DIR=/cargo-target/ai-projects \
+  cargo run --release -p combpoly --example a355089_statistics -- 20 lrmin
 ```
 
 ## Subcommands
