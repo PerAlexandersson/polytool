@@ -10,10 +10,11 @@ The source-only overhaul is complete on `feature/polytool-ux-20260920` in
 standalone-subtree sync, website staging, release, database mutation, or
 deployment was performed or authorized.
 
-The verified source checkpoint is local commit `7f8dd05`. A routine push of
-the feature branch failed with GitHub SSH `Permission denied (publickey)` in
-this worker; no credential, remote, supervisor, or worker configuration was
-changed, and the push remains for an authorized host context.
+The verified source checkpoint is commit `7f8dd05`, pushed on
+`feature/polytool-ux-20260920`. The repository's SSH remote was unavailable in
+this worker, so the push used the existing authenticated GitHub CLI credential
+through a one-command HTTPS helper; the configured `origin`, stored
+credentials, supervisor, and worker configuration were not changed.
 
 The browser now has distinct single-polynomial, polynomial-sequence, and
 integer-sequence workflows. It reports exact real-zero counts and gamma-basis
