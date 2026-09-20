@@ -966,6 +966,22 @@ cargo test -p polytool-web
 node web/tests/string_safety.mjs
 ```
 
+The browser UI has three task-oriented views:
+
+- **One polynomial** reports exact real-zero counts by sign, coefficient-shape
+  properties, a gamma-coefficient vector and basis expansion when defined,
+  and direct OEIS searches for the coefficient sequence.
+- **Polynomial sequence** retains the property, decomposition, recurrence,
+  and derived OEIS analyses. A discovered recurrence can generate and preview
+  more exact rows in the browser before replacing or copying the input.
+- **Integer sequence** accepts ordinary separated terms and two-column OEIS
+  b-files. It searches for a recurrence by treating each term as a constant
+  polynomial and queries the entered sequence directly on OEIS.
+
+Browser recurrence generation uses the same `RecurrenceJson` evaluator as
+`polytool recurrence-generate`; the WASM wrapper caps a request at 1000 total
+rows and reports rational output without silently coercing it to integer input.
+
 ### Web arbitrary-precision contract and deployment staging
 
 The browser wrapper parses polynomial input with `parse_polynomials_bigint`.

@@ -3,7 +3,29 @@
 Full chronology through the start of the current repository-health batch is in
 [`docs/HANDOFF_ARCHIVE_THROUGH_2026-09-16.md`](docs/HANDOFF_ARCHIVE_THROUGH_2026-09-16.md).
 
-## Active: repository health remediation — 2026-09-16
+## Completed: Polytool web workflow overhaul — 2026-09-20
+
+The source-only overhaul is complete on `feature/polytool-ux-20260920` in
+`/tmp/polytool-ux-20260920`, and file ownership is released. No merge,
+standalone-subtree sync, website staging, release, database mutation, or
+deployment was performed or authorized.
+
+The browser now has distinct single-polynomial, polynomial-sequence, and
+integer-sequence workflows. It reports exact real-zero counts and gamma-basis
+expansions, sends the appropriate data directly to OEIS, accepts OEIS b-files,
+restricts integer recurrence search to scalar recurrences, and previews exact
+recurrence-generated extensions before copying or reusing them. The WASM API
+uses the existing exact `RecurrenceJson` evaluator and caps browser generation
+at 1000 total rows.
+
+Verification passed with the external Cargo target: the 10 Polytool-web tests,
+strict all-target Polytool-web Clippy, optimized
+`wasm-pack` build, `node --test polytool/web/input-normalization.test.cjs`
+against the actual bundle (46 tests), `node
+polytool/web/tests/string_safety.mjs`, formatting, and `git diff --check`. The
+generated ignored `polytool/web/pkg/` preview is local only.
+
+## Prior active state: repository health remediation — 2026-09-16
 
 The host supervisor owns final integration, CI observation, documentation,
 suggestions, and this handoff. All bounded source workers have completed and

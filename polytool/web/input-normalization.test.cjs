@@ -13,6 +13,7 @@ assert.ok(start >= 0 && end > start);
 const context = vm.createContext({ document: { getElementById: () => ({ value: '' }) } });
 vm.runInContext(html.slice(start, end), context);
 const normalize = value => context.normalizePolynomialInput(value);
+const integerTerms = value => context.parseIntegerSequenceInput(value);
 
 const oeis = '1;\n\n       1;\n\n       2;\n\n       4,       1;\n\n' +
   '      10,       5;\n\n      26,      26;\n\n      76,     117,      10;\n\n' +
@@ -79,6 +80,23 @@ test('browser input boundary normalizes without rewriting the pasted text', () =
   assert.equal(textarea.value, oeis);
 });
 
+for (const [name, input, expected] of [
+  ['comma-separated integers', '0, 1, 1, 2, 3, 5', ['0', '1', '1', '2', '3', '5']],
+  ['mixed ordinary separators', '1; 2  5\n14, 42', ['1', '2', '5', '14', '42']],
+  ['arbitrary-precision integers', '9007199254740993, -1000000000000000000000000000007',
+    ['9007199254740993', '-1000000000000000000000000000007']],
+  ['OEIS b-file', '# Fibonacci\n0 0\n1 1\n2 1\n3 2\n4 3', ['0', '1', '1', '2', '3']],
+  ['bracketed sequence', '[1, 1, 2, 5, 14]', ['1', '1', '2', '5', '14']],
+]) {
+  test('integer sequence: ' + name, () => {
+    assert.deepEqual(Array.from(integerTerms(input)), expected);
+  });
+}
+
+for (const input of ['1, 2.5, 3', '1, nope, 3', '1,,2']) {
+  test('invalid integer sequence is rejected: ' + input, () => assert.equal(integerTerms(input), null));
+}
+
 test('page scripts remain syntactically valid', () => {
   for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
     if (/type=["'](?:application\/ld\+json|importmap)["']/.test(match[1])) continue;
@@ -103,7 +121,21 @@ test('normalized rows reach real WASM without precision loss', {
   }
   const huge = JSON.parse(wasm.check_properties(normalize('9007199254740993;')));
   assert.equal(String(huge[0].coefficients[0]), '9007199254740993');
+  const roots = JSON.parse(wasm.check_properties('-2, -3, 0, 1'))[0];
+  assert.equal(roots.real_rooted, true);
+  assert.equal(roots.distinct_real_roots, 2);
+  assert.equal(roots.negative_real_roots, 1);
+  assert.equal(roots.positive_real_roots, 1);
   const nested = JSON.parse(wasm.check_properties(normalize('{{1},{1,2},{1,2,3},{1,2,3,4}}')));
   assert.deepEqual(nested.map(p => p.coefficients.map(String)),
     [['1'], ['1', '2'], ['1', '2', '3'], ['1', '2', '3', '4']]);
+
+  const found = JSON.parse(wasm.find_recurrence(
+    '1\n2\n4\n8\n16\n32', 1, 0, 0, 0, false, false, false
+  ));
+  assert.equal(found.found, true);
+  const generated = JSON.parse(wasm.generate_recurrence_rows(found.recurrence_json, 8));
+  assert.equal(generated.integral, true);
+  assert.deepEqual(generated.polynomials.map(row => row.map(String)),
+    [['1'], ['2'], ['4'], ['8'], ['16'], ['32'], ['64'], ['128']]);
 });

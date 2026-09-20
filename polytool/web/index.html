@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Polynomial Tools | SymCat</title>
+<title>Polynomial &amp; Sequence Lab | SymCat</title>
 <meta name="author" content="Per Alexandersson">
-<meta name="description" content="Real-rootedness, interlacing, recurrence search — runs locally in your browser via WebAssembly.">
+<meta name="description" content="Examine polynomial zeros and gamma expansions, identify integer sequences, discover recurrences, and extend polynomial sequences in your browser.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,6 +114,49 @@ h1 {
   margin-bottom: 1rem;
 }
 
+.workflow-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+.workflow-button {
+  min-height: 4.2rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: var(--c-bg-surface);
+  color: var(--c-text-main);
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Raleway', system-ui, sans-serif;
+}
+.workflow-button strong { display: block; font-size: 0.9rem; }
+.workflow-button span { display: block; margin-top: 0.15rem; color: var(--c-text-sub); font-size: 0.75rem; }
+.workflow-button:hover { border-color: var(--c-link); }
+.workflow-button.active {
+  border-color: var(--c-link);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-link) 18%, transparent);
+  background: color-mix(in srgb, var(--c-link) 6%, var(--c-bg-surface));
+}
+.input-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin: 0.2rem 0 0.35rem;
+  font-family: 'Raleway', system-ui, sans-serif;
+}
+.input-heading strong { font-size: 0.9rem; }
+.input-help { color: var(--c-text-muted); font-size: 0.78rem; text-align: right; }
+.workflow-examples[hidden], .tab[hidden], .tab-panel[hidden] { display: none !important; }
+@media (max-width: 680px) {
+  .workflow-picker { grid-template-columns: 1fr; }
+  .workflow-button { min-height: auto; }
+  .input-heading { display: block; }
+  .input-help { margin-top: 0.15rem; text-align: left; }
+}
+
 /* Examples row */
 .examples {
   display: flex;
@@ -212,6 +255,26 @@ textarea:focus { outline: none; border-color: var(--c-link); }
 .copy-btn { font-size: 0.75rem; padding: 2px 8px; border: 1px solid var(--c-border); border-radius: 3px; background: var(--c-bg-gray); color: var(--c-text-sub); cursor: pointer; font-family: inherit; }
 .copy-btn:hover { background: var(--c-border); }
 .recurrence-plain { display: none; }
+.extension-card {
+  margin-top: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-bg-gray);
+}
+.extension-card h3 { margin: 0 0 0.25rem; font: 700 0.9rem 'Raleway', system-ui, sans-serif; }
+.extension-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin-top: 0.65rem; }
+.extension-controls input { width: 5rem; padding: 0.3rem; }
+.extension-preview { max-height: 18rem; overflow: auto; margin-top: 0.7rem; white-space: pre; }
+.single-summary { display: grid; gap: 0.75rem; }
+.single-poly { padding: 0.85rem; border: 1px solid var(--c-border); border-radius: 8px; overflow-x: auto; }
+.single-poly-expression { font-size: 1.05rem; margin-bottom: 0.35rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.65rem; }
+.summary-card { padding: 0.8rem; border: 1px solid var(--c-border); border-radius: 8px; background: var(--c-bg-surface); }
+.summary-card h3 { margin: 0 0 0.3rem; font: 700 0.82rem 'Raleway', system-ui, sans-serif; }
+.summary-value { font-size: 1.05rem; font-weight: 700; }
+.summary-detail { margin-top: 0.25rem; color: var(--c-text-sub); font-size: 0.82rem; }
+@media (max-width: 760px) { .summary-grid { grid-template-columns: 1fr; } }
 .recurrence-code-stack { display: grid; gap: 0.8rem; margin-top: 0.8rem; }
 .recurrence-code-card {
   border: 1px solid var(--c-border);
@@ -784,11 +847,34 @@ footer {
   <a href="https://github.com/PerAlexandersson/polytool" target="_blank" rel="noopener">GitHub</a>
   <a href="https://ko-fi.com/W7W41VN3WK" target="_blank" rel="noopener" class="kofi">&#9749; Support</a>
 </nav>
-<h1>Polynomial Tools</h1>
-<p class="subtitle">Real-rootedness, interlacing, and recurrence search &mdash; runs locally in your browser via WebAssembly.</p>
+<h1>Polynomial &amp; Sequence Lab</h1>
+<p class="subtitle">Examine zeros, gamma expansions, recurrences, and OEIS connections &mdash; exact computations run locally in your browser.</p>
 
 <div class="card">
-<div class="examples">
+<div class="workflow-picker" role="group" aria-label="Choose what to analyze">
+  <button class="workflow-button active" data-workflow="polynomial" onclick="setWorkflow('polynomial')">
+    <strong>One polynomial</strong><span>Real zeros, gamma expansion, and OEIS</span>
+  </button>
+  <button class="workflow-button" data-workflow="polynomial-sequence" onclick="setWorkflow('polynomial-sequence')">
+    <strong>Polynomial sequence</strong><span>Properties, recurrence, OEIS, and extension</span>
+  </button>
+  <button class="workflow-button" data-workflow="integer-sequence" onclick="setWorkflow('integer-sequence')">
+    <strong>Integer sequence</strong><span>Recurrence search and direct OEIS lookup</span>
+  </button>
+</div>
+
+<div class="examples workflow-examples" id="singlePolynomialExamples">
+  <label class="sequence-picker" for="singlePolynomialPicker">
+    <span>Example:</span>
+    <select id="singlePolynomialPicker" onchange="loadWorkflowExample('polynomial', this.value)">
+      <option value="">Choose a polynomial&hellip;</option>
+      <option value="eulerian4">Eulerian polynomial: 1 + 11t + 11t² + t³</option>
+      <option value="repeatedRoots">Repeated real zeros: (t + 1)²(t - 2)</option>
+      <option value="nonreal">Non-real zeros: 1 + t²</option>
+    </select>
+  </label>
+</div>
+<div class="examples workflow-examples" id="polynomialSequenceExamples" hidden>
   <label class="sequence-picker" for="sequencePicker">
     <span>Example:</span>
     <select id="sequencePicker" onchange="loadExample(this.value)">
@@ -830,26 +916,36 @@ footer {
     </select>
   </label>
 </div>
-<textarea id="input" spellcheck="false" placeholder="Enter polynomials, one per line. Accepted formats:
+<div class="examples workflow-examples" id="integerSequenceExamples" hidden>
+  <label class="sequence-picker" for="integerSequencePicker">
+    <span>Example:</span>
+    <select id="integerSequencePicker" onchange="loadWorkflowExample('integer-sequence', this.value)">
+      <option value="">Choose an integer sequence&hellip;</option>
+      <option value="fibonacci">Fibonacci numbers</option>
+      <option value="catalan">Catalan numbers</option>
+      <option value="squares">Squares</option>
+    </select>
+  </label>
+</div>
+<div class="input-heading"><strong id="inputLabel">Polynomial</strong><span class="input-help" id="inputHelp">Enter coefficients in ascending degree, or an expanded polynomial.</span></div>
+<textarea id="input" spellcheck="false" placeholder="Enter one polynomial. Accepted formats:
 
   1, 11, 11, 1            (comma-separated coefficients, ascending degree)
   1 11 11 1               (space-separated)
   [1, 11, 11, 1]          (bracketed)
-  1; 1, 2; 1, 3, 1;      (OEIS rows, semicolons or newlines)
-  {{1, 1}, {1, 4, 1}}     (Mathematica/JSON-style rows)
   1 + 11t + 11t^2 + t^3   (expanded, any single variable)
 
 Lines starting with # are ignored."></textarea>
 
 <div class="tabs">
-  <button class="tab active" onclick="switchTab('properties')">Properties</button>
-  <button class="tab" onclick="switchTab('decomposition')">Decomposition</button>
-  <button class="tab" onclick="switchTab('recurrence')">Recurrence</button>
-  <button class="tab" onclick="switchTab('oeis')">OEIS</button>
+  <button class="tab active" data-tab="properties" data-workflows="polynomial polynomial-sequence" onclick="switchTab('properties', this)">Overview</button>
+  <button class="tab" data-tab="decomposition" data-workflows="polynomial polynomial-sequence" onclick="switchTab('decomposition', this)">Decomposition</button>
+  <button class="tab" data-tab="recurrence" data-workflows="polynomial-sequence integer-sequence" onclick="switchTab('recurrence', this)">Recurrence</button>
+  <button class="tab" data-tab="oeis" data-workflows="polynomial polynomial-sequence integer-sequence" onclick="switchTab('oeis', this)">OEIS</button>
 </div>
 
 <div id="panel-properties" class="tab-panel active">
-  <button class="run" onclick="run('properties')">Check properties</button>
+  <button class="run" onclick="run('properties')" id="btnProperties">Examine polynomial</button>
   <div id="results-properties" class="tab-results"></div>
 </div>
 
@@ -866,7 +962,7 @@ Lines starting with # are ignored."></textarea>
 <div id="panel-recurrence" class="tab-panel">
   <div class="mode-group">
     <label><input type="radio" name="searchMode" value="adaptive" checked onchange="toggleSearchMode()"> Adaptive</label>
-    <span class="info">i<span class="tip">Tries increasingly complex recurrence shapes up to depth 10, <span data-tex="t">t</span>-degree 5, <span data-tex="n">n</span>-degree 5, and derivative order 5, starting from the simplest. There is no time or candidate-count cutoff: it stops at the first match or after exhausting the bounded search. An unsuccessful exhaustive search can take a long time; use Cancel to stop it.</span></span>
+    <span class="info">i<span class="tip">Tries increasingly complex recurrence shapes, starting from the simplest. Polynomial sequences use bounds up to depth 10, <span data-tex="t">t</span>-degree 5, <span data-tex="n">n</span>-degree 5, and derivative order 5; integer sequences use scalar recurrences in <span data-tex="n">n</span>. There is no time or candidate-count cutoff: it stops at the first match or after exhausting the bounded search. An unsuccessful exhaustive search can take a long time; use Cancel to stop it.</span></span>
     <label><input type="radio" name="searchMode" value="manual" onchange="toggleSearchMode()"> Manual</label>
     <span class="info">i<span class="tip">Set exact search bounds yourself. Useful when you know the expected recurrence shape or want to explore a specific search space.</span></span>
   </div>
@@ -874,14 +970,14 @@ Lines starting with # are ignored."></textarea>
     <label>depth <input type="number" id="maxRecLen" value="3" min="1" max="10"></label>
     <span class="info">i<span class="tip">Maximum number of previous terms <span data-tex="P(n-1),\,P(n-2),\,\ldots">P(n&minus;1), P(n&minus;2), &hellip;</span> the recurrence may reference.</span></span>
 
-    <label>t-deg <input type="number" id="maxVarDeg" value="2" min="0" max="6"></label>
-    <span class="info">i<span class="tip">Maximum degree in the polynomial variable <span data-tex="t">t</span> for each coefficient <span data-tex="a_k(n,t)">a_k(n, t)</span>.</span></span>
+    <label class="polynomial-recurrence-option">t-deg <input type="number" id="maxVarDeg" value="2" min="0" max="6"></label>
+    <span class="info polynomial-recurrence-option">i<span class="tip">Maximum degree in the polynomial variable <span data-tex="t">t</span> for each coefficient <span data-tex="a_k(n,t)">a_k(n, t)</span>.</span></span>
 
     <label>n-deg <input type="number" id="maxIdxDeg" value="2" min="0" max="6"></label>
     <span class="info">i<span class="tip">Maximum degree in the index <span data-tex="n">n</span> for each coefficient <span data-tex="a_k(n,t)">a_k(n, t)</span>.</span></span>
 
-    <label>D-order <input type="number" id="maxDiffDeg" value="1" min="0" max="5"></label>
-    <span class="info">i<span class="tip">Maximum order of the derivative operator <span data-tex="D=d/dt">D = d/dt</span> applied to terms. Allows recurrences involving <span data-tex="P(n-k),\,P'(n-k),\,P''(n-k),\,\ldots">P(n&minus;k), P&prime;(n&minus;k), P&Prime;(n&minus;k), &hellip;</span></span></span>
+    <label class="polynomial-recurrence-option">D-order <input type="number" id="maxDiffDeg" value="1" min="0" max="5"></label>
+    <span class="info polynomial-recurrence-option">i<span class="tip">Maximum order of the derivative operator <span data-tex="D=d/dt">D = d/dt</span> applied to terms. Allows recurrences involving <span data-tex="P(n-k),\,P'(n-k),\,P''(n-k),\,\ldots">P(n&minus;k), P&prime;(n&minus;k), P&Prime;(n&minus;k), &hellip;</span></span></span>
   </div>
   <div class="options">
     <label><input type="checkbox" id="tryDenominator" checked> rational coefficients</label>
@@ -907,9 +1003,9 @@ Lines starting with # are ignored."></textarea>
   Source code: <a href="https://github.com/PerAlexandersson/polytool">polytool</a>.
 </footer>
 
-<script src="pkg/polytool_web.js?v=20260907a"></script>
+<script src="pkg/polytool_web.js?v=20260920a"></script>
 <script>
-const ASSET_VERSION = '20260907a';
+const ASSET_VERSION = '20260920a';
 const EXAMPLES = {
   eulerian: {
     label: 'Eulerian polynomials A_n(t) \u2014 descent generating function on S_n',
@@ -1085,6 +1181,43 @@ const EXAMPLES = {
     ]
   },
 };
+
+const WORKFLOW_EXAMPLES = {
+  polynomial: {
+    eulerian4: '1, 11, 11, 1',
+    repeatedRoots: '-2, -3, 0, 1',
+    nonreal: '1, 0, 1',
+  },
+  'integer-sequence': {
+    fibonacci: '0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233',
+    catalan: '1, 1, 2, 5, 14, 42, 132, 429, 1430, 4862, 16796, 58786',
+    squares: '0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169',
+  },
+};
+
+const WORKFLOW_CONFIG = {
+  polynomial: {
+    label: 'Polynomial',
+    help: 'Enter coefficients in ascending degree, or an expanded polynomial.',
+    placeholder: 'Enter one polynomial.\n\n  1, 11, 11, 1\n  [1, 11, 11, 1]\n  1 + 11t + 11t^2 + t^3',
+    defaultTab: 'properties',
+  },
+  'polynomial-sequence': {
+    label: 'Polynomial sequence',
+    help: 'Enter one coefficient row per line; coefficients use ascending degree.',
+    placeholder: 'Enter polynomials, one per line.\n\n  1\n  1, 1\n  1, 4, 1\n  1, 11, 11, 1\n\nOEIS rows, nested lists, and expanded polynomials are accepted.',
+    defaultTab: 'properties',
+  },
+  'integer-sequence': {
+    label: 'Integer sequence',
+    help: 'Paste comma-, space-, semicolon-, or newline-separated integers; OEIS b-files also work.',
+    placeholder: 'Enter integer terms.\n\n  0, 1, 1, 2, 3, 5, 8, 13\n\nor one term per line. Two-column OEIS b-files are accepted.',
+    defaultTab: 'recurrence',
+  },
+};
+
+let activeWorkflow = 'polynomial';
+const workflowDrafts = { polynomial: '', 'polynomial-sequence': '', 'integer-sequence': '' };
 
 const SEQUENCE_CATALOG = {
   A001263: {
@@ -1592,12 +1725,62 @@ function loadExample(name) {
   setStatus('Loaded: ' + ex.label);
 }
 
-function switchTab(name) {
+function loadWorkflowExample(workflow, name) {
+  const text = WORKFLOW_EXAMPLES[workflow] && WORKFLOW_EXAMPLES[workflow][name];
+  if (!text) return;
+  document.getElementById('input').value = text;
+  workflowDrafts[workflow] = text;
+  setStatus('Example loaded.');
+}
+
+function switchTab(name, trigger) {
+  const panel = document.getElementById('panel-' + name);
+  const tab = trigger || document.querySelector('.tab[data-tab="' + name + '"]');
+  if (!panel || !tab || tab.hidden) return;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  event.currentTarget.classList.add('active');
-  document.getElementById('panel-' + name).classList.add('active');
+  tab.classList.add('active');
+  panel.classList.add('active');
   activeTab = name;
+}
+
+function setWorkflow(name, options) {
+  if (!WORKFLOW_CONFIG[name]) return;
+  const opts = options || {};
+  const input = document.getElementById('input');
+  if (activeWorkflow && input) workflowDrafts[activeWorkflow] = input.value;
+  if (recurrenceRunning) cancelRecurrence();
+  activeWorkflow = name;
+  const config = WORKFLOW_CONFIG[name];
+
+  document.querySelectorAll('.workflow-button').forEach(button => {
+    button.classList.toggle('active', button.dataset.workflow === name);
+  });
+  document.querySelectorAll('.workflow-examples').forEach(group => { group.hidden = true; });
+  const examplesId = name === 'polynomial' ? 'singlePolynomialExamples' :
+    (name === 'polynomial-sequence' ? 'polynomialSequenceExamples' : 'integerSequenceExamples');
+  document.getElementById(examplesId).hidden = false;
+  document.getElementById('inputLabel').textContent = config.label;
+  document.getElementById('inputHelp').textContent = config.help;
+  input.placeholder = config.placeholder;
+  if (!opts.keepInput) input.value = workflowDrafts[name] || '';
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.hidden = !tab.dataset.workflows.split(/\s+/).includes(name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    const tab = document.querySelector('.tab[data-tab="' + panel.id.replace('panel-', '') + '"]');
+    panel.hidden = !tab || tab.hidden;
+  });
+  document.getElementById('btnProperties').textContent =
+    name === 'polynomial' ? 'Examine polynomial' : 'Check sequence properties';
+  document.querySelectorAll('.polynomial-recurrence-option').forEach(option => {
+    option.hidden = name === 'integer-sequence';
+  });
+  switchTab(config.defaultTab);
+  document.querySelectorAll('.tab-results').forEach(result => { result.innerHTML = ''; });
+  setStatus('');
+  if (!opts.skipHash && history.replaceState) history.replaceState(null, '', '#' + name);
 }
 
 function toggleSearchMode() {
@@ -1609,12 +1792,14 @@ let wasmReady = false;
 let worker = null;
 let recurrenceRunning = false;
 
-let check_properties, check_interlacing_pairs, check_interlacing_pair, find_recurrence, analyze_decompositions;
+let check_properties, check_interlacing_pairs, check_interlacing_pair, find_recurrence,
+    generate_recurrence_rows, analyze_decompositions;
 
 async function init() {
   try {
     await wasm_bindgen({ module_or_path: 'pkg/polytool_web_bg.wasm?v=' + ASSET_VERSION });
-    ({ check_properties, check_interlacing_pairs, check_interlacing_pair, find_recurrence, analyze_decompositions } = wasm_bindgen);
+    ({ check_properties, check_interlacing_pairs, check_interlacing_pair, find_recurrence,
+       generate_recurrence_rows, analyze_decompositions } = wasm_bindgen);
     wasmReady = true;
     setStatus('');
   } catch (e) {
@@ -1766,7 +1951,43 @@ function normalizePolynomialInput(raw) {
   return rows.map(row => row.join(', ')).join('\n');
 }
 
+function parseIntegerSequenceInput(raw) {
+  const clean = stripCommentOnlyLines(String(raw || '')
+    .replace(/\r\n?|[\u2028\u2029]/g, '\n')
+    .replace(/\u2212/g, '-')
+    .replace(/[\u00a0\u202f\ufeff]/g, ' '))
+    .trim();
+  if (!clean) return [];
+
+  const lines = clean.split('\n').map(line => line.trim()).filter(Boolean);
+  const pairs = lines.map(line => line.match(/^([+-]?\d+)\s+([+-]?\d+)$/));
+  if (lines.length >= 2 && pairs.every(Boolean)) {
+    const indices = pairs.map(match => BigInt(match[1]));
+    const consecutive = indices.every((value, index) =>
+      index === 0 || value === indices[index - 1] + 1n);
+    if (consecutive) return pairs.map(match => match[2]);
+  }
+
+  if (!/^[\s,;{}\[\]()+\-\d]+$/.test(clean)) return null;
+  const stripped = clean.replace(/[{}\[\]()]/g, ' ');
+  if (/[,;]\s*[,;]/.test(stripped) || /(?:^|[,;])\s*(?:$|\n)/m.test(stripped)) return null;
+  const terms = stripped.match(/[+-]?\d+/g) || [];
+  const residue = stripped.replace(/[+-]?\d+/g, '').replace(/[\s,;]/g, '');
+  return residue ? null : terms;
+}
+
+function getIntegerTerms() {
+  const terms = parseIntegerSequenceInput(document.getElementById('input').value);
+  if (terms === null) {
+    throw new Error('Integer sequences may contain only whole numbers and ordinary separators.');
+  }
+  return terms;
+}
+
 function getInput() {
+  if (typeof activeWorkflow !== 'undefined' && activeWorkflow === 'integer-sequence') {
+    return getIntegerTerms().join('\n');
+  }
   return normalizePolynomialInput(document.getElementById('input').value);
 }
 
@@ -1829,6 +2050,67 @@ function renderRecurrenceCodeStack(data) {
   return cards.length ? ('<div class="recurrence-code-stack">' + cards.join('') + '</div>') : '';
 }
 
+function renderRecurrenceExtension(sourceRows) {
+  return '<div class="extension-card">' +
+    '<h3>Extend this sequence</h3>' +
+    '<div class="recurrence-note">Generate exact new terms from the recurrence, preview them, then move the extended sequence back into the input.</div>' +
+    '<div class="extension-controls"><label>Add <input type="number" id="extensionCount" value="10" min="1" max="200"> rows</label>' +
+    '<button class="run-small" onclick="previewRecurrenceExtension(' + sourceRows + ')">Generate preview</button></div>' +
+    '<div id="extensionResult"></div></div>';
+}
+
+function previewRecurrenceExtension(sourceRows) {
+  const slot = document.getElementById('extensionResult');
+  const additional = parseInt(document.getElementById('extensionCount').value, 10);
+  if (!Number.isInteger(additional) || additional < 1 || additional > 200) {
+    slot.innerHTML = '<div class="err">Choose between 1 and 200 additional rows.</div>';
+    return;
+  }
+  const totalRows = sourceRows + additional;
+  const data = JSON.parse(generate_recurrence_rows(window._lastRecJson || '', totalRows));
+  if (data.error) {
+    slot.innerHTML = '<div class="err">' + esc(data.error) + '</div>';
+    return;
+  }
+  window._lastGeneratedRows = data;
+  window._lastGeneratedWorkflow = activeWorkflow;
+  let previewRows = data.polynomials.slice(sourceRows);
+  let preview = previewRows.map(row => row.join(', ')).join('\n');
+  if (activeWorkflow === 'integer-sequence') preview = previewRows.map(row => row[0]).join(', ');
+  const note = data.integral
+    ? 'Generated ' + additional + ' new row' + (additional === 1 ? '' : 's') + ' exactly.'
+    : 'The recurrence generated rational coefficients. They can be copied, but the current input accepts integer coefficients only.';
+  slot.innerHTML = '<div class="recurrence-note">' + esc(note) + '</div>' +
+    '<pre class="recurrence-code extension-preview">' + esc(preview) + '</pre>' +
+    '<div class="extension-controls">' +
+      (data.integral ? '<button class="run-small" onclick="useGeneratedRows()">Use extended sequence</button>' : '') +
+      '<button class="run-small" onclick="copyGeneratedRows(this)">Copy full sequence</button></div>';
+}
+
+function generatedRowsText(data, workflow) {
+  if (workflow === 'integer-sequence') return data.polynomials.map(row => row[0]).join(', ');
+  return data.rows_text;
+}
+
+function useGeneratedRows() {
+  const data = window._lastGeneratedRows;
+  if (!data || !data.integral) return;
+  const text = generatedRowsText(data, window._lastGeneratedWorkflow);
+  document.getElementById('input').value = text;
+  workflowDrafts[activeWorkflow] = text;
+  setStatus('Extended sequence moved into the input; you can analyze it or search again.');
+}
+
+function copyGeneratedRows(button) {
+  const data = window._lastGeneratedRows;
+  if (!data) return;
+  navigator.clipboard.writeText(generatedRowsText(data, window._lastGeneratedWorkflow)).then(() => {
+    const label = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = label; }, 1500);
+  });
+}
+
 function span(cls, text) {
   return '<span class="' + cls + '">' + esc(text) + '</span>';
 }
@@ -1852,10 +2134,9 @@ function katexInline(tex) {
 
 async function run(action) {
   if (!wasmReady) { setStatus('WASM not loaded yet.'); return; }
-  const text = getInput();
-  if (!text.trim()) { setStatus('No input.'); return; }
-
   try {
+    const text = getInput();
+    if (!text.trim()) { setStatus('No input.'); return; }
     switch (action) {
       case 'properties': renderProperties(text); break;
       case 'decomposition': renderDecompositions(text); break;
@@ -1921,14 +2202,98 @@ let lastPropsData = null;  // stored for interlacing check
 let lastDecompData = null;
 let activeDecompView = 'core';
 
+function gammaBasisLatex(item) {
+  if (!item.gamma_coefficients) return null;
+  let initialZeros = 0;
+  while (initialZeros < item.coefficients.length && isZeroValue(item.coefficients[initialZeros])) {
+    initialZeros++;
+  }
+  const effectiveDegree = Math.max(0, item.degree - initialZeros);
+  const terms = [];
+  for (let i = 0; i < item.gamma_coefficients.length; i++) {
+    const coefficient = normalizeIntegerString(item.gamma_coefficients[i]);
+    if (coefficient === null || coefficient === '0') continue;
+    const negative = coefficient.startsWith('-');
+    const abs = negative ? coefficient.slice(1) : coefficient;
+    const exponent = effectiveDegree - 2 * i;
+    const tExponent = initialZeros + i;
+    const basis = (tExponent ? (tExponent === 1 ? 't' : 't^{' + tExponent + '}') : '') +
+      (exponent ? '(1+t)^{' + exponent + '}' : '');
+    const magnitude = basis && abs === '1' ? basis : abs + basis;
+    terms.push({ negative, magnitude });
+  }
+  if (!terms.length) return '0';
+  return terms.map((term, index) => {
+    if (index === 0) return (term.negative ? '-' : '') + term.magnitude;
+    return (term.negative ? ' - ' : ' + ') + term.magnitude;
+  }).join('');
+}
+
+function renderSinglePolynomial(data) {
+  if (data.length !== 1) {
+    setResult('<span class="err">This view expects exactly one polynomial. Choose “Polynomial sequence” to analyze several rows.</span>');
+    return;
+  }
+  const item = data[0];
+  if (item.error) {
+    setResult('<span class="err">' + esc(item.error) + '</span>');
+    return;
+  }
+  const rootClass = item.real_rooted ? 'yes' : 'no';
+  const repeated = item.squarefree_degree < item.degree;
+  const rootDetail = item.degree === 0
+    ? 'A nonzero constant has no zeros.'
+    : item.distinct_real_roots + ' distinct real zero' + (item.distinct_real_roots === 1 ? '' : 's') +
+      ': ' + item.negative_real_roots + ' negative, ' + (item.zero_is_root ? 'one at 0' : 'none at 0') +
+      ', and ' + item.positive_real_roots + ' positive.' + (repeated ? ' Repeated zeros are present.' : '');
+  let gammaValue = 'Not available';
+  let gammaDetail = 'A gamma expansion requires palindromic coefficients.';
+  if (item.gamma_coefficients) {
+    gammaValue = item.gamma_positive ? 'Gamma-positive' : 'Gamma expansion found';
+    gammaDetail = 'γ = [' + item.gamma_coefficients.join(', ') + ']';
+    const expansion = gammaBasisLatex(item);
+    if (expansion !== null) gammaDetail += '<div class="recurrence-display">' + katexInline('p(t)=' + expansion) + '</div>';
+  }
+  const shape = [
+    item.log_concave ? 'log-concave' : 'not log-concave',
+    item.ultra_log_concave ? 'ultra-log-concave' : 'not ultra-log-concave',
+    item.palindromic ? 'palindromic' : 'not palindromic',
+  ].join('; ');
+  const html = '<div class="single-summary">' +
+    '<div class="single-poly"><div class="single-poly-expression">' + katexInline('p(t)=' + item.polynomial.replace(/\^([0-9]+)/g, '^{$1}')) + '</div>' +
+    '<div class="summary-detail">Degree ' + item.degree + '; coefficients [' + esc(item.coefficients.join(', ')) + ']</div></div>' +
+    '<div class="summary-grid">' +
+      '<div class="summary-card"><h3>Real zeros</h3><div class="summary-value ' + rootClass + '">' +
+        (item.real_rooted ? 'All zeros are real' : 'Not all zeros are real') + '</div><div class="summary-detail">' + esc(rootDetail) + '</div></div>' +
+      '<div class="summary-card"><h3>Gamma expansion</h3><div class="summary-value ' + (item.gamma_positive ? 'yes' : '') + '">' +
+        esc(gammaValue) + '</div><div class="summary-detail">' + gammaDetail + '</div></div>' +
+      '<div class="summary-card"><h3>Coefficient shape</h3><div class="summary-value">' +
+        (item.palindromic ? 'Symmetric' : 'Asymmetric') + '</div><div class="summary-detail">' + esc(shape) +
+        '</div></div>' +
+    '</div>' +
+    '<div class="oeis-actions"><button class="run-small" onclick="openOeisTab()">Look up these coefficients on OEIS</button></div>' +
+    '</div>';
+  setResult(html);
+}
+
+function openOeisTab() {
+  switchTab('oeis');
+  run('oeis');
+}
+
 function renderProperties(text) {
   const t0 = performance.now();
   const data = JSON.parse(check_properties(text));
   lastPropsData = data;
-  const counts = computeInterlacingCounts(data);
   const ms = (performance.now() - t0).toFixed(1);
-  renderPropsTable(data, counts);
-  setStatus(data.length + ' polynomial(s) checked in ' + ms + ' ms, including consecutive interlacing profile.');
+  if (activeWorkflow === 'polynomial') {
+    renderSinglePolynomial(data);
+    setStatus('Polynomial checked exactly in ' + ms + ' ms.');
+  } else {
+    const counts = computeInterlacingCounts(data);
+    renderPropsTable(data, counts);
+    setStatus(data.length + ' polynomial(s) checked in ' + ms + ' ms, including consecutive interlacing profile.');
+  }
 }
 
 function computeInterlacingCounts(data) {
@@ -2459,13 +2824,16 @@ function startRecurrence(text) {
     type: 'find_recurrence',
     input: text,
     max_rec_len: adaptive ? 10 : readInt('maxRecLen', 3),
-    max_var_deg: adaptive ? 5 : readInt('maxVarDeg', 2),
+    max_var_deg: activeWorkflow === 'integer-sequence'
+      ? 0 : (adaptive ? 5 : readInt('maxVarDeg', 2)),
     max_idx_deg: adaptive ? 5 : readInt('maxIdxDeg', 2),
-    max_diff_deg: adaptive ? 5 : readInt('maxDiffDeg', 1),
+    max_diff_deg: activeWorkflow === 'integer-sequence'
+      ? 0 : (adaptive ? 5 : readInt('maxDiffDeg', 1)),
     try_inhomogeneous: document.getElementById('tryInhomogeneous').checked,
     try_denominator: document.getElementById('tryDenominator').checked,
     try_alternating_sign: document.getElementById('tryAlternatingSign').checked,
   };
+  const sourceRows = text.split(/\r?\n/).filter(line => line.trim()).length;
 
   if (worker) worker.terminate();
   worker = createWorker();
@@ -2482,6 +2850,9 @@ function startRecurrence(text) {
       document.getElementById('btnCancel').style.display = 'none';
 
       if (data.found) {
+        const domainNote = activeWorkflow === 'integer-sequence'
+          ? '<div class="recurrence-note">Here <strong>P(n)</strong> denotes the entered integer sequence; the search is restricted to scalar recurrences in n.</div>'
+          : '';
         const latexEl = '<div class="recurrence-display" id="recurrence-katex"></div>';
         const copyEl = '<div class="recurrence-copy">' +
           '<button class="copy-btn" onclick="copyRec(this,\'plain\')">Copy plaintext</button>' +
@@ -2495,7 +2866,7 @@ function startRecurrence(text) {
                         data.equations + ' equations, ' +
                         data.candidates_tried + ' candidates tried') + '</div>';
         const codeEl = renderRecurrenceCodeStack(data);
-        setResult(latexEl + copyEl + statsEl + codeEl);
+        setResult(domainNote + latexEl + copyEl + statsEl + renderRecurrenceExtension(sourceRows) + codeEl);
         // Store for copy
         window._lastRecPlain = data.recurrence;
         window._lastRecLatex = data.latex;
@@ -2957,71 +3328,77 @@ function renderSheetOeisHelpers(view, data) {
 
 async function runOeis() {
   if (!wasmReady) { setStatus('WASM not loaded yet.'); return; }
-  const text = getInput();
-  if (!text.trim()) { setStatus('No input.'); return; }
-
-  const data = JSON.parse(check_properties(text));
-  const polys = data.filter(d => !d.error && d.coefficients);
-  if (polys.length === 0) { setResult('<span class="err">No valid polynomials found.</span>'); return; }
-
-  // Row sums: evaluate each polynomial at t=1 (sum of coefficients)
-  const rowSums = polys.map(d => sumIntegerRow(d.coefficients, false));
-
-  // Full triangle: read coefficients row by row
-  const triangle = polys.flatMap(d => d.coefficients);
-  let html = '';
-
-  // Alternating row sums: evaluate each at t=-1
-  const altRowSums = polys.map(d => sumIntegerRow(d.coefficients, true));
-
-  const token = ++oeisLookupToken;
-  const sections = [
-    {
-      title: 'Row sums (evaluate at t = 1)',
-      titleHtml: 'Row sums (evaluate at ' + katexInline('t=1') + ')',
-      seq: rowSums,
-      note: 'Often the fastest way to identify a polynomial family.',
-      previewLimit: 24,
-    },
-    {
-      title: 'Alternating row sums (evaluate at t = -1)',
-      titleHtml: 'Alternating row sums (evaluate at ' + katexInline('t=-1') + ')',
-      seq: altRowSums,
-      note: 'Useful when the family has an especially clean signed specialization.',
-      previewLimit: 24,
-    },
-    {
-      title: 'Triangle read by rows',
-      seq: triangle,
-      note: 'Flatten the coefficient triangle row by row.',
+  let sections = [];
+  if (activeWorkflow === 'integer-sequence') {
+    const terms = getIntegerTerms();
+    if (!terms.length) { setStatus('No input.'); return; }
+    sections = [{
+      title: 'Integer sequence',
+      seq: terms,
+      note: 'The terms exactly as entered. First differences and leading-zero variants are available below.',
       previewLimit: 42,
-    },
-  ];
+    }];
+  } else {
+    const text = getInput();
+    if (!text.trim()) { setStatus('No input.'); return; }
+    const data = JSON.parse(check_properties(text));
+    const polys = data.filter(d => !d.error && d.coefficients);
+    if (polys.length === 0) { setResult('<span class="err">No valid polynomials found.</span>'); return; }
+
+    if (activeWorkflow === 'polynomial') {
+      if (polys.length !== 1) {
+        setResult('<span class="err">This view expects exactly one polynomial.</span>');
+        return;
+      }
+      sections = [{
+        title: 'Coefficient sequence',
+        seq: polys[0].coefficients,
+        note: 'Coefficients in ascending degree, from the constant term onward.',
+        previewLimit: 42,
+      }];
+    } else {
+      const rowSums = polys.map(d => sumIntegerRow(d.coefficients, false));
+      const triangle = polys.flatMap(d => d.coefficients);
+      const altRowSums = polys.map(d => sumIntegerRow(d.coefficients, true));
+      sections = [
+        {
+          title: 'Row sums (evaluate at t = 1)',
+          titleHtml: 'Row sums (evaluate at ' + katexInline('t=1') + ')',
+          seq: rowSums,
+          note: 'Often the fastest way to identify a polynomial family.',
+          previewLimit: 24,
+        },
+        {
+          title: 'Alternating row sums (evaluate at t = -1)',
+          titleHtml: 'Alternating row sums (evaluate at ' + katexInline('t=-1') + ')',
+          seq: altRowSums,
+          note: 'Useful when the family has an especially clean signed specialization.',
+          previewLimit: 24,
+        },
+        {
+          title: 'Triangle read by rows',
+          seq: triangle,
+          note: 'Flatten the coefficient triangle row by row.',
+          previewLimit: 42,
+        },
+      ];
+    }
+  }
+
+  let html = '';
+  const token = ++oeisLookupToken;
 
   html += '<div class="oeis-note">Automatic matches below are fetched through the OEIS proxy at <code>arxiv.symmetricfunctions.com</code>. The buttons still open OEIS directly with the full query.</div>';
-  html += renderOeisSection(sections[0].title, sections[0].seq, {
-    titleHtml: sections[0].titleHtml,
-    note: sections[0].note,
-    previewLimit: sections[0].previewLimit,
-    matchId: 'oeis-match-' + token + '-0',
+  html += sections.map((section, idx) => renderOeisSection(section.title, section.seq, {
+    titleHtml: section.titleHtml,
+    note: section.note,
+    previewLimit: section.previewLimit,
+    matchId: 'oeis-match-' + token + '-' + idx,
     autoFetch: true,
-  });
-  html += renderOeisSection(sections[1].title, sections[1].seq, {
-    titleHtml: sections[1].titleHtml,
-    note: sections[1].note,
-    previewLimit: sections[1].previewLimit,
-    matchId: 'oeis-match-' + token + '-1',
-    autoFetch: true,
-  });
-  html += renderOeisSection(sections[2].title, sections[2].seq, {
-    note: sections[2].note,
-    previewLimit: sections[2].previewLimit,
-    matchId: 'oeis-match-' + token + '-2',
-    autoFetch: true,
-  });
+  })).join('');
 
   setResult(html);
-  setStatus('Looking up OEIS matches for ' + sections.length + ' derived sequence(s)...');
+  setStatus('Looking up OEIS matches for ' + sections.length + ' sequence' + (sections.length === 1 ? '' : 's') + '...');
 
   const lookups = await Promise.all(sections.map((section, idx) =>
     fetchOeisMatches(section.seq, 'oeis-match-' + token + '-' + idx, token)
@@ -3032,13 +3409,15 @@ async function runOeis() {
   const withMatches = lookups.filter(item => item && item.ok && item.matches > 0).length;
   const failed = lookups.filter(item => item && item.error).length;
   if (failed) {
-    setStatus('Fetched OEIS matches for ' + withMatches + ' of ' + sections.length + ' derived sequence(s); some proxy lookups failed, but direct OEIS links remain available.');
+    setStatus('Fetched OEIS matches for ' + withMatches + ' of ' + sections.length + ' sequence' + (sections.length === 1 ? '' : 's') + '; some proxy lookups failed, but direct OEIS links remain available.');
   } else {
-    setStatus('Fetched OEIS matches for ' + withMatches + ' of ' + sections.length + ' derived sequence(s).');
+    setStatus('Fetched OEIS matches for ' + withMatches + ' of ' + sections.length + ' sequence' + (sections.length === 1 ? '' : 's') + '.');
   }
 }
 
 installInfoTooltipLayer();
+const initialWorkflow = location.hash.slice(1);
+setWorkflow(WORKFLOW_CONFIG[initialWorkflow] ? initialWorkflow : 'polynomial', { keepInput: true, skipHash: true });
 init();
 </script>
 </body>

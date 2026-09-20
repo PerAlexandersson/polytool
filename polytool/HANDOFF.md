@@ -5,6 +5,15 @@ Full chronological history through 2026-09-16 is archived in
 
 ## Current state
 
+The source-only UX overhaul is complete on `feature/polytool-ux-20260920`, and
+file ownership is released. The single-polynomial view exposes exact real-zero
+counts and gamma expansions; the polynomial- and integer-sequence views route
+recurrence and OEIS work appropriately; and exact recurrence extensions can be
+previewed, copied, or reused in the browser. Focused Rust, Node, strict Clippy,
+optimized WASM build, and actual-bundle smoke tests pass. No merge, standalone
+subtree sync, website staging, release, or deployment was performed or
+authorized.
+
 `master` in the parent Rust repository is canonical. The public `main` branch
 is a generated standalone subtree and must be updated only with
 `../scripts/sync-polytool-main.sh` after the parent checkpoint is committed,
