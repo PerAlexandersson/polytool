@@ -14,6 +14,10 @@ optimized WASM build, and actual-bundle smoke tests pass. No merge, standalone
 subtree sync, website staging, release, or deployment was performed or
 authorized.
 
+The verified implementation is local commit `7f8dd05`. Feature-branch push
+failed because this worker has no GitHub SSH key; the remote and credentials
+were left unchanged.
+
 `master` in the parent Rust repository is canonical. The public `main` branch
 is a generated standalone subtree and must be updated only with
 `../scripts/sync-polytool-main.sh` after the parent checkpoint is committed,

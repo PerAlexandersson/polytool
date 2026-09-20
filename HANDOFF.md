@@ -10,6 +10,11 @@ The source-only overhaul is complete on `feature/polytool-ux-20260920` in
 standalone-subtree sync, website staging, release, database mutation, or
 deployment was performed or authorized.
 
+The verified source checkpoint is local commit `7f8dd05`. A routine push of
+the feature branch failed with GitHub SSH `Permission denied (publickey)` in
+this worker; no credential, remote, supervisor, or worker configuration was
+changed, and the push remains for an authorized host context.
+
 The browser now has distinct single-polynomial, polynomial-sequence, and
 integer-sequence workflows. It reports exact real-zero counts and gamma-basis
 expansions, sends the appropriate data directly to OEIS, accepts OEIS b-files,
