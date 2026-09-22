@@ -15,6 +15,7 @@ builds on it, followed by `sym-poly-multipoly`, `sym-poly-sym`, and
 | Exact algebra | `SparseMatrix<BigInt>`, Smith normal form, chain complexes and homology |
 | Polynomial models | GT/Kogan-face key polynomials and Ehrhart interpolation |
 | Meanders | Noncrossing matchings and rooted meandric permutations |
+| Colored exchange | `colored_exchange`: fixed-content families, cycle witnesses, exact weighted marginals, and checked decomposition certificates |
 
 Partitions are stored in weakly decreasing order; compositions preserve order;
 weak compositions preserve their length. Labels are normally zero-based, while
@@ -48,6 +49,14 @@ assert_eq!(diamond.order_polytope_hstar(), vec![1, 1]);
 
 Run the crate's focused checks with `cargo test -p combinatoric-core` (the
 workspace guide supplies the timeout/nice wrapper for resource-sensitive runs).
+
+The `colored_exchange` module validates finite families of words with fixed
+color quotas. Its exchange checker returns a cycle witness or a specific
+obstruction; its marginals use arbitrary-precision nonnegative coefficients.
+Product, binary-port, and private-block certificates verify exact support
+reconstruction and factor exchange. They do not assert a general Lorentzian
+theorem. Run `cargo run -p combinatoric-core --example colored_exchange` for
+a small checked use; broad support searches belong in downstream consumers.
 
 ## Exactness and scope
 

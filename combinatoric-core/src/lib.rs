@@ -2,6 +2,7 @@
 //! compositions, permutations, graphs, posets, and related utilities.
 
 pub mod chain_complex;
+pub mod colored_exchange;
 pub mod composition;
 pub mod graph;
 pub mod integer_linear_algebra;
@@ -20,6 +21,10 @@ pub use chain_complex::{
     replay_unit_cancellation_and_verify, universal_coefficient_dimension, AbelianGroup,
     ChainComplexError, FiniteChainComplex, UnitCancellationCertificate, UnitPivot,
     UnitReductionOptions, UnitReductionResult, UnitReductionStats,
+};
+pub use colored_exchange::{
+    BinaryPortCertificate, CycleWitness, ExchangeObstruction, FixedContentFamily,
+    PrivateBlockCertificate, ProductCertificate,
 };
 pub use composition::{Composition, WeakComposition};
 pub use graph::Graph;

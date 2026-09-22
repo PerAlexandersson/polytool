@@ -1,5 +1,32 @@
 # Handoff
 
+## Completed: colored exchange library — 2026-09-22
+
+The user-authorized 3-Matroids integration adds `combinatoric-core::colored_exchange`:
+validated fixed-content families, deterministic symmetric cycle witnesses,
+explicit search-budget exhaustion, exact BigUint marginals, and verified
+product/binary-port/private-block certificates. The API has no 128-word cap.
+Its example demonstrates witnesses, obstructions, weighted coefficients,
+and decompositions. README and library-guide routing are updated.
+
+Claude implemented the module, export, 11 integration tests, and example.
+Root reviewed and integrated it, fixed actual traversal-budget accounting,
+removed finite sentinels from unbounded searches, compressed arbitrary raw
+color labels, rejected unused private-certificate data, and guarded corrupt
+binary count overflow. A twelfth integration test covers these defects.
+All eight unit tests and twelve integration tests pass. Independent brute
+force agrees on all 4,095 quota-(2,1,1) supports (405 successes); tests also
+cover larger-than-128-word families and arbitrary-precision coefficients.
+The example, strict Rustdoc, and focused formatting pass. Clippy reports
+pre-existing findings outside the owned files (44 in the lib-test target,
+38 duplicated from the library); none concern this addition.
+
+All task files are released after the local checkpoint. No nested Claude
+process remains active. No push/publication was authorized or performed.
+The project consumer and further exact classification replay are recorded in
+`/workspace/projects/3-Matroids/RUST_INTEGRATION.md` and its handoff.
+No analytic log-concavity conclusion is built into the certificate API.
+
 ## Completed: A355089 statistic refinements — 2026-09-18
 
 `combpoly::parity_pattern` now uses one generic maximum-and-gap traversal for
