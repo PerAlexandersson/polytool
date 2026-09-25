@@ -1,5 +1,38 @@
 # Handoff
 
+## Completed: square-graph W/forgotten expansions — 2026-09-25
+
+`square_partition_graph_symmetric(&lambda, n)` implements Section 2.3's
+even-degree square basis: doubled stars for even parts; consecutive decreasing
+odd parts give paired stars joined by a doubled edge. It returns the full S_n
+sum over BigInt, not the square of an already symmetrized graph polynomial.
+The new `OddDegree` error complements existing index/vertex validation.
+`examples/square_graph_w.rs` prints both direct forgotten and W coefficients,
+normalized by n!; W coefficients reuse `c_n(...).to_forgotten_basis()`.
+
+`docs/square-graph-expansions.md` records exact examples and the degree-four
+counterexamples to uniform positivity in both bases. Direct forgotten:
+H_(4)=(n-2)! [6 f_(2,2)-4 f_(3,1)-(n+1) f_(4)]. This has a direct algebraic
+proof, not just interpolation. All 141 direct-forgotten cases through even
+degree 12 at n=d,2d,2d+3 roundtrip; 123 have mixed signs, with the remaining
+18 exactly the indices (2^k). The note proves (-1)^k H_(2^k) strictly
+forgotten-positive for n>=2k. Mixed signs for every other index remain only
+a bounded observation. W tests check 78 cases through degree 10, no singleton
+indices, and exact inverse recovery.
+
+Six new integration tests include independent literal permutation sums for
+small doubled/glued graphs, multiple odd-pair ordering, boundary errors,
+translation checks, and direct-forgotten/W regressions. Full crate tests pass
+(238 passed, 3 pre-existing ignored); checked example, strict Rustdoc, targeted
+formatting, and diff checks pass. Focused Clippy reports no diagnostics in the
+owned graph files/example (unrelated warnings remain). Logs are
+`/tmp/square-graph-{tests,doc,clippy}.log`, `/tmp/square-graph-clippy.jsonl`;
+the larger probe output is `/tmp/square-graph-forgotten-results.txt`.
+Paper-cache still had no copy; the source PDF was read through the browser.
+
+All task files are released after the local checkpoint on the existing branch.
+No other worker, Lean build, or publication; the no-push boundary still holds.
+
 ## Completed: Schur content operators — 2026-09-25
 
 `sym-poly-sym::{c_n, c_n_inverse, schur_content_product}` implements the

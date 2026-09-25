@@ -55,7 +55,8 @@ pub use frobenius::{
     multigraded_frobenius_from_character_values, multigraded_frobenius_from_trace_matrices,
 };
 pub use graph_monomial::{
-    partition_graph_symmetric, symmetrized_graph_monomial, GraphMonomialError,
+    partition_graph_symmetric, square_partition_graph_symmetric, symmetrized_graph_monomial,
+    GraphMonomialError,
 };
 pub use hessenberg_gkm::{
     affine_shadow_circular_gkm_hilbert, hessenberg_gkm_dot_action_matrices,

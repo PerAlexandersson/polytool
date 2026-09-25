@@ -3,6 +3,8 @@
 //! Implements the partition-graph basis of Alexandersson--Shapiro,
 //! *Discriminants, symmetrized graph monomials, and sums of squares*,
 //! <https://arxiv.org/abs/1104.0589>, Section 2.2, in every degree.
+//! The square-graph basis of Section 2.3 is also available in even degree via
+//! [`square_partition_graph_symmetric`]; odd parts are paired, not discarded.
 //!
 //! This is a basis of the translation-invariant subspace in **n variables**,
 //! not an additional basis of all of `Sym`. The parameter `n` is essential:
@@ -39,6 +41,8 @@ use crate::{Basis, SymmetricFunction};
 pub enum GraphMonomialError {
     /// A basis index contains a part smaller than two.
     NotTwoPartition,
+    /// The square-graph basis requires an even total degree.
+    OddDegree,
     /// There are insufficient variables to label every graph vertex.
     TooFewVariables {
         /// Number of graph vertices, excluding added isolated vertices.
@@ -66,6 +70,7 @@ impl fmt::Display for GraphMonomialError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotTwoPartition => write!(f, "all parts of the index must be at least two"),
+            Self::OddDegree => write!(f, "the square-graph basis requires an even degree"),
             Self::TooFewVariables { required, provided } => {
                 write!(
                     f,
@@ -170,6 +175,58 @@ pub fn partition_graph_symmetric(
             next += 1;
         }
     }
+    symmetrized_graph_monomial(num_vars, &edges)
+}
+
+/// The square-graph basis element `h_lambda` of Section 2.3, in `num_vars` variables.
+///
+/// An even part `a` gives a star with `a/2` leaves and doubled edges. Odd parts
+/// are read in decreasing order and paired consecutively. A pair `(a,b)` gives
+/// two centers joined by a doubled edge, with `(a-1)/2` and `(b-1)/2` leaves,
+/// respectively; every leaf edge is also doubled. Distinct components are
+/// disjoint. Thus the graph monomial is a square of degree `|lambda|`.
+///
+/// Returns the full permutation sum, **not** the square of a symmetrized
+/// polynomial. In four variables, for example, `h_(2) = 12*m_(2) - 8*m_(1,1)`.
+/// All parts must be at least two and the total degree must be even. The graph
+/// needs `|lambda|/2 + length(lambda) - (number of odd parts)/2` vertices.
+/// The empty partition gives `num_vars!`, including one when `num_vars = 0`.
+/// These elements form the paper's basis in its stable range `num_vars >= 2*d`.
+#[doc(alias = "h_lambda")]
+pub fn square_partition_graph_symmetric(
+    partition: &Partition,
+    num_vars: usize,
+) -> Result<SymmetricFunction<BigInt>, GraphMonomialError> {
+    let degree = two_partition_degree(partition)?;
+    if degree % 2 != 0 {
+        return Err(GraphMonomialError::OddDegree);
+    }
+    let odd_count = partition.parts().iter().filter(|&&a| a % 2 != 0).count();
+    let required = (degree / 2)
+        .checked_add(partition.num_parts() - odd_count / 2)
+        .ok_or(GraphMonomialError::SizeOverflow)?;
+    check_variables(required, num_vars)?;
+    let mut edges = Vec::with_capacity(degree);
+    let mut next = 0;
+    let mut pending_odd_center = None;
+    for &part in partition.parts() {
+        let center = next;
+        next += 1;
+        for _ in 0..(part / 2) {
+            edges.extend([(center, next); 2]);
+            next += 1;
+        }
+        if part % 2 != 0 {
+            if let Some(other) = pending_odd_center.take() {
+                edges.extend([(other, center); 2]);
+            } else {
+                pending_odd_center = Some(center);
+            }
+        }
+    }
+    debug_assert!(pending_odd_center.is_none());
+    debug_assert_eq!(edges.len(), degree);
+    debug_assert_eq!(next, required);
     symmetrized_graph_monomial(num_vars, &edges)
 }
 

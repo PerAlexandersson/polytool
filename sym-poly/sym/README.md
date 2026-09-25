@@ -14,7 +14,7 @@ support. `sym-poly-qsym` is downstream of this crate.
 | Schur content operators | `c_n`, `c_n_inverse`, `schur_content_product`; `examples/schur_content_operator.rs` |
 | Tableaux and characters | `hook_schur`, Kostka/character/Frobenius, shifted LR |
 | Graph/chromatic families | `chromatic`, universal-vertex extension, `weighted_bond`, q-chromatic and Hessenberg/GKM routines |
-| Translation-invariant graph basis | `partition_graph_symmetric`, `symmetrized_graph_monomial`; `examples/partition_graph_schur.rs` |
+| Translation-invariant graph bases | `partition_graph_symmetric`, `square_partition_graph_symmetric`, `symmetrized_graph_monomial`; `examples/partition_graph_schur.rs`, `examples/square_graph_w.rs` |
 | Chordal clique boundaries | `chordal_clique_boundary_schur_channels`; `examples/clique_boundary_channels.rs` |
 | q,t families | `llt`, `macdonald`, Petrie and shifted/Grothendieck routines |
 | Additional constructions | `lah`, twin GKM, circular/affine helpers |
@@ -68,6 +68,23 @@ factor `(n-length(mu))! * product_r multiplicity_mu(r)!`, avoiding `n!`
 permutation enumeration. This factor is necessary for literal Definition 1
 normalization (the coloring count in Lemma 6 omits the zero-exponent factorial).
 Polynomial expansion can still be exponential in the edge count.
+
+The even-degree square basis from Section 2.3 is available as
+`square_partition_graph_symmetric(&lambda, n)`. An even part gives a star
+with half as many leaves and doubled edges; odd parts in decreasing order are
+paired consecutively into two stars joined by a doubled edge. This includes
+indices such as `(3,3)`, not only partitions with even parts. The returned
+`BigInt` monomial expansion uses the full permutation sum, not the square of
+an already symmetrized polynomial. The graph needs
+`degree/2 + length(lambda) - number_of_odd_parts/2` vertices; odd degree and
+parts equal to one are rejected. The empty partition gives `n!`.
+
+`cargo run -p sym-poly-sym --example square_graph_w -- 4 8` prints both the
+direct forgotten expansion and the expansion in `W_mu = C_n^{-1}(f_mu)` for
+each degree-four square basis element in eight variables, normalized by `n!`.
+For W coordinates use `c_n(&graph, n).to_forgotten_basis()`; for direct
+forgotten coordinates use `graph.to_forgotten_basis()`. Neither expansion is
+uniformly positive: see [the checked examples and sign evidence](../../docs/square-graph-expansions.md).
 
 ## Schur content operators
 
