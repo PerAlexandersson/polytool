@@ -1,5 +1,18 @@
 # Handoff
 
+## Completed: forgotten-basis investigation — 2026-09-25
+
+All-degree partition graphs have strictly positive forgotten coefficients
+after multiplying by `(-1)^(|lambda|-length(lambda))`, using `f=omega(m)`.
+`docs/partition-graph-forgotten.md` records the star-expansion and set-partition
+inclusion-exclusion proof, normalization, examples, and exact evidence.
+All 41 two-partitions through degree 10 were checked at three variable counts
+(123 cases), with complete support, the predicted all-ones coefficient,
+monomial roundtrips, and an independent Schur-conjugation conversion route.
+Only this handoff and the mathematical note were changed; existing library
+generators and conversions were reused by a bounded temporary Rust driver.
+These note files are released. The prior no-push boundary below still applies.
+
 ## Completed: all-degree partition-graph basis — 2026-09-25
 
 `sym-poly-sym::partition_graph_symmetric(&lambda, n)` implements the
