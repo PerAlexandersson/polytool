@@ -1,5 +1,32 @@
 # Handoff
 
+## Completed: Schur content operators — 2026-09-25
+
+`sym-poly-sym::{c_n, c_n_inverse, schur_content_product}` implements the
+user-defined eigenvalue `product_(i,j in lambda)(n+j-i)` with one-based box
+coordinates. Content products use BigInt; forward application preserves the
+coefficient ring, while the inverse accepts BigInt/BigRational and returns
+BigRational. Both return Schur expansions. The inverse reports
+`ContentOperatorError` on nonzero terms with more than n rows: finite-variable
+users must first discard these vanishing Schur terms. Empty products and
+constants are one/unchanged, including n=0. No signed narrowing of n occurs.
+Existing non-Schur transition-table limits remain explicitly documented.
+
+Eight new tests cover independent box products, the full usize variable-count
+boundary, arbitrary-precision products, zero/constants, the exact inverse
+domain after basis conversion, fractional coefficients, all six input bases,
+both composition identities, mixed-degree linearity, and graph families through
+degree 7. Full crate tests pass (232 passed, 3 pre-existing ignored), including
+the new doctest. The checked `schur_content_operator` example, strict Rustdoc,
+formatting, and diff checks pass. Focused Clippy reports no findings in new
+files; unrelated existing warnings remain. Logs are
+`/tmp/content-operator-{tests,doc,clippy}.log` and
+`/tmp/content-operator-clippy.jsonl`.
+
+All task files are released after the local checkpoint on
+`feat/translation-invariant-graph-bases`. No Lean work, worker launches, or
+publication occurred. The prior no-push boundary below still applies.
+
 ## Completed: forgotten-basis investigation — 2026-09-25
 
 All-degree partition graphs have strictly positive forgotten coefficients

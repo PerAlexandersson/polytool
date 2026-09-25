@@ -11,6 +11,7 @@ support. `sym-poly-qsym` is downstream of this crate.
 | Area | Main API or module |
 | --- | --- |
 | Core algebra | `SymmetricFunction<C>`, `Basis`, all basis conversions, products, omega, Hall product |
+| Schur content operators | `c_n`, `c_n_inverse`, `schur_content_product`; `examples/schur_content_operator.rs` |
 | Tableaux and characters | `hook_schur`, Kostka/character/Frobenius, shifted LR |
 | Graph/chromatic families | `chromatic`, universal-vertex extension, `weighted_bond`, q-chromatic and Hessenberg/GKM routines |
 | Translation-invariant graph basis | `partition_graph_symmetric`, `symmetrized_graph_monomial`; `examples/partition_graph_schur.rs` |
@@ -67,6 +68,33 @@ factor `(n-length(mu))! * product_r multiplicity_mu(r)!`, avoiding `n!`
 permutation enumeration. This factor is necessary for literal Definition 1
 normalization (the coloring count in Lemma 6 omits the zero-exponent factorial).
 Polynomial expansion can still be exponential in the edge count.
+
+## Schur content operators
+
+`c_n(&value, n)` multiplies each Schur coefficient indexed by `lambda` by
+`product_(i,j in lambda)(n+j-i)`, using one-based row/column indices.
+`schur_content_product(&lambda, n)` returns this eigenvalue as a `BigInt`.
+The forward map accepts any supported coefficient ring; `BigInt` and
+`BigRational` avoid fixed-width overflow in these multiplications.
+
+`c_n_inverse(&value, n)` accepts `BigInt` or `BigRational` input and returns
+`Result<SymmetricFunction<BigRational>, ContentOperatorError>`. Both operators
+accept any classical basis and return Schur expansions. For example,
+`C_3(s_(2,1)) = 24*s_(2,1)` and `C_3^(-1)(s_(2,1)) = s_(2,1)/24`.
+Integer graph polynomials can be supplied directly to the inverse; the checked
+example gives `C_4^(-1)(b_(2)^(4)) = 3/10*s_(2) - 5/6*s_(1,1)`:
+
+```bash
+cargo run -p sym-poly-sym --example schur_content_operator
+```
+
+The inverse's domain is explicit: a nonzero Schur term with more than `n` rows
+is an error because its eigenvalue is zero. When working in exactly `n`
+variables, first convert to Schur and discard such terms (they specialize to
+zero). The forward map annihilates them. Constants are unchanged, including
+at `n=0`; on the admissible Schur span both compositions are the identity.
+This inverse is over the rationals, not generally over the integers. Conversion
+from non-Schur input retains the transition-table limits described below.
 
 ## Exactness and limits
 

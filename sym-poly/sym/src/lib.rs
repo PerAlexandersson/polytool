@@ -11,6 +11,7 @@ use sym_poly_core::Partition;
 pub mod basis;
 pub mod chromatic;
 pub mod clique_boundary;
+pub mod content_operator;
 pub mod frobenius;
 pub mod graph_monomial;
 pub mod hessenberg_gkm;
@@ -47,6 +48,7 @@ pub use chromatic::{
 pub use clique_boundary::{
     chordal_clique_boundary_schur_channels, CliqueBoundaryError, MAX_EXACT_CLIQUE_BOUNDARY_ORDER,
 };
+pub use content_operator::{c_n, c_n_inverse, schur_content_product, ContentOperatorError};
 pub use frobenius::{
     frobenius_from_character_values, frobenius_from_trace_matrices,
     graded_frobenius_from_character_values, graded_frobenius_from_trace_matrices,
