@@ -13,6 +13,7 @@ support. `sym-poly-qsym` is downstream of this crate.
 | Core algebra | `SymmetricFunction<C>`, `Basis`, all basis conversions, products, omega, Hall product |
 | Tableaux and characters | `hook_schur`, Kostka/character/Frobenius, shifted LR |
 | Graph/chromatic families | `chromatic`, universal-vertex extension, `weighted_bond`, q-chromatic and Hessenberg/GKM routines |
+| Translation-invariant graph basis | `partition_graph_symmetric`, `symmetrized_graph_monomial`; `examples/partition_graph_schur.rs` |
 | Chordal clique boundaries | `chordal_clique_boundary_schur_channels`; `examples/clique_boundary_channels.rs` |
 | q,t families | `llt`, `macdonald`, Petrie and shifted/Grothendieck routines |
 | Additional constructions | `lah`, twin GKM, circular/affine helpers |
@@ -41,6 +42,31 @@ For a q-polynomial-valued family, run the checked LLT example with
 `cargo run -p sym-poly-sym --example llt_site_example`.
 The checked `chromatic_universal_vertex` example verifies the monomial-basis
 universal-vertex operator against `Graph::join`.
+
+## Partition-graph basis
+
+`partition_graph_symmetric(&lambda, n)` implements the all-degree partition-graph
+basis from Alexandersson--Shapiro, [arXiv:1104.0589, Section 2.2](https://arxiv.org/abs/1104.0589).
+Indices have every part at least two. Each part supplies a disjoint outward
+star. These span the translation-invariant degree-`d` subspace in `n` variables
+in the paper's stable range `n >= 2*d`; they are not a basis of all symmetric
+functions. The explicit `n` affects the coefficients. The result uses `BigInt`
+and the full permutation sum of Definition 1, including isolated vertices.
+Call `.to_schur_basis()` to expand it. For example, `b_(2)` at `n=4` is
+`6*s_(2) - 10*s_(1,1)`, and `b_(3)` at `n=6` is
+`120*s_(3) - 192*s_(2,1) + 336*s_(1,1,1)`.
+
+```bash
+cargo run -p sym-poly-sym --example partition_graph_schur
+cargo run -p sym-poly-sym --example partition_graph_schur -- 5 10
+```
+
+The first command lists degrees 2--6 at `n=2*d`. Symmetrization groups sparse
+graph-monomial terms by exponent partition and includes the stabilizer
+factor `(n-length(mu))! * product_r multiplicity_mu(r)!`, avoiding `n!`
+permutation enumeration. This factor is necessary for literal Definition 1
+normalization (the coloring count in Lemma 6 omits the zero-exponent factorial).
+Polynomial expansion can still be exponential in the edge count.
 
 ## Exactness and limits
 

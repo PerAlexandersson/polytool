@@ -1,5 +1,39 @@
 # Handoff
 
+## Completed: all-degree partition-graph basis — 2026-09-25
+
+`sym-poly-sym::partition_graph_symmetric(&lambda, n)` implements the
+all-degree basis from Alexandersson--Shapiro, arXiv:1104.0589 Section 2.2.
+The user explicitly selected this family; the even-degree square-graph basis
+is not included. The generator uses disjoint outward stars, BigInt coefficients,
+explicit variable count, and Definition 1's full permutation sum. The reusable
+`symmetrized_graph_monomial` expands via MultiPoly and exponent stabilizers,
+without enumerating S_n; Schur conversion reuses the existing Sym API.
+The checked `partition_graph_schur` example lists degrees 2--6 at n=2*d,
+or accepts `degree [num_vars]`. README and library-guide routing are updated.
+
+Eight new tests pass: literal permutation-sum agreement (including isolates,
+repeated edges and disconnected stars), known even/odd Schur expansions,
+all 2-partition diagonal coefficients and Schur roundtrips through degree 8,
+translation invariance, n=30 BigInt coefficients, boundary/errors, orientation,
+and relabeling. Full package tests pass (223 passed, 3 pre-existing ignored);
+the subsequently strengthened nonzero translation probes also pass. The
+example, strict Rustdoc, formatting, and diff checks pass. Focused Clippy has
+no findings in the new module/tests/example; existing unrelated warnings remain.
+Logs are `/tmp/partition-graph-{sym-tests,doc,clippy}.log` and
+`/tmp/partition-graph-clippy.jsonl`.
+
+All task files are released after the local checkpoint on
+`feat/translation-invariant-graph-bases`, based on `62d6e6f`. No push was made:
+this branch includes 13 pre-existing unpublished master commits, including a
+prior handoff's explicitly unpublished work, which this task does not publish.
+The i64 limitation in existing Schur transition data is documented and a
+separate exactness follow-up is proposed in
+`suggestions/sym-transition-exactness-2026-09-25.md`.
+Paper-cache lookup found no copy; its arXiv fetch failed with HTTP 406 from
+the metadata endpoint. The PDF was read through the browser instead.
+No Lean work or additional worker was involved.
+
 ## Completed: colored exchange library — 2026-09-22
 
 The user-authorized 3-Matroids integration adds `combinatoric-core::colored_exchange`:

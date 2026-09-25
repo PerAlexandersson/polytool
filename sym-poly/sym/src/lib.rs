@@ -12,6 +12,7 @@ pub mod basis;
 pub mod chromatic;
 pub mod clique_boundary;
 pub mod frobenius;
+pub mod graph_monomial;
 pub mod hessenberg_gkm;
 pub mod hook_schur;
 pub mod kostka;
@@ -50,6 +51,9 @@ pub use frobenius::{
     frobenius_from_character_values, frobenius_from_trace_matrices,
     graded_frobenius_from_character_values, graded_frobenius_from_trace_matrices,
     multigraded_frobenius_from_character_values, multigraded_frobenius_from_trace_matrices,
+};
+pub use graph_monomial::{
+    partition_graph_symmetric, symmetrized_graph_monomial, GraphMonomialError,
 };
 pub use hessenberg_gkm::{
     affine_shadow_circular_gkm_hilbert, hessenberg_gkm_dot_action_matrices,
