@@ -5,6 +5,7 @@ pub mod chain_complex;
 pub mod colored_exchange;
 pub mod composition;
 pub mod graph;
+pub mod graph_packings;
 pub mod integer_linear_algebra;
 pub mod key_polynomial;
 pub mod meander;

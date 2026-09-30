@@ -1,5 +1,27 @@
 # Handoff
 
+## Completed: bounded connected-subgraph packing check — 2026-09-30
+
+Host `/root` completed and releases this handoff, `combinatoric-core/src/lib.rs`, new
+`combinatoric-core/src/graph_packings.rs`, `combinatoric-core/README.md`,
+and ignored `experiments/src/bin/connected_subgraph_packings.rs` only.
+Also releases `docs/LIBRARY_GUIDE.md` and `docs/EXPERIMENT_PROMOTION.md` to
+register the new canonical generator without publishing research results.
+The shared checkout was clean at `24559ad`; no live Rust worker appeared
+in the supervisor report. User explicitly requested a small Rust root check.
+Reuse Graph and polytool; add a documented BigInt generator with independent
+edge-subset tests, then run bounded scans. Preserve the existing no-push
+boundary. No other workers, models, profiles, or files are assigned.
+The BigInt generator is canonical in `graph_packings`; its independent
+edge-subset oracle verifies all graphs through four vertices and the specific
+12-vertex tree found by the scan. For k=2, its coefficients are
+`[1,27,142,212,117,21,1]`; exact PRS and rational Sturm both reject real-rootedness,
+with square-free degree 6 and exactly 4 real roots. The same tree fails for
+k=3. Private research issue #39 records the graph and reproducibility details.
+Full verification: 283 unit tests, 12 integration tests, 3 doctests pass;
+targeted rustfmt and `git diff --check` pass. The scan driver remains ignored.
+No public push, broader search, or worker launch was performed.
+
 ## Completed: induced P4 predicate and unit-interval enumeration — 2026-09-30
 
 `Graph::induced_p4_witness` returns a deterministic four-vertex certificate in

@@ -11,6 +11,7 @@ builds on it, followed by `sym-poly-multipoly`, `sym-poly-sym`, and
 | --- | --- |
 | Shapes and words | `Partition`, `Composition`, `WeakComposition`, permutations, set partitions |
 | Graphs | `Graph` generators, union/join operations, predicates, matchings, independence, graph6 |
+| Connected-subgraph packings | `graph_packings::connected_subgraph_packing_polynomial`: exact BigInt coefficients by piece count, non-induced pieces bounded by edge count; at most 20 vertices and 1,000,000 candidate pieces |
 | Posets | `Poset`, linear extensions, map counts, order-polytope Ehrhart and h* |
 | Exact algebra | `SparseMatrix<BigInt>`, Smith normal form, chain complexes and homology |
 | Polynomial models | GT/Kogan-face key polynomials and Ehrhart interpolation |
