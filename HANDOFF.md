@@ -1,5 +1,21 @@
 # Handoff
 
+## Completed: rectangular-grid packing check — 2026-09-30
+
+Host `/root` completed and releases only this handoff and the ignored consumer
+`experiments/src/bin/connected_subgraph_packings.rs` for the requested grid
+check. Reuse `Graph::grid` and the canonical packing generator at `455c5ad`;
+no maintained mathematical source changes. Scan rectangles with at most
+20 vertices for k=2,3. Exact polytool Rust APIs replace unavailable MCP
+adapters; private research Markdown records evidence. No public push or
+worker launch; previous ownership is released and checkout starts clean.
+All 35 rectangles up to transposition with 1<=rows<=cols and rows*cols<=20
+pass for each of k=2 and k=3. The default exact PRS and rational Sturm tests
+agree on all 70 cases. Bounds: 1x1..20, 2x2..10, 3x3..6, 4x4..5. This is
+finite evidence only, not a proof for arbitrary rectangles. The ignored
+consumer accepts `<k> grids`; no mathematical library code changed.
+Release build, targeted rustfmt, and diff checks pass. No public push.
+
 ## Completed: bounded connected-subgraph packing check — 2026-09-30
 
 Host `/root` completed and releases this handoff, `combinatoric-core/src/lib.rs`, new
