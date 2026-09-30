@@ -1,5 +1,37 @@
 # Handoff
 
+## Completed: induced P4 predicate and unit-interval enumeration — 2026-09-30
+
+`Graph::induced_p4_witness` returns a deterministic four-vertex certificate in
+path order, and `Graph::is_p4_free` recognizes cographs in `O(n^4)` time and
+constant auxiliary space.  Tests cover positive and negative graph families,
+relabeling, union/join closure, and natural unit interval examples.
+
+An ignored task-local `experiments/src/bin/uig_cograph_enumeration.rs` scanned
+all Catalan area sequences through length 12 using the existing streaming
+generator.  The P4-free counts for `n=0..12` are
+
+```text
+1, 1, 2, 5, 13, 33, 82, 202, 497, 1224, 3017, 7439, 18343
+```
+
+and the connected counts are
+
+```text
+0, 1, 1, 2, 4, 7, 11, 16, 22, 29, 37, 46, 56.
+```
+
+For `n>=1`, the latter are A152947, `1 + binomial(n-1,2)`.  The classification
+and proof are in symmetricfunctions.com commit `5cb596c`, which also derives
+the all-case generating function `(1-x)^3/(1-4x+5x^2-3x^3)`.
+
+The focused tests and full `combinatoric-core` suite pass: 280 unit tests, 12
+integration tests, and 2 doctests.  Formatting and `git diff --check` pass.
+Strict package Clippy remains blocked by 38 pre-existing diagnostics; none is
+in the new predicate or tests.  The ignored experiment is not part of this
+checkpoint.  Ownership is released, and the existing no-push boundary remains
+in force.
+
 ## Completed: square-graph W/forgotten expansions — 2026-09-25
 
 `square_partition_graph_symmetric(&lambda, n)` implements Section 2.3's

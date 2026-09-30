@@ -1518,6 +1518,77 @@ impl Graph {
         self.bipartition().is_some()
     }
 
+    /// Find four vertices that induce a path, returned in path order.
+    ///
+    /// The search considers four-element vertex sets lexicographically.  For a
+    /// fixed set, the smaller of the two path endpoints comes first, so the
+    /// returned certificate is deterministic.  This takes `O(n^4)` time and
+    /// `O(1)` auxiliary space.
+    pub fn induced_p4_witness(&self) -> Option<[usize; 4]> {
+        for a in 0..self.n {
+            for b in (a + 1)..self.n {
+                for c in (b + 1)..self.n {
+                    for d in (c + 1)..self.n {
+                        let vertices = [a, b, c, d];
+                        let mut degrees = [0_u8; 4];
+                        let mut edge_count = 0_u8;
+
+                        for i in 0..4 {
+                            for j in (i + 1)..4 {
+                                if self.has_edge(vertices[i], vertices[j]) {
+                                    degrees[i] += 1;
+                                    degrees[j] += 1;
+                                    edge_count += 1;
+                                }
+                            }
+                        }
+
+                        let mut sorted_degrees = degrees;
+                        sorted_degrees.sort_unstable();
+                        if edge_count != 3 || sorted_degrees != [1, 1, 2, 2] {
+                            continue;
+                        }
+
+                        let first = degrees
+                            .iter()
+                            .position(|&degree| degree == 1)
+                            .expect("an induced P4 has two endpoints");
+                        let second = (0..4)
+                            .find(|&i| i != first && self.has_edge(vertices[first], vertices[i]))
+                            .expect("an induced P4 endpoint has one neighbor");
+                        let third = (0..4)
+                            .find(|&i| {
+                                i != first
+                                    && i != second
+                                    && self.has_edge(vertices[second], vertices[i])
+                            })
+                            .expect("the second induced P4 vertex has another neighbor");
+                        let fourth = (0..4)
+                            .find(|&i| {
+                                i != second
+                                    && i != third
+                                    && self.has_edge(vertices[third], vertices[i])
+                            })
+                            .expect("the third induced P4 vertex has another neighbor");
+
+                        return Some([
+                            vertices[first],
+                            vertices[second],
+                            vertices[third],
+                            vertices[fourth],
+                        ]);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Is the graph induced-`P4`-free (equivalently, a cograph)?
+    pub fn is_p4_free(&self) -> bool {
+        self.induced_p4_witness().is_none()
+    }
+
     /// Is the graph claw-free (K_{1,3}-free)?
     ///
     /// A graph is claw-free iff no vertex has three mutually non-adjacent
@@ -3301,6 +3372,58 @@ mod tests {
         assert!(!Graph::complete(3).is_bipartite()); // K3 has odd cycle
         assert!(Graph::cycle(4).is_bipartite()); // even cycle
         assert!(!Graph::cycle(5).is_bipartite()); // odd cycle
+    }
+
+    #[test]
+    fn test_induced_p4_witness() {
+        assert_eq!(Graph::path(4).induced_p4_witness(), Some([0, 1, 2, 3]));
+        assert_eq!(Graph::path(5).induced_p4_witness(), Some([0, 1, 2, 3]));
+
+        let relabeled_path = Graph::new(4, &[(3, 1), (1, 0), (0, 2)]);
+        assert_eq!(relabeled_path.induced_p4_witness(), Some([2, 0, 1, 3]));
+
+        let path_with_isolate = Graph::new(5, &[(0, 1), (1, 2), (2, 3)]);
+        assert_eq!(path_with_isolate.induced_p4_witness(), Some([0, 1, 2, 3]));
+    }
+
+    #[test]
+    fn test_p4_free_predicate() {
+        for graph in [
+            Graph::empty(0),
+            Graph::empty(4),
+            Graph::complete(5),
+            Graph::cycle(4),
+            Graph::star(4),
+            Graph::new(4, &[(0, 1), (0, 2), (1, 2), (2, 3)]),
+        ] {
+            assert!(graph.is_p4_free());
+        }
+
+        for graph in [Graph::path(4), Graph::path(6), Graph::cycle(5)] {
+            assert!(!graph.is_p4_free());
+        }
+
+        let union = Graph::complete(3).disjoint_union(&Graph::star(3));
+        assert!(union.is_p4_free());
+        assert!(Graph::complete(2).join(&union).is_p4_free());
+    }
+
+    #[test]
+    fn test_p4_free_unit_interval_graphs() {
+        let path = Graph::unit_interval(&[0, 1, 1, 1]);
+        assert_eq!(path.induced_p4_witness(), Some([0, 1, 2, 3]));
+
+        for area in [
+            &[][..],
+            &[0],
+            &[0, 0, 0, 0],
+            &[0, 1, 1, 0],
+            &[0, 1, 2, 1],
+            &[0, 1, 2, 2],
+            &[0, 1, 2, 3],
+        ] {
+            assert!(Graph::unit_interval(area).is_p4_free(), "area = {area:?}");
+        }
     }
 
     #[test]
