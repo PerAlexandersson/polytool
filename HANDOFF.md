@@ -1,5 +1,22 @@
 # Handoff
 
+## Completed bounded fit: ladder recurrences — 2026-09-30
+
+Host `/root` completed and releases this handoff and ignored
+`experiments/src/bin/connected_subgraph_packings.rs`. User explicitly rejected
+building a transfer model and requested existing polytool recurrence fitting
+from the polynomial rows. No transfer implementation or mathematical library
+change is authorized. Reuse current ladder rows through n=10; hold out the
+last row and distinguish a fitted relation from proof. No public push.
+Polytool fits an order-6, coefficient-degree-4 recurrence for k=2 using
+P_0..P_9, and P_10 passes the exact held-out identity. For k=3 no fit passes
+the same held-out check within order<=7 and coefficient degree<=order.
+Training only on P_0..P_8 does not return a held-out-valid k=2 candidate in
+that box either; the result is not certified unique or proved for all n.
+Research #39 / RECURRENCES.md records the formula, initial rows and scope.
+No transfer code or maintained mathematical source was changed. Release
+consumer build, targeted formatting and diff checks pass.
+
 ## Completed: rectangular-grid packing check — 2026-09-30
 
 Host `/root` completed and releases only this handoff and the ignored consumer
