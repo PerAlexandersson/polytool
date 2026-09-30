@@ -113,6 +113,48 @@ impl Poset {
         Poset::new(n, &[])
     }
 
+    /// Dominance poset of a permutation in one-line notation.
+    ///
+    /// `perm` must be a permutation of `1..=n`, as in the shared permutation
+    /// utilities. The poset vertices are the **zero-based positions** `0..n`:
+    /// `i <_P j` precisely when `i < j` and `perm[i] < perm[j]`.
+    /// The result is naturally labeled and stored as a Hasse diagram, with
+    /// transitive edges removed. The empty permutation gives the empty poset.
+    /// Its height is the longest increasing subsequence length of `perm`.
+    ///
+    /// Construction takes `O(n^3)` time and `O(n^2)` space in the worst case,
+    /// including the shared transitive-reduction routine. This constructor
+    /// does not enumerate linear extensions.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an entry is repeated or lies outside `1..=perm.len()`.
+    /// In particular, zero-based permutation values must be shifted first.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use combinatoric_core::poset::Poset;
+    ///
+    /// let p = Poset::from_permutation(&[1, 3, 2, 4]);
+    /// assert_eq!(p.covers(), &[(0, 1), (0, 2), (1, 3), (2, 3)]);
+    /// assert_eq!(p.p_eulerian_polynomial(), vec![1, 1]);
+    /// assert!(p.is_naturally_labeled());
+    /// ```
+    pub fn from_permutation(perm: &[usize]) -> Self {
+        crate::permutation::assert_one_indexed_permutation(perm);
+        let n = perm.len();
+        let mut relations = Vec::new();
+        for i in 0..n {
+            for j in i + 1..n {
+                if perm[i] < perm[j] {
+                    relations.push((i, j));
+                }
+            }
+        }
+        Self::new(n, &relations).to_hasse_diagram()
+    }
+
     /// Fence (zigzag) poset: 0 < 1 > 2 < 3 > 4 < ...
     ///
     /// Covers: (0,1), (2,1), (2,3), (4,3), (4,5), ...
@@ -1437,6 +1479,85 @@ fn binomial_big(n: usize, k: usize) -> BigInt {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn permutation_poset_boundary_and_monotone() {
+        assert_eq!(Poset::from_permutation(&[]), Poset::antichain(0));
+        assert_eq!(Poset::from_permutation(&[1]), Poset::chain(1));
+        assert_eq!(Poset::from_permutation(&[1, 2, 3, 4]), Poset::chain(4));
+        assert_eq!(Poset::from_permutation(&[4, 3, 2, 1]), Poset::antichain(4));
+    }
+
+    #[test]
+    fn permutation_poset_descent_examples() {
+        let diamond = Poset::from_permutation(&[1, 3, 2, 4]);
+        assert_eq!(diamond.covers(), &[(0, 1), (0, 2), (1, 3), (2, 3)]);
+        assert_eq!(
+            diamond.linear_extensions(),
+            vec![vec![0, 1, 2, 3], vec![0, 2, 1, 3]]
+        );
+        assert_eq!(diamond.p_eulerian_polynomial(), vec![1, 1]);
+        let paired = Poset::from_permutation(&[2, 1, 4, 3]);
+        assert_eq!(paired.p_eulerian_polynomial(), vec![1, 2, 1]);
+        assert_eq!(paired.order_polytope_hstar(), vec![1, 2, 1]);
+    }
+
+    #[test]
+    fn permutation_poset_rejects_invalid_values() {
+        for invalid in [
+            vec![0],
+            vec![2],
+            vec![1, 1],
+            vec![0, 1],
+            vec![1, 3],
+            vec![usize::MAX],
+        ] {
+            assert!(std::panic::catch_unwind(|| Poset::from_permutation(&invalid)).is_err());
+        }
+    }
+
+    #[test]
+    fn permutation_poset_exhaustive_dominance_and_covers() {
+        use crate::permutation::all_permutations_one_indexed;
+        // Independent interval-emptiness oracle for covers, then compare the
+        // computed transitive closure with the defining dominance relation.
+        for n in 0..=7 {
+            for perm in all_permutations_one_indexed(n) {
+                let p = Poset::from_permutation(&perm);
+                assert_eq!(p.num_elements(), n);
+                assert!(p.is_naturally_labeled());
+                let mut expected = Vec::new();
+                for i in 0..n {
+                    for j in i + 1..n {
+                        if perm[i] < perm[j]
+                            && !(i + 1..j).any(|k| perm[i] < perm[k] && perm[k] < perm[j])
+                        {
+                            expected.push((i, j));
+                        }
+                    }
+                }
+                assert_eq!(p.covers(), expected, "perm={perm:?}");
+                let reach = p.reachability_matrix();
+                for i in 0..n {
+                    for j in 0..n {
+                        assert_eq!(reach[i][j], i < j && perm[i] < perm[j], "perm={perm:?}");
+                    }
+                }
+                let mut lis = vec![1; n];
+                for j in 0..n {
+                    for i in 0..j {
+                        if perm[i] < perm[j] {
+                            lis[j] = lis[j].max(lis[i] + 1);
+                        }
+                    }
+                }
+                assert_eq!(
+                    p.chain_polynomial().len() - 1,
+                    lis.into_iter().max().unwrap_or(0)
+                );
+            }
+        }
+    }
 
     // -- Linear extension tests (Mathematica-verified) --
 

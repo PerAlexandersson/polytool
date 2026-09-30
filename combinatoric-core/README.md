@@ -12,7 +12,7 @@ builds on it, followed by `sym-poly-multipoly`, `sym-poly-sym`, and
 | Shapes and words | `Partition`, `Composition`, `WeakComposition`, permutations, set partitions |
 | Graphs | `Graph` generators, union/join operations, predicates, matchings, independence, graph6 |
 | Connected-subgraph packings | `graph_packings::connected_subgraph_packing_polynomial`: exact BigInt coefficients by piece count, non-induced pieces bounded by edge count; at most 20 vertices and 1,000,000 candidate pieces |
-| Posets | `Poset`, linear extensions, map counts, order-polytope Ehrhart and h* |
+| Posets | `Poset`, `Poset::from_permutation`, Young shapes, linear extensions, map counts, order-polytope Ehrhart and h* |
 | Exact algebra | `SparseMatrix<BigInt>`, Smith normal form, chain complexes and homology |
 | Polynomial models | GT/Kogan-face key polynomials and Ehrhart interpolation |
 | Meanders | Noncrossing matchings and rooted meandric permutations |
@@ -50,6 +50,14 @@ assert_eq!(diamond.order_polytope_hstar(), vec![1, 1]);
 
 Run the crate's focused checks with `cargo test -p combinatoric-core` (the
 workspace guide supplies the timeout/nice wrapper for resource-sensitive runs).
+
+`Poset::from_permutation(&[2, 1, 4, 3])` constructs the dominance order
+`i <_P j` iff `i < j` and `perm[i] < perm[j]`, with redundant edges
+removed. Permutation **values are one-indexed** (`1..=n`); poset vertices
+are zero-indexed positions. Invalid permutations panic; empty input is valid.
+Run `cargo run -p combinatoric-core --example permutation_poset` for a
+checked P-Eulerian/height example. The constructor reuses the shared
+permutation validator and Hasse reduction, without enumerating extensions.
 
 The `colored_exchange` module validates finite families of words with fixed
 color quotas. Its exchange checker returns a cycle witness or a specific

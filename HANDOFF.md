@@ -1,5 +1,41 @@
 # Handoff
 
+## Completed: public permutation-poset constructor — 2026-09-30
+
+The 3-Matroids Dependent-order worker completed and releases only
+`combinatoric-core/src/poset.rs`, its README, the new checked
+`combinatoric-core/examples/permutation_poset.rs`, library/promotion guide
+rows, this handoff, and four existing ignored permutation-poset helper
+bodies. User explicitly authorized this narrow shared-library promotion.
+The checkout was clean; supervisor report shows no live Rust worker.
+Use the existing one-indexed permutation validator and Hasse reduction;
+zero-based poset vertices are permutation positions. No push.
+
+`Poset::from_permutation(&[usize])` is public in `combinatoric_core::poset`.
+It accepts a permutation of 1..=n (including empty), validates with the
+existing helper, and returns the reduced dominance order on positions 0..n.
+All 5914 permutations of sizes 0..=7 pass independent cover-interval,
+dominance-reachability and LIS/height checks. Empty/monotone, invalid-input,
+diamond and paired-block polynomial fixtures also pass. Full core suite:
+287 unit tests, 12 integration tests, 4 doctests; checked example and
+strict Rustdoc pass, as do targeted rustfmt and diff checks.
+
+Exact commands (with `CARGO_TARGET_DIR=/cargo-target/ai-projects` and `nice -n 10`):
+
+```bash
+cargo test -p combinatoric-core permutation_poset
+cargo test -p combinatoric-core
+cargo run -p combinatoric-core --example permutation_poset
+cargo check --manifest-path experiments/Cargo.toml --bin stembridge_hstar --bin stembridge_maxim --bin stembridge_delete --bin permutation_poset_w_eulerian
+RUSTDOCFLAGS='-D warnings' cargo doc -p combinatoric-core --no-deps
+```
+
+The four ignored consumers now delegate to the public constructor via a
+lossless u8-to-usize conversion; all compile. Their ignored files remain
+untracked, per policy, while the maintained API/example are committed.
+The pre-existing unused `perm` warning in stembridge_hstar is unchanged.
+No mathematical search, dependency update, or unrelated source edit.
+
 ## Completed bounded fit: ladder recurrences — 2026-09-30
 
 Host `/root` completed and releases this handoff and ignored

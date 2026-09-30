@@ -9,6 +9,7 @@ or examples.
 | Task | Start with | Public entry points / checked examples |
 | --- | --- | --- |
 | Partitions, compositions, graphs, posets, permutations, integral linear algebra | `combinatoric-core` | `Partition`, `Composition`, `Graph`, `Poset`, `smith_normal_form`; `combinatoric-core/examples/optimist_sorting.rs` |
+| Permutation dominance posets and their P-Eulerian polynomials | `combinatoric-core` | `Poset::from_permutation(&[usize])`: one-indexed permutation values, zero-indexed positions, reduced Hasse diagram; `Poset::p_eulerian_polynomial`; checked `examples/permutation_poset.rs` |
 | Vertex-disjoint connected edge-subgraph packings | `combinatoric-core` | `graph_packings::connected_subgraph_packing_polynomial`: BigInt coefficients by piece count, edge cap per piece, non-induced multiplicities, explicit resource limits; checked rustdoc example |
 | Fixed-content colored families, symmetric cycle exchange, weighted marginals, decomposition certificates | `combinatoric-core` | `colored_exchange`; `combinatoric-core/examples/colored_exchange.rs` |
 | Shared tableaux, SSAFs, exact finite-field/rational-function tools, formal sums | `sym-poly-core` | `Tableau`, `SkewTableau`, `Ssaf`, `FormalSum`, `TransitionCache`; `sym-poly/core/examples/hamel_goulden_site_example.rs` |

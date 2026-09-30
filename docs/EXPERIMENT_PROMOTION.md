@@ -14,6 +14,7 @@ same checkpoint.
 
 | Priority | Status | Candidate | Proposed owner | Required before promotion |
 |---|---|---|---|---|
+| P2 | promoted | Private permutation-poset helpers in local Stembridge experiments | `combinatoric_core::Poset::from_permutation` | One-indexed validation, zero-indexed positions, shared Hasse reduction, exhaustive dominance/cover/LIS checks through n=7, empty/invalid cases and checked example. Exploratory drivers remain ignored. |
 | P2 | promoted | Connected-subgraph packing generator; local scan remains in `connected_subgraph_packings.rs` | `combinatoric_core::graph_packings` | BigInt API with per-piece edge cap, vertex/candidate limits, independent edge-subset oracle through four vertices, matching specialization, and checked rustdoc example. |
 | P1 | audit | Tracked `experiments/src/matroids.rs`: `BasisMatroid`, `PrefixLpm`, transversal and contingency routines | `combinatoric-core::matroid`, with a possible `matroid::contingency` submodule | Decide whether construction validates basis exchange or exposes an explicitly unchecked type; document labels and exhaustive costs; retain independent tests. |
 | P1 | audit, local-only | `derangement_fixed_point_slices.rs`: fixed-point/descent bivariate recurrence | `polytool::sequences::permutation_statistics` | Fix and test the index-zero convention; use `BigInt`; preserve a small brute-force permutation oracle. |
