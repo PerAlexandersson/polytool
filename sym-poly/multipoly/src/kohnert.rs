@@ -360,7 +360,7 @@ pub fn lascoux_polynomial<C: Ring>(
     Ok(MultiPoly::from_terms(num_vars, terms))
 }
 
-fn kohnert_polynomial_with_num_vars<C: Ring>(
+pub(crate) fn kohnert_polynomial_with_num_vars<C: Ring>(
     initial: &Diagram,
     max_diagrams: usize,
     num_vars: usize,
