@@ -8,7 +8,8 @@ use sym_poly_multipoly::{
 type Q = Ratio<i64>;
 
 fn main() {
-    let lock: MultiPoly<i64> = lock_polynomial(&[2, 0]);
+    // Assaf--Searles lock with one nonzero row (row 2): the key polynomial kappa_(0,2).
+    let lock: MultiPoly<i64> = lock_polynomial(&[0, 2]);
     assert_eq!(lock.coefficient(&[2, 0]), 1);
     assert_eq!(lock.coefficient(&[1, 1]), 1);
     assert_eq!(lock.coefficient(&[0, 2]), 1);
@@ -26,7 +27,7 @@ fn main() {
         weight.iter().sum::<u32>() == 3 && weight.len() == q0_operator_side.num_vars()
     }));
 
-    println!("lock_(2,0) = {lock}");
+    println!("lock_(0,2) = {lock}");
     println!(
         "permuted-basement Macdonald example has {} terms",
         permuted.terms().len()
