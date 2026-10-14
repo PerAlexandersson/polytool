@@ -191,8 +191,12 @@ mod tests {
     }
 
     #[test]
-    fn increasing_patterns_of_lengths_four_and_five_match_direct_avoidance() {
-        for pattern in [&[1, 2, 3, 4][..], &[1, 2, 3, 4, 5][..]] {
+    fn increasing_patterns_of_lengths_four_through_six_match_direct_avoidance() {
+        for pattern in [
+            &[1, 2, 3, 4][..],
+            &[1, 2, 3, 4, 5][..],
+            &[1, 2, 3, 4, 5, 6][..],
+        ] {
             let descents = increasing_pattern_avoiding_descent_polynomials(8, pattern.len());
             let peaks = increasing_pattern_avoiding_peak_polynomials(8, pattern.len());
             for n in 0..=8 {
