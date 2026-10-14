@@ -191,18 +191,14 @@ mod tests {
     }
 
     #[test]
-    fn increasing_pattern_length_four_matches_direct_avoidance() {
-        let descents = increasing_pattern_avoiding_descent_polynomials(8, 4);
-        let peaks = increasing_pattern_avoiding_peak_polynomials(8, 4);
-        for n in 0..=8 {
-            assert_eq!(
-                descents[n],
-                brute_polynomial(n as u8, &[1, 2, 3, 4], Stat::Des)
-            );
-            assert_eq!(
-                peaks[n],
-                brute_polynomial(n as u8, &[1, 2, 3, 4], Stat::Peak)
-            );
+    fn increasing_patterns_of_lengths_four_and_five_match_direct_avoidance() {
+        for pattern in [&[1, 2, 3, 4][..], &[1, 2, 3, 4, 5][..]] {
+            let descents = increasing_pattern_avoiding_descent_polynomials(8, pattern.len());
+            let peaks = increasing_pattern_avoiding_peak_polynomials(8, pattern.len());
+            for n in 0..=8 {
+                assert_eq!(descents[n], brute_polynomial(n as u8, pattern, Stat::Des));
+                assert_eq!(peaks[n], brute_polynomial(n as u8, pattern, Stat::Peak));
+            }
         }
     }
 
