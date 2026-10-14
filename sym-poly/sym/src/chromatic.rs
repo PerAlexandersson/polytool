@@ -1018,6 +1018,13 @@ mod tests {
     }
 
     #[test]
+    fn test_claw_free_schur_counterexample() {
+        let graph = Graph::claw_free_schur_counterexample();
+        let schur = chromatic_symmetric::<i64>(&graph).to_schur_basis();
+        assert_eq!(schur.coefficient(&Partition::new(vec![3, 3, 3, 3])), -64);
+    }
+
+    #[test]
     fn test_empty_graph_chromatic() {
         // Empty graph on 3: all 3^3 = 27 colorings are proper (k=3 colors).
         // X(1,1,1) = chi(3) = 27.

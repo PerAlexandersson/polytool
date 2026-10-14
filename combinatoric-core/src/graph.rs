@@ -1265,6 +1265,44 @@ impl Graph {
         Self::complete(n).line_graph()
     }
 
+    /// The 12-vertex claw-free graph that disproves Schur positivity of
+    /// chromatic symmetric functions for claw-free graphs.
+    ///
+    /// This is the line graph of the graph obtained from a four-cycle by
+    /// attaching triangles at two opposite vertices and pendant edges at the
+    /// other two.  The labels agree with graph6 code ``K?`CRAWWUXIM`` from
+    /// J. Prajapati, *A counterexample to the claw-free Schur-positivity
+    /// conjecture*, arXiv:2607.26364.
+    pub fn claw_free_schur_counterexample() -> Self {
+        Graph::new(
+            12,
+            &[
+                (0, 4),
+                (1, 5),
+                (0, 6),
+                (4, 6),
+                (1, 7),
+                (2, 7),
+                (0, 8),
+                (3, 8),
+                (4, 8),
+                (1, 9),
+                (2, 9),
+                (7, 9),
+                (0, 10),
+                (1, 10),
+                (4, 10),
+                (5, 10),
+                (8, 10),
+                (1, 11),
+                (3, 11),
+                (7, 11),
+                (8, 11),
+                (9, 11),
+            ],
+        )
+    }
+
     /// Whether this graph is the line graph of a simple undirected graph.
     ///
     /// This uses Krausz's characterization: the edges can be partitioned into
@@ -3201,6 +3239,17 @@ mod tests {
         assert_eq!(triangular, Graph::complete(5).line_graph());
         assert!(triangular.is_claw_free());
         assert!(!triangular.is_chordal());
+    }
+
+    #[test]
+    fn test_claw_free_schur_counterexample() {
+        let graph = Graph::claw_free_schur_counterexample();
+        assert_eq!(graph.num_vertices(), 12);
+        assert_eq!(graph.num_edges(), 22);
+        assert!(graph.is_connected());
+        assert!(graph.is_claw_free());
+        assert!(graph.is_line_graph());
+        assert_eq!(graph, Graph::from_graph6("K?`CRAWWUXIM").unwrap());
     }
 
     #[test]

@@ -1,5 +1,35 @@
 # Handoff
 
+## Completed: claw-free Schur counterexample fixture — 2026-10-14
+
+`/root` completed and releases `combinatoric-core/src/graph.rs`,
+`combinatoric-core/README.md`, `sym-poly/sym/src/chromatic.rs`, and this
+handoff.  `Graph::claw_free_schur_counterexample()` is the 12-vertex,
+22-edge graph6 graph ``K?`CRAWWUXIM`` from J. Prajapati,
+*A counterexample to the claw-free Schur-positivity conjecture*,
+arXiv:2607.26364.  Core regressions check its graph6 identity, connectedness,
+claw-freeness, and line-graph property.  The symmetric-function regression
+checks `[s_(3,3,3,3)]X_G=-64` exactly.  The public constructor is documented
+in the core README.
+
+The shared checkout was clean at `4349e40` before these edits.  Full checks
+pass: 288 core unit tests, 12 core integration tests, 4 core doctests; 137
+sym unit tests, 100 sym integration tests with 3 benchmark tests ignored, and
+2 sym doctests.  Strict Rustdoc for both crates, workspace rustfmt, and diff
+checks also pass.  Exact commands used `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo fmt --all --check
+cargo test -p combinatoric-core
+cargo test -p sym-poly-sym
+RUSTDOCFLAGS='-D warnings' cargo doc -p combinatoric-core -p sym-poly-sym --no-deps
+git diff --check
+```
+
+No dependencies or unrelated APIs changed.  The focused checkpoint is local
+to the existing branch; no push was made, preserving the standing no-push
+boundary.
+
 ## Completed: public permutation-poset constructor — 2026-09-30
 
 The 3-Matroids Dependent-order worker completed and releases only

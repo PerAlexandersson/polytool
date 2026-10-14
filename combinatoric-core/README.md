@@ -34,7 +34,17 @@ let k4 = Graph::complete(4);
 assert_eq!(k4.num_vertices(), 4);
 assert_eq!(k4.num_edges(), 6);
 assert_eq!(k4.matching_polynomial(), vec![1, 6, 3]);
+
+let counterexample = Graph::claw_free_schur_counterexample();
+assert_eq!(counterexample.num_vertices(), 12);
+assert!(counterexample.is_claw_free());
 ```
+
+`Graph::claw_free_schur_counterexample` is the graph6 graph
+``K?`CRAWWUXIM`` from J. Prajapati's counterexample to Schur positivity of
+chromatic symmetric functions for claw-free graphs.  Its structural fixture
+and exact Schur coefficient `-64` are regression-tested in the core and
+`sym-poly-sym` crates.
 
 The poset module tests the diamond throughout its map-count and order-polytope
 APIs:
