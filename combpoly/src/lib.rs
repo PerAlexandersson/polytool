@@ -4,6 +4,7 @@ pub mod catalan;
 pub mod cayley;
 pub mod fixed_descent;
 pub mod lattice_path_matroid;
+pub mod monotone_pattern;
 pub mod order;
 pub mod parity_pattern;
 pub mod parking;

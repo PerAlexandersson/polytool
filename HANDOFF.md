@@ -1,5 +1,27 @@
 # Handoff
 
+## Completed: monotone-pattern descent/peak recurrence — 2026-10-14
+
+Host `/root` completed and releases `combpoly/src/monotone_pattern.rs`,
+`combpoly/src/lib.rs`, `combpoly/README.md`, the checked
+`combpoly/examples/increasing_pattern_avoidance.rs`, `docs/LIBRARY_GUIDE.md`,
+and this handoff.  The new arbitrary-precision APIs generate descent and
+ordinary peak polynomials on permutations avoiding `12...m` by an exact RSK
+recording-tableau recurrence.  The shape has first-row length at most `m-1`;
+the implementation's initial at-most-rows orientation was rejected by the
+independent coefficient test and corrected before checkpointing.
+
+For `m=4`, both families agree coefficient-for-coefficient with direct
+`Av(1234)` enumeration through `n=8`, and descent-row sums reproduce the known
+counts through `n=10`.  Exact polytool checks find real-rootedness and directed
+weak adjacent interlacing through `n=30` for both statistics.  A scan through
+`n=60` was stopped after one minute because exact root certification was slow;
+generation itself was immediate and no failure was found.  The complete
+combpoly suite passes (205 library tests, 2 binary tests, and doctests), as do
+the checked example, strict Rustdoc, workspace rustfmt, and diff checks.
+Research-only scan and `1342` skew-block drivers remain ignored.  No other
+maintained source was changed and the existing no-push boundary remains.
+
 ## Completed: claw-free Schur counterexample fixture — 2026-10-14
 
 `/root` completed and releases `combinatoric-core/src/graph.rs`,

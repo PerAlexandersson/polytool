@@ -14,6 +14,21 @@ cargo build --release
 
 The binary is at `target/release/combpoly`.
 
+## Increasing-pattern avoidance
+
+The library functions
+`increasing_pattern_avoiding_descent_polynomials(max_n, m)` and
+`increasing_pattern_avoiding_peak_polynomials(max_n, m)` in the
+`monotone_pattern` module generate exact statistic polynomials for
+permutations avoiding `12...m`.  They use an RSK recording-tableau recurrence,
+so `m = 4` gives the descent and ordinary peak polynomials on `Av(1234)`
+without enumerating its permutations.  Coefficients are arbitrary-precision
+and returned in ascending degree for every size `0..=max_n`.
+
+```bash
+cargo run -p combpoly --example increasing_pattern_avoidance -- 12 4
+```
+
 ## Library API
 
 The maintained library exposes the same combinatorial building blocks used by
