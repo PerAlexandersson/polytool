@@ -1,10 +1,10 @@
 //! Descent and peak polynomials for permutations avoiding an increasing pattern.
 //!
 //! The generators use the Robinson--Schensted correspondence rather than
-//! enumerating permutations.  Avoiding `12...m` is equivalent to the RSK shape
-//! having at most `m - 1` rows.  The descent set of a permutation is the descent
-//! set of its recording tableau, so adjoining the next largest tableau entry
-//! gives a finite-state recurrence.
+//! enumerating permutations.  Avoiding `12...m` is equivalent to the first row
+//! of the RSK shape having length at most `m - 1`.  The descent set of a
+//! permutation is the descent set of its recording tableau, so adjoining the
+//! next largest tableau entry gives a finite-state recurrence.
 
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
