@@ -1,30 +1,63 @@
 # Handoff
 
-## Active: explicit ordinary bounce lift — 2026-10-15
+## Completed: recursive ordinary marked-coloring/HRV bijection — 2026-10-15
 
-`/root` owns only `experiments/src/bin/marked_coloring_hrv_bijection.rs`
-and this handoff on branch
-`exp/verticalstripllt-marked-coloring-bijection`.  The current checkpoint is
-`675b791`.  The task is to replace the prototype's exact-bucket bounce
-fallback with reversible first-/second-bounce maps while retaining labelled
-HRV fibre fillings.  No maintained Rust API, Lean source, paper source, or
-circular code is owned.  Build output remains under
-`/cargo-target/ai-projects`; the shared Rust checkout is untouched.
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on the
+isolated branch `exp/verticalstripllt-marked-coloring-bijection`.  Checkpoints
+`775bad7` and `0355ab0` replace the original whole-path bounce fallback.  No
+maintained Rust API, Lean source, paper source, circular code, or external
+action is owned.  The shared Rust checkout and its pre-existing branch remain
+untouched; no push was made, preserving the recorded no-push boundary.
 
-The single-bounce NN and DN cases are now explicit in the owned prototype.
-They port the paper's coloring involutions and Lean's `bounceMatch` /
-`secondMatch` orientation correspondences, with their explicit inverses.
-Labelled columns are transported by the proved identity-or-adjacent-swap HRV
-conjugacy: each fibre's actual color set is moved and placed increasingly.
-Dedicated K3 and `NDNDEE` second-bounce tests pass.  The full rank-five census
-still passes all 277,302 certificates: 162,160 certificates traverse an
-explicit first bounce, 23,872 traverse an explicit second bounce, and 78,076
-still encounter the residual generalized-bounce fallback.  The next change is
-to replace only that residual fallback by canonical matching at the smaller
-recursion branches, since the published many-bounce derivation uses algebraic
-cancellation and does not provide a local object map.
+The ordinary prototype is now recursive at every node and has no global
+source-to-target fallback.  Single NN and DN bounces port the paper's coloring
+involutions and the explicit `bounceMatch` / `secondMatch` correspondences from
+`BounceMatching.lean` and `SecondBounceMatching.lean`, including their
+inverses.  Actual labelled column colors are transported using the identity or
+adjacent-swap HRV conjugacies proved in `BounceTransport.lean` and
+`SecondBounceTransport.lean`: a fibre's color set is carried across and placed
+in increasing vertex order.  This preserves the ordered packed content, not
+only the fibre-size partition.
 
-## Completed prototype: ordinary marked-coloring/HRV bijection — 2026-10-15
+For generalized NN/DN/ND bounces, the scanner follows `BounceTrace.lean` and
+the three smaller-successor recurrences in `GeneralizedFirstBounce.lean`,
+`GeneralizedSecondBounceReduction.lean`, and
+`GeneralizedThirdBounceReduction.lean`.  The published many-bounce argument is
+an algebraic cancellation proof and supplies no local object map.  The
+prototype therefore uses the requested alternate rule: canonical rank
+matching inside exact `(ordered content, q-degree)` buckets only between the
+parent and its smaller recursion-branch objects, recurses on the chosen child,
+then uses an independent target-side branch matching.  Branch kind, q-offset,
+rank, and inverse replay are recorded in the trace.  An unsupported bounce is
+now an error rather than a silent whole-path match.
+
+Independent enumerators again verify source/target validity, exact colors and
+degree, injectivity, surjectivity, and inverse trace replay through rank five:
+258 ordinary decorated paths, 9,271 exact buckets, and 277,302 certificates.
+Residual unsupported/global-fallback count is zero.  Across certificates,
+175,432 traverse an explicit first bounce, 29,476 an explicit second bounce,
+and 78,076 a generalized recursion-branch match (categories can overlap).
+Dedicated traces/tests cover K3, the second-bounce path `NDNDEE`, and the third
+bounce path `NNDDEE`.  The exact K3 obstruction to `eta = A` remains: for
+content `[1,1,1]`, degree two, and orientation ascents `{12,13}`, there are two
+sources but three targets.
+
+Checks pass with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --locked --manifest-path experiments/Cargo.toml --bin marked_coloring_hrv_bijection
+cargo build --locked --manifest-path experiments/Cargo.toml --bin marked_coloring_hrv_bijection
+/cargo-target/ai-projects/debug/marked_coloring_hrv_bijection --max-n 5
+cargo clippy --locked --manifest-path experiments/Cargo.toml --bin marked_coloring_hrv_bijection -- -D warnings -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
+The single allowed Clippy lint is the pre-existing unrelated
+`principal_stratum.rs` diagnostic documented below; the owned binary is clean.
+
+## Earlier prototype checkpoint (superseded) — 2026-10-15
 
 Checkpoint `bedd1a2` on task-local branch
 `exp/verticalstripllt-marked-coloring-bijection` contains the prototype and
