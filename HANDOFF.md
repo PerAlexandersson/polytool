@@ -4,7 +4,8 @@
 
 `/root` completed and releases
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
-branch `exp/verticalstripllt-marked-coloring-bijection`.  No maintained crate
+branch `exp/verticalstripllt-marked-coloring-bijection`.  Checkpoint `07ab9ff`
+contains the implementation.  No maintained crate
 API, Lean/paper source, circular code, or external action was changed.
 
 The new `--tableau-report` experiment expands `q -> q-1`, orders HRV fibres by
