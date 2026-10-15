@@ -4,7 +4,8 @@
 
 `/root` completed and releases
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
-branch `exp/verticalstripllt-marked-coloring-bijection`.  The actual `J`
+branch `exp/verticalstripllt-marked-coloring-bijection`.  Checkpoint `42daa4f`
+contains the repair.  The actual `J`
 cancellation used by the coloring-to-SSYT map no longer rank-matches arbitrary
 states in an entire `(q-degree, shape)` bucket.  It constructs the bipartite
 graph of opposite-sign skeletons at combined Hamming distance at most five in
