@@ -1,14 +1,13 @@
 # Handoff
 
-## Active: ordinary marked-coloring/HRV bijection prototype — 2026-10-15
+## Completed prototype: ordinary marked-coloring/HRV bijection — 2026-10-15
 
-The VerticalStripLLT marked-coloring prototype worker owns only this handoff,
-the task-local branch `exp/verticalstripllt-marked-coloring-bijection`, and the
-new experiment artifact to be placed under `experiments/src/bin/` (plus a
-narrow `.gitignore` exception if it is retained as a reproducibility artifact).
+Checkpoint `bedd1a2` on task-local branch
+`exp/verticalstripllt-marked-coloring-bijection` contains the prototype and
+releases this handoff, `.gitignore`, and the new experiment artifact.
 The shared checkout and its existing branch remain untouched.  No maintained
 crate API, Lean source, paper source, circular LLT code, or external action is
-owned.  The task is to test a reversible certificate-producing map from an
+owned.  The prototype tests a reversible certificate-producing map from an
 ordinary packed marked coloring to an HRV orientation with increasing fibre
 columns, preserving packed content and marked-ascent degree, beginning through
 rank five.  Build output must use `/cargo-target/ai-projects`.
@@ -54,6 +53,12 @@ cargo check --locked --manifest-path experiments/Cargo.toml --bin marked_colorin
 cargo test --locked --manifest-path experiments/Cargo.toml --bin marked_coloring_hrv_bijection
 cargo run --quiet --locked --manifest-path experiments/Cargo.toml --bin marked_coloring_hrv_bijection -- --max-n 5
 ```
+
+Strict Clippy for the requested binary is clean when allowing the pre-existing
+`clippy::manual_is_multiple_of` finding in the unrelated
+`experiments/src/principal_stratum.rs`; unqualified `-D warnings` stops at that
+existing library diagnostic before checking the binary.  No push was made,
+preserving the Rust workspace's recorded no-push boundary.
 
 ## Completed: monotone-pattern descent/peak recurrence — 2026-10-14
 
