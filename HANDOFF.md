@@ -1,5 +1,56 @@
 # Handoff
 
+## Completed: fixed-HRV Boolean cancellation and residual census — 2026-10-15
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No maintained API,
+Lean/paper source, circular code, or external action changed.  An independent
+Astra review derived the fixed-HRV row factorization and checked the K4
+triangle obstruction; Astra changed no files.
+
+The actual Schur involution now has a proved first stage.  At fixed HRV map
+`r`, retained marks `B`, and tableaux `P,Q`, it scans rows and toggles the first
+unmarked redundant normal edge.  Its critical states have every lower-HRV edge
+marked; forced rows have every tied-HRV edge marked; and each unforced row has
+either every tied edge marked or only its first tied edge present and unmarked.
+The implementation checks the partner has the same `r,B,Q,P`, reverses sign,
+and toggles back.  Exhaustively through rank five, this cancels 142,348 pairs
+and compresses 308,351 skeletons to 13,258 positive plus 10,397 negative
+critical states while preserving every signed `(q-degree,shape)` bucket.
+
+The remaining critical states are still matched deterministically within
+combined `(eta,B)` radius five.  Residual radius one suffices through rank
+three, while radius five is necessary at rank four and sufficient through all
+197 rank-five paths.  A toggle-plus-triangle graph is not yet enough: it fails
+on 8 rank-four and 76 rank-five paths.  The residual census has 10,397 pairs;
+4,857 preserve `Q`, while the rest require dual-equivalence distance 1--4.
+Thus the next conceptual step is a Pieri/tableau-switching rule that transports
+`Q` across an HRV fibre split/merge or triangle surgery.
+
+The earlier “exact-Q K3 obstruction” was really an exact-`(B,Q)` obstruction.
+Allowing `B` to move repairs complete graphs, but literal fixed `Q` is still
+impossible in general.  The first counterexample is path `NNDNEEE`, q-degree
+one, shape `[2,1,1]`, `Q=[1 3]/[2]/[4]`, where the fixed-Q group has one
+positive and two negative critical skeletons.  This is regression-tested.
+
+The two-stage `J` retains the full end-to-end audit: 48,840 packed colorings
+bijection with 48,840 surviving SSYT objects through rank five, with exact
+content and q-degree and replayable forward/inverse certificates.  Transported
+`S_i` pass through rank four (4,023 involutions, 631 distant commutations,
+2,163 braid relations).  Thirteen focused tests pass.  Useful commands:
+
+```bash
+/cargo-target/ai-projects/release/marked_coloring_hrv_bijection \
+  --boolean-report --max-n 5
+/cargo-target/ai-projects/release/marked_coloring_hrv_bijection \
+  --reduced-move-report --max-n 5
+/cargo-target/ai-projects/release/marked_coloring_hrv_bijection \
+  --exact-q-report --path NNDNEEE
+/cargo-target/ai-projects/release/marked_coloring_hrv_bijection \
+  --tableau-report --path NNNEEE --trace-coloring 1,2,1
+```
+
 ## Completed: bounded-radius repair of Schur cancellation — 2026-10-15
 
 `/root` completed and releases
@@ -13,8 +64,8 @@ graph of opposite-sign skeletons at combined Hamming distance at most five in
 `Q` within the same shape but always leaves `P` fixed, so crystal equivariance
 is unchanged.  No maintained API, Lean/paper source, or circular code changed.
 
-The data isolate why weaker repairs cannot work.  Exact `Q` already has a K3
-obstruction: for `B={12}`, `Q=[1 2]/[3]`, the sole state is the negative
+The data isolate why weaker repairs cannot work.  Exact `(B,Q)` already has a
+K3 obstruction: for `B={12}`, `Q=[1 2]/[3]`, the sole state is the negative
 `eta={12,13}`.  Allowing one elementary dual-equivalence move fixes K3 but
 fails first on K4 at `B={12}`, `eta={12,34}`,
 `Q=[1 3]/[2 4]`.  Even arbitrary `Q` of the same shape and every odd
