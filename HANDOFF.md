@@ -13,8 +13,9 @@ The exhaustive report through rank five covers all 277,302 source states.
 Orienting exactly the marked edges gives the exact output HRV map in 175,695
 states, the same sink set in 189,405, and the same fibre-size partition in
 181,559.  Thus none is a direct rule.  Of 6,954 `(path,A)` groups, 3,924 have
-multiple output HRV maps as the coloring varies, so the coloring data are
-essential.  The first failure is K3: coloring `112`, marks `{13,23}` has marked
+multiple output HRV maps as the coloring varies, so a shortcut reproducing
+this recursive map must use the coloring data.  The first failure is K3:
+coloring `112`, marks `{13,23}` has marked
 reachability `1->3,2->3,3->3`, while the bijection gives eta `{12,13}` and HRV
 `1->3,2->2,3->3`; its HRV vertices are 2 and 3.
 
@@ -22,8 +23,8 @@ Keeping the source word fixed is also impossible, independently of the chosen
 prototype matching.  For K4 (`NNNNEEEE`), word `1123` and q-degree 3 give 10
 marked-coloring sources but only 8 HRV orientations on which that same word is
 increasing along every fibre.  Across rank five, 6,244 of 127,284 fixed-word
-buckets fail the count comparison.  Hence any shortcut must use both the
-relative color pattern and the marks and must permit colors to move among
+buckets fail the count comparison.  Hence a direct reversible shortcut cannot
+keep the coloring word fixed: it must permit colors to move among
 vertices/fibres.  The simple greedy increasing-subsequence partition is much
 weaker (exact fibre sets in 32,236 states).
 
