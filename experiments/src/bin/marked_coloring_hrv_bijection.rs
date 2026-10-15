@@ -3,12 +3,12 @@
 //! A source object is a packed strict coloring together with a subset of its
 //! normal ascents.  A target object is an orientation together with a strictly
 //! increasing color column on every highest-reachable-vertex fibre.  The
-//! map follows the positive shifted recursion objectwise through column,
-//! product, and unicellular steps.  At the first bounce seed it uses canonical
-//! rank matching within the exact ordered color-content and q-degree bucket.
-//! Every step has an explicit inverse and a replayable certificate; the bounce
-//! rank rule is intentionally labelled as a fallback rather than presented as
-//! the missing local Alexandersson--Sulzgruber branch map.
+//! map follows the positive shifted recursion objectwise.  Single NN and DN
+//! bounces use the published coloring involutions and explicit orientation
+//! correspondences.  Generalized NN/DN/ND bounces use canonical rank matching
+//! only between the exact smaller recursion branches, because the published
+//! many-bounce proof proceeds by cancellation rather than an object map.  Every
+//! step has an explicit inverse and a replayable certificate.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,7 +27,7 @@ struct Args {
     #[arg(long)]
     path: Option<String>,
 
-    /// Print the complete canonical map for the undecorated K3 path NNNEEE.
+    /// Print the complete recursive map for the undecorated K3 path NNNEEE.
     #[arg(long)]
     k3_map: bool,
 
@@ -229,7 +229,44 @@ enum Reduction {
         mid: usize,
         top: usize,
     },
+    GeneralizedBounce(GeneralizedBounce),
     BounceFallback,
+}
+
+#[derive(Clone, Debug)]
+enum GeneralizedBounce {
+    First {
+        successor: PathData,
+    },
+    Second {
+        successor: PathData,
+    },
+    Third {
+        selected: PathData,
+        optional: PathData,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+enum GeneralizedBranch {
+    First,
+    Second,
+    ThirdSelected,
+    ThirdOptional,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct BranchSource {
+    branch: GeneralizedBranch,
+    factor: bool,
+    state: SourceState,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct BranchTarget {
+    branch: GeneralizedBranch,
+    factor: bool,
+    state: TargetState,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -238,10 +275,26 @@ enum FibreTransport {
     Swap(usize, usize),
 }
 
+#[derive(Clone, Copy, Debug)]
+struct BounceVertices {
+    low: usize,
+    mid: usize,
+    top: usize,
+}
+
 #[derive(Clone, Debug)]
 struct CanonicalBijection {
     source_buckets: BTreeMap<Signature, Vec<SourceState>>,
     target_buckets: BTreeMap<Signature, Vec<TargetState>>,
+}
+
+#[derive(Clone, Debug)]
+struct GeneralizedBijection {
+    reduction: GeneralizedBounce,
+    parent_sources: BTreeMap<Signature, Vec<SourceState>>,
+    branch_sources: BTreeMap<Signature, Vec<BranchSource>>,
+    parent_targets: BTreeMap<Signature, Vec<TargetState>>,
+    branch_targets: BTreeMap<Signature, Vec<BranchTarget>>,
 }
 
 impl CanonicalBijection {
@@ -344,9 +397,234 @@ impl CanonicalBijection {
     }
 }
 
+impl GeneralizedBounce {
+    fn path_for(&self, branch: GeneralizedBranch) -> Result<&PathData, String> {
+        match (self, branch) {
+            (Self::First { successor }, GeneralizedBranch::First)
+            | (Self::Second { successor }, GeneralizedBranch::Second) => Ok(successor),
+            (Self::Third { selected, .. }, GeneralizedBranch::ThirdSelected) => Ok(selected),
+            (Self::Third { optional, .. }, GeneralizedBranch::ThirdOptional) => Ok(optional),
+            _ => Err("generalized-bounce branch does not belong to this reduction".into()),
+        }
+    }
+
+    fn source_objects(&self) -> Vec<BranchSource> {
+        match self {
+            Self::First { successor } => enumerate_sources(successor)
+                .into_iter()
+                .flat_map(|state| {
+                    [false, true].into_iter().map(move |factor| BranchSource {
+                        branch: GeneralizedBranch::First,
+                        factor,
+                        state: state.clone(),
+                    })
+                })
+                .collect(),
+            Self::Second { successor } => enumerate_sources(successor)
+                .into_iter()
+                .map(|state| BranchSource {
+                    branch: GeneralizedBranch::Second,
+                    factor: false,
+                    state,
+                })
+                .collect(),
+            Self::Third { selected, optional } => {
+                let mut objects = enumerate_sources(selected)
+                    .into_iter()
+                    .map(|state| BranchSource {
+                        branch: GeneralizedBranch::ThirdSelected,
+                        factor: false,
+                        state,
+                    })
+                    .collect::<Vec<_>>();
+                objects.extend(enumerate_sources(optional).into_iter().flat_map(|state| {
+                    [false, true].into_iter().map(move |factor| BranchSource {
+                        branch: GeneralizedBranch::ThirdOptional,
+                        factor,
+                        state: state.clone(),
+                    })
+                }));
+                objects
+            }
+        }
+    }
+
+    fn target_objects(&self) -> Result<Vec<BranchTarget>, String> {
+        Ok(match self {
+            Self::First { successor } => enumerate_targets(successor)?
+                .into_iter()
+                .flat_map(|state| {
+                    [false, true].into_iter().map(move |factor| BranchTarget {
+                        branch: GeneralizedBranch::First,
+                        factor,
+                        state: state.clone(),
+                    })
+                })
+                .collect(),
+            Self::Second { successor } => enumerate_targets(successor)?
+                .into_iter()
+                .map(|state| BranchTarget {
+                    branch: GeneralizedBranch::Second,
+                    factor: false,
+                    state,
+                })
+                .collect(),
+            Self::Third { selected, optional } => {
+                let mut objects = enumerate_targets(selected)?
+                    .into_iter()
+                    .map(|state| BranchTarget {
+                        branch: GeneralizedBranch::ThirdSelected,
+                        factor: false,
+                        state,
+                    })
+                    .collect::<Vec<_>>();
+                objects.extend(enumerate_targets(optional)?.into_iter().flat_map(|state| {
+                    [false, true].into_iter().map(move |factor| BranchTarget {
+                        branch: GeneralizedBranch::ThirdOptional,
+                        factor,
+                        state: state.clone(),
+                    })
+                }));
+                objects
+            }
+        })
+    }
+}
+
+fn generalized_offset(branch: GeneralizedBranch, factor: bool) -> usize {
+    match branch {
+        GeneralizedBranch::First | GeneralizedBranch::ThirdOptional => usize::from(factor),
+        GeneralizedBranch::Second => 0,
+        GeneralizedBranch::ThirdSelected => 1,
+    }
+}
+
+fn branch_source_signature(branch: &BranchSource) -> Signature {
+    let mut signature = source_signature(&branch.state);
+    signature.q_degree += generalized_offset(branch.branch, branch.factor);
+    signature
+}
+
+fn branch_target_signature(branch: &BranchTarget) -> Signature {
+    let mut signature = target_signature(&branch.state);
+    signature.q_degree += generalized_offset(branch.branch, branch.factor);
+    signature
+}
+
+fn sorted_buckets<T: Ord>(
+    objects: impl IntoIterator<Item = T>,
+    signature: impl Fn(&T) -> Signature,
+) -> BTreeMap<Signature, Vec<T>> {
+    let mut buckets: BTreeMap<Signature, Vec<T>> = BTreeMap::new();
+    for object in objects {
+        buckets.entry(signature(&object)).or_default().push(object);
+    }
+    for bucket in buckets.values_mut() {
+        bucket.sort();
+    }
+    buckets
+}
+
+fn validate_bucket_sizes<A, B>(
+    path: &PathData,
+    side: &str,
+    left: &BTreeMap<Signature, Vec<A>>,
+    right: &BTreeMap<Signature, Vec<B>>,
+) -> Result<(), String> {
+    let keys = left
+        .keys()
+        .chain(right.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    for signature in keys {
+        let left_size = left.get(&signature).map_or(0, Vec::len);
+        let right_size = right.get(&signature).map_or(0, Vec::len);
+        if left_size != right_size {
+            return Err(format!(
+                "generalized-bounce {side} obstruction for {}, signature {signature:?}: parent {left_size}, branches {right_size}",
+                path.word()
+            ));
+        }
+    }
+    Ok(())
+}
+
+impl GeneralizedBijection {
+    fn build(path: &PathData, reduction: GeneralizedBounce) -> Result<Self, String> {
+        let parent_sources = sorted_buckets(enumerate_sources(path), source_signature);
+        let branch_sources = sorted_buckets(reduction.source_objects(), branch_source_signature);
+        validate_bucket_sizes(path, "source", &parent_sources, &branch_sources)?;
+        let parent_targets = sorted_buckets(enumerate_targets(path)?, target_signature);
+        let branch_targets = sorted_buckets(reduction.target_objects()?, branch_target_signature);
+        validate_bucket_sizes(path, "target", &parent_targets, &branch_targets)?;
+        Ok(Self {
+            reduction,
+            parent_sources,
+            branch_sources,
+            parent_targets,
+            branch_targets,
+        })
+    }
+
+    fn source_to_branch(
+        &self,
+        source: &SourceState,
+    ) -> Result<(BranchSource, usize, usize), String> {
+        let signature = source_signature(source);
+        let parents = self
+            .parent_sources
+            .get(&signature)
+            .ok_or_else(|| "missing generalized parent-source bucket".to_string())?;
+        let rank = parents
+            .binary_search(source)
+            .map_err(|_| "source absent from generalized parent bucket".to_string())?;
+        Ok((
+            self.branch_sources[&signature][rank].clone(),
+            rank,
+            parents.len(),
+        ))
+    }
+
+    fn branch_to_source(&self, branch: &BranchSource) -> Result<SourceState, String> {
+        let signature = branch_source_signature(branch);
+        let branches = self
+            .branch_sources
+            .get(&signature)
+            .ok_or_else(|| "missing generalized branch-source bucket".to_string())?;
+        let rank = branches
+            .binary_search(branch)
+            .map_err(|_| "branch source absent from generalized bucket".to_string())?;
+        Ok(self.parent_sources[&signature][rank].clone())
+    }
+
+    fn target_to_branch(&self, target: &TargetState) -> Result<BranchTarget, String> {
+        let signature = target_signature(target);
+        let parents = self
+            .parent_targets
+            .get(&signature)
+            .ok_or_else(|| "missing generalized parent-target bucket".to_string())?;
+        let rank = parents
+            .binary_search(target)
+            .map_err(|_| "target absent from generalized parent bucket".to_string())?;
+        Ok(self.branch_targets[&signature][rank].clone())
+    }
+
+    fn branch_to_target(&self, branch: &BranchTarget) -> Result<TargetState, String> {
+        let signature = branch_target_signature(branch);
+        let branches = self
+            .branch_targets
+            .get(&signature)
+            .ok_or_else(|| "missing generalized branch-target bucket".to_string())?;
+        let rank = branches
+            .binary_search(branch)
+            .map_err(|_| "branch target absent from generalized bucket".to_string())?;
+        Ok(self.parent_targets[&signature][rank].clone())
+    }
+}
+
 #[derive(Default)]
 struct RecursiveMatcher {
-    fallback_cache: BTreeMap<String, CanonicalBijection>,
+    generalized_cache: BTreeMap<String, GeneralizedBijection>,
 }
 
 impl RecursiveMatcher {
@@ -478,8 +756,9 @@ impl RecursiveMatcher {
                 mid,
                 top,
             } => {
+                let vertices = BounceVertices { low, mid, top };
                 let (factor, successor_source, coloring_transport) =
-                    first_bounce_coloring_forward(path, &successor, &base, low, mid, top, source)?;
+                    first_bounce_coloring_forward(path, &successor, &base, vertices, source)?;
                 trace.push(format!(
                     "first bounce {} -> {}: paper coloring {}, external q-bit {}; recurse on successor",
                     path.word(),
@@ -527,8 +806,9 @@ impl RecursiveMatcher {
                 mid,
                 top,
             } => {
+                let vertices = BounceVertices { low, mid, top };
                 let (successor_source, coloring_transport) = second_bounce_coloring_forward(
-                    path, &successor, &base, corner, low, mid, top, source,
+                    path, &successor, &base, corner, vertices, source,
                 )?;
                 trace.push(format!(
                     "second bounce {} -> {}: paper coloring {}; recurse on successor",
@@ -573,22 +853,38 @@ impl RecursiveMatcher {
                     column_word,
                 })
             }
-            Reduction::BounceFallback => {
+            Reduction::GeneralizedBounce(generalized) => {
                 let key = path.word();
-                if !self.fallback_cache.contains_key(&key) {
-                    self.fallback_cache
-                        .insert(key.clone(), CanonicalBijection::build(path)?);
+                if !self.generalized_cache.contains_key(&key) {
+                    self.generalized_cache
+                        .insert(key.clone(), GeneralizedBijection::build(path, generalized)?);
                 }
-                let fallback = &self.fallback_cache[&key];
-                let certificate = fallback.map(path, source)?;
+                let (branch, rank, bucket_size, child) = {
+                    let bijection = &self.generalized_cache[&key];
+                    let (branch, rank, bucket_size) = bijection.source_to_branch(source)?;
+                    let child = bijection.reduction.path_for(branch.branch)?.clone();
+                    (branch, rank, bucket_size, child)
+                };
                 trace.push(format!(
-                    "bounce seed {}: canonical exact-bucket fallback rank {}/{} (recursion lift not yet supplied)",
+                    "generalized bounce {}: canonical recursion-branch match {:?}, external q-offset {}, rank {}/{}",
                     key,
-                    certificate.bucket_rank + 1,
-                    certificate.bucket_size
+                    branch.branch,
+                    generalized_offset(branch.branch, branch.factor),
+                    rank + 1,
+                    bucket_size
                 ));
-                Ok(certificate.target)
+                let child_target = self.map_inner(&child, &branch.state, trace)?;
+                let branch_target = BranchTarget {
+                    branch: branch.branch,
+                    factor: branch.factor,
+                    state: child_target,
+                };
+                self.generalized_cache[&key].branch_to_target(&branch_target)
             }
+            Reduction::BounceFallback => Err(format!(
+                "unsupported bounce seed {}; no global source/target fallback is allowed",
+                path.word()
+            )),
         }
     }
 
@@ -714,9 +1010,7 @@ impl RecursiveMatcher {
                     path,
                     &successor,
                     &base,
-                    low,
-                    mid,
-                    top,
+                    BounceVertices { low, mid, top },
                     factor,
                     &successor_source,
                 )
@@ -766,20 +1060,34 @@ impl RecursiveMatcher {
                     &successor,
                     &base,
                     corner,
-                    low,
-                    mid,
-                    top,
+                    BounceVertices { low, mid, top },
                     &successor_source,
                 )
             }
-            Reduction::BounceFallback => {
+            Reduction::GeneralizedBounce(generalized) => {
                 let key = path.word();
-                if !self.fallback_cache.contains_key(&key) {
-                    self.fallback_cache
-                        .insert(key.clone(), CanonicalBijection::build(path)?);
+                if !self.generalized_cache.contains_key(&key) {
+                    self.generalized_cache
+                        .insert(key.clone(), GeneralizedBijection::build(path, generalized)?);
                 }
-                self.fallback_cache[&key].inverse(path, target)
+                let (branch, child) = {
+                    let bijection = &self.generalized_cache[&key];
+                    let branch = bijection.target_to_branch(target)?;
+                    let child = bijection.reduction.path_for(branch.branch)?.clone();
+                    (branch, child)
+                };
+                let child_source = self.inverse_inner(&child, &branch.state)?;
+                let branch_source = BranchSource {
+                    branch: branch.branch,
+                    factor: branch.factor,
+                    state: child_source,
+                };
+                self.generalized_cache[&key].branch_to_source(&branch_source)
             }
+            Reduction::BounceFallback => Err(format!(
+                "unsupported bounce seed {}; no global source/target fallback is allowed",
+                path.word()
+            )),
         }
     }
 
@@ -906,8 +1214,82 @@ fn reduction(path: &PathData) -> Result<Reduction, String> {
             validate_bounce_reduction(path, &candidate)?;
             return Ok(candidate);
         }
+        if let Some(generalized) = generalized_bounce_reduction(path, first_east)? {
+            return Ok(Reduction::GeneralizedBounce(generalized));
+        }
     }
     Ok(Reduction::BounceFallback)
+}
+
+fn generalized_bounce_reduction(
+    path: &PathData,
+    first_east: usize,
+) -> Result<Option<GeneralizedBounce>, String> {
+    let original = &path.steps[..first_east];
+    if original.last() != Some(&Step::Diagonal) {
+        return Ok(None);
+    }
+    let suffix = &path.steps[first_east + 1..];
+    let mut current = original.to_vec();
+    loop {
+        let body = current
+            .get(..current.len().saturating_sub(1))
+            .ok_or_else(|| "bounce scanner reached an empty seed".to_string())?;
+        let split = body.iter().filter(|&&step| step == Step::Diagonal).count();
+        if split + 1 >= body.len() || split + 1 >= original.len() - 1 {
+            return Err(format!("malformed bounce seed in {}", path.word()));
+        }
+        let first = body[split];
+        let second = body[split + 1];
+        if first == Step::Diagonal && second == Step::Diagonal {
+            current = body[..split].to_vec();
+            current.push(Step::Diagonal);
+            continue;
+        }
+        if original[split] != first || original[split + 1] != second {
+            return Err("bounce scanner lost its original-prefix coordinates".into());
+        }
+        let u = &original[..split];
+        let v = &original[split + 2..original.len() - 1];
+        let make_path = |middle: [Step; 2]| -> Result<PathData, String> {
+            let mut steps = u.to_vec();
+            steps.extend(middle);
+            steps.extend_from_slice(v);
+            steps.extend([Step::East, Step::Diagonal]);
+            steps.extend_from_slice(suffix);
+            PathData::from_steps(steps)
+        };
+        let reduction = match (first, second) {
+            (Step::North, Step::North) => GeneralizedBounce::First {
+                successor: make_path([Step::North, Step::North])?,
+            },
+            (Step::Diagonal, Step::North) => GeneralizedBounce::Second {
+                successor: make_path([Step::North, Step::Diagonal])?,
+            },
+            (Step::North, Step::Diagonal) => GeneralizedBounce::Third {
+                selected: make_path([Step::North, Step::Diagonal])?,
+                optional: make_path([Step::Diagonal, Step::North])?,
+            },
+            _ => return Err("bounce scanner ended in a forbidden terminal pair".into()),
+        };
+        let parent_height = endpoint(original).1;
+        for successor in match &reduction {
+            GeneralizedBounce::First { successor } | GeneralizedBounce::Second { successor } => {
+                vec![successor]
+            }
+            GeneralizedBounce::Third { selected, optional } => vec![selected, optional],
+        } {
+            let east = successor
+                .steps
+                .iter()
+                .position(|step| *step == Step::East)
+                .ok_or_else(|| "generalized successor has no east step".to_string())?;
+            if endpoint(&successor.steps[..east]).1 >= parent_height {
+                return Err("generalized bounce did not lower first-east height".into());
+            }
+        }
+        return Ok(Some(reduction));
+    }
 }
 
 fn endpoint(steps: &[Step]) -> (usize, usize) {
@@ -1060,11 +1442,10 @@ fn first_bounce_coloring_forward(
     path: &PathData,
     successor: &PathData,
     base: &PathData,
-    low: usize,
-    mid: usize,
-    top: usize,
+    vertices: BounceVertices,
     source: &SourceState,
 ) -> Result<(bool, SourceState, &'static str), String> {
+    let BounceVertices { low, mid, top } = vertices;
     let identity =
         source.coloring[low] < source.coloring[top] && source.coloring[mid] < source.coloring[top];
     let coloring = if identity {
@@ -1112,12 +1493,11 @@ fn first_bounce_coloring_inverse(
     path: &PathData,
     successor: &PathData,
     base: &PathData,
-    low: usize,
-    mid: usize,
-    top: usize,
+    vertices: BounceVertices,
     factor: bool,
     source: &SourceState,
 ) -> Result<SourceState, String> {
+    let BounceVertices { low, mid, top } = vertices;
     let identity =
         source.coloring[low] < source.coloring[top] && source.coloring[mid] < source.coloring[top];
     let coloring = if identity {
@@ -1188,11 +1568,10 @@ fn second_bounce_coloring_forward(
     successor: &PathData,
     base: &PathData,
     corner: usize,
-    low: usize,
-    mid: usize,
-    top: usize,
+    vertices: BounceVertices,
     source: &SourceState,
 ) -> Result<(SourceState, &'static str), String> {
+    let BounceVertices { low, mid, top } = vertices;
     let inside_low = source.coloring[corner] < source.coloring[low]
         && source.coloring[low] < source.coloring[top];
     let inside_mid = source.coloring[corner] < source.coloring[mid]
@@ -1249,11 +1628,10 @@ fn second_bounce_coloring_inverse(
     successor: &PathData,
     base: &PathData,
     corner: usize,
-    low: usize,
-    mid: usize,
-    top: usize,
+    vertices: BounceVertices,
     source: &SourceState,
 ) -> Result<SourceState, String> {
+    let BounceVertices { low, mid, top } = vertices;
     let inside_low = source.coloring[corner] < source.coloring[low]
         && source.coloring[low] < source.coloring[top];
     let inside_mid = source.coloring[corner] < source.coloring[mid]
@@ -2026,7 +2404,7 @@ fn same_orientation_obstruction(
     }))
 }
 
-fn checked_path(path: &PathData) -> Result<(usize, usize, usize, usize, usize), String> {
+fn checked_path(path: &PathData) -> Result<(usize, usize, usize, usize, usize, usize), String> {
     let bijection = CanonicalBijection::build(path)?;
     let all_targets = enumerate_targets(path)?
         .into_iter()
@@ -2037,6 +2415,7 @@ fn checked_path(path: &PathData) -> Result<(usize, usize, usize, usize, usize), 
     let mut fallback_certificates = 0usize;
     let mut first_bounce_certificates = 0usize;
     let mut second_bounce_certificates = 0usize;
+    let mut generalized_bounce_certificates = 0usize;
     for sources in bijection.source_buckets.values() {
         for source in sources {
             let certificate = bijection.map(path, source)?;
@@ -2064,6 +2443,12 @@ fn checked_path(path: &PathData) -> Result<(usize, usize, usize, usize, usize), 
                     .iter()
                     .any(|step| step.starts_with("second bounce")),
             );
+            generalized_bounce_certificates += usize::from(
+                recursive_certificate
+                    .trace
+                    .iter()
+                    .any(|step| step.starts_with("generalized bounce")),
+            );
             if !recursive_targets.insert(recursive_certificate.target) {
                 return Err("hybrid recursive map is not injective".into());
             }
@@ -2082,6 +2467,7 @@ fn checked_path(path: &PathData) -> Result<(usize, usize, usize, usize, usize), 
         fallback_certificates,
         first_bounce_certificates,
         second_bounce_certificates,
+        generalized_bounce_certificates,
     ))
 }
 
@@ -2199,7 +2585,7 @@ fn print_trace(path: &PathData, coloring_text: &str, marked_mask: u64) -> Result
         format_edges(certificate.target.orientation_mask, &path.normal_edges),
         format_columns(path, &certificate.target)?
     );
-    println!("reverse certificate: target -> same bucket/rank -> original source [OK]");
+    println!("reverse certificate: replayed inverse recursion -> original source [OK]");
     Ok(())
 }
 
@@ -2212,11 +2598,12 @@ fn run(args: Args) -> Result<(), String> {
         if let Some(coloring) = args.trace_coloring.as_deref() {
             print_trace(&path, coloring, args.trace_mask)?;
         } else {
-            let (buckets, certificates, fallback, first_bounce, second_bounce) =
+            let (buckets, certificates, fallback, first_bounce, second_bounce, generalized) =
                 checked_path(&path)?;
             println!(
-                "checked path {}: rank {}, {} signatures, {} reversible certificates; fallback {}, first-bounce {}, second-bounce {}",
-                path.word(), path.n, buckets, certificates, fallback, first_bounce, second_bounce
+                "checked path {}: rank {}, {} signatures, {} reversible certificates; residual-fallback {}, first-bounce {}, second-bounce {}, generalized-branch {}",
+                path.word(), path.n, buckets, certificates, fallback, first_bounce, second_bounce,
+                generalized
             );
         }
         return Ok(());
@@ -2228,11 +2615,12 @@ fn run(args: Args) -> Result<(), String> {
     let mut total_fallback = 0usize;
     let mut total_first_bounce = 0usize;
     let mut total_second_bounce = 0usize;
+    let mut total_generalized_bounce = 0usize;
     for n in 0..=args.max_n {
         let paths = all_paths(n);
         let mut rank_certificates = 0usize;
         for path in &paths {
-            let (buckets, certificates, fallback, first_bounce, second_bounce) =
+            let (buckets, certificates, fallback, first_bounce, second_bounce, generalized) =
                 checked_path(path)?;
             total_buckets += buckets;
             total_certificates += certificates;
@@ -2240,6 +2628,7 @@ fn run(args: Args) -> Result<(), String> {
             total_fallback += fallback;
             total_first_bounce += first_bounce;
             total_second_bounce += second_bounce;
+            total_generalized_bounce += generalized;
         }
         total_paths += paths.len();
         println!(
@@ -2249,7 +2638,7 @@ fn run(args: Args) -> Result<(), String> {
         );
     }
     println!(
-        "total: {total_paths} ordinary decorated paths, {total_buckets} exact invariant buckets, {total_certificates} reversible certificates; fallback {total_fallback}, first-bounce {total_first_bounce}, second-bounce {total_second_bounce}"
+        "total: {total_paths} ordinary decorated paths, {total_buckets} exact invariant buckets, {total_certificates} reversible certificates; residual-fallback {total_fallback}, first-bounce {total_first_bounce}, second-bounce {total_second_bounce}, generalized-branch {total_generalized_bounce}"
     );
     Ok(())
 }
@@ -2285,7 +2674,7 @@ mod tests {
     #[test]
     fn k3_hybrid_recursion_is_a_bijection() {
         let path = PathData::parse("NNNEEE").unwrap();
-        let (_, _, fallback, first_bounce, _) = checked_path(&path).unwrap();
+        let (_, _, fallback, first_bounce, _, _) = checked_path(&path).unwrap();
         assert_eq!(fallback, 0);
         assert!(first_bounce > 0);
     }
@@ -2293,9 +2682,17 @@ mod tests {
     #[test]
     fn single_second_bounce_is_explicit_and_reversible() {
         let path = PathData::parse("NDNDEE").unwrap();
-        let (_, _, fallback, _, second_bounce) = checked_path(&path).unwrap();
+        let (_, _, fallback, _, second_bounce, _) = checked_path(&path).unwrap();
         assert_eq!(fallback, 0);
         assert!(second_bounce > 0);
+    }
+
+    #[test]
+    fn third_bounce_uses_reversible_recursion_branch_matching() {
+        let path = PathData::parse("NNDDEE").unwrap();
+        let (_, _, fallback, _, _, generalized) = checked_path(&path).unwrap();
+        assert_eq!(fallback, 0);
+        assert!(generalized > 0);
     }
 
     #[test]
@@ -2306,10 +2703,15 @@ mod tests {
 
     #[test]
     fn every_ordinary_decorated_path_through_rank_four_checks() {
+        let mut generalized = 0usize;
         for n in 0..=4 {
             for path in all_paths(n) {
-                checked_path(&path).unwrap_or_else(|error| panic!("{}: {error}", path.word()));
+                let (_, _, fallback, _, _, path_generalized) =
+                    checked_path(&path).unwrap_or_else(|error| panic!("{}: {error}", path.word()));
+                assert_eq!(fallback, 0, "{} used the forbidden fallback", path.word());
+                generalized += path_generalized;
             }
         }
+        assert!(generalized > 0);
     }
 }
