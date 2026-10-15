@@ -16,5 +16,6 @@
 /experiments/src/bin/*
 !/experiments/src/bin/delannoy_clawfree_search.rs
 !/experiments/src/bin/delannoy_matching_search.rs
+!/experiments/src/bin/marked_coloring_hrv_bijection.rs
 /ehrcalc/
 .codex

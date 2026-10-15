@@ -1,5 +1,60 @@
 # Handoff
 
+## Active: ordinary marked-coloring/HRV bijection prototype — 2026-10-15
+
+The VerticalStripLLT marked-coloring prototype worker owns only this handoff,
+the task-local branch `exp/verticalstripllt-marked-coloring-bijection`, and the
+new experiment artifact to be placed under `experiments/src/bin/` (plus a
+narrow `.gitignore` exception if it is retained as a reproducibility artifact).
+The shared checkout and its existing branch remain untouched.  No maintained
+crate API, Lean source, paper source, circular LLT code, or external action is
+owned.  The task is to test a reversible certificate-producing map from an
+ordinary packed marked coloring to an HRV orientation with increasing fibre
+columns, preserving packed content and marked-ascent degree, beginning through
+rank five.  Build output must use `/cargo-target/ai-projects`.
+
+The isolated prototype is
+`experiments/src/bin/marked_coloring_hrv_bijection.rs`, retained as a narrowly
+tracked reproducibility artifact.  It enumerates ordinary Schroeder paths and
+decodes normal/strict edges by the same zero-based convention as
+`VerticalStripLLT/Path.lean`; every natural edge set is independently checked
+against `sym_poly_sym::unit_interval_edges`.  Ordinary HRV maps reuse
+`sym_poly_sym::llt::highest_reachable_vertices`.
+
+The implemented bijection is hybrid and fully reversible.  It follows the
+positive shifted Alexandersson--Sulzgruber reduction objectwise for column
+bases, diagonal-return products, and both branches of the unicellular
+relation.  At the first east-free prefix ending in a diagonal (the first
+genuine bounce seed), it uses sorted rank matching inside the exact bucket
+`(ordered packed-color content, q-degree)`.  The certificate labels this as a
+canonical fallback; it is not claimed to be the missing local bounce rule.
+Both forward and inverse maps replay the same reduction decisions.
+
+Independent source and target enumerators verify validity, exact color
+multisets, q-degree, injectivity, surjectivity, and trace reversal for every
+ordinary decorated path through rank five: 258 paths, 9,271 exact buckets,
+and 277,302 source/target certificates.  Rank counts are
+`1, 1, 3, 11, 45, 197` paths and `1, 1, 8, 144, 4,796, 272,352`
+certificates.  The complete K3 map is printed by `--k3-map`; a readable trace
+is printed by, for example,
+`--path NNNEEE --trace-coloring 1,3,2 --trace-mask 3`.
+
+The first exact obstruction to the naive local rule `eta = A` already occurs
+for K3.  With three distinct colors and q-degree two, the orientation with
+ascending edges `12,13` has two marked-coloring sources but three HRV-column
+targets.  Thus a genuine lift must mix orientations; the mismatch is not a
+sorting artifact.  The next task is to replace the bounce fallback with the
+explicit first-/second-bounce orientation correspondences while transporting
+actual labelled HRV fibres, not just their size partition.
+
+Focused commands (all with `CARGO_TARGET_DIR=/cargo-target/ai-projects`) pass:
+
+```bash
+cargo check --locked --manifest-path experiments/Cargo.toml --bin marked_coloring_hrv_bijection
+cargo test --locked --manifest-path experiments/Cargo.toml --bin marked_coloring_hrv_bijection
+cargo run --quiet --locked --manifest-path experiments/Cargo.toml --bin marked_coloring_hrv_bijection -- --max-n 5
+```
+
 ## Completed: monotone-pattern descent/peak recurrence — 2026-10-14
 
 Host `/root` completed and releases `combpoly/src/monotone_pattern.rs`,
