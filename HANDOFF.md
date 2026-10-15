@@ -1,5 +1,60 @@
 # Handoff
 
+## Completed: coloring-to-SSYT involution-principle prototype — 2026-10-15
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No maintained crate
+API, Lean/paper source, circular code, or external action was changed.
+
+The new `--tableau-report` experiment expands `q -> q-1`, orders HRV fibres by
+increasing sink, reads each increasing fibre bottom-to-top as a column-crystal
+word, and applies reversible RSK.  A signed e-object is stored exactly as
+`(eta, B_eta, P, Q)`: `Q` and `eta` recover the ordered column boundaries, so
+inverse RSK reconstructs the HRV filling.  The subset `B` is transported by
+rank between the marked source ascents and the ascending edges of `eta`.
+
+The obvious source sign involution `I` toggles the first ascent outside `B`.
+Its transported version is not crystal-compatible: the first obstruction is
+already K2, where it pairs the `e_2` column shape with the row contribution in
+`e_1 e_1`.  Across ranks through four, it preserves insertion shape in only
+5,862 of 11,456 nonfixed signed states and commutes in 23,488 of 36,186
+nonzero crystal transitions.  This failure is retained as a regression.
+
+The alternate rule `J` is a canonical global matching.  It enumerates the
+admissible standard recording tableaux for each ordered HRV column
+composition, then rank-matches positive and negative `(eta,B_eta,Q)` skeletons
+inside each exact `(q-degree, insertion shape)` bucket.  It leaves `P`
+unchanged, hence commutes with the tableau crystal.  Alternating `J,I,J,I,...`
+from an `I`-fixed ordinary coloring is the finite involution-principle map to a
+`J`-fixed positive SSYT object; reversing the path recovers the coloring.
+This is a genuine certificate-producing bijection for every checked path, but
+the current `J` is global rank matching, not yet a local combinatorial rule or
+a uniform proof that every shape bucket has nonnegative surplus.
+
+`--schur-report --skip-si --max-n 5` exhaustively checks all 258 ordinary
+decorated paths: 308,351 signed LR skeletons cancel to 2,861 positive
+survivors, and 48,840 packed strict colorings biject with 48,840 independently
+enumerated surviving SSYT objects.  Rank five alone has 304,692 skeletons,
+2,556 survivors, and 46,957 objects on each side.  Exact content and q-degree,
+forward/inverse paths, injectivity, and independent surjectivity all pass; the
+longest alternating certificate has 15,886 steps.
+
+Crystal reflections/Bender--Knuth operators `S_i` are defined on `P` and
+conjugated through the final bijection.  Exhaustively through rank four, 4,023
+involutivity/weight/q-degree checks, 631 distant commutations, and 2,163 braid
+relations pass.  The all-path rank-five bijection was checked separately;
+repeating all Coxeter words there was stopped as redundant after the runtime
+became disproportionate.  Ten focused tests, strict owned-binary Clippy,
+rustfmt, and diff checks pass.  Useful commands:
+
+```bash
+/cargo-target/ai-projects/release/marked_coloring_hrv_bijection --schur-report --skip-si --max-n 5
+/cargo-target/ai-projects/release/marked_coloring_hrv_bijection --tableau-report --max-n 4
+/cargo-target/ai-projects/release/marked_coloring_hrv_bijection \
+  --tableau-report --path NNEE --trace-coloring 2,1
+```
+
 ## Completed: direct-HRV shortcut data audit — 2026-10-15
 
 `/root` completed and releases

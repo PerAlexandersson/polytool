@@ -9,10 +9,20 @@
 //! only between the exact smaller recursion branches, because the published
 //! many-bounce proof proceeds by cancellation rather than an object map.  Every
 //! step has an explicit inverse and a replayable certificate.
+//!
+//! The `q -> q - 1` experiment further reads each ordered HRV fibre
+//! bottom-to-top as a column-crystal word and applies reversible RSK.  The
+//! transported obvious sign involution already changes tableau shape at K2.
+//! An alternate canonical matching therefore pairs positive and negative
+//! `(eta, B, Q)` recording skeletons within each `(q-degree, shape)` bucket and
+//! leaves the insertion SSYT `P` untouched.  The involution principle alternates
+//! these two matchings to give a reversible coloring-to-surviving-SSYT map.
+//! Crystal reflections `S_i` are then conjugated back to packed colorings.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use clap::Parser;
+use sym_poly_core::{Partition, Tableau};
 use sym_poly_sym::llt::highest_reachable_vertices;
 use sym_poly_sym::unit_interval_edges;
 
@@ -42,6 +52,22 @@ struct Args {
     /// Compare direct HRV/fibre guesses from (coloring, marked ascents) with the bijection.
     #[arg(long)]
     shortcut_report: bool,
+
+    /// Audit the signed q -> q-1 cancellation after reversible RSK of the HRV columns.
+    #[arg(long)]
+    tableau_report: bool,
+
+    /// Audit only the canonical Schur matching, final bijection, and transported S_i.
+    #[arg(long)]
+    schur_report: bool,
+
+    /// Skip the optional transported-S_i Coxeter stress test in Schur reports.
+    #[arg(long)]
+    skip_si: bool,
+
+    /// With --tableau-report --path --trace-coloring, the source-side B subset mask.
+    #[arg(long, default_value_t = 0)]
+    retained_mask: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -202,6 +228,47 @@ struct RecursiveCertificate {
     source: SourceState,
     target: TargetState,
     trace: Vec<String>,
+}
+
+/// A term in the second expansion
+/// `(q - 1)^|A| = sum_{B subset A} (-1)^(|A|-|B|) q^|B|`.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct SignedSourceState {
+    source: SourceState,
+    retained_mask: u64,
+}
+
+/// The reversible tableau form of an HRV e-object.
+///
+/// Fibres are ordered by increasing sink and read in decreasing vertex order,
+/// i.e. bottom-to-top as column-crystal words.  `recording_rows` makes the RSK
+/// transformation invertible; the orientation recovers all fibre boundaries.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct SignedTableauState {
+    orientation_mask: u64,
+    retained_orientation_mask: u64,
+    insertion_rows: Vec<Vec<u32>>,
+    recording_rows: Vec<Vec<u32>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct TableauSkeleton {
+    orientation_mask: u64,
+    retained_orientation_mask: u64,
+    recording_rows: Vec<Vec<u32>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct SchurKey {
+    q_degree: usize,
+    shape: Vec<usize>,
+}
+
+struct SchurCancellation {
+    partners: BTreeMap<TableauSkeleton, TableauSkeleton>,
+    fixed: BTreeSet<TableauSkeleton>,
+    fixed_multiplicities: BTreeMap<SchurKey, usize>,
+    total_skeletons: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -2261,6 +2328,690 @@ fn fibres(hrv: &[usize]) -> Vec<Vec<usize>> {
     by_sink.into_values().collect()
 }
 
+fn validate_arbitrary_source(path: &PathData, source: &SourceState) -> Result<(), String> {
+    if source.coloring.len() != path.n {
+        return Err(format!(
+            "word length {} differs from rank {}",
+            source.coloring.len(),
+            path.n
+        ));
+    }
+    if !increases_on_edges(&source.coloring, &path.strict_edges) {
+        return Err("source coloring violates a strict edge".into());
+    }
+    let ascents = edge_ascent_mask(&source.coloring, &path.normal_edges);
+    if source.marked_mask & !ascents != 0 {
+        return Err("source marks a normal edge that is not a coloring ascent".into());
+    }
+    Ok(())
+}
+
+fn validate_arbitrary_target(path: &PathData, target: &TargetState) -> Result<(), String> {
+    if target.column_word.len() != path.n {
+        return Err(format!(
+            "word length {} differs from rank {}",
+            target.column_word.len(),
+            path.n
+        ));
+    }
+    if target.orientation_mask >> path.normal_edges.len() != 0 {
+        return Err("target orientation mask has an out-of-range edge".into());
+    }
+    let hrv = hrv_for_mask(path, target.orientation_mask)?;
+    if fibres(&hrv).iter().any(|fibre| {
+        !fibre
+            .windows(2)
+            .all(|vertices| target.column_word[vertices[0]] < target.column_word[vertices[1]])
+    }) {
+        return Err("target column is not strictly increasing".into());
+    }
+    Ok(())
+}
+
+fn map_arbitrary_source(
+    matcher: &mut RecursiveMatcher,
+    path: &PathData,
+    source: &SourceState,
+) -> Result<TargetState, String> {
+    validate_arbitrary_source(path, source)?;
+    let (coloring, alphabet) = standardize_word(&source.coloring);
+    let packed = SourceState {
+        coloring,
+        marked_mask: source.marked_mask,
+    };
+    let certificate = matcher.map(path, &packed)?;
+    let target = TargetState {
+        orientation_mask: certificate.target.orientation_mask,
+        column_word: lift_word(&certificate.target.column_word, &alphabet)?,
+    };
+    validate_arbitrary_target(path, &target)?;
+    Ok(target)
+}
+
+fn inverse_arbitrary_target(
+    matcher: &mut RecursiveMatcher,
+    path: &PathData,
+    target: &TargetState,
+) -> Result<SourceState, String> {
+    validate_arbitrary_target(path, target)?;
+    let (column_word, alphabet) = standardize_word(&target.column_word);
+    let packed = TargetState {
+        orientation_mask: target.orientation_mask,
+        column_word,
+    };
+    let packed_source = matcher.inverse(path, &packed)?;
+    let source = SourceState {
+        coloring: lift_word(&packed_source.coloring, &alphabet)?,
+        marked_mask: packed_source.marked_mask,
+    };
+    validate_arbitrary_source(path, &source)?;
+    Ok(source)
+}
+
+fn transport_submask_by_rank(
+    from_mask: u64,
+    to_mask: u64,
+    subset: u64,
+    edge_count: usize,
+) -> Result<u64, String> {
+    let valid_bits = if edge_count == u64::BITS as usize {
+        u64::MAX
+    } else {
+        (1u64 << edge_count) - 1
+    };
+    if from_mask & !valid_bits != 0 || to_mask & !valid_bits != 0 || subset & !valid_bits != 0 {
+        return Err("rank-transport mask has an out-of-range edge".into());
+    }
+    if subset & !from_mask != 0 {
+        return Err("rank-transport subset is not contained in its ambient mask".into());
+    }
+    let from = (0..edge_count)
+        .filter(|&index| from_mask & (1u64 << index) != 0)
+        .collect::<Vec<_>>();
+    let to = (0..edge_count)
+        .filter(|&index| to_mask & (1u64 << index) != 0)
+        .collect::<Vec<_>>();
+    if from.len() != to.len() {
+        return Err("rank transport requires equally large ambient masks".into());
+    }
+    Ok(from.into_iter().zip(to).fold(0u64, |mask, (old, new)| {
+        if subset & (1u64 << old) != 0 {
+            mask | (1u64 << new)
+        } else {
+            mask
+        }
+    }))
+}
+
+fn target_column_crystal_word(
+    path: &PathData,
+    target: &TargetState,
+) -> Result<Vec<u32>, String> {
+    validate_arbitrary_target(path, target)?;
+    let hrv = hrv_for_mask(path, target.orientation_mask)?;
+    Ok(fibres(&hrv)
+        .into_iter()
+        .flat_map(|fibre| {
+            fibre
+                .into_iter()
+                .rev()
+                .map(|vertex| u32::from(target.column_word[vertex]) + 1)
+                .collect::<Vec<_>>()
+        })
+        .collect())
+}
+
+fn target_from_column_crystal_word(
+    path: &PathData,
+    orientation_mask: u64,
+    word: &[u32],
+) -> Result<TargetState, String> {
+    if word.len() != path.n {
+        return Err("column-crystal word has the wrong length".into());
+    }
+    let hrv = hrv_for_mask(path, orientation_mask)?;
+    let ordered_vertices = fibres(&hrv)
+        .into_iter()
+        .flat_map(|fibre| fibre.into_iter().rev())
+        .collect::<Vec<_>>();
+    let mut column_word = vec![0u8; path.n];
+    for (&vertex, &entry) in ordered_vertices.iter().zip(word) {
+        let color = entry
+            .checked_sub(1)
+            .and_then(|value| u8::try_from(value).ok())
+            .ok_or_else(|| "tableau entry is outside the prototype color range".to_string())?;
+        column_word[vertex] = color;
+    }
+    let target = TargetState {
+        orientation_mask,
+        column_word,
+    };
+    validate_arbitrary_target(path, &target)?;
+    Ok(target)
+}
+
+fn inverse_rsk(p: &Tableau, q: &Tableau) -> Result<Vec<u32>, String> {
+    if !p.is_semistandard() || !q.is_standard() || p.size() != q.size() {
+        return Err("inverse RSK requires an SSYT and a same-size standard tableau".into());
+    }
+    let mut p_rows = p.rows().to_vec();
+    let mut q_rows = q.rows().to_vec();
+    if p_rows.iter().map(Vec::len).collect::<Vec<_>>()
+        != q_rows.iter().map(Vec::len).collect::<Vec<_>>()
+    {
+        return Err("inverse RSK tableaux have different shapes".into());
+    }
+    let mut word = vec![0u32; p.size() as usize];
+    for label in (1..=p.size()).rev() {
+        let (row, column) = q_rows
+            .iter()
+            .enumerate()
+            .find_map(|(row, entries)| {
+                entries
+                    .iter()
+                    .position(|&entry| entry == label)
+                    .map(|column| (row, column))
+            })
+            .ok_or_else(|| format!("recording tableau omits label {label}"))?;
+        if column + 1 != q_rows[row].len()
+            || q_rows
+                .get(row + 1)
+                .is_some_and(|next_row| column < next_row.len())
+        {
+            return Err(format!("recording label {label} is not in an outer corner"));
+        }
+        q_rows[row].pop();
+        let mut value = p_rows[row]
+            .pop()
+            .ok_or_else(|| "insertion tableau corner is missing".to_string())?;
+        for earlier_row in (0..row).rev() {
+            let position = p_rows[earlier_row]
+                .iter()
+                .rposition(|&entry| entry < value)
+                .ok_or_else(|| "reverse row insertion found no smaller entry".to_string())?;
+            std::mem::swap(&mut value, &mut p_rows[earlier_row][position]);
+        }
+        word[label as usize - 1] = value;
+        while p_rows.last().is_some_and(Vec::is_empty) {
+            p_rows.pop();
+        }
+        while q_rows.last().is_some_and(Vec::is_empty) {
+            q_rows.pop();
+        }
+    }
+    if !p_rows.is_empty() || !q_rows.is_empty() {
+        return Err("inverse RSK did not exhaust its tableaux".into());
+    }
+    Ok(word)
+}
+
+fn signed_source_to_tableau(
+    matcher: &mut RecursiveMatcher,
+    path: &PathData,
+    signed: &SignedSourceState,
+) -> Result<SignedTableauState, String> {
+    validate_arbitrary_source(path, &signed.source)?;
+    if signed.retained_mask & !signed.source.marked_mask != 0 {
+        return Err("B is not a subset of the marked ascent set A".into());
+    }
+    let target = map_arbitrary_source(matcher, path, &signed.source)?;
+    let retained_orientation_mask = transport_submask_by_rank(
+        signed.source.marked_mask,
+        target.orientation_mask,
+        signed.retained_mask,
+        path.normal_edges.len(),
+    )?;
+    let word = target_column_crystal_word(path, &target)?;
+    let (p, q) = Tableau::rsk(&word);
+    let state = SignedTableauState {
+        orientation_mask: target.orientation_mask,
+        retained_orientation_mask,
+        insertion_rows: p.rows().to_vec(),
+        recording_rows: q.rows().to_vec(),
+    };
+    let recovered = tableau_to_signed_source(matcher, path, &state)?;
+    if recovered != *signed {
+        return Err("signed tableau encoding did not immediately invert".into());
+    }
+    Ok(state)
+}
+
+fn tableau_target(path: &PathData, state: &SignedTableauState) -> Result<TargetState, String> {
+    let p = Tableau::new(state.insertion_rows.clone());
+    let q = Tableau::new(state.recording_rows.clone());
+    let word = inverse_rsk(&p, &q)?;
+    target_from_column_crystal_word(path, state.orientation_mask, &word)
+}
+
+fn tableau_to_signed_source(
+    matcher: &mut RecursiveMatcher,
+    path: &PathData,
+    state: &SignedTableauState,
+) -> Result<SignedSourceState, String> {
+    if state.retained_orientation_mask & !state.orientation_mask != 0 {
+        return Err("retained target edges are not contained in eta".into());
+    }
+    let target = tableau_target(path, state)?;
+    let source = inverse_arbitrary_target(matcher, path, &target)?;
+    let retained_mask = transport_submask_by_rank(
+        state.orientation_mask,
+        source.marked_mask,
+        state.retained_orientation_mask,
+        path.normal_edges.len(),
+    )?;
+    let signed = SignedSourceState {
+        source,
+        retained_mask,
+    };
+    if signed.retained_mask & !signed.source.marked_mask != 0 {
+        return Err("decoded B is not contained in decoded A".into());
+    }
+    Ok(signed)
+}
+
+fn signed_tableau_involution(
+    matcher: &mut RecursiveMatcher,
+    path: &PathData,
+    state: &SignedTableauState,
+) -> Result<SignedTableauState, String> {
+    let mut signed = tableau_to_signed_source(matcher, path, state)?;
+    let ascents = edge_ascent_mask(&signed.source.coloring, &path.normal_edges);
+    let toggle_candidates = ascents & !signed.retained_mask;
+    if toggle_candidates == 0 {
+        return Ok(state.clone());
+    }
+    let edge = toggle_candidates.trailing_zeros();
+    signed.source.marked_mask ^= 1u64 << edge;
+    signed_source_to_tableau(matcher, path, &signed)
+}
+
+fn tableau_crystal_step(
+    path: &PathData,
+    state: &SignedTableauState,
+    index: u32,
+    raising: bool,
+) -> Result<Option<SignedTableauState>, String> {
+    let p = Tableau::new(state.insertion_rows.clone());
+    let changed = if raising {
+        p.crystal_e(index)
+    } else {
+        p.crystal_f(index)
+    };
+    let Some(changed) = changed else {
+        return Ok(None);
+    };
+    let result = SignedTableauState {
+        orientation_mask: state.orientation_mask,
+        retained_orientation_mask: state.retained_orientation_mask,
+        insertion_rows: changed.rows().to_vec(),
+        recording_rows: state.recording_rows.clone(),
+    };
+    tableau_target(path, &result)?;
+    Ok(Some(result))
+}
+
+fn tableau_simple_reflection(
+    path: &PathData,
+    state: &SignedTableauState,
+    index: u32,
+) -> Result<SignedTableauState, String> {
+    let p = Tableau::new(state.insertion_rows.clone());
+    let mut epsilon = 0usize;
+    let mut raised = p.clone();
+    while let Some(next) = raised.crystal_e(index) {
+        epsilon += 1;
+        raised = next;
+    }
+    let mut phi = 0usize;
+    let mut lowered = p.clone();
+    while let Some(next) = lowered.crystal_f(index) {
+        phi += 1;
+        lowered = next;
+    }
+    let mut reflected = p;
+    if phi >= epsilon {
+        for _ in 0..phi - epsilon {
+            reflected = reflected
+                .crystal_f(index)
+                .ok_or_else(|| "S_i lowering string ended too early".to_string())?;
+        }
+    } else {
+        for _ in 0..epsilon - phi {
+            reflected = reflected
+                .crystal_e(index)
+                .ok_or_else(|| "S_i raising string ended too early".to_string())?;
+        }
+    }
+    let result = SignedTableauState {
+        orientation_mask: state.orientation_mask,
+        retained_orientation_mask: state.retained_orientation_mask,
+        insertion_rows: reflected.rows().to_vec(),
+        recording_rows: state.recording_rows.clone(),
+    };
+    tableau_target(path, &result)?;
+    Ok(result)
+}
+
+fn tableau_skeleton(state: &SignedTableauState) -> TableauSkeleton {
+    TableauSkeleton {
+        orientation_mask: state.orientation_mask,
+        retained_orientation_mask: state.retained_orientation_mask,
+        recording_rows: state.recording_rows.clone(),
+    }
+}
+
+fn skeleton_sign(skeleton: &TableauSkeleton) -> i8 {
+    if (skeleton.orientation_mask.count_ones()
+        - skeleton.retained_orientation_mask.count_ones())
+        % 2
+        == 0
+    {
+        1
+    } else {
+        -1
+    }
+}
+
+fn skeleton_key(skeleton: &TableauSkeleton) -> SchurKey {
+    SchurKey {
+        q_degree: skeleton.retained_orientation_mask.count_ones() as usize,
+        shape: tableau_shape(&skeleton.recording_rows),
+    }
+}
+
+fn permutations(n: usize) -> Vec<Vec<u32>> {
+    fn recurse(
+        n: usize,
+        permutation: &mut Vec<u32>,
+        used: &mut [bool],
+        output: &mut Vec<Vec<u32>>,
+    ) {
+        if permutation.len() == n {
+            output.push(permutation.clone());
+            return;
+        }
+        for value in 1..=n {
+            if !used[value] {
+                used[value] = true;
+                permutation.push(value as u32);
+                recurse(n, permutation, used, output);
+                permutation.pop();
+                used[value] = false;
+            }
+        }
+    }
+
+    let mut output = Vec::new();
+    recurse(n, &mut Vec::new(), &mut vec![false; n + 1], &mut output);
+    output
+}
+
+fn admissible_recordings(
+    n: usize,
+    column_lengths: &[usize],
+    permutation_cache: &[Vec<u32>],
+) -> BTreeSet<Vec<Vec<u32>>> {
+    debug_assert_eq!(column_lengths.iter().sum::<usize>(), n);
+    permutation_cache
+        .iter()
+        .filter(|permutation| {
+            let mut start = 0usize;
+            for &length in column_lengths {
+                let end = start + length;
+                if !permutation[start..end]
+                    .windows(2)
+                    .all(|pair| pair[0] > pair[1])
+                {
+                    return false;
+                }
+                start = end;
+            }
+            true
+        })
+        .map(|permutation| Tableau::rsk(permutation).1.rows().to_vec())
+        .collect()
+}
+
+impl SchurCancellation {
+    fn build(path: &PathData) -> Result<Self, String> {
+        let permutation_cache = permutations(path.n);
+        let mut recording_cache: BTreeMap<Vec<usize>, BTreeSet<Vec<Vec<u32>>>> =
+            BTreeMap::new();
+        let mut groups: BTreeMap<SchurKey, (Vec<TableauSkeleton>, Vec<TableauSkeleton>)> =
+            BTreeMap::new();
+        for orientation_mask in 0..(1u64 << path.normal_edges.len()) {
+            let hrv = hrv_for_mask(path, orientation_mask)?;
+            let column_lengths = fibres(&hrv).into_iter().map(|f| f.len()).collect::<Vec<_>>();
+            let recordings = recording_cache
+                .entry(column_lengths.clone())
+                .or_insert_with(|| {
+                    admissible_recordings(path.n, &column_lengths, &permutation_cache)
+                });
+            let mut retained_orientation_mask = orientation_mask;
+            loop {
+                for recording_rows in recordings.iter().cloned() {
+                    let skeleton = TableauSkeleton {
+                        orientation_mask,
+                        retained_orientation_mask,
+                        recording_rows,
+                    };
+                    let group = groups.entry(skeleton_key(&skeleton)).or_default();
+                    if skeleton_sign(&skeleton) > 0 {
+                        group.0.push(skeleton);
+                    } else {
+                        group.1.push(skeleton);
+                    }
+                }
+                if retained_orientation_mask == 0 {
+                    break;
+                }
+                retained_orientation_mask =
+                    (retained_orientation_mask - 1) & orientation_mask;
+            }
+        }
+
+        let mut partners = BTreeMap::new();
+        let mut fixed = BTreeSet::new();
+        let mut fixed_multiplicities = BTreeMap::new();
+        let mut total_skeletons = 0usize;
+        for (key, (mut positive, mut negative)) in groups {
+            positive.sort();
+            negative.sort();
+            total_skeletons += positive.len() + negative.len();
+            if negative.len() > positive.len() {
+                return Err(format!(
+                    "negative Schur multiplicity for path {}, q-degree {}, shape {:?}: {} positive, {} negative skeletons",
+                    path.word(), key.q_degree, key.shape, positive.len(), negative.len()
+                ));
+            }
+            for (plus, minus) in positive.iter().cloned().zip(negative.iter().cloned()) {
+                partners.insert(plus.clone(), minus.clone());
+                partners.insert(minus, plus);
+            }
+            for survivor in positive.into_iter().skip(negative.len()) {
+                fixed.insert(survivor);
+                *fixed_multiplicities.entry(key.clone()).or_default() += 1;
+            }
+        }
+        Ok(Self {
+            partners,
+            fixed,
+            fixed_multiplicities,
+            total_skeletons,
+        })
+    }
+
+    fn apply(
+        &self,
+        path: &PathData,
+        state: &SignedTableauState,
+    ) -> Result<SignedTableauState, String> {
+        let skeleton = tableau_skeleton(state);
+        if self.fixed.contains(&skeleton) {
+            if skeleton_sign(&skeleton) != 1 {
+                return Err("canonical Schur cancellation fixed a negative skeleton".into());
+            }
+            return Ok(state.clone());
+        }
+        let partner = self.partners.get(&skeleton).ok_or_else(|| {
+            format!(
+                "tableau skeleton is absent from canonical Schur matching: {skeleton:?}"
+            )
+        })?;
+        let result = SignedTableauState {
+            orientation_mask: partner.orientation_mask,
+            retained_orientation_mask: partner.retained_orientation_mask,
+            insertion_rows: state.insertion_rows.clone(),
+            recording_rows: partner.recording_rows.clone(),
+        };
+        tableau_target(path, &result)?;
+        Ok(result)
+    }
+
+    fn is_fixed(&self, state: &SignedTableauState) -> bool {
+        self.fixed.contains(&tableau_skeleton(state))
+    }
+}
+
+#[derive(Clone, Debug)]
+struct InvolutionPrincipleCertificate {
+    source_coloring: Vec<u8>,
+    target: SignedTableauState,
+    alternating_steps: usize,
+    trace: Vec<String>,
+}
+
+fn coloring_to_surviving_tableau(
+    matcher: &mut RecursiveMatcher,
+    schur: &SchurCancellation,
+    path: &PathData,
+    coloring: &[u8],
+    keep_trace: bool,
+) -> Result<InvolutionPrincipleCertificate, String> {
+    validate_packed_word(coloring, path.n)?;
+    if !increases_on_edges(coloring, &path.strict_edges) {
+        return Err("coloring violates a strict edge".into());
+    }
+    let ascents = edge_ascent_mask(coloring, &path.normal_edges);
+    let signed = SignedSourceState {
+        source: SourceState {
+            coloring: coloring.to_vec(),
+            marked_mask: ascents,
+        },
+        retained_mask: ascents,
+    };
+    let mut state = signed_source_to_tableau(matcher, path, &signed)?;
+    let mut trace = Vec::new();
+    if keep_trace {
+        trace.push(format!(
+            "I-fixed coloring enters as {}",
+            format_signed_tableau(path, &state)
+        ));
+    }
+    let mut alternating_steps = 0usize;
+    while !schur.is_fixed(&state) {
+        state = schur.apply(path, &state)?;
+        alternating_steps += 1;
+        if keep_trace {
+            trace.push(format!(
+                "J pairs the recording skeleton: {}",
+                format_signed_tableau(path, &state)
+            ));
+        }
+        state = signed_tableau_involution(matcher, path, &state)?;
+        alternating_steps += 1;
+        if keep_trace {
+            trace.push(format!(
+                "I toggles the first available ascent: {}",
+                format_signed_tableau(path, &state)
+            ));
+        }
+        if alternating_steps > 2 * schur.total_skeletons + 1 {
+            return Err("alternating involution-principle path entered a cycle".into());
+        }
+    }
+    Ok(InvolutionPrincipleCertificate {
+        source_coloring: coloring.to_vec(),
+        target: state,
+        alternating_steps,
+        trace,
+    })
+}
+
+fn surviving_tableau_to_coloring(
+    matcher: &mut RecursiveMatcher,
+    schur: &SchurCancellation,
+    path: &PathData,
+    target: &SignedTableauState,
+) -> Result<Vec<u8>, String> {
+    if !schur.is_fixed(target) {
+        return Err("inverse requires a surviving canonical Schur skeleton".into());
+    }
+    let mut state = target.clone();
+    let mut alternating_steps = 0usize;
+    loop {
+        let signed = tableau_to_signed_source(matcher, path, &state)?;
+        let ascents = edge_ascent_mask(&signed.source.coloring, &path.normal_edges);
+        if signed.source.marked_mask == ascents && signed.retained_mask == ascents {
+            validate_packed_word(&signed.source.coloring, path.n)?;
+            return Ok(signed.source.coloring);
+        }
+        state = signed_tableau_involution(matcher, path, &state)?;
+        state = schur.apply(path, &state)?;
+        alternating_steps += 2;
+        if alternating_steps > 2 * schur.total_skeletons + 1 {
+            return Err("inverse alternating path entered a cycle".into());
+        }
+    }
+}
+
+fn transported_simple_reflection(
+    matcher: &mut RecursiveMatcher,
+    schur: &SchurCancellation,
+    path: &PathData,
+    coloring: &[u8],
+    index: u32,
+) -> Result<Vec<u8>, String> {
+    let certificate =
+        coloring_to_surviving_tableau(matcher, schur, path, coloring, false)?;
+    let reflected = tableau_simple_reflection(path, &certificate.target, index)?;
+    if !schur.is_fixed(&reflected) {
+        return Err("S_i moved a tableau off its surviving Schur skeleton".into());
+    }
+    surviving_tableau_to_coloring(matcher, schur, path, &reflected)
+}
+
+fn transported_reflection_word(
+    matcher: &mut RecursiveMatcher,
+    schur: &SchurCancellation,
+    path: &PathData,
+    coloring: &[u8],
+    indices: &[u32],
+) -> Result<Vec<u8>, String> {
+    let mut result = coloring.to_vec();
+    for &index in indices {
+        result = transported_simple_reflection(matcher, schur, path, &result, index)?;
+    }
+    Ok(result)
+}
+
+fn packed_semistandard_tableaux(shape: &[usize], n: usize) -> Vec<Tableau> {
+    let partition = Partition::from_sorted(shape.iter().map(|&part| part as u32).collect());
+    Tableau::semistandard_tableaux(&partition, n as u32)
+        .into_iter()
+        .filter(|tableau| {
+            let entries = tableau
+                .rows()
+                .iter()
+                .flatten()
+                .copied()
+                .collect::<BTreeSet<_>>();
+            let max = entries.iter().next_back().copied().unwrap_or(0);
+            entries == (1..=max).collect()
+        })
+        .collect()
+}
+
 fn edge_ascent_mask(word: &[u8], edges: &[(usize, usize)]) -> u64 {
     edges
         .iter()
@@ -2911,6 +3662,656 @@ fn print_trace(path: &PathData, coloring_text: &str, marked_mask: u64) -> Result
     Ok(())
 }
 
+fn tableau_shape(rows: &[Vec<u32>]) -> Vec<usize> {
+    rows.iter().map(Vec::len).collect()
+}
+
+fn format_tableau(rows: &[Vec<u32>]) -> String {
+    if rows.is_empty() {
+        return "[]".into();
+    }
+    rows.iter()
+        .map(|row| {
+            format!(
+                "[{}]",
+                row.iter().map(u32::to_string).collect::<Vec<_>>().join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn format_signed_source(path: &PathData, signed: &SignedSourceState) -> String {
+    format!(
+        "kappa={}, A={}, B={}",
+        format_word(&signed.source.coloring),
+        format_edges(signed.source.marked_mask, &path.normal_edges),
+        format_edges(signed.retained_mask, &path.normal_edges)
+    )
+}
+
+fn format_signed_tableau(path: &PathData, state: &SignedTableauState) -> String {
+    format!(
+        "eta={}, B_eta={}, P={}, Q={}",
+        format_edges(state.orientation_mask, &path.normal_edges),
+        format_edges(state.retained_orientation_mask, &path.normal_edges),
+        format_tableau(&state.insertion_rows),
+        format_tableau(&state.recording_rows)
+    )
+}
+
+#[derive(Default)]
+struct TableauAudit {
+    signed_states: usize,
+    fixed_states: usize,
+    paired_states: usize,
+    shape_preserved: usize,
+    insertion_preserved: usize,
+    recording_preserved: usize,
+    crystal_transitions: usize,
+    crystal_closed: usize,
+    crystal_commuting: usize,
+    first_shape_failure: Option<String>,
+    first_insertion_failure: Option<String>,
+    first_crystal_closure_failure: Option<String>,
+    first_crystal_commutation_failure: Option<String>,
+}
+
+#[derive(Default)]
+struct SchurAudit {
+    paths: usize,
+    signed_skeletons: usize,
+    surviving_skeletons: usize,
+    source_colorings: usize,
+    target_tableaux: usize,
+    alternating_steps: usize,
+    max_alternating_steps: usize,
+    simple_reflections: usize,
+    commuting_relations: usize,
+    braid_relations: usize,
+    simple_reflection_paths: usize,
+}
+
+impl SchurAudit {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        self.signed_skeletons += other.signed_skeletons;
+        self.surviving_skeletons += other.surviving_skeletons;
+        self.source_colorings += other.source_colorings;
+        self.target_tableaux += other.target_tableaux;
+        self.alternating_steps += other.alternating_steps;
+        self.max_alternating_steps = self.max_alternating_steps.max(other.max_alternating_steps);
+        self.simple_reflections += other.simple_reflections;
+        self.commuting_relations += other.commuting_relations;
+        self.braid_relations += other.braid_relations;
+        self.simple_reflection_paths += other.simple_reflection_paths;
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "canonical Schur audit {label}: {} paths, {} signed LR skeletons -> {} positive survivors; {} colorings <-> {} surviving SSYT objects; {} alternating I/J steps total, maximum {}",
+            self.paths,
+            self.signed_skeletons,
+            self.surviving_skeletons,
+            self.source_colorings,
+            self.target_tableaux,
+            self.alternating_steps,
+            self.max_alternating_steps
+        );
+        if self.simple_reflection_paths == 0 {
+            println!("transported S_i audit {label}: skipped");
+        } else {
+            println!(
+                "transported S_i audit {label}: {} involutions, {} distant commutations, {} braid relations across {} paths [all exact]",
+                self.simple_reflections,
+                self.commuting_relations,
+                self.braid_relations,
+                self.simple_reflection_paths
+            );
+        }
+    }
+}
+
+impl TableauAudit {
+    fn absorb(&mut self, other: Self) {
+        self.signed_states += other.signed_states;
+        self.fixed_states += other.fixed_states;
+        self.paired_states += other.paired_states;
+        self.shape_preserved += other.shape_preserved;
+        self.insertion_preserved += other.insertion_preserved;
+        self.recording_preserved += other.recording_preserved;
+        self.crystal_transitions += other.crystal_transitions;
+        self.crystal_closed += other.crystal_closed;
+        self.crystal_commuting += other.crystal_commuting;
+        if self.first_shape_failure.is_none() {
+            self.first_shape_failure = other.first_shape_failure;
+        }
+        if self.first_insertion_failure.is_none() {
+            self.first_insertion_failure = other.first_insertion_failure;
+        }
+        if self.first_crystal_closure_failure.is_none() {
+            self.first_crystal_closure_failure = other.first_crystal_closure_failure;
+        }
+        if self.first_crystal_commutation_failure.is_none() {
+            self.first_crystal_commutation_failure = other.first_crystal_commutation_failure;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "tableau audit {label}: {} signed states = {} fixed + {} paired; shape {}/{}, P {}/{}, Q {}/{} preserved",
+            self.signed_states,
+            self.fixed_states,
+            self.paired_states,
+            self.shape_preserved,
+            self.paired_states,
+            self.insertion_preserved,
+            self.paired_states,
+            self.recording_preserved,
+            self.paired_states,
+        );
+        println!(
+            "crystal audit {label}: {} nonzero e_i/f_i transitions; {} remain valid ordered HRV-column tensors; {} commute with cancellation",
+            self.crystal_transitions, self.crystal_closed, self.crystal_commuting
+        );
+        if let Some(failure) = &self.first_shape_failure {
+            println!("first tableau-shape obstruction: {failure}");
+        }
+        if let Some(failure) = &self.first_insertion_failure {
+            println!("first P-tableau obstruction: {failure}");
+        }
+        if let Some(failure) = &self.first_crystal_closure_failure {
+            println!("first column-crystal closure obstruction: {failure}");
+        }
+        if let Some(failure) = &self.first_crystal_commutation_failure {
+            println!("first crystal-commutation obstruction: {failure}");
+        }
+    }
+}
+
+fn audit_tableaux_for_path(path: &PathData) -> Result<TableauAudit, String> {
+    let mut matcher = RecursiveMatcher::default();
+    let mut audit = TableauAudit::default();
+    for source in enumerate_sources(path) {
+        let mut retained_mask = source.marked_mask;
+        loop {
+            let signed = SignedSourceState {
+                source: source.clone(),
+                retained_mask,
+            };
+            let state = signed_source_to_tableau(&mut matcher, path, &signed)?;
+            let recovered = tableau_to_signed_source(&mut matcher, path, &state)?;
+            if recovered != signed {
+                return Err(format!(
+                    "signed RSK round trip failed for {}",
+                    format_signed_source(path, &signed)
+                ));
+            }
+            let target = tableau_target(path, &state)?;
+            if color_content(&target.column_word) != color_content(&source.coloring)
+                || state.retained_orientation_mask.count_ones()
+                    != signed.retained_mask.count_ones()
+            {
+                return Err("signed tableau encoding changed exact weight or q-degree".into());
+            }
+
+            let paired = signed_tableau_involution(&mut matcher, path, &state)?;
+            let paired_source = tableau_to_signed_source(&mut matcher, path, &paired)?;
+            let replayed = signed_tableau_involution(&mut matcher, path, &paired)?;
+            if replayed != state {
+                return Err(format!(
+                    "signed cancellation is not involutive for {}",
+                    format_signed_source(path, &signed)
+                ));
+            }
+            if color_content(&paired_source.source.coloring) != color_content(&source.coloring)
+                || paired_source.retained_mask.count_ones() != retained_mask.count_ones()
+            {
+                return Err("signed cancellation changed content or q-degree".into());
+            }
+            audit.signed_states += 1;
+            let ascents = edge_ascent_mask(&source.coloring, &path.normal_edges);
+            let expected_fixed = ascents == retained_mask;
+            if expected_fixed {
+                if state != paired
+                    || source.marked_mask != retained_mask
+                    || source.marked_mask != ascents
+                {
+                    return Err("cancellation fixed-point characterization failed".into());
+                }
+                audit.fixed_states += 1;
+            } else {
+                if state == paired {
+                    return Err("a nonfixed signed state was not toggled".into());
+                }
+                let old_sign = (source.marked_mask.count_ones() - retained_mask.count_ones()) % 2;
+                let new_sign = (paired_source.source.marked_mask.count_ones()
+                    - paired_source.retained_mask.count_ones())
+                    % 2;
+                if old_sign == new_sign {
+                    return Err("signed cancellation did not reverse sign".into());
+                }
+                audit.paired_states += 1;
+                let context = || {
+                    format!(
+                        "path {}, {} -> {}",
+                        path.word(),
+                        format_signed_source(path, &signed),
+                        format_signed_source(path, &paired_source)
+                    )
+                };
+                if tableau_shape(&state.insertion_rows) == tableau_shape(&paired.insertion_rows) {
+                    audit.shape_preserved += 1;
+                } else if audit.first_shape_failure.is_none() {
+                    audit.first_shape_failure = Some(format!(
+                        "{}; {} -> {}",
+                        context(),
+                        format_signed_tableau(path, &state),
+                        format_signed_tableau(path, &paired)
+                    ));
+                }
+                if state.insertion_rows == paired.insertion_rows {
+                    audit.insertion_preserved += 1;
+                } else if audit.first_insertion_failure.is_none() {
+                    audit.first_insertion_failure = Some(format!(
+                        "{}; P {} -> {}",
+                        context(),
+                        format_tableau(&state.insertion_rows),
+                        format_tableau(&paired.insertion_rows)
+                    ));
+                }
+                if state.recording_rows == paired.recording_rows {
+                    audit.recording_preserved += 1;
+                }
+            }
+
+            for index in 1..=path.n as u32 {
+                for raising in [true, false] {
+                    let direction = if raising { 'e' } else { 'f' };
+                    let changed = match tableau_crystal_step(path, &state, index, raising) {
+                        Ok(Some(changed)) => changed,
+                        Ok(None) => continue,
+                        Err(error) => {
+                            audit.crystal_transitions += 1;
+                            if audit.first_crystal_closure_failure.is_none() {
+                                audit.first_crystal_closure_failure = Some(format!(
+                                    "path {}, {}_{index} on {}: {error}",
+                                    path.word(),
+                                    direction,
+                                    format_signed_tableau(path, &state)
+                                ));
+                            }
+                            continue;
+                        }
+                    };
+                    audit.crystal_transitions += 1;
+                    audit.crystal_closed += 1;
+                    let left = signed_tableau_involution(&mut matcher, path, &changed)?;
+                    let right = tableau_crystal_step(path, &paired, index, raising);
+                    match right {
+                        Ok(Some(right)) if left == right => audit.crystal_commuting += 1,
+                        Ok(right) => {
+                            if audit.first_crystal_commutation_failure.is_none() {
+                                audit.first_crystal_commutation_failure = Some(format!(
+                                    "path {}, {}_{index}, {}; iota(crystal)={}, crystal(iota)={}",
+                                    path.word(),
+                                    direction,
+                                    format_signed_source(path, &signed),
+                                    format_signed_tableau(path, &left),
+                                    right.as_ref().map_or_else(
+                                        || "annihilated".into(),
+                                        |value| format_signed_tableau(path, value)
+                                    )
+                                ));
+                            }
+                        }
+                        Err(error) => {
+                            if audit.first_crystal_commutation_failure.is_none() {
+                                audit.first_crystal_commutation_failure = Some(format!(
+                                    "path {}, {}_{index} after iota on {} left the column tensor: {error}",
+                                    path.word(),
+                                    direction,
+                                    format_signed_source(path, &signed)
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            if retained_mask == 0 {
+                break;
+            }
+            retained_mask = (retained_mask - 1) & source.marked_mask;
+        }
+    }
+    Ok(audit)
+}
+
+fn audit_schur_bijection_for_path(
+    path: &PathData,
+    check_simple_reflections: bool,
+) -> Result<SchurAudit, String> {
+    let schur = SchurCancellation::build(path)?;
+    if schur.fixed_multiplicities.values().sum::<usize>() != schur.fixed.len() {
+        return Err("recorded Schur multiplicities do not count the fixed skeletons".into());
+    }
+    let mut matcher = RecursiveMatcher::default();
+    let source_colorings = packed_words(path.n)
+        .into_iter()
+        .filter(|word| increases_on_edges(word, &path.strict_edges))
+        .collect::<Vec<_>>();
+    let mut images = BTreeSet::new();
+    let mut total_steps = 0usize;
+    let mut max_steps = 0usize;
+    let mut simple_reflections = 0usize;
+    let mut commuting_relations = 0usize;
+    let mut braid_relations = 0usize;
+    for coloring in &source_colorings {
+        let certificate =
+            coloring_to_surviving_tableau(&mut matcher, &schur, path, coloring, false)?;
+        if certificate.source_coloring != *coloring {
+            return Err("coloring/tableau certificate changed its recorded source".into());
+        }
+        let recovered =
+            surviving_tableau_to_coloring(&mut matcher, &schur, path, &certificate.target)?;
+        if recovered != *coloring {
+            return Err(format!(
+                "involution-principle inverse failed on path {}, coloring {}",
+                path.word(),
+                format_word(coloring)
+            ));
+        }
+        let target = tableau_target(path, &certificate.target)?;
+        if color_content(&target.column_word) != color_content(coloring)
+            || certificate
+                .target
+                .retained_orientation_mask
+                .count_ones()
+                != edge_ascent_mask(coloring, &path.normal_edges).count_ones()
+        {
+            return Err("coloring-to-SSYT map changed content or q-degree".into());
+        }
+        if !images.insert(certificate.target) {
+            return Err("coloring-to-SSYT map is not injective".into());
+        }
+        total_steps += certificate.alternating_steps;
+        max_steps = max_steps.max(certificate.alternating_steps);
+
+        let colors = color_content(coloring).len();
+        for index in 1..if check_simple_reflections {
+            colors as u32
+        } else {
+            1
+        } {
+            let reflected = transported_reflection_word(
+                &mut matcher,
+                &schur,
+                path,
+                coloring,
+                &[index],
+            )?;
+            let replayed = transported_reflection_word(
+                &mut matcher,
+                &schur,
+                path,
+                &reflected,
+                &[index],
+            )?;
+            if replayed != *coloring {
+                return Err(format!(
+                    "transported S_{index} is not involutive on path {}, coloring {}",
+                    path.word(),
+                    format_word(coloring)
+                ));
+            }
+            let mut expected_content = color_content(coloring);
+            expected_content.swap(index as usize - 1, index as usize);
+            if color_content(&reflected) != expected_content
+                || edge_ascent_mask(&reflected, &path.normal_edges).count_ones()
+                    != edge_ascent_mask(coloring, &path.normal_edges).count_ones()
+            {
+                return Err(format!(
+                    "transported S_{index} changed the wrong weight or q-degree on path {}",
+                    path.word()
+                ));
+            }
+            simple_reflections += 1;
+        }
+        for left_index in 1..if check_simple_reflections {
+            colors as u32
+        } else {
+            1
+        } {
+            for right_index in left_index + 2..colors as u32 {
+                let left_then_right = transported_reflection_word(
+                    &mut matcher,
+                    &schur,
+                    path,
+                    coloring,
+                    &[left_index, right_index],
+                )?;
+                let right_then_left = transported_reflection_word(
+                    &mut matcher,
+                    &schur,
+                    path,
+                    coloring,
+                    &[right_index, left_index],
+                )?;
+                if left_then_right != right_then_left {
+                    return Err(format!(
+                        "transported S_{left_index},S_{right_index} do not commute on path {}",
+                        path.word()
+                    ));
+                }
+                commuting_relations += 1;
+            }
+        }
+        for index in 1..if check_simple_reflections {
+            colors.saturating_sub(1) as u32
+        } else {
+            1
+        } {
+            let left = transported_reflection_word(
+                &mut matcher,
+                &schur,
+                path,
+                coloring,
+                &[index, index + 1, index],
+            )?;
+            let right = transported_reflection_word(
+                &mut matcher,
+                &schur,
+                path,
+                coloring,
+                &[index + 1, index, index + 1],
+            )?;
+            if left != right {
+                return Err(format!(
+                    "transported S_{index},S_{} fail the braid relation on path {}",
+                    index + 1,
+                    path.word()
+                ));
+            }
+            braid_relations += 1;
+        }
+    }
+
+    let mut tableaux_by_shape: BTreeMap<Vec<usize>, Vec<Tableau>> = BTreeMap::new();
+    let mut independent_targets = BTreeSet::new();
+    for skeleton in &schur.fixed {
+        let shape = tableau_shape(&skeleton.recording_rows);
+        let tableaux = tableaux_by_shape
+            .entry(shape.clone())
+            .or_insert_with(|| packed_semistandard_tableaux(&shape, path.n));
+        for p in tableaux {
+            let state = SignedTableauState {
+                orientation_mask: skeleton.orientation_mask,
+                retained_orientation_mask: skeleton.retained_orientation_mask,
+                insertion_rows: p.rows().to_vec(),
+                recording_rows: skeleton.recording_rows.clone(),
+            };
+            tableau_target(path, &state)?;
+            let coloring = surviving_tableau_to_coloring(&mut matcher, &schur, path, &state)?;
+            if !source_colorings.contains(&coloring) {
+                return Err("surviving SSYT object inverted to an invalid coloring".into());
+            }
+            independent_targets.insert(state);
+        }
+    }
+    if images != independent_targets {
+        return Err(format!(
+            "coloring/SSYT surjectivity mismatch for path {}: {} images, {} independent targets",
+            path.word(),
+            images.len(),
+            independent_targets.len()
+        ));
+    }
+    Ok(SchurAudit {
+        paths: 1,
+        signed_skeletons: schur.total_skeletons,
+        surviving_skeletons: schur.fixed.len(),
+        source_colorings: source_colorings.len(),
+        target_tableaux: independent_targets.len(),
+        alternating_steps: total_steps,
+        max_alternating_steps: max_steps,
+        simple_reflections,
+        commuting_relations,
+        braid_relations,
+        simple_reflection_paths: usize::from(check_simple_reflections),
+    })
+}
+
+fn print_tableau_trace(
+    path: &PathData,
+    coloring_text: &str,
+    marked_mask: u64,
+    retained_mask: u64,
+) -> Result<(), String> {
+    let signed = SignedSourceState {
+        source: SourceState {
+            coloring: parse_coloring(coloring_text)?,
+            marked_mask,
+        },
+        retained_mask,
+    };
+    let mut matcher = RecursiveMatcher::default();
+    let state = signed_source_to_tableau(&mut matcher, path, &signed)?;
+    let target = tableau_target(path, &state)?;
+    let paired = signed_tableau_involution(&mut matcher, path, &state)?;
+    let paired_source = tableau_to_signed_source(&mut matcher, path, &paired)?;
+    println!("path: {}", path.word());
+    println!("signed source: {}", format_signed_source(path, &signed));
+    println!(
+        "sign (-1)^({}-{}) = {}; q-degree {}",
+        signed.source.marked_mask.count_ones(),
+        signed.retained_mask.count_ones(),
+        if (signed.source.marked_mask.count_ones() - signed.retained_mask.count_ones()) % 2
+            == 0
+        {
+            "+"
+        } else {
+            "-"
+        },
+        signed.retained_mask.count_ones()
+    );
+    println!("HRV columns: {}", format_columns(path, &target)?);
+    println!("tableau object: {}", format_signed_tableau(path, &state));
+    println!(
+        "cancellation partner: {}",
+        format_signed_source(path, &paired_source)
+    );
+    println!(
+        "partner tableau object: {}",
+        format_signed_tableau(path, &paired)
+    );
+    println!(
+        "shape {:?} -> {:?}; insertion tableau {}",
+        tableau_shape(&state.insertion_rows),
+        tableau_shape(&paired.insertion_rows),
+        if state.insertion_rows == paired.insertion_rows {
+            "preserved"
+        } else {
+            "changed"
+        }
+    );
+    let schur = SchurCancellation::build(path)?;
+    let certificate = coloring_to_surviving_tableau(
+        &mut matcher,
+        &schur,
+        path,
+        &signed.source.coloring,
+        true,
+    )?;
+    println!(
+        "involution-principle image after {} alternating steps: {}",
+        certificate.alternating_steps,
+        format_signed_tableau(path, &certificate.target)
+    );
+    for (index, step) in certificate.trace.iter().enumerate() {
+        println!("I/J trace {}: {step}", index + 1);
+    }
+    let recovered =
+        surviving_tableau_to_coloring(&mut matcher, &schur, path, &certificate.target)?;
+    println!(
+        "reverse alternating path -> coloring {} [OK]",
+        format_word(&recovered)
+    );
+    for index in 1..color_content(&signed.source.coloring).len() as u32 {
+        let reflected = transported_simple_reflection(
+            &mut matcher,
+            &schur,
+            path,
+            &signed.source.coloring,
+            index,
+        )?;
+        println!(
+            "transported S_{index}: {} -> {} (q-degree {})",
+            format_word(&signed.source.coloring),
+            format_word(&reflected),
+            edge_ascent_mask(&reflected, &path.normal_edges).count_ones()
+        );
+    }
+    Ok(())
+}
+
+fn print_tableau_report(max_n: usize) -> Result<(), String> {
+    let mut total = TableauAudit::default();
+    let mut total_schur = SchurAudit::default();
+    for n in 0..=max_n {
+        let mut rank = TableauAudit::default();
+        let mut rank_schur = SchurAudit::default();
+        for path in all_paths(n) {
+            rank.absorb(audit_tableaux_for_path(&path)?);
+            rank_schur.absorb(audit_schur_bijection_for_path(&path, true)?);
+        }
+        rank.print(&format!("rank {n}"));
+        rank_schur.print(&format!("rank {n}"));
+        total.absorb(rank);
+        total_schur.absorb(rank_schur);
+    }
+    total.print(&format!("ranks 0..={max_n}"));
+    total_schur.print(&format!("ranks 0..={max_n}"));
+    Ok(())
+}
+
+fn print_schur_report(max_n: usize, check_simple_reflections: bool) -> Result<(), String> {
+    let mut total = SchurAudit::default();
+    for n in 0..=max_n {
+        let mut rank = SchurAudit::default();
+        for path in all_paths(n) {
+            rank.absorb(audit_schur_bijection_for_path(
+                &path,
+                check_simple_reflections,
+            )?);
+        }
+        rank.print(&format!("rank {n}"));
+        total.absorb(rank);
+    }
+    total.print(&format!("ranks 0..={max_n}"));
+    Ok(())
+}
+
 fn run(args: Args) -> Result<(), String> {
     if args.k3_map {
         print_k3_map()?;
@@ -2934,6 +4335,36 @@ fn run(args: Args) -> Result<(), String> {
             }
         } else {
             print_shortcut_report(args.max_n)?;
+        }
+        return Ok(());
+    }
+    if args.schur_report {
+        if let Some(word) = args.path.as_deref() {
+            let path = PathData::parse(word)?;
+            audit_schur_bijection_for_path(&path, !args.skip_si)?
+                .print(&format!("path {}", path.word()));
+        } else {
+            print_schur_report(args.max_n, !args.skip_si)?;
+        }
+        return Ok(());
+    }
+    if args.tableau_report {
+        if let Some(word) = args.path.as_deref() {
+            let path = PathData::parse(word)?;
+            if let Some(coloring) = args.trace_coloring.as_deref() {
+                print_tableau_trace(
+                    &path,
+                    coloring,
+                    args.trace_mask,
+                    args.retained_mask,
+                )?;
+            } else {
+                audit_tableaux_for_path(&path)?.print(&format!("path {}", path.word()));
+                audit_schur_bijection_for_path(&path, true)?
+                    .print(&format!("path {}", path.word()));
+            }
+        } else {
+            print_tableau_report(args.max_n)?;
         }
         return Ok(());
     }
@@ -3089,5 +4520,62 @@ mod tests {
             }
         }
         assert!(generalized > 0);
+    }
+
+    #[test]
+    fn inverse_rsk_round_trips_repeated_words() {
+        for n in 0..=4 {
+            for word in packed_words(n) {
+                let word = word
+                    .into_iter()
+                    .map(|entry| u32::from(entry) + 1)
+                    .collect::<Vec<_>>();
+                let (p, q) = Tableau::rsk(&word);
+                assert_eq!(inverse_rsk(&p, &q).unwrap(), word);
+            }
+        }
+    }
+
+    #[test]
+    fn k2_naive_toggle_changes_shape_but_schur_matching_repairs_it() {
+        let path = PathData::parse("NNEE").unwrap();
+        let mut matcher = RecursiveMatcher::default();
+        let signed = SignedSourceState {
+            source: SourceState {
+                coloring: vec![0, 1],
+                marked_mask: 1,
+            },
+            retained_mask: 0,
+        };
+        let state = signed_source_to_tableau(&mut matcher, &path, &signed).unwrap();
+        let paired = signed_tableau_involution(&mut matcher, &path, &state).unwrap();
+        assert_ne!(
+            tableau_shape(&state.insertion_rows),
+            tableau_shape(&paired.insertion_rows)
+        );
+
+        let schur = SchurCancellation::build(&path).unwrap();
+        for skeleton in schur.partners.keys() {
+            let partner = &schur.partners[skeleton];
+            assert_eq!(skeleton_key(skeleton), skeleton_key(partner));
+            assert_eq!(skeleton_sign(skeleton), -skeleton_sign(partner));
+        }
+    }
+
+    #[test]
+    fn coloring_ssyt_bijection_and_transported_reflections_check_through_rank_three() {
+        let mut reflections = 0usize;
+        let mut braids = 0usize;
+        for n in 0..=3 {
+            for path in all_paths(n) {
+                let audit = audit_schur_bijection_for_path(&path, true)
+                    .unwrap_or_else(|error| panic!("{}: {error}", path.word()));
+                assert_eq!(audit.source_colorings, audit.target_tableaux);
+                reflections += audit.simple_reflections;
+                braids += audit.braid_relations;
+            }
+        }
+        assert!(reflections > 0);
+        assert!(braids > 0);
     }
 }
