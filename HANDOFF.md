@@ -1,5 +1,29 @@
 # Handoff
 
+## Active: explicit ordinary bounce lift — 2026-10-15
+
+`/root` owns only `experiments/src/bin/marked_coloring_hrv_bijection.rs`
+and this handoff on branch
+`exp/verticalstripllt-marked-coloring-bijection`.  The current checkpoint is
+`675b791`.  The task is to replace the prototype's exact-bucket bounce
+fallback with reversible first-/second-bounce maps while retaining labelled
+HRV fibre fillings.  No maintained Rust API, Lean source, paper source, or
+circular code is owned.  Build output remains under
+`/cargo-target/ai-projects`; the shared Rust checkout is untouched.
+
+The single-bounce NN and DN cases are now explicit in the owned prototype.
+They port the paper's coloring involutions and Lean's `bounceMatch` /
+`secondMatch` orientation correspondences, with their explicit inverses.
+Labelled columns are transported by the proved identity-or-adjacent-swap HRV
+conjugacy: each fibre's actual color set is moved and placed increasingly.
+Dedicated K3 and `NDNDEE` second-bounce tests pass.  The full rank-five census
+still passes all 277,302 certificates: 162,160 certificates traverse an
+explicit first bounce, 23,872 traverse an explicit second bounce, and 78,076
+still encounter the residual generalized-bounce fallback.  The next change is
+to replace only that residual fallback by canonical matching at the smaller
+recursion branches, since the published many-bounce derivation uses algebraic
+cancellation and does not provide a local object map.
+
 ## Completed prototype: ordinary marked-coloring/HRV bijection — 2026-10-15
 
 Checkpoint `bedd1a2` on task-local branch

@@ -214,7 +214,28 @@ enum Reduction {
         absent_child: PathData,
         distinguished_edge: (usize, usize),
     },
+    FirstBounce {
+        successor: PathData,
+        base: PathData,
+        low: usize,
+        mid: usize,
+        top: usize,
+    },
+    SecondBounce {
+        successor: PathData,
+        base: PathData,
+        corner: usize,
+        low: usize,
+        mid: usize,
+        top: usize,
+    },
     BounceFallback,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FibreTransport {
+    Identity,
+    Swap(usize, usize),
 }
 
 #[derive(Clone, Debug)]
@@ -450,6 +471,108 @@ impl RecursiveMatcher {
                     column_word: child_target.column_word,
                 })
             }
+            Reduction::FirstBounce {
+                successor,
+                base,
+                low,
+                mid,
+                top,
+            } => {
+                let (factor, successor_source, coloring_transport) =
+                    first_bounce_coloring_forward(path, &successor, &base, low, mid, top, source)?;
+                trace.push(format!(
+                    "first bounce {} -> {}: paper coloring {}, external q-bit {}; recurse on successor",
+                    path.word(),
+                    successor.word(),
+                    coloring_transport,
+                    usize::from(factor)
+                ));
+                let successor_target = self.map_inner(&successor, &successor_source, trace)?;
+                let successor_background =
+                    restrict_mask(&successor, successor_target.orientation_mask, &base, 0)?;
+                let (source_bit, source_background) =
+                    bounce_unmatch(&base, low, mid, top, factor, successor_background)?;
+                let source_orientation =
+                    insert_orientation_bit(path, &base, source_background, (mid, top), source_bit)?;
+                let fibre_transport = detect_fibre_transport(
+                    path,
+                    source_orientation,
+                    &successor,
+                    successor_target.orientation_mask,
+                    low,
+                    mid,
+                )?;
+                let column_word = transport_columns(
+                    &successor,
+                    successor_target.orientation_mask,
+                    &successor_target.column_word,
+                    path,
+                    source_orientation,
+                    fibre_transport,
+                )?;
+                trace.push(format!(
+                    "first-bounce orientation unmatch: {} fibre conjugacy",
+                    fibre_transport.describe()
+                ));
+                Ok(TargetState {
+                    orientation_mask: source_orientation,
+                    column_word,
+                })
+            }
+            Reduction::SecondBounce {
+                successor,
+                base,
+                corner,
+                low,
+                mid,
+                top,
+            } => {
+                let (successor_source, coloring_transport) = second_bounce_coloring_forward(
+                    path, &successor, &base, corner, low, mid, top, source,
+                )?;
+                trace.push(format!(
+                    "second bounce {} -> {}: paper coloring {}; recurse on successor",
+                    path.word(),
+                    successor.word(),
+                    coloring_transport
+                ));
+                let successor_target = self.map_inner(&successor, &successor_source, trace)?;
+                let successor_bit = mask_contains_edge(
+                    &successor,
+                    successor_target.orientation_mask,
+                    (corner, low),
+                )?;
+                let successor_background =
+                    restrict_mask(&successor, successor_target.orientation_mask, &base, 0)?;
+                let (source_bit, source_background) =
+                    second_unmatch(&base, low, mid, top, successor_bit, successor_background)?;
+                let source_orientation =
+                    insert_orientation_bit(path, &base, source_background, (mid, top), source_bit)?;
+                let fibre_transport = detect_fibre_transport(
+                    path,
+                    source_orientation,
+                    &successor,
+                    successor_target.orientation_mask,
+                    low,
+                    mid,
+                )?;
+                let column_word = transport_columns(
+                    &successor,
+                    successor_target.orientation_mask,
+                    &successor_target.column_word,
+                    path,
+                    source_orientation,
+                    fibre_transport,
+                )?;
+                trace.push(format!(
+                    "second-bounce orientation unmatch: {} fibre conjugacy",
+                    fibre_transport.describe()
+                ));
+                Ok(TargetState {
+                    orientation_mask: source_orientation,
+                    column_word,
+                })
+            }
             Reduction::BounceFallback => {
                 let key = path.word();
                 if !self.fallback_cache.contains_key(&key) {
@@ -554,6 +677,101 @@ impl RecursiveMatcher {
                     marked_mask: mask_for_edges(path, &selected_edges)?,
                 })
             }
+            Reduction::FirstBounce {
+                successor,
+                base,
+                low,
+                mid,
+                top,
+            } => {
+                let source_bit = mask_contains_edge(path, target.orientation_mask, (mid, top))?;
+                let source_background = restrict_mask(path, target.orientation_mask, &base, 0)?;
+                let (factor, successor_background) =
+                    bounce_match(&base, low, mid, top, source_bit, source_background)?;
+                let successor_orientation = successor_background;
+                let fibre_transport = detect_fibre_transport(
+                    path,
+                    target.orientation_mask,
+                    &successor,
+                    successor_orientation,
+                    low,
+                    mid,
+                )?;
+                let successor_word = transport_columns(
+                    path,
+                    target.orientation_mask,
+                    &target.column_word,
+                    &successor,
+                    successor_orientation,
+                    fibre_transport,
+                )?;
+                let successor_target = TargetState {
+                    orientation_mask: successor_orientation,
+                    column_word: successor_word,
+                };
+                let successor_source = self.inverse_inner(&successor, &successor_target)?;
+                first_bounce_coloring_inverse(
+                    path,
+                    &successor,
+                    &base,
+                    low,
+                    mid,
+                    top,
+                    factor,
+                    &successor_source,
+                )
+            }
+            Reduction::SecondBounce {
+                successor,
+                base,
+                corner,
+                low,
+                mid,
+                top,
+            } => {
+                let source_bit = mask_contains_edge(path, target.orientation_mask, (mid, top))?;
+                let source_background = restrict_mask(path, target.orientation_mask, &base, 0)?;
+                let (successor_bit, successor_background) =
+                    second_match(&base, low, mid, top, source_bit, source_background)?;
+                let successor_orientation = insert_orientation_bit(
+                    &successor,
+                    &base,
+                    successor_background,
+                    (corner, low),
+                    successor_bit,
+                )?;
+                let fibre_transport = detect_fibre_transport(
+                    path,
+                    target.orientation_mask,
+                    &successor,
+                    successor_orientation,
+                    low,
+                    mid,
+                )?;
+                let successor_word = transport_columns(
+                    path,
+                    target.orientation_mask,
+                    &target.column_word,
+                    &successor,
+                    successor_orientation,
+                    fibre_transport,
+                )?;
+                let successor_target = TargetState {
+                    orientation_mask: successor_orientation,
+                    column_word: successor_word,
+                };
+                let successor_source = self.inverse_inner(&successor, &successor_target)?;
+                second_bounce_coloring_inverse(
+                    path,
+                    &successor,
+                    &base,
+                    corner,
+                    low,
+                    mid,
+                    top,
+                    &successor_source,
+                )
+            }
             Reduction::BounceFallback => {
                 let key = path.word();
                 if !self.fallback_cache.contains_key(&key) {
@@ -623,6 +841,72 @@ fn reduction(path: &PathData) -> Result<Reduction, String> {
             distinguished_edge: (u, v),
         });
     }
+    if first_east > 0 && path.steps[first_east - 1] == Step::Diagonal {
+        let prefix = &path.steps[..first_east - 1];
+        let suffix = &path.steps[first_east + 1..];
+        let (low, top) = endpoint(prefix);
+        let mid = low + 1;
+        let mut candidates = Vec::new();
+        for split in 0..prefix.len().saturating_sub(1) {
+            let u = &prefix[..split];
+            let v = &prefix[split + 2..];
+            if endpoint(u).1 != low {
+                continue;
+            }
+            match (prefix[split], prefix[split + 1]) {
+                (Step::North, Step::North) => {
+                    let mut successor_steps = prefix.to_vec();
+                    successor_steps.push(Step::East);
+                    successor_steps.push(Step::Diagonal);
+                    successor_steps.extend_from_slice(suffix);
+                    let mut base_steps = prefix.to_vec();
+                    base_steps.extend([Step::East, Step::East, Step::North]);
+                    base_steps.extend_from_slice(suffix);
+                    candidates.push(Reduction::FirstBounce {
+                        successor: PathData::from_steps(successor_steps)?,
+                        base: PathData::from_steps(base_steps)?,
+                        low,
+                        mid,
+                        top,
+                    });
+                }
+                (Step::Diagonal, Step::North) => {
+                    if endpoint(u).0 >= endpoint(u).1 {
+                        continue;
+                    }
+                    let mut successor_steps = u.to_vec();
+                    successor_steps.extend([Step::North, Step::Diagonal]);
+                    successor_steps.extend_from_slice(v);
+                    successor_steps.extend([Step::East, Step::Diagonal]);
+                    successor_steps.extend_from_slice(suffix);
+                    let mut base_steps = u.to_vec();
+                    base_steps.extend([Step::East, Step::North, Step::North]);
+                    base_steps.extend_from_slice(v);
+                    base_steps.extend([Step::East, Step::East, Step::North]);
+                    base_steps.extend_from_slice(suffix);
+                    candidates.push(Reduction::SecondBounce {
+                        successor: PathData::from_steps(successor_steps)?,
+                        base: PathData::from_steps(base_steps)?,
+                        corner: endpoint(u).0,
+                        low,
+                        mid,
+                        top,
+                    });
+                }
+                _ => {}
+            }
+        }
+        if candidates.len() > 1 {
+            return Err(format!(
+                "ambiguous single-bounce decomposition for {}",
+                path.word()
+            ));
+        }
+        if let Some(candidate) = candidates.pop() {
+            validate_bounce_reduction(path, &candidate)?;
+            return Ok(candidate);
+        }
+    }
     Ok(Reduction::BounceFallback)
 }
 
@@ -634,6 +918,765 @@ fn endpoint(steps: &[Step]) -> (usize, usize) {
             Step::Diagonal => (x + 1, y + 1),
             Step::East => (x + 1, y),
         })
+}
+
+impl FibreTransport {
+    fn apply(self, vertex: usize) -> usize {
+        match self {
+            Self::Identity => vertex,
+            Self::Swap(left, right) if vertex == left => right,
+            Self::Swap(left, right) if vertex == right => left,
+            Self::Swap(_, _) => vertex,
+        }
+    }
+
+    fn describe(self) -> String {
+        match self {
+            Self::Identity => "identity".into(),
+            Self::Swap(left, right) => format!("swap {}<->{}", left + 1, right + 1),
+        }
+    }
+}
+
+fn edge_set(edges: &[(usize, usize)]) -> BTreeSet<(usize, usize)> {
+    edges.iter().copied().collect()
+}
+
+fn edge_set_with(
+    edges: &[(usize, usize)],
+    additions: &[(usize, usize)],
+) -> BTreeSet<(usize, usize)> {
+    edges.iter().chain(additions).copied().collect()
+}
+
+fn swap_vertex(vertex: usize, low: usize, mid: usize) -> usize {
+    if vertex == low {
+        mid
+    } else if vertex == mid {
+        low
+    } else {
+        vertex
+    }
+}
+
+fn swap_edge(edge: (usize, usize), low: usize, mid: usize) -> (usize, usize) {
+    (swap_vertex(edge.0, low, mid), swap_vertex(edge.1, low, mid))
+}
+
+fn validate_background_swap(base: &PathData, low: usize, mid: usize) -> Result<(), String> {
+    let distinguished = (low, mid);
+    if base.normal_edges.binary_search(&distinguished).is_err() {
+        return Err("bounce background omits its distinguished normal edge".into());
+    }
+    let swapped_normal = base
+        .normal_edges
+        .iter()
+        .copied()
+        .filter(|&edge| edge != distinguished)
+        .map(|edge| swap_edge(edge, low, mid))
+        .collect::<BTreeSet<_>>();
+    let expected_normal = base
+        .normal_edges
+        .iter()
+        .copied()
+        .filter(|&edge| edge != distinguished)
+        .collect::<BTreeSet<_>>();
+    let swapped_strict = base
+        .strict_edges
+        .iter()
+        .copied()
+        .map(|edge| swap_edge(edge, low, mid))
+        .collect::<BTreeSet<_>>();
+    if swapped_normal != expected_normal || swapped_strict != edge_set(&base.strict_edges) {
+        return Err("bounce background is not invariant under the adjacent vertex swap".into());
+    }
+    Ok(())
+}
+
+fn validate_bounce_reduction(path: &PathData, reduction: &Reduction) -> Result<(), String> {
+    match reduction {
+        Reduction::FirstBounce {
+            successor,
+            base,
+            low,
+            mid,
+            top,
+        } => {
+            if *mid != *low + 1
+                || edge_set(&path.normal_edges)
+                    != edge_set_with(&base.normal_edges, &[(*mid, *top)])
+                || edge_set(&path.strict_edges)
+                    != edge_set_with(&base.strict_edges, &[(*low, *top)])
+                || edge_set(&successor.normal_edges) != edge_set(&base.normal_edges)
+                || edge_set(&successor.strict_edges)
+                    != edge_set_with(&base.strict_edges, &[(*mid, *top)])
+            {
+                return Err("first-bounce graph decomposition failed its edge certificate".into());
+            }
+            validate_background_swap(base, *low, *mid)
+        }
+        Reduction::SecondBounce {
+            successor,
+            base,
+            corner,
+            low,
+            mid,
+            top,
+        } => {
+            if *mid != *low + 1
+                || *corner >= *low
+                || edge_set(&path.normal_edges)
+                    != edge_set_with(&base.normal_edges, &[(*mid, *top)])
+                || edge_set(&path.strict_edges)
+                    != edge_set_with(&base.strict_edges, &[(*corner, *low), (*low, *top)])
+                || edge_set(&successor.normal_edges)
+                    != edge_set_with(&base.normal_edges, &[(*corner, *low)])
+                || edge_set(&successor.strict_edges)
+                    != edge_set_with(&base.strict_edges, &[(*corner, *mid), (*mid, *top)])
+            {
+                return Err("second-bounce graph decomposition failed its edge certificate".into());
+            }
+            validate_background_swap(base, *low, *mid)
+        }
+        _ => Err("non-bounce reduction passed to bounce validator".into()),
+    }
+}
+
+fn selected_edges(path: &PathData, mask: u64) -> Vec<(usize, usize)> {
+    shifted_selected_edges(path, mask, 0)
+}
+
+fn swap_word_vertices(word: &[u8], low: usize, mid: usize) -> Vec<u8> {
+    let mut swapped = word.to_vec();
+    swapped.swap(low, mid);
+    swapped
+}
+
+fn word_ascends(word: &[u8], edge: (usize, usize)) -> bool {
+    word[edge.0] < word[edge.1]
+}
+
+fn first_bounce_coloring_forward(
+    path: &PathData,
+    successor: &PathData,
+    base: &PathData,
+    low: usize,
+    mid: usize,
+    top: usize,
+    source: &SourceState,
+) -> Result<(bool, SourceState, &'static str), String> {
+    let identity =
+        source.coloring[low] < source.coloring[top] && source.coloring[mid] < source.coloring[top];
+    let coloring = if identity {
+        source.coloring.clone()
+    } else {
+        swap_word_vertices(&source.coloring, low, mid)
+    };
+    let selected = selected_edges(path, source.marked_mask);
+    let mut factor = false;
+    let mut successor_selected = Vec::new();
+    if identity {
+        for edge in selected {
+            if edge == (mid, top) {
+                factor = true;
+            } else {
+                successor_selected.push(edge);
+            }
+        }
+    } else {
+        for edge in selected {
+            if edge == (low, mid) {
+                factor = true;
+            } else if edge == (mid, top) {
+                return Err("nonascending first-bounce fresh edge was marked".into());
+            } else {
+                if base.normal_edges.binary_search(&edge).is_err() {
+                    return Err("first-bounce mark lies outside the background".into());
+                }
+                successor_selected.push(swap_edge(edge, low, mid));
+            }
+        }
+    }
+    let result = SourceState {
+        coloring,
+        marked_mask: mask_for_edges(successor, &successor_selected)?,
+    };
+    validate_source(successor, &result)?;
+    if source.marked_mask.count_ones() != result.marked_mask.count_ones() + u32::from(factor) {
+        return Err("first-bounce coloring lift changed marked degree".into());
+    }
+    Ok((factor, result, if identity { "identity" } else { "swap" }))
+}
+
+fn first_bounce_coloring_inverse(
+    path: &PathData,
+    successor: &PathData,
+    base: &PathData,
+    low: usize,
+    mid: usize,
+    top: usize,
+    factor: bool,
+    source: &SourceState,
+) -> Result<SourceState, String> {
+    let identity =
+        source.coloring[low] < source.coloring[top] && source.coloring[mid] < source.coloring[top];
+    let coloring = if identity {
+        source.coloring.clone()
+    } else {
+        swap_word_vertices(&source.coloring, low, mid)
+    };
+    let mut selected = Vec::new();
+    if identity {
+        selected.extend(selected_edges(successor, source.marked_mask));
+        if factor {
+            selected.push((mid, top));
+        }
+    } else {
+        for edge in selected_edges(successor, source.marked_mask) {
+            if edge == (low, mid) {
+                return Err("nonascending successor distinguished edge was marked".into());
+            }
+            if base.normal_edges.binary_search(&edge).is_err() {
+                return Err("first-bounce inverse mark lies outside the background".into());
+            }
+            selected.push(swap_edge(edge, low, mid));
+        }
+        if factor {
+            selected.push((low, mid));
+        }
+    }
+    let result = SourceState {
+        coloring,
+        marked_mask: mask_for_edges(path, &selected)?,
+    };
+    validate_source(path, &result)?;
+    if result.marked_mask.count_ones() != source.marked_mask.count_ones() + u32::from(factor) {
+        return Err("first-bounce coloring inverse changed marked degree".into());
+    }
+    Ok(result)
+}
+
+fn map_special_marks(
+    from_word: &[u8],
+    from_selected: &BTreeSet<(usize, usize)>,
+    from_special: &[(usize, usize)],
+    to_word: &[u8],
+    to_special: &[(usize, usize)],
+) -> Result<Vec<(usize, usize)>, String> {
+    let from_ascents = from_special
+        .iter()
+        .copied()
+        .filter(|&edge| word_ascends(from_word, edge))
+        .collect::<Vec<_>>();
+    let to_ascents = to_special
+        .iter()
+        .copied()
+        .filter(|&edge| word_ascends(to_word, edge))
+        .collect::<Vec<_>>();
+    if from_ascents.len() != to_ascents.len() {
+        return Err("second-bounce special ascent counts do not match".into());
+    }
+    Ok(from_ascents
+        .iter()
+        .zip(to_ascents)
+        .filter_map(|(from, to)| from_selected.contains(from).then_some(to))
+        .collect())
+}
+
+fn second_bounce_coloring_forward(
+    path: &PathData,
+    successor: &PathData,
+    base: &PathData,
+    corner: usize,
+    low: usize,
+    mid: usize,
+    top: usize,
+    source: &SourceState,
+) -> Result<(SourceState, &'static str), String> {
+    let inside_low = source.coloring[corner] < source.coloring[low]
+        && source.coloring[low] < source.coloring[top];
+    let inside_mid = source.coloring[corner] < source.coloring[mid]
+        && source.coloring[mid] < source.coloring[top];
+    let identity = inside_low && inside_mid;
+    let coloring = if identity {
+        source.coloring.clone()
+    } else {
+        swap_word_vertices(&source.coloring, low, mid)
+    };
+    let from_selected = selected_edges(path, source.marked_mask)
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    let mut selected = Vec::new();
+    if identity {
+        for edge in &from_selected {
+            selected.push(if *edge == (mid, top) {
+                (corner, low)
+            } else {
+                *edge
+            });
+        }
+    } else {
+        for &edge in &from_selected {
+            if edge == (low, mid) || edge == (mid, top) {
+                continue;
+            }
+            if base.normal_edges.binary_search(&edge).is_err() {
+                return Err("second-bounce mark lies outside the background".into());
+            }
+            selected.push(swap_edge(edge, low, mid));
+        }
+        selected.extend(map_special_marks(
+            &source.coloring,
+            &from_selected,
+            &[(low, mid), (mid, top)],
+            &coloring,
+            &[(low, mid), (corner, low)],
+        )?);
+    }
+    let result = SourceState {
+        coloring,
+        marked_mask: mask_for_edges(successor, &selected)?,
+    };
+    validate_source(successor, &result)?;
+    if source_signature(source) != source_signature(&result) {
+        return Err("second-bounce coloring lift changed exact weight".into());
+    }
+    Ok((result, if identity { "identity" } else { "swap" }))
+}
+
+fn second_bounce_coloring_inverse(
+    path: &PathData,
+    successor: &PathData,
+    base: &PathData,
+    corner: usize,
+    low: usize,
+    mid: usize,
+    top: usize,
+    source: &SourceState,
+) -> Result<SourceState, String> {
+    let inside_low = source.coloring[corner] < source.coloring[low]
+        && source.coloring[low] < source.coloring[top];
+    let inside_mid = source.coloring[corner] < source.coloring[mid]
+        && source.coloring[mid] < source.coloring[top];
+    let identity = inside_low && inside_mid;
+    let coloring = if identity {
+        source.coloring.clone()
+    } else {
+        swap_word_vertices(&source.coloring, low, mid)
+    };
+    let from_selected = selected_edges(successor, source.marked_mask)
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    let mut selected = Vec::new();
+    if identity {
+        for edge in &from_selected {
+            selected.push(if *edge == (corner, low) {
+                (mid, top)
+            } else {
+                *edge
+            });
+        }
+    } else {
+        for &edge in &from_selected {
+            if edge == (low, mid) || edge == (corner, low) {
+                continue;
+            }
+            if base.normal_edges.binary_search(&edge).is_err() {
+                return Err("second-bounce inverse mark lies outside the background".into());
+            }
+            selected.push(swap_edge(edge, low, mid));
+        }
+        selected.extend(map_special_marks(
+            &source.coloring,
+            &from_selected,
+            &[(low, mid), (corner, low)],
+            &coloring,
+            &[(low, mid), (mid, top)],
+        )?);
+    }
+    let result = SourceState {
+        coloring,
+        marked_mask: mask_for_edges(path, &selected)?,
+    };
+    validate_source(path, &result)?;
+    if source_signature(source) != source_signature(&result) {
+        return Err("second-bounce coloring inverse changed exact weight".into());
+    }
+    Ok(result)
+}
+
+fn background_values(
+    base: &PathData,
+    mask: u64,
+    low: usize,
+    mid: usize,
+    top: usize,
+) -> Result<(usize, usize, usize), String> {
+    let mut upward = base.strict_edges.clone();
+    upward.extend(
+        base.normal_edges
+            .iter()
+            .enumerate()
+            .filter(|(index, edge)| **edge != (low, mid) && mask & (1u64 << index) != 0)
+            .map(|(_, &edge)| edge),
+    );
+    let hrv = highest_reachable_vertices(base.n, &upward)
+        .ok_or_else(|| "bounce background upward graph is invalid".to_string())?;
+    Ok((hrv[low], hrv[mid], hrv[top]))
+}
+
+fn set_background_bit(
+    base: &PathData,
+    mask: u64,
+    edge: (usize, usize),
+    value: bool,
+) -> Result<u64, String> {
+    let index = base
+        .normal_edges
+        .binary_search(&edge)
+        .map_err(|_| format!("background does not contain distinguished edge {edge:?}"))?;
+    Ok(if value {
+        mask | (1u64 << index)
+    } else {
+        mask & !(1u64 << index)
+    })
+}
+
+fn swap_background_orientation(
+    base: &PathData,
+    mask: u64,
+    low: usize,
+    mid: usize,
+) -> Result<u64, String> {
+    let distinguished = (low, mid);
+    let selected = selected_edges(base, mask)
+        .into_iter()
+        .map(|edge| {
+            if edge == distinguished {
+                edge
+            } else {
+                swap_edge(edge, low, mid)
+            }
+        })
+        .collect::<Vec<_>>();
+    mask_for_edges(base, &selected)
+}
+
+fn bounce_match(
+    base: &PathData,
+    low: usize,
+    mid: usize,
+    top: usize,
+    factor: bool,
+    orientation: u64,
+) -> Result<(bool, u64), String> {
+    let beta = mask_contains_edge(base, orientation, (low, mid))?;
+    let (a, c, h) = background_values(base, orientation, low, mid, top)?;
+    if h <= c {
+        if beta || h <= a {
+            Ok((factor, orientation))
+        } else {
+            Ok((
+                factor,
+                set_background_bit(
+                    base,
+                    swap_background_orientation(base, orientation, low, mid)?,
+                    (low, mid),
+                    false,
+                )?,
+            ))
+        }
+    } else if factor {
+        Ok((
+            beta,
+            set_background_bit(base, orientation, (low, mid), true)?,
+        ))
+    } else {
+        Ok((
+            beta,
+            set_background_bit(
+                base,
+                swap_background_orientation(base, orientation, low, mid)?,
+                (low, mid),
+                false,
+            )?,
+        ))
+    }
+}
+
+fn bounce_unmatch(
+    base: &PathData,
+    low: usize,
+    mid: usize,
+    top: usize,
+    factor: bool,
+    orientation: u64,
+) -> Result<(bool, u64), String> {
+    let beta = mask_contains_edge(base, orientation, (low, mid))?;
+    let (a, c, h) = background_values(base, orientation, low, mid, top)?;
+    if beta {
+        if h <= c {
+            Ok((factor, orientation))
+        } else {
+            Ok((
+                true,
+                set_background_bit(base, orientation, (low, mid), factor)?,
+            ))
+        }
+    } else if h <= a {
+        if h <= c {
+            Ok((factor, orientation))
+        } else {
+            Ok((
+                factor,
+                swap_background_orientation(base, orientation, low, mid)?,
+            ))
+        }
+    } else {
+        Ok((
+            false,
+            set_background_bit(
+                base,
+                swap_background_orientation(base, orientation, low, mid)?,
+                (low, mid),
+                factor,
+            )?,
+        ))
+    }
+}
+
+fn second_match(
+    base: &PathData,
+    low: usize,
+    mid: usize,
+    top: usize,
+    source_bit: bool,
+    orientation: u64,
+) -> Result<(bool, u64), String> {
+    let beta = mask_contains_edge(base, orientation, (low, mid))?;
+    let (a, c, h) = background_values(base, orientation, low, mid, top)?;
+    if source_bit == beta {
+        if source_bit {
+            Ok((true, orientation))
+        } else {
+            Ok((
+                false,
+                set_background_bit(
+                    base,
+                    swap_background_orientation(base, orientation, low, mid)?,
+                    (low, mid),
+                    false,
+                )?,
+            ))
+        }
+    } else if a <= h && c <= h {
+        if source_bit {
+            Ok((
+                false,
+                set_background_bit(base, orientation, (low, mid), true)?,
+            ))
+        } else {
+            Ok((
+                true,
+                set_background_bit(
+                    base,
+                    swap_background_orientation(base, orientation, low, mid)?,
+                    (low, mid),
+                    false,
+                )?,
+            ))
+        }
+    } else if source_bit {
+        if c <= a {
+            Ok((true, orientation))
+        } else {
+            Ok((
+                false,
+                set_background_bit(
+                    base,
+                    swap_background_orientation(base, orientation, low, mid)?,
+                    (low, mid),
+                    true,
+                )?,
+            ))
+        }
+    } else if a <= c {
+        Ok((false, orientation))
+    } else {
+        Ok((
+            true,
+            set_background_bit(
+                base,
+                swap_background_orientation(base, orientation, low, mid)?,
+                (low, mid),
+                false,
+            )?,
+        ))
+    }
+}
+
+fn second_unmatch(
+    base: &PathData,
+    low: usize,
+    mid: usize,
+    top: usize,
+    successor_bit: bool,
+    orientation: u64,
+) -> Result<(bool, u64), String> {
+    let beta = mask_contains_edge(base, orientation, (low, mid))?;
+    let (a, c, h) = background_values(base, orientation, low, mid, top)?;
+    if successor_bit == beta {
+        if successor_bit {
+            Ok((true, orientation))
+        } else {
+            Ok((
+                false,
+                set_background_bit(
+                    base,
+                    swap_background_orientation(base, orientation, low, mid)?,
+                    (low, mid),
+                    false,
+                )?,
+            ))
+        }
+    } else if a <= h && c <= h {
+        if successor_bit {
+            Ok((
+                false,
+                set_background_bit(
+                    base,
+                    swap_background_orientation(base, orientation, low, mid)?,
+                    (low, mid),
+                    true,
+                )?,
+            ))
+        } else {
+            Ok((
+                true,
+                set_background_bit(base, orientation, (low, mid), false)?,
+            ))
+        }
+    } else if successor_bit {
+        if c <= a {
+            Ok((true, orientation))
+        } else {
+            Ok((
+                false,
+                set_background_bit(
+                    base,
+                    swap_background_orientation(base, orientation, low, mid)?,
+                    (low, mid),
+                    true,
+                )?,
+            ))
+        }
+    } else if a <= c {
+        Ok((false, orientation))
+    } else {
+        Ok((
+            true,
+            set_background_bit(
+                base,
+                swap_background_orientation(base, orientation, low, mid)?,
+                (low, mid),
+                false,
+            )?,
+        ))
+    }
+}
+
+fn insert_orientation_bit(
+    path: &PathData,
+    base: &PathData,
+    base_mask: u64,
+    edge: (usize, usize),
+    bit: bool,
+) -> Result<u64, String> {
+    let mut selected = selected_edges(base, base_mask);
+    if bit {
+        selected.push(edge);
+    }
+    mask_for_edges(path, &selected)
+}
+
+fn detect_fibre_transport(
+    source_path: &PathData,
+    source_mask: u64,
+    target_path: &PathData,
+    target_mask: u64,
+    low: usize,
+    mid: usize,
+) -> Result<FibreTransport, String> {
+    let source_hrv = hrv_for_mask(source_path, source_mask)?;
+    let target_hrv = hrv_for_mask(target_path, target_mask)?;
+    if source_hrv == target_hrv {
+        return Ok(FibreTransport::Identity);
+    }
+    let transport = FibreTransport::Swap(low, mid);
+    if (0..source_path.n)
+        .all(|vertex| target_hrv[transport.apply(vertex)] == transport.apply(source_hrv[vertex]))
+    {
+        Ok(transport)
+    } else {
+        Err("matched bounce orientations have no proved identity/swap HRV conjugacy".into())
+    }
+}
+
+fn transport_columns(
+    source_path: &PathData,
+    source_mask: u64,
+    source_word: &[u8],
+    target_path: &PathData,
+    target_mask: u64,
+    transport: FibreTransport,
+) -> Result<Vec<u8>, String> {
+    let source = TargetState {
+        orientation_mask: source_mask,
+        column_word: source_word.to_vec(),
+    };
+    validate_target(source_path, &source)?;
+    if source_path.n != target_path.n {
+        return Err("cannot transport columns between different ranks".into());
+    }
+    let source_hrv = hrv_for_mask(source_path, source_mask)?;
+    let target_hrv = hrv_for_mask(target_path, target_mask)?;
+    if !(0..source_path.n)
+        .all(|vertex| target_hrv[transport.apply(vertex)] == transport.apply(source_hrv[vertex]))
+    {
+        return Err("column transport does not conjugate the two HRV maps".into());
+    }
+    let mut target_word = vec![0u8; source_path.n];
+    let mut assigned = vec![false; source_path.n];
+    for fibre in fibres(&source_hrv) {
+        let mut colors = fibre
+            .iter()
+            .map(|&vertex| source_word[vertex])
+            .collect::<Vec<_>>();
+        colors.sort_unstable();
+        let mut target_vertices = fibre
+            .iter()
+            .map(|&vertex| transport.apply(vertex))
+            .collect::<Vec<_>>();
+        target_vertices.sort_unstable();
+        for (vertex, color) in target_vertices.into_iter().zip(colors) {
+            if std::mem::replace(&mut assigned[vertex], true) {
+                return Err("column transport assigned a vertex twice".into());
+            }
+            target_word[vertex] = color;
+        }
+    }
+    if assigned.iter().any(|assigned| !assigned) {
+        return Err("column transport omitted a vertex".into());
+    }
+    let target = TargetState {
+        orientation_mask: target_mask,
+        column_word: target_word,
+    };
+    validate_target(target_path, &target)?;
+    if color_content(source_word) != color_content(&target.column_word) {
+        return Err("column transport changed color content".into());
+    }
+    Ok(target.column_word)
 }
 
 fn standardize_word(word: &[u8]) -> (Vec<u8>, Vec<u8>) {
@@ -983,7 +2026,7 @@ fn same_orientation_obstruction(
     }))
 }
 
-fn checked_path(path: &PathData) -> Result<(usize, usize), String> {
+fn checked_path(path: &PathData) -> Result<(usize, usize, usize, usize, usize), String> {
     let bijection = CanonicalBijection::build(path)?;
     let all_targets = enumerate_targets(path)?
         .into_iter()
@@ -991,6 +2034,9 @@ fn checked_path(path: &PathData) -> Result<(usize, usize), String> {
     let mut recursive_targets = BTreeSet::new();
     let mut recursive_matcher = RecursiveMatcher::default();
     let mut certificates = 0usize;
+    let mut fallback_certificates = 0usize;
+    let mut first_bounce_certificates = 0usize;
+    let mut second_bounce_certificates = 0usize;
     for sources in bijection.source_buckets.values() {
         for source in sources {
             let certificate = bijection.map(path, source)?;
@@ -1000,6 +2046,24 @@ fn checked_path(path: &PathData) -> Result<(usize, usize), String> {
             bijection.replay(path, &certificate)?;
             let recursive_certificate = recursive_matcher.map(path, source)?;
             recursive_matcher.replay(path, &recursive_certificate)?;
+            fallback_certificates += usize::from(
+                recursive_certificate
+                    .trace
+                    .iter()
+                    .any(|step| step.contains("canonical exact-bucket fallback")),
+            );
+            first_bounce_certificates += usize::from(
+                recursive_certificate
+                    .trace
+                    .iter()
+                    .any(|step| step.starts_with("first bounce")),
+            );
+            second_bounce_certificates += usize::from(
+                recursive_certificate
+                    .trace
+                    .iter()
+                    .any(|step| step.starts_with("second bounce")),
+            );
             if !recursive_targets.insert(recursive_certificate.target) {
                 return Err("hybrid recursive map is not injective".into());
             }
@@ -1012,7 +2076,13 @@ fn checked_path(path: &PathData) -> Result<(usize, usize), String> {
     if recursive_targets != all_targets {
         return Err("hybrid recursive map is not surjective onto the HRV-column targets".into());
     }
-    Ok((bijection.source_buckets.len(), certificates))
+    Ok((
+        bijection.source_buckets.len(),
+        certificates,
+        fallback_certificates,
+        first_bounce_certificates,
+        second_bounce_certificates,
+    ))
 }
 
 fn format_word(word: &[u8]) -> String {
@@ -1142,13 +2212,11 @@ fn run(args: Args) -> Result<(), String> {
         if let Some(coloring) = args.trace_coloring.as_deref() {
             print_trace(&path, coloring, args.trace_mask)?;
         } else {
-            let (buckets, certificates) = checked_path(&path)?;
+            let (buckets, certificates, fallback, first_bounce, second_bounce) =
+                checked_path(&path)?;
             println!(
-                "checked path {}: rank {}, {} signatures, {} reversible certificates",
-                path.word(),
-                path.n,
-                buckets,
-                certificates
+                "checked path {}: rank {}, {} signatures, {} reversible certificates; fallback {}, first-bounce {}, second-bounce {}",
+                path.word(), path.n, buckets, certificates, fallback, first_bounce, second_bounce
             );
         }
         return Ok(());
@@ -1157,14 +2225,21 @@ fn run(args: Args) -> Result<(), String> {
     let mut total_paths = 0usize;
     let mut total_buckets = 0usize;
     let mut total_certificates = 0usize;
+    let mut total_fallback = 0usize;
+    let mut total_first_bounce = 0usize;
+    let mut total_second_bounce = 0usize;
     for n in 0..=args.max_n {
         let paths = all_paths(n);
         let mut rank_certificates = 0usize;
         for path in &paths {
-            let (buckets, certificates) = checked_path(path)?;
+            let (buckets, certificates, fallback, first_bounce, second_bounce) =
+                checked_path(path)?;
             total_buckets += buckets;
             total_certificates += certificates;
             rank_certificates += certificates;
+            total_fallback += fallback;
+            total_first_bounce += first_bounce;
+            total_second_bounce += second_bounce;
         }
         total_paths += paths.len();
         println!(
@@ -1174,7 +2249,7 @@ fn run(args: Args) -> Result<(), String> {
         );
     }
     println!(
-        "total: {total_paths} ordinary decorated paths, {total_buckets} exact invariant buckets, {total_certificates} reversible certificates"
+        "total: {total_paths} ordinary decorated paths, {total_buckets} exact invariant buckets, {total_certificates} reversible certificates; fallback {total_fallback}, first-bounce {total_first_bounce}, second-bounce {total_second_bounce}"
     );
     Ok(())
 }
@@ -1210,7 +2285,17 @@ mod tests {
     #[test]
     fn k3_hybrid_recursion_is_a_bijection() {
         let path = PathData::parse("NNNEEE").unwrap();
-        checked_path(&path).unwrap();
+        let (_, _, fallback, first_bounce, _) = checked_path(&path).unwrap();
+        assert_eq!(fallback, 0);
+        assert!(first_bounce > 0);
+    }
+
+    #[test]
+    fn single_second_bounce_is_explicit_and_reversible() {
+        let path = PathData::parse("NDNDEE").unwrap();
+        let (_, _, fallback, _, second_bounce) = checked_path(&path).unwrap();
+        assert_eq!(fallback, 0);
+        assert!(second_bounce > 0);
     }
 
     #[test]
