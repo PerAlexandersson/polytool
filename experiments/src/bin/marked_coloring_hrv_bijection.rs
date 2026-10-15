@@ -38,6 +38,10 @@ struct Args {
     /// Bit mask in the path's printed normal-edge order for the marked ascent set.
     #[arg(long, default_value_t = 0)]
     trace_mask: u64,
+
+    /// Compare direct HRV/fibre guesses from (coloring, marked ascents) with the bijection.
+    #[arg(long)]
+    shortcut_report: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -2513,6 +2517,321 @@ fn format_columns(path: &PathData, target: &TargetState) -> Result<String, Strin
     Ok(rendered)
 }
 
+fn format_hrv_map(hrv: &[usize]) -> String {
+    hrv.iter()
+        .enumerate()
+        .map(|(vertex, sink)| format!("{}->{}", vertex + 1, sink + 1))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn format_hrv_fibres(hrv: &[usize]) -> String {
+    fibres(hrv)
+        .into_iter()
+        .map(|fibre| {
+            let sink = hrv[fibre[0]] + 1;
+            let vertices = fibre
+                .iter()
+                .map(|vertex| (vertex + 1).to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{sink}:{{{vertices}}}")
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn hrv_sinks(hrv: &[usize]) -> Vec<usize> {
+    hrv.iter()
+        .copied()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn canonical_fibres(hrv: &[usize]) -> Vec<Vec<usize>> {
+    fibres(hrv)
+}
+
+fn fibre_shape(hrv: &[usize]) -> Vec<usize> {
+    let mut shape = fibres(hrv)
+        .into_iter()
+        .map(|fibre| fibre.len())
+        .collect::<Vec<_>>();
+    shape.sort_unstable_by(|left, right| right.cmp(left));
+    shape
+}
+
+fn greedy_color_fibres(coloring: &[u8]) -> Vec<Vec<usize>> {
+    let mut columns: Vec<Vec<usize>> = Vec::new();
+    for vertex in 0..coloring.len() {
+        let choice = columns
+            .iter()
+            .enumerate()
+            .filter(|(_, column)| {
+                coloring[*column.last().expect("column is nonempty")] < coloring[vertex]
+            })
+            .max_by_key(|(index, column)| {
+                (
+                    coloring[*column.last().expect("column is nonempty")],
+                    std::cmp::Reverse(*index),
+                )
+            })
+            .map(|(index, _)| index);
+        if let Some(index) = choice {
+            columns[index].push(vertex);
+        } else {
+            columns.push(vec![vertex]);
+        }
+    }
+    columns.sort_by_key(|column| *column.last().expect("column is nonempty"));
+    columns
+}
+
+fn greedy_hrv(coloring: &[u8]) -> Vec<usize> {
+    let mut hrv = vec![0usize; coloring.len()];
+    for fibre in greedy_color_fibres(coloring) {
+        let sink = *fibre.last().expect("fibre is nonempty");
+        for vertex in fibre {
+            hrv[vertex] = sink;
+        }
+    }
+    hrv
+}
+
+#[derive(Default)]
+struct ShortcutStats {
+    states: usize,
+    eta_is_marked_mask: usize,
+    marked_hrv_exact: usize,
+    marked_fibres_exact: usize,
+    marked_sinks_exact: usize,
+    marked_shape_exact: usize,
+    greedy_fibres_exact: usize,
+    greedy_sinks_exact: usize,
+    greedy_shape_exact: usize,
+    target_word_unchanged: usize,
+    source_word_valid_on_actual_fibres: usize,
+    marked_groups: usize,
+    marked_groups_with_multiple_outputs: usize,
+    fixed_word_buckets: usize,
+    fixed_word_bucket_failures: usize,
+    fixed_word_states: usize,
+    first_marked_sink_failure: Option<String>,
+    first_marked_group_variation: Option<String>,
+    first_source_word_failure: Option<String>,
+    first_fixed_word_bucket_failure: Option<String>,
+}
+
+impl ShortcutStats {
+    fn absorb(&mut self, other: Self) {
+        self.states += other.states;
+        self.eta_is_marked_mask += other.eta_is_marked_mask;
+        self.marked_hrv_exact += other.marked_hrv_exact;
+        self.marked_fibres_exact += other.marked_fibres_exact;
+        self.marked_sinks_exact += other.marked_sinks_exact;
+        self.marked_shape_exact += other.marked_shape_exact;
+        self.greedy_fibres_exact += other.greedy_fibres_exact;
+        self.greedy_sinks_exact += other.greedy_sinks_exact;
+        self.greedy_shape_exact += other.greedy_shape_exact;
+        self.target_word_unchanged += other.target_word_unchanged;
+        self.source_word_valid_on_actual_fibres += other.source_word_valid_on_actual_fibres;
+        self.marked_groups += other.marked_groups;
+        self.marked_groups_with_multiple_outputs += other.marked_groups_with_multiple_outputs;
+        self.fixed_word_buckets += other.fixed_word_buckets;
+        self.fixed_word_bucket_failures += other.fixed_word_bucket_failures;
+        self.fixed_word_states += other.fixed_word_states;
+        if self.first_marked_sink_failure.is_none() {
+            self.first_marked_sink_failure = other.first_marked_sink_failure;
+        }
+        if self.first_marked_group_variation.is_none() {
+            self.first_marked_group_variation = other.first_marked_group_variation;
+        }
+        if self.first_source_word_failure.is_none() {
+            self.first_source_word_failure = other.first_source_word_failure;
+        }
+        if self.first_fixed_word_bucket_failure.is_none() {
+            self.first_fixed_word_bucket_failure = other.first_fixed_word_bucket_failure;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "{label}: states {}; eta=A {}; marked-HRV map/fibres/sinks/shape {}/{}/{}/{}; greedy fibres/sinks/shape {}/{}/{}; unchanged target word {}; source word valid on actual fibres {}",
+            self.states,
+            self.eta_is_marked_mask,
+            self.marked_hrv_exact,
+            self.marked_fibres_exact,
+            self.marked_sinks_exact,
+            self.marked_shape_exact,
+            self.greedy_fibres_exact,
+            self.greedy_sinks_exact,
+            self.greedy_shape_exact,
+            self.target_word_unchanged,
+            self.source_word_valid_on_actual_fibres
+        );
+        println!(
+            "{label}: (path,A) groups {} with multiple output HRV maps {}",
+            self.marked_groups, self.marked_groups_with_multiple_outputs
+        );
+        println!(
+            "{label}: fixed-word buckets {} ({} states), count failures {}",
+            self.fixed_word_buckets, self.fixed_word_states, self.fixed_word_bucket_failures
+        );
+    }
+}
+
+fn analyze_shortcuts_for_path(path: &PathData) -> Result<ShortcutStats, String> {
+    let mut stats = ShortcutStats::default();
+    let mut matcher = RecursiveMatcher::default();
+    let mut by_marked_mask: BTreeMap<u64, (SourceState, Vec<usize>)> = BTreeMap::new();
+    let mut varying_masks = BTreeSet::new();
+    for source in enumerate_sources(path) {
+        let certificate = matcher.map(path, &source)?;
+        let actual_hrv = hrv_for_mask(path, certificate.target.orientation_mask)?;
+        let marked_hrv = hrv_for_mask(path, source.marked_mask)?;
+        let greedy = greedy_hrv(&source.coloring);
+        stats.states += 1;
+        stats.eta_is_marked_mask +=
+            usize::from(certificate.target.orientation_mask == source.marked_mask);
+        stats.marked_hrv_exact += usize::from(actual_hrv == marked_hrv);
+        stats.marked_fibres_exact +=
+            usize::from(canonical_fibres(&actual_hrv) == canonical_fibres(&marked_hrv));
+        stats.marked_sinks_exact += usize::from(hrv_sinks(&actual_hrv) == hrv_sinks(&marked_hrv));
+        stats.marked_shape_exact +=
+            usize::from(fibre_shape(&actual_hrv) == fibre_shape(&marked_hrv));
+        stats.greedy_fibres_exact +=
+            usize::from(canonical_fibres(&actual_hrv) == canonical_fibres(&greedy));
+        stats.greedy_sinks_exact += usize::from(hrv_sinks(&actual_hrv) == hrv_sinks(&greedy));
+        stats.greedy_shape_exact += usize::from(fibre_shape(&actual_hrv) == fibre_shape(&greedy));
+        stats.target_word_unchanged +=
+            usize::from(certificate.target.column_word == source.coloring);
+        let source_word_valid = canonical_fibres(&actual_hrv).iter().all(|fibre| {
+            fibre
+                .windows(2)
+                .all(|pair| source.coloring[pair[0]] < source.coloring[pair[1]])
+        });
+        stats.source_word_valid_on_actual_fibres += usize::from(source_word_valid);
+        if !source_word_valid && stats.first_source_word_failure.is_none() {
+            stats.first_source_word_failure = Some(format!(
+                "path {}, coloring {}, A {}, eta {}, HRV fibres {}",
+                path.word(),
+                format_word(&source.coloring),
+                format_edges(source.marked_mask, &path.normal_edges),
+                format_edges(certificate.target.orientation_mask, &path.normal_edges),
+                format_hrv_fibres(&actual_hrv)
+            ));
+        }
+        if stats.first_marked_sink_failure.is_none()
+            && hrv_sinks(&actual_hrv) != hrv_sinks(&marked_hrv)
+        {
+            stats.first_marked_sink_failure = Some(format!(
+                "path {}, coloring {}, A {}, actual eta {}, marked sinks {:?}, actual sinks {:?}, marked HRV [{}], actual HRV [{}]",
+                path.word(),
+                format_word(&source.coloring),
+                format_edges(source.marked_mask, &path.normal_edges),
+                format_edges(certificate.target.orientation_mask, &path.normal_edges),
+                hrv_sinks(&marked_hrv).into_iter().map(|v| v + 1).collect::<Vec<_>>(),
+                hrv_sinks(&actual_hrv).into_iter().map(|v| v + 1).collect::<Vec<_>>(),
+                format_hrv_map(&marked_hrv),
+                format_hrv_map(&actual_hrv)
+            ));
+        }
+        if let Some((earlier_source, earlier_hrv)) = by_marked_mask.get(&source.marked_mask) {
+            if earlier_hrv != &actual_hrv
+                && varying_masks.insert(source.marked_mask)
+                && stats.first_marked_group_variation.is_none()
+            {
+                stats.first_marked_group_variation = Some(format!(
+                    "path {}, same A {}: coloring {} gives [{}], coloring {} gives [{}]",
+                    path.word(),
+                    format_edges(source.marked_mask, &path.normal_edges),
+                    format_word(&earlier_source.coloring),
+                    format_hrv_map(earlier_hrv),
+                    format_word(&source.coloring),
+                    format_hrv_map(&actual_hrv)
+                ));
+            }
+        } else {
+            by_marked_mask.insert(source.marked_mask, (source.clone(), actual_hrv));
+        }
+    }
+    stats.marked_groups = by_marked_mask.len();
+    stats.marked_groups_with_multiple_outputs = varying_masks.len();
+    let mut source_fixed: BTreeMap<(Vec<u8>, usize), usize> = BTreeMap::new();
+    for source in enumerate_sources(path) {
+        *source_fixed
+            .entry((source.coloring, source.marked_mask.count_ones() as usize))
+            .or_default() += 1;
+    }
+    let mut target_fixed: BTreeMap<(Vec<u8>, usize), usize> = BTreeMap::new();
+    for target in enumerate_targets(path)? {
+        *target_fixed
+            .entry((
+                target.column_word,
+                target.orientation_mask.count_ones() as usize,
+            ))
+            .or_default() += 1;
+    }
+    let fixed_keys = source_fixed
+        .keys()
+        .chain(target_fixed.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    stats.fixed_word_buckets = fixed_keys.len();
+    for (word, degree) in fixed_keys {
+        let sources = source_fixed
+            .get(&(word.clone(), degree))
+            .copied()
+            .unwrap_or(0);
+        let targets = target_fixed
+            .get(&(word.clone(), degree))
+            .copied()
+            .unwrap_or(0);
+        stats.fixed_word_states += sources;
+        if sources != targets {
+            stats.fixed_word_bucket_failures += 1;
+            if stats.first_fixed_word_bucket_failure.is_none() {
+                stats.first_fixed_word_bucket_failure = Some(format!(
+                    "path {}, coloring {}, q-degree {}: {} sources versus {} fixed-word targets",
+                    path.word(),
+                    format_word(&word),
+                    degree,
+                    sources,
+                    targets
+                ));
+            }
+        }
+    }
+    Ok(stats)
+}
+
+fn print_shortcut_report(max_n: usize) -> Result<(), String> {
+    let mut total = ShortcutStats::default();
+    for n in 0..=max_n {
+        let mut rank = ShortcutStats::default();
+        for path in all_paths(n) {
+            rank.absorb(analyze_shortcuts_for_path(&path)?);
+        }
+        rank.print(&format!("rank {n}"));
+        total.absorb(rank);
+    }
+    total.print("total");
+    if let Some(example) = &total.first_marked_sink_failure {
+        println!("first marked-reachability sink failure: {example}");
+    }
+    if let Some(example) = &total.first_marked_group_variation {
+        println!("first proof that (path,A) alone is insufficient: {example}");
+    }
+    if let Some(example) = &total.first_source_word_failure {
+        println!("first current-map source-word/fibre failure: {example}");
+    }
+    if let Some(example) = &total.first_fixed_word_bucket_failure {
+        println!("first fixed-word count obstruction: {example}");
+    }
+    Ok(())
+}
+
 fn print_k3_map() -> Result<(), String> {
     let path = PathData::parse("NNNEEE")?;
     let bijection = CanonicalBijection::build(&path)?;
@@ -2585,6 +2904,9 @@ fn print_trace(path: &PathData, coloring_text: &str, marked_mask: u64) -> Result
         format_edges(certificate.target.orientation_mask, &path.normal_edges),
         format_columns(path, &certificate.target)?
     );
+    let hrv = hrv_for_mask(path, certificate.target.orientation_mask)?;
+    println!("target HRV map: {}", format_hrv_map(&hrv));
+    println!("target HRV vertex fibres: {}", format_hrv_fibres(&hrv));
     println!("reverse certificate: replayed inverse recursion -> original source [OK]");
     Ok(())
 }
@@ -2592,6 +2914,28 @@ fn print_trace(path: &PathData, coloring_text: &str, marked_mask: u64) -> Result
 fn run(args: Args) -> Result<(), String> {
     if args.k3_map {
         print_k3_map()?;
+    }
+    if args.shortcut_report {
+        if let Some(word) = args.path.as_deref() {
+            let path = PathData::parse(word)?;
+            let stats = analyze_shortcuts_for_path(&path)?;
+            stats.print(&format!("path {}", path.word()));
+            if let Some(example) = stats.first_marked_sink_failure {
+                println!("first marked-reachability sink failure: {example}");
+            }
+            if let Some(example) = stats.first_marked_group_variation {
+                println!("first proof that (path,A) alone is insufficient: {example}");
+            }
+            if let Some(example) = stats.first_source_word_failure {
+                println!("first current-map source-word/fibre failure: {example}");
+            }
+            if let Some(example) = stats.first_fixed_word_bucket_failure {
+                println!("first fixed-word count obstruction: {example}");
+            }
+        } else {
+            print_shortcut_report(args.max_n)?;
+        }
+        return Ok(());
     }
     if let Some(word) = args.path {
         let path = PathData::parse(&word)?;
@@ -2693,6 +3037,38 @@ mod tests {
         let (_, _, fallback, _, _, generalized) = checked_path(&path).unwrap();
         assert_eq!(fallback, 0);
         assert!(generalized > 0);
+    }
+
+    #[test]
+    fn shortcut_report_has_minimal_k3_and_k4_obstructions() {
+        let k3 = PathData::parse("NNNEEE").unwrap();
+        let source = SourceState {
+            coloring: vec![0, 0, 1],
+            marked_mask: 0b110,
+        };
+        let target = RecursiveMatcher::default()
+            .map(&k3, &source)
+            .unwrap()
+            .target;
+        let marked_hrv = hrv_for_mask(&k3, source.marked_mask).unwrap();
+        let actual_hrv = hrv_for_mask(&k3, target.orientation_mask).unwrap();
+        assert_eq!(hrv_sinks(&marked_hrv), vec![2]);
+        assert_eq!(hrv_sinks(&actual_hrv), vec![1, 2]);
+
+        let k4 = PathData::parse("NNNNEEEE").unwrap();
+        let word = vec![0, 0, 1, 2];
+        let sources = enumerate_sources(&k4)
+            .into_iter()
+            .filter(|source| source.coloring == word && source.marked_mask.count_ones() == 3)
+            .count();
+        let targets = enumerate_targets(&k4)
+            .unwrap()
+            .into_iter()
+            .filter(|target| {
+                target.column_word == word && target.orientation_mask.count_ones() == 3
+            })
+            .count();
+        assert_eq!((sources, targets), (10, 8));
     }
 
     #[test]
