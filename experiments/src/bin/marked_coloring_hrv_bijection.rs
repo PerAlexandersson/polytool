@@ -13,10 +13,11 @@
 //! The `q -> q - 1` experiment further reads each ordered HRV fibre
 //! bottom-to-top as a column-crystal word and applies reversible RSK.  The
 //! transported obvious sign involution already changes tableau shape at K2.
-//! An alternate canonical matching therefore pairs positive and negative
-//! `(eta, B, Q)` recording skeletons within each `(q-degree, shape)` bucket and
-//! leaves the insertion SSYT `P` untouched.  The involution principle alternates
-//! these two matchings to give a reversible coloring-to-surviving-SSYT map.
+//! An alternate canonical matching pairs positive and negative `(eta, B, Q)`
+//! recording skeletons within each `(q-degree, shape)` bucket, using only edges
+//! of combined `(eta, B)` Hamming radius five, and leaves the insertion SSYT
+//! `P` untouched.  The involution principle alternates these two matchings to
+//! give a reversible coloring-to-surviving-SSYT map.
 //! Crystal reflections `S_i` are then conjugated back to packed colorings.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -60,6 +61,10 @@ struct Args {
     /// Audit only the canonical Schur matching, final bijection, and transported S_i.
     #[arg(long)]
     schur_report: bool,
+
+    /// Find the minimal combined (eta,B) matching radius and compare multiplicities.
+    #[arg(long)]
+    local_schur_report: bool,
 
     /// Skip the optional transported-S_i Coxeter stress test in Schur reports.
     #[arg(long)]
@@ -261,6 +266,20 @@ struct TableauSkeleton {
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct SchurKey {
     q_degree: usize,
+    shape: Vec<usize>,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct LocalSchurKey {
+    retained_orientation_mask: u64,
+    recording_rows: Vec<Vec<u32>>,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct LocalShapeKey {
+    retained_orientation_mask: u64,
     shape: Vec<usize>,
 }
 
@@ -2772,41 +2791,94 @@ fn admissible_recordings(
         .collect()
 }
 
-impl SchurCancellation {
-    fn build(path: &PathData) -> Result<Self, String> {
-        let permutation_cache = permutations(path.n);
-        let mut recording_cache: BTreeMap<Vec<usize>, BTreeSet<Vec<Vec<u32>>>> =
-            BTreeMap::new();
-        let mut groups: BTreeMap<SchurKey, (Vec<TableauSkeleton>, Vec<TableauSkeleton>)> =
-            BTreeMap::new();
-        for orientation_mask in 0..(1u64 << path.normal_edges.len()) {
-            let hrv = hrv_for_mask(path, orientation_mask)?;
-            let column_lengths = fibres(&hrv).into_iter().map(|f| f.len()).collect::<Vec<_>>();
-            let recordings = recording_cache
-                .entry(column_lengths.clone())
-                .or_insert_with(|| {
-                    admissible_recordings(path.n, &column_lengths, &permutation_cache)
-                });
-            let mut retained_orientation_mask = orientation_mask;
-            loop {
-                for recording_rows in recordings.iter().cloned() {
-                    let skeleton = TableauSkeleton {
+fn enumerate_tableau_skeletons(path: &PathData) -> Result<Vec<TableauSkeleton>, String> {
+    let permutation_cache = permutations(path.n);
+    let mut recording_cache: BTreeMap<Vec<usize>, BTreeSet<Vec<Vec<u32>>>> = BTreeMap::new();
+    let mut skeletons = Vec::new();
+    for orientation_mask in 0..(1u64 << path.normal_edges.len()) {
+        let hrv = hrv_for_mask(path, orientation_mask)?;
+        let column_lengths = fibres(&hrv)
+            .into_iter()
+            .map(|fibre| fibre.len())
+            .collect::<Vec<_>>();
+        let recordings = recording_cache
+            .entry(column_lengths.clone())
+            .or_insert_with(|| admissible_recordings(path.n, &column_lengths, &permutation_cache));
+        let mut retained_orientation_mask = orientation_mask;
+        loop {
+            skeletons.extend(
+                recordings
+                    .iter()
+                    .cloned()
+                    .map(|recording_rows| TableauSkeleton {
                         orientation_mask,
                         retained_orientation_mask,
                         recording_rows,
-                    };
-                    let group = groups.entry(skeleton_key(&skeleton)).or_default();
-                    if skeleton_sign(&skeleton) > 0 {
-                        group.0.push(skeleton);
+                    }),
+            );
+            if retained_orientation_mask == 0 {
+                break;
+            }
+            retained_orientation_mask =
+                (retained_orientation_mask - 1) & orientation_mask;
+        }
+    }
+    Ok(skeletons)
+}
+
+#[allow(dead_code)]
+fn elementary_dual_equivalence(rows: &[Vec<u32>], index: u32) -> Vec<Vec<u32>> {
+    debug_assert!(index >= 2);
+    let tableau = Tableau::new(rows.to_vec());
+    debug_assert!(tableau.is_standard());
+    let word = tableau.reading_word();
+    let position = |entry| {
+        word.iter()
+            .position(|&value| value == entry)
+            .expect("standard tableau contains every label")
+    };
+    let lower = position(index - 1);
+    let middle = position(index);
+    let upper = position(index + 1);
+    if (lower < middle && middle < upper) || (upper < middle && middle < lower) {
+        return rows.to_vec();
+    }
+    let swap_with = if middle.abs_diff(lower) > middle.abs_diff(upper) {
+        index - 1
+    } else {
+        index + 1
+    };
+    rows.iter()
+        .map(|row| {
+            row.iter()
+                .map(|&entry| {
+                    if entry == index {
+                        swap_with
+                    } else if entry == swap_with {
+                        index
                     } else {
-                        group.1.push(skeleton);
+                        entry
                     }
-                }
-                if retained_orientation_mask == 0 {
-                    break;
-                }
-                retained_orientation_mask =
-                    (retained_orientation_mask - 1) & orientation_mask;
+                })
+                .collect()
+        })
+        .collect()
+}
+
+impl SchurCancellation {
+    fn build(path: &PathData) -> Result<Self, String> {
+        Self::build_metric_local(path, 5)
+    }
+
+    fn build_global(path: &PathData) -> Result<Self, String> {
+        let mut groups: BTreeMap<SchurKey, (Vec<TableauSkeleton>, Vec<TableauSkeleton>)> =
+            BTreeMap::new();
+        for skeleton in enumerate_tableau_skeletons(path)? {
+            let group = groups.entry(skeleton_key(&skeleton)).or_default();
+            if skeleton_sign(&skeleton) > 0 {
+                group.0.push(skeleton);
+            } else {
+                group.1.push(skeleton);
             }
         }
 
@@ -2831,6 +2903,405 @@ impl SchurCancellation {
             for survivor in positive.into_iter().skip(negative.len()) {
                 fixed.insert(survivor);
                 *fixed_multiplicities.entry(key.clone()).or_default() += 1;
+            }
+        }
+        Ok(Self {
+            partners,
+            fixed,
+            fixed_multiplicities,
+            total_skeletons,
+        })
+    }
+
+    #[allow(dead_code)]
+    fn build_local(path: &PathData) -> Result<Self, String> {
+        let mut groups: BTreeMap<LocalSchurKey, BTreeSet<TableauSkeleton>> = BTreeMap::new();
+        for skeleton in enumerate_tableau_skeletons(path)? {
+            groups
+                .entry(LocalSchurKey {
+                    retained_orientation_mask: skeleton.retained_orientation_mask,
+                    recording_rows: skeleton.recording_rows.clone(),
+                })
+                .or_default()
+                .insert(skeleton);
+        }
+
+        let mut partners = BTreeMap::new();
+        let mut fixed = BTreeSet::new();
+        let mut fixed_multiplicities = BTreeMap::new();
+        let mut total_skeletons = 0usize;
+        for (key, mut unmatched) in groups {
+            total_skeletons += unmatched.len();
+            let initial_positive = unmatched
+                .iter()
+                .filter(|skeleton| skeleton_sign(skeleton) > 0)
+                .count();
+            let initial_negative = unmatched.len() - initial_positive;
+            let initial_orientations = unmatched
+                .iter()
+                .map(|item| {
+                    format!(
+                        "{}{}",
+                        if skeleton_sign(item) > 0 { "+" } else { "-" },
+                        format_edges(item.orientation_mask, &path.normal_edges)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            for edge_index in (0..path.normal_edges.len()).rev() {
+                let edge_bit = 1u64 << edge_index;
+                if key.retained_orientation_mask & edge_bit != 0 {
+                    continue;
+                }
+                let pairs = unmatched
+                    .iter()
+                    .filter(|skeleton| skeleton.orientation_mask & edge_bit == 0)
+                    .filter_map(|lower| {
+                        let mut upper = lower.clone();
+                        upper.orientation_mask |= edge_bit;
+                        unmatched.contains(&upper).then(|| (lower.clone(), upper))
+                    })
+                    .collect::<Vec<_>>();
+                for (lower, upper) in pairs {
+                    if unmatched.remove(&lower) && unmatched.remove(&upper) {
+                        partners.insert(lower.clone(), upper.clone());
+                        partners.insert(upper, lower);
+                    }
+                }
+            }
+            for survivor in unmatched {
+                if skeleton_sign(&survivor) < 0 {
+                    return Err(format!(
+                        "local cancellation leaves a negative survivor for path {}, B={}, Q={}; exact-Q group has {initial_positive} positive and {initial_negative} negative states; original [{initial_orientations}]",
+                        path.word(),
+                        format_edges(
+                            survivor.retained_orientation_mask,
+                            &path.normal_edges
+                        ),
+                        format_tableau(&survivor.recording_rows)
+                    ));
+                }
+                *fixed_multiplicities
+                    .entry(skeleton_key(&survivor))
+                    .or_default() += 1;
+                fixed.insert(survivor);
+            }
+        }
+        Ok(Self {
+            partners,
+            fixed,
+            fixed_multiplicities,
+            total_skeletons,
+        })
+    }
+
+    #[allow(dead_code)]
+    fn build_dual_local(path: &PathData) -> Result<Self, String> {
+        let mut groups: BTreeMap<LocalShapeKey, BTreeSet<TableauSkeleton>> = BTreeMap::new();
+        for skeleton in enumerate_tableau_skeletons(path)? {
+            groups
+                .entry(LocalShapeKey {
+                    retained_orientation_mask: skeleton.retained_orientation_mask,
+                    shape: tableau_shape(&skeleton.recording_rows),
+                })
+                .or_default()
+                .insert(skeleton);
+        }
+
+        let mut partners = BTreeMap::new();
+        let mut fixed = BTreeSet::new();
+        let mut fixed_multiplicities = BTreeMap::new();
+        let mut total_skeletons = 0usize;
+        for (key, mut unmatched) in groups {
+            total_skeletons += unmatched.len();
+            let moves = std::iter::once(None)
+                .chain((2..path.n as u32).map(Some))
+                .collect::<Vec<_>>();
+            for edge_index in 0..path.normal_edges.len() {
+                let edge_bit = 1u64 << edge_index;
+                if key.retained_orientation_mask & edge_bit != 0 {
+                    continue;
+                }
+                for dual_index in &moves {
+                    let pairs = unmatched
+                        .iter()
+                        .filter(|skeleton| skeleton.orientation_mask & edge_bit == 0)
+                        .filter_map(|lower| {
+                            let mut upper = lower.clone();
+                            upper.orientation_mask |= edge_bit;
+                            if let Some(index) = dual_index {
+                                upper.recording_rows = elementary_dual_equivalence(
+                                    &upper.recording_rows,
+                                    *index,
+                                );
+                            }
+                            unmatched.contains(&upper).then(|| (lower.clone(), upper))
+                        })
+                        .collect::<Vec<_>>();
+                    for (lower, upper) in pairs {
+                        if unmatched.remove(&lower) && unmatched.remove(&upper) {
+                            partners.insert(lower.clone(), upper.clone());
+                            partners.insert(upper, lower);
+                        }
+                    }
+                }
+            }
+            for survivor in unmatched {
+                if skeleton_sign(&survivor) < 0 {
+                    return Err(format!(
+                        "dual-local cancellation leaves a negative survivor for path {}, B={}, shape {:?}, eta={}, Q={}",
+                        path.word(),
+                        format_edges(
+                            survivor.retained_orientation_mask,
+                            &path.normal_edges
+                        ),
+                        key.shape,
+                        format_edges(survivor.orientation_mask, &path.normal_edges),
+                        format_tableau(&survivor.recording_rows)
+                    ));
+                }
+                *fixed_multiplicities
+                    .entry(skeleton_key(&survivor))
+                    .or_default() += 1;
+                fixed.insert(survivor);
+            }
+        }
+        Ok(Self {
+            partners,
+            fixed,
+            fixed_multiplicities,
+            total_skeletons,
+        })
+    }
+
+    #[allow(dead_code)]
+    fn build_radius_local(
+        path: &PathData,
+        max_orientation_distance: u32,
+    ) -> Result<Self, String> {
+        fn augment(
+            negative: usize,
+            adjacency: &[Vec<usize>],
+            seen: &mut [bool],
+            matched_positive: &mut [Option<usize>],
+        ) -> bool {
+            for &positive in &adjacency[negative] {
+                if std::mem::replace(&mut seen[positive], true) {
+                    continue;
+                }
+                let previous = matched_positive[positive];
+                if previous.is_none()
+                    || augment(
+                        previous.expect("checked as present"),
+                        adjacency,
+                        seen,
+                        matched_positive,
+                    )
+                {
+                    matched_positive[positive] = Some(negative);
+                    return true;
+                }
+            }
+            false
+        }
+
+        let mut groups: BTreeMap<LocalShapeKey, Vec<TableauSkeleton>> = BTreeMap::new();
+        for skeleton in enumerate_tableau_skeletons(path)? {
+            groups
+                .entry(LocalShapeKey {
+                    retained_orientation_mask: skeleton.retained_orientation_mask,
+                    shape: tableau_shape(&skeleton.recording_rows),
+                })
+                .or_default()
+                .push(skeleton);
+        }
+
+        let mut partners = BTreeMap::new();
+        let mut fixed = BTreeSet::new();
+        let mut fixed_multiplicities = BTreeMap::new();
+        let mut total_skeletons = 0usize;
+        for (key, skeletons) in groups {
+            total_skeletons += skeletons.len();
+            let mut positive = skeletons
+                .iter()
+                .filter(|skeleton| skeleton_sign(skeleton) > 0)
+                .cloned()
+                .collect::<Vec<_>>();
+            let mut negative = skeletons
+                .into_iter()
+                .filter(|skeleton| skeleton_sign(skeleton) < 0)
+                .collect::<Vec<_>>();
+            positive.sort();
+            negative.sort();
+            let adjacency = negative
+                .iter()
+                .map(|minus| {
+                    positive
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, plus)| {
+                            ((minus.orientation_mask ^ plus.orientation_mask).count_ones()
+                                <= max_orientation_distance)
+                                .then_some(index)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            let mut matched_positive = vec![None; positive.len()];
+            let mut negative_order = (0..negative.len()).collect::<Vec<_>>();
+            negative_order.sort_by_key(|&index| (adjacency[index].len(), negative[index].clone()));
+            for negative_index in negative_order {
+                if !augment(
+                    negative_index,
+                    &adjacency,
+                    &mut vec![false; positive.len()],
+                    &mut matched_positive,
+                ) {
+                    let minus = &negative[negative_index];
+                    return Err(format!(
+                        "radius-{max_orientation_distance} cancellation has no full matching for path {}, B={}, shape {:?}; first exposed eta={}, Q={}, degree {} in the local graph",
+                        path.word(),
+                        format_edges(
+                            minus.retained_orientation_mask,
+                            &path.normal_edges
+                        ),
+                        key.shape,
+                        format_edges(minus.orientation_mask, &path.normal_edges),
+                        format_tableau(&minus.recording_rows),
+                        adjacency[negative_index].len()
+                    ));
+                }
+            }
+            for (positive_index, negative_index) in matched_positive.iter().enumerate() {
+                if let Some(negative_index) = negative_index {
+                    let plus = positive[positive_index].clone();
+                    let minus = negative[*negative_index].clone();
+                    partners.insert(plus.clone(), minus.clone());
+                    partners.insert(minus, plus);
+                } else {
+                    let survivor = positive[positive_index].clone();
+                    *fixed_multiplicities
+                        .entry(skeleton_key(&survivor))
+                        .or_default() += 1;
+                    fixed.insert(survivor);
+                }
+            }
+        }
+        Ok(Self {
+            partners,
+            fixed,
+            fixed_multiplicities,
+            total_skeletons,
+        })
+    }
+
+    fn build_metric_local(
+        path: &PathData,
+        max_combined_distance: u32,
+    ) -> Result<Self, String> {
+        fn augment(
+            negative: usize,
+            adjacency: &[Vec<usize>],
+            seen: &mut [bool],
+            matched_positive: &mut [Option<usize>],
+        ) -> bool {
+            for &positive in &adjacency[negative] {
+                if std::mem::replace(&mut seen[positive], true) {
+                    continue;
+                }
+                let previous = matched_positive[positive];
+                if previous.is_none()
+                    || augment(
+                        previous.expect("checked as present"),
+                        adjacency,
+                        seen,
+                        matched_positive,
+                    )
+                {
+                    matched_positive[positive] = Some(negative);
+                    return true;
+                }
+            }
+            false
+        }
+
+        let mut groups: BTreeMap<SchurKey, Vec<TableauSkeleton>> = BTreeMap::new();
+        for skeleton in enumerate_tableau_skeletons(path)? {
+            groups
+                .entry(skeleton_key(&skeleton))
+                .or_default()
+                .push(skeleton);
+        }
+
+        let mut partners = BTreeMap::new();
+        let mut fixed = BTreeSet::new();
+        let mut fixed_multiplicities = BTreeMap::new();
+        let mut total_skeletons = 0usize;
+        for (key, skeletons) in groups {
+            total_skeletons += skeletons.len();
+            let mut positive = skeletons
+                .iter()
+                .filter(|skeleton| skeleton_sign(skeleton) > 0)
+                .cloned()
+                .collect::<Vec<_>>();
+            let mut negative = skeletons
+                .into_iter()
+                .filter(|skeleton| skeleton_sign(skeleton) < 0)
+                .collect::<Vec<_>>();
+            positive.sort();
+            negative.sort();
+            let adjacency = negative
+                .iter()
+                .map(|minus| {
+                    positive
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, plus)| {
+                            let distance = (minus.orientation_mask ^ plus.orientation_mask)
+                                .count_ones()
+                                + (minus.retained_orientation_mask
+                                    ^ plus.retained_orientation_mask)
+                                    .count_ones();
+                            (distance <= max_combined_distance).then_some(index)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            let mut matched_positive = vec![None; positive.len()];
+            for negative_index in 0..negative.len() {
+                if !augment(
+                    negative_index,
+                    &adjacency,
+                    &mut vec![false; positive.len()],
+                    &mut matched_positive,
+                ) {
+                    let minus = &negative[negative_index];
+                    return Err(format!(
+                        "combined-radius-{max_combined_distance} cancellation has no full matching for path {}, q-degree {}, shape {:?}; first exposed B={}, eta={}, Q={}, degree {}",
+                        path.word(),
+                        key.q_degree,
+                        key.shape,
+                        format_edges(
+                            minus.retained_orientation_mask,
+                            &path.normal_edges
+                        ),
+                        format_edges(minus.orientation_mask, &path.normal_edges),
+                        format_tableau(&minus.recording_rows),
+                        adjacency[negative_index].len()
+                    ));
+                }
+            }
+            for (positive_index, negative_index) in matched_positive.iter().enumerate() {
+                if let Some(negative_index) = negative_index {
+                    let plus = positive[positive_index].clone();
+                    let minus = negative[*negative_index].clone();
+                    partners.insert(plus.clone(), minus.clone());
+                    partners.insert(minus, plus);
+                } else {
+                    let survivor = positive[positive_index].clone();
+                    *fixed_multiplicities.entry(key.clone()).or_default() += 1;
+                    fixed.insert(survivor);
+                }
             }
         }
         Ok(Self {
@@ -4312,6 +4783,59 @@ fn print_schur_report(max_n: usize, check_simple_reflections: bool) -> Result<()
     Ok(())
 }
 
+fn print_local_schur_report(max_n: usize) -> Result<(), String> {
+    let mut total_paths = 0usize;
+    let mut total_skeletons = 0usize;
+    let mut total_survivors = 0usize;
+    let mut total_max_radius = 0u32;
+    for n in 0..=max_n {
+        let mut rank_skeletons = 0usize;
+        let mut rank_survivors = 0usize;
+        let mut rank_max_radius = 0u32;
+        let paths = all_paths(n);
+        for path in &paths {
+            let global = SchurCancellation::build_global(path)?;
+            let mut local = None;
+            let mut last_error = None;
+            for radius in (1..=(2 * path.normal_edges.len()).max(1) as u32).step_by(2) {
+                match SchurCancellation::build_metric_local(path, radius) {
+                    Ok(matching) => {
+                        local = Some((radius, matching));
+                        break;
+                    }
+                    Err(error) => last_error = Some(error),
+                }
+            }
+            let (radius, local) = local.ok_or_else(|| {
+                last_error.unwrap_or_else(|| "no odd cancellation radius was tested".into())
+            })?;
+            if global.total_skeletons != local.total_skeletons
+                || global.fixed_multiplicities != local.fixed_multiplicities
+            {
+                return Err(format!(
+                    "local/global Schur multiplicities differ for path {}",
+                    path.word()
+                ));
+            }
+            rank_skeletons += local.total_skeletons;
+            rank_survivors += local.fixed.len();
+            rank_max_radius = rank_max_radius.max(radius);
+        }
+        println!(
+            "local Schur rank {n}: {} paths, {rank_skeletons} skeletons -> {rank_survivors} positive bounded-radius survivors; maximum minimal combined (eta,B) radius {rank_max_radius}",
+            paths.len(),
+        );
+        total_paths += paths.len();
+        total_skeletons += rank_skeletons;
+        total_survivors += rank_survivors;
+        total_max_radius = total_max_radius.max(rank_max_radius);
+    }
+    println!(
+        "local Schur ranks 0..={max_n}: {total_paths} paths, {total_skeletons} skeletons -> {total_survivors} positive bounded-radius survivors; maximum minimal combined (eta,B) radius {total_max_radius}"
+    );
+    Ok(())
+}
+
 fn run(args: Args) -> Result<(), String> {
     if args.k3_map {
         print_k3_map()?;
@@ -4335,6 +4859,33 @@ fn run(args: Args) -> Result<(), String> {
             }
         } else {
             print_shortcut_report(args.max_n)?;
+        }
+        return Ok(());
+    }
+    if args.local_schur_report {
+        if let Some(word) = args.path.as_deref() {
+            let path = PathData::parse(word)?;
+            let global = SchurCancellation::build_global(&path)?;
+            let mut chosen = None;
+            for radius in (1..=(2 * path.normal_edges.len()).max(1) as u32).step_by(2) {
+                if let Ok(local) = SchurCancellation::build_metric_local(&path, radius) {
+                    chosen = Some((radius, local));
+                    break;
+                }
+            }
+            let (radius, local) = chosen.ok_or_else(|| {
+                format!("no bounded-radius local matching exists for path {}", path.word())
+            })?;
+            println!(
+                "local Schur path {}: {} skeletons -> {} positive survivors at minimal combined (eta,B) radius {} (global survivors {})",
+                path.word(),
+                local.total_skeletons,
+                local.fixed.len(),
+                radius,
+                global.fixed.len()
+            );
+        } else {
+            print_local_schur_report(args.max_n)?;
         }
         return Ok(());
     }
@@ -4577,5 +5128,24 @@ mod tests {
         }
         assert!(reflections > 0);
         assert!(braids > 0);
+    }
+
+    #[test]
+    fn local_cancellation_obstructions_and_radius_five_repair_are_exact() {
+        let k3 = PathData::parse("NNNEEE").unwrap();
+        let exact_q_error = SchurCancellation::build_local(&k3).err().unwrap();
+        assert!(exact_q_error.contains("exact-Q group has 0 positive and 1 negative"));
+
+        let k4 = PathData::parse("NNNNEEEE").unwrap();
+        let single_dual_error = SchurCancellation::build_dual_local(&k4).err().unwrap();
+        assert!(single_dual_error.contains("eta=12,34"));
+        assert!(SchurCancellation::build_radius_local(&k4, 5).is_err());
+        assert!(SchurCancellation::build_metric_local(&k4, 3).is_err());
+        let radius_five = SchurCancellation::build_metric_local(&k4, 5).unwrap();
+        let global = SchurCancellation::build_global(&k4).unwrap();
+        assert_eq!(
+            radius_five.fixed_multiplicities,
+            global.fixed_multiplicities
+        );
     }
 }

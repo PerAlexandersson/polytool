@@ -1,5 +1,47 @@
 # Handoff
 
+## Completed: bounded-radius repair of Schur cancellation — 2026-10-15
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  The actual `J`
+cancellation used by the coloring-to-SSYT map no longer rank-matches arbitrary
+states in an entire `(q-degree, shape)` bucket.  It constructs the bipartite
+graph of opposite-sign skeletons at combined Hamming distance at most five in
+`(eta,B)` and uses a deterministic augmenting-path matching.  It may change
+`Q` within the same shape but always leaves `P` fixed, so crystal equivariance
+is unchanged.  No maintained API, Lean/paper source, or circular code changed.
+
+The data isolate why weaker repairs cannot work.  Exact `Q` already has a K3
+obstruction: for `B={12}`, `Q=[1 2]/[3]`, the sole state is the negative
+`eta={12,13}`.  Allowing one elementary dual-equivalence move fixes K3 but
+fails first on K4 at `B={12}`, `eta={12,34}`,
+`Q=[1 3]/[2 4]`.  Even arbitrary `Q` of the same shape and every odd
+orientation distance cannot match this K4 group while literal `B` is fixed.
+Thus a valid rule must move retained q-marks as well as orientation edges.
+
+When only `|B|`, shape, and `P` are fixed, a matching of combined `(eta,B)`
+radius one suffices through rank three; radius five suffices for every one of
+the 45 rank-four and 197 rank-five paths.  Radius three genuinely fails on a
+K4 group.  A simple lexicographic greedy pairing needs radius 13 at rank five,
+so the augmenting-path rerouting is currently essential; finding an explicit
+local description of that rerouting remains the next conceptual step.
+
+With radius-five `J` installed in the final map, the independent rank-five
+audit again gives 46,957 colorings on each side and 2,556 positive skeletons;
+all ranks through five give 48,840 objects and 2,861 survivors.  The new
+alternating paths total 1,385,562 steps and have maximum length 18,258.
+Transported `S_i` again pass through rank four: 4,023 involution/weight checks,
+631 distant commutations, and 2,163 braid relations.  Eleven focused tests,
+strict Clippy, rustfmt, and diff checks pass.  Reproduction:
+
+```bash
+/cargo-target/ai-projects/release/marked_coloring_hrv_bijection \
+  --local-schur-report --max-n 5
+/cargo-target/ai-projects/release/marked_coloring_hrv_bijection \
+  --schur-report --skip-si --max-n 5
+```
+
 ## Completed: coloring-to-SSYT involution-principle prototype — 2026-10-15
 
 `/root` completed and releases
@@ -22,16 +64,11 @@ already K2, where it pairs the `e_2` column shape with the row contribution in
 5,862 of 11,456 nonfixed signed states and commutes in 23,488 of 36,186
 nonzero crystal transitions.  This failure is retained as a regression.
 
-The alternate rule `J` is a canonical global matching.  It enumerates the
-admissible standard recording tableaux for each ordered HRV column
-composition, then rank-matches positive and negative `(eta,B_eta,Q)` skeletons
-inside each exact `(q-degree, insertion shape)` bucket.  It leaves `P`
-unchanged, hence commutes with the tableau crystal.  Alternating `J,I,J,I,...`
-from an `I`-fixed ordinary coloring is the finite involution-principle map to a
-`J`-fixed positive SSYT object; reversing the path recovers the coloring.
-This is a genuine certificate-producing bijection for every checked path, but
-the current `J` is global rank matching, not yet a local combinatorial rule or
-a uniform proof that every shape bucket has nonnegative surplus.
+At checkpoint `07ab9ff`, the initial alternate rule `J` was a canonical global
+rank matching inside each `(q-degree, insertion shape)` bucket.  It left `P`
+unchanged and supported the involution-principle map, but was not local.  The
+bounded-radius checkpoint above supersedes that matching while retaining the
+same positive multiplicities and reversible coloring-to-SSYT construction.
 
 `--schur-report --skip-si --max-n 5` exhaustively checks all 258 ordinary
 decorated paths: 308,351 signed LR skeletons cancel to 2,861 positive
