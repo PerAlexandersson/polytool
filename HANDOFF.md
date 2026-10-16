@@ -5,7 +5,8 @@
 `/root` completed and releases
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
 branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
-Lean/paper source, or circular code is owned.
+Lean/paper source, or circular code is owned.  Implementation checkpoint:
+`3f4a59e` (`Audit Hall matching rigidity and reflections`).
 
 The experiment now classifies candidate edges in every inductive fixed-content
 matching graph without enumerating perfect matchings.  Relative to one perfect
