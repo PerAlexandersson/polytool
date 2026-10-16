@@ -2,15 +2,81 @@
 
 ## Active: standard-permutation dual-equivalence refinement — 2026-10-16
 
-`/root` owns only
-`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
-branch `exp/verticalstripllt-marked-coloring-bijection`.  The current bounded
-task now has a direct reversible coloring-to-SSYT crystal map by LLT
-standardization and a component-local maximum-agreement transformation of
-Assaf's initial LLT graph into standard dual-equivalence components.  The
-active target is to recognize its minimal edge surgeries intrinsically rather
-than by finite component matching.  No shared library, Lean/paper source, or
-circular code is owned.
+`/root` owns
+`experiments/src/bin/marked_coloring_hrv_bijection.rs`,
+`sym-poly/sym/src/llt.rs`, `sym-poly/sym/src/lib.rs`,
+`sym-poly/sym/README.md`, and this handoff on branch
+`exp/verticalstripllt-marked-coloring-bijection`.  The experiment now has a
+direct reversible coloring-to-SSYT crystal map built from a deterministic
+Assaf `phi`/`psi`/`theta` rectification through rank five, rather than finite
+component matching.  The narrow shared-library task is only to promote the
+stable LLT coloring-standardization certificate; the bounded graph rectifier
+stays experimental.  No other shared library, Lean/paper source, or circular
+code is owned.
+
+## Completed: intrinsic dual-equivalence crystal through rank five — 2026-10-16
+
+The actual `FundamentalSchurBridge` no longer uses the component-local
+maximum-agreement tableau assignment described in the historical section
+below.  It now builds Assaf's initial LLT signed colored graph, processes the
+colors in order, and applies the lexicographically first intrinsic witnesses
+for the published `phi` and `psi` conditions.  Through rank five their relevant
+packages are singletons, so each operation is the corresponding crossing
+switch of two same-colored edges.  Components are accepted only after an
+explicit signature- and color-preserving graph isomorphism to a standard dual
+equivalence graph, not merely equality of descent distributions.
+
+After `phi` and `psi`, exactly eight rank-five path contexts retain the same
+eleven-vertex axiom-6 obstruction.  Its descent series is
+`s_(3,2) + s_(3,1,1)`.  A two-edge switch cannot split it.  Matching the two
+top-color signature classes gives four matchings with the right descent
+enumerators, but only one yields actual standard dual-equivalence graphs.
+That unique `theta` matching splits the component into sizes five and six,
+with shapes `(3,2)` and `(3,1,1)`.  This is a useful warning that fundamental
+generating functions alone are too weak to certify a crystal graph.
+
+The exhaustive census over all 258 ordinary decorated paths through rank five
+has 12,270 standard colorings and 2,861 rectified components.  Every component
+is a genuine standard tableau graph after 99 `phi` switches, 23 `psi`
+switches, and eight `theta` splits.  The induced coloring/SSYT map still has
+48,840 objects in each direction and 97,680 two-sided round trips.  All 46,420
+defined three-color Kashiwara arrows invert and preserve q-degree; 46,164 are
+supported only on the two active colors.  In this intrinsic gauge the K4 arrow
+is `f_1(1121)=2112` (the Foata-looking choice), while the first support-locality
+failure remains `f_2(1232)=2133`.
+
+Only the stable standardization layer was promoted.  `sym-poly-sym` now exports
+`LltColoringStandardization<C>` and `llt_standardize_coloring`.  The certificate
+ranks vertices by increasing color and decreasing vertex inside ties, exposes
+the rank-color word and mandatory strict-rise set, validates reconstruction
+from parts, and recovers the original coloring over any ordered alphabet.  The
+experiment consumes this API.  The bounded rectifier was deliberately not
+promoted: above rank five, Assaf's nontrivial package isomorphisms and the full
+`gamma`/`theta` propagation still need an all-rank implementation and proof.
+
+Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```text
+cargo test --release --locked -p sym-poly-sym
+# 139 unit + 103 integration/doc tests passed; 3 benchmark tests ignored
+
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection
+# 32 passed
+
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- \
+  -D warnings -A clippy::manual_is_multiple_of
+# passed
+
+cargo fmt --package sym-poly-sym --check
+git diff --check
+# passed
+```
+
+Strict shared-crate Clippy passes after allowing the pre-existing lint
+categories already present elsewhere in `sym-poly-sym`; an unqualified
+`-D warnings` is blocked by those unrelated baseline warnings.
 
 ## Completed: direct fundamental-to-Schur crystal shortcut — 2026-10-16
 

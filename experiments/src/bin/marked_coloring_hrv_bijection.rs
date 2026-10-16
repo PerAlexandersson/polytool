@@ -27,11 +27,12 @@
 //! adjacent levels give candidate `e_i,f_i` strings and expose their first K4
 //! three-color compatibility obstruction.
 //! A shorter genuine crystal map standardizes LLT colorings with decreasing
-//! vertex order inside color ties, transforms each initial LLT
-//! dual-equivalence component to standard-tableau copies while retaining a
-//! maximum number of its edges, and destandardizes to SSYT.  This map is
-//! explicitly invertible and isolates the remaining nonlocality in a small set
-//! of dual-equivalence edge surgeries.
+//! vertex order inside color ties, rectifies Assaf's initial LLT graph by
+//! deterministic `phi`, `psi`, and `theta` edge transformations, and uses the
+//! resulting unique standard-dual-equivalence isomorphisms to destandardize to
+//! SSYT.  This map is explicitly invertible.  The current package-level
+//! rectifier is exhaustive through rank five; the all-rank package propagation
+//! remains to be implemented.
 //!
 //! The ordinary flip experiment implements the verified reachability-cover
 //! short-edge move exactly.  It refines the coloring/HRV matching by complete
@@ -46,7 +47,10 @@ use clap::Parser;
 use combpoly::permutation::foata_map;
 use combpoly::rook_placements::integer_partitions;
 use sym_poly_core::{Partition, Tableau};
-use sym_poly_sym::llt::highest_reachable_vertices;
+use sym_poly_sym::llt::{
+    highest_reachable_vertices,
+    llt_standardize_coloring as library_llt_standardize_coloring,
+};
 use sym_poly_sym::unit_interval_edges;
 
 #[derive(Parser, Debug)]
@@ -11136,65 +11140,58 @@ impl FundamentalSchurBridge {
             })
             .collect::<BTreeSet<_>>();
         let standard_distributions = standard_tableau_descent_distributions(path.n);
-        let mut unvisited = states.clone();
+        let (rectified_edges, _, _, _) =
+            assaf_rank_five_rectification(path, &states)?;
+        let components = dual_components_in(&rectified_edges, &states, path.n)?;
         let mut next_copy = BTreeMap::<SchurKey, usize>::new();
         let mut forward = BTreeMap::new();
         let mut inverse = BTreeMap::new();
-        while let Some(start) = unvisited.iter().next().cloned() {
-            let mut component = BTreeSet::from([start.clone()]);
-            let mut queue = VecDeque::from([start]);
-            while let Some(state) = queue.pop_front() {
-                for index in 2..path.n as u32 {
-                    let next = llt_dual_equivalence_step(path, &state, index)?;
-                    if component.insert(next.clone()) {
-                        queue.push_back(next);
-                    }
-                }
+        for component in components {
+            let isomorphisms = standard_dual_isomorphisms(
+                &rectified_edges,
+                &component,
+                path.n,
+                &standard_distributions,
+            )?;
+            if isomorphisms.len() != 1 {
+                return Err(format!(
+                    "rectified component on path {} has {} standard dual isomorphisms",
+                    path.word(),
+                    isomorphisms.len()
+                ));
             }
-            for state in &component {
-                unvisited.remove(state);
-            }
-            let mut distribution = DescentDistribution::new();
-            for state in &component {
-                *distribution
-                    .entry(llt_standard_descent_set(state))
-                    .or_default() += 1;
-            }
-            let shapes = decompose_descent_distribution(&distribution, &standard_distributions)
-                .ok_or_else(|| {
-                    format!(
-                        "initial LLT component is not Schur positive on path {}",
-                        path.word()
-                    )
-                })?;
-            let (local_map, _) =
-                component_maximum_agreement_dual_map(path, &component, &shapes)?;
+            let (shape, local_map) = isomorphisms
+                .into_iter()
+                .next()
+                .expect("one standard dual isomorphism was checked");
             let degree = path
                 .normal_edges
                 .iter()
                 .filter(|&&(tail, head)| component.iter().next().unwrap()[tail]
                     < component.iter().next().unwrap()[head])
                 .count();
-            let shape_copies = shapes
-                .iter()
-                .map(|shape| {
-                    let key = SchurKey {
-                        q_degree: degree,
-                        shape: shape.clone(),
-                    };
-                    let copy = next_copy.entry(key).or_default();
-                    let result = (shape.clone(), *copy);
-                    *copy += 1;
-                    result
-                })
-                .collect::<Vec<_>>();
-            for (permutation, local_target) in local_map {
-                let (shape, copy) = &shape_copies[local_target.shape_copy];
+            if component.iter().any(|state| {
+                path.normal_edges
+                    .iter()
+                    .filter(|&&(tail, head)| state[tail] < state[head])
+                    .count()
+                    != degree
+            }) {
+                return Err("rectified component does not have constant q-degree".into());
+            }
+            let key = SchurKey {
+                q_degree: degree,
+                shape: shape.clone(),
+            };
+            let copy = next_copy.entry(key).or_default();
+            let current_copy = *copy;
+            *copy += 1;
+            for (permutation, standard_rows) in local_map {
                 let target = FundamentalStandardTarget {
                     q_degree: degree,
                     shape: shape.clone(),
-                    copy: *copy,
-                    standard_rows: local_target.rows,
+                    copy: current_copy,
+                    standard_rows,
                 };
                 if forward.insert(permutation.clone(), target.clone()).is_some()
                     || inverse.insert(target, permutation).is_some()
@@ -11208,19 +11205,15 @@ impl FundamentalSchurBridge {
 }
 
 fn llt_standardize_coloring(coloring: &[u8]) -> (Vec<u32>, Vec<u8>) {
-    let mut vertices = (0..coloring.len()).collect::<Vec<_>>();
-    vertices.sort_by(|&left, &right| {
-        coloring[left]
-            .cmp(&coloring[right])
-            .then_with(|| right.cmp(&left))
-    });
-    let mut permutation = vec![0u32; coloring.len()];
-    let mut rank_colors = Vec::with_capacity(coloring.len());
-    for (rank, vertex) in vertices.into_iter().enumerate() {
-        permutation[vertex] = rank as u32 + 1;
-        rank_colors.push(coloring[vertex]);
-    }
-    (permutation, rank_colors)
+    let certificate = library_llt_standardize_coloring(coloring);
+    (
+        certificate
+            .permutation()
+            .iter()
+            .map(|&rank| u32::try_from(rank).expect("coloring rank fits u32"))
+            .collect(),
+        certificate.rank_colors().to_vec(),
+    )
 }
 
 fn standardize_semistandard_rows(rows: &[Vec<u32>]) -> Result<(Vec<Vec<u32>>, Vec<u8>), String> {
@@ -11568,20 +11561,30 @@ fn audit_fundamental_schur_for_path(path: &PathData) -> Result<FundamentalSchurA
 fn print_fundamental_crystal_report(max_n: usize) -> Result<(), String> {
     let mut total = FundamentalSchurAudit::default();
     let mut total_dual = LltDualEquivalenceAudit::default();
+    let mut total_assaf = AssafRectificationAudit::default();
     for n in 0..=max_n {
         let mut rank = FundamentalSchurAudit::default();
         let mut rank_dual = LltDualEquivalenceAudit::default();
+        let mut rank_assaf = AssafRectificationAudit::default();
         for path in all_paths(n) {
             rank.absorb(audit_fundamental_schur_for_path(&path)?);
             rank_dual.absorb(audit_llt_dual_equivalence_for_path(&path)?);
+            if n <= 5 {
+                rank_assaf.absorb(audit_assaf_rectification_for_path(&path)?);
+            }
         }
         rank.print(&format!("rank {n}"));
         rank_dual.print(&format!("rank {n}"));
+        if n <= 5 {
+            rank_assaf.print(&format!("rank {n}"));
+        }
         total.absorb(rank);
         total_dual.absorb(rank_dual);
+        total_assaf.absorb(rank_assaf);
     }
     total.print(&format!("ranks 0..={max_n}"));
     total_dual.print(&format!("ranks 0..={max_n}"));
+    total_assaf.print(&format!("ranks 0..={}", max_n.min(5)));
     Ok(())
 }
 
@@ -11922,6 +11925,624 @@ fn decompose_descent_distribution(
 struct ComponentDualTarget {
     shape_copy: usize,
     rows: Vec<Vec<u32>>,
+}
+
+type DualEdgeMap = BTreeMap<(Vec<u32>, u32), Vec<u32>>;
+type StandardDualMap = BTreeMap<Vec<u32>, Vec<Vec<u32>>>;
+type StandardDualIsomorphism = (Vec<usize>, StandardDualMap);
+
+fn dual_signature(permutation: &[u32], index: u32) -> bool {
+    llt_standard_descent_set(permutation).contains(&index)
+}
+
+fn dual_neighbor<'a>(
+    edges: &'a DualEdgeMap,
+    state: &[u32],
+    index: u32,
+) -> Result<&'a Vec<u32>, String> {
+    edges
+        .get(&(state.to_vec(), index))
+        .ok_or_else(|| format!("missing D_{index} edge at {state:?}"))
+}
+
+fn dual_has_neighbor(edges: &DualEdgeMap, state: &[u32], index: u32) -> Result<bool, String> {
+    Ok(dual_neighbor(edges, state, index)?.as_slice() != state)
+}
+
+fn assaf_type_w(
+    edges: &DualEdgeMap,
+    state: &[u32],
+    index: u32,
+) -> Result<bool, String> {
+    if index <= 2 || !dual_has_neighbor(edges, state, index - 1)? {
+        return Ok(false);
+    }
+    let previous = dual_neighbor(edges, state, index - 1)?;
+    Ok(dual_signature(state, index) != dual_signature(previous, index))
+}
+
+fn assaf_witness_w(
+    edges: &DualEdgeMap,
+    state: &[u32],
+    index: u32,
+) -> Result<bool, String> {
+    if !assaf_type_w(edges, state, index)? || !dual_has_neighbor(edges, state, index)? {
+        return Ok(false);
+    }
+    Ok(dual_neighbor(edges, state, index - 1)? != dual_neighbor(edges, state, index)?)
+}
+
+fn assaf_flat_edge(
+    edges: &DualEdgeMap,
+    state: &[u32],
+    index: u32,
+) -> Result<bool, String> {
+    if index <= 2 || !dual_has_neighbor(edges, state, index)? {
+        return Ok(false);
+    }
+    let next = dual_neighbor(edges, state, index)?;
+    Ok(dual_signature(state, index - 2) == dual_signature(next, index - 2))
+}
+
+fn assaf_witness_c(
+    edges: &DualEdgeMap,
+    state: &[u32],
+    index: u32,
+) -> Result<bool, String> {
+    if index <= 3 || !dual_has_neighbor(edges, state, index - 2)? {
+        return Ok(false);
+    }
+    let previous = dual_neighbor(edges, state, index - 2)?;
+    if !assaf_flat_edge(edges, state, index)? || !assaf_flat_edge(edges, previous, index)? {
+        return Ok(false);
+    }
+    let first = dual_neighbor(edges, dual_neighbor(edges, state, index)?, index - 2)?;
+    let second = dual_neighbor(edges, previous, index)?;
+    Ok(first != second)
+}
+
+fn switch_dual_crossing(
+    edges: &mut DualEdgeMap,
+    index: u32,
+    left: &[u32],
+    right: &[u32],
+) -> Result<(), String> {
+    let left_partner = dual_neighbor(edges, left, index)?.clone();
+    let right_partner = dual_neighbor(edges, right, index)?.clone();
+    let vertices = BTreeSet::from([
+        left.to_vec(),
+        right.to_vec(),
+        left_partner.clone(),
+        right_partner.clone(),
+    ]);
+    if vertices.len() != 4 {
+        return Err(format!(
+            "D_{index} crossing switch is degenerate at {left:?}, {right:?}"
+        ));
+    }
+    for (first, second) in [
+        (left.to_vec(), right.to_vec()),
+        (left_partner, right_partner),
+    ] {
+        edges.insert((first.clone(), index), second.clone());
+        edges.insert((second, index), first);
+    }
+    Ok(())
+}
+
+fn set_dual_pair(edges: &mut DualEdgeMap, index: u32, left: &[u32], right: &[u32]) {
+    edges.insert((left.to_vec(), index), right.to_vec());
+    edges.insert((right.to_vec(), index), left.to_vec());
+}
+
+fn dual_components_in(
+    edges: &DualEdgeMap,
+    states: &BTreeSet<Vec<u32>>,
+    n: usize,
+) -> Result<Vec<BTreeSet<Vec<u32>>>, String> {
+    let mut result = Vec::new();
+    let mut unvisited = states.clone();
+    while let Some(start) = unvisited.iter().next().cloned() {
+        let mut component = BTreeSet::from([start.clone()]);
+        let mut queue = VecDeque::from([start]);
+        while let Some(state) = queue.pop_front() {
+            for index in 2..n as u32 {
+                let next = dual_neighbor(edges, &state, index)?.clone();
+                if !states.contains(&next) {
+                    return Err("dual edge left the candidate state set".into());
+                }
+                if component.insert(next.clone()) {
+                    queue.push_back(next);
+                }
+            }
+        }
+        for state in &component {
+            unvisited.remove(state);
+        }
+        result.push(component);
+    }
+    Ok(result)
+}
+
+fn standard_dual_isomorphisms(
+    edges: &DualEdgeMap,
+    component: &BTreeSet<Vec<u32>>,
+    n: usize,
+    standard_distributions: &[ShapeDescentDistribution],
+) -> Result<Vec<StandardDualIsomorphism>, String> {
+    let source_root = component
+        .iter()
+        .next()
+        .ok_or_else(|| "cannot identify an empty dual component".to_string())?;
+    let source_distribution = {
+        let mut distribution = DescentDistribution::new();
+        for state in component {
+            *distribution
+                .entry(llt_standard_descent_set(state))
+                .or_default() += 1;
+        }
+        distribution
+    };
+    let mut isomorphisms = Vec::new();
+    for (shape, distribution) in standard_distributions {
+        if distribution != &source_distribution {
+            continue;
+        }
+        let partition = Partition::from_sorted(
+            shape.iter().map(|&part| part as u32).collect::<Vec<_>>(),
+        );
+        let tableaux = Tableau::standard_tableaux(&partition)
+            .into_iter()
+            .map(|tableau| tableau.rows().to_vec())
+            .collect::<BTreeSet<_>>();
+        for target_root in tableaux.iter().filter(|rows| {
+            Tableau::new((*rows).clone()).descent_set()
+                == llt_standard_descent_set(source_root)
+        }) {
+            let mut forward = BTreeMap::from([(source_root.clone(), target_root.clone())]);
+            let mut inverse = BTreeMap::from([(target_root.clone(), source_root.clone())]);
+            let mut queue = VecDeque::from([source_root.clone()]);
+            let mut valid = true;
+            while let Some(source) = queue.pop_front() {
+                let target = forward[&source].clone();
+                if llt_standard_descent_set(&source)
+                    != Tableau::new(target.clone()).descent_set()
+                {
+                    valid = false;
+                    break;
+                }
+                for index in 2..n as u32 {
+                    let source_next = dual_neighbor(edges, &source, index)?.clone();
+                    let target_next = elementary_dual_equivalence(&target, index);
+                    if !tableaux.contains(&target_next) {
+                        valid = false;
+                        break;
+                    }
+                    if let Some(known) = forward.get(&source_next) {
+                        if known != &target_next {
+                            valid = false;
+                            break;
+                        }
+                    } else {
+                        let std::collections::btree_map::Entry::Vacant(inverse_entry) =
+                            inverse.entry(target_next.clone())
+                        else {
+                            valid = false;
+                            break;
+                        };
+                        forward.insert(source_next.clone(), target_next.clone());
+                        inverse_entry.insert(source_next.clone());
+                        queue.push_back(source_next);
+                    }
+                }
+                if !valid {
+                    break;
+                }
+            }
+            if valid && forward.len() == component.len() && inverse.len() == tableaux.len() {
+                isomorphisms.push((shape.clone(), forward));
+            }
+        }
+    }
+    Ok(isomorphisms)
+}
+
+fn assaf_theta_matching_candidates(
+    edges: &DualEdgeMap,
+    component: &BTreeSet<Vec<u32>>,
+    n: usize,
+    standard_distributions: &[ShapeDescentDistribution],
+) -> Result<Vec<(usize, DualEdgeMap, String)>, String> {
+    if n < 2 {
+        return Ok(Vec::new());
+    }
+    let index = n as u32 - 1;
+    let left = component
+        .iter()
+        .filter(|state| {
+            !dual_signature(state, index - 1) && dual_signature(state, index)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let right = component
+        .iter()
+        .filter(|state| {
+            dual_signature(state, index - 1) && !dual_signature(state, index)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    if left.len() != right.len() {
+        return Err(format!(
+            "D_{index} signature classes have unequal sizes {} and {}",
+            left.len(),
+            right.len()
+        ));
+    }
+    let old_pairs = left
+        .iter()
+        .map(|state| dual_neighbor(edges, state, index).cloned())
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut candidates = Vec::new();
+    for matching in permutations(left.len()) {
+        let mut changed = edges.clone();
+        let mut retained = 0usize;
+        let mut description = Vec::new();
+        for (left_index, &right_rank) in matching.iter().enumerate() {
+            let right_index = right_rank as usize - 1;
+            if old_pairs[left_index] == right[right_index] {
+                retained += 1;
+            } else {
+                description.push(format!(
+                    "{:?}--{:?}", left[left_index], right[right_index]
+                ));
+            }
+            set_dual_pair(
+                &mut changed,
+                index,
+                &left[left_index],
+                &right[right_index],
+            );
+        }
+        let pieces = dual_components_in(&changed, component, n)?;
+        if pieces.len() <= 1 {
+            continue;
+        }
+        let shapes = pieces
+            .iter()
+            .map(|piece| {
+                let isomorphisms =
+                    standard_dual_isomorphisms(&changed, piece, n, standard_distributions).ok()?;
+                (isomorphisms.len() == 1).then(|| isomorphisms[0].0.clone())
+            })
+            .collect::<Option<Vec<_>>>();
+        let Some(shapes) = shapes else {
+            continue;
+        };
+        candidates.push((
+            retained,
+            changed,
+            format!(
+                "retain {retained}/{} D_{index} edges, new [{}], pieces {:?} with shapes {shapes:?}",
+                left.len(),
+                description.join(", "),
+                pieces.iter().map(BTreeSet::len).collect::<Vec<_>>()
+            ),
+        ));
+    }
+    candidates.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| left.2.cmp(&right.2)));
+    Ok(candidates)
+}
+
+/// Deterministic Assaf graph rectification through rank five.
+///
+/// This follows the signed-colored-graph transformations in Assaf,
+/// arXiv:1005.3759v5, Section 5 (especially the definitions of `W_i`, `C_i`,
+/// `phi_i`, `psi_i`, and `theta_i`).
+///
+/// At these ranks the relevant packages for `phi` and `psi` are singletons,
+/// so their package isomorphisms reduce to crossing switches.  The first
+/// axiom-6 obstruction is the same eleven-vertex component in eight path
+/// contexts.  Its `theta` operation is the unique matching of the top-color
+/// signature classes that splits it into genuine standard dual-equivalence
+/// graphs.  Higher ranks require the published propagation over nontrivial
+/// packages and are rejected explicitly.
+fn assaf_rank_five_rectification(
+    path: &PathData,
+    states: &BTreeSet<Vec<u32>>,
+) -> Result<(DualEdgeMap, usize, usize, Vec<String>), String> {
+    if path.n > 5 {
+        return Err(
+            "the current Assaf graph rectifier is validated only through rank five".into(),
+        );
+    }
+    let mut edges = BTreeMap::new();
+    for state in states {
+        for index in 2..path.n as u32 {
+            edges.insert(
+                (state.clone(), index),
+                llt_dual_equivalence_step(path, state, index)?,
+            );
+        }
+    }
+    let mut phi_switches = 0usize;
+    let mut psi_switches = 0usize;
+    for index in 3..path.n as u32 {
+        let mut steps = 0usize;
+        loop {
+            let mut witness = None;
+            for state in states {
+                if assaf_witness_w(&edges, state, index)? {
+                    witness = Some(state.clone());
+                    break;
+                }
+            }
+            let Some(witness) = witness else {
+                break;
+            };
+            let previous = dual_neighbor(&edges, &witness, index - 1)?.clone();
+            switch_dual_crossing(&mut edges, index, &witness, &previous)?;
+            phi_switches += 1;
+            steps += 1;
+            if steps > states.len() * 2 {
+                return Err(format!("Assaf phi_{index} rectification did not terminate"));
+            }
+        }
+        loop {
+            let mut witness = None;
+            for state in states {
+                if assaf_witness_c(&edges, state, index)? {
+                    witness = Some(state.clone());
+                    break;
+                }
+            }
+            let Some(witness) = witness else {
+                break;
+            };
+            let partner = dual_neighbor(&edges, &witness, index)?.clone();
+            let left = dual_neighbor(&edges, &witness, index - 2)?.clone();
+            let right = dual_neighbor(&edges, &partner, index - 2)?.clone();
+            switch_dual_crossing(&mut edges, index, &left, &right)?;
+            psi_switches += 1;
+            steps += 1;
+            if steps > states.len() * 4 {
+                return Err(format!("Assaf psi_{index} rectification did not terminate"));
+            }
+        }
+    }
+    let standard_distributions = standard_tableau_descent_distributions(path.n);
+    let mut theta_trace = Vec::new();
+    let mut theta_steps = 0usize;
+    loop {
+        let components = dual_components_in(&edges, states, path.n)?;
+        let mut bad_component = None;
+        for component in components {
+            if standard_dual_isomorphisms(
+                &edges,
+                &component,
+                path.n,
+                &standard_distributions,
+            )?
+            .len()
+                != 1
+            {
+                bad_component = Some(component);
+                break;
+            }
+        }
+        let Some(component) = bad_component else {
+            break;
+        };
+        let candidates = assaf_theta_matching_candidates(
+            &edges,
+            &component,
+            path.n,
+            &standard_distributions,
+        )?;
+        if candidates.len() != 1 {
+            return Err(format!(
+                "Assaf theta rectification on path {} has {} standard splitting matchings",
+                path.word(),
+                candidates.len()
+            ));
+        }
+        let (_, changed, description) = candidates
+            .into_iter()
+            .next()
+            .expect("one theta candidate was checked");
+        edges = changed;
+        theta_trace.push(description);
+        theta_steps += 1;
+        if theta_steps > states.len() {
+            return Err("Assaf theta rectification did not terminate".into());
+        }
+    }
+    Ok((edges, phi_switches, psi_switches, theta_trace))
+}
+
+#[derive(Clone, Debug, Default)]
+struct AssafRectificationAudit {
+    paths: usize,
+    states: usize,
+    components: usize,
+    standard_components: usize,
+    phi_switches: usize,
+    psi_switches: usize,
+    theta_splits: usize,
+    theta_examples: BTreeSet<String>,
+    failure_loci: BTreeSet<String>,
+    first_failure: Option<String>,
+}
+
+impl AssafRectificationAudit {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        self.states += other.states;
+        self.components += other.components;
+        self.standard_components += other.standard_components;
+        self.phi_switches += other.phi_switches;
+        self.psi_switches += other.psi_switches;
+        self.theta_splits += other.theta_splits;
+        self.theta_examples.extend(other.theta_examples);
+        self.failure_loci.extend(other.failure_loci);
+        if self.first_failure.is_none() {
+            self.first_failure = other.first_failure;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "intrinsic Assaf rectification {label}: {} paths, {} states; standard-tableau {}/{} components; phi switches {}, psi switches {}, theta splits {}",
+            self.paths,
+            self.states,
+            self.standard_components,
+            self.components,
+            self.phi_switches,
+            self.psi_switches,
+            self.theta_splits
+        );
+        if let Some(failure) = &self.first_failure {
+            println!("  first intrinsic rectification failure: {failure}");
+        }
+        for failure in self.failure_loci.iter().take(12) {
+            println!("  unresolved intrinsic component: {failure}");
+        }
+        for example in self.theta_examples.iter().take(4) {
+            println!("  theta split: {example}");
+        }
+    }
+}
+
+fn audit_assaf_rectification_for_path(
+    path: &PathData,
+) -> Result<AssafRectificationAudit, String> {
+    let states = permutations(path.n)
+        .into_iter()
+        .filter(|permutation| {
+            path.strict_edges
+                .iter()
+                .all(|&(tail, head)| permutation[tail] < permutation[head])
+        })
+        .collect::<BTreeSet<_>>();
+    let (edges, phi_switches, psi_switches, theta_trace) =
+        assaf_rank_five_rectification(path, &states)?;
+    for state in &states {
+        for index in 2..path.n as u32 {
+            let next = dual_neighbor(&edges, state, index)?;
+            if dual_neighbor(&edges, next, index)?.as_slice() != state {
+                return Err(format!(
+                    "rectified D_{index} is not involutive at {state:?}"
+                ));
+            }
+            if next != state
+                && (dual_signature(state, index - 1)
+                    == dual_signature(next, index - 1)
+                    || dual_signature(state, index) == dual_signature(next, index))
+            {
+                return Err(format!(
+                    "rectified D_{index} does not reverse its adjacent signatures at {state:?}"
+                ));
+            }
+        }
+    }
+    let standard_distributions = standard_tableau_descent_distributions(path.n);
+    let mut unvisited = states.clone();
+    let mut audit = AssafRectificationAudit {
+        paths: 1,
+        states: states.len(),
+        phi_switches,
+        psi_switches,
+        theta_splits: theta_trace.len(),
+        theta_examples: theta_trace
+            .into_iter()
+            .map(|trace| format!("path {} {trace}", path.word()))
+            .collect(),
+        ..AssafRectificationAudit::default()
+    };
+    while let Some(start) = unvisited.iter().next().cloned() {
+        let mut component = BTreeSet::from([start.clone()]);
+        let mut queue = VecDeque::from([start]);
+        while let Some(state) = queue.pop_front() {
+            for index in 2..path.n as u32 {
+                let next = dual_neighbor(&edges, &state, index)?.clone();
+                if component.insert(next.clone()) {
+                    queue.push_back(next);
+                }
+            }
+        }
+        for state in &component {
+            unvisited.remove(state);
+        }
+        audit.components += 1;
+        let mut distribution = DescentDistribution::new();
+        for state in &component {
+            *distribution
+                .entry(llt_standard_descent_set(state))
+                .or_default() += 1;
+        }
+        let standard_isomorphisms =
+            standard_dual_isomorphisms(&edges, &component, path.n, &standard_distributions)?;
+        if standard_isomorphisms.len() == 1 {
+            audit.standard_components += 1;
+        } else {
+            let mut failure = format!(
+                "path {}, component beginning {:?}, size {}, descent distribution {:?}",
+                path.word(),
+                component.iter().next().expect("component is nonempty"),
+                component.len(),
+                distribution
+            );
+            if audit.first_failure.is_none() && path.n == 5 {
+                let mut lower_unvisited = component.clone();
+                let mut lower_components = Vec::<BTreeSet<Vec<u32>>>::new();
+                while let Some(lower_start) = lower_unvisited.iter().next().cloned() {
+                    let mut lower = BTreeSet::from([lower_start.clone()]);
+                    let mut lower_queue = VecDeque::from([lower_start]);
+                    while let Some(state) = lower_queue.pop_front() {
+                        for index in 2..4 {
+                            let next = dual_neighbor(&edges, &state, index)?.clone();
+                            if lower.insert(next.clone()) {
+                                lower_queue.push_back(next);
+                            }
+                        }
+                    }
+                    for state in &lower {
+                        lower_unvisited.remove(state);
+                    }
+                    lower_components.push(lower);
+                }
+                let lower_index = lower_components
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(index, lower)| {
+                        lower.iter().cloned().map(move |state| (state, index))
+                    })
+                    .collect::<BTreeMap<_, _>>();
+                let top_edges = component
+                    .iter()
+                    .filter_map(|state| {
+                        let next = dual_neighbor(&edges, state, 4).ok()?.clone();
+                        (state < &next).then(|| {
+                            format!(
+                                "{}:{state:?}--{}:{next:?}",
+                                lower_index[state], lower_index[&next]
+                            )
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                failure.push_str(&format!(
+                    "; lower components {:?}; D_4 edges [{}]",
+                    lower_components
+                        .iter()
+                        .map(|lower| lower.iter().cloned().collect::<Vec<_>>())
+                        .collect::<Vec<_>>(),
+                    top_edges.join(", ")
+                ));
+                audit.first_failure = Some(failure.clone());
+            }
+            audit.failure_loci.insert(failure);
+        }
+    }
+    Ok(audit)
 }
 
 fn component_maximum_agreement_dual_map(
@@ -15193,6 +15814,10 @@ fn run(args: Args) -> Result<(), String> {
                     .print(&format!("path {}", path.word()));
                 audit_llt_dual_equivalence_for_path(&path)?
                     .print(&format!("path {}", path.word()));
+                if path.n <= 5 {
+                    audit_assaf_rectification_for_path(&path)?
+                        .print(&format!("path {}", path.word()));
+                }
             }
         } else {
             print_fundamental_crystal_report(args.max_n)?;
@@ -15755,7 +16380,7 @@ mod tests {
         let bridge = FundamentalSchurBridge::build(&k4).unwrap();
         assert_eq!(
             fundamental_crystal_step(&bridge, &k4, &[0, 0, 1, 0], 1, false).unwrap(),
-            Some(vec![0, 1, 1, 0])
+            Some(vec![1, 0, 0, 1])
         );
         assert_eq!(
             fundamental_crystal_step(&bridge, &k4, &[0, 0, 2, 1], 1, false).unwrap(),
@@ -15789,6 +16414,19 @@ mod tests {
             ])
         );
 
+        let mut intrinsic = AssafRectificationAudit::default();
+        for n in 0..=4 {
+            for path in all_paths(n) {
+                intrinsic.absorb(audit_assaf_rectification_for_path(&path).unwrap());
+            }
+        }
+        assert_eq!(intrinsic.standard_components, 305);
+        assert_eq!(intrinsic.components, 305);
+        assert_eq!(intrinsic.phi_switches, 3);
+        assert_eq!(intrinsic.psi_switches, 0);
+        assert_eq!(intrinsic.theta_splits, 0);
+        assert!(intrinsic.first_failure.is_none());
+
         let context = "D_2 [2, 4, 3, 1, 5]<->[3, 4, 1, 2, 5]|q5";
         let kept_path = PathData::parse("NNNNENEEEE").unwrap();
         let kept = audit_llt_dual_equivalence_for_path(&kept_path).unwrap();
@@ -15799,6 +16437,24 @@ mod tests {
             removed.contextual_pattern_decisions.get(context),
             Some(&(0, 1))
         );
+    }
+
+    #[test]
+    fn intrinsic_assaf_theta_split_gives_the_rank_five_crystal() {
+        let path = PathData::parse("NNNNENEEEE").unwrap();
+        let intrinsic = audit_assaf_rectification_for_path(&path).unwrap();
+        assert_eq!(intrinsic.states, 120);
+        assert_eq!(intrinsic.standard_components, 26);
+        assert_eq!(intrinsic.components, 26);
+        assert_eq!(intrinsic.phi_switches, 8);
+        assert_eq!(intrinsic.psi_switches, 4);
+        assert_eq!(intrinsic.theta_splits, 1);
+        assert!(intrinsic.first_failure.is_none());
+
+        let crystal = audit_fundamental_schur_for_path(&path).unwrap();
+        assert_eq!(crystal.crystal_inverse_checks, crystal.crystal_arrows);
+        assert_eq!(crystal.crystal_degree_checks, crystal.crystal_arrows);
+        assert_eq!(crystal.round_trips, 2 * crystal.packed_colorings);
     }
 
     #[test]
