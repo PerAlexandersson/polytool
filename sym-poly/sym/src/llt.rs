@@ -17,6 +17,130 @@ pub(crate) type QSymmetricFunction = SymmetricFunction<QPolynomial>;
 const DYCK_NORTH: u8 = 1;
 const DYCK_EAST: u8 = 0;
 
+/// Order-standardization data for an LLT coloring.
+///
+/// Vertices are ranked by increasing color, with equal colors ranked by
+/// **decreasing** vertex index. Thus `permutation[v]` is the one-based rank of
+/// vertex `v`, while `rank_colors[r - 1]` is the color of rank `r`. This tie
+/// convention is the one for which a coloring is equivalent to a permutation
+/// together with a weakly increasing rank-color word having strict rises at
+/// [`Self::mandatory_descents`].
+///
+/// The type is generic in the color alphabet. Consequently a certificate for
+/// packed positive-integer colors also transports equivariantly along every
+/// strictly increasing relabeling of those colors.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LltColoringStandardization<C> {
+    permutation: Vec<usize>,
+    rank_colors: Vec<C>,
+}
+
+impl<C: Ord + Clone> LltColoringStandardization<C> {
+    /// Construct the LLT standardization certificate of `coloring`.
+    pub fn from_coloring(coloring: &[C]) -> Self {
+        let mut vertices = (0..coloring.len()).collect::<Vec<_>>();
+        vertices.sort_by(|&left, &right| {
+            coloring[left]
+                .cmp(&coloring[right])
+                .then_with(|| right.cmp(&left))
+        });
+        let mut permutation = vec![0usize; coloring.len()];
+        let mut rank_colors = Vec::with_capacity(coloring.len());
+        for (rank, vertex) in vertices.into_iter().enumerate() {
+            permutation[vertex] = rank + 1;
+            rank_colors.push(coloring[vertex].clone());
+        }
+        Self {
+            permutation,
+            rank_colors,
+        }
+    }
+
+    /// Reconstruct a certificate from its two words, rejecting invalid data.
+    ///
+    /// Besides checking that `permutation` is a one-based permutation, this
+    /// checks that `rank_colors` is weakly increasing and is strictly
+    /// increasing at every mandatory descent. These conditions are exactly
+    /// what is needed for standardizing the recovered coloring to return the
+    /// same certificate.
+    pub fn from_parts(permutation: Vec<usize>, rank_colors: Vec<C>) -> Option<Self> {
+        if permutation.len() != rank_colors.len() {
+            return None;
+        }
+        let n = permutation.len();
+        let mut seen = vec![false; n + 1];
+        for &rank in &permutation {
+            if rank == 0 || rank > n || seen[rank] {
+                return None;
+            }
+            seen[rank] = true;
+        }
+        if rank_colors.windows(2).any(|pair| pair[0] > pair[1]) {
+            return None;
+        }
+        let candidate = Self {
+            permutation,
+            rank_colors,
+        };
+        if candidate
+            .mandatory_descents()
+            .into_iter()
+            .any(|rank| candidate.rank_colors[rank - 1] >= candidate.rank_colors[rank])
+        {
+            return None;
+        }
+        Some(candidate)
+    }
+
+    /// The one-based rank stored at each vertex.
+    pub fn permutation(&self) -> &[usize] {
+        &self.permutation
+    }
+
+    /// The colors in increasing rank order.
+    pub fn rank_colors(&self) -> &[C] {
+        &self.rank_colors
+    }
+
+    /// Ranks `r` whose vertex lies left of the vertex carrying `r + 1`.
+    ///
+    /// Equal colors are ranked from right to left, so precisely these ranks
+    /// must be strict rises in the rank-color word.
+    pub fn mandatory_descents(&self) -> BTreeSet<usize> {
+        let mut positions = vec![0usize; self.permutation.len() + 1];
+        for (vertex, &rank) in self.permutation.iter().enumerate() {
+            positions[rank] = vertex;
+        }
+        (1..self.permutation.len())
+            .filter(|&rank| positions[rank] < positions[rank + 1])
+            .collect()
+    }
+
+    /// Recover the original vertex-color word.
+    pub fn recover_coloring(&self) -> Vec<C> {
+        self.permutation
+            .iter()
+            .map(|&rank| self.rank_colors[rank - 1].clone())
+            .collect()
+    }
+}
+
+/// Standardize an LLT coloring with decreasing vertex order inside color ties.
+///
+/// ```
+/// use std::collections::BTreeSet;
+/// use sym_poly_sym::llt_standardize_coloring;
+///
+/// let certificate = llt_standardize_coloring(&[1, 1, 2, 1]);
+/// assert_eq!(certificate.permutation(), &[3, 2, 4, 1]);
+/// assert_eq!(certificate.rank_colors(), &[1, 1, 1, 2]);
+/// assert_eq!(certificate.mandatory_descents(), BTreeSet::from([3]));
+/// assert_eq!(certificate.recover_coloring(), vec![1, 1, 2, 1]);
+/// ```
+pub fn llt_standardize_coloring<C: Ord + Clone>(coloring: &[C]) -> LltColoringStandardization<C> {
+    LltColoringStandardization::from_coloring(coloring)
+}
+
 /// Compute the graph LLT polynomial in the monomial basis.
 ///
 /// The coefficient of `q^a m_\lambda` counts colorings of type `\lambda`
@@ -1265,6 +1389,36 @@ mod tests {
 
     fn q(n: i64) -> Ratio<i64> {
         Ratio::from_integer(n)
+    }
+
+    #[test]
+    fn test_llt_coloring_standardization_certificate() {
+        let certificate = llt_standardize_coloring(&[1u8, 1, 2, 1]);
+        assert_eq!(certificate.permutation(), &[3, 2, 4, 1]);
+        assert_eq!(certificate.rank_colors(), &[1, 1, 1, 2]);
+        assert_eq!(certificate.mandatory_descents(), BTreeSet::from([3]));
+        assert_eq!(certificate.recover_coloring(), vec![1, 1, 2, 1]);
+
+        assert_eq!(
+            LltColoringStandardization::from_parts(
+                certificate.permutation().to_vec(),
+                certificate.rank_colors().to_vec(),
+            ),
+            Some(certificate)
+        );
+    }
+
+    #[test]
+    fn test_llt_coloring_standardization_rejects_invalid_parts() {
+        assert!(LltColoringStandardization::from_parts(vec![1, 1], vec![1, 2]).is_none());
+        assert!(LltColoringStandardization::from_parts(vec![1, 2], vec![2, 1]).is_none());
+        assert!(
+            LltColoringStandardization::from_parts(vec![3, 2, 4, 1], vec![1, 1, 2, 2]).is_none()
+        );
+        assert_eq!(
+            llt_standardize_coloring::<u8>(&[]).recover_coloring(),
+            Vec::<u8>::new()
+        );
     }
 
     #[test]

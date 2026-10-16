@@ -80,10 +80,11 @@ pub use llt::{
     circular_unicellular_llt_frobenius_target, circular_unicellular_llt_q_plus_one,
     circular_unicellular_llt_q_plus_one_e_expansion,
     circular_unicellular_llt_q_plus_one_is_e_positive, directed_graph_llt_symmetric,
-    graph_llt_symmetric, unicellular_llt, unicellular_llt_character_values_by_degree,
-    unicellular_llt_frobenius_target, unicellular_llt_q_plus_one,
-    unicellular_llt_q_plus_one_e_expansion, unicellular_llt_q_plus_one_e_expansion_recursive,
-    unit_interval_edges, UnicellularLltDyckCache,
+    graph_llt_symmetric, llt_standardize_coloring, unicellular_llt,
+    unicellular_llt_character_values_by_degree, unicellular_llt_frobenius_target,
+    unicellular_llt_q_plus_one, unicellular_llt_q_plus_one_e_expansion,
+    unicellular_llt_q_plus_one_e_expansion_recursive, unit_interval_edges,
+    LltColoringStandardization, UnicellularLltDyckCache,
 };
 pub use macdonald::{
     delta_eigenvalue, delta_modified_macdonald, delta_prime_eigenvalue,

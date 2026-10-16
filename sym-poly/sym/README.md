@@ -16,7 +16,7 @@ support. `sym-poly-qsym` is downstream of this crate.
 | Graph/chromatic families | `chromatic`, universal-vertex extension, `weighted_bond`, q-chromatic and Hessenberg/GKM routines |
 | Translation-invariant graph bases | `partition_graph_symmetric`, `square_partition_graph_symmetric`, `symmetrized_graph_monomial`; `examples/partition_graph_schur.rs`, `examples/square_graph_w.rs` |
 | Chordal clique boundaries | `chordal_clique_boundary_schur_channels`; `examples/clique_boundary_channels.rs` |
-| q,t families | `llt`, `macdonald`, Petrie and shifted/Grothendieck routines |
+| q,t families | `llt`, including `LltColoringStandardization`; `macdonald`, Petrie and shifted/Grothendieck routines |
 | Additional constructions | `lah`, twin GKM, circular/affine helpers |
 
 Functions are indexed by normalized `Partition` values. Use
@@ -41,6 +41,10 @@ assert_eq!(monomial.coefficient(&Partition::new(vec![1, 1, 1])), 2);
 
 For a q-polynomial-valued family, run the checked LLT example with
 `cargo run -p sym-poly-sym --example llt_site_example`.
+`llt_standardize_coloring` records the LLT-specific decreasing-vertex
+tie standardization, its rank-color word, and the mandatory strict-rise set;
+the certificate reconstructs the original coloring and works over any ordered
+color alphabet.
 The checked `chromatic_universal_vertex` example verifies the monomial-basis
 universal-vertex operator against `Graph::join`.
 
