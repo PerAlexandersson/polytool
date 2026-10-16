@@ -1,5 +1,66 @@
 # Handoff
 
+## Completed: ordinary flip transport experiment — 2026-10-16
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
+Lean/paper source, or circular code is owned.
+
+The prototype now implements the verified ordinary source-cover flip exactly:
+for `a<b<c`, selected covers `a->b` and `a->c` replace the normal short
+`ab` by `bc`, with the undirected relation obtained by symmetry.  The
+`--flip-report` audit enumerates complete components and pushes all packed
+marked-coloring states through both the existing recursion-selected map and a
+new reversible component-refined certificate map.  The refinement preserves
+every recursion pair already in the correct component and canonically repairs
+only the residual cross-component pairs; forward, inverse, and replay are
+checked state by state.
+
+Across all 258 ordinary decorated paths through rank five there are 6954
+orientations, 3458 complete flip components (1178 nontrivial), and 3964 flip
+edges.  Every `(packed content, q-degree, component)` source/target bucket has
+exactly equal size: zero mismatches among 277302 states.  Thus flip-component
+membership really is an objectwise invariant available to the bijection.  The
+old recursion selector had not enforced it: it preserves the component for
+253943 states and crosses it for 23359, first on `NNNNEEEE`, coloring `1122`,
+`A={14,23}`, whose old target has `eta={13,14}`.  The refined map repairs this
+without changing any of the 253943 already-compatible pairs.
+
+The paper's actual local occurrence flip was also audited.  In the squarefree
+case it is `(A, rho a c b sigma) <-> (A-ab+bc, rho b a c sigma)`, not a
+same-coloring edge; the proof explicitly makes no repeated-color single-flip
+claim.  There are 7216 such occurrences through rank five.  On K3 the map is
+especially clean: `132:{12,13} <-> 213:{13,23}` becomes two e-objects with
+the same `eta={12,13}` and columns `132 <-> 123`, a swap of entries at `b,c`.
+That fixed-eta rule persists for 2004 occurrences but is not universal.  The
+first K4 deviation is still fixed-eta but uses the other adjacent swap:
+`1243:{13,23,24} <-> 1324:{13,24,34}` maps at
+`eta={13,23,24}` to columns `1234 <-> 1324`.  Whenever only one of the two
+adjacent swaps gives a valid HRV filling the recursion chooses it; when both
+are valid, both branches occur, so HRV fibre membership and validity alone do
+not select a canonical branch.  By rank five nonlocal column moves also occur.
+
+A second exact obstruction rules out the simplest target rule “perform the
+orientation short flip and swap entries at `a,b`”: it matches K3, but on the
+complete K4 squarefree degree-three component the source occurrence graph has
+22 edges while this target graph has 18 (and different degree sequence).
+Consequently the durable clean statement is component-level transport plus a
+certificate-producing conjugated e-flip; a uniform one-triangle local rule is
+false for the current recursion selector.
+
+Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 27 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
 ## Completed: objectwise plethystic cancellation — 2026-10-16
 
 `/root` completed and releases

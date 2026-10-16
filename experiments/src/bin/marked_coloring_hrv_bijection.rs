@@ -21,6 +21,13 @@
 //! `P` untouched.  The involution principle alternates these matchings to give
 //! a reversible coloring-to-surviving-SSYT map.
 //! Crystal reflections `S_i` are then conjugated back to packed colorings.
+//!
+//! The ordinary flip experiment implements the verified reachability-cover
+//! short-edge move exactly.  It refines the coloring/HRV matching by complete
+//! flip component while retaining every recursion-selected pair that already
+//! has the right component.  It also audits the published squarefree
+//! four-word occurrence move and records the first obstruction to replacing
+//! its transported e-object move by one uniform local entry transposition.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -113,6 +120,10 @@ struct Args {
     /// Audit the signed virtual-alphabet cancellation from LLT to proper colorings.
     #[arg(long)]
     plethystic_report: bool,
+
+    /// Push ordinary orientation-flip components through the coloring/HRV bijection.
+    #[arg(long)]
+    flip_report: bool,
 
     /// Trace the clean Foata--RSK shortcut for one complete-graph packed coloring.
     #[arg(long)]
@@ -2399,6 +2410,350 @@ fn hrv_for_mask(path: &PathData, mask: u64) -> Result<Vec<usize>, String> {
     );
     highest_reachable_vertices(path.n, &upward_edges)
         .ok_or_else(|| "ordinary upward graph unexpectedly invalid or cyclic".to_string())
+}
+
+/// Reflexive reachability in the selected ordinary orientation: every strict
+/// edge and the normal edges selected by `mask` point from the smaller vertex
+/// to the larger one.
+fn orientation_reachability(path: &PathData, mask: u64) -> Vec<Vec<bool>> {
+    let mut reach = vec![vec![false; path.n]; path.n];
+    for (vertex, row) in reach.iter_mut().enumerate() {
+        row[vertex] = true;
+    }
+    for (tail, head) in path
+        .strict_edges
+        .iter()
+        .copied()
+        .chain(selected_edges(path, mask))
+    {
+        reach[tail][head] = true;
+    }
+    for mid in 0..path.n {
+        let through_mid = reach[mid].clone();
+        for row in &mut reach {
+            if row[mid] {
+                for (entry, &reachable) in row.iter_mut().zip(&through_mid) {
+                    *entry |= reachable;
+                }
+            }
+        }
+    }
+    reach
+}
+
+fn orientation_cover(reach: &[Vec<bool>], tail: usize, head: usize) -> bool {
+    tail < head
+        && reach[tail][head]
+        && (tail + 1..head).all(|mid| !(reach[tail][mid] && reach[mid][head]))
+}
+
+/// Directed ordinary short-edge flips from the source-cover formulation
+/// proved in `Components/DiagramProof/Foundation/ShortFlip.lean`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct DirectedShortFlip {
+    target_mask: u64,
+    a: usize,
+    b: usize,
+    c: usize,
+}
+
+fn directed_short_flip_witnesses(path: &PathData, mask: u64) -> Vec<DirectedShortFlip> {
+    let reach = orientation_reachability(path, mask);
+    let mut targets = BTreeSet::new();
+    for a in 0..path.n {
+        for b in a + 1..path.n {
+            let Ok(ab_index) = path.normal_edges.binary_search(&(a, b)) else {
+                continue;
+            };
+            if mask & (1u64 << ab_index) == 0 || !orientation_cover(&reach, a, b) {
+                continue;
+            }
+            for c in b + 1..path.n {
+                let Ok(bc_index) = path.normal_edges.binary_search(&(b, c)) else {
+                    continue;
+                };
+                if mask & (1u64 << bc_index) != 0 || !orientation_cover(&reach, a, c) {
+                    continue;
+                }
+                targets.insert(DirectedShortFlip {
+                    target_mask: mask ^ (1u64 << ab_index) ^ (1u64 << bc_index),
+                    a,
+                    b,
+                    c,
+                });
+            }
+        }
+    }
+    targets.into_iter().collect()
+}
+
+fn directed_short_flips(path: &PathData, mask: u64) -> Vec<u64> {
+    directed_short_flip_witnesses(path, mask)
+        .into_iter()
+        .map(|witness| witness.target_mask)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+#[derive(Clone, Debug)]
+struct FlipComponents {
+    labels: Vec<usize>,
+    adjacency: Vec<Vec<u64>>,
+    component_count: usize,
+    undirected_edges: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FlipRefinedCertificate {
+    path_word: String,
+    signature: Signature,
+    component: usize,
+    bucket_rank: usize,
+    bucket_size: usize,
+    source: SourceState,
+    target: TargetState,
+}
+
+#[derive(Clone, Debug)]
+struct FlipRefinedBijection {
+    source_buckets: BTreeMap<(Signature, usize), Vec<SourceState>>,
+    target_buckets: BTreeMap<(Signature, usize), Vec<TargetState>>,
+}
+
+impl FlipComponents {
+    fn build(path: &PathData) -> Result<Self, String> {
+        if path.normal_edges.len() >= usize::BITS as usize {
+            return Err("too many normal edges for flip-component enumeration".into());
+        }
+        let orientation_count = 1usize << path.normal_edges.len();
+        let mut adjacency = vec![BTreeSet::new(); orientation_count];
+        for mask in 0..orientation_count {
+            for target in directed_short_flips(path, mask as u64) {
+                let target = usize::try_from(target)
+                    .map_err(|_| "flip target does not fit usize".to_string())?;
+                adjacency[mask].insert(target as u64);
+                adjacency[target].insert(mask as u64);
+            }
+        }
+        let undirected_edges = adjacency.iter().map(BTreeSet::len).sum::<usize>() / 2;
+        let adjacency = adjacency
+            .into_iter()
+            .map(BTreeSet::into_iter)
+            .map(Iterator::collect)
+            .collect::<Vec<Vec<u64>>>();
+        let mut labels = vec![usize::MAX; orientation_count];
+        let mut component_count = 0usize;
+        for start in 0..orientation_count {
+            if labels[start] != usize::MAX {
+                continue;
+            }
+            labels[start] = component_count;
+            let mut queue = VecDeque::from([start]);
+            while let Some(mask) = queue.pop_front() {
+                for &neighbor in &adjacency[mask] {
+                    let neighbor = neighbor as usize;
+                    if labels[neighbor] == usize::MAX {
+                        labels[neighbor] = component_count;
+                        queue.push_back(neighbor);
+                    }
+                }
+            }
+            component_count += 1;
+        }
+        Ok(Self {
+            labels,
+            adjacency,
+            component_count,
+            undirected_edges,
+        })
+    }
+
+    fn same_component(&self, left: u64, right: u64) -> bool {
+        self.labels[left as usize] == self.labels[right as usize]
+    }
+
+    fn distance(&self, start: u64, goal: u64) -> Option<usize> {
+        if !self.same_component(start, goal) {
+            return None;
+        }
+        let mut distances = vec![usize::MAX; self.labels.len()];
+        distances[start as usize] = 0;
+        let mut queue = VecDeque::from([start as usize]);
+        while let Some(mask) = queue.pop_front() {
+            if mask == goal as usize {
+                return Some(distances[mask]);
+            }
+            for &neighbor in &self.adjacency[mask] {
+                let neighbor = neighbor as usize;
+                if distances[neighbor] == usize::MAX {
+                    distances[neighbor] = distances[mask] + 1;
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+        None
+    }
+}
+
+impl FlipRefinedBijection {
+    fn build(path: &PathData, flips: &FlipComponents) -> Result<Self, String> {
+        let mut source_buckets: BTreeMap<(Signature, usize), Vec<SourceState>> = BTreeMap::new();
+        for source in enumerate_sources(path) {
+            let key = (
+                source_signature(&source),
+                flips.labels[source.marked_mask as usize],
+            );
+            source_buckets.entry(key).or_default().push(source);
+        }
+        let mut target_buckets: BTreeMap<(Signature, usize), Vec<TargetState>> = BTreeMap::new();
+        for target in enumerate_targets(path)? {
+            let key = (
+                target_signature(&target),
+                flips.labels[target.orientation_mask as usize],
+            );
+            target_buckets.entry(key).or_default().push(target);
+        }
+        for bucket in source_buckets.values_mut() {
+            bucket.sort();
+        }
+        for bucket in target_buckets.values_mut() {
+            bucket.sort();
+        }
+        let keys = source_buckets
+            .keys()
+            .chain(target_buckets.keys())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        for key in keys {
+            let sources = source_buckets.get(&key).map_or(0, Vec::len);
+            let targets = target_buckets.get(&key).map_or(0, Vec::len);
+            if sources != targets {
+                return Err(format!(
+                    "flip-refined bucket mismatch for {}, key {key:?}: {sources} sources, {targets} targets",
+                    path.word()
+                ));
+            }
+        }
+
+        // Keep every component-compatible pair made by the recursion map, then
+        // repair only its cross-component pairs by sorted residual matching.
+        // Since the recursion map is globally bijective, all kept targets are
+        // distinct; componentwise bucket equality makes the residual square.
+        let mut matcher = RecursiveMatcher::default();
+        for (key, sources) in &source_buckets {
+            let available = target_buckets[key].clone();
+            let mut aligned = vec![None; sources.len()];
+            let mut used = BTreeSet::new();
+            for (rank, source) in sources.iter().enumerate() {
+                let target = matcher.map(path, source)?.target;
+                let target_key = (
+                    target_signature(&target),
+                    flips.labels[target.orientation_mask as usize],
+                );
+                if target_key == *key {
+                    if !used.insert(target.clone()) {
+                        return Err("recursion map repeated a target during flip repair".into());
+                    }
+                    aligned[rank] = Some(target);
+                }
+            }
+            let mut remaining = available
+                .into_iter()
+                .filter(|target| !used.contains(target));
+            for slot in aligned.iter_mut().filter(|slot| slot.is_none()) {
+                *slot = Some(
+                    remaining
+                        .next()
+                        .ok_or_else(|| "flip repair exhausted residual targets".to_string())?,
+                );
+            }
+            if remaining.next().is_some() {
+                return Err("flip repair left an unused residual target".into());
+            }
+            target_buckets.insert(
+                key.clone(),
+                aligned
+                    .into_iter()
+                    .map(|target| target.expect("every flip-repair slot was filled"))
+                    .collect(),
+            );
+        }
+        Ok(Self {
+            source_buckets,
+            target_buckets,
+        })
+    }
+
+    fn map(
+        &self,
+        path: &PathData,
+        flips: &FlipComponents,
+        source: &SourceState,
+    ) -> Result<FlipRefinedCertificate, String> {
+        validate_source(path, source)?;
+        let signature = source_signature(source);
+        let component = flips.labels[source.marked_mask as usize];
+        let key = (signature.clone(), component);
+        let sources = self
+            .source_buckets
+            .get(&key)
+            .ok_or_else(|| "missing flip-refined source bucket".to_string())?;
+        let bucket_rank = sources
+            .binary_search(source)
+            .map_err(|_| "source absent from flip-refined bucket".to_string())?;
+        let target = self.target_buckets[&key][bucket_rank].clone();
+        validate_target(path, &target)?;
+        Ok(FlipRefinedCertificate {
+            path_word: path.word(),
+            signature,
+            component,
+            bucket_rank,
+            bucket_size: sources.len(),
+            source: source.clone(),
+            target,
+        })
+    }
+
+    fn inverse(
+        &self,
+        path: &PathData,
+        flips: &FlipComponents,
+        target: &TargetState,
+    ) -> Result<SourceState, String> {
+        validate_target(path, target)?;
+        let key = (
+            target_signature(target),
+            flips.labels[target.orientation_mask as usize],
+        );
+        let targets = self
+            .target_buckets
+            .get(&key)
+            .ok_or_else(|| "missing flip-refined target bucket".to_string())?;
+        let rank = targets
+            .iter()
+            .position(|candidate| candidate == target)
+            .ok_or_else(|| "target absent from flip-refined bucket".to_string())?;
+        Ok(self.source_buckets[&key][rank].clone())
+    }
+
+    fn replay(
+        &self,
+        path: &PathData,
+        flips: &FlipComponents,
+        certificate: &FlipRefinedCertificate,
+    ) -> Result<(), String> {
+        if certificate.path_word != path.word() {
+            return Err("flip-refined certificate path mismatch".into());
+        }
+        if self.map(path, flips, &certificate.source)? != *certificate {
+            return Err("flip-refined certificate does not replay".into());
+        }
+        if self.inverse(path, flips, &certificate.target)? != certificate.source {
+            return Err("flip-refined inverse did not recover source".into());
+        }
+        Ok(())
+    }
 }
 
 fn fibres(hrv: &[usize]) -> Vec<Vec<usize>> {
@@ -8034,6 +8389,657 @@ fn format_hrv_map(hrv: &[usize]) -> String {
         .join(",")
 }
 
+#[derive(Default)]
+struct FlipTransportStats {
+    paths: usize,
+    orientations: usize,
+    components: usize,
+    nontrivial_components: usize,
+    flip_edges: usize,
+    states: usize,
+    pointwise_component_preserved: usize,
+    component_bucket_mismatches: usize,
+    same_coloring_source_flips: usize,
+    published_occurrence_flips: usize,
+    published_recursive_same_eta: usize,
+    published_recursive_clean_move: usize,
+    published_refined_same_eta: usize,
+    published_refined_clean_move: usize,
+    published_recursive_move_counts: BTreeMap<String, usize>,
+    published_refined_move_counts: BTreeMap<String, usize>,
+    published_local_context_counts: BTreeMap<String, usize>,
+    local_target_flips: usize,
+    local_edge_count_mismatch_buckets: usize,
+    local_degree_mismatch_buckets: usize,
+    target_single_flips: usize,
+    target_word_unchanged: usize,
+    target_distance_counts: BTreeMap<usize, usize>,
+    target_word_hamming_counts: BTreeMap<usize, usize>,
+    first_component_failure: Option<String>,
+    first_bucket_failure: Option<String>,
+    first_local_mismatch: Option<String>,
+    first_published_trace: Option<String>,
+    first_published_failure: Option<String>,
+    first_transported_flip: Option<String>,
+}
+
+impl FlipTransportStats {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        self.orientations += other.orientations;
+        self.components += other.components;
+        self.nontrivial_components += other.nontrivial_components;
+        self.flip_edges += other.flip_edges;
+        self.states += other.states;
+        self.pointwise_component_preserved += other.pointwise_component_preserved;
+        self.component_bucket_mismatches += other.component_bucket_mismatches;
+        self.same_coloring_source_flips += other.same_coloring_source_flips;
+        self.published_occurrence_flips += other.published_occurrence_flips;
+        self.published_recursive_same_eta += other.published_recursive_same_eta;
+        self.published_recursive_clean_move += other.published_recursive_clean_move;
+        self.published_refined_same_eta += other.published_refined_same_eta;
+        self.published_refined_clean_move += other.published_refined_clean_move;
+        for (kind, count) in other.published_recursive_move_counts {
+            *self.published_recursive_move_counts.entry(kind).or_default() += count;
+        }
+        for (kind, count) in other.published_refined_move_counts {
+            *self.published_refined_move_counts.entry(kind).or_default() += count;
+        }
+        for (kind, count) in other.published_local_context_counts {
+            *self.published_local_context_counts.entry(kind).or_default() += count;
+        }
+        self.local_target_flips += other.local_target_flips;
+        self.local_edge_count_mismatch_buckets += other.local_edge_count_mismatch_buckets;
+        self.local_degree_mismatch_buckets += other.local_degree_mismatch_buckets;
+        self.target_single_flips += other.target_single_flips;
+        self.target_word_unchanged += other.target_word_unchanged;
+        for (distance, count) in other.target_distance_counts {
+            *self.target_distance_counts.entry(distance).or_default() += count;
+        }
+        for (distance, count) in other.target_word_hamming_counts {
+            *self.target_word_hamming_counts.entry(distance).or_default() += count;
+        }
+        if self.first_component_failure.is_none() {
+            self.first_component_failure = other.first_component_failure;
+        }
+        if self.first_bucket_failure.is_none() {
+            self.first_bucket_failure = other.first_bucket_failure;
+        }
+        if self.first_local_mismatch.is_none() {
+            self.first_local_mismatch = other.first_local_mismatch;
+        }
+        if self.first_published_trace.is_none() {
+            self.first_published_trace = other.first_published_trace;
+        }
+        if self.first_published_failure.is_none() {
+            self.first_published_failure = other.first_published_failure;
+        }
+        if self.first_transported_flip.is_none() {
+            self.first_transported_flip = other.first_transported_flip;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "{label}: {} paths, {} orientations in {} flip components ({} nontrivial), {} flip edges",
+            self.paths,
+            self.orientations,
+            self.components,
+            self.nontrivial_components,
+            self.flip_edges
+        );
+        if !self.published_local_context_counts.is_empty() {
+            println!(
+                "{label}: fixed-eta adjacent-switch contexts {:?}",
+                self.published_local_context_counts
+            );
+        }
+        println!(
+            "{label}: {}/{} original recursive certificates preserve their flip-component label; {} exact (signature,component) count mismatches (hence flip-refined certificates exist for every state)",
+            self.pointwise_component_preserved, self.states, self.component_bucket_mismatches
+        );
+        println!(
+            "{label}: {} same-coloring source flip pairs transport to {} single target flips; target column word unchanged in {}; target flip distances {:?}; column-word Hamming distances {:?}",
+            self.same_coloring_source_flips,
+            self.target_single_flips,
+            self.target_word_unchanged,
+            self.target_distance_counts,
+            self.target_word_hamming_counts
+        );
+        println!(
+            "{label}: local e-rule (short flip plus swap entries a,b) has {} edges; edge-count mismatches in {} buckets and degree-sequence mismatches in {} buckets",
+            self.local_target_flips,
+            self.local_edge_count_mismatch_buckets,
+            self.local_degree_mismatch_buckets
+        );
+        println!(
+            "{label}: published squarefree four-word flips {}; recursion clean fixed-eta swap(b,c) {}/{} (same eta {}, moves {:?}); minimally repaired {}/{} (same eta {}, moves {:?})",
+            self.published_occurrence_flips,
+            self.published_recursive_clean_move,
+            self.published_occurrence_flips,
+            self.published_recursive_same_eta,
+            self.published_recursive_move_counts,
+            self.published_refined_clean_move,
+            self.published_occurrence_flips,
+            self.published_refined_same_eta,
+            self.published_refined_move_counts
+        );
+        if let Some(example) = &self.first_component_failure {
+            println!("first pointwise component failure: {example}");
+        }
+        if let Some(example) = &self.first_bucket_failure {
+            println!("first component count failure: {example}");
+        }
+        if let Some(example) = &self.first_local_mismatch {
+            println!("first local e-flip mismatch: {example}");
+        }
+        if let Some(example) = &self.first_published_failure {
+            println!("first published-flip transport failure: {example}");
+        }
+        if let Some(example) = &self.first_published_trace {
+            println!("first published-flip transport trace: {example}");
+        }
+        if let Some(example) = &self.first_transported_flip {
+            println!("first transported flip: {example}");
+        }
+    }
+}
+
+type FlipBucketKey = (Signature, usize);
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct PublishedOccurrenceFlip {
+    left: SourceState,
+    right: SourceState,
+    a: usize,
+    b: usize,
+    c: usize,
+}
+
+fn published_occurrence_flips(
+    path: &PathData,
+    sources: &[SourceState],
+) -> Vec<PublishedOccurrenceFlip> {
+    let source_set = sources.iter().cloned().collect::<BTreeSet<_>>();
+    let mut edges = BTreeSet::new();
+    for left in sources {
+        if color_content(&left.coloring) != vec![1; path.n] {
+            continue;
+        }
+        for witness in directed_short_flip_witnesses(path, left.marked_mask) {
+            let a_color = left.coloring[witness.a];
+            let b_color = left.coloring[witness.b];
+            let c_color = left.coloring[witness.c];
+            if usize::from(a_color) + 1 != usize::from(c_color)
+                || usize::from(c_color) + 1 != usize::from(b_color)
+            {
+                continue;
+            }
+            let mut coloring = left.coloring.clone();
+            coloring[witness.a] = c_color;
+            coloring[witness.b] = a_color;
+            coloring[witness.c] = b_color;
+            let right = SourceState {
+                coloring,
+                marked_mask: witness.target_mask,
+            };
+            if source_set.contains(&right) {
+                edges.insert(PublishedOccurrenceFlip {
+                    left: left.clone(),
+                    right,
+                    a: witness.a,
+                    b: witness.b,
+                    c: witness.c,
+                });
+            }
+        }
+    }
+    edges.into_iter().collect()
+}
+
+fn local_permutation_label(
+    left: &[u8],
+    right: &[u8],
+    a: usize,
+    b: usize,
+    c: usize,
+) -> &'static str {
+    if left
+        .iter()
+        .zip(right)
+        .enumerate()
+        .any(|(vertex, (x, y))| vertex != a && vertex != b && vertex != c && x != y)
+    {
+        return "nonlocal";
+    }
+    let source = [left[a], left[b], left[c]];
+    let target = [right[a], right[b], right[c]];
+    [
+        ("id", [source[0], source[1], source[2]]),
+        ("swap_ab", [source[1], source[0], source[2]]),
+        ("swap_ac", [source[2], source[1], source[0]]),
+        ("swap_bc", [source[0], source[2], source[1]]),
+        ("cycle_cab", [source[2], source[0], source[1]]),
+        ("cycle_bca", [source[1], source[2], source[0]]),
+    ]
+    .into_iter()
+    .find_map(|(label, candidate)| (candidate == target).then_some(label))
+    .unwrap_or("not-a-local-permutation")
+}
+
+fn audit_local_e_flip_graphs(
+    path: &PathData,
+    flips: &FlipComponents,
+    sources: &[SourceState],
+    targets: &[TargetState],
+) -> Result<(usize, usize, usize, Option<String>), String> {
+    fn degree_histogram(sequence: &[usize]) -> BTreeMap<usize, usize> {
+        sequence.iter().copied().fold(BTreeMap::new(), |mut counts, degree| {
+            *counts.entry(degree).or_default() += 1;
+            counts
+        })
+    }
+    let source_set = sources.iter().cloned().collect::<BTreeSet<_>>();
+    let target_set = targets.iter().cloned().collect::<BTreeSet<_>>();
+    let mut source_degrees = sources
+        .iter()
+        .cloned()
+        .map(|state| (state, 0usize))
+        .collect::<BTreeMap<_, _>>();
+    let mut target_degrees = targets
+        .iter()
+        .cloned()
+        .map(|state| (state, 0usize))
+        .collect::<BTreeMap<_, _>>();
+    let mut source_edges = BTreeSet::new();
+    for source in sources {
+        for &neighbor_mask in &flips.adjacency[source.marked_mask as usize] {
+            let neighbor = SourceState {
+                coloring: source.coloring.clone(),
+                marked_mask: neighbor_mask,
+            };
+            if !source_set.contains(&neighbor) {
+                continue;
+            }
+            let edge = if source <= &neighbor {
+                (source.clone(), neighbor)
+            } else {
+                (neighbor, source.clone())
+            };
+            if source_edges.insert(edge.clone()) {
+                *source_degrees.get_mut(&edge.0).expect("source endpoint") += 1;
+                *source_degrees.get_mut(&edge.1).expect("source endpoint") += 1;
+            }
+        }
+    }
+
+    let mut target_edges = BTreeSet::new();
+    for target in targets {
+        for witness in directed_short_flip_witnesses(path, target.orientation_mask) {
+            let mut word = target.column_word.clone();
+            word.swap(witness.a, witness.b);
+            let neighbor = TargetState {
+                orientation_mask: witness.target_mask,
+                column_word: word,
+            };
+            if !target_set.contains(&neighbor) {
+                continue;
+            }
+            let edge = if target <= &neighbor {
+                (target.clone(), neighbor)
+            } else {
+                (neighbor, target.clone())
+            };
+            if target_edges.insert(edge.clone()) {
+                *target_degrees.get_mut(&edge.0).expect("target endpoint") += 1;
+                *target_degrees.get_mut(&edge.1).expect("target endpoint") += 1;
+            }
+        }
+    }
+
+    let mut source_edge_counts: BTreeMap<FlipBucketKey, usize> = BTreeMap::new();
+    for (left, _) in &source_edges {
+        let key = (
+            source_signature(left),
+            flips.labels[left.marked_mask as usize],
+        );
+        *source_edge_counts.entry(key).or_default() += 1;
+    }
+    let mut target_edge_counts: BTreeMap<FlipBucketKey, usize> = BTreeMap::new();
+    for (left, _) in &target_edges {
+        let key = (
+            target_signature(left),
+            flips.labels[left.orientation_mask as usize],
+        );
+        *target_edge_counts.entry(key).or_default() += 1;
+    }
+    let mut source_degree_sequences: BTreeMap<FlipBucketKey, Vec<usize>> = BTreeMap::new();
+    for (state, degree) in source_degrees {
+        let key = (
+            source_signature(&state),
+            flips.labels[state.marked_mask as usize],
+        );
+        source_degree_sequences.entry(key).or_default().push(degree);
+    }
+    let mut target_degree_sequences: BTreeMap<FlipBucketKey, Vec<usize>> = BTreeMap::new();
+    for (state, degree) in target_degrees {
+        let key = (
+            target_signature(&state),
+            flips.labels[state.orientation_mask as usize],
+        );
+        target_degree_sequences.entry(key).or_default().push(degree);
+    }
+    for sequence in source_degree_sequences.values_mut() {
+        sequence.sort_unstable();
+    }
+    for sequence in target_degree_sequences.values_mut() {
+        sequence.sort_unstable();
+    }
+    let keys = source_degree_sequences
+        .keys()
+        .chain(target_degree_sequences.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let mut edge_mismatches = 0usize;
+    let mut degree_mismatches = 0usize;
+    let mut first = None;
+    for key in keys {
+        let source_edge_count = source_edge_counts.get(&key).copied().unwrap_or(0);
+        let target_edge_count = target_edge_counts.get(&key).copied().unwrap_or(0);
+        let source_sequence = source_degree_sequences.get(&key).cloned().unwrap_or_default();
+        let target_sequence = target_degree_sequences.get(&key).cloned().unwrap_or_default();
+        edge_mismatches += usize::from(source_edge_count != target_edge_count);
+        degree_mismatches += usize::from(source_sequence != target_sequence);
+        if first.is_none()
+            && (source_edge_count != target_edge_count || source_sequence != target_sequence)
+        {
+            first = Some(format!(
+                "path {}, component {}, content {:?}, degree {}: source/target edges {}/{}, degrees {:?}/{:?}",
+                path.word(),
+                key.1,
+                key.0.content,
+                key.0.q_degree,
+                source_edge_count,
+                target_edge_count,
+                degree_histogram(&source_sequence),
+                degree_histogram(&target_sequence)
+            ));
+        }
+    }
+    Ok((
+        target_edges.len(),
+        edge_mismatches,
+        degree_mismatches,
+        first,
+    ))
+}
+
+fn audit_flip_transport_for_path(path: &PathData) -> Result<FlipTransportStats, String> {
+    let flips = FlipComponents::build(path)?;
+    let mut stats = FlipTransportStats {
+        paths: 1,
+        orientations: flips.labels.len(),
+        components: flips.component_count,
+        nontrivial_components: flips
+            .adjacency
+            .iter()
+            .enumerate()
+            .filter(|(_, neighbors)| !neighbors.is_empty())
+            .map(|(mask, _)| flips.labels[mask])
+            .collect::<BTreeSet<_>>()
+            .len(),
+        flip_edges: flips.undirected_edges,
+        ..FlipTransportStats::default()
+    };
+
+    let sources = enumerate_sources(path);
+    let mut matcher = RecursiveMatcher::default();
+    let refined = FlipRefinedBijection::build(path, &flips)?;
+    let mut images = BTreeMap::new();
+    let mut recursive_images = BTreeMap::new();
+    let mut source_counts: BTreeMap<(Signature, usize), usize> = BTreeMap::new();
+    for source in &sources {
+        let recursive_target = matcher.map(path, source)?.target;
+        stats.states += 1;
+        let source_component = flips.labels[source.marked_mask as usize];
+        let target_component = flips.labels[recursive_target.orientation_mask as usize];
+        *source_counts
+            .entry((source_signature(source), source_component))
+            .or_default() += 1;
+        if source_component == target_component {
+            stats.pointwise_component_preserved += 1;
+        } else if stats.first_component_failure.is_none() {
+            stats.first_component_failure = Some(format!(
+                "path {}, coloring {}, A {} (component {}), eta {} (component {})",
+                path.word(),
+                format_word(&source.coloring),
+                format_edges(source.marked_mask, &path.normal_edges),
+                source_component,
+                format_edges(recursive_target.orientation_mask, &path.normal_edges),
+                target_component
+            ));
+        }
+        recursive_images.insert(source.clone(), recursive_target);
+        let certificate = refined.map(path, &flips, source)?;
+        refined.replay(path, &flips, &certificate)?;
+        if flips.labels[certificate.target.orientation_mask as usize] != source_component {
+            return Err("flip-refined map changed component".into());
+        }
+        images.insert(source.clone(), certificate.target);
+    }
+
+    let targets = enumerate_targets(path)?;
+    let mut target_counts: BTreeMap<(Signature, usize), usize> = BTreeMap::new();
+    for target in &targets {
+        let component = flips.labels[target.orientation_mask as usize];
+        *target_counts
+            .entry((target_signature(target), component))
+            .or_default() += 1;
+    }
+    let count_keys = source_counts
+        .keys()
+        .chain(target_counts.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    for key in count_keys {
+        let source_count = source_counts.get(&key).copied().unwrap_or(0);
+        let target_count = target_counts.get(&key).copied().unwrap_or(0);
+        if source_count != target_count {
+            stats.component_bucket_mismatches += 1;
+            if stats.first_bucket_failure.is_none() {
+                let (signature, component) = &key;
+                stats.first_bucket_failure = Some(format!(
+                    "path {}, component {}, content {:?}, degree {}: {} sources versus {} targets",
+                    path.word(),
+                    component,
+                    signature.content,
+                    signature.q_degree,
+                    source_count,
+                    target_count
+                ));
+            }
+        }
+    }
+
+    let (local_edges, edge_mismatches, degree_mismatches, first_local_mismatch) =
+        audit_local_e_flip_graphs(path, &flips, &sources, &targets)?;
+    stats.local_target_flips = local_edges;
+    stats.local_edge_count_mismatch_buckets = edge_mismatches;
+    stats.local_degree_mismatch_buckets = degree_mismatches;
+    stats.first_local_mismatch = first_local_mismatch;
+
+    for occurrence in published_occurrence_flips(path, &sources) {
+        stats.published_occurrence_flips += 1;
+        let recursive_left = &recursive_images[&occurrence.left];
+        let recursive_right = &recursive_images[&occurrence.right];
+        let recursive_same_eta =
+            recursive_left.orientation_mask == recursive_right.orientation_mask;
+        let recursive_move = local_permutation_label(
+            &recursive_left.column_word,
+            &recursive_right.column_word,
+            occurrence.a,
+            occurrence.b,
+            occurrence.c,
+        );
+        stats.published_recursive_same_eta += usize::from(recursive_same_eta);
+        stats.published_recursive_clean_move +=
+            usize::from(recursive_same_eta && recursive_move == "swap_bc");
+        *stats
+            .published_recursive_move_counts
+            .entry(recursive_move.to_string())
+            .or_default() += 1;
+        if recursive_same_eta && matches!(recursive_move, "swap_ab" | "swap_bc") {
+            let hrv = hrv_for_mask(path, recursive_left.orientation_mask)?;
+            let mut swap_ab = recursive_left.clone();
+            swap_ab.column_word.swap(occurrence.a, occurrence.b);
+            let mut swap_bc = recursive_left.clone();
+            swap_bc.column_word.swap(occurrence.b, occurrence.c);
+            let context = format!(
+                "{}|fibres(ab,bc,ac)={}{}{}|valid(ab,bc)={}{}",
+                recursive_move,
+                usize::from(hrv[occurrence.a] == hrv[occurrence.b]),
+                usize::from(hrv[occurrence.b] == hrv[occurrence.c]),
+                usize::from(hrv[occurrence.a] == hrv[occurrence.c]),
+                usize::from(validate_target(path, &swap_ab).is_ok()),
+                usize::from(validate_target(path, &swap_bc).is_ok())
+            );
+            *stats
+                .published_local_context_counts
+                .entry(context)
+                .or_default() += 1;
+        }
+
+        let refined_left = &images[&occurrence.left];
+        let refined_right = &images[&occurrence.right];
+        let refined_same_eta = refined_left.orientation_mask == refined_right.orientation_mask;
+        let refined_move = local_permutation_label(
+            &refined_left.column_word,
+            &refined_right.column_word,
+            occurrence.a,
+            occurrence.b,
+            occurrence.c,
+        );
+        stats.published_refined_same_eta += usize::from(refined_same_eta);
+        stats.published_refined_clean_move +=
+            usize::from(refined_same_eta && refined_move == "swap_bc");
+        *stats
+            .published_refined_move_counts
+            .entry(refined_move.to_string())
+            .or_default() += 1;
+        if stats.first_published_trace.is_none() {
+            stats.first_published_trace = Some(format!(
+                "path {}, source {}:{} <-> {}:{} at {}<{}<{}; e-objects eta {}/{} with columns {}/{} (move {})",
+                path.word(),
+                format_word(&occurrence.left.coloring),
+                format_edges(occurrence.left.marked_mask, &path.normal_edges),
+                format_word(&occurrence.right.coloring),
+                format_edges(occurrence.right.marked_mask, &path.normal_edges),
+                occurrence.a + 1,
+                occurrence.b + 1,
+                occurrence.c + 1,
+                format_edges(recursive_left.orientation_mask, &path.normal_edges),
+                format_edges(recursive_right.orientation_mask, &path.normal_edges),
+                format_word(&recursive_left.column_word),
+                format_word(&recursive_right.column_word),
+                recursive_move
+            ));
+        }
+        if stats.first_published_failure.is_none()
+            && !(recursive_same_eta && recursive_move == "swap_bc")
+        {
+            stats.first_published_failure = Some(format!(
+                "path {}, {}:{} -> {}:{}, triple {}{}{}; recursion eta {}/{} and words {}/{}",
+                path.word(),
+                format_word(&occurrence.left.coloring),
+                format_edges(occurrence.left.marked_mask, &path.normal_edges),
+                format_word(&occurrence.right.coloring),
+                format_edges(occurrence.right.marked_mask, &path.normal_edges),
+                occurrence.a + 1,
+                occurrence.b + 1,
+                occurrence.c + 1,
+                format_edges(recursive_left.orientation_mask, &path.normal_edges),
+                format_edges(recursive_right.orientation_mask, &path.normal_edges),
+                format_word(&recursive_left.column_word),
+                format_word(&recursive_right.column_word)
+            ));
+        }
+    }
+
+    for source in &sources {
+        for &neighbor_mask in &flips.adjacency[source.marked_mask as usize] {
+            if source.marked_mask >= neighbor_mask {
+                continue;
+            }
+            let neighbor = SourceState {
+                coloring: source.coloring.clone(),
+                marked_mask: neighbor_mask,
+            };
+            if validate_source(path, &neighbor).is_err() {
+                continue;
+            }
+            let Some(left) = images.get(source) else {
+                return Err("missing source image during flip audit".into());
+            };
+            let Some(right) = images.get(&neighbor) else {
+                return Err("missing neighboring source image during flip audit".into());
+            };
+            stats.same_coloring_source_flips += 1;
+            stats.target_word_unchanged += usize::from(left.column_word == right.column_word);
+            let word_hamming = left
+                .column_word
+                .iter()
+                .zip(&right.column_word)
+                .filter(|(left, right)| left != right)
+                .count();
+            *stats
+                .target_word_hamming_counts
+                .entry(word_hamming)
+                .or_default() += 1;
+            let distance = flips
+                .distance(left.orientation_mask, right.orientation_mask)
+                .ok_or_else(|| "flip-refined images left their common component".to_string())?;
+            *stats.target_distance_counts.entry(distance).or_default() += 1;
+            let single_flip = flips.adjacency[left.orientation_mask as usize]
+                .binary_search(&right.orientation_mask)
+                .is_ok();
+            stats.target_single_flips += usize::from(single_flip);
+            if stats.first_transported_flip.is_none() {
+                let left_hrv = hrv_for_mask(path, left.orientation_mask)?;
+                let right_hrv = hrv_for_mask(path, right.orientation_mask)?;
+                stats.first_transported_flip = Some(format!(
+                    "path {}, coloring {}, A {} <-> {}; images eta {} / {}, columns {} / {}, HRV fibres {} / {}, target distance {}",
+                    path.word(),
+                    format_word(&source.coloring),
+                    format_edges(source.marked_mask, &path.normal_edges),
+                    format_edges(neighbor.marked_mask, &path.normal_edges),
+                    format_edges(left.orientation_mask, &path.normal_edges),
+                    format_edges(right.orientation_mask, &path.normal_edges),
+                    format_word(&left.column_word),
+                    format_word(&right.column_word),
+                    format_hrv_fibres(&left_hrv),
+                    format_hrv_fibres(&right_hrv),
+                    distance
+                ));
+            }
+        }
+    }
+    Ok(stats)
+}
+
+fn print_flip_transport_report(max_n: usize) -> Result<(), String> {
+    let mut total = FlipTransportStats::default();
+    for n in 0..=max_n {
+        let mut rank = FlipTransportStats::default();
+        for path in all_paths(n) {
+            rank.absorb(audit_flip_transport_for_path(&path)?);
+        }
+        rank.print(&format!("rank {n}"));
+        total.absorb(rank);
+    }
+    total.print("total");
+    Ok(())
+}
+
 fn format_hrv_fibres(hrv: &[usize]) -> String {
     fibres(hrv)
         .into_iter()
@@ -10803,6 +11809,15 @@ fn run(args: Args) -> Result<(), String> {
         print_plethystic_report(args.max_n)?;
         return Ok(());
     }
+    if args.flip_report {
+        if let Some(word) = args.path.as_deref() {
+            let path = PathData::parse(word)?;
+            audit_flip_transport_for_path(&path)?.print(&format!("path {}", path.word()));
+        } else {
+            print_flip_transport_report(args.max_n)?;
+        }
+        return Ok(());
+    }
     if let Some(parts) = args.hall_partition.as_deref() {
         print_hall_littlewood_bridge(parts)?;
         return Ok(());
@@ -10946,6 +11961,43 @@ mod tests {
         let (_, _, fallback, first_bounce, _, _) = checked_path(&path).unwrap();
         assert_eq!(fallback, 0);
         assert!(first_bounce > 0);
+    }
+
+    #[test]
+    fn ordinary_short_flip_and_k3_occurrence_transport_are_explicit() {
+        let k3 = PathData::parse("NNNEEE").unwrap();
+        assert_eq!(directed_short_flips(&k3, 0b011), vec![0b110]);
+        let flips = FlipComponents::build(&k3).unwrap();
+        assert!(flips.same_component(0b011, 0b110));
+
+        let stats = audit_flip_transport_for_path(&k3).unwrap();
+        assert_eq!(stats.component_bucket_mismatches, 0);
+        assert_eq!(stats.published_occurrence_flips, 1);
+        assert_eq!(stats.published_recursive_clean_move, 1);
+        assert_eq!(stats.published_refined_clean_move, 1);
+
+        let strict_long = PathData::parse("NNDEE").unwrap();
+        assert_eq!(directed_short_flips(&strict_long, 0b01), vec![0b10]);
+    }
+
+    #[test]
+    fn flip_refined_bijection_checks_through_rank_five() {
+        let mut total = FlipTransportStats::default();
+        for n in 0..=5 {
+            for path in all_paths(n) {
+                total.absorb(
+                    audit_flip_transport_for_path(&path)
+                        .unwrap_or_else(|error| panic!("{}: {error}", path.word())),
+                );
+            }
+        }
+        assert_eq!(total.paths, 258);
+        assert_eq!(total.flip_edges, 3_964);
+        assert_eq!(total.component_bucket_mismatches, 0);
+        assert_eq!((total.pointwise_component_preserved, total.states), (253_943, 277_302));
+        assert_eq!(total.published_occurrence_flips, 7_216);
+        assert_eq!(total.published_recursive_clean_move, 2_004);
+        assert!(total.local_edge_count_mismatch_buckets > 0);
     }
 
     #[test]
