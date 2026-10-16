@@ -1,13 +1,14 @@
 # Handoff
 
-## Active ownership: Hall--Littlewood matrix/Foata shortcut — 2026-10-16
+## Completed: Hall--Littlewood matrix/Foata shortcut — 2026-10-16
 
-`/root` owns only `experiments/src/bin/marked_coloring_hrv_bijection.rs` and
-this handoff on branch `exp/verticalstripllt-marked-coloring-bijection`.  No
-shared library, Lean/paper source, or circular code is owned.  The current
-checkpoint isolates the exact statistic-switching problem after finding both
-a clean complete-graph rule and the natural ungraded rule for every
-Hall--Littlewood diagram.
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`; checkpoint `8f46480`
+contains the implementation and tests.  No shared library, Lean/paper source,
+or circular code is owned.  This checkpoint isolates the exact
+statistic-switching problem after finding both a clean complete-graph rule and
+the natural ungraded rule for every Hall--Littlewood diagram.
 
 For complete graphs there is now a direct, reversible map on every packed
 coloring, not just distinct colors.  For a packed word `w`, reverse it, apply
