@@ -31,9 +31,11 @@
 //! deterministic `phi`, `psi`, and `theta` edge transformations, and uses the
 //! resulting unique standard-dual-equivalence isomorphisms to destandardize to
 //! SSYT.  This map is explicitly invertible.  The package-level rectifier is
-//! exhaustive through rank six: rank six first needs nontrivial packages,
+//! defined without a rank cutoff and exhaustively validated through rank six:
+//! rank six first needs nontrivial packages,
 //! higher-color `phi` preparation before a lower `psi`, and quotient-level
-//! `theta` splits.  The general all-rank induction remains experimental.
+//! `theta` splits.  Its general all-rank scheduling remains experimental, so
+//! audits above the validated range stop at and print the first failure.
 //!
 //! The ordinary flip experiment implements the verified reachability-cover
 //! short-edge move exactly.  It refines the coloring/HRV matching by complete
@@ -11729,31 +11731,32 @@ fn print_assaf_package_phase_for_path(path: &PathData) -> Result<(), String> {
         );
         println!("  lower-component isomorphism counts {lower_isomorphism_counts:?}");
     }
-    if path.n <= 6 {
-        let (rectified, _, _, theta_trace) = assaf_package_rectification(path, &states)?;
-        let rectified_components = dual_components_in(&rectified, &states, path.n)?;
-        let rectified_standard = rectified_components
+    let (rectified, _, _, theta_trace) = assaf_package_rectification(path, &states)?;
+    let rectified_components = dual_components_in(&rectified, &states, path.n)?;
+    let rectified_standard = rectified_components
+        .iter()
+        .map(|component| {
+            standard_dual_isomorphisms(
+                &rectified,
+                component,
+                path.n,
+                &distributions,
+            )
+            .map(|isomorphisms| usize::from(isomorphisms.len() == 1))
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .sum::<usize>();
+    println!(
+        "  complete rectification: {rectified_standard}/{} standard components after {} theta splits",
+        rectified_components.len(),
+        theta_trace
             .iter()
-            .map(|component| {
-                standard_dual_isomorphisms(
-                    &rectified,
-                    component,
-                    path.n,
-                    &distributions,
-                )
-                .map(|isomorphisms| usize::from(isomorphisms.len() == 1))
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .sum::<usize>();
-        println!(
-            "  complete rectification: {rectified_standard}/{} standard components after {} theta splits",
-            rectified_components.len(),
-            theta_trace.len()
-        );
-        for trace in theta_trace {
-            println!("  {trace}");
-        }
+            .filter(|step| step.starts_with("theta_"))
+            .count()
+    );
+    for trace in theta_trace {
+        println!("  {trace}");
     }
     Ok(())
 }
@@ -11791,7 +11794,10 @@ fn print_assaf_package_phase_report(max_n: usize) -> Result<(), String> {
             largest_package = largest_package.max(phase.largest_package);
             let (rectified, theta_trace) =
                 assaf_theta_phase_from_edges(&path, &states, phase.edges)?;
-            total_theta += theta_trace.len();
+            total_theta += theta_trace
+                .iter()
+                .filter(|step| step.starts_with("theta_"))
+                .count();
             total_components += dual_components_in(&rectified, &states, path.n)?.len();
         }
     }
@@ -12990,6 +12996,12 @@ fn standard_dual_isomorphisms(
     n: usize,
     standard_distributions: &[ShapeDescentDistribution],
 ) -> Result<Vec<StandardDualIsomorphism>, String> {
+    let restricted_descents = |state: &[u32]| {
+        llt_standard_descent_set(state)
+            .into_iter()
+            .filter(|&descent| descent < n as u32)
+            .collect::<BTreeSet<_>>()
+    };
     let source_root = component
         .iter()
         .next()
@@ -12997,9 +13009,7 @@ fn standard_dual_isomorphisms(
     let source_distribution = {
         let mut distribution = DescentDistribution::new();
         for state in component {
-            *distribution
-                .entry(llt_standard_descent_set(state))
-                .or_default() += 1;
+            *distribution.entry(restricted_descents(state)).or_default() += 1;
         }
         distribution
     };
@@ -13016,8 +13026,7 @@ fn standard_dual_isomorphisms(
             .map(|tableau| tableau.rows().to_vec())
             .collect::<BTreeSet<_>>();
         for target_root in tableaux.iter().filter(|rows| {
-            Tableau::new((*rows).clone()).descent_set()
-                == llt_standard_descent_set(source_root)
+            Tableau::new((*rows).clone()).descent_set() == restricted_descents(source_root)
         }) {
             let mut forward = BTreeMap::from([(source_root.clone(), target_root.clone())]);
             let mut inverse = BTreeMap::from([(target_root.clone(), source_root.clone())]);
@@ -13025,9 +13034,7 @@ fn standard_dual_isomorphisms(
             let mut valid = true;
             while let Some(source) = queue.pop_front() {
                 let target = forward[&source].clone();
-                if llt_standard_descent_set(&source)
-                    != Tableau::new(target.clone()).descent_set()
-                {
+                if restricted_descents(&source) != Tableau::new(target.clone()).descent_set() {
                     valid = false;
                     break;
                 }
@@ -13146,13 +13153,13 @@ fn dual_component_isomorphisms(
 fn assaf_theta_component_candidates(
     edges: &DualEdgeMap,
     component: &BTreeSet<Vec<u32>>,
-    n: usize,
+    index: u32,
     standard_distributions: &[ShapeDescentDistribution],
 ) -> Result<Vec<(DualEdgeMap, String)>, String> {
-    if n < 2 {
+    if index < 2 {
         return Ok(Vec::new());
     }
-    let index = n as u32 - 1;
+    let rank = index as usize + 1;
     let lower_colors = (2..index).collect::<Vec<_>>();
     let signature_coordinates = (1..index).collect::<Vec<_>>();
     let lower_components = dual_components_with_colors(edges, component, &lower_colors)?;
@@ -13233,10 +13240,10 @@ fn assaf_theta_component_candidates(
         for (state, next) in proposed {
             changed.insert((state, index), next);
         }
-        let pieces = dual_components_in(&changed, component, n)?;
+        let pieces = dual_components_in(&changed, component, rank)?;
         if pieces.len() <= 1
             || pieces.iter().any(|piece| {
-                standard_dual_isomorphisms(&changed, piece, n, standard_distributions)
+                standard_dual_isomorphisms(&changed, piece, rank, standard_distributions)
                     .map_or(true, |isomorphisms| isomorphisms.len() != 1)
             })
         {
@@ -13354,8 +13361,9 @@ fn assaf_theta_matching_candidates(
 /// `psi_i` moves that would otherwise break the next local-Schur window, and
 /// `assaf_theta_component_candidates` splits axiom-6 obstructions through the
 /// quotient by lower standard components.  Every accepted step carries an
-/// explicit colored/signature-preserving certificate.  Ranks above six remain
-/// unsupported rather than falling back to arbitrary vertex matching.
+/// explicit colored/signature-preserving certificate.  The rule itself has no
+/// rank cutoff; exhaustive validation currently reaches rank six, and
+/// higher-rank audits are deliberately fail-fast.
 #[derive(Clone, Debug)]
 struct AssafPackagePhase {
     edges: DualEdgeMap,
@@ -13525,75 +13533,185 @@ fn assaf_phi_psi_package_phase(
     })
 }
 
+/// Restore the local `W_index`/`C_index` conditions after a lower `theta` move.
+///
+/// Assaf's axiom-6 induction explicitly interleaves `theta_i` with nearby
+/// `phi_(i+1)` and `psi_(i+2)` transformations.  This is the same certified
+/// package search used by the initial phase, but starts from the current edge
+/// map and records every repair in the returned replay trace.
+fn assaf_repair_local_index(
+    edges: &DualEdgeMap,
+    path: &PathData,
+    states: &BTreeSet<Vec<u32>>,
+    index: u32,
+) -> Result<(DualEdgeMap, Vec<String>), String> {
+    if index < 3 || index >= path.n as u32 {
+        return Ok((edges.clone(), Vec::new()));
+    }
+    let Some((mut repaired, movements)) = assaf_complete_w_phase(
+        edges,
+        path,
+        states,
+        index,
+        &mut BTreeSet::new(),
+        0,
+    )? else {
+        let witness = states
+            .iter()
+            .find(|state| assaf_witness_w(edges, state, index).unwrap_or(false));
+        return Err(format!(
+            "local repair at color {index} has no certified phi/gamma branch from {witness:?}"
+        ));
+    };
+    let mut trace = movements
+        .into_iter()
+        .map(|movement| match movement {
+            AssafIndexMove::Phi(package_size) => {
+                format!("repair phi_{index}, package size {package_size}")
+            }
+            AssafIndexMove::Gamma(package_size, description) => format!(
+                "repair gamma_{index}, package size {package_size}: {description}"
+            ),
+        })
+        .collect::<Vec<_>>();
+    let mut steps = 0usize;
+    loop {
+        let witness = states
+            .iter()
+            .find(|state| assaf_witness_c(&repaired, state, index).unwrap_or(false))
+            .cloned();
+        let Some(witness) = witness else {
+            break;
+        };
+        if let Some((candidate, package_size, _, preparation_size, description)) =
+            assaf_legal_psi_candidates(&repaired, path, states, index)?
+                .into_iter()
+                .next()
+        {
+            repaired = candidate;
+            trace.push(format!(
+                "repair psi_{index} at {witness:?}, package size {package_size}, preparation size {preparation_size}: {description}"
+            ));
+        } else if let Some((candidate, package_size, description)) =
+            assaf_gamma_candidates(&repaired, path, states, index)?
+                .into_iter()
+                .next()
+        {
+            repaired = candidate;
+            trace.push(format!(
+                "repair gamma_{index} at {witness:?}, package size {package_size}: {description}"
+            ));
+        } else {
+            return Err(format!(
+                "local repair at color {index} has no certified psi/gamma branch from {witness:?}"
+            ));
+        }
+        steps += 1;
+        if steps > states.len() * 4 {
+            return Err(format!(
+                "local repair at color {index} did not terminate after {steps} steps"
+            ));
+        }
+    }
+    Ok((repaired, trace))
+}
+
 fn assaf_theta_phase_from_edges(
     path: &PathData,
     states: &BTreeSet<Vec<u32>>,
     mut edges: DualEdgeMap,
 ) -> Result<(DualEdgeMap, Vec<String>), String> {
-    let standard_distributions = standard_tableau_descent_distributions(path.n);
     let mut theta_trace = Vec::new();
     let mut theta_steps = 0usize;
-    loop {
-        let components = dual_components_in(&edges, states, path.n)?;
-        let mut bad_component = None;
-        for component in components {
-            if standard_dual_isomorphisms(
-                &edges,
-                &component,
-                path.n,
-                &standard_distributions,
-            )?
-            .len()
-                != 1
-            {
-                bad_component = Some(component);
-                break;
+    for index in 2..path.n as u32 {
+        let rank = index as usize + 1;
+        let colors = (2..=index).collect::<Vec<_>>();
+        let standard_distributions = standard_tableau_descent_distributions(rank);
+        loop {
+            let components = dual_components_with_colors(&edges, states, &colors)?;
+            let mut bad_component = None;
+            for component in components {
+                if standard_dual_isomorphisms(
+                    &edges,
+                    &component,
+                    rank,
+                    &standard_distributions,
+                )?
+                .len()
+                    != 1
+                {
+                    bad_component = Some(component);
+                    break;
+                }
             }
-        }
-        let Some(component) = bad_component else {
-            break;
-        };
-        let (changed, description) = if path.n <= 5 {
-            let candidates = assaf_theta_matching_candidates(
-                &edges,
-                &component,
-                path.n,
-                &standard_distributions,
-            )?;
-            if candidates.len() != 1 {
+            let Some(component) = bad_component else {
+                break;
+            };
+            let (changed, description) = if rank == path.n && path.n <= 5 {
+                let candidates = assaf_theta_matching_candidates(
+                    &edges,
+                    &component,
+                    path.n,
+                    &standard_distributions,
+                )?;
+                if candidates.len() != 1 {
+                    return Err(format!(
+                        "first Assaf failure: path {}, theta_{index}, component root {:?}, size {}: {} standard splitting matchings",
+                        path.word(),
+                        component.iter().next(),
+                        component.len(),
+                        candidates.len()
+                    ));
+                }
+                let (_, changed, description) = candidates
+                    .into_iter()
+                    .next()
+                    .expect("one theta candidate was checked");
+                (changed, description)
+            } else {
+                let mut candidates = assaf_theta_component_candidates(
+                    &edges,
+                    &component,
+                    index,
+                    &standard_distributions,
+                )?;
+                candidates.sort_by(|left, right| left.1.cmp(&right.1));
+                candidates.dedup_by(|left, right| left.0 == right.0);
+                candidates.into_iter().next().ok_or_else(|| {
+                    format!(
+                        "first Assaf failure: path {}, theta_{index}, component root {:?}, size {}: no certified quotient split",
+                        path.word(),
+                        component.iter().next(),
+                        component.len()
+                    )
+                })?
+            };
+            theta_trace.push(if description.starts_with("theta_") {
+                description
+            } else {
+                format!("theta_{index} {description}")
+            });
+            edges = changed;
+            for repair_index in index + 1..=(index + 2).min(path.n as u32 - 1) {
+                let (repaired, repair_trace) =
+                    assaf_repair_local_index(&edges, path, states, repair_index).map_err(
+                        |error| {
+                            format!(
+                                "first Assaf failure: path {}, after theta_{index}: {error}",
+                                path.word()
+                            )
+                        },
+                    )?;
+                edges = repaired;
+                theta_trace.extend(repair_trace);
+            }
+            theta_steps += 1;
+            if theta_steps > states.len() {
                 return Err(format!(
-                    "Assaf theta rectification on path {} has {} standard splitting matchings",
-                    path.word(),
-                    candidates.len()
+                    "first Assaf failure: path {}, theta_{index}: rectification did not terminate after {theta_steps} splits",
+                    path.word()
                 ));
             }
-            let (_, changed, description) = candidates
-                .into_iter()
-                .next()
-                .expect("one theta candidate was checked");
-            (changed, description)
-        } else {
-            let mut candidates = assaf_theta_component_candidates(
-                &edges,
-                &component,
-                path.n,
-                &standard_distributions,
-            )?;
-            candidates.sort_by(|left, right| left.1.cmp(&right.1));
-            candidates.dedup_by(|left, right| left.0 == right.0);
-            candidates.into_iter().next().ok_or_else(|| {
-                format!(
-                    "Assaf theta component rectification found no standard split on path {} at {:?}",
-                    path.word(),
-                    component.iter().next()
-                )
-            })?
-        };
-        edges = changed;
-        theta_trace.push(description);
-        theta_steps += 1;
-        if theta_steps > states.len() {
-            return Err("Assaf theta rectification did not terminate".into());
         }
     }
     Ok((edges, theta_trace))
@@ -13603,12 +13721,6 @@ fn assaf_package_rectification(
     path: &PathData,
     states: &BTreeSet<Vec<u32>>,
 ) -> Result<(DualEdgeMap, usize, usize, Vec<String>), String> {
-    if path.n > 6 {
-        return Err(
-            "the complete Assaf graph rectifier is validated only through rank six; use the package-phase audit above that rank"
-                .into(),
-        );
-    }
     let phase = assaf_phi_psi_package_phase(path, states)?;
     let (edges, theta_trace) = assaf_theta_phase_from_edges(path, states, phase.edges)?;
     Ok((edges, phase.phi_switches, phase.psi_switches, theta_trace))
@@ -13706,7 +13818,10 @@ fn audit_assaf_rectification_for_path(
         states: states.len(),
         phi_switches,
         psi_switches,
-        theta_splits: theta_trace.len(),
+        theta_splits: theta_trace
+            .iter()
+            .filter(|step| step.starts_with("theta_"))
+            .count(),
         theta_examples: theta_trace
             .into_iter()
             .map(|trace| format!("path {} {trace}", path.word()))
@@ -17751,6 +17866,31 @@ mod tests {
         assert_eq!(components.len(), 76);
         assert!(components.iter().all(|component| {
             standard_dual_isomorphisms(&edges, component, 6, &distributions)
+                .is_ok_and(|isomorphisms| isomorphisms.len() == 1)
+        }));
+    }
+
+    #[test]
+    #[ignore = "rank-seven staged Assaf rectification stress test"]
+    fn intrinsic_assaf_staged_theta_rectifies_rank_seven_example() {
+        let path = PathData::parse("NNNNDDDEEEE").unwrap();
+        let states = assaf_standard_states(&path);
+        assert_eq!(states.len(), 630);
+        let (edges, _, _, trace) = assaf_package_rectification(&path, &states).unwrap();
+        assert_eq!(
+            trace
+                .iter()
+                .filter(|step| step.starts_with("theta_5"))
+                .count(),
+            2
+        );
+        assert!(trace.iter().any(|step| step.starts_with("repair phi_6")));
+        assert!(trace.iter().any(|step| step.starts_with("repair psi_6")));
+        let distributions = standard_tableau_descent_distributions(7);
+        let components = dual_components_in(&edges, &states, 7).unwrap();
+        assert_eq!(components.len(), 32);
+        assert!(components.iter().all(|component| {
+            standard_dual_isomorphisms(&edges, component, 7, &distributions)
                 .is_ok_and(|isomorphisms| isomorphisms.len() == 1)
         }));
     }

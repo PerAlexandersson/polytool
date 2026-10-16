@@ -1,6 +1,6 @@
 # Handoff
 
-## Active: intrinsic LLT crystal rectification through rank six — 2026-10-16
+## Active: all-rank intrinsic LLT crystal scheduler — 2026-10-16
 
 `/root` owns
 `experiments/src/bin/marked_coloring_hrv_bijection.rs`,
@@ -8,10 +8,69 @@
 `sym-poly/sym/README.md`, and this handoff on branch
 `exp/verticalstripllt-marked-coloring-bijection`.  The experiment now has a
 direct reversible coloring-to-SSYT crystal map built from deterministic Assaf
-`phi`/`psi`/`theta` rectification through rank six, rather than finite component
-matching.  The reusable LLT coloring-standardization certificate is already in
-`sym-poly-sym`; the bounded graph rectifier remains experimental.  No other
-shared library, Lean/paper source, or circular code is owned.
+`phi`/`psi`/`theta` rectification, rather than finite component matching.  The
+rectifier now has no rank cutoff: it rectifies restrictions in increasing rank
+and runs the paper's nearby `phi_(i+1)`/`psi_(i+2)` repairs after `theta_i`.
+Exhaustive validation remains through rank six, with selected rank-seven and
+rank-eight certificates.  The reusable LLT coloring-standardization
+certificate is already in `sym-poly-sym`; the rectifier remains experimental.
+No other shared library, Lean/paper source, or circular code is owned.
+
+## Completed: remove the artificial degree cutoff — 2026-10-16
+
+The previous rank-six restriction was computational, not mathematical.  The
+prototype now attempts the same certificate-producing rule at every rank and
+uses finite ranks only as validation bounds.  `standard_dual_isomorphisms`
+correctly truncates descent signatures when checking an intermediate
+restriction.  The axiom-6 phase sweeps colors in order; after each `theta_i`
+split it reuses the certified package search at colors `i+1` and `i+2`, as in
+Assaf's induction.  Higher-rank audits are fail-fast and name the path, color,
+component root/size or local witness, and failed certified branch.
+
+The first useful rank-seven example is path `NNNNDDDEEEE` with 630 standard
+states.  A top-only attempt fails because a 32-vertex lower component still has
+two signature-preserving automorphisms.  The staged scheduler first performs
+two `theta_5` splits, then one package-size-two `phi_6` repair and one
+package-size-three `psi_6` repair.  The result has 32/32 genuine standard
+components.  Paths `NNNDNDDEEEE` and `NNNDNDEDEEE` also rectify, the former
+using a genuine later `theta_6`.  The rank-eight path `NNNDDDDDEEE` rectifies
+560 states into 17/17 standard components and propagates packages as large as
+six.  These are evidence for the all-rank scheduler, not an exhaustive
+rank-seven or rank-eight claim.
+
+A new ignored stress test
+`intrinsic_assaf_staged_theta_rectifies_rank_seven_example` fixes the first
+certificate above.  No library promotion is warranted yet: the staged
+rectifier is still a large experimental search implementation, whereas the
+already-promoted standardization certificate remains the clean reusable API.
+
+Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```text
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection
+# 33 passed, 2 stress tests ignored
+
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection \
+  intrinsic_assaf_staged_theta_rectifies_rank_seven_example -- --ignored
+# passed: 630 states, 32/32 standard components
+
+cargo run --release --locked --manifest-path experiments/Cargo.toml --bin \
+  marked_coloring_hrv_bijection -- --assaf-package-report \
+  --path NNNNDDDEEEE
+# 2 theta_5, repair phi_6 package 2, repair psi_6 package 3; 32/32
+
+cargo clippy --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection -- -D warnings \
+  -A clippy::manual_is_multiple_of
+git diff --check
+# passed
+```
+
+Unqualified `-D warnings` currently stops in the unrelated unowned
+`experiments/src/principal_stratum.rs:483` on `manual_is_multiple_of`; no change
+was made there.
 
 ## Completed: nontrivial packages and intrinsic theta through rank six — 2026-10-16
 
