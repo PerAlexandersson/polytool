@@ -1,5 +1,49 @@
 # Handoff
 
+## Completed: alternating-cycle correction census — 2026-10-16
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
+Lean/paper source, or circular code is owned.  The experiment now measures
+fixed-margin corrections intrinsically in the strict-chain/color incidence
+matrix, requiring every already degree-correct state to remain fixed.
+
+A single alternating cycle is exactly enough for every `Gamma_(3,2)` state:
+among its 101 packed strict colorings, the deterministic matching fixes all 29
+raw matches and uses 55 two-chain switches and 17 genuine three-chain cycles.
+For the complete at-most-three-color subfamily (23 states), an explicit
+reversible rule is recorded and checked: four transpositions
+`11223<->21123`, `12132<->31122`, `11233<->31123`,
+`12133<->31132`, one directed three-cycle
+`12233->31223->32132->12233`, and all other states fixed.  It preserves exact
+content and strictness, and raw dual RSK after correction has the original
+ascent degree.
+
+One cycle is not universal.  The first forced obstruction is already
+`mu=(3,1)`, squarefree content, degree three: the singleton bucket forces
+`1234 -> 3412`, whose incidence difference has distance four and decomposes
+into two simple alternating cycles.  Exhaustively over all 19 partitions and
+all 1119 packed strict colorings through rank five, however, a deterministic
+degree-correcting matching that fixes every raw match always exists using at
+most **two successive simple alternating cycles**.  This is a useful bounded
+recursive target, not yet a uniform local selection rule.  In particular it
+rules out both a universal involution and a universal one-cycle recipe; the
+next conceptual step remains a Carlitz/Foata-style deletion code that chooses
+the first cycle and carries enough state to reconstruct the second.
+
+Current verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 22 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
 ## Completed: Hall--Littlewood matrix/Foata shortcut — 2026-10-16
 
 `/root` completed and releases

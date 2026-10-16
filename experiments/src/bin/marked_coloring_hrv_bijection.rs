@@ -4172,6 +4172,40 @@ fn hall_22_matrix_correction(coloring: &[u8]) -> Result<Vec<u8>, String> {
     }
 }
 
+/// Explicit degree correction for the at-most-three-color part of
+/// `Gamma_(3,2)`.  Entries are packed and zero-based here; the displayed rule
+/// in reports uses the conventional one-based words.
+fn hall_32_three_color_correction(coloring: &[u8]) -> Result<Vec<u8>, String> {
+    let image = match coloring {
+        [0, 0, 1, 1, 2] => &[1, 0, 0, 1, 2][..],
+        [1, 0, 0, 1, 2] => &[0, 0, 1, 1, 2][..],
+        [0, 1, 0, 2, 1] => &[2, 0, 0, 1, 1][..],
+        [2, 0, 0, 1, 1] => &[0, 1, 0, 2, 1][..],
+        [0, 0, 1, 2, 2] => &[2, 0, 0, 1, 2][..],
+        [2, 0, 0, 1, 2] => &[0, 0, 1, 2, 2][..],
+        [0, 1, 0, 2, 2] => &[2, 0, 0, 2, 1][..],
+        [2, 0, 0, 2, 1] => &[0, 1, 0, 2, 2][..],
+        [0, 1, 1, 2, 2] => &[2, 0, 1, 1, 2][..],
+        [2, 0, 1, 1, 2] => &[2, 1, 0, 2, 1][..],
+        [2, 1, 0, 2, 1] => &[0, 1, 1, 2, 2][..],
+        _ => coloring,
+    };
+    if coloring.len() != 5 || coloring.iter().copied().max().unwrap_or(0) > 2 {
+        return Err("the explicit Gamma_(3,2) rule requires five entries and at most three packed colors".into());
+    }
+    Ok(image.to_vec())
+}
+
+fn hall_32_three_color_inverse(coloring: &[u8]) -> Result<Vec<u8>, String> {
+    let preimage = match coloring {
+        [2, 0, 1, 1, 2] => &[0, 1, 1, 2, 2][..],
+        [2, 1, 0, 2, 1] => &[2, 0, 1, 1, 2][..],
+        [0, 1, 1, 2, 2] => &[2, 1, 0, 2, 1][..],
+        _ => return hall_32_three_color_correction(coloring),
+    };
+    Ok(preimage.to_vec())
+}
+
 fn hall_matrix_distance(
     path: &PathData,
     parts: &[usize],
@@ -4179,20 +4213,253 @@ fn hall_matrix_distance(
     right: &[u8],
 ) -> Result<usize, String> {
     let chains = hall_strict_chains(path, parts)?;
-    let incidence = |coloring: &[u8]| {
-        chains
-            .iter()
-            .enumerate()
-            .flat_map(|(chain, vertices)| {
-                vertices
-                    .iter()
-                    .map(move |&vertex| (chain, coloring[vertex]))
-            })
-            .collect::<BTreeSet<_>>()
-    };
-    let left = incidence(left);
-    let right = incidence(right);
+    let left = hall_matrix_incidence(&chains, left);
+    let right = hall_matrix_incidence(&chains, right);
     Ok(left.difference(&right).count())
+}
+
+fn hall_matrix_incidence(chains: &[Vec<usize>], coloring: &[u8]) -> BTreeSet<(usize, u8)> {
+    chains
+        .iter()
+        .enumerate()
+        .flat_map(|(chain, vertices)| {
+            vertices
+                .iter()
+                .map(move |&vertex| (chain, coloring[vertex]))
+        })
+        .collect()
+}
+
+/// Length of the unique simple alternating cycle from `left` to `right`.
+///
+/// The two colorings represent binary matrices with equal row and column
+/// margins.  Their signed symmetric difference is one alternating cycle
+/// exactly when every participating row and color has one `left`-only and one
+/// `right`-only incidence and the resulting bipartite graph is connected.
+/// The returned length is the number of incidences moved; zero denotes the
+/// identity.  `None` means that at least two cycles (or a nonsimple trade) are
+/// needed.
+fn hall_single_cycle_length(
+    path: &PathData,
+    parts: &[usize],
+    left: &[u8],
+    right: &[u8],
+) -> Result<Option<usize>, String> {
+    let chains = hall_strict_chains(path, parts)?;
+    let left = hall_matrix_incidence(&chains, left);
+    let right = hall_matrix_incidence(&chains, right);
+    if left == right {
+        return Ok(Some(0));
+    }
+
+    let left_only = left.difference(&right).copied().collect::<Vec<_>>();
+    let right_only = right.difference(&left).copied().collect::<Vec<_>>();
+    if left_only.len() != right_only.len() {
+        return Ok(None);
+    }
+
+    let mut row_signs = BTreeMap::<usize, (usize, usize)>::new();
+    let mut color_signs = BTreeMap::<u8, (usize, usize)>::new();
+    for &(row, color) in &left_only {
+        row_signs.entry(row).or_default().0 += 1;
+        color_signs.entry(color).or_default().0 += 1;
+    }
+    for &(row, color) in &right_only {
+        row_signs.entry(row).or_default().1 += 1;
+        color_signs.entry(color).or_default().1 += 1;
+    }
+    if row_signs.values().any(|&counts| counts != (1, 1))
+        || color_signs.values().any(|&counts| counts != (1, 1))
+    {
+        return Ok(None);
+    }
+
+    let mut row_to_colors = BTreeMap::<usize, Vec<u8>>::new();
+    let mut color_to_rows = BTreeMap::<u8, Vec<usize>>::new();
+    for &(row, color) in left_only.iter().chain(&right_only) {
+        row_to_colors.entry(row).or_default().push(color);
+        color_to_rows.entry(color).or_default().push(row);
+    }
+    let start = *row_to_colors
+        .keys()
+        .next()
+        .expect("a nonempty difference contains a row");
+    let mut pending_rows = vec![start];
+    let mut seen_rows = BTreeSet::new();
+    let mut seen_colors = BTreeSet::new();
+    while let Some(row) = pending_rows.pop() {
+        if !seen_rows.insert(row) {
+            continue;
+        }
+        for &color in &row_to_colors[&row] {
+            if seen_colors.insert(color) {
+                pending_rows.extend(color_to_rows[&color].iter().copied());
+            }
+        }
+    }
+    if seen_rows.len() != row_to_colors.len() || seen_colors.len() != color_to_rows.len() {
+        return Ok(None);
+    }
+    Ok(Some(left_only.len()))
+}
+
+/// Cycle-space rank of the signed incidence trade from `left` to `right`.
+///
+/// For a nonempty symmetric-difference graph this is `edges - vertices +
+/// components`.  It is one precisely for a single simple alternating cycle;
+/// larger values are a graph-complexity diagnostic, not the minimum number of
+/// successive cycle toggles (which is computed separately below).
+fn hall_trade_cycle_rank(
+    path: &PathData,
+    parts: &[usize],
+    left: &[u8],
+    right: &[u8],
+) -> Result<usize, String> {
+    let chains = hall_strict_chains(path, parts)?;
+    let left = hall_matrix_incidence(&chains, left);
+    let right = hall_matrix_incidence(&chains, right);
+    let difference = left
+        .symmetric_difference(&right)
+        .copied()
+        .collect::<Vec<_>>();
+    if difference.is_empty() {
+        return Ok(0);
+    }
+    let mut row_to_colors = BTreeMap::<usize, Vec<u8>>::new();
+    let mut color_to_rows = BTreeMap::<u8, Vec<usize>>::new();
+    for &(row, color) in &difference {
+        row_to_colors.entry(row).or_default().push(color);
+        color_to_rows.entry(color).or_default().push(row);
+    }
+    let mut components = 0usize;
+    let mut seen_rows = BTreeSet::new();
+    let mut seen_colors = BTreeSet::new();
+    for &start in row_to_colors.keys() {
+        if seen_rows.contains(&start) {
+            continue;
+        }
+        components += 1;
+        let mut pending_rows = vec![start];
+        while let Some(row) = pending_rows.pop() {
+            if !seen_rows.insert(row) {
+                continue;
+            }
+            for &color in &row_to_colors[&row] {
+                if seen_colors.insert(color) {
+                    pending_rows.extend(color_to_rows[&color].iter().copied());
+                }
+            }
+        }
+    }
+    Ok(difference.len() - row_to_colors.len() - color_to_rows.len() + components)
+}
+
+/// Minimum number of simple alternating cycles whose successive toggles carry
+/// `left` to `right`.
+fn hall_min_alternating_cycles(
+    path: &PathData,
+    parts: &[usize],
+    left: &[u8],
+    right: &[u8],
+) -> Result<usize, String> {
+    let chains = hall_strict_chains(path, parts)?;
+    let left = hall_matrix_incidence(&chains, left);
+    let right = hall_matrix_incidence(&chains, right);
+    let left_only = left.difference(&right).copied().collect::<Vec<_>>();
+    let right_only = right.difference(&left).copied().collect::<Vec<_>>();
+    if left_only.is_empty() {
+        return Ok(0);
+    }
+    if left_only.len() != right_only.len() || left_only.len() >= usize::BITS as usize / 2 {
+        return Err("incidence trade is too large or has unequal signed sides".into());
+    }
+    let half = left_only.len();
+    let mut cycles = Vec::<usize>::new();
+    for left_mask in 1usize..(1usize << half) {
+        for right_mask in 1usize..(1usize << half) {
+            if left_mask.count_ones() != right_mask.count_ones() {
+                continue;
+            }
+            let mut row_signs = BTreeMap::<usize, (usize, usize)>::new();
+            let mut color_signs = BTreeMap::<u8, (usize, usize)>::new();
+            let mut edges = Vec::new();
+            for (index, &(row, color)) in left_only.iter().enumerate() {
+                if left_mask & (1usize << index) != 0 {
+                    row_signs.entry(row).or_default().0 += 1;
+                    color_signs.entry(color).or_default().0 += 1;
+                    edges.push((row, color));
+                }
+            }
+            for (index, &(row, color)) in right_only.iter().enumerate() {
+                if right_mask & (1usize << index) != 0 {
+                    row_signs.entry(row).or_default().1 += 1;
+                    color_signs.entry(color).or_default().1 += 1;
+                    edges.push((row, color));
+                }
+            }
+            if row_signs.values().any(|&counts| counts != (1, 1))
+                || color_signs.values().any(|&counts| counts != (1, 1))
+            {
+                continue;
+            }
+            let mut row_to_colors = BTreeMap::<usize, Vec<u8>>::new();
+            let mut color_to_rows = BTreeMap::<u8, Vec<usize>>::new();
+            for &(row, color) in &edges {
+                row_to_colors.entry(row).or_default().push(color);
+                color_to_rows.entry(color).or_default().push(row);
+            }
+            let start = *row_to_colors.keys().next().expect("a cycle is nonempty");
+            let mut pending_rows = vec![start];
+            let mut seen_rows = BTreeSet::new();
+            let mut seen_colors = BTreeSet::new();
+            while let Some(row) = pending_rows.pop() {
+                if !seen_rows.insert(row) {
+                    continue;
+                }
+                for &color in &row_to_colors[&row] {
+                    if seen_colors.insert(color) {
+                        pending_rows.extend(color_to_rows[&color].iter().copied());
+                    }
+                }
+            }
+            if seen_rows.len() == row_to_colors.len() && seen_colors.len() == color_to_rows.len() {
+                cycles.push(left_mask | (right_mask << half));
+            }
+        }
+    }
+
+    fn cover(mask: usize, cycles: &[usize], memo: &mut [usize]) -> usize {
+        if mask == 0 {
+            return 0;
+        }
+        if memo[mask] != usize::MAX {
+            return memo[mask];
+        }
+        let first = mask.trailing_zeros() as usize;
+        let mut answer = usize::MAX;
+        for &cycle in cycles {
+            if cycle & (1usize << first) != 0 && cycle & mask == cycle {
+                let remainder = cover(mask ^ cycle, cycles, memo);
+                if remainder != usize::MAX {
+                    answer = answer.min(1 + remainder);
+                }
+            }
+        }
+        memo[mask] = answer;
+        answer
+    }
+
+    let all = (1usize << (2 * half)) - 1;
+    let mut memo = vec![usize::MAX; all + 1];
+    memo[0] = 0;
+    let answer = cover(all, &cycles, &mut memo);
+    if answer == usize::MAX {
+        Err(format!(
+            "could not decompose incidence trade {left_only:?} -> {right_only:?}"
+        ))
+    } else {
+        Ok(answer)
+    }
 }
 
 #[derive(Default)]
@@ -4208,6 +4475,16 @@ struct HallMatrixAudit {
     first_failure_correction: Option<String>,
     joint_degree_symmetric: bool,
     first_joint_asymmetry: Option<String>,
+    single_cycle_matching: bool,
+    single_cycle_max_length: usize,
+    single_cycle_length_counts: BTreeMap<usize, usize>,
+    first_single_cycle_correction: Option<String>,
+    first_single_cycle_obstruction: Option<String>,
+    trade_cycle_max_rank: usize,
+    trade_cycle_rank_distance_counts: BTreeMap<(usize, usize), usize>,
+    first_multi_cycle_correction: Option<String>,
+    alternating_cycle_max_count: usize,
+    alternating_cycle_count_distance_counts: BTreeMap<(usize, usize), usize>,
 }
 
 fn audit_hall_matrix(parts: &[usize]) -> Result<HallMatrixAudit, String> {
@@ -4224,6 +4501,7 @@ fn audit_hall_matrix(parts: &[usize]) -> Result<HallMatrixAudit, String> {
     let mut images = BTreeSet::new();
     let mut audit = HallMatrixAudit {
         joint_degree_symmetric: true,
+        single_cycle_matching: true,
         ..HallMatrixAudit::default()
     };
     let mut joint_degrees = BTreeMap::<(Vec<usize>, usize, usize), usize>::new();
@@ -4360,6 +4638,235 @@ fn audit_hall_matrix(parts: &[usize]) -> Result<HallMatrixAudit, String> {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
+        let cycle_lengths = sources
+            .iter()
+            .map(|source| {
+                targets
+                    .iter()
+                    .map(|target| hall_single_cycle_length(&path, parts, source, target))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let trade_ranks = sources
+            .iter()
+            .map(|source| {
+                targets
+                    .iter()
+                    .map(|target| hall_trade_cycle_rank(&path, parts, source, target))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let cycle_counts = sources
+            .iter()
+            .map(|source| {
+                targets
+                    .iter()
+                    .map(|target| hall_min_alternating_cycles(&path, parts, source, target))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let maximum_cycle = cycle_lengths
+            .iter()
+            .flatten()
+            .filter_map(|&length| length)
+            .max()
+            .unwrap_or(0);
+        let mut cycle_matching = None;
+        for radius in 0..=maximum_cycle {
+            let adjacency = cycle_lengths
+                .iter()
+                .enumerate()
+                .map(|(source_index, row)| {
+                    let source_raw_degree = shift
+                        + Tableau::new(
+                            hall_binary_dual_rsk(&path, parts, &sources[source_index])?
+                                .charge_rows,
+                        )
+                        .charge() as usize;
+                    let source_is_exact = source_raw_degree == key.1;
+                    Ok(row
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(target_index, &length)| {
+                            let fixes_exact = !source_is_exact
+                                || sources[source_index] == targets[target_index];
+                            match length {
+                                Some(value) if fixes_exact && value <= radius => {
+                                    Some((value, target_index))
+                                }
+                                _ => None,
+                            }
+                        })
+                        .collect::<Vec<_>>())
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            let adjacency = adjacency
+                .into_iter()
+                .map(|mut neighbors| {
+                    neighbors.sort();
+                    neighbors
+                        .into_iter()
+                        .map(|(_, target)| target)
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            if let Some(matching) = match_bipartite(&adjacency, targets.len()) {
+                cycle_matching = Some((radius, matching));
+                break;
+            }
+        }
+        if let Some((radius, matching)) = cycle_matching {
+            audit.single_cycle_max_length = audit.single_cycle_max_length.max(radius);
+            for (source_index, target_index) in matching.into_iter().enumerate() {
+                let length = cycle_lengths[source_index][target_index]
+                    .expect("the matching uses only single-cycle edges");
+                *audit
+                    .single_cycle_length_counts
+                    .entry(length)
+                    .or_default() += 1;
+                if length > 0 && audit.first_single_cycle_correction.is_none() {
+                    audit.first_single_cycle_correction = Some(format!(
+                        "{} -> {} by a {length}-cycle",
+                        format_word(&sources[source_index]),
+                        format_word(&targets[target_index])
+                    ));
+                }
+            }
+        } else {
+            audit.single_cycle_matching = false;
+            if audit.first_single_cycle_obstruction.is_none() {
+                let witness = (sources.len() == 1).then(|| {
+                    format!(
+                        ": {} -> {}, distance {}, cycle rank {}",
+                        format_word(&sources[0]),
+                        format_word(&targets[0]),
+                        distances[0][0],
+                        trade_ranks[0][0]
+                    )
+                });
+                audit.first_single_cycle_obstruction = Some(format!(
+                    "content={:?}, degree={}, {} sources/targets{}",
+                    key.0,
+                    key.1,
+                    sources.len(),
+                    witness.unwrap_or_default()
+                ));
+            }
+        }
+
+        let maximum_trade_rank = trade_ranks.iter().flatten().copied().max().unwrap_or(0);
+        let mut trade_matching = None;
+        for radius in 0..=maximum_trade_rank {
+            let adjacency = trade_ranks
+                .iter()
+                .enumerate()
+                .map(|(source_index, row)| {
+                    let source_raw_degree = shift
+                        + Tableau::new(
+                            hall_binary_dual_rsk(&path, parts, &sources[source_index])?
+                                .charge_rows,
+                        )
+                        .charge() as usize;
+                    let source_is_exact = source_raw_degree == key.1;
+                    let mut neighbors = row
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(target_index, &rank)| {
+                            let fixes_exact = !source_is_exact
+                                || sources[source_index] == targets[target_index];
+                            (fixes_exact && rank <= radius).then_some((
+                                rank,
+                                distances[source_index][target_index],
+                                target_index,
+                            ))
+                        })
+                        .collect::<Vec<_>>();
+                    neighbors.sort();
+                    Ok(neighbors
+                        .into_iter()
+                        .map(|(_, _, target)| target)
+                        .collect::<Vec<_>>())
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            if let Some(matching) = match_bipartite(&adjacency, targets.len()) {
+                trade_matching = Some((radius, matching));
+                break;
+            }
+        }
+        let (trade_radius, trade_matching) = trade_matching.ok_or_else(|| {
+            format!("no cycle-rank matrix correction for mu={parts:?}, key={key:?}")
+        })?;
+        audit.trade_cycle_max_rank = audit.trade_cycle_max_rank.max(trade_radius);
+        for (source_index, target_index) in trade_matching.into_iter().enumerate() {
+            let rank = trade_ranks[source_index][target_index];
+            let distance = distances[source_index][target_index];
+            *audit
+                .trade_cycle_rank_distance_counts
+                .entry((rank, distance))
+                .or_default() += 1;
+            if rank > 1 && audit.first_multi_cycle_correction.is_none() {
+                audit.first_multi_cycle_correction = Some(format!(
+                    "{} -> {}, distance {distance}, cycle rank {rank}",
+                    format_word(&sources[source_index]),
+                    format_word(&targets[target_index])
+                ));
+            }
+        }
+
+        let maximum_cycle_count = cycle_counts.iter().flatten().copied().max().unwrap_or(0);
+        let mut recursive_matching = None;
+        for radius in 0..=maximum_cycle_count {
+            let adjacency = cycle_counts
+                .iter()
+                .enumerate()
+                .map(|(source_index, row)| {
+                    let source_raw_degree = shift
+                        + Tableau::new(
+                            hall_binary_dual_rsk(&path, parts, &sources[source_index])?
+                                .charge_rows,
+                        )
+                        .charge() as usize;
+                    let source_is_exact = source_raw_degree == key.1;
+                    let mut neighbors = row
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(target_index, &count)| {
+                            let fixes_exact = !source_is_exact
+                                || sources[source_index] == targets[target_index];
+                            (fixes_exact && count <= radius).then_some((
+                                count,
+                                distances[source_index][target_index],
+                                target_index,
+                            ))
+                        })
+                        .collect::<Vec<_>>();
+                    neighbors.sort();
+                    Ok(neighbors
+                        .into_iter()
+                        .map(|(_, _, target)| target)
+                        .collect::<Vec<_>>())
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            if let Some(matching) = match_bipartite(&adjacency, targets.len()) {
+                recursive_matching = Some((radius, matching));
+                break;
+            }
+        }
+        let (recursive_radius, recursive_matching) = recursive_matching.ok_or_else(|| {
+            format!("no recursive-cycle matrix correction for mu={parts:?}, key={key:?}")
+        })?;
+        audit.alternating_cycle_max_count =
+            audit.alternating_cycle_max_count.max(recursive_radius);
+        for (source_index, target_index) in recursive_matching.into_iter().enumerate() {
+            let count = cycle_counts[source_index][target_index];
+            let distance = distances[source_index][target_index];
+            *audit
+                .alternating_cycle_count_distance_counts
+                .entry((count, distance))
+                .or_default() += 1;
+        }
+
         let maximum = distances.iter().flatten().copied().max().unwrap_or(0);
         let mut chosen = None;
         for radius in 0..=maximum {
@@ -4430,6 +4937,26 @@ fn audit_hall_matrix(parts: &[usize]) -> Result<HallMatrixAudit, String> {
             {
                 return Err(format!(
                     "the explicit Gamma_(2,2) switch failed on coloring {coloring:?}"
+                ));
+            }
+        }
+    }
+    if parts == [3, 2] {
+        for coloring in colorings
+            .iter()
+            .filter(|word| word.iter().copied().max().unwrap_or(0) <= 2)
+        {
+            let corrected = hall_32_three_color_correction(coloring)?;
+            let state = hall_binary_dual_rsk(&path, parts, &corrected)?;
+            let source_degree =
+                edge_ascent_mask(coloring, &path.normal_edges).count_ones() as usize;
+            let target_degree =
+                shift + Tableau::new(state.charge_rows.clone()).charge() as usize;
+            if source_degree != target_degree
+                || hall_32_three_color_inverse(&corrected)? != *coloring
+            {
+                return Err(format!(
+                    "the explicit at-most-three-color Gamma_(3,2) rule failed on {coloring:?}"
                 ));
             }
         }
@@ -6855,6 +7382,25 @@ fn print_hall_matrix_report(max_n: usize) -> Result<(), String> {
                     .as_deref()
                     .map_or(String::new(), |failure| format!(" ({failure})"))
             );
+            println!(
+                "  one-cycle correction fixing raw matches: {}, maximum cycle length {}, counts {:?}{}",
+                audit.single_cycle_matching,
+                audit.single_cycle_max_length,
+                audit.single_cycle_length_counts,
+                audit
+                    .first_single_cycle_obstruction
+                    .as_deref()
+                    .map_or(String::new(), |failure| format!(" ({failure})"))
+            );
+            println!(
+                "  cycle-space-rank matching: maximum rank {}, (rank,distance) counts {:?}",
+                audit.trade_cycle_max_rank, audit.trade_cycle_rank_distance_counts
+            );
+            println!(
+                "  recursive simple-cycle correction: maximum {} cycles, (cycles,distance) counts {:?}",
+                audit.alternating_cycle_max_count,
+                audit.alternating_cycle_count_distance_counts
+            );
             if let Some(failure) = audit.first_degree_failure {
                 println!("  first raw statistic failure: {failure}");
             }
@@ -6863,6 +7409,17 @@ fn print_hall_matrix_report(max_n: usize) -> Result<(), String> {
             }
             if let Some(correction) = audit.first_failure_correction {
                 println!("  correction of first raw failure: {correction}");
+            }
+            if let Some(correction) = audit.first_single_cycle_correction {
+                println!("  first one-cycle correction: {correction}");
+            }
+            if let Some(correction) = audit.first_multi_cycle_correction {
+                println!("  first genuinely multi-cycle correction: {correction}");
+            }
+            if parts == [3, 2] {
+                println!(
+                    "  explicit <=3-color rule: 11223<->21123, 12132<->31122, 11233<->31123, 12133<->31132, 12233->31223->32132->12233"
+                );
             }
             colorings += audit.colorings;
             exact += audit.exact_degrees;
@@ -7464,5 +8021,84 @@ mod tests {
             hall_22_matrix_correction(&[0, 2, 1, 3]).unwrap(),
             vec![0, 1, 2, 3]
         );
+    }
+
+    #[test]
+    fn gamma_32_detects_switches_and_genuine_three_chain_cycles() {
+        let parts = [3, 2];
+        let path = hall_littlewood_path(&parts).unwrap();
+        assert_eq!(
+            hall_single_cycle_length(&path, &parts, &[0, 0, 1, 2, 2], &[2, 0, 0, 1, 2])
+                .unwrap(),
+            Some(3)
+        );
+        assert_eq!(
+            hall_single_cycle_length(&path, &parts, &[0, 0, 1, 1, 2], &[1, 0, 0, 1, 2])
+                .unwrap(),
+            Some(2)
+        );
+        let audit = audit_hall_matrix(&parts).unwrap();
+        assert!(audit.single_cycle_matching);
+        assert_eq!(audit.single_cycle_max_length, 3);
+        assert_eq!(audit.trade_cycle_max_rank, 1);
+    }
+
+    #[test]
+    fn gamma_32_three_color_rule_is_an_exact_reversible_correction() {
+        let parts = [3, 2];
+        let path = hall_littlewood_path(&parts).unwrap();
+        let sources = packed_words(5)
+            .into_iter()
+            .filter(|word| {
+                word.iter().copied().max().unwrap_or(0) <= 2
+                    && increases_on_edges(word, &path.strict_edges)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(sources.len(), 23);
+        let mut images = BTreeSet::new();
+        for coloring in &sources {
+            let corrected = hall_32_three_color_correction(coloring).unwrap();
+            assert!(increases_on_edges(&corrected, &path.strict_edges));
+            assert_eq!(packed_content(&corrected), packed_content(coloring));
+            assert_eq!(
+                hall_32_three_color_inverse(&corrected).unwrap(),
+                *coloring
+            );
+            let state = hall_binary_dual_rsk(&path, &parts, &corrected).unwrap();
+            let source_degree =
+                edge_ascent_mask(coloring, &path.normal_edges).count_ones() as usize;
+            let target_degree =
+                1 + Tableau::new(state.charge_rows.clone()).charge() as usize;
+            assert_eq!(source_degree, target_degree, "coloring={coloring:?}");
+            assert!(images.insert(corrected));
+        }
+        assert_eq!(images.len(), sources.len());
+    }
+
+    #[test]
+    fn gamma_31_is_the_first_single_cycle_obstruction() {
+        let audit = audit_hall_matrix(&[3, 1]).unwrap();
+        assert!(!audit.single_cycle_matching);
+        assert_eq!(audit.trade_cycle_max_rank, 2);
+        assert_eq!(audit.alternating_cycle_max_count, 2);
+        assert!(audit
+            .first_single_cycle_obstruction
+            .as_deref()
+            .is_some_and(|witness| witness.contains("cycle rank 2")));
+    }
+
+    #[test]
+    fn hall_corrections_need_at_most_two_successive_cycles_through_rank_five() {
+        for n in 0..=5 {
+            for parts in integer_partitions(n) {
+                assert!(
+                    audit_hall_matrix(&parts)
+                        .unwrap()
+                        .alternating_cycle_max_count
+                        <= 2,
+                    "mu={parts:?}"
+                );
+            }
+        }
     }
 }
