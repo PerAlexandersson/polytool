@@ -1,18 +1,89 @@
 # Handoff
 
-## Active: standard-permutation dual-equivalence refinement — 2026-10-16
+## Active: intrinsic LLT crystal rectification through rank six — 2026-10-16
 
 `/root` owns
 `experiments/src/bin/marked_coloring_hrv_bijection.rs`,
 `sym-poly/sym/src/llt.rs`, `sym-poly/sym/src/lib.rs`,
 `sym-poly/sym/README.md`, and this handoff on branch
 `exp/verticalstripllt-marked-coloring-bijection`.  The experiment now has a
-direct reversible coloring-to-SSYT crystal map built from a deterministic
-Assaf `phi`/`psi`/`theta` rectification through rank five, rather than finite
-component matching.  The narrow shared-library task is only to promote the
-stable LLT coloring-standardization certificate; the bounded graph rectifier
-stays experimental.  No other shared library, Lean/paper source, or circular
-code is owned.
+direct reversible coloring-to-SSYT crystal map built from deterministic Assaf
+`phi`/`psi`/`theta` rectification through rank six, rather than finite component
+matching.  The reusable LLT coloring-standardization certificate is already in
+`sym-poly-sym`; the bounded graph rectifier remains experimental.  No other
+shared library, Lean/paper source, or circular code is owned.
+
+## Completed: nontrivial packages and intrinsic theta through rank six — 2026-10-16
+
+The rectifier now implements Assaf's actual `i`-packages: retained edge colors
+are `<= i-3` or `>= i+3`, and retained signature coordinates are `<= i-3` or
+`>= i+2`.  Every package switch constructs a root-forced colored-graph
+isomorphism, checks path independence, bijectivity and retained signatures,
+and propagates the new `i`-edges by the published `phi`/`psi` formula.  Rank six
+first uses two-vertex `D_2` packages for color five.  Candidate moves must
+preserve every `LSP_5` window, not only the window centered at the changed
+color.
+
+The first coupled rank-six obstruction occurs on path `NNNNNENEEEEE`: a
+`psi_4` move is locally valid at color four but breaks the color-five window.
+The published two-color repair is now explicit.  Before `psi_i^x`, try the
+forced `phi_(i+1)` roots `E_(i-2)(x)` and `E_(i-2)E_i(x)`; accept the composite
+only after both rooted package certificates and all local-Schur checks pass.
+Across all ordinary paths through rank six this lookahead is needed four times.
+The nonzero-`m` alternating `psi` branch and `gamma` package formula are also
+implemented and certified, although this rank-six census uses no `gamma`.
+
+The axiom-6 repair no longer matches individual top-color signature classes.
+It quotients a bad component by its lower-color connected components, computes
+the unique signature- and color-preserving isomorphisms between lower
+components, and applies Assaf's `theta` formula at that quotient level.  The
+first K6 obstruction has 32 vertices and descent series `2 s_(3,2,1)`; its six
+lower components have sizes `6,5,5,5,5,6`.  A quotient `theta_5` splits it into
+two certified 16-vertex standard graphs.  This avoids the infeasible `12!`
+top-signature matching search.
+
+The exhaustive ordinary census now covers every one of the 1,161 paths and
+279,639 standard colorings through rank six.  It performs 2,827 `phi`, 768
+`psi`, zero `gamma`, and 202 `theta` operations; 588 switches use nontrivial
+packages, the largest package has size two, and the output consists of 31,658
+genuine standard dual-equivalence components.  The K6 packed lift was checked
+separately: 4,683 colorings biject with 4,683 packed SSYT targets, all 9,366
+two-sided round trips pass, and all 1,848 tested three-color arrows invert and
+preserve q-degree.  The first two-color-support failure there is
+`f_2(112132)=121133`; the crystal is genuine but not support-local.
+
+`audit_fundamental_schur_for_path` now derives its target multiplicities from
+the certified standard components themselves, so the direct crystal audit no
+longer depends on the older radius-five signed-cancellation matcher.  The
+rectifier remains experimental: rank seven introduces larger packages and more
+of the paper's multi-window lookahead, so no all-rank claim is made.
+
+Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```text
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection
+# 33 passed, 1 rank-six stress test ignored
+
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection \
+  intrinsic_assaf_package_and_theta_rectify_k6 -- --ignored
+# passed
+
+cargo run --release --locked --manifest-path experiments/Cargo.toml -- \
+  --assaf-package-report --max-n 6
+# 1161 paths; 279639 states; 31658/31658 standard components
+
+cargo run --release --locked --manifest-path experiments/Cargo.toml -- \
+  --fundamental-crystal-report --path NNNNNNEEEEEE
+# 4683 <-> 4683 packed objects; 9366 round trips; 1848/1848 arrows
+
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- \
+  -D warnings -A clippy::manual_is_multiple_of
+git diff --check
+# passed
+```
 
 ## Completed: intrinsic dual-equivalence crystal through rank five — 2026-10-16
 
