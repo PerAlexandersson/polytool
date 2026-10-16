@@ -7987,6 +7987,25 @@ fn complete_graph_word_decode(state: &CompleteGraphFoataState) -> Result<Vec<u8>
     Ok(reversed.into_iter().rev().collect())
 }
 
+fn complete_graph_crystal_step(
+    word: &[u8],
+    index: u32,
+    raising: bool,
+) -> Result<Option<Vec<u8>>, String> {
+    let mut state = complete_graph_word_encode(word)?;
+    let color = Tableau::new(state.color_rows);
+    let changed = if raising {
+        color.crystal_e(index)
+    } else {
+        color.crystal_f(index)
+    };
+    let Some(changed) = changed else {
+        return Ok(None);
+    };
+    state.color_rows = changed.rows().to_vec();
+    Ok(Some(complete_graph_word_decode(&state)?))
+}
+
 fn complete_graph_matrix_correction(word: &[u8]) -> Result<Vec<u8>, String> {
     if word.is_empty() {
         return Ok(Vec::new());
@@ -10910,6 +10929,7 @@ fn print_crystal_locality_report(max_n: usize) -> Result<(), String> {
         LocalCrystalComponentAudit::default(),
         LocalCrystalComponentAudit::default(),
     ];
+    let mut total_foata = CompleteGraphCrystalComparison::default();
     for n in 0..=max_n {
         let mut rank = CrystalLocalityAudit::default();
         let mut rank_chains = LocalChainAudit::default();
@@ -10944,6 +10964,8 @@ fn print_crystal_locality_report(max_n: usize) -> Result<(), String> {
         for (policy_index, &policy) in policies.iter().enumerate() {
             rank_components[policy_index].print(&format!("rank {n}"), alphabet_size, policy);
         }
+        let rank_foata = audit_complete_graph_crystal_comparison(n, alphabet_size)?;
+        rank_foata.print(&format!("K_{n}"));
         total.absorb(rank);
         total_chains.absorb(rank_chains);
         for policy_index in 0..policies.len() {
@@ -10953,12 +10975,14 @@ fn print_crystal_locality_report(max_n: usize) -> Result<(), String> {
         for policy_index in 0..policies.len() {
             total_components[policy_index].absorb(rank_components[policy_index].clone());
         }
+        total_foata.absorb(rank_foata);
     }
     total.print(&format!("ranks 0..={max_n}"));
     total_chains.print(&format!("ranks 0..={max_n}"));
     for (policy_index, &policy) in policies.iter().enumerate() {
         total_coxeter[policy_index].print(&format!("ranks 0..={max_n}"), policy);
     }
+    total_foata.print(&format!("K_0 through K_{max_n}"));
     total_strings.print(&format!("ranks 0..={max_n}"));
     for (policy_index, &policy) in policies.iter().enumerate() {
         total_components[policy_index].print(
@@ -11986,6 +12010,111 @@ fn audit_local_crystal_components_for_path(
                 format_word(component.iter().next().expect("component is nonempty")),
                 component_result.expect_err("checked that the component failed")
             ));
+        }
+    }
+    Ok(audit)
+}
+
+#[derive(Clone, Debug, Default)]
+struct CompleteGraphCrystalComparison {
+    arrows: usize,
+    lex_matches: usize,
+    hamming_matches: usize,
+    first_lex_difference: Option<String>,
+    first_hamming_difference: Option<String>,
+}
+
+impl CompleteGraphCrystalComparison {
+    fn absorb(&mut self, other: Self) {
+        self.arrows += other.arrows;
+        self.lex_matches += other.lex_matches;
+        self.hamming_matches += other.hamming_matches;
+        if self.first_lex_difference.is_none() {
+            self.first_lex_difference = other.first_lex_difference;
+        }
+        if self.first_hamming_difference.is_none() {
+            self.first_hamming_difference = other.first_hamming_difference;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "complete-graph Foata crystal comparison {label}: lex-rank agrees {}/{} arrows; minimum-Hamming agrees {}/{}",
+            self.lex_matches,
+            self.arrows,
+            self.hamming_matches,
+            self.arrows
+        );
+        if let Some(difference) = &self.first_lex_difference {
+            println!("  first lex-rank difference: {difference}");
+        }
+        if let Some(difference) = &self.first_hamming_difference {
+            println!("  first minimum-Hamming difference: {difference}");
+        }
+    }
+}
+
+fn audit_complete_graph_crystal_comparison(
+    n: usize,
+    alphabet_size: u8,
+) -> Result<CompleteGraphCrystalComparison, String> {
+    let path = if n == 0 {
+        all_paths(0)
+            .into_iter()
+            .next()
+            .ok_or_else(|| "rank zero path is missing".to_string())?
+    } else {
+        hall_littlewood_path(&[n])?
+    };
+    let mut audit = CompleteGraphCrystalComparison::default();
+    let mut lex_cache = LocalReflectionCache::default();
+    let mut hamming_cache = LocalReflectionCache::default();
+    for word in words_with_color_bound(n, alphabet_size) {
+        for index in 1..u32::from(alphabet_size) {
+            for raising in [true, false] {
+                let foata = complete_graph_crystal_step(&word, index, raising)?;
+                let lex = local_two_color_crystal_step_with_policy(
+                    &path,
+                    &word,
+                    index,
+                    raising,
+                    LocalReflectionPolicy::Lexicographic,
+                    &mut lex_cache,
+                )?;
+                let hamming = local_two_color_crystal_step_with_policy(
+                    &path,
+                    &word,
+                    index,
+                    raising,
+                    LocalReflectionPolicy::MinimumHamming,
+                    &mut hamming_cache,
+                )?;
+                audit.arrows += 1;
+                if lex == foata {
+                    audit.lex_matches += 1;
+                } else if audit.first_lex_difference.is_none() {
+                    audit.first_lex_difference = Some(format!(
+                        "K_{n}, {}_{}({}) gives Foata {:?}, local {:?}",
+                        if raising { 'e' } else { 'f' },
+                        index,
+                        format_word(&word),
+                        foata.as_deref().map(format_word),
+                        lex.as_deref().map(format_word)
+                    ));
+                }
+                if hamming == foata {
+                    audit.hamming_matches += 1;
+                } else if audit.first_hamming_difference.is_none() {
+                    audit.first_hamming_difference = Some(format!(
+                        "K_{n}, {}_{}({}) gives Foata {:?}, local {:?}",
+                        if raising { 'e' } else { 'f' },
+                        index,
+                        format_word(&word),
+                        foata.as_deref().map(format_word),
+                        hamming.as_deref().map(format_word)
+                    ));
+                }
+            }
         }
     }
     Ok(audit)
@@ -14057,6 +14186,18 @@ mod tests {
         let failure = obstruction.first_failure.unwrap();
         assert!(failure.contains("degree 2"));
         assert!(failure.contains("2 highest-weight states: 1121,2112"));
+
+        let k3_foata = audit_complete_graph_crystal_comparison(3, 3).unwrap();
+        assert_eq!(k3_foata.lex_matches, k3_foata.arrows);
+        assert_eq!(k3_foata.hamming_matches, k3_foata.arrows);
+        let k4_foata = audit_complete_graph_crystal_comparison(4, 3).unwrap();
+        assert_eq!(k4_foata.lex_matches, 304);
+        assert_eq!(k4_foata.hamming_matches, 310);
+        assert_eq!(k4_foata.arrows, 324);
+        assert!(k4_foata
+            .first_hamming_difference
+            .unwrap()
+            .contains("f_1(1121) gives Foata Some(\"2112\"), local Some(\"1221\")"));
     }
 
     #[test]

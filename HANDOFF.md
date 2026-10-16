@@ -6,7 +6,7 @@
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
 branch `exp/verticalstripllt-marked-coloring-bijection`.  The current bounded
 task has isolated a clean two-color Weyl action and is now determining the
-smallest three-color correction needed to turn its canonical `e_i,f_i`
+smallest cross-index correction needed to turn its canonical `e_i,f_i`
 strings into genuine SSYT crystal components.  No shared library, Lean/paper
 source, or circular code is owned.
 
@@ -41,12 +41,24 @@ lex rank), but retains this same obstruction.  A rule restricted to changing
 one vertex is impossible even on K3: at degree one the unique adjacent content
 states are `121` and `212`, at Hamming distance three.
 
+The existing complete-graph inverse-Foata/RSK bijection supplies the exact
+repair model.  Its crystal arrows agree with both two-color candidates through
+K3.  The first differing arrow is precisely the K4 obstruction:
+`f_1(1121)=2112` under Foata--RSK, whereas both local candidates choose
+`1121 -> 1221`.  That long binary move joins the two spurious highest states
+in the correct direction.  Through K5, minimum-Hamming agrees with Foata--RSK
+on 1338/1456 defined-or-zero operations and lex rank on 1290/1456.  Thus the
+missing datum is not merely “use shorter recolorings”; it is the Foata/charge
+compatibility between adjacent simple-root strings.  Although the first
+repair itself uses only two colors, its choice is forced by compatibility
+with the neighboring `f_2` strings.
+
 The CLI `--crystal-locality-report --max-n 5` prints the complete census and
 the first component's arrows.  Regressions retain the rank-five Weyl checks
 and the precise K4 obstruction.  The next narrow target is a three-color
-local correction of the five failing rank-four minimum-Hamming components,
-starting with the choice of the `f_1` edge incident to `1121/2112`; only after
-that repair should one test Stembridge/SSYT components at rank five.
+compatibility rule generalizing the Foata choice `1121 -> 2112` to arbitrary
+induced unit-interval subgraphs; only after that repair should one retest
+Stembridge/SSYT components at rank five.
 
 Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
 
