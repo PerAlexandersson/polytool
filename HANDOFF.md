@@ -1,15 +1,45 @@
 # Handoff
 
-## Active: objectwise plethystic cancellation — 2026-10-16
+## Completed: objectwise plethystic cancellation — 2026-10-16
 
-`/root` owns `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this
-handoff on branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared
-library, Lean/paper source, or circular code is owned.  The current task is to
-implement Haglund--Xin Proposition 3.5 objectwise for the experiment's ascent
-convention: signed packed colorings in the alphabet
-`bar(1)<1<bar(2)<2<...`, with the last equal-color attacking-pair tail toggle,
-and verify that its fixed points are exactly proper colorings with the required
-`(q-1)^n` fibre and q-degree.
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
+Lean/paper source, or circular code is owned.  Implementation checkpoint:
+`c2c5207` (`Add objectwise plethystic coloring cancellation`).
+
+The experiment now lifts the Carlsson--Mellit plethystic relation to the
+explicit Haglund--Xin sign involution (arXiv:1705.11064, Proposition 3.5 and
+Appendix).  For the project's ascent convention the signed alphabet is
+`bar(1)<1<bar(2)<2<...`; a state has sign `(-1)^(number of bars)` and q-degree
+`number of unbarred vertices + signed ascents`.  On an improper absolute
+coloring, select the equal-color attacking edge with largest head and then
+largest tail and toggle the tail's bar.  This is an explicit involution,
+reverses sign, preserves packed content and exact q-degree, and fixes exactly
+the signed lifts of proper colorings.  Every proper-coloring fibre is also
+checked independently to sum to `q^asc (q-1)^n`.
+
+Across all 65 ordinary Dyck paths through rank five, 744451 signed states from
+23845 packed colorings split into 159026 canceled improper pairs and 426399
+fixed signed lifts of 13702 proper colorings.  The CLI flag
+`--plethystic-report` prints the census and a readable first certificate:
+on `NNEE`, `1 1 <-> bar(1) 1`, pivot edge `1->2`, common degree 2.  This is the
+needed objectwise bridge from arbitrary LLT colorings to signed proper-coloring
+fibres.  Division by `(q-1)^n` remains a fibre factor, not a choice of one fixed
+state; transporting crystals next requires a bar-aware lift of `S_i` and a
+commutation audit with this involution.
+
+Current verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 25 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
 
 ## Completed: canonical minimum-cost Hall selector — 2026-10-16
 
