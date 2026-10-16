@@ -5,7 +5,8 @@
 `/root` completed and releases
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
 branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
-Lean/paper source, or circular code is owned.
+Lean/paper source, or circular code is owned.  Implementation checkpoint:
+`b0b80d0` (`Make Hall bump bridge inductive`).
 
 The endpoint code bridge below was not yet genuinely recursive.  Its first
 paired-trace shape mismatch is `mu=(3,1)`, source `1323`, at depth one:
