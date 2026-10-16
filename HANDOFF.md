@@ -1,5 +1,55 @@
 # Handoff
 
+## Completed: matching rigidity and `S_i` dependence audit — 2026-10-16
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
+Lean/paper source, or circular code is owned.
+
+The experiment now classifies candidate edges in every inductive fixed-content
+matching graph without enumerating perfect matchings.  Relative to one perfect
+matching, unmatched edges point source-to-target and matched edges point
+target-to-source; alternating-cycle reachability identifies exactly the edges
+occurring in some perfect matching and the matched edges forced in every one.
+Through rank five only 70/107 buckets have a unique perfect matching.  There
+are 2622 candidate edges, of which 2580 are allowed in some perfect matching
+and only 736 are forced; one source can have as many as 16 allowable targets.
+The first ambiguity is already `mu=(2,1)`, squarefree content: source `213`
+may map to `123` or `213`.
+
+The first alternating matching square does *not* affect transported tableau
+reflections: both `S_1` and `S_2` agree for every source in that rank-three
+bucket.  Simultaneously replacing the chosen matching by one alternate in
+every ambiguous bucket leaves every transported `S_i` unchanged through rank
+four (31/38 buckets unique there).  Matching independence first fails at rank
+five.  For `mu=(4,1)`, source `12123`, the current bridge gives
+`S_2(12123)=12313`, while the simultaneous alternate gives `13123`.  The
+dependence localizes to a single inverse-matching bucket of target content
+`[2,1,2]`; changing that bucket alone gives `13123`.  Thus transported `S_i`
+is more rigid than the bijection at small rank, but is not intrinsically
+determined by the admissible-edge relation.
+
+The alternate bucket matchings used here remain admissible relative to the
+fixed already-chosen child bridge; they are endpoint bijections at the current
+rank, not a second globally rebuilt recursive family.  The next principled
+selector test is therefore a canonical minimum-cost perfect matching, with
+edge cost given first by total source/target cycle count and then moved
+incidences/drop data.  Its uniqueness and rank-six stability should be checked
+before trying to express it as a local `PullUp` rule.
+
+Current verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 24 passed, 37.44s
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
 ## Completed: explicit cycle certificates and normalization obstruction — 2026-10-16
 
 `/root` completed and releases

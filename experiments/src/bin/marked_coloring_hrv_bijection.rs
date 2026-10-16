@@ -5008,10 +5008,118 @@ struct HallRecursiveBumpCertificate {
     target_steps: Vec<HallBumpDeleteWitness>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HallBucketRigidity {
+    content: Vec<usize>,
+    states: usize,
+    edges: usize,
+    allowed_edges: usize,
+    forced_edges: usize,
+    max_allowed_targets: usize,
+    first_ambiguous_source: Option<String>,
+    alternate_matching: Option<Vec<(Vec<u8>, Vec<u8>)>>,
+}
+
+impl HallBucketRigidity {
+    fn unique(&self) -> bool {
+        self.forced_edges == self.states
+    }
+}
+
+fn hall_bucket_matching_rigidity(
+    content: &[usize],
+    states: &[Vec<u8>],
+    adjacency: &[Vec<usize>],
+    matching: &[usize],
+) -> HallBucketRigidity {
+    let n = states.len();
+    let mut directed = vec![Vec::new(); 2 * n];
+    for (left, neighbors) in adjacency.iter().enumerate() {
+        for &right in neighbors {
+            if matching[left] == right {
+                directed[n + right].push(left);
+            } else {
+                directed[left].push(n + right);
+            }
+        }
+    }
+    let reachable = |start: usize, goal: usize| {
+        let mut pending = vec![start];
+        let mut seen = vec![false; directed.len()];
+        while let Some(vertex) = pending.pop() {
+            if vertex == goal {
+                return true;
+            }
+            if seen[vertex] {
+                continue;
+            }
+            seen[vertex] = true;
+            pending.extend(directed[vertex].iter().copied());
+        }
+        false
+    };
+    let mut allowed_edges = 0usize;
+    let mut forced_edges = 0usize;
+    let mut max_allowed_targets = 0usize;
+    let mut first_ambiguous_source = None;
+    for (left, neighbors) in adjacency.iter().enumerate() {
+        let allowed = neighbors
+            .iter()
+            .copied()
+            .filter(|&right| {
+                matching[left] == right || reachable(n + right, left)
+            })
+            .collect::<Vec<_>>();
+        allowed_edges += allowed.len();
+        max_allowed_targets = max_allowed_targets.max(allowed.len());
+        if allowed.len() > 1 && first_ambiguous_source.is_none() {
+            first_ambiguous_source = Some(format!(
+                "source {} has targets {}",
+                format_word(&states[left]),
+                allowed
+                    .iter()
+                    .map(|&right| format_word(&states[right]))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+        }
+        let matched_right = matching[left];
+        if !reachable(left, n + matched_right) {
+            forced_edges += 1;
+        }
+    }
+    let alternate_matching = if forced_edges == n {
+        None
+    } else {
+        (0..n).find_map(|left| {
+            let mut without_edge = adjacency.to_vec();
+            without_edge[left].retain(|&right| right != matching[left]);
+            match_bipartite(&without_edge, n).map(|alternate| {
+                alternate
+                    .into_iter()
+                    .enumerate()
+                    .map(|(source, target)| (states[source].clone(), states[target].clone()))
+                    .collect()
+            })
+        })
+    };
+    HallBucketRigidity {
+        content: content.to_vec(),
+        states: n,
+        edges: adjacency.iter().map(Vec::len).sum(),
+        allowed_edges,
+        forced_edges,
+        max_allowed_targets,
+        first_ambiguous_source,
+        alternate_matching,
+    }
+}
+
 #[derive(Clone)]
 struct HallRecursiveBumpBridge {
     forward: BTreeMap<Vec<u8>, HallRecursiveBumpCertificate>,
     inverse: BTreeMap<Vec<u8>, HallRecursiveBumpCertificate>,
+    rigidity: Vec<HallBucketRigidity>,
 }
 
 impl HallRecursiveBumpBridge {
@@ -5044,6 +5152,16 @@ impl HallRecursiveBumpBridge {
                 Self {
                     forward: BTreeMap::from([(Vec::new(), certificate.clone())]),
                     inverse: BTreeMap::from([(Vec::new(), certificate)]),
+                    rigidity: vec![HallBucketRigidity {
+                        content: Vec::new(),
+                        states: 1,
+                        edges: 1,
+                        allowed_edges: 1,
+                        forced_edges: 1,
+                        max_allowed_targets: 1,
+                        first_ambiguous_source: None,
+                        alternate_matching: None,
+                    }],
                 },
             );
             return Ok(());
@@ -5065,6 +5183,7 @@ impl HallRecursiveBumpBridge {
         }
         let mut forward = BTreeMap::new();
         let mut inverse = BTreeMap::new();
+        let mut rigidity = Vec::new();
         for (content, states) in buckets {
             let rows = states
                 .iter()
@@ -5171,6 +5290,12 @@ impl HallRecursiveBumpBridge {
                     ))
                 )
             })?;
+            rigidity.push(hall_bucket_matching_rigidity(
+                &content,
+                &states,
+                &adjacency,
+                &matching,
+            ));
             for (source, target) in matching.into_iter().enumerate() {
                 let certificate = witnesses[source][target]
                     .clone()
@@ -5187,7 +5312,14 @@ impl HallRecursiveBumpBridge {
                 inverse.insert(states[target].clone(), inverse_certificate);
             }
         }
-        memo.insert(parts.to_vec(), Self { forward, inverse });
+        memo.insert(
+            parts.to_vec(),
+            Self {
+                forward,
+                inverse,
+                rigidity,
+            },
+        );
         Ok(())
     }
 
@@ -5515,6 +5647,231 @@ fn hall_binary_dual_rsk(
         charge_rows: insertion.rows().to_vec(),
         color_rows,
     })
+}
+
+fn tableau_rows_simple_reflection(
+    rows: &[Vec<u32>],
+    index: u32,
+) -> Result<Vec<Vec<u32>>, String> {
+    let tableau = Tableau::new(rows.to_vec());
+    let mut epsilon = 0usize;
+    let mut raised = tableau.clone();
+    while let Some(next) = raised.crystal_e(index) {
+        epsilon += 1;
+        raised = next;
+    }
+    let mut phi = 0usize;
+    let mut lowered = tableau.clone();
+    while let Some(next) = lowered.crystal_f(index) {
+        phi += 1;
+        lowered = next;
+    }
+    let mut reflected = tableau;
+    if phi >= epsilon {
+        for _ in 0..phi - epsilon {
+            reflected = reflected
+                .crystal_f(index)
+                .ok_or_else(|| "Hall S_i lowering string ended too early".to_string())?;
+        }
+    } else {
+        for _ in 0..epsilon - phi {
+            reflected = reflected
+                .crystal_e(index)
+                .ok_or_else(|| "Hall S_i raising string ended too early".to_string())?;
+        }
+    }
+    Ok(reflected.rows().to_vec())
+}
+
+fn hall_binary_dual_rsk_state_inverse(
+    path: &PathData,
+    parts: &[usize],
+) -> Result<BTreeMap<HallMatrixState, Vec<u8>>, String> {
+    let mut inverse = BTreeMap::new();
+    for word in packed_words(path.n)
+        .into_iter()
+        .filter(|word| increases_on_edges(word, &path.strict_edges))
+    {
+        let state = hall_binary_dual_rsk(path, parts, &word)?;
+        if inverse.insert(state.clone(), word.clone()).is_some() {
+            return Err(format!(
+                "dual-RSK state T={}, P={} has multiple strict packed preimages for mu={parts:?}",
+                format_tableau(&state.charge_rows),
+                format_tableau(&state.color_rows)
+            ));
+        }
+    }
+    Ok(inverse)
+}
+
+fn hall_transport_reflection_with_matching(
+    path: &PathData,
+    parts: &[usize],
+    matching: &BTreeMap<Vec<u8>, Vec<u8>>,
+    state_inverse: &BTreeMap<HallMatrixState, Vec<u8>>,
+    source: &[u8],
+    index: u32,
+) -> Result<Vec<u8>, String> {
+    let target = matching
+        .get(source)
+        .ok_or_else(|| format!("source {source:?} is outside the Hall matching"))?;
+    let mut state = hall_binary_dual_rsk(path, parts, target)?;
+    state.color_rows = tableau_rows_simple_reflection(&state.color_rows, index)?;
+    let reflected_target = state_inverse.get(&state).ok_or_else(|| {
+        format!(
+            "reflected dual-RSK state T={}, P={} has no strict packed preimage for mu={parts:?}",
+            format_tableau(&state.charge_rows),
+            format_tableau(&state.color_rows)
+        )
+    })?;
+    matching
+        .iter()
+        .find_map(|(source, target)| (target == reflected_target).then(|| source.clone()))
+        .ok_or_else(|| {
+            format!("reflected target {reflected_target:?} is outside the Hall matching image")
+        })
+}
+
+fn first_hall_matching_dependent_reflection() -> Result<Option<String>, String> {
+    let parts = [2, 1];
+    let path = hall_littlewood_path(&parts)?;
+    let state_inverse = hall_binary_dual_rsk_state_inverse(&path, &parts)?;
+    let bridge = HallRecursiveBumpBridge::build(&parts)?;
+    let bucket = bridge
+        .rigidity
+        .iter()
+        .find(|bucket| bucket.content == [1, 1, 1] && !bucket.unique())
+        .ok_or_else(|| "the first Hall ambiguity bucket was not found".to_string())?;
+    let alternate = bucket
+        .alternate_matching
+        .as_ref()
+        .ok_or_else(|| "the first Hall ambiguity has no alternate matching".to_string())?
+        .iter()
+        .cloned()
+        .collect::<BTreeMap<_, _>>();
+    let current = bridge
+        .forward
+        .iter()
+        .filter(|(source, _)| packed_content(source) == [1, 1, 1])
+        .map(|(source, certificate)| (source.clone(), certificate.partner.clone()))
+        .collect::<BTreeMap<_, _>>();
+    for source in current.keys() {
+        for index in 1..=2 {
+            let current_image =
+                hall_transport_reflection_with_matching(
+                    &path,
+                    &parts,
+                    &current,
+                    &state_inverse,
+                    source,
+                    index,
+                )?;
+            let alternate_image = hall_transport_reflection_with_matching(
+                &path,
+                &parts,
+                &alternate,
+                &state_inverse,
+                source,
+                index,
+            )?;
+            if current_image != alternate_image {
+                return Ok(Some(format!(
+                    "mu=[2,1], source {}, S_{index}: current {}, alternate {}",
+                    format_word(source),
+                    format_word(&current_image),
+                    format_word(&alternate_image)
+                )));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn hall_matching_dependent_reflection(
+    parts: &[usize],
+    bridge: &HallRecursiveBumpBridge,
+) -> Result<Option<String>, String> {
+    let path = hall_littlewood_path(parts)?;
+    let state_inverse = hall_binary_dual_rsk_state_inverse(&path, parts)?;
+    let current = bridge
+        .forward
+        .iter()
+        .map(|(source, certificate)| (source.clone(), certificate.partner.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let mut alternate = current.clone();
+    let mut changed_buckets = 0usize;
+    for bucket in &bridge.rigidity {
+        let Some(alternate_bucket) = &bucket.alternate_matching else {
+            continue;
+        };
+        changed_buckets += 1;
+        for (source, target) in alternate_bucket {
+            alternate.insert(source.clone(), target.clone());
+        }
+    }
+    if changed_buckets == 0 {
+        return Ok(None);
+    }
+    for source in current.keys() {
+        let colors = source.iter().copied().max().map_or(0, |color| color as u32 + 1);
+        for index in 1..colors {
+            let current_image = hall_transport_reflection_with_matching(
+                &path,
+                parts,
+                &current,
+                &state_inverse,
+                source,
+                index,
+            )?;
+            let alternate_image = hall_transport_reflection_with_matching(
+                &path,
+                parts,
+                &alternate,
+                &state_inverse,
+                source,
+                index,
+            )?;
+            if current_image != alternate_image {
+                let mut single_cause = None;
+                for bucket in &bridge.rigidity {
+                    let Some(alternate_bucket) = &bucket.alternate_matching else {
+                        continue;
+                    };
+                    let mut single_alternate = current.clone();
+                    for (bucket_source, bucket_target) in alternate_bucket {
+                        single_alternate.insert(bucket_source.clone(), bucket_target.clone());
+                    }
+                    let single_image = hall_transport_reflection_with_matching(
+                        &path,
+                        parts,
+                        &single_alternate,
+                        &state_inverse,
+                        source,
+                        index,
+                    )?;
+                    if single_image != current_image {
+                        single_cause = Some(format!(
+                            "single content {:?} gives {}",
+                            bucket.content,
+                            format_word(&single_image)
+                        ));
+                        break;
+                    }
+                }
+                return Ok(Some(format!(
+                    "mu={parts:?}, source {}, S_{index}: current {}, simultaneous-alternate {} ({changed_buckets} changed buckets){}",
+                    format_word(source),
+                    format_word(&current_image),
+                    format_word(&alternate_image),
+                    single_cause.as_deref().map_or(
+                        "; no single bucket changes it".to_string(),
+                        |cause| format!("; {cause}")
+                    )
+                )));
+            }
+        }
+    }
+    Ok(None)
 }
 
 /// The complete statistic correction for `Gamma_(2,2)`.
@@ -9384,6 +9741,15 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
     let mut source_cycle_counts = BTreeMap::<usize, usize>::new();
     let mut target_cycle_counts = BTreeMap::<usize, usize>::new();
     let mut first_two_cycle_step = None;
+    let mut rigidity_buckets = 0usize;
+    let mut unique_rigidity_buckets = 0usize;
+    let mut rigidity_edges = 0usize;
+    let mut allowed_rigidity_edges = 0usize;
+    let mut forced_rigidity_edges = 0usize;
+    let mut max_allowed_targets = 0usize;
+    let mut first_ambiguous_bucket = None;
+    let mut ambiguous_diagrams_checked = 0usize;
+    let mut first_matching_dependent_reflection = None;
     for n in 0..=max_n {
         for parts in integer_partitions(n) {
             let bridge = HallRecursiveBumpBridge::build(&parts)?;
@@ -9394,6 +9760,31 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
             recursive_states += bridge.forward.len();
             shape_transitions.extend(hall_bridge_shape_transitions(&parts, &bridge));
             content_transitions.extend(hall_bridge_content_transitions(&bridge));
+            for bucket in &bridge.rigidity {
+                rigidity_buckets += 1;
+                unique_rigidity_buckets += usize::from(bucket.unique());
+                rigidity_edges += bucket.edges;
+                allowed_rigidity_edges += bucket.allowed_edges;
+                forced_rigidity_edges += bucket.forced_edges;
+                max_allowed_targets = max_allowed_targets.max(bucket.max_allowed_targets);
+                if !bucket.unique() && first_ambiguous_bucket.is_none() {
+                    first_ambiguous_bucket = Some(format!(
+                        "mu={parts:?}, content={:?}: {}",
+                        bucket.content,
+                        bucket
+                            .first_ambiguous_source
+                            .as_deref()
+                            .unwrap_or("alternating matching cycle")
+                    ));
+                }
+            }
+            if bridge.rigidity.iter().any(|bucket| !bucket.unique()) {
+                ambiguous_diagrams_checked += 1;
+                if first_matching_dependent_reflection.is_none() {
+                    first_matching_dependent_reflection =
+                        hall_matching_dependent_reflection(&parts, &bridge)?;
+                }
+            }
             for (source, certificate) in &bridge.forward {
                 for (depth, step) in certificate.source_steps.iter().enumerate() {
                     *source_cycle_counts.entry(step.cycles.len()).or_default() += 1;
@@ -9419,6 +9810,27 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
         first_two_cycle_step
             .as_deref()
             .map_or(String::new(), |step| format!("; first two-cycle step: {step}"))
+    );
+    println!(
+        "  matching rigidity: {unique_rigidity_buckets}/{rigidity_buckets} buckets unique; {forced_rigidity_edges}/{allowed_rigidity_edges}/{rigidity_edges} forced/allowed/candidate edges; maximum {max_allowed_targets} allowed targets per source{}",
+        first_ambiguous_bucket
+            .as_deref()
+            .map_or(String::new(), |bucket| format!("; first ambiguity: {bucket}"))
+    );
+    if max_n >= 3 {
+        match first_hall_matching_dependent_reflection()? {
+            Some(witness) => println!("  first matching-dependent transported reflection: {witness}"),
+            None => println!(
+                "  transported reflections are invariant under the first alternate matching"
+            ),
+        }
+    }
+    println!(
+        "  simultaneous alternate-matching S_i audit: {ambiguous_diagrams_checked} ambiguous diagrams checked{}",
+        first_matching_dependent_reflection.as_deref().map_or(
+            "; no transported reflection changed".to_string(),
+            |witness| format!("; first change: {witness}")
+        )
     );
     let shape_potential = hall_minimal_shape_potential(&shape_transitions)?;
     let normalized_labels = shape_transitions
@@ -10363,6 +10775,11 @@ mod tests {
         let mut bridges = BTreeMap::new();
         let mut shape_transitions = BTreeSet::new();
         let mut content_transitions = BTreeSet::new();
+        let mut rigidity_buckets = 0usize;
+        let mut unique_buckets = 0usize;
+        let mut candidate_edges = 0usize;
+        let mut allowed_edges = 0usize;
+        let mut forced_edges = 0usize;
         for n in 0..=5 {
             for parts in integer_partitions(n) {
                 let path = hall_littlewood_path(&parts).unwrap();
@@ -10375,6 +10792,23 @@ mod tests {
                 let bridge = bridges.get(&parts).unwrap();
                 shape_transitions.extend(hall_bridge_shape_transitions(&parts, bridge));
                 content_transitions.extend(hall_bridge_content_transitions(bridge));
+                for bucket in &bridge.rigidity {
+                    rigidity_buckets += 1;
+                    unique_buckets += usize::from(bucket.unique());
+                    candidate_edges += bucket.edges;
+                    allowed_edges += bucket.allowed_edges;
+                    forced_edges += bucket.forced_edges;
+                }
+                if n <= 4 {
+                    assert_eq!(hall_matching_dependent_reflection(&parts, bridge).unwrap(), None);
+                }
+                if parts == [4, 1] {
+                    let witness = hall_matching_dependent_reflection(&parts, bridge)
+                        .unwrap()
+                        .unwrap();
+                    assert!(witness.contains("source 12123, S_2"));
+                    assert!(witness.contains("current 12313"));
+                }
                 let sources = packed_words(n)
                     .into_iter()
                     .filter(|word| increases_on_edges(word, &path.strict_edges))
@@ -10550,6 +10984,9 @@ mod tests {
             }
         }
         assert_eq!(states, 1_119);
+        assert_eq!(rigidity_buckets, 107);
+        assert_eq!(unique_buckets, 70);
+        assert_eq!((forced_edges, allowed_edges, candidate_edges), (736, 2_580, 2_622));
         let potential = hall_minimal_shape_potential(&shape_transitions).unwrap();
         for (before, after, drop) in &shape_transitions {
             assert!(drop + potential[before] - potential[after] >= 0);
