@@ -1,5 +1,54 @@
 # Handoff
 
+## Completed: explicit cycle certificates and normalization obstruction — 2026-10-16
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
+Lean/paper source, or circular code is owned.
+
+Every inductive bridge step now records a deterministic minimum decomposition
+of the matrix bump into zero, one, or two simple alternating cycles, the
+intermediate bumped matrix, and the exact maximum-color row deletion.  The
+test reconstructs the intermediate matrix by applying the signed cycle
+incidences, performs the recorded deletion, and compares the result with the
+next certified residual object.  Hence cycle validity is now explicit rather
+than re-established by enumerating all radius-two candidates.  Across all
+rank-at-most-five certificates (tails counted in every containing
+certificate), source cycle counts are `{0:4854, 1:492, 2:63}` and target
+counts are `{0:4996, 1:345, 2:68}`.  The first selected two-cycle source step
+is `mu=(2,2)`, word `2134`: toggle
+`-r1c2,-r2c1,+r1c1,+r2c2`, then
+`-r1c3,-r2c4,+r1c4,+r2c3`, then delete color 4 from row 1.
+
+The signed drops cannot be converted into an ordinary bounded Carlitz code by
+adding a potential depending only on residual row shape.  Nonnegativity alone
+is feasible through rank five, but the labels range from 0 to 6.  The sharper
+bounds `0 <= label <= rank-1` hold through rank four and fail first at rank
+five.  The exact contradictory two-edge constraint uses the same shape move
+`(2,1,1,1) -> (1,1,1,1)`: one certified transition has drop 0, forcing the
+potential difference to give a label at most 4, while another has drop -6,
+forcing it to be at least 6.  Concrete witnesses are `mu=(4,1)`,
+`11112 -> 11112` (drop 0, identity bump) and
+`43214 -> 43214` (drop -6, switch
+`-r2c4,-r4c2,+r2c2,+r4c4`).  Allowing the potential also to depend on packed
+color content still has an explicit negative constraint cycle, so the bump
+choice itself carries essential code information.  The next clean-rule search
+should therefore classify the recorded zero/one/two-cycle moves rather than
+try another shape-only normalization.
+
+Current verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 24 passed, 38.79s
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
 ## Completed: inductive two-cycle Hall bridge — 2026-10-16
 
 `/root` completed and releases

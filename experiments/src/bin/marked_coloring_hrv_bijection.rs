@@ -4363,10 +4363,25 @@ fn hall_adaptive_deletion_code(
     Ok(code)
 }
 
-fn hall_bump_delete_candidates_with_radius(
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct HallAlternatingCycle {
+    removed: Vec<(usize, u8)>,
+    added: Vec<(usize, u8)>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct HallBumpDeleteWitness {
+    next_rows: Vec<Vec<u8>>,
+    bumped_rows: Vec<Vec<u8>>,
+    cycles: Vec<HallAlternatingCycle>,
+    deleted_color: u8,
+    deleted_row: usize,
+}
+
+fn hall_bump_delete_witnesses_with_radius(
     rows: &[Vec<u8>],
     max_cycles: usize,
-) -> Result<Vec<Vec<Vec<u8>>>, String> {
+) -> Result<Vec<HallBumpDeleteWitness>, String> {
     let color = rows
         .iter()
         .flatten()
@@ -4379,14 +4394,20 @@ fn hall_bump_delete_candidates_with_radius(
         .filter_map(|(row, entries)| entries.contains(&color).then_some(row))
         .collect::<Vec<_>>();
     let longest = rows.iter().map(Vec::len).max().unwrap_or(0);
-    let mut candidates = BTreeSet::new();
+    let mut witnesses = BTreeSet::new();
     for &source in &source_rows {
-        candidates.insert(hall_delete_incidence_from_row(rows, color, source)?);
+        witnesses.insert(HallBumpDeleteWitness {
+            next_rows: hall_delete_incidence_from_row(rows, color, source)?,
+            bumped_rows: rows.to_vec(),
+            cycles: Vec::new(),
+            deleted_color: color,
+            deleted_row: source,
+        });
     }
     if rows.iter().all(|row| row.len() == 1)
         || !source_rows.iter().any(|&row| rows[row].len() == longest)
     {
-        return Ok(candidates.into_iter().collect());
+        return Ok(witnesses.into_iter().collect());
     }
 
     let (parts, path, coloring) = hall_coloring_from_rows(rows)?;
@@ -4394,23 +4415,44 @@ fn hall_bump_delete_candidates_with_radius(
     for bumped in packed_words(coloring.len()).into_iter().filter(|word| {
         packed_content(word) == content && increases_on_edges(word, &path.strict_edges)
     }) {
-        if hall_min_alternating_cycles(&path, &parts, &coloring, &bumped)? > max_cycles {
+        let cycles = hall_alternating_cycle_decomposition(&path, &parts, &coloring, &bumped)?;
+        if cycles.len() > max_cycles {
             continue;
         }
         let bumped_rows = hall_chain_color_rows(&path, &parts, &bumped)?;
+        let reconstructed = hall_apply_alternating_cycles(rows, &cycles)?;
+        if reconstructed != bumped_rows {
+            return Err(format!(
+                "cycle decomposition reconstructed {reconstructed:?}, expected {bumped_rows:?}"
+            ));
+        }
         for target in bumped_rows
             .iter()
             .enumerate()
             .filter_map(|(row, entries)| entries.contains(&color).then_some(row))
         {
-            candidates.insert(hall_delete_incidence_from_row(
-                &bumped_rows,
-                color,
-                target,
-            )?);
+            witnesses.insert(HallBumpDeleteWitness {
+                next_rows: hall_delete_incidence_from_row(&bumped_rows, color, target)?,
+                bumped_rows: bumped_rows.clone(),
+                cycles: cycles.clone(),
+                deleted_color: color,
+                deleted_row: target,
+            });
         }
     }
-    Ok(candidates.into_iter().collect())
+    Ok(witnesses.into_iter().collect())
+}
+
+fn hall_bump_delete_candidates_with_radius(
+    rows: &[Vec<u8>],
+    max_cycles: usize,
+) -> Result<Vec<Vec<Vec<u8>>>, String> {
+    Ok(hall_bump_delete_witnesses_with_radius(rows, max_cycles)?
+        .into_iter()
+        .map(|witness| witness.next_rows)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect())
 }
 
 fn hall_bump_delete_candidates(rows: &[Vec<u8>]) -> Result<Vec<Vec<Vec<u8>>>, String> {
@@ -4962,6 +5004,8 @@ struct HallRecursiveBumpCertificate {
     code: HallBumpShapeCode,
     source_trace: Vec<Vec<Vec<u8>>>,
     target_trace: Vec<Vec<Vec<u8>>>,
+    source_steps: Vec<HallBumpDeleteWitness>,
+    target_steps: Vec<HallBumpDeleteWitness>,
 }
 
 #[derive(Clone)]
@@ -4992,6 +5036,8 @@ impl HallRecursiveBumpBridge {
                 code: Vec::new(),
                 source_trace: vec![Vec::new()],
                 target_trace: vec![Vec::new()],
+                source_steps: Vec::new(),
+                target_steps: Vec::new(),
             };
             memo.insert(
                 Vec::new(),
@@ -5026,7 +5072,7 @@ impl HallRecursiveBumpBridge {
                 .collect::<Result<Vec<_>, String>>()?;
             let source_next = rows
                 .iter()
-                .map(|state| hall_bump_delete_candidates_with_radius(state, 2))
+                .map(|state| hall_bump_delete_witnesses_with_radius(state, 2))
                 .collect::<Result<Vec<_>, String>>()?;
             let target_next = source_next.clone();
             let mut witnesses = vec![vec![None; states.len()]; states.len()];
@@ -5039,7 +5085,8 @@ impl HallRecursiveBumpBridge {
                     let target_before =
                         hall_rows_statistic(target_rows, HallCodeStatistic::Charge)?;
                     let mut best = None;
-                    for next_source in &source_next[source] {
+                    for source_step in &source_next[source] {
+                        let next_source = &source_step.next_rows;
                         let source_drop = source_before
                             - hall_rows_statistic(next_source, HallCodeStatistic::Source)?;
                         let (child_parts, _, child_source) =
@@ -5048,7 +5095,8 @@ impl HallRecursiveBumpBridge {
                             format!("missing child bridge for mu={child_parts:?}")
                         })?;
                         let child_certificate = child_bridge.encode(&child_source)?;
-                        for next_target in &target_next[target] {
+                        for target_step in &target_next[target] {
+                            let next_target = &target_step.next_rows;
                             if next_source.iter().map(Vec::len).collect::<Vec<_>>()
                                 != next_target.iter().map(Vec::len).collect::<Vec<_>>()
                             {
@@ -5075,16 +5123,22 @@ impl HallRecursiveBumpBridge {
                             source_trace.extend(child_certificate.source_trace.clone());
                             let mut target_trace = vec![target_rows.clone()];
                             target_trace.extend(child_certificate.target_trace.clone());
+                            let mut source_steps = vec![source_step.clone()];
+                            source_steps.extend(child_certificate.source_steps.clone());
+                            let mut target_steps = vec![target_step.clone()];
+                            target_steps.extend(child_certificate.target_steps.clone());
                             let witness = HallRecursiveBumpCertificate {
                                 partner: states[target].clone(),
                                 code,
                                 source_trace,
                                 target_trace,
+                                source_steps,
+                                target_steps,
                             };
                             let key = (
                                 witness.code.clone(),
-                                next_source.clone(),
-                                next_target.clone(),
+                                source_step.clone(),
+                                target_step.clone(),
                             );
                             if best
                                 .as_ref()
@@ -5126,6 +5180,8 @@ impl HallRecursiveBumpBridge {
                     code: certificate.code.clone(),
                     source_trace: certificate.source_trace.clone(),
                     target_trace: certificate.target_trace.clone(),
+                    source_steps: certificate.source_steps.clone(),
+                    target_steps: certificate.target_steps.clone(),
                 };
                 forward.insert(states[source].clone(), certificate);
                 inverse.insert(states[target].clone(), inverse_certificate);
@@ -5148,6 +5204,215 @@ impl HallRecursiveBumpBridge {
     }
 }
 
+type HallShapeTransition = (Vec<usize>, Vec<usize>, isize);
+
+fn hall_bridge_shape_transitions(
+    parts: &[usize],
+    bridge: &HallRecursiveBumpBridge,
+) -> BTreeSet<HallShapeTransition> {
+    let initial_shape = conjugate_parts(parts);
+    let mut transitions = BTreeSet::new();
+    for certificate in bridge.forward.values() {
+        let mut before = initial_shape.clone();
+        for (drop, after) in &certificate.code {
+            transitions.insert((before, after.clone(), *drop));
+            before = after.clone();
+        }
+    }
+    transitions
+}
+
+fn hall_minimal_shape_potential(
+    transitions: &BTreeSet<HallShapeTransition>,
+) -> Result<BTreeMap<Vec<usize>, isize>, String> {
+    let max_rank = transitions
+        .iter()
+        .map(|(before, _, _)| before.iter().sum())
+        .max()
+        .unwrap_or(0);
+    let mut potential = BTreeMap::from([(Vec::new(), 0isize)]);
+    for rank in 1..=max_rank {
+        for shape in integer_partitions(rank) {
+            let outgoing = transitions
+                .iter()
+                .filter(|(before, _, _)| before == &shape)
+                .collect::<Vec<_>>();
+            if outgoing.is_empty() {
+                continue;
+            }
+            let value = outgoing
+                .into_iter()
+                .map(|(_, after, drop)| {
+                    potential
+                        .get(after)
+                        .copied()
+                        .ok_or_else(|| format!("missing potential for residual shape {after:?}"))
+                        .map(|after_value| after_value - drop)
+                })
+                .collect::<Result<Vec<_>, String>>()?
+                .into_iter()
+                .max()
+                .expect("a constrained shape has an outgoing transition");
+            potential.insert(shape, value);
+        }
+    }
+    for (before, after, drop) in transitions {
+        let normalized = drop + potential[before] - potential[after];
+        if normalized < 0 {
+            return Err(format!(
+                "shape potential leaves negative label {normalized} on {before:?} -> {after:?}, drop {drop}"
+            ));
+        }
+    }
+    Ok(potential)
+}
+
+fn hall_bounded_transition_potential<K, F>(
+    transitions: &BTreeSet<(K, K, isize)>,
+    zero: K,
+    rank_of: F,
+    label: &str,
+) -> Result<BTreeMap<K, isize>, String>
+where
+    K: Clone + std::fmt::Debug + Ord,
+    F: Fn(&K) -> usize,
+{
+    let states = transitions
+        .iter()
+        .flat_map(|(before, after, _)| [before.clone(), after.clone()])
+        .chain([zero.clone()])
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let indices = states
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(index, state)| (state, index))
+        .collect::<BTreeMap<_, _>>();
+    let mut constraints = Vec::new();
+    for (before, after, drop) in transitions {
+        let rank = rank_of(before) as isize;
+        constraints.push((
+            indices[before],
+            indices[after],
+            *drop,
+            format!("{before:?}->{after:?}, drop {drop}, label>=0"),
+        ));
+        constraints.push((
+            indices[after],
+            indices[before],
+            rank - 1 - drop,
+            format!("{before:?}->{after:?}, drop {drop}, label<={}", rank - 1),
+        ));
+    }
+    let mut values = vec![0isize; states.len()];
+    let mut predecessor = vec![None; states.len()];
+    for pass in 0..states.len() {
+        let mut changed = None;
+        for (edge, &(from, to, bound, _)) in constraints.iter().enumerate() {
+            if values[to] > values[from] + bound {
+                values[to] = values[from] + bound;
+                predecessor[to] = Some(edge);
+                changed = Some(to);
+            }
+        }
+        if changed.is_none() {
+            break;
+        }
+        if pass + 1 == states.len() {
+            let mut vertex = changed.unwrap();
+            for _ in 0..states.len() {
+                let edge = predecessor[vertex]
+                    .expect("a repeatedly relaxed vertex has a predecessor constraint");
+                vertex = constraints[edge].0;
+            }
+            let start = vertex;
+            let mut cycle = Vec::new();
+            loop {
+                let edge = predecessor[vertex]
+                    .expect("a negative-cycle vertex has a predecessor constraint");
+                cycle.push(constraints[edge].3.clone());
+                vertex = constraints[edge].0;
+                if vertex == start {
+                    break;
+                }
+            }
+            cycle.reverse();
+            return Err(format!(
+                "no {label} potential gives Carlitz bounds; contradictory cycle: {}",
+                cycle.join("; ")
+            ));
+        }
+    }
+    let zero_value = values[indices[&zero]];
+    let potential = states
+        .into_iter()
+        .zip(values)
+        .map(|(state, value)| (state, value - zero_value))
+        .collect::<BTreeMap<_, _>>();
+    for (before, after, drop) in transitions {
+        let rank = rank_of(before) as isize;
+        let label = drop + potential[before] - potential[after];
+        if !(0..rank).contains(&label) {
+            return Err(format!(
+                "bounded potential produced label {label} outside 0..{rank} on {before:?} -> {after:?}, drop {drop}"
+            ));
+        }
+    }
+    Ok(potential)
+}
+
+fn hall_carlitz_bounded_shape_potential(
+    transitions: &BTreeSet<HallShapeTransition>,
+) -> Result<BTreeMap<Vec<usize>, isize>, String> {
+    hall_bounded_transition_potential(
+        transitions,
+        Vec::new(),
+        |shape| shape.iter().sum(),
+        "shape-only",
+    )
+}
+
+type HallContentState = (Vec<usize>, Vec<usize>);
+type HallContentTransition = (HallContentState, HallContentState, isize);
+
+fn hall_rows_content(rows: &[Vec<u8>]) -> Vec<usize> {
+    packed_content(&rows.iter().flatten().copied().collect::<Vec<_>>())
+}
+
+fn hall_bridge_content_transitions(
+    bridge: &HallRecursiveBumpBridge,
+) -> BTreeSet<HallContentTransition> {
+    let mut transitions = BTreeSet::new();
+    for certificate in bridge.forward.values() {
+        for (trace, (drop, after_shape)) in
+            certificate.source_trace.windows(2).zip(&certificate.code)
+        {
+            transitions.insert((
+                (
+                    trace[0].iter().map(Vec::len).collect(),
+                    hall_rows_content(&trace[0]),
+                ),
+                (after_shape.clone(), hall_rows_content(&trace[1])),
+                *drop,
+            ));
+        }
+    }
+    transitions
+}
+
+fn hall_carlitz_bounded_content_potential(
+    transitions: &BTreeSet<HallContentTransition>,
+) -> Result<BTreeMap<HallContentState, isize>, String> {
+    hall_bounded_transition_potential(
+        transitions,
+        (Vec::new(), Vec::new()),
+        |(shape, _)| shape.iter().sum(),
+        "shape-and-content",
+    )
+}
+
 fn format_hall_bump_trace(trace: &[Vec<Vec<u8>>]) -> String {
     trace
         .iter()
@@ -5166,6 +5431,38 @@ fn format_hall_bump_trace(trace: &[Vec<Vec<u8>>]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" -> ")
+}
+
+fn format_hall_bump_step(witness: &HallBumpDeleteWitness) -> String {
+    let cycles = if witness.cycles.is_empty() {
+        "identity".to_string()
+    } else {
+        witness
+            .cycles
+            .iter()
+            .map(|cycle| {
+                let removed = cycle
+                    .removed
+                    .iter()
+                    .map(|&(row, color)| format!("r{}c{}", row + 1, color + 1))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let added = cycle
+                    .added
+                    .iter()
+                    .map(|&(row, color)| format!("r{}c{}", row + 1, color + 1))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("-{removed}+{added}")
+            })
+            .collect::<Vec<_>>()
+            .join("; ")
+    };
+    format!(
+        "cycles {cycles}; delete c{} from r{}",
+        witness.deleted_color + 1,
+        witness.deleted_row + 1
+    )
 }
 
 /// Dual RSK for the 0--1 matrix with rows=strict chains and columns=colors.
@@ -5437,21 +5734,20 @@ fn hall_trade_cycle_rank(
     Ok(difference.len() - row_to_colors.len() - color_to_rows.len() + components)
 }
 
-/// Minimum number of simple alternating cycles whose successive toggles carry
-/// `left` to `right`.
-fn hall_min_alternating_cycles(
+/// A deterministic minimum decomposition into simple alternating cycles.
+fn hall_alternating_cycle_decomposition(
     path: &PathData,
     parts: &[usize],
     left: &[u8],
     right: &[u8],
-) -> Result<usize, String> {
+) -> Result<Vec<HallAlternatingCycle>, String> {
     let chains = hall_strict_chains(path, parts)?;
     let left = hall_matrix_incidence(&chains, left);
     let right = hall_matrix_incidence(&chains, right);
     let left_only = left.difference(&right).copied().collect::<Vec<_>>();
     let right_only = right.difference(&left).copied().collect::<Vec<_>>();
     if left_only.is_empty() {
-        return Ok(0);
+        return Ok(Vec::new());
     }
     if left_only.len() != right_only.len() || left_only.len() >= usize::BITS as usize / 2 {
         return Err("incidence trade is too large or has unequal signed sides".into());
@@ -5510,6 +5806,8 @@ fn hall_min_alternating_cycles(
             }
         }
     }
+    cycles.sort_unstable();
+    cycles.dedup();
 
     fn cover(mask: usize, cycles: &[usize], memo: &mut [usize]) -> usize {
         if mask == 0 {
@@ -5537,12 +5835,100 @@ fn hall_min_alternating_cycles(
     memo[0] = 0;
     let answer = cover(all, &cycles, &mut memo);
     if answer == usize::MAX {
-        Err(format!(
+        return Err(format!(
             "could not decompose incidence trade {left_only:?} -> {right_only:?}"
-        ))
-    } else {
-        Ok(answer)
+        ));
     }
+    let mut mask = all;
+    let mut selected = Vec::with_capacity(answer);
+    while mask != 0 {
+        let first = mask.trailing_zeros() as usize;
+        let cycle = cycles
+            .iter()
+            .copied()
+            .find(|&cycle| {
+                cycle & (1usize << first) != 0
+                    && cycle & mask == cycle
+                    && memo[mask ^ cycle] != usize::MAX
+                    && memo[mask] == 1 + memo[mask ^ cycle]
+            })
+            .expect("the dynamic program supplies a minimum cycle cover");
+        let left_mask = cycle & ((1usize << half) - 1);
+        let right_mask = cycle >> half;
+        selected.push(HallAlternatingCycle {
+            removed: left_only
+                .iter()
+                .enumerate()
+                .filter_map(|(index, &edge)| {
+                    (left_mask & (1usize << index) != 0).then_some(edge)
+                })
+                .collect(),
+            added: right_only
+                .iter()
+                .enumerate()
+                .filter_map(|(index, &edge)| {
+                    (right_mask & (1usize << index) != 0).then_some(edge)
+                })
+                .collect(),
+        });
+        mask ^= cycle;
+    }
+    Ok(selected)
+}
+
+/// Minimum number of simple alternating cycles whose successive toggles carry
+/// `left` to `right`.
+fn hall_min_alternating_cycles(
+    path: &PathData,
+    parts: &[usize],
+    left: &[u8],
+    right: &[u8],
+) -> Result<usize, String> {
+    Ok(hall_alternating_cycle_decomposition(path, parts, left, right)?.len())
+}
+
+fn hall_apply_alternating_cycles(
+    rows: &[Vec<u8>],
+    cycles: &[HallAlternatingCycle],
+) -> Result<Vec<Vec<u8>>, String> {
+    let mut incidence = rows
+        .iter()
+        .map(|row| row.iter().copied().collect::<BTreeSet<_>>())
+        .collect::<Vec<_>>();
+    for cycle in cycles {
+        for &(row, color) in &cycle.removed {
+            let entries = incidence
+                .get_mut(row)
+                .ok_or_else(|| format!("cycle removes color {color} from absent row {row}"))?;
+            if !entries.remove(&color) {
+                return Err(format!(
+                    "cycle removes absent incidence ({row},{color}) from {rows:?}"
+                ));
+            }
+        }
+        for &(row, color) in &cycle.added {
+            let entries = incidence
+                .get_mut(row)
+                .ok_or_else(|| format!("cycle adds color {color} to absent row {row}"))?;
+            if !entries.insert(color) {
+                return Err(format!(
+                    "cycle adds duplicate incidence ({row},{color}) to {rows:?}"
+                ));
+            }
+        }
+    }
+    let result = incidence
+        .into_iter()
+        .map(|row| row.into_iter().collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    if result.iter().map(Vec::len).collect::<Vec<_>>()
+        != rows.iter().map(Vec::len).collect::<Vec<_>>()
+    {
+        return Err(format!(
+            "alternating cycles changed row margins: {rows:?} -> {result:?}"
+        ));
+    }
+    Ok(result)
 }
 
 #[derive(Default)]
@@ -8993,6 +9379,11 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
     }
     let mut recursive_diagrams = 0usize;
     let mut recursive_states = 0usize;
+    let mut shape_transitions = BTreeSet::new();
+    let mut content_transitions = BTreeSet::new();
+    let mut source_cycle_counts = BTreeMap::<usize, usize>::new();
+    let mut target_cycle_counts = BTreeMap::<usize, usize>::new();
+    let mut first_two_cycle_step = None;
     for n in 0..=max_n {
         for parts in integer_partitions(n) {
             let bridge = HallRecursiveBumpBridge::build(&parts)?;
@@ -9001,11 +9392,54 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
             }
             recursive_diagrams += 1;
             recursive_states += bridge.forward.len();
+            shape_transitions.extend(hall_bridge_shape_transitions(&parts, &bridge));
+            content_transitions.extend(hall_bridge_content_transitions(&bridge));
+            for (source, certificate) in &bridge.forward {
+                for (depth, step) in certificate.source_steps.iter().enumerate() {
+                    *source_cycle_counts.entry(step.cycles.len()).or_default() += 1;
+                    if step.cycles.len() == 2 && first_two_cycle_step.is_none() {
+                        first_two_cycle_step = Some(format!(
+                            "mu={parts:?}, source {}, depth {depth}: {}",
+                            format_word(source),
+                            format_hall_bump_step(step)
+                        ));
+                    }
+                }
+                for step in &certificate.target_steps {
+                    *target_cycle_counts.entry(step.cycles.len()).or_default() += 1;
+                }
+            }
         }
     }
     println!(
         "Inductive two-cycle shape bridge ranks 0..={max_n}: {recursive_diagrams} diagrams, {recursive_states} reversible states"
     );
+    println!(
+        "  explicit cycle counts source {source_cycle_counts:?}, target {target_cycle_counts:?}{}",
+        first_two_cycle_step
+            .as_deref()
+            .map_or(String::new(), |step| format!("; first two-cycle step: {step}"))
+    );
+    let shape_potential = hall_minimal_shape_potential(&shape_transitions)?;
+    let normalized_labels = shape_transitions
+        .iter()
+        .map(|(before, after, drop)| drop + shape_potential[before] - shape_potential[after])
+        .collect::<BTreeSet<_>>();
+    println!(
+        "Minimal nonnegative shape potential: {:?}; normalized labels {:?}",
+        shape_potential, normalized_labels
+    );
+    match hall_carlitz_bounded_shape_potential(&shape_transitions) {
+        Ok(potential) => println!("Carlitz-bounded shape potential: {potential:?}"),
+        Err(error) => println!("Carlitz-bounded shape potential obstruction: {error}"),
+    }
+    match hall_carlitz_bounded_content_potential(&content_transitions) {
+        Ok(potential) => println!(
+            "Carlitz-bounded shape-and-content potential exists on {} residual states",
+            potential.len()
+        ),
+        Err(error) => println!("Carlitz-bounded shape-and-content obstruction: {error}"),
+    }
     if max_n >= 4 {
         let parts = [3, 1];
         let source = vec![2, 0, 1, 3];
@@ -9029,6 +9463,35 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
             "  target charge-drop trace: {}",
             format_hall_bump_trace(&certificate.target_trace)
         );
+        println!(
+            "  first source move: {}",
+            format_hall_bump_step(&certificate.source_steps[0])
+        );
+        println!(
+            "  first target move: {}",
+            format_hall_bump_step(&certificate.target_steps[0])
+        );
+    }
+    if max_n >= 5 {
+        let parts = [4, 1];
+        let bridge = HallRecursiveBumpBridge::build(&parts)?;
+        for sought_drop in [0, -6] {
+            let (source, certificate) = bridge
+                .forward
+                .iter()
+                .find(|(_, certificate)| {
+                    certificate.code.first()
+                        == Some(&(sought_drop, vec![1, 1, 1, 1]))
+                })
+                .ok_or_else(|| format!("missing shape-potential witness with drop {sought_drop}"))?;
+            println!(
+                "  shape-potential obstruction drop {sought_drop}: {} -> {}, content {:?}; source move {}",
+                format_word(source),
+                format_word(&certificate.partner),
+                packed_content(source),
+                format_hall_bump_step(&certificate.source_steps[0])
+            );
+        }
     }
     let max_last = HallCodeRule::Fixed(HallDeletionPolicy {
         extreme: HallDeletionExtreme::Largest,
@@ -9898,6 +10361,8 @@ mod tests {
     fn recursive_shape_bump_code_bridge_round_trips_through_rank_five() {
         let mut states = 0usize;
         let mut bridges = BTreeMap::new();
+        let mut shape_transitions = BTreeSet::new();
+        let mut content_transitions = BTreeSet::new();
         for n in 0..=5 {
             for parts in integer_partitions(n) {
                 let path = hall_littlewood_path(&parts).unwrap();
@@ -9908,6 +10373,8 @@ mod tests {
                     .sum::<usize>();
                 bridges.insert(parts.clone(), HallRecursiveBumpBridge::build(&parts).unwrap());
                 let bridge = bridges.get(&parts).unwrap();
+                shape_transitions.extend(hall_bridge_shape_transitions(&parts, bridge));
+                content_transitions.extend(hall_bridge_content_transitions(bridge));
                 let sources = packed_words(n)
                     .into_iter()
                     .filter(|word| increases_on_edges(word, &path.strict_edges))
@@ -9941,6 +10408,8 @@ mod tests {
                         hall_rows_statistic(&target_rows, HallCodeStatistic::Charge).unwrap();
                     let code_sum = certificate.code.iter().map(|step| step.0).sum::<isize>();
                     assert_eq!(certificate.code.len(), n);
+                    assert_eq!(certificate.source_steps.len(), n);
+                    assert_eq!(certificate.target_steps.len(), n);
                     assert_eq!(code_sum, source_core, "mu={parts:?}, source={source:?}");
                     assert_eq!(code_sum, target_charge, "mu={parts:?}, source={source:?}");
 
@@ -10010,6 +10479,36 @@ mod tests {
                         .zip(&certificate.code)
                         .enumerate()
                     {
+                        let source_witness = &certificate.source_steps[index];
+                        let target_witness = &certificate.target_steps[index];
+                        for (trace_step, witness) in [
+                            (source_step, source_witness),
+                            (target_step, target_witness),
+                        ] {
+                            assert_eq!(witness.next_rows, trace_step[1]);
+                            assert!(witness.cycles.len() <= 2);
+                            assert_eq!(
+                                hall_apply_alternating_cycles(
+                                    &trace_step[0],
+                                    &witness.cycles
+                                )
+                                .unwrap(),
+                                witness.bumped_rows
+                            );
+                            assert_eq!(
+                                hall_delete_incidence_from_row(
+                                    &witness.bumped_rows,
+                                    witness.deleted_color,
+                                    witness.deleted_row,
+                                )
+                                .unwrap(),
+                                witness.next_rows
+                            );
+                            assert_eq!(
+                                witness.deleted_color,
+                                trace_step[0].iter().flatten().copied().max().unwrap()
+                            );
+                        }
                         assert!(
                             hall_bump_delete_candidates_with_radius(&source_step[0], 2)
                                 .unwrap()
@@ -10051,5 +10550,27 @@ mod tests {
             }
         }
         assert_eq!(states, 1_119);
+        let potential = hall_minimal_shape_potential(&shape_transitions).unwrap();
+        for (before, after, drop) in &shape_transitions {
+            assert!(drop + potential[before] - potential[after] >= 0);
+        }
+        let rank_four = shape_transitions
+            .iter()
+            .filter(|(before, _, _)| before.iter().sum::<usize>() <= 4)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        assert!(hall_carlitz_bounded_shape_potential(&rank_four).is_ok());
+        assert!(hall_carlitz_bounded_shape_potential(&shape_transitions)
+            .unwrap_err()
+            .contains("contradictory cycle"));
+        let rank_four_content = content_transitions
+            .iter()
+            .filter(|((shape, _), _, _)| shape.iter().sum::<usize>() <= 4)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        assert!(hall_carlitz_bounded_content_potential(&rank_four_content).is_ok());
+        assert!(hall_carlitz_bounded_content_potential(&content_transitions)
+            .unwrap_err()
+            .contains("contradictory cycle"));
     }
 }
