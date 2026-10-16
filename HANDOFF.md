@@ -1,5 +1,39 @@
 # Handoff
 
+## Active: ordinary coloring crystal shortcut audit — 2026-10-16
+
+`/root` owns only
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  The current bounded
+task uses the already transported tableau crystal to test whether `e_i`,
+`f_i`, or `S_i` can be read directly from the induced two-color subgraph,
+independently of all other colors.  No shared library, Lean/paper source, or
+circular code is owned.
+
+## Completed: plethystic crystal descent obstruction — 2026-10-16
+
+`/root` completed and releases the same experiment file and handoff.  The
+ordinary transported `S_i`, with bar positions held fixed, does not descend
+through the Haglund--Xin cancellation: through rank three it preserves proper
+colorings in only 76/80 cases, signed degree in 680/736 cases, and commutes
+with the involution in 624/736 cases.  The first closure failure is on
+`NNENEE`, `121 -> 122`; the first degree failure is on `NNNEEE`,
+`bar(1) 1 2 -> bar(1) 2 2`, changing degree 5 to 4.
+
+Encoding `bar(i),i` as adjacent ordinary letters and applying the reduced
+block-swap word `s_(2i) s_(2i-1) s_(2i+1) s_(2i)` also fails first at rank
+three.  It preserves properness in 584/624 cases, signed degree in 720/736,
+and commutes in 608/736.  This is a structural, not merely ordering,
+obstruction: an equal barred pair contributes a signed ascent, whereas equal
+ordinary letters never contribute an ordinary ascent.  Any later signed
+crystal attempt must therefore use the odd/even equality rules of super
+tableaux (or an involution-principle transfer), rather than another ordinary
+alphabet block permutation.  Muth's cached super-RSK source
+`1711.00420v1` confirms the relevant convention: odd letters are row-strict
+and column-weak, while even letters are row-weak and column-strict.  The CLI
+flag `--plethystic-crystal-report` and a rank-three regression retain the exact
+counterexamples.
+
 ## Completed: ordinary flip transport experiment — 2026-10-16
 
 `/root` completed and releases

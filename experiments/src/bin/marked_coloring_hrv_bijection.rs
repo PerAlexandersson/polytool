@@ -121,6 +121,10 @@ struct Args {
     #[arg(long)]
     plethystic_report: bool,
 
+    /// Test whether transported S_i descends through plethystic cancellation.
+    #[arg(long)]
+    plethystic_crystal_report: bool,
+
     /// Push ordinary orientation-flip components through the coloring/HRV bijection.
     #[arg(long)]
     flip_report: bool,
@@ -4099,14 +4103,20 @@ struct InvolutionPrincipleCertificate {
     trace: Vec<String>,
 }
 
-fn coloring_to_surviving_tableau(
+fn arbitrary_coloring_to_surviving_tableau(
     matcher: &mut RecursiveMatcher,
     schur: &SchurCancellation,
     path: &PathData,
     coloring: &[u8],
     keep_trace: bool,
 ) -> Result<InvolutionPrincipleCertificate, String> {
-    validate_packed_word(coloring, path.n)?;
+    if coloring.len() != path.n {
+        return Err(format!(
+            "word length {} differs from rank {}",
+            coloring.len(),
+            path.n
+        ));
+    }
     if !increases_on_edges(coloring, &path.strict_edges) {
         return Err("coloring violates a strict edge".into());
     }
@@ -4164,7 +4174,18 @@ fn coloring_to_surviving_tableau(
     })
 }
 
-fn surviving_tableau_to_coloring(
+fn coloring_to_surviving_tableau(
+    matcher: &mut RecursiveMatcher,
+    schur: &SchurCancellation,
+    path: &PathData,
+    coloring: &[u8],
+    keep_trace: bool,
+) -> Result<InvolutionPrincipleCertificate, String> {
+    validate_packed_word(coloring, path.n)?;
+    arbitrary_coloring_to_surviving_tableau(matcher, schur, path, coloring, keep_trace)
+}
+
+fn arbitrary_surviving_tableau_to_coloring(
     matcher: &mut RecursiveMatcher,
     schur: &SchurCancellation,
     path: &PathData,
@@ -4179,7 +4200,6 @@ fn surviving_tableau_to_coloring(
         let signed = tableau_to_signed_source(matcher, path, &state)?;
         let ascents = edge_ascent_mask(&signed.source.coloring, &path.normal_edges);
         if signed.source.marked_mask == ascents && signed.retained_mask == ascents {
-            validate_packed_word(&signed.source.coloring, path.n)?;
             return Ok(signed.source.coloring);
         }
         state = signed_tableau_involution(matcher, path, &state)?;
@@ -4189,6 +4209,17 @@ fn surviving_tableau_to_coloring(
             return Err("inverse alternating path entered a cycle".into());
         }
     }
+}
+
+fn surviving_tableau_to_coloring(
+    matcher: &mut RecursiveMatcher,
+    schur: &SchurCancellation,
+    path: &PathData,
+    target: &SignedTableauState,
+) -> Result<Vec<u8>, String> {
+    let coloring = arbitrary_surviving_tableau_to_coloring(matcher, schur, path, target)?;
+    validate_packed_word(&coloring, path.n)?;
+    Ok(coloring)
 }
 
 fn transported_simple_reflection(
@@ -4218,6 +4249,71 @@ fn transported_reflection_word(
         result = transported_simple_reflection(matcher, schur, path, &result, index)?;
     }
     Ok(result)
+}
+
+fn plethystic_signed_rank_word(state: &PlethysticSignedColoring) -> Result<Vec<u8>, String> {
+    state
+        .coloring
+        .iter()
+        .enumerate()
+        .map(|(vertex, &color)| {
+            let rank = 2usize * usize::from(color)
+                + usize::from(state.barred_mask & (1u64 << vertex) == 0);
+            u8::try_from(rank).map_err(|_| "signed alphabet rank does not fit u8".to_string())
+        })
+        .collect()
+}
+
+fn plethystic_from_signed_rank_word(word: &[u8]) -> PlethysticSignedColoring {
+    let mut barred_mask = 0u64;
+    let coloring = word
+        .iter()
+        .enumerate()
+        .map(|(vertex, &rank)| {
+            if rank % 2 == 0 {
+                barred_mask |= 1u64 << vertex;
+            }
+            rank / 2
+        })
+        .collect();
+    PlethysticSignedColoring {
+        coloring,
+        barred_mask,
+    }
+}
+
+/// Swap the adjacent signed-alphabet blocks
+/// `(bar(i), i) <-> (bar(i+1), i+1)` by the reduced Weyl word
+/// `s_(2i) s_(2i-1) s_(2i+1) s_(2i)`.
+fn plethystic_block_reflection(
+    matcher: &mut RecursiveMatcher,
+    schur: &SchurCancellation,
+    path: &PathData,
+    state: &PlethysticSignedColoring,
+    index: u32,
+) -> Result<PlethysticSignedColoring, String> {
+    plethystic_signed_degree(path, state)?;
+    if index == 0 {
+        return Err("plethystic block reflection index must be positive".into());
+    }
+    let signed_word = plethystic_signed_rank_word(state)?;
+    let certificate =
+        arbitrary_coloring_to_surviving_tableau(matcher, schur, path, &signed_word, false)?;
+    let mut tableau = certificate.target;
+    for simple in [2 * index, 2 * index - 1, 2 * index + 1, 2 * index] {
+        tableau = tableau_simple_reflection(path, &tableau, simple)?;
+        if !schur.is_fixed(&tableau) {
+            return Err("signed block reflection left the surviving skeleton".into());
+        }
+    }
+    let reflected_word =
+        arbitrary_surviving_tableau_to_coloring(matcher, schur, path, &tableau)?;
+    let reflected = plethystic_from_signed_rank_word(&reflected_word);
+    validate_packed_word(&reflected.coloring, path.n)?;
+    if reflected.barred_mask.count_ones() != state.barred_mask.count_ones() {
+        return Err("signed block reflection changed the number of bars".into());
+    }
+    Ok(reflected)
 }
 
 fn packed_semistandard_tableaux(shape: &[usize], n: usize) -> Vec<Tableau> {
@@ -10548,6 +10644,286 @@ fn print_plethystic_report(max_n: usize) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Clone, Debug, Default)]
+struct PlethysticCrystalAudit {
+    paths: usize,
+    absolute_reflections: usize,
+    proper_reflections: usize,
+    proper_closed: usize,
+    signed_reflections: usize,
+    signed_degree_preserved: usize,
+    involution_commuting: usize,
+    block_signed_reflections: usize,
+    block_signed_degree_preserved: usize,
+    block_involution_commuting: usize,
+    block_proper_states: usize,
+    block_proper_closed: usize,
+    first_proper_closure_failure: Option<String>,
+    first_signed_degree_failure: Option<String>,
+    first_involution_commutation_failure: Option<String>,
+    first_block_signed_degree_failure: Option<String>,
+    first_block_involution_commutation_failure: Option<String>,
+    first_block_proper_closure_failure: Option<String>,
+}
+
+impl PlethysticCrystalAudit {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        self.absolute_reflections += other.absolute_reflections;
+        self.proper_reflections += other.proper_reflections;
+        self.proper_closed += other.proper_closed;
+        self.signed_reflections += other.signed_reflections;
+        self.signed_degree_preserved += other.signed_degree_preserved;
+        self.involution_commuting += other.involution_commuting;
+        self.block_signed_reflections += other.block_signed_reflections;
+        self.block_signed_degree_preserved += other.block_signed_degree_preserved;
+        self.block_involution_commuting += other.block_involution_commuting;
+        self.block_proper_states += other.block_proper_states;
+        self.block_proper_closed += other.block_proper_closed;
+        if self.first_proper_closure_failure.is_none() {
+            self.first_proper_closure_failure = other.first_proper_closure_failure;
+        }
+        if self.first_signed_degree_failure.is_none() {
+            self.first_signed_degree_failure = other.first_signed_degree_failure;
+        }
+        if self.first_involution_commutation_failure.is_none() {
+            self.first_involution_commutation_failure =
+                other.first_involution_commutation_failure;
+        }
+        if self.first_block_signed_degree_failure.is_none() {
+            self.first_block_signed_degree_failure = other.first_block_signed_degree_failure;
+        }
+        if self.first_block_involution_commutation_failure.is_none() {
+            self.first_block_involution_commutation_failure =
+                other.first_block_involution_commutation_failure;
+        }
+        if self.first_block_proper_closure_failure.is_none() {
+            self.first_block_proper_closure_failure = other.first_block_proper_closure_failure;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "plethystic crystal audit {label}: {} paths, {} transported reflections; proper closure {}/{}; fixed-bar signed degree {}/{}; commutation with Haglund--Xin involution {}/{}",
+            self.paths,
+            self.absolute_reflections,
+            self.proper_closed,
+            self.proper_reflections,
+            self.signed_degree_preserved,
+            self.signed_reflections,
+            self.involution_commuting,
+            self.signed_reflections
+        );
+        println!(
+            "signed-block crystal {label}: proper closure {}/{}; signed degree {}/{}; commutation with Haglund--Xin involution {}/{}",
+            self.block_proper_closed,
+            self.block_proper_states,
+            self.block_signed_degree_preserved,
+            self.block_signed_reflections,
+            self.block_involution_commuting,
+            self.block_signed_reflections
+        );
+        if let Some(failure) = &self.first_proper_closure_failure {
+            println!("  first proper-closure failure: {failure}");
+        }
+        if let Some(failure) = &self.first_signed_degree_failure {
+            println!("  first fixed-bar degree failure: {failure}");
+        }
+        if let Some(failure) = &self.first_involution_commutation_failure {
+            println!("  first involution-commutation failure: {failure}");
+        }
+        if let Some(failure) = &self.first_block_proper_closure_failure {
+            println!("  first signed-block proper-closure failure: {failure}");
+        }
+        if let Some(failure) = &self.first_block_signed_degree_failure {
+            println!("  first signed-block degree failure: {failure}");
+        }
+        if let Some(failure) = &self.first_block_involution_commutation_failure {
+            println!("  first signed-block commutation failure: {failure}");
+        }
+    }
+}
+
+fn audit_plethystic_crystals_for_path(
+    path: &PathData,
+) -> Result<PlethysticCrystalAudit, String> {
+    if !path.strict_edges.is_empty() {
+        return Err("plethystic crystal audit expects an undecorated Dyck path".into());
+    }
+    if path.n >= 64 {
+        return Err("plethystic crystal audit requires rank below 64".into());
+    }
+    let mut audit = PlethysticCrystalAudit {
+        paths: 1,
+        ..PlethysticCrystalAudit::default()
+    };
+    let schur = SchurCancellation::build(path)?;
+    let mut matcher = RecursiveMatcher::default();
+    for coloring in packed_words(path.n) {
+        let alphabet_size = color_content(&coloring).len();
+        for index in 1..alphabet_size as u32 {
+            let reflected = transported_simple_reflection(
+                &mut matcher,
+                &schur,
+                path,
+                &coloring,
+                index,
+            )?;
+            audit.absolute_reflections += 1;
+            if is_proper_coloring(path, &coloring) {
+                audit.proper_reflections += 1;
+                if is_proper_coloring(path, &reflected) {
+                    audit.proper_closed += 1;
+                } else if audit.first_proper_closure_failure.is_none() {
+                    audit.first_proper_closure_failure = Some(format!(
+                        "path {}, S_{}: {} -> {}",
+                        path.word(),
+                        index,
+                        format_word(&coloring),
+                        format_word(&reflected)
+                    ));
+                }
+            }
+
+            let mut block_reflections = BTreeMap::new();
+            for barred_mask in 0..(1u64 << path.n) {
+                let state = PlethysticSignedColoring {
+                    coloring: coloring.clone(),
+                    barred_mask,
+                };
+                let block_reflected =
+                    plethystic_block_reflection(&mut matcher, &schur, path, &state, index)?;
+                block_reflections.insert(barred_mask, block_reflected);
+            }
+
+            for barred_mask in 0..(1u64 << path.n) {
+                let state = PlethysticSignedColoring {
+                    coloring: coloring.clone(),
+                    barred_mask,
+                };
+                let reflected_state = PlethysticSignedColoring {
+                    coloring: reflected.clone(),
+                    barred_mask,
+                };
+                audit.signed_reflections += 1;
+                let source_degree = plethystic_signed_degree(path, &state)?;
+                let reflected_degree = plethystic_signed_degree(path, &reflected_state)?;
+                if source_degree == reflected_degree {
+                    audit.signed_degree_preserved += 1;
+                } else if audit.first_signed_degree_failure.is_none() {
+                    audit.first_signed_degree_failure = Some(format!(
+                        "path {}, S_{}: {} (degree {}) -> {} (degree {})",
+                        path.word(),
+                        index,
+                        format_plethystic_signed_coloring(&state),
+                        source_degree,
+                        format_plethystic_signed_coloring(&reflected_state),
+                        reflected_degree
+                    ));
+                }
+
+                let after_then_cancel = plethystic_signed_partner(path, &reflected_state)?;
+                let cancel_then_after = plethystic_signed_partner(path, &state)?.map(|partner| {
+                    PlethysticSignedColoring {
+                        coloring: reflected.clone(),
+                        barred_mask: partner.barred_mask,
+                    }
+                });
+                if after_then_cancel == cancel_then_after {
+                    audit.involution_commuting += 1;
+                } else if audit.first_involution_commutation_failure.is_none() {
+                    audit.first_involution_commutation_failure = Some(format!(
+                        "path {}, S_{} on {} -> {}; cancel-after {:?}, reflect-after-cancel {:?}",
+                        path.word(),
+                        index,
+                        format_plethystic_signed_coloring(&state),
+                        format_plethystic_signed_coloring(&reflected_state),
+                        after_then_cancel
+                            .as_ref()
+                            .map(format_plethystic_signed_coloring),
+                        cancel_then_after
+                            .as_ref()
+                            .map(format_plethystic_signed_coloring)
+                    ));
+                }
+
+                let block_reflected = &block_reflections[&barred_mask];
+                audit.block_signed_reflections += 1;
+                if is_proper_coloring(path, &coloring) {
+                    audit.block_proper_states += 1;
+                    if is_proper_coloring(path, &block_reflected.coloring) {
+                        audit.block_proper_closed += 1;
+                    } else if audit.first_block_proper_closure_failure.is_none() {
+                        audit.first_block_proper_closure_failure = Some(format!(
+                            "path {}, block S_{}: {} -> {}",
+                            path.word(),
+                            index,
+                            format_plethystic_signed_coloring(&state),
+                            format_plethystic_signed_coloring(block_reflected)
+                        ));
+                    }
+                }
+                let block_degree = plethystic_signed_degree(path, block_reflected)?;
+                if source_degree == block_degree {
+                    audit.block_signed_degree_preserved += 1;
+                } else if audit.first_block_signed_degree_failure.is_none() {
+                    audit.first_block_signed_degree_failure = Some(format!(
+                        "path {}, block S_{}: {} (degree {}) -> {} (degree {})",
+                        path.word(),
+                        index,
+                        format_plethystic_signed_coloring(&state),
+                        source_degree,
+                        format_plethystic_signed_coloring(block_reflected),
+                        block_degree
+                    ));
+                }
+                let block_after_then_cancel =
+                    plethystic_signed_partner(path, block_reflected)?;
+                let block_cancel_then_after = plethystic_signed_partner(path, &state)?
+                    .map(|partner| block_reflections[&partner.barred_mask].clone());
+                if block_after_then_cancel == block_cancel_then_after {
+                    audit.block_involution_commuting += 1;
+                } else if audit
+                    .first_block_involution_commutation_failure
+                    .is_none()
+                {
+                    audit.first_block_involution_commutation_failure = Some(format!(
+                        "path {}, block S_{} on {} -> {}; cancel-after {:?}, reflect-after-cancel {:?}",
+                        path.word(),
+                        index,
+                        format_plethystic_signed_coloring(&state),
+                        format_plethystic_signed_coloring(block_reflected),
+                        block_after_then_cancel
+                            .as_ref()
+                            .map(format_plethystic_signed_coloring),
+                        block_cancel_then_after
+                            .as_ref()
+                            .map(format_plethystic_signed_coloring)
+                    ));
+                }
+            }
+        }
+    }
+    Ok(audit)
+}
+
+fn print_plethystic_crystal_report(max_n: usize) -> Result<(), String> {
+    let mut total = PlethysticCrystalAudit::default();
+    for n in 0..=max_n {
+        let mut rank = PlethysticCrystalAudit::default();
+        for path in all_paths(n)
+            .into_iter()
+            .filter(|path| path.strict_edges.is_empty())
+        {
+            rank.absorb(audit_plethystic_crystals_for_path(&path)?);
+        }
+        rank.print(&format!("rank {n}"));
+        total.absorb(rank);
+    }
+    total.print(&format!("ranks 0..={max_n}"));
+    Ok(())
+}
+
 impl BooleanAudit {
     fn absorb(&mut self, other: Self) {
         self.skeletons += other.skeletons;
@@ -11809,6 +12185,10 @@ fn run(args: Args) -> Result<(), String> {
         print_plethystic_report(args.max_n)?;
         return Ok(());
     }
+    if args.plethystic_crystal_report {
+        print_plethystic_crystal_report(args.max_n)?;
+        return Ok(());
+    }
     if args.flip_report {
         if let Some(word) = args.path.as_deref() {
             let path = PathData::parse(word)?;
@@ -12216,6 +12596,53 @@ mod tests {
         let first_pair = audit.first_pair.unwrap();
         assert!(first_pair.contains("<->"));
         assert!(first_pair.contains("pivot"));
+    }
+
+    #[test]
+    fn naive_plethystic_crystal_lifts_have_first_rank_three_obstructions() {
+        let mut rank_two = PlethysticCrystalAudit::default();
+        for path in all_paths(2)
+            .into_iter()
+            .filter(|path| path.strict_edges.is_empty())
+        {
+            rank_two.absorb(audit_plethystic_crystals_for_path(&path).unwrap());
+        }
+        assert_eq!(rank_two.proper_closed, rank_two.proper_reflections);
+        assert_eq!(
+            rank_two.signed_degree_preserved,
+            rank_two.signed_reflections
+        );
+        assert_eq!(rank_two.involution_commuting, rank_two.signed_reflections);
+        assert_eq!(rank_two.block_proper_closed, rank_two.block_proper_states);
+        assert_eq!(
+            rank_two.block_signed_degree_preserved,
+            rank_two.block_signed_reflections
+        );
+        assert_eq!(
+            rank_two.block_involution_commuting,
+            rank_two.block_signed_reflections
+        );
+
+        let mut through_rank_three = PlethysticCrystalAudit::default();
+        for n in 0..=3 {
+            for path in all_paths(n)
+                .into_iter()
+                .filter(|path| path.strict_edges.is_empty())
+            {
+                through_rank_three
+                    .absorb(audit_plethystic_crystals_for_path(&path).unwrap());
+            }
+        }
+        assert_eq!(through_rank_three.proper_closed, 76);
+        assert_eq!(through_rank_three.proper_reflections, 80);
+        assert_eq!(through_rank_three.signed_degree_preserved, 680);
+        assert_eq!(through_rank_three.signed_reflections, 736);
+        assert_eq!(through_rank_three.involution_commuting, 624);
+        assert_eq!(through_rank_three.block_proper_closed, 584);
+        assert_eq!(through_rank_three.block_proper_states, 624);
+        assert_eq!(through_rank_three.block_signed_degree_preserved, 720);
+        assert_eq!(through_rank_three.block_signed_reflections, 736);
+        assert_eq!(through_rank_three.block_involution_commuting, 608);
     }
 
     #[test]
