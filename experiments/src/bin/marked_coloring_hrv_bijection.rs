@@ -11563,15 +11563,21 @@ fn audit_fundamental_schur_for_path(path: &PathData) -> Result<FundamentalSchurA
 
 fn print_fundamental_crystal_report(max_n: usize) -> Result<(), String> {
     let mut total = FundamentalSchurAudit::default();
+    let mut total_dual = LltDualEquivalenceAudit::default();
     for n in 0..=max_n {
         let mut rank = FundamentalSchurAudit::default();
+        let mut rank_dual = LltDualEquivalenceAudit::default();
         for path in all_paths(n) {
             rank.absorb(audit_fundamental_schur_for_path(&path)?);
+            rank_dual.absorb(audit_llt_dual_equivalence_for_path(&path)?);
         }
         rank.print(&format!("rank {n}"));
+        rank_dual.print(&format!("rank {n}"));
         total.absorb(rank);
+        total_dual.absorb(rank_dual);
     }
     total.print(&format!("ranks 0..={max_n}"));
+    total_dual.print(&format!("ranks 0..={max_n}"));
     Ok(())
 }
 
@@ -11620,6 +11626,334 @@ fn print_fundamental_crystal_trace(
         }
     }
     Ok(())
+}
+
+fn path_positions_attack(path: &PathData, left: usize, right: usize) -> bool {
+    left < right
+        && (path.normal_edges.binary_search(&(left, right)).is_ok()
+            || path.strict_edges.binary_search(&(left, right)).is_ok())
+}
+
+fn llt_dual_equivalence_step(
+    path: &PathData,
+    permutation: &[u32],
+    index: u32,
+) -> Result<Vec<u32>, String> {
+    if permutation.len() != path.n || index < 2 || index as usize >= path.n {
+        return Err("LLT dual-equivalence step has an invalid rank or index".into());
+    }
+    let mut positions = vec![0usize; path.n + 1];
+    let mut seen = vec![false; path.n + 1];
+    for (position, &entry) in permutation.iter().enumerate() {
+        if entry == 0 || entry as usize > path.n || seen[entry as usize] {
+            return Err("LLT dual equivalence requires a permutation".into());
+        }
+        seen[entry as usize] = true;
+        positions[entry as usize] = position;
+    }
+    let center = positions[index as usize];
+    let minus = positions[index as usize - 1];
+    let plus = positions[index as usize + 1];
+    if (minus < center && center < plus) || (plus < center && center < minus) {
+        return Ok(permutation.to_vec());
+    }
+    let mut triple_positions = [minus, center, plus];
+    triple_positions.sort_unstable();
+    let [left, middle, right] = triple_positions;
+    let use_twisted = if center == left {
+        path_positions_attack(path, center, right)
+    } else {
+        path_positions_attack(path, left, center)
+    };
+    let mut result = permutation.to_vec();
+    if use_twisted && center == left {
+        result[left] = permutation[middle];
+        result[middle] = permutation[right];
+        result[right] = permutation[left];
+    } else if use_twisted {
+        result[left] = permutation[right];
+        result[middle] = permutation[left];
+        result[right] = permutation[middle];
+    } else {
+        result.swap(left, right);
+    }
+    if !path
+        .strict_edges
+        .iter()
+        .all(|&(tail, head)| result[tail] < result[head])
+    {
+        return Err("LLT dual-equivalence step violated a strict edge".into());
+    }
+    let degree = |word: &[u32]| {
+        path.normal_edges
+            .iter()
+            .filter(|&&(tail, head)| word[tail] < word[head])
+            .count()
+    };
+    if degree(&result) != degree(permutation) {
+        return Err("LLT dual-equivalence step changed q-degree".into());
+    }
+    Ok(result)
+}
+
+#[derive(Clone, Debug, Default)]
+struct LltDualEquivalenceAudit {
+    paths: usize,
+    standard_colorings: usize,
+    components: usize,
+    single_schur_components: usize,
+    edge_comparisons: usize,
+    unchanged_edges: usize,
+    transform_escapes: usize,
+    failure_loci: BTreeSet<(String, usize)>,
+    first_failure: Option<String>,
+    first_rewiring: Option<String>,
+    first_transform_escape: Option<String>,
+}
+
+impl LltDualEquivalenceAudit {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        self.standard_colorings += other.standard_colorings;
+        self.components += other.components;
+        self.single_schur_components += other.single_schur_components;
+        self.edge_comparisons += other.edge_comparisons;
+        self.unchanged_edges += other.unchanged_edges;
+        self.transform_escapes += other.transform_escapes;
+        self.failure_loci.extend(other.failure_loci);
+        if self.first_failure.is_none() {
+            self.first_failure = other.first_failure;
+        }
+        if self.first_rewiring.is_none() {
+            self.first_rewiring = other.first_rewiring;
+        }
+        if self.first_transform_escape.is_none() {
+            self.first_transform_escape = other.first_transform_escape;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "initial LLT dual-equivalence graph {label}: {} paths, {} standard colorings; single-Schur {}/{} components",
+            self.paths,
+            self.standard_colorings,
+            self.single_schur_components,
+            self.components
+        );
+        println!(
+            "  canonical SYT transformation retains {}/{} labeled vertex moves",
+            self.unchanged_edges, self.edge_comparisons
+        );
+        if let Some(failure) = &self.first_failure {
+            println!("  first multi-Schur component: {failure}");
+        }
+        if let Some(rewiring) = &self.first_rewiring {
+            println!("  first transformed edge: {rewiring}");
+        }
+        if let Some(escape) = &self.first_transform_escape {
+            println!(
+                "  transformed multi-Schur closure failures {} (first: {escape})",
+                self.transform_escapes
+            );
+        }
+        if !self.failure_loci.is_empty() {
+            let shown = self
+                .failure_loci
+                .iter()
+                .take(16)
+                .map(|(path, degree)| format!("({path},{degree})"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!(
+                "  multi-Schur loci (path,degree), first 16 of {}: {}",
+                self.failure_loci.len(),
+                shown
+            );
+        }
+    }
+}
+
+type DescentDistribution = BTreeMap<BTreeSet<u32>, usize>;
+type ShapeDescentDistribution = (Vec<usize>, DescentDistribution);
+
+fn standard_tableau_descent_distributions(n: usize) -> Vec<ShapeDescentDistribution> {
+    integer_partitions(n)
+        .into_iter()
+        .map(|shape| {
+            let partition = Partition::from_sorted(
+                shape.iter().map(|&part| part as u32).collect::<Vec<_>>(),
+            );
+            let mut distribution = BTreeMap::new();
+            for tableau in Tableau::standard_tableaux(&partition) {
+                *distribution.entry(tableau.descent_set()).or_default() += 1;
+            }
+            (shape, distribution)
+        })
+        .collect()
+}
+
+fn decompose_descent_distribution(
+    distribution: &DescentDistribution,
+    candidates: &[ShapeDescentDistribution],
+) -> Option<Vec<Vec<usize>>> {
+    fn recurse(
+        remaining: &DescentDistribution,
+        candidates: &[ShapeDescentDistribution],
+        minimum_index: usize,
+    ) -> Option<Vec<Vec<usize>>> {
+        if remaining.values().all(|&count| count == 0) {
+            return Some(Vec::new());
+        }
+        for (index, (shape, candidate)) in candidates.iter().enumerate().skip(minimum_index) {
+            if candidate
+                .iter()
+                .any(|(descents, &count)| remaining.get(descents).copied().unwrap_or(0) < count)
+            {
+                continue;
+            }
+            let mut next = remaining.clone();
+            for (descents, &count) in candidate {
+                *next.entry(descents.clone()).or_default() -= count;
+            }
+            if let Some(mut tail) = recurse(&next, candidates, index) {
+                tail.insert(0, shape.clone());
+                return Some(tail);
+            }
+        }
+        None
+    }
+    recurse(distribution, candidates, 0)
+}
+
+fn fundamental_dual_equivalence_step(
+    bridge: &FundamentalSchurBridge,
+    permutation: &[u32],
+    index: u32,
+) -> Result<Vec<u32>, String> {
+    let target = bridge
+        .forward
+        .get(permutation)
+        .ok_or_else(|| "standard permutation is absent from the fundamental bridge".to_string())?;
+    let mut changed = target.clone();
+    changed.standard_rows = elementary_dual_equivalence(&target.standard_rows, index);
+    bridge
+        .inverse
+        .get(&changed)
+        .cloned()
+        .ok_or_else(|| "dual-equivalent tableau is absent from the fundamental bridge".to_string())
+}
+
+fn audit_llt_dual_equivalence_for_path(
+    path: &PathData,
+) -> Result<LltDualEquivalenceAudit, String> {
+    let states = permutations(path.n)
+        .into_iter()
+        .filter(|permutation| {
+            path.strict_edges
+                .iter()
+                .all(|&(tail, head)| permutation[tail] < permutation[head])
+        })
+        .collect::<BTreeSet<_>>();
+    let standard_distributions = standard_tableau_descent_distributions(path.n);
+    let bridge = FundamentalSchurBridge::build(path)?;
+    let mut unvisited = states.clone();
+    let mut audit = LltDualEquivalenceAudit {
+        paths: 1,
+        standard_colorings: states.len(),
+        ..LltDualEquivalenceAudit::default()
+    };
+    let mut multi_schur_states = BTreeSet::new();
+    while let Some(start) = unvisited.iter().next().cloned() {
+        let mut component = BTreeSet::from([start.clone()]);
+        let mut queue = VecDeque::from([start]);
+        while let Some(state) = queue.pop_front() {
+            for index in 2..path.n as u32 {
+                let next = llt_dual_equivalence_step(path, &state, index)?;
+                if !states.contains(&next) {
+                    return Err("LLT dual-equivalence edge left the standard state set".into());
+                }
+                if component.insert(next.clone()) {
+                    queue.push_back(next);
+                }
+            }
+        }
+        for state in &component {
+            unvisited.remove(state);
+        }
+        audit.components += 1;
+        let mut distribution = BTreeMap::new();
+        for state in &component {
+            *distribution
+                .entry(llt_standard_descent_set(state))
+                .or_default() += 1;
+        }
+        let matching_shape = standard_distributions
+            .iter()
+            .find_map(|(shape, candidate)| (candidate == &distribution).then(|| shape.clone()));
+        if matching_shape.is_some() {
+            audit.single_schur_components += 1;
+        } else {
+            multi_schur_states.extend(component.iter().cloned());
+            let first = component.iter().next().expect("component is nonempty");
+            let degree = path
+                .normal_edges
+                .iter()
+                .filter(|&&(tail, head)| first[tail] < first[head])
+                .count();
+            audit.failure_loci.insert((path.word(), degree));
+            if audit.first_failure.is_none() {
+                audit.first_failure = Some(format!(
+                    "path {}, degree {}, size {}, beginning {:?}, Schur shapes {:?}, descent distribution {:?}",
+                    path.word(),
+                    degree,
+                    component.len(),
+                    first,
+                    decompose_descent_distribution(&distribution, &standard_distributions),
+                    distribution
+                ));
+            }
+        }
+    }
+    for state in &states {
+        for index in 2..path.n as u32 {
+            let original = llt_dual_equivalence_step(path, state, index)?;
+            let transformed = if multi_schur_states.contains(state) {
+                let candidate = fundamental_dual_equivalence_step(&bridge, state, index)?;
+                if !multi_schur_states.contains(&candidate) {
+                    audit.transform_escapes += 1;
+                    if audit.first_transform_escape.is_none() {
+                        audit.first_transform_escape = Some(format!(
+                            "path {}, D_{}({:?}) -> {:?}",
+                            path.word(), index, state, candidate
+                        ));
+                    }
+                }
+                candidate
+            } else {
+                original.clone()
+            };
+            audit.edge_comparisons += 1;
+            if original == transformed {
+                audit.unchanged_edges += 1;
+            } else if audit.first_rewiring.is_none() {
+                let degree = path
+                    .normal_edges
+                    .iter()
+                    .filter(|&&(tail, head)| state[tail] < state[head])
+                    .count();
+                audit.first_rewiring = Some(format!(
+                    "path {}, degree {}, D_{}({:?}) originally {:?}, transformed {:?}",
+                    path.word(),
+                    degree,
+                    index,
+                    state,
+                    original,
+                    transformed
+                ));
+            }
+        }
+    }
+    Ok(audit)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -15071,6 +15405,27 @@ mod tests {
         assert_eq!(
             complete_graph_crystal_step(&witness, 1, false).unwrap(),
             Some(vec![1, 0, 0, 1, 1])
+        );
+
+        let mut dual = LltDualEquivalenceAudit::default();
+        for n in 0..=4 {
+            for path in all_paths(n) {
+                dual.absorb(audit_llt_dual_equivalence_for_path(&path).unwrap());
+            }
+        }
+        assert_eq!(dual.standard_colorings, 684);
+        assert_eq!(dual.single_schur_components, 299);
+        assert_eq!(dual.components, 302);
+        assert_eq!(dual.unchanged_edges, 1_296);
+        assert_eq!(dual.edge_comparisons, 1_308);
+        assert_eq!(dual.transform_escapes, 0);
+        assert_eq!(
+            dual.failure_loci,
+            BTreeSet::from([
+                ("NNNDEEE".to_string(), 3),
+                ("NNNNEEEE".to_string(), 2),
+                ("NNNNEEEE".to_string(), 4),
+            ])
         );
     }
 

@@ -65,6 +65,28 @@ paper-cache.  Next: instantiate these ordinary/twisted moves directly from
 `PathData`, verify degree/descent preservation, and compare the first required
 edge transformation with the direct standard-permutation bridge above.
 
+That initial comparison is now implemented.  The Assaf move uses twisted dual
+equivalence precisely when the middle label attacks the farther of its two
+neighbors, and ordinary dual equivalence otherwise.  All moves preserve the
+strict-edge constraints and q-degree through rank five.  Every component
+through rank three is already a single standard dual-equivalence graph.  At
+rank four, 299/302 cumulative components are single-Schur; the only three
+multi-Schur loci are K4 degrees 2 and 4 and `NNNDEEE` degree 3.  The first is a
+five-vertex K4 degree-4 component with Schur shapes `(22)+(211)`.
+
+Keeping every edge in the already-single components and using the canonical
+SYT transform only on those three bad components changes just 12 of 1,308
+labeled rank-four vertex moves (six undirected edges), with no edge leaving the
+bad locus.  The first change is
+`D_2(1342): 2143 -> 2314` in K4 degree 4.  This is the smallest concrete
+rewiring dataset so far.  At rank five there are 78 multi-Schur components
+(2,394/2,472 are already single) across 67 `(path,degree)` loci.  Applying the
+global ordinal SYT transform only on those loci is not closed: 162 labeled
+moves escape to an already-single component, first on K5
+`D_3(13542) -> 41253`.  Thus the next rule must align whole components/copies,
+as in Assaf's graph transformations; merely detecting bad components is enough
+at rank four but not rank five.
+
 Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
 
 ```bash
