@@ -7,7 +7,8 @@
 `sym-poly/core/src/tableau.rs`, and this handoff on branch
 `exp/verticalstripllt-marked-coloring-bijection`.  No Lean/paper source,
 circular code, or other maintained API changed; the existing Rust branch was
-preserved and was not pushed.
+preserved and was not pushed.  Implementation checkpoint `543e1de` contains
+the charge repair, Hall--Littlewood bridge, tests, and initial handoff record.
 
 The exact-current cached source is arXiv `1903.03998v3`, tree SHA-256
 `32e82b0272e790383b66d9b0f7b0acc1727b58e4b86746e92be1a9f2cb6001b0`, at
