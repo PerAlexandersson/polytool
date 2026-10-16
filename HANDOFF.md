@@ -1,14 +1,89 @@
 # Handoff
 
-## Active: ordinary coloring crystal shortcut audit — 2026-10-16
+## Active: standard-permutation dual-equivalence refinement — 2026-10-16
 
 `/root` owns only
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
 branch `exp/verticalstripllt-marked-coloring-bijection`.  The current bounded
-task has isolated a clean two-color Weyl action and is now determining the
-smallest cross-index correction needed to turn its canonical `e_i,f_i`
-strings into genuine SSYT crystal components.  No shared library, Lean/paper
-source, or circular code is owned.
+task now has a direct reversible coloring-to-SSYT crystal map by LLT
+standardization.  The active target is to replace its global ordinal matching
+of standard permutations by the ordinary/twisted dual-equivalence graph moves
+of Assaf and the smallest required edge transformations.  No shared library,
+Lean/paper source, or circular code is owned.
+
+## Completed: direct fundamental-to-Schur crystal shortcut — 2026-10-16
+
+The new `--fundamental-crystal-report` implements a much shorter reversible
+map than the signed HRV cancellation.  Standardize a coloring by sorting first
+by color and, within each tie, by **decreasing vertex**.  If `pi` is the
+resulting rank permutation, its mandatory-cut set is
+
+```text
+Des(pi) = { r : vertex carrying r is left of vertex carrying r+1 }.
+```
+
+The coloring is thus exactly `(pi, weakly increasing rank colors with strict
+cuts at Des(pi))`.  At each `(q-degree, Des)` bucket, the prototype pairs the
+standard permutations in lexicographic order with the same-descent standard
+tableaux occurring in the already verified Schur expansion.  Replacing each
+standard-tableau rank by its rank color gives an SSYT; standardizing equal SSYT
+entries from left to right is the explicit inverse.  The target certificate is
+`(q-degree, shape, Schur-copy, SSYT)`.  Tableau `e_i,f_i` therefore transport
+back to a genuine coloring crystal.
+
+The exhaustive ordinary rank-five census is exact: all 258 paths, 12,270
+standard colorings, and 5,960 `(degree,Des)` buckets match; 48,840 packed
+colorings biject with 48,840 packed SSYT targets, with 97,680 two-sided round
+trips.  Over the three-color finite alphabets, every one of 46,420 defined
+crystal arrows in ranks through five inverts and preserves q-degree.  Of these,
+42,094 change only vertices currently colored `i` or `i+1`.  The first
+support-locality failure is K4 `f_1(1132)=2123` (the vertex initially colored
+3 moves), so the direct map is not yet a local crystal rule.
+
+On K4 this crystal agrees with the clean Foata--RSK crystal on **every**
+three-color arrow and gives the desired repair `f_1(1121)=2112`.  The first
+difference from Foata is K5:
+`f_1(11221)=12212` for the canonical descent-bucket pairing, versus `21122`
+for Foata.  This is nonuniqueness between genuine crystals, not a validity
+failure.
+
+Two natural attempted refinements were also isolated.  Using global Foata only
+on a complete normal graph repairs K4 and reduces the minimum-Hamming rank-four
+failures to exactly `(NNNDEEE,3)`, `(NENNNEEE,1)`, and `(NNNEEENE,1)`.
+Forcing every full-word Foata edge that remains individually valid, then
+minimum-Hamming matching the remainder, is worse: only 160/189 rank-four
+components are SSYT-isomorphic.  Thus valid Foata edges cannot be selected
+independently; the correction is component-level.
+
+The relevant primary source is Assaf, arXiv:1005.3759v5, Section 4.1,
+especially equations defining `d_i`, twisted `d_i`, and `D_i^(k)`, plus the
+degree-preservation proposition immediately following.  It explicitly says
+the initial LLT-graph components may be sums of Schur functions and then
+transforms their edges into dual-equivalence components.  This matches the K4
+multi-highest obstruction exactly.  The exact source package is cached in
+paper-cache.  Next: instantiate these ordinary/twisted moves directly from
+`PathData`, verify degree/descent preservation, and compare the first required
+edge transformation with the direct standard-permutation bridge above.
+
+Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo run --release --manifest-path experiments/Cargo.toml -- \
+  --fundamental-crystal-report --max-n 5
+# 258 paths; 5960/5960 descent buckets; 48840 <-> 48840 objects;
+# 46420/46420 inverse and degree-preserving crystal arrows
+
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 31 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+git diff --check
+```
+
+`cargo fmt --all --check` currently reports repository-wide changes in this
+single pre-existing experiment file under rustfmt 1.10.0 (2026-09-28), starting
+far before the owned hunks; it was not applied wholesale.
 
 ## Completed: local two-color Weyl action and first crystal obstruction — 2026-10-16
 

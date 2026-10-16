@@ -26,6 +26,11 @@
 //! equal ranks in complementary content levels gives local Weyl reflections;
 //! adjacent levels give candidate `e_i,f_i` strings and expose their first K4
 //! three-color compatibility obstruction.
+//! A shorter genuine crystal map standardizes LLT colorings with decreasing
+//! vertex order inside color ties, canonically matches equal
+//! `(q-degree, descent-set)` buckets with copies of standard tableaux, and
+//! destandardizes to SSYT.  This map is explicitly invertible and isolates the
+//! remaining problem as a dual-equivalence rule on standard permutations.
 //!
 //! The ordinary flip experiment implements the verified reachability-cover
 //! short-edge move exactly.  It refines the coloring/HRV matching by complete
@@ -133,6 +138,10 @@ struct Args {
     /// Test whether the ordinary transported crystal is intrinsically two-color local.
     #[arg(long)]
     crystal_locality_report: bool,
+
+    /// Match LLT standardization/descent buckets directly with standard tableaux.
+    #[arg(long)]
+    fundamental_crystal_report: bool,
 
     /// Push ordinary orientation-flip components through the coloring/HRV bijection.
     #[arg(long)]
@@ -10921,11 +10930,17 @@ fn print_crystal_locality_report(max_n: usize) -> Result<(), String> {
     let policies = [
         LocalReflectionPolicy::Lexicographic,
         LocalReflectionPolicy::MinimumHamming,
+        LocalReflectionPolicy::FoataSeededHamming,
     ];
-    let mut total_coxeter = [LocalCoxeterAudit::default(), LocalCoxeterAudit::default()];
+    let mut total_coxeter = [
+        LocalCoxeterAudit::default(),
+        LocalCoxeterAudit::default(),
+        LocalCoxeterAudit::default(),
+    ];
     let mut total_strings = LocalCrystalStringAudit::default();
     let alphabet_size = 3u8;
     let mut total_components = [
+        LocalCrystalComponentAudit::default(),
         LocalCrystalComponentAudit::default(),
         LocalCrystalComponentAudit::default(),
     ];
@@ -10933,9 +10948,14 @@ fn print_crystal_locality_report(max_n: usize) -> Result<(), String> {
     for n in 0..=max_n {
         let mut rank = CrystalLocalityAudit::default();
         let mut rank_chains = LocalChainAudit::default();
-        let mut rank_coxeter = [LocalCoxeterAudit::default(), LocalCoxeterAudit::default()];
+        let mut rank_coxeter = [
+            LocalCoxeterAudit::default(),
+            LocalCoxeterAudit::default(),
+            LocalCoxeterAudit::default(),
+        ];
         let mut rank_strings = LocalCrystalStringAudit::default();
         let mut rank_components = [
+            LocalCrystalComponentAudit::default(),
             LocalCrystalComponentAudit::default(),
             LocalCrystalComponentAudit::default(),
         ];
@@ -10990,6 +11010,614 @@ fn print_crystal_locality_report(max_n: usize) -> Result<(), String> {
             alphabet_size,
             policy,
         );
+    }
+    Ok(())
+}
+
+#[derive(Clone, Debug, Default)]
+struct FundamentalSchurAudit {
+    paths: usize,
+    standard_colorings: usize,
+    source_buckets: usize,
+    target_buckets: usize,
+    matched_buckets: usize,
+    packed_colorings: usize,
+    packed_targets: usize,
+    round_trips: usize,
+    crystal_arrows: usize,
+    crystal_inverse_checks: usize,
+    crystal_degree_checks: usize,
+    crystal_support_local: usize,
+    first_mismatch: Option<String>,
+    first_crystal_failure: Option<String>,
+    first_support_failure: Option<String>,
+}
+
+impl FundamentalSchurAudit {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        self.standard_colorings += other.standard_colorings;
+        self.source_buckets += other.source_buckets;
+        self.target_buckets += other.target_buckets;
+        self.matched_buckets += other.matched_buckets;
+        self.packed_colorings += other.packed_colorings;
+        self.packed_targets += other.packed_targets;
+        self.round_trips += other.round_trips;
+        self.crystal_arrows += other.crystal_arrows;
+        self.crystal_inverse_checks += other.crystal_inverse_checks;
+        self.crystal_degree_checks += other.crystal_degree_checks;
+        self.crystal_support_local += other.crystal_support_local;
+        if self.first_mismatch.is_none() {
+            self.first_mismatch = other.first_mismatch;
+        }
+        if self.first_crystal_failure.is_none() {
+            self.first_crystal_failure = other.first_crystal_failure;
+        }
+        if self.first_support_failure.is_none() {
+            self.first_support_failure = other.first_support_failure;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "fundamental-to-Schur audit {label}: {} paths, {} standard colorings; matched {} descent buckets (source {}, target {})",
+            self.paths,
+            self.standard_colorings,
+            self.matched_buckets,
+            self.source_buckets,
+            self.target_buckets
+        );
+        println!(
+            "  direct standardization bijection: {} packed colorings, {} packed SSYT targets, {} two-sided round trips",
+            self.packed_colorings, self.packed_targets, self.round_trips
+        );
+        println!(
+            "  transported tableau crystal: inverse {}/{}, degree {}/{}, two-color support {}/{} defined arrows",
+            self.crystal_inverse_checks,
+            self.crystal_arrows,
+            self.crystal_degree_checks,
+            self.crystal_arrows,
+            self.crystal_support_local,
+            self.crystal_arrows
+        );
+        if let Some(mismatch) = &self.first_mismatch {
+            println!("  first descent-bucket mismatch: {mismatch}");
+        }
+        if let Some(failure) = &self.first_crystal_failure {
+            println!("  first crystal failure: {failure}");
+        }
+        if let Some(failure) = &self.first_support_failure {
+            println!("  first crystal support-locality failure: {failure}");
+        }
+    }
+}
+
+fn llt_standard_descent_set(permutation: &[u32]) -> BTreeSet<u32> {
+    let mut positions = vec![0usize; permutation.len() + 1];
+    for (vertex, &rank) in permutation.iter().enumerate() {
+        positions[rank as usize] = vertex;
+    }
+    (1..permutation.len())
+        .filter(|&rank| positions[rank] < positions[rank + 1])
+        .map(|rank| rank as u32)
+        .collect()
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct FundamentalStandardTarget {
+    q_degree: usize,
+    shape: Vec<usize>,
+    copy: usize,
+    standard_rows: Vec<Vec<u32>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct FundamentalSsytTarget {
+    q_degree: usize,
+    shape: Vec<usize>,
+    copy: usize,
+    rows: Vec<Vec<u32>>,
+}
+
+struct FundamentalSchurBridge {
+    forward: BTreeMap<Vec<u32>, FundamentalStandardTarget>,
+    inverse: BTreeMap<FundamentalStandardTarget, Vec<u32>>,
+}
+
+impl FundamentalSchurBridge {
+    fn build(path: &PathData) -> Result<Self, String> {
+        let mut source = BTreeMap::<(usize, BTreeSet<u32>), Vec<Vec<u32>>>::new();
+        for permutation in permutations(path.n)
+            .into_iter()
+            .filter(|permutation| {
+                path.strict_edges
+                    .iter()
+                    .all(|&(tail, head)| permutation[tail] < permutation[head])
+            })
+        {
+            let degree = path
+                .normal_edges
+                .iter()
+                .filter(|&&(tail, head)| permutation[tail] < permutation[head])
+                .count();
+            source
+                .entry((degree, llt_standard_descent_set(&permutation)))
+                .or_default()
+                .push(permutation);
+        }
+        let schur = SchurCancellation::build(path)?;
+        let mut target =
+            BTreeMap::<(usize, BTreeSet<u32>), Vec<FundamentalStandardTarget>>::new();
+        for (key, &multiplicity) in &schur.fixed_multiplicities {
+            let partition = Partition::from_sorted(
+                key.shape
+                    .iter()
+                    .map(|&part| part as u32)
+                    .collect::<Vec<_>>(),
+            );
+            for tableau in Tableau::standard_tableaux(&partition) {
+                for copy in 0..multiplicity {
+                    target
+                        .entry((key.q_degree, tableau.descent_set()))
+                        .or_default()
+                        .push(FundamentalStandardTarget {
+                            q_degree: key.q_degree,
+                            shape: key.shape.clone(),
+                            copy,
+                            standard_rows: tableau.rows().to_vec(),
+                        });
+                }
+            }
+        }
+        let keys = source
+            .keys()
+            .chain(target.keys())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let mut forward = BTreeMap::new();
+        let mut inverse = BTreeMap::new();
+        for key in keys {
+            let mut sources = source.remove(&key).unwrap_or_default();
+            let mut targets = target.remove(&key).unwrap_or_default();
+            sources.sort();
+            targets.sort();
+            if sources.len() != targets.len() {
+                return Err(format!(
+                    "fundamental bucket mismatch for path {}, degree {}, descents {:?}: {} != {}",
+                    path.word(),
+                    key.0,
+                    key.1,
+                    sources.len(),
+                    targets.len()
+                ));
+            }
+            for (permutation, target) in sources.into_iter().zip(targets) {
+                if forward.insert(permutation.clone(), target.clone()).is_some()
+                    || inverse.insert(target, permutation).is_some()
+                {
+                    return Err("fundamental bridge is not injective".into());
+                }
+            }
+        }
+        Ok(Self { forward, inverse })
+    }
+}
+
+fn llt_standardize_coloring(coloring: &[u8]) -> (Vec<u32>, Vec<u8>) {
+    let mut vertices = (0..coloring.len()).collect::<Vec<_>>();
+    vertices.sort_by(|&left, &right| {
+        coloring[left]
+            .cmp(&coloring[right])
+            .then_with(|| right.cmp(&left))
+    });
+    let mut permutation = vec![0u32; coloring.len()];
+    let mut rank_colors = Vec::with_capacity(coloring.len());
+    for (rank, vertex) in vertices.into_iter().enumerate() {
+        permutation[vertex] = rank as u32 + 1;
+        rank_colors.push(coloring[vertex]);
+    }
+    (permutation, rank_colors)
+}
+
+fn standardize_semistandard_rows(rows: &[Vec<u32>]) -> Result<(Vec<Vec<u32>>, Vec<u8>), String> {
+    let tableau = Tableau::new(rows.to_vec());
+    if !tableau.is_semistandard() {
+        return Err("fundamental target is not semistandard".into());
+    }
+    let mut cells = rows
+        .iter()
+        .enumerate()
+        .flat_map(|(row, entries)| {
+            entries
+                .iter()
+                .enumerate()
+                .map(move |(column, &entry)| (entry, column, row))
+        })
+        .collect::<Vec<_>>();
+    cells.sort();
+    let mut standard_rows = rows.iter().map(|row| vec![0u32; row.len()]).collect::<Vec<_>>();
+    let mut rank_colors = Vec::with_capacity(cells.len());
+    for (rank, &(entry, column, row)) in cells.iter().enumerate() {
+        let color = entry
+            .checked_sub(1)
+            .ok_or_else(|| "semistandard colors must be positive".to_string())?;
+        rank_colors.push(
+            u8::try_from(color).map_err(|_| "semistandard color exceeds u8".to_string())?,
+        );
+        standard_rows[row][column] = rank as u32 + 1;
+    }
+    if !Tableau::new(standard_rows.clone()).is_standard() {
+        return Err("semistandard standardization is not standard".into());
+    }
+    Ok((standard_rows, rank_colors))
+}
+
+fn fundamental_coloring_to_ssyt(
+    bridge: &FundamentalSchurBridge,
+    path: &PathData,
+    coloring: &[u8],
+) -> Result<FundamentalSsytTarget, String> {
+    if coloring.len() != path.n {
+        return Err("fundamental source has the wrong length".into());
+    }
+    if !increases_on_edges(coloring, &path.strict_edges) {
+        return Err("fundamental source violates a strict edge".into());
+    }
+    let (permutation, rank_colors) = llt_standardize_coloring(coloring);
+    let standard = bridge
+        .forward
+        .get(&permutation)
+        .ok_or_else(|| "standardized coloring is absent from the fundamental bridge".to_string())?;
+    let rows = standard
+        .standard_rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|&rank| u32::from(rank_colors[rank as usize - 1]) + 1)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    if !Tableau::new(rows.clone()).is_semistandard() {
+        return Err("fundamental destandardization did not produce an SSYT".into());
+    }
+    Ok(FundamentalSsytTarget {
+        q_degree: standard.q_degree,
+        shape: standard.shape.clone(),
+        copy: standard.copy,
+        rows,
+    })
+}
+
+fn fundamental_ssyt_to_coloring(
+    bridge: &FundamentalSchurBridge,
+    path: &PathData,
+    target: &FundamentalSsytTarget,
+) -> Result<Vec<u8>, String> {
+    if tableau_shape(&target.rows) != target.shape {
+        return Err("fundamental target shape metadata disagrees with its SSYT".into());
+    }
+    let (standard_rows, rank_colors) = standardize_semistandard_rows(&target.rows)?;
+    let standard = FundamentalStandardTarget {
+        q_degree: target.q_degree,
+        shape: target.shape.clone(),
+        copy: target.copy,
+        standard_rows,
+    };
+    let permutation = bridge
+        .inverse
+        .get(&standard)
+        .ok_or_else(|| "standardized SSYT is absent from the fundamental bridge".to_string())?;
+    let coloring = permutation
+        .iter()
+        .map(|&rank| rank_colors[rank as usize - 1])
+        .collect::<Vec<_>>();
+    if coloring.len() != path.n {
+        return Err("inverse fundamental coloring has the wrong length".into());
+    }
+    if !increases_on_edges(&coloring, &path.strict_edges) {
+        return Err("inverse fundamental coloring violates a strict edge".into());
+    }
+    Ok(coloring)
+}
+
+fn fundamental_crystal_step(
+    bridge: &FundamentalSchurBridge,
+    path: &PathData,
+    coloring: &[u8],
+    index: u32,
+    raising: bool,
+) -> Result<Option<Vec<u8>>, String> {
+    let mut target = fundamental_coloring_to_ssyt(bridge, path, coloring)?;
+    let tableau = Tableau::new(target.rows);
+    let changed = if raising {
+        tableau.crystal_e(index)
+    } else {
+        tableau.crystal_f(index)
+    };
+    let Some(changed) = changed else {
+        return Ok(None);
+    };
+    target.rows = changed.rows().to_vec();
+    Ok(Some(fundamental_ssyt_to_coloring(
+        bridge, path, &target,
+    )?))
+}
+
+fn audit_fundamental_schur_for_path(path: &PathData) -> Result<FundamentalSchurAudit, String> {
+    let mut source = BTreeMap::<(usize, BTreeSet<u32>), usize>::new();
+    for permutation in permutations(path.n)
+        .into_iter()
+        .filter(|permutation| {
+            path.strict_edges
+                .iter()
+                .all(|&(tail, head)| permutation[tail] < permutation[head])
+        })
+    {
+        let degree = path
+            .normal_edges
+            .iter()
+            .filter(|&&(tail, head)| permutation[tail] < permutation[head])
+            .count();
+        *source
+            .entry((degree, llt_standard_descent_set(&permutation)))
+            .or_default() += 1;
+    }
+
+    let schur = SchurCancellation::build(path)?;
+    let mut target = BTreeMap::<(usize, BTreeSet<u32>), usize>::new();
+    for (key, &multiplicity) in &schur.fixed_multiplicities {
+        let partition = Partition::from_sorted(
+            key.shape
+                .iter()
+                .map(|&part| part as u32)
+                .collect::<Vec<_>>(),
+        );
+        for tableau in Tableau::standard_tableaux(&partition) {
+            *target
+                .entry((key.q_degree, tableau.descent_set()))
+                .or_default() += multiplicity;
+        }
+    }
+    let keys = source
+        .keys()
+        .chain(target.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let matched_buckets = keys
+        .iter()
+        .filter(|key| source.get(*key) == target.get(*key))
+        .count();
+    let first_mismatch = keys.iter().find_map(|key| {
+        let source_count = source.get(key).copied().unwrap_or(0);
+        let target_count = target.get(key).copied().unwrap_or(0);
+        (source_count != target_count).then(|| {
+            format!(
+                "path {}, degree {}, descents {:?}: source {}, target {}",
+                path.word(),
+                key.0,
+                key.1,
+                source_count,
+                target_count
+            )
+        })
+    });
+    let bridge = FundamentalSchurBridge::build(path)?;
+    let colorings = packed_words(path.n)
+        .into_iter()
+        .filter(|coloring| increases_on_edges(coloring, &path.strict_edges))
+        .collect::<Vec<_>>();
+    let mut images = BTreeSet::new();
+    let mut round_trips = 0usize;
+    for coloring in &colorings {
+        let target_state = fundamental_coloring_to_ssyt(&bridge, path, coloring)?;
+        let source_degree = edge_ascent_mask(coloring, &path.normal_edges).count_ones() as usize;
+        if target_state.q_degree != source_degree {
+            return Err(format!(
+                "fundamental map changed degree on path {}, coloring {}: {} -> {}",
+                path.word(),
+                format_word(coloring),
+                source_degree,
+                target_state.q_degree
+            ));
+        }
+        let target_content = target_state.rows.iter().flatten().fold(
+            vec![0usize; packed_content(coloring).len()],
+            |mut content, &entry| {
+                content[entry as usize - 1] += 1;
+                content
+            },
+        );
+        if target_content != packed_content(coloring) {
+            return Err(format!(
+                "fundamental map changed content on path {}, coloring {}",
+                path.word(),
+                format_word(coloring)
+            ));
+        }
+        if fundamental_ssyt_to_coloring(&bridge, path, &target_state)? != *coloring {
+            return Err("fundamental coloring round trip failed".into());
+        }
+        if !images.insert(target_state) {
+            return Err("fundamental coloring map is not injective".into());
+        }
+        round_trips += 1;
+    }
+    let mut expected = BTreeSet::new();
+    for (key, &multiplicity) in &schur.fixed_multiplicities {
+        for tableau in packed_semistandard_tableaux(&key.shape, path.n) {
+            for copy in 0..multiplicity {
+                expected.insert(FundamentalSsytTarget {
+                    q_degree: key.q_degree,
+                    shape: key.shape.clone(),
+                    copy,
+                    rows: tableau.rows().to_vec(),
+                });
+            }
+        }
+    }
+    if images != expected {
+        return Err(format!(
+            "fundamental target set differs on path {}: {} images, {} expected",
+            path.word(),
+            images.len(),
+            expected.len()
+        ));
+    }
+    for target_state in &expected {
+        let coloring = fundamental_ssyt_to_coloring(&bridge, path, target_state)?;
+        if fundamental_coloring_to_ssyt(&bridge, path, &coloring)? != *target_state {
+            return Err("fundamental SSYT round trip failed".into());
+        }
+        round_trips += 1;
+    }
+    let mut crystal_arrows = 0usize;
+    let mut crystal_inverse_checks = 0usize;
+    let mut crystal_degree_checks = 0usize;
+    let mut crystal_support_local = 0usize;
+    let mut first_crystal_failure = None;
+    let mut first_support_failure = None;
+    let alphabet_size = 3u8;
+    for coloring in words_with_color_bound(path.n, alphabet_size)
+        .into_iter()
+        .filter(|coloring| increases_on_edges(coloring, &path.strict_edges))
+    {
+        for index in 1..u32::from(alphabet_size) {
+            for raising in [true, false] {
+                let Some(changed) =
+                    fundamental_crystal_step(&bridge, path, &coloring, index, raising)?
+                else {
+                    continue;
+                };
+                crystal_arrows += 1;
+                let recovered =
+                    fundamental_crystal_step(&bridge, path, &changed, index, !raising)?;
+                if recovered.as_ref() == Some(&coloring) {
+                    crystal_inverse_checks += 1;
+                } else if first_crystal_failure.is_none() {
+                    first_crystal_failure = Some(format!(
+                        "path {}, {}_{}: {} -> {} -> {:?}",
+                        path.word(),
+                        if raising { 'e' } else { 'f' },
+                        index,
+                        format_word(&coloring),
+                        format_word(&changed),
+                        recovered.as_deref().map(format_word)
+                    ));
+                }
+                let source_degree =
+                    edge_ascent_mask(&coloring, &path.normal_edges).count_ones();
+                let target_degree = edge_ascent_mask(&changed, &path.normal_edges).count_ones();
+                if source_degree == target_degree {
+                    crystal_degree_checks += 1;
+                } else if first_crystal_failure.is_none() {
+                    first_crystal_failure = Some(format!(
+                        "path {}, {}_{} changed degree {} -> {} on {} -> {}",
+                        path.word(),
+                        if raising { 'e' } else { 'f' },
+                        index,
+                        source_degree,
+                        target_degree,
+                        format_word(&coloring),
+                        format_word(&changed)
+                    ));
+                }
+                match normalized_two_color_output(
+                    &coloring,
+                    Some(&changed),
+                    u8::try_from(index - 1).expect("three-color index fits u8"),
+                ) {
+                    Ok(_) => crystal_support_local += 1,
+                    Err(error) if first_support_failure.is_none() => {
+                        first_support_failure = Some(format!(
+                            "path {}, {}_{}: {} -> {}: {error}",
+                            path.word(),
+                            if raising { 'e' } else { 'f' },
+                            index,
+                            format_word(&coloring),
+                            format_word(&changed)
+                        ));
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+    }
+    Ok(FundamentalSchurAudit {
+        paths: 1,
+        standard_colorings: source.values().sum(),
+        source_buckets: source.len(),
+        target_buckets: target.len(),
+        matched_buckets,
+        packed_colorings: colorings.len(),
+        packed_targets: expected.len(),
+        round_trips,
+        crystal_arrows,
+        crystal_inverse_checks,
+        crystal_degree_checks,
+        crystal_support_local,
+        first_mismatch,
+        first_crystal_failure,
+        first_support_failure,
+    })
+}
+
+fn print_fundamental_crystal_report(max_n: usize) -> Result<(), String> {
+    let mut total = FundamentalSchurAudit::default();
+    for n in 0..=max_n {
+        let mut rank = FundamentalSchurAudit::default();
+        for path in all_paths(n) {
+            rank.absorb(audit_fundamental_schur_for_path(&path)?);
+        }
+        rank.print(&format!("rank {n}"));
+        total.absorb(rank);
+    }
+    total.print(&format!("ranks 0..={max_n}"));
+    Ok(())
+}
+
+fn print_fundamental_crystal_trace(
+    path: &PathData,
+    coloring_text: &str,
+) -> Result<(), String> {
+    let coloring = parse_coloring(coloring_text)?;
+    let bridge = FundamentalSchurBridge::build(path)?;
+    let (permutation, rank_colors) = llt_standardize_coloring(&coloring);
+    let descents = llt_standard_descent_set(&permutation);
+    let target = fundamental_coloring_to_ssyt(&bridge, path, &coloring)?;
+    let recovered = fundamental_ssyt_to_coloring(&bridge, path, &target)?;
+    println!("path: {}", path.word());
+    println!("coloring: {}", format_word(&coloring));
+    println!(
+        "decreasing-vertex tie standardization: permutation {:?}, rank colors {:?}, descents {:?}",
+        permutation,
+        rank_colors.iter().map(|color| usize::from(*color) + 1).collect::<Vec<_>>(),
+        descents
+    );
+    println!(
+        "component: q-degree {}, shape {:?}, copy {}",
+        target.q_degree, target.shape, target.copy
+    );
+    println!("SSYT: {}", format_tableau(&target.rows));
+    println!("inverse recovers: {}", format_word(&recovered));
+    let alphabet_size = coloring.iter().copied().max().map_or(1, |color| color + 2);
+    for index in 1..u32::from(alphabet_size) {
+        for raising in [true, false] {
+            let changed = fundamental_crystal_step(
+                &bridge,
+                path,
+                &coloring,
+                index,
+                raising,
+            )?;
+            println!(
+                "{}_{}: {}",
+                if raising { 'e' } else { 'f' },
+                index,
+                changed
+                    .as_deref()
+                    .map_or_else(|| "0".to_string(), format_word)
+            );
+        }
     }
     Ok(())
 }
@@ -11202,6 +11830,7 @@ fn audit_local_single_flip_chains_for_path(path: &PathData) -> LocalChainAudit {
 enum LocalReflectionPolicy {
     Lexicographic,
     MinimumHamming,
+    FoataSeededHamming,
 }
 
 impl LocalReflectionPolicy {
@@ -11209,6 +11838,7 @@ impl LocalReflectionPolicy {
         match self {
             Self::Lexicographic => "lexicographic",
             Self::MinimumHamming => "minimum-Hamming",
+            Self::FoataSeededHamming => "Foata-seeded/minimum-Hamming",
         }
     }
 }
@@ -11218,7 +11848,10 @@ struct LocalReflectionCache {
     pairs: BTreeMap<(u64, usize, usize), BTreeMap<u64, u64>>,
     levels: BTreeMap<(u64, usize, usize), Vec<u64>>,
     chain_pairs: BTreeMap<(u64, usize, usize), BTreeMap<u64, u64>>,
+    contextual_chain_pairs: BTreeMap<ContextualChainKey, BTreeMap<u64, u64>>,
 }
+
+type ContextualChainKey = (Vec<u8>, u32, usize, usize);
 
 fn valid_two_color_patterns(
     path: &PathData,
@@ -11257,6 +11890,11 @@ fn valid_two_color_patterns(
     patterns
 }
 
+fn path_is_complete_normal_graph(path: &PathData) -> bool {
+    path.strict_edges.is_empty()
+        && path.normal_edges.len() == path.n * path.n.saturating_sub(1) / 2
+}
+
 fn local_two_color_reflection(
     path: &PathData,
     coloring: &[u8],
@@ -11283,6 +11921,37 @@ fn local_two_color_reflection(
     let size = support.count_ones() as usize;
     let upper_count = upper.count_ones() as usize;
     let reflected_count = size - upper_count;
+    if matches!(policy, LocalReflectionPolicy::FoataSeededHamming) {
+        let mut epsilon = 0usize;
+        let mut top = coloring.to_vec();
+        while let Some(next) = local_two_color_crystal_step_with_policy(
+            path, &top, index, true, policy, cache,
+        )? {
+            epsilon += 1;
+            top = next;
+        }
+        let mut phi = 0usize;
+        let mut bottom = coloring.to_vec();
+        while let Some(next) = local_two_color_crystal_step_with_policy(
+            path, &bottom, index, false, policy, cache,
+        )? {
+            phi += 1;
+            bottom = next;
+        }
+        let mut reflected = coloring.to_vec();
+        let (raising, distance) = if phi >= epsilon {
+            (false, phi - epsilon)
+        } else {
+            (true, epsilon - phi)
+        };
+        for _ in 0..distance {
+            reflected = local_two_color_crystal_step_with_policy(
+                path, &reflected, index, raising, policy, cache,
+            )?
+            .ok_or_else(|| "Foata-seeded reflection string ended too early".to_string())?;
+        }
+        return Ok(reflected);
+    }
     if upper_count == reflected_count {
         return Ok(coloring.to_vec());
     }
@@ -11313,7 +11982,8 @@ fn local_two_color_reflection(
         }
         let assignment = match policy {
             LocalReflectionPolicy::Lexicographic => (0..low.len()).collect(),
-            LocalReflectionPolicy::MinimumHamming => {
+            LocalReflectionPolicy::MinimumHamming
+            | LocalReflectionPolicy::FoataSeededHamming => {
                 let costs = low
                     .iter()
                     .map(|&left| {
@@ -11392,6 +12062,11 @@ fn local_two_color_crystal_step_with_policy(
         .enumerate()
         .filter(|&(_, &color)| color == upper_color)
         .fold(0u64, |mask, (vertex, _)| mask | (1u64 << vertex));
+    if matches!(policy, LocalReflectionPolicy::FoataSeededHamming)
+        && path_is_complete_normal_graph(path)
+    {
+        return complete_graph_crystal_step(coloring, index, raising);
+    }
     let upper_count = upper.count_ones() as usize;
     let target_count = if raising {
         upper_count.checked_sub(1)
@@ -11423,7 +12098,113 @@ fn local_two_color_crystal_step_with_policy(
     }
     let lower_rank = upper_count.min(target_count);
     let pair_key = (support, degree, lower_rank);
-    if !cache.chain_pairs.contains_key(&pair_key) {
+    let contextual_key = (
+        coloring
+            .iter()
+            .map(|&color| {
+                if color == lower || color == upper_color {
+                    u8::MAX
+                } else {
+                    color
+                }
+            })
+            .collect::<Vec<_>>(),
+        index,
+        degree,
+        lower_rank,
+    );
+    if matches!(policy, LocalReflectionPolicy::FoataSeededHamming)
+        && !cache.contextual_chain_pairs.contains_key(&contextual_key)
+    {
+        let lower_level = cache.levels[&(support, degree, lower_rank)].clone();
+        let upper_level = cache.levels[&(support, degree, lower_rank + 1)].clone();
+        let (small, large) = if lower_level.len() <= upper_level.len() {
+            (&lower_level, &upper_level)
+        } else {
+            (&upper_level, &lower_level)
+        };
+        let mut pairs = BTreeMap::new();
+        let mut used_large = BTreeSet::new();
+        for &small_mask in small {
+            let mut state = coloring.to_vec();
+            for (vertex, color) in state.iter_mut().enumerate() {
+                if support & (1u64 << vertex) != 0 {
+                    *color = if small_mask & (1u64 << vertex) == 0 {
+                        lower
+                    } else {
+                        upper_color
+                    };
+                }
+            }
+            for candidate in [
+                complete_graph_crystal_step(&state, index, true)?,
+                complete_graph_crystal_step(&state, index, false)?,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                let candidate_context = candidate
+                    .iter()
+                    .map(|&color| {
+                        if color == lower || color == upper_color {
+                            u8::MAX
+                        } else {
+                            color
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if candidate_context != contextual_key.0 {
+                    continue;
+                }
+                let candidate_upper = candidate
+                    .iter()
+                    .enumerate()
+                    .filter(|&(_, &color)| color == upper_color)
+                    .fold(0u64, |mask, (vertex, _)| mask | (1u64 << vertex));
+                if large.binary_search(&candidate_upper).is_ok()
+                    && used_large.insert(candidate_upper)
+                {
+                    pairs.insert(small_mask, candidate_upper);
+                    pairs.insert(candidate_upper, small_mask);
+                    break;
+                }
+            }
+        }
+        let remaining_small = small
+            .iter()
+            .copied()
+            .filter(|mask| !pairs.contains_key(mask))
+            .collect::<Vec<_>>();
+        let remaining_large = large
+            .iter()
+            .copied()
+            .filter(|mask| !used_large.contains(mask))
+            .collect::<Vec<_>>();
+        if !remaining_small.is_empty() {
+            let size = remaining_large.len();
+            let mut costs = vec![vec![Some(0usize); size]; size];
+            for (small_index, &small_mask) in remaining_small.iter().enumerate() {
+                for (large_index, &large_mask) in remaining_large.iter().enumerate() {
+                    costs[small_index][large_index] =
+                        Some((small_mask ^ large_mask).count_ones() as usize);
+                }
+            }
+            let assignment = canonical_minimum_cost_assignment(&costs)
+                .map(|(assignment, _, _)| assignment[..remaining_small.len()].to_vec())
+                .ok_or_else(|| {
+                    "Foata-seeded minimum-Hamming adjacent-rank matching failed".to_string()
+                })?;
+            for (small_index, large_index) in assignment.into_iter().enumerate() {
+                let small_mask = remaining_small[small_index];
+                let large_mask = remaining_large[large_index];
+                pairs.insert(small_mask, large_mask);
+                pairs.insert(large_mask, small_mask);
+            }
+        }
+        cache.contextual_chain_pairs.insert(contextual_key.clone(), pairs);
+    } else if !matches!(policy, LocalReflectionPolicy::FoataSeededHamming)
+        && !cache.chain_pairs.contains_key(&pair_key)
+    {
         let lower_level = &cache.levels[&(support, degree, lower_rank)];
         let upper_level = &cache.levels[&(support, degree, lower_rank + 1)];
         let (small, large) = if lower_level.len() <= upper_level.len() {
@@ -11433,7 +12214,8 @@ fn local_two_color_crystal_step_with_policy(
         };
         let assignment = match policy {
             LocalReflectionPolicy::Lexicographic => (0..small.len()).collect::<Vec<_>>(),
-            LocalReflectionPolicy::MinimumHamming => {
+            LocalReflectionPolicy::MinimumHamming
+            | LocalReflectionPolicy::FoataSeededHamming => {
                 let size = large.len();
                 let mut costs = vec![vec![Some(0usize); size]; size];
                 for (small_index, &small_mask) in small.iter().enumerate() {
@@ -11456,7 +12238,14 @@ fn local_two_color_crystal_step_with_policy(
         }
         cache.chain_pairs.insert(pair_key, pairs);
     }
-    let Some(&target_upper) = cache.chain_pairs[&pair_key].get(&upper) else {
+    let target_upper = if matches!(policy, LocalReflectionPolicy::FoataSeededHamming) {
+        cache.contextual_chain_pairs[&contextual_key]
+            .get(&upper)
+            .copied()
+    } else {
+        cache.chain_pairs[&pair_key].get(&upper).copied()
+    };
+    let Some(target_upper) = target_upper else {
         return Ok(None);
     };
     let mut result = coloring.to_vec();
@@ -11806,6 +12595,7 @@ struct LocalCrystalComponentAudit {
     states: usize,
     components: usize,
     ssyt_components: usize,
+    failure_loci: BTreeSet<(String, usize)>,
     first_failure: Option<String>,
 }
 
@@ -11815,6 +12605,7 @@ impl LocalCrystalComponentAudit {
         self.states += other.states;
         self.components += other.components;
         self.ssyt_components += other.ssyt_components;
+        self.failure_loci.extend(other.failure_loci);
         if self.first_failure.is_none() {
             self.first_failure = other.first_failure;
         }
@@ -11832,6 +12623,16 @@ impl LocalCrystalComponentAudit {
         );
         if let Some(failure) = &self.first_failure {
             println!("  first component failure: {failure}");
+        }
+        if !self.failure_loci.is_empty() {
+            println!(
+                "  failure loci (path,degree): {}",
+                self.failure_loci
+                    .iter()
+                    .map(|(path, degree)| format!("({path},{degree})"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
     }
 }
@@ -11998,18 +12799,22 @@ fn audit_local_crystal_components_for_path(
         })();
         if component_result.is_ok() {
             audit.ssyt_components += 1;
-        } else if audit.first_failure.is_none() {
-            audit.first_failure = Some(format!(
-                "path {}, degree {}, component beginning {}: {}",
-                path.word(),
-                edge_ascent_mask(
-                    component.iter().next().expect("component is nonempty"),
-                    &path.normal_edges
-                )
-                .count_ones(),
-                format_word(component.iter().next().expect("component is nonempty")),
-                component_result.expect_err("checked that the component failed")
-            ));
+        } else {
+            let degree = edge_ascent_mask(
+                component.iter().next().expect("component is nonempty"),
+                &path.normal_edges,
+            )
+            .count_ones() as usize;
+            audit.failure_loci.insert((path.word(), degree));
+            if audit.first_failure.is_none() {
+                audit.first_failure = Some(format!(
+                    "path {}, degree {}, component beginning {}: {}",
+                    path.word(),
+                    degree,
+                    format_word(component.iter().next().expect("component is nonempty")),
+                    component_result.expect_err("checked that the component failed")
+                ));
+            }
         }
     }
     Ok(audit)
@@ -13669,6 +14474,20 @@ fn run(args: Args) -> Result<(), String> {
         print_crystal_locality_report(args.max_n)?;
         return Ok(());
     }
+    if args.fundamental_crystal_report {
+        if let Some(word) = args.path.as_deref() {
+            let path = PathData::parse(word)?;
+            if let Some(coloring) = args.trace_coloring.as_deref() {
+                print_fundamental_crystal_trace(&path, coloring)?;
+            } else {
+                audit_fundamental_schur_for_path(&path)?
+                    .print(&format!("path {}", path.word()));
+            }
+        } else {
+            print_fundamental_crystal_report(args.max_n)?;
+        }
+        return Ok(());
+    }
     if args.flip_report {
         if let Some(word) = args.path.as_deref() {
             let path = PathData::parse(word)?;
@@ -14198,6 +15017,61 @@ mod tests {
             .first_hamming_difference
             .unwrap()
             .contains("f_1(1121) gives Foata Some(\"2112\"), local Some(\"1221\")"));
+    }
+
+    #[test]
+    fn fundamental_standardization_gives_a_direct_crystal_bijection_through_rank_four() {
+        let mut audit = FundamentalSchurAudit::default();
+        for n in 0..=4 {
+            for path in all_paths(n) {
+                audit.absorb(audit_fundamental_schur_for_path(&path).unwrap());
+            }
+        }
+        assert_eq!(audit.paths, 61);
+        assert_eq!(audit.standard_colorings, 684);
+        assert_eq!(audit.matched_buckets, 498);
+        assert_eq!(audit.source_buckets, 498);
+        assert_eq!(audit.target_buckets, 498);
+        assert_eq!(audit.packed_colorings, 1_883);
+        assert_eq!(audit.packed_targets, 1_883);
+        assert_eq!(audit.round_trips, 3_766);
+        assert_eq!(audit.crystal_inverse_checks, audit.crystal_arrows);
+        assert_eq!(audit.crystal_degree_checks, audit.crystal_arrows);
+        assert_eq!(audit.crystal_arrows, 4_224);
+        assert_eq!(audit.crystal_support_local, 4_164);
+
+        let k4 = PathData::parse("NNNNEEEE").unwrap();
+        let bridge = FundamentalSchurBridge::build(&k4).unwrap();
+        assert_eq!(
+            fundamental_crystal_step(&bridge, &k4, &[0, 0, 1, 0], 1, false).unwrap(),
+            Some(vec![1, 0, 0, 1])
+        );
+        assert_eq!(
+            fundamental_crystal_step(&bridge, &k4, &[0, 0, 2, 1], 1, false).unwrap(),
+            Some(vec![1, 0, 1, 2])
+        );
+        for word in words_with_color_bound(4, 3) {
+            for index in 1..3 {
+                for raising in [true, false] {
+                    assert_eq!(
+                        fundamental_crystal_step(&bridge, &k4, &word, index, raising).unwrap(),
+                        complete_graph_crystal_step(&word, index, raising).unwrap(),
+                        "word={word:?}, index={index}, raising={raising}"
+                    );
+                }
+            }
+        }
+        let k5 = PathData::parse("NNNNNEEEEE").unwrap();
+        let bridge = FundamentalSchurBridge::build(&k5).unwrap();
+        let witness = [0, 0, 1, 1, 0];
+        assert_eq!(
+            fundamental_crystal_step(&bridge, &k5, &witness, 1, false).unwrap(),
+            Some(vec![0, 1, 1, 0, 1])
+        );
+        assert_eq!(
+            complete_graph_crystal_step(&witness, 1, false).unwrap(),
+            Some(vec![1, 0, 0, 1, 1])
+        );
     }
 
     #[test]
