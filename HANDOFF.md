@@ -1,5 +1,56 @@
 # Handoff
 
+## Completed: recursive one-cycle Hall bump-code bridge — 2026-10-16
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
+Lean/paper source, or circular code is owned.
+
+The experiment now constructs an actual reversible Hall statistic-switching
+bridge, not just a generating-function comparison.  At each rank it deletes
+the current maximum incidence; when that maximum occurs in a longest
+non-singleton strict-chain row, it may first apply one simple alternating
+incidence cycle.  Recursing this candidate operation on both the source
+ascent-minus-shift statistic and the target charge statistic produces sets of
+signed drop codes.  In every fixed-content bucket through rank five, the
+bipartite graph joining states with a common code has a perfect matching:
+107/107 buckets and all 1119 packed strict colorings.  Allowing two cycles at
+one deletion adds no matching power in this range.
+
+`HallBumpCodeBridge` chooses a deterministic matching, records the target and
+the common signed drop code, and stores the inverse certificate.  The code can
+be replayed deterministically as a source and target matrix-deletion trace.
+The exhaustive test checks inverse recovery, strictness, exact packed color
+content, trace length and rank decrease, and
+`asc(source)-shift = sum(code) = charge(target)` for every partition through
+rank five.  The report includes the first nontrivial readable witness
+`mu=(3,1): 3124 -> 2314`, code `[-2,2,1,0]`, with source trace
+`[24|3|1] -> [1|2|3] -> [1|2] -> [1] -> []` and target trace
+`[14|2|3] -> [1|2|3] -> [1|2] -> [1] -> []`.
+
+Two qualifications are durable.  Fixing the target to the earlier naive
+deletion code still fails: only 32/38 rank-at-most-four buckets match, first at
+`mu=(3,1)` with isolated source `4213`; bumping must occur on both sides.
+Also, this is a canonical finite matching among recursively local code
+choices, not yet a closed Gillespie-style `PullUp` selector.  Negative entries
+such as the first `-2` above show that these raw degree drops are not yet a
+standard nonnegative Carlitz code.  The next clean-rule search should inspect
+the selected paired traces and replace the bucket matching by a deterministic
+local choice, or isolate its first obstruction.
+
+Current verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 24 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
 ## Completed: recursive deletion-code obstruction search — 2026-10-16
 
 `/root` completed and releases
