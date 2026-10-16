@@ -4676,6 +4676,40 @@ fn hall_recursive_bump_candidate_codes(
     Ok(codes)
 }
 
+type HallBumpShapeCode = Vec<(isize, Vec<usize>)>;
+
+fn hall_recursive_bump_shape_codes(
+    rows: &[Vec<u8>],
+    statistic: HallCodeStatistic,
+    max_cycles: usize,
+    memo: &mut BTreeMap<Vec<Vec<u8>>, BTreeSet<HallBumpShapeCode>>,
+) -> Result<BTreeSet<HallBumpShapeCode>, String> {
+    if let Some(codes) = memo.get(rows) {
+        return Ok(codes.clone());
+    }
+    if rows.is_empty() {
+        let codes = BTreeSet::from([Vec::new()]);
+        memo.insert(Vec::new(), codes.clone());
+        return Ok(codes);
+    }
+    let before = hall_rows_statistic(rows, statistic)?;
+    let mut codes = BTreeSet::new();
+    for next in hall_bump_delete_candidates_with_radius(rows, max_cycles)? {
+        let step = (
+            before - hall_rows_statistic(&next, statistic)?,
+            next.iter().map(Vec::len).collect::<Vec<_>>(),
+        );
+        for tail in hall_recursive_bump_shape_codes(&next, statistic, max_cycles, memo)? {
+            let mut code = Vec::with_capacity(tail.len() + 1);
+            code.push(step.clone());
+            code.extend(tail);
+            codes.insert(code);
+        }
+    }
+    memo.insert(rows.to_vec(), codes.clone());
+    Ok(codes)
+}
+
 fn audit_hall_first_bump_matching(
     max_n: usize,
     max_cycles: usize,
@@ -4841,21 +4875,138 @@ fn audit_hall_bidirectional_bump_matching(
     Ok(audit)
 }
 
+fn audit_hall_bidirectional_shape_bump_matching(
+    max_n: usize,
+    max_cycles: usize,
+) -> Result<HallCodePolicyAudit, String> {
+    let mut audit = HallCodePolicyAudit::default();
+    let mut source_memo = BTreeMap::new();
+    let mut target_memo = BTreeMap::new();
+    for n in 0..=max_n {
+        for parts in integer_partitions(n) {
+            let path = hall_littlewood_path(&parts)?;
+            let mut buckets = BTreeMap::<Vec<usize>, Vec<Vec<u8>>>::new();
+            for coloring in packed_words(n)
+                .into_iter()
+                .filter(|word| increases_on_edges(word, &path.strict_edges))
+            {
+                buckets
+                    .entry(packed_content(&coloring))
+                    .or_default()
+                    .push(coloring);
+            }
+            for (content, states) in buckets {
+                audit.buckets += 1;
+                let source_codes = states
+                    .iter()
+                    .map(|state| {
+                        let rows = hall_chain_color_rows(&path, &parts, state)?;
+                        hall_recursive_bump_shape_codes(
+                            &rows,
+                            HallCodeStatistic::Source,
+                            max_cycles,
+                            &mut source_memo,
+                        )
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                let target_codes = states
+                    .iter()
+                    .map(|state| {
+                        let rows = hall_chain_color_rows(&path, &parts, state)?;
+                        hall_recursive_bump_shape_codes(
+                            &rows,
+                            HallCodeStatistic::Charge,
+                            max_cycles,
+                            &mut target_memo,
+                        )
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                let adjacency = source_codes
+                    .iter()
+                    .map(|source| {
+                        target_codes
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(index, target)| {
+                                source.iter().any(|code| target.contains(code)).then_some(index)
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                audit.source_injective_buckets +=
+                    usize::from(adjacency.iter().all(|neighbors| !neighbors.is_empty()));
+                audit.target_injective_buckets += usize::from(
+                    (0..states.len()).all(|target| adjacency.iter().any(|row| row.contains(&target))),
+                );
+                if match_bipartite(&adjacency, states.len()).is_some() {
+                    audit.matching_buckets += 1;
+                } else if audit.first_failure.is_none() {
+                    let isolated = adjacency.iter().position(Vec::is_empty);
+                    audit.first_failure = Some(format!(
+                        "mu={parts:?}, content={content:?}, no shape-enriched local-code matching{}",
+                        isolated.map_or(String::new(), |index| format!(
+                            "; isolated source {} with {} candidate codes",
+                            format_word(&states[index]), source_codes[index].len()
+                        ))
+                    ));
+                }
+            }
+        }
+    }
+    Ok(audit)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct HallBumpCodeCertificate {
+struct HallRecursiveBumpCertificate {
     partner: Vec<u8>,
-    code: Vec<isize>,
+    code: HallBumpShapeCode,
+    source_trace: Vec<Vec<Vec<u8>>>,
+    target_trace: Vec<Vec<Vec<u8>>>,
 }
 
-struct HallBumpCodeBridge {
-    forward: BTreeMap<Vec<u8>, HallBumpCodeCertificate>,
-    inverse: BTreeMap<Vec<u8>, HallBumpCodeCertificate>,
+#[derive(Clone)]
+struct HallRecursiveBumpBridge {
+    forward: BTreeMap<Vec<u8>, HallRecursiveBumpCertificate>,
+    inverse: BTreeMap<Vec<u8>, HallRecursiveBumpCertificate>,
 }
 
-impl HallBumpCodeBridge {
+impl HallRecursiveBumpBridge {
     fn build(parts: &[usize]) -> Result<Self, String> {
+        let mut memo = BTreeMap::new();
+        Self::build_cached(parts, &mut memo)?;
+        memo.remove(parts)
+            .ok_or_else(|| format!("recursive bridge for mu={parts:?} was not cached"))
+    }
+
+    fn build_cached(
+        parts: &[usize],
+        memo: &mut BTreeMap<Vec<usize>, Self>,
+    ) -> Result<(), String> {
+        if memo.contains_key(parts) {
+            return Ok(());
+        }
+        let n = parts.iter().sum::<usize>();
+        if n == 0 {
+            let certificate = HallRecursiveBumpCertificate {
+                partner: Vec::new(),
+                code: Vec::new(),
+                source_trace: vec![Vec::new()],
+                target_trace: vec![Vec::new()],
+            };
+            memo.insert(
+                Vec::new(),
+                Self {
+                    forward: BTreeMap::from([(Vec::new(), certificate.clone())]),
+                    inverse: BTreeMap::from([(Vec::new(), certificate)]),
+                },
+            );
+            return Ok(());
+        }
+        for child_parts in integer_partitions(n - 1) {
+            Self::build_cached(&child_parts, memo)?;
+        }
+
         let path = hall_littlewood_path(parts)?;
-        let n = path.n;
         let mut buckets = BTreeMap::<Vec<usize>, Vec<Vec<u8>>>::new();
         for coloring in packed_words(n)
             .into_iter()
@@ -4866,143 +5017,135 @@ impl HallBumpCodeBridge {
                 .or_default()
                 .push(coloring);
         }
-        let mut source_memo = BTreeMap::new();
-        let mut target_memo = BTreeMap::new();
         let mut forward = BTreeMap::new();
         let mut inverse = BTreeMap::new();
         for (content, states) in buckets {
-            let source_codes = states
+            let rows = states
                 .iter()
-                .map(|state| {
-                    let rows = hall_chain_color_rows(&path, parts, state)?;
-                    hall_recursive_bump_candidate_codes(
-                        &rows,
-                        HallCodeStatistic::Source,
-                        1,
-                        &mut source_memo,
-                    )
-                })
+                .map(|state| hall_chain_color_rows(&path, parts, state))
                 .collect::<Result<Vec<_>, String>>()?;
-            let target_codes = states
+            let source_next = rows
                 .iter()
-                .map(|state| {
-                    let rows = hall_chain_color_rows(&path, parts, state)?;
-                    hall_recursive_bump_candidate_codes(
-                        &rows,
-                        HallCodeStatistic::Charge,
-                        1,
-                        &mut target_memo,
-                    )
-                })
+                .map(|state| hall_bump_delete_candidates_with_radius(state, 2))
                 .collect::<Result<Vec<_>, String>>()?;
-            let adjacency = source_codes
-                .iter()
-                .map(|source| {
-                    let mut neighbors = target_codes
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(target, codes)| {
-                            source
-                                .intersection(codes)
-                                .next()
-                                .cloned()
-                                .map(|code| (code, target))
-                        })
-                        .collect::<Vec<_>>();
-                    neighbors.sort();
+            let target_next = source_next.clone();
+            let mut witnesses = vec![vec![None; states.len()]; states.len()];
+            let mut adjacency = Vec::with_capacity(states.len());
+            for (source, source_rows) in rows.iter().enumerate() {
+                let source_before =
+                    hall_rows_statistic(source_rows, HallCodeStatistic::Source)?;
+                let mut neighbors = Vec::new();
+                for (target, target_rows) in rows.iter().enumerate() {
+                    let target_before =
+                        hall_rows_statistic(target_rows, HallCodeStatistic::Charge)?;
+                    let mut best = None;
+                    for next_source in &source_next[source] {
+                        let source_drop = source_before
+                            - hall_rows_statistic(next_source, HallCodeStatistic::Source)?;
+                        let (child_parts, _, child_source) =
+                            hall_coloring_from_rows(next_source)?;
+                        let child_bridge = memo.get(&child_parts).ok_or_else(|| {
+                            format!("missing child bridge for mu={child_parts:?}")
+                        })?;
+                        let child_certificate = child_bridge.encode(&child_source)?;
+                        for next_target in &target_next[target] {
+                            if next_source.iter().map(Vec::len).collect::<Vec<_>>()
+                                != next_target.iter().map(Vec::len).collect::<Vec<_>>()
+                            {
+                                continue;
+                            }
+                            let target_drop = target_before
+                                - hall_rows_statistic(next_target, HallCodeStatistic::Charge)?;
+                            if source_drop != target_drop {
+                                continue;
+                            }
+                            let (target_parts, _, child_target) =
+                                hall_coloring_from_rows(next_target)?;
+                            if target_parts != child_parts
+                                || child_certificate.partner != child_target
+                            {
+                                continue;
+                            }
+                            let mut code = vec![(
+                                source_drop,
+                                next_source.iter().map(Vec::len).collect(),
+                            )];
+                            code.extend(child_certificate.code.clone());
+                            let mut source_trace = vec![source_rows.clone()];
+                            source_trace.extend(child_certificate.source_trace.clone());
+                            let mut target_trace = vec![target_rows.clone()];
+                            target_trace.extend(child_certificate.target_trace.clone());
+                            let witness = HallRecursiveBumpCertificate {
+                                partner: states[target].clone(),
+                                code,
+                                source_trace,
+                                target_trace,
+                            };
+                            let key = (
+                                witness.code.clone(),
+                                next_source.clone(),
+                                next_target.clone(),
+                            );
+                            if best
+                                .as_ref()
+                                .is_none_or(|(best_key, _)| key < *best_key)
+                            {
+                                best = Some((key, witness));
+                            }
+                        }
+                    }
+                    if let Some((_, witness)) = best {
+                        witnesses[source][target] = Some(witness.clone());
+                        neighbors.push((witness.code, target));
+                    }
+                }
+                neighbors.sort();
+                adjacency.push(
                     neighbors
                         .into_iter()
                         .map(|(_, target)| target)
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
+                        .collect::<Vec<_>>(),
+                );
+            }
             let matching = match_bipartite(&adjacency, states.len()).ok_or_else(|| {
+                let isolated = adjacency.iter().position(Vec::is_empty);
                 format!(
-                    "no one-cycle recursive-code bridge for mu={parts:?}, content={content:?}"
+                    "no inductive two-cycle bridge for mu={parts:?}, content={content:?}{}",
+                    isolated.map_or(String::new(), |index| format!(
+                        "; isolated source {}",
+                        format_word(&states[index])
+                    ))
                 )
             })?;
             for (source, target) in matching.into_iter().enumerate() {
-                let code = source_codes[source]
-                    .intersection(&target_codes[target])
-                    .next()
-                    .cloned()
-                    .expect("a matching edge has a common recursive code");
-                let source_word = states[source].clone();
-                let target_word = states[target].clone();
-                if forward
-                    .insert(
-                        source_word.clone(),
-                        HallBumpCodeCertificate {
-                            partner: target_word.clone(),
-                            code: code.clone(),
-                        },
-                    )
-                    .is_some()
-                    || inverse
-                        .insert(
-                            target_word,
-                            HallBumpCodeCertificate {
-                                partner: source_word,
-                                code,
-                            },
-                        )
-                        .is_some()
-                {
-                    return Err(format!(
-                        "recursive-code bridge collision for mu={parts:?}, content={content:?}"
-                    ));
-                }
+                let certificate = witnesses[source][target]
+                    .clone()
+                    .expect("a matching edge has an inductive witness");
+                let inverse_certificate = HallRecursiveBumpCertificate {
+                    partner: states[source].clone(),
+                    code: certificate.code.clone(),
+                    source_trace: certificate.source_trace.clone(),
+                    target_trace: certificate.target_trace.clone(),
+                };
+                forward.insert(states[source].clone(), certificate);
+                inverse.insert(states[target].clone(), inverse_certificate);
             }
         }
-        Ok(Self { forward, inverse })
+        memo.insert(parts.to_vec(), Self { forward, inverse });
+        Ok(())
     }
 
-    fn encode(&self, coloring: &[u8]) -> Result<&HallBumpCodeCertificate, String> {
+    fn encode(&self, coloring: &[u8]) -> Result<&HallRecursiveBumpCertificate, String> {
         self.forward
             .get(coloring)
-            .ok_or_else(|| format!("coloring {coloring:?} is outside the bump-code bridge"))
+            .ok_or_else(|| format!("coloring {coloring:?} is outside the recursive bridge"))
     }
 
-    fn decode(&self, target: &[u8]) -> Result<&HallBumpCodeCertificate, String> {
+    fn decode(&self, target: &[u8]) -> Result<&HallRecursiveBumpCertificate, String> {
         self.inverse
             .get(target)
-            .ok_or_else(|| format!("target {target:?} is outside the bump-code bridge"))
+            .ok_or_else(|| format!("target {target:?} is outside the recursive bridge"))
     }
-}
-
-fn hall_replay_bump_code(
-    rows: &[Vec<u8>],
-    statistic: HallCodeStatistic,
-    code: &[isize],
-    memo: &mut BTreeMap<Vec<Vec<u8>>, BTreeSet<Vec<isize>>>,
-) -> Result<Vec<Vec<Vec<u8>>>, String> {
-    if rows.is_empty() {
-        return if code.is_empty() {
-            Ok(vec![Vec::new()])
-        } else {
-            Err(format!("nonempty residual code {code:?} at the empty matrix"))
-        };
-    }
-    let (&first, tail) = code
-        .split_first()
-        .ok_or_else(|| format!("empty code before matrix {rows:?} was deleted"))?;
-    let before = hall_rows_statistic(rows, statistic)?;
-    for next in hall_bump_delete_candidates_with_radius(rows, 1)? {
-        if before - hall_rows_statistic(&next, statistic)? != first {
-            continue;
-        }
-        let tail_codes =
-            hall_recursive_bump_candidate_codes(&next, statistic, 1, memo)?;
-        if !tail_codes.contains(tail) {
-            continue;
-        }
-        let mut trace = vec![rows.to_vec()];
-        trace.extend(hall_replay_bump_code(&next, statistic, tail, memo)?);
-        return Ok(trace);
-    }
-    Err(format!(
-        "code {code:?} has no one-cycle bump replay from matrix {rows:?}"
-    ))
 }
 
 fn format_hall_bump_trace(trace: &[Vec<Vec<u8>>]) -> String {
@@ -8833,39 +8976,59 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
                 .as_deref()
                 .map_or(String::new(), |failure| format!("; first failure: {failure}"))
         );
+        let shape_enriched =
+            audit_hall_bidirectional_shape_bump_matching(max_n, max_cycles)?;
+        println!(
+            "At-most-{max_cycles}-cycle shape-enriched bump matching ranks 0..={}: {}/{} buckets; source-nonisolated {}, target-covered {}{}",
+            max_n,
+            shape_enriched.matching_buckets,
+            shape_enriched.buckets,
+            shape_enriched.source_injective_buckets,
+            shape_enriched.target_injective_buckets,
+            shape_enriched
+                .first_failure
+                .as_deref()
+                .map_or(String::new(), |failure| format!("; first failure: {failure}"))
+        );
     }
+    let mut recursive_diagrams = 0usize;
+    let mut recursive_states = 0usize;
+    for n in 0..=max_n {
+        for parts in integer_partitions(n) {
+            let bridge = HallRecursiveBumpBridge::build(&parts)?;
+            if bridge.forward.len() != bridge.inverse.len() {
+                return Err(format!("recursive bridge size mismatch for mu={parts:?}"));
+            }
+            recursive_diagrams += 1;
+            recursive_states += bridge.forward.len();
+        }
+    }
+    println!(
+        "Inductive two-cycle shape bridge ranks 0..={max_n}: {recursive_diagrams} diagrams, {recursive_states} reversible states"
+    );
     if max_n >= 4 {
         let parts = [3, 1];
-        let path = hall_littlewood_path(&parts)?;
         let source = vec![2, 0, 1, 3];
-        let bridge = HallBumpCodeBridge::build(&parts)?;
+        let bridge = HallRecursiveBumpBridge::build(&parts)?;
         let certificate = bridge.encode(&source)?;
         let inverse = bridge.decode(&certificate.partner)?;
         if inverse.partner != source || inverse.code != certificate.code {
-            return Err("the printed one-cycle bridge certificate did not invert".into());
+            return Err("the printed shape-code bridge certificate did not invert".into());
         }
-        let source_rows = hall_chain_color_rows(&path, &parts, &source)?;
-        let target_rows = hall_chain_color_rows(&path, &parts, &certificate.partner)?;
-        let source_trace = hall_replay_bump_code(
-            &source_rows,
-            HallCodeStatistic::Source,
-            &certificate.code,
-            &mut BTreeMap::new(),
-        )?;
-        let target_trace = hall_replay_bump_code(
-            &target_rows,
-            HallCodeStatistic::Charge,
-            &certificate.code,
-            &mut BTreeMap::new(),
-        )?;
         println!(
-            "One-cycle recursive bridge example mu=[3,1]: {} -> {}, code {:?}",
+            "Shape-compatible recursive bridge example mu=[3,1]: {} -> {}, code {:?}",
             format_word(&source),
             format_word(&certificate.partner),
             certificate.code
         );
-        println!("  source ascent-drop trace: {}", format_hall_bump_trace(&source_trace));
-        println!("  target charge-drop trace: {}", format_hall_bump_trace(&target_trace));
+        println!(
+            "  source ascent-drop trace: {}",
+            format_hall_bump_trace(&certificate.source_trace)
+        );
+        println!(
+            "  target charge-drop trace: {}",
+            format_hall_bump_trace(&certificate.target_trace)
+        );
     }
     let max_last = HallCodeRule::Fixed(HallDeletionPolicy {
         extreme: HallDeletionExtreme::Largest,
@@ -9732,8 +9895,9 @@ mod tests {
     }
 
     #[test]
-    fn recursive_one_cycle_bump_code_bridge_round_trips_through_rank_five() {
+    fn recursive_shape_bump_code_bridge_round_trips_through_rank_five() {
         let mut states = 0usize;
+        let mut bridges = BTreeMap::new();
         for n in 0..=5 {
             for parts in integer_partitions(n) {
                 let path = hall_littlewood_path(&parts).unwrap();
@@ -9742,7 +9906,8 @@ mod tests {
                     .skip(1)
                     .map(|&part| part * part.saturating_sub(1) / 2)
                     .sum::<usize>();
-                let bridge = HallBumpCodeBridge::build(&parts).unwrap();
+                bridges.insert(parts.clone(), HallRecursiveBumpBridge::build(&parts).unwrap());
+                let bridge = bridges.get(&parts).unwrap();
                 let sources = packed_words(n)
                     .into_iter()
                     .filter(|word| increases_on_edges(word, &path.strict_edges))
@@ -9774,7 +9939,7 @@ mod tests {
                         hall_rows_statistic(&source_rows, HallCodeStatistic::Source).unwrap();
                     let target_charge =
                         hall_rows_statistic(&target_rows, HallCodeStatistic::Charge).unwrap();
-                    let code_sum = certificate.code.iter().sum::<isize>();
+                    let code_sum = certificate.code.iter().map(|step| step.0).sum::<isize>();
                     assert_eq!(certificate.code.len(), n);
                     assert_eq!(code_sum, source_core, "mu={parts:?}, source={source:?}");
                     assert_eq!(code_sum, target_charge, "mu={parts:?}, source={source:?}");
@@ -9787,17 +9952,48 @@ mod tests {
                         shift + Tableau::new(target.charge_rows).charge() as usize;
                     assert_eq!(source_degree, target_degree, "mu={parts:?}, source={source:?}");
 
-                    for (rows, statistic) in [
-                        (&source_rows, HallCodeStatistic::Source),
-                        (&target_rows, HallCodeStatistic::Charge),
-                    ] {
-                        let trace = hall_replay_bump_code(
-                            rows,
-                            statistic,
-                            &certificate.code,
-                            &mut BTreeMap::new(),
-                        )
-                        .unwrap();
+                    let source_trace = &certificate.source_trace;
+                    let target_trace = &certificate.target_trace;
+                    for (depth, (source_residual, target_residual)) in
+                        source_trace.iter().zip(target_trace).enumerate()
+                    {
+                        assert_eq!(
+                            source_residual.iter().map(Vec::len).collect::<Vec<_>>(),
+                            target_residual.iter().map(Vec::len).collect::<Vec<_>>(),
+                            "residual shape mismatch at depth {depth}, mu={parts:?}, source={source:?}"
+                        );
+                        assert_eq!(
+                            source_residual.iter().flatten().copied().fold(
+                                BTreeMap::<u8, usize>::new(),
+                                |mut content, color| {
+                                    *content.entry(color).or_default() += 1;
+                                    content
+                                }
+                            ),
+                            target_residual.iter().flatten().copied().fold(
+                                BTreeMap::<u8, usize>::new(),
+                                |mut content, color| {
+                                    *content.entry(color).or_default() += 1;
+                                    content
+                                }
+                            ),
+                            "residual content mismatch at depth {depth}, mu={parts:?}, source={source:?}"
+                        );
+                        let (residual_parts, _, source_coloring) =
+                            hall_coloring_from_rows(source_residual).unwrap();
+                        let (target_parts, _, target_coloring) =
+                            hall_coloring_from_rows(target_residual).unwrap();
+                        assert_eq!(residual_parts, target_parts);
+                        let residual_bridge = bridges.get(&residual_parts).unwrap();
+                        assert_eq!(
+                            residual_bridge.encode(&source_coloring).unwrap().partner,
+                            target_coloring,
+                            "recursive bridge mismatch at depth {depth}, mu={parts:?}, source={source:?}"
+                        );
+                    }
+                    for (rows, trace) in
+                        [(&source_rows, source_trace), (&target_rows, target_trace)]
+                    {
                         assert_eq!(trace.first(), Some(rows));
                         assert_eq!(trace.last(), Some(&Vec::new()));
                         assert_eq!(trace.len(), n + 1);
@@ -9807,6 +10003,47 @@ mod tests {
                                 step[1].iter().map(Vec::len).sum::<usize>() + 1
                             );
                         }
+                    }
+                    for (index, ((source_step, target_step), code_step)) in source_trace
+                        .windows(2)
+                        .zip(target_trace.windows(2))
+                        .zip(&certificate.code)
+                        .enumerate()
+                    {
+                        assert!(
+                            hall_bump_delete_candidates_with_radius(&source_step[0], 2)
+                                .unwrap()
+                                .contains(&source_step[1]),
+                            "invalid source transition {index}, mu={parts:?}, source={source:?}"
+                        );
+                        assert!(
+                            hall_bump_delete_candidates_with_radius(&target_step[0], 2)
+                                .unwrap()
+                                .contains(&target_step[1]),
+                            "invalid target transition {index}, mu={parts:?}, source={source:?}"
+                        );
+                        assert_eq!(
+                            hall_rows_statistic(&source_step[0], HallCodeStatistic::Source).unwrap()
+                                - hall_rows_statistic(
+                                    &source_step[1],
+                                    HallCodeStatistic::Source,
+                                )
+                                .unwrap(),
+                            code_step.0
+                        );
+                        assert_eq!(
+                            hall_rows_statistic(&target_step[0], HallCodeStatistic::Charge).unwrap()
+                                - hall_rows_statistic(
+                                    &target_step[1],
+                                    HallCodeStatistic::Charge,
+                                )
+                                .unwrap(),
+                            code_step.0
+                        );
+                        assert_eq!(
+                            source_step[1].iter().map(Vec::len).collect::<Vec<_>>(),
+                            code_step.1
+                        );
                     }
                     states += 1;
                 }

@@ -1,6 +1,58 @@
 # Handoff
 
-## Completed: recursive one-cycle Hall bump-code bridge — 2026-10-16
+## Completed: inductive two-cycle Hall bridge — 2026-10-16
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
+Lean/paper source, or circular code is owned.
+
+The endpoint code bridge below was not yet genuinely recursive.  Its first
+paired-trace shape mismatch is `mu=(3,1)`, source `1323`, at depth one:
+source residual shape `(1,1,1)` versus target residual shape `(2,1)`.  Adding
+the residual partition to every code step makes this obstruction visible.
+With at most one alternating cycle per deletion, the shape-enriched graph has
+perfect matchings in 106/107 fixed-content buckets through rank five; the
+first exact failure is `mu=(3,2)`, squarefree source `12345`.  Allowing two
+successive simple alternating cycles restores all 107/107 buckets.
+
+Choosing these shape-enriched matchings independently at every rank is still
+not inductive: the first mismatch is `mu=(3,1)`, source `3312`, whose chosen
+rank-three residual pair differs from the separately chosen rank-three map.
+`HallRecursiveBumpBridge` now fixes this by induction.  A rank-`n` edge is
+admissible only when its source and target first-step drops and residual row
+shapes agree *and* the residual pair is exactly an edge of the already chosen
+rank-`n-1` bridge.  Deterministic perfect matchings still exist for every one
+of the 19 Hall diagrams and all 1119 packed strict colorings through rank
+five.  Thus the resulting endpoint map factors through its recorded smaller
+objects at every depth.
+
+Each certificate contains the target coloring, the common sequence
+`(signed degree drop, residual row shape)`, and the complete source and target
+matrix traces.  Exhaustive checks verify forward/inverse recovery, exact
+packed color content, strictness, valid at-most-two-cycle transitions, one
+incidence deleted per step, recursive agreement with the independently built
+residual bridge, and
+`asc(source)-shift = sum(drops) = charge(target)`.  The CLI prints the
+certificate and readable traces.  This is now a genuine finite recursive
+bijection on the tested Hall--Littlewood subset, but the per-content perfect
+matching and enumeration of all radius-two cycle moves remain global search;
+the next research target is a closed `PullUp`-style selector producing the
+same inductive edge locally.
+
+Current verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 24 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
+## Superseded checkpoint: endpoint one-cycle Hall bump-code bridge — 2026-10-16
 
 `/root` completed and releases
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
