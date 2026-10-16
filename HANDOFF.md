@@ -1,5 +1,79 @@
 # Handoff
 
+## Completed: Hall--Littlewood charge bridge and charge repair — 2026-10-16
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs`,
+`sym-poly/core/src/tableau.rs`, and this handoff on branch
+`exp/verticalstripllt-marked-coloring-bijection`.  No Lean/paper source,
+circular code, or other maintained API changed; the existing Rust branch was
+preserved and was not pushed.
+
+The exact-current cached source is arXiv `1903.03998v3`, tree SHA-256
+`32e82b0272e790383b66d9b0f7b0acc1727b58e4b86746e92be1a9f2cb6001b0`, at
+`/papers/math-co/arxiv-extract/arxiv-sources/1903.03998v3`.  Definition 36 has
+two literal endpoint errors: its clique intervals overlap and the displayed
+triangular bound produces too many edges.  The implementation uses the unique
+interpretation agreeing with the stated `binom(mu_j,2)` count and the printed
+`Gamma_432` figure: disjoint clique blocks, cross-block offsets
+`i+k <= mu_j-2`, and all outer corners strict.  The figure's normal-area
+sequence `[0,1,2,3,2,2,2,1,1]`, complete-graph cases, and strict-chain cases
+are regression-tested.
+
+`--hall-littlewood-report --max-n 5` audits all 19 partitions through rank
+five.  In every case the final positive HRV survivor multiplicities agree
+exactly, degree by degree and conjugate shape by conjugate shape, with
+`q^A K_{nu,mu'}(q)` computed from charge tableaux.  A reversible
+`HallLittlewoodBridge` now pairs survivors with those tableaux inside each
+exact bucket while leaving the arbitrary insertion tableau `P` unchanged.
+Thus the original coloring polynomial `G_{Gamma_mu}` maps to pairs `(T,P)`
+where `T` has content `mu'`, `P` has shape conjugate to `shape(T)`, and the
+degree is `A+charge(T)`.  This is a genuine canonical-rank certificate, but is
+not yet the desired local HRV-to-charge shortcut.  `--hall-partition 2,2`
+prints a human-readable forward/reverse bridge.
+
+The restricted family simplifies but does not eliminate tableau transport.
+Exact `Q` fails first for `mu=(2,2)` and also for `(3,2)` and `(2,2,1)` through
+rank five.  For `(2,2)`, the forced degree-one cancellation is the one-edge
+toggle `eta: {12,23}->{23}`, with fixed `B={23}`, together with the elementary
+dual-equivalence move `d_2(Q)`; neither mark transfer nor triangle surgery is
+needed.  Charge extraction for content `mu'` has successive subword lengths
+`mu_1,mu_2,...`, exactly the clique-block sizes, making Pieri switching between
+these rounds the strongest current shortcut candidate.  Fixed strict-chain
+RSK already fails on `mu=(2,2)`, coloring `(1,3,2,4)`: the two chain orders
+land in degrees three and one rather than the required degree two.
+
+The audit exposed a real shared-library bug: `Tableau::charge()` discarded the
+positions selected into every standard subword and computed
+`maj(inverse(reverse(w)))` instead of SymCat's
+`maj(reverse(inverse(w)))`.  `word_charge` and `word_cocharge` now preserve
+subword order, use the correct charge labels, and normalize nonpartition
+content via RSK plus the existing Lascoux--Schuetzenberger involutions.  Exact
+tests include row/column tableaux, SymCat's four-subword charge-eight example,
+cocharge complements, and nonpartition Sage reference values.  The experiment
+now uses this shared API; its duplicate workaround was removed.
+
+Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --locked -p sym-poly-core                         # 133 passed
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                       # 15 passed
+cargo clippy --locked -p sym-poly-core --no-deps -- -D warnings \
+  -A clippy::suspicious_arithmetic_impl -A clippy::needless_range_loop \
+  -A clippy::while_let_loop -A clippy::type_complexity \
+  -A clippy::new_without_default
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
+Unqualified strict Clippy remains blocked by pre-existing warnings in
+`combinatoric-core` and unrelated `sym-poly-core` files; the scoped owned-file
+gates above are clean.
+
 ## Completed: fixed-HRV Boolean cancellation and residual census — 2026-10-15
 
 `/root` completed and releases

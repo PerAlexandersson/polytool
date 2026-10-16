@@ -25,6 +25,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use clap::Parser;
+use combpoly::rook_placements::integer_partitions;
 use sym_poly_core::{Partition, Tableau};
 use sym_poly_sym::llt::highest_reachable_vertices;
 use sym_poly_sym::unit_interval_edges;
@@ -87,6 +88,14 @@ struct Args {
     /// Audit the explicit sign involution at fixed HRV map, B, Q, and P.
     #[arg(long)]
     boolean_report: bool,
+
+    /// Restrict the cancellation audit to the Hall--Littlewood diagrams Gamma_mu.
+    #[arg(long)]
+    hall_littlewood_report: bool,
+
+    /// Print the surviving HRV-to-charge bridge for one comma-separated partition.
+    #[arg(long, value_delimiter = ',', num_args = 1..)]
+    hall_partition: Option<Vec<usize>>,
 
     /// Skip the optional transported-S_i Coxeter stress test in Schur reports.
     #[arg(long)]
@@ -3608,6 +3617,94 @@ impl SchurCancellation {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct HallLittlewoodSchurState {
+    charge_rows: Vec<Vec<u32>>,
+    insertion_rows: Vec<Vec<u32>>,
+}
+
+struct HallLittlewoodBridge {
+    to_charge: BTreeMap<TableauSkeleton, Vec<Vec<u32>>>,
+    from_charge: BTreeMap<Vec<Vec<u32>>, TableauSkeleton>,
+}
+
+impl HallLittlewoodBridge {
+    fn build(parts: &[usize], cancellation: &SchurCancellation) -> Result<Self, String> {
+        let mut skeletons_by_key = BTreeMap::<SchurKey, Vec<TableauSkeleton>>::new();
+        for skeleton in &cancellation.fixed {
+            skeletons_by_key
+                .entry(skeleton_key(skeleton))
+                .or_default()
+                .push(skeleton.clone());
+        }
+        for skeletons in skeletons_by_key.values_mut() {
+            skeletons.sort();
+        }
+        let charge_by_key = hall_littlewood_charge_tableaux(parts);
+        let skeleton_counts = skeletons_by_key
+            .iter()
+            .map(|(key, values)| (key.clone(), values.len()))
+            .collect::<BTreeMap<_, _>>();
+        let charge_counts = charge_by_key
+            .iter()
+            .map(|(key, values)| (key.clone(), values.len()))
+            .collect::<BTreeMap<_, _>>();
+        if skeleton_counts != charge_counts {
+            return Err(format!(
+                "Hall--Littlewood bridge multiplicities disagree for mu={parts:?}: skeletons={skeleton_counts:?}, charge={charge_counts:?}"
+            ));
+        }
+
+        let mut to_charge = BTreeMap::new();
+        let mut from_charge = BTreeMap::new();
+        for (key, skeletons) in skeletons_by_key {
+            let tableaux = charge_by_key
+                .get(&key)
+                .expect("equal key-count maps contain the key");
+            for (skeleton, rows) in skeletons.into_iter().zip(tableaux.iter().cloned()) {
+                to_charge.insert(skeleton.clone(), rows.clone());
+                from_charge.insert(rows, skeleton);
+            }
+        }
+        Ok(Self {
+            to_charge,
+            from_charge,
+        })
+    }
+
+    fn encode(
+        &self,
+        state: &SignedTableauState,
+    ) -> Result<HallLittlewoodSchurState, String> {
+        let charge_rows = self
+            .to_charge
+            .get(&tableau_skeleton(state))
+            .ok_or_else(|| "Hall--Littlewood encoding requires a surviving skeleton".to_string())?;
+        Ok(HallLittlewoodSchurState {
+            charge_rows: charge_rows.clone(),
+            insertion_rows: state.insertion_rows.clone(),
+        })
+    }
+
+    fn decode(
+        &self,
+        path: &PathData,
+        state: &HallLittlewoodSchurState,
+    ) -> Result<SignedTableauState, String> {
+        let skeleton = self.from_charge.get(&state.charge_rows).ok_or_else(|| {
+            "charge tableau is absent from the Hall--Littlewood bridge".to_string()
+        })?;
+        let decoded = SignedTableauState {
+            orientation_mask: skeleton.orientation_mask,
+            retained_orientation_mask: skeleton.retained_orientation_mask,
+            insertion_rows: state.insertion_rows.clone(),
+            recording_rows: skeleton.recording_rows.clone(),
+        };
+        tableau_target(path, &decoded)?;
+        Ok(decoded)
+    }
+}
+
 #[derive(Clone, Debug)]
 struct InvolutionPrincipleCertificate {
     source_coloring: Vec<u8>,
@@ -3838,6 +3935,136 @@ fn all_paths(n: usize) -> Vec<PathData> {
     let mut steps = Vec::new();
     enumerate_paths(n, 0, 0, &mut steps, &mut paths);
     paths
+}
+
+/// Definition 36 of Alexandersson's melting-lollipop paper.
+///
+/// Vertices use zero-based indices here.  The source prose has endpoint shifts;
+/// we use the interpretation forced by its `Gamma_432` figure: disjoint clique
+/// blocks and exactly `binom(mu_j, 2)` triangular cross-block edges.  Every
+/// outer corner is then declared strict.
+fn hall_littlewood_path(parts: &[usize]) -> Result<PathData, String> {
+    if parts.windows(2).any(|pair| pair[0] < pair[1]) || parts.contains(&0) {
+        return Err(format!("not an integer partition: {parts:?}"));
+    }
+    let n = parts.iter().sum::<usize>();
+    let mut normal = BTreeSet::new();
+    let mut prefix = 0usize;
+    for (block, &part) in parts.iter().enumerate() {
+        let start = prefix;
+        let end = prefix + part - 1;
+        for tail in start..=end {
+            for head in tail + 1..=end {
+                normal.insert((tail, head));
+            }
+        }
+        if block > 0 && part >= 2 {
+            let boundary = prefix - 1;
+            for left_offset in 0..part {
+                for right_offset in 0..part {
+                    if left_offset + right_offset <= part - 2 {
+                        normal.insert((boundary - left_offset, boundary + right_offset + 1));
+                    }
+                }
+            }
+        }
+        prefix += part;
+    }
+
+    let mut strict = BTreeSet::new();
+    for tail in 0..n {
+        for head in tail + 1..n {
+            if normal.contains(&(tail, head)) {
+                continue;
+            }
+            let outer_corner = head == tail + 1
+                || (normal.contains(&(tail + 1, head)) && normal.contains(&(tail, head - 1)));
+            if outer_corner {
+                strict.insert((tail, head));
+            }
+        }
+    }
+
+    all_paths(n)
+        .into_iter()
+        .find(|path| {
+            path.normal_edges.iter().copied().collect::<BTreeSet<_>>() == normal
+                && path.strict_edges.iter().copied().collect::<BTreeSet<_>>() == strict
+        })
+        .ok_or_else(|| {
+            format!(
+                "Hall--Littlewood diagram {parts:?} is not represented by an ordinary Schroeder path; normal={normal:?}, strict={strict:?}"
+            )
+        })
+}
+
+fn conjugate_parts(parts: &[usize]) -> Vec<usize> {
+    (1..=parts.first().copied().unwrap_or(0))
+        .map(|column| parts.iter().filter(|&&part| part >= column).count())
+        .collect()
+}
+
+/// Schur multiplicities of the original coloring polynomial `G_mu`.
+///
+/// Proposition 37 gives `omega G_mu = q^A H_{mu'}`.  Applying `omega` to the
+/// charge expansion conjugates each Schur shape, which is why the key below is
+/// `conjugate(shape(T))` rather than `shape(T)`.
+fn hall_littlewood_charge_tableaux(
+    parts: &[usize],
+) -> BTreeMap<SchurKey, Vec<Vec<Vec<u32>>>> {
+    let n = parts.iter().sum::<usize>();
+    if n == 0 {
+        return BTreeMap::from([(
+            SchurKey {
+                q_degree: 0,
+                shape: Vec::new(),
+            },
+            vec![Vec::new()],
+        )]);
+    }
+    let content = conjugate_parts(parts);
+    let shift = parts
+        .iter()
+        .skip(1)
+        .map(|&part| part * part.saturating_sub(1) / 2)
+        .sum::<usize>();
+    let mut tableaux = BTreeMap::<SchurKey, Vec<Vec<Vec<u32>>>>::new();
+    for shape_parts in integer_partitions(n) {
+        let shape = Partition::from_sorted(
+            shape_parts
+                .iter()
+                .map(|&part| part as u32)
+                .collect::<Vec<_>>(),
+        );
+        for tableau in Tableau::semistandard_tableaux(&shape, content.len() as u32) {
+            let mut actual_content = vec![0usize; content.len()];
+            for &entry in tableau.rows().iter().flatten() {
+                actual_content[entry as usize - 1] += 1;
+            }
+            if actual_content != content {
+                continue;
+            }
+            let key = SchurKey {
+                q_degree: shift + tableau.charge() as usize,
+                shape: conjugate_parts(&shape_parts),
+            };
+            tableaux
+                .entry(key)
+                .or_default()
+                .push(tableau.rows().to_vec());
+        }
+    }
+    for values in tableaux.values_mut() {
+        values.sort();
+    }
+    tableaux
+}
+
+fn hall_littlewood_charge_multiplicities(parts: &[usize]) -> BTreeMap<SchurKey, usize> {
+    hall_littlewood_charge_tableaux(parts)
+        .into_iter()
+        .map(|(key, tableaux)| (key, tableaux.len()))
+        .collect()
 }
 
 fn enumerate_paths(
@@ -5490,6 +5717,145 @@ fn print_boolean_report(max_n: usize) -> Result<(), String> {
     Ok(())
 }
 
+fn print_hall_littlewood_report(max_n: usize) -> Result<(), String> {
+    let mut total_diagrams = 0usize;
+    let mut exact_q_failures = 0usize;
+    let mut triangle_failures = 0usize;
+    let mut first_exact_q_failure = None;
+    for n in 0..=max_n {
+        let partitions = integer_partitions(n);
+        println!("Hall--Littlewood rank {n}: {} partitions", partitions.len());
+        for parts in partitions {
+            let path = hall_littlewood_path(&parts)?;
+            let boolean = audit_boolean_hrv_for_path(&path)?;
+            let exact_q = match SchurCancellation::build_exact_q_metric_local(&path, u32::MAX) {
+                Ok(_) => true,
+                Err(error) => {
+                    exact_q_failures += 1;
+                    if first_exact_q_failure.is_none() {
+                        first_exact_q_failure = Some(format!("mu={parts:?}: {error}"));
+                    }
+                    false
+                }
+            };
+            let mut residual_radius = None;
+            for radius in (1..=(2 * path.normal_edges.len()).max(1) as u32).step_by(2) {
+                if SchurCancellation::build_boolean_reduced_metric_local(&path, radius).is_ok() {
+                    residual_radius = Some(radius);
+                    break;
+                }
+            }
+            let residual_radius = residual_radius.ok_or_else(|| {
+                format!("no bounded residual matching for Hall--Littlewood partition {parts:?}")
+            })?;
+            let triangle = SchurCancellation::build_boolean_reduced_toggle_triangle(&path).is_ok();
+            if !triangle {
+                triangle_failures += 1;
+            }
+            let mut dual_cache = BTreeMap::new();
+            let moves = census_moves_for_path(&path, &mut dual_cache, true)?;
+            let cancellation = SchurCancellation::build(&path)?;
+            let actual_multiplicities = cancellation.fixed_multiplicities.clone();
+            let charge_multiplicities = hall_littlewood_charge_multiplicities(&parts);
+            if actual_multiplicities != charge_multiplicities {
+                return Err(format!(
+                    "Hall--Littlewood charge multiplicities disagree for mu={parts:?}: cancellation={actual_multiplicities:?}, charge={charge_multiplicities:?}"
+                ));
+            }
+            let bridge = HallLittlewoodBridge::build(&parts, &cancellation)?;
+            for skeleton in &cancellation.fixed {
+                let tableau_state = SignedTableauState {
+                    orientation_mask: skeleton.orientation_mask,
+                    retained_orientation_mask: skeleton.retained_orientation_mask,
+                    insertion_rows: skeleton.recording_rows.clone(),
+                    recording_rows: skeleton.recording_rows.clone(),
+                };
+                let charge_state = bridge.encode(&tableau_state)?;
+                if bridge.decode(&path, &charge_state)? != tableau_state {
+                    return Err(format!(
+                        "Hall--Littlewood charge bridge did not invert for mu={parts:?}"
+                    ));
+                }
+            }
+            let max_dual_distance = moves
+                .dual_distance_counts
+                .keys()
+                .next_back()
+                .copied()
+                .unwrap_or(0);
+            println!(
+                "  mu={parts:?}, path={}, area={:?}, strict={}: Boolean {}+ / {}-, residual radius {residual_radius}, exact-Q {}, toggle-triangle {}, max d_Q {max_dual_distance}, {} charge tableaux [exact]",
+                path.word(),
+                path.area_sequence(),
+                format_edges(
+                    (1u64 << path.strict_edges.len()).saturating_sub(1),
+                    &path.strict_edges
+                ),
+                boolean.positive_survivors,
+                boolean.negative_survivors,
+                if exact_q { "yes" } else { "NO" },
+                if triangle { "yes" } else { "NO" },
+                moves.survivors
+            );
+            total_diagrams += 1;
+        }
+    }
+    println!(
+        "Hall--Littlewood ranks 0..={max_n}: {total_diagrams} diagrams; {exact_q_failures} exact-Q failures; {triangle_failures} toggle-triangle failures"
+    );
+    if let Some(failure) = first_exact_q_failure {
+        println!("first exact-Q failure: {failure}");
+    }
+    Ok(())
+}
+
+fn print_hall_littlewood_bridge(parts: &[usize]) -> Result<(), String> {
+    let path = hall_littlewood_path(parts)?;
+    let cancellation = SchurCancellation::build(&path)?;
+    let bridge = HallLittlewoodBridge::build(parts, &cancellation)?;
+    let content = conjugate_parts(parts);
+    let shift = parts
+        .iter()
+        .skip(1)
+        .map(|&part| part * part.saturating_sub(1) / 2)
+        .sum::<usize>();
+    println!(
+        "Hall--Littlewood bridge mu={parts:?}: path {}, normal {}, strict {}, charge content mu'={content:?}, shift A={shift}",
+        path.word(),
+        format_edges(
+            (1u64 << path.normal_edges.len()).saturating_sub(1),
+            &path.normal_edges
+        ),
+        format_edges(
+            (1u64 << path.strict_edges.len()).saturating_sub(1),
+            &path.strict_edges
+        )
+    );
+    println!(
+        "Each line is a reversible canonical-rank certificate; P is unchanged and has the conjugate shape of T."
+    );
+    for skeleton in &cancellation.fixed {
+        let charge_rows = bridge
+            .to_charge
+            .get(skeleton)
+            .expect("bridge covers every surviving skeleton");
+        let tableau = Tableau::new(charge_rows.clone());
+        let key = skeleton_key(skeleton);
+        println!(
+            "  degree {}, shape(P)={:?}: eta={}, B={}, Q={}  <->  T={} (shape {:?}, charge {})",
+            key.q_degree,
+            key.shape,
+            format_edges(skeleton.orientation_mask, &path.normal_edges),
+            format_edges(skeleton.retained_orientation_mask, &path.normal_edges),
+            format_tableau(&skeleton.recording_rows),
+            format_tableau(charge_rows),
+            tableau_shape(charge_rows),
+            tableau.charge()
+        );
+    }
+    Ok(())
+}
+
 fn run(args: Args) -> Result<(), String> {
     if args.k3_map {
         print_k3_map()?;
@@ -5581,6 +5947,14 @@ fn run(args: Args) -> Result<(), String> {
         } else {
             print_boolean_report(args.max_n)?;
         }
+        return Ok(());
+    }
+    if args.hall_littlewood_report {
+        print_hall_littlewood_report(args.max_n)?;
+        return Ok(());
+    }
+    if let Some(parts) = args.hall_partition.as_deref() {
+        print_hall_littlewood_bridge(parts)?;
         return Ok(());
     }
     if args.local_schur_report {
@@ -5892,5 +6266,68 @@ mod tests {
             .unwrap();
         assert!(error.contains("same-Q counts +1 -2"));
         assert!(error.contains("Q=[1 3]/[2]/[4]"));
+    }
+
+    #[test]
+    fn hall_littlewood_paths_match_the_paper_models() {
+        for n in 1..=5 {
+            let complete = hall_littlewood_path(&[n]).unwrap();
+            assert_eq!(complete.normal_edges.len(), n * (n - 1) / 2);
+            assert!(complete.strict_edges.is_empty());
+
+            let column = hall_littlewood_path(&vec![1; n]).unwrap();
+            assert!(column.normal_edges.is_empty());
+            assert_eq!(
+                column.strict_edges,
+                (0..n.saturating_sub(1))
+                    .map(|vertex| (vertex, vertex + 1))
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        let gamma_432 = hall_littlewood_path(&[4, 3, 2]).unwrap();
+        let normal_area = (0..gamma_432.n)
+            .map(|head| {
+                gamma_432
+                    .normal_edges
+                    .iter()
+                    .filter(|&&(_, edge_head)| edge_head == head)
+                    .count()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(normal_area, vec![0, 1, 2, 3, 2, 2, 2, 1, 1]);
+    }
+
+    #[test]
+    fn hall_littlewood_charge_bridge_round_trips_through_rank_five() {
+        let mut diagrams = 0usize;
+        for n in 0..=5 {
+            for parts in integer_partitions(n) {
+                let path = hall_littlewood_path(&parts).unwrap();
+                let cancellation = SchurCancellation::build(&path).unwrap();
+                assert_eq!(
+                    cancellation.fixed_multiplicities,
+                    hall_littlewood_charge_multiplicities(&parts),
+                    "mu={parts:?}"
+                );
+                let bridge = HallLittlewoodBridge::build(&parts, &cancellation).unwrap();
+                for skeleton in &cancellation.fixed {
+                    let tableau_state = SignedTableauState {
+                        orientation_mask: skeleton.orientation_mask,
+                        retained_orientation_mask: skeleton.retained_orientation_mask,
+                        insertion_rows: skeleton.recording_rows.clone(),
+                        recording_rows: skeleton.recording_rows.clone(),
+                    };
+                    let charge_state = bridge.encode(&tableau_state).unwrap();
+                    assert_eq!(
+                        bridge.decode(&path, &charge_state).unwrap(),
+                        tableau_state,
+                        "mu={parts:?}"
+                    );
+                }
+                diagrams += 1;
+            }
+        }
+        assert_eq!(diagrams, 19);
     }
 }

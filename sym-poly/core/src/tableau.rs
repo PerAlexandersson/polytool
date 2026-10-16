@@ -1163,14 +1163,16 @@ impl Tableau {
 
     /// Charge of a semistandard Young tableau.
     ///
-    /// Decomposes the reverse row reading word into standard subwords,
-    /// then sums the charge of each subword.
+    /// Uses the conventional bottom-to-top row reading word.  If the weight is
+    /// not a partition, [`word_charge`] first applies
+    /// Lascoux--Schützenberger weight normalization.
     pub fn charge(&self) -> u32 {
         let word = self.reverse_row_reading_word();
         word_charge(&word)
     }
 
-    /// Cocharge of a semistandard Young tableau.
+    /// Cocharge of a semistandard Young tableau, using the same reading-word
+    /// and normalization conventions as [`Self::charge`].
     pub fn cocharge(&self) -> u32 {
         let word = self.reverse_row_reading_word();
         word_cocharge(&word)
@@ -1216,11 +1218,33 @@ fn row_insert_into(rows: &mut Vec<Vec<u32>>, start_row: usize, value: u32) -> us
 
 /// Charge of a word (Lascoux-Schützenberger).
 ///
-/// Decomposes the word into standard subwords and sums their charges.
+/// For partition content, this decomposes the word into standard subwords and
+/// sums their charges.  General positive words are first normalized to
+/// partition content by the Lascoux--Schützenberger involutions on their RSK
+/// insertion tableau.
+///
+/// # Panics
+///
+/// Panics if an entry is zero.  Tableau words use positive integer entries.
 pub fn word_charge(word: &[u32]) -> u32 {
     if word.is_empty() {
         return 0;
     }
+    assert!(
+        word.iter().all(|&entry| entry > 0),
+        "charge is defined for positive integer words"
+    );
+
+    if !has_partition_content(word) {
+        let (insertion, _) = Tableau::rsk(word);
+        let normalized = insertion.weight_normalize();
+        return partition_word_charge(&normalized.reading_word());
+    }
+
+    partition_word_charge(word)
+}
+
+fn partition_word_charge(word: &[u32]) -> u32 {
     let subwords = charge_word_decompose(word);
     subwords.iter().map(|sw| permutation_charge(sw)).sum()
 }
@@ -1230,14 +1254,35 @@ pub fn word_cocharge(word: &[u32]) -> u32 {
     if word.is_empty() {
         return 0;
     }
-    let subwords = charge_word_decompose(word);
-    subwords
+    assert!(
+        word.iter().all(|&entry| entry > 0),
+        "cocharge is defined for positive integer words"
+    );
+    let counts = evaluation(word);
+    let normalization = counts
         .iter()
-        .map(|sw| {
-            let n = sw.iter().copied().max().unwrap_or(0);
-            n * (n - 1) / 2 - permutation_charge(sw)
+        .enumerate()
+        .map(|(index, &left)| {
+            counts[index + 1..]
+                .iter()
+                .map(|&right| left.min(right))
+                .sum::<u32>()
         })
-        .sum()
+        .sum::<u32>();
+    normalization - word_charge(word)
+}
+
+fn evaluation(word: &[u32]) -> Vec<u32> {
+    let max_entry = word.iter().copied().max().unwrap_or(0) as usize;
+    let mut counts = vec![0u32; max_entry];
+    for &entry in word {
+        counts[entry as usize - 1] += 1;
+    }
+    counts
+}
+
+fn has_partition_content(word: &[u32]) -> bool {
+    evaluation(word).windows(2).all(|pair| pair[0] >= pair[1])
 }
 
 /// Decompose a word into standard subwords for charge computation.
@@ -1253,7 +1298,7 @@ fn charge_word_decompose(word: &[u32]) -> Vec<Vec<u32>> {
     let mut subwords = Vec::new();
 
     while remaining.iter().any(|x| x.is_some()) {
-        let mut subword = Vec::new();
+        let mut selected = Vec::new();
         // Start scanning from the rightmost position
         let mut cursor = n - 1;
 
@@ -1263,7 +1308,7 @@ fn charge_word_decompose(word: &[u32]) -> Vec<Vec<u32>> {
             for step in 0..n {
                 let idx = (cursor + n - step) % n;
                 if remaining[idx] == Some(target) {
-                    subword.push(target);
+                    selected.push((idx, target));
                     remaining[idx] = None;
                     cursor = idx;
                     found = true;
@@ -1274,34 +1319,38 @@ fn charge_word_decompose(word: &[u32]) -> Vec<Vec<u32>> {
                 break;
             }
         }
-        if !subword.is_empty() {
-            subwords.push(subword);
-        }
+        assert!(
+            !selected.is_empty(),
+            "charge subword decomposition requires partition content"
+        );
+        selected.sort_unstable_by_key(|&(index, _)| index);
+        subwords.push(selected.into_iter().map(|(_, value)| value).collect());
     }
     subwords
 }
 
 /// Charge of a standard subword (permutation).
 ///
-/// charge(w) = major index of the inverse of the reverse of w.
+/// `charge(w) = maj(reverse(inverse(w)))`.
 fn permutation_charge(word: &[u32]) -> u32 {
     if word.len() <= 1 {
         return 0;
     }
     let n = word.len();
-    // Compute inverse of reversed word
-    let mut inv = vec![0u32; n];
-    for (i, &v) in word.iter().rev().enumerate() {
-        inv[(v - 1) as usize] = i as u32 + 1;
+    let mut positions = vec![0usize; n + 1];
+    for (index, &value) in word.iter().enumerate() {
+        positions[value as usize] = index;
     }
-    // Major index of inv
-    let mut maj = 0u32;
-    for i in 0..n - 1 {
-        if inv[i] > inv[i + 1] {
-            maj += i as u32 + 1;
+
+    let mut label = 0u32;
+    let mut charge = 0u32;
+    for value in 2..=n {
+        if positions[value] > positions[value - 1] {
+            label += 1;
         }
+        charge += label;
     }
-    maj
+    charge
 }
 
 impl fmt::Display for Tableau {
@@ -1616,13 +1665,46 @@ mod tests {
     // ── Charge tests ───────────────────────────────────────────────
 
     #[test]
-    fn test_charge_ssyt() {
-        // Charge is computed from the reverse row reading word.
-        // For [[1,1,2],[2,3]]: reverse reading word = [2,3,1,1,2]
-        // The decomposition and charge depend on the algorithm.
-        // Basic sanity: charge should be non-negative.
+    fn charge_distinguishes_row_and_column_tableaux() {
+        let row = Tableau::new(vec![vec![1, 2, 3]]);
+        let column = Tableau::new(vec![vec![1], vec![2], vec![3]]);
+        assert_eq!(row.charge(), 3);
+        assert_eq!(row.cocharge(), 0);
+        assert_eq!(column.charge(), 0);
+        assert_eq!(column.cocharge(), 3);
+    }
+
+    #[test]
+    fn charge_uses_standard_subwords_in_their_original_order() {
+        // Example from the SymCat Kostka--Foulkes page.
+        let word = vec![2, 1, 1, 2, 3, 5, 4, 3, 4, 1, 1, 2, 2, 3];
+        assert_eq!(
+            charge_word_decompose(&word),
+            vec![
+                vec![2, 5, 4, 1, 3],
+                vec![2, 4, 3, 1],
+                vec![1, 3, 2],
+                vec![1, 2]
+            ]
+        );
+        assert_eq!(word_charge(&word), 8);
+        assert_eq!(word_cocharge(&word), 12);
+    }
+
+    #[test]
+    fn charge_normalizes_nonpartition_content() {
+        // Reference values agree with Sage's Lascoux--Schuetzenberger charge.
+        assert_eq!(word_charge(&[3, 3, 2, 1, 1]), 0);
+        assert_eq!(word_charge(&[1, 2, 3, 1, 2]), 2);
+        assert_eq!(word_charge(&[2, 1, 2]), 0);
+        assert_eq!(word_cocharge(&[2, 1, 2]), 1);
+    }
+
+    #[test]
+    fn charge_ssyt_matches_kostka_foulkes_convention() {
+        // Reading word [2,3,1,1,2] has charge and cocharge both equal to two.
         let ssyt = Tableau::new(vec![vec![1, 1, 2], vec![2, 3]]);
-        let c = ssyt.charge();
-        assert!(c < 100, "charge should be reasonable: {}", c);
+        assert_eq!(ssyt.charge(), 2);
+        assert_eq!(ssyt.cocharge(), 2);
     }
 }
