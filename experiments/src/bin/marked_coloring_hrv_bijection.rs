@@ -27,10 +27,11 @@
 //! adjacent levels give candidate `e_i,f_i` strings and expose their first K4
 //! three-color compatibility obstruction.
 //! A shorter genuine crystal map standardizes LLT colorings with decreasing
-//! vertex order inside color ties, canonically matches equal
-//! `(q-degree, descent-set)` buckets with copies of standard tableaux, and
-//! destandardizes to SSYT.  This map is explicitly invertible and isolates the
-//! remaining problem as a dual-equivalence rule on standard permutations.
+//! vertex order inside color ties, transforms each initial LLT
+//! dual-equivalence component to standard-tableau copies while retaining a
+//! maximum number of its edges, and destandardizes to SSYT.  This map is
+//! explicitly invertible and isolates the remaining nonlocality in a small set
+//! of dual-equivalence edge surgeries.
 //!
 //! The ordinary flip experiment implements the verified reachability-cover
 //! short-edge move exactly.  It refines the coloring/HRV matching by complete
@@ -11126,72 +11127,75 @@ struct FundamentalSchurBridge {
 
 impl FundamentalSchurBridge {
     fn build(path: &PathData) -> Result<Self, String> {
-        let mut source = BTreeMap::<(usize, BTreeSet<u32>), Vec<Vec<u32>>>::new();
-        for permutation in permutations(path.n)
+        let states = permutations(path.n)
             .into_iter()
             .filter(|permutation| {
                 path.strict_edges
                     .iter()
                     .all(|&(tail, head)| permutation[tail] < permutation[head])
             })
-        {
+            .collect::<BTreeSet<_>>();
+        let standard_distributions = standard_tableau_descent_distributions(path.n);
+        let mut unvisited = states.clone();
+        let mut next_copy = BTreeMap::<SchurKey, usize>::new();
+        let mut forward = BTreeMap::new();
+        let mut inverse = BTreeMap::new();
+        while let Some(start) = unvisited.iter().next().cloned() {
+            let mut component = BTreeSet::from([start.clone()]);
+            let mut queue = VecDeque::from([start]);
+            while let Some(state) = queue.pop_front() {
+                for index in 2..path.n as u32 {
+                    let next = llt_dual_equivalence_step(path, &state, index)?;
+                    if component.insert(next.clone()) {
+                        queue.push_back(next);
+                    }
+                }
+            }
+            for state in &component {
+                unvisited.remove(state);
+            }
+            let mut distribution = DescentDistribution::new();
+            for state in &component {
+                *distribution
+                    .entry(llt_standard_descent_set(state))
+                    .or_default() += 1;
+            }
+            let shapes = decompose_descent_distribution(&distribution, &standard_distributions)
+                .ok_or_else(|| {
+                    format!(
+                        "initial LLT component is not Schur positive on path {}",
+                        path.word()
+                    )
+                })?;
+            let (local_map, _) =
+                component_maximum_agreement_dual_map(path, &component, &shapes)?;
             let degree = path
                 .normal_edges
                 .iter()
-                .filter(|&&(tail, head)| permutation[tail] < permutation[head])
+                .filter(|&&(tail, head)| component.iter().next().unwrap()[tail]
+                    < component.iter().next().unwrap()[head])
                 .count();
-            source
-                .entry((degree, llt_standard_descent_set(&permutation)))
-                .or_default()
-                .push(permutation);
-        }
-        let schur = SchurCancellation::build(path)?;
-        let mut target =
-            BTreeMap::<(usize, BTreeSet<u32>), Vec<FundamentalStandardTarget>>::new();
-        for (key, &multiplicity) in &schur.fixed_multiplicities {
-            let partition = Partition::from_sorted(
-                key.shape
-                    .iter()
-                    .map(|&part| part as u32)
-                    .collect::<Vec<_>>(),
-            );
-            for tableau in Tableau::standard_tableaux(&partition) {
-                for copy in 0..multiplicity {
-                    target
-                        .entry((key.q_degree, tableau.descent_set()))
-                        .or_default()
-                        .push(FundamentalStandardTarget {
-                            q_degree: key.q_degree,
-                            shape: key.shape.clone(),
-                            copy,
-                            standard_rows: tableau.rows().to_vec(),
-                        });
-                }
-            }
-        }
-        let keys = source
-            .keys()
-            .chain(target.keys())
-            .cloned()
-            .collect::<BTreeSet<_>>();
-        let mut forward = BTreeMap::new();
-        let mut inverse = BTreeMap::new();
-        for key in keys {
-            let mut sources = source.remove(&key).unwrap_or_default();
-            let mut targets = target.remove(&key).unwrap_or_default();
-            sources.sort();
-            targets.sort();
-            if sources.len() != targets.len() {
-                return Err(format!(
-                    "fundamental bucket mismatch for path {}, degree {}, descents {:?}: {} != {}",
-                    path.word(),
-                    key.0,
-                    key.1,
-                    sources.len(),
-                    targets.len()
-                ));
-            }
-            for (permutation, target) in sources.into_iter().zip(targets) {
+            let shape_copies = shapes
+                .iter()
+                .map(|shape| {
+                    let key = SchurKey {
+                        q_degree: degree,
+                        shape: shape.clone(),
+                    };
+                    let copy = next_copy.entry(key).or_default();
+                    let result = (shape.clone(), *copy);
+                    *copy += 1;
+                    result
+                })
+                .collect::<Vec<_>>();
+            for (permutation, local_target) in local_map {
+                let (shape, copy) = &shape_copies[local_target.shape_copy];
+                let target = FundamentalStandardTarget {
+                    q_degree: degree,
+                    shape: shape.clone(),
+                    copy: *copy,
+                    standard_rows: local_target.rows,
+                };
                 if forward.insert(permutation.clone(), target.clone()).is_some()
                     || inverse.insert(target, permutation).is_some()
                 {
@@ -11705,6 +11709,9 @@ struct LltDualEquivalenceAudit {
     edge_comparisons: usize,
     unchanged_edges: usize,
     transform_escapes: usize,
+    removed_undirected_edges: usize,
+    added_undirected_edges: usize,
+    edge_change_examples: BTreeSet<String>,
     failure_loci: BTreeSet<(String, usize)>,
     first_failure: Option<String>,
     first_rewiring: Option<String>,
@@ -11720,6 +11727,9 @@ impl LltDualEquivalenceAudit {
         self.edge_comparisons += other.edge_comparisons;
         self.unchanged_edges += other.unchanged_edges;
         self.transform_escapes += other.transform_escapes;
+        self.removed_undirected_edges += other.removed_undirected_edges;
+        self.added_undirected_edges += other.added_undirected_edges;
+        self.edge_change_examples.extend(other.edge_change_examples);
         self.failure_loci.extend(other.failure_loci);
         if self.first_failure.is_none() {
             self.first_failure = other.first_failure;
@@ -11741,8 +11751,12 @@ impl LltDualEquivalenceAudit {
             self.components
         );
         println!(
-            "  canonical SYT transformation retains {}/{} labeled vertex moves",
+            "  component-local maximum-agreement SYT transformation retains {}/{} labeled vertex moves",
             self.unchanged_edges, self.edge_comparisons
+        );
+        println!(
+            "  edge-set surgery removes {} and adds {} undirected colored edges",
+            self.removed_undirected_edges, self.added_undirected_edges
         );
         if let Some(failure) = &self.first_failure {
             println!("  first multi-Schur component: {failure}");
@@ -11755,6 +11769,9 @@ impl LltDualEquivalenceAudit {
                 "  transformed multi-Schur closure failures {} (first: {escape})",
                 self.transform_escapes
             );
+        }
+        for example in self.edge_change_examples.iter().take(12) {
+            println!("  edge surgery: {example}");
         }
         if !self.failure_loci.is_empty() {
             let shown = self
@@ -11825,22 +11842,171 @@ fn decompose_descent_distribution(
     recurse(distribution, candidates, 0)
 }
 
-fn fundamental_dual_equivalence_step(
-    bridge: &FundamentalSchurBridge,
-    permutation: &[u32],
-    index: u32,
-) -> Result<Vec<u32>, String> {
-    let target = bridge
-        .forward
-        .get(permutation)
-        .ok_or_else(|| "standard permutation is absent from the fundamental bridge".to_string())?;
-    let mut changed = target.clone();
-    changed.standard_rows = elementary_dual_equivalence(&target.standard_rows, index);
-    bridge
-        .inverse
-        .get(&changed)
-        .cloned()
-        .ok_or_else(|| "dual-equivalent tableau is absent from the fundamental bridge".to_string())
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct ComponentDualTarget {
+    shape_copy: usize,
+    rows: Vec<Vec<u32>>,
+}
+
+fn component_maximum_agreement_dual_map(
+    path: &PathData,
+    component: &BTreeSet<Vec<u32>>,
+    shapes: &[Vec<usize>],
+) -> Result<(BTreeMap<Vec<u32>, ComponentDualTarget>, usize), String> {
+    let sources = component.iter().cloned().collect::<Vec<_>>();
+    let mut targets = Vec::new();
+    for (shape_copy, shape) in shapes.iter().enumerate() {
+        let partition = Partition::from_sorted(
+            shape.iter().map(|&part| part as u32).collect::<Vec<_>>(),
+        );
+        targets.extend(
+            Tableau::standard_tableaux(&partition)
+                .into_iter()
+                .map(|tableau| ComponentDualTarget {
+                    shape_copy,
+                    rows: tableau.rows().to_vec(),
+                }),
+        );
+    }
+    targets.sort();
+    if sources.len() != targets.len() {
+        return Err("component Schur decomposition has the wrong total size".into());
+    }
+    let source_indices = sources
+        .iter()
+        .enumerate()
+        .map(|(index, source)| (source.clone(), index))
+        .collect::<BTreeMap<_, _>>();
+    let target_indices = targets
+        .iter()
+        .enumerate()
+        .map(|(index, target)| (target.clone(), index))
+        .collect::<BTreeMap<_, _>>();
+    let source_neighbors = sources
+        .iter()
+        .map(|source| {
+            (2..path.n as u32)
+                .map(|index| {
+                    let next = llt_dual_equivalence_step(path, source, index)?;
+                    source_indices
+                        .get(&next)
+                        .copied()
+                        .ok_or_else(|| "initial dual edge left its component".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let target_neighbors = targets
+        .iter()
+        .map(|target| {
+            (2..path.n as u32)
+                .map(|index| {
+                    let changed = ComponentDualTarget {
+                        shape_copy: target.shape_copy,
+                        rows: elementary_dual_equivalence(&target.rows, index),
+                    };
+                    target_indices
+                        .get(&changed)
+                        .copied()
+                        .ok_or_else(|| "standard dual edge left its shape copy".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let candidates = sources
+        .iter()
+        .map(|source| {
+            let descents = llt_standard_descent_set(source);
+            targets
+                .iter()
+                .enumerate()
+                .filter_map(|(index, target)| {
+                    (Tableau::new(target.rows.clone()).descent_set() == descents).then_some(index)
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    if candidates.iter().any(Vec::is_empty) {
+        return Err("component Schur decomposition has a missing descent signature".into());
+    }
+
+    fn search(
+        position: usize,
+        candidates: &[Vec<usize>],
+        used: &mut [bool],
+        assignment: &mut [usize],
+        source_neighbors: &[Vec<usize>],
+        target_neighbors: &[Vec<usize>],
+        best: &mut Option<(usize, Vec<usize>)>,
+    ) {
+        if position == assignment.len() {
+            let mut inverse = vec![0usize; assignment.len()];
+            for (source, &target) in assignment.iter().enumerate() {
+                inverse[target] = source;
+            }
+            let score = source_neighbors
+                .iter()
+                .enumerate()
+                .map(|(source, neighbors)| {
+                    neighbors
+                        .iter()
+                        .enumerate()
+                        .filter(|&(color, &source_next)| {
+                            let target = assignment[source];
+                            let target_next = target_neighbors[target][color];
+                            inverse[target_next] == source_next
+                        })
+                        .count()
+                })
+                .sum();
+            let replace = best.as_ref().is_none_or(|(best_score, best_assignment)| {
+                score > *best_score
+                    || score == *best_score && &*assignment < best_assignment.as_slice()
+            });
+            if replace {
+                *best = Some((score, assignment.to_vec()));
+            }
+            return;
+        }
+        for &target in &candidates[position] {
+            if used[target] {
+                continue;
+            }
+            used[target] = true;
+            assignment[position] = target;
+            search(
+                position + 1,
+                candidates,
+                used,
+                assignment,
+                source_neighbors,
+                target_neighbors,
+                best,
+            );
+            used[target] = false;
+        }
+    }
+
+    let mut best = None;
+    search(
+        0,
+        &candidates,
+        &mut vec![false; targets.len()],
+        &mut vec![0usize; sources.len()],
+        &source_neighbors,
+        &target_neighbors,
+        &mut best,
+    );
+    let (score, assignment) = best
+        .ok_or_else(|| "component descent signatures admit no tableau matching".to_string())?;
+    Ok((
+        sources
+            .into_iter()
+            .enumerate()
+            .map(|(source, permutation)| (permutation, targets[assignment[source]].clone()))
+            .collect(),
+        score,
+    ))
 }
 
 fn audit_llt_dual_equivalence_for_path(
@@ -11855,14 +12021,13 @@ fn audit_llt_dual_equivalence_for_path(
         })
         .collect::<BTreeSet<_>>();
     let standard_distributions = standard_tableau_descent_distributions(path.n);
-    let bridge = FundamentalSchurBridge::build(path)?;
     let mut unvisited = states.clone();
+    let mut optimized_transformed = BTreeMap::new();
     let mut audit = LltDualEquivalenceAudit {
         paths: 1,
         standard_colorings: states.len(),
         ..LltDualEquivalenceAudit::default()
     };
-    let mut multi_schur_states = BTreeSet::new();
     while let Some(start) = unvisited.iter().next().cloned() {
         let mut component = BTreeSet::from([start.clone()]);
         let mut queue = VecDeque::from([start]);
@@ -11890,10 +12055,37 @@ fn audit_llt_dual_equivalence_for_path(
         let matching_shape = standard_distributions
             .iter()
             .find_map(|(shape, candidate)| (candidate == &distribution).then(|| shape.clone()));
+        let shapes = matching_shape.clone().map_or_else(
+            || {
+                decompose_descent_distribution(&distribution, &standard_distributions)
+                    .ok_or_else(|| "LLT component descent series is not Schur positive".to_string())
+            },
+            |shape| Ok(vec![shape]),
+        )?;
+        let (component_map, _) =
+            component_maximum_agreement_dual_map(path, &component, &shapes)?;
+        let inverse_component_map = component_map
+            .iter()
+            .map(|(source, target)| (target.clone(), source.clone()))
+            .collect::<BTreeMap<_, _>>();
+        for (source, target) in &component_map {
+            for index in 2..path.n as u32 {
+                let changed_target = ComponentDualTarget {
+                    shape_copy: target.shape_copy,
+                    rows: elementary_dual_equivalence(&target.rows, index),
+                };
+                let changed_source = inverse_component_map
+                    .get(&changed_target)
+                    .cloned()
+                    .ok_or_else(|| {
+                        "component-local transformed edge left its tableau copies".to_string()
+                    })?;
+                optimized_transformed.insert((source.clone(), index), changed_source);
+            }
+        }
         if matching_shape.is_some() {
             audit.single_schur_components += 1;
         } else {
-            multi_schur_states.extend(component.iter().cloned());
             let first = component.iter().next().expect("component is nonempty");
             let degree = path
                 .normal_edges
@@ -11914,24 +12106,54 @@ fn audit_llt_dual_equivalence_for_path(
             }
         }
     }
+    let mut original_edges = BTreeSet::new();
+    let mut transformed_edges = BTreeSet::new();
+    for comparison_state in &states {
+        for comparison_index in 2..path.n as u32 {
+            let original = llt_dual_equivalence_step(path, comparison_state, comparison_index)?;
+            if &original != comparison_state {
+                let (left, right) = if comparison_state <= &original {
+                    (comparison_state.clone(), original)
+                } else {
+                    (original, comparison_state.clone())
+                };
+                original_edges.insert((comparison_index, left, right));
+            }
+            let transformed = optimized_transformed
+                .get(&(comparison_state.clone(), comparison_index))
+                .cloned()
+                .ok_or_else(|| "optimized transformed edge is missing".to_string())?;
+            if &transformed != comparison_state {
+                let (left, right) = if comparison_state <= &transformed {
+                    (comparison_state.clone(), transformed)
+                } else {
+                    (transformed, comparison_state.clone())
+                };
+                transformed_edges.insert((comparison_index, left, right));
+            }
+        }
+    }
+    for (index, left, right) in original_edges.difference(&transformed_edges) {
+        audit.removed_undirected_edges += 1;
+        audit.edge_change_examples.insert(format!(
+            "path {} remove D_{} {:?}<->{:?}",
+            path.word(), index, left, right
+        ));
+    }
+    for (index, left, right) in transformed_edges.difference(&original_edges) {
+        audit.added_undirected_edges += 1;
+        audit.edge_change_examples.insert(format!(
+            "path {} add D_{} {:?}<->{:?}",
+            path.word(), index, left, right
+        ));
+    }
     for state in &states {
         for index in 2..path.n as u32 {
             let original = llt_dual_equivalence_step(path, state, index)?;
-            let transformed = if multi_schur_states.contains(state) {
-                let candidate = fundamental_dual_equivalence_step(&bridge, state, index)?;
-                if !multi_schur_states.contains(&candidate) {
-                    audit.transform_escapes += 1;
-                    if audit.first_transform_escape.is_none() {
-                        audit.first_transform_escape = Some(format!(
-                            "path {}, D_{}({:?}) -> {:?}",
-                            path.word(), index, state, candidate
-                        ));
-                    }
-                }
-                candidate
-            } else {
-                original.clone()
-            };
+            let transformed = optimized_transformed
+                .get(&(state.clone(), index))
+                .cloned()
+                .ok_or_else(|| "optimized transformed edge is missing".to_string())?;
             audit.edge_comparisons += 1;
             if original == transformed {
                 audit.unchanged_edges += 1;
@@ -14816,6 +15038,8 @@ fn run(args: Args) -> Result<(), String> {
             } else {
                 audit_fundamental_schur_for_path(&path)?
                     .print(&format!("path {}", path.word()));
+                audit_llt_dual_equivalence_for_path(&path)?
+                    .print(&format!("path {}", path.word()));
             }
         } else {
             print_fundamental_crystal_report(args.max_n)?;
@@ -15372,39 +15596,21 @@ mod tests {
         assert_eq!(audit.crystal_inverse_checks, audit.crystal_arrows);
         assert_eq!(audit.crystal_degree_checks, audit.crystal_arrows);
         assert_eq!(audit.crystal_arrows, 4_224);
-        assert_eq!(audit.crystal_support_local, 4_164);
+        assert_eq!(audit.crystal_support_local, 4_212);
 
         let k4 = PathData::parse("NNNNEEEE").unwrap();
         let bridge = FundamentalSchurBridge::build(&k4).unwrap();
         assert_eq!(
             fundamental_crystal_step(&bridge, &k4, &[0, 0, 1, 0], 1, false).unwrap(),
-            Some(vec![1, 0, 0, 1])
+            Some(vec![0, 1, 1, 0])
         );
         assert_eq!(
             fundamental_crystal_step(&bridge, &k4, &[0, 0, 2, 1], 1, false).unwrap(),
-            Some(vec![1, 0, 1, 2])
-        );
-        for word in words_with_color_bound(4, 3) {
-            for index in 1..3 {
-                for raising in [true, false] {
-                    assert_eq!(
-                        fundamental_crystal_step(&bridge, &k4, &word, index, raising).unwrap(),
-                        complete_graph_crystal_step(&word, index, raising).unwrap(),
-                        "word={word:?}, index={index}, raising={raising}"
-                    );
-                }
-            }
-        }
-        let k5 = PathData::parse("NNNNNEEEEE").unwrap();
-        let bridge = FundamentalSchurBridge::build(&k5).unwrap();
-        let witness = [0, 0, 1, 1, 0];
-        assert_eq!(
-            fundamental_crystal_step(&bridge, &k5, &witness, 1, false).unwrap(),
-            Some(vec![0, 1, 1, 0, 1])
+            Some(vec![0, 1, 2, 1])
         );
         assert_eq!(
-            complete_graph_crystal_step(&witness, 1, false).unwrap(),
-            Some(vec![1, 0, 0, 1, 1])
+            fundamental_crystal_step(&bridge, &k4, &[0, 1, 2, 1], 2, false).unwrap(),
+            Some(vec![1, 0, 2, 2])
         );
 
         let mut dual = LltDualEquivalenceAudit::default();
@@ -15419,6 +15625,8 @@ mod tests {
         assert_eq!(dual.unchanged_edges, 1_296);
         assert_eq!(dual.edge_comparisons, 1_308);
         assert_eq!(dual.transform_escapes, 0);
+        assert_eq!(dual.removed_undirected_edges, 6);
+        assert_eq!(dual.added_undirected_edges, 6);
         assert_eq!(
             dual.failure_loci,
             BTreeSet::from([

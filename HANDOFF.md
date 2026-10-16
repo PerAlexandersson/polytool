@@ -6,10 +6,11 @@
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
 branch `exp/verticalstripllt-marked-coloring-bijection`.  The current bounded
 task now has a direct reversible coloring-to-SSYT crystal map by LLT
-standardization.  The active target is to replace its global ordinal matching
-of standard permutations by the ordinary/twisted dual-equivalence graph moves
-of Assaf and the smallest required edge transformations.  No shared library,
-Lean/paper source, or circular code is owned.
+standardization and a component-local maximum-agreement transformation of
+Assaf's initial LLT graph into standard dual-equivalence components.  The
+active target is to recognize its minimal edge surgeries intrinsically rather
+than by finite component matching.  No shared library, Lean/paper source, or
+circular code is owned.
 
 ## Completed: direct fundamental-to-Schur crystal shortcut — 2026-10-16
 
@@ -23,29 +24,28 @@ Des(pi) = { r : vertex carrying r is left of vertex carrying r+1 }.
 ```
 
 The coloring is thus exactly `(pi, weakly increasing rank colors with strict
-cuts at Des(pi))`.  At each `(q-degree, Des)` bucket, the prototype pairs the
-standard permutations in lexicographic order with the same-descent standard
-tableaux occurring in the already verified Schur expansion.  Replacing each
-standard-tableau rank by its rank color gives an SSYT; standardizing equal SSYT
-entries from left to right is the explicit inverse.  The target certificate is
-`(q-degree, shape, Schur-copy, SSYT)`.  Tableau `e_i,f_i` therefore transport
-back to a genuine coloring crystal.
+cuts at Des(pi))`.  On each initial Assaf LLT-graph component separately, the
+prototype decomposes its descent series into standard-tableau shapes and
+chooses the descent-preserving bijection to those SYT copies that retains the
+maximum number of original labeled `D_i` moves (lexicographic tie break).
+Replacing each standard-tableau rank by its rank color gives an SSYT;
+standardizing equal SSYT entries from left to right is the explicit inverse.
+The target certificate is `(q-degree, shape, Schur-copy, SSYT)`.  Tableau
+`e_i,f_i` therefore transport back to a genuine coloring crystal.
 
 The exhaustive ordinary rank-five census is exact: all 258 paths, 12,270
 standard colorings, and 5,960 `(degree,Des)` buckets match; 48,840 packed
 colorings biject with 48,840 packed SSYT targets, with 97,680 two-sided round
 trips.  Over the three-color finite alphabets, every one of 46,420 defined
 crystal arrows in ranks through five inverts and preserves q-degree.  Of these,
-42,094 change only vertices currently colored `i` or `i+1`.  The first
-support-locality failure is K4 `f_1(1132)=2123` (the vertex initially colored
-3 moves), so the direct map is not yet a local crystal rule.
-
-On K4 this crystal agrees with the clean Foata--RSK crystal on **every**
-three-color arrow and gives the desired repair `f_1(1121)=2112`.  The first
-difference from Foata is K5:
-`f_1(11221)=12212` for the canonical descent-bucket pairing, versus `21122`
-for Foata.  This is nonuniqueness between genuine crystals, not a validity
-failure.
+46,224 change only vertices currently colored `i` or `i+1`; only 196 are
+nonlocal.  The first support-locality failure is K4
+`f_2(1232)=2133`.  The maximum-agreement bridge keeps the formerly tempting
+local arrow `f_1(1121)=1221`; it repairs the K4 component by rewiring neighboring
+dual-equivalence edges instead of using Foata's `1121 -> 2112`.  Thus distinct
+genuine crystals realize the same Schur expansion, and this one is far more
+support-local than the earlier global ordinal bridge (which had 4,326 nonlocal
+arrows through rank five).
 
 Two natural attempted refinements were also isolated.  Using global Foata only
 on a complete normal graph repairs K4 and reduces the minimum-Hamming rank-four
@@ -61,9 +61,7 @@ degree-preservation proposition immediately following.  It explicitly says
 the initial LLT-graph components may be sums of Schur functions and then
 transforms their edges into dual-equivalence components.  This matches the K4
 multi-highest obstruction exactly.  The exact source package is cached in
-paper-cache.  Next: instantiate these ordinary/twisted moves directly from
-`PathData`, verify degree/descent preservation, and compare the first required
-edge transformation with the direct standard-permutation bridge above.
+paper-cache.
 
 That initial comparison is now implemented.  The Assaf move uses twisted dual
 equivalence precisely when the middle label attacks the farther of its two
@@ -74,18 +72,33 @@ rank four, 299/302 cumulative components are single-Schur; the only three
 multi-Schur loci are K4 degrees 2 and 4 and `NNNDEEE` degree 3.  The first is a
 five-vertex K4 degree-4 component with Schur shapes `(22)+(211)`.
 
-Keeping every edge in the already-single components and using the canonical
-SYT transform only on those three bad components changes just 12 of 1,308
-labeled rank-four vertex moves (six undirected edges), with no edge leaving the
-bad locus.  The first change is
-`D_2(1342): 2143 -> 2314` in K4 degree 4.  This is the smallest concrete
-rewiring dataset so far.  At rank five there are 78 multi-Schur components
-(2,394/2,472 are already single) across 67 `(path,degree)` loci.  Applying the
-global ordinal SYT transform only on those loci is not closed: 162 labeled
-moves escape to an already-single component, first on K5
-`D_3(13542) -> 41253`.  Thus the next rule must align whole components/copies,
-as in Assaf's graph transformations; merely detecting bad components is enough
-at rank four but not rank five.
+The component-local maximum-agreement transform keeps every edge in an
+already-single component.  At rank four it retains 1,296/1,308 labeled moves
+and replaces six undirected edges.  At rank five there are 78 multi-Schur
+components (2,394/2,472 are already single) across 67 `(path,degree)` loci; the
+transform retains 34,370/34,758 labeled moves and replaces 194 undirected
+edges.  Unlike the superseded global ordinal transform, it is closed on every
+initial component by construction and explicitly splits each multi-Schur
+component into its standard tableau graph copies.
+
+The six rank-four edge replacements are three copies of a four-vertex crossing
+switch.  One maximum-agreement choice on `NNNDEEE` is
+
+```text
+original D_3: 1342--1423, 2143--3124
+new D_3:      1342--2143, 1423--3124.
+```
+
+The other two rank-four bad components have the same crossing form (the exact
+same-score choice depends on the lexicographic tie break).  Thus the first
+correction is not a new coloring move but a crossing change between same-colored
+dual-equivalence edges, exactly the shape of Assaf's local graph
+transformations.  The path-specific CLI prints all removed/added edges:
+
+```bash
+cargo run --release --manifest-path experiments/Cargo.toml -- \
+  --fundamental-crystal-report --path NNNNEEEE
+```
 
 Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
 
