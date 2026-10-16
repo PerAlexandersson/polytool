@@ -1,5 +1,53 @@
 # Handoff
 
+## Completed: recursive deletion-code obstruction search — 2026-10-16
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
+Lean/paper source, or circular code is owned.  The `--hall-code-report` probe
+now compares canonical colored-incidence deletion codes, adaptive degree-drop
+standardization, occurrence-level charge labels, and blockwise Foata maps.
+
+Deleting the largest color from the last eligible strict-chain row and
+recording the successive statistic drops is an exact source/target code for
+every rank-three Hall diagram (all 13 fixed-content buckets).  The first
+failure is the complete graph `mu=(4)`, content `(1,1,2)`: the unique bad word
+is `2313`, whose naive source code is `[2,1,0,0]`; the proved complete-graph
+Foata correction sends it to `2331`, whose target code is `[1,2,0,0]`.  Thus
+the first repair is exactly the required weakly increasing carry among two
+equal largest letters.  Choosing repeated maximum occurrences by minimum
+current degree drop implements that carry.
+
+The adaptive rule then reaches the first genuinely non-Carlitz obstruction at
+`mu=(3,1)`, squarefree content: `3124` and `4123` both acquire code
+`[0,1,0,0]`.  Their first deletions have equal statistic drop zero but leave
+different row-margin partitions, `(3)` and `(2,1)`.  Adding the residual shape
+to every code entry restores source injectivity in 100 of 107 buckets through
+rank five, but source and target enriched-code sets already disagree for
+`mu=(2,1)`.  Therefore the shape is not extra common-code data: the deletion
+transition itself must perform a reversible bump to the canonical corner.
+This matches the role of Gillespie's `psi`/ZeroBump operation and isolates the
+next implementation target: a matrix-row bumping sequence before deletion.
+
+Two tempting alternatives are now ruled out precisely.  Raw charge labels are
+not injective even in small complete graphs.  Applying the proved Foata map
+independently inside clique blocks ignores essential cross-block data: through
+rank five only 1023/1119 outputs remain strict and only 743/1023 of those have
+the right degree; the first degree failure is already `mu=(2,1)`, `123`.
+
+Current verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 23 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
 ## Completed: alternating-cycle correction census — 2026-10-16
 
 `/root` completed and releases

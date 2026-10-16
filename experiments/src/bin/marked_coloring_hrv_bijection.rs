@@ -106,6 +106,10 @@ struct Args {
     #[arg(long)]
     hall_matrix_report: bool,
 
+    /// Search canonical incidence-deletion codes for the Hall matrix statistic switch.
+    #[arg(long)]
+    hall_code_report: bool,
+
     /// Trace the clean Foata--RSK shortcut for one complete-graph packed coloring.
     #[arg(long)]
     foata_trace_coloring: Option<String>,
@@ -4085,6 +4089,402 @@ struct HallMatrixState {
     color_rows: Vec<Vec<u32>>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HallDeletionExtreme {
+    Smallest,
+    Largest,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HallDeletionOccurrence {
+    FirstRow,
+    LastRow,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct HallDeletionPolicy {
+    extreme: HallDeletionExtreme,
+    occurrence: HallDeletionOccurrence,
+}
+
+impl HallDeletionPolicy {
+    const ALL: [Self; 4] = [
+        Self {
+            extreme: HallDeletionExtreme::Smallest,
+            occurrence: HallDeletionOccurrence::FirstRow,
+        },
+        Self {
+            extreme: HallDeletionExtreme::Smallest,
+            occurrence: HallDeletionOccurrence::LastRow,
+        },
+        Self {
+            extreme: HallDeletionExtreme::Largest,
+            occurrence: HallDeletionOccurrence::FirstRow,
+        },
+        Self {
+            extreme: HallDeletionExtreme::Largest,
+            occurrence: HallDeletionOccurrence::LastRow,
+        },
+    ];
+}
+
+fn hall_chain_color_rows(
+    path: &PathData,
+    parts: &[usize],
+    coloring: &[u8],
+) -> Result<Vec<Vec<u8>>, String> {
+    let chains = hall_strict_chains(path, parts)?;
+    Ok(chains
+        .iter()
+        .map(|vertices| {
+            let mut row = vertices
+                .iter()
+                .map(|&vertex| coloring[vertex])
+                .collect::<Vec<_>>();
+            row.sort_unstable();
+            row
+        })
+        .collect())
+}
+
+fn hall_coloring_from_rows(
+    rows: &[Vec<u8>],
+) -> Result<(Vec<usize>, PathData, Vec<u8>), String> {
+    let lengths = rows.iter().map(Vec::len).collect::<Vec<_>>();
+    if lengths.windows(2).any(|pair| pair[0] < pair[1]) {
+        return Err(format!("Hall matrix row lengths are not a partition: {lengths:?}"));
+    }
+    let parts = conjugate_parts(&lengths);
+    let path = hall_littlewood_path(&parts)?;
+    let chains = hall_strict_chains(&path, &parts)?;
+    if chains.len() != rows.len() {
+        return Err(format!(
+            "Hall matrix has {} rows but mu={parts:?} has {} strict chains",
+            rows.len(),
+            chains.len()
+        ));
+    }
+    let mut coloring = vec![0u8; path.n];
+    for (vertices, row) in chains.iter().zip(rows) {
+        if vertices.len() != row.len() || row.windows(2).any(|pair| pair[0] >= pair[1]) {
+            return Err(format!("invalid binary-matrix row {row:?} for chain {vertices:?}"));
+        }
+        for (&vertex, &color) in vertices.iter().zip(row) {
+            coloring[vertex] = color;
+        }
+    }
+    if !increases_on_edges(&coloring, &path.strict_edges) {
+        return Err(format!(
+            "reconstructed coloring {coloring:?} is not strict for mu={parts:?}"
+        ));
+    }
+    Ok((parts, path, coloring))
+}
+
+fn hall_delete_incidence(
+    rows: &[Vec<u8>],
+    policy: HallDeletionPolicy,
+) -> Result<Vec<Vec<u8>>, String> {
+    let color = match policy.extreme {
+        HallDeletionExtreme::Smallest => rows.iter().flatten().copied().min(),
+        HallDeletionExtreme::Largest => rows.iter().flatten().copied().max(),
+    }
+    .ok_or_else(|| "cannot delete an incidence from the empty matrix".to_string())?;
+    let eligible = rows
+        .iter()
+        .enumerate()
+        .filter_map(|(row, entries)| entries.contains(&color).then_some(row))
+        .collect::<Vec<_>>();
+    let chosen = match policy.occurrence {
+        HallDeletionOccurrence::FirstRow => eligible.first(),
+        HallDeletionOccurrence::LastRow => eligible.last(),
+    }
+    .copied()
+    .ok_or_else(|| format!("color {color} has no matrix incidence"))?;
+
+    hall_delete_incidence_from_row(rows, color, chosen)
+}
+
+fn hall_delete_incidence_from_row(
+    rows: &[Vec<u8>],
+    color: u8,
+    chosen: usize,
+) -> Result<Vec<Vec<u8>>, String> {
+    if chosen >= rows.len() || !rows[chosen].contains(&color) {
+        return Err(format!("row {chosen} does not contain color {color}"));
+    }
+    let mut indexed = rows
+        .iter()
+        .cloned()
+        .enumerate()
+        .collect::<Vec<_>>();
+    let position = indexed[chosen]
+        .1
+        .iter()
+        .position(|&entry| entry == color)
+        .expect("the chosen row contains the deleted color");
+    indexed[chosen].1.remove(position);
+    let color_remains = indexed.iter().any(|(_, row)| row.contains(&color));
+    if !color_remains {
+        for (_, row) in &mut indexed {
+            for entry in row {
+                if *entry > color {
+                    *entry -= 1;
+                }
+            }
+        }
+    }
+    indexed.retain(|(_, row)| !row.is_empty());
+    indexed.sort_by_key(|&(old_row, ref row)| (std::cmp::Reverse(row.len()), old_row));
+    Ok(indexed.into_iter().map(|(_, row)| row).collect())
+}
+
+#[derive(Clone, Copy)]
+enum HallCodeStatistic {
+    Source,
+    Charge,
+}
+
+fn hall_rows_statistic(rows: &[Vec<u8>], statistic: HallCodeStatistic) -> Result<isize, String> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let (parts, path, coloring) = hall_coloring_from_rows(rows)?;
+    match statistic {
+        HallCodeStatistic::Source => {
+            let shift = parts
+                .iter()
+                .skip(1)
+                .map(|&part| part * part.saturating_sub(1) / 2)
+                .sum::<usize>();
+            let ascents = edge_ascent_mask(&coloring, &path.normal_edges).count_ones() as usize;
+            Ok(ascents as isize - shift as isize)
+        }
+        HallCodeStatistic::Charge => {
+            let state = hall_binary_dual_rsk(&path, &parts, &coloring)?;
+            Ok(Tableau::new(state.charge_rows).charge() as isize)
+        }
+    }
+}
+
+fn hall_deletion_code(
+    mut rows: Vec<Vec<u8>>,
+    policy: HallDeletionPolicy,
+    statistic: HallCodeStatistic,
+) -> Result<Vec<isize>, String> {
+    let mut code = Vec::new();
+    while !rows.is_empty() {
+        let before = hall_rows_statistic(&rows, statistic)?;
+        let next = hall_delete_incidence(&rows, policy)?;
+        let after = hall_rows_statistic(&next, statistic)?;
+        code.push(before - after);
+        rows = next;
+    }
+    Ok(code)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HallDropPreference {
+    Smallest,
+    Largest,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct HallAdaptivePolicy {
+    preference: HallDropPreference,
+    tie: HallDeletionOccurrence,
+}
+
+impl HallAdaptivePolicy {
+    const ALL: [Self; 4] = [
+        Self {
+            preference: HallDropPreference::Smallest,
+            tie: HallDeletionOccurrence::FirstRow,
+        },
+        Self {
+            preference: HallDropPreference::Smallest,
+            tie: HallDeletionOccurrence::LastRow,
+        },
+        Self {
+            preference: HallDropPreference::Largest,
+            tie: HallDeletionOccurrence::FirstRow,
+        },
+        Self {
+            preference: HallDropPreference::Largest,
+            tie: HallDeletionOccurrence::LastRow,
+        },
+    ];
+}
+
+fn hall_adaptive_deletion_code(
+    mut rows: Vec<Vec<u8>>,
+    policy: HallAdaptivePolicy,
+    statistic: HallCodeStatistic,
+) -> Result<Vec<isize>, String> {
+    let mut code = Vec::new();
+    while !rows.is_empty() {
+        let before = hall_rows_statistic(&rows, statistic)?;
+        let color = rows
+            .iter()
+            .flatten()
+            .copied()
+            .max()
+            .expect("a nonempty matrix has a largest color");
+        let mut candidates = rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| row.contains(&color))
+            .map(|(row, _)| {
+                let next = hall_delete_incidence_from_row(&rows, color, row)?;
+                let drop = before - hall_rows_statistic(&next, statistic)?;
+                Ok((drop, row, next))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        candidates.sort_by_key(|&(drop, row, _)| {
+            let drop_key = match policy.preference {
+                HallDropPreference::Smallest => drop,
+                HallDropPreference::Largest => -drop,
+            };
+            let row_key = match policy.tie {
+                HallDeletionOccurrence::FirstRow => row,
+                HallDeletionOccurrence::LastRow => usize::MAX - row,
+            };
+            (drop_key, row_key)
+        });
+        let (drop, _, next) = candidates
+            .into_iter()
+            .next()
+            .expect("the largest color has an incidence");
+        code.push(drop);
+        rows = next;
+    }
+    Ok(code)
+}
+
+fn hall_shape_enriched_deletion_code(
+    mut rows: Vec<Vec<u8>>,
+    rule: HallCodeRule,
+    statistic: HallCodeStatistic,
+) -> Result<Vec<(isize, Vec<usize>)>, String> {
+    let mut code = Vec::new();
+    while !rows.is_empty() {
+        let before = hall_rows_statistic(&rows, statistic)?;
+        let next = match rule {
+            HallCodeRule::Fixed(policy) => hall_delete_incidence(&rows, policy)?,
+            HallCodeRule::Adaptive(policy) => {
+                let color = rows
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .max()
+                    .expect("a nonempty matrix has a largest color");
+                let mut candidates = rows
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, row)| row.contains(&color))
+                    .map(|(row, _)| {
+                        let next = hall_delete_incidence_from_row(&rows, color, row)?;
+                        let drop = before - hall_rows_statistic(&next, statistic)?;
+                        Ok((drop, row, next))
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                candidates.sort_by_key(|&(drop, row, _)| {
+                    let drop_key = match policy.preference {
+                        HallDropPreference::Smallest => drop,
+                        HallDropPreference::Largest => -drop,
+                    };
+                    let row_key = match policy.tie {
+                        HallDeletionOccurrence::FirstRow => row,
+                        HallDeletionOccurrence::LastRow => usize::MAX - row,
+                    };
+                    (drop_key, row_key)
+                });
+                candidates
+                    .into_iter()
+                    .next()
+                    .expect("the largest color has an incidence")
+                    .2
+            }
+            HallCodeRule::ChargeLabels | HallCodeRule::ReversedChargeLabels => {
+                return Err("charge-label rules do not define a deletion shape".into());
+            }
+        };
+        let after = hall_rows_statistic(&next, statistic)?;
+        code.push((before - after, next.iter().map(Vec::len).collect()));
+        rows = next;
+    }
+    Ok(code)
+}
+
+/// Occurrence-level Lascoux--Schuetzenberger charge labels for the strict-chain
+/// word used by binary dual RSK.  Their sum is the raw target charge.
+fn hall_charge_label_code(rows: &[Vec<u8>]) -> Result<Vec<isize>, String> {
+    let mut pairs = rows
+        .iter()
+        .enumerate()
+        .flat_map(|(row, colors)| {
+            colors
+                .iter()
+                .map(move |&color| (color, row as u32 + 1))
+        })
+        .collect::<Vec<_>>();
+    pairs.sort_by(|left, right| left.0.cmp(&right.0).then(right.1.cmp(&left.1)));
+    let word = pairs.iter().map(|&(_, row)| row).collect::<Vec<_>>();
+    if word.is_empty() {
+        return Ok(Vec::new());
+    }
+    let n = word.len();
+    let max_value = word.iter().copied().max().unwrap() as usize;
+    let mut remaining = word.iter().copied().map(Some).collect::<Vec<_>>();
+    let mut labels = vec![None; n];
+    while remaining.iter().any(Option::is_some) {
+        let mut positions = vec![None; max_value + 1];
+        let mut cursor = n - 1;
+        for (target, position) in positions.iter_mut().enumerate().skip(1) {
+            let mut found = None;
+            for step in 0..n {
+                let index = (cursor + n - step) % n;
+                if remaining[index] == Some(target as u32) {
+                    found = Some(index);
+                    break;
+                }
+            }
+            let Some(index) = found else {
+                break;
+            };
+            *position = Some(index);
+            remaining[index] = None;
+            cursor = index;
+        }
+        let selected = positions.iter().skip(1).take_while(|entry| entry.is_some()).count();
+        if selected == 0 {
+            return Err(format!("charge extraction stalled on chain word {word:?}"));
+        }
+        let mut label = 0isize;
+        labels[positions[1].expect("the subword begins with one")] = Some(label);
+        for value in 2..=selected {
+            if positions[value].unwrap() > positions[value - 1].unwrap() {
+                label += 1;
+            }
+            labels[positions[value].unwrap()] = Some(label);
+        }
+    }
+    let labels = labels
+        .into_iter()
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| format!("not every chain-word occurrence was charge-labelled: {word:?}"))?;
+    let (_, path, coloring) = hall_coloring_from_rows(rows)?;
+    let parts = conjugate_parts(&rows.iter().map(Vec::len).collect::<Vec<_>>());
+    let charge = Tableau::new(hall_binary_dual_rsk(&path, &parts, &coloring)?.charge_rows)
+        .charge() as isize;
+    if labels.iter().sum::<isize>() != charge {
+        return Err(format!(
+            "charge labels {labels:?} do not sum to charge {charge} for word {word:?}"
+        ));
+    }
+    Ok(labels)
+}
+
 /// Dual RSK for the 0--1 matrix with rows=strict chains and columns=colors.
 ///
 /// The biword is sorted by color increasingly and, for equal colors, by chain
@@ -5235,6 +5635,66 @@ fn complete_graph_word_decode(state: &CompleteGraphFoataState) -> Result<Vec<u8>
         .collect::<Result<Vec<_>, _>>()?;
     let reversed = foata_word_map(&foata_preimage);
     Ok(reversed.into_iter().rev().collect())
+}
+
+fn complete_graph_matrix_correction(word: &[u8]) -> Result<Vec<u8>, String> {
+    if word.is_empty() {
+        return Ok(Vec::new());
+    }
+    let state = complete_graph_word_encode(word)?;
+    let parts = [word.len()];
+    let path = hall_littlewood_path(&parts)?;
+    let content = packed_content(word);
+    let mut candidates = packed_words(word.len())
+        .into_iter()
+        .filter(|candidate| packed_content(candidate) == content)
+        .filter(|candidate| {
+            hall_binary_dual_rsk(&path, &parts, candidate).is_ok_and(|candidate_state| {
+                candidate_state.charge_rows == state.charge_rows
+                    && candidate_state.color_rows == state.color_rows
+            })
+        })
+        .collect::<Vec<_>>();
+    match candidates.as_mut_slice() {
+        [candidate] => Ok(std::mem::take(candidate)),
+        _ => Err(format!(
+            "complete-graph Hall state has {} matrix preimages for {word:?}",
+            candidates.len()
+        )),
+    }
+}
+
+fn hall_blockwise_foata_correction(parts: &[usize], coloring: &[u8]) -> Result<Vec<u8>, String> {
+    let mut corrected = Vec::with_capacity(coloring.len());
+    let mut start = 0usize;
+    for &part in parts {
+        let block = &coloring[start..start + part];
+        let mut alphabet = block.to_vec();
+        alphabet.sort_unstable();
+        alphabet.dedup();
+        let packed = block
+            .iter()
+            .map(|color| {
+                alphabet
+                    .binary_search(color)
+                    .expect("a block color belongs to its alphabet") as u8
+            })
+            .collect::<Vec<_>>();
+        let corrected_packed = complete_graph_matrix_correction(&packed)?;
+        corrected.extend(
+            corrected_packed
+                .into_iter()
+                .map(|rank| alphabet[rank as usize]),
+        );
+        start += part;
+    }
+    if start != coloring.len() {
+        return Err(format!(
+            "partition {parts:?} has size {start}, not coloring length {}",
+            coloring.len()
+        ));
+    }
+    Ok(corrected)
 }
 
 fn print_complete_graph_foata_trace(text: &str) -> Result<(), String> {
@@ -7434,6 +7894,410 @@ fn print_hall_matrix_report(max_n: usize) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Default)]
+struct HallCodePolicyAudit {
+    buckets: usize,
+    matching_buckets: usize,
+    source_injective_buckets: usize,
+    target_injective_buckets: usize,
+    first_failure: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HallCodeRule {
+    Fixed(HallDeletionPolicy),
+    Adaptive(HallAdaptivePolicy),
+    ChargeLabels,
+    ReversedChargeLabels,
+}
+
+fn hall_code_for_rule(
+    rows: Vec<Vec<u8>>,
+    rule: HallCodeRule,
+    statistic: HallCodeStatistic,
+) -> Result<Vec<isize>, String> {
+    match rule {
+        HallCodeRule::Fixed(policy) => hall_deletion_code(rows, policy, statistic),
+        HallCodeRule::Adaptive(policy) => hall_adaptive_deletion_code(rows, policy, statistic),
+        HallCodeRule::ChargeLabels => hall_charge_label_code(&rows),
+        HallCodeRule::ReversedChargeLabels => {
+            let mut code = hall_charge_label_code(&rows)?;
+            code.reverse();
+            Ok(code)
+        }
+    }
+}
+
+fn audit_hall_deletion_policies(
+    max_n: usize,
+    source_policy: HallCodeRule,
+    target_policy: HallCodeRule,
+) -> Result<HallCodePolicyAudit, String> {
+    let mut audit = HallCodePolicyAudit::default();
+    for n in 0..=max_n {
+        for parts in integer_partitions(n) {
+            let path = hall_littlewood_path(&parts)?;
+            let mut buckets = BTreeMap::<Vec<usize>, Vec<Vec<u8>>>::new();
+            for coloring in packed_words(n)
+                .into_iter()
+                .filter(|word| increases_on_edges(word, &path.strict_edges))
+            {
+                buckets
+                    .entry(packed_content(&coloring))
+                    .or_default()
+                    .push(coloring);
+            }
+            for (content, colorings) in buckets {
+                audit.buckets += 1;
+                let mut source_codes = BTreeMap::<Vec<isize>, Vec<Vec<u8>>>::new();
+                let mut target_codes = BTreeMap::<Vec<isize>, Vec<Vec<u8>>>::new();
+                for coloring in &colorings {
+                    let rows = hall_chain_color_rows(&path, &parts, coloring)?;
+                    let (_, _, reconstructed) = hall_coloring_from_rows(&rows)?;
+                    if reconstructed != *coloring {
+                        return Err(format!(
+                            "Hall row matrix failed to reconstruct mu={parts:?}, coloring={coloring:?}: got {reconstructed:?}"
+                        ));
+                    }
+                    let source_code = hall_code_for_rule(
+                        rows.clone(),
+                        source_policy,
+                        HallCodeStatistic::Source,
+                    )?;
+                    let target_code = hall_code_for_rule(
+                        rows,
+                        target_policy,
+                        HallCodeStatistic::Charge,
+                    )?;
+                    source_codes
+                        .entry(source_code)
+                        .or_default()
+                        .push(coloring.clone());
+                    target_codes
+                        .entry(target_code)
+                        .or_default()
+                        .push(coloring.clone());
+                }
+                let source_injective = source_codes.values().all(|words| words.len() == 1);
+                let target_injective = target_codes.values().all(|words| words.len() == 1);
+                if source_injective {
+                    audit.source_injective_buckets += 1;
+                }
+                if target_injective {
+                    audit.target_injective_buckets += 1;
+                }
+                let matching = source_injective
+                    && target_injective
+                    && source_codes.keys().eq(target_codes.keys());
+                if matching {
+                    audit.matching_buckets += 1;
+                } else if audit.first_failure.is_none() {
+                    let source_collision = source_codes
+                        .iter()
+                        .find(|(_, words)| words.len() > 1)
+                        .map(|(code, words)| format!("source collision {code:?}: {words:?}"));
+                    let target_collision = target_codes
+                        .iter()
+                        .find(|(_, words)| words.len() > 1)
+                        .map(|(code, words)| format!("target collision {code:?}: {words:?}"));
+                    let missing_target = source_codes
+                        .iter()
+                        .find(|(code, _)| !target_codes.contains_key(*code))
+                        .map(|(code, words)| format!("source-only code {code:?}: {words:?}"));
+                    let missing_source = target_codes
+                        .iter()
+                        .find(|(code, _)| !source_codes.contains_key(*code))
+                        .map(|(code, words)| format!("target-only code {code:?}: {words:?}"));
+                    let detail = source_collision
+                        .or(target_collision)
+                        .or(missing_target)
+                        .or(missing_source)
+                        .unwrap_or_else(|| "unequal code multiplicities".into());
+                    audit.first_failure = Some(format!(
+                        "mu={parts:?}, content={content:?}, {detail}"
+                    ));
+                }
+            }
+        }
+    }
+    Ok(audit)
+}
+
+fn audit_hall_shape_enriched_codes(
+    max_n: usize,
+    source_rule: HallCodeRule,
+    target_rule: HallCodeRule,
+) -> Result<HallCodePolicyAudit, String> {
+    let mut audit = HallCodePolicyAudit::default();
+    for n in 0..=max_n {
+        for parts in integer_partitions(n) {
+            let path = hall_littlewood_path(&parts)?;
+            let mut buckets = BTreeMap::<Vec<usize>, Vec<Vec<u8>>>::new();
+            for coloring in packed_words(n)
+                .into_iter()
+                .filter(|word| increases_on_edges(word, &path.strict_edges))
+            {
+                buckets
+                    .entry(packed_content(&coloring))
+                    .or_default()
+                    .push(coloring);
+            }
+            for (content, colorings) in buckets {
+                audit.buckets += 1;
+                let mut source_codes = BTreeMap::new();
+                let mut target_codes = BTreeMap::new();
+                for coloring in colorings {
+                    let rows = hall_chain_color_rows(&path, &parts, &coloring)?;
+                    let source = hall_shape_enriched_deletion_code(
+                        rows.clone(),
+                        source_rule,
+                        HallCodeStatistic::Source,
+                    )?;
+                    let target = hall_shape_enriched_deletion_code(
+                        rows,
+                        target_rule,
+                        HallCodeStatistic::Charge,
+                    )?;
+                    source_codes
+                        .entry(source)
+                        .or_insert_with(Vec::new)
+                        .push(coloring.clone());
+                    target_codes
+                        .entry(target)
+                        .or_insert_with(Vec::new)
+                        .push(coloring);
+                }
+                let source_injective = source_codes.values().all(|words| words.len() == 1);
+                let target_injective = target_codes.values().all(|words| words.len() == 1);
+                audit.source_injective_buckets += usize::from(source_injective);
+                audit.target_injective_buckets += usize::from(target_injective);
+                if source_injective
+                    && target_injective
+                    && source_codes.keys().eq(target_codes.keys())
+                {
+                    audit.matching_buckets += 1;
+                } else if audit.first_failure.is_none() {
+                    let source_only = source_codes
+                        .iter()
+                        .find(|(code, _)| !target_codes.contains_key(*code));
+                    let target_only = target_codes
+                        .iter()
+                        .find(|(code, _)| !source_codes.contains_key(*code));
+                    audit.first_failure = Some(format!(
+                        "mu={parts:?}, content={content:?}, source-only={source_only:?}, target-only={target_only:?}"
+                    ));
+                }
+            }
+        }
+    }
+    Ok(audit)
+}
+
+fn format_hall_deletion_policy(policy: HallDeletionPolicy) -> &'static str {
+    match (policy.extreme, policy.occurrence) {
+        (HallDeletionExtreme::Smallest, HallDeletionOccurrence::FirstRow) => "min/first",
+        (HallDeletionExtreme::Smallest, HallDeletionOccurrence::LastRow) => "min/last",
+        (HallDeletionExtreme::Largest, HallDeletionOccurrence::FirstRow) => "max/first",
+        (HallDeletionExtreme::Largest, HallDeletionOccurrence::LastRow) => "max/last",
+    }
+}
+
+fn format_hall_code_rule(rule: HallCodeRule) -> &'static str {
+    match rule {
+        HallCodeRule::Fixed(policy) => format_hall_deletion_policy(policy),
+        HallCodeRule::Adaptive(HallAdaptivePolicy {
+            preference: HallDropPreference::Smallest,
+            tie: HallDeletionOccurrence::FirstRow,
+        }) => "max/min-drop/first",
+        HallCodeRule::Adaptive(HallAdaptivePolicy {
+            preference: HallDropPreference::Smallest,
+            tie: HallDeletionOccurrence::LastRow,
+        }) => "max/min-drop/last",
+        HallCodeRule::Adaptive(HallAdaptivePolicy {
+            preference: HallDropPreference::Largest,
+            tie: HallDeletionOccurrence::FirstRow,
+        }) => "max/max-drop/first",
+        HallCodeRule::Adaptive(HallAdaptivePolicy {
+            preference: HallDropPreference::Largest,
+            tie: HallDeletionOccurrence::LastRow,
+        }) => "max/max-drop/last",
+        HallCodeRule::ChargeLabels => "charge-labels",
+        HallCodeRule::ReversedChargeLabels => "reverse-charge-labels",
+    }
+}
+
+fn print_hall_code_report(max_n: usize) -> Result<(), String> {
+    let mut results = Vec::new();
+    for source in HallDeletionPolicy::ALL {
+        for target in HallDeletionPolicy::ALL {
+            let source = HallCodeRule::Fixed(source);
+            let target = HallCodeRule::Fixed(target);
+            let audit = audit_hall_deletion_policies(max_n, source, target)?;
+            results.push((audit.matching_buckets, source, target, audit));
+        }
+    }
+    for source in HallAdaptivePolicy::ALL {
+        for target in HallAdaptivePolicy::ALL {
+            let source = HallCodeRule::Adaptive(source);
+            let target = HallCodeRule::Adaptive(target);
+            let audit = audit_hall_deletion_policies(max_n, source, target)?;
+            results.push((audit.matching_buckets, source, target, audit));
+        }
+    }
+    for target in [
+        HallCodeRule::ChargeLabels,
+        HallCodeRule::ReversedChargeLabels,
+    ] {
+        for source in HallDeletionPolicy::ALL {
+            let source = HallCodeRule::Fixed(source);
+            let audit = audit_hall_deletion_policies(max_n, source, target)?;
+            results.push((audit.matching_buckets, source, target, audit));
+        }
+        for source in HallAdaptivePolicy::ALL {
+            let source = HallCodeRule::Adaptive(source);
+            let audit = audit_hall_deletion_policies(max_n, source, target)?;
+            results.push((audit.matching_buckets, source, target, audit));
+        }
+    }
+    results.sort_by_key(|&(matching, source, target, _)| {
+        (
+            std::cmp::Reverse(matching),
+            format_hall_code_rule(source),
+            format_hall_code_rule(target),
+        )
+    });
+    for (_, source, target, audit) in results {
+        println!(
+            "Hall deletion source={} target={}: {}/{} code-bijective buckets; source injective {}, target injective {}{}",
+            format_hall_code_rule(source),
+            format_hall_code_rule(target),
+            audit.matching_buckets,
+            audit.buckets,
+            audit.source_injective_buckets,
+            audit.target_injective_buckets,
+            audit
+                .first_failure
+                .as_deref()
+                .map_or(String::new(), |failure| format!("; first failure: {failure}"))
+        );
+    }
+    let max_last = HallCodeRule::Fixed(HallDeletionPolicy {
+        extreme: HallDeletionExtreme::Largest,
+        occurrence: HallDeletionOccurrence::LastRow,
+    });
+    let min_drop = HallCodeRule::Adaptive(HallAdaptivePolicy {
+        preference: HallDropPreference::Smallest,
+        tie: HallDeletionOccurrence::FirstRow,
+    });
+    for (label, source, target) in [
+        ("max/last", max_last, max_last),
+        ("min-drop", min_drop, min_drop),
+    ] {
+        let audit = audit_hall_shape_enriched_codes(max_n, source, target)?;
+        println!(
+            "Shape-enriched {label}: {}/{} code-bijective buckets; source injective {}, target injective {}{}",
+            audit.matching_buckets,
+            audit.buckets,
+            audit.source_injective_buckets,
+            audit.target_injective_buckets,
+            audit
+                .first_failure
+                .as_deref()
+                .map_or(String::new(), |failure| format!("; first failure: {failure}"))
+        );
+    }
+    let mut total = 0usize;
+    let mut strict = 0usize;
+    let mut degree_correct = 0usize;
+    let mut first_nonstrict = None;
+    let mut first_degree_failure = None;
+    for n in 0..=max_n {
+        for parts in integer_partitions(n) {
+            let path = hall_littlewood_path(&parts)?;
+            let shift = parts
+                .iter()
+                .skip(1)
+                .map(|&part| part * part.saturating_sub(1) / 2)
+                .sum::<usize>();
+            for coloring in packed_words(n)
+                .into_iter()
+                .filter(|word| increases_on_edges(word, &path.strict_edges))
+            {
+                total += 1;
+                let corrected = hall_blockwise_foata_correction(&parts, &coloring)?;
+                if !increases_on_edges(&corrected, &path.strict_edges) {
+                    if first_nonstrict.is_none() {
+                        first_nonstrict = Some(format!(
+                            "mu={parts:?}: {} -> {}",
+                            format_word(&coloring),
+                            format_word(&corrected)
+                        ));
+                    }
+                    continue;
+                }
+                strict += 1;
+                let source_degree =
+                    edge_ascent_mask(&coloring, &path.normal_edges).count_ones() as usize;
+                let state = hall_binary_dual_rsk(&path, &parts, &corrected)?;
+                let target_degree =
+                    shift + Tableau::new(state.charge_rows).charge() as usize;
+                if source_degree == target_degree {
+                    degree_correct += 1;
+                } else if first_degree_failure.is_none() {
+                    first_degree_failure = Some(format!(
+                        "mu={parts:?}: {} -> {}, source degree {source_degree}, target degree {target_degree}",
+                        format_word(&coloring),
+                        format_word(&corrected)
+                    ));
+                }
+            }
+        }
+    }
+    println!(
+        "Blockwise Foata ranks 0..={max_n}: {strict}/{total} outputs remain strict, {degree_correct}/{strict} strict outputs preserve degree{}{}",
+        first_nonstrict
+            .as_deref()
+            .map_or(String::new(), |failure| format!("; first nonstrict: {failure}")),
+        first_degree_failure
+            .as_deref()
+            .map_or(String::new(), |failure| format!("; first degree failure: {failure}"))
+    );
+    if max_n >= 4 {
+        let parts = [4];
+        let path = hall_littlewood_path(&parts)?;
+        let policy = HallDeletionPolicy {
+            extreme: HallDeletionExtreme::Largest,
+            occurrence: HallDeletionOccurrence::LastRow,
+        };
+        println!("First repeated-color Foata carry, mu=[4], content=[1,1,2]:");
+        for coloring in packed_words(4)
+            .into_iter()
+            .filter(|word| packed_content(word) == [1, 1, 2])
+        {
+            let rows = hall_chain_color_rows(&path, &parts, &coloring)?;
+            let source_code =
+                hall_deletion_code(rows, policy, HallCodeStatistic::Source)?;
+            let corrected = complete_graph_matrix_correction(&coloring)?;
+            let corrected_rows = hall_chain_color_rows(&path, &parts, &corrected)?;
+            let target_code = hall_deletion_code(
+                corrected_rows,
+                policy,
+                HallCodeStatistic::Charge,
+            )?;
+            if source_code != target_code {
+                println!(
+                    "  {}: naive source {:?}, Foata target {} has {:?}",
+                    format_word(&coloring),
+                    source_code,
+                    format_word(&corrected),
+                    target_code
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 fn run(args: Args) -> Result<(), String> {
     if let Some(coloring) = args.foata_trace_coloring.as_deref() {
         print_complete_graph_foata_trace(coloring)?;
@@ -7541,6 +8405,10 @@ fn run(args: Args) -> Result<(), String> {
     }
     if args.hall_matrix_report {
         print_hall_matrix_report(args.max_n)?;
+        return Ok(());
+    }
+    if args.hall_code_report {
+        print_hall_code_report(args.max_n)?;
         return Ok(());
     }
     if let Some(parts) = args.hall_partition.as_deref() {
@@ -8100,5 +8968,41 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn hall_deletion_codes_isolate_the_first_carry_and_bump_obstructions() {
+        let policy = HallDeletionPolicy {
+            extreme: HallDeletionExtreme::Largest,
+            occurrence: HallDeletionOccurrence::LastRow,
+        };
+        let fixed = HallCodeRule::Fixed(policy);
+        let rank_three = audit_hall_deletion_policies(3, fixed, fixed).unwrap();
+        assert_eq!(rank_three.matching_buckets, rank_three.buckets);
+
+        let adaptive = HallCodeRule::Adaptive(HallAdaptivePolicy {
+            preference: HallDropPreference::Smallest,
+            tie: HallDeletionOccurrence::FirstRow,
+        });
+        let rank_four = audit_hall_deletion_policies(4, adaptive, adaptive).unwrap();
+        assert!(rank_four.first_failure.as_deref().is_some_and(|failure| {
+            failure.contains("mu=[3, 1]") && failure.contains("source collision")
+        }));
+
+        let parts = [4];
+        let path = hall_littlewood_path(&parts).unwrap();
+        let coloring = vec![1, 2, 0, 2];
+        let rows = hall_chain_color_rows(&path, &parts, &coloring).unwrap();
+        assert_eq!(
+            hall_deletion_code(rows, policy, HallCodeStatistic::Source).unwrap(),
+            vec![2, 1, 0, 0]
+        );
+        let corrected = complete_graph_matrix_correction(&coloring).unwrap();
+        assert_eq!(corrected, vec![1, 2, 2, 0]);
+        let rows = hall_chain_color_rows(&path, &parts, &corrected).unwrap();
+        assert_eq!(
+            hall_deletion_code(rows, policy, HallCodeStatistic::Charge).unwrap(),
+            vec![1, 2, 0, 0]
+        );
     }
 }
