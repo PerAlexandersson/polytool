@@ -11712,6 +11712,10 @@ struct LltDualEquivalenceAudit {
     removed_undirected_edges: usize,
     added_undirected_edges: usize,
     edge_change_examples: BTreeSet<String>,
+    edge_pattern_counts: BTreeMap<String, usize>,
+    original_pattern_decisions: BTreeMap<String, (usize, usize)>,
+    contextual_pattern_decisions: BTreeMap<String, (usize, usize)>,
+    contextual_pattern_examples: BTreeMap<String, (Option<String>, Option<String>)>,
     failure_loci: BTreeSet<(String, usize)>,
     first_failure: Option<String>,
     first_rewiring: Option<String>,
@@ -11730,6 +11734,28 @@ impl LltDualEquivalenceAudit {
         self.removed_undirected_edges += other.removed_undirected_edges;
         self.added_undirected_edges += other.added_undirected_edges;
         self.edge_change_examples.extend(other.edge_change_examples);
+        for (pattern, count) in other.edge_pattern_counts {
+            *self.edge_pattern_counts.entry(pattern).or_default() += count;
+        }
+        for (pattern, (kept, removed)) in other.original_pattern_decisions {
+            let total = self.original_pattern_decisions.entry(pattern).or_default();
+            total.0 += kept;
+            total.1 += removed;
+        }
+        for (pattern, (kept, removed)) in other.contextual_pattern_decisions {
+            let total = self.contextual_pattern_decisions.entry(pattern).or_default();
+            total.0 += kept;
+            total.1 += removed;
+        }
+        for (pattern, (kept, removed)) in other.contextual_pattern_examples {
+            let examples = self.contextual_pattern_examples.entry(pattern).or_default();
+            if examples.0.is_none() {
+                examples.0 = kept;
+            }
+            if examples.1.is_none() {
+                examples.1 = removed;
+            }
+        }
         self.failure_loci.extend(other.failure_loci);
         if self.first_failure.is_none() {
             self.first_failure = other.first_failure;
@@ -11772,6 +11798,56 @@ impl LltDualEquivalenceAudit {
         }
         for example in self.edge_change_examples.iter().take(12) {
             println!("  edge surgery: {example}");
+        }
+        let mut patterns = self
+            .edge_pattern_counts
+            .iter()
+            .map(|(pattern, &count)| (count, pattern))
+            .collect::<Vec<_>>();
+        patterns.sort_by(|left, right| right.cmp(left));
+        if !patterns.is_empty() {
+            println!(
+                "  {} normalized four-label surgery types",
+                patterns.len()
+            );
+        }
+        for (count, pattern) in patterns.into_iter().take(12) {
+            println!("  normalized four-label surgery ({count}): {pattern}");
+        }
+        let ambiguous = self
+            .original_pattern_decisions
+            .iter()
+            .filter(|(_, &(kept, removed))| kept != 0 && removed != 0)
+            .collect::<Vec<_>>();
+        println!(
+            "  four-label removal decisions ambiguous for {}/{} original edge patterns",
+            ambiguous.len(),
+            self.original_pattern_decisions.len()
+        );
+        for (pattern, (kept, removed)) in ambiguous.into_iter().take(8) {
+            println!("    ambiguous {pattern}: kept {kept}, removed {removed}");
+        }
+        let contextual_ambiguous = self
+            .contextual_pattern_decisions
+            .iter()
+            .filter(|(_, &(kept, removed))| kept != 0 && removed != 0)
+            .collect::<Vec<_>>();
+        println!(
+            "  full permutation edge plus q-degree is ambient-path ambiguous in {}/{} contexts",
+            contextual_ambiguous.len(),
+            self.contextual_pattern_decisions.len()
+        );
+        for (pattern, (kept, removed)) in contextual_ambiguous.into_iter().take(8) {
+            println!("    contextual ambiguity {pattern}: kept {kept}, removed {removed}");
+            if let Some((kept_example, removed_example)) =
+                self.contextual_pattern_examples.get(pattern)
+            {
+                println!(
+                    "      examples: kept {}; removed {}",
+                    kept_example.as_deref().unwrap_or("?"),
+                    removed_example.as_deref().unwrap_or("?")
+                );
+            }
         }
         if !self.failure_loci.is_empty() {
             let shown = self
@@ -12009,6 +12085,32 @@ fn component_maximum_agreement_dual_map(
     ))
 }
 
+fn normalized_four_label_edge_pattern(
+    n: usize,
+    index: u32,
+    left: &[u32],
+    right: &[u32],
+) -> String {
+    debug_assert!(n >= 4);
+    let mut start = index.saturating_sub(2).max(1);
+    if start as usize + 3 > n {
+        start = n as u32 - 3;
+    }
+    let end = start + 3;
+    let restrict = |word: &[u32]| {
+        word.iter()
+            .filter(|&&entry| start <= entry && entry <= end)
+            .map(|&entry| char::from(b'0' + (entry - start + 1) as u8))
+            .collect::<String>()
+    };
+    format!(
+        "D_{} {}<->{}",
+        index - start + 1,
+        restrict(left),
+        restrict(right)
+    )
+}
+
 fn audit_llt_dual_equivalence_for_path(
     path: &PathData,
 ) -> Result<LltDualEquivalenceAudit, String> {
@@ -12133,8 +12235,52 @@ fn audit_llt_dual_equivalence_for_path(
             }
         }
     }
+    if path.n >= 4 {
+        for (index, left, right) in &original_edges {
+            let pattern = normalized_four_label_edge_pattern(path.n, *index, left, right);
+            let degree = path
+                .normal_edges
+                .iter()
+                .filter(|&&(tail, head)| left[tail] < left[head])
+                .count();
+            let context = format!("D_{} {:?}<->{:?}|q{}", index, left, right, degree);
+            let kept = transformed_edges.contains(&(*index, left.clone(), right.clone()));
+            let decision = audit.original_pattern_decisions.entry(pattern).or_default();
+            if kept {
+                decision.0 += 1;
+            } else {
+                decision.1 += 1;
+            }
+            let contextual_decision = audit
+                .contextual_pattern_decisions
+                .entry(context.clone())
+                .or_default();
+            let example = format!(
+                "path {} D_{} {:?}<->{:?}",
+                path.word(), index, left, right
+            );
+            let contextual_examples = audit
+                .contextual_pattern_examples
+                .entry(context)
+                .or_default();
+            if kept {
+                contextual_decision.0 += 1;
+                contextual_examples.0.get_or_insert(example);
+            } else {
+                contextual_decision.1 += 1;
+                contextual_examples.1.get_or_insert(example);
+            }
+        }
+    }
     for (index, left, right) in original_edges.difference(&transformed_edges) {
         audit.removed_undirected_edges += 1;
+        *audit
+            .edge_pattern_counts
+            .entry(format!(
+                "remove {}",
+                normalized_four_label_edge_pattern(path.n, *index, left, right)
+            ))
+            .or_default() += 1;
         audit.edge_change_examples.insert(format!(
             "path {} remove D_{} {:?}<->{:?}",
             path.word(), index, left, right
@@ -12142,6 +12288,13 @@ fn audit_llt_dual_equivalence_for_path(
     }
     for (index, left, right) in transformed_edges.difference(&original_edges) {
         audit.added_undirected_edges += 1;
+        *audit
+            .edge_pattern_counts
+            .entry(format!(
+                "add {}",
+                normalized_four_label_edge_pattern(path.n, *index, left, right)
+            ))
+            .or_default() += 1;
         audit.edge_change_examples.insert(format!(
             "path {} add D_{} {:?}<->{:?}",
             path.word(), index, left, right
@@ -15634,6 +15787,17 @@ mod tests {
                 ("NNNNEEEE".to_string(), 2),
                 ("NNNNEEEE".to_string(), 4),
             ])
+        );
+
+        let context = "D_2 [2, 4, 3, 1, 5]<->[3, 4, 1, 2, 5]|q5";
+        let kept_path = PathData::parse("NNNNENEEEE").unwrap();
+        let kept = audit_llt_dual_equivalence_for_path(&kept_path).unwrap();
+        assert_eq!(kept.contextual_pattern_decisions.get(context), Some(&(1, 0)));
+        let removed_path = PathData::parse("NNNNDEEEE").unwrap();
+        let removed = audit_llt_dual_equivalence_for_path(&removed_path).unwrap();
+        assert_eq!(
+            removed.contextual_pattern_decisions.get(context),
+            Some(&(0, 1))
         );
     }
 

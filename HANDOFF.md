@@ -100,6 +100,23 @@ cargo run --release --manifest-path experiments/Cargo.toml -- \
   --fundamental-crystal-report --path NNNNEEEE
 ```
 
+Normalizing every rank-five surgery to the four consecutive labels around its
+edge color gives 36 added/removed edge types, but no uniform four-label rule.
+More strongly, even the **full permutation edge**, absolute edge color, and
+total q-degree do not decide whether an edge is retained without the ambient
+path: 51/1,084 such contexts have both decisions.  The first concise witness
+at degree 5 is the identical edge
+
+```text
+D_2: 24315 <-> 34125
+```
+
+kept for path `NNNNENEEEE` but removed for path `NNNNDEEEE`.  Therefore an
+intrinsic rewrite must inspect ambient attack/strict-edge data (or the whole
+LLT component), not only the coloring permutation and its degree.  This is the
+current exact obstruction to compressing maximum-agreement matching into a
+universal four-letter switch.
+
 Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
 
 ```bash
