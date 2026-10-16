@@ -1,5 +1,83 @@
 # Handoff
 
+## Active ownership: Hall--Littlewood matrix/Foata shortcut — 2026-10-16
+
+`/root` owns only `experiments/src/bin/marked_coloring_hrv_bijection.rs` and
+this handoff on branch `exp/verticalstripllt-marked-coloring-bijection`.  No
+shared library, Lean/paper source, or circular code is owned.  The current
+checkpoint isolates the exact statistic-switching problem after finding both
+a clean complete-graph rule and the natural ungraded rule for every
+Hall--Littlewood diagram.
+
+For complete graphs there is now a direct, reversible map on every packed
+coloring, not just distinct colors.  For a packed word `w`, reverse it, apply
+the inverse generalized Foata transformation, and RSK the resulting positive
+word as `(P,Q)`; the output is the color SSYT `P` together with charge tableau
+`transpose(evacuation(Q))`.  The inverse applies inverse RSK, generalized
+Foata, and reversal.  It preserves exact content and satisfies
+`asc_Kn(w)=charge(T)`.  The inverse Foata transform is now algorithmic rather
+than a bounded enumeration.  Exhaustive tests through rank six prove forward
+and inverse validity, injectivity, and (through rank five) equality with the
+independently enumerated full target set.  A readable example is available as
+`--foata-trace-coloring 1,1,2`.
+
+For general `Gamma_mu`, the strict-edge graph is a disjoint union of paths of
+lengths `mu'`.  A strict coloring is therefore exactly a binary matrix with
+rows=strict chains and columns=colors.  Dual RSK (sort by color increasingly,
+chain label decreasingly on ties; row-insert chain labels; transpose the
+recording tableau) is an exact ungraded bijection to all pairs `(T,P)` with
+`content(T)=mu'`, conjugate shapes, and the exact packed color content.  The
+implementation independently checks the entire source and target sets for all
+19 partitions through rank five: 1119 objects, no collision or omission.
+
+The remaining issue is precisely a statistic switch on fixed-margin binary
+matrices.  Raw dual RSK first fails for `mu=(3)`, coloring `112`: source ascent
+degree 2, but raw charge 1.  Minimum-distance degree-correcting matchings exist
+in every fixed content bucket; their maximum fixed-margin matrix distance grows
+to five through rank five, so a fixed local switch is not the rule.  This is the
+maximal-slice Macdonald `q,t` switch underlying the brief proof of Proposition
+37, not an omitted RSK convention: horizontally reflecting the corresponding
+right-justified `Gamma_mu` filling gives shape `mu`, maximal major index, and
+`inv=asc-A`; the desired correction sends max-major fillings of `mu` to
+max-inversion fillings of `mu'` while preserving content.  Gillespie,
+arXiv:1503.02109v2, supplies arbitrary-content hook maps and squarefree maps,
+but explicitly leaves the general arbitrary-content switch open (Conjecture
+15 and Question 64).  Its repeated-content zero-slice results for two/three
+rows do not imply this maximal slice; even shape `(2,2)`, content `(2,2)` is
+outside that deduction.  Thus forcing a purported universal local rule would
+hide a genuinely unresolved bijection problem.
+
+The first nonhook case nevertheless has a clean rule.  For `mu=(2,2)`, write
+the two strict-chain color sets as `S1={c1,c3}` and `S2={c2,c4}`.  If all four
+colors are distinct `a<b<c<d`, with `a` in `S1` and `d` in `S2`, exchange the
+middle colors `b,c`; otherwise fix the matrix.  Equivalently this toggles
+`(a,c,b,d) <-> (a,b,c,d)`.  This is an involution preserving both margins, and
+exhaustive packed tests prove that dual RSK after the switch has the source
+degree for every `Gamma_(2,2)` coloring.  A simple involution cannot be the
+general pattern: the joint table of `(source degree, raw target degree)` is
+already asymmetric for `mu=(4)`, content `[1,1,2]`, and for `mu=(3,2)` even in
+squarefree content.  A Carlitz/Foata-style recursive code, rather than pairwise
+swapping all discrepancies, is therefore the more plausible extension.
+
+The standardized Pieri-switch audit gives the same warning from the HRV side:
+only 36 of 90 current Hall survivors through rank five are already aligned,
+and reserving all aligned survivors is impossible first at `mu=(3)`.  The
+`--hall-switch-report` command now records this obstruction instead of
+aborting.  `--hall-matrix-report --max-n 5` prints the matrix audit, degree
+errors, and minimal correction radii.
+
+Current verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 18 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
 ## Completed: Hall--Littlewood charge bridge and charge repair — 2026-10-16
 
 `/root` completed and releases

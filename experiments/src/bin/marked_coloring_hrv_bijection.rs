@@ -25,6 +25,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use clap::Parser;
+use combpoly::permutation::foata_map;
 use combpoly::rook_placements::integer_partitions;
 use sym_poly_core::{Partition, Tableau};
 use sym_poly_sym::llt::highest_reachable_vertices;
@@ -96,6 +97,18 @@ struct Args {
     /// Print the surviving HRV-to-charge bridge for one comma-separated partition.
     #[arg(long, value_delimiter = ',', num_args = 1..)]
     hall_partition: Option<Vec<usize>>,
+
+    /// Search for a local Pieri switch from transpose(Q) to standardized charge tableaux.
+    #[arg(long)]
+    hall_switch_report: bool,
+
+    /// Audit the strict-chain binary-matrix dual-RSK model for Gamma_mu.
+    #[arg(long)]
+    hall_matrix_report: bool,
+
+    /// Trace the clean Foata--RSK shortcut for one complete-graph packed coloring.
+    #[arg(long)]
+    foata_trace_coloring: Option<String>,
 
     /// Skip the optional transported-S_i Coxeter stress test in Schur reports.
     #[arg(long)]
@@ -4004,6 +4017,426 @@ fn conjugate_parts(parts: &[usize]) -> Vec<usize> {
         .collect()
 }
 
+/// Connected components of the strict-edge graph, labelled in partition order.
+///
+/// For `Gamma_mu` these are paths whose lengths, in decreasing order, are
+/// `mu'`.  Within each equal-length class we use the smallest vertex as a
+/// deterministic tie breaker; this is the convention compatible with the
+/// complete-graph Foata map at ranks one and two.
+fn hall_strict_chains(path: &PathData, parts: &[usize]) -> Result<Vec<Vec<usize>>, String> {
+    let mut adjacency = vec![Vec::new(); path.n];
+    for &(left, right) in &path.strict_edges {
+        adjacency[left].push(right);
+        adjacency[right].push(left);
+    }
+    if adjacency.iter().any(|neighbors| neighbors.len() > 2) {
+        return Err(format!(
+            "strict graph for mu={parts:?} is not a union of paths"
+        ));
+    }
+
+    let mut seen = vec![false; path.n];
+    let mut chains = Vec::new();
+    for start in 0..path.n {
+        if seen[start] {
+            continue;
+        }
+        let mut queue = VecDeque::from([start]);
+        seen[start] = true;
+        let mut component = Vec::new();
+        while let Some(vertex) = queue.pop_front() {
+            component.push(vertex);
+            for &neighbor in &adjacency[vertex] {
+                if !seen[neighbor] {
+                    seen[neighbor] = true;
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+        component.sort_unstable();
+        let edge_count = path
+            .strict_edges
+            .iter()
+            .filter(|&&(left, right)| {
+                component.binary_search(&left).is_ok() && component.binary_search(&right).is_ok()
+            })
+            .count();
+        if edge_count + 1 != component.len() {
+            return Err(format!(
+                "strict component {component:?} for mu={parts:?} is not a path"
+            ));
+        }
+        chains.push(component);
+    }
+    chains.sort_by_key(|chain| (std::cmp::Reverse(chain.len()), chain[0]));
+    let lengths = chains.iter().map(Vec::len).collect::<Vec<_>>();
+    let expected = conjugate_parts(parts);
+    if lengths != expected {
+        return Err(format!(
+            "strict-chain lengths {lengths:?} differ from mu'={expected:?} for mu={parts:?}"
+        ));
+    }
+    Ok(chains)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct HallMatrixState {
+    charge_rows: Vec<Vec<u32>>,
+    color_rows: Vec<Vec<u32>>,
+}
+
+/// Dual RSK for the 0--1 matrix with rows=strict chains and columns=colors.
+///
+/// The biword is sorted by color increasingly and, for equal colors, by chain
+/// label decreasingly.  Row insertion of the chain labels gives an SSYT of
+/// content `mu'`; transposing the row-strict recording tableau gives the color
+/// SSYT of conjugate shape.
+fn hall_binary_dual_rsk(
+    path: &PathData,
+    parts: &[usize],
+    coloring: &[u8],
+) -> Result<HallMatrixState, String> {
+    if !increases_on_edges(coloring, &path.strict_edges) {
+        return Err(format!("coloring {coloring:?} is not strict for mu={parts:?}"));
+    }
+    let chains = hall_strict_chains(path, parts)?;
+    let mut pairs = chains
+        .iter()
+        .enumerate()
+        .flat_map(|(chain, vertices)| {
+            vertices
+                .iter()
+                .map(move |&vertex| (coloring[vertex], chain as u32 + 1))
+        })
+        .collect::<Vec<_>>();
+    pairs.sort_by(|left, right| left.0.cmp(&right.0).then(right.1.cmp(&left.1)));
+
+    let mut insertion = Tableau::new(Vec::new());
+    let mut recording_rows: Vec<Vec<u32>> = Vec::new();
+    for (color, chain) in pairs {
+        let (next, new_row) = insertion.row_insert(chain);
+        insertion = next;
+        while recording_rows.len() <= new_row {
+            recording_rows.push(Vec::new());
+        }
+        recording_rows[new_row].push(u32::from(color) + 1);
+    }
+    let recording = Tableau::new(recording_rows);
+    let color_rows = transpose_tableau_rows(recording.rows());
+    let color_tableau = Tableau::new(color_rows.clone());
+    if !insertion.is_semistandard() || !color_tableau.is_semistandard() {
+        return Err(format!(
+            "dual RSK produced invalid tableaux T={}, P={} from coloring {coloring:?}",
+            format_tableau(insertion.rows()),
+            format_tableau(&color_rows)
+        ));
+    }
+    Ok(HallMatrixState {
+        charge_rows: insertion.rows().to_vec(),
+        color_rows,
+    })
+}
+
+/// The complete statistic correction for `Gamma_(2,2)`.
+///
+/// Its strict chains are positions `{1,3}` and `{2,4}` (one-based).  When all
+/// colors are distinct and the minimum belongs to the first chain while the
+/// maximum belongs to the second, exchange the two middle colors between the
+/// chains.  All other matrices are already degree-correct and remain fixed.
+fn hall_22_matrix_correction(coloring: &[u8]) -> Result<Vec<u8>, String> {
+    if coloring.len() != 4 {
+        return Err("the Gamma_(2,2) correction requires four vertices".into());
+    }
+    let mut colors = coloring.to_vec();
+    colors.sort_unstable();
+    colors.dedup();
+    if colors.len() != 4 {
+        return Ok(coloring.to_vec());
+    }
+    let first_chain = [coloring[0], coloring[2]];
+    let second_chain = [coloring[1], coloring[3]];
+    if first_chain.contains(&colors[0]) && second_chain.contains(&colors[3]) {
+        let middle_left = coloring
+            .iter()
+            .position(|&color| color == colors[1])
+            .expect("the second color occurs");
+        let middle_right = coloring
+            .iter()
+            .position(|&color| color == colors[2])
+            .expect("the third color occurs");
+        let mut corrected = coloring.to_vec();
+        corrected.swap(middle_left, middle_right);
+        Ok(corrected)
+    } else {
+        Ok(coloring.to_vec())
+    }
+}
+
+fn hall_matrix_distance(
+    path: &PathData,
+    parts: &[usize],
+    left: &[u8],
+    right: &[u8],
+) -> Result<usize, String> {
+    let chains = hall_strict_chains(path, parts)?;
+    let incidence = |coloring: &[u8]| {
+        chains
+            .iter()
+            .enumerate()
+            .flat_map(|(chain, vertices)| {
+                vertices
+                    .iter()
+                    .map(move |&vertex| (chain, coloring[vertex]))
+            })
+            .collect::<BTreeSet<_>>()
+    };
+    let left = incidence(left);
+    let right = incidence(right);
+    Ok(left.difference(&right).count())
+}
+
+#[derive(Default)]
+struct HallMatrixAudit {
+    colorings: usize,
+    exact_degrees: usize,
+    degree_errors: BTreeMap<isize, usize>,
+    first_degree_failure: Option<String>,
+    correction_distance_counts: BTreeMap<usize, usize>,
+    max_correction_radius: usize,
+    first_correction: Option<String>,
+    first_failure_coloring: Option<Vec<u8>>,
+    first_failure_correction: Option<String>,
+    joint_degree_symmetric: bool,
+    first_joint_asymmetry: Option<String>,
+}
+
+fn audit_hall_matrix(parts: &[usize]) -> Result<HallMatrixAudit, String> {
+    let path = hall_littlewood_path(parts)?;
+    let shift = parts
+        .iter()
+        .skip(1)
+        .map(|&part| part * part.saturating_sub(1) / 2)
+        .sum::<usize>();
+    let colorings = packed_words(path.n)
+        .into_iter()
+        .filter(|word| increases_on_edges(word, &path.strict_edges))
+        .collect::<Vec<_>>();
+    let mut images = BTreeSet::new();
+    let mut audit = HallMatrixAudit {
+        joint_degree_symmetric: true,
+        ..HallMatrixAudit::default()
+    };
+    let mut joint_degrees = BTreeMap::<(Vec<usize>, usize, usize), usize>::new();
+    for coloring in &colorings {
+        let state = hall_binary_dual_rsk(&path, parts, coloring)?;
+        let source_content = packed_content(coloring);
+        let target_content = state
+            .color_rows
+            .iter()
+            .flatten()
+            .fold(vec![0usize; source_content.len()], |mut content, &entry| {
+                content[entry as usize - 1] += 1;
+                content
+            });
+        if target_content != source_content {
+            return Err(format!(
+                "dual RSK changed color content for mu={parts:?}, coloring={coloring:?}"
+            ));
+        }
+        if tableau_shape(&state.color_rows)
+            != conjugate_parts(&tableau_shape(&state.charge_rows))
+        {
+            return Err(format!(
+                "dual RSK shapes are not conjugate for mu={parts:?}, coloring={coloring:?}"
+            ));
+        }
+        if !images.insert(state.clone()) {
+            return Err(format!(
+                "dual RSK is not injective for mu={parts:?}, coloring={coloring:?}"
+            ));
+        }
+        let ascents = edge_ascent_mask(coloring, &path.normal_edges).count_ones() as usize;
+        let charge = Tableau::new(state.charge_rows.clone()).charge() as usize;
+        let error = ascents as isize - (shift + charge) as isize;
+        *joint_degrees
+            .entry((source_content, ascents, shift + charge))
+            .or_default() += 1;
+        *audit.degree_errors.entry(error).or_default() += 1;
+        if error == 0 {
+            audit.exact_degrees += 1;
+        } else if audit.first_degree_failure.is_none() {
+            audit.first_failure_coloring = Some(coloring.clone());
+            audit.first_degree_failure = Some(format!(
+                "coloring {}, asc={}, dual-RSK T={} has A+charge={}+{}={}",
+                format_word(coloring),
+                ascents,
+                format_tableau(&state.charge_rows),
+                shift,
+                charge,
+                shift + charge
+            ));
+        }
+    }
+    audit.colorings = colorings.len();
+    for ((content, source_degree, raw_degree), count) in &joint_degrees {
+        let reverse = joint_degrees
+            .get(&(content.clone(), *raw_degree, *source_degree))
+            .copied()
+            .unwrap_or(0);
+        if *count != reverse {
+            audit.joint_degree_symmetric = false;
+            audit.first_joint_asymmetry = Some(format!(
+                "content={content:?}, (source,raw)=({source_degree},{raw_degree}) has {count}, reverse has {reverse}"
+            ));
+            break;
+        }
+    }
+
+    let mut expected = BTreeSet::new();
+    for charge_rows in hall_littlewood_charge_tableaux(parts)
+        .into_values()
+        .flatten()
+    {
+        let color_shape = conjugate_parts(&tableau_shape(&charge_rows));
+        for color in packed_semistandard_tableaux(&color_shape, path.n) {
+            expected.insert(HallMatrixState {
+                charge_rows: charge_rows.clone(),
+                color_rows: color.rows().to_vec(),
+            });
+        }
+    }
+    if images != expected {
+        return Err(format!(
+            "dual RSK target set differs from the Hall target for mu={parts:?}: {} images, {} expected",
+            images.len(),
+            expected.len()
+        ));
+    }
+
+    let mut sources_by_key = BTreeMap::<(Vec<usize>, usize), Vec<Vec<u8>>>::new();
+    let mut targets_by_key = BTreeMap::<(Vec<usize>, usize), Vec<Vec<u8>>>::new();
+    for coloring in &colorings {
+        let content = packed_content(coloring);
+        let ascents = edge_ascent_mask(coloring, &path.normal_edges).count_ones() as usize;
+        sources_by_key
+            .entry((content.clone(), ascents))
+            .or_default()
+            .push(coloring.clone());
+        let state = hall_binary_dual_rsk(&path, parts, coloring)?;
+        let target_degree =
+            shift + Tableau::new(state.charge_rows.clone()).charge() as usize;
+        targets_by_key
+            .entry((content, target_degree))
+            .or_default()
+            .push(coloring.clone());
+    }
+    for values in sources_by_key.values_mut() {
+        values.sort();
+    }
+    for values in targets_by_key.values_mut() {
+        values.sort();
+    }
+    if sources_by_key.keys().collect::<Vec<_>>() != targets_by_key.keys().collect::<Vec<_>>() {
+        return Err(format!(
+            "source and target matrix degree buckets differ for mu={parts:?}"
+        ));
+    }
+    for (key, sources) in sources_by_key {
+        let targets = &targets_by_key[&key];
+        if sources.len() != targets.len() {
+            return Err(format!(
+                "matrix degree bucket counts differ for mu={parts:?}, key={key:?}"
+            ));
+        }
+        let distances = sources
+            .iter()
+            .map(|source| {
+                targets
+                    .iter()
+                    .map(|target| {
+                        hall_matrix_distance(&path, parts, source, target)
+                            .expect("matrix candidates have valid strict-chain decompositions")
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let maximum = distances.iter().flatten().copied().max().unwrap_or(0);
+        let mut chosen = None;
+        for radius in 0..=maximum {
+            let adjacency = distances
+                .iter()
+                .map(|row| {
+                    let mut neighbors = row
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, &distance)| {
+                            (distance <= radius).then_some((distance, index))
+                        })
+                        .collect::<Vec<_>>();
+                    neighbors.sort();
+                    neighbors
+                        .into_iter()
+                        .map(|(_, index)| index)
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            if let Some(matching) = match_bipartite(&adjacency, targets.len()) {
+                chosen = Some((radius, matching));
+                break;
+            }
+        }
+        let (radius, matching) = chosen.ok_or_else(|| {
+            format!("no matrix correction matching for mu={parts:?}, key={key:?}")
+        })?;
+        audit.max_correction_radius = audit.max_correction_radius.max(radius);
+        for (source, target_index) in matching.into_iter().enumerate() {
+            let distance = distances[source][target_index];
+            *audit
+                .correction_distance_counts
+                .entry(distance)
+                .or_default() += 1;
+            if distance > 0 && audit.first_correction.is_none() {
+                let target = &targets[target_index];
+                let target_state = hall_binary_dual_rsk(&path, parts, target)?;
+                audit.first_correction = Some(format!(
+                    "{} -> matrix {} -> T={}",
+                    format_word(&sources[source]),
+                    format_word(target),
+                    format_tableau(&target_state.charge_rows)
+                ));
+            }
+            if audit.first_failure_coloring.as_ref() == Some(&sources[source]) {
+                let target = &targets[target_index];
+                let target_state = hall_binary_dual_rsk(&path, parts, target)?;
+                audit.first_failure_correction = Some(format!(
+                    "{} -> matrix {} -> T={}",
+                    format_word(&sources[source]),
+                    format_word(target),
+                    format_tableau(&target_state.charge_rows)
+                ));
+            }
+        }
+    }
+    if parts == [2, 2] {
+        for coloring in &colorings {
+            let corrected = hall_22_matrix_correction(coloring)?;
+            let state = hall_binary_dual_rsk(&path, parts, &corrected)?;
+            let source_degree =
+                edge_ascent_mask(coloring, &path.normal_edges).count_ones() as usize;
+            let target_degree =
+                shift + Tableau::new(state.charge_rows.clone()).charge() as usize;
+            if source_degree != target_degree
+                || hall_22_matrix_correction(&corrected)? != *coloring
+            {
+                return Err(format!(
+                    "the explicit Gamma_(2,2) switch failed on coloring {coloring:?}"
+                ));
+            }
+        }
+    }
+    Ok(audit)
+}
+
 /// Schur multiplicities of the original coloring polynomial `G_mu`.
 ///
 /// Proposition 37 gives `omega G_mu = q^A H_{mu'}`.  Applying `omega` to the
@@ -4065,6 +4498,506 @@ fn hall_littlewood_charge_multiplicities(parts: &[usize]) -> BTreeMap<SchurKey, 
         .into_iter()
         .map(|(key, tableaux)| (key, tableaux.len()))
         .collect()
+}
+
+fn transpose_tableau_rows(rows: &[Vec<u32>]) -> Vec<Vec<u32>> {
+    let width = rows.first().map(Vec::len).unwrap_or(0);
+    (0..width)
+        .map(|column| {
+            rows.iter()
+                .take_while(|row| column < row.len())
+                .map(|row| row[column])
+                .collect()
+        })
+        .collect()
+}
+
+/// Standardize equal entries in reading-word order (bottom row to top row).
+fn standardize_tableau_rows(rows: &[Vec<u32>]) -> Vec<Vec<u32>> {
+    let mut result = rows.to_vec();
+    let max_entry = rows.iter().flatten().copied().max().unwrap_or(0);
+    let mut next = 1u32;
+    for entry in 1..=max_entry {
+        for row in (0..rows.len()).rev() {
+            for column in 0..rows[row].len() {
+                if rows[row][column] == entry {
+                    result[row][column] = next;
+                    next += 1;
+                }
+            }
+        }
+    }
+    result
+}
+
+fn foata_insert_step(word: &mut Vec<u8>, inserted: u8) {
+    let last = *word.last().expect("Foata insertion starts from a nonempty word");
+    let mark_less = last < inserted;
+    let mut blocks = Vec::<Vec<u8>>::new();
+    let mut block = Vec::new();
+    for &value in word.iter() {
+        block.push(value);
+        if (mark_less && value < inserted) || (!mark_less && value > inserted) {
+            block.rotate_right(1);
+            blocks.push(std::mem::take(&mut block));
+        }
+    }
+    debug_assert!(block.is_empty());
+    word.clear();
+    for block in blocks {
+        word.extend(block);
+    }
+    word.push(inserted);
+}
+
+fn inverse_foata_map(perm: &[u8]) -> Result<Vec<u8>, String> {
+    fn undo_insert(image: &[u8]) -> Result<Vec<u8>, String> {
+        let (&inserted, prefix) = image
+            .split_last()
+            .ok_or_else(|| "cannot undo Foata insertion on an empty word".to_string())?;
+        if prefix.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut candidates = Vec::new();
+        for mark_less in [true, false] {
+            let is_marked = |value: u8| {
+                if mark_less {
+                    value < inserted
+                } else {
+                    value > inserted
+                }
+            };
+            if !is_marked(prefix[0]) {
+                continue;
+            }
+            let mut blocks = Vec::<Vec<u8>>::new();
+            for &value in prefix {
+                if is_marked(value) {
+                    blocks.push(Vec::new());
+                }
+                let Some(block) = blocks.last_mut() else {
+                    continue;
+                };
+                block.push(value);
+            }
+            let mut original = Vec::with_capacity(prefix.len());
+            for mut block in blocks {
+                block.rotate_left(1);
+                original.extend(block);
+            }
+            let relation_matches = original.last().is_some_and(|&last| {
+                if mark_less {
+                    last < inserted
+                } else {
+                    last > inserted
+                }
+            });
+            if relation_matches {
+                let mut check = original.clone();
+                foata_insert_step(&mut check, inserted);
+                if check == image {
+                    candidates.push(original);
+                }
+            }
+        }
+        match candidates.as_slice() {
+            [candidate] => Ok(candidate.clone()),
+            _ => Err(format!(
+                "Foata insertion has {} preimages for {image:?}",
+                candidates.len()
+            )),
+        }
+    }
+
+    let mut image = perm.to_vec();
+    let mut removed = Vec::with_capacity(perm.len());
+    while !image.is_empty() {
+        removed.push(*image.last().expect("nonempty image has a last entry"));
+        image = undo_insert(&image)?;
+    }
+    removed.reverse();
+    Ok(removed)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct CompleteGraphFoataState {
+    charge_rows: Vec<Vec<u32>>,
+    color_rows: Vec<Vec<u32>>,
+}
+
+fn packed_content(word: &[u8]) -> Vec<usize> {
+    let mut content = vec![0usize; word.iter().copied().max().map_or(0, |value| value as usize + 1)];
+    for &value in word {
+        content[value as usize] += 1;
+    }
+    content
+}
+
+fn standardize_packed_word(word: &[u8]) -> Vec<u8> {
+    let content = packed_content(word);
+    let mut next_rank = Vec::with_capacity(content.len());
+    let mut rank = 1usize;
+    for &count in &content {
+        next_rank.push(rank);
+        rank += count;
+    }
+    word.iter()
+        .map(|&value| {
+            let color = value as usize;
+            let result = next_rank[color];
+            next_rank[color] += 1;
+            u8::try_from(result).expect("prototype words have length at most u8::MAX")
+        })
+        .collect()
+}
+
+fn destandardize_permutation(perm: &[u8], content: &[usize]) -> Vec<u8> {
+    let mut rank_to_color = vec![0u8; perm.len() + 1];
+    let mut rank = 1usize;
+    for (color, &count) in content.iter().enumerate() {
+        for _ in 0..count {
+            rank_to_color[rank] = color as u8;
+            rank += 1;
+        }
+    }
+    perm.iter()
+        .map(|&value| rank_to_color[value as usize])
+        .collect()
+}
+
+fn foata_word_map(word: &[u8]) -> Vec<u8> {
+    destandardize_permutation(&foata_map(&standardize_packed_word(word)), &packed_content(word))
+}
+
+fn inverse_foata_word(word: &[u8]) -> Result<Vec<u8>, String> {
+    let content = packed_content(word);
+    let standardized = standardize_packed_word(word);
+    Ok(destandardize_permutation(
+        &inverse_foata_map(&standardized)?,
+        &content,
+    ))
+}
+
+fn complete_graph_word_encode(word: &[u8]) -> Result<CompleteGraphFoataState, String> {
+    let reversed = word.iter().rev().copied().collect::<Vec<_>>();
+    let foata_preimage = inverse_foata_word(&reversed)?;
+    let positive_word = foata_preimage
+        .iter()
+        .map(|&entry| u32::from(entry) + 1)
+        .collect::<Vec<_>>();
+    let (color, recording) = Tableau::rsk(&positive_word);
+    let charge_rows = transpose_tableau_rows(recording.evacuation().rows());
+    Ok(CompleteGraphFoataState {
+        charge_rows,
+        color_rows: color.rows().to_vec(),
+    })
+}
+
+fn complete_graph_word_decode(state: &CompleteGraphFoataState) -> Result<Vec<u8>, String> {
+    let color = Tableau::new(state.color_rows.clone());
+    let transposed_charge = Tableau::new(transpose_tableau_rows(&state.charge_rows));
+    let recording = transposed_charge.evacuation();
+    let foata_preimage = inverse_rsk(&color, &recording)?
+        .into_iter()
+        .map(|entry| {
+            let zero_based = entry
+                .checked_sub(1)
+                .ok_or_else(|| "color tableaux use positive entries".to_string())?;
+            u8::try_from(zero_based).map_err(|_| "color entry exceeds u8".to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let reversed = foata_word_map(&foata_preimage);
+    Ok(reversed.into_iter().rev().collect())
+}
+
+fn print_complete_graph_foata_trace(text: &str) -> Result<(), String> {
+    let word = parse_coloring(text)?;
+    validate_packed_word(&word, word.len())?;
+    let reversed = word.iter().rev().copied().collect::<Vec<_>>();
+    let foata_preimage = inverse_foata_word(&reversed)?;
+    let positive = foata_preimage
+        .iter()
+        .map(|&entry| u32::from(entry) + 1)
+        .collect::<Vec<_>>();
+    let (color, recording) = Tableau::rsk(&positive);
+    let state = complete_graph_word_encode(&word)?;
+    let ascents = (0..word.len())
+        .flat_map(|left| (left + 1..word.len()).map(move |right| (left, right)))
+        .filter(|&(left, right)| word[left] < word[right])
+        .count();
+    let charge = Tableau::new(state.charge_rows.clone()).charge() as usize;
+    let recovered = complete_graph_word_decode(&state)?;
+    println!("complete graph K_{}", word.len());
+    println!("  packed coloring w       = {}", format_word(&word));
+    println!("  reverse(w)              = {}", format_word(&reversed));
+    println!(
+        "  inverse Foata preimage  = {}",
+        format_word(&foata_preimage)
+    );
+    println!("  RSK color tableau P     = {}", format_tableau(color.rows()));
+    println!(
+        "  RSK recording tableau Q = {}",
+        format_tableau(recording.rows())
+    );
+    println!(
+        "  charge tableau Q^evac,t = {}",
+        format_tableau(&state.charge_rows)
+    );
+    println!("  asc_K(w)={ascents}=charge(T)={charge}");
+    println!("  inverse recovers         = {}", format_word(&recovered));
+    if recovered != word || ascents != charge {
+        return Err("complete-graph Foata trace failed its certificate checks".into());
+    }
+    Ok(())
+}
+
+fn match_bipartite(adjacency: &[Vec<usize>], right_count: usize) -> Option<Vec<usize>> {
+    fn augment(
+        left: usize,
+        adjacency: &[Vec<usize>],
+        visited: &mut [bool],
+        right_to_left: &mut [Option<usize>],
+    ) -> bool {
+        for &right in &adjacency[left] {
+            if visited[right] {
+                continue;
+            }
+            visited[right] = true;
+            if right_to_left[right]
+                .is_none_or(|other| augment(other, adjacency, visited, right_to_left))
+            {
+                right_to_left[right] = Some(left);
+                return true;
+            }
+        }
+        false
+    }
+
+    if adjacency.len() != right_count {
+        return None;
+    }
+    let mut right_to_left = vec![None; right_count];
+    for left in 0..adjacency.len() {
+        if !augment(
+            left,
+            adjacency,
+            &mut vec![false; right_count],
+            &mut right_to_left,
+        ) {
+            return None;
+        }
+    }
+    let mut left_to_right = vec![usize::MAX; adjacency.len()];
+    for (right, left) in right_to_left.into_iter().enumerate() {
+        left_to_right[left.expect("a perfect matching covers every target")] = right;
+    }
+    Some(left_to_right)
+}
+
+#[derive(Default)]
+struct HallSwitchAudit {
+    pairs: usize,
+    exact_pairs: usize,
+    max_radius: usize,
+    distance_counts: BTreeMap<usize, usize>,
+}
+
+#[derive(Default)]
+struct HallAlignedAudit {
+    survivors: usize,
+    cancellation_pairs: usize,
+    max_radius: u32,
+    distance_counts: BTreeMap<u32, usize>,
+}
+
+fn audit_hall_aligned_survivors(parts: &[usize]) -> Result<HallAlignedAudit, String> {
+    let path = hall_littlewood_path(parts)?;
+    let targets_by_key = hall_littlewood_charge_tableaux(parts);
+    let mut critical_by_key = BTreeMap::<SchurKey, Vec<TableauSkeleton>>::new();
+    for skeleton in enumerate_tableau_skeletons(&path)? {
+        if boolean_hrv_partner(&path, &skeleton)?.is_none() {
+            critical_by_key
+                .entry(skeleton_key(&skeleton))
+                .or_default()
+                .push(skeleton);
+        }
+    }
+
+    let mut audit = HallAlignedAudit::default();
+    for (key, mut critical) in critical_by_key {
+        critical.sort();
+        let targets = targets_by_key.get(&key).cloned().unwrap_or_default();
+        let mut positive = critical
+            .iter()
+            .filter(|skeleton| skeleton_sign(skeleton) > 0)
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut negative = critical
+            .into_iter()
+            .filter(|skeleton| skeleton_sign(skeleton) < 0)
+            .collect::<Vec<_>>();
+        positive.sort();
+        negative.sort();
+
+        let desired_recordings = targets
+            .iter()
+            .map(|target| transpose_tableau_rows(&standardize_tableau_rows(target)))
+            .collect::<Vec<_>>();
+        let mut reserved = BTreeSet::new();
+        for recording in &desired_recordings {
+            let index = positive
+                .iter()
+                .enumerate()
+                .find(|(index, skeleton)| {
+                    !reserved.contains(index) && skeleton.recording_rows == *recording
+                })
+                .map(|(index, _)| index)
+                .ok_or_else(|| {
+                    format!(
+                        "no aligned positive survivor for mu={parts:?}, key={key:?}, desired Q={}",
+                        format_tableau(recording)
+                    )
+                })?;
+            reserved.insert(index);
+        }
+        let available = positive
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, skeleton)| (!reserved.contains(&index)).then_some(skeleton))
+            .collect::<Vec<_>>();
+        if available.len() != negative.len() {
+            return Err(format!(
+                "aligned survivor count mismatch for mu={parts:?}, key={key:?}: {} available positive, {} negative, {} targets",
+                available.len(),
+                negative.len(),
+                targets.len()
+            ));
+        }
+
+        let mut chosen = None;
+        let limit = (2 * path.normal_edges.len()).max(1) as u32;
+        for radius in 1..=limit {
+            let adjacency = negative
+                .iter()
+                .map(|minus| {
+                    let mut neighbors = available
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, plus)| {
+                            let distance = (minus.orientation_mask ^ plus.orientation_mask)
+                                .count_ones()
+                                + (minus.retained_orientation_mask
+                                    ^ plus.retained_orientation_mask)
+                                    .count_ones();
+                            (distance <= radius).then_some((distance, index))
+                        })
+                        .collect::<Vec<_>>();
+                    neighbors.sort();
+                    neighbors
+                        .into_iter()
+                        .map(|(_, index)| index)
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            if let Some(matching) = match_bipartite(&adjacency, available.len()) {
+                chosen = Some((radius, matching));
+                break;
+            }
+        }
+        let (radius, matching) = chosen.ok_or_else(|| {
+            format!("no aligned residual matching for mu={parts:?}, key={key:?}")
+        })?;
+        audit.max_radius = audit.max_radius.max(radius);
+        audit.survivors += targets.len();
+        audit.cancellation_pairs += negative.len();
+        for (minus_index, plus_index) in matching.into_iter().enumerate() {
+            let minus = &negative[minus_index];
+            let plus = &available[plus_index];
+            let distance = (minus.orientation_mask ^ plus.orientation_mask).count_ones()
+                + (minus.retained_orientation_mask ^ plus.retained_orientation_mask).count_ones();
+            *audit.distance_counts.entry(distance).or_default() += 1;
+        }
+    }
+    Ok(audit)
+}
+
+fn audit_hall_switches(parts: &[usize]) -> Result<HallSwitchAudit, String> {
+    let path = hall_littlewood_path(parts)?;
+    let cancellation = SchurCancellation::build(&path)?;
+    let targets_by_key = hall_littlewood_charge_tableaux(parts);
+    let mut sources_by_key = BTreeMap::<SchurKey, Vec<TableauSkeleton>>::new();
+    for skeleton in &cancellation.fixed {
+        sources_by_key
+            .entry(skeleton_key(skeleton))
+            .or_default()
+            .push(skeleton.clone());
+    }
+    for sources in sources_by_key.values_mut() {
+        sources.sort();
+    }
+
+    let mut audit = HallSwitchAudit::default();
+    for (key, sources) in sources_by_key {
+        let charge_tableaux = targets_by_key
+            .get(&key)
+            .ok_or_else(|| format!("missing charge targets for mu={parts:?}, key={key:?}"))?;
+        if sources.len() != charge_tableaux.len() {
+            return Err(format!(
+                "Hall switch counts disagree for mu={parts:?}, key={key:?}"
+            ));
+        }
+        let source_tableaux = sources
+            .iter()
+            .map(|source| transpose_tableau_rows(&source.recording_rows))
+            .collect::<Vec<_>>();
+        let target_tableaux = charge_tableaux
+            .iter()
+            .map(|target| standardize_tableau_rows(target))
+            .collect::<Vec<_>>();
+        let mut distances = vec![vec![0usize; target_tableaux.len()]; source_tableaux.len()];
+        for (left, source) in source_tableaux.iter().enumerate() {
+            for (right, target) in target_tableaux.iter().enumerate() {
+                distances[left][right] = dual_equivalence_distance(source, target).ok_or_else(|| {
+                    format!(
+                        "dual-equivalence components disagree for mu={parts:?}, key={key:?}: {} versus {}",
+                        format_tableau(source),
+                        format_tableau(target)
+                    )
+                })?;
+            }
+        }
+        let max_distance = distances.iter().flatten().copied().max().unwrap_or(0);
+        let mut chosen = None;
+        for radius in 0..=max_distance {
+            let adjacency = distances
+                .iter()
+                .map(|row| {
+                    let mut targets = row
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(right, &distance)| (distance <= radius).then_some(right))
+                        .collect::<Vec<_>>();
+                    targets.sort_by_key(|&right| (row[right], right));
+                    targets
+                })
+                .collect::<Vec<_>>();
+            if let Some(matching) = match_bipartite(&adjacency, target_tableaux.len()) {
+                chosen = Some((radius, matching));
+                break;
+            }
+        }
+        let (radius, matching) = chosen.ok_or_else(|| {
+            format!("no standardized-tableau matching for mu={parts:?}, key={key:?}")
+        })?;
+        audit.max_radius = audit.max_radius.max(radius);
+        for (left, right) in matching.into_iter().enumerate() {
+            let distance = distances[left][right];
+            audit.pairs += 1;
+            audit.exact_pairs += usize::from(distance == 0);
+            *audit.distance_counts.entry(distance).or_default() += 1;
+        }
+    }
+    Ok(audit)
 }
 
 fn enumerate_paths(
@@ -5840,9 +6773,11 @@ fn print_hall_littlewood_bridge(parts: &[usize]) -> Result<(), String> {
             .get(skeleton)
             .expect("bridge covers every surviving skeleton");
         let tableau = Tableau::new(charge_rows.clone());
+        let transposed_recording = Tableau::new(transpose_tableau_rows(&skeleton.recording_rows));
+        let rsk_word = inverse_rsk(&tableau, &transposed_recording)?;
         let key = skeleton_key(skeleton);
         println!(
-            "  degree {}, shape(P)={:?}: eta={}, B={}, Q={}  <->  T={} (shape {:?}, charge {})",
+            "  degree {}, shape(P)={:?}: eta={}, B={}, Q={}  <->  T={} (shape {:?}, charge {}), inverse-RSK(T,Q^t)={:?}",
             key.q_degree,
             key.shape,
             format_edges(skeleton.orientation_mask, &path.normal_edges),
@@ -5850,13 +6785,103 @@ fn print_hall_littlewood_bridge(parts: &[usize]) -> Result<(), String> {
             format_tableau(&skeleton.recording_rows),
             format_tableau(charge_rows),
             tableau_shape(charge_rows),
-            tableau.charge()
+            tableau.charge(),
+            rsk_word
         );
     }
     Ok(())
 }
 
+fn print_hall_switch_report(max_n: usize) -> Result<(), String> {
+    let mut total = HallSwitchAudit::default();
+    for n in 0..=max_n {
+        for parts in integer_partitions(n) {
+            let audit = audit_hall_switches(&parts)?;
+            match audit_hall_aligned_survivors(&parts) {
+                Ok(aligned) => println!(
+                    "Hall switch mu={parts:?}: {} survivors, {} current exact, minimum dual-equivalence radius {}, distances {:?}; {} aligned survivors reserved, {} residual pairs, residual radius {}, distances {:?}",
+                    audit.pairs,
+                    audit.exact_pairs,
+                    audit.max_radius,
+                    audit.distance_counts,
+                    aligned.survivors,
+                    aligned.cancellation_pairs,
+                    aligned.max_radius,
+                    aligned.distance_counts
+                ),
+                Err(obstruction) => println!(
+                    "Hall switch mu={parts:?}: {} survivors, {} current exact, minimum dual-equivalence radius {}, distances {:?}; exact-aligned survivor obstruction: {obstruction}",
+                    audit.pairs,
+                    audit.exact_pairs,
+                    audit.max_radius,
+                    audit.distance_counts
+                ),
+            }
+            total.pairs += audit.pairs;
+            total.exact_pairs += audit.exact_pairs;
+            total.max_radius = total.max_radius.max(audit.max_radius);
+            for (distance, count) in audit.distance_counts {
+                *total.distance_counts.entry(distance).or_default() += count;
+            }
+        }
+    }
+    println!(
+        "Hall switches ranks 0..={max_n}: {} survivors, {} exact, maximum matching radius {}, distances {:?}",
+        total.pairs, total.exact_pairs, total.max_radius, total.distance_counts
+    );
+    Ok(())
+}
+
+fn print_hall_matrix_report(max_n: usize) -> Result<(), String> {
+    let mut colorings = 0usize;
+    let mut exact = 0usize;
+    let mut errors = BTreeMap::<isize, usize>::new();
+    for n in 0..=max_n {
+        for parts in integer_partitions(n) {
+            let audit = audit_hall_matrix(&parts)?;
+            println!(
+                "Hall matrix mu={parts:?}: {} binary-matrix colorings, {} raw degree matches, errors asc-(A+charge) {:?}; minimum correction radius {}, distances {:?}",
+                audit.colorings,
+                audit.exact_degrees,
+                audit.degree_errors,
+                audit.max_correction_radius,
+                audit.correction_distance_counts
+            );
+            println!(
+                "  raw/source joint-degree table symmetric: {}{}",
+                audit.joint_degree_symmetric,
+                audit
+                    .first_joint_asymmetry
+                    .as_deref()
+                    .map_or(String::new(), |failure| format!(" ({failure})"))
+            );
+            if let Some(failure) = audit.first_degree_failure {
+                println!("  first raw statistic failure: {failure}");
+            }
+            if let Some(correction) = audit.first_correction {
+                println!("  first minimum-radius correction: {correction}");
+            }
+            if let Some(correction) = audit.first_failure_correction {
+                println!("  correction of first raw failure: {correction}");
+            }
+            colorings += audit.colorings;
+            exact += audit.exact_degrees;
+            for (error, count) in audit.degree_errors {
+                *errors.entry(error).or_default() += count;
+            }
+        }
+    }
+    println!(
+        "Hall binary dual RSK ranks 0..={max_n}: {colorings} bijective objects, {exact} raw degree matches, errors {errors:?}"
+    );
+    Ok(())
+}
+
 fn run(args: Args) -> Result<(), String> {
+    if let Some(coloring) = args.foata_trace_coloring.as_deref() {
+        print_complete_graph_foata_trace(coloring)?;
+        return Ok(());
+    }
     if args.k3_map {
         print_k3_map()?;
     }
@@ -5951,6 +6976,14 @@ fn run(args: Args) -> Result<(), String> {
     }
     if args.hall_littlewood_report {
         print_hall_littlewood_report(args.max_n)?;
+        return Ok(());
+    }
+    if args.hall_switch_report {
+        print_hall_switch_report(args.max_n)?;
+        return Ok(());
+    }
+    if args.hall_matrix_report {
+        print_hall_matrix_report(args.max_n)?;
         return Ok(());
     }
     if let Some(parts) = args.hall_partition.as_deref() {
@@ -6329,5 +7362,107 @@ mod tests {
             }
         }
         assert_eq!(diagrams, 19);
+    }
+
+    #[test]
+    fn word_foata_rsk_maps_all_packed_complete_graph_colorings() {
+        for n in 0..=6 {
+            let words = packed_words(n);
+            let mut targets = BTreeSet::new();
+            for word in &words {
+                let state = complete_graph_word_encode(word).unwrap();
+                let ascents = (0..word.len())
+                    .flat_map(|left| (left + 1..word.len()).map(move |right| (left, right)))
+                    .filter(|&(left, right)| word[left] < word[right])
+                    .count();
+                assert_eq!(
+                    Tableau::new(state.charge_rows.clone()).charge() as usize,
+                    ascents,
+                    "word={word:?}"
+                );
+                assert_eq!(
+                    tableau_shape(&state.color_rows),
+                    conjugate_parts(&tableau_shape(&state.charge_rows))
+                );
+                assert_eq!(
+                    complete_graph_word_decode(&state).unwrap(),
+                    *word
+                );
+                assert!(targets.insert(state), "duplicate target for word={word:?}");
+            }
+            assert_eq!(targets.len(), words.len());
+            if n <= 5 {
+                let mut expected = BTreeSet::new();
+                for charge_shape in integer_partitions(n) {
+                    let charge_partition = Partition::from_sorted(
+                        charge_shape
+                            .iter()
+                            .map(|&part| part as u32)
+                            .collect::<Vec<_>>(),
+                    );
+                    let color_shape = conjugate_parts(&charge_shape);
+                    let color_partition = Partition::from_sorted(
+                        color_shape
+                            .iter()
+                            .map(|&part| part as u32)
+                            .collect::<Vec<_>>(),
+                    );
+                    for charge in Tableau::standard_tableaux(&charge_partition) {
+                        for color in Tableau::semistandard_tableaux(&color_partition, n as u32) {
+                            let entries = color.rows().iter().flatten().copied().collect::<Vec<_>>();
+                            let max_entry = entries.iter().copied().max().unwrap_or(0);
+                            let packed = (1..=max_entry)
+                                .all(|entry| entries.iter().any(|&value| value == entry));
+                            if packed {
+                                expected.insert(CompleteGraphFoataState {
+                                    charge_rows: charge.rows().to_vec(),
+                                    color_rows: color.rows().to_vec(),
+                                });
+                            }
+                        }
+                    }
+                }
+                assert_eq!(targets, expected, "rank {n} target set differs");
+            }
+        }
+    }
+
+    #[test]
+    fn hall_binary_dual_rsk_is_an_ungraded_bijection_through_rank_five() {
+        for n in 0..=5 {
+            for parts in integer_partitions(n) {
+                audit_hall_matrix(&parts).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn gamma_22_has_a_single_clean_middle_color_switch() {
+        let parts = [2, 2];
+        let path = hall_littlewood_path(&parts).unwrap();
+        let shift = 1usize;
+        let sources = packed_words(4)
+            .into_iter()
+            .filter(|word| increases_on_edges(word, &path.strict_edges))
+            .collect::<Vec<_>>();
+        let mut images = BTreeSet::new();
+        for coloring in &sources {
+            let corrected = hall_22_matrix_correction(coloring).unwrap();
+            assert!(increases_on_edges(&corrected, &path.strict_edges));
+            assert_eq!(packed_content(&corrected), packed_content(coloring));
+            assert_eq!(hall_22_matrix_correction(&corrected).unwrap(), *coloring);
+            let state = hall_binary_dual_rsk(&path, &parts, &corrected).unwrap();
+            let source_degree =
+                edge_ascent_mask(coloring, &path.normal_edges).count_ones() as usize;
+            let target_degree =
+                shift + Tableau::new(state.charge_rows.clone()).charge() as usize;
+            assert_eq!(source_degree, target_degree, "coloring={coloring:?}");
+            assert!(images.insert(state));
+        }
+        assert_eq!(images.len(), sources.len());
+        assert_eq!(
+            hall_22_matrix_correction(&[0, 2, 1, 3]).unwrap(),
+            vec![0, 1, 2, 3]
+        );
     }
 }
