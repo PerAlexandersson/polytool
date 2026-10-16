@@ -5,7 +5,8 @@
 `/root` completed and releases
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
 branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
-Lean/paper source, or circular code is owned.
+Lean/paper source, or circular code is owned.  Implementation checkpoint:
+`528410f` (`Certify Hall bump cycles and code obstruction`).
 
 Every inductive bridge step now records a deterministic minimum decomposition
 of the matrix bump into zero, one, or two simple alternating cycles, the
