@@ -5008,6 +5008,84 @@ struct HallRecursiveBumpCertificate {
     target_steps: Vec<HallBumpDeleteWitness>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+struct HallMatchingCost {
+    cycles: usize,
+    toggled_incidences: usize,
+    drop_magnitude: usize,
+    endpoint_disagreement: usize,
+}
+
+impl HallMatchingCost {
+    fn checked_add(self, other: Self) -> Result<Self, String> {
+        Ok(Self {
+            cycles: self
+                .cycles
+                .checked_add(other.cycles)
+                .ok_or_else(|| "Hall cycle cost overflow".to_string())?,
+            toggled_incidences: self
+                .toggled_incidences
+                .checked_add(other.toggled_incidences)
+                .ok_or_else(|| "Hall incidence cost overflow".to_string())?,
+            drop_magnitude: self
+                .drop_magnitude
+                .checked_add(other.drop_magnitude)
+                .ok_or_else(|| "Hall drop-magnitude cost overflow".to_string())?,
+            endpoint_disagreement: self
+                .endpoint_disagreement
+                .checked_add(other.endpoint_disagreement)
+                .ok_or_else(|| "Hall endpoint-disagreement cost overflow".to_string())?,
+        })
+    }
+}
+
+fn hall_recursive_certificate_cost(
+    certificate: &HallRecursiveBumpCertificate,
+) -> HallMatchingCost {
+    let mut cost = certificate
+        .source_steps
+        .iter()
+        .chain(&certificate.target_steps)
+        .fold(HallMatchingCost::default(), |cost, step| HallMatchingCost {
+            cycles: cost.cycles + step.cycles.len(),
+            toggled_incidences: cost.toggled_incidences
+                + step
+                    .cycles
+                    .iter()
+                    .map(|cycle| cycle.removed.len() + cycle.added.len())
+                    .sum::<usize>(),
+            drop_magnitude: 0,
+            endpoint_disagreement: 0,
+        });
+    cost.drop_magnitude = certificate
+        .code
+        .iter()
+        .map(|(drop, _)| drop.unsigned_abs())
+        .sum();
+    cost.endpoint_disagreement = certificate
+        .source_trace
+        .iter()
+        .zip(&certificate.target_trace)
+        .map(|(source_rows, target_rows)| {
+            source_rows
+                .iter()
+                .zip(target_rows)
+                .map(|(source_row, target_row)| {
+                    source_row
+                        .iter()
+                        .filter(|color| !target_row.contains(color))
+                        .count()
+                        + target_row
+                            .iter()
+                            .filter(|color| !source_row.contains(color))
+                            .count()
+                })
+                .sum::<usize>()
+        })
+        .sum();
+    cost
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct HallBucketRigidity {
     content: Vec<usize>,
@@ -5018,6 +5096,9 @@ struct HallBucketRigidity {
     max_allowed_targets: usize,
     first_ambiguous_source: Option<String>,
     alternate_matching: Option<Vec<(Vec<u8>, Vec<u8>)>>,
+    minimum_cost: HallMatchingCost,
+    minimum_cost_unique: bool,
+    alternate_minimum_cost_matching: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 }
 
 impl HallBucketRigidity {
@@ -5026,11 +5107,236 @@ impl HallBucketRigidity {
     }
 }
 
+fn minimum_cost_assignment(costs: &[Vec<Option<usize>>]) -> Option<(Vec<usize>, usize)> {
+    let n = costs.len();
+    if costs.iter().any(|row| row.len() != n) {
+        return None;
+    }
+    if n == 0 {
+        return Some((Vec::new(), 0));
+    }
+    let maximum_edge = costs.iter().flatten().flatten().copied().max().unwrap_or(0);
+    let forbidden = maximum_edge
+        .checked_add(1)?
+        .checked_mul(n.checked_add(1)?)?
+        .checked_mul(4)?;
+    let forbidden = isize::try_from(forbidden).ok()?;
+    let mut left_potential = vec![0isize; n + 1];
+    let mut right_potential = vec![0isize; n + 1];
+    let mut matched_left = vec![0usize; n + 1];
+    let mut predecessor = vec![0usize; n + 1];
+    for left in 1..=n {
+        matched_left[0] = left;
+        let mut column = 0usize;
+        let mut minimum = vec![forbidden; n + 1];
+        let mut used = vec![false; n + 1];
+        loop {
+            used[column] = true;
+            let current_left = matched_left[column];
+            let mut delta = forbidden;
+            let mut next_column = 0usize;
+            for right in 1..=n {
+                if used[right] {
+                    continue;
+                }
+                let edge = costs[current_left - 1][right - 1]
+                    .and_then(|cost| isize::try_from(cost).ok())
+                    .unwrap_or(forbidden);
+                let reduced = edge - left_potential[current_left] - right_potential[right];
+                if reduced < minimum[right] {
+                    minimum[right] = reduced;
+                    predecessor[right] = column;
+                }
+                if minimum[right] < delta {
+                    delta = minimum[right];
+                    next_column = right;
+                }
+            }
+            if delta == forbidden {
+                return None;
+            }
+            for right in 0..=n {
+                if used[right] {
+                    left_potential[matched_left[right]] += delta;
+                    right_potential[right] -= delta;
+                } else {
+                    minimum[right] -= delta;
+                }
+            }
+            column = next_column;
+            if matched_left[column] == 0 {
+                break;
+            }
+        }
+        loop {
+            let previous = predecessor[column];
+            matched_left[column] = matched_left[previous];
+            column = previous;
+            if column == 0 {
+                break;
+            }
+        }
+    }
+    let mut assignment = vec![usize::MAX; n];
+    for right in 1..=n {
+        assignment[matched_left[right] - 1] = right - 1;
+    }
+    let total = assignment
+        .iter()
+        .enumerate()
+        .try_fold(0usize, |total, (left, &right)| {
+            total.checked_add(costs[left][right]?)
+        })?;
+    Some((assignment, total))
+}
+
+fn canonical_minimum_cost_assignment(
+    costs: &[Vec<Option<usize>>],
+) -> Option<(Vec<usize>, usize, Option<Vec<usize>>)> {
+    let n = costs.len();
+    let (_, optimum) = minimum_cost_assignment(costs)?;
+    let mut assignment = vec![usize::MAX; n];
+    let mut used = vec![false; n];
+    let mut prefix_cost = 0usize;
+    for left in 0..n {
+        let mut chosen = None;
+        for right in 0..n {
+            if used[right] {
+                continue;
+            }
+            let Some(edge_cost) = costs[left][right] else {
+                continue;
+            };
+            let remaining_right = (0..n)
+                .filter(|&candidate| !used[candidate] && candidate != right)
+                .collect::<Vec<_>>();
+            let remaining = ((left + 1)..n)
+                .map(|future_left| {
+                    remaining_right
+                        .iter()
+                        .map(|&future_right| costs[future_left][future_right])
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            let suffix_cost = if remaining.is_empty() {
+                Some(0)
+            } else {
+                minimum_cost_assignment(&remaining).map(|(_, cost)| cost)
+            };
+            if suffix_cost.is_some_and(|suffix| {
+                prefix_cost
+                    .checked_add(edge_cost)
+                    .and_then(|cost| cost.checked_add(suffix))
+                    == Some(optimum)
+            }) {
+                chosen = Some((right, edge_cost));
+                break;
+            }
+        }
+        let (right, edge_cost) = chosen?;
+        assignment[left] = right;
+        used[right] = true;
+        prefix_cost = prefix_cost.checked_add(edge_cost)?;
+    }
+
+    let alternate = assignment.iter().enumerate().find_map(|(left, &right)| {
+        let mut without_edge = costs.to_vec();
+        without_edge[left][right] = None;
+        minimum_cost_assignment(&without_edge)
+            .filter(|(_, cost)| *cost == optimum)
+            .map(|(alternate, _)| alternate)
+    });
+    Some((assignment, optimum, alternate))
+}
+
+struct HallCanonicalMatching {
+    assignment: Vec<usize>,
+    cost: HallMatchingCost,
+    alternate: Option<Vec<usize>>,
+}
+
+fn hall_canonical_matching(
+    witnesses: &[Vec<Option<HallRecursiveBumpCertificate>>],
+) -> Result<HallCanonicalMatching, String> {
+    let n = witnesses.len();
+    let maximum_toggled = witnesses
+        .iter()
+        .flatten()
+        .flatten()
+        .map(hall_recursive_certificate_cost)
+        .map(|cost| cost.toggled_incidences)
+        .max()
+        .unwrap_or(0);
+    let maximum_drop_magnitude = witnesses
+        .iter()
+        .flatten()
+        .flatten()
+        .map(hall_recursive_certificate_cost)
+        .map(|cost| cost.drop_magnitude)
+        .max()
+        .unwrap_or(0);
+    let maximum_endpoint_disagreement = witnesses
+        .iter()
+        .flatten()
+        .flatten()
+        .map(hall_recursive_certificate_cost)
+        .map(|cost| cost.endpoint_disagreement)
+        .max()
+        .unwrap_or(0);
+    let incidence_base = maximum_toggled
+        .checked_mul(n)
+        .and_then(|bound| bound.checked_add(1))
+        .ok_or_else(|| "Hall matching incidence base overflow".to_string())?;
+    let drop_base = maximum_drop_magnitude
+        .checked_mul(n)
+        .and_then(|bound| bound.checked_add(1))
+        .ok_or_else(|| "Hall matching drop base overflow".to_string())?;
+    let endpoint_base = maximum_endpoint_disagreement
+        .checked_mul(n)
+        .and_then(|bound| bound.checked_add(1))
+        .ok_or_else(|| "Hall matching endpoint base overflow".to_string())?;
+    let encoded = witnesses
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|witness| {
+                    witness.as_ref().map(|certificate| {
+                        let cost = hall_recursive_certificate_cost(certificate);
+                        ((cost.cycles * incidence_base + cost.toggled_incidences) * drop_base
+                            + cost.drop_magnitude)
+                            * endpoint_base
+                            + cost.endpoint_disagreement
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let (assignment, _, alternate) = canonical_minimum_cost_assignment(&encoded)
+        .ok_or_else(|| "Hall cost graph has no perfect matching".to_string())?;
+    let cost = assignment.iter().enumerate().try_fold(
+        HallMatchingCost::default(),
+        |cost, (source, &target)| {
+            cost.checked_add(hall_recursive_certificate_cost(
+                witnesses[source][target]
+                    .as_ref()
+                    .expect("a selected Hall edge has a witness"),
+            ))
+        },
+    )?;
+    Ok(HallCanonicalMatching {
+        assignment,
+        cost,
+        alternate,
+    })
+}
+
 fn hall_bucket_matching_rigidity(
     content: &[usize],
     states: &[Vec<u8>],
     adjacency: &[Vec<usize>],
     matching: &[usize],
+    minimum_cost: HallMatchingCost,
+    alternate_minimum_cost: Option<&[usize]>,
 ) -> HallBucketRigidity {
     let n = states.len();
     let mut directed = vec![Vec::new(); 2 * n];
@@ -5103,6 +5409,13 @@ fn hall_bucket_matching_rigidity(
             })
         })
     };
+    let alternate_minimum_cost_matching = alternate_minimum_cost.map(|alternate| {
+        alternate
+            .iter()
+            .enumerate()
+            .map(|(source, &target)| (states[source].clone(), states[target].clone()))
+            .collect()
+    });
     HallBucketRigidity {
         content: content.to_vec(),
         states: n,
@@ -5112,6 +5425,9 @@ fn hall_bucket_matching_rigidity(
         max_allowed_targets,
         first_ambiguous_source,
         alternate_matching,
+        minimum_cost,
+        minimum_cost_unique: alternate_minimum_cost_matching.is_none(),
+        alternate_minimum_cost_matching,
     }
 }
 
@@ -5161,6 +5477,9 @@ impl HallRecursiveBumpBridge {
                         max_allowed_targets: 1,
                         first_ambiguous_source: None,
                         alternate_matching: None,
+                        minimum_cost: HallMatchingCost::default(),
+                        minimum_cost_unique: true,
+                        alternate_minimum_cost_matching: None,
                     }],
                 },
             );
@@ -5255,6 +5574,7 @@ impl HallRecursiveBumpBridge {
                                 target_steps,
                             };
                             let key = (
+                                hall_recursive_certificate_cost(&witness),
                                 witness.code.clone(),
                                 source_step.clone(),
                                 target_step.clone(),
@@ -5280,23 +5600,26 @@ impl HallRecursiveBumpBridge {
                         .collect::<Vec<_>>(),
                 );
             }
-            let matching = match_bipartite(&adjacency, states.len()).ok_or_else(|| {
+            if match_bipartite(&adjacency, states.len()).is_none() {
                 let isolated = adjacency.iter().position(Vec::is_empty);
-                format!(
+                return Err(format!(
                     "no inductive two-cycle bridge for mu={parts:?}, content={content:?}{}",
                     isolated.map_or(String::new(), |index| format!(
                         "; isolated source {}",
                         format_word(&states[index])
                     ))
-                )
-            })?;
+                ));
+            }
+            let canonical = hall_canonical_matching(&witnesses)?;
             rigidity.push(hall_bucket_matching_rigidity(
                 &content,
                 &states,
                 &adjacency,
-                &matching,
+                &canonical.assignment,
+                canonical.cost,
+                canonical.alternate.as_deref(),
             ));
-            for (source, target) in matching.into_iter().enumerate() {
+            for (source, target) in canonical.assignment.into_iter().enumerate() {
                 let certificate = witnesses[source][target]
                     .clone()
                     .expect("a matching edge has an inductive witness");
@@ -5791,6 +6114,21 @@ fn hall_matching_dependent_reflection(
     parts: &[usize],
     bridge: &HallRecursiveBumpBridge,
 ) -> Result<Option<String>, String> {
+    hall_matching_dependent_reflection_using(parts, bridge, false)
+}
+
+fn hall_minimum_cost_matching_dependent_reflection(
+    parts: &[usize],
+    bridge: &HallRecursiveBumpBridge,
+) -> Result<Option<String>, String> {
+    hall_matching_dependent_reflection_using(parts, bridge, true)
+}
+
+fn hall_matching_dependent_reflection_using(
+    parts: &[usize],
+    bridge: &HallRecursiveBumpBridge,
+    minimum_cost_only: bool,
+) -> Result<Option<String>, String> {
     let path = hall_littlewood_path(parts)?;
     let state_inverse = hall_binary_dual_rsk_state_inverse(&path, parts)?;
     let current = bridge
@@ -5801,7 +6139,12 @@ fn hall_matching_dependent_reflection(
     let mut alternate = current.clone();
     let mut changed_buckets = 0usize;
     for bucket in &bridge.rigidity {
-        let Some(alternate_bucket) = &bucket.alternate_matching else {
+        let alternate_bucket = if minimum_cost_only {
+            &bucket.alternate_minimum_cost_matching
+        } else {
+            &bucket.alternate_matching
+        };
+        let Some(alternate_bucket) = alternate_bucket else {
             continue;
         };
         changed_buckets += 1;
@@ -5834,7 +6177,12 @@ fn hall_matching_dependent_reflection(
             if current_image != alternate_image {
                 let mut single_cause = None;
                 for bucket in &bridge.rigidity {
-                    let Some(alternate_bucket) = &bucket.alternate_matching else {
+                    let alternate_bucket = if minimum_cost_only {
+                        &bucket.alternate_minimum_cost_matching
+                    } else {
+                        &bucket.alternate_matching
+                    };
+                    let Some(alternate_bucket) = alternate_bucket else {
                         continue;
                     };
                     let mut single_alternate = current.clone();
@@ -9748,8 +10096,13 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
     let mut forced_rigidity_edges = 0usize;
     let mut max_allowed_targets = 0usize;
     let mut first_ambiguous_bucket = None;
+    let mut unique_minimum_cost_buckets = 0usize;
+    let mut total_minimum_cost = HallMatchingCost::default();
+    let mut first_minimum_cost_tie = None;
     let mut ambiguous_diagrams_checked = 0usize;
     let mut first_matching_dependent_reflection = None;
+    let mut minimum_cost_tied_diagrams_checked = 0usize;
+    let mut first_minimum_cost_dependent_reflection = None;
     for n in 0..=max_n {
         for parts in integer_partitions(n) {
             let bridge = HallRecursiveBumpBridge::build(&parts)?;
@@ -9767,6 +10120,14 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
                 allowed_rigidity_edges += bucket.allowed_edges;
                 forced_rigidity_edges += bucket.forced_edges;
                 max_allowed_targets = max_allowed_targets.max(bucket.max_allowed_targets);
+                unique_minimum_cost_buckets += usize::from(bucket.minimum_cost_unique);
+                total_minimum_cost = total_minimum_cost.checked_add(bucket.minimum_cost)?;
+                if !bucket.minimum_cost_unique && first_minimum_cost_tie.is_none() {
+                    first_minimum_cost_tie = Some(format!(
+                        "mu={parts:?}, content={:?}, cost {:?}",
+                        bucket.content, bucket.minimum_cost
+                    ));
+                }
                 if !bucket.unique() && first_ambiguous_bucket.is_none() {
                     first_ambiguous_bucket = Some(format!(
                         "mu={parts:?}, content={:?}: {}",
@@ -9783,6 +10144,17 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
                 if first_matching_dependent_reflection.is_none() {
                     first_matching_dependent_reflection =
                         hall_matching_dependent_reflection(&parts, &bridge)?;
+                }
+            }
+            if bridge
+                .rigidity
+                .iter()
+                .any(|bucket| !bucket.minimum_cost_unique)
+            {
+                minimum_cost_tied_diagrams_checked += 1;
+                if first_minimum_cost_dependent_reflection.is_none() {
+                    first_minimum_cost_dependent_reflection =
+                        hall_minimum_cost_matching_dependent_reflection(&parts, &bridge)?;
                 }
             }
             for (source, certificate) in &bridge.forward {
@@ -9817,6 +10189,12 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
             .as_deref()
             .map_or(String::new(), |bucket| format!("; first ambiguity: {bucket}"))
     );
+    println!(
+        "  minimum cycle/incidence/drop/endpoint cost: {unique_minimum_cost_buckets}/{rigidity_buckets} buckets have a unique optimum; aggregate {total_minimum_cost:?}{}",
+        first_minimum_cost_tie
+            .as_deref()
+            .map_or(String::new(), |tie| format!("; first tie: {tie}"))
+    );
     if max_n >= 3 {
         match first_hall_matching_dependent_reflection()? {
             Some(witness) => println!("  first matching-dependent transported reflection: {witness}"),
@@ -9828,6 +10206,13 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
     println!(
         "  simultaneous alternate-matching S_i audit: {ambiguous_diagrams_checked} ambiguous diagrams checked{}",
         first_matching_dependent_reflection.as_deref().map_or(
+            "; no transported reflection changed".to_string(),
+            |witness| format!("; first change: {witness}")
+        )
+    );
+    println!(
+        "  equal-minimum-cost S_i audit: {minimum_cost_tied_diagrams_checked} tied diagrams checked{}",
+        first_minimum_cost_dependent_reflection.as_deref().map_or(
             "; no transported reflection changed".to_string(),
             |witness| format!("; first change: {witness}")
         )
@@ -9887,7 +10272,7 @@ fn print_hall_code_report(max_n: usize) -> Result<(), String> {
     if max_n >= 5 {
         let parts = [4, 1];
         let bridge = HallRecursiveBumpBridge::build(&parts)?;
-        for sought_drop in [0, -6] {
+        for sought_drop in [2, -3] {
             let (source, certificate) = bridge
                 .forward
                 .iter()
@@ -10780,6 +11165,10 @@ mod tests {
         let mut candidate_edges = 0usize;
         let mut allowed_edges = 0usize;
         let mut forced_edges = 0usize;
+        let mut unique_minimum_cost_buckets = 0usize;
+        let mut total_minimum_cost = HallMatchingCost::default();
+        let mut minimum_cost_tied_diagrams = 0usize;
+        let mut first_minimum_cost_reflection_change = None;
         for n in 0..=5 {
             for parts in integer_partitions(n) {
                 let path = hall_littlewood_path(&parts).unwrap();
@@ -10798,16 +11187,32 @@ mod tests {
                     candidate_edges += bucket.edges;
                     allowed_edges += bucket.allowed_edges;
                     forced_edges += bucket.forced_edges;
+                    unique_minimum_cost_buckets += usize::from(bucket.minimum_cost_unique);
+                    total_minimum_cost = total_minimum_cost
+                        .checked_add(bucket.minimum_cost)
+                        .unwrap();
                 }
-                if n <= 4 {
+                if bridge
+                    .rigidity
+                    .iter()
+                    .any(|bucket| !bucket.minimum_cost_unique)
+                {
+                    minimum_cost_tied_diagrams += 1;
+                    if first_minimum_cost_reflection_change.is_none() {
+                        first_minimum_cost_reflection_change =
+                            hall_minimum_cost_matching_dependent_reflection(&parts, bridge)
+                                .unwrap();
+                    }
+                }
+                if n <= 3 {
                     assert_eq!(hall_matching_dependent_reflection(&parts, bridge).unwrap(), None);
                 }
-                if parts == [4, 1] {
+                if parts == [3, 1] {
                     let witness = hall_matching_dependent_reflection(&parts, bridge)
                         .unwrap()
                         .unwrap();
-                    assert!(witness.contains("source 12123, S_2"));
-                    assert!(witness.contains("current 12313"));
+                    assert!(witness.contains("source 2113, S_1"));
+                    assert!(witness.contains("current 3212"));
                 }
                 let sources = packed_words(n)
                     .into_iter()
@@ -10986,7 +11391,25 @@ mod tests {
         assert_eq!(states, 1_119);
         assert_eq!(rigidity_buckets, 107);
         assert_eq!(unique_buckets, 70);
-        assert_eq!((forced_edges, allowed_edges, candidate_edges), (736, 2_580, 2_622));
+        assert_eq!((forced_edges, allowed_edges, candidate_edges), (736, 2_583, 2_625));
+        assert_eq!(unique_minimum_cost_buckets, 103);
+        assert_eq!(
+            total_minimum_cost,
+            HallMatchingCost {
+                cycles: 422,
+                toggled_incidences: 1_736,
+                drop_magnitude: 3_683,
+                endpoint_disagreement: 8_044,
+            }
+        );
+        println!(
+            "minimum-cost ties in {minimum_cost_tied_diagrams} diagrams; first S_i change {first_minimum_cost_reflection_change:?}"
+        );
+        assert_eq!(minimum_cost_tied_diagrams, 2);
+        let reflection_change = first_minimum_cost_reflection_change.unwrap();
+        assert!(reflection_change.contains("mu=[3, 2], source 11243, S_1"));
+        assert!(reflection_change.contains("current 12243"));
+        assert!(reflection_change.contains("single content [2, 1, 1, 1] gives 21234"));
         let potential = hall_minimal_shape_potential(&shape_transitions).unwrap();
         for (before, after, drop) in &shape_transitions {
             assert!(drop + potential[before] - potential[after] >= 0);

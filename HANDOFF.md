@@ -1,5 +1,44 @@
 # Handoff
 
+## Completed: canonical minimum-cost Hall selector — 2026-10-16
+
+`/root` completed and releases
+`experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
+branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared library,
+Lean/paper source, or circular code is owned.
+
+The inductive Hall bridge now chooses a canonical minimum-cost perfect
+matching in every fixed-content bucket.  Its lexicographic cost is total
+source/target alternating-cycle count, toggled incidences, absolute signed
+degree-drop magnitude, and source/target incidence disagreement over every
+residual trace.  A checked Hungarian assignment gives the optimum; a greedy
+optimal-completion pass chooses the lexicographically first optimum and an
+edge-deletion audit detects whether the optimum is unique.  The same cost also
+selects the least expensive certificate for each candidate edge.
+
+Through rank five, 103/107 buckets have a unique optimum (up from 70/107 with
+no cost), and only two diagrams contain any minimum-cost tie.  The recursively
+rebuilt bridge uses 422 aggregate cycles and 1736 toggled incidences.  Equal-
+cost ambiguity nevertheless still affects the transported crystal operators:
+the first witness is `mu=(3,2)`, source `11243`, where an alternate optimum
+changes `S_1` from `12243` to `21234`, localized to content `[2,1,1,1]`.
+Thus the geometric cost gives a much more rigid canonical implementation, but
+does not define an intrinsic matching-independent `S_i`; the ordered-word
+fallback remains part of the prototype.  This is the correct stable selector
+to use for the next signed plethystic-cancellation experiment.
+
+Current verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 24 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
+
 ## Completed: matching rigidity and `S_i` dependence audit — 2026-10-16
 
 `/root` completed and releases
