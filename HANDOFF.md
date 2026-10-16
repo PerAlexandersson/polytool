@@ -5,10 +5,60 @@
 `/root` owns only
 `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this handoff on
 branch `exp/verticalstripllt-marked-coloring-bijection`.  The current bounded
-task uses the already transported tableau crystal to test whether `e_i`,
-`f_i`, or `S_i` can be read directly from the induced two-color subgraph,
-independently of all other colors.  No shared library, Lean/paper source, or
-circular code is owned.
+task has isolated a clean two-color Weyl action and is now determining the
+smallest three-color correction needed to turn its canonical `e_i,f_i`
+strings into genuine SSYT crystal components.  No shared library, Lean/paper
+source, or circular code is owned.
+
+## Completed: local two-color Weyl action and first crystal obstruction — 2026-10-16
+
+The experiment now has a direct rule on ordinary colorings that no longer uses
+the HRV/Schur cancellation.  For `S_i`, keep the vertex support `U` currently
+colored `i` or `i+1` and the internal ascent degree `d`.  For each `k`, list
+lexicographically all valid binary recolorings of `U` with exactly `k` upper
+colors and degree `d`.  The rule sends the object of ordinal `r` in level `k`
+to ordinal `r` in level `|U|-k`; colors outside `U` remain fixed.  A
+minimum-total-Hamming pairing gives a second canonical variant.
+
+Both variants are exact weight- and q-degree-preserving involutions and,
+exhaustively over all 258 ordinary decorated paths through rank five, satisfy
+all checked type-A Weyl relations: 140429 involutions, 56781 distant
+commutations, and 91654 braids.  Thus the data strongly support a clean
+coloring-side `S_i` action.  The old conjugated tableau action is not this
+rule: its `e_i,f_i` already move colors outside the two-color support on K3,
+and its `S_i` first does so on K4 (`1132` for the complete graph).
+
+The same level order gives canonical partial inverses `e_i,f_i`: preserve the
+ordinal while moving from level `k` to `k-1` or `k+1` when that ordinal exists.
+All 149156 defined arrows invert, preserve exact degree, and induce the local
+lexicographic reflections through rank five.  A minimum-Hamming adjacent-level
+matching is an improved alternate.  Neither choice is yet a genuine global
+crystal.  Over three colors every component through rank three is exactly
+SSYT-isomorphic.  The first obstruction is K4, degree two: the component
+beginning `1121` has two highest states, `1121` and `2112`.  Minimum-Hamming
+repairs most components (250/255 through rank four versus 193/225 for pure
+lex rank), but retains this same obstruction.  A rule restricted to changing
+one vertex is impossible even on K3: at degree one the unique adjacent content
+states are `121` and `212`, at Hamming distance three.
+
+The CLI `--crystal-locality-report --max-n 5` prints the complete census and
+the first component's arrows.  Regressions retain the rank-five Weyl checks
+and the precise K4 obstruction.  The next narrow target is a three-color
+local correction of the five failing rank-four minimum-Hamming components,
+starting with the choice of the `f_1` edge incident to `1121/2112`; only after
+that repair should one test Stembridge/SSYT components at rank five.
+
+Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```bash
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection                         # 30 passed
+cargo clippy --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection --no-deps -- -D warnings \
+  -A clippy::manual_is_multiple_of
+cargo fmt --all --check
+git diff --check
+```
 
 ## Completed: plethystic crystal descent obstruction — 2026-10-16
 

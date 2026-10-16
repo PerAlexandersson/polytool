@@ -21,6 +21,11 @@
 //! `P` untouched.  The involution principle alternates these matchings to give
 //! a reversible coloring-to-surviving-SSYT map.
 //! Crystal reflections `S_i` are then conjugated back to packed colorings.
+//! A separate direct crystal experiment orders all valid binary recolorings of
+//! the current `i/(i+1)` support at fixed internal ascent degree.  Pairing
+//! equal ranks in complementary content levels gives local Weyl reflections;
+//! adjacent levels give candidate `e_i,f_i` strings and expose their first K4
+//! three-color compatibility obstruction.
 //!
 //! The ordinary flip experiment implements the verified reachability-cover
 //! short-edge move exactly.  It refines the coloring/HRV matching by complete
@@ -124,6 +129,10 @@ struct Args {
     /// Test whether transported S_i descends through plethystic cancellation.
     #[arg(long)]
     plethystic_crystal_report: bool,
+
+    /// Test whether the ordinary transported crystal is intrinsically two-color local.
+    #[arg(long)]
+    crystal_locality_report: bool,
 
     /// Push ordinary orientation-flip components through the coloring/HRV bijection.
     #[arg(long)]
@@ -4235,6 +4244,27 @@ fn transported_simple_reflection(
         return Err("S_i moved a tableau off its surviving Schur skeleton".into());
     }
     surviving_tableau_to_coloring(matcher, schur, path, &reflected)
+}
+
+fn transported_crystal_step(
+    matcher: &mut RecursiveMatcher,
+    schur: &SchurCancellation,
+    path: &PathData,
+    coloring: &[u8],
+    index: u32,
+    raising: bool,
+) -> Result<Option<Vec<u8>>, String> {
+    let certificate =
+        arbitrary_coloring_to_surviving_tableau(matcher, schur, path, coloring, false)?;
+    let Some(changed) = tableau_crystal_step(path, &certificate.target, index, raising)? else {
+        return Ok(None);
+    };
+    if !schur.is_fixed(&changed) {
+        return Err("crystal step moved a tableau off its surviving Schur skeleton".into());
+    }
+    Ok(Some(arbitrary_surviving_tableau_to_coloring(
+        matcher, schur, path, &changed,
+    )?))
 }
 
 fn transported_reflection_word(
@@ -10645,6 +10675,1323 @@ fn print_plethystic_report(max_n: usize) -> Result<(), String> {
 }
 
 #[derive(Clone, Debug, Default)]
+struct OperatorLocalityAudit {
+    operations: usize,
+    support_local: usize,
+    degree_preserved: usize,
+    contextual_comparisons: usize,
+    contextual_matches: usize,
+    first_support_failure: Option<String>,
+    first_degree_failure: Option<String>,
+    first_context_failure: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct CrystalLocalityAudit {
+    paths: usize,
+    operators: BTreeMap<char, OperatorLocalityAudit>,
+}
+
+impl CrystalLocalityAudit {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        for (operator, other) in other.operators {
+            let own = self.operators.entry(operator).or_default();
+            own.operations += other.operations;
+            own.support_local += other.support_local;
+            own.degree_preserved += other.degree_preserved;
+            own.contextual_comparisons += other.contextual_comparisons;
+            own.contextual_matches += other.contextual_matches;
+            if own.first_support_failure.is_none() {
+                own.first_support_failure = other.first_support_failure;
+            }
+            if own.first_degree_failure.is_none() {
+                own.first_degree_failure = other.first_degree_failure;
+            }
+            if own.first_context_failure.is_none() {
+                own.first_context_failure = other.first_context_failure;
+            }
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!("ordinary crystal locality {label}: {} paths", self.paths);
+        for (operator, audit) in &self.operators {
+            println!(
+                "  {operator}: {} operations; support-local {}/{}; q-degree preserved {}/{}; repeated two-color contexts agree {}/{}",
+                audit.operations,
+                audit.support_local,
+                audit.operations,
+                audit.degree_preserved,
+                audit.operations,
+                audit.contextual_matches,
+                audit.contextual_comparisons
+            );
+            if let Some(failure) = &audit.first_support_failure {
+                println!("    first support-locality failure: {failure}");
+            }
+            if let Some(failure) = &audit.first_degree_failure {
+                println!("    first degree failure: {failure}");
+            }
+            if let Some(failure) = &audit.first_context_failure {
+                println!("    first context-dependence failure: {failure}");
+            }
+        }
+    }
+}
+
+fn normalized_two_color_output(
+    input: &[u8],
+    output: Option<&[u8]>,
+    lower: u8,
+) -> Result<Option<u64>, String> {
+    let Some(output) = output else {
+        return Ok(None);
+    };
+    if input.len() != output.len() || input.len() >= 64 {
+        return Err("two-color normalization has an invalid word length".into());
+    }
+    let upper = lower + 1;
+    let mut output_upper_mask = 0u64;
+    for (vertex, (&before, &after)) in input.iter().zip(output).enumerate() {
+        if before == lower || before == upper {
+            if after != lower && after != upper {
+                return Err(format!(
+                    "vertex {} left the two-color alphabet",
+                    vertex + 1
+                ));
+            }
+            if after == upper {
+                output_upper_mask |= 1u64 << vertex;
+            }
+        } else if before != after {
+            return Err(format!(
+                "outside vertex {} changed from {} to {}",
+                vertex + 1,
+                usize::from(before) + 1,
+                usize::from(after) + 1
+            ));
+        }
+    }
+    Ok(Some(output_upper_mask))
+}
+
+fn audit_crystal_locality_for_path(path: &PathData) -> Result<CrystalLocalityAudit, String> {
+    if path.n >= 64 {
+        return Err("crystal locality audit requires rank below 64".into());
+    }
+    let mut audit = CrystalLocalityAudit {
+        paths: 1,
+        ..CrystalLocalityAudit::default()
+    };
+    let schur = SchurCancellation::build(path)?;
+    let mut matcher = RecursiveMatcher::default();
+    let mut seen = BTreeMap::<(char, u64, u64), Option<u64>>::new();
+    for coloring in packed_words(path.n)
+        .into_iter()
+        .filter(|word| increases_on_edges(word, &path.strict_edges))
+    {
+        let alphabet_size = color_content(&coloring).len();
+        for index in 1..alphabet_size as u32 {
+            let lower = u8::try_from(index - 1)
+                .map_err(|_| "crystal index does not fit the coloring alphabet".to_string())?;
+            let upper = lower + 1;
+            let support_mask = coloring
+                .iter()
+                .enumerate()
+                .filter(|&(_, &color)| color == lower || color == upper)
+                .fold(0u64, |mask, (vertex, _)| mask | (1u64 << vertex));
+            let input_upper_mask = coloring
+                .iter()
+                .enumerate()
+                .filter(|&(_, &color)| color == upper)
+                .fold(0u64, |mask, (vertex, _)| mask | (1u64 << vertex));
+            let raising = transported_crystal_step(
+                &mut matcher,
+                &schur,
+                path,
+                &coloring,
+                index,
+                true,
+            )?;
+            let lowering = transported_crystal_step(
+                &mut matcher,
+                &schur,
+                path,
+                &coloring,
+                index,
+                false,
+            )?;
+            let reflection = transported_simple_reflection(
+                &mut matcher,
+                &schur,
+                path,
+                &coloring,
+                index,
+            )?;
+            for (operator, output) in [
+                ('e', raising.as_deref()),
+                ('f', lowering.as_deref()),
+                ('S', Some(reflection.as_slice())),
+            ] {
+                let operator_audit = audit.operators.entry(operator).or_default();
+                operator_audit.operations += 1;
+                let normalized =
+                    normalized_two_color_output(&coloring, output, lower).map_err(|error| {
+                        format!(
+                            "path {}, {operator}_{} on {}: {error}",
+                            path.word(),
+                            index,
+                            format_word(&coloring)
+                        )
+                    });
+                let normalized = match normalized {
+                    Ok(normalized) => {
+                        operator_audit.support_local += 1;
+                        normalized
+                    }
+                    Err(error) => {
+                        if operator_audit.first_support_failure.is_none() {
+                            operator_audit.first_support_failure = Some(error);
+                        }
+                        continue;
+                    }
+                };
+                let source_degree =
+                    edge_ascent_mask(&coloring, &path.normal_edges).count_ones();
+                let target_degree = output.map_or(source_degree, |word| {
+                    edge_ascent_mask(word, &path.normal_edges).count_ones()
+                });
+                if source_degree == target_degree {
+                    operator_audit.degree_preserved += 1;
+                } else if operator_audit.first_degree_failure.is_none() {
+                    operator_audit.first_degree_failure = Some(format!(
+                        "path {}, {operator}_{}: {} (degree {}) -> {} (degree {})",
+                        path.word(),
+                        index,
+                        format_word(&coloring),
+                        source_degree,
+                        output.map_or_else(|| "0".into(), format_word),
+                        target_degree
+                    ));
+                }
+                let key = (operator, support_mask, input_upper_mask);
+                if let Some(previous) = seen.get(&key) {
+                    operator_audit.contextual_comparisons += 1;
+                    if previous == &normalized {
+                        operator_audit.contextual_matches += 1;
+                    } else if operator_audit.first_context_failure.is_none() {
+                        operator_audit.first_context_failure = Some(format!(
+                            "path {}, {operator}: support {support_mask:#x}, upper {input_upper_mask:#x} previously gave {previous:?}, but index {index} in {} gives {normalized:?}",
+                            path.word(),
+                            format_word(&coloring)
+                        ));
+                    }
+                } else {
+                    seen.insert(key, normalized);
+                }
+            }
+        }
+    }
+    Ok(audit)
+}
+
+fn print_crystal_locality_report(max_n: usize) -> Result<(), String> {
+    let mut total = CrystalLocalityAudit::default();
+    let mut total_chains = LocalChainAudit::default();
+    let policies = [
+        LocalReflectionPolicy::Lexicographic,
+        LocalReflectionPolicy::MinimumHamming,
+    ];
+    let mut total_coxeter = [LocalCoxeterAudit::default(), LocalCoxeterAudit::default()];
+    let mut total_strings = LocalCrystalStringAudit::default();
+    let alphabet_size = 3u8;
+    let mut total_components = [
+        LocalCrystalComponentAudit::default(),
+        LocalCrystalComponentAudit::default(),
+    ];
+    for n in 0..=max_n {
+        let mut rank = CrystalLocalityAudit::default();
+        let mut rank_chains = LocalChainAudit::default();
+        let mut rank_coxeter = [LocalCoxeterAudit::default(), LocalCoxeterAudit::default()];
+        let mut rank_strings = LocalCrystalStringAudit::default();
+        let mut rank_components = [
+            LocalCrystalComponentAudit::default(),
+            LocalCrystalComponentAudit::default(),
+        ];
+        for path in all_paths(n) {
+            if n <= 4 {
+                rank.absorb(audit_crystal_locality_for_path(&path)?);
+            }
+            rank_chains.absorb(audit_local_single_flip_chains_for_path(&path));
+            for (policy_index, &policy) in policies.iter().enumerate() {
+                rank_coxeter[policy_index]
+                    .absorb(audit_local_reflection_coxeter_for_path(&path, policy)?);
+            }
+            rank_strings.absorb(audit_local_crystal_strings_for_path(&path)?);
+            for (policy_index, &policy) in policies.iter().enumerate() {
+                rank_components[policy_index].absorb(
+                    audit_local_crystal_components_for_path(&path, alphabet_size, policy)?,
+                );
+            }
+        }
+        rank.print(&format!("rank {n}"));
+        rank_chains.print(&format!("rank {n}"));
+        for (policy_index, &policy) in policies.iter().enumerate() {
+            rank_coxeter[policy_index].print(&format!("rank {n}"), policy);
+        }
+        rank_strings.print(&format!("rank {n}"));
+        for (policy_index, &policy) in policies.iter().enumerate() {
+            rank_components[policy_index].print(&format!("rank {n}"), alphabet_size, policy);
+        }
+        total.absorb(rank);
+        total_chains.absorb(rank_chains);
+        for policy_index in 0..policies.len() {
+            total_coxeter[policy_index].absorb(rank_coxeter[policy_index].clone());
+        }
+        total_strings.absorb(rank_strings);
+        for policy_index in 0..policies.len() {
+            total_components[policy_index].absorb(rank_components[policy_index].clone());
+        }
+    }
+    total.print(&format!("ranks 0..={max_n}"));
+    total_chains.print(&format!("ranks 0..={max_n}"));
+    for (policy_index, &policy) in policies.iter().enumerate() {
+        total_coxeter[policy_index].print(&format!("ranks 0..={max_n}"), policy);
+    }
+    total_strings.print(&format!("ranks 0..={max_n}"));
+    for (policy_index, &policy) in policies.iter().enumerate() {
+        total_components[policy_index].print(
+            &format!("ranks 0..={max_n}"),
+            alphabet_size,
+            policy,
+        );
+    }
+    Ok(())
+}
+
+#[derive(Clone, Debug, Default)]
+struct LocalChainAudit {
+    supports: usize,
+    symmetric_rank_counts: usize,
+    unimodal_rank_counts: usize,
+    single_flip_matchable: usize,
+    first_symmetry_failure: Option<String>,
+    first_unimodality_failure: Option<String>,
+    first_matching_failure: Option<String>,
+}
+
+impl LocalChainAudit {
+    fn absorb(&mut self, other: Self) {
+        self.supports += other.supports;
+        self.symmetric_rank_counts += other.symmetric_rank_counts;
+        self.unimodal_rank_counts += other.unimodal_rank_counts;
+        self.single_flip_matchable += other.single_flip_matchable;
+        if self.first_symmetry_failure.is_none() {
+            self.first_symmetry_failure = other.first_symmetry_failure;
+        }
+        if self.first_unimodality_failure.is_none() {
+            self.first_unimodality_failure = other.first_unimodality_failure;
+        }
+        if self.first_matching_failure.is_none() {
+            self.first_matching_failure = other.first_matching_failure;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "local single-flip chain audit {label}: {} induced supports; symmetric {}/{}; unimodal {}/{}; all adjacent-rank Hall injections {}/{}",
+            self.supports,
+            self.symmetric_rank_counts,
+            self.supports,
+            self.unimodal_rank_counts,
+            self.supports,
+            self.single_flip_matchable,
+            self.supports
+        );
+        if let Some(failure) = &self.first_symmetry_failure {
+            println!("  first symmetry failure: {failure}");
+        }
+        if let Some(failure) = &self.first_unimodality_failure {
+            println!("  first unimodality failure: {failure}");
+        }
+        if let Some(failure) = &self.first_matching_failure {
+            println!("  first single-flip Hall failure: {failure}");
+        }
+    }
+}
+
+fn match_bipartite_injection(adjacency: &[Vec<usize>], right_count: usize) -> bool {
+    fn augment(
+        left: usize,
+        adjacency: &[Vec<usize>],
+        visited: &mut [bool],
+        right_to_left: &mut [Option<usize>],
+    ) -> bool {
+        for &right in &adjacency[left] {
+            if visited[right] {
+                continue;
+            }
+            visited[right] = true;
+            if right_to_left[right]
+                .is_none_or(|other| augment(other, adjacency, visited, right_to_left))
+            {
+                right_to_left[right] = Some(left);
+                return true;
+            }
+        }
+        false
+    }
+
+    let mut right_to_left = vec![None; right_count];
+    (0..adjacency.len()).all(|left| {
+        augment(
+            left,
+            adjacency,
+            &mut vec![false; right_count],
+            &mut right_to_left,
+        )
+    })
+}
+
+fn audit_local_single_flip_chains_for_path(path: &PathData) -> LocalChainAudit {
+    let mut audit = LocalChainAudit::default();
+    if path.n >= 64 {
+        audit.first_matching_failure = Some(format!(
+            "path {} is too large for a u64 support",
+            path.word()
+        ));
+        return audit;
+    }
+    for support in 0..(1u64 << path.n) {
+        let size = support.count_ones() as usize;
+        let mut by_degree = BTreeMap::<usize, Vec<Vec<u64>>>::new();
+        for upper in 0..(1u64 << path.n) {
+            if upper & !support != 0 {
+                continue;
+            }
+            let respects_strict_edges = path.strict_edges.iter().all(|&(tail, head)| {
+                let tail_bit = 1u64 << tail;
+                let head_bit = 1u64 << head;
+                if support & tail_bit == 0 || support & head_bit == 0 {
+                    true
+                } else {
+                    upper & tail_bit == 0 && upper & head_bit != 0
+                }
+            });
+            if !respects_strict_edges {
+                continue;
+            }
+            let degree = path
+                .normal_edges
+                .iter()
+                .filter(|&&(tail, head)| {
+                    let tail_bit = 1u64 << tail;
+                    let head_bit = 1u64 << head;
+                    support & tail_bit != 0
+                        && support & head_bit != 0
+                        && upper & tail_bit == 0
+                        && upper & head_bit != 0
+                })
+                .count();
+            let levels = by_degree
+                .entry(degree)
+                .or_insert_with(|| vec![Vec::new(); size + 1]);
+            levels[upper.count_ones() as usize].push(upper);
+        }
+        for levels in by_degree.values_mut() {
+            for level in levels.iter_mut() {
+                level.sort_unstable();
+            }
+        }
+        audit.supports += by_degree.len();
+        for (degree, levels) in by_degree {
+            let counts = levels.iter().map(Vec::len).collect::<Vec<_>>();
+            let symmetric = (0..=size).all(|rank| counts[rank] == counts[size - rank]);
+            if symmetric {
+                audit.symmetric_rank_counts += 1;
+            } else if audit.first_symmetry_failure.is_none() {
+                audit.first_symmetry_failure = Some(format!(
+                    "path {}, support {support:#x}, degree {degree}: {counts:?}",
+                    path.word()
+                ));
+            }
+            let unimodal = (0..size).all(|rank| {
+                if rank < size / 2 {
+                    counts[rank] <= counts[rank + 1]
+                } else if rank >= size.div_ceil(2) {
+                    counts[rank] >= counts[rank + 1]
+                } else {
+                    true
+                }
+            });
+            if unimodal {
+                audit.unimodal_rank_counts += 1;
+            } else if audit.first_unimodality_failure.is_none() {
+                audit.first_unimodality_failure = Some(format!(
+                    "path {}, support {support:#x}, degree {degree}: {counts:?}",
+                    path.word()
+                ));
+            }
+            let mut matchable = true;
+            for rank in 0..size {
+                let (left, right) = if rank < size / 2 {
+                    (&levels[rank], &levels[rank + 1])
+                } else {
+                    (&levels[rank + 1], &levels[rank])
+                };
+                let adjacency = left
+                    .iter()
+                    .map(|&mask| {
+                        right
+                            .iter()
+                            .enumerate()
+                            .filter(|&(_, &other)| (mask ^ other).count_ones() == 1)
+                            .map(|(index, _)| index)
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                if !match_bipartite_injection(&adjacency, right.len()) {
+                    matchable = false;
+                    if audit.first_matching_failure.is_none() {
+                        audit.first_matching_failure = Some(format!(
+                            "path {}, support {support:#x}, degree {degree}, ranks {}-{}: counts {} -> {}",
+                            path.word(),
+                            rank,
+                            rank + 1,
+                            levels[rank].len(),
+                            levels[rank + 1].len()
+                        ));
+                    }
+                    break;
+                }
+            }
+            if matchable {
+                audit.single_flip_matchable += 1;
+            }
+        }
+    }
+    audit
+}
+
+#[derive(Clone, Copy, Debug)]
+enum LocalReflectionPolicy {
+    Lexicographic,
+    MinimumHamming,
+}
+
+impl LocalReflectionPolicy {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Lexicographic => "lexicographic",
+            Self::MinimumHamming => "minimum-Hamming",
+        }
+    }
+}
+
+#[derive(Default)]
+struct LocalReflectionCache {
+    pairs: BTreeMap<(u64, usize, usize), BTreeMap<u64, u64>>,
+    levels: BTreeMap<(u64, usize, usize), Vec<u64>>,
+    chain_pairs: BTreeMap<(u64, usize, usize), BTreeMap<u64, u64>>,
+}
+
+fn valid_two_color_patterns(
+    path: &PathData,
+    support: u64,
+    degree: usize,
+    upper_count: usize,
+) -> Vec<u64> {
+    let mut patterns = (0..(1u64 << path.n))
+        .filter(|&upper| upper & !support == 0)
+        .filter(|upper| upper.count_ones() as usize == upper_count)
+        .filter(|&upper| {
+            path.strict_edges.iter().all(|&(tail, head)| {
+                let tail_bit = 1u64 << tail;
+                let head_bit = 1u64 << head;
+                support & tail_bit == 0
+                    || support & head_bit == 0
+                    || upper & tail_bit == 0 && upper & head_bit != 0
+            })
+        })
+        .filter(|&upper| {
+            path.normal_edges
+                .iter()
+                .filter(|&&(tail, head)| {
+                    let tail_bit = 1u64 << tail;
+                    let head_bit = 1u64 << head;
+                    support & tail_bit != 0
+                        && support & head_bit != 0
+                        && upper & tail_bit == 0
+                        && upper & head_bit != 0
+                })
+                .count()
+                == degree
+        })
+        .collect::<Vec<_>>();
+    patterns.sort_unstable();
+    patterns
+}
+
+fn local_two_color_reflection(
+    path: &PathData,
+    coloring: &[u8],
+    index: u32,
+    policy: LocalReflectionPolicy,
+    cache: &mut LocalReflectionCache,
+) -> Result<Vec<u8>, String> {
+    if index == 0 || path.n >= 64 || coloring.len() != path.n {
+        return Err("local reflection has an invalid index or rank".into());
+    }
+    let lower = u8::try_from(index - 1)
+        .map_err(|_| "local reflection index does not fit u8".to_string())?;
+    let upper_color = lower + 1;
+    let support = coloring
+        .iter()
+        .enumerate()
+        .filter(|&(_, &color)| color == lower || color == upper_color)
+        .fold(0u64, |mask, (vertex, _)| mask | (1u64 << vertex));
+    let upper = coloring
+        .iter()
+        .enumerate()
+        .filter(|&(_, &color)| color == upper_color)
+        .fold(0u64, |mask, (vertex, _)| mask | (1u64 << vertex));
+    let size = support.count_ones() as usize;
+    let upper_count = upper.count_ones() as usize;
+    let reflected_count = size - upper_count;
+    if upper_count == reflected_count {
+        return Ok(coloring.to_vec());
+    }
+    let degree = path
+        .normal_edges
+        .iter()
+        .filter(|&&(tail, head)| {
+            let tail_bit = 1u64 << tail;
+            let head_bit = 1u64 << head;
+            support & tail_bit != 0
+                && support & head_bit != 0
+                && upper & tail_bit == 0
+                && upper & head_bit != 0
+        })
+        .count();
+    let low_rank = upper_count.min(reflected_count);
+    let key = (support, degree, low_rank);
+    if let std::collections::btree_map::Entry::Vacant(entry) = cache.pairs.entry(key) {
+        let low = valid_two_color_patterns(path, support, degree, low_rank);
+        let high = valid_two_color_patterns(path, support, degree, size - low_rank);
+        if low.len() != high.len() {
+            return Err(format!(
+                "local reflection rank counts disagree on path {}, support {support:#x}, degree {degree}: {} != {}",
+                path.word(),
+                low.len(),
+                high.len()
+            ));
+        }
+        let assignment = match policy {
+            LocalReflectionPolicy::Lexicographic => (0..low.len()).collect(),
+            LocalReflectionPolicy::MinimumHamming => {
+                let costs = low
+                    .iter()
+                    .map(|&left| {
+                        high.iter()
+                            .map(|&right| Some((left ^ right).count_ones() as usize))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                canonical_minimum_cost_assignment(&costs)
+                    .map(|(assignment, _, _)| assignment)
+                    .ok_or_else(|| "minimum-Hamming local reflection matching failed".to_string())?
+            }
+        };
+        let mut pairs = BTreeMap::new();
+        for (left_index, right_index) in assignment.into_iter().enumerate() {
+            pairs.insert(low[left_index], high[right_index]);
+            pairs.insert(high[right_index], low[left_index]);
+        }
+        entry.insert(pairs);
+    }
+    let reflected_upper = cache.pairs[&key]
+        .get(&upper)
+        .copied()
+        .ok_or_else(|| "local reflection input is absent from its rank matching".to_string())?;
+    let mut result = coloring.to_vec();
+    for (vertex, color) in result.iter_mut().enumerate() {
+        if support & (1u64 << vertex) != 0 {
+            *color = if reflected_upper & (1u64 << vertex) == 0 {
+                lower
+            } else {
+                upper_color
+            };
+        }
+    }
+    Ok(result)
+}
+
+fn local_two_color_crystal_step(
+    path: &PathData,
+    coloring: &[u8],
+    index: u32,
+    raising: bool,
+    cache: &mut LocalReflectionCache,
+) -> Result<Option<Vec<u8>>, String> {
+    local_two_color_crystal_step_with_policy(
+        path,
+        coloring,
+        index,
+        raising,
+        LocalReflectionPolicy::Lexicographic,
+        cache,
+    )
+}
+
+fn local_two_color_crystal_step_with_policy(
+    path: &PathData,
+    coloring: &[u8],
+    index: u32,
+    raising: bool,
+    policy: LocalReflectionPolicy,
+    cache: &mut LocalReflectionCache,
+) -> Result<Option<Vec<u8>>, String> {
+    if index == 0 || path.n >= 64 || coloring.len() != path.n {
+        return Err("local crystal step has an invalid index or rank".into());
+    }
+    let lower = u8::try_from(index - 1)
+        .map_err(|_| "local crystal index does not fit u8".to_string())?;
+    let upper_color = lower + 1;
+    let support = coloring
+        .iter()
+        .enumerate()
+        .filter(|&(_, &color)| color == lower || color == upper_color)
+        .fold(0u64, |mask, (vertex, _)| mask | (1u64 << vertex));
+    let upper = coloring
+        .iter()
+        .enumerate()
+        .filter(|&(_, &color)| color == upper_color)
+        .fold(0u64, |mask, (vertex, _)| mask | (1u64 << vertex));
+    let upper_count = upper.count_ones() as usize;
+    let target_count = if raising {
+        upper_count.checked_sub(1)
+    } else if upper_count < support.count_ones() as usize {
+        Some(upper_count + 1)
+    } else {
+        None
+    };
+    let Some(target_count) = target_count else {
+        return Ok(None);
+    };
+    let degree = path
+        .normal_edges
+        .iter()
+        .filter(|&&(tail, head)| {
+            let tail_bit = 1u64 << tail;
+            let head_bit = 1u64 << head;
+            support & tail_bit != 0
+                && support & head_bit != 0
+                && upper & tail_bit == 0
+                && upper & head_bit != 0
+        })
+        .count();
+    for rank in [upper_count, target_count] {
+        cache
+            .levels
+            .entry((support, degree, rank))
+            .or_insert_with(|| valid_two_color_patterns(path, support, degree, rank));
+    }
+    let lower_rank = upper_count.min(target_count);
+    let pair_key = (support, degree, lower_rank);
+    if !cache.chain_pairs.contains_key(&pair_key) {
+        let lower_level = &cache.levels[&(support, degree, lower_rank)];
+        let upper_level = &cache.levels[&(support, degree, lower_rank + 1)];
+        let (small, large) = if lower_level.len() <= upper_level.len() {
+            (lower_level, upper_level)
+        } else {
+            (upper_level, lower_level)
+        };
+        let assignment = match policy {
+            LocalReflectionPolicy::Lexicographic => (0..small.len()).collect::<Vec<_>>(),
+            LocalReflectionPolicy::MinimumHamming => {
+                let size = large.len();
+                let mut costs = vec![vec![Some(0usize); size]; size];
+                for (small_index, &small_mask) in small.iter().enumerate() {
+                    for (large_index, &large_mask) in large.iter().enumerate() {
+                        costs[small_index][large_index] =
+                            Some((small_mask ^ large_mask).count_ones() as usize);
+                    }
+                }
+                canonical_minimum_cost_assignment(&costs)
+                    .map(|(assignment, _, _)| assignment[..small.len()].to_vec())
+                    .ok_or_else(|| {
+                        "minimum-Hamming adjacent-rank matching failed".to_string()
+                    })?
+            }
+        };
+        let mut pairs = BTreeMap::new();
+        for (small_index, large_index) in assignment.into_iter().enumerate() {
+            pairs.insert(small[small_index], large[large_index]);
+            pairs.insert(large[large_index], small[small_index]);
+        }
+        cache.chain_pairs.insert(pair_key, pairs);
+    }
+    let Some(&target_upper) = cache.chain_pairs[&pair_key].get(&upper) else {
+        return Ok(None);
+    };
+    let mut result = coloring.to_vec();
+    for (vertex, color) in result.iter_mut().enumerate() {
+        if support & (1u64 << vertex) != 0 {
+            *color = if target_upper & (1u64 << vertex) == 0 {
+                lower
+            } else {
+                upper_color
+            };
+        }
+    }
+    Ok(Some(result))
+}
+
+#[derive(Clone, Debug, Default)]
+struct LocalCoxeterAudit {
+    involutions: usize,
+    involutions_passed: usize,
+    distant_relations: usize,
+    distant_passed: usize,
+    braid_relations: usize,
+    braid_passed: usize,
+    first_failure: Option<String>,
+}
+
+impl LocalCoxeterAudit {
+    fn absorb(&mut self, other: Self) {
+        self.involutions += other.involutions;
+        self.involutions_passed += other.involutions_passed;
+        self.distant_relations += other.distant_relations;
+        self.distant_passed += other.distant_passed;
+        self.braid_relations += other.braid_relations;
+        self.braid_passed += other.braid_passed;
+        if self.first_failure.is_none() {
+            self.first_failure = other.first_failure;
+        }
+    }
+
+    fn print(&self, label: &str, policy: LocalReflectionPolicy) {
+        println!(
+            "local {} S_i audit {label}: involutions {}/{}; distant commutations {}/{}; braids {}/{}",
+            policy.label(),
+            self.involutions_passed,
+            self.involutions,
+            self.distant_passed,
+            self.distant_relations,
+            self.braid_passed,
+            self.braid_relations
+        );
+        if let Some(failure) = &self.first_failure {
+            println!("  first Coxeter failure: {failure}");
+        }
+    }
+}
+
+fn audit_local_reflection_coxeter_for_path(
+    path: &PathData,
+    policy: LocalReflectionPolicy,
+) -> Result<LocalCoxeterAudit, String> {
+    let mut audit = LocalCoxeterAudit::default();
+    let mut cache = LocalReflectionCache::default();
+    for coloring in packed_words(path.n)
+        .into_iter()
+        .filter(|word| increases_on_edges(word, &path.strict_edges))
+    {
+        let alphabet_size = color_content(&coloring).len();
+        for index in 1..alphabet_size as u32 {
+            let reflected =
+                local_two_color_reflection(path, &coloring, index, policy, &mut cache)?;
+            let recovered =
+                local_two_color_reflection(path, &reflected, index, policy, &mut cache)?;
+            audit.involutions += 1;
+            if recovered == coloring
+                && edge_ascent_mask(&reflected, &path.normal_edges).count_ones()
+                    == edge_ascent_mask(&coloring, &path.normal_edges).count_ones()
+            {
+                audit.involutions_passed += 1;
+            } else if audit.first_failure.is_none() {
+                audit.first_failure = Some(format!(
+                    "path {}, S_{}^2({})={} via {}",
+                    path.word(),
+                    index,
+                    format_word(&coloring),
+                    format_word(&recovered),
+                    policy.label()
+                ));
+            }
+        }
+        for left in 1..alphabet_size as u32 {
+            for right in left + 2..alphabet_size as u32 {
+                let left_then_right = local_two_color_reflection(
+                    path,
+                    &local_two_color_reflection(path, &coloring, left, policy, &mut cache)?,
+                    right,
+                    policy,
+                    &mut cache,
+                )?;
+                let right_then_left = local_two_color_reflection(
+                    path,
+                    &local_two_color_reflection(path, &coloring, right, policy, &mut cache)?,
+                    left,
+                    policy,
+                    &mut cache,
+                )?;
+                audit.distant_relations += 1;
+                if left_then_right == right_then_left {
+                    audit.distant_passed += 1;
+                } else if audit.first_failure.is_none() {
+                    audit.first_failure = Some(format!(
+                        "path {}, S_{}S_{} != S_{}S_{} on {} via {}",
+                        path.word(),
+                        left,
+                        right,
+                        right,
+                        left,
+                        format_word(&coloring),
+                        policy.label()
+                    ));
+                }
+            }
+        }
+        for index in 1..alphabet_size.saturating_sub(1) as u32 {
+            let left = local_two_color_reflection(
+                path,
+                &local_two_color_reflection(
+                    path,
+                    &local_two_color_reflection(path, &coloring, index, policy, &mut cache)?,
+                    index + 1,
+                    policy,
+                    &mut cache,
+                )?,
+                index,
+                policy,
+                &mut cache,
+            )?;
+            let right = local_two_color_reflection(
+                path,
+                &local_two_color_reflection(
+                    path,
+                    &local_two_color_reflection(
+                        path,
+                        &coloring,
+                        index + 1,
+                        policy,
+                        &mut cache,
+                    )?,
+                    index,
+                    policy,
+                    &mut cache,
+                )?,
+                index + 1,
+                policy,
+                &mut cache,
+            )?;
+            audit.braid_relations += 1;
+            if left == right {
+                audit.braid_passed += 1;
+            } else if audit.first_failure.is_none() {
+                audit.first_failure = Some(format!(
+                    "path {}, S_{}S_{}S_{}({})={} but S_{}S_{}S_{} gives {} via {}",
+                    path.word(),
+                    index,
+                    index + 1,
+                    index,
+                    format_word(&coloring),
+                    format_word(&left),
+                    index + 1,
+                    index,
+                    index + 1,
+                    format_word(&right),
+                    policy.label()
+                ));
+            }
+        }
+    }
+    Ok(audit)
+}
+
+#[derive(Clone, Debug, Default)]
+struct LocalCrystalStringAudit {
+    inverse_checks: usize,
+    inverse_passed: usize,
+    reflection_checks: usize,
+    reflection_passed: usize,
+    first_failure: Option<String>,
+}
+
+impl LocalCrystalStringAudit {
+    fn absorb(&mut self, other: Self) {
+        self.inverse_checks += other.inverse_checks;
+        self.inverse_passed += other.inverse_passed;
+        self.reflection_checks += other.reflection_checks;
+        self.reflection_passed += other.reflection_passed;
+        if self.first_failure.is_none() {
+            self.first_failure = other.first_failure;
+        }
+    }
+
+    fn print(&self, label: &str) {
+        println!(
+            "local lex-rank e_i/f_i audit {label}: partial inverses {}/{}; induced reflections {}/{}",
+            self.inverse_passed,
+            self.inverse_checks,
+            self.reflection_passed,
+            self.reflection_checks
+        );
+        if let Some(failure) = &self.first_failure {
+            println!("  first crystal-string failure: {failure}");
+        }
+    }
+}
+
+fn audit_local_crystal_strings_for_path(
+    path: &PathData,
+) -> Result<LocalCrystalStringAudit, String> {
+    let mut audit = LocalCrystalStringAudit::default();
+    let mut cache = LocalReflectionCache::default();
+    for coloring in packed_words(path.n)
+        .into_iter()
+        .filter(|word| increases_on_edges(word, &path.strict_edges))
+    {
+        let alphabet_size = color_content(&coloring).len();
+        for index in 1..alphabet_size as u32 {
+            for raising in [true, false] {
+                let changed = local_two_color_crystal_step(
+                    path,
+                    &coloring,
+                    index,
+                    raising,
+                    &mut cache,
+                )?;
+                if let Some(changed) = changed {
+                    audit.inverse_checks += 1;
+                    let recovered = local_two_color_crystal_step(
+                        path,
+                        &changed,
+                        index,
+                        !raising,
+                        &mut cache,
+                    )?;
+                    let valid = recovered.as_ref() == Some(&coloring)
+                        && increases_on_edges(&changed, &path.strict_edges)
+                        && edge_ascent_mask(&changed, &path.normal_edges).count_ones()
+                            == edge_ascent_mask(&coloring, &path.normal_edges).count_ones();
+                    if valid {
+                        audit.inverse_passed += 1;
+                    } else if audit.first_failure.is_none() {
+                        audit.first_failure = Some(format!(
+                            "path {}, {}_{}: {} -> {} -> {:?}",
+                            path.word(),
+                            if raising { 'e' } else { 'f' },
+                            index,
+                            format_word(&coloring),
+                            format_word(&changed),
+                            recovered.as_deref().map(format_word)
+                        ));
+                    }
+                }
+            }
+
+            let expected = local_two_color_reflection(
+                path,
+                &coloring,
+                index,
+                LocalReflectionPolicy::Lexicographic,
+                &mut cache,
+            )?;
+            let mut epsilon = 0usize;
+            let mut top = coloring.clone();
+            while let Some(next) =
+                local_two_color_crystal_step(path, &top, index, true, &mut cache)?
+            {
+                epsilon += 1;
+                top = next;
+            }
+            let mut phi = 0usize;
+            let mut bottom = coloring.clone();
+            while let Some(next) =
+                local_two_color_crystal_step(path, &bottom, index, false, &mut cache)?
+            {
+                phi += 1;
+                bottom = next;
+            }
+            let mut reflected = coloring.clone();
+            if phi >= epsilon {
+                for _ in 0..phi - epsilon {
+                    reflected = local_two_color_crystal_step(
+                        path,
+                        &reflected,
+                        index,
+                        false,
+                        &mut cache,
+                    )?
+                    .ok_or_else(|| "local f_i string ended too early".to_string())?;
+                }
+            } else {
+                for _ in 0..epsilon - phi {
+                    reflected = local_two_color_crystal_step(
+                        path,
+                        &reflected,
+                        index,
+                        true,
+                        &mut cache,
+                    )?
+                    .ok_or_else(|| "local e_i string ended too early".to_string())?;
+                }
+            }
+            audit.reflection_checks += 1;
+            if reflected == expected {
+                audit.reflection_passed += 1;
+            } else if audit.first_failure.is_none() {
+                audit.first_failure = Some(format!(
+                    "path {}, local string S_{}({})={} but lex-rank reflection gives {}",
+                    path.word(),
+                    index,
+                    format_word(&coloring),
+                    format_word(&reflected),
+                    format_word(&expected)
+                ));
+            }
+        }
+    }
+    Ok(audit)
+}
+
+fn words_with_color_bound(n: usize, colors: u8) -> Vec<Vec<u8>> {
+    fn recurse(index: usize, colors: u8, word: &mut [u8], output: &mut Vec<Vec<u8>>) {
+        if index == word.len() {
+            output.push(word.to_vec());
+            return;
+        }
+        for color in 0..colors {
+            word[index] = color;
+            recurse(index + 1, colors, word, output);
+        }
+    }
+
+    let mut output = Vec::new();
+    recurse(0, colors, &mut vec![0u8; n], &mut output);
+    output
+}
+
+#[derive(Clone, Debug, Default)]
+struct LocalCrystalComponentAudit {
+    paths: usize,
+    states: usize,
+    components: usize,
+    ssyt_components: usize,
+    first_failure: Option<String>,
+}
+
+impl LocalCrystalComponentAudit {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        self.states += other.states;
+        self.components += other.components;
+        self.ssyt_components += other.ssyt_components;
+        if self.first_failure.is_none() {
+            self.first_failure = other.first_failure;
+        }
+    }
+
+    fn print(&self, label: &str, alphabet_size: u8, policy: LocalReflectionPolicy) {
+        println!(
+            "local {} crystal components {label} over {} colors: {} paths, {} states, SSYT-isomorphic {}/{} components",
+            policy.label(),
+            alphabet_size,
+            self.paths,
+            self.states,
+            self.ssyt_components,
+            self.components
+        );
+        if let Some(failure) = &self.first_failure {
+            println!("  first component failure: {failure}");
+        }
+    }
+}
+
+fn audit_local_crystal_components_for_path(
+    path: &PathData,
+    alphabet_size: u8,
+    policy: LocalReflectionPolicy,
+) -> Result<LocalCrystalComponentAudit, String> {
+    let states = words_with_color_bound(path.n, alphabet_size)
+        .into_iter()
+        .filter(|word| increases_on_edges(word, &path.strict_edges))
+        .collect::<BTreeSet<_>>();
+    let mut audit = LocalCrystalComponentAudit {
+        paths: 1,
+        states: states.len(),
+        ..LocalCrystalComponentAudit::default()
+    };
+    let mut unvisited = states.clone();
+    let mut cache = LocalReflectionCache::default();
+    while let Some(start) = unvisited.iter().next().cloned() {
+        let mut component = BTreeSet::from([start.clone()]);
+        let mut queue = VecDeque::from([start]);
+        while let Some(state) = queue.pop_front() {
+            for index in 1..u32::from(alphabet_size) {
+                for raising in [true, false] {
+                    if let Some(next) = local_two_color_crystal_step_with_policy(
+                        path,
+                        &state,
+                        index,
+                        raising,
+                        policy,
+                        &mut cache,
+                    )? {
+                        if !states.contains(&next) {
+                            return Err("local crystal arrow left the finite alphabet state set".into());
+                        }
+                        if component.insert(next.clone()) {
+                            queue.push_back(next);
+                        }
+                    }
+                }
+            }
+        }
+        for state in &component {
+            unvisited.remove(state);
+        }
+        audit.components += 1;
+
+        let highest = component
+            .iter()
+            .filter(|state| {
+                (1..u32::from(alphabet_size)).all(|index| {
+                    local_two_color_crystal_step_with_policy(
+                        path,
+                        state,
+                        index,
+                        true,
+                        policy,
+                        &mut cache,
+                    )
+                        .is_ok_and(|next| next.is_none())
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let component_result = (|| -> Result<(), String> {
+            if highest.len() != 1 {
+                let mut arrows = Vec::new();
+                for state in &component {
+                    for index in 1..u32::from(alphabet_size) {
+                        if let Some(next) = local_two_color_crystal_step_with_policy(
+                            path, state, index, false, policy, &mut cache,
+                        )? {
+                            arrows.push(format!(
+                                "{}-f_{}->{}",
+                                format_word(state),
+                                index,
+                                format_word(&next)
+                            ));
+                        }
+                    }
+                }
+                return Err(format!(
+                    "has {} highest-weight states: {}; arrows {}",
+                    highest.len(),
+                    highest
+                        .iter()
+                        .map(|state| format_word(state))
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    arrows.join("; ")
+                ));
+            }
+            let highest = &highest[0];
+            let content = (0..alphabet_size)
+                .map(|color| highest.iter().filter(|&&entry| entry == color).count())
+                .collect::<Vec<_>>();
+            if !content.windows(2).all(|parts| parts[0] >= parts[1]) {
+                return Err(format!(
+                    "highest state {} has nonpartition content {content:?}",
+                    format_word(highest)
+                ));
+            }
+            let rows = content
+                .iter()
+                .enumerate()
+                .filter(|&(_, &length)| length != 0)
+                .map(|(row, &length)| vec![row as u32 + 1; length])
+                .collect::<Vec<_>>();
+            let highest_tableau = Tableau::new(rows);
+            if !highest_tableau.is_semistandard() {
+                return Err("canonical highest tableau is not semistandard".into());
+            }
+            let mut correspondence = BTreeMap::from([(highest.clone(), highest_tableau)]);
+            let mut queue = VecDeque::from([highest.clone()]);
+            while let Some(state) = queue.pop_front() {
+                let tableau = correspondence[&state].clone();
+                for index in 1..u32::from(alphabet_size) {
+                    let coloring_next = local_two_color_crystal_step_with_policy(
+                        path,
+                        &state,
+                        index,
+                        false,
+                        policy,
+                        &mut cache,
+                    )?;
+                    let tableau_next = tableau.crystal_f(index);
+                    match (coloring_next, tableau_next) {
+                        (None, None) => {}
+                        (Some(coloring_next), Some(tableau_next)) => {
+                            if !component.contains(&coloring_next) {
+                                return Err("lowering arrow left its component".into());
+                            }
+                            if let Some(previous) = correspondence.get(&coloring_next) {
+                                if previous != &tableau_next {
+                                    return Err(format!(
+                                        "two lowering words identify {} with different tableaux",
+                                        format_word(&coloring_next)
+                                    ));
+                                }
+                            } else {
+                                correspondence.insert(coloring_next.clone(), tableau_next);
+                                queue.push_back(coloring_next);
+                            }
+                        }
+                        _ => {
+                            return Err(format!(
+                                "coloring/tableau f_{index} presence differs at {}",
+                                format_word(&state)
+                            ));
+                        }
+                    }
+                }
+            }
+            if correspondence.len() != component.len() {
+                return Err(format!(
+                    "lowering closure reaches {} of {} states",
+                    correspondence.len(),
+                    component.len()
+                ));
+            }
+            Ok(())
+        })();
+        if component_result.is_ok() {
+            audit.ssyt_components += 1;
+        } else if audit.first_failure.is_none() {
+            audit.first_failure = Some(format!(
+                "path {}, degree {}, component beginning {}: {}",
+                path.word(),
+                edge_ascent_mask(
+                    component.iter().next().expect("component is nonempty"),
+                    &path.normal_edges
+                )
+                .count_ones(),
+                format_word(component.iter().next().expect("component is nonempty")),
+                component_result.expect_err("checked that the component failed")
+            ));
+        }
+    }
+    Ok(audit)
+}
+
+#[derive(Clone, Debug, Default)]
 struct PlethysticCrystalAudit {
     paths: usize,
     absolute_reflections: usize,
@@ -12189,6 +13536,10 @@ fn run(args: Args) -> Result<(), String> {
         print_plethystic_crystal_report(args.max_n)?;
         return Ok(());
     }
+    if args.crystal_locality_report {
+        print_crystal_locality_report(args.max_n)?;
+        return Ok(());
+    }
     if args.flip_report {
         if let Some(word) = args.path.as_deref() {
             let path = PathData::parse(word)?;
@@ -12643,6 +13994,69 @@ mod tests {
         assert_eq!(through_rank_three.block_signed_degree_preserved, 720);
         assert_eq!(through_rank_three.block_signed_reflections, 736);
         assert_eq!(through_rank_three.block_involution_commuting, 608);
+    }
+
+    #[test]
+    fn local_two_color_reflections_form_a_weyl_action_through_rank_five() {
+        let policies = [
+            LocalReflectionPolicy::Lexicographic,
+            LocalReflectionPolicy::MinimumHamming,
+        ];
+        let mut coxeter = [LocalCoxeterAudit::default(), LocalCoxeterAudit::default()];
+        let mut strings = LocalCrystalStringAudit::default();
+        for n in 0..=5 {
+            for path in all_paths(n) {
+                for (policy_index, &policy) in policies.iter().enumerate() {
+                    coxeter[policy_index]
+                        .absorb(audit_local_reflection_coxeter_for_path(&path, policy).unwrap());
+                }
+                strings.absorb(audit_local_crystal_strings_for_path(&path).unwrap());
+            }
+        }
+        for audit in coxeter {
+            assert_eq!(audit.involutions_passed, audit.involutions);
+            assert_eq!(audit.distant_passed, audit.distant_relations);
+            assert_eq!(audit.braid_passed, audit.braid_relations);
+            assert_eq!(audit.involutions, 140_429);
+            assert_eq!(audit.distant_relations, 56_781);
+            assert_eq!(audit.braid_relations, 91_654);
+        }
+        assert_eq!(strings.inverse_passed, strings.inverse_checks);
+        assert_eq!(strings.reflection_passed, strings.reflection_checks);
+        assert_eq!(strings.inverse_checks, 149_156);
+        assert_eq!(strings.reflection_checks, 140_429);
+    }
+
+    #[test]
+    fn canonical_two_color_local_crystal_strings_first_fail_on_k4() {
+        let mut through_rank_three = LocalCrystalComponentAudit::default();
+        for n in 0..=3 {
+            for path in all_paths(n) {
+                through_rank_three.absorb(
+                    audit_local_crystal_components_for_path(
+                        &path,
+                        3,
+                        LocalReflectionPolicy::MinimumHamming,
+                    )
+                    .unwrap(),
+                );
+            }
+        }
+        assert_eq!(
+            through_rank_three.ssyt_components,
+            through_rank_three.components
+        );
+
+        let k4 = PathData::parse("NNNNEEEE").unwrap();
+        let obstruction = audit_local_crystal_components_for_path(
+            &k4,
+            3,
+            LocalReflectionPolicy::MinimumHamming,
+        )
+        .unwrap();
+        let failure = obstruction.first_failure.unwrap();
+        assert!(failure.contains("degree 2"));
+        assert!(failure.contains("2 highest-weight states: 1121,2112"));
     }
 
     #[test]
