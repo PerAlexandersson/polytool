@@ -110,6 +110,10 @@ struct Args {
     #[arg(long)]
     hall_code_report: bool,
 
+    /// Audit the signed virtual-alphabet cancellation from LLT to proper colorings.
+    #[arg(long)]
+    plethystic_report: bool,
+
     /// Trace the clean Foata--RSK shortcut for one complete-graph packed coloring.
     #[arg(long)]
     foata_trace_coloring: Option<String>,
@@ -289,6 +293,16 @@ struct RecursiveCertificate {
 struct SignedSourceState {
     source: SourceState,
     retained_mask: u64,
+}
+
+/// A term in the Haglund--Xin superization of `LLT[X(q-1)]`.
+///
+/// For the ascent convention used here the signed alphabet is ordered
+/// `bar(1) < 1 < bar(2) < 2 < ...`.  A set bit marks a barred occurrence.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct PlethysticSignedColoring {
+    coloring: Vec<u8>,
+    barred_mask: u64,
 }
 
 /// The reversible tableau form of an HRV e-object.
@@ -3879,6 +3893,87 @@ fn edge_ascent_mask(word: &[u8], edges: &[(usize, usize)]) -> u64 {
                 mask
             }
         })
+}
+
+fn is_proper_coloring(path: &PathData, coloring: &[u8]) -> bool {
+    path.normal_edges
+        .iter()
+        .all(|&(tail, head)| coloring[tail] != coloring[head])
+}
+
+fn plethystic_signed_degree(
+    path: &PathData,
+    state: &PlethysticSignedColoring,
+) -> Result<usize, String> {
+    if state.coloring.len() != path.n {
+        return Err("plethystic signed coloring has the wrong length".into());
+    }
+    if path.n < 64 && state.barred_mask >> path.n != 0 {
+        return Err("plethystic signed coloring has a barred bit outside its word".into());
+    }
+    let unbarred = path.n - state.barred_mask.count_ones() as usize;
+    let signed_ascents = path
+        .normal_edges
+        .iter()
+        .filter(|&&(tail, head)| {
+            let tail_color = state.coloring[tail];
+            let head_color = state.coloring[head];
+            if tail_color != head_color {
+                return tail_color < head_color;
+            }
+            state.barred_mask & (1u64 << tail) != 0
+        })
+        .count();
+    Ok(unbarred + signed_ascents)
+}
+
+fn plethystic_signed_sign(state: &PlethysticSignedColoring) -> i8 {
+    if state.barred_mask.count_ones() % 2 == 0 {
+        1
+    } else {
+        -1
+    }
+}
+
+/// The Haglund--Xin Proposition 3.5 sign involution (arXiv:1705.11064,
+/// Appendix), translated from inversions to ascents.
+///
+/// Among equal-color attacking pairs choose the lexicographically largest
+/// `(head, tail)` and toggle the bar on its tail.  Dyck-graph nesting ensures
+/// this preserves the total q-degree.  Signed lifts of proper colorings are
+/// exactly the fixed points.
+fn plethystic_signed_partner(
+    path: &PathData,
+    state: &PlethysticSignedColoring,
+) -> Result<Option<PlethysticSignedColoring>, String> {
+    plethystic_signed_degree(path, state)?;
+    let pivot = path
+        .normal_edges
+        .iter()
+        .copied()
+        .filter(|&(tail, head)| state.coloring[tail] == state.coloring[head])
+        .max_by_key(|&(tail, head)| (head, tail));
+    Ok(pivot.map(|(tail, _)| PlethysticSignedColoring {
+        coloring: state.coloring.clone(),
+        barred_mask: state.barred_mask ^ (1u64 << tail),
+    }))
+}
+
+fn format_plethystic_signed_coloring(state: &PlethysticSignedColoring) -> String {
+    state
+        .coloring
+        .iter()
+        .enumerate()
+        .map(|(vertex, color)| {
+            let label = usize::from(*color) + 1;
+            if state.barred_mask & (1u64 << vertex) == 0 {
+                label.to_string()
+            } else {
+                format!("bar({label})")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn increases_on_edges(word: &[u8], edges: &[(usize, usize)]) -> bool {
@@ -9302,6 +9397,151 @@ struct BooleanAudit {
     negative_survivors: usize,
 }
 
+#[derive(Clone, Debug, Default)]
+struct PlethysticAudit {
+    paths: usize,
+    absolute_colorings: usize,
+    signed_states: usize,
+    cancelled_pairs: usize,
+    proper_colorings: usize,
+    proper_signed_states: usize,
+    first_pair: Option<String>,
+}
+
+fn small_binomial(n: usize, k: usize) -> usize {
+    let k = k.min(n - k);
+    (0..k).fold(1usize, |value, index| value * (n - index) / (index + 1))
+}
+
+fn audit_plethystic_cancellation(max_n: usize) -> Result<PlethysticAudit, String> {
+    if max_n >= 64 {
+        return Err("plethystic cancellation audit requires rank below 64".into());
+    }
+    let mut audit = PlethysticAudit::default();
+    for n in 0..=max_n {
+        for path in all_paths(n)
+            .into_iter()
+            .filter(|path| path.strict_edges.is_empty())
+        {
+            audit.paths += 1;
+            for coloring in packed_words(n) {
+                audit.absolute_colorings += 1;
+                let proper = is_proper_coloring(&path, &coloring);
+                audit.proper_colorings += usize::from(proper);
+                let ordinary_degree = edge_ascent_mask(&coloring, &path.normal_edges)
+                    .count_ones() as usize;
+                let mut proper_fibre = BTreeMap::<usize, isize>::new();
+                for barred_mask in 0..(1u64 << n) {
+                    audit.signed_states += 1;
+                    let state = PlethysticSignedColoring {
+                        coloring: coloring.clone(),
+                        barred_mask,
+                    };
+                    let partner = plethystic_signed_partner(&path, &state)?;
+                    if proper {
+                        if partner.is_some() {
+                            return Err(format!(
+                                "proper coloring {} on {} was paired",
+                                format_word(&coloring),
+                                path.word()
+                            ));
+                        }
+                        audit.proper_signed_states += 1;
+                        *proper_fibre
+                            .entry(plethystic_signed_degree(&path, &state)?)
+                            .or_default() += isize::from(plethystic_signed_sign(&state));
+                        continue;
+                    }
+
+                    let partner = partner.ok_or_else(|| {
+                        format!(
+                            "improper coloring {} on {} was fixed",
+                            format_word(&coloring),
+                            path.word()
+                        )
+                    })?;
+                    if plethystic_signed_partner(&path, &partner)?.as_ref() != Some(&state) {
+                        return Err("plethystic signed partner is not involutive".into());
+                    }
+                    if plethystic_signed_sign(&partner) != -plethystic_signed_sign(&state) {
+                        return Err("plethystic signed partner did not reverse sign".into());
+                    }
+                    if plethystic_signed_degree(&path, &partner)?
+                        != plethystic_signed_degree(&path, &state)?
+                    {
+                        return Err(format!(
+                            "plethystic signed partner changed q-degree on path {}, coloring {}",
+                            path.word(),
+                            format_word(&coloring)
+                        ));
+                    }
+                    if state < partner {
+                        audit.cancelled_pairs += 1;
+                        if audit.first_pair.is_none() {
+                            let changed_tail = (state.barred_mask ^ partner.barred_mask)
+                                .trailing_zeros() as usize;
+                            let pivot = path
+                                .normal_edges
+                                .iter()
+                                .copied()
+                                .filter(|&(tail, head)| {
+                                    tail == changed_tail && coloring[tail] == coloring[head]
+                                })
+                                .max_by_key(|&(tail, head)| (head, tail))
+                                .expect("a plethystic toggle has an equal-color pivot");
+                            audit.first_pair = Some(format!(
+                                "path {}, {} <-> {}, pivot {}->{}, degree {}",
+                                path.word(),
+                                format_plethystic_signed_coloring(&state),
+                                format_plethystic_signed_coloring(&partner),
+                                pivot.0 + 1,
+                                pivot.1 + 1,
+                                plethystic_signed_degree(&path, &state)?
+                            ));
+                        }
+                    }
+                }
+                if proper {
+                    let expected = (0..=n)
+                        .map(|unbarred| {
+                            let sign = if (n - unbarred) % 2 == 0 { 1 } else { -1 };
+                            (
+                                ordinary_degree + unbarred,
+                                sign * small_binomial(n, unbarred) as isize,
+                            )
+                        })
+                        .collect::<BTreeMap<_, _>>();
+                    if proper_fibre != expected {
+                        return Err(format!(
+                            "proper signed fibre for path {}, coloring {} is {proper_fibre:?}, expected {expected:?}",
+                            path.word(),
+                            format_word(&coloring)
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(audit)
+}
+
+fn print_plethystic_report(max_n: usize) -> Result<(), String> {
+    let audit = audit_plethystic_cancellation(max_n)?;
+    println!(
+        "Plethystic LLT-to-chromatic cancellation ranks 0..={max_n}: {} Dyck paths, {} packed colorings, {} signed states; {} improper pairs cancel; {} proper colorings lift to {} fixed signed states",
+        audit.paths,
+        audit.absolute_colorings,
+        audit.signed_states,
+        audit.cancelled_pairs,
+        audit.proper_colorings,
+        audit.proper_signed_states
+    );
+    if let Some(pair) = audit.first_pair {
+        println!("  first pair: {pair}");
+    }
+    Ok(())
+}
+
 impl BooleanAudit {
     fn absorb(&mut self, other: Self) {
         self.skeletons += other.skeletons;
@@ -10559,6 +10799,10 @@ fn run(args: Args) -> Result<(), String> {
         print_hall_code_report(args.max_n)?;
         return Ok(());
     }
+    if args.plethystic_report {
+        print_plethystic_report(args.max_n)?;
+        return Ok(());
+    }
     if let Some(parts) = args.hall_partition.as_deref() {
         print_hall_littlewood_bridge(parts)?;
         return Ok(());
@@ -10902,6 +11146,24 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert_eq!(normal_area, vec![0, 1, 2, 3, 2, 2, 2, 1, 1]);
+    }
+
+    #[test]
+    fn plethystic_signed_cancellation_leaves_exactly_proper_colorings_through_rank_five() {
+        let audit = audit_plethystic_cancellation(5).unwrap();
+        assert_eq!(audit.paths, 65);
+        assert_eq!(audit.absolute_colorings, 23_845);
+        assert_eq!(audit.signed_states, 744_451);
+        assert_eq!(audit.cancelled_pairs, 159_026);
+        assert_eq!(audit.proper_colorings, 13_702);
+        assert_eq!(audit.proper_signed_states, 426_399);
+        assert_eq!(
+            audit.signed_states,
+            2 * audit.cancelled_pairs + audit.proper_signed_states
+        );
+        let first_pair = audit.first_pair.unwrap();
+        assert!(first_pair.contains("<->"));
+        assert!(first_pair.contains("pivot"));
     }
 
     #[test]

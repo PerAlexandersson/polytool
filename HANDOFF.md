@@ -1,5 +1,16 @@
 # Handoff
 
+## Active: objectwise plethystic cancellation — 2026-10-16
+
+`/root` owns `experiments/src/bin/marked_coloring_hrv_bijection.rs` and this
+handoff on branch `exp/verticalstripllt-marked-coloring-bijection`.  No shared
+library, Lean/paper source, or circular code is owned.  The current task is to
+implement Haglund--Xin Proposition 3.5 objectwise for the experiment's ascent
+convention: signed packed colorings in the alphabet
+`bar(1)<1<bar(2)<2<...`, with the last equal-color attacking-pair tail toggle,
+and verify that its fixed points are exactly proper colorings with the required
+`(q-1)^n` fibre and q-degree.
+
 ## Completed: canonical minimum-cost Hall selector — 2026-10-16
 
 `/root` completed and releases
