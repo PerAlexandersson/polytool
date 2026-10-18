@@ -356,6 +356,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "exact-real-roots"
+version = "0.1.0"
+dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "experiments"
 version = "0.1.0"
 dependencies = [
@@ -884,6 +893,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 name = "polytool"
 version = "0.2.1-rc.5"
 dependencies = [
+ "exact-real-roots",
  "num-bigint",
  "num-integer",
  "num-rational",

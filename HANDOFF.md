@@ -1,5 +1,27 @@
 # Handoff
 
+## Completed: adaptive subresultant PRS — 2026-10-18
+
+Host `/root` implemented the classical Collins--Brown/Cohen subresultant
+scaling rule in `exact-real-roots`, using positive exact divisors so the
+sequence retains Sturm signs. Degree five keeps the marginally faster
+unreduced chain; degree six and above use subresultants. Pseudo-division now
+scales and subtracts in place instead of allocating two polynomials per
+eliminated term. The new sequence agrees with primitive PRS on 3,359
+deterministic dense and repeated-root cases through degree 14, checking gcd
+degree and both total and positive root counts where applicable.
+
+On the existing matched 64-polynomial-per-degree corpus, the full default call
+is 1.53x faster at degree 5, 1.85x at degree 7, 2.70x at degree 8, 3.17x at
+degree 10, and 4.46x at degree 20 compared with the preceding implementation.
+At degree 20, the gap to FLINT 3.0.1 including its square-free check is now
+about 3.07x instead of 13.68x. FLINT was only a differential/performance
+oracle; no FLINT source was copied. The 24 engine tests and the full Polytool
+gate pass: 339 library, 22 BigInt CLI, 9 OEIS CLI, 6 version/budget, 5
+interlacing API, 4 recurrence fixture, and 5 doctests. Strict Rustdoc, root and
+standalone metadata, packaging, rustfmt, and diff checks pass. Ownership is
+released.
+
 ## Completed: reusable exact-real-roots crate — 2026-10-18
 
 Host `/root` extracted Polytool's integer root-counting engine into the

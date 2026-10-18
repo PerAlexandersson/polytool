@@ -2,13 +2,11 @@
 //!
 //! This module provides the default exact backend for boolean
 //! real-rootedness. Degrees at most four use exact discriminant and quartic
-//! invariant formulas. Degrees five through seven use an unreduced signed
-//! pseudo-remainder sequence; from degree eight, content-normalized primitive
-//! PRS avoids coefficient swell. Large one-signed inputs can instead select
-//! an exact Uspensky/Descartes path. Primitive PRS keeps
-//! intermediate coefficient growth much smaller than a naive rational PRS,
-//! while both paths avoid the large exact PSD matrices used by the Bézout
-//! criterion.
+//! invariant formulas. Degree five uses an unreduced signed pseudo-remainder
+//! sequence; from degree six, a Collins--Brown subresultant PRS removes known
+//! exact factors without computing coefficient-content GCDs. Large one-signed
+//! inputs can instead select an exact Uspensky/Descartes path. Both paths avoid
+//! the large exact PSD matrices used by the Bézout criterion.
 //!
 //! The positive-coefficient path is intended for combinatorial polynomials.  If
 //! all coefficients have one sign, roots can only be non-positive; after
@@ -118,13 +116,6 @@ fn poly_derivative(p: &[BigInt]) -> Vec<BigInt> {
     )
 }
 
-fn poly_scale(p: &[BigInt], a: &BigInt) -> Vec<BigInt> {
-    if a.is_zero() || p.is_empty() {
-        return vec![];
-    }
-    trim(p.iter().map(|c| c * a).collect())
-}
-
 fn poly_mul(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
     if a.is_empty() || b.is_empty() {
         return vec![];
@@ -139,23 +130,6 @@ fn poly_mul(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
                 r[i + j] += ca * cb;
             }
         }
-    }
-    trim(r)
-}
-
-fn poly_sub_shifted_scaled(
-    a: &[BigInt],
-    b: &[BigInt],
-    shift: usize,
-    scale: &BigInt,
-) -> Vec<BigInt> {
-    let n = a.len().max(b.len() + shift);
-    let mut r = vec![BigInt::zero(); n];
-    for (i, c) in a.iter().enumerate() {
-        r[i] += c;
-    }
-    for (i, c) in b.iter().enumerate() {
-        r[i + shift] -= c * scale;
     }
     trim(r)
 }
@@ -175,13 +149,9 @@ fn pseudo_remainder_positive_multiplier(a: &[BigInt], b: &[BigInt]) -> Vec<BigIn
         return trim_slice(a);
     }
 
-    let mut b_pos = trim_slice(b);
-    if leading(&b_pos).is_negative() {
-        for c in &mut b_pos {
-            *c = -c.clone();
-        }
-    }
-    let lc = leading(&b_pos);
+    let b = &b[..=db];
+    let divisor_is_negative = b[db].is_negative();
+    let lc = b[db].abs();
     debug_assert!(lc.is_positive());
 
     let mut r = trim_slice(a);
@@ -192,14 +162,30 @@ fn pseudo_remainder_positive_multiplier(a: &[BigInt], b: &[BigInt]) -> Vec<BigIn
         }
         let c = leading(&r);
         let shift = dr - db;
-        let scaled_r = poly_scale(&r, &lc);
-        r = poly_sub_shifted_scaled(&scaled_r, &b_pos, shift, &c);
+        for coefficient in &mut r {
+            *coefficient *= &lc;
+        }
+        for (j, coefficient) in b.iter().enumerate() {
+            if !coefficient.is_zero() {
+                if divisor_is_negative {
+                    r[j + shift] += &c * coefficient;
+                } else {
+                    r[j + shift] -= &c * coefficient;
+                }
+            }
+        }
+        while r.last().is_some_and(BigInt::is_zero) {
+            r.pop();
+        }
         e -= 1;
     }
-    for _ in 0..e {
-        r = poly_scale(&r, &lc);
+    if e > 0 && !r.is_empty() {
+        let remaining_scale = lc.pow(e as u32);
+        for coefficient in &mut r {
+            *coefficient *= &remaining_scale;
+        }
     }
-    trim(r)
+    r
 }
 
 fn primitive_gcd(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
@@ -338,7 +324,10 @@ fn signed_remainder_sequence(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
 /// This avoids coefficient GCDs at small fixed degrees, where the chain is
 /// short enough that coefficient swell costs less than repeated normalization.
 fn signed_remainder_sequence_unreduced(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
-    let p0 = primitive_positive(trim_slice(a));
+    // The derivative driver already supplies a primitive, positive-leading
+    // first member. Avoid repeating its coefficient-content GCD here.
+    let p0 = trim_slice(a);
+    debug_assert!(p0.is_empty() || leading(&p0).is_positive());
     if p0.is_empty() || degree(&p0).unwrap_or(0) == 0 {
         return vec![p0];
     }
@@ -355,6 +344,67 @@ fn signed_remainder_sequence_unreduced(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<Bi
             break;
         }
         chain.push(poly_neg(&prem));
+    }
+    chain
+}
+
+/// Build a signed subresultant PRS using the Collins--Brown scaling rule.
+///
+/// Each pseudo-remainder has a predictable factor derived from earlier
+/// leading coefficients and degree drops. Dividing by that factor is much
+/// cheaper than computing the full coefficient content at every step. We use
+/// its positive absolute value and negate the remainder, preserving the
+/// Sturm sign convention.
+fn signed_remainder_sequence_subresultant(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
+    // The derivative driver already supplies a primitive, positive-leading
+    // first member. Avoid repeating its coefficient-content GCD here.
+    let p0 = trim_slice(a);
+    debug_assert!(p0.is_empty() || leading(&p0).is_positive());
+    if p0.is_empty() || degree(&p0).unwrap_or(0) == 0 {
+        return vec![p0];
+    }
+    let p1 = primitive_keep_sign(trim_slice(b));
+    if p1.is_empty() {
+        return vec![p0];
+    }
+
+    let mut chain = vec![p0, p1];
+    let mut g = BigInt::one();
+    let mut h = BigInt::one();
+
+    loop {
+        let n = chain.len();
+        let previous_degree = degree(&chain[n - 2]).expect("nonzero PRS member");
+        let current_degree = degree(&chain[n - 1]).expect("nonzero PRS member");
+        let delta = previous_degree - current_degree;
+        let prem = pseudo_remainder_positive_multiplier(&chain[n - 2], &chain[n - 1]);
+        if prem.is_empty() {
+            break;
+        }
+
+        let divisor = &g * h.pow(delta as u32);
+        debug_assert!(divisor.is_positive());
+        let mut next = Vec::with_capacity(prem.len());
+        for coefficient in prem {
+            debug_assert!((&coefficient % &divisor).is_zero());
+            next.push(-(coefficient / &divisor));
+        }
+        let next = trim(next);
+        if next.is_empty() {
+            break;
+        }
+
+        g = leading(&chain[n - 1]).abs();
+        h = if delta == 1 {
+            g.clone()
+        } else {
+            let numerator = g.pow(delta as u32);
+            let denominator = h.pow((delta - 1) as u32);
+            debug_assert!((&numerator % &denominator).is_zero());
+            numerator / denominator
+        };
+        debug_assert!(h.is_positive());
+        chain.push(next);
     }
     chain
 }
@@ -376,13 +426,13 @@ fn derivative_sturm_chain(coeffs: &[BigInt]) -> (Vec<Vec<BigInt>>, usize) {
     }
 
     let derivative = poly_derivative(&p);
-    // Benchmarks on dense, structured, and bundled OEIS inputs put the
-    // coefficient-swell crossover at degree eight: omitting content GCDs wins
-    // through degree seven, while primitive normalization wins from eight.
-    let chain = if (2..=7).contains(&p_degree) {
+    // Very short chains do not repay the scaling bookkeeping. From degree
+    // six onward, predictable subresultant divisions avoid both coefficient
+    // swell and a coefficient-content GCD at every step.
+    let chain = if (2..=5).contains(&p_degree) {
         signed_remainder_sequence_unreduced(&p, &derivative)
     } else {
-        signed_remainder_sequence(&p, &derivative)
+        signed_remainder_sequence_subresultant(&p, &derivative)
     };
     let gcd_degree = chain.last().and_then(|last| degree(last)).unwrap_or(0);
     (chain, p_degree.saturating_sub(gcd_degree))
@@ -778,7 +828,7 @@ pub fn squarefree_degree_bigint_coeffs(coeffs: &[BigInt]) -> usize {
     derivative_sturm_chain(coeffs).1
 }
 
-/// Count distinct real roots using a primitive pseudo-remainder Sturm sequence.
+/// Count distinct real roots using a signed pseudo-remainder Sturm sequence.
 ///
 /// The input may have repeated roots. The signed PRS of `p` and `p'` ends in
 /// their gcd; its endpoint variations count the distinct roots directly.
@@ -790,7 +840,7 @@ pub fn count_real_roots_prs_bigint_coeffs(coeffs: &[BigInt]) -> usize {
     variations_at_neg_infinity(&chain).saturating_sub(variations_at_pos_infinity(&chain))
 }
 
-/// Count distinct positive roots using a primitive pseudo-remainder Sturm sequence.
+/// Count distinct positive roots using a signed pseudo-remainder Sturm sequence.
 ///
 /// The count is over the open interval `(0, +infinity)`.
 pub fn count_positive_roots_prs_bigint_coeffs(coeffs: &[BigInt]) -> usize {
@@ -953,7 +1003,7 @@ pub fn satisfies_kurtz_condition_bigint(coeffs: &[BigInt]) -> bool {
     true
 }
 
-/// Exact real-rootedness via primitive integer Sturm/PRS root counting.
+/// Exact real-rootedness via integer Sturm/PRS root counting.
 ///
 /// This is a general method: it works for mixed-sign coefficients as well as
 /// one-signed combinatorial polynomials.  It is often useful as a fallback when
@@ -985,7 +1035,7 @@ pub fn is_real_rooted_uspensky_i64(coeffs: &[i64]) -> bool {
     is_real_rooted_uspensky_bigint_coeffs(&coeffs)
 }
 
-/// Whether the benchmarked Uspensky path is likely to beat primitive PRS.
+/// Whether the benchmarked Uspensky path is likely to beat subresultant PRS.
 ///
 /// Degree alone is not a reliable discriminator: PRS is substantially faster
 /// on Narayana, Chebyshev, Hermite, and evenly spaced linear-factor products.
@@ -1064,7 +1114,7 @@ pub fn is_real_rooted_one_signed_bigint_coeffs(coeffs: &[BigInt]) -> Option<bool
 /// Exact real-rootedness with an adaptive one-signed path and PRS fallback.
 ///
 /// The one-signed path first applies coefficient filters, then selects between
-/// primitive PRS and Uspensky using a conservative benchmark-derived
+/// subresultant PRS and Uspensky using a conservative benchmark-derived
 /// heuristic. Mixed-sign inputs use PRS. This avoids constructing Bézout/PSD
 /// matrices entirely and is the backend used by the public
 /// `real_rootedness::is_real_rooted_bigint_coeffs` default.
@@ -1413,7 +1463,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unreduced_small_degree_prs_agrees_with_primitive_prs() {
+    fn test_adaptive_small_degree_prs_agrees_with_primitive_prs() {
         let mut state = 0xbb67_ae85_84ca_a73bu64;
         for d in 5usize..=7 {
             let mut cases = Vec::new();
@@ -1455,14 +1505,67 @@ mod tests {
                     .and_then(|last| degree(last))
                     .unwrap_or(0);
                 let primitive_squarefree_degree = d - primitive_gcd_degree;
-                let (unreduced_chain, unreduced_squarefree_degree) = derivative_sturm_chain(&p);
+                let (adaptive_chain, adaptive_squarefree_degree) = derivative_sturm_chain(&p);
 
-                assert_eq!(unreduced_squarefree_degree, primitive_squarefree_degree);
+                assert_eq!(adaptive_squarefree_degree, primitive_squarefree_degree);
                 assert_eq!(
-                    variations_at_neg_infinity(&unreduced_chain)
-                        .saturating_sub(variations_at_pos_infinity(&unreduced_chain)),
+                    variations_at_neg_infinity(&adaptive_chain)
+                        .saturating_sub(variations_at_pos_infinity(&adaptive_chain)),
                     variations_at_neg_infinity(&primitive_chain)
                         .saturating_sub(variations_at_pos_infinity(&primitive_chain)),
+                    "degree={d}, coeffs={p:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_subresultant_prs_agrees_with_primitive_prs() {
+        let mut state = 0x3c6e_f372_fe94_f82bu64;
+        for d in 8usize..=14 {
+            let mut cases = Vec::new();
+            for _ in 0..256 {
+                let mut coefficients = Vec::with_capacity(d + 1);
+                for _ in 0..=d {
+                    state = state
+                        .wrapping_mul(6_364_136_223_846_793_005)
+                        .wrapping_add(1_442_695_040_888_963_407);
+                    coefficients.push(BigInt::from(((state >> 32) % 101) as i64 - 50));
+                }
+                if coefficients[d].is_zero() {
+                    coefficients[d] = BigInt::one();
+                }
+                cases.push(coefficients);
+            }
+
+            let mut repeated = vec![BigInt::one()];
+            for root_index in 0..d {
+                let root = if root_index < 3 { 2 } else { root_index + 1 };
+                repeated = poly_mul(&repeated, &[BigInt::from(root), BigInt::one()]);
+            }
+            cases.push(repeated);
+
+            for coefficients in cases {
+                let p = primitive_positive(coefficients);
+                let derivative = poly_derivative(&p);
+                let primitive_chain = signed_remainder_sequence(&p, &derivative);
+                let subresultant_chain = signed_remainder_sequence_subresultant(&p, &derivative);
+
+                assert_eq!(
+                    subresultant_chain.last().and_then(|last| degree(last)),
+                    primitive_chain.last().and_then(|last| degree(last)),
+                    "degree={d}, coeffs={p:?}"
+                );
+                assert_eq!(
+                    variations_at_neg_infinity(&subresultant_chain)
+                        .saturating_sub(variations_at_pos_infinity(&subresultant_chain)),
+                    variations_at_neg_infinity(&primitive_chain)
+                        .saturating_sub(variations_at_pos_infinity(&primitive_chain)),
+                    "degree={d}, coeffs={p:?}"
+                );
+                assert_eq!(
+                    count_positive_roots_from_sturm_chain(&subresultant_chain),
+                    count_positive_roots_from_sturm_chain(&primitive_chain),
                     "degree={d}, coeffs={p:?}"
                 );
             }
@@ -1610,7 +1713,7 @@ mod tests {
         assert!(!prefers_uspensky_for_one_signed(&narayana));
         assert!(!prefers_uspensky_for_one_signed(&product));
 
-        let scaled_eulerian = poly_scale(&eulerian, &BigInt::from(7));
+        let scaled_eulerian: Vec<BigInt> = eulerian.iter().map(|c| c * 7).collect();
         assert!(prefers_uspensky_for_one_signed(&scaled_eulerian));
 
         assert!(is_real_rooted_fast_bigint_coeffs(&eulerian));
