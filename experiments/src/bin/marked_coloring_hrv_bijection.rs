@@ -36,6 +36,10 @@
 //! higher-color `phi` preparation before a lower `psi`, and quotient-level
 //! `theta` splits.  Its general all-rank scheduling remains experimental, so
 //! audits above the validated range stop at and print the first failure.
+//! Accepted package and theta moves now also preserve the later paper's
+//! degree-4/5/6 local Schur conditions and axiom 4'(a).  Axiom 4'(b), whose
+//! definition quantifies over maximal flat chains, remains to be implemented
+//! before the experiment can model the later transformation framework fully.
 //!
 //! The ordinary flip experiment implements the verified reachability-cover
 //! short-edge move exactly.  It refines the coloring/HRV matching by complete
@@ -12575,29 +12579,37 @@ fn dual_components_with_colors(
     Ok(result)
 }
 
-/// Test Assaf's `LSP_5` condition around edge color `index`.
+/// Test Assaf's `LSP_degree` condition at a window ending in `top_color`.
 ///
-/// A local component uses edge colors `index - 2, index - 1, index` and
-/// signature coordinates `index - 3, ..., index`.  Relabeling these as a
-/// degree-five signed colored graph, local Schur positivity says exactly that
-/// its fundamental descent distribution is a nonnegative sum of the SYT
-/// distributions of partitions of five.
-fn assaf_locally_schur_positive_five(
+/// The window uses `degree - 2` consecutive edge colors and `degree - 1`
+/// consecutive signature coordinates.  Local Schur positivity says exactly
+/// that each component's fundamental descent distribution is a nonnegative
+/// sum of the SYT distributions of partitions of `degree`.
+fn assaf_locally_schur_positive_degree(
     edges: &DualEdgeMap,
     states: &BTreeSet<Vec<u32>>,
-    index: u32,
+    top_color: u32,
+    degree: usize,
 ) -> Result<bool, String> {
-    if index < 4 {
+    if degree < 3 {
+        return Err(format!("local Schur degree {degree} is below three"));
+    }
+    let minimum_top_color = degree as u32 - 1;
+    if top_color < minimum_top_color {
         return Ok(true);
     }
-    let colors = [index - 2, index - 1, index];
-    let candidates = standard_tableau_descent_distributions(5);
+    let color_start = top_color - (degree as u32 - 3);
+    let colors = (color_start..=top_color).collect::<Vec<_>>();
+    let signature_start = top_color - (degree as u32 - 2);
+    let candidates = standard_tableau_descent_distributions(degree);
     for component in dual_components_with_colors(edges, states, &colors)? {
         let mut distribution = DescentDistribution::new();
         for state in component {
-            let descents = (0..4)
-                .filter(|&offset| dual_signature(&state, index - 3 + offset))
-                .map(|offset| offset + 1)
+            let descents = (0..degree - 1)
+                .filter(|&offset| {
+                    dual_signature(&state, signature_start + offset as u32)
+                })
+                .map(|offset| offset as u32 + 1)
                 .collect::<BTreeSet<_>>();
             *distribution.entry(descents).or_default() += 1;
         }
@@ -12608,17 +12620,100 @@ fn assaf_locally_schur_positive_five(
     Ok(true)
 }
 
-fn assaf_all_locally_schur_positive_five(
+fn assaf_local_signature_distribution(
+    edges: &DualEdgeMap,
+    root: &[u32],
+    colors: &[u32],
+    signature_start: u32,
+    signature_length: usize,
+) -> Result<DescentDistribution, String> {
+    let mut component = BTreeSet::from([root.to_vec()]);
+    let mut queue = VecDeque::from([root.to_vec()]);
+    while let Some(state) = queue.pop_front() {
+        for &color in colors {
+            let next = dual_neighbor(edges, &state, color)?.clone();
+            if component.insert(next.clone()) {
+                queue.push_back(next);
+            }
+        }
+    }
+    let mut distribution = DescentDistribution::new();
+    for state in component {
+        let descents = (0..signature_length)
+            .filter(|&offset| dual_signature(&state, signature_start + offset as u32))
+            .map(|offset| offset as u32 + 1)
+            .collect::<BTreeSet<_>>();
+        *distribution.entry(descents).or_default() += 1;
+    }
+    Ok(distribution)
+}
+
+/// Check axiom 4'(a) from Assaf's later transformation paper
+/// (arXiv:1704.07039v1, Definition 53).
+fn assaf_axiom_four_prime_a(
+    edges: &DualEdgeMap,
+    states: &BTreeSet<Vec<u32>>,
+    n: usize,
+) -> Result<Option<String>, String> {
+    for index in 4..n as u32 {
+        for state in states {
+            if !assaf_witness_w(edges, state, index)?
+                || assaf_flat_edge(edges, state, index - 1)?
+            {
+                continue;
+            }
+            let lower = assaf_local_signature_distribution(
+                edges,
+                state,
+                &[index - 2, index - 1],
+                index - 3,
+                3,
+            )?;
+            let upper = assaf_local_signature_distribution(
+                edges,
+                state,
+                &[index - 1, index],
+                index - 2,
+                3,
+            )?;
+            if lower != upper {
+                return Ok(Some(format!(
+                    "axiom 4'(a) at color {index}, witness {state:?}: lower {lower:?}, upper {upper:?}"
+                )));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn assaf_first_later_paper_guard_failure(
+    edges: &DualEdgeMap,
+    states: &BTreeSet<Vec<u32>>,
+    n: usize,
+) -> Result<Option<String>, String> {
+    for degree in 4..=6 {
+        for top_color in degree as u32 - 1..n as u32 {
+            if !assaf_locally_schur_positive_degree(
+                edges,
+                states,
+                top_color,
+                degree,
+            )? {
+                return Ok(Some(format!(
+                    "LSP_{degree} in the window ending at edge color {top_color}"
+                )));
+            }
+        }
+    }
+    assaf_axiom_four_prime_a(edges, states, n)
+}
+
+fn assaf_all_later_paper_guards(
     edges: &DualEdgeMap,
     states: &BTreeSet<Vec<u32>>,
     n: usize,
 ) -> Result<bool, String> {
-    for index in 4..n as u32 {
-        if !assaf_locally_schur_positive_five(edges, states, index)? {
-            return Ok(false);
-        }
-    }
-    Ok(true)
+    Ok(assaf_first_later_paper_guard_failure(edges, states, n)?.is_none())
 }
 
 fn assaf_legal_psi_candidates_core(
@@ -12672,7 +12767,7 @@ fn assaf_legal_psi_candidates_core(
         else {
             continue;
         };
-        if !assaf_all_locally_schur_positive_five(&candidate, states, path.n)? {
+        if !assaf_all_later_paper_guards(&candidate, states, path.n)? {
             continue;
         }
         let key = states
@@ -12717,7 +12812,7 @@ fn assaf_legal_psi_candidates_core(
                 ) else {
                     continue;
                 };
-                if !assaf_all_locally_schur_positive_five(&prepared, states, path.n)? {
+                if !assaf_all_later_paper_guards(&prepared, states, path.n)? {
                     continue;
                 }
                 let preparation_key = states
@@ -12773,7 +12868,7 @@ fn assaf_has_legal_phi_or_psi(
             let previous = dual_neighbor(edges, state, index - 1)?;
             let mut candidate = edges.clone();
             if switch_dual_packages(&mut candidate, path.n, index, state, previous).is_ok()
-                && assaf_all_locally_schur_positive_five(&candidate, states, path.n)?
+                && assaf_all_later_paper_guards(&candidate, states, path.n)?
             {
                 return Ok(true);
             }
@@ -12826,7 +12921,7 @@ fn assaf_gamma_candidates(
             else {
                 continue;
             };
-            if !assaf_all_locally_schur_positive_five(&candidate, states, path.n)?
+            if !assaf_all_later_paper_guards(&candidate, states, path.n)?
                 || !assaf_has_legal_phi_or_psi(&candidate, path, states, index)?
             {
                 continue;
@@ -12874,7 +12969,7 @@ fn assaf_legal_phi_candidates(
         else {
             continue;
         };
-        if !assaf_all_locally_schur_positive_five(&candidate, states, path.n)? {
+        if !assaf_all_later_paper_guards(&candidate, states, path.n)? {
             continue;
         }
         let key = states
@@ -13715,7 +13810,7 @@ fn assaf_repair_local_index(
 /// `(frontier + 1, N)` restriction is a disjoint union of standard dual
 /// equivalence graphs, axiom 4 has been cleared through color `frontier + 2`,
 /// and every global edge still satisfies the signed involution, distant
-/// commutation, local-Schur, and LLT-degree conditions.
+/// commutation, degree-4/5/6 local-Schur, and LLT-degree conditions.
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct AssafFrontierCertificate {
     frontier: u32,
@@ -13771,9 +13866,11 @@ fn assaf_validate_frontier(
             axiom_four_colors += 1;
         }
     }
-    if !assaf_all_locally_schur_positive_five(edges, states, path.n)? {
+    if let Some(failure) =
+        assaf_first_later_paper_guard_failure(edges, states, path.n)?
+    {
         return Err(format!(
-            "frontier {frontier} fails a rank-five local-Schur window"
+            "frontier {frontier} fails later-paper guard: {failure}"
         ));
     }
 
@@ -13918,6 +14015,14 @@ fn assaf_complete_theta_frontier_at(
                 .into_iter()
                 .next()
                 .expect("one theta candidate was checked");
+            if let Some(failure) =
+                assaf_first_later_paper_guard_failure(&changed, states, path.n)?
+            {
+                return Err(format!(
+                    "first Assaf failure: path {}, theta_{index}: the unique split fails {failure}",
+                    path.word(),
+                ));
+            }
             (changed, description)
         } else {
             let mut candidates = assaf_theta_component_candidates(
@@ -13928,12 +14033,27 @@ fn assaf_complete_theta_frontier_at(
             )?;
             candidates.sort_by(|left, right| left.1.cmp(&right.1));
             candidates.dedup_by(|left, right| left.0 == right.0);
-            candidates.into_iter().next().ok_or_else(|| {
+            let mut accepted = None;
+            let mut first_guard_failure = None;
+            for candidate in candidates {
+                if let Some(failure) =
+                    assaf_first_later_paper_guard_failure(&candidate.0, states, path.n)?
+                {
+                    first_guard_failure.get_or_insert(failure);
+                } else {
+                    accepted = Some(candidate);
+                    break;
+                }
+            }
+            accepted.ok_or_else(|| {
                 format!(
-                    "first Assaf failure: path {}, theta_{index}, component root {:?}, size {}: no certified quotient split",
+                    "first Assaf failure: path {}, theta_{index}, component root {:?}, size {}: no certified quotient split preserving the later-paper guards{}",
                     path.word(),
                     component.iter().next(),
-                    component.len()
+                    component.len(),
+                    first_guard_failure
+                        .as_ref()
+                        .map_or(String::new(), |failure| format!("; first failure: {failure}"))
                 )
             })?
         };

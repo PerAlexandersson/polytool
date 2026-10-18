@@ -4,6 +4,7 @@
 
 `/root` owns
 `experiments/src/bin/marked_coloring_hrv_bijection.rs`,
+`docs/ASSAF_CANONICAL_SEARCH_PROOF.md`,
 `sym-poly/sym/src/llt.rs`, `sym-poly/sym/src/lib.rs`,
 `sym-poly/sym/README.md`, and this handoff on branch
 `exp/verticalstripllt-marked-coloring-bijection`.  The experiment now has a
@@ -15,7 +16,39 @@ frontier by frontier, runs the nearby `phi_(i+1)`/`psi_(i+2)` repairs after
 frontier.  Exhaustive validation remains through rank six, with a selected
 rank-seven certificate.  The reusable LLT coloring-standardization
 certificate is already in `sym-poly-sym`; the rectifier remains experimental.
+“No rank cutoff” here means only that the executable has no hard-coded bound;
+it is not an all-rank existence theorem.
 No other shared library, Lean/paper source, or circular code is owned.
+
+## Correction: canonical search is conditional, not an all-rank proof — 2026-10-18
+
+`docs/ASSAF_CANONICAL_SEARCH_PROOF.md` records a useful but conditional
+construction.  On each fixed-q-degree LLT D graph, lexicographic breadth-first
+search through certified Assaf moves is finite and produces a canonical
+replayable rectification whenever a terminal state is reachable.  It does not
+prove reachability.
+
+The later source arXiv:1704.07039v1 prevents using the older arXiv:1005.3759v5
+Theorem 65 as a black box.  The later paper proves only the highest-color
+transformation theorem, introduces additional axioms 4'(a,b), and explicitly
+leaves open whether its conditions suffice for the full iterative
+transformation.  Therefore the current Rust crystal is genuine for every
+certified finite instance, but is not yet proved to exist for all ranks.
+
+The important older-source audit remains that Assaf Theorem 64 rewrites history
+retrospectively: Lemmas 60--63 insert same- or higher-color repairs *before* an
+offending lower move.  Thus the paper proves existence of a successful path
+from the original graph, not termination of the experiment's greedy
+current-state DFS.  The immediate fail-fast task is stricter: implement the
+later paper's LSP_6 and axiom-4' guards after every move, then stop at the first
+failed guard or no-move obstruction.  No larger-rank census is needed.
+
+The first stricter audit is now implemented.  Every accepted package or theta
+move preserves LSP_4, LSP_5, LSP_6, and the later paper's axiom 4'(a).  The
+ordinary suite (33 passed, 2 ignored) and the exhaustive rank-six stress test
+pass.  Axiom 4'(b) remains intentionally unimplemented: its source definition
+quantifies over maximal flat chains, and the nearby forbidden local diagram
+has not yet been proved equivalent to that definition in the prototype.
 
 ## Completed: replace degree climbing by theorem-shaped frontier certificates — 2026-10-18
 
@@ -29,7 +62,8 @@ frontier `G_i`, `AssafFrontierCertificate` checks all of the following:
 - every colored edge is a signature-compatible involution, remains in the
   state set, preserves the exact LLT q-degree, and commutes with distant edge
   colors;
-- every rank-five local window remains Schur positive.
+- every rank-five local window remains Schur positive.  This historical
+  checkpoint predates the stricter LSP_4/5/6 and axiom-4'(a) guard above.
 
 The scheduler repairs colors `i,i+1,i+2`, completes `theta_i`, performs the
 paper's nearby repairs, and validates the frontier before proceeding.  Local
