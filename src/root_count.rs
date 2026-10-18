@@ -1,9 +1,11 @@
 //! Exact real-root counting over the integers.
 //!
 //! This module provides the default exact backend for boolean
-//! real-rootedness. It uses a primitive pseudo-remainder Sturm sequence for
-//! general inputs and adaptively selects an exact Uspensky/Descartes path for
-//! a conservative class of large one-signed inputs. Primitive PRS keeps
+//! real-rootedness. Degrees at most four use exact discriminant and quartic
+//! invariant formulas. Degrees five through seven use an unreduced signed
+//! pseudo-remainder sequence; from degree eight, content-normalized primitive
+//! PRS avoids coefficient swell. Large one-signed inputs can instead select
+//! an exact Uspensky/Descartes path. Primitive PRS keeps
 //! intermediate coefficient growth much smaller than a naive rational PRS,
 //! while both paths avoid the large exact PSD matrices used by the Bézout
 //! criterion.
@@ -330,6 +332,32 @@ fn signed_remainder_sequence(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
     chain
 }
 
+/// Build the same signed pseudo-remainder sequence without removing content.
+///
+/// This avoids coefficient GCDs at small fixed degrees, where the chain is
+/// short enough that coefficient swell costs less than repeated normalization.
+fn signed_remainder_sequence_unreduced(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
+    let p0 = primitive_positive(trim_slice(a));
+    if p0.is_empty() || degree(&p0).unwrap_or(0) == 0 {
+        return vec![p0];
+    }
+    let p1 = trim_slice(b);
+    if p1.is_empty() {
+        return vec![p0];
+    }
+
+    let mut chain = vec![p0, p1];
+    loop {
+        let n = chain.len();
+        let prem = pseudo_remainder_positive_multiplier(&chain[n - 2], &chain[n - 1]);
+        if prem.is_empty() {
+            break;
+        }
+        chain.push(poly_neg(&prem));
+    }
+    chain
+}
+
 /// Build the signed PRS of `p` and `p'` and recover the square-free degree
 /// from its final nonzero member, which is the gcd up to a nonzero scalar.
 ///
@@ -347,7 +375,14 @@ fn derivative_sturm_chain(coeffs: &[BigInt]) -> (Vec<Vec<BigInt>>, usize) {
     }
 
     let derivative = poly_derivative(&p);
-    let chain = signed_remainder_sequence(&p, &derivative);
+    // Benchmarks on dense, structured, and bundled OEIS inputs put the
+    // coefficient-swell crossover at degree eight: omitting content GCDs wins
+    // through degree seven, while primitive normalization wins from eight.
+    let chain = if (2..=7).contains(&p_degree) {
+        signed_remainder_sequence_unreduced(&p, &derivative)
+    } else {
+        signed_remainder_sequence(&p, &derivative)
+    };
     let gcd_degree = chain.last().and_then(|last| degree(last)).unwrap_or(0);
     (chain, p_degree.saturating_sub(gcd_degree))
 }
@@ -430,6 +465,80 @@ fn all_one_sign(coeffs: &[BigInt]) -> bool {
         }
     }
     !(seen_pos && seen_neg)
+}
+
+/// Return whether a polynomial of degree at most four has only real roots.
+///
+/// The discriminant formulas below are evaluated only up to a positive
+/// factor, since only their sign is needed.  The quartic invariants also cover
+/// zero-discriminant cases, so repeated roots do not require a GCD fallback.
+fn low_degree_is_real_rooted(coeffs: &[BigInt]) -> Option<bool> {
+    let p = trim_slice(coeffs);
+    let Some(d) = degree(&p) else {
+        return Some(true);
+    };
+
+    match d {
+        0 | 1 => Some(true),
+        2 => {
+            // b^2 - 4ac >= 0.
+            let discriminant = &p[1] * &p[1] - BigInt::from(4) * &p[2] * &p[0];
+            Some(!discriminant.is_negative())
+        }
+        3 => {
+            // For ax^3 + bx^2 + cx + d, the usual discriminant has the
+            // same sign as 4 Delta_0^3 - Delta_1^2, since their ratio is
+            // the positive quantity 27a^2.
+            let delta_0 = &p[2] * &p[2] - BigInt::from(3) * &p[3] * &p[1];
+            let delta_1 = BigInt::from(2) * &p[2] * &p[2] * &p[2]
+                - BigInt::from(9) * &p[3] * &p[2] * &p[1]
+                + BigInt::from(27) * &p[3] * &p[3] * &p[0];
+            let discriminant_numerator =
+                BigInt::from(4) * &delta_0 * &delta_0 * &delta_0 - &delta_1 * &delta_1;
+            Some(!discriminant_numerator.is_negative())
+        }
+        4 => {
+            // Binary-quartic invariants.  The usual discriminant has the
+            // same sign as 4 I^3 - J^2 (the ratio is the positive constant
+            // 27).  When it is positive, the quartic has four real roots
+            // exactly when P < 0 and D < 0.
+            let i =
+                BigInt::from(12) * &p[4] * &p[0] - BigInt::from(3) * &p[3] * &p[1] + &p[2] * &p[2];
+            let j = BigInt::from(72) * &p[4] * &p[2] * &p[0]
+                + BigInt::from(9) * &p[3] * &p[2] * &p[1]
+                - BigInt::from(27) * &p[4] * &p[1] * &p[1]
+                - BigInt::from(27) * &p[3] * &p[3] * &p[0]
+                - BigInt::from(2) * &p[2] * &p[2] * &p[2];
+            let discriminant_numerator = BigInt::from(4) * &i * &i * &i - &j * &j;
+
+            if discriminant_numerator.is_negative() {
+                return Some(false);
+            }
+
+            let quartic_p = BigInt::from(8) * &p[4] * &p[2] - BigInt::from(3) * &p[3] * &p[3];
+            if quartic_p.is_positive()
+                || (discriminant_numerator.is_positive() && quartic_p.is_zero())
+            {
+                return Some(false);
+            }
+
+            let quartic_d = BigInt::from(64) * &p[4] * &p[4] * &p[4] * &p[0]
+                - BigInt::from(16) * &p[4] * &p[4] * &p[2] * &p[2]
+                + BigInt::from(16) * &p[4] * &p[3] * &p[3] * &p[2]
+                - BigInt::from(16) * &p[4] * &p[4] * &p[3] * &p[1]
+                - BigInt::from(3) * &p[3] * &p[3] * &p[3] * &p[3];
+
+            if discriminant_numerator.is_positive() {
+                Some(quartic_d.is_negative())
+            } else {
+                // Strict inequalities give one double and two simple real
+                // roots. Equality includes two double roots and the triple-
+                // or quadruple-root cases.
+                Some(!quartic_p.is_positive() && !quartic_d.is_positive())
+            }
+        }
+        _ => None,
+    }
 }
 
 fn make_nonnegative(mut coeffs: Vec<BigInt>) -> Vec<BigInt> {
@@ -919,6 +1028,9 @@ pub fn is_real_rooted_one_signed_bigint_coeffs(coeffs: &[BigInt]) -> Option<bool
     if !all_one_sign(&p) {
         return None;
     }
+    if let Some(real_rooted) = low_degree_is_real_rooted(&p) {
+        return Some(real_rooted);
+    }
 
     let p = make_nonnegative(p);
     if satisfies_kurtz_condition_bigint(&p) {
@@ -956,6 +1068,9 @@ pub fn is_real_rooted_one_signed_bigint_coeffs(coeffs: &[BigInt]) -> Option<bool
 /// matrices entirely and is the backend used by the public
 /// `real_rootedness::is_real_rooted_bigint_coeffs` default.
 pub fn is_real_rooted_fast_bigint_coeffs(coeffs: &[BigInt]) -> bool {
+    if let Some(real_rooted) = low_degree_is_real_rooted(coeffs) {
+        return real_rooted;
+    }
     if let Some(rr) = is_real_rooted_one_signed_bigint_coeffs(coeffs) {
         rr
     } else {
@@ -1152,6 +1267,69 @@ mod tests {
     }
 
     #[test]
+    fn test_low_degree_closed_form_edge_cases() {
+        let cases = [
+            (vec![], true),
+            (vec![3], true),
+            (vec![1, 0, 1], false),
+            (vec![1, -2, 1], true),
+            (vec![1, 0, 2, 0, 1], false), // (x^2 + 1)^2
+            (vec![1, 0, -2, 0, 1], true), // (x^2 - 1)^2
+            (mul_i64(&[1, -2, 1], &[1, 0, 1]), false),
+            (mul_i64(&mul_i64(&[1, -2, 1], &[-2, 1]), &[-3, 1]), true),
+            (vec![4, 0, -5, 0, 1], true), // roots -2, -1, 1, 2
+            (vec![1, 0, 0, 0, 1], false), // no real roots
+        ];
+
+        for (coeffs, expected) in cases {
+            assert_eq!(low_degree_is_real_rooted(&b(&coeffs)), Some(expected));
+        }
+    }
+
+    #[test]
+    fn test_low_degree_closed_forms_agree_with_prs_exhaustively() {
+        for nominal_degree in 0usize..=4 {
+            let total = 7usize.pow((nominal_degree + 1) as u32);
+            for mut mask in 0..total {
+                let mut coeffs = Vec::with_capacity(nominal_degree + 1);
+                for _ in 0..=nominal_degree {
+                    coeffs.push(BigInt::from((mask % 7) as i64 - 3));
+                    mask /= 7;
+                }
+
+                assert_eq!(
+                    low_degree_is_real_rooted(&coeffs),
+                    Some(is_real_rooted_prs_bigint_coeffs(&coeffs)),
+                    "coeffs={coeffs:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_low_degree_closed_forms_agree_with_prs_on_large_coefficients() {
+        let mut state = 0x6a09_e667_f3bc_c909u64;
+        for _ in 0..4096 {
+            let mut coeffs = Vec::with_capacity(5);
+            for _ in 0..5 {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                coeffs.push(BigInt::from(((state >> 32) % 2_000_001) as i64 - 1_000_000));
+            }
+            if coeffs[4].is_zero() {
+                coeffs[4] = BigInt::one();
+            }
+
+            assert_eq!(
+                low_degree_is_real_rooted(&coeffs),
+                Some(is_real_rooted_prs_bigint_coeffs(&coeffs)),
+                "coeffs={coeffs:?}"
+            );
+        }
+    }
+
+    #[test]
     fn test_derivative_prs_reuses_gcd_chain_on_small_grid() {
         for degree in 0usize..=4 {
             let total = 5usize.pow((degree + 1) as u32);
@@ -1181,6 +1359,63 @@ mod tests {
                     variations_at_zero_plus(&reference)
                         .saturating_sub(variations_at_pos_infinity(&reference)),
                     "coeffs={coeffs:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_unreduced_small_degree_prs_agrees_with_primitive_prs() {
+        let mut state = 0xbb67_ae85_84ca_a73bu64;
+        for d in 5usize..=7 {
+            let mut cases = Vec::new();
+            for _ in 0..512 {
+                let mut coefficients = Vec::with_capacity(d + 1);
+                for _ in 0..=d {
+                    state = state
+                        .wrapping_mul(6_364_136_223_846_793_005)
+                        .wrapping_add(1_442_695_040_888_963_407);
+                    coefficients.push(BigInt::from(((state >> 32) % 101) as i64 - 50));
+                }
+                if coefficients[d].is_zero() {
+                    coefficients[d] = BigInt::one();
+                }
+                cases.push(coefficients);
+            }
+
+            // Include all-real inputs with repeated roots, since the final
+            // remainder degree also supplies the square-free degree.
+            for repeated_root in 1..=8usize {
+                let mut polynomial = vec![BigInt::one()];
+                for root_index in 0..d {
+                    let root = if root_index < 2 {
+                        repeated_root
+                    } else {
+                        repeated_root + root_index
+                    };
+                    polynomial = poly_mul(&polynomial, &[BigInt::from(root), BigInt::one()]);
+                }
+                cases.push(polynomial);
+            }
+
+            for coefficients in cases {
+                let p = primitive_positive(coefficients);
+                let derivative = poly_derivative(&p);
+                let primitive_chain = signed_remainder_sequence(&p, &derivative);
+                let primitive_gcd_degree = primitive_chain
+                    .last()
+                    .and_then(|last| degree(last))
+                    .unwrap_or(0);
+                let primitive_squarefree_degree = d - primitive_gcd_degree;
+                let (unreduced_chain, unreduced_squarefree_degree) = derivative_sturm_chain(&p);
+
+                assert_eq!(unreduced_squarefree_degree, primitive_squarefree_degree);
+                assert_eq!(
+                    variations_at_neg_infinity(&unreduced_chain)
+                        .saturating_sub(variations_at_pos_infinity(&unreduced_chain)),
+                    variations_at_neg_infinity(&primitive_chain)
+                        .saturating_sub(variations_at_pos_infinity(&primitive_chain)),
+                    "degree={d}, coeffs={p:?}"
                 );
             }
         }

@@ -1021,12 +1021,19 @@ Report issues in the Git repository, or contact Per Alexandersson
 ### Real-rootedness algorithms
 
 The default real-rootedness check uses an adaptive exact path from
-`root_count`. Its primitive signed PRS of `p` and `p'` simultaneously counts
+`root_count`. Degrees at most four are decided directly by exact discriminant
+and quartic-invariant signs, including the repeated-root cases; they do not
+construct a remainder sequence or square-free quotient. For higher degrees,
+the signed PRS of `p` and `p'` simultaneously counts
 the distinct real roots and ends in their gcd, whose degree determines the
 square-free degree. Thus the general check avoids constructing the square-free
 quotient and running a second Euclidean pass. The polynomial is real-rooted
 precisely when the root count equals the square-free degree. Public operations
 that do need the quotient use the same fraction-free primitive integer GCD.
+Degrees five through seven omit content normalization because benchmarked
+coefficient-GCD overhead exceeds the limited coefficient swell; primitive
+normalization resumes at degree eight, where the crossover reverses on the
+bundled OEIS corpus.
 For one-signed coefficient polynomials, the backend first tries cheap
 coefficient filters and then counts positive roots of `f(-t)`, since such
 polynomials can only have non-positive real roots. Primitive PRS remains the
