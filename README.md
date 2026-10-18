@@ -1,8 +1,8 @@
 # polytool
 
 Dense univariate polynomial toolkit for combinatorial research. Provides
-real-rootedness testing by primitive integer root counting, Bézout-matrix
-interlacing checks, log-concavity, gamma-positivity, resultants,
+real-rootedness testing by adaptive subresultant integer root counting,
+Bézout-matrix interlacing checks, log-concavity, gamma-positivity, resultants,
 Ehrhart/h\*-vector conversion, recurrence search for polynomial sequences,
 finite Athanasiadis--Wagner interlacing matrices, and standard sequences —
 all with exact arithmetic.
@@ -1046,13 +1046,13 @@ square-free degree. Thus the general check avoids constructing the square-free
 quotient and running a second Euclidean pass. The polynomial is real-rooted
 precisely when the root count equals the square-free degree. Public operations
 that do need the quotient use the same fraction-free primitive integer GCD.
-Degrees five through seven omit content normalization because benchmarked
-coefficient-GCD overhead exceeds the limited coefficient swell; primitive
-normalization resumes at degree eight, where the crossover reverses on the
-bundled OEIS corpus.
+Degree five omits content normalization because its short chain does not repay
+the scaling bookkeeping. From degree six onward, a signed Collins--Brown
+subresultant PRS divides out predictable exact factors, avoiding both
+coefficient swell and a coefficient-content GCD after every pseudo-division.
 For one-signed coefficient polynomials, the backend first tries cheap
 coefficient filters and then counts positive roots of `f(-t)`, since such
-polynomials can only have non-positive real roots. Primitive PRS remains the
+polynomials can only have non-positive real roots. Subresultant PRS is the
 general backend. Uspensky is selected conservatively at degree 35 or above
 when the endpoint coefficients are equal and an interior coefficient is at
 least `4^degree` times as large as an endpoint. This benchmark-derived,
