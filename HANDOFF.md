@@ -50,6 +50,9 @@ pass.  Axiom 4'(b) remains intentionally unimplemented: its source definition
 quantifies over maximal flat chains, and the nearby forbidden local diagram
 has not yet been proved equivalent to that definition in the prototype.
 
+Implementation checkpoint: `7fc37b6` (`Audit Assaf rectification against
+later guards`).
+
 ## Completed: replace degree climbing by theorem-shaped frontier certificates — 2026-10-18
 
 The rectifier now tests the structural induction used in Assaf's D-graph
