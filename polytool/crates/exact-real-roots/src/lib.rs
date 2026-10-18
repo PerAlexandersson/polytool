@@ -1331,9 +1331,64 @@ pub fn bigint_coeffs_to_i64(coeffs: &[BigInt]) -> Option<Vec<i64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_rational::BigRational;
 
     fn b(v: &[i64]) -> Vec<BigInt> {
         v.iter().map(|&x| BigInt::from(x)).collect()
+    }
+
+    /// Independently compute `|lc(b)|^(deg(a)-deg(b)+1) * rem(a, b)` over Q.
+    ///
+    /// This intentionally does not use pseudo-division, so it can detect a
+    /// regression in the shared integer pseudo-remainder kernel.
+    fn rational_scaled_remainder(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
+        let a = trim_slice(a);
+        let b = trim_slice(b);
+        let Some(a_degree) = degree(&a) else {
+            return Vec::new();
+        };
+        let b_degree = degree(&b).expect("rational remainder divisor must be nonzero");
+        if a_degree < b_degree {
+            return a;
+        }
+
+        let divisor_sign = if b[b_degree].is_negative() {
+            -BigInt::one()
+        } else {
+            BigInt::one()
+        };
+        let divisor: Vec<BigRational> = b
+            .iter()
+            .map(|coefficient| BigRational::from_integer(coefficient * &divisor_sign))
+            .collect();
+        let mut remainder: Vec<BigRational> =
+            a.iter().cloned().map(BigRational::from_integer).collect();
+
+        while let Some(remainder_degree) = remainder.iter().rposition(|c| !c.is_zero()) {
+            if remainder_degree < b_degree {
+                break;
+            }
+            let shift = remainder_degree - b_degree;
+            let quotient_term = remainder[remainder_degree].clone() / &divisor[b_degree];
+            for (j, coefficient) in divisor.iter().enumerate() {
+                remainder[j + shift] -= &quotient_term * coefficient;
+            }
+            while remainder.last().is_some_and(BigRational::is_zero) {
+                remainder.pop();
+            }
+        }
+
+        let scale = b[b_degree].abs().pow((a_degree - b_degree + 1) as u32);
+        trim(
+            remainder
+                .into_iter()
+                .map(|coefficient| {
+                    let scaled = coefficient * BigRational::from_integer(scale.clone());
+                    assert!(scaled.denom().is_one());
+                    scaled.numer().clone()
+                })
+                .collect(),
+        )
     }
 
     fn mul_i64(a: &[i64], b: &[i64]) -> Vec<i64> {
@@ -1405,6 +1460,66 @@ mod tests {
         // (x^2 + 1) mod (x - 2) = 5.  The divisor is monic, so prem = rem.
         let r = pseudo_remainder_positive_multiplier(&b(&[1, 0, 1]), &b(&[-2, 1]));
         assert_eq!(r, b(&[5]));
+    }
+
+    #[test]
+    fn test_pseudo_remainder_matches_independent_rational_oracle() {
+        let mut cases = vec![
+            // Negative-leading divisor.
+            (b(&[7, -3, 5, 0, 2]), b(&[2, 0, -3])),
+            // The exact remainder is constant, forcing a sparse degree drop.
+            (b(&[-3, 0, -2, 15, 0, 3]), b(&[-2, 0, 0, 3])),
+            (b(&[-3, 0, -2, 15, 0, 3]), b(&[2, 0, 0, -3])),
+            // Dividend degree below divisor degree, with trailing zeros.
+            (b(&[5, -2, 0, 0]), b(&[1, 0, 4, 0])),
+            // A constant divisor must leave the zero remainder.
+            (b(&[9, -4, 7, 1]), b(&[-3])),
+        ];
+
+        let mut state = 0xa54f_f53a_5f1d_36f1u64;
+        for case_index in 0..512usize {
+            let a_degree = case_index % 8;
+            let b_degree = 1 + (case_index * 5 % 6);
+            let mut a = Vec::with_capacity(a_degree + 1);
+            let mut divisor = Vec::with_capacity(b_degree + 1);
+            for _ in 0..=a_degree {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                a.push(BigInt::from(((state >> 32) % 17) as i64 - 8));
+            }
+            for _ in 0..=b_degree {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                divisor.push(BigInt::from(((state >> 32) % 17) as i64 - 8));
+            }
+            if a[a_degree].is_zero() {
+                a[a_degree] = BigInt::one();
+            }
+            if divisor[b_degree].is_zero() {
+                divisor[b_degree] = BigInt::one();
+            }
+            if case_index % 2 == 1 && divisor[b_degree].is_positive() {
+                for coefficient in &mut divisor {
+                    *coefficient = -std::mem::take(coefficient);
+                }
+            }
+            cases.push((a, divisor));
+        }
+
+        for (a, divisor) in cases {
+            let expected = rational_scaled_remainder(&a, &divisor);
+            assert_eq!(
+                pseudo_remainder_positive_multiplier(&a, &divisor),
+                expected,
+                "a={a:?}, divisor={divisor:?}"
+            );
+
+            let mut scratch = vec![(BigInt::one() << 256usize) - 1; a.len() + 11];
+            pseudo_remainder_positive_multiplier_into(&mut scratch, &a, &divisor);
+            assert_eq!(scratch, expected, "a={a:?}, divisor={divisor:?}");
+        }
     }
 
     #[test]
@@ -1754,6 +1869,12 @@ mod tests {
                 let derivative = poly_derivative(&p);
                 let primitive_chain = signed_remainder_sequence(&p, &derivative);
                 let subresultant_chain = signed_remainder_sequence_subresultant(&p, &derivative);
+                let summary = derivative_sturm_summary(&p, true, true);
+                let primitive_gcd_degree = primitive_chain
+                    .last()
+                    .and_then(|last| degree(last))
+                    .unwrap_or(0);
+                let primitive_squarefree_degree = d - primitive_gcd_degree;
 
                 assert_eq!(
                     subresultant_chain.last().and_then(|last| degree(last)),
@@ -1769,6 +1890,21 @@ mod tests {
                 );
                 assert_eq!(
                     count_positive_roots_from_sturm_chain(&subresultant_chain),
+                    count_positive_roots_from_sturm_chain(&primitive_chain),
+                    "degree={d}, coeffs={p:?}"
+                );
+                assert_eq!(
+                    summary.squarefree_degree, primitive_squarefree_degree,
+                    "degree={d}, coeffs={p:?}"
+                );
+                assert_eq!(
+                    summary.real_roots,
+                    variations_at_neg_infinity(&primitive_chain)
+                        .saturating_sub(variations_at_pos_infinity(&primitive_chain)),
+                    "degree={d}, coeffs={p:?}"
+                );
+                assert_eq!(
+                    summary.positive_roots,
                     count_positive_roots_from_sturm_chain(&primitive_chain),
                     "degree={d}, coeffs={p:?}"
                 );

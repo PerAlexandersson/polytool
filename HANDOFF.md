@@ -1,5 +1,22 @@
 # Handoff
 
+## Completed: Astra audit follow-up — 2026-10-18
+
+Host `/root` closed all three non-blocking observations from Astra's audit of
+`793fc4a`. A new rational polynomial-division oracle checks the integer
+pseudo-remainder kernel independently on 517 fixed and deterministic cases,
+including negative-leading and constant divisors, sparse degree drops,
+dividends below divisor degree, and deliberately dirty reusable buffers. The
+degree 8--14 primitive/subresultant corpus now also compares all three fields
+of the streaming summary, including repeated-root cases.
+
+The deterministic 64-polynomial-per-degree benchmark is now tracked at
+`polytool/examples/bench_streaming_prs.rs` and is reproducible with
+`cargo run --release -p polytool --example bench_streaming_prs -- 100`.
+All 25 engine tests pass, as do clippy with warnings denied, the tracked example
+build and smoke run, strict Rustdoc, root and standalone metadata,
+exact-real-roots packaging, rustfmt, and diff checks. Ownership is released.
+
 ## Completed: streaming exact root counts — 2026-10-18
 
 Host `/root` replaced the production full PRS vector with a two-polynomial
