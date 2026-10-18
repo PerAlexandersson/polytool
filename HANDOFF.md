@@ -24,6 +24,20 @@ library tests, 22 BigInt CLI tests, 9 OEIS CLI tests, 6 version/budget tests,
 5 interlacing API tests, 4 recurrence fixture tests, and 5 doctests, together
 with strict Rustdoc, standalone metadata, workspace rustfmt, and diff checks.
 
+A follow-up external comparison used the host's FLINT 3.0.1 C library directly
+(Sage itself is not installed), excluding process and Python overhead. For each
+degree 2 through 20, the identical 64-polynomial square-free corpus contained
+48 deterministic dense inputs with coefficients in `[-10,10]` and 16 products
+of distinct integer linear factors. All FLINT and Polytool decisions agreed.
+When FLINT's square-free check is included in its timed region to better match
+Polytool's multiplicity-safe public semantics, Polytool wins at degrees 3 and 4
+by factors 1.83 and 1.30. FLINT wins at degree 2 by 3.08x and from degree 5
+onward: 3.54x at degree 5, 8.76x at degree 8, 10.25x at degree 10, and 13.68x
+at degree 20. Thus degree 5 is the measured crossover for considering an
+optional native FLINT backend; no dependency or backend policy was changed.
+The matching Rust driver remains ignored under `experiments/`, and the C
+driver and TSV outputs remain disposable files under `/tmp`.
+
 ## Completed: primitive square-free and one-pass derivative PRS — 2026-10-18
 
 Host `/root` completed and releases `polytool/src/root_count.rs`,
