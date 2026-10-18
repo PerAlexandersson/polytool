@@ -22,6 +22,7 @@ exclude = [
 ]
 
 [dependencies]
+exact-real-roots = { version = "0.1.0", path = "crates/exact-real-roots" }
 num-bigint = "0.4"
 num-rational = "0.4"
 num-traits = "0.2"

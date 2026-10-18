@@ -1,0 +1,17 @@
+[package]
+name = "exact-real-roots"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+authors = ["Per Alexandersson <per.w.alexandersson@gmail.com>"]
+description = "Exact real-root counting and real-rootedness tests for integer polynomials"
+readme = "README.md"
+repository = "https://github.com/PerAlexandersson/polytool"
+keywords = ["polynomials", "real-rootedness", "sturm", "subresultants"]
+categories = ["mathematics", "science"]
+
+[dependencies]
+num-bigint = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"
