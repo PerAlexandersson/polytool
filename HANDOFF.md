@@ -1,5 +1,15 @@
 # Handoff
 
+## Completed: Polytool issue #9 coefficient diagnosis — 2026-10-18
+
+Issue #9's polynomial is not A046741 row 8: it gives coefficients 836, 2523,
+and 1641 where the catalog recurrence and OEIS give 838, 2504, and 1577. The
+reported polynomial has exactly two real roots; the canonical row has eight
+and passes PRS, Uspensky, rational isolation, and strict Bézout interlacing.
+Structured A046741 tests now cover the catalog row, all exact root-count paths,
+rational isolation, and interlacing. No root algorithm changed, and `/root`
+released ownership after the focused checks and full Polytool library suite.
+
 ## Completed: Astra audit follow-up — 2026-10-18
 
 Host `/root` closed all three non-blocking observations from Astra's audit of
