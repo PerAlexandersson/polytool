@@ -2,6 +2,10 @@
 
 ## Completed: Polytool issue #9 coefficient diagnosis — 2026-10-18
 
+The [GitHub issue](https://github.com/PerAlexandersson/polytool/issues/9)
+was corrected and closed as an input-data error after exact CLI readback;
+no Polytool root bug remains from this report.
+
 Issue #9's polynomial is not A046741 row 8: it gives coefficients 836, 2523,
 and 1641 where the catalog recurrence and OEIS give 838, 2504, and 1577. The
 reported polynomial has exactly two real roots; the canonical row has eight
