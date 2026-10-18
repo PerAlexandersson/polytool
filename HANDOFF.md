@@ -1,5 +1,34 @@
 # Handoff
 
+## Completed: primitive square-free and one-pass derivative PRS — 2026-10-18
+
+Host `/root` completed and releases `polytool/src/root_count.rs`,
+`polytool/src/real_rootedness.rs`, `polytool/README.md`, and this handoff.  The
+public square-free operation now reuses the fraction-free primitive integer
+GCD instead of a rational Euclidean computation, while preserving its existing
+primitive coefficient and leading-sign conventions.  General Sturm counting
+now uses one signed PRS of `p` and `p'`: endpoint variations count distinct
+roots, and the last nonzero member supplies the gcd degree and hence the
+square-free degree.  This removes the former square-free quotient plus second
+Euclidean pass.  The one-signed PRS path uses the same consolidation; the
+independent Uspensky path still constructs the quotient it needs.
+
+Exhaustive tests on every coefficient vector in `[-2,2]` through degree four
+check the public square-free result against the former rational reference and
+the one-pass root counts/degrees against the explicit square-free Sturm chain.
+The full Polytool suite passes: 358 library tests, 22 BigInt CLI tests, 9 OEIS
+CLI tests, 6 version/budget tests, 5 interlacing API tests, 4 recurrence fixture
+tests, and 5 doctests.  Strict Rustdoc, workspace rustfmt, and diff checks pass.
+
+Release-mode OEIS timings are approximate one-call corpus measurements.  On
+767 eligible row-16 polynomials, explicit PRS fell from 0.260s to 0.170s
+(about 35%), while the Hermite corpus fell from 8.104s to 2.031s after the
+square-free replacement.  On the first 98 eligible row-24 polynomials, PRS
+fell from 0.086s to 0.054s and Hermite from 6.375s to 1.334s.  All backends
+agreed.  Phase probes show CRT is not the square-free bottleneck; no CRT policy
+changed.  Ignored benchmark drivers remain task-local, and maintained-source
+ownership is released.  No push.
+
 ## Completed: monotone-pattern descent/peak recurrence — 2026-10-14
 
 Host `/root` completed and releases `combpoly/src/monotone_pattern.rs`,
