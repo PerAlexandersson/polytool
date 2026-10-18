@@ -87,6 +87,22 @@ functions accept `&[i64]`; use the `*_bigint_coeffs` variants when coefficients
 may exceed `i64`. Interlacing functions return `Option<bool>`: `None` means the
 directed degree relation is not valid for that test, not that interlacing failed.
 
+### Standalone exact root counting
+
+The low-level integer root-counting engine is the independent
+`exact-real-roots` crate under `crates/exact-real-roots`. Polytool depends on
+it and preserves the existing `polytool::root_count` module and crate-root
+re-exports. Projects that only need exact root counts or coefficient-slice
+real-rootedness can depend directly on the smaller crate:
+
+```toml
+[dependencies]
+exact-real-roots = { path = "path/to/polytool/crates/exact-real-roots" }
+```
+
+Both crates use ascending-degree coefficient order and arbitrary-precision
+integer arithmetic. Repeated roots are handled through the square-free part.
+
 ### Shared-denominator vector recurrences
 
 `find_vector_recurrence_with_denominator_rational` (and its integer wrapper)

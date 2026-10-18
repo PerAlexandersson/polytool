@@ -18,7 +18,8 @@ or examples.
 | Symmetric functions, chromatic and bond-lattice symmetric functions, chordal clique-boundary channels, LLT/Macdonald-related constructions | `sym-poly-sym` | `SymmetricFunction`, `Basis`, `chromatic_symmetric`, `chordal_clique_boundary_schur_channels`, `graph_mobius_symmetric_function`, `chromatic_mobius_symmetric_function`, `unicellular_llt`, `delta_modified_macdonald`; `sym-poly/sym/examples/clique_boundary_channels.rs`, `*_site_example.rs` |
 | Quasisymmetric functions, P-partitions, QSym Schur variants, QSym chromatics | `sym-poly-qsym` | `QSymFunction`, `QSymBasis`, `p_partition_generating_function`, `qsym_schur`, `young_qsym_schur`, `chromatic_qsym`; `sym-poly/qsym/examples/qsym_schur_degree4.rs`, `p_partition_site_example.rs` |
 | Sparse multivariate and nonsymmetric polynomial bases/operators | `sym-poly-multipoly` | `MultiPoly`, `key_polynomial`, `atom_polynomial`, `schubert_polynomial`, `flagged_schur`, `nonsymmetric_macdonald_filling_formula`; `sym-poly/multipoly/examples/key_site_example.rs`, `schubert_site_example.rs` |
-| Exact univariate root/interlacing, recurrence, h* and standard sequences | `polytool` | `Polynomial`, `is_real_rooted`, `check_weak_interlacing`, `find_recurrence_adaptive`, `eulerian_polynomials_bigint`; `polytool/examples/bench_bezout_vs_sturm.rs` |
+| Exact integer real-root counts and coefficient-slice real-rootedness | `exact-real-roots` | `count_real_roots_prs_bigint_coeffs`, `is_real_rooted_fast_bigint_coeffs`, `count_root_signs_prs_bigint_coeffs`; coefficients are in ascending degree order |
+| Exact univariate interlacing, recurrence, h* and standard sequences | `polytool` | `Polynomial`, `is_real_rooted`, `check_weak_interlacing`, `find_recurrence_adaptive`, `eulerian_polynomials_bigint`; its root-counting facade re-exports `exact-real-roots` |
 | Permutation/word/parking-function generating polynomials, increasing-pattern avoidance via RSK, parity-oriented pattern counts/statistics, and CLI scans | `combpoly` | `build_generating_polynomial`, `increasing_pattern_avoiding_descent_polynomials`, `increasing_pattern_avoiding_peak_polynomials`, `count_parity_oriented_321_avoiding`, `parity_preserving_123_avoiding_counts`, `parity_preserving_123_statistic_polynomials`, and the `combpoly` CLI; see `combpoly/README.md` and the checked `a355089` examples |
 | Structured evidence, counterexamples, and proof-search records | `polynomial-lab` | `PolynomialFamilyRegistry`, `real_rooted_evidence_id`, and the `poly-lab` CLI; see `polynomial-lab/tests/fixtures/minimal_lab/` |
 | GT/Ehrhart, h*, flagged Kostka, flows, keys, and order polytopes | [Ehrcalc](https://github.com/PerAlexandersson/ehrcalc) | standalone maintained library, CLI, and MCP server; see its README and generated CLI reference |
@@ -62,10 +63,11 @@ re-exports canonical foundation types; it does not supply them to
 
 ## Exact arithmetic and result interpretation
 
-- Coefficient vectors accepted by `polytool` convenience functions are in
-  ascending degree order. Use its `*_bigint_coeffs` APIs when `i64` is not a
-  proved bound. `Option<bool>` interlacing results can be `None` for an invalid
-  directed degree relation, rather than a failed mathematical assertion.
+- Coefficient vectors accepted by `exact-real-roots` and `polytool`
+  convenience functions are in ascending degree order. Use their
+  `*_bigint_coeffs` APIs when `i64` is not a proved bound. `Option<bool>`
+  interlacing results can be `None` for an invalid directed degree relation,
+  rather than a failed mathematical assertion.
 - The symmetric-function crates are generic over their `Ring`; QSym power-sum
   bases require rational coefficients. Select `BigInt` or `BigRational` when
   growth or division demands it, and do not add lossy casts for convenience.

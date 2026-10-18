@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "polytool",
+    "polytool/crates/exact-real-roots",
     "polytool/web",
     "polytool/mcp",
     "combinatoric-core",
@@ -16,6 +17,7 @@ members = [
 exclude = ["experiments", "KTT-search", "kostka"]
 default-members = [
     "polytool",
+    "polytool/crates/exact-real-roots",
     "polytool/web",
     "polytool/mcp",
     "combinatoric-core",

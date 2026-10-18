@@ -1,5 +1,24 @@
 # Handoff
 
+## Completed: reusable exact-real-roots crate — 2026-10-18
+
+Host `/root` extracted Polytool's integer root-counting engine into the
+publishable `polytool/crates/exact-real-roots` Cargo package. The crate remains
+inside the exported `polytool` subtree so standalone Git dependencies include
+it; it is an ordinary dependency rather than a Git submodule. Existing
+`polytool::root_count` and crate-root imports remain source-compatible through
+a thin re-export facade. The independent crate retains 23 engine tests, while
+Polytool retains the exhaustive comparison with its separate rational Sturm
+implementation.
+
+No FLINT source was copied: subsequent algorithmic work must remain a clean
+mathematical implementation with FLINT used only as a differential/performance
+oracle. Verification passes for the new crate, all 339 Polytool library tests,
+22 BigInt CLI tests, 9 OEIS CLI tests, 6 version/budget tests, 5 interlacing
+API tests, 4 recurrence fixture tests, and 5 Polytool doctests. Strict Rustdoc,
+root and standalone metadata, packaging of `exact-real-roots`, rustfmt, and
+diff checks pass. Ownership is released.
+
 ## Completed: compiled low-degree real-rootedness paths — 2026-10-18
 
 Host `/root` completed and releases `polytool/src/root_count.rs`,
