@@ -1,6 +1,6 @@
 # Handoff
 
-## Active: all-rank intrinsic LLT crystal scheduler — 2026-10-16
+## Active: certified Assaf frontiers for the intrinsic LLT crystal — 2026-10-18
 
 `/root` owns
 `experiments/src/bin/marked_coloring_hrv_bijection.rs`,
@@ -9,14 +9,90 @@
 `exp/verticalstripllt-marked-coloring-bijection`.  The experiment now has a
 direct reversible coloring-to-SSYT crystal map built from deterministic Assaf
 `phi`/`psi`/`theta` rectification, rather than finite component matching.  The
-rectifier now has no rank cutoff: it rectifies restrictions in increasing rank
-and runs the paper's nearby `phi_(i+1)`/`psi_(i+2)` repairs after `theta_i`.
-Exhaustive validation remains through rank six, with selected rank-seven and
-rank-eight certificates.  The reusable LLT coloring-standardization
+rectifier now has no rank cutoff: it constructs the paper's graph sequence
+frontier by frontier, runs the nearby `phi_(i+1)`/`psi_(i+2)` repairs after
+`theta_i`, and emits a machine-checkable induction certificate at every
+frontier.  Exhaustive validation remains through rank six, with a selected
+rank-seven certificate.  The reusable LLT coloring-standardization
 certificate is already in `sym-poly-sym`; the rectifier remains experimental.
 No other shared library, Lean/paper source, or circular code is owned.
 
+## Completed: replace degree climbing by theorem-shaped frontier certificates — 2026-10-18
+
+The rectifier now tests the structural induction used in Assaf's D-graph
+proof, rather than treating success at the next rank as the main evidence.  At
+frontier `G_i`, `AssafFrontierCertificate` checks all of the following:
+
+- the `(i+1,N)` restriction is a disjoint union of uniquely identified
+  standard dual-equivalence graphs;
+- all `W_j` and `C_j` witnesses through the required `i+2` window vanish;
+- every colored edge is a signature-compatible involution, remains in the
+  state set, preserves the exact LLT q-degree, and commutes with distant edge
+  colors;
+- every rank-five local window remains Schur positive.
+
+The scheduler repairs colors `i,i+1,i+2`, completes `theta_i`, performs the
+paper's nearby repairs, and validates the frontier before proceeding.  Local
+`psi/gamma` choices are no longer greedy: a finite DFS over the actual
+`D_i`-edge states tries the published branches in deterministic order, detects
+cycles, returns the first certified history, and reports the number of
+exhausted local edge states if none works.  Thus failures are local finite
+obstructions, not rank timeouts.
+
+This audit exposed and removed the old `n <= 5` special-case `psi` branch.  On
+path `NNNNENEEEE` the shortcut cleared `W_4`, repaired `C_4`, and silently
+recreated `W_4`; iterating it cycled through 12 distinct `D_4` edge states.
+With the uniform published `psi_i` rule the same 120-state graph has certified
+frontiers `G_2,G_3,G_4`, ends in 26/26 standard components after 8 `phi` and 4
+`psi` moves, and needs no `theta`.  Consequently the earlier eleven-vertex
+rank-five `theta` obstruction was an implementation artifact.  The known
+630-state rank-seven path still certifies every frontier and ends in 32/32
+standard components after its two genuine `theta_5` splits.
+
+This is a more meaningful all-rank prototype, but not yet an all-rank proof.
+Assaf's final existence theorem permits intermediate graphs to lose local
+Schur positivity and uses Theorem `restore` to revise earlier choices.  The
+prototype searches for and certifies a successful history; the unresolved
+mathematical task is to make that retrospective restoration canonical, or to
+prove that this deterministic DFS always finds a branch.  Testing higher
+degrees alone cannot settle that point.
+
+Verification with `CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```text
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection
+# 33 passed, 2 stress tests ignored
+
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection \
+  intrinsic_assaf_package_and_theta_rectify_k6 -- --ignored
+# passed
+
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection \
+  intrinsic_assaf_staged_theta_rectifies_rank_seven_example -- --ignored
+# passed
+
+cargo clippy --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection -- -D warnings \
+  -A clippy::manual_is_multiple_of
+git diff --check
+# passed
+```
+
+The Clippy allowance is only for the unrelated unowned baseline lint in
+`experiments/src/principal_stratum.rs:483`.
+
+Implementation checkpoint: `e4ce355` (`Certify Assaf crystal induction
+frontiers`).
+
 ## Completed: remove the artificial degree cutoff — 2026-10-16
+
+This checkpoint describes the former all-local-then-theta scheduler.  It is
+retained as history but superseded by the 2026-10-18 certified-frontier
+scheduler above; in particular, the selected rank-eight run was not a frontier
+certificate.
 
 The previous rank-six restriction was computational, not mathematical.  The
 prototype now attempts the same certificate-producing rule at every rank and
@@ -145,6 +221,11 @@ git diff --check
 ```
 
 ## Completed: intrinsic dual-equivalence crystal through rank five — 2026-10-16
+
+This checkpoint used the now-removed rank-five `psi` shortcut.  Its reported
+eleven-vertex `theta` obstruction and eight rank-five theta splits are
+superseded: the uniform published `psi_i` rule clears those components without
+theta while satisfying every frontier certificate.
 
 The actual `FundamentalSchurBridge` no longer uses the component-local
 maximum-agreement tableau assignment described in the historical section
