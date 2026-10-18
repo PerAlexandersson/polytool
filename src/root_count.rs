@@ -257,7 +257,11 @@ fn strip_initial_zeros_bigint(coeffs: &[BigInt]) -> &[BigInt] {
     }
 }
 
-fn squarefree_part_bigint(coeffs: &[BigInt]) -> Vec<BigInt> {
+/// Return the primitive, positive-leading square-free part.
+///
+/// This crate-private entry point is shared by the public square-free API and
+/// the root-counting backends so they use the same fraction-free integer GCD.
+pub(crate) fn squarefree_part_primitive_bigint_coeffs(coeffs: &[BigInt]) -> Vec<BigInt> {
     let p = primitive_positive(trim_slice(coeffs));
     if degree(&p).unwrap_or(0) == 0 {
         return p;
@@ -297,7 +301,7 @@ fn sturm_chain_from_squarefree(p0: Vec<BigInt>) -> Vec<Vec<BigInt>> {
 }
 
 fn sturm_chain_squarefree(coeffs: &[BigInt]) -> Vec<Vec<BigInt>> {
-    sturm_chain_from_squarefree(squarefree_part_bigint(coeffs))
+    sturm_chain_from_squarefree(squarefree_part_primitive_bigint_coeffs(coeffs))
 }
 
 fn signed_remainder_sequence(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
@@ -324,6 +328,28 @@ fn signed_remainder_sequence(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
         chain.push(next);
     }
     chain
+}
+
+/// Build the signed PRS of `p` and `p'` and recover the square-free degree
+/// from its final nonzero member, which is the gcd up to a nonzero scalar.
+///
+/// Sturm variations are unchanged when the common gcd is divided out of every
+/// member.  Consequently this one sequence both counts the distinct roots of
+/// `p` and supplies `deg(p / gcd(p, p'))`, without first constructing the
+/// square-free quotient and starting a second Euclidean pass.
+fn derivative_sturm_chain(coeffs: &[BigInt]) -> (Vec<Vec<BigInt>>, usize) {
+    let p = primitive_positive(trim_slice(coeffs));
+    let Some(p_degree) = degree(&p) else {
+        return (Vec::new(), 0);
+    };
+    if p_degree == 0 {
+        return (vec![p], 0);
+    }
+
+    let derivative = poly_derivative(&p);
+    let chain = signed_remainder_sequence(&p, &derivative);
+    let gcd_degree = chain.last().and_then(|last| degree(last)).unwrap_or(0);
+    (chain, p_degree.saturating_sub(gcd_degree))
 }
 
 fn sign_at_pos_infinity(p: &[BigInt]) -> i8 {
@@ -639,15 +665,15 @@ fn count_positive_roots_uspensky_squarefree(coeffs: &[BigInt]) -> usize {
 ///
 /// The zero polynomial and nonzero constants both return `0`.
 pub fn squarefree_degree_bigint_coeffs(coeffs: &[BigInt]) -> usize {
-    degree(&squarefree_part_bigint(coeffs)).unwrap_or(0)
+    derivative_sturm_chain(coeffs).1
 }
 
 /// Count distinct real roots using a primitive pseudo-remainder Sturm sequence.
 ///
-/// The input may have repeated roots; internally we replace it by its
-/// square-free part before counting.
+/// The input may have repeated roots. The signed PRS of `p` and `p'` ends in
+/// their gcd; its endpoint variations count the distinct roots directly.
 pub fn count_real_roots_prs_bigint_coeffs(coeffs: &[BigInt]) -> usize {
-    let chain = sturm_chain_squarefree(coeffs);
+    let (chain, _) = derivative_sturm_chain(coeffs);
     if chain.is_empty() {
         return 0;
     }
@@ -658,7 +684,7 @@ pub fn count_real_roots_prs_bigint_coeffs(coeffs: &[BigInt]) -> usize {
 ///
 /// The count is over the open interval `(0, +infinity)`.
 pub fn count_positive_roots_prs_bigint_coeffs(coeffs: &[BigInt]) -> usize {
-    let chain = sturm_chain_squarefree(coeffs);
+    let (chain, _) = derivative_sturm_chain(coeffs);
     count_positive_roots_from_sturm_chain(&chain)
 }
 
@@ -675,14 +701,14 @@ fn count_positive_roots_from_sturm_chain(chain: &[Vec<BigInt>]) -> usize {
 /// only integer arithmetic: no finite fields, floating point, or approximate
 /// roots are involved.
 pub fn count_positive_roots_uspensky_bigint_coeffs(coeffs: &[BigInt]) -> usize {
-    let squarefree = squarefree_part_bigint(coeffs);
+    let squarefree = squarefree_part_primitive_bigint_coeffs(coeffs);
     let without_zero = strip_initial_zeros_bigint(&squarefree);
     count_positive_roots_uspensky_squarefree(without_zero)
 }
 
 /// Count distinct real roots by exact Uspensky/Descartes subdivision.
 pub fn count_real_roots_uspensky_bigint_coeffs(coeffs: &[BigInt]) -> usize {
-    let squarefree = squarefree_part_bigint(coeffs);
+    let squarefree = squarefree_part_primitive_bigint_coeffs(coeffs);
     let zero_root = usize::from(squarefree.first().is_some_and(BigInt::is_zero));
     let without_zero = strip_initial_zeros_bigint(&squarefree);
     if degree(without_zero).unwrap_or(0) == 0 {
@@ -702,7 +728,7 @@ pub fn count_real_roots_uspensky_bigint_coeffs(coeffs: &[BigInt]) -> usize {
 /// implementation uses the signed pseudo-remainder sequence of
 /// `P` and `P' * query`, so it avoids isolating roots.
 pub fn tarski_query_prs_bigint_coeffs(root_poly: &[BigInt], query: &[BigInt]) -> isize {
-    let p = squarefree_part_bigint(root_poly);
+    let p = squarefree_part_primitive_bigint_coeffs(root_poly);
     if p.is_empty() || degree(&p).unwrap_or(0) == 0 || trim_slice(query).is_empty() {
         return 0;
     }
@@ -823,21 +849,17 @@ pub fn satisfies_kurtz_condition_bigint(coeffs: &[BigInt]) -> bool {
 /// one-signed combinatorial polynomials.  It is often useful as a fallback when
 /// Bézout matrices become large.
 pub fn is_real_rooted_prs_bigint_coeffs(coeffs: &[BigInt]) -> bool {
-    let squarefree = squarefree_part_bigint(coeffs);
-    let d = match degree(&squarefree) {
-        Some(d) => d,
-        None => return true,
-    };
-    if d <= 1 {
+    let (chain, squarefree_degree) = derivative_sturm_chain(coeffs);
+    if squarefree_degree <= 1 {
         return true;
     }
-    let chain = sturm_chain_from_squarefree(squarefree);
-    variations_at_neg_infinity(&chain).saturating_sub(variations_at_pos_infinity(&chain)) == d
+    variations_at_neg_infinity(&chain).saturating_sub(variations_at_pos_infinity(&chain))
+        == squarefree_degree
 }
 
 /// Exact real-rootedness via Uspensky's method and Descartes' rule of signs.
 pub fn is_real_rooted_uspensky_bigint_coeffs(coeffs: &[BigInt]) -> bool {
-    let squarefree = squarefree_part_bigint(coeffs);
+    let squarefree = squarefree_part_primitive_bigint_coeffs(coeffs);
     let squarefree_degree = degree(&squarefree).unwrap_or(0);
     let zero_root = usize::from(squarefree.first().is_some_and(BigInt::is_zero));
     let without_zero = strip_initial_zeros_bigint(&squarefree);
@@ -907,16 +929,23 @@ pub fn is_real_rooted_one_signed_bigint_coeffs(coeffs: &[BigInt]) -> Option<bool
     }
 
     let use_uspensky = prefers_uspensky_for_one_signed(&p);
-    let squarefree = squarefree_part_bigint(&p);
-    let sf_degree = degree(&squarefree).unwrap_or(0);
-    let transformed = alternating_neg_argument(&squarefree);
-    let positive_roots = if use_uspensky {
-        count_positive_roots_uspensky_squarefree(&transformed)
+    let (positive_roots, squarefree_degree) = if use_uspensky {
+        let squarefree = squarefree_part_primitive_bigint_coeffs(&p);
+        let squarefree_degree = degree(&squarefree).unwrap_or(0);
+        let transformed = alternating_neg_argument(&squarefree);
+        (
+            count_positive_roots_uspensky_squarefree(&transformed),
+            squarefree_degree,
+        )
     } else {
-        let chain = sturm_chain_from_squarefree(transformed);
-        count_positive_roots_from_sturm_chain(&chain)
+        let transformed = alternating_neg_argument(&p);
+        let (chain, squarefree_degree) = derivative_sturm_chain(&transformed);
+        (
+            count_positive_roots_from_sturm_chain(&chain),
+            squarefree_degree,
+        )
     };
-    Some(positive_roots == sf_degree)
+    Some(positive_roots == squarefree_degree)
 }
 
 /// Exact real-rootedness with an adaptive one-signed path and PRS fallback.
@@ -1120,6 +1149,41 @@ mod tests {
         assert!(is_real_rooted_prs_bigint_coeffs(&b(&[-6, 11, -6, 1])));
         assert!(!is_real_rooted_prs_bigint_coeffs(&b(&[1, 0, 1])));
         assert!(is_real_rooted_prs_bigint_coeffs(&b(&[0, 0, 1, 2, 1]))); // x^2(1+x)^2
+    }
+
+    #[test]
+    fn test_derivative_prs_reuses_gcd_chain_on_small_grid() {
+        for degree in 0usize..=4 {
+            let total = 5usize.pow((degree + 1) as u32);
+            for mut mask in 0..total {
+                let mut coeffs = Vec::with_capacity(degree + 1);
+                for _ in 0..=degree {
+                    coeffs.push(BigInt::from((mask % 5) as i64 - 2));
+                    mask /= 5;
+                }
+
+                let (direct, direct_squarefree_degree) = derivative_sturm_chain(&coeffs);
+                let squarefree = squarefree_part_primitive_bigint_coeffs(&coeffs);
+                let reference_squarefree_degree = super::degree(&squarefree).unwrap_or(0);
+                let reference = sturm_chain_from_squarefree(squarefree);
+
+                assert_eq!(direct_squarefree_degree, reference_squarefree_degree);
+                assert_eq!(
+                    variations_at_neg_infinity(&direct)
+                        .saturating_sub(variations_at_pos_infinity(&direct)),
+                    variations_at_neg_infinity(&reference)
+                        .saturating_sub(variations_at_pos_infinity(&reference)),
+                    "coeffs={coeffs:?}"
+                );
+                assert_eq!(
+                    variations_at_zero_plus(&direct)
+                        .saturating_sub(variations_at_pos_infinity(&direct)),
+                    variations_at_zero_plus(&reference)
+                        .saturating_sub(variations_at_pos_infinity(&reference)),
+                    "coeffs={coeffs:?}"
+                );
+            }
+        }
     }
 
     #[test]
