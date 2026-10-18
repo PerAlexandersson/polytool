@@ -1,5 +1,29 @@
 # Handoff
 
+## Completed: compiled low-degree real-rootedness paths — 2026-10-18
+
+Host `/root` completed and releases `polytool/src/root_count.rs`,
+`polytool/README.md`, and this handoff. Degrees at most four now use direct
+exact discriminant and quartic-invariant sign tests, including all
+zero-discriminant/repeated-root strata, without a PRS or square-free quotient.
+For degrees two through seven, explicit PRS/count APIs use an unreduced signed
+pseudo-remainder chain: at these short lengths, omitting coefficient-content
+GCDs wins. Primitive content normalization resumes at degree eight.
+
+The direct formulas agree with primitive PRS on all 19,607 coefficient vectors
+in `[-3,3]` through degree four and on 4,096 deterministic quartics with
+coefficients up to one million. The unreduced chain agrees with primitive PRS
+on 1,560 dense and repeated-root cases of degrees five through seven. On 727
+bundled OEIS rows of degrees two through four, the direct default totals are
+3.50x faster than the newly improved explicit PRS control (11.67x for
+quadratics, 5.28x for cubics, 3.32x for quartics). A separate 256-row-per-degree
+OEIS crossover benchmark measured unreduced/primitive ratios 0.666, 0.662,
+0.752, 1.118, and 3.059 at degrees 5 through 9, justifying the conservative
+cutoff before degree eight. No CRT policy changed. Final checks pass: 362
+library tests, 22 BigInt CLI tests, 9 OEIS CLI tests, 6 version/budget tests,
+5 interlacing API tests, 4 recurrence fixture tests, and 5 doctests, together
+with strict Rustdoc, standalone metadata, workspace rustfmt, and diff checks.
+
 ## Completed: primitive square-free and one-pass derivative PRS — 2026-10-18
 
 Host `/root` completed and releases `polytool/src/root_count.rs`,
