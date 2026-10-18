@@ -1050,6 +1050,12 @@ Degree five omits content normalization because its short chain does not repay
 the scaling bookkeeping. From degree six onward, a signed Collins--Brown
 subresultant PRS divides out predictable exact factors, avoiding both
 coefficient swell and a coefficient-content GCD after every pseudo-division.
+The root-counting path streams this sequence through two active polynomials
+and one reusable pseudo-remainder buffer. It records only the requested Sturm
+endpoint variations and the final gcd degree rather than retaining the full
+chain. Pseudo-division also moves out the leading coefficient and skips the
+large-integer multiply/subtract pair that would cancel it exactly.
+
 For one-signed coefficient polynomials, the backend first tries cheap
 coefficient filters and then counts positive roots of `f(-t)`, since such
 polynomials can only have non-positive real roots. Subresultant PRS is the

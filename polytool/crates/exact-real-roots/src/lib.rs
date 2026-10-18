@@ -140,13 +140,31 @@ fn poly_mul(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
 /// positive, this returns `lc(b_pos)^k * rem(a, b_pos)` for a nonnegative `k`.
 /// The scalar is positive, so it does not change Sturm sign variations.
 fn pseudo_remainder_positive_multiplier(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
+    let mut output = Vec::new();
+    pseudo_remainder_positive_multiplier_into(&mut output, a, b);
+    output
+}
+
+/// In-place-buffer variant of [`pseudo_remainder_positive_multiplier`].
+///
+/// Existing coefficient slots are updated with `clone_from`, allowing their
+/// limb allocations to be reused by a streaming remainder sequence.
+fn pseudo_remainder_positive_multiplier_into(output: &mut Vec<BigInt>, a: &[BigInt], b: &[BigInt]) {
     let da = match degree(a) {
         Some(d) => d,
-        None => return vec![],
+        None => {
+            output.clear();
+            return;
+        }
     };
     let db = degree(b).expect("pseudo_remainder: division by zero polynomial");
     if da < db {
-        return trim_slice(a);
+        output.resize_with(a.len(), BigInt::zero);
+        for (target, source) in output.iter_mut().zip(a) {
+            target.clone_from(source);
+        }
+        output.truncate(da + 1);
+        return;
     }
 
     let b = &b[..=db];
@@ -154,38 +172,46 @@ fn pseudo_remainder_positive_multiplier(a: &[BigInt], b: &[BigInt]) -> Vec<BigIn
     let lc = b[db].abs();
     debug_assert!(lc.is_positive());
 
-    let mut r = trim_slice(a);
+    output.resize_with(da + 1, BigInt::zero);
+    for (target, source) in output.iter_mut().zip(&a[..=da]) {
+        target.clone_from(source);
+    }
+    output.truncate(da + 1);
+
     let mut e = da - db + 1;
-    while let Some(dr) = degree(&r) {
+    while let Some(dr) = degree(output) {
         if dr < db {
             break;
         }
-        let c = leading(&r);
+        // The leading term cancels exactly in
+        // `lc(b) * output - lc(output) * b`. Move its coefficient out rather
+        // than cloning it, and leave that slot zero instead of performing the
+        // two large-integer operations whose results would cancel.
+        let c = std::mem::take(&mut output[dr]);
         let shift = dr - db;
-        for coefficient in &mut r {
+        for coefficient in &mut output[..dr] {
             *coefficient *= &lc;
         }
-        for (j, coefficient) in b.iter().enumerate() {
+        for (j, coefficient) in b[..db].iter().enumerate() {
             if !coefficient.is_zero() {
                 if divisor_is_negative {
-                    r[j + shift] += &c * coefficient;
+                    output[j + shift] += &c * coefficient;
                 } else {
-                    r[j + shift] -= &c * coefficient;
+                    output[j + shift] -= &c * coefficient;
                 }
             }
         }
-        while r.last().is_some_and(BigInt::is_zero) {
-            r.pop();
+        while output.last().is_some_and(BigInt::is_zero) {
+            output.pop();
         }
         e -= 1;
     }
-    if e > 0 && !r.is_empty() {
+    if e > 0 && !output.is_empty() {
         let remaining_scale = lc.pow(e as u32);
-        for coefficient in &mut r {
+        for coefficient in output.iter_mut() {
             *coefficient *= &remaining_scale;
         }
     }
-    r
 }
 
 fn primitive_gcd(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
@@ -323,6 +349,7 @@ fn signed_remainder_sequence(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
 ///
 /// This avoids coefficient GCDs at small fixed degrees, where the chain is
 /// short enough that coefficient swell costs less than repeated normalization.
+#[cfg(test)]
 fn signed_remainder_sequence_unreduced(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
     // The derivative driver already supplies a primitive, positive-leading
     // first member. Avoid repeating its coefficient-content GCD here.
@@ -355,6 +382,7 @@ fn signed_remainder_sequence_unreduced(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<Bi
 /// cheaper than computing the full coefficient content at every step. We use
 /// its positive absolute value and negate the remainder, preserving the
 /// Sturm sign convention.
+#[cfg(test)]
 fn signed_remainder_sequence_subresultant(a: &[BigInt], b: &[BigInt]) -> Vec<Vec<BigInt>> {
     // The derivative driver already supplies a primitive, positive-leading
     // first member. Avoid repeating its coefficient-content GCD here.
@@ -416,6 +444,7 @@ fn signed_remainder_sequence_subresultant(a: &[BigInt], b: &[BigInt]) -> Vec<Vec
 /// member.  Consequently this one sequence both counts the distinct roots of
 /// `p` and supplies `deg(p / gcd(p, p'))`, without first constructing the
 /// square-free quotient and starting a second Euclidean pass.
+#[cfg(test)]
 fn derivative_sturm_chain(coeffs: &[BigInt]) -> (Vec<Vec<BigInt>>, usize) {
     let p = primitive_positive(trim_slice(coeffs));
     let Some(p_degree) = degree(&p) else {
@@ -491,8 +520,163 @@ fn variations_at_pos_infinity(chain: &[Vec<BigInt>]) -> usize {
     sign_variations(chain.iter().map(|p| sign_at_pos_infinity(p)))
 }
 
+#[cfg(test)]
 fn variations_at_zero_plus(chain: &[Vec<BigInt>]) -> usize {
     sign_variations(chain.iter().map(|p| sign_at_zero_plus(p)))
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct RunningVariations {
+    previous: i8,
+    changes: usize,
+}
+
+impl RunningVariations {
+    fn push(&mut self, sign: i8) {
+        if sign == 0 {
+            return;
+        }
+        if self.previous != 0 && self.previous != sign {
+            self.changes += 1;
+        }
+        self.previous = sign;
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct DerivativeSturmSummary {
+    real_roots: usize,
+    positive_roots: usize,
+    squarefree_degree: usize,
+}
+
+fn observe_sturm_member(
+    polynomial: &[BigInt],
+    count_real_roots: bool,
+    count_positive_roots: bool,
+    negative_infinity: &mut RunningVariations,
+    positive_infinity: &mut RunningVariations,
+    zero_plus: &mut RunningVariations,
+) {
+    if count_real_roots {
+        negative_infinity.push(sign_at_neg_infinity(polynomial));
+    }
+    if count_real_roots || count_positive_roots {
+        positive_infinity.push(sign_at_pos_infinity(polynomial));
+    }
+    if count_positive_roots {
+        zero_plus.push(sign_at_zero_plus(polynomial));
+    }
+}
+
+fn negate_in_place(polynomial: &mut [BigInt]) {
+    for coefficient in polynomial {
+        *coefficient = -std::mem::take(coefficient);
+    }
+}
+
+/// Stream the signed PRS of `p` and `p'` into the endpoint data Sturm needs.
+///
+/// Only two consecutive sequence members and one reusable remainder buffer are
+/// retained. The buffer becomes the polynomial from two steps earlier after
+/// each rotation, so both its coefficient vector and its `BigInt` limb storage
+/// can be reused by the next pseudo-division.
+fn derivative_sturm_summary(
+    coeffs: &[BigInt],
+    count_real_roots: bool,
+    count_positive_roots: bool,
+) -> DerivativeSturmSummary {
+    let mut previous = primitive_positive(trim_slice(coeffs));
+    let Some(polynomial_degree) = degree(&previous) else {
+        return DerivativeSturmSummary::default();
+    };
+    if polynomial_degree == 0 {
+        return DerivativeSturmSummary::default();
+    }
+
+    let use_subresultant_scaling = polynomial_degree >= 6;
+    let derivative = poly_derivative(&previous);
+    let mut current = if use_subresultant_scaling {
+        primitive_keep_sign(derivative)
+    } else {
+        derivative
+    };
+    debug_assert!(!current.is_empty());
+
+    let mut negative_infinity = RunningVariations::default();
+    let mut positive_infinity = RunningVariations::default();
+    let mut zero_plus = RunningVariations::default();
+    observe_sturm_member(
+        &previous,
+        count_real_roots,
+        count_positive_roots,
+        &mut negative_infinity,
+        &mut positive_infinity,
+        &mut zero_plus,
+    );
+    observe_sturm_member(
+        &current,
+        count_real_roots,
+        count_positive_roots,
+        &mut negative_infinity,
+        &mut positive_infinity,
+        &mut zero_plus,
+    );
+
+    let mut scratch = Vec::new();
+    let mut g = BigInt::one();
+    let mut h = BigInt::one();
+
+    loop {
+        let previous_degree = degree(&previous).expect("nonzero PRS member");
+        let current_degree = degree(&current).expect("nonzero PRS member");
+        let delta = previous_degree - current_degree;
+        pseudo_remainder_positive_multiplier_into(&mut scratch, &previous, &current);
+        if scratch.is_empty() {
+            break;
+        }
+
+        if use_subresultant_scaling {
+            let divisor = &g * h.pow(delta as u32);
+            debug_assert!(divisor.is_positive());
+            for coefficient in &mut scratch {
+                debug_assert!((&*coefficient % &divisor).is_zero());
+                *coefficient /= &divisor;
+            }
+
+            g = leading(&current).abs();
+            h = if delta == 1 {
+                g.clone()
+            } else {
+                let numerator = g.pow(delta as u32);
+                let denominator = h.pow((delta - 1) as u32);
+                debug_assert!((&numerator % &denominator).is_zero());
+                numerator / denominator
+            };
+            debug_assert!(h.is_positive());
+        }
+        negate_in_place(&mut scratch);
+
+        observe_sturm_member(
+            &scratch,
+            count_real_roots,
+            count_positive_roots,
+            &mut negative_infinity,
+            &mut positive_infinity,
+            &mut zero_plus,
+        );
+        std::mem::swap(&mut previous, &mut current);
+        std::mem::swap(&mut current, &mut scratch);
+    }
+
+    let gcd_degree = degree(&current).unwrap_or(0);
+    DerivativeSturmSummary {
+        real_roots: negative_infinity
+            .changes
+            .saturating_sub(positive_infinity.changes),
+        positive_roots: zero_plus.changes.saturating_sub(positive_infinity.changes),
+        squarefree_degree: polynomial_degree.saturating_sub(gcd_degree),
+    }
 }
 
 fn alternating_neg_argument(coeffs: &[BigInt]) -> Vec<BigInt> {
@@ -825,7 +1009,7 @@ fn count_positive_roots_uspensky_squarefree(coeffs: &[BigInt]) -> usize {
 ///
 /// The zero polynomial and nonzero constants both return `0`.
 pub fn squarefree_degree_bigint_coeffs(coeffs: &[BigInt]) -> usize {
-    derivative_sturm_chain(coeffs).1
+    derivative_sturm_summary(coeffs, false, false).squarefree_degree
 }
 
 /// Count distinct real roots using a signed pseudo-remainder Sturm sequence.
@@ -833,21 +1017,17 @@ pub fn squarefree_degree_bigint_coeffs(coeffs: &[BigInt]) -> usize {
 /// The input may have repeated roots. The signed PRS of `p` and `p'` ends in
 /// their gcd; its endpoint variations count the distinct roots directly.
 pub fn count_real_roots_prs_bigint_coeffs(coeffs: &[BigInt]) -> usize {
-    let (chain, _) = derivative_sturm_chain(coeffs);
-    if chain.is_empty() {
-        return 0;
-    }
-    variations_at_neg_infinity(&chain).saturating_sub(variations_at_pos_infinity(&chain))
+    derivative_sturm_summary(coeffs, true, false).real_roots
 }
 
 /// Count distinct positive roots using a signed pseudo-remainder Sturm sequence.
 ///
 /// The count is over the open interval `(0, +infinity)`.
 pub fn count_positive_roots_prs_bigint_coeffs(coeffs: &[BigInt]) -> usize {
-    let (chain, _) = derivative_sturm_chain(coeffs);
-    count_positive_roots_from_sturm_chain(&chain)
+    derivative_sturm_summary(coeffs, false, true).positive_roots
 }
 
+#[cfg(test)]
 fn count_positive_roots_from_sturm_chain(chain: &[Vec<BigInt>]) -> usize {
     if chain.is_empty() {
         return 0;
@@ -1009,12 +1189,11 @@ pub fn satisfies_kurtz_condition_bigint(coeffs: &[BigInt]) -> bool {
 /// one-signed combinatorial polynomials.  It is often useful as a fallback when
 /// Bézout matrices become large.
 pub fn is_real_rooted_prs_bigint_coeffs(coeffs: &[BigInt]) -> bool {
-    let (chain, squarefree_degree) = derivative_sturm_chain(coeffs);
-    if squarefree_degree <= 1 {
+    let summary = derivative_sturm_summary(coeffs, true, false);
+    if summary.squarefree_degree <= 1 {
         return true;
     }
-    variations_at_neg_infinity(&chain).saturating_sub(variations_at_pos_infinity(&chain))
-        == squarefree_degree
+    summary.real_roots == summary.squarefree_degree
 }
 
 /// Exact real-rootedness via Uspensky's method and Descartes' rule of signs.
@@ -1102,11 +1281,8 @@ pub fn is_real_rooted_one_signed_bigint_coeffs(coeffs: &[BigInt]) -> Option<bool
         )
     } else {
         let transformed = alternating_neg_argument(&p);
-        let (chain, squarefree_degree) = derivative_sturm_chain(&transformed);
-        (
-            count_positive_roots_from_sturm_chain(&chain),
-            squarefree_degree,
-        )
+        let summary = derivative_sturm_summary(&transformed, false, true);
+        (summary.positive_roots, summary.squarefree_degree)
     };
     Some(positive_roots == squarefree_degree)
 }
@@ -1439,11 +1615,13 @@ mod tests {
                 }
 
                 let (direct, direct_squarefree_degree) = derivative_sturm_chain(&coeffs);
+                let summary = derivative_sturm_summary(&coeffs, true, true);
                 let squarefree = squarefree_part_primitive_bigint_coeffs(&coeffs);
                 let reference_squarefree_degree = super::degree(&squarefree).unwrap_or(0);
                 let reference = sturm_chain_from_squarefree(squarefree);
 
                 assert_eq!(direct_squarefree_degree, reference_squarefree_degree);
+                assert_eq!(summary.squarefree_degree, reference_squarefree_degree);
                 assert_eq!(
                     variations_at_neg_infinity(&direct)
                         .saturating_sub(variations_at_pos_infinity(&direct)),
@@ -1452,8 +1630,20 @@ mod tests {
                     "coeffs={coeffs:?}"
                 );
                 assert_eq!(
+                    summary.real_roots,
+                    variations_at_neg_infinity(&reference)
+                        .saturating_sub(variations_at_pos_infinity(&reference)),
+                    "coeffs={coeffs:?}"
+                );
+                assert_eq!(
                     variations_at_zero_plus(&direct)
                         .saturating_sub(variations_at_pos_infinity(&direct)),
+                    variations_at_zero_plus(&reference)
+                        .saturating_sub(variations_at_pos_infinity(&reference)),
+                    "coeffs={coeffs:?}"
+                );
+                assert_eq!(
+                    summary.positive_roots,
                     variations_at_zero_plus(&reference)
                         .saturating_sub(variations_at_pos_infinity(&reference)),
                     "coeffs={coeffs:?}"
@@ -1506,12 +1696,26 @@ mod tests {
                     .unwrap_or(0);
                 let primitive_squarefree_degree = d - primitive_gcd_degree;
                 let (adaptive_chain, adaptive_squarefree_degree) = derivative_sturm_chain(&p);
+                let summary = derivative_sturm_summary(&p, true, true);
 
                 assert_eq!(adaptive_squarefree_degree, primitive_squarefree_degree);
+                assert_eq!(summary.squarefree_degree, primitive_squarefree_degree);
                 assert_eq!(
                     variations_at_neg_infinity(&adaptive_chain)
                         .saturating_sub(variations_at_pos_infinity(&adaptive_chain)),
                     variations_at_neg_infinity(&primitive_chain)
+                        .saturating_sub(variations_at_pos_infinity(&primitive_chain)),
+                    "degree={d}, coeffs={p:?}"
+                );
+                assert_eq!(
+                    summary.real_roots,
+                    variations_at_neg_infinity(&primitive_chain)
+                        .saturating_sub(variations_at_pos_infinity(&primitive_chain)),
+                    "degree={d}, coeffs={p:?}"
+                );
+                assert_eq!(
+                    summary.positive_roots,
+                    variations_at_zero_plus(&primitive_chain)
                         .saturating_sub(variations_at_pos_infinity(&primitive_chain)),
                     "degree={d}, coeffs={p:?}"
                 );

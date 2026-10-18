@@ -9,7 +9,9 @@ the distinct roots of the square-free part. The implementation combines exact
 low-degree formulas, a signed Collins--Brown subresultant pseudo-remainder
 sequence, and an independent Uspensky/Descartes path. The subresultant path
 divides out predictable exact factors instead of computing a coefficient GCD
-after every pseudo-division.
+after every pseudo-division. Root-counting calls stream the sequence through
+two active polynomials and one reusable scratch buffer; they retain only the
+endpoint sign variations and final gcd degree needed by Sturm's theorem.
 
 ```rust
 use exact_real_roots::{

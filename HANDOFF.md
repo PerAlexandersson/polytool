@@ -1,5 +1,29 @@
 # Handoff
 
+## Completed: streaming exact root counts — 2026-10-18
+
+Host `/root` replaced the production full PRS vector with a two-polynomial
+streaming sequence and one reusable pseudo-remainder buffer. Root-counting
+calls retain only the requested running endpoint sign variations and final gcd
+degree. Pseudo-division now moves out the leading coefficient and omits the
+large-integer multiply/subtract pair whose leading terms cancel exactly. The
+full-chain implementations remain test-only differential oracles.
+
+On the identical 64-polynomial-per-degree corpus, this is 1.52x faster at
+degree 5, 1.39x at degree 7, 1.36x at degree 8, 1.26x at degree 10, 1.08x at
+degree 20, 1.10x at degrees 40 and 60, 1.07x at degree 80, and 1.05x at degree
+100 versus the preceding subresultant implementation. A degree-100 product of
+100 distinct integer linear factors improves by about 1.05x on PRS. Explicit
+Uspensky is about 2x faster on that known all-real input, but a proposed broad
+automatic dispatch regressed non-real one-signed degree-80--100 corpus members
+by 4--5x and was removed; the conservative default selector is unchanged.
+
+Verification passes for 24 engine tests, all 339 Polytool library tests, 22
+BigInt CLI tests, 9 OEIS CLI tests, 6 version/budget tests, 5 interlacing API
+tests, both two-test recurrence integration suites, and 5 doctests. Strict
+Rustdoc, root and standalone metadata, exact-real-roots packaging, rustfmt, and
+diff checks pass. Ownership is released.
+
 ## Completed: adaptive subresultant PRS — 2026-10-18
 
 Host `/root` implemented the classical Collins--Brown/Cohen subresultant
