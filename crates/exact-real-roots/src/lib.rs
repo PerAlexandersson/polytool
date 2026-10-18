@@ -1540,6 +1540,27 @@ mod tests {
     }
 
     #[test]
+    fn test_a046741_degree_eight_cross_checks_exact_paths() {
+        let polynomial = b(&[1, 22, 191, 838, 1982, 2504, 1577, 424, 34]);
+        let prs_count = count_real_roots_prs_bigint_coeffs(&polynomial);
+        let uspensky_count = count_real_roots_uspensky_bigint_coeffs(&polynomial);
+        let derivative = poly_derivative(&polynomial);
+        let primitive_chain = signed_remainder_sequence(&polynomial, &derivative);
+        let primitive_count = variations_at_neg_infinity(&primitive_chain)
+            .saturating_sub(variations_at_pos_infinity(&primitive_chain));
+
+        assert_eq!(prs_count, 8);
+        assert_eq!(uspensky_count, 8);
+        assert_eq!(primitive_count, 8);
+        assert!(satisfies_newton_inequalities_bigint(&polynomial));
+        assert_eq!(
+            is_real_rooted_one_signed_bigint_coeffs(&polynomial),
+            Some(true)
+        );
+        assert!(is_real_rooted_fast_bigint_coeffs(&polynomial));
+    }
+
+    #[test]
     fn test_count_positive_roots() {
         // (x-1)(x-2)(x+3) = 6 - 7x + x^3 has two positive roots.
         assert_eq!(

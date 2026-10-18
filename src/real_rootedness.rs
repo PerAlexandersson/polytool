@@ -1984,6 +1984,12 @@ mod tests {
     }
 
     #[test]
+    fn test_a046741_degree_eight_real_roots_regression() {
+        let polynomial = [1, 22, 191, 838, 1982, 2504, 1577, 424, 34];
+        assert_eq!(real_roots(&polynomial).map(|roots| roots.len()), Some(8));
+    }
+
+    #[test]
     fn test_interlacing_sturm() {
         // (t-2) ≪ (t-1)(t-3): roots 1 < 2 < 3
         assert_eq!(check_interlacing_sturm(&[-2, 1], &[3, -4, 1]), Some(true));
@@ -2022,6 +2028,13 @@ mod tests {
 
         // Not real-rooted: t+1 and t^2+1. Degree diff = 1 but B is not pos def.
         assert_eq!(check_interlacing(&[1, 1], &[1, 0, 1]), Some(false));
+    }
+
+    #[test]
+    fn test_a046741_degrees_seven_eight_interlacing_regression() {
+        let degree_seven = [1, 19, 137, 473, 815, 667, 223, 21];
+        let degree_eight = [1, 22, 191, 838, 1982, 2504, 1577, 424, 34];
+        assert_eq!(check_interlacing(&degree_seven, &degree_eight), Some(true));
     }
 
     #[test]
