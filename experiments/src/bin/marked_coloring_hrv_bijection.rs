@@ -155,6 +155,10 @@ struct Args {
     #[arg(long)]
     fundamental_crystal_report: bool,
 
+    /// Audit three-color lifts and exact bounded-support crystal obstructions.
+    #[arg(long)]
+    triple_crystal_report: bool,
+
     /// Run Assaf's phi/psi package phase, including nontrivial packages above rank five.
     #[arg(long)]
     assaf_package_report: bool,
@@ -294,6 +298,59 @@ impl PathData {
             ));
         }
         Ok(())
+    }
+
+    fn induced_on(&self, vertices: &[usize]) -> Result<Self, String> {
+        let local = vertices
+            .iter()
+            .enumerate()
+            .map(|(index, &vertex)| (vertex, index))
+            .collect::<BTreeMap<_, _>>();
+        let restrict = |edges: &[(usize, usize)]| {
+            edges
+                .iter()
+                .filter_map(|&(tail, head)| Some((*local.get(&tail)?, *local.get(&head)?)))
+                .collect::<Vec<_>>()
+        };
+        let normal_edges = restrict(&self.normal_edges);
+        let strict_edges = restrict(&self.strict_edges);
+        let mut steps = Vec::new();
+        let mut height = 0usize;
+        for tail in 0..vertices.len() {
+            let normal_heads = normal_edges
+                .iter()
+                .filter_map(|&(edge_tail, head)| (edge_tail == tail).then_some(head))
+                .collect::<Vec<_>>();
+            let target_height = tail + 1 + normal_heads.len();
+            if normal_heads != (tail + 1..target_height).collect::<Vec<_>>()
+                || height > target_height
+            {
+                return Err("induced LLT edges do not form an ordered unit-interval path".into());
+            }
+            steps.extend(std::iter::repeat_n(Step::North, target_height - height));
+            height = target_height;
+            let strict_heads = strict_edges
+                .iter()
+                .filter_map(|&(edge_tail, head)| (edge_tail == tail).then_some(head))
+                .collect::<Vec<_>>();
+            match strict_heads.as_slice() {
+                [] => steps.push(Step::East),
+                [head] if *head == target_height => {
+                    steps.push(Step::Diagonal);
+                    height += 1;
+                }
+                _ => {
+                    return Err(
+                        "induced strict edges do not form a decorated unit-interval path".into(),
+                    );
+                }
+            }
+        }
+        let induced = Self::from_steps(steps)?;
+        if induced.normal_edges != normal_edges || induced.strict_edges != strict_edges {
+            return Err("reconstructed induced path changed its decorated edges".into());
+        }
+        Ok(induced)
     }
 }
 
@@ -11030,6 +11087,95 @@ fn print_crystal_locality_report(max_n: usize) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct ThreeColorCrystalContext {
+    raising: bool,
+    active_offset: u8,
+    normal_edges: Vec<(usize, usize)>,
+    strict_edges: Vec<(usize, usize)>,
+    colors: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ThreeColorLocalityAudit {
+    queries: usize,
+    defined_arrows: usize,
+    triple_supported: usize,
+    contextual_comparisons: usize,
+    contextual_matches: usize,
+    rules: BTreeMap<ThreeColorCrystalContext, (Option<Vec<u8>>, String)>,
+    first_support_failure: Option<String>,
+    first_context_failure: Option<String>,
+}
+
+impl ThreeColorLocalityAudit {
+    fn absorb(&mut self, other: Self) {
+        self.queries += other.queries;
+        self.defined_arrows += other.defined_arrows;
+        self.triple_supported += other.triple_supported;
+        self.contextual_comparisons += other.contextual_comparisons;
+        self.contextual_matches += other.contextual_matches;
+        if self.first_support_failure.is_none() {
+            self.first_support_failure = other.first_support_failure;
+        }
+        if self.first_context_failure.is_none() {
+            self.first_context_failure = other.first_context_failure;
+        }
+        for (context, (outcome, witness)) in other.rules {
+            if let Some((previous, previous_witness)) = self.rules.get(&context) {
+                self.contextual_comparisons += 1;
+                if previous == &outcome {
+                    self.contextual_matches += 1;
+                } else if self.first_context_failure.is_none() {
+                    self.first_context_failure = Some(format!(
+                        "same induced three-color context gave {previous:?} for {previous_witness}, but {outcome:?} for {witness}"
+                    ));
+                }
+            } else {
+                self.rules.insert(context, (outcome, witness));
+            }
+        }
+    }
+
+    fn observe(
+        &mut self,
+        context: ThreeColorCrystalContext,
+        outcome: Option<Vec<u8>>,
+        witness: String,
+    ) {
+        if let Some((previous, previous_witness)) = self.rules.get(&context) {
+            self.contextual_comparisons += 1;
+            if previous == &outcome {
+                self.contextual_matches += 1;
+            } else if self.first_context_failure.is_none() {
+                self.first_context_failure = Some(format!(
+                    "same induced three-color context gave {previous:?} for {previous_witness}, but {outcome:?} for {witness}"
+                ));
+            }
+        } else {
+            self.rules.insert(context, (outcome, witness));
+        }
+    }
+
+    fn print(&self) {
+        println!(
+            "  induced three-color locality: {}/{} defined arrows stay in their relevant triple; repeated ambient contexts agree {}/{} ({} canonical rules, {} total queries)",
+            self.triple_supported,
+            self.defined_arrows,
+            self.contextual_matches,
+            self.contextual_comparisons,
+            self.rules.len(),
+            self.queries
+        );
+        if let Some(failure) = &self.first_support_failure {
+            println!("  first three-color support failure: {failure}");
+        }
+        if let Some(failure) = &self.first_context_failure {
+            println!("  first three-color context failure: {failure}");
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct FundamentalSchurAudit {
     paths: usize,
@@ -11044,6 +11190,7 @@ struct FundamentalSchurAudit {
     crystal_inverse_checks: usize,
     crystal_degree_checks: usize,
     crystal_support_local: usize,
+    three_color_locality: ThreeColorLocalityAudit,
     first_mismatch: Option<String>,
     first_crystal_failure: Option<String>,
     first_support_failure: Option<String>,
@@ -11063,6 +11210,8 @@ impl FundamentalSchurAudit {
         self.crystal_inverse_checks += other.crystal_inverse_checks;
         self.crystal_degree_checks += other.crystal_degree_checks;
         self.crystal_support_local += other.crystal_support_local;
+        self.three_color_locality
+            .absorb(other.three_color_locality);
         if self.first_mismatch.is_none() {
             self.first_mismatch = other.first_mismatch;
         }
@@ -11105,6 +11254,7 @@ impl FundamentalSchurAudit {
         if let Some(failure) = &self.first_support_failure {
             println!("  first crystal support-locality failure: {failure}");
         }
+        self.three_color_locality.print();
     }
 }
 
@@ -11138,6 +11288,111 @@ struct FundamentalSsytTarget {
 struct FundamentalSchurBridge {
     forward: BTreeMap<Vec<u32>, FundamentalStandardTarget>,
     inverse: BTreeMap<FundamentalStandardTarget, Vec<u32>>,
+}
+
+#[derive(Clone, Debug)]
+struct SupportLocalCrystalSearch {
+    source_states: Vec<Vec<u8>>,
+    target_states: Vec<FundamentalSsytTarget>,
+    candidates: Vec<Vec<usize>>,
+    neighbors: Vec<Vec<(usize, u32)>>,
+    three_color_support: bool,
+    explored_nodes: usize,
+}
+
+impl SupportLocalCrystalSearch {
+    fn compatible(&self, left: &[u8], right: &[u8], index: u32) -> bool {
+        let lower = u8::try_from(index - 1).expect("finite crystal index fits u8");
+        let upper = lower + 1;
+        let (support_bottom, support_top) = if self.three_color_support {
+            if lower == 0 {
+                (0, 2)
+            } else {
+                (lower - 1, upper)
+            }
+        } else {
+            (lower, upper)
+        };
+        left.iter().zip(right).all(|(&left, &right)| {
+            left == right
+                || ((support_bottom <= left && left <= support_top)
+                    && (support_bottom <= right && right <= support_top))
+        })
+    }
+
+    fn candidate_is_consistent(
+        &self,
+        target: usize,
+        source: usize,
+        assignment: &[Option<usize>],
+    ) -> bool {
+        self.neighbors[target]
+            .iter()
+            .all(|&(neighbor, index)| {
+                assignment[neighbor].is_none_or(|neighbor_source| {
+                    self.compatible(
+                        &self.source_states[source],
+                        &self.source_states[neighbor_source],
+                        index,
+                    )
+                })
+            })
+    }
+
+    fn solve_from(
+        &mut self,
+        assignment: &mut [Option<usize>],
+        used: &mut [bool],
+    ) -> bool {
+        self.explored_nodes += 1;
+        let mut choice = None::<(usize, Vec<usize>)>;
+        for target in 0..assignment.len() {
+            if assignment[target].is_some() {
+                continue;
+            }
+            let available = self.candidates[target]
+                .iter()
+                .copied()
+                .filter(|&source| {
+                    !used[source]
+                        && self.candidate_is_consistent(target, source, assignment)
+                })
+                .collect::<Vec<_>>();
+            if available.is_empty() {
+                return false;
+            }
+            if choice
+                .as_ref()
+                .is_none_or(|(_, current)| available.len() < current.len())
+            {
+                choice = Some((target, available));
+            }
+        }
+        let Some((target, available)) = choice else {
+            return true;
+        };
+        for source in available {
+            assignment[target] = Some(source);
+            used[source] = true;
+            if self.solve_from(assignment, used) {
+                return true;
+            }
+            used[source] = false;
+            assignment[target] = None;
+        }
+        false
+    }
+
+    fn solve(&mut self) -> Option<Vec<usize>> {
+        let mut assignment = vec![None; self.target_states.len()];
+        let mut used = vec![false; self.source_states.len()];
+        self.solve_from(&mut assignment, &mut used).then(|| {
+            assignment
+                .into_iter()
+                .map(|source| source.expect("a solved assignment is total"))
+                .collect()
+        })
+    }
 }
 
 impl FundamentalSchurBridge {
@@ -11212,6 +11467,174 @@ impl FundamentalSchurBridge {
         }
         Ok(Self { forward, inverse })
     }
+}
+
+fn coloring_content_with_bound(coloring: &[u8], alphabet_size: u8) -> Vec<usize> {
+    let mut content = vec![0usize; usize::from(alphabet_size)];
+    for &color in coloring {
+        content[usize::from(color)] += 1;
+    }
+    content
+}
+
+fn tableau_content_with_bound(rows: &[Vec<u32>], alphabet_size: u8) -> Vec<usize> {
+    let mut content = vec![0usize; usize::from(alphabet_size)];
+    for &entry in rows.iter().flatten() {
+        content[entry as usize - 1] += 1;
+    }
+    content
+}
+
+fn support_local_crystal_search(
+    path: &PathData,
+    alphabet_size: u8,
+    degree: usize,
+    three_color_support: bool,
+) -> Result<SupportLocalCrystalSearch, String> {
+    let bridge = FundamentalSchurBridge::build(path)?;
+    let source_states = words_with_color_bound(path.n, alphabet_size)
+        .into_iter()
+        .filter(|word| {
+            increases_on_edges(word, &path.strict_edges)
+                && edge_ascent_mask(word, &path.normal_edges).count_ones() as usize == degree
+        })
+        .collect::<Vec<_>>();
+    let mut multiplicities = BTreeMap::<SchurKey, usize>::new();
+    for standard in bridge.forward.values() {
+        if standard.q_degree != degree {
+            continue;
+        }
+        let key = SchurKey {
+            q_degree: degree,
+            shape: standard.shape.clone(),
+        };
+        let copies = multiplicities.entry(key).or_default();
+        *copies = (*copies).max(standard.copy + 1);
+    }
+    let mut target_states = Vec::new();
+    for (key, multiplicity) in multiplicities {
+        let shape = Partition::from_sorted(key.shape.iter().map(|&part| part as u32).collect());
+        for tableau in Tableau::semistandard_tableaux(&shape, u32::from(alphabet_size)) {
+            for copy in 0..multiplicity {
+                target_states.push(FundamentalSsytTarget {
+                    q_degree: degree,
+                    shape: key.shape.clone(),
+                    copy,
+                    rows: tableau.rows().to_vec(),
+                });
+            }
+        }
+    }
+    target_states.sort();
+    if source_states.len() != target_states.len() {
+        return Err(format!(
+            "support-local search count mismatch at degree {degree}: {} colorings, {} tableaux",
+            source_states.len(),
+            target_states.len()
+        ));
+    }
+    let source_by_content = source_states
+        .iter()
+        .enumerate()
+        .fold(BTreeMap::<Vec<usize>, Vec<usize>>::new(), |mut map, (index, state)| {
+            map.entry(coloring_content_with_bound(state, alphabet_size))
+                .or_default()
+                .push(index);
+            map
+        });
+    let candidates = target_states
+        .iter()
+        .map(|target| {
+            source_by_content
+                .get(&tableau_content_with_bound(&target.rows, alphabet_size))
+                .cloned()
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    let target_indices = target_states
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(index, target)| (target, index))
+        .collect::<BTreeMap<_, _>>();
+    let mut neighbors = vec![Vec::new(); target_states.len()];
+    for (target_index, target) in target_states.iter().enumerate() {
+        let tableau = Tableau::new(target.rows.clone());
+        for index in 1..u32::from(alphabet_size) {
+            if let Some(next_tableau) = tableau.crystal_f(index) {
+                let mut next = target.clone();
+                next.rows = next_tableau.rows().to_vec();
+                let next_index = *target_indices
+                    .get(&next)
+                    .ok_or_else(|| "target crystal arrow left its finite state set".to_string())?;
+                neighbors[target_index].push((next_index, index));
+                neighbors[next_index].push((target_index, index));
+            }
+        }
+    }
+    Ok(SupportLocalCrystalSearch {
+        source_states,
+        target_states,
+        candidates,
+        neighbors,
+        three_color_support,
+        explored_nodes: 0,
+    })
+}
+
+fn print_support_local_crystal_search(path: &PathData) -> Result<(), String> {
+    let maximum_degree = path.normal_edges.len();
+    for (alphabet_size, three_color_support, label) in
+        [(3, false, "two-color"), (4, true, "three-color")]
+    {
+        for degree in 0..=maximum_degree {
+            let mut search = support_local_crystal_search(
+                path,
+                alphabet_size,
+                degree,
+                three_color_support,
+            )?;
+            if search.source_states.is_empty() {
+                continue;
+            }
+            let solution = search.solve();
+            let mut foata_arrows = 0usize;
+            let mut foata_valid = 0usize;
+            if path.strict_edges.is_empty()
+                && path.normal_edges.len() == path.n * path.n.saturating_sub(1) / 2
+            {
+                for state in &search.source_states {
+                    for index in 1..u32::from(alphabet_size) {
+                        for raising in [true, false] {
+                            if let Some(next) =
+                                complete_graph_crystal_step(state, index, raising)?
+                            {
+                                foata_arrows += 1;
+                                if search.compatible(state, &next, index)
+                                    && edge_ascent_mask(&next, &path.normal_edges).count_ones()
+                                        as usize
+                                        == degree
+                                {
+                                    foata_valid += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            println!(
+                "{label}-supported crystal search path {}, degree {degree}: {} states, {} after {} search nodes; Foata support/degree {foata_valid}/{foata_arrows}",
+                path.word(),
+                search.source_states.len(),
+                if solution.is_some() { "FOUND" } else { "IMPOSSIBLE" },
+                search.explored_nodes
+            );
+            if solution.is_none() {
+                break;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn llt_standardize_coloring(coloring: &[u8]) -> (Vec<u32>, Vec<u8>) {
@@ -11350,6 +11773,685 @@ fn fundamental_crystal_step(
     )?))
 }
 
+#[derive(Default)]
+struct InducedThreeColorCrystal {
+    bridges: BTreeMap<String, FundamentalSchurBridge>,
+}
+
+impl InducedThreeColorCrystal {
+    fn step(
+        &mut self,
+        path: &PathData,
+        coloring: &[u8],
+        index: u32,
+        raising: bool,
+    ) -> Result<Option<Vec<u8>>, String> {
+        let stored_index = u8::try_from(index)
+            .map_err(|_| "crystal index exceeds the prototype color type".to_string())?;
+        if stored_index == 0 {
+            return Err("crystal indices are positive".into());
+        }
+        let base = stored_index.saturating_sub(2);
+        let top = base
+            .checked_add(2)
+            .ok_or_else(|| "three-color window exceeds the prototype color type".to_string())?;
+        let vertices = coloring
+            .iter()
+            .enumerate()
+            .filter_map(|(vertex, &color)| (base <= color && color <= top).then_some(vertex))
+            .collect::<Vec<_>>();
+        let induced = path.induced_on(&vertices)?;
+        let local_coloring = vertices
+            .iter()
+            .map(|&vertex| coloring[vertex] - base)
+            .collect::<Vec<_>>();
+        let local_index = if stored_index == 1 { 1 } else { 2 };
+        let key = induced.word();
+        if !self.bridges.contains_key(&key) {
+            self.bridges
+                .insert(key.clone(), FundamentalSchurBridge::build(&induced)?);
+        }
+        let changed = fundamental_crystal_step(
+            self.bridges
+                .get(&key)
+                .expect("the induced bridge was inserted"),
+            &induced,
+            &local_coloring,
+            local_index,
+            raising,
+        )?;
+        let Some(changed) = changed else {
+            return Ok(None);
+        };
+        if changed.len() != vertices.len()
+            || changed.iter().any(|&color| color > 2)
+        {
+            return Err("induced three-color arrow left its normalized alphabet".into());
+        }
+        let mut result = coloring.to_vec();
+        for (&vertex, color) in vertices.iter().zip(changed) {
+            result[vertex] = base + color;
+        }
+        Ok(Some(result))
+    }
+}
+
+fn threshold_three_color_crystal_step(
+    bridge: &FundamentalSchurBridge,
+    path: &PathData,
+    coloring: &[u8],
+    index: u32,
+    raising: bool,
+) -> Result<Option<Vec<u8>>, String> {
+    let middle = u8::try_from(index - 1)
+        .map_err(|_| "crystal index exceeds the prototype color type".to_string())?;
+    let upper = middle
+        .checked_add(1)
+        .ok_or_else(|| "crystal color exceeds the prototype type".to_string())?;
+    if (raising && !coloring.contains(&upper))
+        || (!raising && !coloring.contains(&middle))
+    {
+        return Ok(None);
+    }
+    let active_class = usize::from(middle != 0);
+    let upper_class = active_class + 1;
+    let compressed = coloring
+        .iter()
+        .map(|&color| {
+            if middle == 0 {
+                u8::from(color != 0)
+            } else {
+                match color.cmp(&middle) {
+                    std::cmp::Ordering::Less => 0,
+                    std::cmp::Ordering::Equal => 1,
+                    std::cmp::Ordering::Greater => 2,
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+    let local_index = u32::try_from(active_class + 1)
+        .expect("the threshold crystal uses index one or two");
+    let Some(changed) =
+        fundamental_crystal_step(bridge, path, &compressed, local_index, raising)?
+    else {
+        return Ok(None);
+    };
+    let mut carried = [Vec::new(), Vec::new(), Vec::new()];
+    for (&color, &class) in coloring.iter().zip(&compressed) {
+        carried[usize::from(class)].push(color);
+    }
+    if raising {
+        let position = carried[upper_class]
+            .iter()
+            .position(|&color| color == upper)
+            .ok_or_else(|| "three-class e_i had no i+1 color to raise".to_string())?;
+        carried[upper_class].remove(position);
+        carried[active_class].push(middle);
+    } else {
+        carried[active_class]
+            .pop()
+            .ok_or_else(|| "three-class f_i had no i color to lower".to_string())?;
+        carried[upper_class].push(upper);
+    }
+    for colors in &mut carried {
+        colors.sort_unstable();
+    }
+    let mut used = [0usize; 3];
+    let mut result = Vec::with_capacity(coloring.len());
+    for class in changed {
+        let class = usize::from(class);
+        let color = carried[class]
+            .get(used[class])
+            .copied()
+            .ok_or_else(|| "three-class output has the wrong class content".to_string())?;
+        used[class] += 1;
+        result.push(color);
+    }
+    if used
+        .iter()
+        .zip(&carried)
+        .any(|(&count, colors)| count != colors.len())
+    {
+        return Err("three-class output did not use every carried color".into());
+    }
+    Ok(Some(result))
+}
+
+#[derive(Clone, Debug, Default)]
+struct ThresholdThreeColorAudit {
+    paths: usize,
+    states: usize,
+    comparisons: usize,
+    matches: usize,
+    arrows: usize,
+    valid_arrows: usize,
+    components: usize,
+    unique_highest_components: usize,
+    first_difference: Option<String>,
+    first_arrow_failure: Option<String>,
+    first_component_failure: Option<String>,
+}
+
+impl ThresholdThreeColorAudit {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        self.states += other.states;
+        self.comparisons += other.comparisons;
+        self.matches += other.matches;
+        self.arrows += other.arrows;
+        self.valid_arrows += other.valid_arrows;
+        self.components += other.components;
+        self.unique_highest_components += other.unique_highest_components;
+        if self.first_difference.is_none() {
+            self.first_difference = other.first_difference;
+        }
+        if self.first_arrow_failure.is_none() {
+            self.first_arrow_failure = other.first_arrow_failure;
+        }
+        if self.first_component_failure.is_none() {
+            self.first_component_failure = other.first_component_failure;
+        }
+    }
+
+    fn print(&self, label: &str, alphabet_size: u8) {
+        println!(
+            "threshold-three-color compression {label} over {alphabet_size} colors: {} paths, {} states, agrees with certified ambient crystal {}/{} queries; inverse/degree-valid {}/{} arrows; unique-highest {}/{} components",
+            self.paths,
+            self.states,
+            self.matches,
+            self.comparisons,
+            self.valid_arrows,
+            self.arrows,
+            self.unique_highest_components,
+            self.components
+        );
+        if let Some(failure) = &self.first_difference {
+            println!("  first threshold-compression difference: {failure}");
+        }
+        if let Some(failure) = &self.first_arrow_failure {
+            println!("  first threshold arrow failure: {failure}");
+        }
+        if let Some(failure) = &self.first_component_failure {
+            println!("  first threshold component failure: {failure}");
+        }
+    }
+}
+
+fn audit_threshold_three_color_for_path(
+    path: &PathData,
+    alphabet_size: u8,
+) -> Result<ThresholdThreeColorAudit, String> {
+    let bridge = FundamentalSchurBridge::build(path)?;
+    let states = words_with_color_bound(path.n, alphabet_size)
+        .into_iter()
+        .filter(|word| increases_on_edges(word, &path.strict_edges))
+        .collect::<BTreeSet<_>>();
+    let mut audit = ThresholdThreeColorAudit {
+        paths: 1,
+        states: states.len(),
+        ..ThresholdThreeColorAudit::default()
+    };
+    for state in &states {
+        for index in 1..u32::from(alphabet_size) {
+            for raising in [true, false] {
+                let compressed =
+                    threshold_three_color_crystal_step(&bridge, path, state, index, raising)?;
+                let ambient = fundamental_crystal_step(&bridge, path, state, index, raising)?;
+                audit.comparisons += 1;
+                if compressed == ambient {
+                    audit.matches += 1;
+                } else if audit.first_difference.is_none() {
+                    audit.first_difference = Some(format!(
+                        "path {}, {}_{}({}): threshold {:?}, ambient {:?}",
+                        path.word(),
+                        if raising { 'e' } else { 'f' },
+                        index,
+                        format_word(state),
+                        compressed.as_deref().map(format_word),
+                        ambient.as_deref().map(format_word)
+                    ));
+                }
+            }
+        }
+    }
+    let mut unvisited = states.clone();
+    while let Some(start) = unvisited.iter().next().cloned() {
+        let mut component = BTreeSet::from([start.clone()]);
+        let mut queue = VecDeque::from([start]);
+        while let Some(state) = queue.pop_front() {
+            for index in 1..u32::from(alphabet_size) {
+                for raising in [true, false] {
+                    let Some(next) = threshold_three_color_crystal_step(
+                        &bridge, path, &state, index, raising,
+                    )? else {
+                        continue;
+                    };
+                    audit.arrows += 1;
+                    let recovered = threshold_three_color_crystal_step(
+                        &bridge, path, &next, index, !raising,
+                    )?;
+                    if recovered.as_ref() == Some(&state)
+                        && states.contains(&next)
+                        && edge_ascent_mask(&next, &path.normal_edges).count_ones()
+                            == edge_ascent_mask(&state, &path.normal_edges).count_ones()
+                    {
+                        audit.valid_arrows += 1;
+                    } else if audit.first_arrow_failure.is_none() {
+                        audit.first_arrow_failure = Some(format!(
+                            "path {}, {}_{}: {} -> {} -> {:?}",
+                            path.word(),
+                            if raising { 'e' } else { 'f' },
+                            index,
+                            format_word(&state),
+                            format_word(&next),
+                            recovered.as_deref().map(format_word)
+                        ));
+                    }
+                    if component.insert(next.clone()) {
+                        queue.push_back(next);
+                    }
+                }
+            }
+        }
+        for state in &component {
+            unvisited.remove(state);
+        }
+        audit.components += 1;
+        let mut highest = Vec::new();
+        for state in &component {
+            let mut is_highest = true;
+            for index in 1..u32::from(alphabet_size) {
+                if threshold_three_color_crystal_step(
+                    &bridge, path, state, index, true,
+                )?
+                .is_some()
+                {
+                    is_highest = false;
+                    break;
+                }
+            }
+            if is_highest {
+                highest.push(state.clone());
+            }
+        }
+        if highest.len() == 1 {
+            audit.unique_highest_components += 1;
+        } else if audit.first_component_failure.is_none() {
+            audit.first_component_failure = Some(format!(
+                "path {}, component beginning {} has {} highest states: {}",
+                path.word(),
+                format_word(component.iter().next().expect("component is nonempty")),
+                highest.len(),
+                highest
+                    .iter()
+                    .map(|state| format_word(state))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+        }
+    }
+    Ok(audit)
+}
+
+#[derive(Clone, Debug, Default)]
+struct InducedThreeColorCrystalAudit {
+    paths: usize,
+    states: usize,
+    arrows: usize,
+    inverse_and_degree_checks: usize,
+    ambient_comparisons: usize,
+    ambient_matches: usize,
+    components: usize,
+    ssyt_components: usize,
+    first_arrow_failure: Option<String>,
+    first_ambient_difference: Option<String>,
+    first_component_failure: Option<String>,
+}
+
+impl InducedThreeColorCrystalAudit {
+    fn absorb(&mut self, other: Self) {
+        self.paths += other.paths;
+        self.states += other.states;
+        self.arrows += other.arrows;
+        self.inverse_and_degree_checks += other.inverse_and_degree_checks;
+        self.ambient_comparisons += other.ambient_comparisons;
+        self.ambient_matches += other.ambient_matches;
+        self.components += other.components;
+        self.ssyt_components += other.ssyt_components;
+        if self.first_arrow_failure.is_none() {
+            self.first_arrow_failure = other.first_arrow_failure;
+        }
+        if self.first_ambient_difference.is_none() {
+            self.first_ambient_difference = other.first_ambient_difference;
+        }
+        if self.first_component_failure.is_none() {
+            self.first_component_failure = other.first_component_failure;
+        }
+    }
+
+    fn print(&self, label: &str, alphabet_size: u8) {
+        println!(
+            "induced-three-color crystal {label} over {alphabet_size} colors: {} paths, {} states, inverse/degree-valid {}/{} arrows; agrees with ambient transport {}/{} queries; SSYT-isomorphic {}/{} components",
+            self.paths,
+            self.states,
+            self.inverse_and_degree_checks,
+            self.arrows,
+            self.ambient_matches,
+            self.ambient_comparisons,
+            self.ssyt_components,
+            self.components
+        );
+        if let Some(failure) = &self.first_arrow_failure {
+            println!("  first arrow failure: {failure}");
+        }
+        if let Some(failure) = &self.first_ambient_difference {
+            println!("  first ambient-transport difference: {failure}");
+        }
+        if let Some(failure) = &self.first_component_failure {
+            println!("  first component failure: {failure}");
+        }
+    }
+}
+
+fn audit_induced_three_color_crystal_for_path(
+    path: &PathData,
+    alphabet_size: u8,
+) -> Result<InducedThreeColorCrystalAudit, String> {
+    let states = words_with_color_bound(path.n, alphabet_size)
+        .into_iter()
+        .filter(|word| increases_on_edges(word, &path.strict_edges))
+        .collect::<BTreeSet<_>>();
+    let mut audit = InducedThreeColorCrystalAudit {
+        paths: 1,
+        states: states.len(),
+        ..InducedThreeColorCrystalAudit::default()
+    };
+    let mut crystal = InducedThreeColorCrystal::default();
+    let ambient = FundamentalSchurBridge::build(path)?;
+    for state in &states {
+        for index in 1..u32::from(alphabet_size) {
+            for raising in [true, false] {
+                let local = crystal.step(path, state, index, raising)?;
+                let transported =
+                    fundamental_crystal_step(&ambient, path, state, index, raising)?;
+                audit.ambient_comparisons += 1;
+                if local == transported {
+                    audit.ambient_matches += 1;
+                } else if audit.first_ambient_difference.is_none() {
+                    audit.first_ambient_difference = Some(format!(
+                        "path {}, {}_{}({}): induced {:?}, ambient {:?}",
+                        path.word(),
+                        if raising { 'e' } else { 'f' },
+                        index,
+                        format_word(state),
+                        local.as_deref().map(format_word),
+                        transported.as_deref().map(format_word)
+                    ));
+                }
+            }
+        }
+    }
+    let mut unvisited = states.clone();
+    while let Some(start) = unvisited.iter().next().cloned() {
+        let mut component = BTreeSet::from([start.clone()]);
+        let mut queue = VecDeque::from([start]);
+        while let Some(state) = queue.pop_front() {
+            for index in 1..u32::from(alphabet_size) {
+                for raising in [true, false] {
+                    let Some(next) = crystal.step(path, &state, index, raising)? else {
+                        continue;
+                    };
+                    audit.arrows += 1;
+                    let recovered = crystal.step(path, &next, index, !raising)?;
+                    let valid = recovered.as_ref() == Some(&state)
+                        && states.contains(&next)
+                        && increases_on_edges(&next, &path.strict_edges)
+                        && edge_ascent_mask(&next, &path.normal_edges).count_ones()
+                            == edge_ascent_mask(&state, &path.normal_edges).count_ones();
+                    if valid {
+                        audit.inverse_and_degree_checks += 1;
+                    } else if audit.first_arrow_failure.is_none() {
+                        audit.first_arrow_failure = Some(format!(
+                            "path {}, {}_{}: {} -> {} -> {:?}",
+                            path.word(),
+                            if raising { 'e' } else { 'f' },
+                            index,
+                            format_word(&state),
+                            format_word(&next),
+                            recovered.as_deref().map(format_word)
+                        ));
+                    }
+                    if component.insert(next.clone()) {
+                        queue.push_back(next);
+                    }
+                }
+            }
+        }
+        for state in &component {
+            unvisited.remove(state);
+        }
+        audit.components += 1;
+        let component_result = (|| -> Result<(), String> {
+            let highest = component
+                .iter()
+                .filter(|state| {
+                    (1..u32::from(alphabet_size))
+                        .all(|index| crystal.step(path, state, index, true).is_ok_and(|x| x.is_none()))
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            if highest.len() != 1 {
+                let mut arrows = Vec::new();
+                for state in &component {
+                    for index in 1..u32::from(alphabet_size) {
+                        if let Some(next) = crystal.step(path, state, index, false)? {
+                            arrows.push(format!(
+                                "{}-f_{}->{}",
+                                format_word(state),
+                                index,
+                                format_word(&next)
+                            ));
+                        }
+                    }
+                }
+                return Err(format!(
+                    "has {} highest states: {}; arrows {}",
+                    highest.len(),
+                    highest
+                        .iter()
+                        .map(|state| format_word(state))
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    arrows.join("; ")
+                ));
+            }
+            let highest = &highest[0];
+            let content = (0..alphabet_size)
+                .map(|color| highest.iter().filter(|&&entry| entry == color).count())
+                .collect::<Vec<_>>();
+            if !content.windows(2).all(|parts| parts[0] >= parts[1]) {
+                return Err(format!(
+                    "highest state {} has nonpartition content {content:?}",
+                    format_word(highest)
+                ));
+            }
+            let rows = content
+                .iter()
+                .enumerate()
+                .filter(|&(_, &length)| length != 0)
+                .map(|(row, &length)| vec![row as u32 + 1; length])
+                .collect::<Vec<_>>();
+            let mut correspondence =
+                BTreeMap::from([(highest.clone(), Tableau::new(rows))]);
+            let mut tableau_queue = VecDeque::from([highest.clone()]);
+            while let Some(state) = tableau_queue.pop_front() {
+                let tableau = correspondence[&state].clone();
+                for index in 1..u32::from(alphabet_size) {
+                    match (
+                        crystal.step(path, &state, index, false)?,
+                        tableau.crystal_f(index),
+                    ) {
+                        (None, None) => {}
+                        (Some(next), Some(next_tableau)) => {
+                            if let Some(previous) = correspondence.get(&next) {
+                                if previous != &next_tableau {
+                                    return Err(format!(
+                                        "two lowering words identify {} with different tableaux",
+                                        format_word(&next)
+                                    ));
+                                }
+                            } else {
+                                correspondence.insert(next.clone(), next_tableau);
+                                tableau_queue.push_back(next);
+                            }
+                        }
+                        _ => {
+                            return Err(format!(
+                                "coloring/tableau f_{index} presence differs at {}",
+                                format_word(&state)
+                            ));
+                        }
+                    }
+                }
+            }
+            if correspondence.len() != component.len() {
+                return Err(format!(
+                    "lowering closure reaches {} of {} states",
+                    correspondence.len(),
+                    component.len()
+                ));
+            }
+            Ok(())
+        })();
+        if component_result.is_ok() {
+            audit.ssyt_components += 1;
+        } else if audit.first_component_failure.is_none() {
+            audit.first_component_failure = Some(format!(
+                "path {}, component beginning {}: {}",
+                path.word(),
+                format_word(component.iter().next().expect("component is nonempty")),
+                component_result.expect_err("the component was checked to fail")
+            ));
+        }
+    }
+    Ok(audit)
+}
+
+fn print_induced_three_color_crystal_report(max_n: usize) -> Result<(), String> {
+    let alphabet_size = 4;
+    let mut total = InducedThreeColorCrystalAudit::default();
+    for n in 0..=max_n {
+        let mut rank = InducedThreeColorCrystalAudit::default();
+        for path in all_paths(n) {
+            rank.absorb(audit_induced_three_color_crystal_for_path(
+                &path,
+                alphabet_size,
+            )?);
+        }
+        rank.print(&format!("rank {n}"), alphabet_size);
+        total.absorb(rank);
+        if total.first_arrow_failure.is_some() || total.first_component_failure.is_some() {
+            break;
+        }
+    }
+    total.print(&format!("ranks 0..={max_n}"), alphabet_size);
+    Ok(())
+}
+
+fn print_threshold_three_color_report(max_n: usize) -> Result<(), String> {
+    let alphabet_size = 4;
+    let mut total = ThresholdThreeColorAudit::default();
+    for n in 0..=max_n {
+        let mut rank = ThresholdThreeColorAudit::default();
+        for path in all_paths(n) {
+            rank.absorb(audit_threshold_three_color_for_path(
+                &path,
+                alphabet_size,
+            )?);
+        }
+        rank.print(&format!("rank {n}"), alphabet_size);
+        total.absorb(rank);
+        if total.first_difference.is_some() {
+            break;
+        }
+    }
+    total.print(&format!("ranks 0..={max_n}"), alphabet_size);
+    Ok(())
+}
+
+fn induced_three_color_crystal_observation(
+    path: &PathData,
+    coloring: &[u8],
+    index: u32,
+    raising: bool,
+    output: Option<&[u8]>,
+) -> Result<(ThreeColorCrystalContext, Option<Vec<u8>>), String> {
+    let stored_index = u8::try_from(index)
+        .map_err(|_| "crystal index exceeds the prototype color type".to_string())?;
+    let (base, active_offset) = if stored_index == 1 {
+        (0, 0)
+    } else {
+        (stored_index - 2, 1)
+    };
+    let top = base
+        .checked_add(2)
+        .ok_or_else(|| "three-color window exceeds the prototype color type".to_string())?;
+    let support = coloring
+        .iter()
+        .enumerate()
+        .filter_map(|(vertex, &color)| (base <= color && color <= top).then_some(vertex))
+        .collect::<Vec<_>>();
+    let local_vertices = support
+        .iter()
+        .enumerate()
+        .map(|(local, &vertex)| (vertex, local))
+        .collect::<BTreeMap<_, _>>();
+    let restrict_edges = |edges: &[(usize, usize)]| {
+        edges
+            .iter()
+            .filter_map(|&(tail, head)| {
+                Some((*local_vertices.get(&tail)?, *local_vertices.get(&head)?))
+            })
+            .collect::<Vec<_>>()
+    };
+    let context = ThreeColorCrystalContext {
+        raising,
+        active_offset,
+        normal_edges: restrict_edges(&path.normal_edges),
+        strict_edges: restrict_edges(&path.strict_edges),
+        colors: support.iter().map(|&vertex| coloring[vertex] - base).collect(),
+    };
+    let Some(output) = output else {
+        return Ok((context, None));
+    };
+    if output.len() != coloring.len() {
+        return Err("crystal output has the wrong word length".into());
+    }
+    for (vertex, (&before, &after)) in coloring.iter().zip(output).enumerate() {
+        if local_vertices.contains_key(&vertex) {
+            if after < base || after > top {
+                return Err(format!(
+                    "supported vertex {} left colors {}..={}",
+                    vertex + 1,
+                    usize::from(base) + 1,
+                    usize::from(top) + 1
+                ));
+            }
+        } else if before != after {
+            return Err(format!(
+                "outside vertex {} changed from {} to {}",
+                vertex + 1,
+                usize::from(before) + 1,
+                usize::from(after) + 1
+            ));
+        }
+    }
+    Ok((
+        context,
+        Some(support.iter().map(|&vertex| output[vertex] - base).collect()),
+    ))
+}
+
 fn audit_fundamental_schur_for_path(path: &PathData) -> Result<FundamentalSchurAudit, String> {
     let mut source = BTreeMap::<(usize, BTreeSet<u32>), usize>::new();
     for permutation in permutations(path.n)
@@ -11486,6 +12588,7 @@ fn audit_fundamental_schur_for_path(path: &PathData) -> Result<FundamentalSchurA
     let mut crystal_support_local = 0usize;
     let mut first_crystal_failure = None;
     let mut first_support_failure = None;
+    let mut three_color_locality = ThreeColorLocalityAudit::default();
     let alphabet_size = 3u8;
     for coloring in words_with_color_bound(path.n, alphabet_size)
         .into_iter()
@@ -11552,6 +12655,46 @@ fn audit_fundamental_schur_for_path(path: &PathData) -> Result<FundamentalSchurA
             }
         }
     }
+    for coloring in &colorings {
+        let alphabet_size = coloring.iter().copied().max().map_or(1, |color| color + 1);
+        for index in 1..u32::from(alphabet_size) {
+            for raising in [true, false] {
+                three_color_locality.queries += 1;
+                let changed = fundamental_crystal_step(
+                    &bridge,
+                    path,
+                    coloring,
+                    index,
+                    raising,
+                )?;
+                three_color_locality.defined_arrows += usize::from(changed.is_some());
+                let witness = format!(
+                    "path {}, {}_{} on {}",
+                    path.word(),
+                    if raising { 'e' } else { 'f' },
+                    index,
+                    format_word(coloring)
+                );
+                match induced_three_color_crystal_observation(
+                    path,
+                    coloring,
+                    index,
+                    raising,
+                    changed.as_deref(),
+                ) {
+                    Ok((context, outcome)) => {
+                        three_color_locality.triple_supported += usize::from(changed.is_some());
+                        three_color_locality.observe(context, outcome, witness);
+                    }
+                    Err(error) if three_color_locality.first_support_failure.is_none() => {
+                        three_color_locality.first_support_failure =
+                            Some(format!("{witness}: {error}"));
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+    }
     Ok(FundamentalSchurAudit {
         paths: 1,
         standard_colorings: source.values().sum(),
@@ -11565,6 +12708,7 @@ fn audit_fundamental_schur_for_path(path: &PathData) -> Result<FundamentalSchurA
         crystal_inverse_checks,
         crystal_degree_checks,
         crystal_support_local,
+        three_color_locality,
         first_mismatch,
         first_crystal_failure,
         first_support_failure,
@@ -17680,6 +18824,20 @@ fn run(args: Args) -> Result<(), String> {
         print_crystal_locality_report(args.max_n)?;
         return Ok(());
     }
+    if args.triple_crystal_report {
+        if let Some(word) = args.path.as_deref() {
+            let path = PathData::parse(word)?;
+            audit_threshold_three_color_for_path(&path, 4)?
+                .print(&format!("path {}", path.word()), 4);
+            audit_induced_three_color_crystal_for_path(&path, 4)?
+                .print(&format!("path {}", path.word()), 4);
+            print_support_local_crystal_search(&path)?;
+        } else {
+            print_threshold_three_color_report(args.max_n)?;
+            print_induced_three_color_crystal_report(args.max_n)?;
+        }
+        return Ok(());
+    }
     if args.assaf_package_report {
         if let Some(word) = args.path.as_deref() {
             print_assaf_package_phase_for_path(&PathData::parse(word)?)?;
@@ -18417,6 +19575,19 @@ mod tests {
             standard_dual_isomorphisms(&edges, component, 7, &distributions)
                 .is_ok_and(|isomorphisms| isomorphisms.len() == 1)
         }));
+    }
+
+    #[test]
+    fn k4_degree_two_rejects_two_and_three_color_support() {
+        let path = PathData::parse("NNNNEEEE").unwrap();
+
+        let mut two_color = support_local_crystal_search(&path, 3, 2, false).unwrap();
+        assert!(two_color.solve().is_none());
+        assert_eq!(two_color.explored_nodes, 11);
+
+        let mut three_color = support_local_crystal_search(&path, 4, 2, true).unwrap();
+        assert!(three_color.solve().is_none());
+        assert_eq!(three_color.explored_nodes, 23);
     }
 
     #[test]

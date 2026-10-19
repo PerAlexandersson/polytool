@@ -20,6 +20,79 @@ certificate is already in `sym-poly-sym`; the rectifier remains experimental.
 it is not an all-rank existence theorem.
 No other shared library, Lean/paper source, or circular code is owned.
 
+## Active: what “three colors suffice” can and cannot mean — 2026-10-19
+
+The useful rank-agnostic finite model is an arbitrary number of vertices over
+a three-letter alphabet, not three vertices.  The certified transported
+crystal already audits exactly that model.  On the selected rank-seven path
+`NNNNDDDEEEE`, all 184 defined three-letter arrows invert and preserve the
+exact LLT degree.  The stronger Assaf-frontier computation also passes selected
+rank-eight `NNNDDDDDEEE` (560 standard states) and rank-nine
+`NNNDDDDDDEEE` (1,680 standard states) examples with the later-paper
+LSP_4/5/6 and axiom-4'(a) guards.  These are stress evidence, not the missing
+all-rank reachability proof.
+
+The first exact locality boundary is now isolated.  The transported gauge is
+three-color-window supported through every ordinary path of vertex rank four:
+4,144/4,144 defined arrows remain in the relevant window, and all 3,786
+repeated embeddings of the same induced context agree.  At rank five this
+fails first on the complete graph:
+
+```text
+f_3(13243) = 31244.
+```
+
+Thus the present gauge can move a color outside `{i-1,i,i+1}`.  Two natural
+attempts to force a bounded-window lift were tested and retained as explicit
+counterexamples.  Deleting the other colored vertices and applying the
+induced three-color crystal preserves inverses and q-degree, but on `K4` over
+four letters it has only 6/8 SSYT components; the component beginning `1121`
+has two highest states.  Threshold-compressing all colors to `<i`, `=i`,
+`>i` and restoring exact colors already changes q-degree and loses inverses on
+`K4`.
+
+Most importantly, a complete constraint search rules out fixing this merely by
+choosing better bounded-support matchings.  At `K4`, q-degree two:
+
+- no crystal-to-SSYT bijection over three letters can make every `e_i,f_i`
+  change only colors `i,i+1` (11 search nodes exhaust the forced CSP);
+- no such bijection over four letters can freeze every color outside the
+  neighboring three-color window (23 search nodes exhaust the CSP).
+
+The regression
+`k4_degree_two_rejects_two_and_three_color_support` fixes both exact
+obstructions.  Foata--RSK independently agrees with the diagnosis: in the
+four-letter degree-two slice, 200/204 arrows obey the three-color window and
+four necessarily escape it in that gauge.
+
+Consequently “three colors suffice” remains correct in the local-crystal
+sense only after retaining standardization/permutation data.  The next viable
+intrinsic object is the change of LLT standardization (equivalently the
+rectified `D_i` edge) visible in three-color destandardizations.  A rule that
+freezes all other colored vertices is impossible already at `K4`; do not spend
+more time tuning lexicographic, Hamming, induced-subgraph, or threshold
+recolorings.
+
+Verification for this checkpoint, with
+`CARGO_TARGET_DIR=/cargo-target/ai-projects`:
+
+```text
+cargo test --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection
+# 34 passed, 2 stress tests ignored
+
+cargo clippy --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection -- -D warnings \
+  -A clippy::manual_is_multiple_of
+git diff --check
+# passed
+
+cargo run --release --locked --manifest-path experiments/Cargo.toml \
+  --bin marked_coloring_hrv_bijection -- --triple-crystal-report \
+  --path NNNNEEEE
+# exact two- and three-color support CSPs first fail at q-degree two
+```
+
 ## Correction: canonical search is conditional, not an all-rank proof — 2026-10-18
 
 `docs/ASSAF_CANONICAL_SEARCH_PROOF.md` records a useful but conditional
