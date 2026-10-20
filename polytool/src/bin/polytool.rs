@@ -241,6 +241,8 @@ fn print_recurrence_help() {
     println!("  --no-verify                Use all input rows for fitting");
     println!("  --no-modular-prefilter     Disable default modular candidate rejection");
     println!("  --max-candidates <n>       Inspect at most n candidate configurations");
+    println!("  --representations          Return a menu of length/derivative tradeoffs");
+    println!("                             With --json: structured candidates and coverage");
     println!("  --json                     Emit recurrence JSON with initial conditions");
     println!("  --format json              Alias for --json");
     println!("  --python                   Emit exact Python code for the recurrence");
@@ -2462,10 +2464,12 @@ fn cmd_recurrence(args: &[String]) {
     let mut search = AdaptiveSearchOptions::default();
     let mut budget = AdaptiveSearchBudget::unbounded();
     let mut format = RecurrenceOutputFormat::Text;
+    let mut representations = false;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--representations" => representations = true,
             "--json" => {
                 format = RecurrenceOutputFormat::Json;
             }
@@ -2699,6 +2703,47 @@ fn cmd_recurrence(args: &[String]) {
         return;
     }
 
+    if representations {
+        if matches!(format, RecurrenceOutputFormat::Python) {
+            eprintln!("--representations supports text or JSON; use a candidate's recurrence_json for row generation");
+            return;
+        }
+        match find_recurrence_representations_rational(&polys, &search, budget) {
+            Ok(report) => {
+                if matches!(format, RecurrenceOutputFormat::Json) {
+                    println!("{}", serde_json::to_string_pretty(&report).unwrap());
+                } else {
+                    println!("Exact fits to supplied rows (not all-rank proofs).");
+                    println!(
+                        "{:?}; {} configurations inspected.",
+                        report.status, report.configurations_considered
+                    );
+                    for (i, item) in report.representations.iter().enumerate() {
+                        println!(
+                            "{}[{}] length {}, derivative order {}, checked n={}..={}: {}",
+                            if report.frontier.contains(&i) {
+                                "* "
+                            } else {
+                                "  "
+                            },
+                            i,
+                            item.complexity.rec_len,
+                            item.complexity.diff_deg,
+                            item.first_checked_index,
+                            item.last_checked_index,
+                            item.recurrence
+                        );
+                    }
+                    println!("* Nondominated among returned candidates; use --json for bounds and coverage.");
+                }
+                if report.status == RepresentationSearchStatus::BudgetExhausted {
+                    std::process::exit(3);
+                }
+            }
+            Err(error) => eprintln!("{error}"),
+        }
+        return;
+    }
     eprintln!(
         "Searching for recurrence among {} polynomials...",
         polys.len()

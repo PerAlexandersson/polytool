@@ -83,6 +83,11 @@ fn lists_tools_and_calls_properties() {
     assert!(tool_names.contains(&"bicyclic_sieving"));
     assert!(tool_names.contains(&"check_polynomial_family"));
     assert!(tool_names.contains(&"find_recurrence"));
+    let menu_tool = tools_array
+        .iter()
+        .find(|tool| tool["name"] == "find_recurrence_representations")
+        .expect("representation tool");
+    assert_eq!(menu_tool["outputSchema"]["type"], "object");
     let recurrence_schema = &tools_array
         .iter()
         .find(|tool| tool["name"] == "find_recurrence")
@@ -260,6 +265,29 @@ fn lists_tools_and_calls_properties() {
     assert!(invalid["error"]["message"]
         .as_str()
         .is_some_and(|message| message.contains("expected exactly one")));
+
+    send(
+        &mut stdin,
+        json!({
+            "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+            "params": {
+                "name": "find_recurrence_representations",
+                "arguments": {
+                    "coefficients": [[1], [2], [4], [8], [16]],
+                    "max_rec_len": 1, "max_diff_deg": 0,
+                    "max_var_deg": 0, "max_idx_deg": 0, "max_candidates": 1
+                }
+            }
+        }),
+    );
+    let menu = read_response(&mut stdout, 8);
+    let report = &menu["result"]["structuredContent"];
+    assert_eq!(report["schema"], "polytool.recurrence-representations.v1");
+    assert_eq!(
+        report["representations"][0]["recurrence"],
+        "P(n) = 2 P(n-1)"
+    );
+    assert_eq!(report["representations"][0]["evidence"], "exact_fit");
 
     drop(stdin);
     let _ = child.kill();

@@ -1,5 +1,45 @@
 # Handoff
 
+## Verified: recurrence representations API and browser — 2026-10-20
+
+Codex derivative-lift lane, isolated worktree
+`/workspace/rust-recurrence-representations`, branch
+`feat/recurrence-representations-20261020`, based on `f44662e`.
+Source ownership is released after this checkpoint. Task-owned changes are
+`polytool/src/recurrence/representations.rs`, the recurrence module/CLI exports,
+MCP library and stdio smoke, web library/HTML and representation Node tests,
+`polytool/tests/{recurrence_representations,cli_representations}.rs`,
+`polytool/examples/recurrence_representations.rs`, root/crate handoffs,
+`docs/LIBRARY_GUIDE.md`, and parent/MCP READMEs.
+No other worker sessions were reported; the shared Rust checkout is untouched.
+No workers, Lean/OEIS edits, merge, subtree publication or deployment.
+
+The additive API returns one preferred exact finite fit per requested
+length/order pair, actual coefficient complexity, checked domains, reusable
+v1 recurrence JSON, a multidimensional frontier and bounded coverage.
+The denominator fallback reuses the existing vector fitter, including leading
+coefficients with zero constant term. This is not a complete coefficient kernel
+or an all-rank certificate. Existing single-result APIs remain unchanged.
+A171608 yields five candidates in 125 configurations; the frontier includes
+(3,0), (2,1), (1,2), plus an index-independent (3,1) alternative.
+Each candidate fitted to 40 rows replays the canonical generator through 60.
+
+Browser baseline `878113b` is preserved by commit `082ff0e`; its HTML matched
+website staging. Compare representations adds selectable formulas, degree and
+denominator controls, coverage, exact JSON, row extension and an A171608 example.
+Optimized WASM is under `/cargo-target/polytool-representations-web`.
+The site staging handoff records publication readiness separately; live assets
+have not been changed. No installed MCP executable was replaced.
+
+Verification: 359 library tests; all existing CLI/recurrence integration suites;
+eight representation and one menu CLI tests; five doctests; 32 MCP library,
+two MCP binary, one stdio, and 11 native web tests. Strict all-target Clippy,
+strict Rustdoc, touched-file formatting, Cargo metadata, OEIS bundled checksum,
+package-list exclusions and whitespace pass. All 48 Node checks pass against
+optimized WASM, including actual menu search, browser-example tradeoffs,
+arbitrary precision, JSON selection and extension. wasm-pack reports the
+existing missing license-file packaging notice. No visual-browser test claimed.
+
 ## Completed: Polytool CSP orbit decomposition and bicyclic sieving — 2026-10-20
 
 `polytool::cyclic_sieving` now decomposes `f mod q^n - 1` in the orbit basis

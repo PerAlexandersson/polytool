@@ -1,5 +1,15 @@
 # Polytool Handoff
 
+## Verified recurrence representation checkpoint — 2026-10-20
+
+The isolated `feat/recurrence-representations-20261020` lane adds the library,
+CLI `--representations`, MCP tool and browser comparison view. Source ownership
+is released after the checkpoint; exact scope/checks are in the root handoff.
+The shared checkout and installed MCP remain untouched. All outputs are finite
+exact fits with explicit domains and coverage; complete-kernel/all-rank source
+certification remains future work. The optimized browser bundle passes all
+48 Node checks. Website staging is separate; no live deployment or merge.
+
 Full chronological history through 2026-09-16 is archived in
 [`doc/HANDOFF_ARCHIVE_THROUGH_2026-09-16.md`](doc/HANDOFF_ARCHIVE_THROUGH_2026-09-16.md).
 

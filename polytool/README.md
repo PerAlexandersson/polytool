@@ -491,6 +491,86 @@ includes `candidates_considered`, `candidates_tried`, and `max_candidates`.
 If all configured candidates have been checked, the JSON status is instead
 `not_found`. Omitting the option preserves the unbounded behavior.
 
+#### Several recurrence representations
+
+Use `--representations` to compare lag length against derivative order instead
+of stopping at the first match:
+
+```sh
+polytool recurrence --representations --json \
+  --max-rec-len 3 --max-diff-deg 2 --max-var-deg 3 --max-idx-deg 1 \
+  --denominator --max-denom-var-deg 0 --max-denom-idx-deg 1 \
+  --max-candidates 2000 < rows.txt > representations.json
+```
+
+The additive Rust APIs are
+`recurrence::find_recurrence_representations_rational` and the `i64` convenience
+wrapper `find_recurrence_representations`. Both take rows, existing
+`AdaptiveSearchOptions`, and an `AdaptiveSearchBudget`, and return
+`Result<RecurrenceRepresentations, String>`. The MCP tool
+`find_recurrence_representations` accepts the same inputs and controls as
+`find_recurrence`. Existing single-result APIs and schemas are unchanged.
+
+The `polytool.recurrence-representations.v1` report contains:
+
+- `representations`: one preferred candidate per length/order bound pair,
+  deduplicated when formula and checked domain agree. Each includes text,
+  LaTeX, a reusable `recurrence_json` **object**, actual nonzero coefficient
+  complexity, fit/held-out row counts, and checked starting indices.
+- `frontier`: indices into that array. These candidates are nondominated in
+  actual lag, derivative order, coefficient and denominator degrees, use of
+  forcing/alternating terms, number of nonzero coefficients, and checked start.
+  The frontier is relative to returned candidates, not a minimality theorem.
+- `coverage`: requested length/order pairs, candidate indices where found,
+  configuration counts, and `found`, `not_found`, `incomplete`, or
+  `insufficient_rows` statuses.
+- `search`, `source_rows`, and global budget/coverage counters.
+  `status` is `complete` or `budget_exhausted`; CLI exhaustion exits with code 3
+  **after** emitting the partial report.
+
+Within each pair the existing weighted-complexity ordering chooses the first
+successful fit. The scalar path shares derivative/modular caches, and solved pairs are
+skipped without spending more of the global configuration budget.
+Denominators are strictly opt-in in this API. Its denominator fallback reuses
+the vector fitter's projective normalization (with a per-shape system), so denominators such as `n` or
+`t`, whose constant coefficient is zero, are supported too.
+
+Every result has `evidence: "exact_fit"`: finite rows, even held-out rows, do
+not prove an identity for all indices. `complete` means this representative
+search finished, **not** that all recurrences have been classified.
+`not_found` is not a nonexistence certificate: fitting-prefix selection,
+equation-count safeguards, and choice of a particular solution can miss
+representations. On budget exhaustion, unresolved cells are conservatively
+labelled `incomplete`. This API does not return a complete coefficient kernel
+or an Ore-ideal basis.
+
+Rows after `skip_prefix` are renumbered from 1. `first_checked_index` is the
+first checked target in this numbering; `first_checked_input_row` refers to
+the original input. JSON retains **every** initial row before the checked
+domain, even when the actual lag is smaller. We do not cancel polynomial
+common factors or extend a checked domain implicitly. Vanishing denominators
+on supplied target rows are listed in `singular_checked_indices`; a formula
+with such an index cannot generate that row. Future singularities are not
+classified, and the row generator reports them if encountered.
+
+For a checked example using the canonical OEIS generator:
+
+```sh
+cargo run -p polytool --example recurrence_representations
+```
+
+For A171608 with the displayed affine index bounds and index-only denominator,
+the menu includes length/order `(3,0)`, `(2,1)`, and `(1,2)`. Tests fit 40 rows,
+then independently replay each exported recurrence through row 60. This is
+finite exact verification, not an all-rank certificate.
+
+To generate rows from one entry, extract its nested object:
+
+```sh
+jq '.representations[0].recurrence_json' representations.json > recurrence.json
+polytool recurrence-generate --recurrence recurrence.json --rows 60
+```
+
 #### Machine-readable recurrence JSON and row generation
 
 To save a recurrence with enough initial conditions to regenerate the sequence,
@@ -1058,6 +1138,14 @@ node web/tests/string_safety.mjs
 ```
 
 ### Web arbitrary-precision contract and deployment staging
+
+The recurrence panel also offers **Compare representations**. It uses the
+visible length, coefficient-degree and derivative-order bounds, and a global
+configuration limit (default 2000). A table lets the user select a formula,
+copy its text/LaTeX/JSON, and extend the sequence with that selected formula.
+It displays checked starting indices, held-out row counts, and partial coverage.
+The interface preserves the task-oriented UI and row-extension feature deployed
+from `878113b`, which had not yet reached the parent integration branch.
 
 The browser wrapper parses polynomial input with `parse_polynomials_bigint`.
 Every integer coefficient returned across its string-based WASM/JSON boundary

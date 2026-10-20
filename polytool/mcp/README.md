@@ -11,6 +11,31 @@ The server is intentionally small:
 - structured JSON results for agent-friendly use
 - exact arithmetic inherited from `polytool`
 
+## Comparing recurrence representations
+
+`find_recurrence_representations` accepts the same polynomial input forms and
+top-level search controls as `find_recurrence`. For example, pass
+`max_rec_len: 3`, `max_diff_deg: 2`, `max_var_deg: 3`, `max_idx_deg: 1`,
+`try_denominator: true`, `max_denom_var_deg: 0`, `max_denom_idx_deg: 1`, and
+`max_candidates: 2000` alongside the rows.
+
+The result uses `polytool.recurrence-representations.v1`, shared with the CLI
+and browser. `representations` holds preferred exact fits, `frontier` indexes
+the nondominated choices, and `coverage` records requested length/order cells.
+The budget applies globally; `budget_exhausted` can return useful partial
+results. Denominators are never implicitly enabled in this mode.
+
+Each candidate includes its checked start, actual complexity, held-out count,
+and a nested `recurrence_json` object. Serialize that object to a string when
+passing it to `generate_recurrence_rows`. `include_code` is accepted for request
+compatibility but does not remove this structural object; the menu does not
+generate separate Mathematica/Python/Sage strings.
+
+`evidence: "exact_fit"` means finite-data verification, not an all-rank proof.
+One preferred fit is retained per length/order pair; neither the menu nor an
+empty cell is a complete description of the annihilating ideal. See the parent
+README for the precise frontier, index, normalization and coverage conventions.
+
 ## Build
 
 From the Rust workspace root:
