@@ -422,3 +422,148 @@ fn cyclic_sieving_sequence_uses_default_offsets() {
     assert!(orders.iter().any(|item| item["order"] == 2));
     assert!(orders.iter().any(|item| item["order"] == 5));
 }
+
+#[test]
+fn cyclic_sieving_json_keeps_report_and_adds_orbit_decomposition() {
+    let output = run_polytool(
+        &["cyclic-sieving", "--order", "6", "--json"],
+        "10,1,0,3,0,1\n",
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout is utf8");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("valid csp JSON");
+    let item = &json["items"][0];
+    assert_eq!(item["report"]["order"], 6);
+    assert_eq!(item["report"]["holds"], serde_json::Value::Null);
+    let dec = &item["orbit_decomposition"];
+    assert_eq!(dec["integral"], true);
+    assert_eq!(dec["natural_coefficients"], true);
+    assert_eq!(dec["cone_condition"], false);
+    assert_eq!(dec["realizable"], false);
+    assert_eq!(
+        dec["fixed_points"],
+        serde_json::json!(["15", "8", "12", "5", "12", "8"])
+    );
+    let orbits = dec["orbits"].as_array().expect("orbits");
+    let size3 = orbits.iter().find(|o| o["orbit_size"] == 3).unwrap();
+    assert_eq!(size3["orbit_count"], "-1");
+    assert_eq!(size3["element_count"], "-3");
+    assert_eq!(item["orbit_sizes_check"], serde_json::Value::Null);
+}
+
+#[test]
+fn cyclic_sieving_orbit_sizes_option_checks_an_action() {
+    // [4 choose 2]_q = 1 + q + 2q^2 + q^3 + q^4 with rotation orbits 4 and 2.
+    let run = |sizes: &str| {
+        let output = run_polytool(
+            &[
+                "cyclic-sieving",
+                "--order",
+                "4",
+                "--orbit-sizes",
+                sizes,
+                "--json",
+            ],
+            "1,1,2,1,1\n",
+        );
+        assert!(output.status.success());
+        let stdout = String::from_utf8(output.stdout).expect("stdout is utf8");
+        serde_json::from_str::<serde_json::Value>(&stdout).expect("valid csp JSON")
+    };
+    let good = run("4,2");
+    assert_eq!(good["items"][0]["report"]["holds"], true);
+    assert_eq!(good["items"][0]["orbit_sizes_check"]["holds"], true);
+    assert_eq!(
+        good["items"][0]["orbit_sizes_check"]["actual_fixed_points"],
+        serde_json::json!(["6", "0", "2", "0"])
+    );
+    let bad = run("4,1,1");
+    assert_eq!(bad["items"][0]["report"]["holds"], false);
+    assert_eq!(bad["items"][0]["orbit_sizes_check"]["holds"], false);
+    assert_eq!(
+        bad["items"][0]["orbit_sizes_check"]["mismatched_orbit_sizes"],
+        serde_json::json!([1, 2])
+    );
+
+    let output = run_polytool(
+        &[
+            "cyclic-sieving",
+            "--order",
+            "4",
+            "--orbit-sizes",
+            "4,2",
+            "--fixed-counts",
+            "6,0,2,0",
+        ],
+        "1,1,2,1,1\n",
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("alternatives"));
+}
+
+#[test]
+fn cyclic_sieving_text_reports_orbit_verdict() {
+    let output = run_polytool(&["cyclic-sieving", "--order", "6"], "10,1,0,3,0,1\n");
+    let stdout = String::from_utf8(output.stdout).expect("stdout is utf8");
+    assert!(stdout.contains("orbit size 3: -1 orbit(s)"));
+    assert!(stdout.contains("no C_n-action makes"));
+}
+
+#[test]
+fn bicyclic_sieving_one_plus_qt() {
+    let output = run_polytool(
+        &[
+            "bicyclic-sieving",
+            "--order1",
+            "2",
+            "--order2",
+            "2",
+            "--fixed-table",
+            "[[2,0],[0,2]]",
+            "--json",
+        ],
+        "[[1,0],[0,1]]\n",
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout is utf8");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("valid bicyclic JSON");
+    let report = &json["report"];
+    assert_eq!(report["holds"], true);
+    assert_eq!(report["integral"], true);
+    assert_eq!(report["product_basis_form"], true);
+    assert_eq!(
+        report["product_coordinates"],
+        serde_json::json!([["1", "-1"], ["-1", "2"]])
+    );
+    assert_eq!(
+        report["evaluations"],
+        serde_json::json!([["2", "0"], ["0", "2"]])
+    );
+
+    let output = run_polytool(
+        &[
+            "bicyclic-sieving",
+            "--order1",
+            "2",
+            "--order2",
+            "2",
+            "--fixed-table",
+            "[[2,0],[0,0]]",
+            "--json",
+        ],
+        "[[1,0],[0,1]]\n",
+    );
+    let stdout = String::from_utf8(output.stdout).expect("stdout is utf8");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("valid bicyclic JSON");
+    assert_eq!(json["report"]["holds"], false);
+    assert_eq!(json["report"]["mismatches"], serde_json::json!([[1, 1]]));
+}
+
+#[test]
+fn bicyclic_sieving_help_and_errors() {
+    let output = run_polytool(&["bicyclic-sieving", "--help"], "");
+    let stdout = String::from_utf8(output.stdout).expect("stdout is utf8");
+    assert!(stdout.contains("--order1"));
+    assert!(stdout.contains("1, -1, -1, 2"));
+    let output = run_polytool(&["bicyclic-sieving", "--order1", "2"], "[[1]]\n");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("requires --order1"));
+}
