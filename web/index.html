@@ -255,6 +255,13 @@ textarea:focus { outline: none; border-color: var(--c-link); }
 .copy-btn { font-size: 0.75rem; padding: 2px 8px; border: 1px solid var(--c-border); border-radius: 3px; background: var(--c-bg-gray); color: var(--c-text-sub); cursor: pointer; font-family: inherit; }
 .copy-btn:hover { background: var(--c-border); }
 .recurrence-plain { display: none; }
+.options[hidden] { display: none; }
+.representation-table { overflow-x: auto; margin: 0.8rem 0; }
+.representation-table table { width: 100%; border-collapse: collapse; }
+.representation-table th, .representation-table td {
+  padding: 0.45rem; text-align: left; border-bottom: 1px solid var(--c-border);
+}
+.representation-table tr[aria-selected="true"] { background: var(--c-bg-gray); }
 .extension-card {
   margin-top: 1rem;
   padding: 0.9rem;
@@ -879,6 +886,7 @@ footer {
     <span>Example:</span>
     <select id="sequencePicker" onchange="loadExample(this.value)">
       <option value="">Choose a sequence&hellip;</option>
+      <option value="A171608">A171608 &mdash; length / derivative tradeoffs</option>
       <option value="A001263">A001263 &mdash; Narayana numbers</option>
       <option value="touchard">A008277 &mdash; Touchard polynomials</option>
       <option value="A008288">A008288 &mdash; Delannoy numbers by antidiagonals</option>
@@ -965,18 +973,20 @@ Lines starting with # are ignored."></textarea>
     <span class="info">i<span class="tip">Tries increasingly complex recurrence shapes, starting from the simplest. Polynomial sequences use bounds up to depth 10, <span data-tex="t">t</span>-degree 5, <span data-tex="n">n</span>-degree 5, and derivative order 5; integer sequences use scalar recurrences in <span data-tex="n">n</span>. There is no time or candidate-count cutoff: it stops at the first match or after exhausting the bounded search. An unsuccessful exhaustive search can take a long time; use Cancel to stop it.</span></span>
     <label><input type="radio" name="searchMode" value="manual" onchange="toggleSearchMode()"> Manual</label>
     <span class="info">i<span class="tip">Set exact search bounds yourself. Useful when you know the expected recurrence shape or want to explore a specific search space.</span></span>
+    <label><input type="radio" name="searchMode" value="representations" onchange="toggleSearchMode()"> Compare representations</label>
+    <span class="info">i<span class="tip">Look for shorter recurrences using higher derivatives, within the bounds below. Keeps one preferred candidate per length/order pair. Matches are checked exactly on supplied rows; they are not proofs for all n.</span></span>
   </div>
   <div class="options disabled" id="manualOpts">
     <label>depth <input type="number" id="maxRecLen" value="3" min="1" max="10"></label>
     <span class="info">i<span class="tip">Maximum number of previous terms <span data-tex="P(n-1),\,P(n-2),\,\ldots">P(n&minus;1), P(n&minus;2), &hellip;</span> the recurrence may reference.</span></span>
 
-    <label class="polynomial-recurrence-option">t-deg <input type="number" id="maxVarDeg" value="2" min="0" max="6"></label>
+    <label class="polynomial-recurrence-option">t-deg <input type="number" id="maxVarDeg" value="3" min="0" max="6"></label>
     <span class="info polynomial-recurrence-option">i<span class="tip">Maximum degree in the polynomial variable <span data-tex="t">t</span> for each coefficient <span data-tex="a_k(n,t)">a_k(n, t)</span>.</span></span>
 
-    <label>n-deg <input type="number" id="maxIdxDeg" value="2" min="0" max="6"></label>
+    <label>n-deg <input type="number" id="maxIdxDeg" value="1" min="0" max="6"></label>
     <span class="info">i<span class="tip">Maximum degree in the index <span data-tex="n">n</span> for each coefficient <span data-tex="a_k(n,t)">a_k(n, t)</span>.</span></span>
 
-    <label class="polynomial-recurrence-option">D-order <input type="number" id="maxDiffDeg" value="1" min="0" max="5"></label>
+    <label class="polynomial-recurrence-option">D-order <input type="number" id="maxDiffDeg" value="2" min="0" max="5"></label>
     <span class="info polynomial-recurrence-option">i<span class="tip">Maximum order of the derivative operator <span data-tex="D=d/dt">D = d/dt</span> applied to terms. Allows recurrences involving <span data-tex="P(n-k),\,P'(n-k),\,P''(n-k),\,\ldots">P(n&minus;k), P&prime;(n&minus;k), P&Prime;(n&minus;k), &hellip;</span></span></span>
   </div>
   <div class="options">
@@ -988,6 +998,12 @@ Lines starting with # are ignored."></textarea>
 
     <label><input type="checkbox" id="tryAlternatingSign"> <span data-tex="(-1)^n">(-1)<sup>n</sup></span> terms</label>
     <span class="info">i<span class="tip">Also allow right-hand-side terms multiplied by <span data-tex="(-1)^n">(-1)<sup>n</sup></span>, such as <span data-tex="(-1)^n a_k(n,t)P(n-k)">(-1)<sup>n</sup> a_k(n, t) P(n&minus;k)</span>. Useful for alternating or parity-sensitive sequences.</span></span>
+  </div>
+  <div class="options" id="comparisonOptions" hidden>
+    <label>Search limit <input type="number" id="representationBudget" value="2000" min="0" max="100000"> configurations</label>
+    <label>Denominator t-deg <input type="number" id="representationDenomVar" value="0" min="0" max="6"></label>
+    <label>Denominator n-deg <input type="number" id="representationDenomIdx" value="1" min="0" max="6"></label>
+    <span class="recurrence-note">Partial results show which pairs still need searching.</span>
   </div>
   <button class="run" onclick="run('recurrence')" id="btnRec">Find recurrence</button>
   <button class="cancel" onclick="cancelRecurrence()" id="btnCancel" style="display:none">Cancel</button>
@@ -1003,9 +1019,9 @@ Lines starting with # are ignored."></textarea>
   Source code: <a href="https://github.com/PerAlexandersson/polytool">polytool</a>.
 </footer>
 
-<script src="pkg/polytool_web.js?v=20260920a"></script>
+<script src="pkg/polytool_web.js?v=20261020a"></script>
 <script>
-const ASSET_VERSION = '20260920a';
+const ASSET_VERSION = '20261020a';
 const EXAMPLES = {
   eulerian: {
     label: 'Eulerian polynomials A_n(t) \u2014 descent generating function on S_n',
@@ -1220,6 +1236,53 @@ let activeWorkflow = 'polynomial';
 const workflowDrafts = { polynomial: '', 'polynomial-sequence': '', 'integer-sequence': '' };
 
 const SEQUENCE_CATALOG = {
+  // Canonical rows: polytool oeis generate A171608 --rows 40 --format json.
+  A171608: {
+    label: 'A171608 — compare length 3/order 0, length 2/order 1, length 1/order 2',
+    lines: [
+      '# Choose Compare representations with depth 3, t-degree 3, n-degree 1, D-order 2.',
+      "1",
+      "2",
+      "0, 2",
+      "0, 3",
+      "0, 0, 3",
+      "0, 0, 4",
+      "0, 0, 0, 4",
+      "0, 0, 0, 5",
+      "0, 0, 0, 0, 5",
+      "0, 0, 0, 0, 6",
+      "0, 0, 0, 0, 0, 6",
+      "0, 0, 0, 0, 0, 7",
+      "0, 0, 0, 0, 0, 0, 7",
+      "0, 0, 0, 0, 0, 0, 8",
+      "0, 0, 0, 0, 0, 0, 0, 8",
+      "0, 0, 0, 0, 0, 0, 0, 9",
+      "0, 0, 0, 0, 0, 0, 0, 0, 9",
+      "0, 0, 0, 0, 0, 0, 0, 0, 10",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 10",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 11",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 15",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20",
+      "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 21",
+    ],
+  },
   A001263: {
     label: 'A001263 — Narayana numbers — peaks on Dyck paths and parking-function refinements',
     lines: EXAMPLES.narayana.lines
@@ -1786,6 +1849,9 @@ function setWorkflow(name, options) {
 function toggleSearchMode() {
   const adaptive = document.querySelector('input[name="searchMode"][value="adaptive"]').checked;
   document.getElementById('manualOpts').classList.toggle('disabled', adaptive);
+  const compare = document.querySelector('input[name="searchMode"][value="representations"]').checked;
+  document.getElementById('comparisonOptions').hidden = !compare;
+  document.getElementById('btnRec').textContent = compare ? 'Compare representations' : 'Find recurrence';
 }
 
 let wasmReady = false;
@@ -2784,6 +2850,78 @@ function renderDecompositionView() {
 
 // --- Recurrence via Web Worker ---
 
+function renderRecurrenceMenu(selected) {
+  const report = window._recurrenceMenu;
+  if (!report) return;
+  const items = report.representations;
+  const coverage = report.coverage.map(cell =>
+    'Length ' + cell.rec_len + ', derivative order ' + cell.diff_deg + ': ' +
+    cell.status.replaceAll('_', ' ') + ' (' + cell.configurations_considered + ' configurations)'
+  ).join('\n');
+  const incomplete = report.status === 'budget_exhausted';
+  let html = '<div class="recurrence-note">' +
+    (incomplete ? 'Search limit reached; this is a partial comparison. ' : 'Bounded comparison completed. ') +
+    'Exact fits to the supplied rows, not proofs for all n. One preferred fit per length/order bound pair; ' +
+    '“Tradeoff” marks candidates not dominated in length, derivative order, coefficient degrees, size, and checked start.</div>' +
+    '<div class="recurrence-stats">' + esc(items.length + ' representations · ' +
+      report.configurations_considered + ' configurations inspected · t-degree ≤ ' +
+      report.search.max_var_deg + ', n-degree ≤ ' + report.search.max_idx_deg) + '</div>';
+  if (items.length) {
+    html += '<div class="representation-table"><table><thead><tr>' +
+      '<th>Choose</th><th>Length</th><th>Derivative</th><th>t / n degree</th><th>Checked n</th>' +
+      '</tr></thead><tbody>' + items.map((item, i) => {
+        const c = item.complexity;
+        return '<tr aria-selected="' + (i === selected) + '"><td>' +
+          '<button class="copy-btn" onclick="renderRecurrenceMenu(' + i + ')">' +
+          (i === selected ? 'Selected' : 'View') + '</button> ' +
+          (report.frontier.includes(i) ? 'Tradeoff' : 'Alternative') + '</td><td>' +
+          c.rec_len + '</td><td>' + c.diff_deg + '</td><td>' + c.var_deg + ' / ' + c.idx_deg +
+          '</td><td>' + item.first_checked_index + '–' + item.last_checked_index + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    const item = items[selected];
+    const c = item.complexity;
+    window._lastRecPlain = item.recurrence;
+    window._lastRecLatex = item.latex;
+    window._lastRecJson = JSON.stringify(item.recurrence_json, null, 2);
+    window._lastRecMathematica = '';
+    window._lastRecSage = '';
+    window._lastGeneratedRows = null;
+    html += '<div class="recurrence-display" id="recurrence-katex"></div>' +
+      '<div class="recurrence-copy">' +
+      '<button class="copy-btn" onclick="copyRec(this,\'plain\')">Copy plaintext</button>' +
+      '<button class="copy-btn" onclick="copyRec(this,\'latex\')">Copy LaTeX</button>' +
+      '<button class="copy-btn" onclick="copyRec(this,\'json\')">Copy selected JSON</button></div>' +
+      '<div class="recurrence-note">' + esc(
+        'Rows are indexed from 1. ' + item.fit_polynomials + ' fit rows; ' +
+        item.verification_polynomials + ' held-out rows. Denominator t / n degrees: ' +
+        c.denom_var_deg + ' / ' + c.denom_idx_deg + '.'
+      ) + '</div>';
+    html += item.singular_checked_indices.length
+      ? '<div class="recurrence-note">Row generation is undefined at checked indices ' +
+        esc(item.singular_checked_indices.join(', ')) + ' where the denominator vanishes.</div>'
+      : renderRecurrenceExtension(report.source_rows);
+  } else {
+    html += '<p>No candidate returned. Try more rows or different bounds.</p>';
+  }
+  html += '<details><summary>Search coverage and full JSON</summary>' +
+    '<p class="recurrence-note">“Not found” is a search outcome, not a nonexistence proof. ' +
+    'Insufficient data and fitting heuristics can also prevent a candidate.</p>' +
+    '<pre class="recurrence-code">' + esc(coverage) + '</pre>' +
+    '<button class="copy-btn" onclick="copyRecurrenceMenu(this)">Copy comparison JSON</button></details>';
+  setResult(html);
+  if (items.length) {
+    const slot = document.getElementById('recurrence-katex');
+    try { katex.render(items[selected].latex, slot, {displayMode: true, throwOnError: false}); }
+    catch (_) { slot.textContent = items[selected].recurrence; }
+  }
+}
+
+function copyRecurrenceMenu(button) {
+  navigator.clipboard.writeText(JSON.stringify(window._recurrenceMenu, null, 2)).then(() => {
+    button.textContent = 'Copied!';
+  });
+}
+
 function createWorker() {
   const base = new URL('.', location.href).href;
   const code = `
@@ -2793,11 +2931,14 @@ function createWorker() {
     });
     onmessage = function(e) {
       if (e.data.type === 'find_recurrence') {
-        const result = wasm_bindgen.find_recurrence(
+        const finder = e.data.representations
+          ? wasm_bindgen.find_recurrence_representations : wasm_bindgen.find_recurrence;
+        const result = finder(
           e.data.input, e.data.max_rec_len, e.data.max_var_deg,
           e.data.max_idx_deg, e.data.max_diff_deg,
           e.data.try_inhomogeneous, e.data.try_denominator,
-          e.data.try_alternating_sign
+          e.data.try_alternating_sign, e.data.max_candidates,
+          e.data.max_denom_var_deg, e.data.max_denom_idx_deg
         );
         postMessage({type: 'result', data: result});
       }
@@ -2822,6 +2963,10 @@ function startRecurrence(text) {
   };
   const params = {
     type: 'find_recurrence',
+    representations: document.querySelector('input[name="searchMode"][value="representations"]').checked,
+    max_candidates: readInt('representationBudget', 2000),
+    max_denom_var_deg: readInt('representationDenomVar', 0),
+    max_denom_idx_deg: readInt('representationDenomIdx', 1),
     input: text,
     max_rec_len: adaptive ? 10 : readInt('maxRecLen', 3),
     max_var_deg: activeWorkflow === 'integer-sequence'
@@ -2849,7 +2994,11 @@ function startRecurrence(text) {
       document.getElementById('btnRec').disabled = false;
       document.getElementById('btnCancel').style.display = 'none';
 
-      if (data.found) {
+      if (data.schema === 'polytool.recurrence-representations.v1') {
+        window._recurrenceMenu = data;
+        renderRecurrenceMenu(data.frontier[0] ?? 0);
+        setStatus((data.status === 'budget_exhausted' ? 'Partial comparison' : 'Comparison completed') + ' in ' + ms + ' ms.');
+      } else if (data.found) {
         const domainNote = activeWorkflow === 'integer-sequence'
           ? '<div class="recurrence-note">Here <strong>P(n)</strong> denotes the entered integer sequence; the search is restricted to scalar recurrences in n.</div>'
           : '';

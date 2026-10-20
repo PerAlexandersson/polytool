@@ -1,10 +1,10 @@
 use num_bigint::BigInt;
 use polytool::recurrence::{
     candidate_complexity, find_recurrence_adaptive_rational_with_budget,
-    find_recurrence_adaptive_with_budget, format_rational_coeff, parse_rational_coeff,
-    AdaptiveSearchBudget, AdaptiveSearchOptions, AdaptiveSearchOutcome, AdaptiveSearchResult,
-    AdaptiveSearchSummary, BigRational, BivarPoly, Recurrence, RecurrenceJson,
-    RecurrenceJsonSearch, RecurrenceOptions, RecurrenceOptionsJson,
+    find_recurrence_adaptive_with_budget, find_recurrence_representations_rational,
+    format_rational_coeff, parse_rational_coeff, AdaptiveSearchBudget, AdaptiveSearchOptions,
+    AdaptiveSearchOutcome, AdaptiveSearchResult, AdaptiveSearchSummary, BigRational, BivarPoly,
+    Recurrence, RecurrenceJson, RecurrenceJsonSearch, RecurrenceOptions, RecurrenceOptionsJson,
 };
 use polytool::sequences::{
     chebyshev_polynomials_t_bigint, chebyshev_polynomials_u_bigint, eulerian_polynomials_bigint,
@@ -3419,7 +3419,28 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Generate or extend coefficient rows from recurrence JSON returned by find_recurrence."
+        description = "Find several recurrence representations trading lag length against derivative order. Uses the same inputs and bounds as find_recurrence, but keeps one preferred exact fit per length/order bound pair. Returns polytool.recurrence-representations.v1: candidates with reusable recurrence_json objects, actual complexity, checked starting indices, finite-fit evidence, a nondominated frontier, and per-pair coverage. The candidate budget is global; incomplete coverage is explicit. No automatic denominator escalation. These are finite-data candidates, not all-rank certificates, a complete annihilator basis, or nonexistence proofs. include_code is accepted for request compatibility; recurrence_json is always included and language code is not generated."
+    )]
+    pub fn find_recurrence_representations(
+        &self,
+        Parameters(input): Parameters<FindRecurrenceRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        let (search, budget) = apply_recurrence_options(input.effective_options())?;
+        let batch = parse_recurrence_batch_rational(&input)?;
+        let polynomials = collect_rational_polynomials_or_errors(batch)
+            .map_err(|_| invalid_params("one or more polynomials failed to parse"))?;
+        let report = find_recurrence_representations_rational(&polynomials, &search, budget)
+            .map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize recurrence menu")
+        else {
+            unreachable!("recurrence report is an object")
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Generate or extend coefficient rows from recurrence JSON returned by find_recurrence or one recurrence_json object from find_recurrence_representations."
     )]
     pub fn generate_recurrence_rows(
         &self,
@@ -4669,6 +4690,36 @@ mod tests {
         let serialized = serde_json::to_value(compact).unwrap();
         for absent in ["mathematica", "python", "sage", "recurrence_json"] {
             assert!(serialized.get(absent).is_none(), "unexpected {absent}");
+        }
+    }
+
+    #[test]
+    fn recurrence_representations_tool_uses_shared_schema_and_global_budget() {
+        let server = PolynomialToolsServer::new();
+        for limit in [0, 1] {
+            let input: FindRecurrenceRequest = serde_json::from_value(json!({
+                "coefficients": [["9007199254740993"], ["18014398509481986"],
+                    ["36028797018963972"], ["72057594037927944"], ["144115188075855888"]],
+                "max_rec_len": 1, "max_diff_deg": 0, "max_idx_deg": 0,
+                "max_var_deg": 0, "max_candidates": limit
+            }))
+            .unwrap();
+            let Json(report) = server
+                .find_recurrence_representations(Parameters(input))
+                .unwrap();
+            assert_eq!(report["schema"], "polytool.recurrence-representations.v1");
+            assert_eq!(report["configurations_considered"], limit);
+            if limit == 0 {
+                assert_eq!(report["status"], "budget_exhausted");
+                assert_eq!(report["coverage"][0]["status"], "incomplete");
+            } else {
+                assert_eq!(report["status"], "complete");
+                assert_eq!(report["representations"][0]["evidence"], "exact_fit");
+                assert_eq!(
+                    report["representations"][0]["recurrence_json"]["initial_polynomials"][0][0],
+                    "9007199254740993"
+                );
+            }
         }
     }
 

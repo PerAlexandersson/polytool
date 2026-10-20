@@ -446,6 +446,62 @@ pub fn find_recurrence(
 }
 
 #[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn find_recurrence_representations(
+    input: &str,
+    max_rec_len: u32,
+    max_var_deg: u32,
+    max_idx_deg: u32,
+    max_diff_deg: u32,
+    try_inhomogeneous: bool,
+    try_denominator: bool,
+    try_alternating_sign: bool,
+    max_candidates: u32,
+    max_denom_var_deg: u32,
+    max_denom_idx_deg: u32,
+) -> String {
+    let (polys, errors) = parse_ok(input);
+    let fail = |message: &str| serde_json::json!({"error": message}).to_string();
+    if !errors.is_empty() {
+        return fail(&format!("invalid polynomial input: {}", errors.join("; ")));
+    }
+    if max_rec_len == 0
+        || max_rec_len > 10
+        || max_var_deg > 6
+        || max_idx_deg > 6
+        || max_diff_deg > 5
+        || max_candidates > 100_000
+        || max_denom_var_deg > 6
+        || max_denom_idx_deg > 6
+        || polys.len() > 1000
+    {
+        return fail("comparison limits: length 1–10, coefficient degrees 0–6, derivative order 0–5, at most 100000 configurations and 1000 rows");
+    }
+    let search = AdaptiveSearchOptions {
+        max_rec_len: max_rec_len as usize,
+        max_var_deg: max_var_deg as usize,
+        max_idx_deg: max_idx_deg as usize,
+        max_diff_deg: max_diff_deg as usize,
+        try_inhomogeneous,
+        try_denominator,
+        try_alternating_sign,
+        max_denom_idx_deg: max_denom_idx_deg as usize,
+        max_denom_var_deg: max_denom_var_deg as usize,
+        max_inhomo_idx_deg: max_idx_deg as usize,
+        max_inhomo_var_deg: max_var_deg as usize,
+        ..Default::default()
+    };
+    match polytool::recurrence::find_recurrence_representations_rational(
+        &integer_polys_to_rational(&polys),
+        &search,
+        AdaptiveSearchBudget::limited(max_candidates as usize),
+    ) {
+        Ok(report) => serde_json::to_string(&report).expect("serialize recurrence menu"),
+        Err(message) => fail(&message),
+    }
+}
+
+#[wasm_bindgen]
 pub fn generate_recurrence_rows(recurrence_json: &str, total_rows: usize) -> String {
     if total_rows > 1000 {
         return serde_json::json!({
@@ -619,6 +675,45 @@ mod tests {
     };
     use num_bigint::BigInt;
     use serde_json::Value;
+
+    #[test]
+    fn representation_export_preserves_exact_coefficients_and_rejects_bad_rows() {
+        let input = "9007199254740993\n18014398509481986\n36028797018963972\n72057594037927944\n144115188075855888";
+        let report: Value = serde_json::from_str(&super::find_recurrence_representations(
+            input, 1, 0, 0, 0, false, false, false, 10, 0, 0,
+        ))
+        .unwrap();
+        assert_eq!(report["schema"], "polytool.recurrence-representations.v1");
+        assert_eq!(report["status"], "complete");
+        assert_eq!(report["representations"][0]["evidence"], "exact_fit");
+        assert_eq!(
+            report["representations"][0]["recurrence_json"]["initial_polynomials"][0][0],
+            "9007199254740993"
+        );
+        let partial: Value = serde_json::from_str(&super::find_recurrence_representations(
+            input, 1, 0, 0, 0, false, false, false, 0, 0, 0,
+        ))
+        .unwrap();
+        assert_eq!(partial["status"], "budget_exhausted");
+        let bad: Value = serde_json::from_str(&super::find_recurrence_representations(
+            "1\n2\nnot a polynomial\n4\n8",
+            1,
+            0,
+            0,
+            0,
+            false,
+            false,
+            false,
+            10,
+            0,
+            0,
+        ))
+        .unwrap();
+        assert!(bad["error"]
+            .as_str()
+            .unwrap()
+            .contains("invalid polynomial input"));
+    }
 
     const HUGE: &str = "1000000000000000000000000000000";
 
