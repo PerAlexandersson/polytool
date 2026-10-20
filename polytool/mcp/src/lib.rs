@@ -27,6 +27,7 @@ const MCP_MAX_BATCH_POLYNOMIALS: usize = 512;
 const MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL: usize = 4_096;
 const MCP_MAX_TOTAL_COEFFICIENTS: usize = 65_536;
 const MCP_MAX_COEFFICIENT_TEXT_BYTES: usize = 16_384;
+const MCP_MAX_CYCLIC_ORDER: usize = 10_000;
 const MCP_MAX_SEQUENCE_N: usize = 200;
 const MCP_MAX_RECURRENCE_ROWS: usize = 200;
 const MCP_MAX_RECURRENCE_INPUT_ROWS: usize = 256;
@@ -451,7 +452,24 @@ pub struct HStarInequalitiesRequest {
 pub struct CyclicSievingRequest {
     pub polynomial: BigIntPolynomialInput,
     pub order: usize,
+    /// Fixed-point counts `fix(g^d)` for `d = 0..order-1`.
     pub fixed_counts: Option<Vec<BigIntCoefficientInput>>,
+    /// Alternative to `fixed_counts`: the multiset of orbit sizes (each a
+    /// divisor of `order`) of a concrete cyclic action.
+    pub orbit_sizes: Option<Vec<usize>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BicyclicSievingRequest {
+    /// Coefficient matrix: `matrix[i][j]` is the coefficient of `q^i t^j`.
+    pub matrix: Vec<Vec<BigIntCoefficientInput>>,
+    /// Order `n1` of the cyclic group acting through `q`.
+    pub order1: usize,
+    /// Order `n2` of the cyclic group acting through `t`.
+    pub order2: usize,
+    /// Optional `n1 x n2` table of fixed-point counts `fix(g1^d1 g2^d2)`.
+    pub fixed_table: Option<Vec<Vec<BigIntCoefficientInput>>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -924,8 +942,91 @@ pub struct CyclicSievingReportItem {
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct ResidueClassItem {
+    pub gcd_class: usize,
+    pub indices: Vec<usize>,
+    pub residues: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub common_value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct OrbitSizeEntryItem {
+    pub orbit_size: usize,
+    /// `r = n / orbit_size`, the index of the orbit-basis polynomial `h_r`.
+    pub basis_index: usize,
+    /// Number of orbits of this size (negative: not realizable).
+    pub orbit_count: String,
+    /// Number of elements in orbits of this size, `orbit_size * orbit_count`.
+    pub element_count: String,
+}
+
+/// Orbit decomposition (Alexandersson-Amini, arXiv:1804.01447).
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct OrbitDecompositionItem {
+    pub order: usize,
+    /// Coefficients of `f mod q^n - 1`.
+    pub reduced_residues: Vec<String>,
+    pub classes: Vec<ResidueClassItem>,
+    /// `f(zeta^d)` is an integer for every `d` (iff `c_j = c_gcd(j,n)`).
+    pub integral: bool,
+    pub violating_classes: Vec<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orbits: Option<Vec<OrbitSizeEntryItem>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fixed_points: Option<Vec<String>>,
+    /// Hypothesis of the theorem: all input coefficients are nonnegative.
+    pub natural_coefficients: bool,
+    /// All orbit counts are nonnegative (all `S_k >= 0`); present iff integral.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cone_condition: Option<bool>,
+    /// Some cyclic action has the fixed-point counts `f(zeta^d)`.
+    pub realizable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct OrbitSizesCheckItem {
+    pub orbit_sizes: Vec<usize>,
+    pub num_elements: String,
+    pub actual_orbits: Vec<OrbitSizeEntryItem>,
+    pub actual_fixed_points: Vec<String>,
+    pub mismatched_orbit_sizes: Vec<usize>,
+    pub holds: bool,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct CyclicSievingResponse {
     pub report: CyclicSievingReportItem,
+    pub orbit_decomposition: OrbitDecompositionItem,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orbit_sizes_check: Option<OrbitSizesCheckItem>,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct BicyclicSievingResponse {
+    pub order1: usize,
+    pub order2: usize,
+    pub reduced_matrix: Vec<Vec<String>>,
+    /// `f(zeta1^d1, zeta2^d2)`; `null` where the value is not an integer.
+    pub evaluations: Vec<Vec<Option<String>>>,
+    pub integral: bool,
+    pub natural_coefficients: bool,
+    pub divisors1: Vec<usize>,
+    pub divisors2: Vec<usize>,
+    /// `c_{j1,j2} = c_{gcd(j1,n1),gcd(j2,n2)}` for all `j1, j2`.
+    pub product_basis_form: bool,
+    /// Coordinates `a_{r1,r2}` in the basis `h_{r1}(q) h_{r2}(t)` (rows `r1` in
+    /// `divisors1`, columns `r2` in `divisors2`).  They are NOT orbit counts and
+    /// may be negative (e.g. `1 + q t` for `C_2 x C_2` gives 1, -1, -1, 2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub product_coordinates: Option<Vec<Vec<String>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub product_formula_evaluations: Option<Vec<Vec<String>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fixed_table: Option<Vec<Vec<String>>>,
+    pub mismatches: Vec<[usize; 2]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub holds: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
@@ -1684,6 +1785,79 @@ fn cyclic_power_check_item(check: &CyclicSievingPowerCheck) -> CyclicSievingPowe
         evaluation: root_evaluation_item(&check.evaluation),
         holds: check.holds,
     }
+}
+
+fn orbit_entry_items(entries: &[OrbitSizeEntry]) -> Vec<OrbitSizeEntryItem> {
+    entries
+        .iter()
+        .map(|entry| OrbitSizeEntryItem {
+            orbit_size: entry.orbit_size,
+            basis_index: entry.basis_index,
+            orbit_count: entry.orbit_count.to_string(),
+            element_count: entry.element_count.to_string(),
+        })
+        .collect()
+}
+
+fn orbit_decomposition_item(dec: &OrbitDecomposition) -> OrbitDecompositionItem {
+    OrbitDecompositionItem {
+        order: dec.order,
+        reduced_residues: bigint_strings(&dec.reduced_residues),
+        classes: dec
+            .classes
+            .iter()
+            .map(|class| ResidueClassItem {
+                gcd_class: class.gcd_class,
+                indices: class.indices.clone(),
+                residues: bigint_strings(&class.residues),
+                common_value: class.common_value.as_ref().map(ToString::to_string),
+            })
+            .collect(),
+        integral: dec.integral,
+        violating_classes: dec.violating_classes.clone(),
+        orbits: dec.orbits.as_deref().map(orbit_entry_items),
+        fixed_points: dec.fixed_points.as_deref().map(bigint_strings),
+        natural_coefficients: dec.natural_coefficients,
+        cone_condition: dec.cone_condition,
+        realizable: dec.realizable,
+    }
+}
+
+fn orbit_sizes_check_item(check: &OrbitSizesCheck) -> OrbitSizesCheckItem {
+    OrbitSizesCheckItem {
+        orbit_sizes: check.orbit_sizes.clone(),
+        num_elements: check.num_elements.to_string(),
+        actual_orbits: orbit_entry_items(&check.actual_orbits),
+        actual_fixed_points: bigint_strings(&check.actual_fixed_points),
+        mismatched_orbit_sizes: check.mismatched_orbit_sizes.clone(),
+        holds: check.holds,
+    }
+}
+
+fn bigint_matrix_strings(matrix: &[Vec<BigInt>]) -> Vec<Vec<String>> {
+    matrix.iter().map(|row| bigint_strings(row)).collect()
+}
+
+fn parse_bigint_matrix(
+    input: &[Vec<BigIntCoefficientInput>],
+    name: &str,
+) -> Result<Vec<Vec<BigInt>>, McpError> {
+    if input.len() > MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL {
+        return Err(invalid_params(format!(
+            "`{name}` has {} rows; the MCP limit is {MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL}",
+            input.len()
+        )));
+    }
+    let cells: usize = input.iter().map(Vec::len).sum();
+    if cells > MCP_MAX_TOTAL_COEFFICIENTS {
+        return Err(invalid_params(format!(
+            "`{name}` has {cells} entries; the MCP limit is {MCP_MAX_TOTAL_COEFFICIENTS}"
+        )));
+    }
+    input
+        .iter()
+        .map(|row| parse_bigint_coefficients(row))
+        .collect()
 }
 
 fn cyclic_sieving_report_item(report: &CyclicSievingReport) -> CyclicSievingReportItem {
@@ -3427,23 +3601,110 @@ impl PolynomialToolsServer {
         if input.order == 0 {
             return Err(invalid_params("`order` must be positive"));
         }
+        if input.order > MCP_MAX_CYCLIC_ORDER {
+            return Err(invalid_params(format!(
+                "`order` {} exceeds the MCP limit {MCP_MAX_CYCLIC_ORDER}",
+                input.order
+            )));
+        }
+        if input.fixed_counts.is_some() && input.orbit_sizes.is_some() {
+            return Err(invalid_params(
+                "`fixed_counts` and `orbit_sizes` are alternatives; give only one",
+            ));
+        }
+        if input
+            .orbit_sizes
+            .as_ref()
+            .is_some_and(|sizes| sizes.len() > MCP_MAX_TOTAL_COEFFICIENTS)
+        {
+            return Err(invalid_params(format!(
+                "`orbit_sizes` may have at most {MCP_MAX_TOTAL_COEFFICIENTS} entries"
+            )));
+        }
         let polynomial = normalize_bigint_polynomial(parse_required_bigint_polynomial(
             &input.polynomial,
             "polynomial",
         )?);
-        let fixed_counts = input
-            .fixed_counts
+        let orbit_sizes_check = input
+            .orbit_sizes
             .as_ref()
-            .map(|counts| parse_bigint_coefficients(counts))
-            .transpose()?;
+            .map(|sizes| {
+                cyclic_sieving_check_orbit_sizes(&polynomial.coefficients, input.order, sizes)
+            })
+            .transpose()
+            .map_err(invalid_params)?;
+        let fixed_counts = match &orbit_sizes_check {
+            Some(check) => Some(check.actual_fixed_points.clone()),
+            None => input
+                .fixed_counts
+                .as_ref()
+                .map(|counts| parse_bigint_coefficients(counts))
+                .transpose()?,
+        };
         let report = cyclic_sieving_report_bigint(
             &polynomial.coefficients,
             input.order,
             fixed_counts.as_deref(),
         )
         .map_err(invalid_params)?;
+        let decomposition =
+            cyclic_sieving_orbit_decomposition_bigint(&polynomial.coefficients, input.order)
+                .map_err(invalid_params)?;
         Ok(Json(CyclicSievingResponse {
             report: cyclic_sieving_report_item(&report),
+            orbit_decomposition: orbit_decomposition_item(&decomposition),
+            orbit_sizes_check: orbit_sizes_check.as_ref().map(orbit_sizes_check_item),
+        }))
+    }
+
+    #[tool(
+        description = "Check bicyclic sieving for G = C_n1 x C_n2 and f(q,t) given as a coefficient matrix (matrix[i][j] = coeff of q^i t^j). Reduces modulo (q^n1-1, t^n2-1), evaluates exactly at all (zeta_n1^d1, zeta_n2^d2), reports integrality, and, when c_(j1,j2)=c_(gcd(j1,n1),gcd(j2,n2)), the coordinates in the product basis h_r1(q)h_r2(t) (not orbit counts; may be negative: 1+qt gives 1,-1,-1,2). With fixed_table (n1 x n2 table of fix(g1^d1 g2^d2)) it checks the CSP equalities."
+    )]
+    pub fn bicyclic_sieving(
+        &self,
+        Parameters(input): Parameters<BicyclicSievingRequest>,
+    ) -> Result<Json<BicyclicSievingResponse>, McpError> {
+        if input.order1 == 0 || input.order2 == 0 {
+            return Err(invalid_params("`order1` and `order2` must be positive"));
+        }
+        let matrix = parse_bigint_matrix(&input.matrix, "matrix")?;
+        let table = input
+            .fixed_table
+            .as_ref()
+            .map(|table| parse_bigint_matrix(table, "fixed_table"))
+            .transpose()?;
+        let report =
+            bicyclic_sieving_report_bigint(&matrix, input.order1, input.order2, table.as_deref())
+                .map_err(invalid_params)?;
+        Ok(Json(BicyclicSievingResponse {
+            order1: report.order1,
+            order2: report.order2,
+            reduced_matrix: bigint_matrix_strings(&report.reduced_matrix),
+            evaluations: report
+                .evaluations
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|cell| cell.as_ref().map(ToString::to_string))
+                        .collect()
+                })
+                .collect(),
+            integral: report.integral,
+            natural_coefficients: report.natural_coefficients,
+            divisors1: report.divisors1.clone(),
+            divisors2: report.divisors2.clone(),
+            product_basis_form: report.product_basis_form,
+            product_coordinates: report
+                .product_coordinates
+                .as_deref()
+                .map(bigint_matrix_strings),
+            product_formula_evaluations: report
+                .product_formula_evaluations
+                .as_deref()
+                .map(bigint_matrix_strings),
+            fixed_table: report.fixed_table.as_deref().map(bigint_matrix_strings),
+            mismatches: report.mismatches.iter().map(|&(a, b)| [a, b]).collect(),
+            holds: report.holds,
         }))
     }
 
@@ -3901,6 +4162,7 @@ mod tests {
                 polynomial: bigint_coeffs(&["1", "1"]),
                 order: 2,
                 fixed_counts: Some(vec![1.into(), 0.into()]),
+                orbit_sizes: None,
             }))
             .unwrap();
         assert_eq!(response.report.holds, Some(false));
@@ -3910,9 +4172,142 @@ mod tests {
                 polynomial: bigint_coeffs(&["1", "1"]),
                 order: 2,
                 fixed_counts: Some(vec![2.into(), 0.into()]),
+                orbit_sizes: None,
             }))
             .unwrap();
         assert_eq!(response.report.holds, Some(true));
+    }
+
+    fn cyclic_request(
+        coefficients: &[&str],
+        order: usize,
+        orbit_sizes: Option<Vec<usize>>,
+    ) -> CyclicSievingRequest {
+        CyclicSievingRequest {
+            polynomial: bigint_coeffs(coefficients),
+            order,
+            fixed_counts: None,
+            orbit_sizes,
+        }
+    }
+
+    #[test]
+    fn cyclic_sieving_reports_orbit_decomposition_and_cone_condition() {
+        let server = PolynomialToolsServer::new();
+        // Alexandersson-Amini counterexample: integral, natural, but S_3 = -3.
+        let Json(response) = server
+            .cyclic_sieving(Parameters(cyclic_request(
+                &["10", "1", "0", "3", "0", "1"],
+                6,
+                None,
+            )))
+            .unwrap();
+        let dec = &response.orbit_decomposition;
+        assert!(dec.integral && dec.natural_coefficients);
+        assert_eq!(dec.cone_condition, Some(false));
+        assert!(!dec.realizable);
+        assert_eq!(
+            dec.fixed_points.as_ref().unwrap(),
+            &["15", "8", "12", "5", "12", "8"]
+        );
+        let size3 = dec
+            .orbits
+            .as_ref()
+            .unwrap()
+            .iter()
+            .find(|entry| entry.orbit_size == 3)
+            .unwrap();
+        assert_eq!(size3.orbit_count, "-1");
+        assert_eq!(size3.element_count, "-3");
+        assert!(response.orbit_sizes_check.is_none());
+
+        // non-integral
+        let Json(response) = server
+            .cyclic_sieving(Parameters(cyclic_request(&["1", "1"], 3, None)))
+            .unwrap();
+        assert!(!response.orbit_decomposition.integral);
+        assert_eq!(response.orbit_decomposition.violating_classes, vec![1]);
+        assert!(response.orbit_decomposition.orbits.is_none());
+        assert!(!response.orbit_decomposition.realizable);
+    }
+
+    #[test]
+    fn cyclic_sieving_orbit_sizes_alternative_to_fixed_counts() {
+        let server = PolynomialToolsServer::new();
+        let coefficients = ["1", "1", "2", "1", "1"];
+        let Json(response) = server
+            .cyclic_sieving(Parameters(cyclic_request(
+                &coefficients,
+                4,
+                Some(vec![4, 2]),
+            )))
+            .unwrap();
+        assert_eq!(response.report.holds, Some(true));
+        assert!(response.orbit_sizes_check.as_ref().unwrap().holds);
+        let Json(response) = server
+            .cyclic_sieving(Parameters(cyclic_request(
+                &coefficients,
+                4,
+                Some(vec![4, 1, 1]),
+            )))
+            .unwrap();
+        assert_eq!(response.report.holds, Some(false));
+        let check = response.orbit_sizes_check.unwrap();
+        assert!(!check.holds);
+        assert_eq!(check.mismatched_orbit_sizes, vec![1, 2]);
+
+        let mut both = cyclic_request(&coefficients, 4, Some(vec![4, 2]));
+        both.fixed_counts = Some(vec![6.into(), 0.into(), 2.into(), 0.into()]);
+        assert!(server.cyclic_sieving(Parameters(both)).is_err());
+        assert!(server
+            .cyclic_sieving(Parameters(cyclic_request(&coefficients, 4, Some(vec![3]))))
+            .is_err());
+    }
+
+    #[test]
+    fn bicyclic_sieving_one_plus_qt() {
+        let server = PolynomialToolsServer::new();
+        let matrix = |rows: &[&[i64]]| -> Vec<Vec<BigIntCoefficientInput>> {
+            rows.iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|&v| BigIntCoefficientInput::Integer(v))
+                        .collect()
+                })
+                .collect()
+        };
+        let Json(response) = server
+            .bicyclic_sieving(Parameters(BicyclicSievingRequest {
+                matrix: matrix(&[&[1, 0], &[0, 1]]),
+                order1: 2,
+                order2: 2,
+                fixed_table: Some(matrix(&[&[2, 0], &[0, 2]])),
+            }))
+            .unwrap();
+        assert_eq!(response.holds, Some(true));
+        assert!(response.integral && response.product_basis_form);
+        assert_eq!(
+            response.product_coordinates.unwrap(),
+            vec![vec!["1", "-1"], vec!["-1", "2"]]
+        );
+        let Json(response) = server
+            .bicyclic_sieving(Parameters(BicyclicSievingRequest {
+                matrix: matrix(&[&[1, 0], &[0, 1]]),
+                order1: 2,
+                order2: 2,
+                fixed_table: Some(matrix(&[&[2, 0], &[0, 0]])),
+            }))
+            .unwrap();
+        assert_eq!(response.holds, Some(false));
+        assert_eq!(response.mismatches, vec![[1, 1]]);
+        assert!(server
+            .bicyclic_sieving(Parameters(BicyclicSievingRequest {
+                matrix: matrix(&[&[1]]),
+                order1: 0,
+                order2: 2,
+                fixed_table: None,
+            }))
+            .is_err());
     }
 
     #[test]

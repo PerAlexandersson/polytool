@@ -1,5 +1,29 @@
 # Handoff
 
+## Completed: Polytool CSP orbit decomposition and bicyclic sieving — 2026-10-20
+
+`polytool::cyclic_sieving` now decomposes `f mod q^n - 1` in the orbit basis
+`h_r = 1 + q^r + ... + q^(n-r)` (`cyclic_sieving_orbit_decomposition_bigint`):
+integrality via Désarménien (`c_j = c_gcd(j,n)`), predicted orbit counts by
+Möbius inversion, and the Alexandersson–Amini realizability criterion (all
+orbit counts nonnegative; arXiv:1804.01447). Also integer conversions between
+orbit sizes, orbit counts and fixed points, `cyclic_sieving_check_orbit_sizes`,
+and `bicyclic_sieving_report_bigint` (exact evaluations via `Phi_lcm`). CLI:
+`cyclic-sieving --orbit-sizes`, new `bicyclic-sieving`; MCP: decomposition
+fields and a `bicyclic_sieving` tool (order caps 10000 and n1*n2 <= 2500).
+Gate: polytool and polytool-mcp tests, clippy `-D warnings`, fmt, standalone
+metadata.
+
+Caveat recorded in the docs: the multivariate basis theorem of
+Alexandersson–Amini (`thm:multmodbasis`) fails when `gcd(n1, n2) > 1`:
+`1 + q t^2 + q^2 t` (one diagonal orbit of `C_3 x C_3`) is integer-valued but
+not in the product span. The bicyclic report therefore treats the product
+form only as a sufficient condition.
+
+Open (not fixed): `sym_poly_core::tableau::word_charge` is wrong: it gives
+charge 3 to both `312` and `213` (only one permutation of `123` has charge 3).
+Found by the cylindric CSP experiment (scratch, not in this repository).
+
 ## Completed: Polytool issue #9 coefficient diagnosis — 2026-10-18
 
 The [GitHub issue](https://github.com/PerAlexandersson/polytool/issues/9)

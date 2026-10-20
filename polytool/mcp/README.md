@@ -615,13 +615,41 @@ Example arguments:
 
 Profile or check one polynomial against one cyclic group order.  If
 `fixed_counts` is omitted, the tool returns exact root-of-unity evaluations.  If
-`fixed_counts` is supplied, it checks the CSP equalities.
+`fixed_counts` is supplied, it checks the CSP equalities.  Alternatively,
+`orbit_sizes` (a multiset of divisors of `order`) describes a concrete action;
+it is converted to fixed-point counts and also compared orbit by orbit
+(`orbit_sizes_check`).  The response always includes `orbit_decomposition`
+(Alexandersson--Amini, arXiv:1804.01447): the reduced residues `f mod q^n - 1`,
+`integral` (Desarmenien: `c_j = c_gcd(j,n)`) with `violating_classes`, the
+predicted `orbits` (`orbit_count` `a_r` and `element_count` `S_k`), the
+`fixed_points`, `natural_coefficients`, `cone_condition` (all orbit counts
+nonnegative) and `realizable`.  All integers are strings.
 
 ```json
 {
   "polynomial": { "coefficients": [1, 1] },
   "order": 2,
   "fixed_counts": [2, 0]
+}
+```
+
+### `bicyclic_sieving`
+
+Bicyclic sieving for `C_n1 x C_n2` and `f(q, t)` given as a matrix with
+`matrix[i][j]` the coefficient of `q^i t^j`.  The tool reduces modulo
+`(q^n1 - 1, t^n2 - 1)`, evaluates exactly at all root-of-unity pairs, reports
+`integral`, and if `c_(j1,j2) = c_(gcd(j1,n1),gcd(j2,n2))` the coordinates
+`product_coordinates` in the basis `h_r1(q) h_r2(t)`.  These are not orbit
+counts and may be negative (`1 + q t` on `C_2 x C_2` gives `1, -1, -1, 2`).
+With `fixed_table` (an `n1 x n2` table of `fix(g1^d1 g2^d2)`) it checks the CSP
+equalities and lists `mismatches`.
+
+```json
+{
+  "matrix": [[1, 0], [0, 1]],
+  "order1": 2,
+  "order2": 2,
+  "fixed_table": [[2, 0], [0, 2]]
 }
 ```
 
