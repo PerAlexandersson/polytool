@@ -1216,7 +1216,14 @@ fn row_insert_into(rows: &mut Vec<Vec<u32>>, start_row: usize, value: u32) -> us
 
 /// Charge of a word (Lascoux-Schützenberger).
 ///
-/// Decomposes the word into standard subwords and sums their charges.
+/// Decomposes the word into standard subwords and sums their charges.  With
+/// the reading word of [`Tableau::reading_word`] this gives the Kostka-Foulkes
+/// polynomials: `K_{λμ}(t) = Σ_{T ∈ SSYT(λ, μ)} t^{charge(T)}`.
+///
+/// # Panics
+///
+/// Panics if the content of `word` is not a partition (some letter `i + 1`
+/// occurs more often than `i`); charge is only defined for such words.
 pub fn word_charge(word: &[u32]) -> u32 {
     if word.is_empty() {
         return 0;
@@ -1242,28 +1249,40 @@ pub fn word_cocharge(word: &[u32]) -> u32 {
 
 /// Decompose a word into standard subwords for charge computation.
 ///
-/// Cyclically scans for 1, 2, 3, ... to extract each subword.
+/// Cyclically scans rightward for 1, 2, 3, ... to extract each subword; each
+/// subword keeps the positional order of its letters.
 fn charge_word_decompose(word: &[u32]) -> Vec<Vec<u32>> {
     if word.is_empty() {
         return Vec::new();
     }
     let max_val = *word.iter().max().unwrap();
+    let mut content = vec![0usize; max_val as usize + 1];
+    for &v in word {
+        assert!(v >= 1, "charge: letters must be positive");
+        content[v as usize] += 1;
+    }
+    assert!(
+        content[1..].windows(2).all(|w| w[0] >= w[1]),
+        "charge is only defined for words whose content is a partition"
+    );
     let n = word.len();
     let mut remaining: Vec<Option<u32>> = word.iter().map(|&v| Some(v)).collect();
     let mut subwords = Vec::new();
 
     while remaining.iter().any(|x| x.is_some()) {
-        let mut subword = Vec::new();
-        // Start scanning from the rightmost position
-        let mut cursor = n - 1;
+        // Positions of the letters 1, 2, ... of this standard subword.
+        let mut positions = Vec::new();
+        // The reading word is the mirror image of Macdonald's word (rows read
+        // left to right, bottom to top), so scan from the leftmost position
+        // rightward, cyclically.
+        let mut cursor = 0;
 
         for target in 1..=max_val {
-            // Scan leftward cyclically from cursor
             let mut found = false;
             for step in 0..n {
-                let idx = (cursor + n - step) % n;
+                let idx = (cursor + step) % n;
                 if remaining[idx] == Some(target) {
-                    subword.push(target);
+                    positions.push(idx);
                     remaining[idx] = None;
                     cursor = idx;
                     found = true;
@@ -1274,34 +1293,30 @@ fn charge_word_decompose(word: &[u32]) -> Vec<Vec<u32>> {
                 break;
             }
         }
-        if !subword.is_empty() {
-            subwords.push(subword);
-        }
+        // The subword keeps the positional order of its letters in `word`.
+        positions.sort_unstable();
+        subwords.push(positions.iter().map(|&i| word[i]).collect());
     }
     subwords
 }
 
 /// Charge of a standard subword (permutation).
 ///
-/// charge(w) = major index of the inverse of the reverse of w.
+/// In the reading-word convention of [`word_charge`], the letter 1 has index 0
+/// and `r + 1` has the index of `r`, plus one if `r + 1` stands to the right
+/// of `r`; the charge is the sum of the indices.  Equivalently,
+/// `charge(w) = Σ (n - r)` over the ascents `r` of `w^{-1}` (the positions of
+/// `1, …, n`).
 fn permutation_charge(word: &[u32]) -> u32 {
-    if word.len() <= 1 {
-        return 0;
-    }
     let n = word.len();
-    // Compute inverse of reversed word
-    let mut inv = vec![0u32; n];
-    for (i, &v) in word.iter().rev().enumerate() {
-        inv[(v - 1) as usize] = i as u32 + 1;
+    let mut pos = vec![0usize; n];
+    for (i, &v) in word.iter().enumerate() {
+        pos[(v - 1) as usize] = i;
     }
-    // Major index of inv
-    let mut maj = 0u32;
-    for i in 0..n - 1 {
-        if inv[i] > inv[i + 1] {
-            maj += i as u32 + 1;
-        }
-    }
-    maj
+    (1..n)
+        .filter(|&r| pos[r - 1] < pos[r])
+        .map(|r| (n - r) as u32)
+        .sum()
 }
 
 impl fmt::Display for Tableau {
@@ -1615,14 +1630,112 @@ mod tests {
 
     // ── Charge tests ───────────────────────────────────────────────
 
+    /// `Σ_{T ∈ SSYT(λ, μ)} t^{charge(T)}` as ascending coefficients.
+    fn charge_polynomial(lambda: &[u32], mu: &[u32]) -> Vec<u64> {
+        let shape = Partition::new(lambda.to_vec());
+        let mut poly = Vec::new();
+        for t in Tableau::semistandard_tableaux(&shape, mu.len() as u32) {
+            let mut content = vec![0u32; mu.len()];
+            for &v in t.reverse_row_reading_word().iter() {
+                content[v as usize - 1] += 1;
+            }
+            if content != mu {
+                continue;
+            }
+            let c = t.charge() as usize;
+            if poly.len() <= c {
+                poly.resize(c + 1, 0);
+            }
+            poly[c] += 1;
+        }
+        poly
+    }
+
     #[test]
-    fn test_charge_ssyt() {
-        // Charge is computed from the reverse row reading word.
-        // For [[1,1,2],[2,3]]: reverse reading word = [2,3,1,1,2]
-        // The decomposition and charge depend on the algorithm.
-        // Basic sanity: charge should be non-negative.
-        let ssyt = Tableau::new(vec![vec![1, 1, 2], vec![2, 3]]);
-        let c = ssyt.charge();
-        assert!(c < 100, "charge should be reasonable: {}", c);
+    fn test_charge_permutations_of_three() {
+        // The charge distribution on S_3 is 1 + 2t + 2t^2 + t^3, so the
+        // charges of 312 and 213 must differ.
+        let mut counts = [0u32; 4];
+        for w in [
+            [1, 2, 3],
+            [1, 3, 2],
+            [2, 1, 3],
+            [2, 3, 1],
+            [3, 1, 2],
+            [3, 2, 1],
+        ] {
+            counts[word_charge(&w) as usize] += 1;
+        }
+        assert_eq!(counts, [1, 2, 2, 1]);
+        assert_ne!(word_charge(&[3, 1, 2]), word_charge(&[2, 1, 3]));
+        assert_eq!(word_charge(&[1, 2, 3]), 3);
+        assert_eq!(word_charge(&[3, 2, 1]), 0);
+    }
+
+    #[test]
+    fn test_charge_kostka_foulkes_n4() {
+        // Macdonald, Symmetric Functions and Hall Polynomials, III.6.
+        let table: [(&[u32], &[u32], &[u64]); 13] = [
+            (&[4], &[1, 1, 1, 1], &[0, 0, 0, 0, 0, 0, 1]),
+            (&[3, 1], &[1, 1, 1, 1], &[0, 0, 0, 1, 1, 1]),
+            (&[2, 2], &[1, 1, 1, 1], &[0, 0, 1, 0, 1]),
+            (&[2, 1, 1], &[1, 1, 1, 1], &[0, 1, 1, 1]),
+            (&[1, 1, 1, 1], &[1, 1, 1, 1], &[1]),
+            (&[4], &[2, 1, 1], &[0, 0, 0, 1]),
+            (&[3, 1], &[2, 1, 1], &[0, 1, 1]),
+            (&[2, 2], &[2, 1, 1], &[0, 1]),
+            (&[2, 1, 1], &[2, 1, 1], &[1]),
+            (&[4], &[2, 2], &[0, 0, 1]),
+            (&[3, 1], &[2, 2], &[0, 1]),
+            (&[2, 2], &[2, 2], &[1]),
+            (&[4], &[3, 1], &[0, 1]),
+        ];
+        for (lambda, mu, expected) in table {
+            assert_eq!(
+                charge_polynomial(lambda, mu),
+                expected,
+                "K_{lambda:?},{mu:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_charge_structural_identities() {
+        // K_{λλ} = 1, K_{(n),μ} = t^{n(μ)}, and K_{λμ}(1) is the Kostka number.
+        for n in 1..=6u32 {
+            for mu in Partition::all_of_size(n) {
+                let mu_parts = mu.parts().to_vec();
+                let n_mu: usize = mu_parts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &m)| i * m as usize)
+                    .sum();
+                let row = charge_polynomial(&[n], &mu_parts);
+                let mut expected = vec![0u64; n_mu + 1];
+                expected[n_mu] = 1;
+                assert_eq!(row, expected, "K_(n),{mu_parts:?}");
+                assert_eq!(charge_polynomial(&mu_parts, &mu_parts), vec![1]);
+                for lambda in Partition::all_of_size(n) {
+                    let total: u64 = charge_polynomial(lambda.parts(), &mu_parts).iter().sum();
+                    let count = Tableau::semistandard_tableaux(&lambda, mu_parts.len() as u32)
+                        .into_iter()
+                        .filter(|t| {
+                            let mut c = vec![0u32; mu_parts.len()];
+                            for &v in t.reverse_row_reading_word().iter() {
+                                c[v as usize - 1] += 1;
+                            }
+                            c == mu_parts
+                        })
+                        .count() as u64;
+                    assert_eq!(total, count);
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "content is a partition")]
+    fn test_charge_rejects_non_partition_content() {
+        word_charge(&[2, 1, 2]);
     }
 }

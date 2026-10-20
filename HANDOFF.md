@@ -20,9 +20,15 @@ Alexandersson–Amini (`thm:multmodbasis`) fails when `gcd(n1, n2) > 1`:
 not in the product span. The bicyclic report therefore treats the product
 form only as a sufficient condition.
 
-Open (not fixed): `sym_poly_core::tableau::word_charge` is wrong: it gives
-charge 3 to both `312` and `213` (only one permutation of `123` has charge 3).
-Found by the cylindric CSP experiment (scratch, not in this repository).
+Fixed the same day: `sym_poly_core::tableau::word_charge` / `Tableau::charge`
+were wrong (e.g. charge 3 for both `312` and `213`). Two bugs: the standard
+subwords lost their positional order, and `permutation_charge` weighted the
+ascents `r` of `w^{-1}` by `r` instead of `n - r`; the subword scan now also
+runs rightward (the reading word is the mirror of Macdonald's). Tests: the
+full `n = 4` Kostka-Foulkes table, `K_{λλ} = 1`, `K_{(n),μ} = t^{n(μ)}` and
+`K(1) = Kostka` for `n <= 6`; non-partition content now panics instead of
+looping. `cargo clippy --no-deps -p sym-poly-core` still reports 20
+pre-existing errors elsewhere (newer lints), none in `tableau.rs`.
 
 ## Completed: Polytool issue #9 coefficient diagnosis — 2026-10-18
 
