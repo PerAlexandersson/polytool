@@ -1,5 +1,41 @@
 # Handoff
 
+## Verified: Opus browser review and fixes — 2026-10-21
+
+The user-requested Claude Opus 5.5 review completed against ec48a23 with
+actual headless Chromium interactions. It found a blocking numeric `esc`
+exception missed by permissive VM mocks, wrong-tab asynchronous results,
+phone overflow, incomplete-result wording and stale exports. Codex verified
+and fixed these, including the additional automatic-cap/incomplete-search
+wording case. Status accessibility, rejected requests, ignored controls and
+clipboard failures were also corrected. The original review and adjudication
+are in the derivative-lift research lane, `opus-browser-review.md`.
+
+Ownership is released at this checkpoint: `polytool/web/index.html`,
+`polytool/web/recurrence-spaces.test.cjs`, new
+`polytool/web/tests/recurrence_browser.cjs`, `polytool/README.md`, root/crate
+handoff openings. Branch remains `feat/recurrence-representations-20261020`.
+The reviewer owned scratch files only, and did not edit source or build.
+No shared-checkout, mathematical algorithm or Lean/OEIS changes; no merge,
+subtree publication, installed-MCP update or hosting deployment.
+
+Verification on the corrected source (without the reviewer's temporary shim):
+all 50 existing Node/WASM tests, no skips; string safety; whitespace; and the
+new real-browser regression at 1366 and 375 pixels. Both viewport runs check
+A171608/Hermite/automatic examples, visible output, clipboard/report equality,
+WASM replay, finite fits and absence, partial automatic caps, rejected JSON,
+stale edits, tab routing, cancel/retry, injected render-error recovery and
+comparison/adaptive/manual modes. No uncaught page errors; phone document
+width fits the viewport. Corrected screenshots were inspected. Rust/WASM is
+unchanged; tested bundle remains `/cargo-target/polytool-recurrence-continuation-web`.
+HTML asset version is `20261021c`. No Cargo rebuild was needed.
+
+Artifacts: `/cargo-target/derivative-lift-browser-opus-20261021/`, including
+original stream/review scripts, `fixed/` screenshots and final `parent-*.log`.
+Opus completed successfully; the owned temporary server was stopped. No
+persistent worker session was retired. Limits: local Chromium desktop/narrow
+viewport only, not real touch, screen-reader, Firefox/WebKit or live hosting.
+
 ## Verified: automatic bounds and polynomial-index propagation — 2026-10-21
 
 The derivative-lift lane completed the three authorized scoped extensions on

@@ -677,6 +677,31 @@ invalid input or a rejected certificate. `--verify-space` reports the number of
 incomplete shapes and only verifies completed claims. These two flags do not
 combine with legacy search controls; all controls are in the JSON request.
 
+#### Browser verification
+
+The recurrence browser regression drives the actual page, Web Worker and WASM
+at desktop and 375-pixel widths. It checks examples, clipboard exports and
+certificate replay, evidence/partial-result labels, cancellation, tab routing,
+stale-input invalidation, renderer-error recovery and the older finder modes.
+It uses a temporary localhost server and closes its own browser and server.
+No hosting deployment is involved.
+
+With Playwright/Chromium installed and a no-modules WASM build available:
+
+```sh
+NODE_PATH="$(npm root -g)" \
+POLYTOOL_WASM_DIR=/external/path/to/wasm-bundle \
+  node polytool/web/tests/recurrence_browser.cjs
+```
+
+Run from the parent workspace, or omit the initial `polytool/` in a standalone
+checkout. `POLYTOOL_PLAYWRIGHT` can name the installed Playwright module and
+`POLYTOOL_CHROMIUM` an existing Chromium executable. Optional
+`POLYTOOL_BROWSER_ARTIFACTS` writes screenshots outside the source checkout.
+The ordinary `node --test polytool/web/*.test.cjs` checks remain useful, but
+the browser test additionally checks real DOM events and visible rendering.
+A viewport test does not substitute for real-device or screen-reader testing.
+
 #### Automatic variable degree, collective leaders, and indexed sources
 
 These extensions use the same `--space` / `--verify-space` entry points and
