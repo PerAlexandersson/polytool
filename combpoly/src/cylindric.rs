@@ -397,6 +397,47 @@ pub fn staircase_bosonic_charge_polynomial_bigint(
     laurent_to_polynomial(acc, "staircase bosonic formula")
 }
 
+/// The cocharge form of the Krattenthaler--Mohanty formula for the staircase `(1 0^z)^y` of
+/// width `w` (`p = z + 1`, `n = yw`):
+///
+/// `CC(q) = sum_{eps in O} sign(tau) q^{T_p(eps)} [n; w - p eps_0, ..., w - p eps_{y-1}]_q`,
+///
+/// where `O` is the disjoint union over `tau in S_y` of `eps_tau + yQ`,
+/// `eps_tau = (i - tau(i))_i`, `Q = {alpha in Z^y : sum alpha = 0}`, and
+/// `T_p(eps) = (p / y) (|eps|^2 / 2 - sum_i i eps_i)` (an integer on `O`). This is
+/// Krattenthaler--Mohanty, Discrete Math. 126 (1994), Theorem B, with `tau` the reversal,
+/// `mu_i = z (y - 1 - i)` and `K = zy`, written in the variables `eps`.
+pub fn staircase_cocharge_bosonic_polynomial_bigint(
+    shift: usize,
+    rows: usize,
+    width: usize,
+) -> Vec<BigInt> {
+    check_shape(shift, rows, width);
+    let (y, w, p) = (rows as i64, width as i64, (shift + 1) as i64);
+    let bound = w / p + 2;
+    let mut cache = HashMap::new();
+    let mut acc = BTreeMap::new();
+    let perms = permutations(rows);
+    for alpha in root_lattice_box(rows, bound) {
+        for (tau, sign) in &perms {
+            let eps: Vec<i64> = (0..rows)
+                .map(|i| i as i64 - tau[i] as i64 + y * alpha[i])
+                .collect();
+            let parts: Vec<i64> = eps.iter().map(|e| w - p * e).collect();
+            if parts.iter().any(|&c| c < 0) {
+                continue;
+            }
+            let norm: i64 = eps.iter().map(|e| e * e).sum();
+            let lin: i64 = eps.iter().enumerate().map(|(i, e)| i as i64 * e).sum();
+            let num = p * (norm - 2 * lin);
+            assert!(num % (2 * y) == 0, "T_p(eps) is not an integer");
+            let mult = q_multinomial(&parts, &mut cache);
+            add_shifted(&mut acc, &mult, num / (2 * y), *sign);
+        }
+    }
+    laurent_to_polynomial(acc, "staircase cocharge bosonic formula")
+}
+
 /// Krattenthaler--Mohanty, *q-generalization of a ballot problem*, Discrete Math. 126 (1994),
 /// Theorem B: the generating function `sum_p q^{maj_tau p}` over lattice paths in `Z^n` from
 /// `mu` to `lambda` (unit positive steps) that never touch the hyperplanes
@@ -631,6 +672,45 @@ mod tests {
                 krattenthaler_mohanty_major_polynomial_bigint(b as i64, &mu, &lam, &rev),
                 staircase_cocharge_polynomial_bigint(1, b, a),
                 "a={a} b={b}"
+            );
+        }
+    }
+
+    #[test]
+    fn staircase_cocharge_is_krattenthaler_mohanty_lesser_index() {
+        // staircase hop words are the chamber paths from mu_i = z(y-1-i) to mu + w, K = zy
+        for (z, y, w) in [
+            (2usize, 2usize, 4usize),
+            (2, 3, 2),
+            (3, 2, 3),
+            (3, 3, 2),
+            (2, 4, 1),
+        ] {
+            let mu: Vec<i64> = (0..y).map(|i| (z * (y - 1 - i)) as i64).collect();
+            let lam: Vec<i64> = mu.iter().map(|m| m + w as i64).collect();
+            let rev: Vec<usize> = (0..y).rev().collect();
+            assert_eq!(
+                krattenthaler_mohanty_major_polynomial_bigint((z * y) as i64, &mu, &lam, &rev),
+                staircase_cocharge_polynomial_bigint(z, y, w),
+                "z={z} y={y} w={w}"
+            );
+        }
+    }
+
+    #[test]
+    fn cocharge_bosonic_formula_matches_dp() {
+        for (z, y, w) in [
+            (1, 3, 3),
+            (1, 4, 2),
+            (2, 2, 5),
+            (2, 3, 2),
+            (3, 2, 4),
+            (2, 4, 1),
+        ] {
+            assert_eq!(
+                staircase_cocharge_bosonic_polynomial_bigint(z, y, w),
+                staircase_cocharge_polynomial_bigint(z, y, w),
+                "z={z} y={y} w={w}"
             );
         }
     }
