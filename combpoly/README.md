@@ -45,11 +45,21 @@ the CLI:
 | `fixed_descent` | Fixed-descent insertion and transfer data |
 | `lattice_path_matroid` | Lattice-path-matroid h* computations |
 | `rook_placements` | Ordinary and non-nesting rook generators and packets |
+| `cylindric` | Charge/cocharge polynomials of cylindric staircase tableaux `(1 0^z)^y` (exact DP over hop words), their bosonic affine alternating sums, Krattenthaler–Mohanty Theorem B, and conjectured root-of-unity values |
 
 Polynomial root, interlacing, and recurrence algorithms belong to `polytool`;
 general graphs, posets, partitions, and compositions belong to
 `combinatoric-core`. See `../docs/LIBRARY_GUIDE.md` before adding another
 implementation.
+
+The cylindric scan checks the cocharge cyclic sieving conjectures for staircases (values at
+roots of unity and the Alexandersson–Amini criterion for `C_n`; for rectangles also `C_{2a}` and
+the factor `prod_{j <= n/2} (1 + q^j)`) for `z <= Z_MAX`, `y <= Y_MAX`, `n <= N_MAX`:
+
+```bash
+CARGO_TARGET_DIR=/cargo-target/ai-projects \
+  cargo run --release -p combpoly --example cylindric_charge_scan -- 3 4 20
+```
 
 The named A355089 kernel uses exact integers and boundary-state memoization;
 it does not enumerate the avoiding permutations:
