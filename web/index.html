@@ -1008,9 +1008,13 @@ Lines starting with # are ignored."></textarea>
   </div>
   <div id="spaceOptions" hidden>
     <p class="recurrence-note">Analyze all recurrences within explicit coefficient bounds. The request below supplies its own source and seeds or finite rows; the main polynomial input and other search controls are not used in this mode. A source-backed identity follows from the supplied recurrence, which must itself describe your sequence. Without a source, positive results remain finite fits. Absence is proved only within each requested shape.</p>
+    <div class="options">
+      <button class="copy-btn" onclick="loadRecurrenceSpaceExample('hermite')">Hermite: indexed source</button>
+      <button class="copy-btn" onclick="loadRecurrenceSpaceExample('automatic')">Automatic X-degree</button>
+    </div>
     <label for="spaceRequest">Recurrence-space request (exact JSON)</label>
-    <textarea id="spaceRequest" rows="9" spellcheck="false">{"source":{"coefficients":[["0","0","-1"],["0"],["0","2"],["0"]],"seeds":[["1"],["2"],["0","2"],["0","3"]]},"shapes":[{"kind":"box","length":3,"index_degree":1,"variable_degree":3,"leading_index_degree":1},{"kind":"box","length":2,"derivative_order":1,"index_degree":1,"variable_degree":3,"leading_index_degree":1},{"kind":"box","length":1,"derivative_order":2,"index_degree":1,"variable_degree":3,"leading_index_degree":1}]}</textarea>
-    <p class="recurrence-note">The example is A171608, indexed from zero. Coefficient rows contain exact rational strings in ascending powers. Results include full coefficient-space bases and certificates for independent replay.</p>
+    <textarea id="spaceRequest" rows="9" spellcheck="false">{"include_leader_coverage":true,"source":{"coefficients":[["0","0","-1"],["0"],["0","2"],["0"]],"seeds":[["1"],["2"],["0","2"],["0","3"]]},"shapes":[{"kind":"box","length":3,"index_degree":1,"variable_degree":3,"leading_index_degree":1},{"kind":"box","length":2,"derivative_order":1,"index_degree":1,"variable_degree":3,"leading_index_degree":1},{"kind":"box","length":1,"derivative_order":2,"index_degree":1,"variable_degree":3,"leading_index_degree":1}]}</textarea>
+    <p class="recurrence-note">The initial example is A171608, indexed from zero. The buttons also demonstrate a polynomial-index source and an automatic RHS variable-degree bound. Coefficient rows contain exact rational strings in ascending powers. Results include full coefficient-space bases and certificates for independent replay.</p>
   </div>
   <button class="run" onclick="run('recurrence')" id="btnRec">Find recurrence</button>
   <button class="cancel" onclick="cancelRecurrence()" id="btnCancel" style="display:none">Cancel</button>
@@ -1026,9 +1030,9 @@ Lines starting with # are ignored."></textarea>
   Source code: <a href="https://github.com/PerAlexandersson/polytool">polytool</a>.
 </footer>
 
-<script src="pkg/polytool_web.js?v=20261021a"></script>
+<script src="pkg/polytool_web.js?v=20261021b"></script>
 <script>
-const ASSET_VERSION = '20261021a';
+const ASSET_VERSION = '20261021b';
 const EXAMPLES = {
   eulerian: {
     label: 'Eulerian polynomials A_n(t) \u2014 descent generating function on S_n',
@@ -2932,6 +2936,24 @@ function copyRecurrenceMenu(button) {
   });
 }
 
+function recurrenceSpaceExample(kind) {
+  if (kind === 'hermite') return {
+    indexed_source: {coefficients: [[['-2'], ['-2']], [['0', '2']]], seeds: [['1'], ['0', '2']]},
+    include_leader_coverage: true,
+    shapes: [{kind: 'box', length: 1, derivative_order: 1, variable_degree: 1}],
+  };
+  if (kind === 'automatic') return {
+    indexed_source: {coefficients: [[['0', '1'], ['0', '1']]], seeds: [['1']]},
+    include_leader_coverage: true,
+    shapes: [{kind: 'automatic_variable_degree', length: 1, index_degree: 1}],
+  };
+  throw new Error('Unknown recurrence-space example');
+}
+
+function loadRecurrenceSpaceExample(kind) {
+  document.getElementById('spaceRequest').value = JSON.stringify(recurrenceSpaceExample(kind), null, 2);
+}
+
 function renderRecurrenceSpaces(report) {
   window._recurrenceSpaces = report;
   const evidence = {
@@ -2954,12 +2976,32 @@ function renderRecurrenceSpaces(report) {
         '; successor projection rank ' + result.successor_projection_rank +
         '; residuals checked ' + result.residual_count + '.</p>';
     }
+    if (result.automatic_degree_bound) {
+      html += '<p>All RHS X-degrees are covered for successor existence using the proved cap ' +
+        esc(result.automatic_degree_bound.variable_degree) +
+        '. Index-degree and leader bounds remain as requested; the displayed kernel uses this finite cap.</p>';
+    }
+    if (result.propagation) {
+      html += '<p>Polynomial-index propagation certificate: order ' +
+        esc(result.propagation.coefficients.length - 1) + '; regular from base rank ' +
+        esc(result.propagation.regular_from) + '. Cutoff method: ' + esc(result.propagation.cutoff_method) + '.</p>';
+    }
     for (const rep of result.representatives) {
       const singular = rep.singular_ranks === null ? 'Singular ranks: not analyzed.' :
         rep.singular_ranks.length ? 'Singular base ranks: ' + rep.singular_ranks.join(', ') + '.' :
         'No nonnegative integer base rank makes the entire successor coefficient zero.';
       html += '<pre class="recurrence-code">' + esc(rep.formula) + '</pre><p>' + esc(singular) +
         (rep.requires_x_division ? ' Generation requires exact polynomial division in X.' : '') + '</p>';
+    }
+    if (result.leader_coverage) {
+      const coverage = result.leader_coverage;
+      const roots = coverage.common_singular_ranks;
+      html += '<p><strong>Combined recurrence</strong> — same evidence and domain as above. ' +
+        'Regular wherever any returned formula is regular; coefficient degrees may increase.</p>' +
+        '<pre class="recurrence-code">' + esc(coverage.formula) + '</pre><p>' +
+        (roots === null ? 'Common singular ranks: not fully analyzed.' :
+          roots.length ? 'Common singular base ranks: ' + esc(roots.join(', ')) + '.' : 'No common nonnegative integer singular ranks.') +
+        (coverage.requires_x_division ? ' Generation requires exact polynomial division in X.' : '') + '</p>';
     }
     html += '</details>';
   });

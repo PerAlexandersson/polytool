@@ -2,6 +2,8 @@
 //! Source: sqrt-of-2/real-rooted-oeis-proofs, commit
 //! 9bb3970e5ba7877b77572c066bd56fbf8f63f05c, ProofsOeis/A171608.lean.
 //! Run: cargo run -p polytool --example recurrence_spaces > spaces.json
+//! Add `-- hermite` for a polynomial-index source, or `-- automatic` for n! X^n.
+//! All source generation uses ConstantLagSource or IndexedLagSource.
 use polytool::recurrence::{
     find_recurrence_spaces, verify_recurrence_spaces, RecurrenceSpaceRequest,
 };
@@ -17,12 +19,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
         })
         .collect();
-    let request: RecurrenceSpaceRequest = serde_json::from_value(json!({
+    let input = match std::env::args().nth(1).as_deref() {
+        Some("hermite") => {
+            json!({"indexed_source":{"coefficients":[[["-2"],["-2"]],[["0","2"]]],"seeds":[["1"],["0","2"]]},
+            "include_leader_coverage":true,"shapes":[{"kind":"box","length":1,"derivative_order":1,"variable_degree":1}]})
+        }
+        Some("automatic") => {
+            json!({"indexed_source":{"coefficients":[[["0","1"],["0","1"]]],"seeds":[["1"]]},
+            "include_leader_coverage":true,"shapes":[{"kind":"automatic_variable_degree","length":1,"index_degree":1}]})
+        }
+        None => json!({
         "source": {
             "coefficients": [["0", "0", "-1"], ["0"], ["0", "2"], ["0"]],
             "seeds": [["1"], ["2"], ["0", "2"], ["0", "3"]]
-        }, "shapes": shapes
-    }))?;
+        }, "shapes": shapes, "include_leader_coverage": true
+        }),
+        Some(_) => return Err("expected no argument, hermite, or automatic".into()),
+    };
+    let request: RecurrenceSpaceRequest = serde_json::from_value(input)?;
     let report = find_recurrence_spaces(&request)?;
     verify_recurrence_spaces(&request, &report)?;
     println!("{}", serde_json::to_string_pretty(&report)?);

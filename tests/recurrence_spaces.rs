@@ -337,3 +337,248 @@ fn canonical_source_generator_matches_pinned_and_bundled_rows() {
         assert_eq!(a, &b);
     }
 }
+
+#[test]
+fn automatic_variable_degree_preserves_the_leader_space() {
+    let mut req = request(
+        json!({"coefficients":[["0","1"]],"seeds":[["1"]]}),
+        json!([{"kind":"automatic_variable_degree","length":1,"derivative_order":1,"index_degree":1,"leading_index_degree":1}]),
+    );
+    let report = run(&req);
+    let result = &report.results[0];
+    assert_eq!(result.status, "successor_exists");
+    assert!(
+        result
+            .automatic_degree_bound
+            .as_ref()
+            .unwrap()
+            .variable_degree
+            >= 1
+    );
+    let mut tampered = report.clone();
+    tampered.results[0]
+        .automatic_degree_bound
+        .as_mut()
+        .unwrap()
+        .variable_degree += 1;
+    assert!(verify_recurrence_spaces(&req, &tampered).is_err());
+    req.source = None;
+    req.rows = Some(vec![vec!["1".into()]; 8]);
+    assert!(find_recurrence_spaces(&req)
+        .unwrap_err()
+        .contains("defining source"));
+}
+
+#[test]
+fn leader_combination_removes_each_avoidable_singularity() {
+    // A constant sequence has independent leaders 1 and n. The combined
+    // leader 1+n^2 has no real zero and preserves the whole coverage.
+    let mut req = request(
+        json!({"coefficients":[["1"]],"seeds":[["1"]]}),
+        json!([box_shape(1, 0, 1, 0)]),
+    );
+    req.include_leader_coverage = true;
+    let report = run(&req);
+    let r = &report.results[0];
+    let coverage = r.leader_coverage.as_ref().unwrap();
+    assert_eq!(coverage.common_singular_ranks, Some(vec![]));
+    assert_eq!(coverage.basis_indices.len(), r.successor_projection_rank);
+    assert!(coverage.monomials.iter().any(|c| c.index_degree == 2));
+    let mut bad = report.clone();
+    bad.results[0]
+        .leader_coverage
+        .as_mut()
+        .unwrap()
+        .coefficients[0] = "999".into();
+    assert!(verify_recurrence_spaces(&req, &bad).is_err());
+    let rec = coverage.to_recurrence(r.target_lag).unwrap();
+    let one = vec![BigRational::from_integer(1.into())];
+    for n in 1..8 {
+        let rows = vec![one.clone(); n];
+        assert_eq!(rec.evaluate_next_rational(&rows, 0).unwrap(), one);
+    }
+}
+
+#[test]
+fn leader_combination_reports_an_unavoidable_rank() {
+    let mut req = request(
+        json!({"coefficients":[["-1"],["2"]],"seeds":[["-51"],["-50"]]}),
+        json!([box_shape(1, 0, 1, 0)]),
+    );
+    req.include_leader_coverage = true;
+    let report = run(&req);
+    assert_eq!(
+        report.results[0]
+            .leader_coverage
+            .as_ref()
+            .unwrap()
+            .common_singular_ranks,
+        Some(vec!["51".into()])
+    );
+}
+
+#[test]
+fn polynomial_index_source_has_a_replayable_common_propagator() {
+    // Canonical generator: IndexedLagSource::generate_rows for P[n]=n! X^n.
+    let req:RecurrenceSpaceRequest=serde_json::from_value(json!({
+        "indexed_source":{"coefficients":[[["0","1"],["0","1"]]],"seeds":[["1"]]},
+        "shapes":[{"kind":"box","length":1,"derivative_order":1,"index_degree":1,"variable_degree":1,"leading_index_degree":1}]
+    })).unwrap();
+    let report = run(&req);
+    let r = &report.results[0];
+    assert_eq!(r.status, "successor_exists", "{:?}", r.reason);
+    assert_eq!(r.evidence, "conditional_on_source");
+    assert!(r.propagation.is_some());
+    let rows = req
+        .indexed_source
+        .as_ref()
+        .unwrap()
+        .generate_rows(6, &Default::default())
+        .unwrap();
+    assert_eq!(rows[5], vec!["0", "0", "0", "0", "0", "120"]);
+    let mut bad = report.clone();
+    bad.results[0].propagation.as_mut().unwrap().coefficients[0] = vec![vec!["123".into()]];
+    assert!(verify_recurrence_spaces(&req, &bad).is_err());
+    let mut bad = report.clone();
+    bad.results[0].propagation.as_mut().unwrap().regular_from += 1;
+    assert!(verify_recurrence_spaces(&req, &bad).is_err());
+}
+
+#[test]
+fn indexed_source_derivative_lift_for_hermite() {
+    // H[n+2]=2X H[n+1]-2(n+1) H[n], seeds H[0]=1,H[1]=2X.
+    let req: RecurrenceSpaceRequest = serde_json::from_value(json!({
+        "indexed_source":{"coefficients":[[["-2"],["-2"]],[["0","2"]]],"seeds":[["1"],["0","2"]]},
+        "shapes":[{"kind":"box","length":1,"derivative_order":1,"variable_degree":1}]
+    }))
+    .unwrap();
+    let report = run(&req);
+    let r = &report.results[0];
+    assert_eq!(r.status, "successor_exists", "{:?}", r.reason);
+    assert_eq!(r.successor_projection_rank, 1);
+    let generated = req
+        .indexed_source
+        .as_ref()
+        .unwrap()
+        .generate_rows(5, &Default::default())
+        .unwrap();
+    assert_eq!(generated[4], vec!["12", "0", "-48", "0", "16"]);
+    let rec = r.representatives[0].to_recurrence(r).unwrap();
+    let exact: Vec<Vec<BigRational>> = generated
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|c| parse_rational_coeff(c).unwrap())
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        rec.evaluate_next_rational(&exact[..4], 0).unwrap(),
+        exact[4]
+    );
+}
+
+#[test]
+fn indexed_propagation_checks_beyond_a_late_exception() {
+    let req:RecurrenceSpaceRequest=serde_json::from_value(json!({
+        "indexed_source":{"coefficients":[[["0","-17"],["0","1"]]],"seeds":[["1"]]},
+        "shapes":[{"kind":"box","length":1,"index_degree":1,"variable_degree":1,"leading_index_degree":1}]
+    })).unwrap();
+    let report = run(&req);
+    let r = &report.results[0];
+    assert_eq!(r.status, "successor_exists", "{:?}", r.reason);
+    assert!(r.residual_count > r.h);
+    assert!(r.propagation.as_ref().unwrap().regular_from > 17);
+    let mut bad = report.clone();
+    bad.results[0].residual_count = r.h;
+    assert!(verify_recurrence_spaces(&req, &bad).is_err());
+}
+
+#[test]
+fn automatic_bound_also_applies_to_indexed_sources() {
+    let req: RecurrenceSpaceRequest = serde_json::from_value(json!({
+        "indexed_source":{"coefficients":[[["0","1"],["0","1"]]],"seeds":[["1"]]},
+        "shapes":[{"kind":"automatic_variable_degree","length":1,"index_degree":1}]
+    }))
+    .unwrap();
+    let report = run(&req);
+    let r = &report.results[0];
+    assert_eq!(r.status, "successor_exists", "{:?}", r.reason);
+    assert!(r.automatic_degree_bound.is_some() && r.propagation.is_some());
+}
+
+#[test]
+fn automatic_degree_can_prove_absence_for_all_rhs_variable_degrees() {
+    // P[n]=1+X^n has two active bases, hence no constant-index one-row rule.
+    let req = request(
+        json!({"coefficients":[["0","-1"],["1","1"]],"seeds":[["2"],["1","1"]]}),
+        json!([{"kind":"automatic_variable_degree","length":1}]),
+    );
+    let report = run(&req);
+    let r = &report.results[0];
+    assert_eq!(r.status, "absent_in_shape");
+    assert_eq!(
+        r.automatic_degree_bound.as_ref().unwrap().variable_degree,
+        2
+    );
+    assert!(!r.certificate.as_ref().unwrap().absence_duals.is_empty());
+}
+
+#[test]
+fn automatic_degree_finds_a_rule_missed_by_zero_variable_degree() {
+    let mut req = request(
+        json!({"coefficients":[["0","1"]],"seeds":[["1"]]}),
+        json!([box_shape(1, 0, 0, 0)]),
+    );
+    assert_eq!(run(&req).results[0].status, "absent_in_shape");
+    req.shapes =
+        serde_json::from_value(json!([{"kind":"automatic_variable_degree","length":1}])).unwrap();
+    assert_eq!(run(&req).results[0].status, "successor_exists");
+    req.limits.max_columns = 2;
+    let partial = run(&req);
+    assert_eq!(partial.results[0].status, "incomplete_budget");
+    assert!(partial.results[0]
+        .reason
+        .as_ref()
+        .unwrap()
+        .contains("automatic RHS X-degree 1"));
+}
+
+#[test]
+fn propagation_uses_a_proved_root_bound_when_exact_root_analysis_is_unavailable() {
+    let mut coefficient = vec![vec!["0"]; 10];
+    coefficient[9] = vec!["1"];
+    let req: RecurrenceSpaceRequest = serde_json::from_value(json!({
+        "indexed_source":{"coefficients":[coefficient],"seeds":[["1"]]},
+        "shapes":[{"kind":"explicit","target_lag":1,"monomials":[{"lag":1}]}]
+    }))
+    .unwrap();
+    let report = run(&req);
+    let r = &report.results[0];
+    assert_eq!(r.status, "successor_exists", "{:?}", r.reason);
+    let cert = r.propagation.as_ref().unwrap();
+    assert_eq!(cert.cutoff_method, "coefficient_root_bound");
+    assert_eq!(cert.exceptional_ranks, None);
+    assert_eq!(cert.regular_from, 2);
+}
+
+#[test]
+fn indexed_zero_order_and_original_origin_are_checked() {
+    let req:RecurrenceSpaceRequest=serde_json::from_value(json!({
+        "indexed_source":{"coefficients":[[["1"],["1"]]],"seeds":[["2"]],"origin":7},"domain_start":7,
+        "shapes":[{"kind":"explicit","target_lag":1,"monomials":[]}]
+    })).unwrap();
+    let report = run(&req);
+    let r = &report.results[0];
+    assert_eq!(r.status, "absent_in_shape");
+    assert_eq!(r.residual_count, 0);
+    assert_eq!(r.propagation.as_ref().unwrap().coefficients.len(), 1);
+    assert_eq!(
+        req.indexed_source
+            .as_ref()
+            .unwrap()
+            .generate_rows(3, &Default::default())
+            .unwrap(),
+        vec![vec!["2"], vec!["16"], vec!["144"]]
+    );
+}

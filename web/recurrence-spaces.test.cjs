@@ -17,6 +17,9 @@ test('space display separates evidence and exports the complete certificate', as
   const report = {request: {domain_start: 3}, frontier: [0], results: [
     {status: 'successor_exists', evidence: 'conditional_on_source', certificate: {basis: [['1']]},
       successor_projection_rank: 1, residual_count: 4,
+      automatic_degree_bound: {variable_degree: 7},
+      propagation: {coefficients: [[], []], regular_from: 52, cutoff_method: 'exact_integer_zeros'},
+      leader_coverage: {formula: '<combined>', common_singular_ranks: [], requires_x_division: false},
       representatives: [{formula: '<unsafe>', singular_ranks: ['51'], requires_x_division: true}]},
     {status: 'successor_exists', evidence: 'exact_fit', representatives: []},
     {status: 'absent_in_shape', evidence: 'rows_only_obstruction', representatives: []},
@@ -24,6 +27,10 @@ test('space display separates evidence and exports the complete certificate', as
   ]};
   sandbox.renderRecurrenceSpaces(report);
   assert.match(displayed, /domain starts at n = 3/);
+  assert.match(displayed, /proved cap 7/);
+  assert.match(displayed, /regular from base rank 52/);
+  assert.match(displayed, /coefficient degrees may increase/);
+  assert.match(displayed, /&lt;combined>/);
   assert.match(displayed, /conditional on the supplied source/);
   assert.match(displayed, /no all-rank conclusion/);
   assert.match(displayed, /no successor recurrence in this shape/);
@@ -53,6 +60,17 @@ test('actual WASM finds and replays a complete space', {skip: !process.env.POLYT
   assert.equal(menu.frontier.length, 3);
   assert.ok(menu.results.every(r => r.evidence === 'conditional_on_source'));
   assert.equal(JSON.parse(wasm.verify_recurrence_spaces(JSON.stringify(menu))).verified_completed_claims, true);
+  const exampleStart = html.indexOf('function recurrenceSpaceExample(');
+  const exampleContext = vm.createContext({});
+  vm.runInContext(html.slice(exampleStart, html.indexOf('function renderRecurrenceSpaces(', exampleStart)), exampleContext);
+  for (const kind of ['hermite', 'automatic']) {
+    const extended = JSON.parse(wasm.find_recurrence_spaces(JSON.stringify(exampleContext.recurrenceSpaceExample(kind))));
+    assert.equal(extended.results[0].evidence, 'conditional_on_source');
+    assert.ok(extended.results[0].propagation);
+    assert.ok(extended.results[0].leader_coverage);
+    if (kind === 'automatic') assert.ok(extended.results[0].automatic_degree_bound);
+    assert.equal(JSON.parse(wasm.verify_recurrence_spaces(JSON.stringify(extended))).verified_completed_claims, true);
+  }
   report.results[0].certificate.basis[0][0] = '100';
   assert.ok(JSON.parse(wasm.verify_recurrence_spaces(JSON.stringify(report))).error);
 });

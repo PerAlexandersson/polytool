@@ -3456,7 +3456,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Compute complete bounded recurrence spaces with exact kernel/rank certificates. request is a JSON object with shapes (kind: box with length, derivative_order, index_degree, variable_degree, leading_index_degree; or kind: explicit with target_lag and monomials), domain_start (original zero-based index by default), and source {coefficients: ascending rational-string polynomial rows, seeds: exactly k rows, origin}, source_recurrence (existing recurrence.v1), or rows plus row_origin. Source must be monic pure-lag and independent of n. Positive identities are conditional_on_source; rows-only positives are exact_fit. Dual negatives prove absent_in_shape from rows alone. Returns polytool.recurrence-spaces.v1, including full kernels, successors, bounded frontier, singular-rank diagnostics and explicit incomplete results. No spectral or unrestricted-order claim."
+        description = "Compute complete bounded recurrence spaces with exact kernel/rank certificates. request is a JSON object with shapes (kind: box with length, derivative_order, index_degree, variable_degree, leading_index_degree; or kind: explicit with target_lag and monomials), domain_start (original zero-based index by default), and source {coefficients: ascending rational-string polynomial rows, seeds: exactly k rows, origin}, source_recurrence (existing recurrence.v1), or rows plus row_origin. Alternatively indexed_source uses coefficients[i][n_power][X_power] for monic pure-lag sources polynomial in n, with a replayable jet-state propagator. Shape kind automatic_variable_degree removes the RHS X-degree cap while retaining index/leader bounds. include_leader_coverage returns a sum-of-squares leader combination. Positive identities are conditional_on_source; rows-only positives are exact_fit. Dual negatives prove absent_in_shape from rows alone. Returns polytool.recurrence-spaces.v1, including full kernels, successors, bounded frontier, singular-rank diagnostics and explicit incomplete results. No spectral or unrestricted-order claim."
     )]
     pub fn find_recurrence_spaces(
         &self,
@@ -4804,6 +4804,28 @@ mod tests {
                 request: excessive
             }))
             .is_err());
+    }
+
+    #[test]
+    fn recurrence_spaces_indexed_automatic_and_leader_coverage() {
+        let server = PolynomialToolsServer::new();
+        let request = json!({"indexed_source":{"coefficients":[[["0","1"],["0","1"]]],"seeds":[["1"]]},
+            "include_leader_coverage":true,"shapes":[{"kind":"automatic_variable_degree","length":1,"index_degree":1}]});
+        let Json(report) = server
+            .find_recurrence_spaces(Parameters(RecurrenceSpacesToolRequest {
+                request: request.clone(),
+            }))
+            .unwrap();
+        assert!(report["results"][0]["propagation"].is_object());
+        assert!(report["results"][0]["automatic_degree_bound"].is_object());
+        assert!(report["results"][0]["leader_coverage"].is_object());
+        let Json(checked) = server
+            .verify_recurrence_spaces(Parameters(VerifyRecurrenceSpacesToolRequest {
+                report: json!(report),
+                expected_request: Some(request),
+            }))
+            .unwrap();
+        assert_eq!(checked["verified_completed_claims"], true);
     }
 
     #[test]

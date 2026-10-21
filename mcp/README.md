@@ -62,6 +62,16 @@ omitting it checks consistency against the embedded request. It reports
 shared default ceilings (requests may lower them), and a 1 MiB JSON input cap.
 The legacy tools and their schemas are unchanged.
 
+The same request also accepts `indexed_source` for monic polynomial-index
+sources (`coefficients[lag][n_power][X_power]`), shape kind
+`automatic_variable_degree`, and `include_leader_coverage: true`. Reports then
+include the common polynomial propagator and its safe prefix cutoff, the
+proved RHS X-degree cap preserving all allowed leaders, and the sum-of-squares
+leader combination. Index and leader bounds remain explicit; the combination
+can increase coefficient degrees. Replay checks these extra certificates.
+See the parent README's Hermite and automatic-bound examples. No installed
+server upgrade is implied by a source checkpoint.
+
 ## Build
 
 From the Rust workspace root:

@@ -721,6 +721,18 @@ mod tests {
         excessive["limits"] = serde_json::json!({"max_columns":1000000});
         assert!(super::find_recurrence_spaces(&excessive.to_string()).contains("service ceilings"));
     }
+    #[test]
+    fn recurrence_spaces_indexed_source_and_coverage_roundtrip() {
+        let request = r#"{"indexed_source":{"coefficients":[[["-2"],["-2"]],[["0","2"]]],"seeds":[["1"],["0","2"]]},"include_leader_coverage":true,"shapes":[{"kind":"box","length":1,"derivative_order":1,"variable_degree":1}]}"#;
+        let report = super::find_recurrence_spaces(request);
+        let value: serde_json::Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(value["results"][0]["evidence"], "conditional_on_source");
+        assert!(value["results"][0]["propagation"].is_object());
+        assert!(value["results"][0]["leader_coverage"].is_object());
+        let checked: serde_json::Value =
+            serde_json::from_str(&super::verify_recurrence_spaces(&report)).unwrap();
+        assert_eq!(checked["verified_completed_claims"], true);
+    }
     use super::{
         analyze_decompositions, check_interlacing_pair, check_interlacing_pairs, check_properties,
         compute_discriminant, compute_resultant, find_recurrence, generate_recurrence_rows,
