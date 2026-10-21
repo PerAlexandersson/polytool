@@ -1,5 +1,18 @@
 # Polytool Handoff
 
+## Verified: complete recurrence spaces — 2026-10-21
+
+The isolated recurrence-representations lane adds `recurrence --space` and
+`--verify-space`, shared library/MCP/WASM APIs, and a **Complete spaces** browser
+view. Reports contain full bounded kernels, successor projections, source-
+conditional certificates and finite-row absence duals. Original indices,
+source consistency, singular ranks and resource shortages remain explicit.
+Legacy finite-fit APIs are unchanged. Exact scope and all passing checks are
+in the parent handoff; ownership is released. No installed MCP replacement,
+shared-checkout edit, merge, subtree publication or live deployment occurred.
+RealRooted #1978 tracks the remaining Lean checker/tactic work. Spectral and
+unrestricted-order algorithms remain future stages.
+
 ## Verified recurrence representation checkpoint — 2026-10-20
 
 The isolated `feat/recurrence-representations-20261020` lane adds the library,

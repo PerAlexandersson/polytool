@@ -501,6 +501,46 @@ pub fn find_recurrence_representations(
     }
 }
 
+/// Same complete-space JSON contract as the CLI and MCP.
+#[wasm_bindgen]
+pub fn find_recurrence_spaces(request_json: &str) -> String {
+    let run = || -> Result<serde_json::Value, String> {
+        if request_json.len() > 1_048_576 {
+            return Err("recurrence-space request exceeds 1 MiB".into());
+        }
+        let request: polytool::recurrence::RecurrenceSpaceRequest =
+            serde_json::from_str(request_json).map_err(|e| e.to_string())?;
+        request.limits.check_ceiling(&Default::default())?;
+        serde_json::to_value(polytool::recurrence::find_recurrence_spaces(&request)?)
+            .map_err(|e| e.to_string())
+    };
+    match run() {
+        Ok(value) => value.to_string(),
+        Err(error) => serde_json::json!({"error":error}).to_string(),
+    }
+}
+
+/// Replay the completed claims under the report's embedded assumptions.
+#[wasm_bindgen]
+pub fn verify_recurrence_spaces(report_json: &str) -> String {
+    let run = || -> Result<serde_json::Value, String> {
+        if report_json.len() > 1_048_576 {
+            return Err("recurrence-space report exceeds 1 MiB".into());
+        }
+        let report: polytool::recurrence::RecurrenceSpaces =
+            serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+        report.request.limits.check_ceiling(&Default::default())?;
+        polytool::recurrence::verify_recurrence_spaces(&report.request, &report)?;
+        Ok(
+            serde_json::json!({"verified_completed_claims":true,"incomplete_shapes":report.results.iter().filter(|r|r.certificate.is_none()).count()}),
+        )
+    };
+    match run() {
+        Ok(value) => value.to_string(),
+        Err(error) => serde_json::json!({"error":error}).to_string(),
+    }
+}
+
 #[wasm_bindgen]
 pub fn generate_recurrence_rows(recurrence_json: &str, total_rows: usize) -> String {
     if total_rows > 1000 {
@@ -668,6 +708,19 @@ pub fn parse_and_format(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn recurrence_spaces_json_roundtrip_and_limits() {
+        let request = r#"{"source":{"coefficients":[["2"]],"seeds":[["9007199254740993"]]},"shapes":[{"kind":"box","length":1}]}"#;
+        let report = super::find_recurrence_spaces(request);
+        let value: serde_json::Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(value["results"][0]["evidence"], "conditional_on_source");
+        let checked: serde_json::Value =
+            serde_json::from_str(&super::verify_recurrence_spaces(&report)).unwrap();
+        assert_eq!(checked["verified_completed_claims"], true);
+        let mut excessive: serde_json::Value = serde_json::from_str(request).unwrap();
+        excessive["limits"] = serde_json::json!({"max_columns":1000000});
+        assert!(super::find_recurrence_spaces(&excessive.to_string()).contains("service ceilings"));
+    }
     use super::{
         analyze_decompositions, check_interlacing_pair, check_interlacing_pairs, check_properties,
         compute_discriminant, compute_resultant, find_recurrence, generate_recurrence_rows,

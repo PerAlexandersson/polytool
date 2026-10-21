@@ -1,5 +1,46 @@
 # Handoff
 
+## Verified: certified recurrence spaces — 2026-10-21
+
+Codex derivative-lift lane completed the source-conditional bounded-space API
+on `feat/recurrence-representations-20261020`, based on c5f4978. Ownership is
+released at this checkpoint. Exact scope: `polytool/src/{linalg,recurrence}.rs`,
+new `polytool/src/recurrence/space.rs`, CLI, MCP and web adapters, browser HTML,
+focused recurrence-space tests/example, parent/MCP READMEs, library guide and
+root/crate handoff openings. Shared Rust, Lean/OEIS and shared research
+checkouts remain untouched. No workers, merge, subtree publication or deployment.
+
+`recurrence --space` returns full kernels, leader projections, rank minors,
+absence duals and explicit evidence; `--verify-space` replays completed claims.
+The h*k theorem handles repeated poles, nonminimal sources and finite support.
+Source positives are conditional, source-less positives finite fits, and
+bounded negatives have exact dual witnesses. The shared rational elimination
+core serves both old and new APIs. Sparse supports retain original indices;
+source adapters reject inconsistent initial rows, including masked extras.
+Singular ranks are exact within the documented diagnostic limits and otherwise
+unknown. The old finite-fit APIs and schemas retain their meanings.
+
+Verification: all 359 library tests and existing integration suites passed,
+including recurrence fixture regeneration; 14 new space and two CLI tests;
+33 MCP library, two binary, one stdio; 12 native web; five doctests.
+The final focused rerun includes independent legacy-evaluator replay,
+corrupted certificates and original-index/source-boundary regressions.
+Strict all-target Clippy, strict Rustdoc, touched-file formatting, standalone
+metadata, bundled OEIS checksum, package boundary and whitespace passed.
+The checked example emits a report accepted by the CLI verifier.
+All 50 Node checks passed against optimized WASM, plus string-safety checks.
+Bundle: `/cargo-target/polytool-recurrence-spaces-web`; logs:
+`/cargo-target/recurrence-spaces-*.log`. The existing wasm-pack missing
+license-file packaging notice remains. No visual-browser check is claimed.
+
+The browser adds **Complete spaces** with structured exact input, domain and
+evidence labels, singular ranks and complete JSON export. Live hosting and the
+installed MCP binary were not changed. RealRooted #1978 tracks the independent
+Lean formalization. Spectral/localization algorithms, automatic subsequence
+transforms, expanded chi^h/Lean scripts and unrestricted-order classification
+remain future work. The report retains source+h, sufficient to reconstruct
+chi^h; it does not emit a formal proof.
+
 ## Verified: recurrence representations API and browser — 2026-10-20
 
 Codex derivative-lift lane, isolated worktree

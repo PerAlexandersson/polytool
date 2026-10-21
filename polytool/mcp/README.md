@@ -36,6 +36,32 @@ One preferred fit is retained per length/order pair; neither the menu nor an
 empty cell is a complete description of the annihilating ideal. See the parent
 README for the precise frontier, index, normalization and coverage conventions.
 
+## Complete recurrence spaces
+
+`find_recurrence_spaces` takes `{"request": {...}}`, where the inner object is
+exactly the `--space` request documented in the parent README. For example:
+
+```json
+{"request": {
+  "source": {"coefficients": [["0", "1"]], "seeds": [["1"]]},
+  "shapes": [{"kind": "box", "length": 1, "derivative_order": 1,
+              "index_degree": 1, "variable_degree": 1, "leading_index_degree": 1}]
+}}
+```
+
+It returns `polytool.recurrence-spaces.v1` with the full bounded kernel,
+independent successor projections, rank certificates and absence duals.
+Source-certified positives are conditional on the supplied defining recurrence;
+without a source, positives remain finite fits. Negative certificates apply only
+to the requested support, and resource exhaustion never proves nonexistence.
+
+`verify_recurrence_spaces` takes `{"report": {...}, "expected_request": {...}}`.
+The optional expected request binds verification to independent assumptions;
+omitting it checks consistency against the embedded request. It reports
+`verified_completed_claims` and `incomplete_shapes`. Both tools enforce the
+shared default ceilings (requests may lower them), and a 1 MiB JSON input cap.
+The legacy tools and their schemas are unchanged.
+
 ## Build
 
 From the Rust workspace root:
