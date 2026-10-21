@@ -1,5 +1,48 @@
 # Polytool Handoff
 
+## Verified: automatic bounds and polynomial-index propagation — 2026-10-21
+
+The derivative-lift lane completed the three authorized scoped extensions on
+`feat/recurrence-representations-20261020`, based on 578654d. Ownership is
+released after this checkpoint. Owned files: `polytool/src/recurrence/space.rs`,
+new `propagation.rs`, recurrence-space integration/CLI tests and example,
+MCP/web adapters and tests, browser HTML, parent/MCP READMEs, library guide
+and root/crate handoff openings. Shared Rust, Lean/OEIS and shared research
+checkouts remain untouched. No workers, merge, subtree publication,
+installed-MCP replacement or live deployment occurred.
+
+`automatic_variable_degree` computes a sufficient RHS X-degree preserving
+all allowed leaders; index, derivative and leader bounds stay explicit.
+`include_leader_coverage` combines identities with leader multipliers to
+obtain a sum-of-squares leader, preserving every regular rank within the
+reported space, at possibly higher coefficient degrees. `indexed_source`
+adds monic Q[n,X] pure-lag sources, a canonical exact generator, and explicit
+common residual propagators. Replay verifies the polynomial identity and
+cutoff, using exact exceptional ranks or a conservative Cauchy bound with
+roots marked unknown. Old APIs/schema behavior is preserved. Resource
+exhaustion is incomplete; automatic caps can exceed the configured budget.
+The installed Polytool MCP predates this API; exact checks use the owned
+crate/CLI, while polynomial-lab remains the proof-search ledger.
+
+All suites passed: 360 library tests, existing integration/fixture suites,
+25 recurrence-space and three CLI tests, 34 MCP library plus binary/stdio,
+13 native web and five doctests. After incremental coefficient-storage
+limits, the 25+3 focused tests passed again. Strict all-target Clippy,
+strict Rustdoc, touched-file formatting, standalone metadata, bundled OEIS
+checksum, package boundaries and whitespace passed. Hermite and automatic
+example reports both replay through the CLI. All 50 Node checks pass against
+optimized WASM, plus string safety. No visual-browser check is claimed.
+Bundle: `/cargo-target/polytool-recurrence-continuation-web`; logs:
+`/cargo-target/recurrence-continuation-*`. wasm-pack retains its existing
+missing license-file packaging notice.
+
+The browser adds Hermite/automatic examples and displays the degree scope,
+propagation cutoff and combined identity. RealRooted #1978 and the isolated
+research note record the proofs and future Lean lemmas. General index-degree,
+spectral/localization and unrestricted-order backends, nonmonic singular
+sources and Lean tactic integration remain future work. No survey expansion
+or new real-rootedness theorem is claimed.
+
 ## Verified: complete recurrence spaces — 2026-10-21
 
 The isolated recurrence-representations lane adds `recurrence --space` and
