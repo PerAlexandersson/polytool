@@ -10,9 +10,10 @@ test('space display separates evidence and exports the complete certificate', as
   const sandbox = vm.createContext({
     window: {}, setResult: text => {displayed = text;},
     navigator: {clipboard: {writeText: async text => {copied = text;}}},
-    esc: value => String(value).replaceAll('<', '&lt;'),
+    setTimeout: () => {}, setStatus: () => {},
   });
-  const start = html.indexOf('function renderRecurrenceSpaces(');
+  const start = html.indexOf('function recurrenceSpaceSummary(');
+  vm.runInContext(html.slice(html.indexOf('function esc('), html.indexOf('function escAttr(')), sandbox);
   vm.runInContext(html.slice(start, html.indexOf('function createWorker(', start)), sandbox);
   const report = {request: {domain_start: 3}, frontier: [0], results: [
     {status: 'successor_exists', evidence: 'conditional_on_source', certificate: {basis: [['1']]},
@@ -27,19 +28,32 @@ test('space display separates evidence and exports the complete certificate', as
   ]};
   sandbox.renderRecurrenceSpaces(report);
   assert.match(displayed, /domain starts at n = 3/);
-  assert.match(displayed, /proved cap 7/);
+  assert.match(displayed, /RHS X-degree cap: 7/);
+  assert.match(displayed, /1 of 4 shapes complete; 3 incomplete/);
   assert.match(displayed, /regular from base rank 52/);
   assert.match(displayed, /coefficient degrees may increase/);
-  assert.match(displayed, /&lt;combined>/);
+  assert.match(displayed, /&lt;combined&gt;/);
   assert.match(displayed, /conditional on the supplied source/);
   assert.match(displayed, /no all-rank conclusion/);
   assert.match(displayed, /no successor recurrence in this shape/);
   assert.match(displayed, /No mathematical conclusion/);
   assert.match(displayed, /Singular base ranks: 51/);
-  assert.match(displayed, /&lt;unsafe>/);
+  assert.match(displayed, /&lt;unsafe&gt;/);
   assert.doesNotMatch(displayed, /<unsafe>/);
   await sandbox.copyRecurrenceSpaces({});
   assert.deepEqual(JSON.parse(copied), report);
+  report.results = [{status: 'incomplete_budget', evidence: 'none', representatives: [],
+    automatic_degree_bound: {variable_degree: 1}, reason: 'matrix entry budget'}];
+  sandbox.renderRecurrenceSpaces(report);
+  assert.match(displayed, /0 of 1 shapes complete; 1 incomplete/);
+  assert.match(displayed, /Search at this cap is incomplete/);
+  assert.doesNotMatch(displayed, /completed search covers all RHS/);
+  sandbox.navigator.clipboard.writeText = async () => { throw new Error('permission denied'); };
+  let status = '';
+  sandbox.setStatus = text => {status = text;};
+  await sandbox.copyRecurrenceSpaces({});
+  assert.match(status, /Could not copy the report/);
+
 });
 
 test('actual WASM finds and replays a complete space', {skip: !process.env.POLYTOOL_WASM_DIR}, async () => {
