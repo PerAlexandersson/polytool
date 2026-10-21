@@ -6669,6 +6669,8 @@ pub fn find_recurrence_adaptive_with_budget(
 
 mod representations;
 pub use representations::*;
+mod space;
+pub use space::*;
 
 // ---------------------------------------------------------------------------
 // Tests

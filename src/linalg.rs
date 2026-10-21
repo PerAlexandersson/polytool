@@ -1759,6 +1759,167 @@ pub struct LinearSystemSolution {
     pub nullity: usize,
 }
 
+/// Resource limits for a complete rational kernel computation.
+#[derive(Debug, Clone, Copy)]
+pub struct RationalKernelLimits {
+    pub max_entries: usize,
+    pub max_operations: usize,
+    pub max_coefficient_bits: u64,
+}
+
+/// Failure to compute a kernel, distinguished from a proved zero kernel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RationalKernelError {
+    InvalidDimensions,
+    BudgetExceeded(&'static str),
+}
+
+/// A complete nullspace, with a nonsingular minor proving its dimension.
+/// Basis vectors are stored separately (as columns mathematically).
+#[derive(Debug, Clone)]
+pub struct RationalKernel {
+    pub basis: Vec<Vec<Q>>,
+    pub free_columns: Vec<usize>,
+    pub pivot_columns: Vec<usize>,
+    pub independent_rows: Vec<usize>,
+    /// Inverse of `A[independent_rows, pivot_columns]`.
+    pub inverse_minor: Vec<Vec<Q>>,
+}
+
+struct EliminationBudget {
+    remaining: usize,
+    bits: u64,
+}
+
+impl EliminationBudget {
+    fn check(&mut self, value: &Q) -> Result<(), RationalKernelError> {
+        self.remaining = self
+            .remaining
+            .checked_sub(1)
+            .ok_or(RationalKernelError::BudgetExceeded("arithmetic operations"))?;
+        if value.numer().bits().max(value.denom().bits()) > self.bits {
+            return Err(RationalKernelError::BudgetExceeded("coefficient bits"));
+        }
+        Ok(())
+    }
+}
+
+// Shared elimination for the legacy solver and complete-kernel API. Columns
+// after `columns` are carried through the row operations, never pivoted on.
+fn rational_rref(
+    aug: &mut [Vec<Q>],
+    columns: usize,
+    mut budget: Option<&mut EliminationBudget>,
+) -> Result<(Vec<usize>, Vec<usize>), RationalKernelError> {
+    let mut origins: Vec<_> = (0..aug.len()).collect();
+    let mut pivots = Vec::new();
+    for col in 0..columns {
+        let row = pivots.len();
+        let Some(pr) = (row..aug.len()).find(|&r| !aug[r][col].is_zero()) else {
+            continue;
+        };
+        aug.swap(row, pr);
+        origins.swap(row, pr);
+        let value = aug[row][col].clone();
+        let snapshot = aug[row][col..].to_vec();
+        for r in 0..aug.len() {
+            if r == row || aug[r][col].is_zero() {
+                continue;
+            }
+            let factor = &aug[r][col] / &value;
+            if let Some(b) = budget.as_deref_mut() {
+                b.check(&factor)?;
+            }
+            for (entry, pivot) in aug[r][col..].iter_mut().zip(&snapshot) {
+                *entry -= pivot * &factor;
+                if let Some(b) = budget.as_deref_mut() {
+                    b.check(entry)?;
+                }
+            }
+        }
+        pivots.push(col);
+    }
+    origins.truncate(pivots.len());
+    Ok((pivots, origins))
+}
+
+/// Compute every rational null vector, including a rank certificate.
+/// `columns` is explicit so a zero-equation matrix has kernel Q^columns.
+/// No modular or floating-point rank decisions are used.
+pub fn rational_kernel_with_certificate(
+    a: &[Vec<Q>],
+    columns: usize,
+    limits: RationalKernelLimits,
+) -> Result<RationalKernel, RationalKernelError> {
+    use RationalKernelError::{BudgetExceeded, InvalidDimensions};
+    if a.iter().any(|r| r.len() != columns) {
+        return Err(InvalidDimensions);
+    }
+    if a.len()
+        .checked_mul(columns)
+        .is_none_or(|n| n > limits.max_entries)
+        || columns
+            .checked_mul(columns)
+            .is_none_or(|n| n > limits.max_entries / 2)
+    {
+        return Err(BudgetExceeded("matrix entries"));
+    }
+    if a.iter()
+        .flatten()
+        .any(|x| x.numer().bits().max(x.denom().bits()) > limits.max_coefficient_bits)
+    {
+        return Err(BudgetExceeded("coefficient bits"));
+    }
+    let mut budget = EliminationBudget {
+        remaining: limits.max_operations,
+        bits: limits.max_coefficient_bits,
+    };
+    let mut reduced = a.to_vec();
+    let (pivots, rows) = rational_rref(&mut reduced, columns, Some(&mut budget))?;
+    let rank = pivots.len();
+    let free: Vec<_> = (0..columns).filter(|c| !pivots.contains(c)).collect();
+    let mut basis = Vec::new();
+    for &f in &free {
+        let mut v = vec![Q::zero(); columns];
+        v[f] = Q::one();
+        for (i, &p) in pivots.iter().enumerate() {
+            v[p] = -&reduced[i][f] / &reduced[i][p];
+            budget.check(&v[p])?;
+        }
+        basis.push(v);
+    }
+    let mut minor: Vec<Vec<Q>> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, &r)| {
+            let mut row: Vec<_> = pivots.iter().map(|&c| a[r][c].clone()).collect();
+            row.extend((0..rank).map(|j| if i == j { Q::one() } else { Q::zero() }));
+            row
+        })
+        .collect();
+    let (minor_pivots, _) = rational_rref(&mut minor, rank, Some(&mut budget))?;
+    if minor_pivots.len() != rank {
+        return Err(InvalidDimensions);
+    }
+    let mut inverse = Vec::new();
+    for (i, row) in minor.iter().enumerate() {
+        let mut out = Vec::new();
+        for x in &row[rank..] {
+            let v = x / &row[i];
+            budget.check(&v)?;
+            out.push(v);
+        }
+        inverse.push(out);
+    }
+    Ok(RationalKernel {
+        basis,
+        free_columns: free,
+        pivot_columns: pivots,
+        independent_rows: rows,
+        inverse_minor: inverse,
+    })
+}
+
 /// Solve `Ax = b` over ℚ and report the rank and nullity of `A`.
 ///
 /// Returns `None` if the dimensions are invalid or the system is
@@ -1792,38 +1953,8 @@ pub fn solve_linear_system_with_rank(a: &[Vec<Q>], b: &[Q]) -> Option<LinearSyst
         })
         .collect();
 
-    // Forward + upward elimination (reduced row-echelon form).
-    let mut pivot_cols: Vec<(usize, usize)> = Vec::new();
-    let mut pivot_row = 0;
-
-    for col in 0..num_cols {
-        let Some(pr) = (pivot_row..num_rows).find(|&r| !aug[r][col].is_zero()) else {
-            continue;
-        };
-
-        aug.swap(pivot_row, pr);
-        pivot_cols.push((pivot_row, col));
-
-        let pivot_val = aug[pivot_row][col].clone();
-        let pivot_snapshot: Vec<_> = aug[pivot_row][col..=num_cols].to_vec();
-
-        // Eliminate all other rows in this column.
-        for row in 0..num_rows {
-            if row == pivot_row || aug[row][col].is_zero() {
-                continue;
-            }
-            let factor = aug[row][col].clone() / pivot_val.clone();
-            for (aug_j, pivot_j) in aug[row][col..=num_cols]
-                .iter_mut()
-                .zip(pivot_snapshot.iter())
-            {
-                let sub = pivot_j.clone() * &factor;
-                *aug_j -= sub;
-            }
-        }
-
-        pivot_row += 1;
-    }
+    let (pivot_columns, _) = rational_rref(&mut aug, num_cols, None).ok()?;
+    let pivot_row = pivot_columns.len();
 
     // Consistency check: any row [0 ... 0 | nonzero] means no solution.
     for aug_row in &aug[pivot_row..num_rows] {
@@ -1834,10 +1965,10 @@ pub fn solve_linear_system_with_rank(a: &[Vec<Q>], b: &[Q]) -> Option<LinearSyst
 
     // Extract solution (free variables = 0).
     let mut x = vec![Q::zero(); num_cols];
-    for &(pr, pc) in &pivot_cols {
+    for (pr, &pc) in pivot_columns.iter().enumerate() {
         x[pc] = aug[pr][num_cols].clone() / aug[pr][pc].clone();
     }
-    let rank = pivot_cols.len();
+    let rank = pivot_columns.len();
     Some(LinearSystemSolution {
         particular: x,
         rank,

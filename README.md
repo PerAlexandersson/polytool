@@ -571,6 +571,112 @@ jq '.representations[0].recurrence_json' representations.json > recurrence.json
 polytool recurrence-generate --recurrence recurrence.json --rows 60
 ```
 
+#### Complete recurrence spaces and certificates
+
+Use `--space` for the full rational coefficient space in specified supports.
+The existing single-result finder and `--representations` retain their finite-fit
+semantics. The new mode reads a structured request rather than polynomial text:
+
+```sh
+polytool recurrence --space < request.json > spaces.json
+polytool recurrence --verify-space < spaces.json
+cargo run -p polytool --example recurrence_spaces > a171608-spaces.json
+```
+
+A small request for `P[n] = X^n` is:
+
+```json
+{
+  "source": {"coefficients": [["0", "1"]], "seeds": [["1"]]},
+  "domain_start": 0,
+  "shapes": [
+    {"kind": "box", "length": 1, "derivative_order": 1,
+     "index_degree": 1, "variable_degree": 1, "leading_index_degree": 1}
+  ]
+}
+```
+
+`source.coefficients[i]` is `a[i](X)` in the defining, homogeneous monic rule
+`P[n+k] = sum(i<k) a[i](X) P[n+i]`; exactly `k` seeds are required.
+Coefficients are ascending-power rational **strings**. `source.origin` defaults
+to zero. The source is valid from that origin and its coefficients must be
+independent of `n`. Alternatively, `source_recurrence` accepts an existing
+`polytool.recurrence.v1` object satisfying these restrictions. Extra initial
+rows and optional `rows` are checked for consistency. A guessed source is an
+assumption, not proof that an external sequence satisfies it.
+
+Omit the source to analyze finite `rows`, with `row_origin` defaulting to zero.
+`domain_start` is the first base index tested, must not precede the origin,
+and defaults to zero; set it explicitly for a nonzero origin. All coefficient
+polynomials use the **original** index, including on a tail.
+
+A box includes every RHS monomial `n^u X^v D^s(P[n+j])` for
+`j < length`, `s <= derivative_order`, `u <= index_degree`, and
+`v <= variable_degree`. Its leader multiplies `P[n+length]` and has separate
+`leading_index_degree` and `leading_variable_degree` bounds. All omitted degree
+bounds default to zero. For sparse supports use
+`{"kind":"explicit","target_lag":1,"monomials":[{"lag":1},{"lag":0,"variable_degree":1}]}`.
+Each monomial has `lag`, `derivative_order`, `index_degree`, `variable_degree`;
+omitted powers are zero. Target-lag derivatives are forbidden. Columns are
+sorted and the report records that ordering. Target columns enter the residual
+positively, other columns negatively.
+
+The schema `polytool.recurrence-spaces.v1` echoes the request and returns:
+
+- A **complete kernel basis** per completed shape, including relations with zero
+  successor coefficient; its `basis` entries are coefficient vectors.
+- `successor_projection_rank` and representatives with independent projections
+  onto the leader coordinates. Their linear combinations together with the
+  zero-leader relations describe every recurrence in that shape.
+- Exact rank witnesses (an inverse pivot minor and an identity minor of the
+  kernel basis), plus row-space dual witnesses for `absent_in_shape`.
+- Evidence `conditional_on_source` for all-rank identities, `exact_fit` for
+  finite-row positives, or `rows_only_obstruction` for bounded nonexistence.
+  Budget or row shortages carry `evidence: "none"` and never mean absence.
+- A frontier among compatible **requested boxes**, holding coefficient bounds
+  fixed. It is not an unrestricted minimal-order claim or an Ore ideal basis.
+
+Why finitely many rows suffice: let `chi(S)` be the monic order-`k` source
+operator. For support exponent pair `(u,s)`, set `h = 1 + max(u+s)`, including
+leader columns. Commutators with `n` and differentiation show that `chi(S)^h`
+annihilates every residual in this support, without a simple-root assumption.
+Thus zero residuals at `domain_start` through `domain_start+h*k-1` are necessary
+and sufficient for an all-rank identity on that domain. We generate rows through
+`domain_start+h*k-1+target_lag`. Original source order, including a nonminimal
+source or zero oldest coefficient, is safe. See
+[RealRooted #1978](https://github.com/PerAlexandersson/RealRooted/issues/1978)
+for the formalization proposal; this implementation does not emit a Lean proof.
+For an E-by-M residual matrix, elimination uses O(E M min(E,M) + M^3)
+rational operations and O(E M + M^2) storage; integer bit growth is separately
+bounded. The row-generation cost depends on source order and polynomial degrees.
+
+The Rust entry points are `find_recurrence_spaces(&RecurrenceSpaceRequest)` and
+`verify_recurrence_spaces(&expected_request, &report)`. Verification regenerates
+residuals and checks the supplied kernel/rank/dual witnesses, reducing only the
+small leader projection. It binds to the caller's expected request. CLI replay
+checks against the embedded request; it does not authenticate the source.
+`ConstantLagSource::generate_rows` is the canonical exact source generator.
+`representative.to_recurrence(result)` converts original forward indices to the
+existing backward evaluator, but callers must provide the required seeds.
+
+`singular_ranks` lists **all nonnegative integer base ranks** at which the whole
+leader vanishes as a polynomial in X. Exact Sturm analysis is limited to degree
+at most 8 and coefficient bit size at most 128; outside these diagnostic bounds
+it is `null`, meaning unknown. Such ranks need extra seeds for generation.
+`requires_x_division` separately records a variable-dependent leader. We never
+cancel boundary factors or silently extend the declared domain.
+
+Default limits per shape/phase are 512 generated rows, 128 columns, degree 512,
+500,000 matrix entries, 20,000,000 arithmetic-work units, and 4096-bit
+coefficients, with at most 16 shapes. `limits` can override individual fields;
+MCP and WASM allow only reductions and cap JSON input at 1 MiB. Generation,
+elimination, and witness replay have separate work accounting, so replay can independently reject a report on resource grounds. Such a
+rejection is not a mathematical counterexample.
+CLI exit codes: 0 for completed claims, 3 if any shape is incomplete, and 2 for
+invalid input or a rejected certificate. `--verify-space` reports the number of
+incomplete shapes and only verifies completed claims. These two flags do not
+combine with legacy search controls; all controls are in the JSON request.
+
 #### Machine-readable recurrence JSON and row generation
 
 To save a recurrence with enough initial conditions to regenerate the sequence,
@@ -1146,6 +1252,13 @@ copy its text/LaTeX/JSON, and extend the sequence with that selected formula.
 It displays checked starting indices, held-out row counts, and partial coverage.
 The interface preserves the task-oriented UI and row-extension feature deployed
 from `878113b`, which had not yet reached the parent integration branch.
+
+The **Complete spaces** mode accepts the structured request above in its own
+JSON field, with an A171608 trade-off example. It does not use the main row
+input or the legacy search controls. It displays evidence, kernel dimensions,
+singular ranks and formulas, and copies the complete certificate JSON.
+The WASM exports `find_recurrence_spaces(request_json)` and
+`verify_recurrence_spaces(report_json)` share the Rust backend.
 
 The browser wrapper parses polynomial input with `parse_polynomials_bigint`.
 Every integer coefficient returned across its string-based WASM/JSON boundary
