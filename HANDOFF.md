@@ -1,5 +1,41 @@
 # Handoff
 
+## Implemented: guided full-space recurrence UI — 2026-10-23
+
+Full search now defaults to the main polynomial input, with previous-term
+and derivative controls, explicit row origin, expandable coefficient bounds,
+and defining-recurrence examples. Custom JSON remains expandable and switches
+off guided controls when edited. The existing WASM `parse_and_format`
+export supplies exact rows without root analysis; any invalid row
+rejects the whole input. Guided searches enumerate at most 16 length/order
+combinations. Existing CLI/library mathematics and request schemas are unchanged.
+
+At the user's request the webpage omits certificate/replay controls, kernel
+diagnostics and proof details. Results lead with typeset formulas and copy
+buttons, with successful searches first and further formulas/bounds folded.
+Finite fits, source-derived identities, bounded absence and unfinished work
+retain short distinct labels. Relevant edits cancel work and clear results.
+The source asset version is `20261023a`; this is not deployed.
+
+Checks passed: 50 Node/WASM tests (zero skips), string safety and whitespace.
+The Rust/WASM code is unchanged; tests use the previously deployed bundle.
+Actual Chromium at 1366 and 375 pixels covers guided controls, exact large coefficients,
+invalid rows/origins, examples, formula copying, backend replay, partial
+searches, custom JSON, stale edits, cancellation, tab routing and old modes.
+Light/dark screenshots are under
+`/cargo-target/polytool-full-search-ui-20261023/screenshots/`; test logs are
+in that parent directory. The tested bundle is
+`/cargo-target/polytool-recurrence-continuation-web`. No uncaught page errors
+or horizontal document overflow.
+
+Ownership released: `polytool/web/index.html`,
+`polytool/web/recurrence-spaces.test.cjs`,
+`polytool/web/tests/recurrence_browser.cjs`, `polytool/README.md`, and
+root/crate handoff openings on `feat/recurrence-representations-20261020`.
+No shared checkout, Lean/OEIS, staging or live-site edits; no merge/subtree
+publication. Deployment requires a new scoped request and the normal
+clean-state gate.
+
 ## Verified: Opus browser review and fixes — 2026-10-21
 
 The user-requested Claude Opus 5.5 review completed against ec48a23 with
