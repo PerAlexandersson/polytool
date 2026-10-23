@@ -11,6 +11,7 @@ pub mod parity_pattern;
 pub mod parking;
 pub mod permutation;
 pub mod polynomial_builder;
+pub mod residue_words;
 pub mod rook_placements;
 pub mod statistics;
 pub mod word;

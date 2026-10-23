@@ -1,5 +1,26 @@
 # Handoff
 
+## Completed: residue-word CSP generators — 2026-10-23
+
+The cylindric-tableaux worker added `combpoly::residue_words`: exact BigInt
+major polynomials for even/odd bit-sum words, the induced rotation CSP
+`[m]_(q^a) O_a E_a^(m-1)` for a unique odd residue subsequence, and the binary
+product `[m]_(q^a) product_(j=1..a-1)(1+q^j)^m`. It includes independent
+word-enumeration/statistic/fixed-point tests and a runnable example.
+The proof is in the research project's `notes/uniform-graph-model.md`.
+
+Ownership at this verified checkpoint is released for `combpoly/src/residue_words.rs`,
+`combpoly/src/lib.rs`, `combpoly/README.md`, `docs/LIBRARY_GUIDE.md`,
+`combpoly/examples/residue_word_csp.rs`, and this handoff. All 215 combpoly
+library tests pass; the example and strict Rustdoc pass; formatting and diff
+checks pass. Clippy has zero diagnostics in task-owned source files; strict
+crate-wide Clippy is blocked by 14 pre-existing warnings in `catalan.rs`,
+`lattice_path_matroid.rs`, and `parking.rs`. Those files were not changed.
+The project consumer independently checks 618 loop/parity cases and 3,450
+rotations, the induced polynomials on 103 loop parameter sets, and the binary
+product on 48 shapes through length 20. Ordinary interleaved-word major
+index fails in several of these families; it is not the new statistic.
+
 ## Completed: Polytool CSP orbit decomposition and bicyclic sieving — 2026-10-20
 
 `polytool::cyclic_sieving` now decomposes `f mod q^n - 1` in the orbit basis
