@@ -435,6 +435,41 @@ textarea:focus { outline: none; border-color: var(--c-link); }
   gap: 0.3rem;
   cursor: pointer;
 }
+.mode-choice { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+/* Full recurrence search: ordinary controls first, exact request on demand. */
+.space-form {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 0.8rem 0;
+}
+.space-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.8rem 1.2rem;
+  margin: 0.8rem 0;
+}
+.space-field { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.space-field[hidden] { display: none; }
+.space-field label, .space-form legend { font-weight: bold; }
+.space-field select, .space-field input {
+  width: 100%; min-width: 0; padding: 0.45rem;
+  border: 1px solid var(--c-border); border-radius: 4px;
+  color: var(--c-text-main); background: var(--c-bg-surface);
+  font: inherit;
+}
+.space-field small, .space-help { color: var(--c-text-sub); font-size: 0.85rem; }
+.space-form details { margin-top: 0.8rem; }
+.space-form summary { cursor: pointer; color: var(--c-link); }
+.space-form fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.space-form legend { padding: 0; }
+.space-summary { border-left: 3px solid var(--c-brand); padding-left: 0.7rem; }
+.space-result { border-top: 1px solid var(--c-border); padding: 0.9rem 0; }
+.space-result h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+.space-result details { margin: 0.7rem 0; }
+.space-result summary { cursor: pointer; color: var(--c-link); }
+.space-result p { margin: 0.4rem 0; }
 
 /* Dim manual options when adaptive is selected */
 .options.disabled {
@@ -971,14 +1006,14 @@ Lines starting with # are ignored."></textarea>
 
 <div id="panel-recurrence" class="tab-panel">
   <div class="mode-group">
-    <label><input type="radio" name="searchMode" value="adaptive" checked onchange="toggleSearchMode()"> Adaptive</label>
-    <span class="info">i<span class="tip">Tries increasingly complex recurrence shapes, starting from the simplest. Polynomial sequences use bounds up to depth 10, <span data-tex="t">t</span>-degree 5, <span data-tex="n">n</span>-degree 5, and derivative order 5; integer sequences use scalar recurrences in <span data-tex="n">n</span>. There is no time or candidate-count cutoff: it stops at the first match or after exhausting the bounded search. An unsuccessful exhaustive search can take a long time; use Cancel to stop it.</span></span>
-    <label><input type="radio" name="searchMode" value="manual" onchange="toggleSearchMode()"> Manual</label>
-    <span class="info">i<span class="tip">Set exact search bounds yourself. Useful when you know the expected recurrence shape or want to explore a specific search space.</span></span>
-    <label><input type="radio" name="searchMode" value="representations" onchange="toggleSearchMode()"> Compare representations</label>
-    <span class="info">i<span class="tip">Look for shorter recurrences using higher derivatives, within the bounds below. Keeps one preferred candidate per length/order pair. Matches are checked exactly on supplied rows; they are not proofs for all n.</span></span>
-    <label><input type="radio" name="searchMode" value="spaces" onchange="toggleSearchMode()"> Complete spaces</label>
-    <span class="info">i<span class="tip">Compute all identities in the requested coefficient shapes. A supplied defining recurrence can certify identities for all ranks; rows alone give finite fits. Incomplete shapes make no existence or absence claim.</span></span>
+    <span class="mode-choice"><label><input type="radio" name="searchMode" value="adaptive" checked onchange="toggleSearchMode()"> Adaptive</label>
+    <span class="info">i<span class="tip">Tries increasingly complex recurrence shapes, starting from the simplest. Polynomial sequences use bounds up to depth 10, <span data-tex="t">t</span>-degree 5, <span data-tex="n">n</span>-degree 5, and derivative order 5; integer sequences use scalar recurrences in <span data-tex="n">n</span>. There is no time or candidate-count cutoff: it stops at the first match or after exhausting the bounded search. An unsuccessful exhaustive search can take a long time; use Cancel to stop it.</span></span></span>
+    <span class="mode-choice"><label><input type="radio" name="searchMode" value="manual" onchange="toggleSearchMode()"> Manual</label>
+    <span class="info">i<span class="tip">Set exact search bounds yourself. Useful when you know the expected recurrence shape or want to explore a specific search space.</span></span></span>
+    <span class="mode-choice"><label><input type="radio" name="searchMode" value="representations" onchange="toggleSearchMode()"> Compare representations</label>
+    <span class="info">i<span class="tip">Look for shorter recurrences using higher derivatives, within the bounds below. Keeps one preferred candidate per length/order pair. Matches are checked exactly on supplied rows; they are not proofs for all n.</span></span></span>
+    <span class="mode-choice"><label><input type="radio" name="searchMode" value="spaces" onchange="toggleSearchMode()"> Full search</label>
+    <span class="info">i<span class="tip">Find all recurrences within your chosen bounds. Compare rules using different numbers of previous terms and derivatives.</span></span></span>
   </div>
   <div class="options disabled" id="manualOpts">
     <label>depth <input type="number" id="maxRecLen" value="3" min="1" max="10"></label>
@@ -1010,14 +1045,78 @@ Lines starting with # are ignored."></textarea>
     <span class="recurrence-note">Partial results show which pairs still need searching.</span>
   </div>
   <div id="spaceOptions" hidden>
-    <p class="recurrence-note">Analyze all recurrences within explicit coefficient bounds. The request below supplies its own source and seeds or finite rows; the main polynomial input and other search controls are not used in this mode. A source-backed identity follows from the supplied recurrence, which must itself describe your sequence. Without a source, positive results remain finite fits. Absence is proved only within each requested shape.</p>
-    <div class="options">
-      <button class="copy-btn" onclick="loadRecurrenceSpaceExample('hermite')">Hermite: indexed source</button>
-      <button class="copy-btn" onclick="loadRecurrenceSpaceExample('automatic')">Automatic X-degree</button>
+    <p class="space-help">Find all recurrences within chosen bounds, including shorter rules that use derivatives.</p>
+    <div class="space-form">
+      <div class="space-field">
+        <label for="spaceSource">Sequence to search</label>
+        <select id="spaceSource" onchange="changeSpaceSource()">
+          <option value="rows">Use the polynomials entered above</option>
+          <option value="default">Example: A171608 — compare lengths and derivatives</option>
+          <option value="hermite">Example: Hermite polynomials</option>
+          <option value="automatic">Example: choose the polynomial degree automatically</option>
+          <option value="custom">Custom request (JSON)</option>
+        </select>
+      </div>
+      <p class="space-help" id="spaceSourceHelp">Matches are checked on the rows you supply. Enter more rows for a stronger check.</p>
+      <div id="spaceGuided">
+        <div class="space-grid">
+          <div class="space-field">
+            <label for="spaceLength">Previous terms, up to</label>
+            <select id="spaceLength" onchange="spaceControlsChanged()">
+              <option>1</option><option selected>2</option><option>3</option><option>4</option>
+            </select>
+            <small>1 uses Pₙ to find Pₙ₊₁; 2 can also use Pₙ₋₁.</small>
+          </div>
+          <div class="space-field">
+            <label for="spaceDerivative">Derivatives, up to</label>
+            <select id="spaceDerivative" onchange="spaceControlsChanged()">
+              <option value="0">None</option><option value="1" selected>First derivative · P′</option>
+              <option value="2">Second derivative · P″</option><option value="3">Third derivative · P‴</option>
+            </select>
+            <small>Also searches rules with fewer derivatives.</small>
+          </div>
+        </div>
+        <div class="space-field" id="spaceOriginField">
+          <label for="spaceOrigin">Index of the first input row</label>
+          <input id="spaceOrigin" type="number" value="1" min="0" max="1000000" oninput="spaceControlsChanged()">
+        </div>
+        <details id="spaceCoefficientOptions">
+          <summary>Coefficient bounds</summary>
+          <p class="space-help">These limit the factors multiplying each polynomial or derivative. Start small; larger bounds take longer and need more rows.</p>
+          <div class="space-grid">
+            <div class="space-field">
+              <label for="spaceVariableDegree">Degree in x</label>
+              <select id="spaceVariableDegree" onchange="spaceControlsChanged()">
+                <option value="0">Constant</option><option value="1">Linear · a + bx</option>
+                <option value="2" selected>Quadratic · a + bx + cx²</option><option value="3">Up to x³</option>
+                <option value="4">Up to x⁴</option><option value="5">Up to x⁵</option><option value="6">Up to x⁶</option>
+              </select>
+            </div>
+            <div class="space-field">
+              <label for="spaceIndexDegree">Dependence on n</label>
+              <select id="spaceIndexDegree" onchange="spaceControlsChanged()">
+                <option value="0">Independent of n</option><option value="1" selected>Linear · a + bn</option>
+                <option value="2">Quadratic · a + bn + cn²</option><option value="3">Up to n³</option>
+              </select>
+            </div>
+            <div class="space-field">
+              <label for="spaceLeaderDegree">Factor on the next term</label>
+              <select id="spaceLeaderDegree" onchange="spaceControlsChanged()">
+                <option value="0">Constant</option><option value="1" selected>Linear in n, e.g. n + 1</option>
+                <option value="2">Quadratic in n</option>
+              </select>
+            </div>
+          </div>
+          <label id="spaceAutomaticLabel"><input type="checkbox" id="spaceAutomatic" onchange="spaceControlsChanged()"> Choose the x-degree automatically from the defining recurrence</label>
+        </details>
+        <p class="space-help space-summary" id="spaceSearchSummary" aria-live="polite"></p>
+      </div>
+      <details id="spaceAdvanced">
+        <summary>Advanced: request JSON</summary>
+        <p class="space-help">Use this for your own defining recurrence, sparse terms, or resource limits. Editing it switches to a custom request; the controls above no longer apply.</p>
+    <textarea id="spaceRequest" oninput="editSpaceRequest()" rows="9" spellcheck="false" aria-label="Custom recurrence request JSON"></textarea>
+      </details>
     </div>
-    <label for="spaceRequest">Recurrence-space request (exact JSON)</label>
-    <textarea id="spaceRequest" oninput="invalidateRecurrenceSpaces()" rows="9" spellcheck="false">{"include_leader_coverage":true,"source":{"coefficients":[["0","0","-1"],["0"],["0","2"],["0"]],"seeds":[["1"],["2"],["0","2"],["0","3"]]},"shapes":[{"kind":"box","length":3,"index_degree":1,"variable_degree":3,"leading_index_degree":1},{"kind":"box","length":2,"derivative_order":1,"index_degree":1,"variable_degree":3,"leading_index_degree":1},{"kind":"box","length":1,"derivative_order":2,"index_degree":1,"variable_degree":3,"leading_index_degree":1}]}</textarea>
-    <p class="recurrence-note">The initial example is A171608, indexed from zero. The buttons also demonstrate a polynomial-index source and an automatic RHS variable-degree bound. Coefficient rows contain exact rational strings in ascending powers. Results include full coefficient-space bases and certificates for independent replay.</p>
   </div>
   <button class="run" onclick="run('recurrence')" id="btnRec">Find recurrence</button>
   <button class="cancel" onclick="cancelRecurrence()" id="btnCancel" style="display:none">Cancel</button>
@@ -1033,9 +1132,9 @@ Lines starting with # are ignored."></textarea>
   Source code: <a href="https://github.com/PerAlexandersson/polytool">polytool</a>.
 </footer>
 
-<script src="pkg/polytool_web.js?v=20261021c"></script>
+<script src="pkg/polytool_web.js?v=20261023a"></script>
 <script>
-const ASSET_VERSION = '20261021c';
+const ASSET_VERSION = '20261023a';
 const EXAMPLES = {
   eulerian: {
     label: 'Eulerian polynomials A_n(t) \u2014 descent generating function on S_n',
@@ -1799,6 +1898,7 @@ function loadExample(name) {
   const ex = EXAMPLES[name] || SEQUENCE_CATALOG[name];
   if (!ex) return;
   document.getElementById('input').value = ex.lines.join('\n');
+  spaceMainInputChanged();
   setStatus('Loaded: ' + ex.label);
 }
 
@@ -1807,6 +1907,7 @@ function loadWorkflowExample(workflow, name) {
   if (!text) return;
   document.getElementById('input').value = text;
   workflowDrafts[workflow] = text;
+  spaceMainInputChanged();
   setStatus('Example loaded.');
 }
 
@@ -1854,6 +1955,9 @@ function setWorkflow(name, options) {
   document.querySelectorAll('.polynomial-recurrence-option').forEach(option => {
     option.hidden = name === 'integer-sequence';
   });
+  updateSpaceControls();
+  refreshSpaceRequestPreview();
+  window._recurrenceSpaces = null;
   switchTab(config.defaultTab);
   document.querySelectorAll('.tab-results').forEach(result => { result.innerHTML = ''; });
   setStatus('');
@@ -1866,11 +1970,14 @@ function toggleSearchMode() {
   const compare = document.querySelector('input[name="searchMode"][value="representations"]').checked;
   const spaces = document.querySelector('input[name="searchMode"][value="spaces"]').checked;
   document.getElementById('spaceOptions').hidden = !spaces;
-  document.getElementById('legacyRecurrenceOptions').classList.toggle('disabled', spaces);
+  document.getElementById('legacyRecurrenceOptions').hidden = spaces;
   document.querySelectorAll('#legacyRecurrenceOptions input').forEach(input => { input.disabled = spaces; });
-  document.getElementById('manualOpts').classList.toggle('disabled', adaptive || spaces);
+  document.getElementById('manualOpts').hidden = spaces;
+  document.getElementById('manualOpts').classList.toggle('disabled', adaptive);
+  updateSpaceControls();
+  refreshSpaceRequestPreview();
   document.getElementById('comparisonOptions').hidden = !compare;
-  document.getElementById('btnRec').textContent = spaces ? 'Analyze complete spaces' : (compare ? 'Compare representations' : 'Find recurrence');
+  document.getElementById('btnRec').textContent = spaces ? 'Find recurrences' : (compare ? 'Compare representations' : 'Find recurrence');
 }
 
 let wasmReady = false;
@@ -2221,7 +2328,7 @@ async function run(action) {
   if (!wasmReady) { setStatus('WASM not loaded yet.'); return; }
   try {
     const spaces = action === 'recurrence' && document.querySelector('input[name="searchMode"][value="spaces"]').checked;
-    const text = spaces ? document.getElementById('spaceRequest').value : getInput();
+    const text = spaces ? prepareSpaceRequest() : getInput();
     if (!text.trim()) { setStatus('No input.'); return; }
     switch (action) {
       case 'properties': renderProperties(text); break;
@@ -2230,7 +2337,8 @@ async function run(action) {
       case 'oeis': await runOeis(); break;
     }
   } catch (e) {
-    setResult(span('err', 'Error: ' + e));
+    setResult(span('err', 'Error: ' + e), action === 'recurrence' ? 'recurrence' : undefined);
+    if (action === 'recurrence') setStatus('Check the input and search settings.');
   }
 }
 
@@ -2943,108 +3051,238 @@ function copyRecurrenceMenu(button) {
 }
 
 function recurrenceSpaceExample(kind) {
+  if (kind === 'default') return {
+    source: {coefficients: [['0', '0', '-1'], ['0'], ['0', '2'], ['0']],
+      seeds: [['1'], ['2'], ['0', '2'], ['0', '3']]},
+    shapes: [
+      {kind: 'box', length: 3, index_degree: 1, variable_degree: 3, leading_index_degree: 1},
+      {kind: 'box', length: 2, derivative_order: 1, index_degree: 1, variable_degree: 3, leading_index_degree: 1},
+      {kind: 'box', length: 1, derivative_order: 2, index_degree: 1, variable_degree: 3, leading_index_degree: 1},
+    ],
+  };
   if (kind === 'hermite') return {
     indexed_source: {coefficients: [[['-2'], ['-2']], [['0', '2']]], seeds: [['1'], ['0', '2']]},
-    include_leader_coverage: true,
     shapes: [{kind: 'box', length: 1, derivative_order: 1, variable_degree: 1}],
   };
   if (kind === 'automatic') return {
     indexed_source: {coefficients: [[['0', '1'], ['0', '1']]], seeds: [['1']]},
-    include_leader_coverage: true,
     shapes: [{kind: 'automatic_variable_degree', length: 1, index_degree: 1}],
   };
-  throw new Error('Unknown recurrence-space example');
+  throw new Error('Unknown recurrence example');
 }
 
 function invalidateRecurrenceSpaces() {
   if (recurrenceRunning) cancelRecurrence();
   window._recurrenceSpaces = null;
-  setResult('Request changed. Analyze complete spaces to get a new result.', 'recurrence');
-  setStatus('Request changed; previous result cleared.');
+  setResult('Settings changed. Find recurrences to update the results.', 'recurrence');
+  setStatus('Previous result cleared.');
 }
 
-function loadRecurrenceSpaceExample(kind) {
-  document.getElementById('spaceRequest').value = JSON.stringify(recurrenceSpaceExample(kind), null, 2);
+function spaceMainInputChanged() {
+  if (document.querySelector('input[name="searchMode"][value="spaces"]').checked &&
+      document.getElementById('spaceSource').value === 'rows') {
+    invalidateRecurrenceSpaces();
+    refreshSpaceRequestPreview();
+  }
+}
+
+function readSpaceInteger(id, min, max) {
+  const field = document.getElementById(id);
+  const value = Number(field.value);
+  if (!field.value.trim() || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error('Choose a whole number from ' + min + ' to ' + max + ' for ' +
+      document.querySelector('label[for="' + id + '"]').textContent.toLowerCase() + '.');
+  }
+  return value;
+}
+
+function buildGuidedSpaceRequest() {
+  const mode = document.getElementById('spaceSource').value;
+  const request = mode === 'rows' ? {} : recurrenceSpaceExample(mode);
+  if (mode === 'rows') {
+    const input = getInput();
+    if (input.length > 1048576) throw new Error('Polynomial input is too large (limit: 1 MiB).');
+    const parsed = JSON.parse(wasm_bindgen.parse_and_format(input));
+    const errors = parsed.filter(row => row.error).map(row => row.error);
+    if (errors.length) throw new Error(errors.join('; '));
+    if (!parsed.length) throw new Error('Enter polynomial rows above, or choose an example.');
+    request.rows = parsed.map(row => row.coefficients);
+    request.row_origin = readSpaceInteger('spaceOrigin', 0, 1000000);
+    request.domain_start = request.row_origin;
+  }
+  const length = readSpaceInteger('spaceLength', 1, 4);
+  const derivative = activeWorkflow === 'integer-sequence' ? 0 : readSpaceInteger('spaceDerivative', 0, 3);
+  const automatic = activeWorkflow !== 'integer-sequence' && mode !== 'rows' && document.getElementById('spaceAutomatic').checked;
+  request.shapes = [];
+  for (let l = 1; l <= length; l++) {
+    for (let d = 0; d <= derivative; d++) {
+      const shape = {kind: automatic ? 'automatic_variable_degree' : 'box',
+        length: l, derivative_order: d,
+        index_degree: readSpaceInteger('spaceIndexDegree', 0, 3),
+        leading_index_degree: readSpaceInteger('spaceLeaderDegree', 0, 2)};
+      if (!automatic) shape.variable_degree = activeWorkflow === 'integer-sequence' ? 0 :
+        readSpaceInteger('spaceVariableDegree', 0, 6);
+      request.shapes.push(shape);
+    }
+  }
+  return request;
+}
+
+function updateSpaceControls() {
+  const mode = document.getElementById('spaceSource').value;
+  const custom = mode === 'custom';
+  const integer = activeWorkflow === 'integer-sequence';
+  document.getElementById('spaceGuided').hidden = custom;
+  document.getElementById('spaceOriginField').hidden = mode !== 'rows';
+  document.getElementById('spaceAutomaticLabel').hidden = mode === 'rows' || integer;
+  document.getElementById('spaceDerivative').disabled = integer;
+  document.getElementById('spaceVariableDegree').disabled = integer ||
+    (mode !== 'rows' && document.getElementById('spaceAutomatic').checked);
+  if (custom) document.getElementById('spaceAdvanced').open = true;
+  const help = {
+    rows: 'Matches are checked on the rows entered above. The first row index is used in every formula.',
+    default: 'Uses A171608: Pₙ₊₄ = 2xPₙ₊₂ − x²Pₙ, starting with 1, 2, 2x, 3x at n = 0. The input above is not used.',
+    hermite: 'Uses Hermite polynomials: Pₙ₊₂ = 2xPₙ₊₁ − 2(n + 1)Pₙ, with P₀ = 1 and P₁ = 2x. The input above is not used.',
+    automatic: 'Uses Pₙ₊₁ = (n + 1)xPₙ, with P₀ = 1. The input above is not used.',
+    custom: 'Uses the request JSON below, including its own rows or defining recurrence. The input above is not used.',
+  };
+  document.getElementById('spaceSourceHelp').textContent = help[mode];
+  const length = Number(document.getElementById('spaceLength').value);
+  const derivative = integer ? 0 : Number(document.getElementById('spaceDerivative').value);
+  const xDegree = integer ? '0' : document.getElementById('spaceVariableDegree').value;
+  const automatic = !integer && mode !== 'rows' && document.getElementById('spaceAutomatic').checked;
+  document.getElementById('spaceSearchSummary').textContent =
+    length * (derivative + 1) + ' combinations: ' + (length === 1 ? '1 previous term' : '1–' + length + ' previous terms') + ', ' +
+    (derivative ? 'derivatives up to order ' + derivative : 'no derivatives') + '. ' +
+    (automatic ? 'The x-degree is chosen automatically' : 'Coefficient degrees: x ≤ ' + xDegree) +
+    ', n ≤ ' + document.getElementById('spaceIndexDegree').value + '.';
+}
+
+function refreshSpaceRequestPreview() {
+  if (document.getElementById('spaceSource').value === 'custom' || !wasmReady) return;
+  try {
+    document.getElementById('spaceRequest').value = JSON.stringify(buildGuidedSpaceRequest(), null, 2);
+  } catch (_) {
+    // Never leave a previous example in the editor when the current input is invalid.
+    document.getElementById('spaceRequest').value = '';
+  }
+}
+
+function spaceControlsChanged() {
+  updateSpaceControls();
+  refreshSpaceRequestPreview();
   invalidateRecurrenceSpaces();
+}
+
+function changeSpaceSource() {
+  const mode = document.getElementById('spaceSource').value;
+  if (mode !== 'rows' && mode !== 'custom') {
+    const shape = recurrenceSpaceExample(mode).shapes[0];
+    document.getElementById('spaceLength').value = mode === 'default' ? 3 : shape.length;
+    document.getElementById('spaceDerivative').value = mode === 'default' ? 2 : (shape.derivative_order || 0);
+    document.getElementById('spaceIndexDegree').value = shape.index_degree || 0;
+    document.getElementById('spaceVariableDegree').value = shape.variable_degree || 1;
+    document.getElementById('spaceLeaderDegree').value = shape.leading_index_degree || 0;
+    document.getElementById('spaceAutomatic').checked = mode === 'automatic';
+  } else if (mode === 'rows') {
+    document.getElementById('spaceAutomatic').checked = false;
+  }
+  spaceControlsChanged();
+}
+
+function editSpaceRequest() {
+  document.getElementById('spaceSource').value = 'custom';
+  updateSpaceControls();
+  invalidateRecurrenceSpaces();
+}
+
+function prepareSpaceRequest() {
+  if (document.getElementById('spaceSource').value === 'custom') {
+    return document.getElementById('spaceRequest').value;
+  }
+  const request = JSON.stringify(buildGuidedSpaceRequest());
+  document.getElementById('spaceRequest').value = JSON.stringify(JSON.parse(request), null, 2);
+  return request;
 }
 
 function recurrenceSpaceSummary(report) {
   const total = report.results.length;
-  const complete = report.results.filter(result => result.certificate &&
+  const finished = report.results.filter(result => result.certificate &&
     ['successor_exists', 'absent_in_shape'].includes(result.status)).length;
-  return complete + ' of ' + total + ' shapes complete; ' + (total - complete) +
-    (complete === total ? ' incomplete.' : ' incomplete (no conclusion).');
+  return finished + ' of ' + total + ' searches finished' +
+    (finished === total ? '.' : '; ' + (total - finished) + ' unfinished.');
+}
+
+function spaceFormulaHtml(formula) {
+  // Format the backend's forward-index notation; coefficients and indices are unchanged.
+  const tex = formula.replace(/ \+ \(-1\) /g, ' - ').replace(/\(-1\) /g, '-')
+    .replace(/\(1\) /g, '')
+    .replace(/D\^(\d+)\(P\[n\+(\d+)\]\)/g, (_, order, lag) =>
+      'P_{' + (lag === '0' ? 'n' : 'n+' + lag) + '}' +
+      (Number(order) <= 3 ? "'".repeat(Number(order)) : '^{(' + order + ')}'))
+    .replace(/P\[n\+(\d+)\]/g, (_, lag) => 'P_{' + (lag === '0' ? 'n' : 'n+' + lag) + '}')
+    .replace(/X/g, 'x').replace(/\^(\d+)/g, '^{$1}')
+    .replace(/(\d+)\/(\d+)/g, '\\frac{$1}{$2}');
+  return '<div class="recurrence-display">' + katexInline(tex) + '</div>';
 }
 
 function renderRecurrenceSpaces(report) {
   window._recurrenceSpaces = report;
-  const evidence = {
-    conditional_on_source: 'Identity for all ranks in the declared domain, conditional on the supplied source recurrence and seeds.',
-    exact_fit: 'Exact fit to supplied rows; no all-rank conclusion.',
-    rows_only_obstruction: (report.request.source || report.request.indexed_source || report.request.source_recurrence)
-      ? 'Exact obstruction from rows generated by the supplied source: no successor recurrence in this shape.'
-      : 'Exact obstruction from supplied rows: no successor recurrence in this shape.',
-    none: 'No mathematical conclusion for this shape.',
-  };
-  let html = '<strong>Recurrence-space analysis</strong><p>' + esc(recurrenceSpaceSummary(report)) + '</p>' +
-    '<p>Declared base-index domain starts at n = ' + esc(report.request.domain_start) + '.</p>' +
-    '<p>Indices retain their original meaning. A source recurrence is an assumption. ' +
-    'The frontier compares only compatible requested boxes; it is not a global minimum.</p>';
-  report.results.forEach((result, i) => {
-    const frontier = report.frontier.includes(i) ? ' — requested frontier' : '';
-    html += '<details open><summary>Shape ' + (i + 1) + ': ' + esc(result.status) + frontier + '</summary>' +
-      '<p>' + esc(evidence[result.evidence] || result.evidence) + '</p>';
-    if (result.reason) html += '<p>' + esc(result.reason) + '</p>';
-    if (result.certificate) {
-      html += '<p>Kernel dimension ' + result.certificate.basis.length +
-        '; successor projection rank ' + result.successor_projection_rank +
-        '; residuals checked ' + result.residual_count + '.</p>';
+  const source = report.request.source || report.request.indexed_source || report.request.source_recurrence;
+  const states = {successor_exists: 'Recurrence found', absent_in_shape: 'No recurrence within these bounds',
+    incomplete_budget: 'Search limit reached', insufficient_rows: 'More rows needed'};
+  let html = '<strong>Recurrence search results</strong><p>' + esc(recurrenceSpaceSummary(report)) + '</p>';
+  html += '<p class="space-help">' + (source
+    ? 'Identities below follow from the defining recurrence and initial values.'
+    : 'Matches below fit the supplied rows exactly; they may fail on later rows.') + '</p>';
+  const ordered = report.results.map((result, i) => ({result, i}));
+  ordered.sort((a, b) => Number(b.result.status === 'successor_exists') - Number(a.result.status === 'successor_exists'));
+  ordered.forEach(({result, i}) => {
+    const shape = report.request.shapes && report.request.shapes[i];
+    const name = shape && shape.length ? shape.length + ' previous term' + (shape.length === 1 ? '' : 's') +
+      ' · ' + ((shape.derivative_order || 0) === 0 ? 'no derivatives' : 'derivatives up to order ' + shape.derivative_order) :
+      'Search ' + (i + 1);
+    html += '<section class="space-result"><h3>' + esc(name) + '</h3><p><strong>' +
+      esc(states[result.status] || 'Search unfinished') + '</strong></p>';
+    if (result.reason) html += '<p class="space-help">' + esc(result.reason) + '</p>';
+    if (result.status === 'absent_in_shape') html += '<p class="space-help">Try higher coefficient bounds or allow more terms or derivatives.</p>';
+    if (!['successor_exists', 'absent_in_shape'].includes(result.status)) {
+      html += '<p class="space-help">This search does not tell us whether a recurrence exists.</p>';
     }
-    if (result.automatic_degree_bound) {
-      html += '<p>Proved sufficient RHS X-degree cap: ' + esc(result.automatic_degree_bound.variable_degree) + '. ' +
-        (result.certificate && ['successor_exists', 'absent_in_shape'].includes(result.status)
-          ? 'The completed search covers all RHS X-degrees for successor existence. Index-degree and leader bounds remain as requested; the displayed kernel uses this finite cap.'
-          : 'Search at this cap is incomplete; no existence or absence conclusion.') + '</p>';
+    result.representatives.forEach((rep, j) => {
+      if (j === 1) html += '<details><summary>More formulas (' + (result.representatives.length - 1) + ')</summary>';
+      html += spaceFormulaHtml(rep.formula) +
+        '<button class="copy-btn" onclick="copySpaceFormula(this,' + i + ',' + j + ')">Copy formula</button>';
+      if (rep.singular_ranks === null) html += '<p class="space-help">Check when the coefficient of the next term vanishes before using this rule to generate rows.</p>';
+      else if (rep.singular_ranks.length) html += '<p class="space-help">Cannot determine the next term at base n = ' +
+        esc(rep.singular_ranks.join(', ')) + '; supply these rows separately.</p>';
+      if (rep.requires_x_division) html += '<p class="space-help">Generating the next row requires exact polynomial division.</p>';
+    });
+    if (result.representatives.length > 1) html += '</details>';
+    html += '<details><summary>Search bounds</summary><p class="space-help">Base index starts at n = ' +
+      esc(report.request.domain_start) + '.';
+    if (shape && shape.kind !== 'explicit') {
+      html += ' Coefficient degree in n: ' + esc(shape.index_degree || 0) +
+        '; in x: ' + esc(result.automatic_degree_bound ? result.automatic_degree_bound.variable_degree : shape.variable_degree || 0) +
+        '. Next-term factor degrees: n ≤ ' + esc(shape.leading_index_degree || 0) + ', x ≤ ' + esc(shape.leading_variable_degree || 0) + '.';
     }
-    if (result.propagation) {
-      html += '<p>Polynomial-index propagation certificate: order ' +
-        esc(result.propagation.coefficients.length - 1) + '; regular from base rank ' +
-        esc(result.propagation.regular_from) + '. Cutoff method: ' + esc(result.propagation.cutoff_method) + '.</p>';
-    }
-    for (const rep of result.representatives) {
-      const singular = rep.singular_ranks === null ? 'Singular ranks: not analyzed.' :
-        rep.singular_ranks.length ? 'Singular base ranks: ' + rep.singular_ranks.join(', ') + '.' :
-        'No nonnegative integer base rank makes the entire successor coefficient zero.';
-      html += '<pre class="recurrence-code">' + esc(rep.formula) + '</pre><p>' + esc(singular) +
-        (rep.requires_x_division ? ' Generation requires exact polynomial division in X.' : '') + '</p>';
-    }
-    if (result.leader_coverage) {
-      const coverage = result.leader_coverage;
-      const roots = coverage.common_singular_ranks;
-      html += '<p><strong>Combined recurrence</strong> — same evidence and domain as above. ' +
-        'Regular wherever any returned formula is regular; coefficient degrees may increase.</p>' +
-        '<pre class="recurrence-code">' + esc(coverage.formula) + '</pre><p>' +
-        (roots === null ? 'Common singular ranks: not fully analyzed.' :
-          roots.length ? 'Common singular base ranks: ' + esc(roots.join(', ')) + '.' : 'No common nonnegative integer singular ranks.') +
-        (coverage.requires_x_division ? ' Generation requires exact polynomial division in X.' : '') + '</p>';
-    }
-    html += '</details>';
+    if (result.automatic_degree_bound) html += result.certificate
+      ? ' The x-degree was chosen automatically to cover all possible x-degrees for existence within the other bounds.'
+      : ' The automatic x-degree search is unfinished.';
+    html += '</p></details></section>';
   });
-  html += '<p>The JSON includes the full kernel, rank witnesses, source assumptions, and resource limits. ' +
-    'Replay it with <code>polytool recurrence --verify-space</code>.</p>' +
-    '<button class="copy-btn" onclick="copyRecurrenceSpaces(this)">Copy complete space JSON</button>';
   setResult(html, 'recurrence');
 }
 
-async function copyRecurrenceSpaces(button) {
-  if (!window._recurrenceSpaces) return;
-  const label = button.textContent;
+async function copySpaceFormula(button, resultIndex, formulaIndex) {
+  const formula = window._recurrenceSpaces?.results[resultIndex]?.representatives[formulaIndex]?.formula;
+  if (!formula) return;
   try {
-    await navigator.clipboard.writeText(JSON.stringify(window._recurrenceSpaces, null, 2));
+    await navigator.clipboard.writeText(formula);
     button.textContent = 'Copied!';
-    setTimeout(() => { button.textContent = label; }, 1500);
+    setTimeout(() => { button.textContent = 'Copy formula'; }, 1500);
   } catch (_) {
-    setStatus('Could not copy the report. Check clipboard permission and try again.');
+    setStatus('Could not copy the formula. Check clipboard permission and try again.');
   }
 }
 
@@ -3705,6 +3943,7 @@ async function runOeis() {
   }
 }
 
+document.getElementById('input').addEventListener('input', spaceMainInputChanged);
 installInfoTooltipLayer();
 const initialWorkflow = location.hash.slice(1);
 setWorkflow(WORKFLOW_CONFIG[initialWorkflow] ? initialWorkflow : 'polynomial', { keepInput: true, skipHash: true });

@@ -680,9 +680,10 @@ combine with legacy search controls; all controls are in the JSON request.
 #### Browser verification
 
 The recurrence browser regression drives the actual page, Web Worker and WASM
-at desktop and 375-pixel widths. It checks examples, clipboard exports and
-certificate replay, evidence/partial-result labels, cancellation, tab routing,
-stale-input invalidation, renderer-error recovery and the older finder modes.
+at desktop and 375-pixel widths. It checks guided full-search controls, exact
+row parsing and origins, example formulas, clipboard copying, backend replay,
+partial-result labels, cancellation, tab routing, stale-input invalidation,
+renderer-error recovery and the older finder modes.
 It uses a temporary localhost server and closes its own browser and server.
 No hosting deployment is involved.
 
@@ -1385,10 +1386,27 @@ It displays checked starting indices, held-out row counts, and partial coverage.
 The interface preserves the task-oriented UI and row-extension feature deployed
 from `878113b`, which had not yet reached the parent integration branch.
 
-The **Complete spaces** mode accepts the structured request above in its own
-JSON field, with an A171608 trade-off example. It does not use the main row
-input or the legacy search controls. It displays evidence, kernel dimensions,
-singular ranks and formulas, and copies the complete certificate JSON.
+The **Full search** mode uses the entered polynomial rows by default. Choose
+the maximum number of previous terms and derivative order; coefficient bounds
+are in a separate expandable section. The first-row index is explicit. The
+browser searches every length/order combination within these bounds, with up
+to 16 combinations in the guided form. Examples use defining recurrences for
+A171608, Hermite polynomials and automatic polynomial-degree selection.
+
+Results lead with typeset formulas and a copy button, with additional formulas
+and search bounds expandable. Short labels distinguish finite-row matches,
+identities following from a defining recurrence, bounded absence and unfinished
+searches. Certificate exports and linear-algebra diagnostics are kept out of
+the webpage; the CLI and library retain their complete reports and replay APIs.
+
+**Advanced: request JSON** supports custom defining recurrences, sparse
+supports and resource limits. Editing the JSON switches to custom mode and
+disables the guided form; the main input is then unused. Any relevant input or
+settings change cancels active work and clears stale results. The existing
+WASM export `parse_and_format(input)` supplies exact decimal-string coefficient
+rows without computing root properties. The form rejects the entire input if
+any row is invalid. Rational rows remain
+available through the custom JSON request.
 The WASM exports `find_recurrence_spaces(request_json)` and
 `verify_recurrence_spaces(report_json)` share the Rust backend.
 

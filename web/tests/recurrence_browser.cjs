@@ -30,6 +30,7 @@ async function run(page) {
   return page.locator('#results-recurrence').innerText();
 }
 async function request(page, value) {
+  await page.locator('#spaceAdvanced').evaluate(el => {el.open = true;});
   await page.fill('#spaceRequest', typeof value === 'string' ? value : JSON.stringify(value));
   return run(page);
 }
@@ -60,22 +61,45 @@ const shape = {kind: 'box', length: 1, variable_degree: 1};
         assert.equal(await page.locator('#tryDenominator').isDisabled(), true);
         assert.equal(await page.locator('#status').getAttribute('aria-live'), 'polite');
 
+        assert.equal(await page.locator('#spaceSource').inputValue(), 'rows');
+        assert.equal(await page.locator('#spaceRequest').isVisible(), false);
+        assert.equal(await page.locator('#manualOpts').isVisible(), false);
+        assert.equal(await page.locator('#legacyRecurrenceOptions').isVisible(), false);
+        // Use the main input, including expanded polynomials and exact large integers.
+        await page.fill('#input', '1\nx\nx^2\nx^3\nx^4\nx^5\nx^6\nx^7');
+        await page.selectOption('#spaceLength', '1');
+        await page.selectOption('#spaceDerivative', '0');
+        await page.fill('#spaceOrigin', '0');
+        let text = await run(page);
+        assert.match(text, /fit the supplied rows exactly/);
+        assert.match(text, /Recurrence found/);
+        assert.equal(await page.evaluate(() => window._recurrenceSpaces.request.row_origin), 0);
+        assert.equal(await page.evaluate(() => window._recurrenceSpaces.request.shapes.length), 1);
+        await page.fill('#input', '1\ninvalid row');
+        assert.equal(await page.evaluate(() => window._recurrenceSpaces), null);
+        assert.match(await run(page), /Error:/);
+        assert.equal(await page.evaluate(() => recurrenceRunning), false);
+        await page.fill('#input', '9007199254740993\n18014398509481986\n36028797018963972\n72057594037927944\n144115188075855888');
+        await run(page);
+        assert.equal(await page.evaluate(() => window._recurrenceSpaces.request.rows[0][0]), '9007199254740993');
+        await page.fill('#spaceOrigin', '-1');
+        assert.match(await run(page), /whole number/);
+        await page.fill('#spaceOrigin', '1');
+
         for (const example of ['default', 'hermite', 'automatic']) {
-          if (example !== 'default') {
-            await page.click(`button[onclick="loadRecurrenceSpaceExample('${example}')"]`);
-            assert.equal(await page.locator('button[onclick^="copyRecurrenceSpaces"]').count(), 0);
-          }
+          await page.selectOption('#spaceSource', example);
+          assert.equal(await page.locator('button[onclick^="copySpaceFormula"]').count(), 0);
+          assert.equal(await page.locator('#spaceOriginField').isVisible(), false);
           const text = await run(page);
-          assert.match(text, /Recurrence-space analysis/);
-          assert.match(text, /conditional on the supplied source/);
-          assert.match(text, /0 incomplete/);
-          if (example === 'automatic') assert.match(text, /RHS X-degree cap: 3/);
-          if (example === 'hermite') assert.match(text, /Polynomial-index propagation certificate: order 4/);
-          await page.click('button[onclick^="copyRecurrenceSpaces"]');
+          assert.match(text, /Recurrence search results/);
+          assert.match(text, /follow from the defining recurrence/);
+          assert.doesNotMatch(text, /\bunfinished\b|kernel|projection|certificate|verify-space|frontier/i);
+          assert.ok(await page.locator('#results-recurrence .katex').count() > 0, 'Formulas render as mathematics');
+          await page.locator('button[onclick^="copySpaceFormula"]').first().click();
           const exportCheck = await page.evaluate(async () => {
             const copied = await navigator.clipboard.readText();
-            return {same: copied === JSON.stringify(window._recurrenceSpaces, null, 2),
-              replay: JSON.parse(wasm_bindgen.verify_recurrence_spaces(copied))};
+            return {same: copied === window._recurrenceSpaces.results.find(r => r.representatives.length).representatives[0].formula,
+              replay: JSON.parse(wasm_bindgen.verify_recurrence_spaces(JSON.stringify(window._recurrenceSpaces)))};
           });
           assert.equal(exportCheck.same, true);
           assert.equal(exportCheck.replay.verified_completed_claims, true);
@@ -85,24 +109,31 @@ const shape = {kind: 'box', length: 1, variable_degree: 1};
             fs.mkdirSync(process.env.POLYTOOL_BROWSER_ARTIFACTS, {recursive: true});
             await page.screenshot({path: path.join(process.env.POLYTOOL_BROWSER_ARTIFACTS,
               `${width}-${example}.png`), fullPage: true});
+            if (example === 'hermite') {
+              await page.emulateMedia({colorScheme: 'dark'});
+              await page.screenshot({path: path.join(process.env.POLYTOOL_BROWSER_ARTIFACTS,
+                `${width}-hermite-dark.png`), fullPage: true});
+              await page.emulateMedia({colorScheme: 'light'});
+            }
           }
         }
 
         // Editing invalidates the old result and export, including while a job runs.
+        await page.locator('#spaceAdvanced').evaluate(el => {el.open = true;});
         await page.fill('#spaceRequest', '{');
-        assert.equal(await page.locator('button[onclick^="copyRecurrenceSpaces"]').count(), 0);
+        assert.equal(await page.locator('button[onclick^="copySpaceFormula"]').count(), 0);
         assert.equal(await page.evaluate(() => window._recurrenceSpaces), null);
         assert.match(await run(page), /JSON|expected|EOF/i);
         assert.match(await page.locator('#status').innerText(), /Request rejected/);
         assert.match(await request(page, {rows: [['1'], ['0', '1'], ['0', '0', '1']], shapes: [shape]}),
-          /Exact fit to supplied rows; no all-rank conclusion/);
+          /fit the supplied rows exactly/);
         assert.match(await request(page, {source, shapes: [{kind: 'box', length: 1}]}),
-          /rows generated by the supplied source/);
+          /No recurrence within these bounds/);
         const partial = await request(page, {source, limits: {max_matrix_entries: 2},
           shapes: [{kind: 'automatic_variable_degree', length: 1}]});
-        assert.match(partial, /0 of 1 shapes complete; 1 incomplete/);
-        assert.match(partial, /Search at this cap is incomplete/);
-        assert.doesNotMatch(partial, /completed search covers all RHS/);
+        assert.match(partial, /0 of 1 searches finished; 1 unfinished/);
+        assert.match(partial, /does not tell us whether a recurrence exists/);
+        assert.doesNotMatch(partial, /cover all possible x-degrees/);
 
         // Delay only the next worker's WASM fetch, making navigation/cancel deterministic.
         workerDelay = 700;
@@ -112,14 +143,14 @@ const shape = {kind: 'box', length: 1, variable_degree: 1};
         await page.click('.tab[data-tab="oeis"]');
         await page.waitForFunction(() => !recurrenceRunning);
         assert.equal(await page.locator('#results-oeis').innerText(), 'Previous OEIS result');
-        assert.match(await page.locator('#results-recurrence').innerText(), /Recurrence-space analysis/);
+        assert.match(await page.locator('#results-recurrence').innerText(), /Recurrence search results/);
         await page.click('.tab[data-tab="recurrence"]');
         await page.click('#btnRec');
         await page.click('#btnCancel');
         assert.match(await page.locator('#results-recurrence').innerText(), /cancelled/);
         assert.equal(await page.evaluate(() => recurrenceRunning), false);
         workerDelay = 0;
-        assert.match(await run(page), /1 of 1 shapes complete/);
+        assert.match(await run(page), /1 of 1 searches finished/);
 
         // A future render exception must be visible, with controls usable for retry.
         await page.evaluate(() => {
@@ -129,7 +160,7 @@ const shape = {kind: 'box', length: 1, variable_degree: 1};
         assert.match(await run(page), /Could not display recurrence result:.*injected renderer failure/);
         assert.equal(await page.locator('#btnRec').isDisabled(), false);
         await page.evaluate(() => { renderRecurrenceSpaces = window.savedSpaceRenderer; });
-        assert.match(await run(page), /1 of 1 shapes complete/);
+        assert.match(await run(page), /1 of 1 searches finished/);
 
         // Existing modes still work after spaces; no numeric data is mocked.
         await page.fill('#input', '1\n2\n4\n8\n16\n32\n64\n128');
@@ -142,7 +173,7 @@ const shape = {kind: 'box', length: 1, variable_degree: 1};
         }
         assert.equal(await page.locator('#tryDenominator').isDisabled(), false);
         assert.deepEqual(errors, []);
-        console.log(`${width}px: examples, copy/replay, evidence, partial cap, errors, stale input, tab routing, cancellation, render recovery and legacy modes passed`);
+        console.log(`${width}px: guided controls, exact rows/origins, examples, copy, backend replay, partial search, errors, stale input, tab routing, cancellation and legacy modes passed`);
       } finally { await context.close(); }
     }
   } finally {
