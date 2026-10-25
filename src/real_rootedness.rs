@@ -1210,29 +1210,23 @@ fn derivative_bigint_coeffs(coeffs: &[BigInt]) -> Vec<BigInt> {
 ///
 /// This is useful for boolean real-rootedness checks: a polynomial is weakly
 /// real-rooted if and only if its squarefree part is strictly real-rooted.
-/// The zero polynomial is returned as `0`.
+/// The computation uses a primitive integer pseudo-remainder GCD, avoiding
+/// rational coefficient growth. The zero polynomial is returned as `0`.
 pub fn squarefree_part_bigint_coeffs(coeffs: &[BigInt]) -> Vec<BigInt> {
     let Some(degree) = poly_degree_trimmed_bigint(coeffs) else {
         return vec![BigInt::zero()];
     };
-    let trimmed: Vec<BigInt> = coeffs.iter().take(degree + 1).cloned().collect();
-    if degree <= 1 {
-        return q_poly_to_primitive_bigint(
-            &trimmed
-                .iter()
-                .map(|c| Q::from_integer(c.clone()))
-                .collect::<Vec<_>>(),
-        );
+    let negative_leading_coefficient = coeffs[degree].is_negative();
+    let mut squarefree = crate::root_count::squarefree_part_primitive_bigint_coeffs(coeffs);
+    if squarefree.is_empty() {
+        return vec![BigInt::zero()];
     }
-
-    let p_q: Vec<Q> = trimmed.iter().map(|c| Q::from_integer(c.clone())).collect();
-    let dp_q: Vec<Q> = derivative_bigint_coeffs(&trimmed)
-        .iter()
-        .map(|c| Q::from_integer(c.clone()))
-        .collect();
-    let gcd = poly_gcd_q(&p_q, &dp_q);
-    let squarefree = poly_exact_div_q(&p_q, &gcd);
-    q_poly_to_primitive_bigint(&squarefree)
+    if negative_leading_coefficient {
+        for coefficient in &mut squarefree {
+            *coefficient = -coefficient.clone();
+        }
+    }
+    squarefree
 }
 
 fn newton_sums_rational_bigint_coeffs(coeffs: &[BigInt], max_power: usize) -> Option<Vec<Q>> {
@@ -1990,6 +1984,12 @@ mod tests {
     }
 
     #[test]
+    fn test_a046741_degree_eight_real_roots_regression() {
+        let polynomial = [1, 22, 191, 838, 1982, 2504, 1577, 424, 34];
+        assert_eq!(real_roots(&polynomial).map(|roots| roots.len()), Some(8));
+    }
+
+    #[test]
     fn test_interlacing_sturm() {
         // (t-2) ≪ (t-1)(t-3): roots 1 < 2 < 3
         assert_eq!(check_interlacing_sturm(&[-2, 1], &[3, -4, 1]), Some(true));
@@ -2028,6 +2028,13 @@ mod tests {
 
         // Not real-rooted: t+1 and t^2+1. Degree diff = 1 but B is not pos def.
         assert_eq!(check_interlacing(&[1, 1], &[1, 0, 1]), Some(false));
+    }
+
+    #[test]
+    fn test_a046741_degrees_seven_eight_interlacing_regression() {
+        let degree_seven = [1, 19, 137, 473, 815, 667, 223, 21];
+        let degree_eight = [1, 22, 191, 838, 1982, 2504, 1577, 424, 34];
+        assert_eq!(check_interlacing(&degree_seven, &degree_eight), Some(true));
     }
 
     #[test]
@@ -2168,6 +2175,68 @@ mod tests {
             squarefree_part_bigint_coeffs(&complex_repeated),
             vec![BigInt::from(1), BigInt::from(0), BigInt::from(1)]
         );
+
+        let negative_repeated = repeated
+            .iter()
+            .map(|coefficient| -coefficient)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            squarefree_part_bigint_coeffs(&negative_repeated),
+            vec![BigInt::from(0), BigInt::from(1), BigInt::from(-1)]
+        );
+        assert_eq!(
+            squarefree_part_bigint_coeffs(&[BigInt::from(-6)]),
+            vec![BigInt::from(-1)]
+        );
+        assert_eq!(
+            squarefree_part_bigint_coeffs(&[BigInt::zero()]),
+            vec![BigInt::zero()]
+        );
+    }
+
+    #[test]
+    fn test_primitive_squarefree_matches_rational_reference_on_small_grid() {
+        for degree in 0usize..=4 {
+            let total = 5usize.pow((degree + 1) as u32);
+            for mut mask in 0..total {
+                let mut coeffs = Vec::with_capacity(degree + 1);
+                for _ in 0..=degree {
+                    coeffs.push(BigInt::from((mask % 5) as i64 - 2));
+                    mask /= 5;
+                }
+
+                let expected = if let Some(actual_degree) = poly_degree_trimmed_bigint(&coeffs) {
+                    let trimmed = coeffs
+                        .iter()
+                        .take(actual_degree + 1)
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let p = trimmed
+                        .iter()
+                        .cloned()
+                        .map(Q::from_integer)
+                        .collect::<Vec<_>>();
+                    if actual_degree <= 1 {
+                        q_poly_to_primitive_bigint(&p)
+                    } else {
+                        let derivative = derivative_bigint_coeffs(&trimmed)
+                            .into_iter()
+                            .map(Q::from_integer)
+                            .collect::<Vec<_>>();
+                        let gcd = poly_gcd_q(&p, &derivative);
+                        q_poly_to_primitive_bigint(&poly_exact_div_q(&p, &gcd))
+                    }
+                } else {
+                    vec![BigInt::zero()]
+                };
+
+                assert_eq!(
+                    squarefree_part_bigint_coeffs(&coeffs),
+                    expected,
+                    "coeffs={coeffs:?}"
+                );
+            }
+        }
     }
 
     #[test]

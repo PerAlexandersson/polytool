@@ -80,6 +80,7 @@ fn lists_tools_and_calls_properties() {
     assert!(tool_names.contains(&"hstar_inequalities"));
     assert!(tool_names.contains(&"cyclic_sieving"));
     assert!(tool_names.contains(&"cyclic_sieving_sequence"));
+    assert!(tool_names.contains(&"bicyclic_sieving"));
     assert!(tool_names.contains(&"check_polynomial_family"));
     assert!(tool_names.contains(&"find_recurrence"));
     let recurrence_schema = &tools_array

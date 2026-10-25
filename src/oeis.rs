@@ -481,6 +481,18 @@ mod tests {
     }
 
     #[test]
+    fn a046741_degree_eight_matches_its_canonical_recurrence() {
+        let rows = A046741().generate_rows(9).unwrap();
+        assert_eq!(
+            rows[8],
+            [1, 22, 191, 838, 1982, 2504, 1577, 424, 34]
+                .into_iter()
+                .map(BigInt::from)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn a166345_export_preserves_delayed_rows_and_displayed_indices() {
         let sequence = A166345();
         let (recurrence, initial_rows, first_index) = sequence.recurrence_export_parts().unwrap();

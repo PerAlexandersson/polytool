@@ -154,9 +154,14 @@ pub use coefficient_tests::{
     CoefficientCriterionReport, CoefficientInequalityCheck, CoefficientTestReport,
 };
 pub use cyclic_sieving::{
-    cyclic_sieving_report_bigint, cyclic_sieving_sequence_reports_bigint,
-    cyclotomic_polynomial_bigint, root_of_unity_evaluation_bigint, CyclicSievingPowerCheck,
-    CyclicSievingReport, CyclicSievingSequenceItem, RootOfUnityEvaluation,
+    bicyclic_sieving_report_bigint, cyclic_sieving_check_orbit_sizes,
+    cyclic_sieving_orbit_decomposition_bigint, cyclic_sieving_report_bigint,
+    cyclic_sieving_sequence_reports_bigint, cyclotomic_polynomial_bigint,
+    fixed_points_from_orbit_counts, fixed_points_from_orbit_sizes, orbit_counts_from_fixed_points,
+    orbit_counts_from_orbit_sizes, reduce_modulo_cyclic_bigint, root_of_unity_evaluation_bigint,
+    BicyclicSievingReport, CyclicSievingPowerCheck, CyclicSievingReport, CyclicSievingSequenceItem,
+    OrbitDecomposition, OrbitSizeEntry, OrbitSizesCheck, ResidueClass, RootOfUnityEvaluation,
+    BICYCLIC_MAX_GROUP_SIZE,
 };
 pub use decomposition::{
     analyze_symmetric_decomposition_bigint, analyze_symmetric_decomposition_i64, f_polynomial,

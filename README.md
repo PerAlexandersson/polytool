@@ -1,8 +1,8 @@
 # polytool
 
 Dense univariate polynomial toolkit for combinatorial research. Provides
-real-rootedness testing by primitive integer root counting, Bézout-matrix
-interlacing checks, log-concavity, gamma-positivity, resultants,
+real-rootedness testing by adaptive subresultant integer root counting,
+Bézout-matrix interlacing checks, log-concavity, gamma-positivity, resultants,
 Ehrhart/h\*-vector conversion, recurrence search for polynomial sequences,
 finite Athanasiadis--Wagner interlacing matrices, and standard sequences —
 all with exact arithmetic.
@@ -78,6 +78,22 @@ Coefficient vectors are always in ascending degree order. Most convenience
 functions accept `&[i64]`; use the `*_bigint_coeffs` variants when coefficients
 may exceed `i64`. Interlacing functions return `Option<bool>`: `None` means the
 directed degree relation is not valid for that test, not that interlacing failed.
+
+### Standalone exact root counting
+
+The low-level integer root-counting engine is the independent
+`exact-real-roots` crate under `crates/exact-real-roots`. Polytool depends on
+it and preserves the existing `polytool::root_count` module and crate-root
+re-exports. Projects that only need exact root counts or coefficient-slice
+real-rootedness can depend directly on the smaller crate:
+
+```toml
+[dependencies]
+exact-real-roots = { path = "path/to/polytool/crates/exact-real-roots" }
+```
+
+Both crates use ascending-degree coefficient order and arbitrary-precision
+integer arithmetic. Repeated roots are handled through the square-free part.
 
 ### Shared-denominator vector recurrences
 
@@ -161,7 +177,7 @@ A text file `polys.txt` might look like:
 The commands `interlacing`, `interlacing-profile`, `properties`,
 `gamma-expansion`, `bernstein-expansion`, `family-check`, `sequence`, `coefficient-tests`,
 `hstar-to-ehrhart`, `ehrhart-to-hstar`, `hstar-inequalities`,
-`cyclic-sieving`, and `cyclic-sieving-sequence` also accept `--json` for
+`cyclic-sieving`, `cyclic-sieving-sequence`, and `bicyclic-sieving` also accept `--json` for
 machine-readable output.
 Large integer coefficients in JSON output are serialized as strings.
 
@@ -588,6 +604,81 @@ Optional fixed-count files use lines of the form:
 5 7: 10, 0, 2, 0, 2, 0, 0
 ```
 
+#### Orbit decomposition and the Alexandersson--Amini criterion
+
+Every `cyclic-sieving` run also decomposes the polynomial into cyclic orbits,
+following P. Alexandersson and N. Amini, *The cone of cyclic sieving
+phenomena*, Discrete Math. 342 (2019) 1581--1601 (arXiv:1804.01447).  All
+arithmetic is exact and integral.  Reduce `f` modulo `q^n - 1` to residues
+`c_0, ..., c_{n-1}`.
+
+* `f(zeta_n^d)` is an integer for all `d` iff `c_j = c_{gcd(j,n)}` for all `j`
+  (Desarmenien); otherwise the non-constant gcd classes are listed.
+* If integral, `f = sum_{r | n} a_r h_r (mod q^n - 1)` with
+  `h_r = 1 + q^r + ... + q^{n-r}` and `a_r = sum_{e | r} mu(r/e) c_e`.  A CSP
+  action needs exactly `a_r` orbits of size `n/r`, i.e.
+  `S_k = k a_{n/k} = sum_{j | k} mu(k/j) f(zeta_n^j)` elements in orbits of
+  size `k`, and `f(zeta_n^d) = sum_{(n/r) | d} (n/r) a_r`.
+* For `f` in `N[q]` that is integral, a `C_n`-action making `(X, C_n, f)` a CSP
+  exists iff all `a_r >= 0` (`thm:cspCond`).  The natural-coefficient hypothesis
+  and the cone condition are reported separately.
+
+The paper's counterexample `f = q^5 + 3q^3 + q + 10`, `n = 6` has natural
+coefficients and integral evaluations `15, 8, 12, 5, 12, 8` (`d = 0..5`) but
+`S_k = 8, 4, -3, 6` for `k = 1, 2, 3, 6`:
+
+```sh
+echo "10, 1, 0, 3, 0, 1" | polytool cyclic-sieving --order 6
+#   orbit size 3: -1 orbit(s), -3 element(s)  [a_2 = -1]
+#   verdict: no C_n-action makes (X, C_n, f) a CSP
+```
+
+To check a concrete action, give its multiset of orbit sizes instead of fixed
+counts.  Rotation of 2-subsets of `[4]` has orbits of sizes 4 and 2 and
+`[4 choose 2]_q = 1 + q + 2q^2 + q^3 + q^4`:
+
+```sh
+echo "1,1,2,1,1" | polytool cyclic-sieving --order 4 --orbit-sizes 4,2
+```
+
+With `--json`, each item keeps its `report` object unchanged and gains
+`orbit_decomposition` (residues, gcd classes, `integral`, `violating_classes`,
+`orbits` with `orbit_count`/`element_count`, `fixed_points`,
+`natural_coefficients`, `cone_condition`, `realizable`) and `orbit_sizes_check`
+(`null` unless `--orbit-sizes` is given).
+
+Library API (`polytool::`, all `BigInt`): `cyclic_sieving_orbit_decomposition_bigint(coeffs, n)`,
+`cyclic_sieving_check_orbit_sizes(coeffs, n, orbit_sizes)`,
+`orbit_counts_from_fixed_points(fixed, n)` (Moebius inversion; errors if the
+table is not that of an action), `orbit_counts_from_orbit_sizes`,
+`fixed_points_from_orbit_sizes`, `fixed_points_from_orbit_counts`,
+`reduce_modulo_cyclic_bigint`.
+
+#### Bicyclic sieving
+
+For `G = C_{n1} x C_{n2}` and `f(q, t)` (Barcelo--Reiner--Stanton), the
+polynomial is a JSON coefficient matrix on stdin, `f[i][j]` being the
+coefficient of `q^i t^j`; entries are integers or decimal strings:
+
+```sh
+echo '[[1,0],[0,1]]' | polytool bicyclic-sieving --order1 2 --order2 2 \
+  --fixed-table '[[2,0],[0,2]]'
+```
+
+The command reduces `f` modulo `(q^{n1} - 1, t^{n2} - 1)`, evaluates it exactly
+at all `(zeta_{n1}^{d1}, zeta_{n2}^{d2})` and compares with the table
+`fix(g1^{d1} g2^{d2})`.  If `c_{j1,j2} = c_{gcd(j1,n1),gcd(j2,n2)}` the
+polynomial lies in the product basis `h_{r1}(q) h_{r2}(t)`; its coordinates
+`a_{r1,r2}` (two-dimensional Moebius inversion) are reported together with the
+evaluations they imply.  **They are not orbit counts and may be negative**: for
+the diagonal action of `C_2 x C_2` on two points, `f = 1 + qt` has coordinates
+`a_{1,1}, a_{1,2}, a_{2,1}, a_{2,2} = 1, -1, -1, 2`.  Integrality at all points
+is reported separately from product form, because they differ in general when
+`gcd(n1, n2) > 1` (for `n1 = n2 = 3`, `sum (zeta_3^{i+j} + zeta_3^{-(i+j)}) q^i t^j`
+takes only the values 0 and 9 on `mu_3 x mu_3` but is not in the product
+span).  Library: `bicyclic_sieving_report_bigint(matrix, n1, n2, fixed_table)`
+(limit `n1 n2 <= 2500`).
+
 ### Stapledon decomposition
 
 ```sh
@@ -1013,17 +1104,34 @@ Report issues in the Git repository, or contact Per Alexandersson
 ### Real-rootedness algorithms
 
 The default real-rootedness check uses an adaptive exact path from
-`root_count`. It replaces the polynomial by its square-free part and counts
-distinct real roots exactly over `BigInt`; the polynomial is real-rooted
-precisely when this count equals the square-free degree. For one-signed
-coefficient polynomials, the backend first tries cheap coefficient filters and
-then counts positive roots of `f(-t)`, since such polynomials can only have
-non-positive real roots. Primitive PRS remains the general backend. Uspensky is
-selected conservatively at degree 35 or above when the endpoint coefficients
-are equal and an interior coefficient is at least `4^degree` times as large as
-an endpoint. This benchmark-derived, scale-invariant rule captures the large
-Eulerian, type-B Eulerian, and Touchard cases tested without penalizing
-Narayana polynomials or evenly spaced linear-factor products.
+`root_count`. Degrees at most four are decided directly by exact discriminant
+and quartic-invariant signs, including the repeated-root cases; they do not
+construct a remainder sequence or square-free quotient. For higher degrees,
+the signed PRS of `p` and `p'` simultaneously counts
+the distinct real roots and ends in their gcd, whose degree determines the
+square-free degree. Thus the general check avoids constructing the square-free
+quotient and running a second Euclidean pass. The polynomial is real-rooted
+precisely when the root count equals the square-free degree. Public operations
+that do need the quotient use the same fraction-free primitive integer GCD.
+Degree five omits content normalization because its short chain does not repay
+the scaling bookkeeping. From degree six onward, a signed Collins--Brown
+subresultant PRS divides out predictable exact factors, avoiding both
+coefficient swell and a coefficient-content GCD after every pseudo-division.
+The root-counting path streams this sequence through two active polynomials
+and one reusable pseudo-remainder buffer. It records only the requested Sturm
+endpoint variations and the final gcd degree rather than retaining the full
+chain. Pseudo-division also moves out the leading coefficient and skips the
+large-integer multiply/subtract pair that would cancel it exactly.
+
+For one-signed coefficient polynomials, the backend first tries cheap
+coefficient filters and then counts positive roots of `f(-t)`, since such
+polynomials can only have non-positive real roots. Subresultant PRS is the
+general backend. Uspensky is selected conservatively at degree 35 or above
+when the endpoint coefficients are equal and an interior coefficient is at
+least `4^degree` times as large as an endpoint. This benchmark-derived,
+scale-invariant rule captures the large Eulerian, type-B Eulerian, and Touchard
+cases tested without penalizing Narayana polynomials or evenly spaced
+linear-factor products.
 
 For algorithm comparisons, `is_real_rooted_uspensky_bigint_coeffs` uses an
 independent exact Uspensky/Descartes path.  It applies a strict Fujiwara root

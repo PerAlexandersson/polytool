@@ -180,6 +180,7 @@ fn print_top_level_help() {
     println!("  cyclic-sieving    Check/profile one cyclic sieving order");
     println!("  cyclic-sieving-sequence");
     println!("                    Profile candidate cyclic sieving orders for a sequence");
+    println!("  bicyclic-sieving  Check bicyclic sieving for C_n1 x C_n2 and f(q,t)");
     println!("  stapledon         Compute a Stapledon decomposition");
     println!();
     println!("Options:");
@@ -960,10 +961,59 @@ fn print_cyclic_sieving_help() {
     println!();
     println!("Options:");
     println!("  --order <n>          Cyclic group order");
-    println!("  --fixed-counts <xs>  Fixed-point counts c_0,...,c_{{n-1}}");
+    println!("  --fixed-counts <xs>  Fixed-point counts fix(g^0),...,fix(g^(n-1))");
+    println!("  --orbit-sizes <xs>   Alternative to --fixed-counts: the multiset of orbit sizes");
+    println!("                       (each a divisor of n) of a concrete C_n-action");
     println!("  --json               Emit machine-readable JSON");
     println!();
-    println!("Without fixed counts, this profiles exact root-of-unity evaluations only.");
+    println!("Without fixed counts or orbit sizes, this profiles exact root-of-unity");
+    println!("evaluations only.");
+    println!();
+    println!("Every run also reports the orbit decomposition of the polynomial (exact integer");
+    println!("arithmetic, Alexandersson-Amini, 'The cone of cyclic sieving phenomena',");
+    println!("Discrete Math. 342 (2019), arXiv:1804.01447):");
+    println!("  - reduce f modulo q^n-1 to residues c_0..c_{{n-1}}; f(zeta^d) is an integer for");
+    println!("    all d iff c_j = c_gcd(j,n) (Desarmenien); violating gcd classes are listed;");
+    println!("  - if integral, f = sum_(r|n) a_r h_r mod q^n-1 with h_r = 1+q^r+...+q^(n-r),");
+    println!("    a_r = sum_(e|r) mu(r/e) c_e = number of orbits of size n/r a CSP action needs;");
+    println!("    S_k = k*a_(n/k) = sum_(j|k) mu(k/j) f(zeta^j) elements lie in orbits of size k;");
+    println!("  - cone condition: all a_r >= 0 (equivalently all S_k >= 0).  For f in N[q] this");
+    println!("    is necessary and sufficient for a C_n-action making (X, C_n, f) a CSP.");
+    println!("The hypothesis (natural coefficients) and the cone condition are reported");
+    println!("separately.  With --orbit-sizes the predicted orbit counts are compared with");
+    println!("the actual ones.  JSON adds 'orbit_decomposition' and 'orbit_sizes_check'");
+    println!("next to the unchanged 'report' of every item; exact integers are strings.");
+}
+
+fn print_bicyclic_sieving_help() {
+    println!("Usage:");
+    println!("  polytool bicyclic-sieving --order1 <n1> --order2 <n2> [options] < matrix.json");
+    println!("  polytool bicyclic-sieving --help");
+    println!();
+    println!("Check bicyclic sieving (Barcelo-Reiner-Stanton) of f(q,t) for G = C_n1 x C_n2.");
+    println!();
+    println!("Input:");
+    println!("  A JSON coefficient matrix on stdin: f[i][j] is the coefficient of q^i t^j, e.g.");
+    println!("    [[1,0],[0,1]]   represents   1 + q t");
+    println!("  Entries are integers or decimal strings (use strings beyond 64 bits).");
+    println!();
+    println!("Options:");
+    println!("  --order1 <n1>        Order of the cyclic group acting through q");
+    println!("  --order2 <n2>        Order of the cyclic group acting through t");
+    println!("  --fixed-table <json> n1 x n2 JSON matrix of fix(g1^d1 g2^d2), d1<n1, d2<n2");
+    println!("  --json               Emit machine-readable JSON");
+    println!();
+    println!("The polynomial is reduced modulo (q^n1-1, t^n2-1) and evaluated exactly at all");
+    println!("points (zeta_n1^d1, zeta_n2^d2) (limit n1*n2 <= 2500).  If every coefficient");
+    println!("c_(j1,j2) equals c_(gcd(j1,n1),gcd(j2,n2)) the polynomial lies in the product");
+    println!("basis h_r1(q) h_r2(t) (Alexandersson-Amini, multivariate basis theorem) and its");
+    println!("coordinates a_(r1,r2) (two-dimensional Moebius inversion) are reported, with");
+    println!("f(zeta^d1, omega^d2) = sum over (n1/r1)|d1, (n2/r2)|d2 of (n1/r1)(n2/r2) a_(r1,r2).");
+    println!("These coordinates are NOT orbit counts and need not be nonnegative: for the");
+    println!("diagonal action of C_2 x C_2 on two points, f = 1 + qt has coordinates");
+    println!("1, -1, -1, 2.  Integrality at all points is reported separately from product");
+    println!("form (they differ in general when gcd(n1,n2) > 1).  With --fixed-table the");
+    println!("command checks f(zeta^d1, omega^d2) = fix(g1^d1 g2^d2) for all d1, d2.");
 }
 
 fn print_cyclic_sieving_sequence_help() {
@@ -1143,6 +1193,7 @@ fn print_command_help(command: &str) -> bool {
         "hstar-inequalities" => print_hstar_inequalities_help(),
         "cyclic-sieving" => print_cyclic_sieving_help(),
         "cyclic-sieving-sequence" => print_cyclic_sieving_sequence_help(),
+        "bicyclic-sieving" => print_bicyclic_sieving_help(),
         "stapledon" => print_stapledon_help(),
         _ => return false,
     }
@@ -4479,6 +4530,7 @@ struct CyclicSievingOptions {
     format: OutputFormat,
     order: Option<usize>,
     fixed_counts: Option<Vec<BigInt>>,
+    orbit_sizes: Option<Vec<usize>>,
 }
 
 fn parse_bigint_values(input: &str) -> Result<Vec<BigInt>, String> {
@@ -4490,11 +4542,28 @@ fn parse_cyclic_sieving_args(args: &[String]) -> Result<CyclicSievingOptions, St
         format: OutputFormat::Text,
         order: None,
         fixed_counts: None,
+        orbit_sizes: None,
     };
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--json" => options.format = OutputFormat::Json,
+            "--orbit-sizes" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .ok_or_else(|| "--orbit-sizes expects a list of orbit sizes".to_string())?;
+                let sizes = value
+                    .split(|c: char| c == ',' || c.is_whitespace())
+                    .filter(|part| !part.is_empty())
+                    .map(|part| {
+                        part.parse::<usize>().map_err(|_| {
+                            format!("--orbit-sizes expects positive integers, got '{part}'")
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                options.orbit_sizes = Some(sizes);
+            }
             "--order" => {
                 i += 1;
                 let value = args
@@ -4519,7 +4588,145 @@ fn parse_cyclic_sieving_args(args: &[String]) -> Result<CyclicSievingOptions, St
         }
         i += 1;
     }
+    if options.fixed_counts.is_some() && options.orbit_sizes.is_some() {
+        return Err("--fixed-counts and --orbit-sizes are alternatives; give only one".to_string());
+    }
     Ok(options)
+}
+
+fn json_orbit_entries(entries: &[OrbitSizeEntry]) -> String {
+    let items = entries
+        .iter()
+        .map(|entry| {
+            format!(
+                "{{\"orbit_size\":{},\"basis_index\":{},\"orbit_count\":{},\
+                 \"element_count\":{}}}",
+                entry.orbit_size,
+                entry.basis_index,
+                json_string(&entry.orbit_count.to_string()),
+                json_string(&entry.element_count.to_string())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{items}]")
+}
+
+fn orbit_decomposition_json(dec: &OrbitDecomposition) -> String {
+    let classes = dec
+        .classes
+        .iter()
+        .map(|class| {
+            format!(
+                "{{\"gcd_class\":{},\"indices\":{},\"residues\":{},\"common_value\":{}}}",
+                class.gcd_class,
+                json_usize_vec(&class.indices),
+                json_bigint_vec(&class.residues),
+                class
+                    .common_value
+                    .as_ref()
+                    .map(|v| json_string(&v.to_string()))
+                    .unwrap_or_else(|| "null".to_string())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"order\":{},\"reduced_residues\":{},\"classes\":[{}],\"integral\":{},\
+         \"violating_classes\":{},\"orbits\":{},\"fixed_points\":{},\
+         \"natural_coefficients\":{},\"cone_condition\":{},\"realizable\":{}}}",
+        dec.order,
+        json_bigint_vec(&dec.reduced_residues),
+        classes,
+        dec.integral,
+        json_usize_vec(&dec.violating_classes),
+        dec.orbits
+            .as_deref()
+            .map(json_orbit_entries)
+            .unwrap_or_else(|| "null".to_string()),
+        dec.fixed_points
+            .as_deref()
+            .map(json_bigint_vec)
+            .unwrap_or_else(|| "null".to_string()),
+        dec.natural_coefficients,
+        json_bool_option(dec.cone_condition),
+        dec.realizable
+    )
+}
+
+fn orbit_sizes_check_json(check: &OrbitSizesCheck) -> String {
+    format!(
+        "{{\"orbit_sizes\":{},\"num_elements\":{},\"actual_orbits\":{},\
+         \"actual_fixed_points\":{},\"mismatched_orbit_sizes\":{},\"holds\":{}}}",
+        json_usize_vec(&check.orbit_sizes),
+        json_string(&check.num_elements.to_string()),
+        json_orbit_entries(&check.actual_orbits),
+        json_bigint_vec(&check.actual_fixed_points),
+        json_usize_vec(&check.mismatched_orbit_sizes),
+        check.holds
+    )
+}
+
+fn print_orbit_decomposition_text(dec: &OrbitDecomposition) {
+    let residues = dec
+        .reduced_residues
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!("  f mod q^{}-1: [{residues}]", dec.order);
+    if !dec.integral {
+        let classes = dec
+            .violating_classes
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!(
+            "  not integral: f(zeta^d) is not an integer for some d (non-constant gcd \
+             classes: {classes}); no cyclic action can satisfy CSP"
+        );
+        return;
+    }
+    println!("  integral: yes (c_j = c_gcd(j,n))");
+    for entry in dec.orbits.iter().flatten() {
+        println!(
+            "  orbit size {}: {} orbit(s), {} element(s)  [a_{} = {}]",
+            entry.orbit_size,
+            entry.orbit_count,
+            entry.element_count,
+            entry.basis_index,
+            entry.orbit_count
+        );
+    }
+    println!(
+        "  Alexandersson-Amini: natural coefficients: {}; cone condition (all orbit counts >= 0): {}",
+        if dec.natural_coefficients { "yes" } else { "no" },
+        if dec.cone_condition == Some(true) { "yes" } else { "no" }
+    );
+    println!(
+        "  verdict: {}",
+        if dec.realizable {
+            "a C_n-action making (X, C_n, f) a CSP exists"
+        } else {
+            "no C_n-action makes (X, C_n, f) a CSP"
+        }
+    );
+}
+
+fn print_orbit_sizes_check_text(check: &OrbitSizesCheck) {
+    println!(
+        "  action with orbit sizes {:?} ({} elements): predicted orbit counts {}",
+        check.orbit_sizes,
+        check.num_elements,
+        if check.holds {
+            "match the action".to_string()
+        } else if !check.decomposition.integral {
+            "do not exist (not integral)".to_string()
+        } else {
+            format!("differ for orbit sizes {:?}", check.mismatched_orbit_sizes)
+        }
+    );
 }
 
 fn root_evaluation_json(evaluation: &RootOfUnityEvaluation) -> String {
@@ -4633,13 +4840,34 @@ fn cmd_cyclic_sieving(args: &[String]) {
         return;
     };
     let mut reports = Vec::new();
+    let mut decompositions = Vec::new();
+    let mut orbit_checks = Vec::new();
     for coeffs in read_polys_bigint() {
-        match cyclic_sieving_report_bigint(
-            strip_trailing_zeros_bigint(&coeffs),
-            order,
-            options.fixed_counts.as_deref(),
-        ) {
-            Ok(report) => reports.push(report),
+        let coeffs = strip_trailing_zeros_bigint(&coeffs);
+        let check = match &options.orbit_sizes {
+            Some(sizes) => match cyclic_sieving_check_orbit_sizes(coeffs, order, sizes) {
+                Ok(check) => Some(check),
+                Err(error) => {
+                    eprintln!("{error}");
+                    return;
+                }
+            },
+            None => None,
+        };
+        let fixed_counts = match &check {
+            Some(check) => Some(check.actual_fixed_points.as_slice()),
+            None => options.fixed_counts.as_deref(),
+        };
+        let report = cyclic_sieving_report_bigint(coeffs, order, fixed_counts).and_then(|report| {
+            cyclic_sieving_orbit_decomposition_bigint(coeffs, order)
+                .map(|decomposition| (report, decomposition))
+        });
+        match report {
+            Ok((report, decomposition)) => {
+                reports.push(report);
+                decompositions.push(decomposition);
+                orbit_checks.push(check);
+            }
             Err(error) => {
                 eprintln!("{error}");
                 return;
@@ -4652,9 +4880,15 @@ fn cmd_cyclic_sieving(args: &[String]) {
             .enumerate()
             .map(|(index, report)| {
                 format!(
-                    "{{\"index\":{},\"report\":{}}}",
+                    "{{\"index\":{},\"report\":{},\"orbit_decomposition\":{},\
+                     \"orbit_sizes_check\":{}}}",
                     index,
-                    cyclic_sieving_report_json(report)
+                    cyclic_sieving_report_json(report),
+                    orbit_decomposition_json(&decompositions[index]),
+                    orbit_checks[index]
+                        .as_ref()
+                        .map(orbit_sizes_check_json)
+                        .unwrap_or_else(|| "null".to_string())
                 )
             })
             .collect::<Vec<_>>()
@@ -4664,6 +4898,254 @@ fn cmd_cyclic_sieving(args: &[String]) {
     }
     for (row, report) in reports.iter().enumerate() {
         print_cyclic_sieving_report_text(row, report);
+        print_orbit_decomposition_text(&decompositions[row]);
+        if let Some(check) = &orbit_checks[row] {
+            print_orbit_sizes_check_text(check);
+        }
+    }
+}
+
+fn parse_bigint_json_value(value: &Value) -> Result<BigInt, String> {
+    match value {
+        Value::Number(number) => {
+            if let Some(v) = number.as_i64() {
+                Ok(BigInt::from(v))
+            } else if let Some(v) = number.as_u64() {
+                Ok(BigInt::from(v))
+            } else {
+                Err(format!(
+                    "matrix entry {number} is not an integer; write large integers as strings"
+                ))
+            }
+        }
+        Value::String(text) => text
+            .trim()
+            .parse::<BigInt>()
+            .map_err(|_| format!("matrix entry '{text}' is not an integer")),
+        other => Err(format!("matrix entry {other} is not an integer")),
+    }
+}
+
+fn parse_bigint_matrix_json(input: &str, what: &str) -> Result<Vec<Vec<BigInt>>, String> {
+    let value: Value = serde_json::from_str(input)
+        .map_err(|error| format!("{what} is not valid JSON: {error}"))?;
+    let rows = value
+        .as_array()
+        .ok_or_else(|| format!("{what} must be a JSON array of rows"))?;
+    rows.iter()
+        .map(|row| {
+            row.as_array()
+                .ok_or_else(|| format!("{what} must be a JSON array of arrays"))?
+                .iter()
+                .map(parse_bigint_json_value)
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .collect()
+}
+
+fn json_bigint_matrix(matrix: &[Vec<BigInt>]) -> String {
+    format!(
+        "[{}]",
+        matrix
+            .iter()
+            .map(|row| json_bigint_vec(row))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn json_optional_bigint_matrix(matrix: &[Vec<Option<BigInt>>]) -> String {
+    let rows = matrix
+        .iter()
+        .map(|row| {
+            let cells = row
+                .iter()
+                .map(|cell| {
+                    cell.as_ref()
+                        .map(|v| json_string(&v.to_string()))
+                        .unwrap_or_else(|| "null".to_string())
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("[{cells}]")
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{rows}]")
+}
+
+fn bicyclic_sieving_report_json(report: &BicyclicSievingReport) -> String {
+    let mismatches = report
+        .mismatches
+        .iter()
+        .map(|(d1, d2)| format!("[{d1},{d2}]"))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"order1\":{},\"order2\":{},\"coefficient_matrix\":{},\
+         \"reduced_matrix\":{},\"evaluations\":{},\"integral\":{},\
+         \"natural_coefficients\":{},\"divisors1\":{},\"divisors2\":{},\
+         \"product_basis_form\":{},\"product_coordinates\":{},\
+         \"product_formula_evaluations\":{},\"fixed_table\":{},\"mismatches\":[{}],\
+         \"holds\":{}}}",
+        report.order1,
+        report.order2,
+        json_bigint_matrix(&report.coefficient_matrix),
+        json_bigint_matrix(&report.reduced_matrix),
+        json_optional_bigint_matrix(&report.evaluations),
+        report.integral,
+        report.natural_coefficients,
+        json_usize_vec(&report.divisors1),
+        json_usize_vec(&report.divisors2),
+        report.product_basis_form,
+        report
+            .product_coordinates
+            .as_deref()
+            .map(json_bigint_matrix)
+            .unwrap_or_else(|| "null".to_string()),
+        report
+            .product_formula_evaluations
+            .as_deref()
+            .map(json_bigint_matrix)
+            .unwrap_or_else(|| "null".to_string()),
+        report
+            .fixed_table
+            .as_deref()
+            .map(json_bigint_matrix)
+            .unwrap_or_else(|| "null".to_string()),
+        mismatches,
+        json_bool_option(report.holds)
+    )
+}
+
+fn print_bicyclic_sieving_report_text(report: &BicyclicSievingReport) {
+    println!(
+        "C_{} x C_{}: {}",
+        report.order1,
+        report.order2,
+        match report.holds {
+            Some(true) => "bicyclic sieving checks passed",
+            Some(false) => "bicyclic sieving checks failed",
+            None => "profile only",
+        }
+    );
+    println!(
+        "  integral at all roots of unity: {}; natural coefficients: {}; product basis form: {}",
+        if report.integral { "yes" } else { "no" },
+        if report.natural_coefficients {
+            "yes"
+        } else {
+            "no"
+        },
+        if report.product_basis_form {
+            "yes"
+        } else {
+            "no"
+        }
+    );
+    for (d1, row) in report.evaluations.iter().enumerate() {
+        let cells = row
+            .iter()
+            .map(|cell| {
+                cell.as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "non-integer".to_string())
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("  d1={d1}: f(zeta1^d1, zeta2^d2) for d2=0.. : {cells}");
+    }
+    if let Some(coords) = &report.product_coordinates {
+        println!(
+            "  product coordinates a_(r1,r2) (rows r1 in {:?}, columns r2 in {:?}); not orbit counts:",
+            report.divisors1, report.divisors2
+        );
+        for row in coords {
+            let cells = row
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!("    {cells}");
+        }
+    }
+    for (d1, d2) in &report.mismatches {
+        let expected = report
+            .fixed_table
+            .as_ref()
+            .map(|t| t[*d1][*d2].to_string())
+            .unwrap_or_default();
+        let got = report.evaluations[*d1][*d2]
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "non-integer".to_string());
+        println!("  FAIL (d1,d2)=({d1},{d2}): expected {expected}, got {got}");
+    }
+}
+
+fn cmd_bicyclic_sieving(args: &[String]) {
+    let mut format = OutputFormat::Text;
+    let mut order1: Option<usize> = None;
+    let mut order2: Option<usize> = None;
+    let mut fixed_table: Option<Vec<Vec<BigInt>>> = None;
+    let mut i = 0;
+    while i < args.len() {
+        let parse_order = |value: Option<&String>, name: &str| -> Result<usize, String> {
+            let value = value.ok_or_else(|| format!("{name} expects a positive integer"))?;
+            match value.parse::<usize>() {
+                Ok(0) | Err(_) => Err(format!("{name} expects a positive integer, got '{value}'")),
+                Ok(n) => Ok(n),
+            }
+        };
+        let result = match args[i].as_str() {
+            "--json" => {
+                format = OutputFormat::Json;
+                Ok(())
+            }
+            "--order1" => {
+                i += 1;
+                parse_order(args.get(i), "--order1").map(|n| order1 = Some(n))
+            }
+            "--order2" => {
+                i += 1;
+                parse_order(args.get(i), "--order2").map(|n| order2 = Some(n))
+            }
+            "--fixed-table" => {
+                i += 1;
+                match args.get(i) {
+                    Some(value) => parse_bigint_matrix_json(value, "--fixed-table")
+                        .map(|table| fixed_table = Some(table)),
+                    None => Err("--fixed-table expects a JSON matrix".to_string()),
+                }
+            }
+            other => Err(format!("unknown bicyclic-sieving option: {other}")),
+        };
+        if let Err(error) = result {
+            eprintln!("{error}");
+            return;
+        }
+        i += 1;
+    }
+    let (Some(order1), Some(order2)) = (order1, order2) else {
+        eprintln!("bicyclic-sieving requires --order1 <n1> and --order2 <n2>");
+        return;
+    };
+    let matrix = match parse_bigint_matrix_json(&read_stdin_or_exit(), "stdin") {
+        Ok(matrix) => matrix,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+    };
+    match bicyclic_sieving_report_bigint(&matrix, order1, order2, fixed_table.as_deref()) {
+        Ok(report) => {
+            if format == OutputFormat::Json {
+                println!("{{\"report\":{}}}", bicyclic_sieving_report_json(&report));
+            } else {
+                print_bicyclic_sieving_report_text(&report);
+            }
+        }
+        Err(error) => eprintln!("{error}"),
     }
 }
 
@@ -5659,6 +6141,7 @@ fn main() {
         "hstar-inequalities" => cmd_hstar_inequalities(rest),
         "cyclic-sieving" => cmd_cyclic_sieving(rest),
         "cyclic-sieving-sequence" => cmd_cyclic_sieving_sequence(rest),
+        "bicyclic-sieving" => cmd_bicyclic_sieving(rest),
         "stapledon" => cmd_stapledon(rest),
         _ => {
             eprintln!("Unknown command: {}", cmd);
