@@ -1090,3 +1090,34 @@ The crate implements finite truncations through `lace_matrix_i64`,
 `lace_matrix_sequence_i64` / `lace_matrix_sequence_bigint`.  Exact finite TNN
 checks are available with `check_lace_total_nonnegative_i64` and the faster
 Neville-elimination wrappers.
+
+### Recognizing weighted renewal recurrences
+
+`renewal::recognize_weighted_renewal(&Recurrence)` recognizes
+`P_n = sum_j r_j t^j P_(n-1-ell*j)`, with positive integer `ell`,
+nonnegative rational `r_j`, `r_0=1`, and an exactly real-rooted seed
+`R(z)=sum_j r_j z^j`. It normalizes a constant LHS and combines duplicate
+terms. Derivatives, alternating signs and index-dependent coefficients are
+conservatively rejected. Failure means this criterion did not apply.
+
+The returned `WeightedRenewal` provides the canonical generator `rows(count)`
+for `1/(1-x R(t x^ell))`, and checks supplied initial rows with
+`matches_initial_rows(first_index, rows)`. At least `1+ell*degree(R)` rows,
+starting at zero, must match. Its paper theorem gives oriented weak
+interlacing `P_n << P_(n+s)` for `degree(R)*s <= degree(R)*ell+1`.
+`max_interlacing_step()` returns this bound, or `None` for the constant
+family. Repeated roots are allowed; no numerical root finding is used.
+
+An example accepts the existing recurrence JSON format on stdin:
+
+```sh
+cargo run -p polytool --example recognize_renewal < recurrence.json
+```
+
+Its JSON distinguishes structural recognition from matching initial data.
+Neither proves that a recurrence guessed from finite rows holds for the
+intended combinatorial sequence. The all-index identity remains a caller
+obligation. See [the formalization task](https://github.com/PerAlexandersson/RealRooted/issues/2037)
+for the proof and the broader variable-predecessor theorem; this Rust feature
+is not a Lean certificate. The recognizer is currently a library API and
+example, not integrated into MCP or automatic recurrence-search output.

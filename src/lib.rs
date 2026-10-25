@@ -130,6 +130,7 @@ pub use linalg::{
 pub mod parse;
 pub mod real_rootedness;
 pub mod recurrence;
+pub mod renewal;
 pub mod root_count;
 pub mod sequences;
 
