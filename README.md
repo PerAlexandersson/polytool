@@ -50,15 +50,7 @@ this directory:
 polytool = { path = "/home/paxinum/Dropbox/AI-projects/rust/polytool" }
 ```
 
-From the monorepo `master` branch, Cargo can also depend on the package by
-name:
-
-```toml
-[dependencies]
-polytool = { git = "https://github.com/PerAlexandersson/polytool.git", branch = "master", package = "polytool" }
-```
-
-The repository's generated standalone `main` branch supports the shorter form:
+From GitHub, depend on the repository's standalone `main` branch:
 
 ```toml
 [dependencies]
