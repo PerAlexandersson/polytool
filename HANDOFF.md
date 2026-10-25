@@ -1,3 +1,13 @@
+# Weighted renewal recognition — completed 2026-10-25
+
+Ownership released. Added polytool::renewal exact stationary recognizer,
+PF-seed validation, canonical generator and initial-data checking, plus
+recognize_renewal JSON example and README. Four focused tests and example
+compilation pass; JSON smoke check uses R=1+3z+2z².
+Theory/Lean task: RealRooted#2037. Adapter and variable-predecessor work:
+polytool#15. No claim of a proved identity from a finite recurrence fit.
+No Lean work. Feature is isolated from unrelated unpublished workspace work.
+
 # Handoff
 
 Full chronology through the start of the current repository-health batch is in
