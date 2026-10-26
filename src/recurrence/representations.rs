@@ -1,5 +1,7 @@
 //! A bounded menu of lag/derivative representations using the existing fitter.
 use super::*;
+use num_traits::Zero;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Termination of the representative search, not a completeness claim about

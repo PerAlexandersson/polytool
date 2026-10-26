@@ -30,9 +30,14 @@
   - planar-network and TNN certificates: `tnn_network`, `brenti_sequence`,
     `brenti_recognition`, `interlacing_matrix`;
   - standard sequences: `sequences` (with `deco` and `literature`).
-- The CLI is `src/bin/polytool.rs`; `mcp/` and `web/` are adapters over the
-  library, not separate implementations.  Put mathematics in the library and keep
-  adapters thin.
+- The CLI is `src/bin/polytool/`: `main.rs` dispatches, each subcommand (or
+  close group) has its own module, and `input`, `json_out` and `help` hold the
+  shared parsing, JSON fragments and help text.  `mcp/` and `web/` are adapters
+  over the library, not separate implementations.  Put mathematics in the library
+  and keep adapters thin.
+- `recurrence.rs` is a facade: its private submodules under `src/recurrence/`
+  are split by concern and re-exported, so public paths stay
+  `polytool::recurrence::*`.
 - Reuse before adding: look for an existing helper in `vec_poly`, `numeric` and
   `real_rootedness` before writing a new coefficient-vector routine, and build
   new real-rootedness checks on `is_real_rooted*` or `exact-real-roots` rather
