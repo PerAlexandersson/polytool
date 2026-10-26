@@ -126,3 +126,29 @@ fn omitted_candidate_budget_preserves_unbounded_cli_behavior() {
         .expect("stderr is UTF-8")
         .contains("budget"));
 }
+
+#[test]
+fn closed_stdout_pipe_exits_quietly() {
+    // A reader that closes its end immediately: the CLI must not panic.
+    let mut child = Command::new(env!("CARGO_BIN_EXE_polytool"))
+        .args([
+            "enumerate-real-rooted",
+            "--degree",
+            "6",
+            "--leading-desc",
+            "1,0,-15",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn polytool");
+    drop(child.stdout.take());
+    let output = child.wait_with_output().expect("wait for polytool");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("panicked"), "{stderr}");
+    assert!(
+        matches!(output.status.code(), Some(0) | Some(141)),
+        "{:?}",
+        output.status
+    );
+}

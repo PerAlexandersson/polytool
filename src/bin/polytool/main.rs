@@ -54,7 +54,29 @@ use crate::sequence::cmd_sequence;
 use crate::stapledon::cmd_stapledon;
 use crate::tnn_network::cmd_tnn_network;
 
+/// Exit quietly when stdout is closed early (e.g. `polytool ... | head`).
+///
+/// Rust ignores `SIGPIPE`, so `println!` panics with "failed printing to
+/// stdout: Broken pipe". Treat exactly that panic as the conventional
+/// SIGPIPE exit status 141 and keep the default report for every other panic.
+fn exit_quietly_on_broken_pipe() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let message = info
+            .payload()
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| info.payload().downcast_ref::<&str>().copied())
+            .unwrap_or("");
+        if message.contains("failed printing to stdout") && message.contains("Broken pipe") {
+            std::process::exit(141);
+        }
+        default_hook(info);
+    }));
+}
+
 fn main() {
+    exit_quietly_on_broken_pipe();
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
         print_top_level_help();
