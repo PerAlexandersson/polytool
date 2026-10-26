@@ -97,15 +97,21 @@
 //!   polynomial recurrences
 //! - [`decomposition`] — `I_d` / `R_d` symmetric decompositions, `f`-polynomials,
 //!   alternatingly increasing checks, and Brandén--Solus-style magic-basis analysis
-//! - [`brenti_sequence`] — Brenti-style planar strip digraph certificates for
-//!   row real-rootedness via PF sequences
+//! - [`brenti_sequence`] — Planar strip digraphs with height-dependent
+//!   transitions; their path matrices are totally nonnegative (they do not by
+//!   themselves certify real-rooted rows)
+//! - [`brenti_recognition`] — Exact search for a planar strip digraph that
+//!   reproduces a given prefix of polynomial rows
 //! - [`interlacing_matrix`] — Finite Athanasiadis--Wagner `Lace(A)`
 //!   interlacing-matrix truncations and exact finite TNN checks
 //! - [`tnn_network`] — Constructive planar-network certificates for
-//!   lower-unitriangular totally nonnegative matrices and monic polynomial sequences
+//!   lower-unitriangular totally nonnegative matrices and monic polynomial
+//!   sequences, structured TNN diagnostics, and Brändén--Saud Maia Leite chain
+//!   polynomials
 
 pub mod basis;
 pub mod bkw;
+pub mod brenti_recognition;
 pub mod brenti_sequence;
 pub mod coefficient_tests;
 pub mod cyclic_sieving;
@@ -152,6 +158,10 @@ pub use basis::{
 pub use bkw::{
     BkwError, BkwRootComputation, BkwRootInfo, BkwRootOptions, BkwScoutCandidate, BkwScoutOptions,
     BkwSymbol, Complex64,
+};
+pub use brenti_recognition::{
+    recognize_brenti_strip_digraph, BrentiRecognition, BrentiRecognitionError,
+    BrentiRecognitionOptions, BrentiWeightDomain,
 };
 pub use brenti_sequence::{
     build_brenti_sequence_certificate, BrentiEdge, BrentiError, BrentiSequenceCertificate,
@@ -290,7 +300,10 @@ pub use sturm_cf::{
     SturmContinuedFractionOptions, SturmContinuedFractionSummary,
 };
 pub use tnn_network::{
-    build_tnn_certificate_from_monic_polynomials, coefficient_matrix_from_monic_polynomials,
-    evaluate_path_matrix, reconstruct_canonical_tnn_network, verify_path_matrix_certificate,
-    BigRational, CanonicalPlanarNetwork, CanonicalTnnProof, NetworkError,
+    build_tnn_certificate_from_monic_polynomials, chain_polynomials_bigint,
+    chain_polynomials_rational, check_chain_polynomials_bigint, check_lower_unitriangular_tnn,
+    coefficient_matrix_from_monic_polynomials, evaluate_path_matrix,
+    lower_triangular_rows_from_square, reconstruct_canonical_tnn_network,
+    verify_path_matrix_certificate, BigRational, CanonicalPlanarNetwork, CanonicalTnnProof,
+    ChainPolynomialReport, NegativeMinor, NetworkError,
 };

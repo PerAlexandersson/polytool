@@ -13,11 +13,37 @@
 //! 4. reconstruct the canonical network,
 //! 5. verify the certificate by re-evaluating the path matrix.
 //!
-//! Note that a network certificate proves TNN of the matrix. Whether that also
-//! proves real-rootedness of the original row polynomials depends on the extra
-//! structure of the family under study.
+//! When a matrix is rejected, [`NetworkError`] says why: a malformed shape
+//! (row length, nonzero entry above the diagonal, non-unit diagonal), a
+//! negative entry, or a failure of total non-negativity.  In the last case
+//! [`check_lower_unitriangular_tnn`] also searches for an explicit
+//! [`NegativeMinor`] whose exact value can be recomputed independently.
+//!
+//! # Chain polynomials
+//!
+//! For a lower-unitriangular matrix `R = (r_{n,k})`, the *chain polynomials*
+//! are `p_0 = 1` and `p_n(t) = t * sum_{k<n} r_{n,k} p_k(t)`
+//! ([`chain_polynomials_bigint`], [`chain_polynomials_rational`]).
+//! Brändén and Saud Maia Leite (arXiv:2412.06595, Theorem 3.7) prove that if
+//! `R` is totally nonnegative, then every `p_n` is
+//! real-rooted with all zeros in `[-1, 0]` and `p_n` interlaces `p_{n+1}`.
+//! [`check_chain_polynomials_bigint`] reports the TNN verdict and the
+//! chain-polynomial properties separately.
+//!
+//! # Guardrail
+//!
+//! A network certificate proves TNN of the *matrix*.  It does **not** prove that
+//! the row polynomials `sum_k r_{n,k} t^k` are real-rooted: the matrix
+//! `[[1,0,0],[1,1,0],[1,1,1]]` is lower-unitriangular and TNN, yet its last row
+//! is `1 + t + t^2`.  Real-rootedness of a single row is the
+//! Aissen--Schoenberg--Whitney criterion (its Toeplitz matrix is TNN), which is
+//! a different matrix.  The theorem above concerns the chain polynomials, not
+//! the rows.
 
-use crate::{check_tnn_neville_bigint, Polynomial};
+use crate::linalg::determinant;
+use crate::real_rootedness::{check_weak_interlacing_bigint_coeffs, is_real_rooted_bigint_coeffs};
+use crate::root_count::count_root_signs_prs_bigint_coeffs;
+use crate::{check_tnn_neville_bigint, vec_poly, Polynomial};
 use num_bigint::BigInt;
 use num_rational::Ratio;
 use num_traits::{One, Zero};
@@ -68,11 +94,66 @@ impl CanonicalTnnProof {
     }
 }
 
+/// An explicit minor with a negative value: a checkable witness that a matrix
+/// is not totally nonnegative.
+///
+/// `rows` and `cols` are increasing, zero-based indices into the square
+/// (zero-padded) form of the lower-triangular matrix, and `value` is the exact
+/// determinant of the corresponding submatrix.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NegativeMinor {
+    pub rows: Vec<usize>,
+    pub cols: Vec<usize>,
+    pub value: BigInt,
+}
+
+impl NegativeMinor {
+    /// Recompute the minor in `matrix` (rows of any length; missing entries
+    /// count as zero) and check that it equals the stored negative value.
+    pub fn verify(&self, matrix: &[Vec<BigInt>]) -> bool {
+        if self.rows.len() != self.cols.len() || self.value >= BigInt::zero() {
+            return false;
+        }
+        if self.rows.iter().any(|&r| r >= matrix.len()) {
+            return false;
+        }
+        determinant(&submatrix(matrix, &self.rows, &self.cols)) == self.value
+    }
+}
+
+impl fmt::Display for NegativeMinor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "minor with rows {:?} and columns {:?} equals {}",
+            self.rows, self.cols, self.value
+        )
+    }
+}
+
 /// Errors returned while building or verifying a TNN network certificate.
+///
+/// The shape variants (`InvalidRowLength`, `NotSquare`,
+/// `NonzeroAboveDiagonal`, `NonUnitDiagonal`) and `NegativeEntry` name the
+/// offending entry.  `NotTnn` carries the Neville-elimination diagnosis and,
+/// when the bounded search finds one, an explicit [`NegativeMinor`].
+/// `NegativeReducedEntry` names the failing Whitney-reduction step.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkError {
     EmptyMatrix,
     EmptyPolynomialSequence,
+    /// A square input matrix has a row of the wrong length.
+    NotSquare {
+        row: usize,
+        expected: usize,
+        found: usize,
+    },
+    /// A square input matrix has a nonzero entry above the diagonal.
+    NonzeroAboveDiagonal {
+        row: usize,
+        col: usize,
+        value: BigInt,
+    },
     UnsupportedStartingDegree {
         found: usize,
     },
@@ -99,8 +180,14 @@ pub enum NetworkError {
         row: usize,
         value: BigInt,
     },
+    /// Neville elimination proved that the matrix is not totally
+    /// nonnegative.  `reason` describes the failing elimination step;
+    /// `witness` is an explicit negative minor when the bounded search finds
+    /// one (it always does for matrices with at most
+    /// [`EXHAUSTIVE_MINOR_SEARCH_MAX_DIMENSION`] rows).
     NotTnn {
         reason: String,
+        witness: Option<NegativeMinor>,
     },
     ZeroTailViolation {
         row: usize,
@@ -160,7 +247,27 @@ impl fmt::Display for NetworkError {
                 "diagonal entry ({},{}) should be 1, found {}",
                 row, row, value
             ),
-            Self::NotTnn { reason } => write!(f, "matrix is not totally nonnegative: {}", reason),
+            Self::NotSquare {
+                row,
+                expected,
+                found,
+            } => write!(
+                f,
+                "matrix is not square: row {} has length {}, expected {}",
+                row, found, expected
+            ),
+            Self::NonzeroAboveDiagonal { row, col, value } => write!(
+                f,
+                "matrix is not lower triangular: entry ({},{}) = {} lies above the diagonal",
+                row, col, value
+            ),
+            Self::NotTnn { reason, witness } => {
+                write!(f, "matrix is not totally nonnegative: {}", reason)?;
+                if let Some(witness) = witness {
+                    write!(f, "; witness: {}", witness)?;
+                }
+                Ok(())
+            }
             Self::ZeroTailViolation { row, value } => write!(
                 f,
                 "first-column zero tail violated at row {}: expected 0, found {}",
@@ -277,14 +384,106 @@ pub fn validate_lower_unitriangular_nonnegative_matrix(
     Ok(())
 }
 
+/// Convert a square lower-triangular matrix into the triangular row format
+/// used by this module (row `n` keeps its first `n + 1` entries).
+///
+/// Errors name the first row of the wrong length ([`NetworkError::NotSquare`])
+/// or the first nonzero entry above the diagonal
+/// ([`NetworkError::NonzeroAboveDiagonal`]).  Nonnegativity and the unit
+/// diagonal are checked separately by
+/// [`validate_lower_unitriangular_nonnegative_matrix`].
+pub fn lower_triangular_rows_from_square(
+    matrix: &[Vec<BigInt>],
+) -> Result<Vec<Vec<BigInt>>, NetworkError> {
+    if matrix.is_empty() {
+        return Err(NetworkError::EmptyMatrix);
+    }
+    let size = matrix.len();
+    for (row, entries) in matrix.iter().enumerate() {
+        if entries.len() != size {
+            return Err(NetworkError::NotSquare {
+                row,
+                expected: size,
+                found: entries.len(),
+            });
+        }
+        if let Some((col, value)) = entries
+            .iter()
+            .enumerate()
+            .skip(row + 1)
+            .find(|(_, value)| !value.is_zero())
+        {
+            return Err(NetworkError::NonzeroAboveDiagonal {
+                row,
+                col,
+                value: value.clone(),
+            });
+        }
+    }
+    Ok(matrix
+        .iter()
+        .enumerate()
+        .map(|(row, entries)| entries[..=row].to_vec())
+        .collect())
+}
+
+/// Matrices with at most this many rows get an exhaustive search for a
+/// negative minor when Neville elimination rejects them.
+pub const EXHAUSTIVE_MINOR_SEARCH_MAX_DIMENSION: usize = 10;
+
+/// Upper bound on the number of minors evaluated by the witness search for
+/// larger matrices.
+const MINOR_SEARCH_BUDGET: usize = 200_000;
+
+/// Decide whether a lower-unitriangular matrix (triangular row format) is
+/// totally nonnegative, with a structured diagnosis on failure.
+///
+/// The decision is made by exact Neville elimination
+/// ([`check_tnn_neville_bigint`]) on the zero-padded square matrix.  On
+/// failure, [`NetworkError::NotTnn`] carries the elimination message and an
+/// explicit [`NegativeMinor`] found by a search that first tries structured
+/// families (contiguous rows against contiguous or initial columns) and then
+/// all minors, exhaustively for matrices with at most
+/// [`EXHAUSTIVE_MINOR_SEARCH_MAX_DIMENSION`] rows and within a fixed budget
+/// otherwise.  Shape problems and negative entries are reported first, by
+/// [`validate_lower_unitriangular_nonnegative_matrix`].
+///
+/// ```
+/// use num_bigint::BigInt;
+/// use polytool::tnn_network::{check_lower_unitriangular_tnn, NetworkError};
+///
+/// let rows: Vec<Vec<BigInt>> = vec![vec![1], vec![1, 1], vec![2, 0, 1]]
+///     .into_iter()
+///     .map(|r: Vec<i64>| r.into_iter().map(BigInt::from).collect())
+///     .collect();
+/// match check_lower_unitriangular_tnn(&rows) {
+///     Err(NetworkError::NotTnn { witness: Some(minor), .. }) => {
+///         // rows {1,2}, columns {0,1}: 1*0 - 1*2 = -2
+///         assert_eq!(minor.rows, vec![1, 2]);
+///         assert_eq!(minor.cols, vec![0, 1]);
+///         assert_eq!(minor.value, BigInt::from(-2));
+///     }
+///     other => panic!("unexpected {:?}", other),
+/// }
+/// ```
+pub fn check_lower_unitriangular_tnn(rows: &[Vec<BigInt>]) -> Result<(), NetworkError> {
+    validate_lower_unitriangular_nonnegative_matrix(rows)?;
+    let padded = pad_to_square_matrix(rows);
+    check_tnn_neville_bigint(&padded).map_err(|reason| NetworkError::NotTnn {
+        reason,
+        witness: find_negative_minor(&padded),
+    })
+}
+
 /// Reconstruct the canonical network certificate from a lower-unitriangular TNN matrix.
+///
+/// Errors are those of [`check_lower_unitriangular_tnn`], plus the Whitney
+/// reduction diagnostics [`NetworkError::ZeroTailViolation`] and
+/// [`NetworkError::NegativeReducedEntry`] (which cannot occur for a TNN input).
 pub fn reconstruct_canonical_tnn_network(
     rows: &[Vec<BigInt>],
 ) -> Result<CanonicalPlanarNetwork<BigRational>, NetworkError> {
-    validate_lower_unitriangular_nonnegative_matrix(rows)?;
-
-    let padded = pad_to_square_matrix(rows);
-    check_tnn_neville_bigint(&padded).map_err(|reason| NetworkError::NotTnn { reason })?;
+    check_lower_unitriangular_tnn(rows)?;
 
     let first_zero = rows
         .iter()
@@ -364,6 +563,282 @@ pub fn verify_path_matrix_certificate(
     network: &CanonicalPlanarNetwork<BigRational>,
 ) -> bool {
     evaluate_path_matrix(network) == bigint_triangular_to_q(rows)
+}
+
+/// Chain polynomials of a lower-unitriangular integer matrix.
+///
+/// Returns `p_0, ..., p_N` for the `N + 1` rows of `rows` (triangular row
+/// format: row `n` has `n + 1` entries and `rows[n][n] = 1`), where `p_0 = 1`
+/// and `p_n(t) = t * sum_{k<n} r_{n,k} p_k(t)`.  Coefficient vectors are in
+/// ascending degree order, trimmed, with the zero polynomial as `[0]`.
+///
+/// Only the shape and unit diagonal are required here; signs are not
+/// checked, so the generator also serves non-TNN matrices.  Use
+/// [`check_chain_polynomials_bigint`] for the Brändén--Saud Maia Leite
+/// properties.
+///
+/// ```
+/// use num_bigint::BigInt;
+/// use polytool::tnn_network::chain_polynomials_bigint;
+///
+/// // Pascal's triangle: p_n = sum_k k! S(n,k) t^k.
+/// let pascal: Vec<Vec<BigInt>> = vec![vec![1], vec![1, 1], vec![1, 2, 1], vec![1, 3, 3, 1]]
+///     .into_iter()
+///     .map(|r: Vec<i64>| r.into_iter().map(BigInt::from).collect())
+///     .collect();
+/// let p = chain_polynomials_bigint(&pascal).unwrap();
+/// let expected: Vec<BigInt> = [0, 1, 6, 6].iter().map(|&c| BigInt::from(c)).collect();
+/// assert_eq!(p[3], expected);
+/// ```
+pub fn chain_polynomials_bigint(rows: &[Vec<BigInt>]) -> Result<Vec<Vec<BigInt>>, NetworkError> {
+    validate_unitriangular_shape(rows, |row, value| NetworkError::NonUnitDiagonal {
+        row,
+        value: value.clone(),
+    })?;
+    Ok(chain_polynomials_unchecked(rows))
+}
+
+/// Chain polynomials of a lower-unitriangular rational matrix.
+///
+/// Same conventions as [`chain_polynomials_bigint`].  A diagonal entry other
+/// than `1` is reported as [`NetworkError::NonUnitDiagonal`] with the value's
+/// integer part (exact rational diagonals equal to `1` are required).
+pub fn chain_polynomials_rational(
+    rows: &[Vec<BigRational>],
+) -> Result<Vec<Vec<BigRational>>, NetworkError> {
+    validate_unitriangular_shape(rows, |row, value| NetworkError::NonUnitDiagonal {
+        row,
+        value: value.to_integer(),
+    })?;
+    Ok(chain_polynomials_unchecked(rows))
+}
+
+fn validate_unitriangular_shape<C: crate::CoeffRing>(
+    rows: &[Vec<C>],
+    non_unit: impl Fn(usize, &C) -> NetworkError,
+) -> Result<(), NetworkError> {
+    if rows.is_empty() {
+        return Err(NetworkError::EmptyMatrix);
+    }
+    for (n, row) in rows.iter().enumerate() {
+        if row.len() != n + 1 {
+            return Err(NetworkError::InvalidRowLength {
+                row: n,
+                expected: n + 1,
+                found: row.len(),
+            });
+        }
+        if row[n] != C::one() {
+            return Err(non_unit(n, &row[n]));
+        }
+    }
+    Ok(())
+}
+
+fn chain_polynomials_unchecked<C: crate::CoeffRing>(rows: &[Vec<C>]) -> Vec<Vec<C>> {
+    let mut chain: Vec<Vec<C>> = Vec::with_capacity(rows.len());
+    for (n, row) in rows.iter().enumerate() {
+        if n == 0 {
+            chain.push(vec![C::one()]);
+            continue;
+        }
+        let mut sum = vec![C::zero()];
+        for (k, entry) in row.iter().take(n).enumerate() {
+            if !entry.is_zero() {
+                sum = vec_poly::add(&sum, &vec_poly::scale(&chain[k], entry));
+            }
+        }
+        chain.push(vec_poly::trim(&vec_poly::shift(&sum)));
+    }
+    chain
+}
+
+/// Report of [`check_chain_polynomials_bigint`].
+///
+/// The TNN verdict and the chain-polynomial properties are computed
+/// independently, so the report also shows what happens for non-TNN
+/// matrices (where the theorem says nothing).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChainPolynomialReport {
+    /// `p_0, ..., p_N`, ascending coefficients, zero polynomial as `[0]`.
+    pub chain_polynomials: Vec<Vec<BigInt>>,
+    /// TNN verdict of the input matrix, with diagnostics on failure
+    /// (see [`check_lower_unitriangular_tnn`]).
+    pub tnn: Result<(), NetworkError>,
+    /// Whether `p_n` is real-rooted (the zero polynomial counts as real-rooted).
+    pub real_rooted: Vec<bool>,
+    /// Whether `p_n` is real-rooted with all zeros in `[-1, 0]`.
+    pub roots_in_minus_one_zero: Vec<bool>,
+    /// Entry `n` says whether `p_n` interlaces `p_{n+1}` (zeros of `p_n`
+    /// weakly to the left, in the directed sense of
+    /// [`crate::check_weak_interlacing_bigint_coeffs`]); the zero polynomial
+    /// interlaces every real-rooted polynomial in both directions.
+    pub interlacing: Vec<bool>,
+}
+
+impl ChainPolynomialReport {
+    /// Whether the matrix is totally nonnegative.
+    pub fn is_tnn(&self) -> bool {
+        self.tnn.is_ok()
+    }
+
+    /// Whether every chain polynomial is real-rooted in `[-1, 0]` and
+    /// consecutive ones interlace (the conclusion of the theorem).
+    pub fn chain_conclusion_holds(&self) -> bool {
+        self.roots_in_minus_one_zero.iter().all(|&ok| ok) && self.interlacing.iter().all(|&ok| ok)
+    }
+
+    /// `true` would contradict Brändén--Saud Maia Leite, Theorem 3.7: the
+    /// matrix is TNN but the chain-polynomial conclusion fails.
+    pub fn contradicts_theorem(&self) -> bool {
+        self.is_tnn() && !self.chain_conclusion_holds()
+    }
+}
+
+/// Generate the chain polynomials of a lower-unitriangular integer matrix
+/// and check them against Brändén--Saud Maia Leite (arXiv:2412.06595,
+/// Theorem 3.7).
+///
+/// The report contains the TNN verdict of the matrix and, separately, exact
+/// checks of real-rootedness, location of the zeros in `[-1, 0]`, and
+/// interlacing `p_n ≺ p_{n+1}`.  Only shape errors (row lengths, unit
+/// diagonal) are returned as `Err`; a negative entry or a failing minor
+/// appears in [`ChainPolynomialReport::tnn`].
+///
+/// The theorem is about the chain polynomials, **not** about the row
+/// polynomials `sum_k r_{n,k} t^k`: `[[1,0,0],[1,1,0],[1,1,1]]` is TNN, its
+/// chain polynomials `1, t, t + t^2` behave as predicted, but its last row
+/// `1 + t + t^2` has no real zeros.
+pub fn check_chain_polynomials_bigint(
+    rows: &[Vec<BigInt>],
+) -> Result<ChainPolynomialReport, NetworkError> {
+    let chain_polynomials = chain_polynomials_bigint(rows)?;
+    let tnn = check_lower_unitriangular_tnn(rows);
+    let is_zero = |p: &[BigInt]| vec_poly::degree(p).is_none();
+    let real_rooted: Vec<bool> = chain_polynomials
+        .iter()
+        .map(|p| is_zero(p) || is_real_rooted_bigint_coeffs(p))
+        .collect();
+    let minus_one_zero_test = [BigInt::zero(), BigInt::one(), BigInt::one()];
+    let roots_in_minus_one_zero = chain_polynomials
+        .iter()
+        .zip(&real_rooted)
+        .map(|(p, &rr)| {
+            rr && (is_zero(p)
+                || count_root_signs_prs_bigint_coeffs(p, &minus_one_zero_test).positive == 0)
+        })
+        .collect();
+    let interlacing = chain_polynomials
+        .windows(2)
+        .zip(real_rooted.windows(2))
+        .map(|(pair, rr)| match (is_zero(&pair[0]), is_zero(&pair[1])) {
+            (true, true) => true,
+            (true, false) => rr[1],
+            (false, true) => rr[0],
+            (false, false) => {
+                check_weak_interlacing_bigint_coeffs(&pair[0], &pair[1]) == Some(true)
+            }
+        })
+        .collect();
+    Ok(ChainPolynomialReport {
+        chain_polynomials,
+        tnn,
+        real_rooted,
+        roots_in_minus_one_zero,
+        interlacing,
+    })
+}
+
+fn submatrix(matrix: &[Vec<BigInt>], rows: &[usize], cols: &[usize]) -> Vec<Vec<BigInt>> {
+    rows.iter()
+        .map(|&r| {
+            cols.iter()
+                .map(|&c| matrix[r].get(c).cloned().unwrap_or_else(BigInt::zero))
+                .collect()
+        })
+        .collect()
+}
+
+/// Search a square matrix for a negative minor, structured families first.
+fn find_negative_minor(matrix: &[Vec<BigInt>]) -> Option<NegativeMinor> {
+    let n = matrix.len();
+    let mut budget = MINOR_SEARCH_BUDGET;
+    let test = |rows: &[usize], cols: &[usize], budget: &mut usize| -> Option<NegativeMinor> {
+        *budget = budget.saturating_sub(1);
+        let value = determinant(&submatrix(matrix, rows, cols));
+        (value < BigInt::zero()).then(|| NegativeMinor {
+            rows: rows.to_vec(),
+            cols: cols.to_vec(),
+            value,
+        })
+    };
+
+    // Entries (1x1 minors).
+    for (r, row) in matrix.iter().enumerate() {
+        if let Some((c, value)) = row.iter().enumerate().find(|(_, v)| **v < BigInt::zero()) {
+            return Some(NegativeMinor {
+                rows: vec![r],
+                cols: vec![c],
+                value: value.clone(),
+            });
+        }
+    }
+
+    // Contiguous rows against contiguous columns, and against
+    // `{0, ..., size-2} ∪ {c}` (the minors behind Whitney/Neville steps).
+    for size in 2..=n {
+        for r0 in 0..=(n - size) {
+            let rows: Vec<usize> = (r0..r0 + size).collect();
+            for c0 in 0..=(n - size) {
+                let cols: Vec<usize> = (c0..c0 + size).collect();
+                if let Some(w) = test(&rows, &cols, &mut budget) {
+                    return Some(w);
+                }
+            }
+            for c in size..n {
+                let mut cols: Vec<usize> = (0..size - 1).collect();
+                cols.push(c);
+                if let Some(w) = test(&rows, &cols, &mut budget) {
+                    return Some(w);
+                }
+            }
+        }
+    }
+
+    // All minors, smallest first, within the budget (exhaustive for small n).
+    let exhaustive = n <= EXHAUSTIVE_MINOR_SEARCH_MAX_DIMENSION;
+    for size in 2..=n {
+        let row_sets = combinations(n, size);
+        for rows in &row_sets {
+            for cols in &row_sets {
+                if !exhaustive && budget == 0 {
+                    return None;
+                }
+                if let Some(w) = test(rows, cols, &mut budget) {
+                    return Some(w);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn combinations(n: usize, k: usize) -> Vec<Vec<usize>> {
+    let mut out = Vec::new();
+    let mut current: Vec<usize> = (0..k).collect();
+    if k > n {
+        return out;
+    }
+    loop {
+        out.push(current.clone());
+        let Some(i) = (0..k).rev().find(|&i| current[i] < n - k + i) else {
+            return out;
+        };
+        current[i] += 1;
+        for j in i + 1..k {
+            current[j] = current[j - 1] + 1;
+        }
+    }
 }
 
 fn reconstruct_lambda_from_q_rows(
@@ -535,9 +1010,149 @@ mod tests {
     fn test_reconstruct_rejects_non_tnn_matrix() {
         let rows = bi_rows(&[&[1], &[1, 1], &[2, 0, 1]]);
         match reconstruct_canonical_tnn_network(&rows) {
-            Err(NetworkError::NotTnn { .. }) => {}
-            other => panic!("expected NotTnn, got {:?}", other),
+            Err(NetworkError::NotTnn {
+                witness: Some(witness),
+                ..
+            }) => {
+                assert!(witness.verify(&rows));
+                assert_eq!(witness.rows, vec![1, 2]);
+                assert_eq!(witness.cols, vec![0, 1]);
+                assert_eq!(witness.value, bi(-2));
+            }
+            other => panic!("expected NotTnn with witness, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_not_tnn_witness_needs_a_3x3_minor() {
+        // The lower-triangular Toeplitz matrix of 1 + t + t^2: entries and
+        // 2x2 minors are nonnegative (the sequence is log-concave), but the
+        // sequence is not PF, so a 3x3 minor is negative.
+        let rows = bi_rows(&[&[1], &[1, 1], &[1, 1, 1], &[0, 1, 1, 1]]);
+        let error = check_lower_unitriangular_tnn(&rows).unwrap_err();
+        match error {
+            NetworkError::NotTnn {
+                witness: Some(witness),
+                ..
+            } => {
+                assert!(witness.verify(&rows));
+                assert_eq!(witness.rows, vec![1, 2, 3]);
+                assert_eq!(witness.cols, vec![0, 1, 2]);
+                assert_eq!(witness.value, bi(-1));
+            }
+            other => panic!("expected NotTnn with witness, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_witness_search_agrees_with_neville_on_small_matrices() {
+        // Every lower-unitriangular 3x3 matrix with entries in 0..=2 below
+        // the diagonal: Neville rejects exactly when a witness exists.
+        for a in 0..=2 {
+            for b in 0..=2 {
+                for c in 0..=2 {
+                    let rows = bi_rows(&[&[1], &[a, 1], &[b, c, 1]]);
+                    match check_lower_unitriangular_tnn(&rows) {
+                        Ok(()) => {
+                            let padded = pad_to_square_matrix(&rows);
+                            assert_eq!(find_negative_minor(&padded), None, "{:?}", rows);
+                        }
+                        Err(NetworkError::NotTnn {
+                            witness: Some(w), ..
+                        }) => assert!(w.verify(&rows)),
+                        other => panic!("unexpected {:?} for {:?}", other, rows),
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_shape_diagnostics() {
+        let square = bi_rows(&[&[1, 0], &[1, 1]]);
+        assert_eq!(
+            lower_triangular_rows_from_square(&square).unwrap(),
+            bi_rows(&[&[1], &[1, 1]])
+        );
+        assert_eq!(
+            lower_triangular_rows_from_square(&bi_rows(&[&[1, 2], &[1, 1]])),
+            Err(NetworkError::NonzeroAboveDiagonal {
+                row: 0,
+                col: 1,
+                value: bi(2)
+            })
+        );
+        assert_eq!(
+            lower_triangular_rows_from_square(&bi_rows(&[&[1, 0], &[1]])),
+            Err(NetworkError::NotSquare {
+                row: 1,
+                expected: 2,
+                found: 1
+            })
+        );
+        assert_eq!(
+            check_lower_unitriangular_tnn(&bi_rows(&[&[1], &[-1, 1]])),
+            Err(NetworkError::NegativeEntry {
+                row: 1,
+                col: 0,
+                value: bi(-1)
+            })
+        );
+        assert_eq!(
+            check_lower_unitriangular_tnn(&bi_rows(&[&[1], &[1, 2]])),
+            Err(NetworkError::NonUnitDiagonal {
+                row: 1,
+                value: bi(2)
+            })
+        );
+    }
+
+    #[test]
+    fn test_chain_polynomials_pascal() {
+        // p_n = sum_k k! S(n,k) t^k (ordered set partitions / Fubini).
+        let rows = bi_rows(&[&[1], &[1, 1], &[1, 2, 1], &[1, 3, 3, 1], &[1, 4, 6, 4, 1]]);
+        let chain = chain_polynomials_bigint(&rows).unwrap();
+        let expected: Vec<Vec<BigInt>> = [
+            vec![1],
+            vec![0, 1],
+            vec![0, 1, 2],
+            vec![0, 1, 6, 6],
+            vec![0, 1, 14, 36, 24],
+        ]
+        .iter()
+        .map(|r| r.iter().map(|&v| bi(v)).collect())
+        .collect();
+        assert_eq!(chain, expected);
+        let report = check_chain_polynomials_bigint(&rows).unwrap();
+        assert!(report.is_tnn());
+        assert!(report.chain_conclusion_holds());
+        assert!(!report.contradicts_theorem());
+    }
+
+    #[test]
+    fn test_chain_polynomials_rational_matches_integer() {
+        let rows = bi_rows(&[&[1], &[2, 1], &[1, 3, 1]]);
+        let qrows = bigint_triangular_to_q(&rows);
+        let chain_q = chain_polynomials_rational(&qrows).unwrap();
+        let chain_z = chain_polynomials_bigint(&rows).unwrap();
+        let lifted: Vec<Vec<BigRational>> = chain_z
+            .iter()
+            .map(|p| {
+                p.iter()
+                    .map(|c| BigRational::from_integer(c.clone()))
+                    .collect()
+            })
+            .collect();
+        assert_eq!(chain_q, lifted);
+    }
+
+    #[test]
+    fn test_chain_polynomials_identity_are_zero() {
+        let rows = bi_rows(&[&[1], &[0, 1], &[0, 0, 1]]);
+        let report = check_chain_polynomials_bigint(&rows).unwrap();
+        assert_eq!(report.chain_polynomials[1], vec![bi(0)]);
+        assert!(report.is_tnn());
+        assert!(report.chain_conclusion_holds());
     }
 
     #[test]

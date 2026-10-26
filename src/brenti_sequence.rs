@@ -1,18 +1,43 @@
-//! Brenti-style real-rootedness certificates from planar weakly `y`-invariant strip digraphs.
+//! Planar strip digraphs whose transitions depend only on the height.
 //!
-//! This module implements a restricted, proof-friendly subclass of Brenti's
-//! digraph model:
+//! This module implements a restricted, proof-friendly class of weighted
+//! planar digraphs:
 //!
 //! - vertices are `(x, y)` with `x >= 0` and `0 <= y <= H`,
 //! - every edge goes from column `x` to column `x + 1`,
-//! - the outgoing edges depend only on the height `y`,
+//! - the outgoing edges depend only on the height `y` (the digraph is
+//!   invariant under translation in `x`),
 //! - planarity is certified by an explicit monotonicity condition on target
-//!   heights.
+//!   heights: if `y < y'` both have edges, every target of `y` is at most every
+//!   target of `y'`.
 //!
-//! The resulting digraph is automatically weakly `y`-invariant. When the
-//! monotonicity condition holds and all weights are nonnegative, Brenti's
-//! theorem applies: every row of the path matrix is a Pólya frequency sequence,
-//! hence every row polynomial has only real nonpositive zeros.
+//! Write `W` for the `(H+1) x (H+1)` weight matrix and `M_{n,k}` for the total
+//! weight of paths from `(0,0)` to `(n,k)`, so row `n` of `M` is `e_0 W^n`.
+//!
+//! # What a valid strip digraph certifies
+//!
+//! With sources `(-n, 0)` and sinks `(0, k)`, `x`-invariance makes `M_{n,k}`
+//! the path weight from source `n` to sink `k`.  Two paths from sources
+//! `n_1 < n_2` to sinks `k_1 < k_2` that pair `n_1` with `k_2` and `n_2` with
+//! `k_1` must share a vertex (the monotone-target condition forbids crossing
+//! edges), so by Lindström--Gessel--Viennot every minor of `M` is a sum of
+//! nonnegative weights: **the coefficient matrix `M` is totally nonnegative**
+//! (and so is `W`).  When the rows are the coefficient rows of a
+//! lower-unitriangular matrix, the chain polynomials of
+//! [`crate::tnn_network::check_chain_polynomials_bigint`] are then real-rooted.
+//!
+//! # What it does not certify
+//!
+//! A valid strip digraph does **not** make the row polynomials
+//! `sum_k M_{n,k} t^k` real-rooted.  Heights `0 -> {0, 1}` and `1 -> {2}` with
+//! unit weights form a valid planar strip digraph whose row `2` is
+//! `1 + t + t^2`.  Brenti's theorem on Pólya frequency rows needs invariance
+//! under translation in `y` (the height), which makes the Toeplitz matrix of a
+//! row a path matrix; the height-dependent transitions used here are invariant
+//! in `x` instead.  Use an exact real-rootedness test for the rows themselves.
+//!
+//! [`crate::brenti_recognition`] searches for a strip digraph reproducing a
+//! given finite prefix of rows.
 
 use crate::{tnn_network::BigRational, Polynomial};
 use num_bigint::BigInt;
@@ -28,10 +53,11 @@ pub struct BrentiEdge {
     pub weight: BigRational,
 }
 
-/// A restricted weakly `y`-invariant digraph on a finite strip of heights.
+/// A planar, `x`-invariant digraph on a finite strip of heights.
 ///
 /// From every vertex `(x, y)`, the outgoing edges are exactly `outgoing[y]`,
-/// translated one column to the right.
+/// translated one column to the right.  See the module documentation for
+/// what a valid strip digraph does and does not certify.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrentiStripDigraph {
     pub outgoing: Vec<Vec<BrentiEdge>>,
@@ -46,6 +72,48 @@ impl BrentiStripDigraph {
     /// Largest tracked height, if any.
     pub fn max_height(&self) -> Option<usize> {
         self.num_heights().checked_sub(1)
+    }
+
+    /// Build a strip digraph from a square weight matrix, where
+    /// `weights[y][z]` is the weight of the edge from height `y` to height
+    /// `z`.  Zero entries produce no edge.  The result is not validated.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `weights` is not square.
+    pub fn from_weight_matrix(weights: &[Vec<BigRational>]) -> Self {
+        let size = weights.len();
+        let outgoing = weights
+            .iter()
+            .map(|row| {
+                assert_eq!(row.len(), size, "weight matrix must be square");
+                row.iter()
+                    .enumerate()
+                    .filter(|(_, weight)| !weight.is_zero())
+                    .map(|(to, weight)| BrentiEdge {
+                        to,
+                        weight: weight.clone(),
+                    })
+                    .collect()
+            })
+            .collect();
+        Self { outgoing }
+    }
+
+    /// The square weight matrix `W`, where `W[y][z]` is the total weight of
+    /// the edges from height `y` to height `z`.  Targets outside the strip are
+    /// ignored.
+    pub fn weight_matrix(&self) -> Vec<Vec<BigRational>> {
+        let size = self.num_heights();
+        let mut matrix = vec![vec![BigRational::zero(); size]; size];
+        for (from, edges) in self.outgoing.iter().enumerate() {
+            for edge in edges {
+                if edge.to < size {
+                    matrix[from][edge.to] += edge.weight.clone();
+                }
+            }
+        }
+        matrix
     }
 
     /// Validate nonnegativity, target range, and the monotone-target planarity condition.
@@ -137,7 +205,12 @@ impl BrentiStripDigraph {
     }
 }
 
-/// A verified Brenti-style certificate for a polynomial sequence prefix.
+/// A verified match between a strip digraph and a polynomial sequence prefix.
+///
+/// It certifies that the listed rows are rows of the path matrix of a planar
+/// network, hence that their coefficient matrix is totally nonnegative; it
+/// says nothing about rows beyond the prefix and does not by itself make the
+/// rows real-rooted (see the module documentation).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrentiSequenceCertificate {
     pub digraph: BrentiStripDigraph,
@@ -258,7 +331,10 @@ impl fmt::Display for BrentiError {
 
 impl std::error::Error for BrentiError {}
 
-/// Build a verified Brenti-style certificate for a polynomial sequence prefix.
+/// Build a verified strip-digraph certificate for a polynomial sequence prefix.
+///
+/// Checks [`BrentiStripDigraph::validate`] and that row `row_indices[i]` of
+/// the digraph equals `polys[i]` exactly.
 pub fn build_brenti_sequence_certificate(
     digraph: BrentiStripDigraph,
     row_indices: &[usize],
@@ -387,6 +463,41 @@ mod tests {
         let cert = build_brenti_sequence_certificate(digraph, &[1, 2, 3, 4], &polys).unwrap();
         assert_eq!(cert.row_indices, vec![1, 2, 3, 4]);
         assert_eq!(cert.matched_rows.len(), 4);
+    }
+
+    #[test]
+    fn test_valid_strip_digraph_can_have_non_real_rooted_rows() {
+        // 0 -> {0, 1}, 1 -> {2}: planar and nonnegative, yet row 2 is 1 + t + t^2.
+        let digraph = BrentiStripDigraph {
+            outgoing: vec![
+                vec![
+                    BrentiEdge {
+                        to: 0,
+                        weight: br(1),
+                    },
+                    BrentiEdge {
+                        to: 1,
+                        weight: br(1),
+                    },
+                ],
+                vec![BrentiEdge {
+                    to: 2,
+                    weight: br(1),
+                }],
+                vec![],
+            ],
+        };
+        assert!(digraph.validate().is_ok());
+        let row = digraph.row_counts(2).unwrap();
+        assert_eq!(row, vec![br(1), br(1), br(1)]);
+        assert!(!crate::is_real_rooted(&[1, 1, 1]));
+    }
+
+    #[test]
+    fn test_weight_matrix_round_trip() {
+        let digraph = pascal_strip(3);
+        let matrix = digraph.weight_matrix();
+        assert_eq!(BrentiStripDigraph::from_weight_matrix(&matrix), digraph);
     }
 
     #[test]

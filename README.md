@@ -817,6 +817,62 @@ matrix, not a proof of full interlacing unless a separate finite criterion
 applies. See [`doc/athanasiadis-wagner-lace.md`](doc/athanasiadis-wagner-lace.md)
 for further notes on the construction.
 
+### Planar networks, chain polynomials and strip-digraph recognition
+
+```rust
+use num_bigint::BigInt;
+use polytool::*;
+
+let to_rows = |rows: Vec<Vec<i64>>| -> Vec<Vec<BigInt>> {
+    rows.into_iter()
+        .map(|r| r.into_iter().map(BigInt::from).collect())
+        .collect()
+};
+
+// TNN check with a structured diagnosis: rows {1,2}, columns {0,1} give -2.
+let bad = to_rows(vec![vec![1], vec![1, 1], vec![2, 0, 1]]);
+match check_lower_unitriangular_tnn(&bad) {
+    Err(NetworkError::NotTnn { witness: Some(minor), .. }) => {
+        assert_eq!(minor.value, BigInt::from(-2));
+    }
+    other => panic!("{:?}", other),
+}
+
+// Chain polynomials p_0 = 1, p_n = t * sum_{k<n} r_{n,k} p_k.
+let ones = to_rows(vec![vec![1], vec![1, 1], vec![1, 1, 1]]);
+let report = check_chain_polynomials_bigint(&ones).unwrap();
+assert!(report.is_tnn() && report.chain_conclusion_holds());
+
+// Search for a planar strip digraph reproducing the rows (1+t)^n.
+let rows: Vec<Polynomial<BigInt>> = (1..=4)
+    .map(|n| Polynomial::new((0..=n).map(|k| numeric::binomial_bigint(n, k)).collect()))
+    .collect();
+let result = recognize_brenti_strip_digraph(&rows, &BrentiRecognitionOptions::default()).unwrap();
+assert!(result.is_certified());
+```
+
+- `tnn_network::check_lower_unitriangular_tnn` decides total nonnegativity
+  of a lower-unitriangular matrix exactly; on failure `NetworkError` names the
+  bad entry or shape problem, or gives a `NegativeMinor` (rows, columns, exact
+  value).  `lower_triangular_rows_from_square` converts a square matrix with
+  diagnostics.
+- `chain_polynomials_bigint`, `chain_polynomials_rational`, and
+  `check_chain_polynomials_bigint` implement the chain polynomials of
+  Brändén--Saud Maia Leite (arXiv:2412.06595, Theorem 3.7): for a TNN
+  lower-unitriangular `R` they are real-rooted in `[-1, 0]` and interlace.
+  The report keeps the TNN verdict separate from the polynomial checks.  The
+  theorem is about chain polynomials, not rows: `[[1,0,0],[1,1,0],[1,1,1]]` is
+  TNN but has the row `1 + t + t^2`.
+- `brenti_recognition::recognize_brenti_strip_digraph` searches exactly for a
+  `BrentiStripDigraph` (height-dependent transitions, monotone targets) whose
+  rows from `(0,0)` are the given polynomials, with rational or integer
+  weights and an optional bound on the target span.  It returns a verified
+  certificate, an exact proof of impossibility within the bounds, or
+  "inconclusive" when a budget runs out.  A certificate covers only the
+  supplied prefix and proves that the coefficient matrix is TNN (by
+  Lindström--Gessel--Viennot); it does not prove that the rows are
+  real-rooted (`[1 + t, 1 + t + t^2]` is recognized).
+
 ### Polynomial arithmetic
 
 ```rust
@@ -1158,7 +1214,9 @@ The tracked programs in `examples/` are run with
   exact root counting.
 - `benchmark_recurrence_fixtures`: benchmarks adaptive recurrence search on the
   fixture suite in `fixtures/recurrence-benchmarks/`.
-- `generate_recurrence_benchmarks`: regenerates those recurrence benchmark
+- `brenti_recognition`: recognizes the Pascal rows as rows of a planar strip
+  digraph and checks the chain polynomials of a small TNN matrix.
+- `generate_recurrence_benchmarks`: regenerates the recurrence benchmark
   fixtures.
 - `literature_sequence_rows`: exports exact literature families (Delannoy,
   Eulerian-square, Hoggatt) as polytool-compatible coefficient rows.
@@ -1166,6 +1224,34 @@ The tracked programs in `examples/` are run with
   a weighted renewal recurrence.
 
 ## Changelog
+
+### 0.5.0
+
+Breaking changes:
+
+- `tnn_network::NetworkError::NotTnn` carries an optional explicit negative
+  minor (`witness: Option<NegativeMinor>`), and `NetworkError` has the new
+  variants `NotSquare` and `NonzeroAboveDiagonal`.
+- The `brenti_sequence` documentation no longer claims that a valid strip
+  digraph makes its row polynomials real-rooted.  Its transitions depend on the
+  height (the digraph is invariant in `x`), so by Lindström--Gessel--Viennot it
+  certifies that the coefficient matrix is totally nonnegative; heights
+  `0 -> {0, 1}`, `1 -> {2}` give the row `1 + t + t^2`.
+
+Additions:
+
+- `tnn_network::{check_lower_unitriangular_tnn, NegativeMinor,
+  lower_triangular_rows_from_square, chain_polynomials_bigint,
+  chain_polynomials_rational, check_chain_polynomials_bigint}`: TNN diagnostics
+  with explicit failing minors, and the chain polynomials of a
+  lower-unitriangular matrix (real-rooted in `[-1, 0]` and interlacing when the
+  matrix is TNN; Brändén--Saud Maia Leite, Theorem 3.7).
+- `brenti_recognition::recognize_brenti_strip_digraph`: exact search for a
+  planar strip digraph reproducing a finite prefix of rows (certificate,
+  impossibility within the stated bounds, or inconclusive).
+- `BrentiStripDigraph::{from_weight_matrix, weight_matrix}`.
+- `exact-real-roots` 0.1.1: `isolate_real_roots_bigint_coeffs` with exact
+  dyadic isolating intervals.
 
 ### 0.4.0
 
