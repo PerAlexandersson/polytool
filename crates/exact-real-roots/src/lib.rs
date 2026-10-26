@@ -6,9 +6,9 @@
 //! real-rootedness. Degrees at most four use exact discriminant and quartic
 //! invariant formulas. Degree five uses an unreduced signed pseudo-remainder
 //! sequence; from degree six, a Collins--Brown subresultant PRS removes known
-//! exact factors without computing coefficient-content GCDs. Large one-signed
-//! inputs can instead select an exact Uspensky/Descartes path. Both paths avoid
-//! the large exact PSD matrices used by the Bézout criterion.
+//! exact factors without computing coefficient-content GCDs. One-signed
+//! inputs first try cheap coefficient filters. These paths avoid the large
+//! exact PSD matrices used by the Bézout criterion.
 //!
 //! The positive-coefficient path is intended for combinatorial polynomials.  If
 //! all coefficients have one sign, roots can only be non-positive; after
@@ -1241,34 +1241,6 @@ pub fn is_real_rooted_uspensky_i64(coeffs: &[i64]) -> bool {
     is_real_rooted_uspensky_bigint_coeffs(&coeffs)
 }
 
-/// Whether the benchmarked Uspensky path is likely to beat subresultant PRS.
-///
-/// Degree alone is not a reliable discriminator: PRS is substantially faster
-/// on Narayana, Chebyshev, Hermite, and evenly spaced linear-factor products.
-/// The families where Uspensky wins consistently in our benchmark (ordinary
-/// and type-B Eulerian, and Touchard after removing its zero root) have equal
-/// endpoint coefficients and interior coefficients at least `4^degree` times
-/// as large. This exact comparison is invariant under scalar multiplication.
-fn prefers_uspensky_for_one_signed(coeffs: &[BigInt]) -> bool {
-    const MIN_USPENSKY_DEGREE: usize = 35;
-
-    let d = match degree(coeffs) {
-        Some(d) if d >= MIN_USPENSKY_DEGREE => d,
-        _ => return false,
-    };
-    if coeffs[0] != coeffs[d] || !coeffs[0].is_positive() {
-        return false;
-    }
-
-    let Some(growth_shift) = d.checked_mul(2) else {
-        return false;
-    };
-    let large_interior_threshold = &coeffs[0] << growth_shift;
-    coeffs[1..d]
-        .iter()
-        .any(|coefficient| coefficient >= &large_interior_threshold)
-}
-
 /// Exact real-rootedness optimized for one-signed coefficient polynomials.
 ///
 /// Returns `None` if the nonzero coefficients do not all have the same sign.
@@ -1299,28 +1271,23 @@ pub fn is_real_rooted_one_signed_bigint_coeffs(coeffs: &[BigInt]) -> Option<bool
         return Some(false);
     }
 
-    let use_uspensky = prefers_uspensky_for_one_signed(&p);
-    let (positive_roots, squarefree_degree) = if use_uspensky {
-        let squarefree = squarefree_part_primitive_bigint_coeffs(&p);
-        let squarefree_degree = degree(&squarefree).unwrap_or(0);
-        let transformed = alternating_neg_argument(&squarefree);
-        (
-            count_positive_roots_uspensky_squarefree(&transformed),
-            squarefree_degree,
-        )
-    } else {
-        let transformed = alternating_neg_argument(&p);
-        let summary = derivative_sturm_summary(&transformed, false, true);
-        (summary.positive_roots, summary.squarefree_degree)
-    };
-    Some(positive_roots == squarefree_degree)
+    // After stripping zero roots, a one-signed polynomial has only negative
+    // real roots, so counting all distinct real roots (signs at +-infinity
+    // only) is equivalent to, and cheaper than, counting positive roots of
+    // p(-t). The subresultant PRS beats the Uspensky/Descartes path on every
+    // benchmarked one-signed family (Eulerian, type B Eulerian, Touchard,
+    // Narayana, linear-factor products; see `polytool bench real-rootedness`).
+    let summary = derivative_sturm_summary(&p, true, false);
+    Some(summary.real_roots == summary.squarefree_degree)
 }
 
 /// Exact real-rootedness with an adaptive one-signed path and PRS fallback.
 ///
-/// The one-signed path first applies coefficient filters, then selects between
-/// subresultant PRS and Uspensky using a conservative benchmark-derived
-/// heuristic. Mixed-sign inputs use PRS. This avoids constructing Bézout/PSD
+/// The one-signed path first applies the Kurtz (sufficient) and Newton
+/// (necessary) coefficient filters, then counts distinct real roots with the
+/// subresultant PRS; mixed-sign inputs use PRS directly. (An earlier
+/// heuristic switched large palindromic inputs to Uspensky; after the
+/// Collins--Brown PRS it was about 10--26 times slower on those families.) This avoids constructing Bézout/PSD
 /// matrices entirely and is the backend used by the public
 /// `real_rootedness::is_real_rooted_bigint_coeffs` default.
 pub fn is_real_rooted_fast_bigint_coeffs(coeffs: &[BigInt]) -> bool {
@@ -2342,7 +2309,7 @@ mod tests {
     }
 
     #[test]
-    fn test_adaptive_uspensky_selector_on_benchmarked_families() {
+    fn test_one_signed_path_agrees_with_both_backends_on_benchmarked_families() {
         let eulerian = generated_eulerian(36);
         let eulerian_below_cutoff = generated_eulerian(35);
         let narayana = generated_narayana(36);
@@ -2366,19 +2333,23 @@ mod tests {
             product = poly_mul(&product, &[BigInt::from(root), BigInt::one()]);
         }
 
-        assert!(prefers_uspensky_for_one_signed(&eulerian));
-        assert!(!prefers_uspensky_for_one_signed(&eulerian_below_cutoff));
-        assert!(prefers_uspensky_for_one_signed(&type_b_eulerian));
-        assert!(prefers_uspensky_for_one_signed(&touchard));
-        assert!(!prefers_uspensky_for_one_signed(&narayana));
-        assert!(!prefers_uspensky_for_one_signed(&product));
+        let mut dented = eulerian.clone();
+        let middle = dented.len() / 2;
+        dented[middle] = &dented[middle] * 3 / 4;
 
-        let scaled_eulerian: Vec<BigInt> = eulerian.iter().map(|c| c * 7).collect();
-        assert!(prefers_uspensky_for_one_signed(&scaled_eulerian));
-
-        assert!(is_real_rooted_fast_bigint_coeffs(&eulerian));
-        assert!(is_real_rooted_fast_bigint_coeffs(&type_b_eulerian));
-        assert!(is_real_rooted_fast_bigint_coeffs(&touchard));
+        for (polynomial, expected) in [
+            (&eulerian, true),
+            (&eulerian_below_cutoff, true),
+            (&type_b_eulerian, true),
+            (&touchard, true),
+            (&narayana, true),
+            (&product, true),
+            (&dented, false),
+        ] {
+            assert_eq!(is_real_rooted_fast_bigint_coeffs(polynomial), expected);
+            assert_eq!(is_real_rooted_prs_bigint_coeffs(polynomial), expected);
+            assert_eq!(is_real_rooted_uspensky_bigint_coeffs(polynomial), expected);
+        }
     }
 
     fn dyadic_to_rational(value: &DyadicRational) -> BigRational {

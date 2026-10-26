@@ -1945,6 +1945,14 @@ The tracked programs in `examples/` are run with
 
 ### Unreleased
 
+Performance:
+
+- The default exact real-rootedness test no longer switches large
+  one-signed palindromic inputs to the Uspensky path and counts real roots
+  directly (signs at infinity only); degree-79 Eulerian, type-B Eulerian and
+  Touchard checks are about 10, 15 and 26 times faster (6.9 s to 0.72 s,
+  14.5 s to 0.94 s, 4.9 s to 0.19 s).
+
 Additions (no breaking changes):
 
 - New module `real_rooted_enumeration`:
@@ -2121,14 +2129,14 @@ chain. Pseudo-division also moves out the leading coefficient and skips the
 large-integer multiply/subtract pair that would cancel it exactly.
 
 For one-signed coefficient polynomials, the backend first tries cheap
-coefficient filters and then counts positive roots of `f(-t)`, since such
-polynomials can only have non-positive real roots. Subresultant PRS is the
-general backend. Uspensky is selected conservatively at degree 35 or above
-when the endpoint coefficients are equal and an interior coefficient is at
-least `4^degree` times as large as an endpoint. This benchmark-derived,
-scale-invariant rule captures the large Eulerian, type-B Eulerian, and Touchard
-cases tested without penalizing Narayana polynomials or evenly spaced
-linear-factor products.
+coefficient filters (Kurtz, sufficient; Newton, necessary) and then counts the
+distinct real roots with the subresultant PRS: after removing powers of `t`,
+such polynomials can only have negative real roots, so only the signs at
+`±∞` are needed. Subresultant PRS is the general backend. An earlier rule
+switched large palindromic inputs (Eulerian, type-B Eulerian, Touchard) to
+Uspensky; after the Collins--Brown PRS that rule made those families about
+10--26 times slower at degree 79, so it was removed. `polytool bench
+real-rootedness` tracks these cases.
 
 For algorithm comparisons, `is_real_rooted_uspensky_bigint_coeffs` uses an
 independent exact Uspensky/Descartes path.  It applies a strict Fujiwara root
