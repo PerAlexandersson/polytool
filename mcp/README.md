@@ -11,6 +11,67 @@ The server is intentionally small:
 - structured JSON results for agent-friendly use
 - exact arithmetic inherited from `polytool`
 
+## Comparing recurrence representations
+
+`find_recurrence_representations` accepts the same polynomial input forms and
+top-level search controls as `find_recurrence`. For example, pass
+`max_rec_len: 3`, `max_diff_deg: 2`, `max_var_deg: 3`, `max_idx_deg: 1`,
+`try_denominator: true`, `max_denom_var_deg: 0`, `max_denom_idx_deg: 1`, and
+`max_candidates: 2000` alongside the rows.
+
+The result uses `polytool.recurrence-representations.v1`, shared with the CLI
+and browser. `representations` holds preferred exact fits, `frontier` indexes
+the nondominated choices, and `coverage` records requested length/order cells.
+The budget applies globally; `budget_exhausted` can return useful partial
+results. Denominators are never implicitly enabled in this mode.
+
+Each candidate includes its checked start, actual complexity, held-out count,
+and a nested `recurrence_json` object. Serialize that object to a string when
+passing it to `generate_recurrence_rows`. `include_code` is accepted for request
+compatibility but does not remove this structural object; the menu does not
+generate separate Mathematica/Python/Sage strings.
+
+`evidence: "exact_fit"` means finite-data verification, not an all-rank proof.
+One preferred fit is retained per length/order pair; neither the menu nor an
+empty cell is a complete description of the annihilating ideal. See the parent
+README for the precise frontier, index, normalization and coverage conventions.
+
+## Complete recurrence spaces
+
+`find_recurrence_spaces` takes `{"request": {...}}`, where the inner object is
+exactly the `--space` request documented in the parent README. For example:
+
+```json
+{"request": {
+  "source": {"coefficients": [["0", "1"]], "seeds": [["1"]]},
+  "shapes": [{"kind": "box", "length": 1, "derivative_order": 1,
+              "index_degree": 1, "variable_degree": 1, "leading_index_degree": 1}]
+}}
+```
+
+It returns `polytool.recurrence-spaces.v1` with the full bounded kernel,
+independent successor projections, rank certificates and absence duals.
+Source-certified positives are conditional on the supplied defining recurrence;
+without a source, positives remain finite fits. Negative certificates apply only
+to the requested support, and resource exhaustion never proves nonexistence.
+
+`verify_recurrence_spaces` takes `{"report": {...}, "expected_request": {...}}`.
+The optional expected request binds verification to independent assumptions;
+omitting it checks consistency against the embedded request. It reports
+`verified_completed_claims` and `incomplete_shapes`. Both tools enforce the
+shared default ceilings (requests may lower them), and a 1 MiB JSON input cap.
+The legacy tools and their schemas are unchanged.
+
+The same request also accepts `indexed_source` for monic polynomial-index
+sources (`coefficients[lag][n_power][X_power]`), shape kind
+`automatic_variable_degree`, and `include_leader_coverage: true`. Reports then
+include the common polynomial propagator and its safe prefix cutoff, the
+proved RHS X-degree cap preserving all allowed leaders, and the sum-of-squares
+leader combination. Index and leader bounds remain explicit; the combination
+can increase coefficient degrees. Replay checks these extra certificates.
+See the parent README's Hermite and automatic-bound examples. No installed
+server upgrade is implied by a source checkpoint.
+
 ## Build
 
 From the repository root:

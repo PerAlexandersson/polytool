@@ -1,10 +1,10 @@
 use num_bigint::BigInt;
 use polytool::recurrence::{
     candidate_complexity, find_recurrence_adaptive_rational_with_budget,
-    find_recurrence_adaptive_with_budget, format_rational_coeff, parse_rational_coeff,
-    AdaptiveSearchBudget, AdaptiveSearchOptions, AdaptiveSearchOutcome, AdaptiveSearchResult,
-    AdaptiveSearchSummary, BigRational, BivarPoly, Recurrence, RecurrenceJson,
-    RecurrenceJsonSearch, RecurrenceOptions, RecurrenceOptionsJson,
+    find_recurrence_adaptive_with_budget, find_recurrence_representations_rational,
+    format_rational_coeff, parse_rational_coeff, AdaptiveSearchBudget, AdaptiveSearchOptions,
+    AdaptiveSearchOutcome, AdaptiveSearchResult, AdaptiveSearchSummary, BigRational, BivarPoly,
+    Recurrence, RecurrenceJson, RecurrenceJsonSearch, RecurrenceOptions, RecurrenceOptionsJson,
 };
 use polytool::sequences::{
     chebyshev_polynomials_t_bigint, chebyshev_polynomials_u_bigint, eulerian_polynomials_bigint,
@@ -780,6 +780,22 @@ pub struct GenerateRecurrenceRowsRequest {
     pub recurrence_json: String,
     pub rows: Option<usize>,
     pub additional: Option<usize>,
+}
+
+/// Structured recurrence-space request; the library validates the strict schema.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecurrenceSpacesToolRequest {
+    pub request: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VerifyRecurrenceSpacesToolRequest {
+    pub report: serde_json::Value,
+    /// Optional independently supplied assumptions. Otherwise replay checks
+    /// consistency with the assumptions embedded in the report.
+    pub expected_request: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
@@ -3411,7 +3427,91 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Generate or extend coefficient rows from recurrence JSON returned by find_recurrence."
+        description = "Find several recurrence representations trading lag length against derivative order. Uses the same inputs and bounds as find_recurrence, but keeps one preferred exact fit per length/order bound pair. Returns polytool.recurrence-representations.v1: candidates with reusable recurrence_json objects, actual complexity, checked starting indices, finite-fit evidence, a nondominated frontier, and per-pair coverage. The candidate budget is global; incomplete coverage is explicit. No automatic denominator escalation. These are finite-data candidates, not all-rank certificates, a complete annihilator basis, or nonexistence proofs. include_code is accepted for request compatibility; recurrence_json is always included and language code is not generated."
+    )]
+    pub fn find_recurrence_representations(
+        &self,
+        Parameters(input): Parameters<FindRecurrenceRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        let (search, budget) = apply_recurrence_options(input.effective_options())?;
+        let batch = parse_recurrence_batch_rational(&input)?;
+        let polynomials = collect_rational_polynomials_or_errors(batch)
+            .map_err(|_| invalid_params("one or more polynomials failed to parse"))?;
+        let report = find_recurrence_representations_rational(&polynomials, &search, budget)
+            .map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize recurrence menu")
+        else {
+            unreachable!("recurrence report is an object")
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Compute complete bounded recurrence spaces with exact kernel/rank certificates. request is a JSON object with shapes (kind: box with length, derivative_order, index_degree, variable_degree, leading_index_degree; or kind: explicit with target_lag and monomials), domain_start (original zero-based index by default), and source {coefficients: ascending rational-string polynomial rows, seeds: exactly k rows, origin}, source_recurrence (existing recurrence.v1), or rows plus row_origin. Alternatively indexed_source uses coefficients[i][n_power][X_power] for monic pure-lag sources polynomial in n, with a replayable jet-state propagator. Shape kind automatic_variable_degree removes the RHS X-degree cap while retaining index/leader bounds. include_leader_coverage returns a sum-of-squares leader combination. Positive identities are conditional_on_source; rows-only positives are exact_fit. Dual negatives prove absent_in_shape from rows alone. Returns polytool.recurrence-spaces.v1, including full kernels, successors, bounded frontier, singular-rank diagnostics and explicit incomplete results. No spectral or unrestricted-order claim."
+    )]
+    pub fn find_recurrence_spaces(
+        &self,
+        Parameters(input): Parameters<RecurrenceSpacesToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.request.to_string(), "recurrence-space request")
+            .map_err(invalid_params)?;
+        let request: polytool::recurrence::RecurrenceSpaceRequest =
+            serde_json::from_value(input.request).map_err(|e| invalid_params(e.to_string()))?;
+        request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        let report =
+            polytool::recurrence::find_recurrence_spaces(&request).map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize recurrence spaces")
+        else {
+            unreachable!()
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Replay exact recurrence-space kernel, rank and dual certificates without rerunning the full search. Supply report from find_recurrence_spaces and optionally expected_request to bind independently supplied assumptions. Without expected_request this verifies the report's internal source-conditional claims, not the truth of a guessed source. Incomplete shapes remain explicitly incomplete."
+    )]
+    pub fn verify_recurrence_spaces(
+        &self,
+        Parameters(input): Parameters<VerifyRecurrenceSpacesToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.report.to_string(), "recurrence-space report")
+            .map_err(invalid_params)?;
+        let report: polytool::recurrence::RecurrenceSpaces =
+            serde_json::from_value(input.report).map_err(|e| invalid_params(e.to_string()))?;
+        let request = match input.expected_request {
+            Some(value) => {
+                validate_mcp_text(&value.to_string(), "expected request")
+                    .map_err(invalid_params)?;
+                serde_json::from_value(value).map_err(|e| invalid_params(e.to_string()))?
+            }
+            None => report.request.clone(),
+        };
+        request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        polytool::recurrence::verify_recurrence_spaces(&request, &report)
+            .map_err(invalid_params)?;
+        Ok(Json(BTreeMap::from([
+            ("verified_completed_claims".into(), json!(true)),
+            (
+                "incomplete_shapes".into(),
+                json!(report
+                    .results
+                    .iter()
+                    .filter(|r| r.certificate.is_none())
+                    .count()),
+            ),
+        ])))
+    }
+
+    #[tool(
+        description = "Generate or extend coefficient rows from recurrence JSON returned by find_recurrence or one recurrence_json object from find_recurrence_representations."
     )]
     pub fn generate_recurrence_rows(
         &self,
@@ -4672,6 +4772,92 @@ mod tests {
         let serialized = serde_json::to_value(compact).unwrap();
         for absent in ["mathematica", "python", "sage", "recurrence_json"] {
             assert!(serialized.get(absent).is_none(), "unexpected {absent}");
+        }
+    }
+
+    #[test]
+    fn recurrence_spaces_tool_certifies_and_replays() {
+        let server = PolynomialToolsServer::new();
+        let request = json!({"source":{"coefficients":[["2"]],"seeds":[["9007199254740993"]]},"shapes":[{"kind":"box","length":1}]});
+        let Json(report) = server
+            .find_recurrence_spaces(Parameters(RecurrenceSpacesToolRequest {
+                request: request.clone(),
+            }))
+            .unwrap();
+        assert_eq!(report["schema"], "polytool.recurrence-spaces.v1");
+        let Json(checked) = server
+            .verify_recurrence_spaces(Parameters(VerifyRecurrenceSpacesToolRequest {
+                report: json!(report),
+                expected_request: Some(request.clone()),
+            }))
+            .unwrap();
+        assert_eq!(checked["verified_completed_claims"], true);
+        let mut wrong = request.clone();
+        wrong["domain_start"] = json!(1);
+        assert!(server
+            .verify_recurrence_spaces(Parameters(VerifyRecurrenceSpacesToolRequest {
+                report: json!(report),
+                expected_request: Some(wrong)
+            }))
+            .is_err());
+        let mut excessive = request;
+        excessive["limits"] = json!({"max_columns":1000000});
+        assert!(server
+            .find_recurrence_spaces(Parameters(RecurrenceSpacesToolRequest {
+                request: excessive
+            }))
+            .is_err());
+    }
+
+    #[test]
+    fn recurrence_spaces_indexed_automatic_and_leader_coverage() {
+        let server = PolynomialToolsServer::new();
+        let request = json!({"indexed_source":{"coefficients":[[["0","1"],["0","1"]]],"seeds":[["1"]]},
+            "include_leader_coverage":true,"shapes":[{"kind":"automatic_variable_degree","length":1,"index_degree":1}]});
+        let Json(report) = server
+            .find_recurrence_spaces(Parameters(RecurrenceSpacesToolRequest {
+                request: request.clone(),
+            }))
+            .unwrap();
+        assert!(report["results"][0]["propagation"].is_object());
+        assert!(report["results"][0]["automatic_degree_bound"].is_object());
+        assert!(report["results"][0]["leader_coverage"].is_object());
+        let Json(checked) = server
+            .verify_recurrence_spaces(Parameters(VerifyRecurrenceSpacesToolRequest {
+                report: json!(report),
+                expected_request: Some(request),
+            }))
+            .unwrap();
+        assert_eq!(checked["verified_completed_claims"], true);
+    }
+
+    #[test]
+    fn recurrence_representations_tool_uses_shared_schema_and_global_budget() {
+        let server = PolynomialToolsServer::new();
+        for limit in [0, 1] {
+            let input: FindRecurrenceRequest = serde_json::from_value(json!({
+                "coefficients": [["9007199254740993"], ["18014398509481986"],
+                    ["36028797018963972"], ["72057594037927944"], ["144115188075855888"]],
+                "max_rec_len": 1, "max_diff_deg": 0, "max_idx_deg": 0,
+                "max_var_deg": 0, "max_candidates": limit
+            }))
+            .unwrap();
+            let Json(report) = server
+                .find_recurrence_representations(Parameters(input))
+                .unwrap();
+            assert_eq!(report["schema"], "polytool.recurrence-representations.v1");
+            assert_eq!(report["configurations_considered"], limit);
+            if limit == 0 {
+                assert_eq!(report["status"], "budget_exhausted");
+                assert_eq!(report["coverage"][0]["status"], "incomplete");
+            } else {
+                assert_eq!(report["status"], "complete");
+                assert_eq!(report["representations"][0]["evidence"], "exact_fit");
+                assert_eq!(
+                    report["representations"][0]["recurrence_json"]["initial_polynomials"][0][0],
+                    "9007199254740993"
+                );
+            }
         }
     }
 

@@ -5511,7 +5511,7 @@ pub fn count_equations(polys: &[Vec<i64>], opts: &RecurrenceOptions) -> usize {
 // ---------------------------------------------------------------------------
 
 /// Options controlling the adaptive search bounds.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdaptiveSearchOptions {
     /// Number of initial polynomials to ignore before searching.
     pub skip_prefix: usize,
@@ -6666,6 +6666,11 @@ pub fn find_recurrence_adaptive_with_budget(
     let rational_polys = i64_polys_to_rational(polys);
     find_recurrence_adaptive_rational_with_budget(&rational_polys, search, budget)
 }
+
+mod representations;
+pub use representations::*;
+mod space;
+pub use space::*;
 
 // ---------------------------------------------------------------------------
 // Tests

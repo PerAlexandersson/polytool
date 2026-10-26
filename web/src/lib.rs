@@ -15,12 +15,30 @@ struct PolyProps {
     degree: usize,
     coefficients: Vec<String>,
     real_rooted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    distinct_real_roots: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    positive_real_roots: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    negative_real_roots: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    zero_is_root: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    squarefree_degree: Option<usize>,
     palindromic: bool,
     gamma_positive: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     gamma_coefficients: Option<Vec<String>>,
     log_concave: bool,
     ultra_log_concave: bool,
+}
+
+#[derive(Serialize)]
+struct GeneratedRows {
+    first_index: usize,
+    polynomials: Vec<Vec<String>>,
+    rows_text: String,
+    integral: bool,
 }
 
 #[derive(Serialize)]
@@ -225,18 +243,39 @@ fn parse_coefficient_array_json(input: &str) -> Result<Vec<BigInt>, String> {
 #[wasm_bindgen]
 pub fn check_properties(input: &str) -> String {
     let mut results: Vec<serde_json::Value> = Vec::new();
+    let parsed = parse_input(input);
+    let include_root_counts = parsed.len() == 1;
 
-    for r in parse_input(input) {
+    for r in parsed {
         match r {
             Ok(coeffs) => {
                 let c = strip_trailing_zeros(&coeffs);
                 let zero = BigInt::from(0);
                 let deg = c.iter().rposition(|x| x != &zero).unwrap_or(0);
+                let root_counts = include_root_counts.then(|| {
+                    let distinct = count_real_roots_prs_bigint_coeffs(c);
+                    let positive = count_positive_roots_prs_bigint_coeffs(c);
+                    let zero_is_root = c.len() > 1 && c.first() == Some(&zero);
+                    let squarefree_degree = squarefree_degree_bigint_coeffs(c);
+                    (
+                        distinct,
+                        positive,
+                        distinct.saturating_sub(positive + usize::from(zero_is_root)),
+                        zero_is_root,
+                        squarefree_degree,
+                    )
+                });
                 let props = PolyProps {
                     polynomial: format_poly_bigint_coeffs(c),
                     degree: deg,
                     coefficients: decimal_coefficients(c),
-                    real_rooted: is_real_rooted_bigint_coeffs(c),
+                    real_rooted: root_counts.is_some_and(|counts| counts.0 == counts.4)
+                        || (!include_root_counts && is_real_rooted_bigint_coeffs(c)),
+                    distinct_real_roots: root_counts.map(|counts| counts.0),
+                    positive_real_roots: root_counts.map(|counts| counts.1),
+                    negative_real_roots: root_counts.map(|counts| counts.2),
+                    zero_is_root: root_counts.map(|counts| counts.3),
+                    squarefree_degree: root_counts.map(|counts| counts.4),
                     palindromic: is_palindromic_ignoring_initial_zeros_bigint_coeffs(c),
                     gamma_positive: is_gamma_positive_ignoring_initial_zeros_bigint_coeffs(c),
                     gamma_coefficients: gamma_coefficients_ignoring_initial_zeros_bigint_coeffs(c)
@@ -404,6 +443,152 @@ pub fn find_recurrence(
 }
 
 #[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn find_recurrence_representations(
+    input: &str,
+    max_rec_len: u32,
+    max_var_deg: u32,
+    max_idx_deg: u32,
+    max_diff_deg: u32,
+    try_inhomogeneous: bool,
+    try_denominator: bool,
+    try_alternating_sign: bool,
+    max_candidates: u32,
+    max_denom_var_deg: u32,
+    max_denom_idx_deg: u32,
+) -> String {
+    let (polys, errors) = parse_ok(input);
+    let fail = |message: &str| serde_json::json!({"error": message}).to_string();
+    if !errors.is_empty() {
+        return fail(&format!("invalid polynomial input: {}", errors.join("; ")));
+    }
+    if max_rec_len == 0
+        || max_rec_len > 10
+        || max_var_deg > 6
+        || max_idx_deg > 6
+        || max_diff_deg > 5
+        || max_candidates > 100_000
+        || max_denom_var_deg > 6
+        || max_denom_idx_deg > 6
+        || polys.len() > 1000
+    {
+        return fail("comparison limits: length 1–10, coefficient degrees 0–6, derivative order 0–5, at most 100000 configurations and 1000 rows");
+    }
+    let search = AdaptiveSearchOptions {
+        max_rec_len: max_rec_len as usize,
+        max_var_deg: max_var_deg as usize,
+        max_idx_deg: max_idx_deg as usize,
+        max_diff_deg: max_diff_deg as usize,
+        try_inhomogeneous,
+        try_denominator,
+        try_alternating_sign,
+        max_denom_idx_deg: max_denom_idx_deg as usize,
+        max_denom_var_deg: max_denom_var_deg as usize,
+        max_inhomo_idx_deg: max_idx_deg as usize,
+        max_inhomo_var_deg: max_var_deg as usize,
+        ..Default::default()
+    };
+    match polytool::recurrence::find_recurrence_representations_rational(
+        &integer_polys_to_rational(&polys),
+        &search,
+        AdaptiveSearchBudget::limited(max_candidates as usize),
+    ) {
+        Ok(report) => serde_json::to_string(&report).expect("serialize recurrence menu"),
+        Err(message) => fail(&message),
+    }
+}
+
+/// Same complete-space JSON contract as the CLI and MCP.
+#[wasm_bindgen]
+pub fn find_recurrence_spaces(request_json: &str) -> String {
+    let run = || -> Result<serde_json::Value, String> {
+        if request_json.len() > 1_048_576 {
+            return Err("recurrence-space request exceeds 1 MiB".into());
+        }
+        let request: polytool::recurrence::RecurrenceSpaceRequest =
+            serde_json::from_str(request_json).map_err(|e| e.to_string())?;
+        request.limits.check_ceiling(&Default::default())?;
+        serde_json::to_value(polytool::recurrence::find_recurrence_spaces(&request)?)
+            .map_err(|e| e.to_string())
+    };
+    match run() {
+        Ok(value) => value.to_string(),
+        Err(error) => serde_json::json!({"error":error}).to_string(),
+    }
+}
+
+/// Replay the completed claims under the report's embedded assumptions.
+#[wasm_bindgen]
+pub fn verify_recurrence_spaces(report_json: &str) -> String {
+    let run = || -> Result<serde_json::Value, String> {
+        if report_json.len() > 1_048_576 {
+            return Err("recurrence-space report exceeds 1 MiB".into());
+        }
+        let report: polytool::recurrence::RecurrenceSpaces =
+            serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+        report.request.limits.check_ceiling(&Default::default())?;
+        polytool::recurrence::verify_recurrence_spaces(&report.request, &report)?;
+        Ok(
+            serde_json::json!({"verified_completed_claims":true,"incomplete_shapes":report.results.iter().filter(|r|r.certificate.is_none()).count()}),
+        )
+    };
+    match run() {
+        Ok(value) => value.to_string(),
+        Err(error) => serde_json::json!({"error":error}).to_string(),
+    }
+}
+
+#[wasm_bindgen]
+pub fn generate_recurrence_rows(recurrence_json: &str, total_rows: usize) -> String {
+    if total_rows > 1000 {
+        return serde_json::json!({
+            "error": "browser generation is limited to 1000 rows"
+        })
+        .to_string();
+    }
+
+    let parsed: RecurrenceJson = match serde_json::from_str(recurrence_json) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            return serde_json::json!({
+                "error": format!("invalid recurrence JSON: {error}")
+            })
+            .to_string();
+        }
+    };
+    let (recurrence, first_index, initial_polynomials) = match parsed.to_recurrence_parts() {
+        Ok(parts) => parts,
+        Err(error) => return serde_json::json!({"error": error}).to_string(),
+    };
+    let generated =
+        match recurrence.generate_rows_rational(&initial_polynomials, first_index, total_rows) {
+            Ok(rows) => rows,
+            Err(error) => return serde_json::json!({"error": error.to_string()}).to_string(),
+        };
+    let rows: Vec<Vec<String>> = generated
+        .iter()
+        .map(|row| row.iter().map(format_rational_coeff).collect())
+        .collect();
+    let integral = rows
+        .iter()
+        .flatten()
+        .all(|coefficient| !coefficient.contains('/'));
+    let rows_text = rows
+        .iter()
+        .map(|row| row.join(", "))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    serde_json::to_string(&GeneratedRows {
+        first_index,
+        polynomials: rows,
+        rows_text,
+        integral,
+    })
+    .expect("serialize generated recurrence rows")
+}
+
+#[wasm_bindgen]
 pub fn analyze_decompositions(input: &str) -> String {
     let mut results: Vec<serde_json::Value> = Vec::new();
 
@@ -520,12 +705,77 @@ pub fn parse_and_format(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn recurrence_spaces_json_roundtrip_and_limits() {
+        let request = r#"{"source":{"coefficients":[["2"]],"seeds":[["9007199254740993"]]},"shapes":[{"kind":"box","length":1}]}"#;
+        let report = super::find_recurrence_spaces(request);
+        let value: serde_json::Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(value["results"][0]["evidence"], "conditional_on_source");
+        let checked: serde_json::Value =
+            serde_json::from_str(&super::verify_recurrence_spaces(&report)).unwrap();
+        assert_eq!(checked["verified_completed_claims"], true);
+        let mut excessive: serde_json::Value = serde_json::from_str(request).unwrap();
+        excessive["limits"] = serde_json::json!({"max_columns":1000000});
+        assert!(super::find_recurrence_spaces(&excessive.to_string()).contains("service ceilings"));
+    }
+    #[test]
+    fn recurrence_spaces_indexed_source_and_coverage_roundtrip() {
+        let request = r#"{"indexed_source":{"coefficients":[[["-2"],["-2"]],[["0","2"]]],"seeds":[["1"],["0","2"]]},"include_leader_coverage":true,"shapes":[{"kind":"box","length":1,"derivative_order":1,"variable_degree":1}]}"#;
+        let report = super::find_recurrence_spaces(request);
+        let value: serde_json::Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(value["results"][0]["evidence"], "conditional_on_source");
+        assert!(value["results"][0]["propagation"].is_object());
+        assert!(value["results"][0]["leader_coverage"].is_object());
+        let checked: serde_json::Value =
+            serde_json::from_str(&super::verify_recurrence_spaces(&report)).unwrap();
+        assert_eq!(checked["verified_completed_claims"], true);
+    }
     use super::{
         analyze_decompositions, check_interlacing_pair, check_interlacing_pairs, check_properties,
-        compute_discriminant, compute_resultant, find_recurrence, parse_and_format,
+        compute_discriminant, compute_resultant, find_recurrence, generate_recurrence_rows,
+        parse_and_format,
     };
     use num_bigint::BigInt;
     use serde_json::Value;
+
+    #[test]
+    fn representation_export_preserves_exact_coefficients_and_rejects_bad_rows() {
+        let input = "9007199254740993\n18014398509481986\n36028797018963972\n72057594037927944\n144115188075855888";
+        let report: Value = serde_json::from_str(&super::find_recurrence_representations(
+            input, 1, 0, 0, 0, false, false, false, 10, 0, 0,
+        ))
+        .unwrap();
+        assert_eq!(report["schema"], "polytool.recurrence-representations.v1");
+        assert_eq!(report["status"], "complete");
+        assert_eq!(report["representations"][0]["evidence"], "exact_fit");
+        assert_eq!(
+            report["representations"][0]["recurrence_json"]["initial_polynomials"][0][0],
+            "9007199254740993"
+        );
+        let partial: Value = serde_json::from_str(&super::find_recurrence_representations(
+            input, 1, 0, 0, 0, false, false, false, 0, 0, 0,
+        ))
+        .unwrap();
+        assert_eq!(partial["status"], "budget_exhausted");
+        let bad: Value = serde_json::from_str(&super::find_recurrence_representations(
+            "1\n2\nnot a polynomial\n4\n8",
+            1,
+            0,
+            0,
+            0,
+            false,
+            false,
+            false,
+            10,
+            0,
+            0,
+        ))
+        .unwrap();
+        assert!(bad["error"]
+            .as_str()
+            .unwrap()
+            .contains("invalid polynomial input"));
+    }
 
     const HUGE: &str = "1000000000000000000000000000000";
 
@@ -662,6 +912,68 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(pair["strict"], true);
+    }
+
+    #[test]
+    fn property_export_reports_exact_real_root_counts() {
+        let properties: Value = serde_json::from_str(&check_properties("-2, -3, 0, 1")).unwrap();
+        assert_eq!(properties[0]["distinct_real_roots"], 2);
+        assert_eq!(properties[0]["positive_real_roots"], 1);
+        assert_eq!(properties[0]["negative_real_roots"], 1);
+        assert_eq!(properties[0]["zero_is_root"], false);
+        assert_eq!(properties[0]["squarefree_degree"], 2);
+        let with_zero: Value = serde_json::from_str(&check_properties("0, -2, 1")).unwrap();
+        assert_eq!(with_zero[0]["distinct_real_roots"], 2);
+        assert_eq!(with_zero[0]["positive_real_roots"], 1);
+        assert_eq!(with_zero[0]["negative_real_roots"], 0);
+        assert_eq!(with_zero[0]["zero_is_root"], true);
+
+        let sequence: Value = serde_json::from_str(&check_properties("1, 1\n1, 2, 1")).unwrap();
+        assert!(sequence[0].get("distinct_real_roots").is_none());
+    }
+
+    #[test]
+    fn recurrence_export_can_generate_more_rows_in_browser() {
+        let found: Value = serde_json::from_str(&find_recurrence(
+            DELANNOY_INPUT,
+            10,
+            5,
+            5,
+            5,
+            false,
+            false,
+            false,
+        ))
+        .unwrap();
+        let generated: Value = serde_json::from_str(&generate_recurrence_rows(
+            found["recurrence_json"].as_str().unwrap(),
+            14,
+        ))
+        .unwrap();
+        assert_eq!(generated["integral"], true);
+        assert_eq!(generated["polynomials"].as_array().unwrap().len(), 14);
+        assert_eq!(
+            generated["polynomials"][13],
+            serde_json::json!([
+                "1", "25", "265", "1561", "5641", "13073", "19825", "19825", "13073", "5641",
+                "1561", "265", "25", "1"
+            ])
+        );
+    }
+
+    #[test]
+    fn recurrence_generation_rejects_bad_json_and_large_requests() {
+        let invalid: Value = serde_json::from_str(&generate_recurrence_rows("{}", 10)).unwrap();
+        assert!(invalid["error"]
+            .as_str()
+            .unwrap()
+            .contains("invalid recurrence JSON"));
+
+        let too_large: Value = serde_json::from_str(&generate_recurrence_rows("{}", 1001)).unwrap();
+        assert_eq!(
+            too_large["error"],
+            "browser generation is limited to 1000 rows"
+        );
     }
 
     #[test]

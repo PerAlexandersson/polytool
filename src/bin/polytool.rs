@@ -242,6 +242,15 @@ fn print_recurrence_help() {
     println!("  --no-verify                Use all input rows for fitting");
     println!("  --no-modular-prefilter     Disable default modular candidate rejection");
     println!("  --max-candidates <n>       Inspect at most n candidate configurations");
+    println!("  --representations          Return a menu of length/derivative tradeoffs");
+    println!("  --space                    Complete bounded spaces; read a recurrence-space JSON request from stdin");
+    println!(
+        "  --verify-space             Replay a recurrence-space JSON report from stdin (no search)"
+    );
+    println!("                             These two modes emit exact JSON and accept only optional --json.");
+    println!("                             Source-backed positives are conditional on the supplied source/seeds.");
+    println!("                             Rows-only positives are fits; dual negatives prove absence in shape.");
+    println!("                             With --json: structured candidates and coverage");
     println!("  --json                     Emit recurrence JSON with initial conditions");
     println!("  --format json              Alias for --json");
     println!("  --python                   Emit exact Python code for the recurrence");
@@ -2455,13 +2464,20 @@ fn cmd_recurrence(args: &[String]) {
         return;
     }
 
+    if args.iter().any(|x| x == "--space" || x == "--verify-space") {
+        cmd_recurrence_space(args);
+        return;
+    }
+
     let mut search = AdaptiveSearchOptions::default();
     let mut budget = AdaptiveSearchBudget::unbounded();
     let mut format = RecurrenceOutputFormat::Text;
+    let mut representations = false;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--representations" => representations = true,
             "--json" => {
                 format = RecurrenceOutputFormat::Json;
             }
@@ -2695,6 +2711,47 @@ fn cmd_recurrence(args: &[String]) {
         return;
     }
 
+    if representations {
+        if matches!(format, RecurrenceOutputFormat::Python) {
+            eprintln!("--representations supports text or JSON; use a candidate's recurrence_json for row generation");
+            return;
+        }
+        match find_recurrence_representations_rational(&polys, &search, budget) {
+            Ok(report) => {
+                if matches!(format, RecurrenceOutputFormat::Json) {
+                    println!("{}", serde_json::to_string_pretty(&report).unwrap());
+                } else {
+                    println!("Exact fits to supplied rows (not all-rank proofs).");
+                    println!(
+                        "{:?}; {} configurations inspected.",
+                        report.status, report.configurations_considered
+                    );
+                    for (i, item) in report.representations.iter().enumerate() {
+                        println!(
+                            "{}[{}] length {}, derivative order {}, checked n={}..={}: {}",
+                            if report.frontier.contains(&i) {
+                                "* "
+                            } else {
+                                "  "
+                            },
+                            i,
+                            item.complexity.rec_len,
+                            item.complexity.diff_deg,
+                            item.first_checked_index,
+                            item.last_checked_index,
+                            item.recurrence
+                        );
+                    }
+                    println!("* Nondominated among returned candidates; use --json for bounds and coverage.");
+                }
+                if report.status == RepresentationSearchStatus::BudgetExhausted {
+                    std::process::exit(3);
+                }
+            }
+            Err(error) => eprintln!("{error}"),
+        }
+        return;
+    }
     eprintln!(
         "Searching for recurrence among {} polynomials...",
         polys.len()
@@ -2785,6 +2842,59 @@ fn cmd_recurrence(args: &[String]) {
                 summary.diagnostics.considered_candidates
             );
             std::process::exit(3);
+        }
+    }
+}
+
+fn cmd_recurrence_space(args: &[String]) {
+    let verify = args.iter().any(|x| x == "--verify-space");
+    let search = args.iter().any(|x| x == "--space");
+    if verify == search
+        || args
+            .iter()
+            .any(|x| !["--space", "--verify-space", "--json"].contains(&x.as_str()))
+    {
+        eprintln!("choose --space or --verify-space, with optional --json; bounds belong in the JSON request");
+        std::process::exit(2);
+    }
+    let input = read_stdin_or_exit();
+    let outcome: Result<(Value, bool), String> = if verify {
+        serde_json::from_str::<RecurrenceSpaces>(&input)
+            .map_err(|e| e.to_string())
+            .and_then(|report| {
+                verify_recurrence_spaces(&report.request, &report)?;
+                let incomplete = report
+                    .results
+                    .iter()
+                    .filter(|r| r.certificate.is_none())
+                    .count();
+                Ok((
+                    json!({"verified_completed_claims":true,"incomplete_shapes":incomplete}),
+                    incomplete > 0,
+                ))
+            })
+    } else {
+        serde_json::from_str::<RecurrenceSpaceRequest>(&input)
+            .map_err(|e| e.to_string())
+            .and_then(|request| {
+                let report = find_recurrence_spaces(&request)?;
+                let incomplete = report.results.iter().any(|r| r.certificate.is_none());
+                Ok((
+                    serde_json::to_value(report).map_err(|e| e.to_string())?,
+                    incomplete,
+                ))
+            })
+    };
+    match outcome {
+        Ok((value, incomplete)) => {
+            println!("{}", serde_json::to_string_pretty(&value).unwrap());
+            if incomplete {
+                std::process::exit(3);
+            }
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
         }
     }
 }
