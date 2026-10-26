@@ -428,7 +428,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Search adaptively for a polynomial recurrence. Provide exactly one of `polynomials`, `coefficients`, `expressions`, or `text`. Pass search controls such as `min_rec_len`, `max_rec_len`, degree bounds, `try_denominator`, `fit_extra_rows`, `modular_prefilter`, and `max_candidates` as top-level arguments. Legacy nested `options` is accepted; a top-level control wins when both are supplied. Set `include_code` to false for a compact result without Mathematica, Python, Sage, or recurrence JSON."
+        description = "Search adaptively for a polynomial recurrence. Provide exactly one of `polynomials`, `coefficients`, `expressions`, or `text`. Pass search controls such as `min_rec_len`, `max_rec_len`, degree bounds, `try_denominator`, `fit_extra_rows`, `modular_prefilter`, and `max_candidates` as top-level arguments. Legacy nested `options` is accepted; a top-level control wins when both are supplied. Set `include_code` to false for a compact result without Mathematica, Python, Sage, or recurrence JSON. When the found recurrence matches a supported interlacing theorem (weighted renewal, fixed-delay predecessor), the additive field theorem_matches lists conditional matches: exact hypotheses, conclusion, window and a finite boundary-row check. They are separate from the finite-fit evidence and never prove the recurrence for all n."
     )]
     pub fn find_recurrence(
         &self,
@@ -487,6 +487,11 @@ impl PolynomialToolsServer {
                 candidates_considered: Some(result.diagnostics.considered_candidates),
                 error: None,
                 parse_errors: Vec::new(),
+                theorem_matches: crate::theorems::search_theorem_matches(
+                    &result,
+                    &polynomials,
+                    &search,
+                ),
             })),
             AdaptiveSearchOutcome::NoRecurrence(summary) => Ok(Json(recurrence_failure_response(
                 RecurrenceSearchStatus::NotFound,
@@ -690,6 +695,16 @@ impl PolynomialToolsServer {
             row_count: generated.len(),
             polynomials,
         }))
+    }
+
+    #[tool(
+        description = "Check a supplied recurrence JSON record (polytool.recurrence.v1, e.g. recurrence_json from find_recurrence) against the supported interlacing theorems: weighted_renewal_window (P_n = sum_j r_j t^j P_(n-1-ell*j), real-rooted nonnegative seed, window d*s <= d*ell+1) and fixed_delay_predecessor_window (P_n = P_(n-1) + w(n) t P_(n-L), polynomial weight certified nonnegative on all integers n >= 1, window B - A <= L). Returns polytool.recurrence-theorems.v1 with finite_evidence, theorem_matches (exact hypotheses, conclusion, window, boundary check of the record's initial rows, remaining obligations, proof_status paper_proof_not_lean_checked) and rejected_theorems with reasons. Matches are conditional: the caller must still establish the recurrence for the intended sequence for all n."
+    )]
+    pub fn recurrence_theorems(
+        &self,
+        Parameters(input): Parameters<crate::requests::RecurrenceTheoremsRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        crate::theorems::supplied_theorem_report(&input.recurrence_json).map(Json)
     }
 
     #[tool(description = "Compute the exact resultant of two polynomials.")]

@@ -234,6 +234,10 @@ pub struct FindRecurrenceResponse {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub parse_errors: Vec<ParsePolynomialItem>,
+    /// Conditional theorem matches of a found recurrence (objects of
+    /// `polytool.recurrence-theorems.v1`); omitted when none match.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theorem_matches: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]

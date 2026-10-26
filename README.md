@@ -2292,6 +2292,21 @@ Additions (no breaking changes):
   comparison.
 - Internal: `linalg::sparse_modular` is split into the row type, a private
   `solver` submodule and a `tests` submodule; public paths are unchanged.
+- `renewal::{VariablePredecessorRecurrence, PredecessorRule,
+  PredecessorWeight, VariablePredecessorCertificate,
+  recognize_fixed_delay_predecessor}`: symbolic variable-predecessor
+  recurrences `Q_n = Q_(n-1) + w(n) t Q_(p(n))` with exact, replayable
+  hypotheses certificates (fixed delay; polynomial weights proven nonnegative
+  on all integers `n >= 1` by a Taylor-shift certificate, periodic weights by
+  residue) and a canonical row generator; finite lists certify only a prefix.
+- `renewal::{match_recurrence_theorems, RecurrenceTheoremReport}`: explicit
+  conditional theorem matches (`weighted_renewal_window`,
+  `fixed_delay_predecessor_window`) for found or supplied recurrences, schema
+  `polytool.recurrence-theorems.v1`, kept separate from finite fit evidence.
+- CLI `recurrence --theorem-matches` and `recurrence-theorems --recurrence
+  <file|->`; default `recurrence` output is unchanged apart from a stderr note.
+  MCP: additive `theorem_matches` field of `find_recurrence` (and the
+  `check_polynomial_family` recurrence) and the tool `recurrence_theorems`.
 
 ### 0.5.0
 
@@ -2496,5 +2511,72 @@ cargo run -p polytool --example recognize_renewal < recurrence.json
 Its JSON distinguishes structural recognition from matching initial data.
 Neither proves that a recurrence guessed from finite rows holds for the
 intended combinatorial sequence. The all-index identity remains a caller
-obligation: this Rust feature is not a formal certificate. The recognizer is currently a library API and
-example, not integrated into MCP or automatic recurrence-search output.
+obligation: this Rust feature is not a formal certificate.
+
+### Variable-predecessor recurrences
+
+`renewal::VariablePredecessorRecurrence` represents
+`Q_0 = 1`, `Q_n = Q_(n-1) + w(n) t Q_(p(n))` (`n >= 1`) with the predecessor
+rule and the weight kept apart from the fixed-offset `RecurrenceTerm`. If
+`w(n) >= 0`, `0 <= p(n) < n` and `p` is nondecreasing, every `Q_n` has
+nonnegative coefficients and constant term 1, is real-rooted, and
+`Q_i << Q_n` for `p(n) <= i <= n`; for `p(n) = max(0, n-L)` this gives
+`Q_A << Q_B` whenever `0 <= A <= B` and `B - A <= L` (a window of `L+1` rows,
+not derived from transitivity). The paper proof is in
+[RealRooted#2037](https://github.com/PerAlexandersson/RealRooted/issues/2037)
+and is not Lean checked.
+
+Supported symbolic forms are `PredecessorRule::FixedDelay { delay: L }` with
+`PredecessorWeight::Polynomial` (coefficients in ascending powers of `n`) or
+`PredecessorWeight::Periodic` (`w(n) = values[(n-1) mod period]`).
+`certify()` returns a `VariablePredecessorCertificate` or an error naming a
+violating index:
+
+- the delay must satisfy `L >= 1` (symbolic: `p` is nondecreasing and
+  `0 <= p(n) < n`);
+- a polynomial weight is proven nonnegative on every integer `n >= 1`, never
+  sampled: the certificate stores the least integer `c >= 1` such that
+  `w(c+m)` has nonnegative coefficients in `m` (so `w >= 0` on `[c, oo)`) and
+  the exact values `w(1), ..., w(c-1)`. A negative leading coefficient yields a
+  witness beyond the Cauchy root bound. Certificates needing `c > 65536` are
+  rejected as not certified;
+- a periodic weight has each residue value checked.
+
+`PredecessorRule::Explicit` and `PredecessorWeight::Explicit` lists certify only
+the supplied prefix: the certificate scope is `prefix` with `last_index`, the
+conclusion says so, and `certify_all_indices()` rejects them.
+`verify_certificate` replays a certificate (any valid shift is accepted).
+`rows(count)` is the canonical generator (exact `BigRational` rows), and
+`recognize_fixed_delay_predecessor(&Recurrence)` recognizes
+`P_n = P_(n-1) + w(n) t P_(n-L)` with `w` polynomial in `n`. Note that the
+canonical family uses `Q_(max(0, n-L))`, so for `n < L` it adds `w(n) t Q_0`
+where a fixed-offset recurrence would use a zero row.
+
+### Conditional theorem matches
+
+`renewal::match_recurrence_theorems(&Recurrence, first_index, rows)` checks a
+found or supplied recurrence against `weighted_renewal_window` and
+`fixed_delay_predecessor_window` and returns explicit conditional matches plus
+rejection reasons. `RecurrenceTheoremReport` (schema
+`polytool.recurrence-theorems.v1`) wraps them with the recurrence record and
+its `finite_evidence` (`adaptive_search_fit` or `supplied_recurrence`, status
+`finite_evidence_only`). Each match lists the exactly checked hypotheses, the
+conclusion, the window (`d*s <= d*ell+1`, or `B - A <= L`), the boundary
+contract with a finite comparison of the supplied rows (`canonical`,
+`canonical_after_relabel` when the first supplied row plays index 0,
+`mismatch` or `insufficient_rows`), `remaining_obligations` (always including
+the all-`n` validity of the recurrence) and `proof_status:
+"paper_proof_not_lean_checked"`.
+
+```sh
+polytool recurrence --theorem-matches < rows.txt          # text report
+polytool recurrence --json --theorem-matches < rows.txt   # theorem report JSON
+polytool recurrence --json < rows.txt | polytool recurrence-theorems --recurrence -
+```
+
+Default `recurrence` output is unchanged: a match is only noted on stderr, and
+`--json` still emits the plain `polytool.recurrence.v1` record. With
+`--theorem-matches --json` the record is nested as `recurrence_json`.
+`recurrence-theorems` exits 0 with a match, 1 without, 2 on invalid input. The
+MCP `find_recurrence` response gains the additive `theorem_matches` field, and
+the MCP tool `recurrence_theorems` checks a supplied record.

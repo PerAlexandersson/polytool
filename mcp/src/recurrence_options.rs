@@ -77,6 +77,7 @@ pub(crate) fn recurrence_failure_response(
         candidates_considered,
         error: Some(error.into()),
         parse_errors,
+        theorem_matches: None,
     }
 }
 

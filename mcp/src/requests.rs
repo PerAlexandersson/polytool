@@ -509,6 +509,14 @@ pub struct GenerateRecurrenceRowsRequest {
     pub additional: Option<usize>,
 }
 
+/// A supplied `polytool.recurrence.v1` record to check against the
+/// interlacing theorems.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecurrenceTheoremsRequest {
+    pub recurrence_json: String,
+}
+
 /// Structured recurrence-space request; the library validates the strict schema.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

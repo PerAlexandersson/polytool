@@ -6,6 +6,9 @@ use crate::input::{
     is_help_arg, next_option_value, parse_usize_option, read_limited_text, read_polys_rational,
     read_stdin_or_exit, OutputFormat,
 };
+use crate::recurrence_theorems::{
+    note_theorem_matches, print_theorem_report_text, search_theorem_report,
+};
 use polytool::recurrence::BigRational as RecurrenceBigRational;
 use polytool::recurrence::*;
 use serde_json::{json, Value};
@@ -64,6 +67,13 @@ pub(crate) fn print_recurrence_help() {
     println!("  --python                   Emit exact Python code for the recurrence");
     println!("  --format python            Alias for --python");
     println!("  --verbose                  Print candidate search details");
+    println!("  --theorem-matches          Also report conditional theorem matches");
+    println!("                             (weighted renewal, fixed-delay predecessor),");
+    println!("                             separate from the finite fit evidence. With --json,");
+    println!("                             emit polytool.recurrence-theorems.v1 (the usual");
+    println!("                             record is its recurrence_json). Without the flag a");
+    println!("                             match is only noted on stderr. Not used with");
+    println!("                             --representations; see recurrence-theorems.");
     println!("  -h, --help                 Print this help text");
     println!();
     println!("Example:");
@@ -113,6 +123,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
     let mut budget = AdaptiveSearchBudget::unbounded();
     let mut format = RecurrenceOutputFormat::Text;
     let mut representations = false;
+    let mut theorem_matches = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -337,6 +348,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             "--verbose" => {
                 search.verbose = true;
             }
+            "--theorem-matches" => theorem_matches = true,
             other => {
                 eprintln!("unknown recurrence option: {other}");
                 return;
@@ -403,7 +415,11 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                 .recurrence
                 .generation_initial_count(1, searched_polys.len());
             let initial_polys = &searched_polys[..initial_count];
+            let theorem_report = search_theorem_report(&res, &polys, &search);
             match format {
+                RecurrenceOutputFormat::Json if theorem_matches => {
+                    println!("{}", serde_json::to_string_pretty(&theorem_report).unwrap());
+                }
                 RecurrenceOutputFormat::Json => {
                     let recurrence_json = RecurrenceJson::from_recurrence_rational(
                         &res.recurrence,
@@ -435,7 +451,13 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                 }
                 RecurrenceOutputFormat::Text => {
                     println!("{}", res.recurrence);
+                    if theorem_matches {
+                        print_theorem_report_text(&theorem_report);
+                    }
                 }
+            }
+            if !theorem_matches || format == RecurrenceOutputFormat::Python {
+                note_theorem_matches(&theorem_report);
             }
             eprintln!(
                 "Found with {} unknowns, weighted score {}, {} equations, {} fit rows, \

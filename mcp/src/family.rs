@@ -259,6 +259,11 @@ pub(crate) fn family_recurrence_response(
                 candidates_considered: Some(result.diagnostics.considered_candidates),
                 error: None,
                 parse_errors: Vec::new(),
+                theorem_matches: crate::theorems::search_theorem_matches(
+                    &result,
+                    &rational_polys,
+                    search,
+                ),
             }
         }
         AdaptiveSearchOutcome::NoRecurrence(summary) => recurrence_failure_response(

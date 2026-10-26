@@ -15,6 +15,14 @@
 //! [`WeightedRenewal::max_interlacing_step`] gives the proven interlacing
 //! distance.  Rows are `Vec<BigRational>` in ascending powers of `t`; recognition
 //! failures are returned as `Err(String)`.
+//!
+//! The symbolic variable-predecessor family `Q_0 = 1`,
+//! `Q_n = Q_(n-1) + w(n) t Q_(p(n))` is [`VariablePredecessorRecurrence`], with
+//! exact hypotheses certificates ([`VariablePredecessorCertificate`]) and the
+//! canonical generator [`VariablePredecessorRecurrence::rows`].
+//! [`match_recurrence_theorems`] and [`RecurrenceTheoremReport`] turn a found or
+//! supplied recurrence into explicit conditional theorem matches, kept separate
+//! from finite fit evidence.
 
 use crate::is_real_rooted_bigint_coeffs;
 use crate::recurrence::{BivarPoly, Recurrence, RecurrenceSign};
@@ -23,6 +31,11 @@ use num_integer::Integer;
 use num_rational::BigRational;
 use num_traits::{One, Signed, Zero};
 use std::collections::BTreeMap;
+
+mod predecessor;
+pub use predecessor::*;
+mod theorem;
+pub use theorem::*;
 
 /// A PF seed and positive delay, checked exactly at construction.
 #[derive(Debug, Clone, PartialEq, Eq)]

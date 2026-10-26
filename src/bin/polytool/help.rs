@@ -16,6 +16,7 @@ use crate::oeis::print_oeis_help;
 use crate::pf_network::print_pf_network_help;
 use crate::pf_pencil::print_pf_pencil_help;
 use crate::recurrence::{print_recurrence_generate_help, print_recurrence_help};
+use crate::recurrence_theorems::print_recurrence_theorems_help;
 use crate::recurrence_transform::print_recurrence_transform_help;
 use crate::sequence::print_sequence_help;
 use crate::stapledon::print_stapledon_help;
@@ -68,6 +69,8 @@ pub(crate) fn print_top_level_help() {
     println!("                    Generate coefficient rows from recurrence JSON");
     println!("  recurrence-transform");
     println!("                    Change polynomial coordinates and transport a recurrence");
+    println!("  recurrence-theorems");
+    println!("                    Conditional interlacing theorem matches for recurrence JSON");
     println!("  bench             Run built-in timing suites");
     println!("  bkw-scout         Scout BKW equal-modulus loci for a recurrence symbol");
     println!("  resultant         Compute the resultant of two polynomials");
@@ -215,6 +218,7 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "recurrence" => print_recurrence_help(),
         "recurrence-generate" => print_recurrence_generate_help(),
         "recurrence-transform" => print_recurrence_transform_help(),
+        "recurrence-theorems" => print_recurrence_theorems_help(),
         "bench" => print_bench_help(),
         "bkw-scout" => bkw_scout_usage(),
         "resultant" => print_stdin_command_help(

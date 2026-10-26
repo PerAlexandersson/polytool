@@ -550,6 +550,16 @@ Every response includes a `status`: `found`, `not_found`,
 `budget_exhausted`, or `invalid_input`. In particular, `budget_exhausted` is
 distinct from completing the configured search space with `not_found`.
 
+When the found recurrence matches a supported interlacing theorem, the
+additive field `theorem_matches` lists conditional theorem-match objects (the
+same objects as in `polytool.recurrence-theorems.v1`, see
+`recurrence_theorems`); the field is omitted otherwise. Rows after
+`skip_prefix` are labeled from 1, as in `recurrence_json`. A match states the
+exactly checked hypotheses, the conclusion, the interlacing window, a finite
+comparison of the supplied rows with the canonical boundary rows, and the
+remaining obligations. It is separate from the finite-fit statistics and never
+proves that the recurrence holds for all `n`.
+
 ### `generate_recurrence_rows`
 
 Generate or extend coefficient rows from `recurrence_json` returned by
@@ -571,6 +581,31 @@ Use exactly one of:
 
 The response contains `first_index`, `row_count`, and `polynomials`, where
 coefficients are exact rational strings in ascending powers of `t`.
+
+### `recurrence_theorems`
+
+Check a supplied `recurrence_json` string (`polytool.recurrence.v1`, e.g. from
+`find_recurrence`) against the supported interlacing theorems:
+
+- `weighted_renewal_window`: `P_n = sum_j r_j t^j P_(n-1-ell*j)` with `r_0 = 1`,
+  nonnegative coefficients and real-rooted `R(z) = sum_j r_j z^j`;
+  `P_n << P_(n+s)` for `d*s <= d*ell+1`, `d = deg R`;
+- `fixed_delay_predecessor_window`: `P_n = P_(n-1) + w(n) t P_(n-L)` with `w`
+  polynomial in `n` and certified nonnegative on every integer `n >= 1` (exact
+  Taylor-shift certificate, not sampling); `Q_A << Q_B` for `B - A <= L`, with
+  canonical boundary `Q_(max(0, n-L))`.
+
+Example arguments: `{"recurrence_json": "{ ... }"}`. The response uses
+`polytool.recurrence-theorems.v1`: `recurrence_json`, `finite_evidence`
+(always `finite_evidence_only`), `theorem_matches` and `rejected_theorems`
+(theorem and reason). Each match has `theorem`, `status:
+"conditional_theorem_match"`, `family`, `hypotheses` (each with its exact
+`check`), `conclusion`, `window` (`inequality`, `max_step`, `statement`),
+`boundary` (`status` `canonical`, `canonical_after_relabel`, `mismatch` or
+`insufficient_rows`, with the contract and row counts),
+`remaining_obligations`, `proof_status: "paper_proof_not_lean_checked"` and
+`reference`. Predecessor matches embed the replayable `variable_predecessor`
+certificate.
 
 ### `resultant`
 

@@ -15,7 +15,9 @@ mod responses;
 mod server;
 #[cfg(test)]
 mod tests;
+mod theorems;
 
+pub use requests::RecurrenceTheoremsRequest;
 pub use requests::{
     BicyclicSievingRequest, BigIntCoefficientInput, BigIntPolynomialBatchInput,
     BigIntPolynomialInput, BigIntPolynomialPairRequest, BrentiRecognitionRequest,

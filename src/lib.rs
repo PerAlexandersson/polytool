@@ -93,7 +93,10 @@
 //! - [`sturm_cf`] — signed Euclidean/Sturm continued-fraction certificates
 //! - [`recurrence`] — Adaptive recurrence search for polynomial sequences
 //! - [`renewal`] — Exact recognition of renewal-type recurrences
-//!   `P_n = sum_j r_j t^j P_(n-1-ell*j)` with interlacing consequences
+//!   `P_n = sum_j r_j t^j P_(n-1-ell*j)` with interlacing consequences,
+//!   symbolic variable-predecessor recurrences `Q_n = Q_(n-1) + w(n) t Q_(p(n))`
+//!   with exact hypotheses certificates, and conditional theorem matches for
+//!   found or supplied recurrences
 //! - [`oeis`] — Bundled recurrence-backed OEIS polynomial families
 //! - [`sequences`] — Standard sequences: Eulerian, Narayana, type B Eulerian,
 //!   Chebyshev T/U, Hermite, shifted Legendre
