@@ -21,7 +21,8 @@
 //! public items are re-exported here: core types, vector systems, exact
 //! verification, modular prefiltering, fixed-shape and vector search,
 //! display/export, row generation, JSON, parameter counting, candidate
-//! enumeration, adaptive search, representation menus and complete spaces.
+//! enumeration, adaptive search, representation menus, complete spaces and
+//! complete spaces after factorial coefficient rescaling.
 
 use num_bigint::BigInt;
 use num_rational::Ratio;
@@ -60,6 +61,8 @@ mod representations;
 pub use representations::*;
 mod space;
 pub use space::*;
+mod rescaling;
+pub use rescaling::*;
 
 #[cfg(test)]
 mod test_support;

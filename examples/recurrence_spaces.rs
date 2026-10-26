@@ -2,7 +2,8 @@
 //! Source: sqrt-of-2/real-rooted-oeis-proofs, commit
 //! 9bb3970e5ba7877b77572c066bd56fbf8f63f05c, ProofsOeis/A171608.lean.
 //! Run: cargo run -p polytool --example recurrence_spaces > spaces.json
-//! Add `-- hermite` for a polynomial-index source, or `-- automatic` for n! X^n.
+//! Add `-- hermite` for a polynomial-index source, `-- automatic` for n! X^n,
+//! or `-- rescaled` for A007318 rows (1+X)^n after dividing coefficient k by k!.
 //! All source generation uses ConstantLagSource or IndexedLagSource.
 use polytool::recurrence::{
     find_recurrence_spaces, verify_recurrence_spaces, RecurrenceSpaceRequest,
@@ -28,13 +29,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             json!({"indexed_source":{"coefficients":[[["0","1"],["0","1"]]],"seeds":[["1"]]},
             "include_leader_coverage":true,"shapes":[{"kind":"automatic_variable_degree","length":1,"index_degree":1}]})
         }
+        Some("rescaled") => {
+            let derivative = json!({"kind":"box","length":1,"derivative_order":1,
+                "index_degree":1,"variable_degree":1,"leading_index_degree":1});
+            let three_term = json!({"kind":"box","length":2,"index_degree":1,
+                "variable_degree":1,"leading_index_degree":1});
+            json!({"source":{"coefficients":[["1","1"]],"seeds":[["1"]],"origin":0},
+            "coefficient_rescaling":{"kind":"factorial_power","power":1},
+            "shapes":[derivative, three_term]})
+        }
         None => json!({
         "source": {
             "coefficients": [["0", "0", "-1"], ["0"], ["0", "2"], ["0"]],
             "seeds": [["1"], ["2"], ["0", "2"], ["0", "3"]]
         }, "shapes": shapes, "include_leader_coverage": true
         }),
-        Some(_) => return Err("expected no argument, hermite, or automatic".into()),
+        Some(_) => return Err("expected no argument, hermite, automatic, or rescaled".into()),
     };
     let request: RecurrenceSpaceRequest = serde_json::from_value(input)?;
     let report = find_recurrence_spaces(&request)?;

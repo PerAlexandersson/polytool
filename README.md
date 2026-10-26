@@ -922,6 +922,74 @@ limits apply before successful certification. This is not a claim of polynomial
 bit complexity or a shortest propagator. No source hypothesis or certificate
 is promoted to a trusted Lean axiom.
 
+#### Complete spaces after factorial coefficient rescaling
+
+The optional request field `coefficient_rescaling` searches the rescaled rows
+`Q[n] = T_m(P[n])`, where `T_m(X^k) = X^k/(k!)^m` divides coefficient `k` by
+`(k!)^m` for a fixed integer `m >= 1`. It uses the same `--space` /
+`--verify-space` entry points, MCP tools and `polytool.recurrence-spaces.v1`
+report; requests without the field behave exactly as before.
+
+```json
+{
+  "source": {"coefficients": [["1", "1"]], "seeds": [["1"]], "origin": 0},
+  "coefficient_rescaling": {"kind": "factorial_power", "power": 1},
+  "shapes": [
+    {"kind": "box", "length": 1, "derivative_order": 1,
+     "index_degree": 1, "variable_degree": 1, "leading_index_degree": 1},
+    {"kind": "box", "length": 2, "index_degree": 1, "variable_degree": 1,
+     "leading_index_degree": 1}
+  ]
+}
+```
+
+For canonical A007318, `P[n] = (1+X)^n` from origin 0, this gives
+`Q[n] = sum_k binom(n,k) X^k/k!` and certifies one-dimensional complete
+kernels spanned by
+
+```text
+(1 + n) Q[n+1] = (1 + n + X) Q[n+0] + (X) D^1(Q[n+0])                 n >= 0
+(2 + n) Q[n+2] = (-1 - n) Q[n+0] + (3 + 2n + X) Q[n+1]                n >= 0
+```
+
+The second is `(n+1)Q[n+1] = (2n+1+X)Q[n] - nQ[n-1]` for `n >= 1` in the
+original forward-index convention. Formulas name the rescaled rows `Q`.
+Each result adds `rescaling_bound`: the rescaling, source order `r`, the
+support maxima `U` (index degree), `A` (variable degree) and `J` (derivative
+order) over all columns including the leader, the exponent
+`H = U + m(A+J) + 1` (also reported as `h`), the rescaled initial rows
+`Q[domain_start + j]` for `j < target_lag` (here `Q[0] = 1`, respectively
+`Q[0] = 1, Q[1] = 1 + X`), and a completeness statement.
+
+Why `r H` residuals suffice: multiply a residual by `X^J` and pull it back by
+`T_m^-1`. With `theta = X D`, a term `n^u X^a D^j S^i` becomes
+`n^u X^s theta^(j falling) (prod_(h=1..s) (theta+h))^m S^i` with
+`s = a + J - j >= 0`, whose derivative order is at most `m(A+J)`. As for the
+untransformed bound, `chi^(u+d+1)` annihilates `n^u X^v D^d P[n+i]`, so
+`chi^H` annihilates the pulled-back residual; this monic recurrence has order
+`r H`. Multiplication by `X^J` and `T_m^-1` are injective, so the first `r H`
+zero residuals from `domain_start` imply that all later residuals vanish. The
+returned kernel is therefore the complete space of all-index identities for
+`Q` in the requested support, conditional on the supplied source. This is a
+sufficient uniform count; sharper counts would need separate proofs.
+
+Validated hypotheses: `m >= 1` (and at most `limits.max_degree`), a
+constant-index monic `source` or `source_recurrence`, and `domain_start` not
+before the source origin. Rows-only requests, `indexed_source` and
+`automatic_variable_degree` shapes are rejected with this field. Optional
+consistency `rows` remain rows of the source `P`. Row generation budgets
+include the target-lag shift, and a rescaled coefficient above
+`max_coefficient_bits` yields an explicit `incomplete_budget` result, never an
+absence claim. Verification regenerates the source rows and replays the
+rescaling, support, bound and certificates against the expected request.
+Rust callers can apply the exact row map and its inverse with
+`RecurrenceCoefficientRescaling::{rescale_coefficients, unscale_coefficients}`.
+
+```sh
+cargo run -p polytool --example recurrence_spaces -- rescaled > rescaled-space.json
+polytool recurrence --verify-space < rescaled-space.json
+```
+
 #### Machine-readable recurrence JSON and row generation
 
 To save a recurrence with enough initial conditions to regenerate the sequence,
@@ -1864,6 +1932,11 @@ Additions (no breaking changes):
   bounds, collective leaders and polynomial-index propagation.
 - CLI `--space` / `--verify-space`, matching MCP tools, and a guided
   full-search mode in the web app.
+- Recurrence spaces: optional request field `coefficient_rescaling`
+  (`recurrence::RecurrenceCoefficientRescaling`, kind `factorial_power`)
+  certifies complete spaces for `Q[n] = T_m(P[n])`, `T_m(X^k) = X^k/(k!)^m`,
+  from `r(U+m(A+J)+1)` residuals of a constant-index source; results carry a
+  replayable `rescaling_bound` (`RecurrenceRescalingBound`).
 - `vec_poly::{exact_div_by_t, exact_div_by_t_minus_one, exact_div_by_t_minus,
   sum, prefix_sums, mul_linear, mul_linear_pow, has_nonnegative_coefficients,
   evaluate_homogeneous, evaluate_at_ratio}`: exact division by `t` and

@@ -37,6 +37,7 @@ impl IndexedLagSource {
             source: None,
             source_recurrence: None,
             indexed_source: Some(self.clone()),
+            coefficient_rescaling: None,
             include_leader_coverage: false,
             rows: None,
             row_origin: self.origin,

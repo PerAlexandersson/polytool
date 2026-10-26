@@ -62,3 +62,22 @@ fn cli_indexed_source_and_automatic_bound_replay() {
         Some(2)
     );
 }
+
+#[test]
+fn cli_factorial_rescaling_certifies_and_replays() {
+    let req = r#"{"source":{"coefficients":[["1","1"]],"seeds":[["1"]]},"coefficient_rescaling":{"kind":"factorial_power","power":1},"shapes":[{"kind":"box","length":1,"derivative_order":1,"index_degree":1,"variable_degree":1,"leading_index_degree":1}]}"#;
+    let output = call("--space", req);
+    assert!(output.status.success(), "{:?}", output);
+    let report = String::from_utf8(output.stdout).unwrap();
+    assert!(report.contains("(1 + n) Q[n+1] = (1 + n + X) Q[n+0] + (X) D^1(Q[n+0])"));
+    assert!(report.contains("rescaling_bound"));
+    assert!(call("--verify-space", &report).status.success());
+    let mut bad: serde_json::Value = serde_json::from_str(&report).unwrap();
+    bad["request"]["coefficient_rescaling"]["power"] = serde_json::json!(2);
+    assert_eq!(
+        call("--verify-space", &bad.to_string()).status.code(),
+        Some(2)
+    );
+    let rows_only = r#"{"rows":[["1"],["1","1"]],"coefficient_rescaling":{"kind":"factorial_power","power":1},"shapes":[{"kind":"box","length":1}]}"#;
+    assert_eq!(call("--space", rows_only).status.code(), Some(2));
+}

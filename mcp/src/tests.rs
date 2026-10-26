@@ -722,6 +722,41 @@ fn recurrence_spaces_indexed_automatic_and_leader_coverage() {
 }
 
 #[test]
+fn recurrence_spaces_factorial_rescaling_certifies_and_binds_power() {
+    let server = PolynomialToolsServer::new();
+    let request = json!({"source":{"coefficients":[["1","1"]],"seeds":[["1"]]},
+        "coefficient_rescaling":{"kind":"factorial_power","power":1},
+        "shapes":[{"kind":"box","length":2,"index_degree":1,"variable_degree":1,"leading_index_degree":1}]});
+    let Json(report) = server
+        .find_recurrence_spaces(Parameters(RecurrenceSpacesToolRequest {
+            request: request.clone(),
+        }))
+        .unwrap();
+    let result = &report["results"][0];
+    assert_eq!(result["status"], "successor_exists");
+    assert_eq!(result["rescaling_bound"]["annihilator_power"], 3);
+    assert_eq!(
+        result["representatives"][0]["formula"],
+        "(2 + n) Q[n+2] = (-1 - n) Q[n+0] + (3 + 2n + X) Q[n+1]"
+    );
+    let Json(checked) = server
+        .verify_recurrence_spaces(Parameters(VerifyRecurrenceSpacesToolRequest {
+            report: json!(report),
+            expected_request: Some(request.clone()),
+        }))
+        .unwrap();
+    assert_eq!(checked["verified_completed_claims"], true);
+    let mut other = request;
+    other["coefficient_rescaling"]["power"] = json!(2);
+    assert!(server
+        .verify_recurrence_spaces(Parameters(VerifyRecurrenceSpacesToolRequest {
+            report: json!(report),
+            expected_request: Some(other),
+        }))
+        .is_err());
+}
+
+#[test]
 fn recurrence_representations_tool_uses_shared_schema_and_global_budget() {
     let server = PolynomialToolsServer::new();
     for limit in [0, 1] {

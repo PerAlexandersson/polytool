@@ -19,10 +19,13 @@
 //! the declared domain therefore imply all subsequent values are zero.
 //! No factorization, distinct-root assumption, or invertible oldest
 //! coefficient is required. A source inferred from rows remains an assumption.
+//!
+//! With the opt-in `coefficient_rescaling` field the same machinery runs on
+//! rescaled rows; the `rescaling` module documents its residual bound.
 
 use super::{
-    parse_rational_coeff, BigRational as Q, BivarPoly, Recurrence, RecurrenceJson, RecurrenceSign,
-    RecurrenceTerm,
+    parse_rational_coeff, BigRational as Q, BivarPoly, Recurrence, RecurrenceCoefficientRescaling,
+    RecurrenceJson, RecurrenceRescalingBound, RecurrenceSign, RecurrenceTerm,
 };
 use crate::linalg::{rational_kernel_with_certificate, RationalKernelError, RationalKernelLimits};
 use crate::{sturm::SturmChain, Polynomial};
@@ -72,6 +75,7 @@ impl ConstantLagSource {
             source: Some(self.clone()),
             source_recurrence: None,
             indexed_source: None,
+            coefficient_rescaling: None,
             include_leader_coverage: false,
             rows: None,
             row_origin: self.origin,
@@ -286,6 +290,12 @@ pub struct RecurrenceSpaceRequest {
     /// Monic source whose coefficients are polynomials in the index `n` as well as `X`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub indexed_source: Option<IndexedLagSource>,
+    /// Opt-in exact coefficient map applied to every source row before the search:
+    /// the shapes then describe identities of `Q[n] = T(P[n])`. Requires `source` or
+    /// `source_recurrence`; see the `rescaling` module notes for the finite theorem.
+    /// Omitted from the output when absent, which keeps the untransformed behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coefficient_rescaling: Option<RecurrenceCoefficientRescaling>,
     /// When true, also compute the sum of every representative multiplied by its own
     /// leader polynomial, in which singular ranks of different representatives can
     /// cancel. Omitted from the output when false.
@@ -487,6 +497,7 @@ pub struct RecurrenceSpaceResult {
     pub monomials: Vec<RecurrenceMonomial>,
     /// One plus the largest `index_degree + derivative_order` among the columns; this is
     /// the exponent `h` in the finite certificate bound of the module documentation.
+    /// Under `coefficient_rescaling` it is the rescaled exponent `U + m(A+J) + 1`.
     pub h: usize,
     /// Number of consecutive base indices, starting at `domain_start`, at which the
     /// residual is tested.
@@ -516,6 +527,9 @@ pub struct RecurrenceSpaceResult {
     /// Combination of the representatives; present only when requested.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub leader_coverage: Option<RecurrenceLeaderCoverage>,
+    /// Finite-theorem data for a request with `coefficient_rescaling`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rescaling_bound: Option<RecurrenceRescalingBound>,
 }
 
 /// Versioned report, retaining the assumptions needed to replay certificates.
@@ -604,12 +618,23 @@ struct Input {
     rows: Vec<Poly>,
     origin: usize,
     consistency: Vec<Poly>,
+    rescaling: Option<RecurrenceCoefficientRescaling>,
 }
 
 fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
     let lim = &request.limits;
     if request.shapes.len() > lim.max_shapes {
         return Err("too many requested shapes".into());
+    }
+    if let Some(rescaling) = &request.coefficient_rescaling {
+        rescaling.validate(lim)?;
+        if request.source.is_none() && request.source_recurrence.is_none() {
+            return Err(
+                "coefficient_rescaling requires a constant-index monic source \
+                        (source or source_recurrence)"
+                    .into(),
+            );
+        }
     }
     if usize::from(request.source.is_some())
         + usize::from(request.source_recurrence.is_some())
@@ -647,6 +672,7 @@ fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
                 .map(|p| parse_polys(p, lim))
                 .transpose()?
                 .unwrap_or_default(),
+            rescaling: None,
         });
     }
     if let Some(json) = &request.source_recurrence {
@@ -722,6 +748,7 @@ fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
             rows,
             origin: src.origin,
             consistency,
+            rescaling: request.coefficient_rescaling,
         })
     } else {
         let rows = supplied.ok_or("provide a source recurrence or finite rows")?;
@@ -734,6 +761,7 @@ fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
             rows: parse_polys(rows, lim)?,
             origin: request.row_origin,
             consistency: Vec::new(),
+            rescaling: None,
         })
     }
 }
@@ -1089,6 +1117,7 @@ fn representative(
     vector: &[Q],
     target: usize,
     index: usize,
+    symbol: &str,
 ) -> RecurrenceSpaceRepresentative {
     let (singular_ranks, requires_x_division) = singular_ranks(cols, vector, target);
     let groups = grouped_coefficients(cols, vector);
@@ -1098,9 +1127,9 @@ fn representative(
             .filter(|((lag, _), _)| (*lag == target) == leading)
             .map(|((lag, d), p)| {
                 let row = if *d == 0 {
-                    format!("P[n+{lag}]")
+                    format!("{symbol}[n+{lag}]")
                 } else {
-                    format!("D^{d}(P[n+{lag}])")
+                    format!("D^{d}({symbol}[n+{lag}])")
                 };
                 format!("({}) {row}", p.to_string().replace('t', "X"))
             })
@@ -1139,6 +1168,16 @@ fn empty_result(target: usize, cols: Vec<RecurrenceMonomial>, h: usize) -> Recur
         automatic_degree_bound: None,
         propagation: None,
         leader_coverage: None,
+        rescaling_bound: None,
+    }
+}
+
+/// Row name used in formulas: `Q` for rescaled rows, `P` for source rows.
+fn row_symbol(rescaled: bool) -> &'static str {
+    if rescaled {
+        "Q"
+    } else {
+        "P"
     }
 }
 
@@ -1158,6 +1197,7 @@ struct ShapeData {
     required: usize,
     automatic: Option<RecurrenceAutomaticDegreeBound>,
     propagation: Option<RecurrencePropagationCertificate>,
+    rescaling_bound: Option<RecurrenceRescalingBound>,
 }
 fn prepare_shape(
     shape: &RecurrenceSpaceShape,
@@ -1178,6 +1218,11 @@ fn prepare_shape(
             if input.a.is_none() && input.indexed_a.is_none() {
                 return Err("automatic degree requires a defining source".into());
             }
+            if input.rescaling.is_some() {
+                return Err(
+                    "automatic_variable_degree is not supported with coefficient_rescaling".into(),
+                );
+            }
             RecurrenceSpaceShape::Box {
                 length: *length,
                 derivative_order: *derivative_order,
@@ -1190,16 +1235,21 @@ fn prepare_shape(
         other => other.clone(),
     };
     let (target, mut cols) = shape_columns(&resolved, lim)?;
-    let h = cols
-        .iter()
-        .map(|c| c.index_degree.checked_add(c.derivative_order))
-        .collect::<Option<Vec<_>>>()
-        .ok_or("support degree overflow")?
-        .into_iter()
-        .max()
-        .unwrap_or(0)
-        .checked_add(1)
-        .ok_or("h overflow")?;
+    let h = if let Some(rescaling) = &input.rescaling {
+        rescaling
+            .annihilator_power(&cols)
+            .ok_or("rescaled h overflow")?
+    } else {
+        cols.iter()
+            .map(|c| c.index_degree.checked_add(c.derivative_order))
+            .collect::<Option<Vec<_>>>()
+            .ok_or("support degree overflow")?
+            .into_iter()
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or("h overflow")?
+    };
     let propagation = if let Some(a) = &input.indexed_a {
         if verifying {
             let cert = supplied.ok_or("missing indexed-source propagation certificate")?;
@@ -1232,7 +1282,30 @@ fn prepare_shape(
         .checked_add(count)
         .and_then(|n| n.checked_add(target))
         .ok_or("row bound overflow")?;
-    let rows = source_rows(input, required, lim)?;
+    let mut rows = source_rows(input, required, lim)?;
+    let mut rescaling_bound = None;
+    if let Some(rescaling) = input.rescaling {
+        // Rescaling reaches this point only with a constant-index source.
+        let order = input.a.as_ref().map_or(0, Vec::len);
+        rows = rows
+            .iter()
+            .map(|p| {
+                rescaling
+                    .rescale_coefficients(p.coeffs(), lim)
+                    .map(Poly::new)
+            })
+            .collect::<Result<_, _>>()?;
+        let initial = rows
+            .get(offset..offset.checked_add(target).ok_or("row bound overflow")?)
+            .ok_or("missing rescaled initial rows")?;
+        rescaling_bound = Some(RecurrenceRescalingBound::new(
+            rescaling,
+            order,
+            &cols,
+            encode_polys(initial),
+            request.domain_start,
+        )?);
+    }
     let mut automatic = None;
     if matches!(shape, RecurrenceSpaceShape::AutomaticVariableDegree { .. }) {
         let mut rhs_degree = 0;
@@ -1310,6 +1383,7 @@ fn prepare_shape(
         required,
         automatic,
         propagation,
+        rescaling_bound,
     })
 }
 
@@ -1387,7 +1461,13 @@ fn leader_coverage(
     }
     combined.retain(|_, v| !v.is_zero());
     let (cols, vector): (Vec<_>, Vec<_>) = combined.into_iter().unzip();
-    let rep = representative(&cols, &vector, result.target_lag, 0);
+    let rep = representative(
+        &cols,
+        &vector,
+        result.target_lag,
+        0,
+        row_symbol(result.rescaling_bound.is_some()),
+    );
     Ok(Some(RecurrenceLeaderCoverage {
         basis_indices: result
             .representatives
@@ -1418,6 +1498,7 @@ pub fn find_recurrence_spaces(
     request: &RecurrenceSpaceRequest,
 ) -> Result<RecurrenceSpaces, String> {
     let input = prepare(request)?;
+    let symbol = row_symbol(input.rescaling.is_some());
     // A contradictory source is invalid input, not an incomplete search.
     source_rows(&input, input.rows.len(), &request.limits)?;
     let mut results = Vec::new();
@@ -1441,10 +1522,12 @@ pub fn find_recurrence_spaces(
             required,
             automatic,
             propagation,
+            rescaling_bound,
         } = data;
         let mut result = empty_result(target, cols.clone(), h);
         result.automatic_degree_bound = automatic;
         result.propagation = propagation;
+        result.rescaling_bound = rescaling_bound;
         result.residual_count = count;
         result.last_required_source_row = required
             .checked_sub(1)
@@ -1531,7 +1614,7 @@ pub fn find_recurrence_spaces(
         for &i in &projection_kernel.pivot_columns {
             result
                 .representatives
-                .push(representative(&cols, &kernel.basis[i], target, i));
+                .push(representative(&cols, &kernel.basis[i], target, i, symbol));
         }
         result.status = if absent {
             "absent_in_shape"
@@ -1638,6 +1721,7 @@ pub fn verify_recurrence_spaces(
         return Err("report/request mismatch".into());
     }
     let input = prepare(request)?;
+    let symbol = row_symbol(input.rescaling.is_some());
     source_rows(&input, input.rows.len(), &request.limits)?;
     for (shape, result) in request.shapes.iter().zip(&report.results) {
         if result.certificate.is_none() {
@@ -1645,6 +1729,7 @@ pub fn verify_recurrence_spaces(
                 || result.evidence != "none"
                 || !result.representatives.is_empty()
                 || result.leader_coverage.is_some()
+                || (result.rescaling_bound.is_some() && request.coefficient_rescaling.is_none())
             {
                 return Err("uncertified claim".into());
             }
@@ -1659,12 +1744,14 @@ pub fn verify_recurrence_spaces(
             required,
             automatic,
             propagation,
+            rescaling_bound,
         } = prepare_shape(shape, &input, request, result.propagation.as_ref(), true)?;
         if target != result.target_lag
             || cols != result.monomials
             || h != result.h
             || automatic != result.automatic_degree_bound
             || propagation != result.propagation
+            || rescaling_bound != result.rescaling_bound
         {
             return Err("support or bound mismatch".into());
         }
@@ -1813,7 +1900,7 @@ pub fn verify_recurrence_spaces(
         let expected: Vec<_> = projected
             .pivot_columns
             .iter()
-            .map(|&i| representative(&cols, &basis[i], target, i))
+            .map(|&i| representative(&cols, &basis[i], target, i, symbol))
             .collect();
         if result.representatives != expected {
             return Err("representative or singular-rank mismatch".into());
@@ -1868,7 +1955,9 @@ mod coverage_tests {
                 .into_iter()
                 .map(|n| Q::from_integer(n.into()))
                 .collect::<Vec<_>>();
-            result.representatives.push(representative(&cols, &v, 1, i));
+            result
+                .representatives
+                .push(representative(&cols, &v, 1, i, "P"));
         }
         assert_eq!(
             result.representatives[0].singular_ranks,

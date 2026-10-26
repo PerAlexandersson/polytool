@@ -55,6 +55,9 @@ pub(crate) fn print_recurrence_help() {
     println!("                             These two modes emit exact JSON and accept only optional --json.");
     println!("                             Source-backed positives are conditional on the supplied source/seeds.");
     println!("                             Rows-only positives are fits; dual negatives prove absence in shape.");
+    println!("                             Opt-in \"coefficient_rescaling\": {{\"kind\":\"factorial_power\",\"power\":m}}");
+    println!("                             searches Q[n] = T(P[n]), T(X^k) = X^k/(k!)^m, m >= 1, and certifies");
+    println!("                             complete spaces from r(U+m(A+J)+1) residuals (constant-index source).");
     println!("                             With --json: structured candidates and coverage");
     println!("  --json                     Emit recurrence JSON with initial conditions");
     println!("  --format json              Alias for --json");
