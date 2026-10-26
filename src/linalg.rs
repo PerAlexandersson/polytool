@@ -15,6 +15,7 @@
 
 #![allow(clippy::needless_range_loop)]
 
+use crate::vec_poly::strip_trailing_zeros;
 use crate::Polynomial;
 use num_bigint::BigInt;
 use num_rational::Ratio;
@@ -1725,7 +1726,7 @@ fn exact_div_polynomial_bigint(
     }
 
     let mut quotient = vec![BigInt::zero(); rem.len() - den_degree];
-    trim_bigint_coeffs(&mut rem);
+    strip_trailing_zeros(&mut rem);
     while rem.len() >= den.len() && !rem.is_empty() {
         let shift = rem.len() - den.len();
         let rem_lc = rem.last().expect("nonempty remainder").clone();
@@ -1737,7 +1738,7 @@ fn exact_div_polynomial_bigint(
         for (i, c) in den.iter().enumerate() {
             rem[shift + i] -= &q * c;
         }
-        trim_bigint_coeffs(&mut rem);
+        strip_trailing_zeros(&mut rem);
     }
 
     if rem.is_empty() {
@@ -2353,12 +2354,6 @@ fn bigint_to_q(mat: &[Vec<BigInt>]) -> Vec<Vec<Q>> {
     mat.iter()
         .map(|row| row.iter().map(|v| Q::from_integer(v.clone())).collect())
         .collect()
-}
-
-fn trim_bigint_coeffs(coeffs: &mut Vec<BigInt>) {
-    while coeffs.last().is_some_and(BigInt::is_zero) {
-        coeffs.pop();
-    }
 }
 
 #[cfg(test)]

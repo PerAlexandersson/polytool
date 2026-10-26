@@ -13,6 +13,7 @@
 //! | Chebyshev T_n, U_n | no | no | yes | yes |
 //! | Hermite He_n | no | no | yes | yes |
 
+use crate::vec_poly;
 use num_bigint::BigInt;
 
 pub mod deco;
@@ -40,52 +41,17 @@ pub fn eulerian_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     }
     let mut polys = Vec::with_capacity(max_n);
     polys.push(vec![BigInt::from(1)]); // A_1 = 1
+    let t_one_minus_t = [BigInt::from(0), BigInt::from(1), BigInt::from(-1)];
 
     for n in 2..=max_n {
         let prev = &polys[n - 2];
-        let d = prev.len();
-
-        // Derivative of prev
-        let mut dp = vec![BigInt::from(0); d.saturating_sub(1)];
-        for k in 1..d {
-            dp[k - 1] = &prev[k] * usize_to_bigint(k);
-        }
-
-        // (1 + (n-1)t) * prev
-        let mut term1 = vec![BigInt::from(0); d + 1];
-        let n_minus_one = usize_to_bigint(n - 1);
-        for k in 0..d {
-            term1[k] += &prev[k];
-            term1[k + 1] += &prev[k] * &n_minus_one;
-        }
-
-        // t(1-t) * dp = t*dp - t^2*dp
-        let dp_len = dp.len();
-        let mut term2 = vec![BigInt::from(0); dp_len + 2];
-        for k in 0..dp_len {
-            term2[k + 1] += &dp[k];
-            term2[k + 2] -= &dp[k];
-        }
-
-        // Sum
-        let len = term1.len().max(term2.len());
-        let mut result = vec![BigInt::from(0); len];
-        for k in 0..term1.len() {
-            result[k] += &term1[k];
-        }
-        for k in 0..term2.len() {
-            result[k] += &term2[k];
-        }
-        trim_trailing_zeros_bigint(&mut result);
-        polys.push(result);
+        // A_n = (1 + (n-1)t) A_{n-1} + t(1-t) A'_{n-1}
+        let linear = [BigInt::from(1), usize_to_bigint(n - 1)];
+        let term1 = vec_poly::mul(&linear, prev);
+        let term2 = vec_poly::mul(&t_one_minus_t, &vec_poly::derivative(prev));
+        polys.push(vec_poly::add(&term1, &term2));
     }
     polys
-}
-
-fn trim_trailing_zeros_bigint(coeffs: &mut Vec<BigInt>) {
-    while coeffs.last() == Some(&BigInt::from(0)) {
-        coeffs.pop();
-    }
 }
 
 fn bigint_polys_to_i64(polys: Vec<Vec<BigInt>>) -> Vec<Vec<i64>> {
@@ -101,55 +67,6 @@ fn bigint_polys_to_i64(polys: Vec<Vec<BigInt>>) -> Vec<Vec<i64>> {
 
 fn usize_to_bigint(value: usize) -> BigInt {
     BigInt::from(value)
-}
-
-fn bigint_two() -> BigInt {
-    BigInt::from(2)
-}
-
-fn bigint_zero_vec(len: usize) -> Vec<BigInt> {
-    vec![BigInt::from(0); len]
-}
-
-fn add_polys_bigint(lhs: &[BigInt], rhs: &[BigInt]) -> Vec<BigInt> {
-    let len = lhs.len().max(rhs.len());
-    let mut result = bigint_zero_vec(len);
-    for (k, c) in lhs.iter().enumerate() {
-        result[k] += c;
-    }
-    for (k, c) in rhs.iter().enumerate() {
-        result[k] += c;
-    }
-    trim_trailing_zeros_bigint(&mut result);
-    result
-}
-
-fn sub_polys_bigint(lhs: &[BigInt], rhs: &[BigInt]) -> Vec<BigInt> {
-    let len = lhs.len().max(rhs.len());
-    let mut result = bigint_zero_vec(len);
-    for (k, c) in lhs.iter().enumerate() {
-        result[k] += c;
-    }
-    for (k, c) in rhs.iter().enumerate() {
-        result[k] -= c;
-    }
-    trim_trailing_zeros_bigint(&mut result);
-    result
-}
-
-fn shift_scale_bigint(poly: &[BigInt], scale: &BigInt, shift: usize) -> Vec<BigInt> {
-    let mut result = bigint_zero_vec(poly.len() + shift);
-    for (k, c) in poly.iter().enumerate() {
-        result[k + shift] = c * scale;
-    }
-    trim_trailing_zeros_bigint(&mut result);
-    result
-}
-
-fn scale_bigint(poly: &[BigInt], scale: &BigInt) -> Vec<BigInt> {
-    let mut result = poly.iter().map(|c| c * scale).collect::<Vec<_>>();
-    trim_trailing_zeros_bigint(&mut result);
-    result
 }
 
 fn binomial_row_bigint(n: usize) -> Vec<BigInt> {
@@ -184,7 +101,7 @@ pub fn narayana_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
                 n_big.clone(),
             ));
         }
-        trim_trailing_zeros_bigint(&mut coeffs);
+        vec_poly::strip_trailing_zeros(&mut coeffs);
         polys.push(coeffs);
     }
     polys
@@ -195,30 +112,15 @@ pub fn type_b_eulerian_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     let mut polys = Vec::with_capacity(max_n + 1);
     polys.push(vec![BigInt::from(1)]); // B_0 = 1
 
+    let two_t_one_minus_t = [BigInt::from(0), BigInt::from(2), BigInt::from(-2)];
+
     for n in 1..=max_n {
         let prev = &polys[n - 1];
-        let d = prev.len();
-
-        let mut dp = bigint_zero_vec(d.saturating_sub(1));
-        for k in 1..d {
-            dp[k - 1] = &prev[k] * usize_to_bigint(k);
-        }
-
-        let mut term1 = bigint_zero_vec(d + 1);
-        let two_n_minus_one = usize_to_bigint(2 * n - 1);
-        for k in 0..d {
-            term1[k] += &prev[k];
-            term1[k + 1] += &prev[k] * &two_n_minus_one;
-        }
-
-        let mut term2 = bigint_zero_vec(dp.len() + 2);
-        for k in 0..dp.len() {
-            let twice = &dp[k] * bigint_two();
-            term2[k + 1] += &twice;
-            term2[k + 2] -= &twice;
-        }
-
-        polys.push(add_polys_bigint(&term1, &term2));
+        // B_n = (1 + (2n-1)t) B_{n-1} + 2t(1-t) B'_{n-1}
+        let linear = [BigInt::from(1), usize_to_bigint(2 * n - 1)];
+        let term1 = vec_poly::mul(&linear, prev);
+        let term2 = vec_poly::mul(&two_t_one_minus_t, &vec_poly::derivative(prev));
+        polys.push(vec_poly::add(&term1, &term2));
     }
     polys
 }
@@ -233,8 +135,8 @@ pub fn chebyshev_polynomials_t_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     polys.push(vec![BigInt::from(0), BigInt::from(1)]);
 
     for n in 2..=max_n {
-        let term1 = shift_scale_bigint(&polys[n - 1], &bigint_two(), 1);
-        polys.push(sub_polys_bigint(&term1, &polys[n - 2]));
+        let term1 = vec_poly::shift(&vec_poly::scale(&polys[n - 1], &BigInt::from(2)));
+        polys.push(vec_poly::sub(&term1, &polys[n - 2]));
     }
     polys
 }
@@ -249,8 +151,8 @@ pub fn chebyshev_polynomials_u_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     polys.push(vec![BigInt::from(0), BigInt::from(2)]);
 
     for n in 2..=max_n {
-        let term1 = shift_scale_bigint(&polys[n - 1], &bigint_two(), 1);
-        polys.push(sub_polys_bigint(&term1, &polys[n - 2]));
+        let term1 = vec_poly::shift(&vec_poly::scale(&polys[n - 1], &BigInt::from(2)));
+        polys.push(vec_poly::sub(&term1, &polys[n - 2]));
     }
     polys
 }
@@ -265,9 +167,9 @@ pub fn hermite_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     polys.push(vec![BigInt::from(0), BigInt::from(1)]);
 
     for n in 2..=max_n {
-        let term1 = shift_scale_bigint(&polys[n - 1], &BigInt::from(1), 1);
-        let term2 = scale_bigint(&polys[n - 2], &usize_to_bigint(n - 1));
-        polys.push(sub_polys_bigint(&term1, &term2));
+        let term1 = vec_poly::shift(&polys[n - 1]);
+        let term2 = vec_poly::scale(&polys[n - 2], &usize_to_bigint(n - 1));
+        polys.push(vec_poly::sub(&term1, &term2));
     }
     polys
 }

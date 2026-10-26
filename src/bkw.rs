@@ -13,6 +13,7 @@
 
 use crate::parse::parse_polynomial;
 use crate::real_rootedness::format_poly_var;
+use crate::vec_poly::strip_trailing_zeros;
 use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt;
@@ -174,8 +175,10 @@ pub struct BkwSymbol {
 impl BkwSymbol {
     /// Build a symbol from z-coefficients, trimming zero tails in both variables.
     pub fn from_z_coefficients(coefficients: Vec<Vec<i64>>) -> Result<Self, BkwError> {
-        let mut z_coefficients: Vec<Vec<i64>> =
-            coefficients.into_iter().map(trim_i64_polynomial).collect();
+        let mut z_coefficients = coefficients;
+        for coefficient in &mut z_coefficients {
+            strip_trailing_zeros(coefficient);
+        }
         while matches!(z_coefficients.last(), Some(c) if c.is_empty()) {
             z_coefficients.pop();
         }
@@ -586,13 +589,6 @@ fn evaluate_complex_polynomial(coeffs: &[Complex64], z: Complex64) -> Complex64 
         result = result * z + coeff;
     }
     result
-}
-
-fn trim_i64_polynomial(mut coeffs: Vec<i64>) -> Vec<i64> {
-    while matches!(coeffs.last(), Some(0)) {
-        coeffs.pop();
-    }
-    coeffs
 }
 
 fn strip_near_zero_complex_tail(coeffs: &mut Vec<Complex64>, tolerance: f64) {

@@ -11,8 +11,9 @@
 //! for turning exact Euclidean data for a Hermite--Biehler pair into a Sturm
 //! chain with negative roots and hence interlacing.
 
+use crate::vec_poly::{coeff, degree, is_zero, neg, scale, sub, trim};
 use num_rational::BigRational;
-use num_traits::{One, Signed, Zero};
+use num_traits::{Signed, Zero};
 use std::error::Error;
 use std::fmt;
 
@@ -150,8 +151,8 @@ pub fn check_sturm_continued_fraction_certificate_with_options(
     right: &[BigRational],
     options: SturmContinuedFractionOptions,
 ) -> Result<SturmContinuedFractionSummary, SturmContinuedFractionError> {
-    let mut previous = trim(left.to_vec());
-    let mut current = trim(right.to_vec());
+    let mut previous = trim(left);
+    let mut current = trim(right);
     let mut steps = 0usize;
     let mut max_numerator_bits = 0u64;
     let mut max_denominator_bits = 0u64;
@@ -180,8 +181,8 @@ pub fn check_sturm_continued_fraction_certificate_with_options(
             });
         }
 
-        let intercept = coeff_at(&quotient, 0);
-        let slope = coeff_at(&quotient, 1);
+        let intercept = coeff(&quotient, 0);
+        let slope = coeff(&quotient, 1);
         if !slope.is_positive() || !intercept.is_positive() {
             return Err(SturmContinuedFractionError::QuotientNotPositiveLinear { step: steps });
         }
@@ -208,7 +209,7 @@ pub fn check_sturm_continued_fraction_certificate_with_options(
         if is_zero(&remainder) {
             break;
         }
-        let next = scale(&remainder, &(-BigRational::one()));
+        let next = neg(&remainder);
         if options.require_positive_remainders && !all_coefficients_positive(&next) {
             return Err(
                 SturmContinuedFractionError::SignedRemainderHasNonpositiveCoefficient {
@@ -247,8 +248,8 @@ pub fn check_sturm_continued_fraction_certificate_with_options(
 
 fn div_rem(a: &[BigRational], b: &[BigRational]) -> (Vec<BigRational>, Vec<BigRational>) {
     assert!(!is_zero(b), "division by zero polynomial");
-    let mut remainder = trim(a.to_vec());
-    let b = trim(b.to_vec());
+    let mut remainder = trim(a);
+    let b = trim(b);
     if remainder.len() < b.len() {
         return (vec![BigRational::zero()], remainder);
     }
@@ -263,53 +264,11 @@ fn div_rem(a: &[BigRational], b: &[BigRational]) -> (Vec<BigRational>, Vec<BigRa
         subtract.extend(scale(&b, &coeff));
         remainder = sub(&remainder, &subtract);
     }
-    (trim(quotient), trim(remainder))
-}
-
-fn sub(a: &[BigRational], b: &[BigRational]) -> Vec<BigRational> {
-    let mut out = vec![BigRational::zero(); a.len().max(b.len())];
-    for (i, coeff) in a.iter().enumerate() {
-        out[i] += coeff;
-    }
-    for (i, coeff) in b.iter().enumerate() {
-        out[i] -= coeff;
-    }
-    trim(out)
-}
-
-fn scale(p: &[BigRational], factor: &BigRational) -> Vec<BigRational> {
-    trim(p.iter().map(|coeff| factor * coeff).collect())
-}
-
-fn coeff_at(poly: &[BigRational], index: usize) -> BigRational {
-    poly.get(index).cloned().unwrap_or_else(BigRational::zero)
-}
-
-fn degree(poly: &[BigRational]) -> Option<usize> {
-    if is_zero(poly) {
-        None
-    } else {
-        Some(trim(poly.to_vec()).len() - 1)
-    }
+    (trim(&quotient), trim(&remainder))
 }
 
 fn all_coefficients_positive(p: &[BigRational]) -> bool {
     p.iter().all(BigRational::is_positive)
-}
-
-fn is_zero(p: &[BigRational]) -> bool {
-    p.iter().all(BigRational::is_zero)
-}
-
-fn trim(mut p: Vec<BigRational>) -> Vec<BigRational> {
-    while p.len() > 1 && p.last().is_some_and(BigRational::is_zero) {
-        p.pop();
-    }
-    if p.is_empty() {
-        vec![BigRational::zero()]
-    } else {
-        p
-    }
 }
 
 #[cfg(test)]

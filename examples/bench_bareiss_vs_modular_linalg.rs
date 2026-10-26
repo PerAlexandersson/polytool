@@ -8,32 +8,12 @@
 
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
+use polytool::vec_poly::{derivative, trim};
 use polytool::{
     bareiss_leading_principal_minors_bigint, bezout_matrix_bigint_coeffs,
     modular_leading_principal_minors_bigint,
 };
 use std::time::Instant;
-
-fn trim(mut p: Vec<BigInt>) -> Vec<BigInt> {
-    while p.last().is_some_and(BigInt::is_zero) {
-        p.pop();
-    }
-    if p.is_empty() {
-        vec![BigInt::zero()]
-    } else {
-        p
-    }
-}
-
-fn derivative(p: &[BigInt]) -> Vec<BigInt> {
-    trim(
-        p.iter()
-            .enumerate()
-            .skip(1)
-            .map(|(i, c)| BigInt::from(i) * c)
-            .collect(),
-    )
-}
 
 fn product_linear(degree: usize) -> Vec<BigInt> {
     let mut p = vec![BigInt::one()];
@@ -43,7 +23,7 @@ fn product_linear(degree: usize) -> Vec<BigInt> {
             next[i] += BigInt::from(a) * c;
             next[i + 1] += c;
         }
-        p = trim(next);
+        p = trim(&next);
     }
     p
 }

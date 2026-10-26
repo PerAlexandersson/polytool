@@ -2,11 +2,29 @@
 //!
 //! `Polynomial<C>` stores coefficients in ascending degree order: `coeffs[i]` is
 //! the coefficient of t^i.  Trailing zeros are stripped automatically.
+//!
+//! Ring arithmetic, derivatives, powers, evaluation, and reversal delegate to
+//! [`crate::vec_poly`], so fixed-width coefficient types (`i64`, `i128`,
+//! `Ratio<i64>`) panic on overflow instead of wrapping; see [`CoeffRing`].
 
+use crate::vec_poly;
 use std::fmt;
 use std::ops::{Add, Mul, Neg, Sub};
 
 /// Trait for polynomial coefficients. Any commutative ring with identity.
+///
+/// Besides the required constants, the trait has borrowing arithmetic hooks
+/// ([`add_ref`](Self::add_ref), [`mul_ref`](Self::mul_ref),
+/// [`add_mul_assign`](Self::add_mul_assign), ...) with clone-based defaults.
+/// [`crate::vec_poly`] and the arithmetic of [`Polynomial`] use them.
+///
+/// # Overflow
+///
+/// The implementations for the fixed-width types `i64`, `i128` and
+/// `Ratio<i64>` use checked arithmetic in these hooks and **panic on
+/// overflow** (in both debug and release builds) instead of wrapping.  Use
+/// `BigInt` or `Ratio<BigInt>` coefficients when values may grow without
+/// bound.
 pub trait CoeffRing:
     Clone
     + Eq
@@ -26,24 +44,93 @@ pub trait CoeffRing:
     fn is_zero(&self) -> bool;
     /// Embed an integer.
     fn from_i64(n: i64) -> Self;
+
+    // -- Borrowing arithmetic hooks --
+    //
+    // The coefficient-vector routines in `crate::vec_poly` and the arithmetic
+    // of `Polynomial<C>` go through these methods.  The defaults clone and use
+    // the by-value operators.  Implementations override them to avoid clones
+    // (`BigInt`, `BigRational`) or to turn silent wrap-around into a panic
+    // (`i64`, `i128`, `Ratio<i64>`).
+
+    /// `self + other` without consuming either operand.
+    fn add_ref(&self, other: &Self) -> Self {
+        self.clone() + other.clone()
+    }
+    /// `self - other` without consuming either operand.
+    fn sub_ref(&self, other: &Self) -> Self {
+        self.clone() - other.clone()
+    }
+    /// `self * other` without consuming either operand.
+    fn mul_ref(&self, other: &Self) -> Self {
+        self.clone() * other.clone()
+    }
+    /// `-self` without consuming the operand.
+    fn neg_ref(&self) -> Self {
+        -self.clone()
+    }
+    /// `self += other`.
+    fn add_assign_ref(&mut self, other: &Self) {
+        *self = self.add_ref(other);
+    }
+    /// `self -= other`.
+    fn sub_assign_ref(&mut self, other: &Self) {
+        *self = self.sub_ref(other);
+    }
+    /// `self += a * b`.
+    fn add_mul_assign(&mut self, a: &Self, b: &Self) {
+        let product = a.mul_ref(b);
+        self.add_assign_ref(&product);
+    }
 }
 
 // -- CoeffRing impls for standard types --
 
-impl CoeffRing for i64 {
-    fn zero() -> Self {
-        0
-    }
-    fn one() -> Self {
-        1
-    }
-    fn is_zero(&self) -> bool {
-        *self == 0
-    }
-    fn from_i64(n: i64) -> Self {
-        n
-    }
+/// Implements `CoeffRing` for a primitive signed integer type.  All arithmetic
+/// hooks use checked operations and panic on overflow instead of wrapping.
+macro_rules! impl_checked_int_coeff_ring {
+    ($t:ty) => {
+        impl CoeffRing for $t {
+            fn zero() -> Self {
+                0
+            }
+            fn one() -> Self {
+                1
+            }
+            fn is_zero(&self) -> bool {
+                *self == 0
+            }
+            fn from_i64(n: i64) -> Self {
+                n.into()
+            }
+            fn add_ref(&self, other: &Self) -> Self {
+                self.checked_add(*other)
+                    .unwrap_or_else(|| overflow_panic(stringify!($t), "addition"))
+            }
+            fn sub_ref(&self, other: &Self) -> Self {
+                self.checked_sub(*other)
+                    .unwrap_or_else(|| overflow_panic(stringify!($t), "subtraction"))
+            }
+            fn mul_ref(&self, other: &Self) -> Self {
+                self.checked_mul(*other)
+                    .unwrap_or_else(|| overflow_panic(stringify!($t), "multiplication"))
+            }
+            fn neg_ref(&self) -> Self {
+                self.checked_neg()
+                    .unwrap_or_else(|| overflow_panic(stringify!($t), "negation"))
+            }
+        }
+    };
 }
+
+#[cold]
+#[track_caller]
+fn overflow_panic(type_name: &str, operation: &str) -> ! {
+    panic!("{type_name} overflow in polynomial coefficient {operation}; use BigInt coefficients")
+}
+
+impl_checked_int_coeff_ring!(i64);
+impl_checked_int_coeff_ring!(i128);
 
 impl CoeffRing for num_bigint::BigInt {
     fn zero() -> Self {
@@ -53,10 +140,31 @@ impl CoeffRing for num_bigint::BigInt {
         num_bigint::BigInt::from(1)
     }
     fn is_zero(&self) -> bool {
-        *self == num_bigint::BigInt::from(0)
+        num_traits::Zero::is_zero(self)
     }
     fn from_i64(n: i64) -> Self {
         num_bigint::BigInt::from(n)
+    }
+    fn add_ref(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn sub_ref(&self, other: &Self) -> Self {
+        self - other
+    }
+    fn mul_ref(&self, other: &Self) -> Self {
+        self * other
+    }
+    fn neg_ref(&self) -> Self {
+        -self
+    }
+    fn add_assign_ref(&mut self, other: &Self) {
+        *self += other;
+    }
+    fn sub_assign_ref(&mut self, other: &Self) {
+        *self -= other;
+    }
+    fn add_mul_assign(&mut self, a: &Self, b: &Self) {
+        *self += a * b;
     }
 }
 
@@ -68,10 +176,31 @@ impl CoeffRing for num_rational::Ratio<num_bigint::BigInt> {
         num_rational::Ratio::from_integer(num_bigint::BigInt::from(1))
     }
     fn is_zero(&self) -> bool {
-        self.numer() == &num_bigint::BigInt::from(0)
+        num_traits::Zero::is_zero(self.numer())
     }
     fn from_i64(n: i64) -> Self {
         num_rational::Ratio::from_integer(num_bigint::BigInt::from(n))
+    }
+    fn add_ref(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn sub_ref(&self, other: &Self) -> Self {
+        self - other
+    }
+    fn mul_ref(&self, other: &Self) -> Self {
+        self * other
+    }
+    fn neg_ref(&self) -> Self {
+        -self
+    }
+    fn add_assign_ref(&mut self, other: &Self) {
+        *self += other;
+    }
+    fn sub_assign_ref(&mut self, other: &Self) {
+        *self -= other;
+    }
+    fn add_mul_assign(&mut self, a: &Self, b: &Self) {
+        *self += a * b;
     }
 }
 
@@ -87,6 +216,25 @@ impl CoeffRing for num_rational::Ratio<i64> {
     }
     fn from_i64(n: i64) -> Self {
         num_rational::Ratio::from_integer(n)
+    }
+    fn add_ref(&self, other: &Self) -> Self {
+        num_traits::CheckedAdd::checked_add(self, other)
+            .unwrap_or_else(|| overflow_panic("Ratio<i64>", "addition"))
+    }
+    fn sub_ref(&self, other: &Self) -> Self {
+        num_traits::CheckedSub::checked_sub(self, other)
+            .unwrap_or_else(|| overflow_panic("Ratio<i64>", "subtraction"))
+    }
+    fn mul_ref(&self, other: &Self) -> Self {
+        num_traits::CheckedMul::checked_mul(self, other)
+            .unwrap_or_else(|| overflow_panic("Ratio<i64>", "multiplication"))
+    }
+    fn neg_ref(&self) -> Self {
+        let numer = self
+            .numer()
+            .checked_neg()
+            .unwrap_or_else(|| overflow_panic("Ratio<i64>", "negation"));
+        num_rational::Ratio::new_raw(numer, *self.denom())
     }
 }
 
@@ -217,23 +365,17 @@ impl<C: CoeffRing> Polynomial<C> {
 
     /// Multiply by a scalar.
     pub fn scale(&self, c: &C) -> Self {
-        if c.is_zero() {
-            return Self::zero();
-        }
-        Self::new(self.coeffs.iter().map(|a| a.clone() * c.clone()).collect())
+        Self::new(vec_poly::scale(&self.coeffs, c))
     }
 
     /// Formal derivative dp/dt.
     pub fn derivative(&self) -> Self {
-        if self.coeffs.len() <= 1 {
-            return Self::zero();
-        }
-        let coeffs: Vec<C> = self.coeffs[1..]
-            .iter()
-            .enumerate()
-            .map(|(i, c)| c.clone() * C::from_i64(i as i64 + 1))
-            .collect();
-        Self::new(coeffs)
+        Self::new(vec_poly::derivative(&self.coeffs))
+    }
+
+    /// The power `self^e`, by repeated squaring (`p^0 = 1`).
+    pub fn pow(&self, e: usize) -> Self {
+        Self::new(vec_poly::pow(&self.coeffs, e))
     }
 
     /// k-th derivative.
@@ -247,15 +389,7 @@ impl<C: CoeffRing> Polynomial<C> {
 
     /// Evaluate at a point.
     pub fn evaluate(&self, x: &C) -> C {
-        if self.is_zero() {
-            return C::zero();
-        }
-        // Horner's method
-        let mut result = self.coeffs.last().unwrap().clone();
-        for c in self.coeffs.iter().rev().skip(1) {
-            result = result * x.clone() + c.clone();
-        }
-        result
+        vec_poly::evaluate(&self.coeffs, x)
     }
 
     /// Shift: return p(t + a).
@@ -285,12 +419,7 @@ impl<C: CoeffRing> Polynomial<C> {
     /// Note: if p has a zero constant term (divisible by t), the reciprocal
     /// has lower degree since trailing zeros are stripped.
     pub fn reverse(&self) -> Self {
-        if self.is_zero() {
-            return Self::zero();
-        }
-        let mut coeffs = self.coeffs.clone();
-        coeffs.reverse();
-        Self::new(coeffs)
+        Self::new(vec_poly::reciprocal(&self.coeffs))
     }
 
     /// Reciprocal polynomial with respect to a prescribed degree bound.
@@ -303,16 +432,7 @@ impl<C: CoeffRing> Polynomial<C> {
     ///
     /// Returns `None` if `self` has degree greater than `n`.
     pub fn reverse_with_degree(&self, n: usize) -> Option<Self> {
-        match self.degree() {
-            Some(d) if d > n => return None,
-            _ => {}
-        }
-
-        let mut coeffs = vec![C::zero(); n + 1];
-        for (i, coeff) in coeffs.iter_mut().enumerate() {
-            *coeff = self.coeff(n - i);
-        }
-        Some(Self::new(coeffs))
+        vec_poly::reverse(&self.coeffs, n).map(Self::new)
     }
 
     /// Dilate: return p(c*t), replacing t with c*t.
@@ -484,45 +604,28 @@ impl<C: CoeffRing> PartialEq for Polynomial<C> {
 impl<C: CoeffRing> Add for Polynomial<C> {
     type Output = Self;
     fn add(self, rhs: Self) -> Self {
-        let len = self.coeffs.len().max(rhs.coeffs.len());
-        let coeffs: Vec<C> = (0..len).map(|i| self.coeff(i) + rhs.coeff(i)).collect();
-        Self::new(coeffs)
+        Self::new(vec_poly::add(&self.coeffs, &rhs.coeffs))
     }
 }
 
 impl<C: CoeffRing> Sub for Polynomial<C> {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self {
-        let len = self.coeffs.len().max(rhs.coeffs.len());
-        let coeffs: Vec<C> = (0..len).map(|i| self.coeff(i) - rhs.coeff(i)).collect();
-        Self::new(coeffs)
+        Self::new(vec_poly::sub(&self.coeffs, &rhs.coeffs))
     }
 }
 
 impl<C: CoeffRing> Neg for Polynomial<C> {
     type Output = Self;
     fn neg(self) -> Self {
-        Polynomial::new(self.coeffs.into_iter().map(|c| -c).collect())
+        Self::new(vec_poly::neg(&self.coeffs))
     }
 }
 
 impl<C: CoeffRing> Mul for Polynomial<C> {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self {
-        if self.is_zero() || rhs.is_zero() {
-            return Self::zero();
-        }
-        let n = self.coeffs.len() + rhs.coeffs.len() - 1;
-        let mut coeffs = vec![C::zero(); n];
-        for (i, a) in self.coeffs.iter().enumerate() {
-            if a.is_zero() {
-                continue;
-            }
-            for (j, b) in rhs.coeffs.iter().enumerate() {
-                coeffs[i + j] = coeffs[i + j].clone() + a.clone() * b.clone();
-            }
-        }
-        Self::new(coeffs)
+        Self::new(vec_poly::mul(&self.coeffs, &rhs.coeffs))
     }
 }
 

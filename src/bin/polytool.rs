@@ -4,6 +4,7 @@
 //! in ascending degree order, one polynomial per line.
 
 use num_bigint::BigInt;
+use polytool::numeric::binomial_bigint;
 use polytool::recurrence::BigRational as RecurrenceBigRational;
 use polytool::recurrence::*;
 use polytool::*;
@@ -484,19 +485,6 @@ fn pf_pencil_case(id: &str) -> Option<PfPencilCase> {
         .iter()
         .copied()
         .find(|case| case.id.eq_ignore_ascii_case(id))
-}
-
-fn binomial_bigint(n: usize, k: usize) -> BigInt {
-    if k > n {
-        return BigInt::from(0);
-    }
-    let k = k.min(n - k);
-    let mut out = BigInt::from(1);
-    for i in 0..k {
-        out *= BigInt::from(n - i);
-        out /= BigInt::from(i + 1);
-    }
-    out
 }
 
 fn lcm_usize(a: usize, b: usize) -> usize {

@@ -60,6 +60,8 @@
 //! - **Directed**: `check_weak_interlacing(f, g)` tests `f ≪ g` (f interlaces g
 //!   from the left). This is **not symmetric**: `f ≪ g` and `g ≪ f` are different
 //!   for same-degree polynomials. Requires deg(f) ≤ deg(g) ≤ deg(f) + 1.
+//! - **Undirected**: [`interlaces_either_order`] answers "do f and g interlace
+//!   in some order allowed by their degrees?" and returns a plain `bool`.
 //!
 //! ## Sturm chain fallback
 //!
@@ -80,6 +82,7 @@
 //!   <https://mathoverflow.net/questions/403708/bezout-matrices-and-interlacing-roots>
 
 use crate::sturm::SturmChain;
+use crate::vec_poly;
 use crate::Polynomial;
 use num_bigint::BigInt;
 use num_integer::Integer;
@@ -299,42 +302,78 @@ pub fn is_unimodal_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 ///
 /// A polynomial a_0 + a_1 t + ... + a_d t^d of degree d is ultra-log-concave if
 /// a_k / C(d,k) is log-concave, where C(d,k) is the binomial coefficient.
+/// This is [`is_ultra_log_concave_of_degree`] with the nominal degree equal to
+/// the actual degree.
 ///
 /// This is implied by real-rootedness but is strictly weaker.
 pub fn is_ultra_log_concave(coeffs: &[i64]) -> bool {
-    let d = match coeffs.iter().rposition(|&c| c != 0) {
-        Some(d) => d,
-        None => return true,
-    };
-    if d <= 1 {
-        return true;
-    }
-    let mut binom = vec![BigInt::from(1); d + 1];
-    for k in 1..=d {
-        binom[k] = &binom[k - 1] * BigInt::from(d - k + 1) / BigInt::from(k);
-    }
-    for k in 1..d {
-        let lhs = BigInt::from(coeffs[k]).pow(2) * &binom[k - 1] * &binom[k + 1];
-        let rhs = BigInt::from(coeffs[k - 1]) * BigInt::from(coeffs[k + 1]) * &binom[k] * &binom[k];
-        if lhs < rhs {
-            return false;
-        }
-    }
-    true
+    let coeffs: Vec<BigInt> = coeffs.iter().map(|&c| BigInt::from(c)).collect();
+    is_ultra_log_concave_bigint_coeffs(&coeffs)
 }
 
 /// Check if a `BigInt` coefficient sequence is ultra-log-concave.
 pub fn is_ultra_log_concave_bigint_coeffs(coeffs: &[BigInt]) -> bool {
-    let d = match coeffs.iter().rposition(|c| !c.is_zero()) {
-        Some(d) => d,
-        None => return true,
-    };
-    if d <= 1 {
+    let d = vec_poly::degree(coeffs).unwrap_or(0);
+    is_ultra_log_concave_of_degree_bigint_coeffs(coeffs, d)
+}
+
+/// Check ultra-log-concavity with respect to a prescribed nominal degree `n`.
+///
+/// The sequence `a_0, ..., a_n` (with `a_k = 0` past the end of `coeffs`) is
+/// *ultra-log-concave of order `n`* (ULC(n)) if `a_k / C(n, k)` is
+/// log-concave, i.e.
+///
+/// ```text
+/// a_k^2 · C(n, k-1) · C(n, k+1) ≥ a_(k-1) · a_(k+1) · C(n, k)^2   for 1 ≤ k ≤ n-1.
+/// ```
+///
+/// For `n = deg p` this is [`is_ultra_log_concave`].  ULC(n) implies ULC(n')
+/// for every `n' ≥ n` for nonnegative sequences, so a nominal degree above the
+/// actual degree (for example the rank of a matroid, or the size of a ground
+/// set) is a *weaker* condition.  By Newton's inequalities, a real-rooted
+/// polynomial with nonnegative coefficients and `deg p ≤ n` is ULC(n).
+///
+/// Conventions:
+///
+/// - If `deg p > n` the sequence is not supported on `0..=n`, and the
+///   function returns `false`.
+/// - The zero polynomial is ULC(n) for every `n` (returns `true`).
+/// - Trailing zeros in `coeffs` are ignored.  As in [`is_log_concave`], the
+///   inequalities are checked pointwise; the absence of internal zeros and the
+///   signs of the coefficients are not checked.
+///
+/// ```
+/// use polytool::{is_ultra_log_concave, is_ultra_log_concave_of_degree};
+///
+/// // 1 + 2t + t^2 = (1 + t)^2 is ULC(2), hence ULC(n) for all n ≥ 2.
+/// assert!(is_ultra_log_concave_of_degree(&[1, 2, 1], 2));
+/// assert!(is_ultra_log_concave_of_degree(&[1, 2, 1], 5));
+/// assert!(!is_ultra_log_concave_of_degree(&[1, 2, 1], 1));
+/// // 1 + 3t + 3t^2 is not ULC at its degree 2 (9 < 3 · 2^2), but it is
+/// // ULC(3): 9 · C(3,0) · C(3,2) = 27 ≥ 3 · C(3,1)^2 = 27.
+/// assert!(!is_ultra_log_concave(&[1, 3, 3]));
+/// assert!(is_ultra_log_concave_of_degree(&[1, 3, 3], 3));
+/// ```
+pub fn is_ultra_log_concave_of_degree(coeffs: &[i64], n: usize) -> bool {
+    let coeffs: Vec<BigInt> = coeffs.iter().map(|&c| BigInt::from(c)).collect();
+    is_ultra_log_concave_of_degree_bigint_coeffs(&coeffs, n)
+}
+
+/// Check ultra-log-concavity of order `n` for `BigInt` coefficients.
+///
+/// Same convention as [`is_ultra_log_concave_of_degree`].
+pub fn is_ultra_log_concave_of_degree_bigint_coeffs(coeffs: &[BigInt], n: usize) -> bool {
+    let Some(d) = vec_poly::degree(coeffs) else {
         return true;
+    };
+    if d > n {
+        return false;
     }
+    // For k ≥ d the right-hand side vanishes and the left-hand side is a
+    // square times positive binomials, so only 1 ≤ k < d needs checking.
     let mut binom = vec![BigInt::from(1); d + 1];
     for k in 1..=d {
-        binom[k] = &binom[k - 1] * BigInt::from(d - k + 1) / BigInt::from(k);
+        binom[k] = &binom[k - 1] * BigInt::from(n - k + 1) / BigInt::from(k);
     }
     for k in 1..d {
         let lhs = coeffs[k].pow(2) * &binom[k - 1] * &binom[k + 1];
@@ -633,7 +672,7 @@ pub fn check_interlacing_sturm(f: &[i64], g: &[i64]) -> Option<bool> {
         return None;
     }
 
-    let (Some(df), Some(dg)) = (poly_degree_trimmed(f), poly_degree_trimmed(g)) else {
+    let (Some(df), Some(dg)) = (vec_poly::degree(f), vec_poly::degree(g)) else {
         return Some(false);
     };
     if dg != df + 1 {
@@ -817,8 +856,8 @@ pub fn check_interlacing(f: &[i64], g: &[i64]) -> Option<bool> {
 /// positive before the Bézout matrix is formed, so the result is invariant
 /// under multiplying either input polynomial by a nonzero scalar.
 pub fn check_interlacing_bigint_coeffs(f: &[BigInt], g: &[BigInt]) -> Option<bool> {
-    let df = poly_degree_trimmed_bigint(f);
-    let dg = poly_degree_trimmed_bigint(g);
+    let df = vec_poly::degree(f);
+    let dg = vec_poly::degree(g);
 
     // 0 ≪ g for any real-rooted g (vacuously true).
     if df.is_none() {
@@ -848,38 +887,83 @@ fn normalize_positive_leading_bigint(coeffs: &[BigInt], degree: usize) -> Vec<Bi
     normalized
 }
 
-/// Check **directed weak** interlacing `p ≪ q` via the Bézout matrix.
+/// Check **directed weak** interlacing `p ≪ q` ("`p` interlaces `q`") exactly.
 ///
-/// Tests whether `p` interlaces `q` **from the left**: the roots of `p` and `q`
-/// alternate with p's roots weakly to the left of q's roots:
+/// # Definition
 ///
-/// ```text
-/// ... ≤ a₃ ≤ b₃ ≤ a₂ ≤ b₂ ≤ a₁ ≤ b₁ ≤ 0
-/// ```
+/// Let `p` and `q` be real-rooted, with roots `a_1 ≥ a_2 ≥ ... ≥ a_m` and
+/// `b_1 ≥ b_2 ≥ ...` listed with multiplicity.  Then `p ≪ q` means:
 ///
-/// where aᵢ are roots of p and bᵢ are roots of q. Shared roots are allowed.
-/// Requires `deg(p) = deg(q)` or `deg(p) = deg(q) - 1` (equivalently,
-/// `deg(q) ∈ {deg(p), deg(p) + 1}`). The zero polynomial interlaces
-/// any real-rooted polynomial from the left (vacuously).
+/// - **`deg q = deg p + 1`**: the roots of `p` separate those of `q`,
 ///
-/// **This function is NOT symmetric**: `check_weak_interlacing(p, q)` tests
-/// `p ≪ q`, which is different from `q ≪ p` when `deg(p) = deg(q)`.
+///   ```text
+///   b_1 ≥ a_1 ≥ b_2 ≥ a_2 ≥ ... ≥ b_m ≥ a_m ≥ b_(m+1);
+///   ```
 ///
-/// Handles:
-/// - **deg(q) = deg(p) + 1**: divides out gcd(p,q) if nontrivial (verifying
-///   the shared roots are real), then checks strict interlacing of the reduced pair.
-/// - **deg(p) = deg(q)** (same degree): extends p with a root far to the right
-///   (via the Cauchy bound), giving p_ext of degree deg(p)+1, then checks q ≪ p_ext.
-///   **Fast path**: if all coefficients of p are positive (all roots negative),
-///   multiplying by t (root at 0) suffices.
+/// - **`deg q = deg p`** (same degree): every root of `p` lies weakly to the
+///   left of the matching root of `q`,
+///
+///   ```text
+///   b_1 ≥ a_1 ≥ b_2 ≥ a_2 ≥ ... ≥ b_m ≥ a_m.
+///   ```
+///
+/// All inequalities are weak, so shared (and repeated) roots are allowed.  The
+/// relation only depends on the roots: multiplying either polynomial by a
+/// nonzero constant (in particular, flipping the sign of its leading
+/// coefficient) does not change the answer.
+///
+/// **This relation is directed.**  For same-degree pairs `p ≪ q` and `q ≪ p`
+/// are different conditions (both hold only when `p` and `q` have the same
+/// roots), and for `deg q = deg p + 1` only `p ≪ q` is meaningful.  Use
+/// [`interlaces_either_order`] for the undirected question "do these two
+/// polynomials interlace in some order?".
+///
+/// # Zero and constant polynomials
+///
+/// - `p = 0`: returns `Some(is_real_rooted(q))`; the zero polynomial
+///   interlaces every real-rooted polynomial, including `0` itself.
+/// - `q = 0` and `p ≠ 0`: returns `Some(false)`.
+/// - Nonzero constants have no roots, so `c ≪ q` holds for every nonzero
+///   constant `c` and every real-rooted `q` of degree 0 or 1.
+///
+/// # Return value
+///
+/// - `Some(true)`: the degrees are compatible and `p ≪ q` holds (so both
+///   polynomials are real-rooted).
+/// - `Some(false)`: the degrees are compatible but `p ≪ q` fails, including
+///   when `p` or `q` is not real-rooted.
+/// - `None`: both polynomials are nonzero and `deg q ∉ {deg p, deg p + 1}`;
+///   the directed relation is not defined for this argument order.  In
+///   particular, `None` is returned when the arguments are passed in the
+///   wrong order for a degree-difference-one pair.
+///
+/// # Method
+///
+/// - **`deg q = deg p + 1`**: divides out `gcd(p, q)` over ℚ if it is
+///   nontrivial (verifying that the shared factor is real-rooted), then checks
+///   strict interlacing of the reduced pair with the Bézout matrix.
+/// - **`deg q = deg p`**: extends `p` with a root to the right of all roots
+///   (via the Cauchy bound), giving `p_ext` of degree `deg p + 1`, then checks
+///   `q ≪ p_ext`.  **Fast path**: if both `p` and `q` have one-signed
+///   coefficients with nonzero constant terms (so no nonnegative roots),
+///   multiplying `p` by `t` suffices.
 ///
 /// References: Kummer--Naldi--Plaumann, Thm. 2.13 for the
 /// degree-difference-one Bézoutian criterion; Fisk, §9.21, Cor. 9.145 for the
 /// same-degree oriented alternation criterion. The explicit gcd real-rootedness
-/// check below guards the semidefinite/common-factor caveat.
+/// check guards the semidefinite/common-factor caveat.
 ///
-/// Returns `Some(true)` if `p ≪ q`, `Some(false)` if not, or `None`
-/// if the degree relationship is invalid (deg(p) > deg(q) or deg(q) > deg(p) + 1).
+/// ```
+/// use polytool::check_weak_interlacing;
+///
+/// // t ≪ t^2 - 1: the root 0 separates -1 and 1.
+/// assert_eq!(check_weak_interlacing(&[0, 1], &[-1, 0, 1]), Some(true));
+/// // Wrong argument order for a degree-difference-one pair.
+/// assert_eq!(check_weak_interlacing(&[-1, 0, 1], &[0, 1]), None);
+/// // Same degree: t + 1 (root -1) lies to the left of t (root 0).
+/// assert_eq!(check_weak_interlacing(&[1, 1], &[0, 1]), Some(true));
+/// assert_eq!(check_weak_interlacing(&[0, 1], &[1, 1]), Some(false));
+/// ```
 pub fn check_weak_interlacing(p: &[i64], q: &[i64]) -> Option<bool> {
     let p_big: Vec<BigInt> = p.iter().map(|&c| BigInt::from(c)).collect();
     let q_big: Vec<BigInt> = q.iter().map(|&c| BigInt::from(c)).collect();
@@ -893,16 +977,16 @@ pub fn check_weak_interlacing(p: &[i64], q: &[i64]) -> Option<bool> {
 /// Bézout matrix after common factors are removed.
 pub fn check_weak_interlacing_bigint_coeffs(p: &[BigInt], q: &[BigInt]) -> Option<bool> {
     // 0 ≪ q for any real-rooted q (vacuously true).
-    if poly_degree_trimmed_bigint(p).is_none() {
+    if vec_poly::degree(p).is_none() {
         return Some(is_real_rooted_bigint_coeffs(q));
     }
     // p ≪ 0 only if p is also zero (already handled above).
-    if poly_degree_trimmed_bigint(q).is_none() {
+    if vec_poly::degree(q).is_none() {
         return Some(false);
     }
 
-    let dp = poly_degree_trimmed_bigint(p).unwrap();
-    let dq = poly_degree_trimmed_bigint(q).unwrap();
+    let dp = vec_poly::degree(p).unwrap();
+    let dq = vec_poly::degree(q).unwrap();
 
     // Same-degree case: p ≪ q means p's roots are to the LEFT of q's roots.
     // The alternation pattern is: p_d ≤ q_d ≤ ... ≤ p_1 ≤ q_1 ≤ 0.
@@ -919,10 +1003,10 @@ pub fn check_weak_interlacing_bigint_coeffs(p: &[BigInt], q: &[BigInt]) -> Optio
         {
             // Both polynomials have no nonnegative real roots, so root at 0 is
             // far right enough if the pair is real-rooted.
-            poly_mul_linear_factor_bigint(p, &BigInt::zero())
+            vec_poly::shift(p)
         } else {
             let r = cauchy_root_bound_bigint(p).max(cauchy_root_bound_bigint(q)) + BigInt::from(1);
-            poly_mul_linear_factor_bigint(p, &(-r))
+            vec_poly::mul(p, &[-r, BigInt::from(1)])
         };
         return check_weak_interlacing_impl(q, &p_ext);
     }
@@ -936,13 +1020,72 @@ pub fn check_weak_interlacing_bigint_coeffs(p: &[BigInt], q: &[BigInt]) -> Optio
     None
 }
 
+/// Undirected weak interlacing: whether `f` and `g` interlace in some order.
+///
+/// Returns `true` iff one of the directed relations of
+/// [`check_weak_interlacing`] holds in an order allowed by the degrees:
+///
+/// | degrees | condition |
+/// |---|---|
+/// | `deg g = deg f + 1` | `f ≪ g` |
+/// | `deg f = deg g + 1` | `g ≪ f` |
+/// | `deg f = deg g` | `f ≪ g` **or** `g ≪ f` |
+/// | `|deg f - deg g| ≥ 2` | never (`false`) |
+///
+/// The zero polynomial interlaces every real-rooted polynomial (in both
+/// orders), so `interlaces_either_order(0, g) == is_real_rooted(g)` and
+/// `interlaces_either_order(0, 0) == true`; a polynomial that is not
+/// real-rooted interlaces nothing.  Leading-coefficient signs do not matter,
+/// and nonzero constants interlace each other and every linear polynomial.
+///
+/// This is the predicate that research code usually wants when checking
+/// that consecutive members of a family interlace, without tracking which
+/// one has the larger degree or which same-degree orientation applies.
+///
+/// ```
+/// use polytool::interlaces_either_order;
+///
+/// // Either argument order works.
+/// assert!(interlaces_either_order(&[0, 1], &[-1, 0, 1]));
+/// assert!(interlaces_either_order(&[-1, 0, 1], &[0, 1]));
+/// // Same degree, roots {-1} and {0}.
+/// assert!(interlaces_either_order(&[0, 1], &[1, 1]));
+/// // Zero interlaces real-rooted polynomials only.
+/// assert!(interlaces_either_order(&[0], &[2, 3, 1]));
+/// assert!(!interlaces_either_order(&[], &[1, 0, 1]));
+/// // Degree difference two.
+/// assert!(!interlaces_either_order(&[1], &[-1, 0, 1]));
+/// ```
+pub fn interlaces_either_order(f: &[i64], g: &[i64]) -> bool {
+    let f_big: Vec<BigInt> = f.iter().map(|&c| BigInt::from(c)).collect();
+    let g_big: Vec<BigInt> = g.iter().map(|&c| BigInt::from(c)).collect();
+    interlaces_either_order_bigint_coeffs(&f_big, &g_big)
+}
+
+/// Undirected weak interlacing for `BigInt` coefficients.
+///
+/// Same convention as [`interlaces_either_order`].
+pub fn interlaces_either_order_bigint_coeffs(f: &[BigInt], g: &[BigInt]) -> bool {
+    let holds =
+        |p: &[BigInt], q: &[BigInt]| check_weak_interlacing_bigint_coeffs(p, q) == Some(true);
+    match (vec_poly::degree(f), vec_poly::degree(g)) {
+        (None, None) => true,
+        (None, Some(_)) => is_real_rooted_bigint_coeffs(g),
+        (Some(_), None) => is_real_rooted_bigint_coeffs(f),
+        (Some(df), Some(dg)) if dg == df + 1 => holds(f, g),
+        (Some(df), Some(dg)) if df == dg + 1 => holds(g, f),
+        (Some(df), Some(dg)) if df == dg => holds(f, g) || holds(g, f),
+        _ => false,
+    }
+}
+
 /// Cauchy bound for root radius: all roots of `coeffs` lie in |z| < bound.
 ///
 /// For f(t) = a_n t^n + ... + a_0, the Cauchy bound is
 /// 1 + max(|a_0|, ..., |a_{n-1}|) / |a_n|.
 /// Returns 2 for constant or zero polynomials.
 fn cauchy_root_bound_bigint(coeffs: &[BigInt]) -> BigInt {
-    let deg = match poly_degree_trimmed_bigint(coeffs) {
+    let deg = match vec_poly::degree(coeffs) {
         Some(d) if d > 0 => d,
         _ => return BigInt::from(2),
     };
@@ -955,20 +1098,8 @@ fn cauchy_root_bound_bigint(coeffs: &[BigInt]) -> BigInt {
     BigInt::from(1) + (&max_other + &lc - BigInt::from(1)) / lc
 }
 
-/// Multiply polynomial by (t + r) in BigInt coefficients.
-fn poly_mul_linear_factor_bigint(coeffs: &[BigInt], r: &BigInt) -> Vec<BigInt> {
-    // (t + r) * (a_0 + a_1 t + ... + a_n t^n) = r*a_0 + (a_0 + r*a_1)t + ... + a_n t^{n+1}
-    let n = coeffs.len();
-    let mut result = vec![BigInt::zero(); n + 1];
-    for i in 0..n {
-        result[i] = &result[i] + r * &coeffs[i];
-        result[i + 1] = &result[i + 1] + &coeffs[i];
-    }
-    result
-}
-
 fn has_nonzero_one_signed_trimmed_coefficients_bigint(coeffs: &[BigInt]) -> bool {
-    let Some(degree) = poly_degree_trimmed_bigint(coeffs) else {
+    let Some(degree) = vec_poly::degree(coeffs) else {
         return false;
     };
     if coeffs.first().is_none_or(BigInt::is_zero) {
@@ -1191,20 +1322,6 @@ fn q_poly_to_primitive_bigint(p: &[Q]) -> Vec<BigInt> {
     result
 }
 
-fn derivative_bigint_coeffs(coeffs: &[BigInt]) -> Vec<BigInt> {
-    let Some(degree) = poly_degree_trimmed_bigint(coeffs) else {
-        return vec![BigInt::zero()];
-    };
-    if degree == 0 {
-        return vec![BigInt::zero()];
-    }
-    let mut derivative = Vec::with_capacity(degree);
-    for k in 0..degree {
-        derivative.push(&coeffs[k + 1] * BigInt::from((k + 1) as u64));
-    }
-    derivative
-}
-
 /// Return the squarefree part `p / gcd(p, p')`, with primitive integer
 /// coefficients.
 ///
@@ -1213,7 +1330,7 @@ fn derivative_bigint_coeffs(coeffs: &[BigInt]) -> Vec<BigInt> {
 /// The computation uses a primitive integer pseudo-remainder GCD, avoiding
 /// rational coefficient growth. The zero polynomial is returned as `0`.
 pub fn squarefree_part_bigint_coeffs(coeffs: &[BigInt]) -> Vec<BigInt> {
-    let Some(degree) = poly_degree_trimmed_bigint(coeffs) else {
+    let Some(degree) = vec_poly::degree(coeffs) else {
         return vec![BigInt::zero()];
     };
     let negative_leading_coefficient = coeffs[degree].is_negative();
@@ -1230,7 +1347,7 @@ pub fn squarefree_part_bigint_coeffs(coeffs: &[BigInt]) -> Vec<BigInt> {
 }
 
 fn newton_sums_rational_bigint_coeffs(coeffs: &[BigInt], max_power: usize) -> Option<Vec<Q>> {
-    let degree = poly_degree_trimmed_bigint(coeffs)?;
+    let degree = vec_poly::degree(coeffs)?;
     let lc = coeffs[degree].clone();
     if lc.is_zero() {
         return None;
@@ -1268,7 +1385,7 @@ fn newton_sums_rational_bigint_coeffs(coeffs: &[BigInt], max_power: usize) -> Op
 /// clears denominators by a single positive scalar and returns an integer
 /// matrix with the same definiteness.
 pub fn hermite_matrix_bigint_coeffs(coeffs: &[BigInt]) -> Option<Vec<Vec<BigInt>>> {
-    let degree = poly_degree_trimmed_bigint(coeffs)?;
+    let degree = vec_poly::degree(coeffs)?;
     if degree == 0 {
         return Some(Vec::new());
     }
@@ -1306,13 +1423,13 @@ pub fn is_real_rooted_bezout_squarefree_bigint_coeffs(coeffs: &[BigInt]) -> bool
 /// Check strict real-rootedness with the Bézout positive-definite criterion,
 /// without removing repeated factors first.
 pub fn is_strictly_real_rooted_bezout_bigint_coeffs(coeffs: &[BigInt]) -> bool {
-    let Some(degree) = poly_degree_trimmed_bigint(coeffs) else {
+    let Some(degree) = vec_poly::degree(coeffs) else {
         return true;
     };
     if degree <= 1 {
         return true;
     }
-    let derivative = derivative_bigint_coeffs(coeffs);
+    let derivative = vec_poly::derivative(coeffs);
     check_interlacing_bigint_coeffs(&derivative, coeffs).unwrap_or(false)
 }
 
@@ -1326,7 +1443,7 @@ pub fn is_real_rooted_hermite_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 /// Check strict real-rootedness with the Hermite/Newton-sum positive-definite
 /// criterion, without removing repeated factors first.
 pub fn is_strictly_real_rooted_hermite_bigint_coeffs(coeffs: &[BigInt]) -> bool {
-    let Some(degree) = poly_degree_trimmed_bigint(coeffs) else {
+    let Some(degree) = vec_poly::degree(coeffs) else {
         return true;
     };
     if degree <= 1 {
@@ -1376,7 +1493,7 @@ pub fn is_real_rooted(coeffs: &[i64]) -> bool {
 }
 
 fn is_real_rooted_bezout_i64_impl(coeffs: &[i64]) -> bool {
-    let d = match poly_degree_trimmed(coeffs) {
+    let d = match vec_poly::degree(coeffs) {
         Some(d) => d,
         None => return true,
     };
@@ -1390,7 +1507,7 @@ fn is_real_rooted_bezout_i64_impl(coeffs: &[i64]) -> bool {
     let mut overflowed = false;
     for k in 0..d {
         let mult = (k as i64) + 1;
-        let ak1 = coeff_i64(coeffs, k + 1);
+        let ak1 = vec_poly::coeff(coeffs, k + 1);
         match mult.checked_mul(ak1) {
             Some(v) => fp.push(BigInt::from(v)),
             None => {
@@ -1401,7 +1518,7 @@ fn is_real_rooted_bezout_i64_impl(coeffs: &[i64]) -> bool {
     }
 
     // Ensure leading coefficients have the same sign.
-    let lc_f = BigInt::from(coeff_i64(coeffs, d));
+    let lc_f = BigInt::from(vec_poly::coeff(coeffs, d));
     let lc_fp = fp.last().cloned().unwrap_or_else(|| BigInt::from(0));
     let zero_big = BigInt::from(0);
     if (lc_f > zero_big) != (lc_fp > zero_big) {
@@ -1452,7 +1569,7 @@ pub fn is_real_rooted_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 /// This is the old exact BigInt implementation and is kept public for
 /// benchmarking and cases where the matrix certificate itself is desired.
 pub fn is_real_rooted_bezout_bigint_coeffs(coeffs: &[BigInt]) -> bool {
-    let d = match poly_degree_trimmed_bigint(coeffs) {
+    let d = match vec_poly::degree(coeffs) {
         Some(d) => d,
         None => return true,
     };
@@ -1533,8 +1650,8 @@ pub fn check_weak_interlacing_bezout(p: &[i64], q: &[i64]) -> Option<bool> {
 ///
 /// Returns `None` if either polynomial is zero.
 pub fn sylvester_matrix(f: &[i64], g: &[i64]) -> Option<Vec<Vec<BigInt>>> {
-    let n = poly_degree_trimmed(f)?;
-    let m = poly_degree_trimmed(g)?;
+    let n = vec_poly::degree(f)?;
+    let m = vec_poly::degree(g)?;
     let size = n + m;
     let zero = BigInt::from(0);
     let mut mat = vec![vec![zero.clone(); size]; size];
@@ -1543,21 +1660,21 @@ pub fn sylvester_matrix(f: &[i64], g: &[i64]) -> Option<Vec<Vec<BigInt>>> {
     // Row i has f_n, f_{n-1}, ..., f_0 starting at column i.
     for i in 0..m {
         for k in 0..=n {
-            mat[i][i + k] = BigInt::from(coeff_i64(f, n - k));
+            mat[i][i + k] = BigInt::from(vec_poly::coeff(f, n - k));
         }
     }
     // Last n rows: coefficients of g, shifted right by row index.
     for i in 0..n {
         for k in 0..=m {
-            mat[m + i][i + k] = BigInt::from(coeff_i64(g, m - k));
+            mat[m + i][i + k] = BigInt::from(vec_poly::coeff(g, m - k));
         }
     }
     Some(mat)
 }
 
 fn sylvester_matrix_bigint_coeffs(f: &[BigInt], g: &[BigInt]) -> Option<Vec<Vec<BigInt>>> {
-    let n = poly_degree_trimmed_bigint(f)?;
-    let m = poly_degree_trimmed_bigint(g)?;
+    let n = vec_poly::degree(f)?;
+    let m = vec_poly::degree(g)?;
     let size = n + m;
     let zero = BigInt::from(0);
     let mut mat = vec![vec![zero; size]; size];
@@ -1618,7 +1735,7 @@ pub fn discriminant(f: &[i64]) -> BigInt {
 
 /// Compute the discriminant for a `BigInt` coefficient polynomial.
 pub fn discriminant_bigint_coeffs(f: &[BigInt]) -> BigInt {
-    let n = match poly_degree_trimmed_bigint(f) {
+    let n = match vec_poly::degree(f) {
         Some(n) => n,
         None => return BigInt::from(0),
     };
@@ -1845,22 +1962,6 @@ pub fn ehrhart_to_hstar_with_denom(
         .map(|&c| Q::from_integer(BigInt::from(c)) / denom_q.clone())
         .collect();
     ehrhart_to_hstar(&coeffs)
-}
-
-fn poly_degree_trimmed(coeffs: &[i64]) -> Option<usize> {
-    coeffs.iter().rposition(|&c| c != 0)
-}
-
-fn poly_degree_trimmed_bigint(coeffs: &[BigInt]) -> Option<usize> {
-    coeffs.iter().rposition(|c| *c != BigInt::from(0))
-}
-
-fn coeff_i64(coeffs: &[i64], k: usize) -> i64 {
-    if k < coeffs.len() {
-        coeffs[k]
-    } else {
-        0
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2205,7 +2306,7 @@ mod tests {
                     mask /= 5;
                 }
 
-                let expected = if let Some(actual_degree) = poly_degree_trimmed_bigint(&coeffs) {
+                let expected = if let Some(actual_degree) = vec_poly::degree(&coeffs) {
                     let trimmed = coeffs
                         .iter()
                         .take(actual_degree + 1)
@@ -2219,7 +2320,7 @@ mod tests {
                     if actual_degree <= 1 {
                         q_poly_to_primitive_bigint(&p)
                     } else {
-                        let derivative = derivative_bigint_coeffs(&trimmed)
+                        let derivative = vec_poly::derivative(&trimmed)
                             .into_iter()
                             .map(Q::from_integer)
                             .collect::<Vec<_>>();
@@ -2678,5 +2779,257 @@ mod tests {
             ehrhart_to_hstar_with_denom(&[1], 0),
             Err(EhrhartToHstarError::ZeroDenominator)
         );
+    }
+
+    // -- Undirected interlacing and ULC of prescribed degree --
+
+    /// Polynomial `sign * prod (t - r)` with the given integer roots.
+    fn from_roots(roots: &[i64], scale: i64) -> Vec<i64> {
+        roots
+            .iter()
+            .fold(vec![scale], |acc, &r| vec_poly::mul(&acc, &[-r, 1]))
+    }
+
+    /// Multisets of size `len` from `values` (nondecreasing sequences).
+    fn multisets(values: &[i64], len: usize) -> Vec<Vec<i64>> {
+        if len == 0 {
+            return vec![vec![]];
+        }
+        let mut out = Vec::new();
+        for (i, &v) in values.iter().enumerate() {
+            for mut rest in multisets(&values[i..], len - 1) {
+                rest.insert(0, v);
+                out.push(rest);
+            }
+        }
+        out
+    }
+
+    /// Root-based oracle for the directed relation `p ≪ q`, with roots given
+    /// in any order.
+    fn directed_oracle(p_roots: &[i64], q_roots: &[i64]) -> Option<bool> {
+        let mut a = p_roots.to_vec();
+        let mut b = q_roots.to_vec();
+        a.sort_unstable_by(|x, y| y.cmp(x));
+        b.sort_unstable_by(|x, y| y.cmp(x));
+        if b.len() != a.len() && b.len() != a.len() + 1 {
+            return None;
+        }
+        // Interleave b_1, a_1, b_2, a_2, ... and require it to be nonincreasing.
+        let mut merged = Vec::new();
+        for i in 0..b.len() {
+            merged.push(b[i]);
+            if i < a.len() {
+                merged.push(a[i]);
+            }
+        }
+        Some(merged.windows(2).all(|w| w[0] >= w[1]))
+    }
+
+    enum TestPoly {
+        Zero,
+        Rooted(Vec<i64>, Vec<i64>),
+        NotRealRooted(Vec<i64>),
+    }
+
+    impl TestPoly {
+        fn coeffs(&self) -> &[i64] {
+            match self {
+                TestPoly::Zero => &[0, 0],
+                TestPoly::Rooted(_, c) | TestPoly::NotRealRooted(c) => c,
+            }
+        }
+    }
+
+    fn interlacing_test_family() -> Vec<TestPoly> {
+        let values = [-2, -1, 0, 1, 2];
+        let mut family = vec![TestPoly::Zero];
+        for len in 0..=3 {
+            for roots in multisets(&values, len) {
+                for scale in [1, -3] {
+                    let coeffs = from_roots(&roots, scale);
+                    family.push(TestPoly::Rooted(roots.clone(), coeffs));
+                }
+            }
+        }
+        for coeffs in [
+            vec![1, 0, 1],      // t^2 + 1
+            vec![-1, 1, -1],    // -(t^2 - t + 1)
+            vec![-1, 1, -1, 1], // (t^2 + 1)(t - 1)
+            vec![0, 1, 0, 1],   // t (t^2 + 1)
+            vec![-2, 0, 0, 1],  // t^3 - 2
+        ] {
+            family.push(TestPoly::NotRealRooted(coeffs));
+        }
+        family
+    }
+
+    #[test]
+    fn zero_polynomial_conventions() {
+        assert!(is_real_rooted(&[0]));
+        assert!(is_real_rooted(&[]));
+        assert_eq!(check_weak_interlacing(&[], &[]), Some(true));
+        assert_eq!(check_weak_interlacing(&[0], &[1, 0, 1]), Some(false));
+        assert_eq!(check_weak_interlacing(&[1], &[0]), Some(false));
+        assert!(interlaces_either_order(&[], &[0, 0]));
+        assert!(interlaces_either_order(&[5], &[0]));
+        assert!(interlaces_either_order(&[0], &[1, 2, 1]));
+        assert!(!interlaces_either_order(&[1, 0, 1], &[0]));
+    }
+
+    #[test]
+    fn weak_interlacing_matches_root_oracle_exhaustively() {
+        let family = interlacing_test_family();
+        let mut checked_true = 0usize;
+        for f in &family {
+            for g in &family {
+                let (fc, gc) = (f.coeffs(), g.coeffs());
+                let directed = check_weak_interlacing(fc, gc);
+                // Directed relation against the oracle.
+                let expected_directed = match (f, g) {
+                    (TestPoly::Zero, _) => Some(is_real_rooted(gc)),
+                    (_, TestPoly::Zero) => Some(false),
+                    (TestPoly::Rooted(a, _), TestPoly::Rooted(b, _)) => directed_oracle(a, b),
+                    _ => {
+                        let (df, dg) = (vec_poly::degree(fc), vec_poly::degree(gc));
+                        let (df, dg) = (df.unwrap(), dg.unwrap());
+                        (dg == df || dg == df + 1).then_some(false)
+                    }
+                };
+                assert_eq!(
+                    directed, expected_directed,
+                    "directed f = {fc:?}, g = {gc:?}"
+                );
+
+                // Undirected relation against the oracle.
+                let expected = match (f, g) {
+                    (TestPoly::Zero, TestPoly::Zero) => true,
+                    (TestPoly::Zero, other) | (other, TestPoly::Zero) => {
+                        !matches!(other, TestPoly::NotRealRooted(_))
+                    }
+                    (TestPoly::Rooted(a, _), TestPoly::Rooted(b, _)) => {
+                        directed_oracle(a, b) == Some(true) || directed_oracle(b, a) == Some(true)
+                    }
+                    _ => false,
+                };
+                let actual = interlaces_either_order(fc, gc);
+                assert_eq!(actual, expected, "undirected f = {fc:?}, g = {gc:?}");
+                assert_eq!(actual, interlaces_either_order(gc, fc), "symmetry");
+                // Consistency with the directed checker.
+                assert_eq!(
+                    actual,
+                    check_weak_interlacing(fc, gc) == Some(true)
+                        || check_weak_interlacing(gc, fc) == Some(true)
+                );
+                let f_big: Vec<BigInt> = fc.iter().map(|&c| BigInt::from(c)).collect();
+                let g_big: Vec<BigInt> = gc.iter().map(|&c| BigInt::from(c)).collect();
+                assert_eq!(
+                    interlaces_either_order_bigint_coeffs(&f_big, &g_big),
+                    actual
+                );
+                checked_true += usize::from(actual);
+            }
+        }
+        assert!(
+            checked_true > 1000,
+            "family should contain many interlacing pairs"
+        );
+    }
+
+    #[test]
+    fn interlaces_either_order_bigint_large_coefficients() {
+        // Roots c - 1, c + 1 and c with c = 10^20.
+        let c = BigInt::from(10).pow(20);
+        let f = vec![-&c, BigInt::from(1)];
+        let g = vec![
+            (&c - 1u32) * (&c + 1u32),
+            -BigInt::from(2) * &c,
+            BigInt::from(1),
+        ];
+        assert!(interlaces_either_order_bigint_coeffs(&f, &g));
+        assert!(interlaces_either_order_bigint_coeffs(&g, &f));
+        // Shift f's root outside [c - 1, c + 1].
+        let f_far = vec![-(&c + 2u32), BigInt::from(1)];
+        assert!(!interlaces_either_order_bigint_coeffs(&f_far, &g));
+    }
+
+    /// Independent ULC(n) oracle: log-concavity of `a_k / C(n, k)` over ℚ.
+    fn ulc_oracle(coeffs: &[i64], n: usize) -> bool {
+        if vec_poly::degree(coeffs).is_some_and(|d| d > n) {
+            return false;
+        }
+        let normalized: Vec<Q> = (0..=n)
+            .map(|k| {
+                Q::new(
+                    BigInt::from(vec_poly::coeff(coeffs, k)),
+                    crate::numeric::binomial_bigint(n, k),
+                )
+            })
+            .collect();
+        (1..n).all(|k| &normalized[k] * &normalized[k] >= &normalized[k - 1] * &normalized[k + 1])
+    }
+
+    #[test]
+    fn ulc_of_degree_matches_rational_oracle_exhaustively() {
+        let values = [-1i64, 0, 1, 2, 3, 5];
+        for len in 0..=4u32 {
+            for code in 0..values.len().pow(len) {
+                let mut rest = code;
+                let coeffs: Vec<i64> = (0..len)
+                    .map(|_| {
+                        let v = values[rest % values.len()];
+                        rest /= values.len();
+                        v
+                    })
+                    .collect();
+                for n in 0..=6 {
+                    let expected = ulc_oracle(&coeffs, n);
+                    assert_eq!(
+                        is_ultra_log_concave_of_degree(&coeffs, n),
+                        expected,
+                        "{coeffs:?}, n = {n}"
+                    );
+                    let big: Vec<BigInt> = coeffs.iter().map(|&c| BigInt::from(c)).collect();
+                    assert_eq!(
+                        is_ultra_log_concave_of_degree_bigint_coeffs(&big, n),
+                        expected
+                    );
+                }
+                let d = vec_poly::degree(&coeffs).unwrap_or(0);
+                assert_eq!(
+                    is_ultra_log_concave(&coeffs),
+                    is_ultra_log_concave_of_degree(&coeffs, d),
+                    "{coeffs:?}"
+                );
+                // ULC(n) implies ULC(n + 1) for nonnegative sequences.
+                if coeffs.iter().all(|&c| c >= 0) {
+                    for n in d..6 {
+                        if is_ultra_log_concave_of_degree(&coeffs, n) {
+                            assert!(is_ultra_log_concave_of_degree(&coeffs, n + 1));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ulc_of_degree_edge_cases() {
+        assert!(is_ultra_log_concave_of_degree(&[], 0));
+        assert!(is_ultra_log_concave_of_degree(&[0, 0], 3));
+        assert!(is_ultra_log_concave_of_degree(&[4], 0));
+        assert!(is_ultra_log_concave_of_degree(&[1, 2, 0, 0], 1));
+        assert!(!is_ultra_log_concave_of_degree(&[1, 2, 1], 1));
+        assert!(!is_ultra_log_concave(&[1, 3, 3]));
+        assert!(is_ultra_log_concave_of_degree(&[1, 3, 3], 3));
+        // Large coefficients: (1 + t)^60 is ULC(60) with equality throughout.
+        let row: Vec<BigInt> = (0..=60)
+            .map(|k| crate::numeric::binomial_bigint(60, k))
+            .collect();
+        assert!(is_ultra_log_concave_of_degree_bigint_coeffs(&row, 60));
+        let mut bumped = row.clone();
+        bumped[30] -= 1;
+        assert!(!is_ultra_log_concave_of_degree_bigint_coeffs(&bumped, 60));
+        assert!(is_ultra_log_concave_of_degree_bigint_coeffs(&row, 61));
     }
 }

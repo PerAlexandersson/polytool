@@ -11,6 +11,7 @@ use polytool::sequences::{
     chebyshev_polynomials_t_bigint, chebyshev_polynomials_u_bigint, eulerian_polynomials_bigint,
     hermite_polynomials_bigint, narayana_polynomials_bigint, type_b_eulerian_polynomials_bigint,
 };
+use polytool::vec_poly::{mul, trim};
 use polytool::{
     is_real_rooted_bezout_bigint_coeffs, is_real_rooted_bigint_coeffs,
     is_real_rooted_prs_bigint_coeffs, is_real_rooted_uspensky_bigint_coeffs,
@@ -18,26 +19,6 @@ use polytool::{
 };
 use std::hint::black_box;
 use std::time::{Duration, Instant};
-
-fn trim(mut p: Vec<BigInt>) -> Vec<BigInt> {
-    while p.last().is_some_and(|c| c == &BigInt::from(0)) {
-        p.pop();
-    }
-    p
-}
-
-fn mul(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
-    if a.is_empty() || b.is_empty() {
-        return vec![];
-    }
-    let mut r = vec![BigInt::from(0); a.len() + b.len() - 1];
-    for (i, ca) in a.iter().enumerate() {
-        for (j, cb) in b.iter().enumerate() {
-            r[i + j] += ca * cb;
-        }
-    }
-    trim(r)
-}
 
 fn product_linear(deg: usize) -> Vec<BigInt> {
     let mut p = vec![BigInt::from(1)];
@@ -91,7 +72,7 @@ fn touchard_polynomial(degree: usize) -> Vec<BigInt> {
                 next[k] += coefficient * BigInt::from(k);
             }
         }
-        p = trim(next);
+        p = trim(&next);
     }
     p
 }

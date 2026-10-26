@@ -77,11 +77,7 @@ impl WeightedRenewal {
     /// Largest guaranteed index step; `None` means every step (constant seed).
     pub fn max_interlacing_step(&self) -> Option<usize> {
         let d = self.seed.len() - 1;
-        if d == 0 {
-            None
-        } else {
-            Some((d * self.ell + 1) / d)
-        }
+        (d * self.ell + 1).checked_div(d)
     }
 
     /// Canonical rows starting at `P_0=1`, with negative-index rows zero.

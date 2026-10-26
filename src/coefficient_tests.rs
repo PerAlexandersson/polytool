@@ -5,6 +5,7 @@
 //! positive; Newton's inequalities are necessary for real-rootedness of a
 //! nonnegative coefficient polynomial.
 
+use crate::vec_poly::{degree, strip_trailing_zeros};
 use num_bigint::BigInt;
 use num_traits::{One, Signed, Zero};
 
@@ -39,13 +40,6 @@ pub struct CoefficientTestReport {
     pub kurtz: CoefficientCriterionReport,
 }
 
-fn trim_trailing(mut coeffs: Vec<BigInt>) -> Vec<BigInt> {
-    while coeffs.last().is_some_and(|c| c.is_zero()) {
-        coeffs.pop();
-    }
-    coeffs
-}
-
 fn strip_initial_zeros(coeffs: &[BigInt]) -> &[BigInt] {
     match coeffs.iter().position(|c| !c.is_zero()) {
         Some(index) => &coeffs[index..],
@@ -53,13 +47,10 @@ fn strip_initial_zeros(coeffs: &[BigInt]) -> &[BigInt] {
     }
 }
 
-fn degree(coeffs: &[BigInt]) -> Option<usize> {
-    coeffs.iter().rposition(|c| !c.is_zero())
-}
-
 /// Detailed Newton-inequality report for a nonnegative coefficient sequence.
 pub fn newton_inequality_report_bigint(coeffs: &[BigInt]) -> CoefficientCriterionReport {
-    let p = trim_trailing(strip_initial_zeros(coeffs).to_vec());
+    let mut p = strip_initial_zeros(coeffs).to_vec();
+    strip_trailing_zeros(&mut p);
     let d = match degree(&p) {
         Some(d) if d >= 2 => d,
         _ => {
@@ -118,7 +109,8 @@ pub fn newton_inequality_report_bigint(coeffs: &[BigInt]) -> CoefficientCriterio
 
 /// Detailed Kurtz-condition report.
 pub fn kurtz_condition_report_bigint(coeffs: &[BigInt]) -> CoefficientCriterionReport {
-    let p = trim_trailing(strip_initial_zeros(coeffs).to_vec());
+    let mut p = strip_initial_zeros(coeffs).to_vec();
+    strip_trailing_zeros(&mut p);
     let d = match degree(&p) {
         Some(d) if d >= 2 => d,
         _ => {
@@ -173,7 +165,8 @@ pub fn kurtz_condition_report_bigint(coeffs: &[BigInt]) -> CoefficientCriterionR
 
 /// Run all coefficient-only criteria currently implemented.
 pub fn coefficient_test_report_bigint(coeffs: &[BigInt]) -> CoefficientTestReport {
-    let coefficients = trim_trailing(coeffs.to_vec());
+    let mut coefficients = coeffs.to_vec();
+    strip_trailing_zeros(&mut coefficients);
     let degree = degree(&coefficients);
     CoefficientTestReport {
         newton: newton_inequality_report_bigint(&coefficients),

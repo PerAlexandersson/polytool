@@ -92,8 +92,8 @@ pub fn f_polynomial<C: CoeffRing>(h: &Polynomial<C>, degree: usize) -> Option<Po
         if coeff.is_zero() {
             continue;
         }
-        let term = Polynomial::<C>::monomial(C::one(), k)
-            * poly_pow(&one_plus_x, degree.saturating_sub(k));
+        let term =
+            Polynomial::<C>::monomial(C::one(), k) * one_plus_x.pow(degree.saturating_sub(k));
         result = result + term.scale(&coeff);
     }
 
@@ -285,25 +285,6 @@ pub fn analyze_symmetric_decomposition_bigint(
         r_interlaces_f: check_weak_interlacing_bigint_coeffs(r_of_f.coeffs(), f.coeffs()),
         magic,
     })
-}
-
-fn poly_pow<C: CoeffRing>(base: &Polynomial<C>, exp: usize) -> Polynomial<C> {
-    if exp == 0 {
-        return Polynomial::one();
-    }
-    let mut result = Polynomial::one();
-    let mut power = base.clone();
-    let mut e = exp;
-    while e > 0 {
-        if e & 1 == 1 {
-            result = result * power.clone();
-        }
-        e >>= 1;
-        if e > 0 {
-            power = power.clone() * power;
-        }
-    }
-    result
 }
 
 #[cfg(test)]

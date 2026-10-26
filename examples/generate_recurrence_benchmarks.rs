@@ -9,6 +9,7 @@
 use num_bigint::BigInt;
 use num_rational::BigRational;
 use num_traits::{One, Zero};
+use polytool::vec_poly::{self, add, derivative, mul as mul_t_poly, shift_by as shift_t, trim};
 use std::fs;
 use std::path::Path;
 
@@ -34,37 +35,12 @@ fn rat_usize(n: usize) -> Rat {
     Rat::from_integer(BigInt::from(n))
 }
 
-fn trim(mut p: Poly) -> Poly {
-    while p.len() > 1 && p.last().is_some_and(|c| c.is_zero()) {
-        p.pop();
-    }
-    if p.is_empty() {
-        vec![Rat::zero()]
-    } else {
-        p
-    }
-}
-
 fn poly(coeffs: &[i64]) -> Poly {
-    trim(coeffs.iter().map(|&c| rat(c)).collect())
+    trim(&coeffs.iter().map(|&c| rat(c)).collect::<Vec<_>>())
 }
 
 fn prev(rows: &[Poly], offset: usize) -> &Poly {
     &rows[rows.len() - offset]
-}
-
-fn add(a: &[Rat], b: &[Rat]) -> Poly {
-    let len = a.len().max(b.len());
-    let mut out = vec![Rat::zero(); len];
-    for i in 0..len {
-        if i < a.len() {
-            out[i] += a[i].clone();
-        }
-        if i < b.len() {
-            out[i] += b[i].clone();
-        }
-    }
-    trim(out)
 }
 
 fn add3(a: &[Rat], b: &[Rat], c: &[Rat]) -> Poly {
@@ -80,62 +56,15 @@ fn sum_polys(polys: &[Poly]) -> Poly {
 }
 
 fn scale(a: &[Rat], c: Rat) -> Poly {
-    if c.is_zero() {
-        return vec![Rat::zero()];
-    }
-    trim(a.iter().map(|x| x.clone() * c.clone()).collect())
+    vec_poly::scale(a, &c)
 }
 
 fn scale_i(a: &[Rat], c: i64) -> Poly {
     scale(a, rat(c))
 }
 
-fn shift_t(a: &[Rat], amount: usize) -> Poly {
-    if amount == 0 {
-        return a.to_vec();
-    }
-    if a.iter().all(|c| c.is_zero()) {
-        return vec![Rat::zero()];
-    }
-    let mut out = vec![Rat::zero(); amount];
-    out.extend_from_slice(a);
-    trim(out)
-}
-
 fn mul_linear(constant: Rat, t_coeff: Rat, p: &[Rat]) -> Poly {
     add(&scale(p, constant), &scale(&shift_t(p, 1), t_coeff))
-}
-
-fn mul_t_poly(coeffs: &[Rat], p: &[Rat]) -> Poly {
-    if coeffs.iter().all(|c| c.is_zero()) || p.iter().all(|c| c.is_zero()) {
-        return vec![Rat::zero()];
-    }
-    let mut out = vec![Rat::zero(); coeffs.len() + p.len() - 1];
-    for (i, coeff) in coeffs.iter().enumerate() {
-        if coeff.is_zero() {
-            continue;
-        }
-        for (j, value) in p.iter().enumerate() {
-            if value.is_zero() {
-                continue;
-            }
-            out[i + j] += coeff.clone() * value.clone();
-        }
-    }
-    trim(out)
-}
-
-fn derivative(p: &[Rat]) -> Poly {
-    if p.len() <= 1 {
-        return vec![Rat::zero()];
-    }
-    trim(
-        p.iter()
-            .enumerate()
-            .skip(1)
-            .map(|(i, c)| c.clone() * rat_usize(i))
-            .collect(),
-    )
 }
 
 fn second_derivative(p: &[Rat]) -> Poly {
@@ -163,7 +92,7 @@ fn generate_rows(fixture: &Fixture, rows: usize) -> Vec<Poly> {
     while out.len() < rows {
         let n = out.len() + 1;
         let next = (fixture.next)(n, &out);
-        out.push(trim(next));
+        out.push(trim(&next));
     }
     out
 }
@@ -177,7 +106,7 @@ fn format_rat(x: &Rat) -> String {
 }
 
 fn format_row(p: &[Rat]) -> String {
-    trim(p.to_vec())
+    trim(p)
         .iter()
         .map(format_rat)
         .collect::<Vec<_>>()

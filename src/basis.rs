@@ -10,6 +10,7 @@
 //!   `{ t^i (1+t)^{d-i} }_{i=0}^d`,
 //! - convenience helpers for checking magic positivity.
 
+use crate::numeric::binomial_bigint;
 use crate::polynomial::{CoeffRing, FieldRing};
 use crate::Polynomial;
 use num_bigint::BigInt;
@@ -139,7 +140,7 @@ pub fn bernstein_basis_bigint(degree: usize) -> Vec<Polynomial<BigInt>> {
     let one_minus_t = Polynomial::from_i64_coeffs(&[1, -1]);
     (0..=degree)
         .map(|j| {
-            let polynomial = poly_pow(&t, j) * poly_pow(&one_minus_t, degree - j);
+            let polynomial = t.pow(j) * one_minus_t.pow(degree - j);
             polynomial.scale(&binomial_bigint(degree, j))
         })
         .collect()
@@ -214,7 +215,7 @@ pub fn bernstein_basis_coordinates_i64(
 pub fn magic_basis<C: CoeffRing>(degree: usize) -> Vec<Polynomial<C>> {
     let one_plus_t = Polynomial::from_i64_coeffs(&[1, 1]);
     (0..=degree)
-        .map(|i| poly_pow(&Polynomial::variable(), i) * poly_pow(&one_plus_t, degree - i))
+        .map(|i| Polynomial::variable().pow(i) * one_plus_t.pow(degree - i))
         .collect()
 }
 
@@ -344,37 +345,6 @@ fn polynomial_bigint_to_q(poly: &Polynomial<BigInt>) -> Polynomial<BigRational> 
             .map(|c| BigRational::from_integer(c.clone()))
             .collect(),
     )
-}
-
-fn poly_pow<C: CoeffRing>(base: &Polynomial<C>, exp: usize) -> Polynomial<C> {
-    if exp == 0 {
-        return Polynomial::one();
-    }
-    let mut result = Polynomial::one();
-    let mut power = base.clone();
-    let mut e = exp;
-    while e > 0 {
-        if e & 1 == 1 {
-            result = result * power.clone();
-        }
-        e >>= 1;
-        if e > 0 {
-            power = power.clone() * power;
-        }
-    }
-    result
-}
-
-fn binomial_bigint(n: usize, k: usize) -> BigInt {
-    if k > n {
-        return BigInt::from(0);
-    }
-    let k = k.min(n - k);
-    let mut value = BigInt::from(1);
-    for j in 0..k {
-        value = value * BigInt::from(n - j) / BigInt::from(j + 1);
-    }
-    value
 }
 
 fn solve_square_linear_system<C: FieldRing>(a: &[Vec<C>], b: &[C]) -> Option<Vec<C>> {

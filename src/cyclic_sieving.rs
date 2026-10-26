@@ -12,6 +12,7 @@
 //! N. Amini, *The cone of cyclic sieving phenomena*, Discrete Math. 342 (2019)
 //! 1581-1601, arXiv:1804.01447.
 
+use crate::vec_poly::{degree, is_zero, strip_trailing_zeros};
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Zero};
@@ -57,17 +58,6 @@ pub struct CyclicSievingSequenceItem {
     pub candidate_orders: Vec<CyclicSievingReport>,
 }
 
-fn trim(mut p: Vec<BigInt>) -> Vec<BigInt> {
-    while p.last().is_some_and(|c| c.is_zero()) {
-        p.pop();
-    }
-    p
-}
-
-fn degree(p: &[BigInt]) -> Option<usize> {
-    p.iter().rposition(|c| !c.is_zero())
-}
-
 fn divisors(n: usize) -> Vec<usize> {
     let mut out = Vec::new();
     for d in 1..=n {
@@ -78,29 +68,9 @@ fn divisors(n: usize) -> Vec<usize> {
     out
 }
 
-#[cfg(test)]
-fn poly_mul(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
-    if a.is_empty() || b.is_empty() {
-        return Vec::new();
-    }
-    let mut out = vec![BigInt::zero(); a.len() + b.len() - 1];
-    for (i, ca) in a.iter().enumerate() {
-        if ca.is_zero() {
-            continue;
-        }
-        for (j, cb) in b.iter().enumerate() {
-            if !cb.is_zero() {
-                out[i + j] += ca * cb;
-            }
-        }
-    }
-    trim(out)
-}
-
 fn exact_div_monic(mut numerator: Vec<BigInt>, divisor: &[BigInt]) -> Option<Vec<BigInt>> {
-    numerator = trim(numerator);
-    let divisor = trim(divisor.to_vec());
-    let dd = degree(&divisor)?;
+    strip_trailing_zeros(&mut numerator);
+    let dd = degree(divisor)?;
     if divisor[dd] != BigInt::one() {
         return None;
     }
@@ -123,17 +93,17 @@ fn exact_div_monic(mut numerator: Vec<BigInt>, divisor: &[BigInt]) -> Option<Vec
             numerator[j + shift] -= &coeff * dcoeff;
         }
     }
-    if trim(numerator).is_empty() {
-        Some(trim(quotient))
+    if is_zero(&numerator) {
+        strip_trailing_zeros(&mut quotient);
+        Some(quotient)
     } else {
         None
     }
 }
 
 fn remainder_monic(mut numerator: Vec<BigInt>, divisor: &[BigInt]) -> Vec<BigInt> {
-    numerator = trim(numerator);
-    let divisor = trim(divisor.to_vec());
-    let Some(dd) = degree(&divisor) else {
+    strip_trailing_zeros(&mut numerator);
+    let Some(dd) = degree(divisor) else {
         panic!("division by zero polynomial");
     };
     assert_eq!(divisor[dd], BigInt::one(), "divisor must be monic");
@@ -150,9 +120,9 @@ fn remainder_monic(mut numerator: Vec<BigInt>, divisor: &[BigInt]) -> Vec<BigInt
         for (j, dcoeff) in divisor.iter().enumerate().take(dd + 1) {
             numerator[j + shift] -= &coeff * dcoeff;
         }
-        numerator = trim(numerator);
+        strip_trailing_zeros(&mut numerator);
     }
-    trim(numerator)
+    numerator
 }
 
 fn cyclotomic_cached(n: usize, cache: &mut BTreeMap<usize, Vec<BigInt>>) -> Vec<BigInt> {
@@ -244,7 +214,8 @@ pub fn cyclic_sieving_report_bigint(
         }
     }
 
-    let coefficients = trim(coeffs.to_vec());
+    let mut coefficients = coeffs.to_vec();
+    strip_trailing_zeros(&mut coefficients);
     let mut evaluations = Vec::with_capacity(order);
     let mut checks = Vec::new();
     for power in 0..order {
@@ -297,10 +268,12 @@ pub fn cyclic_sieving_sequence_reports_bigint(
                     candidate_orders.push(report);
                 }
             }
+            let mut coefficients = coeffs.clone();
+            strip_trailing_zeros(&mut coefficients);
             CyclicSievingSequenceItem {
                 row,
                 index,
-                coefficients: trim(coeffs.clone()),
+                coefficients,
                 candidate_orders,
             }
         })
@@ -448,7 +421,8 @@ pub fn cyclic_sieving_orbit_decomposition_bigint(
         return Err("cyclic group order must be positive".to_string());
     }
     let n = order;
-    let coefficients = trim(coeffs.to_vec());
+    let mut coefficients = coeffs.to_vec();
+    strip_trailing_zeros(&mut coefficients);
     let reduced_residues = reduce_modulo_cyclic_bigint(&coefficients, n);
     let divs = divisors(n);
 
@@ -967,7 +941,7 @@ mod tests {
         assert_eq!(cyclotomic_polynomial_bigint(3), b(&[1, 1, 1]));
         assert_eq!(cyclotomic_polynomial_bigint(4), b(&[1, 0, 1]));
         assert_eq!(
-            poly_mul(&cyclotomic_polynomial_bigint(3), &b(&[-1, 1])),
+            crate::vec_poly::mul(&cyclotomic_polynomial_bigint(3), &b(&[-1, 1])),
             b(&[-1, 0, 0, 1])
         );
     }
@@ -1020,7 +994,8 @@ mod tests {
                         sum[x] += y;
                     }
                 }
-                table[i][j] = trim(sum);
+                strip_trailing_zeros(&mut sum);
+                table[i][j] = sum;
             }
         }
         table[n][k].clone()

@@ -1,5 +1,6 @@
 //! Named inequalities for Ehrhart h*-vectors.
 
+use crate::vec_poly::{self, coeff};
 use num_bigint::BigInt;
 use num_rational::Ratio;
 use num_traits::{One, Signed, Zero};
@@ -59,10 +60,6 @@ fn check(
     }
 }
 
-fn coeff(hstar: &[BigInt], index: usize) -> BigInt {
-    hstar.get(index).cloned().unwrap_or_else(BigInt::zero)
-}
-
 fn pad_to_dimension(mut hstar: Vec<BigInt>, dimension: usize) -> Vec<BigInt> {
     if hstar.len() <= dimension {
         hstar.resize(dimension + 1, BigInt::zero());
@@ -91,27 +88,6 @@ fn format_q(value: &Q) -> String {
     } else {
         format!("{}/{}", value.numer(), value.denom())
     }
-}
-
-fn poly_mul(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
-    if a.is_empty() || b.is_empty() {
-        return Vec::new();
-    }
-    let mut out = vec![BigInt::zero(); a.len() + b.len() - 1];
-    for (i, ca) in a.iter().enumerate() {
-        if ca.is_zero() {
-            continue;
-        }
-        for (j, cb) in b.iter().enumerate() {
-            if !cb.is_zero() {
-                out[i + j] += ca * cb;
-            }
-        }
-    }
-    while out.last().is_some_and(|c| c.is_zero()) {
-        out.pop();
-    }
-    out
 }
 
 fn solve_linear_rational(rows: Vec<Vec<Q>>, variables: usize) -> Option<Vec<Q>> {
@@ -168,7 +144,7 @@ fn stapledon_decomposition_shifted(
     }
     let codegree = dimension + 1 - degree;
     let multiplier = vec![BigInt::one(); codegree];
-    let mut g = poly_mul(hstar, &multiplier);
+    let mut g = vec_poly::mul(hstar, &multiplier);
     g.resize(dimension + 1, BigInt::zero());
 
     let a_vars = dimension / 2 + 1;

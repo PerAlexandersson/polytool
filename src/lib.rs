@@ -44,7 +44,9 @@
 //! Interlacing checks return `Option<bool>` because the degree relation is part
 //! of the contract. `Some(true)` and `Some(false)` mean the degree relation is
 //! valid and the property was decided exactly; `None` means the input degrees
-//! are not valid for that directed interlacing test.
+//! are not valid for that directed interlacing test. For the undirected
+//! question "do these two polynomials interlace in some order?", use
+//! [`interlaces_either_order`], which returns a plain `bool`.
 //!
 //! ```
 //! use num_bigint::BigInt;
@@ -64,6 +66,11 @@
 //!
 //! - [`polynomial`] — `Polynomial<C>` with `CoeffRing`/`FieldRing` traits, arithmetic,
 //!   derivative, evaluate, shift, reverse, dilate, GCD, division, Lagrange interpolation
+//! - [`vec_poly`] — Arithmetic on plain coefficient vectors `&[C]`, generic
+//!   over [`CoeffRing`]: add/sub/mul, powers, composition, derivative,
+//!   reversal, Wronskian, polynomial-matrix permanent
+//! - [`numeric`] — Exact binomials, factorials, falling factorials,
+//!   multinomials, and a checked `u128` binomial
 //! - [`linalg`] — Exact linear algebra: fraction-free Bareiss elimination,
 //!   modular/CRT determinant reconstruction, Gaussian elimination over ℚ,
 //!   sparse finite-field consistency/solution checks, positive
@@ -106,6 +113,7 @@ pub mod decomposition;
 pub mod hstar_inequalities;
 pub mod interlacing_matrix;
 pub mod linalg;
+pub mod numeric;
 pub mod oeis;
 pub mod polynomial;
 pub mod sturm;
@@ -215,6 +223,9 @@ pub use real_rootedness::{
     hermite_matrix_bigint_coeffs,
     hstar_to_ehrhart,
     hstar_to_ehrhart_bigint_coeffs,
+    // Undirected interlacing
+    interlaces_either_order,
+    interlaces_either_order_bigint_coeffs,
     is_gamma_positive,
     is_gamma_positive_bigint_coeffs,
     is_gamma_positive_ignoring_initial_zeros,
@@ -242,6 +253,8 @@ pub use real_rootedness::{
     is_strictly_real_rooted_hermite_bigint_coeffs,
     is_ultra_log_concave,
     is_ultra_log_concave_bigint_coeffs,
+    is_ultra_log_concave_of_degree,
+    is_ultra_log_concave_of_degree_bigint_coeffs,
     is_unimodal,
     is_unimodal_bigint_coeffs,
     real_roots,

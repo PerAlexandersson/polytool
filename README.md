@@ -24,7 +24,7 @@ The CLI binary is at `target/release/polytool`.
 Use `polytool --version` (or `polytool -V`) for a single deterministic line:
 
 ```text
-polytool 0.2.1-rc.5 (git 0123456789ab)
+polytool 0.3.0 (git 0123456789ab)
 ```
 
 The version comes from the crate manifest and the lowercase 12-hex-digit Git
@@ -61,7 +61,7 @@ After publishing to crates.io, the dependency would be:
 
 ```toml
 [dependencies]
-polytool = "0.1"
+polytool = "0.3"
 ```
 
 The public API is re-exported from `polytool`, so a downstream crate
@@ -71,13 +71,15 @@ can write:
 use polytool::{check_weak_interlacing, is_real_rooted};
 
 assert!(is_real_rooted(&[1, 11, 11, 1]));
-assert_eq!(check_weak_interlacing(&[2, -3, 1], &[-1, 1]), Some(true));
+assert_eq!(check_weak_interlacing(&[-1, 1], &[2, -3, 1]), Some(true));
 ```
 
 Coefficient vectors are always in ascending degree order. Most convenience
 functions accept `&[i64]`; use the `*_bigint_coeffs` variants when coefficients
 may exceed `i64`. Interlacing functions return `Option<bool>`: `None` means the
 directed degree relation is not valid for that test, not that interlacing failed.
+For the undirected question "do `f` and `g` interlace in some order?", use
+`interlaces_either_order`, which returns a plain `bool`.
 
 ### Standalone exact root counting
 
@@ -738,15 +740,16 @@ assert!(is_real_rooted(&eulerian_4));
 // Sturm chain method (slower, gives root locations)
 assert!(is_real_rooted_sturm(&eulerian_4));
 
-// Strict interlacing: deg(p) = deg(q) + 1
+// Strict interlacing q ≪ p: the smaller-degree polynomial comes first
 let p = [-15, 23, -9, 1];  // (t-1)(t-3)(t-5)
 let q = [8, -6, 1];         // (t-2)(t-4)
-assert_eq!(check_interlacing(&p, &q), Some(true));
+assert_eq!(check_interlacing(&q, &p), Some(true));
+assert_eq!(check_interlacing(&p, &q), None); // wrong order for these degrees
 
-// Weak interlacing (allows shared roots)
+// Weak interlacing g ≪ f (allows shared roots)
 let f = [2, -3, 1];   // (t-1)(t-2)
 let g = [-1, 1];       // (t-1)
-assert_eq!(check_weak_interlacing(&f, &g), Some(true));
+assert_eq!(check_weak_interlacing(&g, &f), Some(true));
 
 // Same-degree interlacing: roots alternate on the real line
 // (t-1)(t-3) roots {1,3} and (t-2)(t-4) roots {2,4}: 1 < 2 < 3 < 4
@@ -754,6 +757,13 @@ assert_eq!(check_weak_interlacing(&[3, -4, 1], &[8, -6, 1]), Some(true));
 
 // Nested roots do NOT interlace: (t-1)(t-4) vs (t-2)(t-3)
 assert_eq!(check_weak_interlacing(&[4, -5, 1], &[6, -5, 1]), Some(false));
+
+// Undirected check: true iff the pair interlaces in some order allowed by
+// the degrees; the zero polynomial interlaces every real-rooted polynomial.
+assert!(interlaces_either_order(&g, &f));
+assert!(interlaces_either_order(&f, &g));
+assert!(interlaces_either_order(&[0], &f));
+assert!(!interlaces_either_order(&[4, -5, 1], &[6, -5, 1]));
 ```
 
 For large exact coefficients, use the `BigInt` APIs:
@@ -810,12 +820,33 @@ use polytool::Polynomial;
 
 let p = Polynomial::<i64>::from_i64_coeffs(&[1, 1]);  // 1 + t
 let q = p.clone() * p.clone();                         // 1 + 2t + t^2
-assert_eq!(q.evaluate(3), 16);
+assert_eq!(q.evaluate(&3), 16);
 assert!(q.is_palindromic());
-
-let deriv = q.derivative();  // 2 + 2t
-let gcd = Polynomial::<i64>::gcd(&q, &deriv);
+assert_eq!(q.derivative(), Polynomial::from_i64_coeffs(&[2, 2]));
 ```
+
+For plain coefficient vectors, `polytool::vec_poly` provides the same
+operations on `&[C]` for any `CoeffRing` (`i64`, `i128`, `BigInt`,
+`BigRational`, ...). Results are trimmed, and zero is returned as `[0]`.
+Fixed-width coefficient types panic on overflow instead of wrapping.
+
+```rust
+use num_bigint::BigInt;
+use polytool::vec_poly;
+
+let p = [1i64, 1];                                   // 1 + t
+assert_eq!(vec_poly::pow(&p, 3), vec![1, 3, 3, 1]);
+assert_eq!(vec_poly::compose(&[0, 0, 1], &p), vec![1, 2, 1]); // (1 + t)^2
+assert_eq!(vec_poly::reverse(&[1, 2], 3), Some(vec![0, 0, 2, 1])); // t^3 p(1/t)
+assert_eq!(vec_poly::wronskian(&[0, 1], &[-1, 0, 1]), vec![-1, 0, -1]);
+
+let big: Vec<BigInt> = vec![BigInt::from(2), BigInt::from(0), BigInt::from(1)];
+assert_eq!(vec_poly::derivative(&big), vec![BigInt::from(0), BigInt::from(2)]);
+```
+
+Exact binomials and factorials live in `polytool::numeric`:
+`binomial_bigint`, `factorial_bigint`, `falling_factorial_bigint`,
+`multinomial_bigint`, and the checked `binomial_u128`.
 
 ### Recurrence search
 
@@ -930,6 +961,8 @@ assert!(is_palindromic(&coeffs));
 assert!(is_unimodal(&coeffs));
 assert!(is_log_concave(&coeffs));
 assert!(is_ultra_log_concave(&coeffs));
+// ULC with respect to a nominal degree n ≥ deg p (e.g. a matroid rank)
+assert!(is_ultra_log_concave_of_degree(&coeffs, 5));
 assert!(is_gamma_positive(&coeffs));
 
 // Gamma coefficients: p(t) = Σ γ_i t^i (1+t)^{d-2i}
@@ -1085,6 +1118,38 @@ The tracked programs in `examples/` are run with
   Eulerian-square, Hoggatt) as polytool-compatible coefficient rows.
 - `recognize_renewal`: reads recurrence JSON on stdin and reports whether it is
   a weighted renewal recurrence.
+
+## Changelog
+
+### 0.3.0
+
+Breaking changes:
+
+- `vec_poly` is generic over `CoeffRing` instead of fixed to `i64`.
+  Scalars are now passed by reference (`scale(&p, &c)`, `evaluate(&p, &x)`),
+  every arithmetic result is trimmed (`neg` and `shift` included), and calls
+  whose arguments are only integer literals need a type annotation such as
+  `&[1i64, 1]`.
+- `i64` (and the new `i128`) coefficient arithmetic in `vec_poly` and in
+  `Polynomial` arithmetic panics on overflow instead of wrapping in release
+  builds; the same holds for `Ratio<i64>`.
+- `CoeffRing` gains borrowing arithmetic hooks (`add_ref`, `mul_ref`,
+  `add_mul_assign`, ...) with default implementations; a `CoeffRing` impl for
+  `i128` is added, which makes integer-literal type inference ambiguous where
+  it previously defaulted to `i64`.
+
+Additions:
+
+- `vec_poly::{derivative, reverse, reciprocal, compose, pow, wronskian,
+  shift_by, strip_trailing_zeros}` and `Polynomial::pow`.
+- `numeric`: `binomial_bigint`, `factorial_bigint`, `falling_factorial_bigint`,
+  `multinomial_bigint`, `binomial_u128`.
+- `interlaces_either_order` / `interlaces_either_order_bigint_coeffs`
+  (undirected, zero-tolerant weak interlacing) and
+  `is_ultra_log_concave_of_degree` / `_bigint_coeffs` (ULC at a prescribed
+  nominal degree).
+- Expanded documentation of the directed and same-degree semantics of
+  `check_weak_interlacing`.
 
 ## Support
 

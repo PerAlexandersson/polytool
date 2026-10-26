@@ -421,6 +421,7 @@ pub fn by_id(id: &str) -> Option<&'static OeisSequenceDefinition> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vec_poly::trim;
 
     #[test]
     fn catalog_is_sorted_unique_and_decodable() {
@@ -544,13 +545,6 @@ mod tests {
 
     #[test]
     fn every_oeis_export_reproduces_displayed_rows_past_its_initial_prefix() {
-        fn trim(mut row: Vec<BigRational>) -> Vec<BigRational> {
-            while row.len() > 1 && row.last().is_some_and(num_traits::Zero::is_zero) {
-                row.pop();
-            }
-            row
-        }
-
         for sequence in catalog() {
             let (recurrence, initial_rows, first_index) = sequence
                 .recurrence_export_parts()
@@ -570,8 +564,8 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             assert_eq!(
-                exported.into_iter().map(trim).collect::<Vec<_>>(),
-                expected.into_iter().map(trim).collect::<Vec<_>>(),
+                exported.iter().map(|row| trim(row)).collect::<Vec<_>>(),
+                expected.iter().map(|row| trim(row)).collect::<Vec<_>>(),
                 "{}",
                 sequence.id
             );
@@ -588,16 +582,6 @@ mod tests {
 
     #[test]
     fn every_sparse_definition_reproduces_its_fixture_rows() {
-        fn trim(mut row: Vec<BigInt>) -> Vec<BigInt> {
-            while row.last().is_some_and(|value| value == &BigInt::from(0)) {
-                row.pop();
-            }
-            if row.is_empty() {
-                row.push(BigInt::from(0));
-            }
-            row
-        }
-
         let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("fixtures/recurrence-benchmarks/rows");
         for sequence in catalog() {
@@ -620,10 +604,9 @@ mod tests {
                 .unwrap_or_else(|error| panic!("{}: {error}", sequence.id));
             let actual = generated[sequence.fixture_row_offset..]
                 .iter()
-                .cloned()
-                .map(trim)
+                .map(|row| trim(row))
                 .collect::<Vec<_>>();
-            let expected = expected.into_iter().map(trim).collect::<Vec<_>>();
+            let expected = expected.iter().map(|row| trim(row)).collect::<Vec<_>>();
             assert_eq!(actual, expected, "{}", sequence.id);
         }
     }

@@ -11,6 +11,7 @@
 //! Eulerian polynomial `A_N(x)`, while `w = 1` gives the unweighted deco
 //! polynomial.  Coefficient vectors use ascending degree order throughout.
 
+use crate::numeric::binomial_bigint;
 use num_bigint::BigInt;
 
 /// A matrix indexed first by noninitial kernel blocks, then by eligible sites.
@@ -236,18 +237,6 @@ pub fn selected_join_gamma_layers(max_size: usize) -> Vec<Vec<Vec<i64>>> {
 
 fn zero_matrix(rows: usize, columns: usize) -> JointHistogramBigInt {
     vec![vec![BigInt::from(0); columns]; rows]
-}
-
-fn binomial_bigint(n: usize, k: usize) -> BigInt {
-    if k > n {
-        return BigInt::from(0);
-    }
-    let k = k.min(n - k);
-    let mut result = BigInt::from(1);
-    for index in 1..=k {
-        result = result * BigInt::from(n - k + index) / BigInt::from(index);
-    }
-    result
 }
 
 fn table_entry(
