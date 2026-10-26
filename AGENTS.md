@@ -76,8 +76,9 @@
   input/output, exactness guarantees, or standalone build behavior changes.
 - Every module starts with `//!` documentation (purpose, entry points,
   conventions, related modules).  Public items need rustdoc; check with
-  `cargo rustdoc -q --lib -p polytool -- -W missing_docs` (the generated OEIS
-  catalog is the known exception).  Doc examples must compile as doctests and
+  `cargo rustdoc -q --lib -p polytool -- -W missing_docs` (it reports none;
+  keep it that way, including in the generated OEIS catalog, whose generator
+  emits accessor docs).  Doc examples must compile as doctests and
   must not use APIs newer than the declared `rust-version` (1.82).
 - This directory is published as a standalone repository: do not put local
   paths, private project names or workflow notes into code, comments, docs or

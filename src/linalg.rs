@@ -612,6 +612,7 @@ fn signed_mod_u64(value: i64, prime: u64) -> u64 {
 /// Errors raised while constructing or updating a sparse modular row.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SparseModRowError {
+    /// The modulus is zero.
     ZeroModulus,
 }
 
@@ -1126,11 +1127,17 @@ pub struct SparseModEliminationResult {
 pub enum SparseModEliminationError {
     /// The modulus is not prime.  The elimination routine divides by nonzero
     /// pivots, so it must run over a field.
-    ModulusNotPrime { modulus: u64 },
+    ModulusNotPrime {
+        /// The offending modulus.
+        modulus: u64,
+    },
     /// A row contains a column outside `0..num_vars`.
     ColumnOutOfRange {
+        /// Caller-supplied index of the offending row.
         row: usize,
+        /// The out-of-range column.
         column: usize,
+        /// Number of variables; valid columns are `0..num_vars`.
         num_vars: usize,
     },
 }
@@ -1864,15 +1871,23 @@ pub struct LinearSystemSolution {
 /// Resource limits for a complete rational kernel computation.
 #[derive(Debug, Clone, Copy)]
 pub struct RationalKernelLimits {
+    /// Maximum number of matrix entries (rows times columns); the kernel computation also
+    /// requires `columns^2 <= max_entries / 2`.
     pub max_entries: usize,
+    /// Maximum number of exact arithmetic operations during elimination.
     pub max_operations: usize,
+    /// Maximum bit length of a numerator or denominator of any rational that occurs.
     pub max_coefficient_bits: u64,
 }
 
 /// Failure to compute a kernel, distinguished from a proved zero kernel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RationalKernelError {
+    /// The rows do not all have the stated number of columns, or the rank certificate is
+    /// inconsistent.
     InvalidDimensions,
+    /// A resource limit was reached; the payload names it (`matrix entries`,
+    /// `coefficient bits` or `arithmetic operations`). This is not a statement about the kernel.
     BudgetExceeded(&'static str),
 }
 
@@ -1880,9 +1895,15 @@ pub enum RationalKernelError {
 /// Basis vectors are stored separately (as columns mathematically).
 #[derive(Debug, Clone)]
 pub struct RationalKernel {
+    /// Kernel basis; `basis[i]` has one entry per column of the matrix. Entry
+    /// `free_columns[i]` of `basis[i]` is one and the other free-column entries are zero.
     pub basis: Vec<Vec<Q>>,
+    /// Free columns in ascending order, one per basis vector.
     pub free_columns: Vec<usize>,
+    /// Pivot columns in ascending order; their number is the rank.
     pub pivot_columns: Vec<usize>,
+    /// Row indices of the input matrix forming an independent set, one per pivot column in
+    /// the same order.
     pub independent_rows: Vec<usize>,
     /// Inverse of `A[independent_rows, pivot_columns]`.
     pub inverse_minor: Vec<Vec<Q>>,
@@ -2238,20 +2259,33 @@ fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option
 /// Exact failure reported by brute-force total-positivity checking.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TotalPositivityError {
+    /// The rows do not all have the same length.
     RaggedMatrix {
+        /// Zero-based index of the first row whose length differs from that of row 0.
         row: usize,
+        /// Length of row 0.
         expected_columns: usize,
+        /// Length of the offending row.
         found_columns: usize,
     },
+    /// Some minor is negative.
     NegativeMinor {
+        /// Order of the minor.
         size: usize,
+        /// Zero-based indices of the rows of the minor, in increasing order.
         rows: Vec<usize>,
+        /// Zero-based indices of the columns of the minor, in increasing order.
         columns: Vec<usize>,
+        /// Value of the minor.
         determinant: BigInt,
     },
+    /// In strict mode, a minor that is zero although its submatrix is not entirely zero.
     ZeroMinor {
+        /// Order of the minor.
         size: usize,
+        /// Zero-based indices of the rows of the minor, in increasing order.
         rows: Vec<usize>,
+        /// Zero-based indices of the columns of the minor, in increasing order.
         columns: Vec<usize>,
     },
 }
@@ -2372,28 +2406,8 @@ pub fn is_totally_nonnegative(mat: &[Vec<i64>], max_minor_size: usize) -> bool {
     check_total_positivity(mat, max_minor_size, false).is_ok()
 }
 
-/// Check total non-negativity via Neville elimination (adjacent-row subtraction).
-///
-/// This is *much* faster than [`check_total_positivity`]: O(n²m) instead of
-/// exponential in `min(n,m)`. It checks ALL minors, not just up to a given size.
-///
-/// A matrix is TNN iff Neville elimination completes with all multipliers ≥ 0
-/// and no negative entries arise during the process.
-///
-/// Returns `Ok(())` if TNN, or `Err(msg)` describing the failure.
-///
-/// # Example
-/// ```
-/// use polytool::linalg::check_tnn_neville;
-/// let pascal = vec![
-///     vec![1, 0, 0],
-///     vec![1, 1, 0],
-///     vec![1, 2, 1],
-///     vec![1, 3, 3],
-///     vec![1, 4, 6],
-/// ];
-/// assert!(check_tnn_neville(&pascal).is_ok());
-/// ```
+// Neville elimination on the rows of an exact rational matrix: the shared
+// kernel of the `i64` and `BigInt` entry points, which also apply it to the transpose.
 fn check_tnn_neville_rational_rows(a: &mut [Vec<Q>]) -> Result<(), String> {
     let nrows = a.len();
     let ncols = a.first().map_or(0, Vec::len);
@@ -2444,6 +2458,31 @@ fn check_tnn_neville_rational_rows(a: &mut [Vec<Q>]) -> Result<(), String> {
     Ok(())
 }
 
+/// Check total non-negativity of an integer matrix via Neville elimination
+/// (adjacent-row subtraction), in exact rational arithmetic.
+///
+/// This is much faster than [`check_total_positivity`]: O(n²m) instead of
+/// exponential in `min(n,m)`. It checks all minors, not just up to a given size.
+/// The matrix is TNN iff the elimination, applied to the matrix and to its
+/// transpose, completes with all multipliers ≥ 0 and no negative entry arises.
+///
+/// Returns `Ok(())` if the matrix is TNN, or `Err(msg)` describing the first
+/// failure: ragged rows, a negative entry, or a failed elimination step. An empty
+/// matrix and a matrix with no columns are TNN. Use [`check_tnn_neville_bigint`]
+/// when entries may not fit in `i64`.
+///
+/// # Example
+/// ```
+/// use polytool::linalg::check_tnn_neville;
+/// let pascal = vec![
+///     vec![1, 0, 0],
+///     vec![1, 1, 0],
+///     vec![1, 2, 1],
+///     vec![1, 3, 3],
+///     vec![1, 4, 6],
+/// ];
+/// assert!(check_tnn_neville(&pascal).is_ok());
+/// ```
 pub fn check_tnn_neville(mat: &[Vec<i64>]) -> Result<(), String> {
     let nrows = mat.len();
     if nrows == 0 {

@@ -28,6 +28,7 @@ use std::fmt;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
+/// Exact rational number used for every coefficient (`num_rational::Ratio<BigInt>`).
 pub type BigRational = Ratio<BigInt>;
 
 // ---------------------------------------------------------------------------
@@ -104,6 +105,8 @@ impl RecurrenceOptions {
 /// Stored as `coeffs[i][j]` = coefficient of n^i t^j.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BivarPoly {
+    /// Coefficient array: `coeffs[i][j]` is the coefficient of `n^i t^j`. Rows may have
+    /// different lengths; missing entries are zero.
     pub coeffs: Vec<Vec<BigRational>>,
 }
 
@@ -325,13 +328,23 @@ pub struct VectorRecurrenceOptions {
 /// the original, normalized (`q = 1`) API.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorRecurrenceDenominatorOptions {
+    /// Maximum degree in `x` of every matrix-entry coefficient.
     pub var_deg: usize,
+    /// Maximum degree in the source index `n` of every matrix-entry coefficient.
     pub idx_deg: usize,
+    /// Maximum derivative order in every matrix entry.
     pub diff_deg: usize,
+    /// If false, fit an additive polynomial forcing vector.
     pub homogeneous: bool,
+    /// Maximum degree in `x` of each forcing component.
     pub forcing_var_deg: usize,
+    /// Maximum degree in `n` of each forcing component.
     pub forcing_idx_deg: usize,
+    /// Number of final complete transitions `F_n -> F_{n+1}` excluded from fitting and
+    /// checked independently.
     pub held_out_transitions: usize,
+    /// Reject non-identifiable rows instead of returning an arbitrary particular
+    /// solution with free parameters set to zero.
     pub require_unique: bool,
     /// Maximum degree in `x` of the common factor `q`.
     pub denominator_var_deg: usize,
@@ -392,17 +405,27 @@ pub struct VectorRecurrenceRowDiagnostics {
 /// A fitted recurrence and the diagnostics used to accept it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorRecurrenceFit {
+    /// The fitted recurrence. For a companion fit the matrix acts on the stacked state
+    /// `(F_{n-lag+1}, ..., F_n)`.
     pub recurrence: VectorRecurrence,
+    /// Rank diagnostics of each fitted output row. A companion fit solves only its final
+    /// block row, so only that block's components are listed.
     pub rows: Vec<VectorRecurrenceRowDiagnostics>,
+    /// Number of transitions `F_n -> F_{n+1}` used for fitting.
     pub fit_transitions: usize,
+    /// Number of final transitions reserved for independent exact verification.
     pub held_out_transitions: usize,
 }
 
 /// A vector recurrence with a common polynomial denominator on its left.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SharedDenominatorVectorRecurrence {
+    /// Common left factor `q(n, x)`.
     pub denominator: BivarPoly,
+    /// Row-major operator matrix: target component, then source component.
     pub matrix: Vec<Vec<WeylOperator>>,
+    /// Optional additive polynomial vector, one entry per target component. `None` means a
+    /// homogeneous system.
     pub forcing: Option<Vec<BivarPoly>>,
 }
 
@@ -410,6 +433,8 @@ pub struct SharedDenominatorVectorRecurrence {
 pub type VectorRecurrenceWithDenominator = SharedDenominatorVectorRecurrence;
 
 impl SharedDenominatorVectorRecurrence {
+    /// Number of target components (rows of `matrix`); for a square system this is also
+    /// the number of source components.
     pub fn dimension(&self) -> usize {
         self.matrix.len()
     }
@@ -496,14 +521,20 @@ fn evaluate_shared_denominator_rectangular_rational(
 /// Result of a shared-denominator vector recurrence search.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SharedDenominatorVectorRecurrenceFit {
+    /// The fitted recurrence.
     pub recurrence: SharedDenominatorVectorRecurrence,
+    /// Rank and equation counts of the joint linear system.
     pub diagnostics: SharedDenominatorVectorRecurrenceDiagnostics,
+    /// Number of transitions `F_n -> F_{n+1}` used for fitting.
     pub fit_transitions: usize,
+    /// Number of final transitions reserved for independent exact verification.
     pub held_out_transitions: usize,
     /// Rank after fixing the canonical denominator pivot to one.
     pub rank: usize,
     /// Nullity after fixing the canonical denominator pivot.
     pub nullity: usize,
+    /// Exponents `(i, j)` of the denominator monomial `n^i x^j` that was normalized to one;
+    /// all earlier monomials in the ordering `(n^0 x^0, n^0 x^1, ..., n^1 x^0, ...)` are zero.
     pub denominator_pivot: (usize, usize),
 }
 
@@ -512,43 +543,74 @@ pub struct SharedDenominatorVectorRecurrenceFit {
 /// system, not independently fitted output rows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SharedDenominatorVectorRecurrenceDiagnostics {
+    /// Total number of coefficient equations, the sum of `equations_by_output`.
     pub total_equations: usize,
+    /// Number of coefficient equations contributed by each output component, in the order
+    /// of `output_components`.
     pub equations_by_output: Vec<usize>,
+    /// Number of unknown coefficients after the denominator pivot is fixed: later
+    /// denominator monomials plus the matrix and forcing coefficients of every output row.
     pub unknowns: usize,
+    /// Exact rank of the coefficient matrix of the joint system.
     pub rank: usize,
+    /// `unknowns - rank`; zero means the model is identifiable once the pivot is fixed.
     pub nullity: usize,
+    /// Component indices of the fitted output rows. A companion fit reports the final
+    /// block row, so these indices start at `(lag - 1)` times the component count.
     pub output_components: Vec<usize>,
 }
 
+/// Shorter compatibility name for [`SharedDenominatorVectorRecurrenceFit`].
 pub type VectorRecurrenceWithDenominatorFit = SharedDenominatorVectorRecurrenceFit;
 
 /// Why a fixed-bound vector recurrence search could not return a model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorRecurrenceFitError {
+    /// The state list is empty or its first state has no components.
     EmptyStateVector,
+    /// A companion fit was requested with `lag == 0`.
     InvalidLag,
+    /// There is no fitting transition left after reserving the held-out ones.
     NotEnoughTransitions {
+        /// Number of available transitions (`states.len() - 1`, or `states.len() - lag` for a
+        /// companion fit).
         transitions: usize,
+        /// Requested number of held-out transitions.
         held_out: usize,
     },
+    /// A state has a different number of components from the first state.
     InconsistentStateDimension {
+        /// Zero-based position of the offending state in the input list.
         state: usize,
+        /// Number of components of the first state.
         expected: usize,
+        /// Number of components of the offending state.
         found: usize,
     },
+    /// The linear system has no solution in the requested search space.
     NoSolution {
+        /// Zero-based index of the output component whose system failed.
         output_component: usize,
     },
+    /// Unique identification was required, but a row has free parameters.
     Underdetermined {
+        /// Zero-based index of the output component whose system is underdetermined.
         output_component: usize,
+        /// Exact rank of that system.
         rank: usize,
+        /// Number of unknowns of that system.
         unknowns: usize,
     },
+    /// The fitted recurrence does not reproduce a held-out transition.
     HeldOutVerificationFailed {
+        /// Source index `n` of the first failing held-out transition `F_n -> F_{n+1}`.
         transition: usize,
     },
+    /// A source index `first_index + offset` does not fit in `usize`.
     IndexOverflow {
+        /// Index of the first state.
         first_index: usize,
+        /// Zero-based position of the state whose index overflowed.
         offset: usize,
     },
 }
@@ -608,10 +670,23 @@ impl std::error::Error for VectorRecurrenceFitError {}
 /// Why a shared-denominator vector recurrence search could not return a model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SharedDenominatorVectorRecurrenceFitError {
+    /// A failure shared with the denominator-free fitter.
     Base(VectorRecurrenceFitError),
+    /// No nonzero denominator in the requested degrees gives a usable recurrence, that is,
+    /// one consistent with the data and nonzero at every source index.
     NoSharedDenominator,
-    SharedDenominatorUnderdetermined { rank: usize, unknowns: usize },
-    HeldOutVerificationFailed { transition: usize },
+    /// The normalized system has free parameters although unique identification was required.
+    SharedDenominatorUnderdetermined {
+        /// Exact rank of the normalized system (denominator pivot fixed to one).
+        rank: usize,
+        /// Number of unknowns of the normalized system.
+        unknowns: usize,
+    },
+    /// The fitted recurrence does not reproduce a held-out transition.
+    HeldOutVerificationFailed {
+        /// Source index `n` of the first failing held-out transition `F_n -> F_{n+1}`.
+        transition: usize,
+    },
 }
 
 impl From<VectorRecurrenceFitError> for SharedDenominatorVectorRecurrenceFitError {
@@ -646,9 +721,22 @@ impl std::error::Error for SharedDenominatorVectorRecurrenceFitError {}
 /// Errors from applying a vector recurrence to one state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VectorRecurrenceEvaluationError {
+    /// Some matrix row does not have as many operators as there are rows.
     NonSquareMatrix,
-    StateDimension { expected: usize, found: usize },
-    ForcingDimension { expected: usize, found: usize },
+    /// The state has the wrong number of components.
+    StateDimension {
+        /// Number of components the matrix acts on.
+        expected: usize,
+        /// Number of components supplied.
+        found: usize,
+    },
+    /// The forcing vector has the wrong number of components.
+    ForcingDimension {
+        /// Number of matrix rows.
+        expected: usize,
+        /// Number of forcing components supplied.
+        found: usize,
+    },
 }
 
 impl fmt::Display for VectorRecurrenceEvaluationError {
@@ -672,8 +760,11 @@ impl std::error::Error for VectorRecurrenceEvaluationError {}
 /// type, while denominator-specific failures are represented separately.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SharedDenominatorVectorRecurrenceEvaluationError {
+    /// Dimension or forcing error shared with the denominator-free evaluator.
     Base(VectorRecurrenceEvaluationError),
+    /// The shared denominator evaluates to the zero polynomial at the source index.
     ZeroDenominator,
+    /// Some numerator component is not exactly divisible by the evaluated denominator.
     NonPolynomialQuotient,
 }
 
@@ -4378,6 +4469,12 @@ impl Recurrence {
         lines.join("\n")
     }
 
+    /// Export a Mathematica definition of `P[n, t]` with first index 1.
+    ///
+    /// The first `max_offset()` entries of `initial_polys` (all of them, if fewer are
+    /// supplied) become base cases and the recurrence applies from the next index. Use
+    /// [`Self::to_mathematica_definition_rational_indexed`] to keep every supplied row and
+    /// choose the first index.
     pub fn to_mathematica_definition_rational(&self, initial_polys: &[Vec<BigRational>]) -> String {
         let base_count = self.max_offset().min(initial_polys.len());
         self.to_mathematica_definition_rational_indexed_prefix(initial_polys, 1, base_count)
@@ -4396,6 +4493,7 @@ impl Recurrence {
         )
     }
 
+    /// Integer-coefficient wrapper for [`Self::to_mathematica_definition_rational`].
     pub fn to_mathematica_definition(&self, initial_polys: &[Vec<i64>]) -> String {
         let rational_polys = i64_polys_to_rational(initial_polys);
         self.to_mathematica_definition_rational(&rational_polys)
@@ -4445,6 +4543,12 @@ impl Recurrence {
         lines.join("\n")
     }
 
+    /// Export a Sage definition of `P(n)` over `QQ[t]` with first index 1.
+    ///
+    /// The first `max_offset()` entries of `initial_polys` (all of them, if fewer are
+    /// supplied) become base cases and the recurrence applies from the next index. Use
+    /// [`Self::to_sage_definition_rational_indexed`] to keep every supplied row and choose
+    /// the first index.
     pub fn to_sage_definition_rational(&self, initial_polys: &[Vec<BigRational>]) -> String {
         let base_count = self.max_offset().min(initial_polys.len());
         self.to_sage_definition_rational_indexed_prefix(initial_polys, 1, base_count)
@@ -4463,6 +4567,7 @@ impl Recurrence {
         )
     }
 
+    /// Integer-coefficient wrapper for [`Self::to_sage_definition_rational`].
     pub fn to_sage_definition(&self, initial_polys: &[Vec<i64>]) -> String {
         let rational_polys = i64_polys_to_rational(initial_polys);
         self.to_sage_definition_rational(&rational_polys)
@@ -4619,6 +4724,13 @@ impl Recurrence {
         lines.join("\n")
     }
 
+    /// Export standalone Python code defining `P(n)` with exact `Fraction` arithmetic and
+    /// first index 1.
+    ///
+    /// The first `max_offset()` entries of `initial_polys` (all of them, if fewer are
+    /// supplied) become base cases and the recurrence applies from the next index. Use
+    /// [`Self::to_python_definition_rational_indexed`] to keep every supplied row and
+    /// choose the first index.
     pub fn to_python_definition_rational(&self, initial_polys: &[Vec<BigRational>]) -> String {
         let base_count = self.max_offset().min(initial_polys.len());
         self.to_python_definition_rational_indexed_prefix(initial_polys, 1, base_count)
@@ -4637,6 +4749,7 @@ impl Recurrence {
         )
     }
 
+    /// Integer-coefficient wrapper for [`Self::to_python_definition_rational`].
     pub fn to_python_definition(&self, initial_polys: &[Vec<i64>]) -> String {
         let rational_polys = i64_polys_to_rational(initial_polys);
         self.to_python_definition_rational(&rational_polys)
@@ -4723,10 +4836,14 @@ impl BivarPoly {
         join_signed_terms(&terms)
     }
 
+    /// Format as a Mathematica expression in `n` and `t` with exact rational coefficients;
+    /// the zero polynomial is `0`.
     pub fn to_mathematica_code(&self) -> String {
         self.to_code(CodeStyle::Mathematica)
     }
 
+    /// Format as a Sage expression in `n` and `t`; non-integer coefficients are written
+    /// `QQ(a)/b`, and the zero polynomial is `0`.
     pub fn to_sage_code(&self) -> String {
         self.to_code(CodeStyle::Sage)
     }
@@ -4812,11 +4929,19 @@ impl fmt::Display for Recurrence {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecurrenceEvaluationError {
     /// More initial rows are needed before the recurrence can be evaluated.
-    InsufficientInitialRows { required: usize, provided: usize },
+    InsufficientInitialRows {
+        /// Number of rows needed, the largest term offset.
+        required: usize,
+        /// Number of rows supplied.
+        provided: usize,
+    },
     /// An offset points before the first available initial/generated row.
     OffsetBeforeInitialRow {
+        /// Index `n` of the row being evaluated.
         n: usize,
+        /// Offset `r` of the term that refers to `P_{n-r}`.
         offset: usize,
+        /// Index of the first available row.
         first_index: usize,
     },
     /// The evaluated LHS factor is the zero polynomial.
@@ -4825,7 +4950,9 @@ pub enum RecurrenceEvaluationError {
     NonPolynomialQuotient,
     /// The requested row index cannot be represented by `usize`.
     IndexOverflow {
+        /// Index of the first available row.
         first_index: usize,
+        /// Number of rows already available; `first_index + row_offset` overflowed.
         row_offset: usize,
     },
 }
@@ -4990,9 +5117,12 @@ pub struct RecurrenceJson {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RecurrenceJsonData {
+    /// Right-hand-side terms `sign(n) c(n,t) D^d P_{n-r}(t)`.
     pub terms: Vec<RecurrenceTermJson>,
+    /// Left-hand factor `f(n,t)`; omitted when it is the constant 1.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub denominator: Option<BivarPolyJson>,
+    /// Additive term `g(n,t)`; omitted for a homogeneous recurrence.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inhomogeneous: Option<BivarPolyJson>,
 }
@@ -5001,9 +5131,13 @@ pub struct RecurrenceJsonData {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RecurrenceTermJson {
+    /// Lag `r`: the term refers to `P_{n-r}`.
     pub offset: usize,
+    /// Derivative order `d` in `t` applied to `P_{n-r}`.
     pub deriv_order: usize,
+    /// Extra sign factor: `none`, or `alternating_n` for a multiplier `(-1)^n`.
     pub sign: String,
+    /// Coefficient polynomial `c(n,t)`.
     pub coeff: BivarPolyJson,
 }
 
@@ -5014,6 +5148,9 @@ pub struct RecurrenceTermJson {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct BivarPolyJson {
+    /// Coefficient array: `coeffs[i][j]` is the coefficient of `n^i t^j`, an integer or
+    /// `num/den` string. Rows are padded to equal length on output and may be ragged on
+    /// input.
     pub coeffs: Vec<Vec<String>>,
 }
 
@@ -5021,15 +5158,25 @@ pub struct BivarPolyJson {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RecurrenceJsonSearch {
+    /// The recurrence as text, `f(n,t) P(n) = ...`.
     pub recurrence_text: String,
+    /// Number of input rows supplied to the search, before `skip_prefix`.
     pub source_rows: usize,
+    /// Number of leading input rows that were ignored.
     pub skip_prefix: usize,
+    /// Number of unknown coefficients of the winning linear system.
     pub unknowns: usize,
+    /// Weighted unknown count used to order the candidates.
     pub weighted_unknowns: usize,
+    /// Number of scalar equations of the winning linear system.
     pub equations: usize,
+    /// Number of rows, after `skip_prefix`, used to fit the winning system.
     pub fit_polynomials: usize,
+    /// Number of held-out rows verified after fitting.
     pub verification_polynomials: usize,
+    /// Number of candidates that were actually solved before this one was accepted.
     pub candidates_tried: usize,
+    /// Bounds of the winning candidate configuration.
     pub options: RecurrenceOptionsJson,
 }
 
@@ -5037,15 +5184,25 @@ pub struct RecurrenceJsonSearch {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RecurrenceOptionsJson {
+    /// Maximum degree in `t` of the coefficient polynomials.
     pub var_deg: usize,
+    /// Maximum degree in `n` of the coefficient polynomials.
     pub idx_deg: usize,
+    /// Maximum derivative order.
     pub diff_deg: usize,
+    /// Maximum lag (number of previous rows used).
     pub rec_len: usize,
+    /// False when an inhomogeneous term was allowed.
     pub homogeneous: bool,
+    /// Maximum degree in `t` of the inhomogeneous term.
     pub inhomo_var_deg: usize,
+    /// Maximum degree in `n` of the inhomogeneous term.
     pub inhomo_idx_deg: usize,
+    /// Degree bound in `t` of the left-hand factor `f(n,t)`.
     pub denom_var_deg: usize,
+    /// Degree bound in `n` of the left-hand factor `f(n,t)`.
     pub denom_idx_deg: usize,
+    /// Whether terms multiplied by `(-1)^n` were allowed.
     pub alternating_sign: bool,
 }
 

@@ -7,7 +7,11 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RepresentationSearchStatus {
+    /// The search ran to completion: every requested cell was solved or all of its
+    /// configurations were inspected.
     Complete,
+    /// The global candidate budget ran out while configurations remained uninspected;
+    /// unresolved cells are reported as `incomplete`.
     BudgetExhausted,
 }
 
@@ -15,13 +19,24 @@ pub enum RepresentationSearchStatus {
 /// The frontier compares every field componentwise, with `false < true`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RepresentationComplexity {
+    /// Largest lag `r` (the term `P_{n-r}`) of a term with a nonzero coefficient. This is the
+    /// actual lag, which can be smaller than the requested bound.
     pub rec_len: usize,
+    /// Largest derivative order of a term with a nonzero coefficient.
     pub diff_deg: usize,
+    /// Largest power of `t` among the nonzero coefficients of the right-hand-side terms and
+    /// of the inhomogeneous term.
     pub var_deg: usize,
+    /// Largest power of the index `n` among the nonzero coefficients of the right-hand-side
+    /// terms and of the inhomogeneous term.
     pub idx_deg: usize,
+    /// Degree in `t` of the left-hand factor `f(n,t)`; zero when there is no denominator.
     pub denom_var_deg: usize,
+    /// Degree in `n` of the left-hand factor `f(n,t)`; zero when there is no denominator.
     pub denom_idx_deg: usize,
+    /// Whether a nonzero additive term `g(n,t)` is present.
     pub inhomogeneous: bool,
+    /// Whether some term carries the factor `(-1)^n`.
     pub alternating_sign: bool,
     /// Number of nonzero scalar coefficients, including the denominator.
     pub nonzero_coefficients: usize,
@@ -30,19 +45,27 @@ pub struct RepresentationComplexity {
 /// One exact fit to supplied rows. This is never an all-rank proof.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecurrenceRepresentation {
+    /// The recurrence as text, `f(n,t) P(n) = ...`.
     pub recurrence: String,
+    /// The recurrence as a LaTeX expression.
     pub latex: String,
     /// Reusable existing v1 recurrence schema, with sufficient initial rows.
     pub recurrence_json: RecurrenceJson,
+    /// Actual support of the recurrence.
     pub complexity: RepresentationComplexity,
     /// Always `exact_fit`; checking a finite input cannot certify an identity.
     pub evidence: String,
     /// First checked target in the renumbered sequence (whose first row is 1).
     pub first_checked_index: usize,
+    /// Last checked target index in the same renumbering (the number of rows after
+    /// `skip_prefix`).
     pub last_checked_index: usize,
     /// First checked target as a 1-based position in the original input.
     pub first_checked_input_row: usize,
+    /// Number of leading rows, counted after `skip_prefix`, used to fit the coefficients.
     pub fit_polynomials: usize,
+    /// Number of trailing rows reserved for held-out verification; zero when verification
+    /// is disabled.
     pub verification_polynomials: usize,
     /// Supplied target indices at which the denominator is the zero polynomial.
     /// The identity can still hold there, but it cannot generate that row.
@@ -52,31 +75,47 @@ pub struct RecurrenceRepresentation {
 /// Coverage of one requested pair of length/order bounds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepresentationCoverage {
+    /// Requested lag bound of this cell: candidates use lags `1..=rec_len`.
     pub rec_len: usize,
+    /// Requested derivative-order bound of this cell: candidates use orders `0..=diff_deg`.
     pub diff_deg: usize,
     /// Index into `representations`, when this cell produced a candidate.
     pub representation: Option<usize>,
     /// `found`, `not_found`, `incomplete`, or `insufficient_rows`.
     /// `not_found` refers to the adaptive fitter, not a nonexistence proof.
     pub status: String,
+    /// Number of candidate configurations of this cell that were inspected.
     pub configurations_considered: usize,
 }
 
 /// Serializable menu shared by the Rust, CLI, MCP and browser APIs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecurrenceRepresentations {
+    /// Schema identifier, `polytool.recurrence-representations.v1`.
     pub schema: String,
+    /// Whether the search completed or exhausted its budget.
     pub status: RepresentationSearchStatus,
+    /// The search bounds that were used.
     pub search: AdaptiveSearchOptions,
+    /// Global limit on inspected configurations; `None` means unbounded.
     pub max_candidates: Option<usize>,
+    /// Number of input rows supplied, before `skip_prefix` is applied.
     pub source_rows: usize,
+    /// Total number of configurations inspected across all cells; this is the quantity
+    /// bounded by `max_candidates`.
     pub configurations_considered: usize,
+    /// Total number of configurations in the searched space.
     pub configurations_available: usize,
+    /// Number of inspected configurations skipped because no fitting prefix of the rows
+    /// had enough equations.
     pub insufficient_fit_rows: usize,
+    /// Retained candidates: at most one per cell, deduplicated when formula and checked
+    /// domain agree.
     pub representations: Vec<RecurrenceRepresentation>,
     /// Indices of nondominated candidates among those returned. Starting index
     /// is also compared, so a later tail does not dominate an earlier identity.
     pub frontier: Vec<usize>,
+    /// One entry per requested `(rec_len, diff_deg)` cell, in ascending lexicographic order.
     pub coverage: Vec<RepresentationCoverage>,
 }
 

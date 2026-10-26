@@ -11,10 +11,18 @@ type PolynomialMatrix = Vec<Vec<BivarPoly>>;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct IndexedLagSource {
+    /// `coefficients[i]` is `a_i(n, X)` as an array indexed `[n power][X power]` of
+    /// exact rational strings; the source order `k` is `coefficients.len()`.
     pub coefficients: Vec<ExactRows>,
+    /// Initial rows: `seeds[j]` is `P[origin + j]` as ascending-power rational strings.
+    /// Exactly `k` seeds are required.
     pub seeds: ExactRows,
+    /// Original index of `seeds[0]`; the rule is used for base indices `n >= origin`.
+    /// Defaults to zero.
     #[serde(default)]
     pub origin: usize,
+    /// Free-form note on where the source came from. It is informational and is never
+    /// used in a computation.
     #[serde(default)]
     pub provenance: Option<String>,
 }
@@ -48,11 +56,22 @@ impl IndexedLagSource {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RecurrencePropagationCertificate {
+    /// `coefficients[j]` is the polynomial multiplying `E[n + j]`, as an array indexed
+    /// `[n power][X power]`. The last entry is the leader.
     pub coefficients: Vec<ExactRows>,
+    /// Dimension of the jet state: the source order times one more than the largest
+    /// derivative order in the support.
     pub state_dimension: usize,
+    /// Number of distinct `(lag, derivative_order, index_degree)` triples in the support.
     pub basic_columns: usize,
+    /// Nonnegative integer ranks, as decimal strings, at which the leader vanishes
+    /// identically in `X`. `None` means the bounded exact analysis was not performed.
     pub exceptional_ranks: Option<Vec<String>>,
+    /// How `regular_from` was derived: `exact_integer_zeros` or `coefficient_root_bound`.
     pub cutoff_method: String,
+    /// Base index from which the leader does not vanish identically in `X` at any rank:
+    /// at least the domain start and beyond every exceptional rank (or, when those are
+    /// unknown, beyond a Cauchy bound on the roots).
     pub regular_from: usize,
 }
 
