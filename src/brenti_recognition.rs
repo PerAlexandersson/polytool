@@ -118,7 +118,9 @@ pub enum BrentiRecognition {
     /// certificate covers the supplied prefix only, and certifies total
     /// nonnegativity of the coefficient matrix, not real-rootedness of rows.
     Certified {
+        /// The recovered digraph, with zero-weight edges dropped.
         digraph: BrentiStripDigraph,
+        /// The verified certificate (row indices and path-count rows).
         certificate: BrentiSequenceCertificate,
     },
     /// No planar strip digraph within the bounds reproduces the rows.  This
@@ -126,11 +128,16 @@ pub enum BrentiRecognition {
     /// visited (every maximal support extends one of them); `obstruction`
     /// explains the failure when a single reason is known.
     ImpossibleWithinBounds {
+        /// Number of partial interval supports visited by the search.
         supports_checked: usize,
+        /// Human-readable reason, when a single obstruction is known.
         obstruction: String,
     },
     /// A budget was exhausted before the search was decided.
-    Inconclusive { reason: String },
+    Inconclusive {
+        /// Which budget was exhausted, and where.
+        reason: String,
+    },
 }
 
 impl BrentiRecognition {
@@ -165,13 +172,20 @@ impl fmt::Display for BrentiRecognition {
 /// Invalid input for [`recognize_brenti_strip_digraph`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BrentiRecognitionError {
+    /// No rows were supplied.
     EmptyInput,
+    /// `first_row_index` was not 0 or 1 (larger offsets make the search
+    /// nonlinear).
     UnsupportedFirstRowIndex {
+        /// The rejected index.
         found: usize,
     },
+    /// With `first_row_index == 0` the first row must be the polynomial `1`.
     FirstRowNotOne {
+        /// Coefficients of the supplied first row (ascending).
         found: Vec<BigInt>,
     },
+    /// `max_target_span` was `Some(0)`.
     ZeroTargetSpan,
     /// The digraph found by the search failed re-verification (a bug).
     CertificateRejected(BrentiError),

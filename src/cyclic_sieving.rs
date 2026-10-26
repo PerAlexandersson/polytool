@@ -27,11 +27,10 @@
 //! invalid input (zero group order, wrong table length, ...) and never panic on
 //! such input, except that [`cyclotomic_polynomial_bigint`],
 //! [`reduce_modulo_cyclic_bigint`] and [`root_of_unity_evaluation_bigint`]
-//! panic on a zero order.  The cost of a full report grows roughly cubically
-//! with the group order (a cyclotomic polynomial is rebuilt for each of the
-//! `n` powers; in a release build order 1000 takes a few seconds and order
-//! 3000 about a minute), so keep orders moderate;
-//! [`bicyclic_sieving_report_bigint`] enforces [`BICYCLIC_MAX_GROUP_SIZE`].
+//! panic on a zero order.  A full report reduces `P` once per divisor of the
+//! group order and its size is linear in the order (one evaluation per
+//! power); [`bicyclic_sieving_report_bigint`] enforces
+//! [`BICYCLIC_MAX_GROUP_SIZE`].
 
 use crate::vec_poly::{degree, is_zero, strip_trailing_zeros};
 use num_bigint::BigInt;
@@ -218,29 +217,9 @@ pub fn root_of_unity_evaluation_bigint(
 ) -> RootOfUnityEvaluation {
     assert!(group_order >= 1, "group order must be positive");
     let power = power % group_order;
-    let root_order = if power == 0 {
-        1
-    } else {
-        group_order / group_order.gcd(&power)
-    };
-    if root_order == 1 {
-        let value = evaluate_at_one(coeffs);
-        return RootOfUnityEvaluation {
-            group_order,
-            power,
-            root_order,
-            integer_value: Some(value.clone()),
-            remainder: vec![value],
-        };
-    }
-
-    let phi = cyclotomic_polynomial_bigint(root_order);
-    let remainder = remainder_monic(coeffs.to_vec(), &phi);
-    let integer_value = match remainder.as_slice() {
-        [] => Some(BigInt::zero()),
-        [constant] => Some(constant.clone()),
-        _ => None,
-    };
+    let root_order = root_order_of_power(group_order, power);
+    let (remainder, integer_value) =
+        evaluate_at_root_order(coeffs, root_order, &mut BTreeMap::new());
     RootOfUnityEvaluation {
         group_order,
         power,
@@ -248,6 +227,36 @@ pub fn root_of_unity_evaluation_bigint(
         integer_value,
         remainder,
     }
+}
+
+/// Order of `zeta_group_order^power` for `power < group_order`.
+fn root_order_of_power(group_order: usize, power: usize) -> usize {
+    if power == 0 {
+        1
+    } else {
+        group_order / group_order.gcd(&power)
+    }
+}
+
+/// Remainder of `P` modulo `Phi_root_order` and its integer value when the
+/// remainder is constant.  `cyclotomic` caches the cyclotomic polynomials.
+fn evaluate_at_root_order(
+    coeffs: &[BigInt],
+    root_order: usize,
+    cyclotomic: &mut BTreeMap<usize, Vec<BigInt>>,
+) -> (Vec<BigInt>, Option<BigInt>) {
+    if root_order == 1 {
+        let value = evaluate_at_one(coeffs);
+        return (vec![value.clone()], Some(value));
+    }
+    let phi = cyclotomic_cached(root_order, cyclotomic);
+    let remainder = remainder_monic(coeffs.to_vec(), &phi);
+    let integer_value = match remainder.as_slice() {
+        [] => Some(BigInt::zero()),
+        [constant] => Some(constant.clone()),
+        _ => None,
+    };
+    (remainder, integer_value)
 }
 
 /// Check one CSP candidate.  If `fixed_counts` is `None`, this only profiles
@@ -277,8 +286,23 @@ pub fn cyclic_sieving_report_bigint(
     strip_trailing_zeros(&mut coefficients);
     let mut evaluations = Vec::with_capacity(order);
     let mut checks = Vec::new();
+    // The evaluation depends only on the order of the root, a divisor of
+    // `order`, so each divisor is reduced once.
+    let mut cyclotomic = BTreeMap::new();
+    let mut by_root_order: BTreeMap<usize, (Vec<BigInt>, Option<BigInt>)> = BTreeMap::new();
     for power in 0..order {
-        let evaluation = root_of_unity_evaluation_bigint(&coefficients, order, power);
+        let root_order = root_order_of_power(order, power);
+        let (remainder, integer_value) = by_root_order
+            .entry(root_order)
+            .or_insert_with(|| evaluate_at_root_order(&coefficients, root_order, &mut cyclotomic))
+            .clone();
+        let evaluation = RootOfUnityEvaluation {
+            group_order: order,
+            power,
+            root_order,
+            integer_value,
+            remainder,
+        };
         if let Some(counts) = fixed_counts {
             let expected = counts[power].clone();
             let holds = evaluation.integer_value.as_ref() == Some(&expected);
