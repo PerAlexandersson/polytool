@@ -587,6 +587,10 @@ fn condition_statuses(
     match transformation {
         RecurrenceTransformation::MultiplyPower { .. }
         | RecurrenceTransformation::Affine { .. } => Vec::new(),
+        RecurrenceTransformation::Diagonal { .. }
+        | RecurrenceTransformation::DerivativeAntecedent { .. } => {
+            implicit_map_condition_statuses(transformation, source.map_or(0, |s| s.first_index))
+        }
         RecurrenceTransformation::DividePower { power } => {
             let condition = format!("x^{power} divides P_n");
             vec![match source {

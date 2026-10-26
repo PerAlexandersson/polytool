@@ -16,6 +16,7 @@ use crate::oeis::print_oeis_help;
 use crate::pf_network::print_pf_network_help;
 use crate::pf_pencil::print_pf_pencil_help;
 use crate::recurrence::{print_recurrence_generate_help, print_recurrence_help};
+use crate::recurrence_implicit::print_recurrence_implicit_help;
 use crate::recurrence_theorems::print_recurrence_theorems_help;
 use crate::recurrence_transform::print_recurrence_transform_help;
 use crate::root_enclosures::print_root_enclosures_help;
@@ -73,6 +74,8 @@ pub(crate) fn print_top_level_help() {
     println!("  recurrence-theorems");
     println!("                    Conditional interlacing theorem matches for recurrence JSON");
     println!("  root-enclosures   Exact rational root enclosures with multiplicities");
+    println!("  recurrence-implicit");
+    println!("                    Diagonal maps and antecedents: implicit relations, uniqueness");
     println!("  bench             Run built-in timing suites");
     println!("  bkw-scout         Scout BKW equal-modulus loci for a recurrence symbol");
     println!("  resultant         Compute the resultant of two polynomials");
@@ -222,6 +225,7 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "recurrence-transform" => print_recurrence_transform_help(),
         "recurrence-theorems" => print_recurrence_theorems_help(),
         "root-enclosures" => print_root_enclosures_help(),
+        "recurrence-implicit" => print_recurrence_implicit_help(),
         "bench" => print_bench_help(),
         "bkw-scout" => bkw_scout_usage(),
         "resultant" => print_stdin_command_help(

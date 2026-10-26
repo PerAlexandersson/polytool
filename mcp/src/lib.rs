@@ -19,6 +19,10 @@ mod theorems;
 
 pub use requests::RecurrenceTheoremsRequest;
 pub use requests::{
+    AssessGeneratingDescriptionToolRequest, RecurrenceImplicitToolRequest,
+    VerifyRecurrenceImplicitToolRequest,
+};
+pub use requests::{
     BicyclicSievingRequest, BigIntCoefficientInput, BigIntPolynomialBatchInput,
     BigIntPolynomialInput, BigIntPolynomialPairRequest, BrentiRecognitionRequest,
     BrentiWeightsInput, CheckPolynomialFamilyRequest, CyclicSievingFixedCountsInput,

@@ -558,6 +558,30 @@ pub struct RootEnclosuresToolRequest {
     pub request: serde_json::Value,
 }
 
+/// Structured implicit-transport request
+/// (`polytool::recurrence::ImplicitTransformRequest`); the library validates
+/// the strict schema.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecurrenceImplicitToolRequest {
+    pub request: serde_json::Value,
+}
+
+/// A `polytool.recurrence-implicit.v1` report to replay exactly.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VerifyRecurrenceImplicitToolRequest {
+    pub report: serde_json::Value,
+}
+
+/// A generating description (`polytool::recurrence::GeneratingDescription`)
+/// to assess.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AssessGeneratingDescriptionToolRequest {
+    pub description: serde_json::Value,
+}
+
 /// Input of `check_tnn_network`.  Give exactly one of `polynomials`, `text`
 /// or `matrix`.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]

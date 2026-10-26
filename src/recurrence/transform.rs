@@ -70,8 +70,10 @@
 //!
 //! Root-location properties of the maps are not part of the algebraic
 //! report; the opt-in `root_domain` request field attaches them separately
-//! (see [`RootDomainReport`]).  Factorial rescalings and implicit differential relations are separate
-//! extensions of this registry.
+//! (see [`RootDomainReport`]). Factorial rescalings are a separate extension.
+//! The diagonal maps `T_n(x^k) = lambda(n,k) x^k` and derivative antecedents
+//! `P_n = D^m(g Q_n)/m!` are registered here but transport relations as
+//! implicit relations (module `diagonal`, reports in `implicit_report`).
 
 use super::*;
 use crate::decomposition::f_polynomial;
@@ -327,7 +329,8 @@ impl std::error::Error for TransformError {}
 ///
 /// Rational parameters are integer or `num/den` strings.  The JSON form is
 /// tagged by `kind` (`multiply_power`, `divide_power`, `reversal`, `affine`,
-/// `mobius`, `f_polynomial`, `gamma`, `symmetric_decomposition`).
+/// `mobius`, `f_polynomial`, `gamma`, `symmetric_decomposition`, `diagonal`,
+/// `derivative_antecedent`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RecurrenceTransformation {
@@ -386,6 +389,21 @@ pub enum RecurrenceTransformation {
     SymmetricDecomposition {
         /// Degree bounds and symmetry indices `d_n`.
         schedule: DegreeSchedule,
+    },
+    /// `Q_n = T_n P_n` with `T_n(x^k) = lambda(n,k) x^k`; requires every
+    /// needed weight to be defined and nonzero. Relations are transported as
+    /// implicit relations ([`RecurrenceTransformation::transport_implicit`]).
+    Diagonal {
+        /// The weight `lambda(n,k)`.
+        weight: DiagonalWeight,
+    },
+    /// `Q_n = T_g^-1 P_n`, the antecedent with `P_n = D^m(g Q_n)/m!` for a fixed
+    /// nonzero rational `g` of degree `m`; bijective (triangular with nonzero
+    /// diagonal `lc(g) binom(k+m,m)`). Relations are transported by
+    /// substitution ([`RecurrenceTransformation::transport_implicit`]).
+    DerivativeAntecedent {
+        /// Ascending rational coefficients of `g`, as strings.
+        g: Vec<String>,
     },
 }
 
@@ -469,6 +487,8 @@ impl RecurrenceTransformation {
             Self::FPolynomial { .. } => "f_polynomial",
             Self::Gamma { .. } => "gamma",
             Self::SymmetricDecomposition { .. } => "symmetric_decomposition",
+            Self::Diagonal { .. } => "diagonal",
+            Self::DerivativeAntecedent { .. } => "derivative_antecedent",
         }
     }
 
@@ -552,6 +572,13 @@ impl RecurrenceTransformation {
                 return Err(TransformError::SingularMobius);
             }
         }
+        match self {
+            Self::Diagonal { weight } => weight.validate()?,
+            Self::DerivativeAntecedent { g } => {
+                derivative_antecedent_parameters(g)?;
+            }
+            _ => {}
+        }
         Ok(())
     }
 
@@ -611,6 +638,11 @@ impl RecurrenceTransformation {
                     .stapledon_decomposition(d)
                     .expect("degree checked");
                 Ok(vec![vec_poly::trim(a.coeffs()), vec_poly::trim(b.coeffs())])
+            }
+            Self::Diagonal { weight } => Ok(vec![weight.map_row(index, &row)?]),
+            Self::DerivativeAntecedent { g } => {
+                let (g, _) = derivative_antecedent_parameters(g)?;
+                Ok(vec![derivative_antecedent_row(&g, &row)])
             }
         }
     }
@@ -688,6 +720,11 @@ impl RecurrenceTransformation {
                 }
                 Ok(vec_poly::add(&image, &vec_poly::shift(&b)))
             }
+            Self::Diagonal { weight } => weight.inverse_row(index, &image),
+            Self::DerivativeAntecedent { g } => {
+                let (g, _) = derivative_antecedent_parameters(g)?;
+                Ok(vec_poly::trim(&derivative_lift_row(&g, &image)))
+            }
         }
     }
 
@@ -750,6 +787,13 @@ impl RecurrenceTransformation {
             )),
             Self::SymmetricDecomposition { schedule } => {
                 transport_symmetric_decomposition(rule, schedule).map(TransportedRecurrence::Vector)
+            }
+            Self::Diagonal { .. } | Self::DerivativeAntecedent { .. } => {
+                Err(TransformError::TransportUnsupported(
+                    "this map transports implicit relations: use transport_implicit or \
+                     implicit_transform_recurrence"
+                        .into(),
+                ))
             }
         }
     }
@@ -860,6 +904,10 @@ impl RecurrenceTransformation {
                  two-component system in (a_n, b_n); no component is selected"
                     .to_string(),
             ),
+            Self::Diagonal { .. } | Self::DerivativeAntecedent { .. } => {
+                let (row_map, inverse, conditions, transport) = implicit_map_record(self);
+                (row_map, inverse, conditions, scalar(), transport)
+            }
         };
         TransformationRecord {
             kind: self.kind_name().to_string(),

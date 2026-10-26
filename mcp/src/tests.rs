@@ -1741,3 +1741,50 @@ fn recurrence_transform_tool_transports_and_replays() {
         }))
         .is_err());
 }
+
+#[test]
+fn recurrence_implicit_tools_transport_assess_and_replay() {
+    let server = PolynomialToolsServer::new();
+    let request = json!({"oeis_id":"A007318","row_count":6,
+        "transformation":{"kind":"diagonal",
+            "weight":{"kind":"factorial_power","power":1}}});
+    let Json(report) = server
+        .transform_recurrence_implicit(Parameters(RecurrenceImplicitToolRequest {
+            request: request.clone(),
+        }))
+        .unwrap();
+    assert_eq!(report["schema"], "polytool.recurrence-implicit.v1");
+    assert_eq!(report["assessment"]["status"], "equivalent_description");
+    assert_eq!(
+        report["transports"][0]["relation"]["text"],
+        "D Q[n+1] - D Q[n] - Q[n] = 0"
+    );
+    let Json(checked) = server
+        .verify_recurrence_implicit(Parameters(VerifyRecurrenceImplicitToolRequest {
+            report: json!(report),
+        }))
+        .unwrap();
+    assert_eq!(checked["verified"], true);
+    let mut description = report["description"].clone();
+    description["exceptional_index_conditions"] = json!([]);
+    let Json(assessment) = server
+        .assess_generating_description(Parameters(AssessGeneratingDescriptionToolRequest {
+            description,
+        }))
+        .unwrap();
+    assert_eq!(assessment["status"], "certified_consequence");
+    let mut tampered = json!(report);
+    tampered["row_origin"] = json!(1);
+    assert!(server
+        .verify_recurrence_implicit(Parameters(VerifyRecurrenceImplicitToolRequest {
+            report: tampered,
+        }))
+        .is_err());
+    let mut excessive = request;
+    excessive["limits"] = json!({"max_rows": 1_000_000});
+    assert!(server
+        .transform_recurrence_implicit(Parameters(RecurrenceImplicitToolRequest {
+            request: excessive
+        }))
+        .is_err());
+}

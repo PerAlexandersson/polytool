@@ -31,6 +31,10 @@ use crate::report_items::{
     orbit_sizes_check_item, parse_bigint_items, parse_items, polynomial_properties_item_bigint,
 };
 use crate::requests::{
+    AssessGeneratingDescriptionToolRequest, RecurrenceImplicitToolRequest,
+    VerifyRecurrenceImplicitToolRequest,
+};
+use crate::requests::{
     BicyclicSievingRequest, BigIntPolynomialBatchInput, BigIntPolynomialPairRequest,
     BrentiRecognitionRequest, CheckPolynomialFamilyRequest, CyclicSievingRequest,
     CyclicSievingSequenceRequest, EhrhartHstarMode, EhrhartHstarRequest, FindRecurrenceRequest,
@@ -666,6 +670,82 @@ impl PolynomialToolsServer {
         let report = polytool::recurrence::root_enclosures(&request).map_err(invalid_params)?;
         let serde_json::Value::Object(fields) =
             serde_json::to_value(report).expect("serialize root enclosures")
+        else {
+            unreachable!()
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Map a sequence with a defining rule by a diagonal coefficient map or a derivative antecedent and transport the rule into an implicit differential relation (derivatives on any row). request: {transformation: {kind: diagonal, weight: {kind: factorial_power {power} (lambda = 1/(k!)^m) | binomial {m} (lambda = binom(k+m,m), Q = W_m P) | inverse_binomial {m} (P = W_m Q) | product {scale, factorial_exponent, factors: [{coeffs: {coeffs}, exponent}]}} | {kind: derivative_antecedent, g: [..]} (P_n = D^m(g Q_n)/m!, m = deg g)}, source_recurrence (polytool.recurrence.v1 with seeds) or oeis_id, row_count, optional source_relations / target_relations [{relation: {terms: [{shift, deriv_order, coeff: {coeffs}}]}, first_base}], boundary_conditions [{condition: {terms: [{shift, coefficient_index, coeff}]}, first_base}], search ({} fits a successor rule and tries a reconstruction certificate). Returns polytool.recurrence-implicit.v1: map conditions (certified_all_indices or checked_supplied_rows), transported relations with clearing certificates (one common multiplier H, certified exceptional indices and their coefficient conditions; uncertified sets stay visible), reconstruction certificates L o T = sum H_nu S^nu M, a generating description with an assessment (equivalent_description, certified_consequence, finite_evidence, inconsistent_seeds) whose uniqueness argument is separate from annihilation, additional row relations, and the search (finite_fit or certified_by_reconstruction)."
+    )]
+    pub fn transform_recurrence_implicit(
+        &self,
+        Parameters(input): Parameters<RecurrenceImplicitToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.request.to_string(), "recurrence-implicit request")
+            .map_err(invalid_params)?;
+        let request: polytool::recurrence::ImplicitTransformRequest =
+            serde_json::from_value(input.request).map_err(|e| invalid_params(e.to_string()))?;
+        request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        let report = polytool::recurrence::implicit_transform_recurrence(&request)
+            .map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize implicit transport")
+        else {
+            unreachable!()
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Replay a polytool.recurrence-implicit.v1 report from transform_recurrence_implicit exactly from its embedded request, re-check every reconstruction certificate symbolically and by deriving its identities on the transformed rows, and re-assess the description."
+    )]
+    pub fn verify_recurrence_implicit(
+        &self,
+        Parameters(input): Parameters<VerifyRecurrenceImplicitToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.report.to_string(), "recurrence-implicit report")
+            .map_err(invalid_params)?;
+        let report: polytool::recurrence::ImplicitTransformReport =
+            serde_json::from_value(input.report).map_err(|e| invalid_params(e.to_string()))?;
+        report
+            .request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        polytool::recurrence::verify_recurrence_implicit(&report).map_err(invalid_params)?;
+        Ok(Json(BTreeMap::from([
+            ("verified".into(), json!(true)),
+            ("assessment".into(), json!(report.assessment.status)),
+            (
+                "independent_search".into(),
+                json!(report.independent_search.map(|s| s.evidence)),
+            ),
+        ])))
+    }
+
+    #[tool(
+        description = "Assess a generating description {first_index, seeds, relations: [{relation, first_base, role, evidence, text}], exceptional_index_conditions, boundary_conditions} (for example one from transform_recurrence_implicit with a condition removed): seed consistency, annihilation evidence and a uniqueness argument, reported separately."
+    )]
+    pub fn assess_generating_description(
+        &self,
+        Parameters(input): Parameters<AssessGeneratingDescriptionToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.description.to_string(), "generating description")
+            .map_err(invalid_params)?;
+        let description: polytool::recurrence::GeneratingDescription =
+            serde_json::from_value(input.description).map_err(|e| invalid_params(e.to_string()))?;
+        if description.seeds.len() > crate::limits::MCP_MAX_RECURRENCE_INPUT_ROWS {
+            return Err(invalid_params("too many seed rows".to_string()));
+        }
+        let assessment = polytool::recurrence::assess_generating_description(&description)
+            .map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(assessment).expect("serialize assessment")
         else {
             unreachable!()
         };

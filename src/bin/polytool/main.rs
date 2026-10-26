@@ -29,6 +29,7 @@ mod pf_network;
 mod pf_pencil;
 mod properties;
 mod recurrence;
+mod recurrence_implicit;
 mod recurrence_theorems;
 mod recurrence_transform;
 mod resultant;
@@ -57,6 +58,7 @@ use crate::pf_network::cmd_pf_network;
 use crate::pf_pencil::cmd_pf_pencil;
 use crate::properties::{cmd_properties, cmd_real_rooted};
 use crate::recurrence::{cmd_recurrence, cmd_recurrence_generate};
+use crate::recurrence_implicit::cmd_recurrence_implicit;
 use crate::recurrence_theorems::cmd_recurrence_theorems;
 use crate::recurrence_transform::cmd_recurrence_transform;
 use crate::resultant::{cmd_discriminant, cmd_resultant};
@@ -137,6 +139,7 @@ fn main() {
         "recurrence-transform" => cmd_recurrence_transform(rest),
         "recurrence-theorems" => cmd_recurrence_theorems(rest),
         "root-enclosures" => cmd_root_enclosures(rest),
+        "recurrence-implicit" => cmd_recurrence_implicit(rest),
         "bench" => cmd_bench(rest),
         "bkw-scout" => cmd_bkw_scout(rest),
         "resultant" => cmd_resultant(),

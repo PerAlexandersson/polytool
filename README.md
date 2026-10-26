@@ -1353,6 +1353,95 @@ multiplier tests use `recurrence::jensen_fixed_cap_check` (Jensen polynomial
 `T[(1 + x)^N]`, Schur--Malo composition; evidence `fixed_cap`, never a proof
 for larger degrees).
 
+#### Implicit differential relations, diagonal maps and reconstruction
+
+Some coordinate changes turn a successor rule into an implicit relation with
+derivatives on the newest row, or into a differential equation within one row.
+An implicit relation is `sum c(n,x) D^d Q[n+i] = 0` at base index `n`
+(JSON `{"terms": [{"shift": i, "deriv_order": d, "coeff": {"coeffs": ...}}]}`),
+and a coefficient condition is `sum c(n) [x^k] Q[n+i] = 0`
+(`{"terms": [{"shift": i, "coefficient_index": k, "coeff": [...]}]}`).
+`polytool recurrence-implicit` maps a sequence with a defining rule
+(`source_recurrence` or `oeis_id`) by one of two registry maps, which
+`recurrence-transform` also accepts for row mapping:
+
+| `kind` | Row map | Inverse |
+| --- | --- | --- |
+| `diagonal {weight}` | `Q_n = T_n P_n`, `T_n(x^k) = lambda(n,k) x^k` | divide coefficient `k` by `lambda(n,k)` |
+| `derivative_antecedent {g}` | `Q_n` with `P_n = D^m(g Q_n)/m!`, `m = deg g` | `P_n = D^m(g Q_n)/m!` |
+
+Weights are `factorial_power {power}` (`1/(k!)^m`), `binomial {m}`
+(`binom(k+m,m)`, so `Q = W_m P` with `W_m = D^m x^m/m!`), `inverse_binomial {m}`
+(`P = W_m Q`) and `product {scale, factorial_exponent, factors}` for
+`scale (k!)^p prod f_j(n,k)^(e_j)`. A weight factor with a certified zero
+(for example `k - 2`) is rejected; a factor whose zero set depends on `n`
+is reported as `checked_supplied_rows` in `map_conditions`, and the
+transported components then carry the same finite evidence. The antecedent
+map is triangular with diagonal `lc(g) binom(k+m,m)`, so antecedents are found
+by exact back substitution.
+
+With `theta = x D`, a relation multiplied by `x^J` is written as
+`sum x^s a(n,theta) S^i` and transported by
+`x^s a(n,theta) S^i -> x^s a(n,theta) lambda(n,theta+s)/lambda(n+i,theta) S^i`.
+One common multiplier `H(n,theta) = lcm b_(i,s)(n, theta - s)` clears the
+denominators of every column (`H(theta) x^s = x^s H(theta+s)`). For the
+original residual `Z_n`, `Z_n = 0` is equivalent to `H(n,theta) Z_n = 0`
+together with `[x^k] Z_n = 0` at every `k >= 0` with `H(n,k) = 0`. These
+exceptional indices are certified uniformly in `n` (exact nonnegative integer
+roots of an index-free factor, or a one-signed shifted factor); otherwise the
+clearing record says `checked_supplied_rows`, lists the factor and the zeros
+seen on the supplied rows, and makes no equivalence claim. The derivative
+antecedent transports a relation by substitution, `L T_g Q = 0`.
+
+The report keeps evidence apart. `transports` holds each transported relation
+(`transported_identity`), its clearing certificate and, when `P_n = T Q_n` with
+a differential operator `T` (`W_m`, `T_g`), a reconstruction certificate
+`L o T = sum_nu H_nu o S^nu o M` whose multipliers `H_nu = sum_d h_d(n,x) D^d`
+record their differentiations. `description` is a generating description:
+seeds, relations, `exceptional_index_conditions` and supplied
+`boundary_conditions`. `assessment` gives the status (`equivalent_description`,
+`certified_consequence`, `finite_evidence`, `inconsistent_seeds`) and a
+uniqueness argument that is separate from annihilation. The argument picks a
+relation of positive leader shift and compares coefficients of a difference
+of two solutions. In the degree grading the top coefficient is multiplied by
+`psi(n,k)`. In the valuation grading the lowest coefficient is multiplied by
+`phi(n,k)`, and every certified exceptional index needs a condition that pins
+`[x^k]` of the new row. Singular leaders and uncovered indices are listed as
+reasons. `additional_relations` stores supplied or transported row equations
+without treating them as successor rules. `"search": {}` fits a successor rule
+to `Q` (`finite_fit`). The fit becomes `certified_by_reconstruction` when the
+identity `L o T = sum H_nu S^nu M` holds, the source rule determines `P` from
+its seeds, the generated `T Q*` agrees with the source seeds, and `T` is
+injective.
+
+Canonical binomial rows A007318 divided coefficientwise by `k!` give
+`Q'_(n+1) = Q'_n + Q_n` with the exceptional condition
+`Q_(n+1)(0) = Q_n(0)` and `Q_0 = 1`, an equivalent description; without the
+constant condition (`--assess` on the edited description) the status drops to
+`certified_consequence`. The row equation `x Q'' + (1 + x) Q' - n Q = 0` can be
+stored through `target_relations` or transported from `(1 + x) P' - n P = 0`
+through `source_relations`. Canonical A065826 divided by `k + 1` gives the
+Eulerian rows A008292, and the fitted Eulerian rule is proved by
+reconstruction:
+
+```sh
+echo '{"oeis_id":"A065826","row_count":9,"search":{},
+  "transformation":{"kind":"diagonal","weight":{"kind":"inverse_binomial","m":1}}}' \
+  | polytool recurrence-implicit > report.json
+polytool recurrence-implicit --verify < report.json
+```
+
+`--verify` replays the report exactly and re-checks every reconstruction
+certificate symbolically and on the rows. In Rust, see
+`recurrence::{ImplicitRelation, CoefficientCondition, GeneratingDescription,
+assess_generating_description, DiagonalWeight,
+RecurrenceTransformation::transport_implicit, find_reconstruction_certificate,
+ReconstructionCertificate, implicit_transform_recurrence,
+verify_recurrence_implicit}`. The MCP tools are `transform_recurrence_implicit`,
+`verify_recurrence_implicit` and `assess_generating_description`. A
+general search over implicit relations is not part of this release: fits are
+successor rules, and implicit relations come from transport or input.
+
 ### Scout BKW equal-modulus loci
 
 For a polynomial recurrence with characteristic symbol
@@ -2180,6 +2269,9 @@ Available MCP tools:
 - `check_left_production_matrix`
 - `transform_recurrence`
 - `verify_recurrence_transform`
+- `transform_recurrence_implicit`
+- `verify_recurrence_implicit`
+- `assess_generating_description`
 
 `check_tnn_network` and `recognize_brenti_strip_digraph` return the same
 fields as the JSON output of `polytool tnn-network` and
@@ -2397,6 +2489,22 @@ Additions (no breaking changes):
   `recurrence::root_enclosures` with CLI `root-enclosures` and MCP tool
   `exact_root_enclosures`.  `recurrence::jensen_fixed_cap_check`: fixed-cap
   Jensen-polynomial test of diagonal multipliers (`fixed_cap` evidence).
+- Implicit differential relations: `recurrence::{ImplicitRelation,
+  CoefficientCondition, GeneratingDescription, assess_generating_description,
+  DiagonalWeight, find_reconstruction_certificate, ReconstructionCertificate,
+  implicit_transform_recurrence, verify_recurrence_implicit}` and
+  `RecurrenceTransformation::{transport_implicit, reconstruction_operator}`.
+  New registry maps `diagonal` (`T_n(x^k) = lambda(n,k) x^k`: factorial,
+  `W_m`, inverse `W_m`, products of polynomial factors) and
+  `derivative_antecedent` (`P_n = D^m(g Q_n)/m!`, exact back substitution).
+  Diagonal transport uses one common clearing multiplier with certified
+  exceptional-index conditions; uncertified sets stay visible. Generating
+  descriptions record seeds, exceptional-index and boundary conditions, and a
+  uniqueness argument separate from annihilation. Reconstruction certificates
+  `L o T = sum H_nu S^nu M` record their differentiations and are replayed.
+  `polytool.recurrence-implicit.v1` reports; CLI `recurrence-implicit`
+  (`--verify`, `--assess`); MCP tools `transform_recurrence_implicit`,
+  `verify_recurrence_implicit`, `assess_generating_description`.
 - `vec_poly::{exact_div_by_t, exact_div_by_t_minus_one, exact_div_by_t_minus,
   sum, prefix_sums, mul_linear, mul_linear_pow, has_nonnegative_coefficients,
   evaluate_homogeneous, evaluate_at_ratio}`: exact division by `t` and
