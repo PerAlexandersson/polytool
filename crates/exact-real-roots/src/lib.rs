@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 //! Exact real-root counting over the integers.
 //!
 //! This module provides the default exact backend for boolean

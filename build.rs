@@ -1,3 +1,6 @@
+//! Build script: embeds the abbreviated Git commit (or `POLYTOOL_GIT_COMMIT`)
+//! as the `POLYTOOL_GIT_COMMIT` environment variable for `--version` output.
+
 use std::env;
 use std::path::Path;
 use std::process::Command;
