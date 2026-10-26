@@ -15,6 +15,7 @@ mod coefficient_tests;
 mod cyclic_sieving;
 mod cyclic_sieving_sequence;
 mod ehrhart;
+mod enumerate_real_rooted;
 mod expansion;
 mod family_check;
 mod help;
@@ -38,6 +39,7 @@ use crate::coefficient_tests::cmd_coefficient_tests;
 use crate::cyclic_sieving::cmd_cyclic_sieving;
 use crate::cyclic_sieving_sequence::cmd_cyclic_sieving_sequence;
 use crate::ehrhart::{cmd_ehrhart_to_hstar, cmd_hstar_inequalities, cmd_hstar_to_ehrhart};
+use crate::enumerate_real_rooted::cmd_enumerate_real_rooted;
 use crate::expansion::{cmd_bernstein_expansion, cmd_gamma_expansion};
 use crate::family_check::cmd_family_check;
 use crate::help::{print_command_help, print_top_level_help};
@@ -113,6 +115,7 @@ fn main() {
         "stapledon" => cmd_stapledon(rest),
         "tnn-network" => cmd_tnn_network(rest),
         "brenti-recognize" => cmd_brenti_recognize(rest),
+        "enumerate-real-rooted" => cmd_enumerate_real_rooted(rest),
         _ => {
             eprintln!("Unknown command: {}", cmd);
             std::process::exit(1);

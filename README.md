@@ -995,6 +995,39 @@ echo "1, 0, -3, 1" | polytool discriminant
 Inputs for these CLI commands may have arbitrary-size integer coefficients.
 The exact resultant or discriminant output is printed as an integer.
 
+### Enumerate real-rooted integer polynomials
+
+`enumerate-real-rooted` lists **every** real-rooted integer polynomial
+`p(x) = a_0 x^n + a_1 x^(n-1) + ... + a_n` of degree `n` whose first `t`
+leading coefficients are prescribed, for `3 <= t <= n + 1` and `a_0 != 0` of
+either sign.  Reducible polynomials and polynomials with repeated roots are
+included.  The search is the Greaves--Syatriadi derivative-tower algorithm
+(arXiv:2504.09241) with certified endpoints (see the library section below);
+nothing is read from stdin.
+
+```sh
+# All real-rooted x^3 - 3x + c: c = -2, ..., 2
+polytool enumerate-real-rooted --degree 3 --leading-desc 1,0,-3
+
+# Monic, trace 0, a_2 = -15 (degree 6), as JSON with exact string coefficients
+polytool enumerate-real-rooted --degree 6 --leading-desc 1,0,-15 --format json
+```
+
+The prefix `--leading-desc` is in **descending** order (`a_0, a_1, ...`), while
+every output polynomial is in the usual **ascending** order `c_0, ..., c_n`
+(`c_k = a_(n-k)`), one per line, so the rows can be piped into
+`polytool real-rooted`.  Rows are sorted lexicographically by
+`(a_t, ..., a_n)`.  Budgets: `--max-results` (default 10000), `--max-nodes`
+(default 1000000) and `--max-coefficient-bits` (default none); pass `none` to
+lift one.  The status is `complete` (the full set, possibly empty) or
+`resource_limit` (an initial segment of the full sorted set; JSON
+`limit_reached` names the budget).  Invalid arguments exit with code 2 and,
+with JSON output, print `{"status":"invalid_input", ...}`.  Text and JSON
+output report the active limits and the search statistics.  With only two
+prescribed coefficients the set can be infinite (`x^(n-2) (x^2 - k)` for all
+`k >= 0`), which is why `t >= 3` is required.  A complete enumeration is a
+certified finite computation for one prefix, not a statement about a family.
+
 ### Ehrhart ↔ h\*-vector conversion
 
 ```sh
@@ -1567,6 +1600,57 @@ To treat a zero polynomial as vacuously interlacing in either position, write
 == Some(true)`; `interlaces_either_order` already lets zero interlace every
 real-rooted polynomial.
 
+### Enumerating real-rooted integer polynomials
+
+`real_rooted_enumeration::enumerate_real_rooted_integer_polynomials_bigint`
+returns all real-rooted `p ∈ Z[x]` of a given degree with at least three
+prescribed leading coefficients (given in descending order; results are
+ascending vectors in lexicographic order of the free coefficients).  It walks
+the scaled derivative tower `p_i = p^(n-i)`, where
+`p_i = ∫_0^x p_(i-1) + (n-i)! a_i`, and at each level keeps exactly the
+constants allowed by Lemma 2.5 of Greaves--Syatriadi: for real-rooted `q` and
+`P = ∫_0^x q`, `P + C` is real-rooted iff `C >= -P(µ)` at the roots with
+`q'(µ) < 0`, `C <= -P(µ)` at those with `q'(µ) > 0`, and `C = -P(µ)` at
+multiple roots.  The paper's floating-point endpoint step is replaced by exact
+root isolation, dyadic enclosures of the critical values refined until they
+are narrower than the factorial modulus (or contain none of its multiples),
+and an exact real-rootedness test of the at most one undecided candidate at
+each end.  Every emitted polynomial is re-checked exactly.
+
+```rust
+use num_bigint::BigInt;
+use polytool::real_rooted_enumeration::{
+    enumerate_real_rooted_integer_polynomials_bigint,
+    real_rooted_antiderivative_integer_constants_bigint, RealRootedEnumerationOptions,
+    RealRootedEnumerationStatus,
+};
+
+let prefix = [1, 0, -6].map(BigInt::from); // x^4 - 6x^2 + a_3 x + a_4
+let options = RealRootedEnumerationOptions {
+    max_results: Some(10_000),
+    ..Default::default()
+};
+let result = enumerate_real_rooted_integer_polynomials_bigint(4, &prefix, &options).unwrap();
+assert_eq!(result.status, RealRootedEnumerationStatus::Complete);
+assert_eq!(result.polynomials.len(), 64);
+
+// The kernel on its own: x^3 - 3x + C is real-rooted iff -2 <= C <= 2.
+let q = [-3, 0, 3].map(BigInt::from);
+let range = real_rooted_antiderivative_integer_constants_bigint(&q).unwrap().unwrap();
+assert_eq!((range.lower, range.upper), (BigInt::from(-2), BigInt::from(2)));
+```
+
+`RealRootedEnumerationOptions` bounds examined nodes, returned results and the
+bit length of tower coefficients; exhausting one gives
+`RealRootedEnumerationStatus::ResourceLimit(limit)` with the results found so
+far (an initial segment of the complete output), never an empty "complete"
+answer.  `real_rooted_antiderivative_constant_multiples_bigint` restricts the
+kernel to multiples of a modulus, and `antiderivative_exact_bigint` /
+`antiderivative_rational_bigint` give zero-constant antiderivatives (the
+integral version reports any non-exact division).  The search statistics are
+deterministic counters; no wall-clock times are recorded.  The operation is
+not yet exposed through the MCP server.
+
 ## MCP server
 
 The repository also contains a local Model Context Protocol server in
@@ -1760,6 +1844,16 @@ The tracked programs in `examples/` are run with
 ### Unreleased
 
 Additions (no breaking changes):
+
+- New module `real_rooted_enumeration`:
+  `enumerate_real_rooted_integer_polynomials_bigint` enumerates all
+  real-rooted integer polynomials of fixed degree with at least three
+  prescribed leading coefficients (Greaves--Syatriadi `AllRealRooted`, with
+  certified exact endpoints instead of floating point), with node, result and
+  coefficient-bit budgets; the kernel
+  `real_rooted_antiderivative_integer_constants_bigint` (and
+  `..._constant_multiples_bigint`) returns the integer shifts making an
+  antiderivative real-rooted.  CLI command `enumerate-real-rooted`.
 
 - `recurrence::find_recurrence_representations_rational`: bounded menus of
   candidate recurrence representations (lags, derivatives, polynomial

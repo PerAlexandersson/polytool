@@ -22,6 +22,8 @@
     Ehrhart/h* conversion: `real_rootedness`; its default exact backend is the
     separate `exact-real-roots` crate (`crates/exact-real-roots`), re-exported as
     `root_count`; `sturm` and `sturm_cf` hold the Sturm-chain routes;
+    `real_rooted_enumeration` enumerates real-rooted integer polynomials with
+    a prescribed leading prefix (exact antiderivative-shift kernel);
   - linear algebra, total non-negativity, determinants: `linalg`;
   - recurrence search and renewal recognition: `recurrence`, `renewal`; bundled
     OEIS families: `oeis` (data generated into `oeis_catalog_generated.rs`);

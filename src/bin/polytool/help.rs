@@ -9,6 +9,7 @@ use crate::coefficient_tests::print_coefficient_tests_help;
 use crate::cyclic_sieving::print_cyclic_sieving_help;
 use crate::cyclic_sieving_sequence::print_cyclic_sieving_sequence_help;
 use crate::ehrhart::print_hstar_inequalities_help;
+use crate::enumerate_real_rooted::print_enumerate_real_rooted_help;
 use crate::family_check::print_family_check_help;
 use crate::oeis::print_oeis_help;
 use crate::pf_pencil::print_pf_pencil_help;
@@ -78,6 +79,8 @@ pub(crate) fn print_top_level_help() {
     println!("  stapledon         Compute a Stapledon decomposition");
     println!("  tnn-network       Check TNN of a coefficient triangle; canonical planar network");
     println!("  brenti-recognize  Search for a planar strip digraph reproducing the rows");
+    println!("  enumerate-real-rooted");
+    println!("                    Enumerate real-rooted integer polynomials by leading prefix");
     println!();
     println!("Options:");
     println!("  -h, --help        Print help text");
@@ -266,6 +269,7 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "stapledon" => print_stapledon_help(),
         "tnn-network" => print_tnn_network_help(),
         "brenti-recognize" => print_brenti_recognize_help(),
+        "enumerate-real-rooted" => print_enumerate_real_rooted_help(),
         _ => return false,
     }
     true

@@ -82,6 +82,10 @@
 //!   Cauchy bound reduction), log-concavity, ultra-log-concavity, palindromic
 //!   check, gamma-positivity, Stapledon decomposition, resultant,
 //!   discriminant, Ehrhart ↔ h*-vector, display utilities
+//! - [`real_rooted_enumeration`] — exact enumeration of all real-rooted
+//!   integer polynomials of fixed degree with at least three prescribed
+//!   leading coefficients (Greaves--Syatriadi `AllRealRooted`, certified
+//!   endpoints), and the antiderivative-shift kernel behind it
 //! - [`root_count`] — adaptive exact real-rootedness using primitive integer
 //!   PRS and Uspensky/Descartes root counting
 //! - [`sturm`] — Sturm chains for exact root counting and isolation (the slower
@@ -156,6 +160,7 @@ pub use linalg::{
 };
 
 pub mod parse;
+pub mod real_rooted_enumeration;
 pub mod real_rootedness;
 pub mod recurrence;
 pub mod renewal;
@@ -217,6 +222,14 @@ pub use parse::{
     MAX_POLYNOMIAL_COEFFICIENTS, MAX_POLYNOMIAL_INPUT_BYTES,
 };
 pub use polynomial::{CoeffRing, FieldRing, Polynomial};
+pub use real_rooted_enumeration::{
+    enumerate_real_rooted_integer_polynomials_bigint,
+    real_rooted_antiderivative_constant_multiples_bigint,
+    real_rooted_antiderivative_integer_constants_bigint, AntiderivativeIntervalError,
+    InclusiveIntegerRange, RealRootedEnumerationError, RealRootedEnumerationLimit,
+    RealRootedEnumerationOptions, RealRootedEnumerationResult, RealRootedEnumerationStats,
+    RealRootedEnumerationStatus,
+};
 pub use real_rootedness::{
     // Bézout matrix directly
     bezout_matrix,
