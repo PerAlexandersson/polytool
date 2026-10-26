@@ -23,7 +23,9 @@ mod help;
 mod input;
 mod interlacing;
 mod json_out;
+mod left_production;
 mod oeis;
+mod pf_network;
 mod pf_pencil;
 mod properties;
 mod recurrence;
@@ -46,7 +48,9 @@ use crate::family_check::cmd_family_check;
 use crate::help::{print_command_help, print_top_level_help};
 use crate::input::is_help_arg;
 use crate::interlacing::{cmd_interlacing, cmd_interlacing_profile};
+use crate::left_production::cmd_left_production;
 use crate::oeis::cmd_oeis;
+use crate::pf_network::cmd_pf_network;
 use crate::pf_pencil::cmd_pf_pencil;
 use crate::properties::{cmd_properties, cmd_real_rooted};
 use crate::recurrence::{cmd_recurrence, cmd_recurrence_generate};
@@ -139,6 +143,8 @@ fn main() {
         "tnn-network" => cmd_tnn_network(rest),
         "brenti-recognize" => cmd_brenti_recognize(rest),
         "enumerate-real-rooted" => cmd_enumerate_real_rooted(rest),
+        "pf-network" => cmd_pf_network(rest),
+        "left-production" => cmd_left_production(rest),
         _ => {
             eprintln!("Unknown command: {}", cmd);
             std::process::exit(1);

@@ -1554,3 +1554,114 @@ fn brenti_recognition_guardrail_budgets_and_limits() {
     )
     .contains("degree"));
 }
+
+fn pf_network_request(text: &str) -> PfNetworkRequest {
+    PfNetworkRequest {
+        polynomials: None,
+        text: Some(text.to_string()),
+        first_row_index: None,
+        max_step_length: None,
+        max_rise: None,
+        weights: None,
+        max_search_nodes: None,
+        max_integer_search_nodes: None,
+    }
+}
+
+#[test]
+fn pf_network_certifies_pascal_and_never_one_plus_t_plus_t_squared() {
+    let server = PolynomialToolsServer::new();
+    let Json(pascal) = server
+        .recognize_pf_network(Parameters(pf_network_request("1,1\n1,2,1\n1,3,3,1")))
+        .unwrap();
+    assert_eq!(pascal.verdict, "certified");
+    assert_eq!(pascal.certificate_verified, Some(true));
+    assert_eq!(pascal.row_indices, Some(vec![1, 2, 3]));
+    let network = pascal.network.unwrap();
+    assert_eq!(network.last_column, 3);
+    let step = |length: usize, rise: usize| PfNetworkStepItem {
+        length,
+        rise,
+        weight: "1".to_string(),
+    };
+    assert_eq!(network.steps[0], vec![step(1, 0), step(1, 1)]);
+    assert!(pascal.note.contains("Pólya frequency"));
+    assert!(pascal
+        .note
+        .contains("does not certify that the coefficient matrix"));
+
+    let Json(bad) = server
+        .recognize_pf_network(Parameters(pf_network_request("1,1\n1,1,1")))
+        .unwrap();
+    assert_eq!(bad.verdict, "impossible_within_bounds");
+    assert!(!bad.certified);
+    assert!(bad.obstruction.unwrap().contains("not real-rooted"));
+
+    let Json(eulerian) = server
+        .recognize_pf_network(Parameters(pf_network_request(
+            "1,1\n1,4,1\n1,11,11,1\n1,26,66,26,1",
+        )))
+        .unwrap();
+    assert_eq!(eulerian.verdict, "impossible_within_bounds");
+
+    let mut tiny = pf_network_request("1,1\n1,2,1\n1,3,3,1");
+    tiny.max_search_nodes = Some(1);
+    let Json(inconclusive) = server.recognize_pf_network(Parameters(tiny)).unwrap();
+    assert_eq!(inconclusive.verdict, "inconclusive");
+
+    let mut long = pf_network_request("1,1");
+    long.max_step_length = Some(crate::limits::MCP_MAX_PF_NETWORK_STEP + 1);
+    assert!(format!(
+        "{:?}",
+        server.recognize_pf_network(Parameters(long)).err().unwrap()
+    )
+    .contains("MCP limit"));
+}
+
+fn left_production_request(text: &str, first_row_index: Option<usize>) -> LeftProductionRequest {
+    LeftProductionRequest {
+        polynomials: None,
+        text: Some(text.to_string()),
+        first_row_index,
+    }
+}
+
+#[test]
+fn left_production_certifies_stirling_and_rejects_eulerian() {
+    let server = PolynomialToolsServer::new();
+    let Json(stirling) = server
+        .check_left_production_matrix(Parameters(left_production_request(
+            "0,1\n0,1,1\n0,1,3,1\n0,1,7,6,1",
+            None,
+        )))
+        .unwrap();
+    assert!(stirling.tnn);
+    assert!(stirling.rows_certified_pf);
+    assert_eq!(stirling.certificate_verified, Some(true));
+    assert_eq!(stirling.production_matrix[4], vec!["0", "1", "3", "3", "1"]);
+    assert!(stirling.production_network.is_some());
+
+    let Json(eulerian) = server
+        .check_left_production_matrix(Parameters(left_production_request(
+            "1,1\n1,4,1\n1,11,11,1\n1,26,66,26,1",
+            None,
+        )))
+        .unwrap();
+    assert!(!eulerian.tnn);
+    assert!(!eulerian.rows_certified_pf);
+    assert_eq!(eulerian.production_matrix[4][2], "-5");
+    assert_eq!(eulerian.negative_minor.unwrap().value, "-5");
+    assert!(eulerian.note.contains("nothing follows about the rows"));
+
+    let Json(ones) = server
+        .check_left_production_matrix(Parameters(left_production_request(
+            "1\n1,1\n1,1,1",
+            Some(0),
+        )))
+        .unwrap();
+    assert!(!ones.rows_certified_pf);
+
+    let bad =
+        server.check_left_production_matrix(Parameters(left_production_request("1,1,1", None)));
+    assert!(format!("{:?}", bad.err().unwrap()).contains("degree"));
+}

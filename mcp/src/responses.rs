@@ -736,3 +736,98 @@ pub struct BrentiRecognitionResponse {
     /// not real-rootedness of the rows.
     pub note: String,
 }
+
+/// One step of a height-invariant network: for every height `y`, an edge
+/// `(n - length, y) -> (n, y + rise)` with this weight.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct PfNetworkStepItem {
+    pub length: usize,
+    pub rise: usize,
+    /// Exact nonnegative weight.
+    pub weight: String,
+}
+
+/// A height-invariant planar network: `steps[n - 1]` lists the steps into
+/// column `n`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct PfNetworkItem {
+    pub last_column: usize,
+    pub steps: Vec<Vec<PfNetworkStepItem>>,
+}
+
+/// The options actually used by `recognize_pf_network`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct PfNetworkOptionsItem {
+    pub first_row_index: usize,
+    pub max_step_length: usize,
+    pub max_rise: usize,
+    pub weights: String,
+    pub max_search_nodes: usize,
+    pub max_integer_search_nodes: usize,
+}
+
+/// Result of `recognize_pf_network`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct PfNetworkResponse {
+    pub options: PfNetworkOptionsItem,
+    pub rows: usize,
+    /// `certified`, `impossible_within_bounds` or `inconclusive`.
+    pub verdict: String,
+    /// Every supplied row is certified PF (real-rooted, nonpositive zeros).
+    pub certified: bool,
+    pub network: Option<PfNetworkItem>,
+    /// Network row of each input polynomial.
+    pub row_indices: Option<Vec<usize>>,
+    /// The certificate was re-checked (planarity, rows, Toeplitz windows).
+    pub certificate_verified: Option<bool>,
+    pub supports_checked: Option<usize>,
+    pub obstruction: Option<String>,
+    pub reason: Option<String>,
+    pub message: String,
+    /// Fixed guardrail: a certificate proves PF rows, not TNN of the
+    /// coefficient matrix.
+    pub note: String,
+}
+
+/// A negative minor of a rational matrix (zero-based rows and columns).
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct RationalNegativeMinorItem {
+    pub rows: Vec<usize>,
+    pub cols: Vec<usize>,
+    /// Exact negative value.
+    pub value: String,
+}
+
+/// A planar network for a TNN production matrix: `Q_N = L D`, with
+/// `lambda` the canonical network of `L` and `D = diag(column_scales)`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct ProductionNetworkItem {
+    /// `lambda[n][k]`: weight of the vertical edge `(n+1,k) -> (n,k)`.
+    pub lambda: Vec<Vec<String>>,
+    /// The diagonal of `Q_N`.
+    pub column_scales: Vec<String>,
+}
+
+/// Result of `check_left_production_matrix`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct LeftProductionResponse {
+    pub first_row_index: usize,
+    pub rows: usize,
+    /// The triangle `A_N` (triangular rows, exact integer strings).
+    pub triangle: Vec<Vec<String>>,
+    /// The left production matrix `Q_N` (triangular rows, exact rationals).
+    pub production_matrix: Vec<Vec<String>>,
+    /// `Q_N` is totally nonnegative.
+    pub tnn: bool,
+    pub failure_reason: Option<String>,
+    pub negative_minor: Option<RationalNegativeMinorItem>,
+    /// When TNN: the certificate re-verified (regeneration, TNN, Toeplitz
+    /// windows of the unified network).
+    pub certificate_verified: Option<bool>,
+    /// Rows `P_0..P_N` are certified PF and the triangle and its reversal TNN.
+    pub rows_certified_pf: bool,
+    pub production_network: Option<ProductionNetworkItem>,
+    pub message: String,
+    /// Fixed guardrail: the criterion is sufficient, not necessary.
+    pub note: String,
+}

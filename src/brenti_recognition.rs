@@ -18,7 +18,9 @@
 //! totally nonnegative; see [`crate::brenti_sequence`].  It does **not** show
 //! that the rows are real-rooted: `[1 + t, 1 + t + t^2]` is recognized.  It
 //! also covers only the supplied prefix; whether the digraphs found for longer
-//! prefixes stabilize is a separate question.
+//! prefixes stabilize is a separate question.  For certificates that the rows
+//! are Pólya frequency sequences see [`crate::pf_network`] and
+//! [`crate::left_production`].
 //!
 //! # Method
 //!
@@ -311,7 +313,7 @@ pub fn recognize_brenti_strip_digraph(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum ColumnOutcome {
+pub(crate) enum ColumnOutcome {
     Feasible(Vec<Q>),
     Infeasible,
     Inconclusive,
@@ -541,7 +543,7 @@ impl<'a> Search<'a> {
 }
 
 /// Decide `A x = b`, `x >= 0` (and `x` integral when `integer`) exactly.
-fn solve_nonnegative_column(
+pub(crate) fn solve_nonnegative_column(
     a: &[Vec<Q>],
     b: &[Q],
     num_vars: usize,

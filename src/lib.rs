@@ -110,6 +110,10 @@
 //!   themselves certify real-rooted rows)
 //! - [`brenti_recognition`] — Exact search for a planar strip digraph that
 //!   reproduces a given prefix of polynomial rows
+//! - [`pf_network`] — Height-shift-invariant planar networks (Brenti): exact
+//!   search and verifier for Pólya frequency certificates of polynomial rows
+//! - [`left_production`] — Left production matrices (Chen--Fu--Ruan): one TNN
+//!   check certifying a triangle, its reversal and PF rows
 //! - [`interlacing_matrix`] — Finite Athanasiadis--Wagner `Lace(A)`
 //!   interlacing-matrix truncations and exact finite TNN checks
 //! - [`cyclic_sieving`] — Exact cyclic and bicyclic sieving checks via
@@ -136,9 +140,11 @@ pub mod decomposition;
 pub mod hstar_inequalities;
 pub mod hurwitz;
 pub mod interlacing_matrix;
+pub mod left_production;
 pub mod linalg;
 pub mod numeric;
 pub mod oeis;
+pub mod pf_network;
 pub mod polynomial;
 pub mod sturm;
 pub mod sturm_cf;
@@ -217,9 +223,18 @@ pub use interlacing_matrix::{
     lace_matrix_bigint, lace_matrix_i64, lace_matrix_sequence, lace_matrix_sequence_bigint,
     lace_matrix_sequence_i64, InterlacingMatrixError,
 };
+pub use left_production::{
+    check_left_production_matrix, left_production_matrix, LeftProductionCertificate,
+    LeftProductionError, LeftProductionReport,
+};
 pub use parse::{
     parse_polynomial, parse_polynomial_bigint, parse_polynomials, parse_polynomials_bigint,
     MAX_POLYNOMIAL_COEFFICIENTS, MAX_POLYNOMIAL_INPUT_BYTES,
+};
+pub use pf_network::{
+    build_pf_rows_certificate, recognize_pf_network, HeightInvariantNetwork, PfNetworkError,
+    PfNetworkOptions, PfNetworkRecognition, PfNetworkRecognitionError, PfRowsCertificate, PfStep,
+    PfStepType,
 };
 pub use polynomial::{CoeffRing, FieldRing, Polynomial};
 pub use real_rooted_enumeration::{

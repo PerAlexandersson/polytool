@@ -173,8 +173,9 @@ A text file `polys.txt` might look like:
 The commands `interlacing`, `interlacing-profile`, `properties`,
 `gamma-expansion`, `bernstein-expansion`, `family-check`, `sequence`, `coefficient-tests`,
 `hstar-to-ehrhart`, `ehrhart-to-hstar`, `hstar-inequalities`,
-`cyclic-sieving`, `cyclic-sieving-sequence`, `bicyclic-sieving`, `tnn-network`, and
-`brenti-recognize` also accept `--json` for machine-readable output.
+`cyclic-sieving`, `cyclic-sieving-sequence`, `bicyclic-sieving`, `tnn-network`,
+`brenti-recognize`, `pf-network`, and `left-production` also accept `--json` for
+machine-readable output.
 Large integer coefficients in JSON output are serialized as strings.
 
 The exact property commands `real-rooted`, `interlacing`,
@@ -532,6 +533,127 @@ Guardrails for both commands:
   invariant under shifts in `x`, not in `y`, and Brenti's PF theorem needs
   height-shift invariance.
 - Both commands certify only the supplied finite prefix.
+
+### Planar networks: Pólya frequency rows
+
+Two commands certify the *rows* themselves: each certified row is a Pólya
+frequency (PF) sequence, i.e. real-rooted with only nonpositive zeros.
+
+`pf-network` searches exactly for a planar network on `{0..N} x Z` that is
+invariant under **height** shifts (Brenti, *Combinatorics and total
+positivity*, JCTA 1995).  Into each column `n` it has steps
+`(length, rise, weight)`, standing for the edges `(n - length, y) -> (n, y + rise)`
+at every height `y`, so
+`P_n = sum weight * t^rise * P_(n - length)` with `P_0 = 1`.  When every
+positive-weight step is primitive (`gcd(length, rise) = 1`) and no two edges
+meet away from a common endpoint, the Toeplitz matrix of every row is the path
+matrix of fully compatible sources `(0, i)` and sinks `(n, j)`, so it is
+totally nonnegative (Lindström--Gessel--Viennot) and the row is PF
+(Aissen--Schoenberg--Whitney).  The search tries, column by column, every
+inclusion-minimal set of steps that is planar together with the edges already
+chosen and admits nonnegative weights for that row; this is exact for the
+bounds `--max-length <L>` and `--max-rise <R>` (default 3 and 3).  Other
+options: `--first-row <0|1>`, `--weights rational|integer`,
+`--max-search-nodes <n>`, `--max-integer-nodes <n>`.  The certificate is
+re-verified exactly: structure, planarity, every row, and the path matrix
+rebuilt over the explicit lattice against the `(deg + 1) x (deg + 1)` Toeplitz
+window of the row.  The PF conclusion comes from planarity and height
+invariance, for Toeplitz sections of every size; a finite Toeplitz window that
+happens to be TNN would prove nothing (the `3 x 3` window of `1 + t + t^2` is
+TNN).  A row that is not real-rooted rules out every network.  Verdicts and
+exit codes are as for `brenti-recognize` (0 certified, 1
+`impossible_within_bounds`, 2 invalid input, 3 inconclusive).
+
+```sh
+printf '1,1\n1,2,1\n1,3,3,1\n' | polytool pf-network
+printf '1,1\n1,4,1\n1,11,11,1\n1,26,66,26,1\n' | polytool pf-network --json
+```
+
+```text
+Height-invariant planar network (PF rows)
+- Input: 3 row(s), network rows 1..3; P_0 = 1 implicit
+- Bounds: rational weights, step length <= 3, rise <= 3, 1000000 search nodes, 10000 integer nodes per row
+- Verdict: certified (every supplied row is PF)
+- Steps into column n (length, rise): weight
+  n=1: (1, 0): 1, (1, 1): 1
+  n=2: (1, 0): 1, (1, 1): 1
+  n=3: (1, 0): 1, (1, 1): 1
+- Certificate re-verified (planarity, rows, Toeplitz windows): yes
+```
+
+The Eulerian rows `A_1, A_2, A_3` are certified with Brenti's recursive
+pattern (steps `(1,0)`, `(1,1)`, `(2,1)`; `A_3 = (1+t) A_2 + 6t A_1`), but no
+network with steps of length and rise at most 8 reproduces `A_1, ..., A_4`
+(rational or integer weights); the same holds for the Narayana rows
+`N_1, ..., N_4`.  Likewise no such network reproduces the Bell polynomials
+`B_1, ..., B_4` (Stirling numbers of the second kind), which
+`left-production` does certify.  These are statements about the stated
+bounds only.  JSON output (schema
+`polytool.pf-network.v1`) has `options`, `rows`, `verdict`, `certified`,
+`network` (`last_column`, `steps[n-1]` as `{length, rise, weight}`),
+`row_indices`, `certificate_verified`, `supports_checked`, `obstruction`,
+`reason`, `message` and the fixed `note`.
+
+`left-production` implements the unified planar network of Chen--Fu--Ruan
+(arXiv:2512.08369).  Rows `P_0, ..., P_N` with `deg P_n = n` form a lower
+triangular matrix `A` with nonzero diagonal; its left production matrix
+`Q = A (1 ⊕ A^{-1})` is determined row by row by
+`a_{n,0} = q_{n,0}`, `a_{n,k} = sum_{i=k..n} q_{n,i} a_{i-1,k-1}`, and row `n`
+of `A` depends only on the leading block `Q_n`.  If `Q_N` is totally
+nonnegative, then (Theorems 3 and 4 of the paper, applied to `Q_N ⊕ I`) the
+rows `P_0, ..., P_N` are PF and `A_N` and its reversal `[a_{n,n-k}]` are TNN.
+The command computes `Q_N` exactly, decides TNN (with a negative-minor witness
+on failure), re-verifies the certificate (regenerates `A_N` from `Q_N`,
+re-checks TNN, and compares the unified-network window
+`M_{n,n}[n..2n; 0..n] = T_n(P_n)^T` for every row), and prints an explicit
+planar network for `Q_N = L D` (canonical network weights of `L`, diagonal
+`D`).  It covers Stirling numbers of both kinds, Lah, `r`-Whitney and
+idempotent numbers, and Brenti's `n`-recursive triangles (Pascal, Delannoy,
+derangements) without naming the family.  The criterion is sufficient, not
+necessary: `Q_4` of the Eulerian triangle has `q_{4,2} = -5` although the rows
+are real-rooted, and the Narayana triangle fails at `Q_4`.  `--first-row 0`
+reads `P_0, P_1, ...`; by default `P_0 = 1` is prepended.  Exit status 0 if
+certified, 1 if not, 2 for invalid input.
+
+```sh
+printf '0,1\n0,1,1\n0,1,3,1\n0,1,7,6,1\n' | polytool left-production
+printf '1,1\n1,4,1\n1,11,11,1\n1,26,66,26,1\n' | polytool left-production --json
+```
+
+```text
+Left production matrix (Chen--Fu--Ruan)
+- Input: 4 row(s); P_0 = 1 prepended
+- Production matrix Q_N (triangular rows):
+  0: 1
+  1: 0, 1
+  2: 0, 1, 1
+  3: 0, 1, 2, 1
+  4: 0, 1, 3, 3, 1
+- Verdict: Q_4 is TNN; certificate re-verified
+- Conclusion: rows P_0..P_4 are PF (real-rooted, nonpositive zeros); the triangle and its reversal are TNN
+- Planar network for Q_N = L D (lambda[n][k] of Gamma_N(lambda) for L):
+  n=0: 0
+  n=1: 0, 1
+  n=2: 0, 1, 1
+  n=3: 0, 1, 1, 1
+  column scales D = diag(1, 1, 1, 1, 1)
+```
+
+JSON output (schema `polytool.left-production.v1`) has `first_row_index`,
+`rows`, `triangle`, `production_matrix`, `tnn`, `failure_reason`,
+`negative_minor` (`rows`, `cols`, `value`), `certificate_verified`,
+`rows_certified_pf`, `production_network` (`lambda`, `column_scales`),
+`message` and the fixed `note`.
+
+Guardrails for these two commands:
+
+- They certify that the supplied rows are PF.  `pf-network` says nothing
+  about the coefficient matrix of the rows (`tnn-network` and
+  `brenti-recognize` concern that matrix, and do not certify PF rows).
+- `impossible_within_bounds` from `pf-network` is relative to the step
+  bounds, unless the obstruction is a row that is not real-rooted.  A
+  `left-production` failure says nothing about the rows.
+- Both certify only the supplied rows; `1 + t + t^2` is never certified.
 
 ### Search for a recurrence
 
@@ -1446,6 +1568,40 @@ assert!(result.is_certified());
   supplied prefix and proves that the coefficient matrix is TNN (by
   Lindström--Gessel--Viennot); it does not prove that the rows are
   real-rooted (`[1 + t, 1 + t + t^2]` is recognized).
+- `pf_network::recognize_pf_network` searches exactly for a
+  `HeightInvariantNetwork` (steps `(length, rise, weight)` per column, the
+  same at every height) whose rows are the given polynomials.  Such a network
+  certifies that **each row is a PF sequence** (real-rooted, nonpositive
+  zeros): its planarity makes the Toeplitz matrix of every row a path matrix
+  with fully compatible sources and sinks (Brenti 1995).
+  `build_pf_rows_certificate` and `PfRowsCertificate::verify_against_bigint_polynomials`
+  re-check a given network (exact planarity test, rows, explicitly rebuilt
+  Toeplitz windows); `toeplitz_path_matrix` and `toeplitz_window` expose the
+  two sides of that comparison.
+- `left_production::check_left_production_matrix` computes the left
+  production matrix `Q_N` of a triangle with nonzero diagonal and decides
+  whether it is TNN; if so (Chen--Fu--Ruan, arXiv:2512.08369), the rows are
+  PF and the triangle and its reversal are TNN.  `LeftProductionCertificate::verify`
+  re-checks a claimed certificate, `unified_network_toeplitz_window` evaluates
+  the paper's Theorem 4 window, and the report includes an explicit planar
+  network for `Q_N`.  Failure of TNN proves nothing about the rows.
+
+```rust
+use num_bigint::BigInt;
+use polytool::*;
+
+// PF certificates for the rows (1+t)^n.
+let rows: Vec<Polynomial<BigInt>> = (1..=4)
+    .map(|n| Polynomial::new((0..=n).map(|k| numeric::binomial_bigint(n, k)).collect()))
+    .collect();
+assert!(recognize_pf_network(&rows, &PfNetworkOptions::default()).unwrap().is_certified());
+assert!(check_left_production_matrix(&rows, 1).unwrap().rows_certified_pf());
+
+// 1 + t + t^2 is never certified.
+let bad = vec![Polynomial::from_i64_coeffs(&[1, 1]), Polynomial::from_i64_coeffs(&[1, 1, 1])];
+assert!(!recognize_pf_network(&bad, &PfNetworkOptions::default()).unwrap().is_certified());
+assert!(!check_left_production_matrix(&bad, 1).unwrap().rows_certified_pf());
+```
 
 ### Polynomial arithmetic
 
@@ -1811,12 +1967,19 @@ Available MCP tools:
 - `generate_sequence`
 - `check_tnn_network`
 - `recognize_brenti_strip_digraph`
+- `recognize_pf_network`
+- `check_left_production_matrix`
 
 `check_tnn_network` and `recognize_brenti_strip_digraph` return the same
 fields as the JSON output of `polytool tnn-network` and
 `polytool brenti-recognize` (without the `schema` tag), including the fixed
 guardrail `note`: TNN of the coefficient matrix, and a strip-digraph
 certificate, say nothing about real-rootedness of the row polynomials.
+`recognize_pf_network` and `check_left_production_matrix` mirror
+`polytool pf-network` and `polytool left-production`; their certificates do
+prove PF (real-rooted) rows, and their notes say what they do not prove (at
+most 64 rows of degree at most 64 and steps of length and rise at most 8 for
+`recognize_pf_network`; at most 32 rows for `check_left_production_matrix`).
 
 The MCP property, interlacing, resultant, discriminant, Ehrhart conversion,
 sequence-generation, and recurrence tools accept arbitrary-size integer
@@ -1954,6 +2117,23 @@ Performance:
   14.5 s to 0.94 s, 4.9 s to 0.19 s).
 
 Additions (no breaking changes):
+
+- New module `pf_network`: height-shift-invariant planar networks
+  (`HeightInvariantNetwork`, `PfStep`, `PfStepType`) with an exact planarity
+  test, `build_pf_rows_certificate` / `PfRowsCertificate` (rows plus
+  explicitly rebuilt Toeplitz windows), and `recognize_pf_network`, an exact
+  column-by-column search over minimal planar supports with step-length,
+  rise and budget bounds.  A certificate proves that every matched row is a
+  Pólya frequency sequence (Brenti 1995): real-rooted with nonpositive zeros.
+  CLI `pf-network`, MCP tool `recognize_pf_network`.
+- New module `left_production` (Chen--Fu--Ruan, arXiv:2512.08369):
+  `left_production_matrix`, `triangle_from_left_production_matrix`,
+  `unified_network_toeplitz_window`, `check_production_tnn`,
+  `LeftProductionCertificate::verify` and `check_left_production_matrix`.  A
+  TNN left production matrix certifies PF rows and a TNN triangle and
+  reversal for the supplied prefix; the report includes a negative-minor
+  witness on failure and an explicit planar network on success.  CLI
+  `left-production`, MCP tool `check_left_production_matrix`.
 
 - New module `real_rooted_enumeration`:
   `enumerate_real_rooted_integer_polynomials_bigint` enumerates all

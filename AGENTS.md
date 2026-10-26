@@ -30,7 +30,9 @@
   - structured diagnostics: `coefficient_tests`, `hstar_inequalities`,
     `cyclic_sieving`, `decomposition`, `basis`, `bkw`;
   - planar-network and TNN certificates: `tnn_network`, `brenti_sequence`,
-    `brenti_recognition`, `interlacing_matrix`;
+    `brenti_recognition`, `interlacing_matrix`; Pólya frequency certificates
+    for rows: `pf_network` (height-invariant networks), `left_production`
+    (Chen--Fu--Ruan left production matrices);
   - standard sequences: `sequences` (with `deco` and `literature`).
 - The CLI is `src/bin/polytool/`: `main.rs` dispatches, each subcommand (or
   close group) has its own module, and `input`, `json_out` and `help` hold the

@@ -822,7 +822,7 @@ fn submatrix(matrix: &[Vec<BigInt>], rows: &[usize], cols: &[usize]) -> Vec<Vec<
 }
 
 /// Search a square matrix for a negative minor, structured families first.
-fn find_negative_minor(matrix: &[Vec<BigInt>]) -> Option<NegativeMinor> {
+pub(crate) fn find_negative_minor(matrix: &[Vec<BigInt>]) -> Option<NegativeMinor> {
     let n = matrix.len();
     let mut budget = MINOR_SEARCH_BUDGET;
     let test = |rows: &[usize], cols: &[usize], budget: &mut usize| -> Option<NegativeMinor> {
@@ -903,7 +903,7 @@ fn combinations(n: usize, k: usize) -> Vec<Vec<usize>> {
     }
 }
 
-fn reconstruct_lambda_from_q_rows(
+pub(crate) fn reconstruct_lambda_from_q_rows(
     rows: &[Vec<BigRational>],
 ) -> Result<Vec<Vec<BigRational>>, NetworkError> {
     let num_rows = rows.len();

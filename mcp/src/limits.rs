@@ -20,3 +20,7 @@ pub(crate) const MCP_MAX_BRENTI_ROWS: usize = 64;
 pub(crate) const MCP_MAX_BRENTI_DEGREE: usize = 64;
 pub(crate) const MCP_MAX_BRENTI_SEARCH_NODES: usize = 1_000_000;
 pub(crate) const MCP_MAX_BRENTI_INTEGER_NODES: usize = 100_000;
+pub(crate) const MCP_MAX_PF_NETWORK_ROWS: usize = 64;
+pub(crate) const MCP_MAX_PF_NETWORK_DEGREE: usize = 64;
+pub(crate) const MCP_MAX_PF_NETWORK_STEP: usize = 8;
+pub(crate) const MCP_MAX_LEFT_PRODUCTION_ROWS: usize = 32;

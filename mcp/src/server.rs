@@ -15,7 +15,10 @@ use crate::parsing::{
     parse_bigint_coefficients, parse_bigint_matrix, parse_rational,
     parse_recurrence_batch_rational, parse_required_bigint_polynomial, validate_mcp_text,
 };
-use crate::planar_network::{brenti_recognition_response, tnn_network_response};
+use crate::planar_network::{
+    brenti_recognition_response, left_production_response, pf_network_response,
+    tnn_network_response,
+};
 use crate::recurrence_options::{
     apply_recurrence_options, recurrence_failure_response, recurrence_json_string,
     validate_recurrence_for_generation,
@@ -1157,6 +1160,26 @@ impl PolynomialToolsServer {
         Parameters(input): Parameters<BrentiRecognitionRequest>,
     ) -> Result<Json<BrentiRecognitionResponse>, McpError> {
         Ok(Json(brenti_recognition_response(&input)?))
+    }
+
+    #[tool(
+        description = "Search exactly for a planar network on {0..N} x Z that is invariant under height shifts (steps (length, rise, weight) into each column n stand for the edges (n-length, y) -> (n, y+rise) at every height y, so P_n = sum weight * t^rise * P_(n-length), P_0 = 1) whose rows are the input polynomials (P_1, P_2, ... or first_row_index=0). Valid networks have primitive steps and no crossing edges; then the Toeplitz matrix of every row is a path matrix of fully compatible sources and sinks, hence TNN (Lindstrom--Gessel--Viennot, Brenti 1995), so every supplied row is a Polya frequency sequence: real-rooted with nonpositive zeros. Bounds: max_step_length, max_rise, weights (rational|integer), max_search_nodes, max_integer_search_nodes. Verdict: certified (re-verified: planarity, rows, rebuilt Toeplitz windows), impossible_within_bounds (exact; a non-real-rooted row rules out every network), or inconclusive. Guardrail: certifies PF rows, NOT TNN of the coefficient matrix (that is check_tnn_network / recognize_brenti_strip_digraph); covers only the supplied rows."
+    )]
+    pub fn recognize_pf_network(
+        &self,
+        Parameters(input): Parameters<crate::requests::PfNetworkRequest>,
+    ) -> Result<Json<crate::responses::PfNetworkResponse>, McpError> {
+        Ok(Json(pf_network_response(&input)?))
+    }
+
+    #[tool(
+        description = "Chen--Fu--Ruan (arXiv:2512.08369) certificate for a triangle: rows P_0 (or P_1), P_1, ... with deg P_n = n form a lower-triangular A with nonzero diagonal; compute exactly the leading block Q_N of its left production matrix Q = A (1 + A^{-1}) (a_{n,0} = q_{n,0}, a_{n,k} = sum_{i=k..n} q_{n,i} a_{i-1,k-1}) and decide whether Q_N is TNN. If so (certificate re-verified: regeneration, TNN, unified-network Toeplitz windows), rows P_0..P_N are Polya frequency sequences (real-rooted, nonpositive zeros) and A_N and its reversal are TNN; an explicit planar network Q_N = L D is returned. Otherwise returns the failure and a negative minor when found. Guardrail: sufficient, not necessary (Eulerian rows are real-rooted, yet q_{4,2} = -5); covers only the supplied rows."
+    )]
+    pub fn check_left_production_matrix(
+        &self,
+        Parameters(input): Parameters<crate::requests::LeftProductionRequest>,
+    ) -> Result<Json<crate::responses::LeftProductionResponse>, McpError> {
+        Ok(Json(left_production_response(&input)?))
     }
 }
 

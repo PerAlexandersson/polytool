@@ -34,7 +34,9 @@
 //! `1 + t + t^2`.  Brenti's theorem on Pólya frequency rows needs invariance
 //! under translation in `y` (the height), which makes the Toeplitz matrix of a
 //! row a path matrix; the height-dependent transitions used here are invariant
-//! in `x` instead.  Use an exact real-rootedness test for the rows themselves.
+//! in `x` instead.  Use an exact real-rootedness test for the rows themselves,
+//! or a PF certificate from [`crate::pf_network`] (height-invariant networks)
+//! or [`crate::left_production`] (Chen--Fu--Ruan).
 //!
 //! [`crate::brenti_recognition`] searches for a strip digraph reproducing a
 //! given finite prefix of rows.

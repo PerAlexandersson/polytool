@@ -580,3 +580,43 @@ pub struct BrentiRecognitionRequest {
     /// 100000).
     pub max_integer_search_nodes: Option<usize>,
 }
+
+/// Input of `recognize_pf_network`.  Give exactly one of `polynomials` or
+/// `text`.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PfNetworkRequest {
+    /// Rows `P_1, P_2, ...` (or `P_0, P_1, ...` with `first_row_index = 0`),
+    /// ascending coefficients.
+    pub polynomials: Option<Vec<BigIntPolynomialInput>>,
+    /// The same rows as newline-separated coefficient lists or expressions.
+    pub text: Option<String>,
+    /// Network row of the first polynomial: 1 (default, `P_0 = 1` implicit)
+    /// or 0 (the first row must be `1`).
+    pub first_row_index: Option<usize>,
+    /// Largest step length (default 3, maximum 8).
+    pub max_step_length: Option<usize>,
+    /// Largest rise (default 3, maximum 8).
+    pub max_rise: Option<usize>,
+    /// Rational (default) or integer edge weights.
+    pub weights: Option<BrentiWeightsInput>,
+    /// Budget on the column supports visited (default and maximum 1000000).
+    pub max_search_nodes: Option<usize>,
+    /// Budget on the integer search for one row (default 10000, maximum
+    /// 100000).
+    pub max_integer_search_nodes: Option<usize>,
+}
+
+/// Input of `check_left_production_matrix`.  Give exactly one of
+/// `polynomials` or `text`.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LeftProductionRequest {
+    /// Rows `P_1, P_2, ...` with `deg P_n = n` (or `P_0, P_1, ...` with
+    /// `first_row_index = 0`), ascending coefficients.
+    pub polynomials: Option<Vec<BigIntPolynomialInput>>,
+    /// The same rows as newline-separated coefficient lists or expressions.
+    pub text: Option<String>,
+    /// Index of the first row: 1 (default, `P_0 = 1` is prepended) or 0.
+    pub first_row_index: Option<usize>,
+}

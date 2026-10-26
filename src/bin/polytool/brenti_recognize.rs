@@ -52,7 +52,8 @@ pub(crate) fn print_brenti_recognize_help() {
     println!("  are real-rooted or PF: [1 + t, 1 + t + t^2] is certified.  The transitions");
     println!("  here depend on the height, so the digraph is invariant under shifts in x,");
     println!("  not in y; Brenti's PF theorem needs height-shift invariance.  Only the");
-    println!("  supplied prefix is covered.");
+    println!("  supplied prefix is covered.  For PF certificates of the rows themselves");
+    println!("  use pf-network or left-production.");
     println!();
     println!("Exit status:");
     println!("  0  certified");

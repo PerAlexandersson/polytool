@@ -11,7 +11,9 @@ use crate::cyclic_sieving_sequence::print_cyclic_sieving_sequence_help;
 use crate::ehrhart::print_hstar_inequalities_help;
 use crate::enumerate_real_rooted::print_enumerate_real_rooted_help;
 use crate::family_check::print_family_check_help;
+use crate::left_production::print_left_production_help;
 use crate::oeis::print_oeis_help;
+use crate::pf_network::print_pf_network_help;
 use crate::pf_pencil::print_pf_pencil_help;
 use crate::recurrence::{print_recurrence_generate_help, print_recurrence_help};
 use crate::sequence::print_sequence_help;
@@ -81,6 +83,8 @@ pub(crate) fn print_top_level_help() {
     println!("  brenti-recognize  Search for a planar strip digraph reproducing the rows");
     println!("  enumerate-real-rooted");
     println!("                    Enumerate real-rooted integer polynomials by leading prefix");
+    println!("  pf-network        Search for a height-invariant planar network: PF rows");
+    println!("  left-production   Chen--Fu--Ruan left production matrix: TNN triangle, PF rows");
     println!();
     println!("Options:");
     println!("  -h, --help        Print help text");
@@ -270,6 +274,8 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "tnn-network" => print_tnn_network_help(),
         "brenti-recognize" => print_brenti_recognize_help(),
         "enumerate-real-rooted" => print_enumerate_real_rooted_help(),
+        "pf-network" => print_pf_network_help(),
+        "left-production" => print_left_production_help(),
         _ => return false,
     }
     true
