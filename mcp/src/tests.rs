@@ -1267,3 +1267,255 @@ fn mcp_bounds_generation_and_reports_exact_conversion_errors() {
         .error
         .is_some_and(|error| error.contains("exceeds MCP limits")));
 }
+
+fn tnn_request(text: &str, chain: bool) -> TnnNetworkRequest {
+    TnnNetworkRequest {
+        polynomials: None,
+        text: Some(text.to_string()),
+        matrix: None,
+        chain: Some(chain),
+    }
+}
+
+fn int_matrix(rows: &[&[i64]]) -> Vec<Vec<BigIntCoefficientInput>> {
+    rows.iter()
+        .map(|row| {
+            row.iter()
+                .map(|&v| BigIntCoefficientInput::from(v))
+                .collect()
+        })
+        .collect()
+}
+
+fn brenti_request(text: &str) -> BrentiRecognitionRequest {
+    BrentiRecognitionRequest {
+        polynomials: None,
+        text: Some(text.to_string()),
+        first_row_index: None,
+        max_target_span: None,
+        weights: None,
+        max_search_nodes: None,
+        max_integer_search_nodes: None,
+    }
+}
+
+#[test]
+fn tnn_network_certifies_pascal_with_chain_polynomials() {
+    let server = PolynomialToolsServer::new();
+    let Json(response) = server
+        .check_tnn_network(Parameters(tnn_request(
+            "1,1\n1,2,1\n1,3,3,1\n1,4,6,4,1",
+            true,
+        )))
+        .unwrap();
+    assert_eq!(response.input_mode, "polynomials");
+    assert!(response.prepended_p0);
+    assert!(response.tnn);
+    assert_eq!(response.failure, None);
+    assert_eq!(response.certificate_verified, Some(true));
+    let lambda = response.lambda.as_ref().unwrap();
+    assert_eq!(lambda.len(), 4);
+    for (n, row) in lambda.iter().enumerate() {
+        assert_eq!(row, &vec!["1".to_string(); n + 1]);
+    }
+    let chain = response.chain.as_ref().unwrap();
+    assert_eq!(chain.error, None);
+    assert_eq!(chain.conclusion_holds, Some(true));
+    assert_eq!(chain.contradicts_theorem, Some(false));
+    assert_eq!(chain.polynomials[3].polynomial, "t + 6t^2 + 6t^3");
+    assert!(chain.polynomials.iter().all(|p| p.roots_in_minus_one_zero));
+    assert_eq!(chain.interlacing.len(), 4);
+    assert!(chain.interlacing.iter().all(|pair| pair.interlaces));
+
+    let value = serde_json::to_value(&response).unwrap();
+    assert_eq!(value["coefficient_matrix"][2], json!(["1", "2", "1"]));
+    assert_eq!(value["lambda"][0], json!(["1"]));
+}
+
+#[test]
+fn tnn_network_guardrail_example_makes_no_row_claim() {
+    let server = PolynomialToolsServer::new();
+    let Json(response) = server
+        .check_tnn_network(Parameters(TnnNetworkRequest {
+            polynomials: None,
+            text: None,
+            matrix: Some(int_matrix(&[&[1, 0, 0], &[1, 1, 0], &[1, 1, 1]])),
+            chain: None,
+        }))
+        .unwrap();
+    assert_eq!(response.input_mode, "matrix");
+    assert!(response.tnn);
+    assert_eq!(response.certificate_verified, Some(true));
+    assert_eq!(
+        response.lambda,
+        Some(vec![
+            vec!["1".to_string()],
+            vec!["1".to_string(), "0".to_string()]
+        ])
+    );
+    assert_eq!(response.chain, None);
+    assert!(response
+        .note
+        .contains("does not imply that the row polynomials are real-rooted"));
+    let value = serde_json::to_value(&response).unwrap();
+    assert!(value
+        .as_object()
+        .unwrap()
+        .keys()
+        .all(|key| !key.contains("real_rooted")));
+}
+
+#[test]
+fn tnn_network_reports_negative_minor_and_shape_failures() {
+    let server = PolynomialToolsServer::new();
+    let Json(response) = server
+        .check_tnn_network(Parameters(TnnNetworkRequest {
+            polynomials: None,
+            text: None,
+            matrix: Some(int_matrix(&[&[1], &[1, 1], &[2, 0, 1]])),
+            chain: Some(true),
+        }))
+        .unwrap();
+    assert!(!response.tnn);
+    assert_eq!(response.lambda, None);
+    let failure = response.failure.as_ref().unwrap();
+    assert_eq!(failure.kind, "not_tnn");
+    assert_eq!(
+        failure.witness,
+        Some(NegativeMinorItem {
+            rows: vec![1, 2],
+            cols: vec![0, 1],
+            value: "-2".to_string(),
+        })
+    );
+    // The chain polynomials are still reported; the theorem does not apply.
+    assert_eq!(
+        response.chain.as_ref().unwrap().contradicts_theorem,
+        Some(false)
+    );
+
+    let Json(non_monic) = server
+        .check_tnn_network(Parameters(tnn_request("1,2\n1,2,1", false)))
+        .unwrap();
+    let failure = non_monic.failure.unwrap();
+    assert_eq!(failure.kind, "non_monic_polynomial");
+    assert_eq!(
+        (failure.row, failure.value.as_deref()),
+        (Some(1), Some("2"))
+    );
+    assert_eq!(non_monic.coefficient_matrix, None);
+
+    let Json(above) = server
+        .check_tnn_network(Parameters(TnnNetworkRequest {
+            polynomials: None,
+            text: None,
+            matrix: Some(int_matrix(&[&[1, 2], &[1, 1]])),
+            chain: Some(true),
+        }))
+        .unwrap();
+    assert_eq!(above.failure.unwrap().kind, "nonzero_above_diagonal");
+    assert!(above.chain.unwrap().error.is_some());
+}
+
+#[test]
+fn tnn_network_validates_input_shape_and_limits() {
+    let server = PolynomialToolsServer::new();
+    let both = server.check_tnn_network(Parameters(TnnNetworkRequest {
+        polynomials: None,
+        text: Some("1".to_string()),
+        matrix: Some(int_matrix(&[&[1]])),
+        chain: None,
+    }));
+    assert!(format!("{:?}", both.err().unwrap()).contains("exactly one"));
+    let bad = server.check_tnn_network(Parameters(tnn_request("1\n1,x", false)));
+    assert!(format!("{:?}", bad.err().unwrap()).contains("polynomial 1"));
+    let rows = crate::limits::MCP_MAX_TNN_NETWORK_ROWS + 1;
+    let too_many = server.check_tnn_network(Parameters(TnnNetworkRequest {
+        polynomials: None,
+        text: None,
+        matrix: Some(vec![vec![BigIntCoefficientInput::from(1)]; rows]),
+        chain: None,
+    }));
+    assert!(format!("{:?}", too_many.err().unwrap()).contains("MCP limit"));
+}
+
+#[test]
+fn brenti_recognition_certifies_stirling_and_rejects_eulerian() {
+    let server = PolynomialToolsServer::new();
+    let mut request = brenti_request("0,1\n0,1,1\n0,1,3,1\n0,1,7,6,1\n0,1,15,25,10,1");
+    request.weights = Some(BrentiWeightsInput::Integer);
+    let Json(stirling) = server
+        .recognize_brenti_strip_digraph(Parameters(request))
+        .unwrap();
+    assert_eq!(stirling.verdict, "certified");
+    assert!(stirling.certified);
+    assert_eq!(stirling.certificate_verified, Some(true));
+    assert_eq!(stirling.row_indices, Some(vec![1, 2, 3, 4, 5]));
+    assert_eq!(stirling.options.weights, "integer");
+    let digraph = stirling.digraph.unwrap();
+    let edge = |to: usize, weight: usize| StripDigraphEdgeItem {
+        to,
+        weight: weight.to_string(),
+    };
+    assert_eq!(digraph.outgoing[0], vec![edge(1, 1)]);
+    for y in 1..5 {
+        assert_eq!(digraph.outgoing[y], vec![edge(y, y), edge(y + 1, 1)]);
+    }
+
+    let Json(eulerian) = server
+        .recognize_brenti_strip_digraph(Parameters(brenti_request(
+            "1,1\n1,4,1\n1,11,11,1\n1,26,66,26,1",
+        )))
+        .unwrap();
+    assert_eq!(eulerian.verdict, "impossible_within_bounds");
+    assert!(!eulerian.certified);
+    assert_eq!(eulerian.digraph, None);
+    assert_eq!(eulerian.supports_checked, Some(0));
+    assert!(eulerian.obstruction.is_some());
+}
+
+#[test]
+fn brenti_recognition_guardrail_budgets_and_limits() {
+    let server = PolynomialToolsServer::new();
+    let Json(guardrail) = server
+        .recognize_brenti_strip_digraph(Parameters(brenti_request("1,1\n1,1,1")))
+        .unwrap();
+    assert_eq!(guardrail.verdict, "certified");
+    assert!(guardrail
+        .note
+        .contains("does not show that the rows are real-rooted"));
+
+    let mut tiny = brenti_request("1,1,1\n1,2,3,2,1");
+    tiny.max_search_nodes = Some(1);
+    let Json(inconclusive) = server
+        .recognize_brenti_strip_digraph(Parameters(tiny))
+        .unwrap();
+    assert_eq!(inconclusive.verdict, "inconclusive");
+    assert!(inconclusive.reason.is_some());
+
+    let mut huge = brenti_request("1,1");
+    huge.max_search_nodes = Some(crate::limits::MCP_MAX_BRENTI_SEARCH_NODES + 1);
+    assert!(server
+        .recognize_brenti_strip_digraph(Parameters(huge))
+        .is_err());
+    let mut bad_offset = brenti_request("1,1");
+    bad_offset.first_row_index = Some(2);
+    assert!(format!(
+        "{:?}",
+        server
+            .recognize_brenti_strip_digraph(Parameters(bad_offset))
+            .err()
+            .unwrap()
+    )
+    .contains("first row index"));
+    let degree = crate::limits::MCP_MAX_BRENTI_DEGREE + 1;
+    let high = brenti_request(&format!("t^{degree}"));
+    assert!(format!(
+        "{:?}",
+        server
+            .recognize_brenti_strip_digraph(Parameters(high))
+            .err()
+            .unwrap()
+    )
+    .contains("degree"));
+}

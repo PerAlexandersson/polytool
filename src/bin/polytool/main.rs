@@ -10,6 +10,7 @@
 mod bench;
 mod bicyclic_sieving;
 mod bkw_scout;
+mod brenti_recognize;
 mod coefficient_tests;
 mod cyclic_sieving;
 mod cyclic_sieving_sequence;
@@ -27,10 +28,12 @@ mod recurrence;
 mod resultant;
 mod sequence;
 mod stapledon;
+mod tnn_network;
 
 use crate::bench::cmd_bench;
 use crate::bicyclic_sieving::cmd_bicyclic_sieving;
 use crate::bkw_scout::cmd_bkw_scout;
+use crate::brenti_recognize::cmd_brenti_recognize;
 use crate::coefficient_tests::cmd_coefficient_tests;
 use crate::cyclic_sieving::cmd_cyclic_sieving;
 use crate::cyclic_sieving_sequence::cmd_cyclic_sieving_sequence;
@@ -47,6 +50,7 @@ use crate::recurrence::{cmd_recurrence, cmd_recurrence_generate};
 use crate::resultant::{cmd_discriminant, cmd_resultant};
 use crate::sequence::cmd_sequence;
 use crate::stapledon::cmd_stapledon;
+use crate::tnn_network::cmd_tnn_network;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -107,6 +111,8 @@ fn main() {
         "cyclic-sieving-sequence" => cmd_cyclic_sieving_sequence(rest),
         "bicyclic-sieving" => cmd_bicyclic_sieving(rest),
         "stapledon" => cmd_stapledon(rest),
+        "tnn-network" => cmd_tnn_network(rest),
+        "brenti-recognize" => cmd_brenti_recognize(rest),
         _ => {
             eprintln!("Unknown command: {}", cmd);
             std::process::exit(1);

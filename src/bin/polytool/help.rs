@@ -4,6 +4,7 @@
 use crate::bench::print_bench_help;
 use crate::bicyclic_sieving::print_bicyclic_sieving_help;
 use crate::bkw_scout::bkw_scout_usage;
+use crate::brenti_recognize::print_brenti_recognize_help;
 use crate::coefficient_tests::print_coefficient_tests_help;
 use crate::cyclic_sieving::print_cyclic_sieving_help;
 use crate::cyclic_sieving_sequence::print_cyclic_sieving_sequence_help;
@@ -14,6 +15,7 @@ use crate::pf_pencil::print_pf_pencil_help;
 use crate::recurrence::{print_recurrence_generate_help, print_recurrence_help};
 use crate::sequence::print_sequence_help;
 use crate::stapledon::print_stapledon_help;
+use crate::tnn_network::print_tnn_network_help;
 
 pub(crate) fn print_coefficient_input_help() {
     println!("Input:");
@@ -74,6 +76,8 @@ pub(crate) fn print_top_level_help() {
     println!("                    Profile candidate cyclic sieving orders for a sequence");
     println!("  bicyclic-sieving  Check bicyclic sieving for C_n1 x C_n2 and f(q,t)");
     println!("  stapledon         Compute a Stapledon decomposition");
+    println!("  tnn-network       Check TNN of a coefficient triangle; canonical planar network");
+    println!("  brenti-recognize  Search for a planar strip digraph reproducing the rows");
     println!();
     println!("Options:");
     println!("  -h, --help        Print help text");
@@ -260,6 +264,8 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "cyclic-sieving-sequence" => print_cyclic_sieving_sequence_help(),
         "bicyclic-sieving" => print_bicyclic_sieving_help(),
         "stapledon" => print_stapledon_help(),
+        "tnn-network" => print_tnn_network_help(),
+        "brenti-recognize" => print_brenti_recognize_help(),
         _ => return false,
     }
     true

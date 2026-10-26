@@ -173,8 +173,8 @@ A text file `polys.txt` might look like:
 The commands `interlacing`, `interlacing-profile`, `properties`,
 `gamma-expansion`, `bernstein-expansion`, `family-check`, `sequence`, `coefficient-tests`,
 `hstar-to-ehrhart`, `ehrhart-to-hstar`, `hstar-inequalities`,
-`cyclic-sieving`, `cyclic-sieving-sequence`, and `bicyclic-sieving` also accept `--json` for
-machine-readable output.
+`cyclic-sieving`, `cyclic-sieving-sequence`, `bicyclic-sieving`, `tnn-network`, and
+`brenti-recognize` also accept `--json` for machine-readable output.
 Large integer coefficients in JSON output are serialized as strings.
 
 The exact property commands `real-rooted`, `interlacing`,
@@ -412,6 +412,126 @@ polytool family-check \
   --recurrence \
   --json < polys.txt
 ```
+
+### Planar networks: TNN triangles and strip digraphs
+
+`tnn-network` reads monic rows `P_0, P_1, ...` with `deg P_n = n` (or
+`P_1, P_2, ...`, in which case `P_0 = 1` is prepended) and decides exactly
+whether the coefficient triangle `r_{n,k} = [t^k] P_n` is lower-unitriangular
+and totally nonnegative (TNN).  On success it prints the weights
+`lambda[n][k]` of the canonical planar network `Gamma_N(lambda)` (the weight of
+the vertical edge `(n+1,k) -> (n,k)`; horizontal edges have weight 1) and
+re-evaluates the network's path matrix against the input (reconstruct →
+evaluate → compare).  On failure it says why: a shape problem (not monic, wrong
+degree, entry above the diagonal), a negative entry, or an explicit negative
+minor with zero-based rows, columns and exact value.  With `--matrix` each line
+is a matrix row instead (a square lower-triangular matrix, or triangular rows
+with `n + 1` entries in row `n`).  `--chain` adds the chain polynomials
+`p_0 = 1`, `p_n = t * sum_{k<n} r_{n,k} p_k` and checks that each is
+real-rooted with zeros in `[-1, 0]` and that `p_n` interlaces `p_{n+1}`.
+
+```sh
+printf '1,1\n1,2,1\n1,3,3,1\n' | polytool tnn-network --chain
+```
+
+```text
+TNN network check
+- Input: 3 polynomial row(s); P_0 = 1 prepended
+- Coefficient matrix (triangular rows):
+  0: 1
+  1: 1, 1
+  2: 1, 2, 1
+  3: 1, 3, 3, 1
+- Verdict: lower-unitriangular and totally nonnegative (TNN)
+- Canonical network weights lambda[n][k] (edge (n+1,k) -> (n,k)):
+  n=0: 1
+  n=1: 1, 1
+  n=2: 1, 1, 1
+- Certificate (reconstruct -> evaluate -> compare): the network's path matrix equals the input
+
+Chain polynomials (Brändén--Saud Maia Leite, arXiv:2412.06595, Theorem 3.7):
+  p_0 = 1: real-rooted, zeros in [-1, 0]
+  p_1 = t: real-rooted, zeros in [-1, 0]
+  p_2 = t + 2t^2: real-rooted, zeros in [-1, 0]
+  p_3 = t + 6t^2 + 6t^3: real-rooted, zeros in [-1, 0]
+- Consecutive interlacing p_n << p_(n+1): all hold
+- Theorem conclusion (real-rooted in [-1, 0] and interlacing): holds
+
+Note: TNN of the coefficient matrix does not imply that the row polynomials are real-rooted: ...
+```
+
+The guardrail example `[[1,0,0],[1,1,0],[1,1,1]]` (rows `1`, `1 + t`,
+`1 + t + t^2`) is TNN with weights `lambda = [[1], [1, 0]]`, although its last
+row has no real zeros.  The report makes no claim about the rows:
+
+```sh
+printf '1,0,0\n1,1,0\n1,1,1\n' | polytool tnn-network --matrix
+printf '1,0,0\n1,1,0\n2,0,1\n' | polytool tnn-network --matrix --json
+```
+
+The second matrix is rejected with the witness `rows [1, 2], columns [0, 1]`,
+minor `-2`.  JSON output (schema `polytool.tnn-network.v1`) has the fields
+`input_mode`, `input_rows`, `prepended_p0`, `coefficient_matrix`, `tnn`,
+`failure` (`kind`, `message`, `row`, `col`, `value`, `witness` with `rows`,
+`cols`, `value`), `lambda`, `certificate_verified`, `chain` (`theorem`, `error`,
+`polynomials` with `real_rooted` and `roots_in_minus_one_zero`, `interlacing`,
+`conclusion_holds`, `contradicts_theorem`) and the fixed `note`.  Integers and
+rationals are strings.  Exit status: 0 if the triangle is TNN and the
+certificate re-evaluates, 1 if it is not lower-unitriangular TNN, 2 for invalid
+input or options.
+
+`brenti-recognize` searches exactly for a planar strip digraph (edges from
+column `x` to `x + 1` that depend only on the height, with monotone targets)
+whose path counts from `(0,0)` to `(n,k)` are the coefficients of the input
+rows `P_1, P_2, ...` (`P_0 = 1` implicit; `--first-row 0` reads `P_0, P_1, ...`).
+Bounds mirror `BrentiRecognitionOptions`: `--max-span <k>`,
+`--weights rational|integer`, `--max-search-nodes <n>`,
+`--max-integer-nodes <n>`.  The verdict is `certified` (the digraph is
+re-verified against every row), `impossible_within_bounds` (exact) or
+`inconclusive` (a budget ran out); exit status 0, 1 and 3 respectively, and 2
+for invalid input or options.
+
+```sh
+printf '0,1\n0,1,1\n0,1,3,1\n0,1,7,6,1\n' | polytool brenti-recognize --weights integer
+printf '1,1\n1,4,1\n1,11,11,1\n' | polytool brenti-recognize --json
+```
+
+```text
+Strip-digraph recognition
+- Input: 4 row(s), digraph rows 1..4; P_0 = 1 implicit
+- Bounds: integer weights, target span unbounded, 1000000 search nodes, 10000 integer nodes per column
+- Verdict: certified
+- Digraph (height -> target: weight):
+  0 -> 1: 1
+  1 -> 1: 1, 2: 1
+  2 -> 2: 2, 3: 1
+  3 -> 3: 3, 4: 1
+  4 -> (no edges)
+- Certificate re-verified against the input rows: yes
+```
+
+The Stirling rows above are certified; the Eulerian rows are
+`impossible_within_bounds` (no nonnegative weights produce target height 1,
+even without the planarity constraint).  JSON
+output (schema `polytool.brenti-recognize.v1`) has `options`, `rows`,
+`verdict`, `certified`, `digraph` (`num_heights`, `outgoing[y]` as
+`{to, weight}`), `row_indices`, `certificate_verified`, `supports_checked`,
+`obstruction`, `reason`, `message` and the fixed `note`.
+
+Guardrails for both commands:
+
+- TNN of the coefficient matrix does **not** make the row polynomials
+  real-rooted: `[[1,0,0],[1,1,0],[1,1,1]]` is TNN and has the row
+  `1 + t + t^2`.  Brändén--Saud Maia Leite (arXiv:2412.06595, Theorem 3.7)
+  concerns the chain polynomials: they are real-rooted in `[-1, 0]` and
+  interlace when the triangle is lower-unitriangular TNN.
+- A strip-digraph certificate proves, by Lindström--Gessel--Viennot, that the
+  coefficient matrix of `P_0, ..., P_N` is TNN.  It does not prove that the
+  rows are real-rooted or Pólya frequency sequences (`[1 + t, 1 + t + t^2]` is
+  certified): the transitions depend on the height, so the digraph is
+  invariant under shifts in `x`, not in `y`, and Brenti's PF theorem needs
+  height-shift invariance.
+- Both commands certify only the supplied finite prefix.
 
 ### Search for a recurrence
 
@@ -1503,6 +1623,14 @@ Available MCP tools:
 - `ehrhart_hstar`
 - `analyze_decomposition`
 - `generate_sequence`
+- `check_tnn_network`
+- `recognize_brenti_strip_digraph`
+
+`check_tnn_network` and `recognize_brenti_strip_digraph` return the same
+fields as the JSON output of `polytool tnn-network` and
+`polytool brenti-recognize` (without the `schema` tag), including the fixed
+guardrail `note`: TNN of the coefficient matrix, and a strip-digraph
+certificate, say nothing about real-rootedness of the row polynomials.
 
 The MCP property, interlacing, resultant, discriminant, Ehrhart conversion,
 sequence-generation, and recurrence tools accept arbitrary-size integer
@@ -1657,6 +1785,22 @@ Additions (no breaking changes):
   polynomials on `[0, 1]` with `P~_n(1) = 1`.
 - The `check_weak_interlacing` documentation now spells out the idiom for
   treating a zero polynomial as vacuously interlacing.
+- CLI `tnn-network`: TNN verdict for the coefficient triangle of monic rows
+  (or, with `--matrix`, of a lower-triangular matrix), with the failing shape
+  condition, negative entry or negative-minor witness; canonical network
+  weights `lambda` and a reconstruct → evaluate → compare certificate;
+  `--chain` adds the Brändén--Saud Maia Leite chain polynomials with exact
+  real-rootedness, `[-1, 0]` and interlacing checks.  TNN of the triangle is
+  reported separately from, and does not imply, real-rootedness of the rows.
+- CLI `brenti-recognize`: exact planar strip-digraph search with
+  `--first-row`, `--max-span`, `--weights`, `--max-search-nodes` and
+  `--max-integer-nodes`; verdict `certified` (exit 0),
+  `impossible_within_bounds` (exit 1) or `inconclusive` (exit 3).  A
+  certificate proves TNN of the coefficient matrix, not real-rooted or PF rows.
+- MCP tools `check_tnn_network` and `recognize_brenti_strip_digraph` with the
+  same structured results (at most 128 rows for `check_tnn_network`; at most
+  64 rows of degree at most 64 and bounded search budgets for
+  `recognize_brenti_strip_digraph`).
 
 ### 0.5.0
 

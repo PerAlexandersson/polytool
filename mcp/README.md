@@ -707,6 +707,82 @@ is not indexed by zero.  Optional fixed counts are keyed by `index` and `order`.
 }
 ```
 
+### `check_tnn_network`
+
+Decide exactly whether the coefficient triangle `r_{n,k} = [t^k] P_n` of monic
+rows `P_0, P_1, ...` with `deg P_n = n` is lower-unitriangular and totally
+nonnegative (TNN).  Give exactly one of `polynomials`, `text` (both as monic
+rows; `P_0 = 1` is prepended when the first row has degree 1) or `matrix`
+(a square lower-triangular matrix, or triangular rows with `n + 1` entries in
+row `n`).  At most 128 rows.
+
+The response has `input_mode`, `input_rows`, `prepended_p0`,
+`coefficient_matrix`, `tnn`, `failure` (`kind`, `message`, `row`, `col`,
+`value`, and for `kind = "not_tnn"` a `witness` minor with zero-based `rows`,
+`cols` and exact `value`), `lambda` (weights of the canonical planar network
+`Gamma_N(lambda)`; `lambda[n][k]` is the weight of the vertical edge
+`(n+1,k) -> (n,k)`), `certificate_verified` (the network's path matrix
+re-evaluates exactly to the input), optional `chain`, and a fixed `note`.
+Integers and rationals are strings.
+
+With `"chain": true` the response adds the chain polynomials `p_0 = 1`,
+`p_n = t * sum_{k<n} r_{n,k} p_k` with `real_rooted`,
+`roots_in_minus_one_zero`, consecutive `interlacing`, `conclusion_holds` and
+`contradicts_theorem`.  Brändén--Saud Maia Leite (arXiv:2412.06595,
+Theorem 3.7) prove the conclusion whenever the triangle is TNN.
+
+Guardrail: TNN of the triangle does **not** make the row polynomials
+real-rooted.  `[[1,0,0],[1,1,0],[1,1,1]]` is TNN (`lambda = [["1"], ["1", "0"]]`)
+although its last row is `1 + t + t^2`; the tool reports no row
+real-rootedness at all.
+
+```json
+{
+  "text": "1,1\n1,2,1\n1,3,3,1",
+  "chain": true
+}
+```
+
+Pascal's triangle gives `tnn: true`, every `lambda` weight `"1"`, and chain
+polynomials `1, t, t + 2t^2, t + 6t^2 + 6t^3` that are real-rooted in
+`[-1, 0]` and interlace.  The matrix `[[1], [1, 1], [2, 0, 1]]` gives
+`failure.kind = "not_tnn"` with the witness rows `[1, 2]`, columns `[0, 1]`,
+value `"-2"`.
+
+### `recognize_brenti_strip_digraph`
+
+Search exactly for a planar strip digraph (edges from column `x` to `x + 1`
+depending only on the height, with monotone targets) whose path counts from
+`(0,0)` to `(n,k)` are the coefficients of the input rows.  Give `polynomials`
+or `text` (rows `P_1, P_2, ...` with `P_0 = 1` implicit, or `P_0, P_1, ...`
+with `first_row_index: 0`).  Optional bounds: `max_target_span`, `weights`
+(`"rational"` or `"integer"`), `max_search_nodes` (default and maximum
+1000000) and `max_integer_search_nodes` (default 10000, maximum 100000).  At
+most 64 rows of degree at most 64.
+
+The response has `options`, `rows`, `verdict` (`certified`,
+`impossible_within_bounds` or `inconclusive`), `certified`, `digraph`
+(`num_heights`, `outgoing[y]` as `{to, weight}`), `row_indices`,
+`certificate_verified`, `supports_checked`, `obstruction`, `reason`,
+`message` and a fixed `note`.
+
+Guardrail: a certificate proves, by Lindström--Gessel--Viennot, that the
+coefficient matrix of `P_0, ..., P_N` is TNN.  It does **not** prove that the
+rows are real-rooted or Pólya frequency sequences: `[1 + t, 1 + t + t^2]` is
+certified.  Brenti's PF theorem needs digraphs invariant under height shifts,
+which these are not.  Only the supplied prefix is covered.
+
+```json
+{
+  "text": "0,1\n0,1,1\n0,1,3,1\n0,1,7,6,1",
+  "weights": "integer"
+}
+```
+
+The Stirling rows are certified with edges `y -> y` of weight `y` and
+`y -> y + 1` of weight 1; the Eulerian rows `1,1\n1,4,1\n1,11,11,1` are
+`impossible_within_bounds`.
+
 ### `generate_sequence`
 
 Generate standard polynomial sequences.

@@ -15,6 +15,7 @@ use crate::parsing::{
     parse_bigint_coefficients, parse_bigint_matrix, parse_rational,
     parse_recurrence_batch_rational, parse_required_bigint_polynomial, validate_mcp_text,
 };
+use crate::planar_network::{brenti_recognition_response, tnn_network_response};
 use crate::recurrence_options::{
     apply_recurrence_options, recurrence_failure_response, recurrence_json_string,
     validate_recurrence_for_generation,
@@ -28,22 +29,24 @@ use crate::report_items::{
 };
 use crate::requests::{
     BicyclicSievingRequest, BigIntPolynomialBatchInput, BigIntPolynomialPairRequest,
-    CheckPolynomialFamilyRequest, CyclicSievingRequest, CyclicSievingSequenceRequest,
-    EhrhartHstarMode, EhrhartHstarRequest, FindRecurrenceRequest, GenerateOeisRowsRequest,
-    GenerateRecurrenceRowsRequest, GenerateSequenceRequest, GetOeisSequenceRequest,
-    HStarInequalitiesRequest, ListOeisSequencesRequest, PolynomialBatchInput,
-    RecurrenceSpacesToolRequest, VerifyRecurrenceSpacesToolRequest,
+    BrentiRecognitionRequest, CheckPolynomialFamilyRequest, CyclicSievingRequest,
+    CyclicSievingSequenceRequest, EhrhartHstarMode, EhrhartHstarRequest, FindRecurrenceRequest,
+    GenerateOeisRowsRequest, GenerateRecurrenceRowsRequest, GenerateSequenceRequest,
+    GetOeisSequenceRequest, HStarInequalitiesRequest, ListOeisSequencesRequest,
+    PolynomialBatchInput, RecurrenceSpacesToolRequest, TnnNetworkRequest,
+    VerifyRecurrenceSpacesToolRequest,
 };
 use crate::responses::{
-    BicyclicSievingResponse, CheckPolynomialFamilyResponse, CoefficientTestsResponse,
-    CyclicSievingResponse, CyclicSievingSequenceResponse, DecompositionItem, DecompositionReport,
-    DecompositionResponse, DiscriminantItem, DiscriminantResponse, EhrhartHstarResponse,
-    FindRecurrenceResponse, GenerateOeisRowsResponse, GenerateRecurrenceRowsResponse,
-    GenerateSequenceResponse, GetOeisSequenceResponse, HStarInequalitiesResponse,
-    InterlacingPairItem, InterlacingPairResult, InterlacingProfileItem, InterlacingProfileResponse,
-    InterlacingSequenceResponse, ListOeisSequencesResponse, MagicBasisReport, OeisPolynomialRow,
-    ParsePolynomialsResponse, PolynomialPropertiesItem, PolynomialPropertiesResponse,
-    RealRootsItem, RealRootsResponse, RecurrenceSearchStatus, ResultantResponse,
+    BicyclicSievingResponse, BrentiRecognitionResponse, CheckPolynomialFamilyResponse,
+    CoefficientTestsResponse, CyclicSievingResponse, CyclicSievingSequenceResponse,
+    DecompositionItem, DecompositionReport, DecompositionResponse, DiscriminantItem,
+    DiscriminantResponse, EhrhartHstarResponse, FindRecurrenceResponse, GenerateOeisRowsResponse,
+    GenerateRecurrenceRowsResponse, GenerateSequenceResponse, GetOeisSequenceResponse,
+    HStarInequalitiesResponse, InterlacingPairItem, InterlacingPairResult, InterlacingProfileItem,
+    InterlacingProfileResponse, InterlacingSequenceResponse, ListOeisSequencesResponse,
+    MagicBasisReport, OeisPolynomialRow, ParsePolynomialsResponse, PolynomialPropertiesItem,
+    PolynomialPropertiesResponse, RealRootsItem, RealRootsResponse, RecurrenceSearchStatus,
+    ResultantResponse, TnnNetworkResponse,
 };
 use num_bigint::BigInt;
 use polytool::recurrence::{
@@ -1134,6 +1137,26 @@ impl PolynomialToolsServer {
             max_n: input.max_n,
             polynomials,
         }))
+    }
+
+    #[tool(
+        description = "Decide exactly whether the coefficient triangle r_{n,k} = [t^k] P_n of monic rows P_0 (or P_1), P_1, ... with deg P_n = n (or given `matrix` rows, square lower-triangular or triangular) is lower-unitriangular and totally nonnegative (TNN). On success returns the canonical planar network weights lambda[n][k] (vertical edge (n+1,k) -> (n,k)) and whether the network's path matrix re-evaluates to the input; on failure the reason (shape, negative entry, or an explicit negative minor with zero-based rows/cols and exact value). With chain=true also returns the chain polynomials p_0 = 1, p_n = t sum_{k<n} r_{n,k} p_k with checks of real-rootedness in [-1,0] and consecutive interlacing (Branden--Saud Maia Leite, arXiv:2412.06595, Thm 3.7: these hold when the matrix is TNN). Guardrail: TNN of the matrix does NOT make the row polynomials real-rooted ([[1,0,0],[1,1,0],[1,1,1]] is TNN with row 1+t+t^2)."
+    )]
+    pub fn check_tnn_network(
+        &self,
+        Parameters(input): Parameters<TnnNetworkRequest>,
+    ) -> Result<Json<TnnNetworkResponse>, McpError> {
+        Ok(Json(tnn_network_response(&input)?))
+    }
+
+    #[tool(
+        description = "Search exactly for a planar strip digraph (edges from column x to x+1 depending only on the height, monotone targets) whose path counts from (0,0) to (n,k) are the coefficients [t^k] P_n of the input rows (P_1, P_2, ... with P_0 = 1 implicit, or first_row_index=0). Bounds: max_target_span, weights (rational|integer), max_search_nodes, max_integer_search_nodes. Verdict: certified (digraph re-verified against every row), impossible_within_bounds (exact), or inconclusive (budget exhausted). Guardrail: a certificate proves that the coefficient matrix of P_0..P_N is TNN (Lindstrom--Gessel--Viennot), NOT that the rows are real-rooted or PF ([1+t, 1+t+t^2] is certified); it covers only the supplied prefix."
+    )]
+    pub fn recognize_brenti_strip_digraph(
+        &self,
+        Parameters(input): Parameters<BrentiRecognitionRequest>,
+    ) -> Result<Json<BrentiRecognitionResponse>, McpError> {
+        Ok(Json(brenti_recognition_response(&input)?))
     }
 }
 

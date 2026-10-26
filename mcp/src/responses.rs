@@ -604,3 +604,135 @@ pub struct CheckPolynomialFamilyResponse {
     pub recurrence: Option<FindRecurrenceResponse>,
     pub markdown: String,
 }
+
+/// An explicit negative minor (zero-based, strictly increasing indices into
+/// the zero-padded square matrix).
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct NegativeMinorItem {
+    pub rows: Vec<usize>,
+    pub cols: Vec<usize>,
+    /// Exact (negative) value of the minor.
+    pub value: String,
+}
+
+/// Why a matrix is not lower-unitriangular TNN.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct TnnFailureItem {
+    /// Snake-case `NetworkError` variant, e.g. `not_tnn`, `negative_entry`,
+    /// `non_monic_polynomial`, `nonzero_above_diagonal`.
+    pub kind: String,
+    pub message: String,
+    /// Zero-based row (or sequence position) of the offending entry.
+    pub row: Option<usize>,
+    /// Zero-based column of the offending entry.
+    pub col: Option<usize>,
+    /// The offending value (exact integer or rational string).
+    pub value: Option<String>,
+    /// For `not_tnn`: an explicit negative minor.
+    pub witness: Option<NegativeMinorItem>,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct ChainPolynomialItem {
+    pub n: usize,
+    pub polynomial: String,
+    pub coefficients: Vec<String>,
+    pub real_rooted: bool,
+    /// Real-rooted with every zero in `[-1, 0]`.
+    pub roots_in_minus_one_zero: bool,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct ChainInterlacingItem {
+    pub left: usize,
+    pub right: usize,
+    /// `p_left` interlaces `p_right` (zeros of `p_left` weakly to the left).
+    pub interlaces: bool,
+}
+
+/// Chain polynomials and the checks of Brändén--Saud Maia Leite,
+/// arXiv:2412.06595, Theorem 3.7.  These concern the chain polynomials, not
+/// the row polynomials of the input.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct ChainPolynomialsItem {
+    pub theorem: String,
+    /// Set when the matrix shape does not define chain polynomials.
+    pub error: Option<String>,
+    pub polynomials: Vec<ChainPolynomialItem>,
+    pub interlacing: Vec<ChainInterlacingItem>,
+    /// Every `p_n` is real-rooted in `[-1, 0]` and consecutive ones interlace.
+    pub conclusion_holds: Option<bool>,
+    /// The matrix is TNN but the conclusion fails (would contradict the
+    /// theorem).
+    pub contradicts_theorem: Option<bool>,
+}
+
+/// Result of `check_tnn_network`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct TnnNetworkResponse {
+    /// `polynomials` or `matrix`.
+    pub input_mode: String,
+    pub input_rows: usize,
+    /// `P_0 = 1` was prepended to the polynomial rows.
+    pub prepended_p0: bool,
+    /// Triangular rows `r_{n,k}` (`k <= n`) as exact integer strings.
+    pub coefficient_matrix: Option<Vec<Vec<String>>>,
+    /// The coefficient matrix is lower-unitriangular and totally nonnegative.
+    pub tnn: bool,
+    pub failure: Option<TnnFailureItem>,
+    /// Canonical network weights: `lambda[n][k]` is the weight of the
+    /// vertical edge `(n+1,k) -> (n,k)` of `Gamma_N(lambda)` (exact rationals).
+    pub lambda: Option<Vec<Vec<String>>>,
+    /// The network's path matrix re-evaluates exactly to the input matrix.
+    pub certificate_verified: Option<bool>,
+    pub chain: Option<ChainPolynomialsItem>,
+    /// Fixed guardrail: TNN of the matrix says nothing about the rows.
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct StripDigraphEdgeItem {
+    /// Target height in the next column.
+    pub to: usize,
+    /// Exact nonnegative weight.
+    pub weight: String,
+}
+
+/// A planar strip digraph: `outgoing[y]` lists the edges leaving height `y`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct StripDigraphItem {
+    pub num_heights: usize,
+    pub outgoing: Vec<Vec<StripDigraphEdgeItem>>,
+}
+
+/// The options actually used by `recognize_brenti_strip_digraph`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct BrentiRecognitionOptionsItem {
+    pub first_row_index: usize,
+    pub max_target_span: Option<usize>,
+    pub weights: String,
+    pub max_search_nodes: usize,
+    pub max_integer_search_nodes: usize,
+}
+
+/// Result of `recognize_brenti_strip_digraph`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct BrentiRecognitionResponse {
+    pub options: BrentiRecognitionOptionsItem,
+    pub rows: usize,
+    /// `certified`, `impossible_within_bounds` or `inconclusive`.
+    pub verdict: String,
+    pub certified: bool,
+    pub digraph: Option<StripDigraphItem>,
+    /// Digraph row of each input polynomial.
+    pub row_indices: Option<Vec<usize>>,
+    /// The certificate was re-checked against every input row.
+    pub certificate_verified: Option<bool>,
+    pub supports_checked: Option<usize>,
+    pub obstruction: Option<String>,
+    pub reason: Option<String>,
+    pub message: String,
+    /// Fixed guardrail: a certificate proves TNN of the coefficient matrix,
+    /// not real-rootedness of the rows.
+    pub note: String,
+}

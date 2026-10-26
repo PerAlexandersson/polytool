@@ -83,6 +83,17 @@ fn lists_tools_and_calls_properties() {
     assert!(tool_names.contains(&"bicyclic_sieving"));
     assert!(tool_names.contains(&"check_polynomial_family"));
     assert!(tool_names.contains(&"find_recurrence"));
+    for name in ["check_tnn_network", "recognize_brenti_strip_digraph"] {
+        let tool = tools_array
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap_or_else(|| panic!("missing {name}"));
+        assert_eq!(tool["inputSchema"]["type"], "object", "{name}");
+        assert_eq!(tool["outputSchema"]["type"], "object", "{name}");
+        assert!(tool["description"]
+            .as_str()
+            .is_some_and(|description| description.contains("NOT")));
+    }
     let menu_tool = tools_array
         .iter()
         .find(|tool| tool["name"] == "find_recurrence_representations")

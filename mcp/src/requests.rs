@@ -524,3 +524,59 @@ pub struct VerifyRecurrenceSpacesToolRequest {
     /// consistency with the assumptions embedded in the report.
     pub expected_request: Option<serde_json::Value>,
 }
+
+/// Input of `check_tnn_network`.  Give exactly one of `polynomials`, `text`
+/// or `matrix`.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TnnNetworkRequest {
+    /// Monic polynomial rows `P_0, P_1, ...` with `deg P_n = n` (ascending
+    /// coefficients); `P_0 = 1` is prepended when the first row has degree 1.
+    pub polynomials: Option<Vec<BigIntPolynomialInput>>,
+    /// The same rows as newline-separated coefficient lists or expressions.
+    pub text: Option<String>,
+    /// Matrix rows instead of polynomials: a square lower-triangular matrix
+    /// (every row as long as the number of rows) or triangular rows (row `n`
+    /// has `n + 1` entries).  Shape errors then name the offending entry.
+    pub matrix: Option<Vec<Vec<BigIntCoefficientInput>>>,
+    /// Also compute and check the chain polynomials `p_0 = 1`,
+    /// `p_n = t * sum_{k<n} r_{n,k} p_k` (default `false`).
+    pub chain: Option<bool>,
+}
+
+/// Edge-weight domain of `recognize_brenti_strip_digraph`.
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BrentiWeightsInput {
+    /// Nonnegative rational weights (default).
+    #[default]
+    Rational,
+    /// Nonnegative integer weights.
+    Integer,
+}
+
+/// Input of `recognize_brenti_strip_digraph`.  Give exactly one of
+/// `polynomials` or `text`.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BrentiRecognitionRequest {
+    /// Rows `P_1, P_2, ...` (or `P_0, P_1, ...` with `first_row_index = 0`),
+    /// ascending coefficients.
+    pub polynomials: Option<Vec<BigIntPolynomialInput>>,
+    /// The same rows as newline-separated coefficient lists or expressions.
+    pub text: Option<String>,
+    /// Digraph row of the first polynomial: 1 (default, `P_0 = 1` implicit)
+    /// or 0 (the first row must be `1`).
+    pub first_row_index: Option<usize>,
+    /// At most this many consecutive target heights per height (bounds the
+    /// out-degree; default: no bound).
+    pub max_target_span: Option<usize>,
+    /// Rational (default) or integer edge weights.
+    pub weights: Option<BrentiWeightsInput>,
+    /// Budget on the partial supports visited (default and maximum
+    /// 1000000).
+    pub max_search_nodes: Option<usize>,
+    /// Budget on the integer search for one column (default 10000, maximum
+    /// 100000).
+    pub max_integer_search_nodes: Option<usize>,
+}
