@@ -1,8 +1,9 @@
 # Recurrence Overfit Fixtures
 
-These are negative recurrence-search fixtures from the OEIS real-rootedness
-workbench.  They are finite row prefixes that produced implausible
-high-coefficient recurrences under broad or unverified recurrence searches.
+These are negative recurrence-search fixtures from curated OEIS
+real-rootedness research datasets.  They are finite row prefixes that produced
+implausible high-coefficient recurrences under broad or unverified recurrence
+searches.
 
 Unlike `fixtures/recurrence-benchmarks/`, these are not expected-success
 fixtures.  They are intended for testing recurrence-confidence heuristics,
@@ -34,14 +35,5 @@ The important diagnostic is that the result uses all 19 rows for fitting and
 has zero held-out verification rows.  Treat such output as a stress artifact,
 not as recurrence evidence.
 
-The stored recurrence text files are copied from:
-
-```text
-/workspace/projects/real-rooted-oeis/data/stage-02-likely-recurrences/
-```
-
-The row files are copied from:
-
-```text
-/workspace/projects/real-rooted-oeis/data/stage-01-likely-real-rooted/
-```
+The stored recurrence text files and row files were derived from curated
+research datasets of OEIS recurrences.

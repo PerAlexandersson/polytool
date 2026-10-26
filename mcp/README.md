@@ -13,10 +13,10 @@ The server is intentionally small:
 
 ## Build
 
-From the Rust workspace root:
+From the repository root:
 
 ```sh
-cargo build --release -p polytool-mcp
+cargo build --release --manifest-path mcp/Cargo.toml --target-dir target
 ```
 
 The binary is:
@@ -40,21 +40,13 @@ mode, stdout is reserved for MCP protocol messages.
 For a local user install, run the installer from the repository root:
 
 ```sh
-./polytool/mcp/install.sh
-```
-
-If `polytool` later lives in its own Git repository, the same script can
-be run as:
-
-```sh
 ./mcp/install.sh
 ```
 
 By default the script:
 
 - builds `polytool-mcp` in release mode
-- uses `target` under the `polytool` directory as the Cargo target
-  directory
+- uses `target` under the repository root as the Cargo target directory
 - copies the binary to `$HOME/.local/bin/polytool-mcp`
 - prints an MCP client configuration snippet with the absolute binary path
 
@@ -74,31 +66,19 @@ Useful options:
 ./mcp/install.sh --build-dir /tmp/polytool-mcp-target --skip-build
 ```
 
-This machine currently needs the rustup toolchain binaries rather than the snap
-wrappers, so a reliable local install command is:
+If your shell resolves `cargo`, `rustc`, or `rustdoc` through a wrapper that does
+not work in your environment, point the installer at the rustup toolchain
+binaries directly:
 
 ```sh
 env \
-  RUSTC=/home/peal0658/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc \
-  RUSTDOC=/home/peal0658/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustdoc \
-  ./polytool/mcp/install.sh \
-  --cargo /home/peal0658/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo
+  RUSTC=/path/to/rustup/toolchain/bin/rustc \
+  RUSTDOC=/path/to/rustup/toolchain/bin/rustdoc \
+  ./mcp/install.sh --cargo /path/to/rustup/toolchain/bin/cargo
 ```
 
 On another computer, install Rust with `rustup`, clone the repository, and run
 the same installer. Cargo will fetch the Rust dependencies from crates.io.
-
-If your shell resolves `cargo`, `rustc`, or `rustdoc` through a wrapper that does
-not work in the current environment, use the rustup toolchain binaries directly.
-On this computer, that build command is:
-
-```sh
-env \
-  RUSTC=/home/peal0658/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc \
-  RUSTDOC=/home/peal0658/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustdoc \
-  /home/peal0658/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo \
-  build --release -p polytool-mcp
-```
 
 ## MCP client configuration
 
@@ -108,7 +88,7 @@ Use an absolute path to the compiled binary. A typical local configuration is:
 {
   "mcpServers": {
     "polytool": {
-      "command": "/absolute/path/to/rust/target/release/polytool-mcp"
+      "command": "/absolute/path/to/polytool/target/release/polytool-mcp"
     }
   }
 }
@@ -206,7 +186,7 @@ Run the common research checks in one exact batch.  The tool accepts either
 explicit polynomials, text input, or one of the built-in standard sequences.
 It reports polynomial properties, consecutive interlacing data, optional finite
 `Lace(A)` total-nonnegativity checks, and optional recurrence search.  It also
-returns a Markdown summary suitable for a project note or `HANDOFF.md`.
+returns a Markdown summary suitable for a project note.
 
 Example with a generated sequence:
 
@@ -695,37 +675,21 @@ Example arguments:
 Run the MCP server tests:
 
 ```sh
-cargo test -p polytool-mcp
+cargo test --manifest-path mcp/Cargo.toml
 ```
 
 Run the polytool baseline checks:
 
 ```sh
-cargo test -p polytool
-cargo test -p polytool-web
+cargo test
+cargo test --manifest-path web/Cargo.toml
 ```
 
 Format the MCP package:
 
 ```sh
-cargo fmt -p polytool-mcp
+cargo fmt --manifest-path mcp/Cargo.toml
 ```
-
-## Repository notes
-
-This package currently lives as a workspace member under the broader Rust
-workspace. If `polytool` is split into its own Git repository, keep
-these pieces together:
-
-- the core crate in `polytool/`
-- the MCP package in `polytool/mcp/`
-- the web package in `polytool/web/`, if the browser UI should remain
-- a workspace manifest that includes `mcp` and `web`
-- `Cargo.lock`, if release binaries or reproducible local MCP installs matter
-- CI jobs for `cargo test -p polytool`, `cargo test -p polytool-mcp`,
-  and `cargo test -p polytool-web`
-
-Before publishing, also fill in repository metadata in the package manifests.
 
 ## Support
 

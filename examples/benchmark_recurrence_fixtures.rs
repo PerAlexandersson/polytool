@@ -1,6 +1,6 @@
 //! Benchmark adaptive recurrence search on the fixture suite.
 //!
-//! Run from the Rust workspace root:
+//! Run from the repository root:
 //!
 //! ```text
 //! cargo run --release -p polytool --example benchmark_recurrence_fixtures

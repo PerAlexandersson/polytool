@@ -3750,7 +3750,7 @@ fn extract_bivar(
                 .collect()
         })
         .collect();
-    // Trim trailing zero rows/cols if desired (we keep them for now).
+    // Trailing zero rows and columns are kept; the result is not trimmed.
     BivarPoly { coeffs }
 }
 

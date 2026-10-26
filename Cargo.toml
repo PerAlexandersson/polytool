@@ -14,10 +14,7 @@ categories = ["mathematics", "science"]
 exclude = [
     "/.github/",
     "/AGENTS.md",
-    "/HANDOFF.md",
     "/bench-results/",
-    "/doc/HANDOFF_ARCHIVE*.md",
-    "/doc/refactoring-notes.md",
     "/scripts/",
 ]
 

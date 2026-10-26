@@ -13,7 +13,7 @@ documentation, and MCP server configuration.
 
 ## Installation
 
-From the current workspace root:
+From the repository root:
 
 ```sh
 cargo build --release -p polytool
@@ -47,7 +47,7 @@ this directory:
 
 ```toml
 [dependencies]
-polytool = { path = "/home/paxinum/Dropbox/AI-projects/rust/polytool" }
+polytool = { path = "../polytool" }
 ```
 
 From GitHub, depend on the repository's standalone `main` branch:
@@ -137,22 +137,16 @@ let certificate =
 assert_eq!(certificate.steps, 2);
 ```
 
-To build the MCP server from the workspace root:
+To build the MCP server from the repository root:
 
 ```sh
-cargo build --release -p polytool-mcp
+cargo build --release --manifest-path mcp/Cargo.toml --target-dir target
 ```
 
 The MCP binary is at `target/release/polytool-mcp`.
 
 To install the MCP server into a user bin directory and print a client
 configuration snippet:
-
-```sh
-./polytool/mcp/install.sh
-```
-
-On the generated standalone `main` branch, run:
 
 ```sh
 ./mcp/install.sh
@@ -343,8 +337,8 @@ bundled catalog contains none.
 
 The source generator is `scripts/build_oeis_catalog.py`.  It imports the
 machine-readable recurrence benchmark fixtures, supplements them from the
-curated `OEIS-polynomials/sequences` queue, and imports the 728 canonical
-generated definitions in `real-rooted-oeis-proofs`.  The latter are converted
+a curated recurrence queue, and imports the 728 canonical generated
+definitions from a separate formal-proof repository.  The latter are converted
 from their restricted Lean expression grammar into the same sparse exact
 representation and replayed against local OEIS data.  The generator rejects
 queue recurrences that do not reproduce their cached rows or cannot be aligned
@@ -367,9 +361,9 @@ polytool pf-pencil --case A036969 --min-degree 1 --max-degree 10 --json
 polytool pf-pencil --all-family-h --max-degree 8 --json
 ```
 
-`pf-pencil` builds the fixed Family H coefficient actions used in the
-`real-rooted-oeis` proof work.  For an old-row degree `d`, it forms the
-integer-cleared Jensen endpoint kernels
+`pf-pencil` builds the fixed Family H coefficient actions used in
+a separate real-rootedness proof project.  For an old-row degree `d`, it forms
+the integer-cleared Jensen endpoint kernels
 
 ```text
 J_alpha,d(t) = sum_k binomial(d,k) alpha(k,d) t^k
@@ -719,7 +713,7 @@ modular prefiltering, modular lifting, exact solving, and held-out
 verification. `polytool bench compare` compares two such JSON runs and
 highlights fixture/category speedups or regressions. The recurrence fixture
 suite contains synthetic stress tests and natural OEIS-derived recurrences from
-the curated `real-rooted-oeis` sequence queue.
+a curated recurrence queue.
 
 ## Library usage
 
@@ -806,7 +800,8 @@ of `x^(cb-rb)` in `A_ij(x)`.  This follows Definition 3.5 of
 Athanasiadis--Wagner, *Veronese sections and interlacing matrices of formal
 power series*.  A finite TNN check is computational evidence for the infinite
 matrix, not a proof of full interlacing unless a separate finite criterion
-applies.
+applies. See [`doc/athanasiadis-wagner-lace.md`](doc/athanasiadis-wagner-lace.md)
+for further notes on the construction.
 
 ### Polynomial arithmetic
 
@@ -950,16 +945,16 @@ let disc = discriminant(&[1, 0, -3, 1]);
 The repository also contains a local Model Context Protocol server in
 `mcp/`. It exposes the exact polynomial routines to MCP clients over stdio.
 
-Build it from the workspace root:
+Build it from the repository root:
 
 ```sh
-cargo build --release -p polytool-mcp
+cargo build --release --manifest-path mcp/Cargo.toml --target-dir target
 ```
 
 Install it locally:
 
 ```sh
-./polytool/mcp/install.sh
+./mcp/install.sh
 ```
 
 Check the installed binary:
@@ -975,7 +970,7 @@ Example MCP client configuration:
 {
   "mcpServers": {
     "polytool": {
-      "command": "/absolute/path/to/rust/target/release/polytool-mcp"
+      "command": "/absolute/path/to/polytool/target/release/polytool-mcp"
     }
   }
 }
@@ -1039,17 +1034,17 @@ cargo test -p polytool
 Run the MCP server tests:
 
 ```sh
-cargo test -p polytool-mcp
+cargo test --manifest-path mcp/Cargo.toml
 ```
 
 Run the web wrapper tests:
 
 ```sh
-cargo test -p polytool-web
+cargo test --manifest-path web/Cargo.toml
 node web/tests/string_safety.mjs
 ```
 
-### Web arbitrary-precision contract and deployment staging
+### Web arbitrary-precision contract and build
 
 The browser wrapper parses polynomial input with `parse_polynomials_bigint`.
 Every integer coefficient returned across its string-based WASM/JSON boundary
@@ -1059,40 +1054,37 @@ strings as well. Browser code must keep these values as strings or convert
 them to JavaScript `BigInt` for exact arithmetic; converting them to `Number`
 can round values above `2^53`.
 
-Build the deployable no-modules bundle from the monorepo root with an external
-target directory:
+Build the no-modules bundle with `wasm-pack`:
 
 ```sh
-CARGO_TARGET_DIR=/cargo-target/ai-projects timeout 60s nice -n 10 \
-  wasm-pack build polytool/web --target no-modules --release \
-  --out-dir pkg
+wasm-pack build web --target no-modules --release --out-dir pkg
 ```
 
-After review and explicit deployment authorization, stage exactly the files
-referenced by `web/index.html` into the website checkout. The backup option
-keeps replaced files recoverable, and these commands deliberately do not use
-the website's historical `--delete` deployment target:
+`web/build.sh` runs the same build from inside `web/`. The page `web/index.html`
+loads `pkg/polytool_web.js` and `pkg/polytool_web_bg.wasm`; serve the `web/`
+directory (for example with `python3 -m http.server`) to try it locally.
 
-```sh
-site_stage=/home/paxinum/Dropbox/webpages/poly.symmetricfunctions.com/www
-install -d "$site_stage/pkg"
-cp --backup=numbered web/index.html "$site_stage/index.html"
-cp --backup=numbered web/favicon.svg "$site_stage/favicon.svg"
-cp --backup=numbered web/pkg/polytool_web.js "$site_stage/pkg/polytool_web.js"
-cp --backup=numbered web/pkg/polytool_web_bg.wasm \
-  "$site_stage/pkg/polytool_web_bg.wasm"
-cmp web/index.html "$site_stage/index.html"
-cmp web/pkg/polytool_web.js "$site_stage/pkg/polytool_web.js"
-cmp web/pkg/polytool_web_bg.wasm "$site_stage/pkg/polytool_web_bg.wasm"
-```
+## Examples
 
-The legacy website Makefile still names `polynomial_tools_web*`; do not use
-that stale assembly rule for the current `polytool_web*` bundle without first
-updating and reviewing the website repository itself.
+The tracked programs in `examples/` are run with
+`cargo run [--release] --example NAME`:
 
-The repository's `main` branch is generated from this directory with
-`git subtree split`; the monorepo `master` branch remains canonical. The core
-crate, `mcp/`, `web/`, and `Cargo.lock` are therefore published together.
+- `bench_bareiss_vs_modular_linalg`: compares BigInt Bareiss and modular/CRT
+  leading principal minors.
+- `bench_bezout_vs_sturm`: benchmarks Bézout-matrix and Sturm-chain
+  real-rootedness and interlacing tests on Eulerian polynomials.
+- `bench_positive_real_rooted`: benchmarks exact real-rootedness checks on
+  representative polynomial families.
+- `bench_streaming_prs`: reproduces the deterministic corpus used to benchmark
+  exact root counting.
+- `benchmark_recurrence_fixtures`: benchmarks adaptive recurrence search on the
+  fixture suite in `fixtures/recurrence-benchmarks/`.
+- `generate_recurrence_benchmarks`: regenerates those recurrence benchmark
+  fixtures.
+- `literature_sequence_rows`: exports exact literature families (Delannoy,
+  Eulerian-square, Hoggatt) as polytool-compatible coefficient rows.
+- `recognize_renewal`: reads recurrence JSON on stdin and reports whether it is
+  a weighted renewal recurrence.
 
 ## Support
 
@@ -1217,7 +1209,5 @@ cargo run -p polytool --example recognize_renewal < recurrence.json
 Its JSON distinguishes structural recognition from matching initial data.
 Neither proves that a recurrence guessed from finite rows holds for the
 intended combinatorial sequence. The all-index identity remains a caller
-obligation. See [the formalization task](https://github.com/PerAlexandersson/RealRooted/issues/2037)
-for the proof and the broader variable-predecessor theorem; this Rust feature
-is not a Lean certificate. The recognizer is currently a library API and
+obligation: this Rust feature is not a formal certificate. The recognizer is currently a library API and
 example, not integrated into MCP or automatic recurrence-search output.

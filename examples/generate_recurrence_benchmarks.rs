@@ -1,6 +1,6 @@
 //! Generate benchmark fixtures for adaptive recurrence search.
 //!
-//! Run from the Rust workspace root:
+//! Run from the repository root:
 //!
 //! ```text
 //! cargo run -p polytool --example generate_recurrence_benchmarks
@@ -544,23 +544,21 @@ fn write_readme(base: &Path, fixtures: &[Fixture], row_count: usize) -> std::io:
     md.push_str("The matching `json/*.json` files are recurrence JSON records emitted by\n");
     md.push_str("`polytool recurrence --json`; they include minimal initial conditions and\n");
     md.push_str("can regenerate or extend the raw row files with `recurrence-generate`.\n\n");
-    md.push_str("Regenerate from the Rust workspace root with:\n\n");
+    md.push_str("Regenerate from the repository root with:\n\n");
     md.push_str("```sh\n");
     md.push_str("cargo run -p polytool --example generate_recurrence_benchmarks\n");
-    md.push_str("bash polytool/fixtures/recurrence-benchmarks/regenerate-json.sh\n");
+    md.push_str("bash fixtures/recurrence-benchmarks/regenerate-json.sh\n");
     md.push_str("```\n\n");
     md.push_str("Example timing command:\n\n");
     md.push_str("```sh\n");
     md.push_str("time cargo run -q -p polytool --bin polytool -- recurrence \\\n");
     md.push_str("  --max-rec-len 1 --max-var-deg 1 --max-idx-deg 0 --max-diff-deg 0 \\\n");
-    md.push_str("  < polytool/fixtures/recurrence-benchmarks/rows/03_binomial_powers.txt\n");
+    md.push_str("  < fixtures/recurrence-benchmarks/rows/03_binomial_powers.txt\n");
     md.push_str("```\n\n");
     md.push_str("Example regeneration command:\n\n");
     md.push_str("```sh\n");
     md.push_str("polytool recurrence-generate \\\n");
-    md.push_str(
-        "  --recurrence polytool/fixtures/recurrence-benchmarks/json/03_binomial_powers.json \\\n",
-    );
+    md.push_str("  --recurrence fixtures/recurrence-benchmarks/json/03_binomial_powers.json \\\n");
     md.push_str("  --rows 50\n");
     md.push_str("```\n\n");
     md.push_str("| slug | features | suggested args | recurrence |\n");
@@ -575,7 +573,8 @@ fn write_readme(base: &Path, fixtures: &[Fixture], row_count: usize) -> std::io:
 }
 
 fn main() -> std::io::Result<()> {
-    let base = Path::new("polytool/fixtures/recurrence-benchmarks");
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recurrence-benchmarks");
+    let base = base_dir.as_path();
     fs::create_dir_all(base.join("rows"))?;
 
     let fixtures = fixtures();

@@ -1,4 +1,4 @@
-// Run: node --test polytool/web/input-normalization.test.cjs
+// Run: node --test web/input-normalization.test.cjs
 // Optional POLYTOOL_HTML=/path/to/index.html checks the staged/live page.
 const fs = require('node:fs');
 const path = require('node:path');

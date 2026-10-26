@@ -14,6 +14,7 @@ import csv
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -24,28 +25,48 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURES = PROJECT_ROOT / "fixtures" / "recurrence-benchmarks"
-DEFAULT_OEIS_DATA = Path("/home/paxinum/OEIS-data/seq")
 DEFAULT_OUTPUT = PROJECT_ROOT / "src" / "oeis_catalog_generated.rs"
 DEFAULT_CHECKSUM = PROJECT_ROOT / "src" / "oeis_catalog_generated.sha256"
-DEFAULT_SEQUENCE_LIBRARY = Path(
-    "/home/paxinum/Dropbox/AI-projects/projects/OEIS-polynomials/sequences"
-)
-DEFAULT_LEAN_SEQUENCE_REPOSITORY = Path(
-    "/home/paxinum/Dropbox/AI-projects/projects/real-rooted-oeis-proofs/ProofsOeis"
-)
 
-# The source queue lives in a Dropbox-synced tree where generated cache files
-# are intentionally forbidden.
+# Regeneration needs external inputs, which have no built-in default.  Point
+# them at local copies with these environment variables or the matching flags:
+#   OEIS_DATA_DIR              directory of OEIS internal-format files
+#   POLYTOOL_RECURRENCE_QUEUE  directory of curated recurrence queue files
+#   POLYTOOL_LEAN_SEQUENCES    directory of generated Lean sequence definitions
+# Verifying the bundled catalog (--check-bundled) needs none of them.
+ENV_OEIS_DATA = "OEIS_DATA_DIR"
+ENV_SEQUENCE_LIBRARY = "POLYTOOL_RECURRENCE_QUEUE"
+ENV_LEAN_SEQUENCES = "POLYTOOL_LEAN_SEQUENCES"
+
+# Do not leave bytecode caches next to the sources.
 sys.dont_write_bytecode = True
+
+
+def env_path(name: str) -> Path | None:
+    value = os.environ.get(name)
+    return Path(value) if value else None
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures", type=Path, default=DEFAULT_FIXTURES)
-    parser.add_argument("--oeis-data", type=Path, default=DEFAULT_OEIS_DATA)
-    parser.add_argument("--sequence-library", type=Path, default=DEFAULT_SEQUENCE_LIBRARY)
     parser.add_argument(
-        "--lean-sequences", type=Path, default=DEFAULT_LEAN_SEQUENCE_REPOSITORY
+        "--oeis-data",
+        type=Path,
+        default=env_path(ENV_OEIS_DATA),
+        help=f"OEIS internal-format data directory (default: ${ENV_OEIS_DATA})",
+    )
+    parser.add_argument(
+        "--sequence-library",
+        type=Path,
+        default=env_path(ENV_SEQUENCE_LIBRARY),
+        help=f"curated recurrence queue directory (default: ${ENV_SEQUENCE_LIBRARY})",
+    )
+    parser.add_argument(
+        "--lean-sequences",
+        type=Path,
+        default=env_path(ENV_LEAN_SEQUENCES),
+        help=f"generated Lean sequence definitions (default: ${ENV_LEAN_SEQUENCES})",
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
@@ -303,7 +324,7 @@ def lean_sequence_entries(
     oeis_data: Path,
     existing_ids: set[str],
 ) -> list[dict[str, Any]]:
-    """Import canonical generated recurrences from real-rooted-oeis-proofs."""
+    """Import canonical generated recurrences from generated Lean sequence definitions."""
     import sympy as sp
 
     n_symbol, t_symbol = sp.symbols("N T")
@@ -868,6 +889,20 @@ def main() -> int:
                 f"bundled generated catalog checksum mismatch: expected {expected}, got {actual}"
             )
         return 0
+    missing = [
+        f"{flag} (or ${env})"
+        for flag, env, value in (
+            ("--oeis-data", ENV_OEIS_DATA, args.oeis_data),
+            ("--sequence-library", ENV_SEQUENCE_LIBRARY, args.sequence_library),
+            ("--lean-sequences", ENV_LEAN_SEQUENCES, args.lean_sequences),
+        )
+        if value is None
+    ]
+    if missing:
+        raise SystemExit(
+            "regenerating or checking against sources needs external inputs; "
+            "set " + ", ".join(missing)
+        )
     rendered = rustfmt(
         render_catalog(
             args.fixtures,

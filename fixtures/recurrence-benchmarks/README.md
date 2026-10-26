@@ -9,18 +9,17 @@ The matching `json/*.json` files are recurrence JSON records emitted by
 `polytool recurrence --json`; they include minimal initial conditions and
 can regenerate or extend the raw row files with `recurrence-generate`.
 Fixtures `01`--`23` are synthetic stress tests. Fixtures `24` onward are
-natural OEIS-derived cases copied from the curated
-`projects/real-rooted-oeis/sequences` queue and related recurrence workbench
-evidence. Fixtures `46` onward are deliberately harder high-weight OEIS
+natural OEIS-derived cases derived from curated research
+datasets of OEIS recurrences. Fixtures `46` onward are deliberately harder high-weight OEIS
 recurrences.
 Some later OEIS fixtures use recurrence-generated 50-row extensions when the
 curated source prefix was shorter or contained non-integer JSON number syntax.
 
-Regenerate from the Rust workspace root with:
+Regenerate from the repository root with:
 
 ```sh
 cargo run -p polytool --example generate_recurrence_benchmarks
-bash polytool/fixtures/recurrence-benchmarks/regenerate-json.sh
+bash fixtures/recurrence-benchmarks/regenerate-json.sh
 ```
 
 Run the built-in timing suite:
@@ -50,14 +49,14 @@ Example one-off timing command:
 ```sh
 time cargo run -q -p polytool --bin polytool -- recurrence \
   --max-rec-len 1 --max-var-deg 1 --max-idx-deg 0 --max-diff-deg 0 \
-  < polytool/fixtures/recurrence-benchmarks/rows/03_binomial_powers.txt
+  < fixtures/recurrence-benchmarks/rows/03_binomial_powers.txt
 ```
 
 Example regeneration command:
 
 ```sh
 polytool recurrence-generate \
-  --recurrence polytool/fixtures/recurrence-benchmarks/json/03_binomial_powers.json \
+  --recurrence fixtures/recurrence-benchmarks/json/03_binomial_powers.json \
   --rows 50
 ```
 
