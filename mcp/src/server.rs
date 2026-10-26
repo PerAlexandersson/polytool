@@ -39,6 +39,7 @@ use crate::requests::{
     PolynomialBatchInput, RecurrenceSpacesToolRequest, TnnNetworkRequest,
     VerifyRecurrenceSpacesToolRequest,
 };
+use crate::requests::{RecurrenceTransformToolRequest, VerifyRecurrenceTransformToolRequest};
 use crate::responses::{
     BicyclicSievingResponse, BrentiRecognitionResponse, CheckPolynomialFamilyResponse,
     CoefficientTestsResponse, CyclicSievingResponse, CyclicSievingSequenceResponse,
@@ -588,6 +589,58 @@ impl PolynomialToolsServer {
                     .iter()
                     .filter(|r| r.certificate.is_none())
                     .count()),
+            ),
+        ])))
+    }
+
+    #[tool(
+        description = "Apply an exact change of polynomial coordinates and transport a defining recurrence. request: {transformation: {kind: multiply_power {power} | divide_power {power} (needs x^r | P_n) | reversal {schedule} (x^(d_n) P_n(1/x)) | affine {a, b} (P_n(a x + b)) | mobius {a, b, c, e, schedule} ((c x + e)^(d_n) P_n((a x + b)/(c x + e)), ae - bc != 0) | f_polynomial {schedule} | gamma {schedule} (symmetry index d_n) | symmetric_decomposition {schedule} (P_n = a_n + x b_n)}, rationals as strings; schedule {first_index, first_degree, step, last_index?} gives d_n = first_degree + step*(n - first_index) on an explicit index domain. Source: source_recurrence (polytool.recurrence.v1 with seeds), oeis_id (bundled family) or rows with row_origin; row_count rows are generated from a source. Optional search ({} for defaults) fits independently in the new coordinates. Returns polytool.recurrence-transform.v1: exact row map, inverse and image conditions, transformed states, exact reconstruction, condition statuses (certified_all_indices from the source rule, or checked_supplied_rows), the transported rule (evidence transported_identity, with transformed seeds) and the independent fit (evidence finite_fit), kept separately. Gamma coordinates are not transported. No root-location claims."
+    )]
+    pub fn transform_recurrence(
+        &self,
+        Parameters(input): Parameters<RecurrenceTransformToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.request.to_string(), "recurrence-transform request")
+            .map_err(invalid_params)?;
+        let request: polytool::recurrence::RecurrenceTransformRequest =
+            serde_json::from_value(input.request).map_err(|e| invalid_params(e.to_string()))?;
+        request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        let report =
+            polytool::recurrence::transform_recurrence(&request).map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize recurrence transform")
+        else {
+            unreachable!()
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Replay a polytool.recurrence-transform.v1 report from transform_recurrence exactly: recompute the map, reconstruction, transported rule and independent search from the embedded request and require equality. The transported rule remains conditional on the supplied source rule."
+    )]
+    pub fn verify_recurrence_transform(
+        &self,
+        Parameters(input): Parameters<VerifyRecurrenceTransformToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.report.to_string(), "recurrence-transform report")
+            .map_err(invalid_params)?;
+        let report: polytool::recurrence::RecurrenceTransformReport =
+            serde_json::from_value(input.report).map_err(|e| invalid_params(e.to_string()))?;
+        report
+            .request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        polytool::recurrence::verify_recurrence_transform(&report).map_err(invalid_params)?;
+        Ok(Json(BTreeMap::from([
+            ("verified".into(), json!(true)),
+            ("transported".into(), json!(report.transported.is_some())),
+            (
+                "independent_search".into(),
+                json!(report.independent_search.is_some()),
             ),
         ])))
     }

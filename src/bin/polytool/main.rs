@@ -29,6 +29,7 @@ mod pf_network;
 mod pf_pencil;
 mod properties;
 mod recurrence;
+mod recurrence_transform;
 mod resultant;
 mod sequence;
 mod stapledon;
@@ -54,6 +55,7 @@ use crate::pf_network::cmd_pf_network;
 use crate::pf_pencil::cmd_pf_pencil;
 use crate::properties::{cmd_properties, cmd_real_rooted};
 use crate::recurrence::{cmd_recurrence, cmd_recurrence_generate};
+use crate::recurrence_transform::cmd_recurrence_transform;
 use crate::resultant::{cmd_discriminant, cmd_resultant};
 use crate::sequence::cmd_sequence;
 use crate::stapledon::cmd_stapledon;
@@ -128,6 +130,7 @@ fn main() {
         "pf-pencil" | "pf-bidiagonal-pencil" => cmd_pf_pencil(rest),
         "recurrence" => cmd_recurrence(rest),
         "recurrence-generate" => cmd_recurrence_generate(rest),
+        "recurrence-transform" => cmd_recurrence_transform(rest),
         "bench" => cmd_bench(rest),
         "bkw-scout" => cmd_bkw_scout(rest),
         "resultant" => cmd_resultant(),

@@ -142,20 +142,25 @@ pub fn f_polynomial<C: CoeffRing>(h: &Polynomial<C>, degree: usize) -> Option<Po
         _ => {}
     }
 
+    let Some(actual) = h.degree() else {
+        return Some(Polynomial::<C>::zero());
+    };
+    // Homogeneous Horner scheme: sum_k h_k x^k (1+x)^(actual-k), then the
+    // remaining factor (1+x)^(degree-actual) of the declared bound.
     let one_plus_x = Polynomial::<C>::from_i64_coeffs(&[1, 1]);
-    let mut result = Polynomial::<C>::zero();
-
-    for k in 0..=degree {
+    let x = Polynomial::<C>::variable();
+    let mut result = Polynomial::<C>::monomial(h.coeff(actual), 0);
+    let mut power = Polynomial::<C>::one();
+    for k in (0..actual).rev() {
+        power = power * one_plus_x.clone();
+        result = result * x.clone();
         let coeff = h.coeff(k);
-        if coeff.is_zero() {
-            continue;
+        if !coeff.is_zero() {
+            result = result + power.scale(&coeff);
         }
-        let term =
-            Polynomial::<C>::monomial(C::one(), k) * one_plus_x.pow(degree.saturating_sub(k));
-        result = result + term.scale(&coeff);
     }
 
-    Some(result)
+    Some(result * one_plus_x.pow(degree - actual))
 }
 
 /// Convenience wrapper for `i64` coefficients (panics on `i64` overflow).
@@ -356,6 +361,15 @@ mod tests {
     fn test_f_polynomial_basic() {
         let f = f_polynomial_i64(&[1, 2, 1], 2).unwrap();
         assert_eq!(f, vec![1, 4, 4]);
+    }
+
+    #[test]
+    fn test_f_polynomial_keeps_the_declared_degree_bound() {
+        // (1+x)^3 h(x/(1+x)) for h = 1 + 2x of actual degree 1.
+        assert_eq!(f_polynomial_i64(&[1, 2], 3).unwrap(), vec![1, 5, 7, 3]);
+        assert_eq!(f_polynomial_i64(&[0, 0, 1], 2).unwrap(), vec![0, 0, 1]);
+        assert_eq!(f_polynomial_i64(&[0], 2).unwrap(), Vec::<i64>::new());
+        assert_eq!(f_polynomial_i64(&[1, 1, 1], 1), None);
     }
 
     #[test]

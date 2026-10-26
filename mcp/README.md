@@ -72,6 +72,26 @@ can increase coefficient degrees. Replay checks these extra certificates.
 See the parent README's Hermite and automatic-bound examples. No installed
 server upgrade is implied by a source checkpoint.
 
+## Coordinate transformations
+
+`transform_recurrence` takes `{"request": {...}}`, where the inner object is the
+`polytool recurrence-transform` request documented in the parent README:
+
+```json
+{"request": {
+  "oeis_id": "A008292", "row_count": 8, "search": {},
+  "transformation": {"kind": "f_polynomial",
+    "schedule": {"first_index": 1, "first_degree": 0, "step": 1}}
+}}
+```
+
+It returns `polytool.recurrence-transform.v1` with the exact row map, inverse
+and image conditions, transformed states, exact reconstruction, condition
+statuses, the transported rule (`transported_identity`, conditional on the
+supplied source rule) and the optional independent fit (`finite_fit`), kept
+separately. `verify_recurrence_transform` takes `{"report": {...}}` and replays
+it exactly. Both enforce the default resource ceilings and the 1 MiB input cap.
+
 ## Build
 
 From the repository root:

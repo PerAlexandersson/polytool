@@ -29,6 +29,7 @@ pub use requests::{
     VerifyRecurrenceSpacesToolRequest,
 };
 pub use requests::{LeftProductionRequest, PfNetworkRequest};
+pub use requests::{RecurrenceTransformToolRequest, VerifyRecurrenceTransformToolRequest};
 pub use responses::{
     BicyclicSievingResponse, BigIntNormalizedPolynomial, BigIntParsePolynomialItem,
     BrentiRecognitionOptionsItem, BrentiRecognitionResponse, ChainInterlacingItem,

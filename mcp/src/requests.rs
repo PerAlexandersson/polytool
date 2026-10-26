@@ -525,6 +525,22 @@ pub struct VerifyRecurrenceSpacesToolRequest {
     pub expected_request: Option<serde_json::Value>,
 }
 
+/// Structured coordinate-transformation request
+/// (`polytool::recurrence::RecurrenceTransformRequest`); the library validates
+/// the strict schema.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecurrenceTransformToolRequest {
+    pub request: serde_json::Value,
+}
+
+/// A `polytool.recurrence-transform.v1` report to replay exactly.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VerifyRecurrenceTransformToolRequest {
+    pub report: serde_json::Value,
+}
+
 /// Input of `check_tnn_network`.  Give exactly one of `polynomials`, `text`
 /// or `matrix`.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]

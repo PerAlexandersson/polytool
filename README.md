@@ -1144,6 +1144,87 @@ polytool recurrence --python < polys.txt > recurrence.py
 The generated Python uses exact `fractions.Fraction` arithmetic and dense
 coefficient lists in ascending powers of `t`.
 
+#### Coordinate transformations and recurrence transport
+
+`polytool recurrence-transform` applies an exact change of polynomial
+coordinates to a sequence, transports its defining recurrence into the new
+coordinates, and can search independently there. It reads one JSON request on
+stdin and prints a `polytool.recurrence-transform.v1` report; `--verify`
+replays a report exactly from its embedded request (exit status 2 on a
+mismatch or invalid input), and `--compact` prints compact JSON.
+
+| `kind` | Row map | Precondition / inverse image |
+| --- | --- | --- |
+| `multiply_power {power}` | `Q_n = x^r P_n` | inverse needs `x^r` to divide `Q_n` |
+| `divide_power {power}` | `Q_n = P_n / x^r` | `x^r` divides `P_n` |
+| `reversal {schedule}` | `Q_n = x^(d_n) P_n(1/x)` | `deg P_n <= d_n` |
+| `affine {a, b}` | `Q_n = P_n(a x + b)`, `a != 0` | none |
+| `mobius {a, b, c, e, schedule}` | `Q_n = (c x + e)^(d_n) P_n((a x + b)/(c x + e))`, `a e - b c != 0` | `deg P_n <= d_n` |
+| `f_polynomial {schedule}` | `Q_n = (1 + x)^(d_n) P_n(x/(1 + x))` | `deg P_n <= d_n` |
+| `gamma {schedule}` | `P_n = sum_i Q_(n,i) x^i (1 + x)^(d_n - 2i)` | `x^(d_n) P_n(1/x) = P_n`; inverse needs `deg Q_n <= d_n/2` |
+| `symmetric_decomposition {schedule}` | `P_n = a_n + x b_n`, state `(a_n, b_n)` | `deg P_n <= d_n`; inverse needs `a_n`, `b_n` symmetric at `d_n`, `d_n - 1` |
+
+Rational parameters are strings such as `"3/2"`. A schedule
+`{"first_index": n0, "first_degree": d0, "step": h, "last_index": n1}` declares
+`d_n = d0 + h (n - n0)` on the index domain `n0 <= n (<= n1)`, so
+`d_(n+1) = d_n + h`; a decreasing schedule needs `last_index`, and negative
+degrees, empty domains and rows outside the domain are rejected. The declared
+bound is used even when a row has lower degree (`f_polynomial` calls
+`decomposition::f_polynomial` with `d_n`, never the observed degree), so
+missing top coefficients and endpoint factors are preserved exactly.
+
+The source is a defining `polytool.recurrence.v1` rule with seeds
+(`source_recurrence`), a bundled OEIS family (`oeis_id`), or explicit `rows`
+with `row_origin`; with a source, `row_count` rows are generated (default 10).
+Every row is mapped, the inverse reconstructs it exactly
+(`reconstruction_verified`), and a row violating a precondition rejects the
+request. Each condition is reported as `certified_all_indices` when the source
+rule proves it for the whole domain (the transported rule is denominator-free
+and the seeds qualify; for gamma, the reversal-transported rule equals the
+source rule) and otherwise as `checked_supplied_rows`, which is finite
+evidence.
+
+A rule `f(n,x) P_n = sum s(n) c(n,x) D^k P_(n-r) + g(n,x)` is transported
+exactly. For a Möbius map with `phi = (a x + b)/ell`, `ell = c x + e`,
+`Delta = a e - b c`, a first-order rule `R P_(n+1) = A P_n + B P_n'` becomes
+
+```text
+R Q_(n+1) = ell^h (A(phi) - d_n c ell B(phi)/Delta) Q_n + ell^(h+2) B(phi)/Delta Q_n'
+```
+
+Higher derivatives and lags follow from the product and chain rules; the
+identity is multiplied by the power of `ell` that clears every denominator and
+a common power of `ell` is then divided out exactly, never evaluated at the
+pole. An additive term `g` is transported only when `ell^(d_n)` does not
+depend on `n` (`h = 0`, or constant `ell` with `ell^h = 1`). The symmetric
+decomposition turns a first-order rule without `(-1)^n` factors into the
+complete two-component shared-denominator vector system for `(a_n, b_n)`.
+Gamma coordinates are not transported (the substitution `y = x/(1+x)^2` is
+quadratic); search the gamma rows instead.
+
+The transported rule (`evidence: "transported_identity"`, a replayable
+`polytool.recurrence.v1` record with transformed seeds) is an exact
+consequence of the supplied source rule and is kept separately from the
+optional independent search (`"search": {}` or explicit bounds,
+`evidence: "finite_fit"`). Canonical Eulerian rows A008292 (`E_1 = 1`, degree
+`n - 1`) under the `f`-polynomial map give `Q_1 = 1`,
+`Q_(n+1) = (1 + 2x) Q_n + x (1 + x) Q_n'`:
+
+```sh
+echo '{"oeis_id":"A008292","row_count":8,"search":{},
+  "transformation":{"kind":"f_polynomial",
+    "schedule":{"first_index":1,"first_degree":0,"step":1}}}' \
+  | polytool recurrence-transform > report.json
+polytool recurrence-transform --verify < report.json
+```
+
+In Rust, `RecurrenceTransformation::{map_row, inverse_row, transport,
+record}` act on single rows and rules, and
+`recurrence::{transform_recurrence, verify_recurrence_transform}` build and
+replay reports. The MCP tools `transform_recurrence` and
+`verify_recurrence_transform` take `{"request": {...}}` and
+`{"report": {...}}`. Root-location properties of the maps are not recorded.
+
 ### Scout BKW equal-modulus loci
 
 For a polynomial recurrence with characteristic symbol
@@ -1969,6 +2050,8 @@ Available MCP tools:
 - `recognize_brenti_strip_digraph`
 - `recognize_pf_network`
 - `check_left_production_matrix`
+- `transform_recurrence`
+- `verify_recurrence_transform`
 
 `check_tnn_network` and `recognize_brenti_strip_digraph` return the same
 fields as the JSON output of `polytool tnn-network` and
@@ -2159,6 +2242,17 @@ Additions (no breaking changes):
   certifies complete spaces for `Q[n] = T_m(P[n])`, `T_m(X^k) = X^k/(k!)^m`,
   from `r(U+m(A+J)+1)` residuals of a constant-index source; results carry a
   replayable `rescaling_bound` (`RecurrenceRescalingBound`).
+- `recurrence::{RecurrenceTransformation, DegreeSchedule, transform_recurrence,
+  verify_recurrence_transform}`: exact coordinate changes (`x^r`
+  multiplication/removal, reversal, affine and Möbius maps, `f`-polynomial,
+  gamma coordinates, symmetric decomposition) with inverses, image conditions
+  and affine degree schedules on explicit index domains; exact transport of
+  derivative recurrences (a vector system for the symmetric decomposition);
+  replayable `polytool.recurrence-transform.v1` reports keeping the
+  transported rule and an independent fit separately.  CLI
+  `recurrence-transform` and MCP tools `transform_recurrence` /
+  `verify_recurrence_transform`.  `decomposition::f_polynomial` now uses a
+  homogeneous Horner scheme (same results and degree-bound semantics).
 - `vec_poly::{exact_div_by_t, exact_div_by_t_minus_one, exact_div_by_t_minus,
   sum, prefix_sums, mul_linear, mul_linear_pow, has_nonnegative_coefficients,
   evaluate_homogeneous, evaluate_at_ratio}`: exact division by `t` and

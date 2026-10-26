@@ -1665,3 +1665,39 @@ fn left_production_certifies_stirling_and_rejects_eulerian() {
         server.check_left_production_matrix(Parameters(left_production_request("1,1,1", None)));
     assert!(format!("{:?}", bad.err().unwrap()).contains("degree"));
 }
+
+#[test]
+fn recurrence_transform_tool_transports_and_replays() {
+    let server = PolynomialToolsServer::new();
+    let request = json!({"oeis_id":"A008292","row_count":6,"search":{},
+        "transformation":{"kind":"f_polynomial",
+            "schedule":{"first_index":1,"first_degree":0,"step":1}}});
+    let Json(report) = server
+        .transform_recurrence(Parameters(RecurrenceTransformToolRequest {
+            request: request.clone(),
+        }))
+        .unwrap();
+    assert_eq!(report["schema"], "polytool.recurrence-transform.v1");
+    assert_eq!(report["transported"]["evidence"], "transported_identity");
+    assert_eq!(report["independent_search"]["evidence"], "finite_fit");
+    let Json(checked) = server
+        .verify_recurrence_transform(Parameters(VerifyRecurrenceTransformToolRequest {
+            report: json!(report),
+        }))
+        .unwrap();
+    assert_eq!(checked["verified"], true);
+    let mut tampered = json!(report);
+    tampered["row_origin"] = json!(0);
+    assert!(server
+        .verify_recurrence_transform(Parameters(VerifyRecurrenceTransformToolRequest {
+            report: tampered,
+        }))
+        .is_err());
+    let mut excessive = request;
+    excessive["limits"] = json!({"max_rows": 1_000_000});
+    assert!(server
+        .transform_recurrence(Parameters(RecurrenceTransformToolRequest {
+            request: excessive
+        }))
+        .is_err());
+}
