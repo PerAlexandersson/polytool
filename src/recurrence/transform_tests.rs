@@ -139,6 +139,7 @@ fn oeis_request_retains_transport_and_independent_search() {
         row_count: Some(9),
         search: Some(TransformSearchBounds::default()),
         limits: TransformLimits::default(),
+        root_domain: None,
     };
     let report = transform_recurrence(&request).unwrap();
     assert!(report.reconstruction_verified);
@@ -688,6 +689,7 @@ fn uncertified_preconditions_and_images_are_rejected() {
         row_count: None,
         search: None,
         limits: TransformLimits::default(),
+        root_domain: None,
     };
     assert!(transform_recurrence(&request)
         .unwrap_err()

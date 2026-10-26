@@ -22,8 +22,10 @@
 //! verification, modular prefiltering, fixed-shape and vector search,
 //! display/export, row generation, JSON, parameter counting, candidate
 //! enumeration, adaptive search, representation menus, complete spaces
-//! (also after factorial coefficient rescaling), and exact coordinate
-//! transformations with recurrence transport.
+//! (also after factorial coefficient rescaling), exact coordinate
+//! transformations with recurrence transport, and optional root-domain
+//! information (theorem adapters, exact root enclosures) for transformed
+//! results.
 
 use num_bigint::BigInt;
 use num_rational::Ratio;
@@ -66,6 +68,10 @@ mod rescaling;
 pub use rescaling::*;
 mod transform;
 pub use transform::*;
+mod root_domain;
+pub use root_domain::*;
+mod root_enclosure_report;
+pub use root_enclosure_report::*;
 
 #[cfg(test)]
 mod test_support;

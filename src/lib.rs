@@ -81,7 +81,8 @@
 //!   comparison paths, strict/weak interlacing (including same-degree via
 //!   Cauchy bound reduction), log-concavity, ultra-log-concavity, palindromic
 //!   check, gamma-positivity, Stapledon decomposition, resultant,
-//!   discriminant, Ehrhart ↔ h*-vector, display utilities
+//!   discriminant, Ehrhart ↔ h*-vector, display utilities, exact rational
+//!   root enclosures with multiplicities and interval tests
 //! - [`real_rooted_enumeration`] — exact enumeration of all real-rooted
 //!   integer polynomials of fixed degree with at least three prescribed
 //!   leading coefficients (Greaves--Syatriadi `AllRealRooted`, certified
@@ -91,7 +92,9 @@
 //! - [`sturm`] — Sturm chains for exact root counting and isolation (the slower
 //!   alternative to the default real-rootedness path)
 //! - [`sturm_cf`] — signed Euclidean/Sturm continued-fraction certificates
-//! - [`recurrence`] — Adaptive recurrence search for polynomial sequences
+//! - [`recurrence`] — Adaptive recurrence search for polynomial sequences,
+//!   coordinate transformations with recurrence transport and optional
+//!   root-domain certificates
 //! - [`renewal`] — Exact recognition of renewal-type recurrences
 //!   `P_n = sum_j r_j t^j P_(n-1-ell*j)` with interlacing consequences,
 //!   symbolic variable-predecessor recurrences `Q_n = Q_(n-1) + w(n) t Q_(p(n))`

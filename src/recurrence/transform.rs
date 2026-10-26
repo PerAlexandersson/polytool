@@ -68,8 +68,9 @@
 //! search in the new coordinates (`finite_fit`).  The two outputs are kept
 //! separately.  [`verify_recurrence_transform`] replays a report exactly.
 //!
-//! Root-location properties of the maps are deliberately not recorded here.
-//! Factorial rescalings and implicit differential relations are separate
+//! Root-location properties of the maps are not part of the algebraic
+//! report; the opt-in `root_domain` request field attaches them separately
+//! (see [`RootDomainReport`]).  Factorial rescalings and implicit differential relations are separate
 //! extensions of this registry.
 
 use super::*;

@@ -1667,6 +1667,46 @@ fn left_production_certifies_stirling_and_rejects_eulerian() {
 }
 
 #[test]
+fn recurrence_transform_tool_attaches_root_domain_and_enclosures() {
+    let server = PolynomialToolsServer::new();
+    let request = json!({"oeis_id":"A008292","row_count":6,"root_domain":{},
+        "transformation":{"kind":"f_polynomial",
+            "schedule":{"first_index":1,"first_degree":0,"step":1}}});
+    let Json(report) = server
+        .transform_recurrence(Parameters(RecurrenceTransformToolRequest { request }))
+        .unwrap();
+    let root = &report["root_domain"];
+    assert_eq!(root["recurrence_theorem"]["matched"], true);
+    assert!(root["claims"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|c| c["evidence"] == "completed_recurrence_induction"));
+    let Json(checked) = server
+        .verify_recurrence_transform(Parameters(VerifyRecurrenceTransformToolRequest {
+            report: json!(report),
+        }))
+        .unwrap();
+    assert_eq!(checked["verified"], true);
+
+    let Json(enclosures) = server
+        .exact_root_enclosures(Parameters(RootEnclosuresToolRequest {
+            request: json!({"polynomials": [["0", "-2", "0", "1"]], "max_width": "1/100",
+                "interval": {"lower": {"value": "-2"}, "upper": {"value": "2"}}}),
+        }))
+        .unwrap();
+    let item = &enclosures["items"][0];
+    assert_eq!(item["real_root_count"], 3);
+    assert_eq!(item["roots"][1]["lower"], "0");
+    assert_eq!(item["real_rooted_in_interval"], true);
+    assert!(server
+        .exact_root_enclosures(Parameters(RootEnclosuresToolRequest {
+            request: json!({"polynomials": [["1"]], "unknown": 1}),
+        }))
+        .is_err());
+}
+
+#[test]
 fn recurrence_transform_tool_transports_and_replays() {
     let server = PolynomialToolsServer::new();
     let request = json!({"oeis_id":"A008292","row_count":6,"search":{},

@@ -39,7 +39,9 @@ use crate::requests::{
     PolynomialBatchInput, RecurrenceSpacesToolRequest, TnnNetworkRequest,
     VerifyRecurrenceSpacesToolRequest,
 };
-use crate::requests::{RecurrenceTransformToolRequest, VerifyRecurrenceTransformToolRequest};
+use crate::requests::{
+    RecurrenceTransformToolRequest, RootEnclosuresToolRequest, VerifyRecurrenceTransformToolRequest,
+};
 use crate::responses::{
     BicyclicSievingResponse, BrentiRecognitionResponse, CheckPolynomialFamilyResponse,
     CoefficientTestsResponse, CyclicSievingResponse, CyclicSievingSequenceResponse,
@@ -385,7 +387,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Return rational midpoint representatives for isolated real roots, or real_rooted=false."
+        description = "Return rational midpoint representatives for isolated real roots, or real_rooted=false. Midpoints are neither roots nor certified bounds; use exact_root_enclosures for certified enclosures with multiplicities."
     )]
     pub fn real_roots(
         &self,
@@ -599,7 +601,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Apply an exact change of polynomial coordinates and transport a defining recurrence. request: {transformation: {kind: multiply_power {power} | divide_power {power} (needs x^r | P_n) | reversal {schedule} (x^(d_n) P_n(1/x)) | affine {a, b} (P_n(a x + b)) | mobius {a, b, c, e, schedule} ((c x + e)^(d_n) P_n((a x + b)/(c x + e)), ae - bc != 0) | f_polynomial {schedule} | gamma {schedule} (symmetry index d_n) | symmetric_decomposition {schedule} (P_n = a_n + x b_n)}, rationals as strings; schedule {first_index, first_degree, step, last_index?} gives d_n = first_degree + step*(n - first_index) on an explicit index domain. Source: source_recurrence (polytool.recurrence.v1 with seeds), oeis_id (bundled family) or rows with row_origin; row_count rows are generated from a source. Optional search ({} for defaults) fits independently in the new coordinates. Returns polytool.recurrence-transform.v1: exact row map, inverse and image conditions, transformed states, exact reconstruction, condition statuses (certified_all_indices from the source rule, or checked_supplied_rows), the transported rule (evidence transported_identity, with transformed seeds) and the independent fit (evidence finite_fit), kept separately. Gamma coordinates are not transported. No root-location claims."
+        description = "Apply an exact change of polynomial coordinates and transport a defining recurrence. request: {transformation: {kind: multiply_power {power} | divide_power {power} (needs x^r | P_n) | reversal {schedule} (x^(d_n) P_n(1/x)) | affine {a, b} (P_n(a x + b)) | mobius {a, b, c, e, schedule} ((c x + e)^(d_n) P_n((a x + b)/(c x + e)), ae - bc != 0) | f_polynomial {schedule} | gamma {schedule} (symmetry index d_n) | symmetric_decomposition {schedule} (P_n = a_n + x b_n)}, rationals as strings; schedule {first_index, first_degree, step, last_index?} gives d_n = first_degree + step*(n - first_index) on an explicit index domain. Source: source_recurrence (polytool.recurrence.v1 with seeds), oeis_id (bundled family) or rows with row_origin; row_count rows are generated from a source. Optional search ({} for defaults) fits independently in the new coordinates. Returns polytool.recurrence-transform.v1: exact row map, inverse and image conditions, transformed states, exact reconstruction, condition statuses (certified_all_indices from the source rule, or checked_supplied_rows), the transported rule (evidence transported_identity, with transformed seeds) and the independent fit (evidence finite_fit), kept separately. Gamma coordinates are not transported. Optional root_domain ({} for defaults, or {candidate_intervals, assumptions, default_window, max_candidate_intervals, max_observed_rows, max_observed_degree}; interval {lower?, upper?} with endpoints {value, per_index?, closed?}, an omitted end is infinite; assumption {subject: source|transformed, component?, property: real_rooted|real_rooted_in|real_roots_in, interval?, first_index?, last_index?, note?}) attaches root implications (direction, hypotheses with status, converse), claims labelled finite_exact_observation, supplied_assumption, proposed_interval, completed_recurrence_induction or certified_family_invariant, the Rolle recurrence match Q_m = s(m) D^j(g Q_(m-1)) with its interval attempts, and exact root enclosures; the algebraic results never depend on it."
     )]
     pub fn transform_recurrence(
         &self,
@@ -648,6 +650,26 @@ impl PolynomialToolsServer {
                 json!(report.independent_search.is_some()),
             ),
         ])))
+    }
+
+    #[tool(
+        description = "Exact real-root enclosures with multiplicities. request: {polynomials: [[ascending rational strings]], max_width?: rational (default refinement width 1/1024), interval?: {lower?, upper?} with endpoints {value, per_index?, closed?} (omitted end infinite; value + per_index * n with n = first_index + position), first_index?}. Returns polytool.root-enclosures.v1 items with degree, valuation, real_rooted, real_root_count (with multiplicity), enclosures {lower, upper, multiplicity} (lower == upper is an exact rational root; otherwise exactly one root lies strictly inside and neither endpoint is a root) and exact interval verdicts real_roots_in_interval and real_rooted_in_interval. Each verdict is exact for the given polynomial only."
+    )]
+    pub fn exact_root_enclosures(
+        &self,
+        Parameters(input): Parameters<RootEnclosuresToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.request.to_string(), "root-enclosures request")
+            .map_err(invalid_params)?;
+        let request: polytool::recurrence::RootEnclosureRequest =
+            serde_json::from_value(input.request).map_err(|e| invalid_params(e.to_string()))?;
+        let report = polytool::recurrence::root_enclosures(&request).map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize root enclosures")
+        else {
+            unreachable!()
+        };
+        Ok(Json(fields.into_iter().collect()))
     }
 
     #[tool(

@@ -92,6 +92,17 @@ supplied source rule) and the optional independent fit (`finite_fit`), kept
 separately. `verify_recurrence_transform` takes `{"report": {...}}` and replays
 it exactly. Both enforce the default resource ceilings and the 1 MiB input cap.
 
+An optional `"root_domain": {}` in the request attaches root-domain
+information (root implications with direction and hypothesis statuses, claims
+labelled by evidence, the Rolle recurrence match and exact root enclosures);
+see the parent README. Supplied assumptions and the whole section are replayed
+by `verify_recurrence_transform`.
+
+`exact_root_enclosures` takes `{"request": {"polynomials": [["0", "-2", "0", "1"]],
+"max_width": "1/100", "interval": {"lower": {"value": "-2"}, "upper":
+{"value": "2"}}}}` and returns `polytool.root-enclosures.v1`: rational
+enclosures with multiplicities, degree, valuation and exact interval verdicts.
+
 ## Build
 
 From the repository root:
@@ -435,7 +446,8 @@ previous row and include the first failure when there is one.
 ### `real_roots`
 
 Return rational midpoint representatives from the existing Sturm isolation
-helper, or `real_rooted: false`.
+helper, or `real_rooted: false`.  Midpoints are neither roots nor certified
+bounds; use `exact_root_enclosures` for certified enclosures.
 
 Example arguments:
 

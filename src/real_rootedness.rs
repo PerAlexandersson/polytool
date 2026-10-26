@@ -71,6 +71,14 @@
 //! - **Undirected**: [`interlaces_either_order`] answers "do f and g interlace
 //!   in some order allowed by their degrees?" and returns a plain `bool`.
 //!
+//! ## Exact root enclosures
+//!
+//! [`isolate_real_roots_exact`] returns rational isolating intervals (or exact
+//! rational roots) with multiplicities, degree and valuation, and
+//! [`RealInterval`] decides exactly whether all (real) roots lie in an
+//! interval or ray.  Use it whenever a root location is a hypothesis of an
+//! argument; [`real_roots`] only returns midpoint representatives.
+//!
 //! ## Sturm chain fallback
 //!
 //! The original Sturm-chain implementations are available as [`is_real_rooted_sturm`],
@@ -97,6 +105,7 @@ use num_rational::Ratio;
 mod bezout;
 mod coefficients;
 mod ehrhart;
+mod enclosures;
 mod formatting;
 mod interlacing;
 mod qpoly;
@@ -122,6 +131,9 @@ pub use coefficients::{
 pub use ehrhart::{
     ehrhart_to_hstar, ehrhart_to_hstar_bigint, ehrhart_to_hstar_with_denom, hstar_to_ehrhart,
     hstar_to_ehrhart_bigint_coeffs, EhrhartToHstarError,
+};
+pub use enclosures::{
+    isolate_real_roots_exact, RealInterval, RealRootEnclosure, RealRootIsolation,
 };
 pub use formatting::{
     format_poly, format_poly_bigint_coeffs, format_poly_bigint_var, format_poly_var,

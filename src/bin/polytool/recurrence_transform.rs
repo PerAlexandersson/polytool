@@ -47,6 +47,16 @@ pub(crate) fn print_recurrence_transform_help() {
     println!("                   max_diff_deg, try_denominator, max_candidates, ...}}:");
     println!("                   also search independently in the new coordinates");
     println!("  limits           {{max_rows, max_degree, ...}} resource limits");
+    println!("  root_domain      optional {{}} or {{candidate_intervals, assumptions,");
+    println!("                   default_window, max_candidate_intervals, max_observed_rows,");
+    println!("                   max_observed_degree}}: attach root-domain information");
+    println!("                   (never needed for the algebraic results). An interval is");
+    println!(
+        "                   {{lower?, upper?}} with endpoints {{value, per_index?, closed?}};"
+    );
+    println!("                   an assumption is {{subject: source|transformed, component?,");
+    println!("                   property: real_rooted|real_rooted_in|real_roots_in, interval?,");
+    println!("                   first_index?, last_index?, note?}}");
     println!();
     println!("Report:");
     println!("  transformation      exact row map, inverse, image conditions, domain");
@@ -57,6 +67,12 @@ pub(crate) fn print_recurrence_transform_help() {
     println!("  transported         evidence transported_identity: exact consequence of");
     println!("                      the source rule, with transformed seeds");
     println!("  independent_search  evidence finite_fit, kept separately");
+    println!("  root_domain         implications (direction, hypotheses with status,");
+    println!("                      converse), claims labelled finite_exact_observation,");
+    println!("                      supplied_assumption, proposed_interval,");
+    println!("                      completed_recurrence_induction or");
+    println!("                      certified_family_invariant, the Rolle recurrence match");
+    println!("                      with its interval attempts, and exact root enclosures");
     println!();
     println!("Options:");
     println!("  --verify    Replay a report exactly from its embedded request");

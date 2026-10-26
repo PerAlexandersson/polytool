@@ -1268,7 +1268,90 @@ record}` act on single rows and rules, and
 `recurrence::{transform_recurrence, verify_recurrence_transform}` build and
 replay reports. The MCP tools `transform_recurrence` and
 `verify_recurrence_transform` take `{"request": {...}}` and
-`{"report": {...}}`. Root-location properties of the maps are not recorded.
+`{"report": {...}}`. Root-location information is opt-in (next section).
+
+#### Root-domain information for transformed results
+
+Algebraic discovery never needs an interval or a real-rootedness proof. An
+optional `"root_domain": {}` (or explicit fields) in a `recurrence-transform`
+request adds a `root_domain` section to the report; requests and reports
+without it are unchanged. The section keeps apart
+
+- `implications`: theorem adapters for the map, each with its `direction`
+  (`equivalent`, `source_to_target`, `target_to_source`), hypotheses with a
+  status (`certified_all_indices`, `checked_supplied_rows`, `failed_on_rows`,
+  ...), degree bounds, coefficient-sign hypotheses, endpoint conventions, zero
+  cases, index domain and, for one-directional maps, why the converse fails;
+- `claims` about the source rows `P_n` or the transformed rows, each with an
+  `evidence` label: `finite_exact_observation` (exact root isolation of the
+  listed rows only), `supplied_assumption` (from the request, checked on the
+  rows), `proposed_interval` (a candidate window), `completed_recurrence_induction`
+  (a closed induction over the transported rule for every index) and
+  `certified_family_invariant` (transferred to every index by a map theorem
+  whose conditions are certified); unproved dependencies are listed in
+  `conditional_on`;
+- `recurrence_theorem`: the match of the transported rule against Rolle's
+  theorem for derivatives of products, `Q_m = s(m) D^j (g Q_(m-1))`, with every
+  interval attempt (bounded by `max_candidate_intervals`);
+- `observations`: exact rational root enclosures with multiplicities for the
+  first `max_observed_rows` rows.
+
+| Adapter | Statement | Direction |
+| --- | --- | --- |
+| `monomial_factor` | `Q_n = x^r P_n`; only the multiplicity of the root 0 changes | equivalent |
+| `real_mobius_equivalence` (`reversal`, `mobius`, `f_polynomial`), `real_affine_equivalence` | real Möbius maps with `a e - b c != 0` and `deg P_n <= d_n`; the pole `-e/c` is a root of multiplicity `d_n - deg P_n`, roots at `a/c` lower `deg Q_n`; intervals and rays map exactly | equivalent |
+| `nonnegative_coefficient_window` | nonnegative coefficients put the real roots of `P_n` in `(-inf, 0]`; for the `f`-polynomial every real root of `Q_n` lies in `[-1, 0]` (`-1` records missing top degree, `0` the valuation) | proposes a window only |
+| `gamma_quarter_bound` | `P_n` is real-rooted iff every root of the gamma polynomial is real and at most `1/4` (`G = 1 - z` at `d = 2` gives `1 + x + x^2`) | equivalent |
+| `hermite_kakeya_obreschkoff_symmetric_pair` | real-rooted interlacing `a_n`, `x b_n` give real-rooted `P_n = a_n + x b_n` | components to `P_n` only |
+| `rolle_derivative_of_product` | roots of `g` and `Q_(m-1)` in an interval `I` put the roots of `s(m) D^j(g Q_(m-1))` in `I` (zero allowed) | recurrence step |
+
+Real-rooted components alone do not suffice for the symmetric pair
+(`a = (1 + x)^3`, `b = x` give `1 + 3x + 4x^2 + x^3`), and its converse fails
+(`(1 + 2x)^2` has `a = 1 + x + x^2`). Invertible maps need not preserve
+real-rootedness both ways: for `P = (xQ)'`, real-rooted `Q` gives real-rooted
+`P`, but `(1 + x)^2` has the antecedent `1 + x + x^2/3`.
+
+The induction tries supplied `candidate_intervals`, then the default window,
+then the hull of the roots of `g` and the seeds, checking `g` and every seed
+exactly. Canonical Eulerian rows A008292 under the `f`-polynomial map become
+`Q_(n+1) = (x(1 + x) Q_n)'`, `Q_1 = 1`; the induction closes on `[-1, 0]`
+(`completed_recurrence_induction`), and since `deg P_n <= d_n` is certified
+and `deg Q_n = d_n` follows from the degree formula, the Möbius equivalence
+gives real-rooted Eulerian polynomials with roots in `(-inf, 0]`
+(`certified_family_invariant`):
+
+```sh
+echo '{"oeis_id":"A008292","row_count":8,"root_domain":{},
+  "transformation":{"kind":"f_polynomial",
+    "schedule":{"first_index":1,"first_degree":0,"step":1}}}' \
+  | polytool recurrence-transform > report.json
+polytool recurrence-transform --verify < report.json
+```
+
+`root_domain` fields: `candidate_intervals`, `assumptions`, `default_window`
+(default `true`), `max_candidate_intervals` (8), `max_observed_rows` (32),
+`max_observed_degree` (128). An interval is `{"lower": {...}, "upper": {...}}`
+with endpoints `{"value": "-1", "per_index": "0", "closed": true}`; an omitted
+end is infinite (a ray) and `value + per_index * n` depends on the index (for
+`P_n = x + n` the roots `-n` escape while the `f`-polynomial roots stay in
+`(-1, 0]`). An assumption is `{"subject": "source" | "transformed",
+"component": 0, "property": "real_rooted" | "real_rooted_in" | "real_roots_in",
+"interval": ..., "first_index": ..., "last_index": ..., "note": ...}`; it is
+checked exactly on the observed rows (`assumption_checks`), transferred through
+equivalences with its label in `conditional_on`, and replayed with the report.
+Finite exact checks are never promoted to statements about every index.
+
+`polytool root-enclosures` (MCP `exact_root_enclosures`) is the exact interval
+interface: for `{"polynomials": [["0", "0", "1", "3", "3", "1"]],
+"max_width": "1/1000", "interval": {...}}` it returns enclosures with
+multiplicities (`lower == upper` is an exact rational root; otherwise exactly
+one root lies strictly inside and neither endpoint is a root), degree,
+valuation, `real_rooted` and exact interval verdicts. The MCP `real_roots`
+midpoints are representatives only. In Rust use
+`real_rootedness::{isolate_real_roots_exact, RealInterval}`; fixed-cap diagonal
+multiplier tests use `recurrence::jensen_fixed_cap_check` (Jensen polynomial
+`T[(1 + x)^N]`, Schur--Malo composition; evidence `fixed_cap`, never a proof
+for larger degrees).
 
 ### Scout BKW equal-modulus loci
 
@@ -2298,6 +2381,22 @@ Additions (no breaking changes):
   `recurrence-transform` and MCP tools `transform_recurrence` /
   `verify_recurrence_transform`.  `decomposition::f_polynomial` now uses a
   homogeneous Horner scheme (same results and degree-bound semantics).
+- Optional root-domain information for transformed results: request field
+  `root_domain` (`recurrence::RootDomainRequest`) adds a `root_domain` report
+  section (`RootDomainReport`) with theorem adapters (`root_implication`:
+  monomial factors, real affine/Möbius maps, nonnegative-coefficient window,
+  gamma quarter bound, Hermite--Kakeya--Obreschkoff symmetric pairs) recording
+  direction, hypotheses, degree/sign/endpoint/zero conventions and failing
+  converses; evidence-labelled claims; a Rolle recurrence match
+  `Q_m = s(m) D^j(g Q_(m-1))` closing inductions (canonical Eulerian rows on
+  `[-1, 0]`); and exact root observations.  Replayed by
+  `verify_recurrence_transform`; reports without the field are unchanged.
+- `real_rootedness::{isolate_real_roots_exact, RealInterval,
+  RealRootIsolation, RealRootEnclosure}`: exact rational root enclosures with
+  multiplicities, degree and valuation, and exact interval/ray tests;
+  `recurrence::root_enclosures` with CLI `root-enclosures` and MCP tool
+  `exact_root_enclosures`.  `recurrence::jensen_fixed_cap_check`: fixed-cap
+  Jensen-polynomial test of diagonal multipliers (`fixed_cap` evidence).
 - `vec_poly::{exact_div_by_t, exact_div_by_t_minus_one, exact_div_by_t_minus,
   sum, prefix_sums, mul_linear, mul_linear_pow, has_nonnegative_coefficients,
   evaluate_homogeneous, evaluate_at_ratio}`: exact division by `t` and

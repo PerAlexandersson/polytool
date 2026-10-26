@@ -299,6 +299,10 @@ pub struct RecurrenceTransformRequest {
     /// Resource limits.
     #[serde(default)]
     pub limits: TransformLimits,
+    /// Optional root-domain analysis (see [`RootDomainRequest`]); omitted means
+    /// none, and algebraic discovery never depends on it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_domain: Option<RootDomainRequest>,
 }
 
 impl RecurrenceTransformRequest {
@@ -317,6 +321,7 @@ impl RecurrenceTransformRequest {
             row_count: Some(row_count),
             search: None,
             limits: TransformLimits::default(),
+            root_domain: None,
         }
     }
 }
@@ -416,6 +421,9 @@ pub struct RecurrenceTransformReport {
     /// Independent search in the new coordinates, when requested.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub independent_search: Option<IndependentSearchReport>,
+    /// Root-domain implications, claims and observations, when requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_domain: Option<RootDomainReport>,
 }
 
 struct ResolvedSource {
@@ -858,6 +866,30 @@ pub fn transform_recurrence(
         .search
         .as_ref()
         .map(|bounds| independent_search(transformation, bounds, origin, &states));
+    let root_domain = request
+        .root_domain
+        .as_ref()
+        .map(|root_request| {
+            super::super::root_domain::analyze_root_domain(
+                &super::super::root_domain::RootDomainInputs {
+                    request: root_request,
+                    transformation,
+                    origin,
+                    rows: &rows,
+                    states: &states,
+                    conditions: &conditions,
+                    transported: source
+                        .as_ref()
+                        .zip(transported_rule.as_ref())
+                        .map(|(s, rule)| super::super::root_domain::TransportedInput {
+                            rule,
+                            first_index: s.first_index,
+                            valid_from: s.first_index + s.seeds.len(),
+                        }),
+                },
+            )
+        })
+        .transpose()?;
 
     Ok(RecurrenceTransformReport {
         schema: RECURRENCE_TRANSFORM_SCHEMA.to_string(),
@@ -875,6 +907,7 @@ pub fn transform_recurrence(
         transported: transported_report,
         transport_error,
         independent_search: independent,
+        root_domain,
     })
 }
 

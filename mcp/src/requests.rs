@@ -549,6 +549,15 @@ pub struct VerifyRecurrenceTransformToolRequest {
     pub report: serde_json::Value,
 }
 
+/// Exact root-enclosure request
+/// (`polytool::recurrence::RootEnclosureRequest`); the library validates the
+/// strict schema.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RootEnclosuresToolRequest {
+    pub request: serde_json::Value,
+}
+
 /// Input of `check_tnn_network`.  Give exactly one of `polynomials`, `text`
 /// or `matrix`.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
