@@ -1328,6 +1328,276 @@ pub fn bigint_coeffs_to_i64(coeffs: &[BigInt]) -> Option<Vec<i64>> {
     coeffs.iter().map(ToPrimitive::to_i64).collect()
 }
 
+/// An exact dyadic rational `numerator / 2^exponent`.
+///
+/// Values are kept in lowest terms: either `exponent == 0` or the numerator
+/// is odd. Root isolation uses dyadic endpoints because bisection stays in
+/// this set and signs can be evaluated with integer arithmetic only.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DyadicRational {
+    numerator: BigInt,
+    exponent: u32,
+}
+
+impl DyadicRational {
+    /// Construct `numerator / 2^exponent`, reduced to lowest terms.
+    pub fn new(numerator: BigInt, exponent: u32) -> Self {
+        let mut numerator = numerator;
+        let mut exponent = exponent;
+        if numerator.is_zero() {
+            exponent = 0;
+        }
+        while exponent > 0 && numerator.is_even() {
+            numerator /= 2;
+            exponent -= 1;
+        }
+        DyadicRational {
+            numerator,
+            exponent,
+        }
+    }
+
+    /// The integer `value` as a dyadic rational.
+    pub fn from_integer(value: BigInt) -> Self {
+        DyadicRational {
+            numerator: value,
+            exponent: 0,
+        }
+    }
+
+    /// The reduced numerator.
+    pub fn numerator(&self) -> &BigInt {
+        &self.numerator
+    }
+
+    /// The reduced power of two in the denominator.
+    pub fn exponent(&self) -> u32 {
+        self.exponent
+    }
+
+    /// The denominator `2^exponent`.
+    pub fn denominator(&self) -> BigInt {
+        BigInt::one() << self.exponent
+    }
+
+    /// Numerator after rescaling to the denominator `2^exponent`, which must
+    /// be at least `self.exponent()`.
+    fn numerator_at_exponent(&self, exponent: u32) -> BigInt {
+        debug_assert!(exponent >= self.exponent);
+        &self.numerator << (exponent - self.exponent)
+    }
+
+    /// The exact midpoint `(self + other) / 2`.
+    pub fn midpoint(&self, other: &Self) -> Self {
+        let exponent = self.exponent.max(other.exponent);
+        let sum = self.numerator_at_exponent(exponent) + other.numerator_at_exponent(exponent);
+        DyadicRational::new(sum, exponent + 1)
+    }
+
+    /// `self + numerator / 2^exponent`.
+    fn add_dyadic(&self, numerator: &BigInt, exponent: u32) -> Self {
+        let common = self.exponent.max(exponent);
+        let other = numerator << (common - exponent);
+        DyadicRational::new(self.numerator_at_exponent(common) + other, common)
+    }
+
+    /// Sign of `polynomial(self)` for ascending integer coefficients.
+    ///
+    /// The value is multiplied by the positive factor `2^(exponent * degree)`,
+    /// so only integer arithmetic is needed.
+    fn sign_of(&self, polynomial: &[BigInt]) -> i8 {
+        let Some(d) = degree(polynomial) else {
+            return 0;
+        };
+        let denominator = self.denominator();
+        let mut accumulator = polynomial[d].clone();
+        let mut denominator_power = BigInt::one();
+        for coefficient in polynomial[..d].iter().rev() {
+            denominator_power *= &denominator;
+            accumulator = accumulator * &self.numerator + coefficient * &denominator_power;
+        }
+        sign_i8(&accumulator)
+    }
+}
+
+impl PartialOrd for DyadicRational {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DyadicRational {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let exponent = self.exponent.max(other.exponent);
+        self.numerator_at_exponent(exponent)
+            .cmp(&other.numerator_at_exponent(exponent))
+    }
+}
+
+impl std::fmt::Display for DyadicRational {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.exponent == 0 {
+            write!(f, "{}", self.numerator)
+        } else {
+            write!(f, "{}/2^{}", self.numerator, self.exponent)
+        }
+    }
+}
+
+/// One isolated distinct real root of an integer polynomial.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IsolatedRealRoot {
+    /// The root is exactly this dyadic rational.
+    Exact(DyadicRational),
+    /// Exactly one distinct root lies in the open interval `(lower, upper)`;
+    /// neither endpoint is a root.
+    Interval {
+        /// Lower endpoint (not a root).
+        lower: DyadicRational,
+        /// Upper endpoint (not a root).
+        upper: DyadicRational,
+    },
+}
+
+impl IsolatedRealRoot {
+    /// Smallest point of the closed isolating set.
+    pub fn lower(&self) -> &DyadicRational {
+        match self {
+            IsolatedRealRoot::Exact(root) => root,
+            IsolatedRealRoot::Interval { lower, .. } => lower,
+        }
+    }
+
+    /// Largest point of the closed isolating set.
+    pub fn upper(&self) -> &DyadicRational {
+        match self {
+            IsolatedRealRoot::Exact(root) => root,
+            IsolatedRealRoot::Interval { upper, .. } => upper,
+        }
+    }
+}
+
+fn sturm_variations_at(chain: &[Vec<BigInt>], point: &DyadicRational) -> usize {
+    sign_variations(chain.iter().map(|p| point.sign_of(p)))
+}
+
+enum IsolationWork {
+    Interval {
+        lower: DyadicRational,
+        upper: DyadicRational,
+        lower_variations: usize,
+        upper_variations: usize,
+    },
+    Emit(IsolatedRealRoot),
+}
+
+/// Isolate the distinct real roots of an integer polynomial.
+///
+/// Coefficients are in ascending degree order. The result has one entry per
+/// distinct real root, sorted increasingly. Each entry is either an exact
+/// dyadic root or an open interval with dyadic endpoints containing exactly
+/// one root; interval endpoints are never roots. Consecutive entries satisfy
+/// `previous.upper() <= next.lower()`, with strict inequality whenever one
+/// of them is [`IsolatedRealRoot::Exact`], so neighbouring intervals may share
+/// a (non-root) endpoint but never overlap.
+///
+/// The method is Sturm bisection on the primitive square-free part, starting
+/// from a strict Fujiwara bound, with exact integer sign evaluation. Constant
+/// polynomials, including the zero polynomial, return an empty vector: the
+/// caller must treat the zero polynomial separately.
+pub fn isolate_real_roots_bigint_coeffs(coeffs: &[BigInt]) -> Vec<IsolatedRealRoot> {
+    let p = squarefree_part_primitive_bigint_coeffs(coeffs);
+    if degree(&p).unwrap_or(0) == 0 {
+        return Vec::new();
+    }
+    let bound = strict_fujiwara_root_bound(&p);
+    let chain = sturm_chain_from_squarefree(p);
+
+    let lower = DyadicRational::from_integer(-bound.clone());
+    let upper = DyadicRational::from_integer(bound);
+    let mut stack = vec![IsolationWork::Interval {
+        lower_variations: sturm_variations_at(&chain, &lower),
+        upper_variations: sturm_variations_at(&chain, &upper),
+        lower,
+        upper,
+    }];
+    let mut roots = Vec::new();
+
+    while let Some(work) = stack.pop() {
+        let (lower, upper, lower_variations, upper_variations) = match work {
+            IsolationWork::Emit(root) => {
+                roots.push(root);
+                continue;
+            }
+            IsolationWork::Interval {
+                lower,
+                upper,
+                lower_variations,
+                upper_variations,
+            } => (lower, upper, lower_variations, upper_variations),
+        };
+        let count = lower_variations.saturating_sub(upper_variations);
+        if count == 0 {
+            continue;
+        }
+        if count == 1 {
+            roots.push(IsolatedRealRoot::Interval { lower, upper });
+            continue;
+        }
+
+        let middle = lower.midpoint(&upper);
+        if middle.sign_of(&chain[0]) != 0 {
+            let middle_variations = sturm_variations_at(&chain, &middle);
+            stack.push(IsolationWork::Interval {
+                lower: middle.clone(),
+                upper,
+                lower_variations: middle_variations,
+                upper_variations,
+            });
+            stack.push(IsolationWork::Interval {
+                lower,
+                upper: middle,
+                lower_variations,
+                upper_variations: middle_variations,
+            });
+            continue;
+        }
+
+        // The midpoint is a root: shrink a symmetric window around it until it
+        // isolates that root, then continue on both sides of the window.
+        let width_exponent = lower.exponent().max(upper.exponent());
+        let width = upper.numerator_at_exponent(width_exponent)
+            - lower.numerator_at_exponent(width_exponent);
+        let mut half_window_exponent = width_exponent + 2;
+        let (left, right, left_variations, right_variations) = loop {
+            let left = middle.add_dyadic(&-&width, half_window_exponent);
+            let right = middle.add_dyadic(&width, half_window_exponent);
+            if left.sign_of(&chain[0]) != 0 && right.sign_of(&chain[0]) != 0 {
+                let left_variations = sturm_variations_at(&chain, &left);
+                let right_variations = sturm_variations_at(&chain, &right);
+                if left_variations.saturating_sub(right_variations) == 1 {
+                    break (left, right, left_variations, right_variations);
+                }
+            }
+            half_window_exponent += 1;
+        };
+        stack.push(IsolationWork::Interval {
+            lower: right,
+            upper,
+            lower_variations: right_variations,
+            upper_variations,
+        });
+        stack.push(IsolationWork::Emit(IsolatedRealRoot::Exact(middle)));
+        stack.push(IsolationWork::Interval {
+            lower,
+            upper: left,
+            lower_variations,
+            upper_variations: left_variations,
+        });
+    }
+    roots
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2080,5 +2350,112 @@ mod tests {
         assert!(is_real_rooted_fast_bigint_coeffs(&eulerian));
         assert!(is_real_rooted_fast_bigint_coeffs(&type_b_eulerian));
         assert!(is_real_rooted_fast_bigint_coeffs(&touchard));
+    }
+
+    fn dyadic_to_rational(value: &DyadicRational) -> BigRational {
+        BigRational::new(value.numerator().clone(), value.denominator())
+    }
+
+    fn rational_value(coeffs: &[BigInt], point: &BigRational) -> BigRational {
+        coeffs.iter().rev().fold(BigRational::zero(), |acc, c| {
+            acc * point + BigRational::from_integer(c.clone())
+        })
+    }
+
+    /// Check the documented isolation contract against independent evaluation.
+    fn assert_valid_isolation(coeffs: &[BigInt]) -> Vec<IsolatedRealRoot> {
+        let roots = isolate_real_roots_bigint_coeffs(coeffs);
+        assert_eq!(roots.len(), count_real_roots_prs_bigint_coeffs(coeffs));
+        let squarefree = squarefree_part_primitive_bigint_coeffs(coeffs);
+        for root in &roots {
+            match root {
+                IsolatedRealRoot::Exact(value) => {
+                    assert!(rational_value(coeffs, &dyadic_to_rational(value)).is_zero());
+                }
+                IsolatedRealRoot::Interval { lower, upper } => {
+                    assert!(lower < upper);
+                    let low = rational_value(&squarefree, &dyadic_to_rational(lower));
+                    let high = rational_value(&squarefree, &dyadic_to_rational(upper));
+                    assert!(!low.is_zero() && !high.is_zero());
+                    // A simple root of the square-free part changes its sign.
+                    assert!(low.is_negative() != high.is_negative());
+                }
+            }
+        }
+        for pair in roots.windows(2) {
+            let strict = matches!(pair[0], IsolatedRealRoot::Exact(_))
+                || matches!(pair[1], IsolatedRealRoot::Exact(_));
+            if strict {
+                assert!(pair[0].upper() < pair[1].lower());
+            } else {
+                assert!(pair[0].upper() <= pair[1].lower());
+            }
+        }
+        roots
+    }
+
+    #[test]
+    fn dyadic_rational_is_reduced_and_ordered() {
+        let half = DyadicRational::new(BigInt::from(4), 3);
+        assert_eq!(half.numerator(), &BigInt::from(1));
+        assert_eq!(half.exponent(), 1);
+        assert_eq!(DyadicRational::new(BigInt::zero(), 7).exponent(), 0);
+        let one = DyadicRational::from_integer(BigInt::one());
+        assert!(half < one);
+        assert_eq!(half.midpoint(&one), DyadicRational::new(BigInt::from(3), 2));
+        assert_eq!(half.to_string(), "1/2^1");
+    }
+
+    #[test]
+    fn isolates_constant_and_irrational_roots() {
+        assert!(isolate_real_roots_bigint_coeffs(&[]).is_empty());
+        assert!(isolate_real_roots_bigint_coeffs(&b(&[5])).is_empty());
+        assert!(isolate_real_roots_bigint_coeffs(&b(&[1, 0, 1])).is_empty());
+
+        // x^2 - 2 has the two irrational roots +-sqrt(2).
+        let roots = assert_valid_isolation(&b(&[-2, 0, 1]));
+        assert_eq!(roots.len(), 2);
+        assert!(roots
+            .iter()
+            .all(|root| matches!(root, IsolatedRealRoot::Interval { .. })));
+        assert!(roots[0].upper() <= &DyadicRational::from_integer(BigInt::zero()));
+    }
+
+    #[test]
+    fn isolates_exact_dyadic_roots_hit_by_bisection() {
+        // x (x - 1) (2x - 1) (x + 3): the bisection midpoints hit 0 and 1/2.
+        let mut p = b(&[1]);
+        for factor in [[0, 1], [-1, 1], [-1, 2], [3, 1]] {
+            p = poly_mul(&p, &b(&factor));
+        }
+        let roots = assert_valid_isolation(&p);
+        assert_eq!(roots.len(), 4);
+        assert!(roots
+            .iter()
+            .any(|root| *root == IsolatedRealRoot::Exact(DyadicRational::from_integer(0.into()))));
+    }
+
+    #[test]
+    fn isolates_repeated_and_close_roots() {
+        // (3x - 1)^2 (3x - 2) (x^2 + 1) (1000x - 333)
+        let mut p = b(&[1]);
+        for factor in [
+            vec![-1, 3],
+            vec![-1, 3],
+            vec![-2, 3],
+            vec![1, 0, 1],
+            vec![-333, 1000],
+        ] {
+            p = poly_mul(&p, &b(&factor));
+        }
+        let roots = assert_valid_isolation(&p);
+        assert_eq!(roots.len(), 3);
+
+        // A product of many linear factors, including negative roots.
+        let mut wilkinson = b(&[1]);
+        for root in -6..=7 {
+            wilkinson = poly_mul(&wilkinson, &b(&[-root, 1]));
+        }
+        assert_eq!(assert_valid_isolation(&wilkinson).len(), 14);
     }
 }

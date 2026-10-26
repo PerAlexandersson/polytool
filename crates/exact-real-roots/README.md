@@ -25,6 +25,10 @@ assert!(is_real_rooted_fast_bigint_coeffs(&polynomial));
 assert_eq!(count_real_roots_prs_bigint_coeffs(&polynomial), 1);
 ```
 
+`isolate_real_roots_bigint_coeffs` isolates the distinct real roots by Sturm
+bisection: each root is returned either exactly (a `DyadicRational`) or in an
+open interval with dyadic endpoints that are not roots, sorted increasingly.
+
 `polytool` re-exports this API from `polytool::root_count` and its crate root.
 
 ## Algorithm lineage
