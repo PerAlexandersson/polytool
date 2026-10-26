@@ -9,7 +9,10 @@ fn call(flag: &str, input: &str) -> std::process::Output {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    p.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+    if let Err(error) = p.stdin.take().unwrap().write_all(input.as_bytes()) {
+        // The CLI may exit before reading its input.
+        assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
+    }
     p.wait_with_output().unwrap()
 }
 

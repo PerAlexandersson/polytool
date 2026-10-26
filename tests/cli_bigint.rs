@@ -11,12 +11,20 @@ fn run_polytool(args: &[&str], input: &str) -> Output {
         .spawn()
         .expect("spawn polytool");
 
-    child
+    // The CLI may exit (e.g. on `--help` or an argument error) before reading
+    // its input; a closed pipe is then expected, not a test failure.
+    if let Err(error) = child
         .stdin
-        .as_mut()
+        .take()
         .expect("polytool stdin")
         .write_all(input.as_bytes())
-        .expect("write polytool stdin");
+    {
+        assert_eq!(
+            error.kind(),
+            std::io::ErrorKind::BrokenPipe,
+            "write polytool stdin"
+        );
+    }
 
     child.wait_with_output().expect("wait for polytool")
 }
