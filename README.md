@@ -2,10 +2,10 @@
 
 Dense univariate polynomial toolkit for combinatorial research. Provides
 real-rootedness testing by adaptive subresultant integer root counting,
-Bézout-matrix interlacing checks, log-concavity, gamma-positivity, resultants,
-Ehrhart/h\*-vector conversion, recurrence search for polynomial sequences,
-finite Athanasiadis--Wagner interlacing matrices, and standard sequences —
-all with exact arithmetic.
+Bézout-matrix interlacing checks, exact Hurwitz stability, log-concavity,
+gamma-positivity, resultants, Ehrhart/h\*-vector conversion, recurrence search
+for polynomial sequences, finite Athanasiadis--Wagner interlacing matrices,
+and standard sequences — all with exact arithmetic.
 
 Rename note: this crate was renamed from `polynomial-tools` to `polytool`
 before publication. Use `polytool` in Cargo manifests, Rust imports, CLI
@@ -1223,6 +1223,28 @@ let big: Vec<BigInt> = vec![BigInt::from(2), BigInt::from(0), BigInt::from(1)];
 assert_eq!(vec_poly::derivative(&big), vec![BigInt::from(0), BigInt::from(2)]);
 ```
 
+The module also covers the small helpers that research code otherwise
+re-implements: exact division by `t` and by `t - a`
+(`exact_div_by_t`, `exact_div_by_t_minus_one`, `exact_div_by_t_minus`; these
+return `None` rather than dropping a nonzero remainder), `sum` and
+`prefix_sums` of many polynomials, multiplication by a linear factor
+`a + b t` and its powers (`mul_linear`, `mul_linear_pow`),
+`has_nonnegative_coefficients`, and division-free evaluation at fractions
+(`evaluate_homogeneous` gives `den^n p(num/den)`; `evaluate_at_ratio`
+evaluates an integer polynomial at a `BigRational` point).
+
+```rust
+use polytool::vec_poly;
+
+assert_eq!(vec_poly::exact_div_by_t_minus_one(&[1i64, 0, 0, -1]), Some(vec![-1, -1, -1]));
+assert_eq!(vec_poly::exact_div_by_t(&[1i64, 2]), None);
+let rows = vec![vec![1i64], vec![0, 1], vec![0, 0, 1]];
+let prefix = vec_poly::prefix_sums(&rows); // prefix[k] = rows[0] + ... + rows[k-1]
+assert_eq!(vec_poly::sub(&prefix[3], &prefix[1]), vec_poly::sum(&rows[1..]));
+assert_eq!(vec_poly::mul_linear_pow(&[1i64], &1, &-1, 2), vec![1, -2, 1]); // (1 - t)^2
+assert!(vec_poly::has_nonnegative_coefficients(&[1i64, 0, 3]));
+```
+
 Exact binomials and factorials live in `polytool::numeric`:
 `binomial_bigint`, `factorial_bigint`, `falling_factorial_bigint`,
 `multinomial_bigint`, and the checked `binomial_u128`.  Its q-analogues return
@@ -1247,6 +1269,9 @@ A046739), `fixed_point_descent_polynomials_bigint` (the bivariate
 fixed-point/descent array `rows[n][j][k]`),
 `binomial_eulerian_polynomials_bigint`, `refined_eulerian_polynomials_bigint`
 (descents by first letter) and `s_eulerian_polynomial_bigint`.
+`shifted_legendre_polynomials_bigint` gives the shifted Legendre polynomials
+`P~_n(x) = P_n(2x - 1) = sum_k (-1)^(n+k) C(n,k) C(n+k,k) x^k` on `[0, 1]`
+(`P~_n(1) = 1`, coefficients up to sign in OEIS A063007).
 
 ### Characteristic polynomials and closed walks
 
@@ -1393,6 +1418,34 @@ assert_eq!(gamma, vec![1, 8]);
 // Resultant and discriminant
 let disc = discriminant(&[1, 0, -3, 1]);
 ```
+
+Hurwitz stability (all roots in the open left half-plane) is decided exactly
+by `polytool::hurwitz`: `hurwitz_matrix_bigint` (classical layout, built from
+the ascending coefficients as given), `hurwitz_leading_minors_bigint` (the
+Hurwitz determinants `Δ_1, ..., Δ_n`) and `is_hurwitz_stable_bigint` (which
+normalizes a negative leading coefficient first).  A zero constant term is a
+root at the origin and makes the polynomial unstable; nonzero constants are
+stable and the zero polynomial is not.  `bezoutian_bigint_coeffs(f, g)` gives
+the symmetric `max(deg f, deg g)`-square Bézoutian for arbitrary degrees, with
+the orientation of `bezout_matrix_bigint_coeffs` (entry `[i][j]` is the
+coefficient of `x^i y^j` in `(f(x) g(y) - f(y) g(x)) / (x - y)`) and rank
+`max(deg f, deg g) - deg gcd(f, g)`.
+
+```rust
+use num_bigint::BigInt;
+use polytool::{bezoutian_bigint_coeffs, is_hurwitz_stable_bigint};
+
+let big = |v: &[i64]| v.iter().map(|&c| BigInt::from(c)).collect::<Vec<_>>();
+assert!(is_hurwitz_stable_bigint(&big(&[1, 3, 3, 1])));   // (1 + t)^3
+assert!(!is_hurwitz_stable_bigint(&big(&[2, 1, 1, 1])));  // Δ_2 < 0
+let b = bezoutian_bigint_coeffs(&big(&[-1, 0, 1]), &big(&[0, 1]));
+assert_eq!(b, vec![big(&[1, 0]), big(&[0, 1])]);
+```
+
+To treat a zero polynomial as vacuously interlacing in either position, write
+`vec_poly::is_zero(p) || vec_poly::is_zero(q) || check_weak_interlacing(p, q)
+== Some(true)`; `interlaces_either_order` already lets zero interlace every
+real-rooted polynomial.
 
 ## MCP server
 
@@ -1589,6 +1642,21 @@ Additions (no breaking changes):
   bounds, collective leaders and polynomial-index propagation.
 - CLI `--space` / `--verify-space`, matching MCP tools, and a guided
   full-search mode in the web app.
+- `vec_poly::{exact_div_by_t, exact_div_by_t_minus_one, exact_div_by_t_minus,
+  sum, prefix_sums, mul_linear, mul_linear_pow, has_nonnegative_coefficients,
+  evaluate_homogeneous, evaluate_at_ratio}`: exact division by `t` and
+  `t - a` (`None` on a nonzero remainder), sums and exclusive prefix sums,
+  products with powers of `a + b t`, a coefficient sign test, and
+  division-free evaluation at fractions.
+- New module `hurwitz` with `hurwitz_matrix_bigint`,
+  `hurwitz_leading_minors_bigint` and `is_hurwitz_stable_bigint` (exact
+  Routh--Hurwitz criterion).
+- `bezoutian_bigint_coeffs`: Bézoutian for arbitrary degree pairs; agrees
+  with `bezout_matrix_bigint_coeffs` when `deg f = deg g + 1`.
+- `sequences::shifted_legendre_polynomials_bigint`: shifted Legendre
+  polynomials on `[0, 1]` with `P~_n(1) = 1`.
+- The `check_weak_interlacing` documentation now spells out the idiom for
+  treating a zero polynomial as vacuously interlacing.
 
 ### 0.5.0
 

@@ -844,6 +844,7 @@ def render_catalog(
     lines.extend(
         [
             "#[cfg(test)]",
+            "/// Test-only `(id, row index, expected row)` triples imported from OEIS b-files.",
             "pub static OEIS_IMPORTED_VALIDATION_ROWS: &[(&str, usize, &[&str])] = &[",
         ]
     )

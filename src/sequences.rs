@@ -18,6 +18,7 @@
 //! |---|---|---|
 //! | [`eulerian_polynomials`], [`narayana_polynomials`] (and `_bigint`) | `A_0 = N_0 = 1` | `max_n + 1` |
 //! | [`type_b_eulerian_polynomials`], [`chebyshev_polynomials_t`], [`chebyshev_polynomials_u`], [`hermite_polynomials`] (and `_bigint`) | member 0 | `max_n + 1` |
+//! | [`shifted_legendre_polynomials_bigint`] | `P~_0 = 1` | `max_n + 1` |
 //! | [`derangement_descent_polynomials_bigint`], [`fixed_point_descent_polynomials_bigint`] | permutations of the empty set | `max_n + 1` |
 //! | [`binomial_eulerian_polynomials_bigint`] | `B~_0 = 1` | `max_n + 1` |
 //! | [`refined_eulerian_polynomials_bigint`] | empty (no first letter) | `max_n + 1`; `rows[n][i]` has first letter `i + 1` |
@@ -41,6 +42,7 @@
 //! | Type B Eulerian B_n | yes | yes | yes | yes |
 //! | Chebyshev T_n, U_n | no | no | yes | yes |
 //! | Hermite He_n | no | no | yes | yes |
+//! | Shifted Legendre P~_n | no | no | yes (roots in (0, 1)) | yes |
 
 use crate::vec_poly;
 use num_bigint::BigInt;
@@ -208,6 +210,58 @@ pub fn hermite_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
         polys.push(vec_poly::sub(&term1, &term2));
     }
     polys
+}
+
+/// Shifted Legendre polynomials `P~_0(x), ..., P~_{max_n}(x)` on `[0, 1]`
+/// (`polys[n]` = `P~_n`), with exact integer coefficients.
+///
+/// `P~_n(x) = P_n(2x - 1)`, where `P_n` is the classical Legendre polynomial
+/// on `[-1, 1]` normalized by `P_n(1) = 1`.  Explicitly,
+///
+/// ```text
+/// P~_n(x) = sum_{k=0}^{n} (-1)^(n+k) C(n, k) C(n+k, k) x^k
+///         = sum_{j=0}^{n} C(n, j)^2 x^j (x - 1)^(n-j),
+/// ```
+///
+/// so all coefficients are integers, the leading coefficient is `C(2n, n)`,
+/// and `polys[n][k]` has sign `(-1)^(n+k)`.  This is the standard
+/// normalization `P~_n(1) = 1`, `P~_n(0) = (-1)^n` (OEIS A063007 up to the
+/// sign `(-1)^(n+k)`), with the three-term recurrence
+/// `(n+1) P~_{n+1} = (2n+1)(2x-1) P~_n - n P~_{n-1}`, the orthogonality
+/// `∫_0^1 P~_m P~_n dx = δ_{mn} / (2n+1)`, and `n` simple roots in `(0, 1)`.
+///
+/// Returns `max_n + 1` rows; `polys[0] = [1]`, `polys[1] = [-1, 2]`,
+/// `polys[2] = [1, -6, 6]`.
+///
+/// ```
+/// use num_bigint::BigInt;
+/// use polytool::sequences::shifted_legendre_polynomials_bigint;
+///
+/// let rows = shifted_legendre_polynomials_bigint(3);
+/// let big = |v: &[i64]| v.iter().map(|&c| BigInt::from(c)).collect::<Vec<_>>();
+/// assert_eq!(rows[3], big(&[-1, 12, -30, 20]));
+/// ```
+pub fn shifted_legendre_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
+    (0..=max_n)
+        .map(|n| {
+            // C(n, k) C(n+k, k) = C(n+k, k) C(n, k), built incrementally:
+            // c_k = c_{k-1} * (n - k + 1)(n + k) / k^2, exact at every step.
+            let mut row = Vec::with_capacity(n + 1);
+            let mut c = BigInt::from(1);
+            for k in 0..=n {
+                if k > 0 {
+                    c = c * usize_to_bigint(n - k + 1) * usize_to_bigint(n + k)
+                        / usize_to_bigint(k * k);
+                }
+                row.push(if (n + k) % 2 == 0 {
+                    c.clone()
+                } else {
+                    -c.clone()
+                });
+            }
+            row
+        })
+        .collect()
 }
 
 /// Compute Narayana polynomials N_0(t), N_1(t), ..., N_{max_n}(t).
@@ -929,5 +983,167 @@ mod tests {
             fixed_point_descent_polynomials_bigint(1),
             vec![big_rows(&[&[1]]), big_rows(&[&[0], &[1]])]
         );
+    }
+
+    mod shifted_legendre {
+        use super::super::shifted_legendre_polynomials_bigint;
+        use crate::numeric::binomial_bigint;
+        use crate::vec_poly;
+        use num_bigint::BigInt;
+        use num_rational::BigRational;
+        use num_traits::{One, Zero};
+
+        fn q(n: i64, d: i64) -> BigRational {
+            BigRational::new(BigInt::from(n), BigInt::from(d))
+        }
+
+        fn to_q(p: &[BigInt]) -> Vec<BigRational> {
+            p.iter()
+                .map(|c| BigRational::from_integer(c.clone()))
+                .collect()
+        }
+
+        /// Exact `∫_0^1 p(x) dx = sum_k p_k / (k + 1)`.
+        fn integrate_unit_interval(p: &[BigRational]) -> BigRational {
+            p.iter()
+                .enumerate()
+                .map(|(k, c)| c / BigRational::from_integer(BigInt::from(k + 1)))
+                .fold(BigRational::zero(), |acc, x| acc + x)
+        }
+
+        #[test]
+        fn first_rows_and_sign_pattern() {
+            let rows = shifted_legendre_polynomials_bigint(4);
+            let big = |v: &[i64]| v.iter().map(|&c| BigInt::from(c)).collect::<Vec<_>>();
+            assert_eq!(rows.len(), 5);
+            assert_eq!(rows[0], big(&[1]));
+            assert_eq!(rows[1], big(&[-1, 2]));
+            assert_eq!(rows[2], big(&[1, -6, 6]));
+            assert_eq!(rows[3], big(&[-1, 12, -30, 20]));
+            assert_eq!(rows[4], big(&[1, -20, 90, -140, 70]));
+            assert_eq!(shifted_legendre_polynomials_bigint(0), vec![big(&[1])]);
+        }
+
+        #[test]
+        fn closed_form_and_squared_binomial_form() {
+            // The squared-binomial form sum_j C(n,j)^2 x^j (x - 1)^(n - j) is
+            // the same polynomial, not merely equal up to sign.
+            for (n, row) in shifted_legendre_polynomials_bigint(14).iter().enumerate() {
+                let mut squared_form = vec![BigInt::zero()];
+                for j in 0..=n {
+                    let c = binomial_bigint(n, j).pow(2);
+                    let term = vec_poly::mul_linear_pow(
+                        &vec_poly::shift_by(&[c], j),
+                        &-BigInt::one(),
+                        &BigInt::one(),
+                        n - j,
+                    );
+                    squared_form = vec_poly::add(&squared_form, &term);
+                }
+                assert_eq!(row, &squared_form, "n = {n}");
+                for (k, c) in row.iter().enumerate() {
+                    let magnitude = binomial_bigint(n, k) * binomial_bigint(n + k, k);
+                    let expected = if (n + k) % 2 == 0 {
+                        magnitude
+                    } else {
+                        -magnitude
+                    };
+                    assert_eq!(c, &expected);
+                }
+                // P~_n(x) = P_n(2x - 1) with the classical recurrence for P_n.
+                assert_eq!(vec_poly::evaluate(row, &BigInt::one()), BigInt::one());
+                let sign = if n % 2 == 0 { 1 } else { -1 };
+                assert_eq!(vec_poly::evaluate(row, &BigInt::zero()), BigInt::from(sign));
+                assert_eq!(row[n], binomial_bigint(2 * n, n));
+            }
+        }
+
+        #[test]
+        fn matches_classical_legendre_composed_with_2x_minus_1() {
+            // Bonnet recurrence over Q for P_n on [-1, 1].
+            let mut classical = vec![
+                vec![BigRational::one()],
+                to_q(&[BigInt::zero(), BigInt::one()]),
+            ];
+            for n in 1..10 {
+                let a = q(2 * n + 1, n + 1);
+                let b = q(n, n + 1);
+                let next = vec_poly::sub(
+                    &vec_poly::scale(&vec_poly::shift(&classical[n as usize]), &a),
+                    &vec_poly::scale(&classical[n as usize - 1], &b),
+                );
+                classical.push(next);
+            }
+            let two_x_minus_one = [q(-1, 1), q(2, 1)];
+            for (n, row) in shifted_legendre_polynomials_bigint(10).iter().enumerate() {
+                assert_eq!(
+                    to_q(row),
+                    vec_poly::compose(&classical[n], &two_x_minus_one)
+                );
+            }
+        }
+
+        #[test]
+        fn three_term_recurrence() {
+            let rows = shifted_legendre_polynomials_bigint(20);
+            for n in 1..20 {
+                // (n+1) P~_{n+1} = (2n+1)(2x-1) P~_n - n P~_{n-1}
+                let lhs = vec_poly::scale(&rows[n + 1], &BigInt::from(n + 1));
+                let rhs = vec_poly::sub(
+                    &vec_poly::mul_linear(
+                        &rows[n],
+                        &-BigInt::from(2 * n + 1),
+                        &BigInt::from(2 * (2 * n + 1)),
+                    ),
+                    &vec_poly::scale(&rows[n - 1], &BigInt::from(n)),
+                );
+                assert_eq!(lhs, rhs, "n = {n}");
+            }
+        }
+
+        #[test]
+        fn exact_orthogonality_on_unit_interval() {
+            let rows = shifted_legendre_polynomials_bigint(6);
+            for m in 0..=6 {
+                for n in 0..=6 {
+                    let product = vec_poly::mul(&to_q(&rows[m]), &to_q(&rows[n]));
+                    let expected = if m == n {
+                        q(1, 2 * n as i64 + 1)
+                    } else {
+                        BigRational::zero()
+                    };
+                    assert_eq!(
+                        integrate_unit_interval(&product),
+                        expected,
+                        "m = {m}, n = {n}"
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn simple_real_roots_in_open_unit_interval() {
+            for (n, row) in shifted_legendre_polynomials_bigint(16).iter().enumerate() {
+                assert!(crate::is_real_rooted_bigint_coeffs(row), "n = {n}");
+                assert_eq!(crate::count_real_roots_uspensky_bigint_coeffs(row), n);
+                // x = 1 / (1 + u) maps u in (0, ∞) onto x in (0, 1), and
+                // (1 + u)^n P~_n(1 / (1 + u)) = rev_n(P~_n)(1 + u).
+                let reversed = vec_poly::reverse(row, n).unwrap();
+                let substituted = vec_poly::compose(&reversed, &[BigInt::one(), BigInt::one()]);
+                assert_eq!(vec_poly::degree(&substituted), Some(n));
+                assert_eq!(
+                    crate::count_positive_roots_uspensky_bigint_coeffs(&substituted),
+                    n,
+                    "n = {n}"
+                );
+            }
+            let rows = shifted_legendre_polynomials_bigint(16);
+            for pair in rows.windows(2) {
+                assert_eq!(
+                    crate::check_interlacing_bigint_coeffs(&pair[0], &pair[1]),
+                    Some(true)
+                );
+            }
+        }
     }
 }

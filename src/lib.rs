@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 //! Dense univariate polynomial toolkit for combinatorial research.
 //!
@@ -91,7 +92,7 @@
 //!   `P_n = sum_j r_j t^j P_(n-1-ell*j)` with interlacing consequences
 //! - [`oeis`] — Bundled recurrence-backed OEIS polynomial families
 //! - [`sequences`] — Standard sequences: Eulerian, Narayana, type B Eulerian,
-//!   Chebyshev T/U, Hermite
+//!   Chebyshev T/U, Hermite, shifted Legendre
 //! - [`parse`] — Flexible polynomial parsing (comma/space-separated, bracketed,
 //!   expanded polynomial notation)
 //! - [`basis`] — Exact expansion of polynomials in prescribed bases, including
@@ -113,6 +114,8 @@
 //!   (Hibi, Stanley, Balletti--Higashitani, Stapledon)
 //! - [`coefficient_tests`] — Coefficient-only real-rootedness criteria
 //!   (Newton inequalities, Kurtz condition) with structured reports
+//! - [`hurwitz`] — Exact Hurwitz matrices, Hurwitz determinants and the
+//!   Routh--Hurwitz stability test (all roots in the open left half-plane)
 //! - [`version`] — build-version formatting shared by the CLI
 //! - [`tnn_network`] — Constructive planar-network certificates for
 //!   lower-unitriangular totally nonnegative matrices and monic polynomial
@@ -127,6 +130,7 @@ pub mod coefficient_tests;
 pub mod cyclic_sieving;
 pub mod decomposition;
 pub mod hstar_inequalities;
+pub mod hurwitz;
 pub mod interlacing_matrix;
 pub mod linalg;
 pub mod numeric;
@@ -200,6 +204,7 @@ pub use decomposition::{
 pub use hstar_inequalities::{
     hstar_inequality_report_bigint, HStarInequalityCheck, HStarInequalityReport,
 };
+pub use hurwitz::{hurwitz_leading_minors_bigint, hurwitz_matrix_bigint, is_hurwitz_stable_bigint};
 pub use interlacing_matrix::{
     check_lace_sequence_total_nonnegative_i64, check_lace_tnn_neville_bigint,
     check_lace_tnn_neville_i64, check_lace_total_nonnegative_i64,
@@ -216,6 +221,7 @@ pub use real_rootedness::{
     // Bézout matrix directly
     bezout_matrix,
     bezout_matrix_bigint_coeffs,
+    bezoutian_bigint_coeffs,
     check_interlacing,
     check_interlacing_bigint_coeffs,
     check_interlacing_sturm,

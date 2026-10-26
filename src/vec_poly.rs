@@ -11,6 +11,15 @@
 //! ([`characteristic_polynomial_bigint`](crate::linalg::characteristic_polynomial_bigint))
 //! is returned in this coefficient-vector format.
 //!
+//! Besides the ring operations, the module provides exact division by `t`
+//! and by `t - a` ([`exact_div_by_t`], [`exact_div_by_t_minus_one`],
+//! [`exact_div_by_t_minus`], returning `None` instead of dropping a nonzero
+//! remainder), sums and prefix sums of many polynomials ([`sum`],
+//! [`prefix_sums`]), products with (powers of) a linear factor `a + b t`
+//! ([`mul_linear`], [`mul_linear_pow`]), [`has_nonnegative_coefficients`],
+//! and division-free evaluation at fractions ([`evaluate_homogeneous`],
+//! [`evaluate_at_ratio`]).
+//!
 //! # Conventions
 //!
 //! - **Inputs** may carry trailing zeros, and the empty slice is accepted as
@@ -283,6 +292,300 @@ pub fn reciprocal<C: CoeffRing>(p: &[C]) -> Vec<C> {
 
 fn index_to_i64(k: usize) -> i64 {
     i64::try_from(k).expect("polynomial degree exceeds i64::MAX")
+}
+
+// ---------------------------------------------------------------------------
+// Exact division by linear factors
+// ---------------------------------------------------------------------------
+
+/// Exact division `p(t) / (t - a)` by synthetic division.
+///
+/// Returns `Some(q)` with `p = (t - a)·q` when `t - a` divides `p`, that is
+/// when `p(a) = 0`, and `None` otherwise (the remainder `p(a)` is never
+/// silently dropped).  The zero polynomial divides to `Some([0])`.  Only ring
+/// operations are used, so this works over `i64`, `BigInt`, `BigRational`,
+/// and every other [`CoeffRing`].  See [`exact_div_by_t`] and
+/// [`exact_div_by_t_minus_one`] for the two common special cases.
+///
+/// ```
+/// use polytool::vec_poly;
+///
+/// // t^2 - 3t + 2 = (t - 1)(t - 2)
+/// assert_eq!(vec_poly::exact_div_by_t_minus(&[2i64, -3, 1], &2), Some(vec![-1, 1]));
+/// assert_eq!(vec_poly::exact_div_by_t_minus(&[2i64, -3, 1], &3), None);
+/// ```
+pub fn exact_div_by_t_minus<C: CoeffRing>(p: &[C], a: &C) -> Option<Vec<C>> {
+    let Some(d) = degree(p) else {
+        return Some(vec![C::zero()]);
+    };
+    if d == 0 {
+        return None;
+    }
+    // q_{d-1} = p_d and q_{k-1} = p_k + a·q_k; the remainder is p_0 + a·q_0.
+    let mut q = vec![C::zero(); d];
+    let mut carry = C::zero();
+    for k in (1..=d).rev() {
+        let mut value = p[k].clone();
+        value.add_mul_assign(a, &carry);
+        q[k - 1] = value.clone();
+        carry = value;
+    }
+    let mut remainder = p[0].clone();
+    remainder.add_mul_assign(a, &carry);
+    remainder.is_zero().then(|| canonical(q))
+}
+
+/// Exact division `p(t) / t`.
+///
+/// Returns `Some(q)` with `p = t·q` when the constant term of `p` is zero,
+/// and `None` otherwise.  The zero polynomial divides to `Some([0])`.  This
+/// is the inverse of [`shift`]; use
+/// [`strip_initial_zeros`](crate::strip_initial_zeros) to divide out the
+/// largest power of `t` instead.
+///
+/// ```
+/// use polytool::vec_poly;
+///
+/// assert_eq!(vec_poly::exact_div_by_t(&[0i64, 3, 1]), Some(vec![3, 1]));
+/// assert_eq!(vec_poly::exact_div_by_t(&[1i64, 3, 1]), None);
+/// ```
+pub fn exact_div_by_t<C: CoeffRing>(p: &[C]) -> Option<Vec<C>> {
+    match degree(p) {
+        None => Some(vec![C::zero()]),
+        Some(_) if !p[0].is_zero() => None,
+        Some(d) => Some(canonical(p[1..=d].to_vec())),
+    }
+}
+
+/// Exact division `p(t) / (t - 1)`.
+///
+/// Returns `Some(q)` with `p = (t - 1)·q` when `p(1) = 0` (the coefficients
+/// sum to zero), and `None` otherwise.  The zero polynomial divides to
+/// `Some([0])`.  The quotient coefficients are the negated partial sums
+/// `q_k = -(p_0 + ... + p_k)`.  Same as [`exact_div_by_t_minus`] with
+/// `a = 1`.
+///
+/// ```
+/// use polytool::vec_poly;
+///
+/// // 1 - t^3 = (t - 1)(-1 - t - t^2)
+/// assert_eq!(vec_poly::exact_div_by_t_minus_one(&[1i64, 0, 0, -1]), Some(vec![-1, -1, -1]));
+/// assert_eq!(vec_poly::exact_div_by_t_minus_one(&[1i64, 1]), None);
+/// ```
+pub fn exact_div_by_t_minus_one<C: CoeffRing>(p: &[C]) -> Option<Vec<C>> {
+    exact_div_by_t_minus(p, &C::one())
+}
+
+// ---------------------------------------------------------------------------
+// Sums of many polynomials
+// ---------------------------------------------------------------------------
+
+/// The sum of all polynomials produced by `polys`.
+///
+/// Accepts any iterator over coefficient vectors or slices (`&[Vec<C>]`,
+/// `Vec<Vec<C>>`, an iterator of `&[C]`, ...).  The empty sum is `[0]`, and
+/// the result is canonical.  Accumulation happens in place, so this is
+/// cheaper than folding with [`add`].
+///
+/// ```
+/// use polytool::vec_poly;
+///
+/// let rows = vec![vec![1i64, 1], vec![0, 0, 1], vec![-1]];
+/// assert_eq!(vec_poly::sum(&rows), vec![0, 1, 1]);
+/// assert_eq!(vec_poly::sum(rows.iter().skip(1)), vec![-1, 0, 1]);
+/// assert_eq!(vec_poly::sum(Vec::<Vec<i64>>::new()), vec![0]);
+/// ```
+pub fn sum<C, I>(polys: I) -> Vec<C>
+where
+    C: CoeffRing,
+    I: IntoIterator,
+    I::Item: AsRef<[C]>,
+{
+    let mut total: Vec<C> = Vec::new();
+    for poly in polys {
+        let poly = poly.as_ref();
+        if total.len() < poly.len() {
+            total.resize(poly.len(), C::zero());
+        }
+        for (x, y) in total.iter_mut().zip(poly) {
+            x.add_assign_ref(y);
+        }
+    }
+    canonical(total)
+}
+
+/// Exclusive prefix sums of a list of polynomials.
+///
+/// Returns `polys.len() + 1` canonical polynomials with
+/// `result[k] = polys[0] + ... + polys[k - 1]`, so `result[0] = [0]` and
+/// `result[polys.len()]` is the total.  The sum over an index interval
+/// `lo..hi` (or `lo..=hi`) is then `sub(&result[hi], &result[lo])` (or
+/// `sub(&result[hi + 1], &result[lo])`).
+///
+/// ```
+/// use polytool::vec_poly;
+///
+/// let rows = vec![vec![1i64], vec![0, 1], vec![0, 0, 1]];
+/// let prefix = vec_poly::prefix_sums(&rows);
+/// assert_eq!(prefix, vec![vec![0], vec![1], vec![1, 1], vec![1, 1, 1]]);
+/// // rows[1] + rows[2]
+/// assert_eq!(vec_poly::sub(&prefix[3], &prefix[1]), vec![0, 1, 1]);
+/// ```
+pub fn prefix_sums<C: CoeffRing, P: AsRef<[C]>>(polys: &[P]) -> Vec<Vec<C>> {
+    let mut result = Vec::with_capacity(polys.len() + 1);
+    let mut running = vec![C::zero()];
+    result.push(running.clone());
+    for poly in polys {
+        running = add(&running, poly.as_ref());
+        result.push(running.clone());
+    }
+    result
+}
+
+// ---------------------------------------------------------------------------
+// Linear factors
+// ---------------------------------------------------------------------------
+
+/// The product `p(t)·(a + b·t)`.
+///
+/// Note the argument order: `a` is the constant term and `b` the coefficient
+/// of `t`, matching the ascending coefficient vector `[a, b]`.  The result is
+/// canonical, so `b = 0` or `a = b = 0` lowers the degree as expected.
+///
+/// ```
+/// use polytool::vec_poly;
+///
+/// // (1 + t)(2 + 3t) = 2 + 5t + 3t^2
+/// assert_eq!(vec_poly::mul_linear(&[1i64, 1], &2, &3), vec![2, 5, 3]);
+/// ```
+pub fn mul_linear<C: CoeffRing>(p: &[C], a: &C, b: &C) -> Vec<C> {
+    let Some(d) = degree(p) else {
+        return vec![C::zero()];
+    };
+    let mut r = vec![C::zero(); d + 2];
+    for (i, c) in p[..=d].iter().enumerate() {
+        r[i].add_mul_assign(c, a);
+        r[i + 1].add_mul_assign(c, b);
+    }
+    canonical(r)
+}
+
+/// The product `p(t)·(a + b·t)^k`.
+///
+/// Computed by `k` applications of [`mul_linear`], which costs
+/// `O(k·(deg p + k))` coefficient operations.  `k = 0` returns the canonical
+/// form of `p`; `(a + b·t)^k` itself is `mul_linear_pow(&[1], a, b, k)`.
+///
+/// ```
+/// use polytool::vec_poly;
+///
+/// // (1 - t)^3
+/// assert_eq!(vec_poly::mul_linear_pow(&[1i64], &1, &-1, 3), vec![1, -3, 3, -1]);
+/// // t·(t - 1)^2
+/// assert_eq!(vec_poly::mul_linear_pow(&[0i64, 1], &-1, &1, 2), vec![0, 1, -2, 1]);
+/// ```
+pub fn mul_linear_pow<C: CoeffRing>(p: &[C], a: &C, b: &C, k: usize) -> Vec<C> {
+    let mut result = trim(p);
+    for _ in 0..k {
+        result = mul_linear(&result, a, b);
+    }
+    result
+}
+
+// ---------------------------------------------------------------------------
+// Sign tests and evaluation at fractions
+// ---------------------------------------------------------------------------
+
+/// Whether every coefficient of `p` is `>= 0`.
+///
+/// The zero polynomial (including the empty slice) passes vacuously.  Use
+/// this for ordered coefficient types such as `i64`, `BigInt` and
+/// `BigRational`; the comparison is exact.
+///
+/// ```
+/// use polytool::vec_poly;
+///
+/// assert!(vec_poly::has_nonnegative_coefficients(&[1i64, 0, 2]));
+/// assert!(!vec_poly::has_nonnegative_coefficients(&[1i64, -1]));
+/// assert!(vec_poly::has_nonnegative_coefficients::<i64>(&[]));
+/// ```
+pub fn has_nonnegative_coefficients<C: CoeffRing + PartialOrd>(p: &[C]) -> bool {
+    let zero = C::zero();
+    p.iter().all(|c| *c >= zero)
+}
+
+/// The homogenized value `den^n · p(num / den)` for a nominal degree `n`.
+///
+/// This is `sum_i p_i num^i den^(n - i)`, computed in the coefficient ring
+/// without division, so an integer polynomial evaluated at a fraction stays
+/// an exact integer.  If `den > 0` its sign is the sign of `p(num / den)`.
+/// `den = 0` is allowed and gives `p_n num^n`.
+///
+/// Returns `None` if `deg p > n`; the zero polynomial gives zero for every
+/// `n`.  Trailing zeros of the input beyond index `n` are allowed (as in
+/// [`reverse`]).
+///
+/// ```
+/// use polytool::vec_poly;
+///
+/// // p = 1 - 3t + 2t^2 at t = 1/2: 4·p(1/2) = 4 - 6 + 2 = 0.
+/// assert_eq!(vec_poly::evaluate_homogeneous(&[1i64, -3, 2], &1, &2, 2), Some(0));
+/// // At t = 1/3 with nominal degree 3: 27·p(1/3) = 27 - 27 + 6 = 6.
+/// assert_eq!(vec_poly::evaluate_homogeneous(&[1i64, -3, 2], &1, &3, 3), Some(6));
+/// assert_eq!(vec_poly::evaluate_homogeneous(&[1i64, -3, 2], &1, &3, 1), None);
+/// ```
+pub fn evaluate_homogeneous<C: CoeffRing>(p: &[C], num: &C, den: &C, n: usize) -> Option<C> {
+    match degree(p) {
+        None => return Some(C::zero()),
+        Some(d) if d > n => return None,
+        Some(_) => {}
+    }
+    // r_k = sum_{i >= k} p_i num^(i - k) den^(n - i), from r_n = p_n down to r_0.
+    let mut result = coeff(p, n);
+    let mut den_power = C::one();
+    for k in (0..n).rev() {
+        den_power = den_power.mul_ref(den);
+        result = result.mul_ref(num);
+        result.add_mul_assign(&coeff(p, k), &den_power);
+    }
+    Some(result)
+}
+
+/// Evaluate a polynomial with integer-like coefficients at an exact fraction.
+///
+/// For `C = BigInt` this evaluates an integer polynomial at a
+/// `BigRational` point without first converting the coefficient vector to
+/// rationals: the numerator is [`evaluate_homogeneous`] at the actual degree,
+/// followed by one division.  (When the coefficients are already rational,
+/// [`evaluate`] with `C = BigRational` does the same job.)  For fixed-width
+/// types (`i64`, `i128`) the intermediate integer arithmetic panics on
+/// overflow, as everywhere in this module.
+///
+/// ```
+/// use num_bigint::BigInt;
+/// use num_rational::BigRational;
+/// use polytool::vec_poly;
+///
+/// let p: Vec<BigInt> = [1, -3, 2].into_iter().map(BigInt::from).collect();
+/// let x = BigRational::new(BigInt::from(1), BigInt::from(3));
+/// // p(1/3) = 1 - 1 + 2/9
+/// assert_eq!(
+///     vec_poly::evaluate_at_ratio(&p, &x),
+///     BigRational::new(BigInt::from(2), BigInt::from(9))
+/// );
+/// ```
+pub fn evaluate_at_ratio<C>(p: &[C], x: &num_rational::Ratio<C>) -> num_rational::Ratio<C>
+where
+    C: CoeffRing + num_integer::Integer,
+{
+    let d = degree(p).unwrap_or(0);
+    let numerator =
+        evaluate_homogeneous(p, x.numer(), x.denom(), d).expect("degree is the actual degree");
+    let mut denominator = <C as CoeffRing>::one();
+    for _ in 0..d {
+        denominator = denominator.mul_ref(x.denom());
+    }
+    num_rational::Ratio::new(numerator, denominator)
 }
 
 // ---------------------------------------------------------------------------
@@ -861,6 +1164,140 @@ mod tests {
     fn ratio_i64_overflow_panics() {
         let big = Ratio::<i64>::from_integer(i64::MAX);
         let _ = mul(&[big], &[Ratio::from_integer(2)]);
+    }
+
+    #[test]
+    fn exact_division_by_linear_factors_inverts_multiplication() {
+        let mut rng = Rng(2026);
+        for _ in 0..300 {
+            let q = rng.poly(6, 9);
+            let a = (rng.next() % 7) as i64 - 3;
+            let p = mul(&q, &[-a, 1]);
+            assert_eq!(
+                exact_div_by_t_minus(&p, &a),
+                Some(trim(&q)),
+                "q = {q:?}, a = {a}"
+            );
+            assert_eq!(
+                exact_div_by_t_minus(&rat(&p), &Q::from_integer(BigInt::from(a))),
+                Some(rat(&trim(&q)))
+            );
+            let p1 = mul(&q, &[-1, 1]);
+            assert_eq!(exact_div_by_t_minus_one(&p1), Some(trim(&q)));
+            assert_eq!(exact_div_by_t_minus_one(&big(&p1)), Some(big(&trim(&q))));
+            assert_eq!(exact_div_by_t(&shift(&q)), Some(trim(&q)));
+            // A nonzero remainder is reported, never dropped.
+            let r = add(&p, &[1]);
+            assert_eq!(exact_div_by_t_minus(&r, &a), None);
+            assert_eq!(exact_div_by_t(&add(&shift(&q), &[2])), None);
+        }
+    }
+
+    #[test]
+    fn exact_division_edge_cases() {
+        let e: &[i64] = &[];
+        assert_eq!(exact_div_by_t(e), Some(vec![0]));
+        assert_eq!(exact_div_by_t_minus_one(e), Some(vec![0]));
+        assert_eq!(exact_div_by_t(&[0i64, 0]), Some(vec![0]));
+        assert_eq!(exact_div_by_t(&[0i64, 5, 0, 0]), Some(vec![5]));
+        assert_eq!(exact_div_by_t(&[3i64]), None);
+        assert_eq!(exact_div_by_t_minus_one(&[3i64]), None);
+        assert_eq!(exact_div_by_t_minus_one(&[-1i64, 1, 0]), Some(vec![1]));
+        // Partial-sum description of the quotient.
+        assert_eq!(
+            exact_div_by_t_minus_one(&[2i64, -5, 0, 3]),
+            Some(vec![-2, 3, 3])
+        );
+    }
+
+    #[test]
+    fn sums_and_prefix_sums_match_repeated_addition() {
+        let mut rng = Rng(31337);
+        for len in 0..8 {
+            let rows: Vec<Vec<i64>> = (0..len).map(|_| rng.poly(5, 9)).collect();
+            let folded = rows.iter().fold(vec![0i64], |acc, p| add(&acc, p));
+            assert_eq!(sum(&rows), folded);
+            assert_eq!(sum(rows.iter().map(Vec::as_slice)), folded);
+            let big_rows: Vec<Vec<BigInt>> = rows.iter().map(|p| big(p)).collect();
+            assert_eq!(sum(&big_rows), big(&folded));
+
+            let prefix = prefix_sums(&rows);
+            assert_eq!(prefix.len(), len + 1);
+            assert_eq!(prefix[0], vec![0]);
+            for lo in 0..=len {
+                for hi in lo..=len {
+                    assert_eq!(sub(&prefix[hi], &prefix[lo]), sum(&rows[lo..hi]));
+                }
+            }
+        }
+        assert_eq!(sum([[1i64, 1], [-1, -1]]), vec![0]);
+    }
+
+    #[test]
+    fn linear_factor_products_match_mul_and_pow() {
+        let mut rng = Rng(8080);
+        for _ in 0..200 {
+            let p = rng.poly(5, 9);
+            let a = (rng.next() % 9) as i64 - 4;
+            let b = (rng.next() % 9) as i64 - 4;
+            assert_eq!(mul_linear(&p, &a, &b), mul(&p, &[a, b]));
+            for k in 0..5 {
+                assert_eq!(
+                    mul_linear_pow(&p, &a, &b, k),
+                    mul(&p, &pow(&[a, b], k)),
+                    "p = {p:?}, a = {a}, b = {b}, k = {k}"
+                );
+            }
+            assert_eq!(
+                mul_linear_pow(&big(&p), &BigInt::from(a), &BigInt::from(b), 3),
+                big(&mul(&p, &pow(&[a, b], 3)))
+            );
+        }
+        assert_eq!(mul_linear::<i64>(&[], &1, &1), vec![0]);
+        assert_eq!(mul_linear(&[1i64, 2, 0], &3, &0), vec![3, 6]);
+        assert_eq!(mul_linear_pow(&[1i64, 2, 0], &3, &1, 0), vec![1, 2]);
+    }
+
+    #[test]
+    fn nonnegative_coefficients() {
+        assert!(has_nonnegative_coefficients(&[0i64]));
+        assert!(has_nonnegative_coefficients(&[0i64, 1, 0, 3]));
+        assert!(!has_nonnegative_coefficients(&[0i64, 1, 0, -3]));
+        assert!(has_nonnegative_coefficients(&big(&[1, 2, 3])));
+        assert!(!has_nonnegative_coefficients(&[
+            Q::from_integer(BigInt::from(1)),
+            Q::new(BigInt::from(-1), BigInt::from(2))
+        ]));
+    }
+
+    #[test]
+    fn homogeneous_and_rational_evaluation_match_rational_horner() {
+        let mut rng = Rng(5150);
+        for _ in 0..300 {
+            let p = rng.poly(6, 9);
+            let num = (rng.next() % 11) as i64 - 5;
+            let den = (rng.next() % 5) as i64 + 1;
+            let x = Q::new(BigInt::from(num), BigInt::from(den));
+            let expected = evaluate(&rat(&p), &x);
+            assert_eq!(evaluate_at_ratio(&big(&p), &x), expected, "p = {p:?}");
+            let n = degree(&p).unwrap_or(0) + 2;
+            let scaled =
+                evaluate_homogeneous(&big(&p), &BigInt::from(num), &BigInt::from(den), n).unwrap();
+            assert_eq!(
+                Q::from_integer(scaled),
+                expected.clone() * Q::from_integer(BigInt::from(den).pow(n as u32))
+            );
+            let small = evaluate_at_ratio(&p, &Ratio::new(num, den));
+            assert_eq!(
+                Q::new(BigInt::from(*small.numer()), BigInt::from(*small.denom())),
+                expected
+            );
+        }
+        // Zero polynomial and den = 0.
+        assert_eq!(evaluate_homogeneous::<i64>(&[], &3, &2, 0), Some(0));
+        assert_eq!(evaluate_homogeneous(&[1i64, 2, 5], &3, &0, 2), Some(45));
+        assert_eq!(evaluate_homogeneous(&[1i64, 2, 5], &3, &0, 3), Some(0));
+        assert_eq!(evaluate_homogeneous(&[1i64, 2, 0, 0], &1, &1, 1), Some(3));
     }
 
     #[test]
