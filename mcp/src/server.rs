@@ -1,0 +1,1165 @@
+//! The MCP server: the tool router with one method per tool, and the
+//! `ServerHandler` metadata.
+
+use crate::family::{
+    check_family_lace, family_markdown, family_recurrence_response, family_report,
+    family_source_and_polynomials, first_family_failure, generated_sequence_polynomials_bigint,
+};
+use crate::limits::{
+    MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL, MCP_MAX_COEFFICIENT_TEXT_BYTES, MCP_MAX_CYCLIC_ORDER,
+    MCP_MAX_RECURRENCE_ROWS, MCP_MAX_SEQUENCE_N, MCP_MAX_TOTAL_COEFFICIENTS,
+};
+use crate::parsing::{
+    bigint_strings, collect_rational_polynomials_or_errors, invalid_params,
+    normalize_bigint_polynomial, parse_batch, parse_bigint_batch, parse_bigint_coefficient,
+    parse_bigint_coefficients, parse_bigint_matrix, parse_rational,
+    parse_recurrence_batch_rational, parse_required_bigint_polynomial, validate_mcp_text,
+};
+use crate::recurrence_options::{
+    apply_recurrence_options, recurrence_failure_response, recurrence_json_string,
+    validate_recurrence_for_generation,
+};
+use crate::report_items::{
+    bigint_matrix_strings, coefficient_tests_item, cyclic_sequence_item_response,
+    cyclic_sieving_report_item, displayed, format_rational, hstar_inequalities_item,
+    interlacing_pair_has_interlacing, interlacing_pair_item, interlacing_result,
+    interlacing_result_i64, oeis_sequence_summary, orbit_decomposition_item,
+    orbit_sizes_check_item, parse_bigint_items, parse_items, polynomial_properties_item_bigint,
+};
+use crate::requests::{
+    BicyclicSievingRequest, BigIntPolynomialBatchInput, BigIntPolynomialPairRequest,
+    CheckPolynomialFamilyRequest, CyclicSievingRequest, CyclicSievingSequenceRequest,
+    EhrhartHstarMode, EhrhartHstarRequest, FindRecurrenceRequest, GenerateOeisRowsRequest,
+    GenerateRecurrenceRowsRequest, GenerateSequenceRequest, GetOeisSequenceRequest,
+    HStarInequalitiesRequest, ListOeisSequencesRequest, PolynomialBatchInput,
+    RecurrenceSpacesToolRequest, VerifyRecurrenceSpacesToolRequest,
+};
+use crate::responses::{
+    BicyclicSievingResponse, CheckPolynomialFamilyResponse, CoefficientTestsResponse,
+    CyclicSievingResponse, CyclicSievingSequenceResponse, DecompositionItem, DecompositionReport,
+    DecompositionResponse, DiscriminantItem, DiscriminantResponse, EhrhartHstarResponse,
+    FindRecurrenceResponse, GenerateOeisRowsResponse, GenerateRecurrenceRowsResponse,
+    GenerateSequenceResponse, GetOeisSequenceResponse, HStarInequalitiesResponse,
+    InterlacingPairItem, InterlacingPairResult, InterlacingProfileItem, InterlacingProfileResponse,
+    InterlacingSequenceResponse, ListOeisSequencesResponse, MagicBasisReport, OeisPolynomialRow,
+    ParsePolynomialsResponse, PolynomialPropertiesItem, PolynomialPropertiesResponse,
+    RealRootsItem, RealRootsResponse, RecurrenceSearchStatus, ResultantResponse,
+};
+use num_bigint::BigInt;
+use polytool::recurrence::{
+    find_recurrence_adaptive_rational_with_budget, find_recurrence_representations_rational,
+    format_rational_coeff, AdaptiveSearchOutcome, BigRational, RecurrenceJson,
+};
+use polytool::*;
+use rmcp::{
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
+    model::{Implementation, ServerCapabilities, ServerInfo},
+    tool, tool_handler, tool_router, ErrorData as McpError, Json, ServerHandler,
+};
+use serde_json::json;
+use std::collections::BTreeMap;
+
+#[derive(Debug, Clone)]
+pub struct PolynomialToolsServer {
+    tool_router: ToolRouter<Self>,
+}
+
+#[tool_router(router = tool_router)]
+impl PolynomialToolsServer {
+    pub fn new() -> Self {
+        Self {
+            tool_router: Self::tool_router(),
+        }
+    }
+
+    #[tool(description = "Parse and format one or more dense univariate polynomials.")]
+    pub fn parse_polynomials(
+        &self,
+        Parameters(input): Parameters<PolynomialBatchInput>,
+    ) -> Result<Json<ParsePolynomialsResponse>, McpError> {
+        let batch = parse_batch(&input)?;
+        Ok(Json(ParsePolynomialsResponse {
+            items: parse_items(&batch),
+        }))
+    }
+
+    #[tool(
+        description = "Check a polynomial family in one exact batch: properties, consecutive interlacing, optional finite Lace TNN, and optional recurrence search."
+    )]
+    pub fn check_polynomial_family(
+        &self,
+        Parameters(input): Parameters<CheckPolynomialFamilyRequest>,
+    ) -> Result<Json<CheckPolynomialFamilyResponse>, McpError> {
+        let (source, polynomials) = family_source_and_polynomials(&input)?;
+        let polynomials = match polynomials {
+            Ok(polynomials) => polynomials,
+            Err(parse_errors) => {
+                let first_failure = Some("one or more polynomials failed to parse".to_string());
+                let mut markdown = String::new();
+                markdown.push_str("# Polynomial family check\n\n");
+                markdown.push_str(&format!("- Source: `{source}`\n"));
+                markdown.push_str("- Required checks: failed\n");
+                markdown.push_str("- First failure: one or more polynomials failed to parse\n\n");
+                markdown.push_str("## Parse errors\n\n");
+                for item in &parse_errors {
+                    markdown.push_str(&format!(
+                        "- polynomial {}: {}\n",
+                        item.index,
+                        item.error.as_deref().unwrap_or("parse error")
+                    ));
+                }
+                return Ok(Json(CheckPolynomialFamilyResponse {
+                    source,
+                    item_count: 0,
+                    all_required_checks_passed: false,
+                    first_failure,
+                    parse_errors,
+                    items: Vec::new(),
+                    consecutive_pairs: Vec::new(),
+                    lace: None,
+                    recurrence: None,
+                    markdown,
+                }));
+            }
+        };
+
+        let options = input.options.as_ref();
+        let find_recurrence = options.and_then(|o| o.find_recurrence).unwrap_or(false);
+        let recurrence_search = if find_recurrence {
+            Some(apply_recurrence_options(input.recurrence_options.clone())?)
+        } else {
+            None
+        };
+        let check_consecutive_interlacing = options
+            .and_then(|o| o.check_consecutive_interlacing)
+            .unwrap_or(true);
+
+        let items: Vec<_> = polynomials
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(index, polynomial)| family_report(index, polynomial))
+            .collect();
+
+        let consecutive_pairs = if check_consecutive_interlacing {
+            polynomials
+                .windows(2)
+                .enumerate()
+                .map(|(pair_index, pair)| InterlacingPairItem {
+                    pair_index,
+                    left_index: pair_index,
+                    right_index: pair_index + 1,
+                    ok: true,
+                    result: Some(interlacing_result_i64(pair[0].clone(), pair[1].clone())),
+                    error: None,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let lace = input
+            .lace
+            .as_ref()
+            .map(|request| check_family_lace(&polynomials, request));
+
+        let coefficients: Vec<Vec<i64>> =
+            polynomials.iter().map(|p| p.coefficients.clone()).collect();
+        let recurrence = recurrence_search
+            .as_ref()
+            .map(|(search, budget)| family_recurrence_response(&coefficients, search, *budget));
+
+        let first_failure = first_family_failure(
+            &items,
+            &consecutive_pairs,
+            lace.as_ref(),
+            recurrence.as_ref(),
+            options,
+        );
+        let all_required_checks_passed = first_failure.is_none();
+        let markdown = family_markdown(
+            &source,
+            all_required_checks_passed,
+            first_failure.as_deref(),
+            &items,
+            &consecutive_pairs,
+            lace.as_ref(),
+            recurrence.as_ref(),
+        );
+
+        Ok(Json(CheckPolynomialFamilyResponse {
+            source,
+            item_count: items.len(),
+            all_required_checks_passed,
+            first_failure,
+            parse_errors: Vec::new(),
+            items,
+            consecutive_pairs,
+            lace,
+            recurrence,
+            markdown,
+        }))
+    }
+
+    #[tool(
+        description = "Check real-rootedness, gamma-positivity, unimodality, and concavity properties."
+    )]
+    pub fn polynomial_properties(
+        &self,
+        Parameters(input): Parameters<BigIntPolynomialBatchInput>,
+    ) -> Result<Json<PolynomialPropertiesResponse>, McpError> {
+        let batch = parse_bigint_batch(&input)?;
+        let items = batch
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| match item {
+                Ok(polynomial) => polynomial_properties_item_bigint(index, polynomial),
+                Err(error) => PolynomialPropertiesItem {
+                    index,
+                    ok: false,
+                    error: Some(error),
+                    polynomial: None,
+                    real_rooted: None,
+                    simple_roots: None,
+                    palindromic: None,
+                    gamma_positive: None,
+                    gamma_coefficients: None,
+                    unimodal: None,
+                    log_concave: None,
+                    ultra_log_concave: None,
+                },
+            })
+            .collect();
+        Ok(Json(PolynomialPropertiesResponse { items }))
+    }
+
+    #[tool(
+        description = "Check Newton inequalities and Kurtz's sufficient real-rootedness criterion for each polynomial."
+    )]
+    pub fn coefficient_tests(
+        &self,
+        Parameters(input): Parameters<BigIntPolynomialBatchInput>,
+    ) -> Result<Json<CoefficientTestsResponse>, McpError> {
+        let batch = parse_bigint_batch(&input)?;
+        let items = batch
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| coefficient_tests_item(index, item))
+            .collect();
+        Ok(Json(CoefficientTestsResponse { items }))
+    }
+
+    #[tool(
+        description = "Check named Ehrhart h*-vector inequalities, including Stanley, Hibi, Balletti-Higashitani, and Stapledon-derived checks."
+    )]
+    pub fn hstar_inequalities(
+        &self,
+        Parameters(input): Parameters<HStarInequalitiesRequest>,
+    ) -> Result<Json<HStarInequalitiesResponse>, McpError> {
+        let batch = parse_bigint_batch(&BigIntPolynomialBatchInput {
+            polynomials: input.polynomials,
+            text: input.text,
+        })?;
+        let items = batch
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| hstar_inequalities_item(index, item, input.dimension))
+            .collect();
+        Ok(Json(HStarInequalitiesResponse { items }))
+    }
+
+    #[tool(
+        description = "Check strict and weak interlacing for a pair of polynomials with arbitrary-size integer coefficients."
+    )]
+    pub fn check_interlacing_pair(
+        &self,
+        Parameters(input): Parameters<BigIntPolynomialPairRequest>,
+    ) -> Result<Json<InterlacingPairResult>, McpError> {
+        let p = normalize_bigint_polynomial(parse_required_bigint_polynomial(&input.p, "p")?);
+        let q = normalize_bigint_polynomial(parse_required_bigint_polynomial(&input.q, "q")?);
+        Ok(Json(interlacing_result(p, q)))
+    }
+
+    #[tool(
+        description = "Check strict and weak interlacing for consecutive polynomial pairs with arbitrary-size integer coefficients."
+    )]
+    pub fn check_interlacing_sequence(
+        &self,
+        Parameters(input): Parameters<BigIntPolynomialBatchInput>,
+    ) -> Result<Json<InterlacingSequenceResponse>, McpError> {
+        let batch = parse_bigint_batch(&input)?;
+        let items = parse_bigint_items(&batch);
+        let pairs = batch
+            .windows(2)
+            .enumerate()
+            .map(|(pair_index, pair)| {
+                interlacing_pair_item(pair_index, pair_index, pair_index + 1, &pair[0], &pair[1])
+            })
+            .collect();
+        Ok(Json(InterlacingSequenceResponse { items, pairs }))
+    }
+
+    #[tool(
+        description = "For each polynomial, count backward consecutive previous interlacings until the first failure. Accepts arbitrary-size integer coefficients."
+    )]
+    pub fn check_interlacing_profile(
+        &self,
+        Parameters(input): Parameters<BigIntPolynomialBatchInput>,
+    ) -> Result<Json<InterlacingProfileResponse>, McpError> {
+        let batch = parse_bigint_batch(&input)?;
+        let items = parse_bigint_items(&batch);
+        let mut pair_index = 0;
+        let profile = batch
+            .iter()
+            .enumerate()
+            .map(|(index, item)| match item {
+                Err(error) => InterlacingProfileItem {
+                    index,
+                    ok: false,
+                    polynomial: None,
+                    previous_count: index,
+                    checked_previous_count: 0,
+                    interlacing_previous_count: 0,
+                    strict_previous_count: 0,
+                    weak_previous_count: 0,
+                    previous_interlacing_indices: Vec::new(),
+                    previous: Vec::new(),
+                    error: Some(error.clone()),
+                },
+                Ok(polynomial) => {
+                    let mut previous = Vec::new();
+                    for left_index in (0..index).rev() {
+                        let pair = interlacing_pair_item(
+                            pair_index,
+                            left_index,
+                            index,
+                            &batch[left_index],
+                            item,
+                        );
+                        pair_index += 1;
+                        let interlaces = interlacing_pair_has_interlacing(&pair);
+                        previous.push(pair);
+                        if !interlaces {
+                            break;
+                        }
+                    }
+                    let previous_interlacing_indices = previous
+                        .iter()
+                        .filter(|pair| interlacing_pair_has_interlacing(pair))
+                        .map(|pair| pair.left_index)
+                        .collect::<Vec<_>>();
+                    InterlacingProfileItem {
+                        index,
+                        ok: true,
+                        polynomial: Some(polynomial.display.clone()),
+                        previous_count: index,
+                        checked_previous_count: previous.len(),
+                        interlacing_previous_count: previous_interlacing_indices.len(),
+                        strict_previous_count: previous
+                            .iter()
+                            .filter(|pair| {
+                                pair.result.as_ref().and_then(|result| result.strict) == Some(true)
+                            })
+                            .count(),
+                        weak_previous_count: previous
+                            .iter()
+                            .filter(|pair| {
+                                pair.result.as_ref().and_then(|result| result.weak) == Some(true)
+                            })
+                            .count(),
+                        previous_interlacing_indices,
+                        previous,
+                        error: None,
+                    }
+                }
+            })
+            .collect();
+        Ok(Json(InterlacingProfileResponse { items, profile }))
+    }
+
+    #[tool(
+        description = "Return rational midpoint representatives for isolated real roots, or real_rooted=false."
+    )]
+    pub fn real_roots(
+        &self,
+        Parameters(input): Parameters<PolynomialBatchInput>,
+    ) -> Result<Json<RealRootsResponse>, McpError> {
+        let batch = parse_batch(&input)?;
+        let items = batch
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| match item {
+                Ok(polynomial) => match polytool::real_roots(&polynomial.coefficients) {
+                    Some(roots) => RealRootsItem {
+                        index,
+                        ok: true,
+                        error: None,
+                        polynomial: Some(polynomial),
+                        real_rooted: Some(true),
+                        roots: Some(roots.into_iter().map(format_rational).collect()),
+                    },
+                    None => RealRootsItem {
+                        index,
+                        ok: true,
+                        error: None,
+                        polynomial: Some(polynomial),
+                        real_rooted: Some(false),
+                        roots: None,
+                    },
+                },
+                Err(error) => RealRootsItem {
+                    index,
+                    ok: false,
+                    error: Some(error),
+                    polynomial: None,
+                    real_rooted: None,
+                    roots: None,
+                },
+            })
+            .collect();
+        Ok(Json(RealRootsResponse { items }))
+    }
+
+    #[tool(
+        description = "Search adaptively for a polynomial recurrence. Provide exactly one of `polynomials`, `coefficients`, `expressions`, or `text`. Pass search controls such as `min_rec_len`, `max_rec_len`, degree bounds, `try_denominator`, `fit_extra_rows`, `modular_prefilter`, and `max_candidates` as top-level arguments. Legacy nested `options` is accepted; a top-level control wins when both are supplied. Set `include_code` to false for a compact result without Mathematica, Python, Sage, or recurrence JSON."
+    )]
+    pub fn find_recurrence(
+        &self,
+        Parameters(input): Parameters<FindRecurrenceRequest>,
+    ) -> Result<Json<FindRecurrenceResponse>, McpError> {
+        let recurrence_options = input.effective_options();
+        let include_code = input.include_code.unwrap_or(true);
+        let batch = parse_recurrence_batch_rational(&input)?;
+        let polynomials = match collect_rational_polynomials_or_errors(batch) {
+            Ok(polynomials) => polynomials,
+            Err(parse_errors) => {
+                return Ok(Json(recurrence_failure_response(
+                    RecurrenceSearchStatus::InvalidInput,
+                    "one or more polynomials failed to parse",
+                    None,
+                    parse_errors,
+                )));
+            }
+        };
+        if polynomials.len() < 3 {
+            return Ok(Json(recurrence_failure_response(
+                RecurrenceSearchStatus::InvalidInput,
+                "need at least 3 polynomials",
+                None,
+                Vec::new(),
+            )));
+        }
+        let (search, budget) = apply_recurrence_options(recurrence_options)?;
+        match find_recurrence_adaptive_rational_with_budget(&polynomials, &search, budget) {
+            AdaptiveSearchOutcome::Found(result) => Ok(Json(FindRecurrenceResponse {
+                status: RecurrenceSearchStatus::Found,
+                found: true,
+                recurrence: Some(format!("{}", result.recurrence)),
+                latex: Some(result.recurrence.to_latex()),
+                mathematica: include_code.then(|| {
+                    result
+                        .recurrence
+                        .to_mathematica_definition_rational(&polynomials)
+                }),
+                sage: include_code
+                    .then(|| result.recurrence.to_sage_definition_rational(&polynomials)),
+                python: include_code.then(|| {
+                    result
+                        .recurrence
+                        .to_python_definition_rational(&polynomials)
+                }),
+                recurrence_json: include_code.then(|| {
+                    recurrence_json_string(&result, &polynomials, &search, polynomials.len())
+                }),
+                unknowns: Some(result.num_unknowns),
+                weighted_unknowns: Some(result.weighted_unknowns),
+                equations: Some(result.num_equations),
+                fit_polynomials: Some(result.fit_polynomials),
+                verification_polynomials: Some(result.verification_polynomials),
+                candidates_tried: Some(result.candidates_tried),
+                candidates_considered: Some(result.diagnostics.considered_candidates),
+                error: None,
+                parse_errors: Vec::new(),
+            })),
+            AdaptiveSearchOutcome::NoRecurrence(summary) => Ok(Json(recurrence_failure_response(
+                RecurrenceSearchStatus::NotFound,
+                "no recurrence found within the search bounds",
+                Some(summary),
+                Vec::new(),
+            ))),
+            AdaptiveSearchOutcome::BudgetExhausted(summary) => {
+                let error = format!(
+                    "recurrence candidate budget exhausted after {} candidates; unsearched candidates remain",
+                    summary.diagnostics.considered_candidates
+                );
+                Ok(Json(recurrence_failure_response(
+                    RecurrenceSearchStatus::BudgetExhausted,
+                    error,
+                    Some(summary),
+                    Vec::new(),
+                )))
+            }
+        }
+    }
+
+    #[tool(
+        description = "Find several recurrence representations trading lag length against derivative order. Uses the same inputs and bounds as find_recurrence, but keeps one preferred exact fit per length/order bound pair. Returns polytool.recurrence-representations.v1: candidates with reusable recurrence_json objects, actual complexity, checked starting indices, finite-fit evidence, a nondominated frontier, and per-pair coverage. The candidate budget is global; incomplete coverage is explicit. No automatic denominator escalation. These are finite-data candidates, not all-rank certificates, a complete annihilator basis, or nonexistence proofs. include_code is accepted for request compatibility; recurrence_json is always included and language code is not generated."
+    )]
+    pub fn find_recurrence_representations(
+        &self,
+        Parameters(input): Parameters<FindRecurrenceRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        let (search, budget) = apply_recurrence_options(input.effective_options())?;
+        let batch = parse_recurrence_batch_rational(&input)?;
+        let polynomials = collect_rational_polynomials_or_errors(batch)
+            .map_err(|_| invalid_params("one or more polynomials failed to parse"))?;
+        let report = find_recurrence_representations_rational(&polynomials, &search, budget)
+            .map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize recurrence menu")
+        else {
+            unreachable!("recurrence report is an object")
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Compute complete bounded recurrence spaces with exact kernel/rank certificates. request is a JSON object with shapes (kind: box with length, derivative_order, index_degree, variable_degree, leading_index_degree; or kind: explicit with target_lag and monomials), domain_start (original zero-based index by default), and source {coefficients: ascending rational-string polynomial rows, seeds: exactly k rows, origin}, source_recurrence (existing recurrence.v1), or rows plus row_origin. Alternatively indexed_source uses coefficients[i][n_power][X_power] for monic pure-lag sources polynomial in n, with a replayable jet-state propagator. Shape kind automatic_variable_degree removes the RHS X-degree cap while retaining index/leader bounds. include_leader_coverage returns a sum-of-squares leader combination. Positive identities are conditional_on_source; rows-only positives are exact_fit. Dual negatives prove absent_in_shape from rows alone. Returns polytool.recurrence-spaces.v1, including full kernels, successors, bounded frontier, singular-rank diagnostics and explicit incomplete results. No spectral or unrestricted-order claim."
+    )]
+    pub fn find_recurrence_spaces(
+        &self,
+        Parameters(input): Parameters<RecurrenceSpacesToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.request.to_string(), "recurrence-space request")
+            .map_err(invalid_params)?;
+        let request: polytool::recurrence::RecurrenceSpaceRequest =
+            serde_json::from_value(input.request).map_err(|e| invalid_params(e.to_string()))?;
+        request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        let report =
+            polytool::recurrence::find_recurrence_spaces(&request).map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize recurrence spaces")
+        else {
+            unreachable!()
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Replay exact recurrence-space kernel, rank and dual certificates without rerunning the full search. Supply report from find_recurrence_spaces and optionally expected_request to bind independently supplied assumptions. Without expected_request this verifies the report's internal source-conditional claims, not the truth of a guessed source. Incomplete shapes remain explicitly incomplete."
+    )]
+    pub fn verify_recurrence_spaces(
+        &self,
+        Parameters(input): Parameters<VerifyRecurrenceSpacesToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.report.to_string(), "recurrence-space report")
+            .map_err(invalid_params)?;
+        let report: polytool::recurrence::RecurrenceSpaces =
+            serde_json::from_value(input.report).map_err(|e| invalid_params(e.to_string()))?;
+        let request = match input.expected_request {
+            Some(value) => {
+                validate_mcp_text(&value.to_string(), "expected request")
+                    .map_err(invalid_params)?;
+                serde_json::from_value(value).map_err(|e| invalid_params(e.to_string()))?
+            }
+            None => report.request.clone(),
+        };
+        request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        polytool::recurrence::verify_recurrence_spaces(&request, &report)
+            .map_err(invalid_params)?;
+        Ok(Json(BTreeMap::from([
+            ("verified_completed_claims".into(), json!(true)),
+            (
+                "incomplete_shapes".into(),
+                json!(report
+                    .results
+                    .iter()
+                    .filter(|r| r.certificate.is_none())
+                    .count()),
+            ),
+        ])))
+    }
+
+    #[tool(
+        description = "Generate or extend coefficient rows from recurrence JSON returned by find_recurrence or one recurrence_json object from find_recurrence_representations."
+    )]
+    pub fn generate_recurrence_rows(
+        &self,
+        Parameters(input): Parameters<GenerateRecurrenceRowsRequest>,
+    ) -> Result<Json<GenerateRecurrenceRowsResponse>, McpError> {
+        if input.rows.is_some() == input.additional.is_some() {
+            return Err(invalid_params("provide exactly one of rows or additional"));
+        }
+        validate_mcp_text(&input.recurrence_json, "recurrence JSON").map_err(invalid_params)?;
+        let recurrence_json: RecurrenceJson = serde_json::from_str(&input.recurrence_json)
+            .map_err(|error| invalid_params(format!("failed to parse recurrence JSON: {error}")))?;
+        let (recurrence, first_index, initial_polys) = recurrence_json
+            .to_recurrence_parts()
+            .map_err(|error| invalid_params(format!("invalid recurrence JSON: {error}")))?;
+        let row_count = match (input.rows, input.additional) {
+            (Some(rows), None) => rows,
+            (None, Some(additional)) => initial_polys
+                .len()
+                .checked_add(additional)
+                .ok_or_else(|| invalid_params("recurrence row count overflow"))?,
+            _ => unreachable!("validated exactly one row-count option"),
+        };
+        if row_count > MCP_MAX_RECURRENCE_ROWS {
+            return Err(invalid_params(format!(
+                "requested {row_count} recurrence rows; the MCP limit is {MCP_MAX_RECURRENCE_ROWS}"
+            )));
+        }
+        first_index
+            .checked_add(row_count)
+            .ok_or_else(|| invalid_params("recurrence index range overflow"))?;
+        validate_recurrence_for_generation(&recurrence, &initial_polys)?;
+        let generated = recurrence
+            .generate_rows_rational(&initial_polys, first_index, row_count)
+            .map_err(|error| invalid_params(format!("failed to generate rows: {error}")))?;
+        let polynomials = generated
+            .iter()
+            .map(|row| row.iter().map(format_rational_coeff).collect())
+            .collect::<Vec<Vec<_>>>();
+        Ok(Json(GenerateRecurrenceRowsResponse {
+            first_index,
+            row_count: generated.len(),
+            polynomials,
+        }))
+    }
+
+    #[tool(description = "Compute the exact resultant of two polynomials.")]
+    pub fn resultant(
+        &self,
+        Parameters(input): Parameters<BigIntPolynomialPairRequest>,
+    ) -> Result<Json<ResultantResponse>, McpError> {
+        let p = normalize_bigint_polynomial(parse_required_bigint_polynomial(&input.p, "p")?);
+        let q = normalize_bigint_polynomial(parse_required_bigint_polynomial(&input.q, "q")?);
+        let resultant =
+            polytool::resultant_bigint_coeffs(&p.coefficients, &q.coefficients).to_string();
+        Ok(Json(ResultantResponse {
+            p: p.display,
+            q: q.display,
+            resultant,
+        }))
+    }
+
+    #[tool(description = "Compute exact discriminants for one or more polynomials.")]
+    pub fn discriminant(
+        &self,
+        Parameters(input): Parameters<BigIntPolynomialBatchInput>,
+    ) -> Result<Json<DiscriminantResponse>, McpError> {
+        let batch = parse_bigint_batch(&input)?;
+        let items = batch
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| match item {
+                Ok(polynomial) => DiscriminantItem {
+                    index,
+                    ok: true,
+                    error: None,
+                    discriminant: Some(
+                        polytool::discriminant_bigint_coeffs(&polynomial.coefficients).to_string(),
+                    ),
+                    polynomial: Some(polynomial.display),
+                },
+                Err(error) => DiscriminantItem {
+                    index,
+                    ok: false,
+                    error: Some(error),
+                    polynomial: None,
+                    discriminant: None,
+                },
+            })
+            .collect();
+        Ok(Json(DiscriminantResponse { items }))
+    }
+
+    #[tool(
+        description = "Convert h*-vectors to Ehrhart polynomials or Ehrhart polynomials to h*-vectors."
+    )]
+    pub fn ehrhart_hstar(
+        &self,
+        Parameters(input): Parameters<EhrhartHstarRequest>,
+    ) -> Result<Json<EhrhartHstarResponse>, McpError> {
+        match input.mode {
+            EhrhartHstarMode::HstarToEhrhart => {
+                let hstar_input = input
+                    .hstar
+                    .ok_or_else(|| invalid_params("`hstar` is required for hstar_to_ehrhart"))?;
+                let hstar = parse_bigint_coefficients(&hstar_input)?;
+                let ehrhart = hstar_to_ehrhart_bigint_coeffs(&hstar)
+                    .into_iter()
+                    .map(format_rational)
+                    .collect();
+                Ok(Json(EhrhartHstarResponse {
+                    mode: EhrhartHstarMode::HstarToEhrhart,
+                    hstar: Some(bigint_strings(&hstar)),
+                    ehrhart_coefficients: Some(ehrhart),
+                }))
+            }
+            EhrhartHstarMode::EhrhartToHstar => {
+                let hstar = match (
+                    input.ehrhart_coefficients,
+                    input.numerator_coefficients,
+                    input.denominator,
+                ) {
+                    (Some(coefficients), None, None) => {
+                        if coefficients.len() > MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL {
+                            return Err(invalid_params(format!(
+                                "Ehrhart polynomial has {} coefficients; the MCP limit is {MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL}",
+                                coefficients.len()
+                            )));
+                        }
+                        for coefficient in &coefficients {
+                            if coefficient.len() > MCP_MAX_COEFFICIENT_TEXT_BYTES {
+                                return Err(invalid_params(format!(
+                                    "Ehrhart coefficient is {} bytes; the MCP limit is {MCP_MAX_COEFFICIENT_TEXT_BYTES}",
+                                    coefficient.len()
+                                )));
+                            }
+                        }
+                        let coefficients: Result<Vec<_>, _> =
+                            coefficients.iter().map(|c| parse_rational(c)).collect();
+                        ehrhart_to_hstar_bigint(&coefficients.map_err(invalid_params)?)
+                            .map_err(|error| invalid_params(error.to_string()))?
+                    }
+                    (None, Some(numerator_coefficients), Some(denominator)) => {
+                        let numerator_coefficients =
+                            parse_bigint_coefficients(&numerator_coefficients)?;
+                        let denominator =
+                            parse_bigint_coefficient(&denominator).map_err(invalid_params)?;
+                        if denominator == BigInt::from(0) {
+                            return Err(invalid_params("`denominator` must be nonzero"));
+                        }
+                        let coefficients = numerator_coefficients
+                            .into_iter()
+                            .map(|numerator| BigRational::new(numerator, denominator.clone()))
+                            .collect::<Vec<_>>();
+                        ehrhart_to_hstar_bigint(&coefficients)
+                            .map_err(|error| invalid_params(error.to_string()))?
+                    }
+                    _ => {
+                        return Err(invalid_params(
+                            "for ehrhart_to_hstar, provide either `ehrhart_coefficients` or both `numerator_coefficients` and `denominator`",
+                        ));
+                    }
+                };
+                Ok(Json(EhrhartHstarResponse {
+                    mode: EhrhartHstarMode::EhrhartToHstar,
+                    hstar: Some(bigint_strings(&hstar)),
+                    ehrhart_coefficients: None,
+                }))
+            }
+        }
+    }
+
+    #[tool(
+        description = "Profile or check a cyclic sieving polynomial for one cyclic group order using exact cyclotomic arithmetic."
+    )]
+    pub fn cyclic_sieving(
+        &self,
+        Parameters(input): Parameters<CyclicSievingRequest>,
+    ) -> Result<Json<CyclicSievingResponse>, McpError> {
+        if input.order == 0 {
+            return Err(invalid_params("`order` must be positive"));
+        }
+        if input.order > MCP_MAX_CYCLIC_ORDER {
+            return Err(invalid_params(format!(
+                "`order` {} exceeds the MCP limit {MCP_MAX_CYCLIC_ORDER}",
+                input.order
+            )));
+        }
+        if input.fixed_counts.is_some() && input.orbit_sizes.is_some() {
+            return Err(invalid_params(
+                "`fixed_counts` and `orbit_sizes` are alternatives; give only one",
+            ));
+        }
+        if input
+            .orbit_sizes
+            .as_ref()
+            .is_some_and(|sizes| sizes.len() > MCP_MAX_TOTAL_COEFFICIENTS)
+        {
+            return Err(invalid_params(format!(
+                "`orbit_sizes` may have at most {MCP_MAX_TOTAL_COEFFICIENTS} entries"
+            )));
+        }
+        let polynomial = normalize_bigint_polynomial(parse_required_bigint_polynomial(
+            &input.polynomial,
+            "polynomial",
+        )?);
+        let orbit_sizes_check = input
+            .orbit_sizes
+            .as_ref()
+            .map(|sizes| {
+                cyclic_sieving_check_orbit_sizes(&polynomial.coefficients, input.order, sizes)
+            })
+            .transpose()
+            .map_err(invalid_params)?;
+        let fixed_counts = match &orbit_sizes_check {
+            Some(check) => Some(check.actual_fixed_points.clone()),
+            None => input
+                .fixed_counts
+                .as_ref()
+                .map(|counts| parse_bigint_coefficients(counts))
+                .transpose()?,
+        };
+        let report = cyclic_sieving_report_bigint(
+            &polynomial.coefficients,
+            input.order,
+            fixed_counts.as_deref(),
+        )
+        .map_err(invalid_params)?;
+        let decomposition =
+            cyclic_sieving_orbit_decomposition_bigint(&polynomial.coefficients, input.order)
+                .map_err(invalid_params)?;
+        Ok(Json(CyclicSievingResponse {
+            report: cyclic_sieving_report_item(&report),
+            orbit_decomposition: orbit_decomposition_item(&decomposition),
+            orbit_sizes_check: orbit_sizes_check.as_ref().map(orbit_sizes_check_item),
+        }))
+    }
+
+    #[tool(
+        description = "Check bicyclic sieving for G = C_n1 x C_n2 and f(q,t) given as a coefficient matrix (matrix[i][j] = coeff of q^i t^j). Reduces modulo (q^n1-1, t^n2-1), evaluates exactly at all (zeta_n1^d1, zeta_n2^d2), reports integrality, and, when c_(j1,j2)=c_(gcd(j1,n1),gcd(j2,n2)), the coordinates in the product basis h_r1(q)h_r2(t) (not orbit counts; may be negative: 1+qt gives 1,-1,-1,2). With fixed_table (n1 x n2 table of fix(g1^d1 g2^d2)) it checks the CSP equalities."
+    )]
+    pub fn bicyclic_sieving(
+        &self,
+        Parameters(input): Parameters<BicyclicSievingRequest>,
+    ) -> Result<Json<BicyclicSievingResponse>, McpError> {
+        if input.order1 == 0 || input.order2 == 0 {
+            return Err(invalid_params("`order1` and `order2` must be positive"));
+        }
+        let matrix = parse_bigint_matrix(&input.matrix, "matrix")?;
+        let table = input
+            .fixed_table
+            .as_ref()
+            .map(|table| parse_bigint_matrix(table, "fixed_table"))
+            .transpose()?;
+        let report =
+            bicyclic_sieving_report_bigint(&matrix, input.order1, input.order2, table.as_deref())
+                .map_err(invalid_params)?;
+        Ok(Json(BicyclicSievingResponse {
+            order1: report.order1,
+            order2: report.order2,
+            reduced_matrix: bigint_matrix_strings(&report.reduced_matrix),
+            evaluations: report
+                .evaluations
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|cell| cell.as_ref().map(ToString::to_string))
+                        .collect()
+                })
+                .collect(),
+            integral: report.integral,
+            natural_coefficients: report.natural_coefficients,
+            divisors1: report.divisors1.clone(),
+            divisors2: report.divisors2.clone(),
+            product_basis_form: report.product_basis_form,
+            product_coordinates: report
+                .product_coordinates
+                .as_deref()
+                .map(bigint_matrix_strings),
+            product_formula_evaluations: report
+                .product_formula_evaluations
+                .as_deref()
+                .map(bigint_matrix_strings),
+            fixed_table: report.fixed_table.as_deref().map(bigint_matrix_strings),
+            mismatches: report.mismatches.iter().map(|&(a, b)| [a, b]).collect(),
+            holds: report.holds,
+        }))
+    }
+
+    #[tool(
+        description = "For a polynomial sequence P_n(q), profile candidate cyclic sieving group orders n-2,n-1,n,n+1,n+2,n+3 by default."
+    )]
+    pub fn cyclic_sieving_sequence(
+        &self,
+        Parameters(input): Parameters<CyclicSievingSequenceRequest>,
+    ) -> Result<Json<CyclicSievingSequenceResponse>, McpError> {
+        let first_index = input.first_index.unwrap_or(0);
+        let offsets = input.offsets.unwrap_or_else(|| vec![-2, -1, 0, 1, 2, 3]);
+        if offsets.is_empty() {
+            return Err(invalid_params("`offsets` may not be empty"));
+        }
+        let batch = parse_bigint_batch(&BigIntPolynomialBatchInput {
+            polynomials: input.polynomials,
+            text: input.text,
+        })?;
+        let mut polynomials = Vec::new();
+        for (index, item) in batch.into_iter().enumerate() {
+            match item {
+                Ok(polynomial) => polynomials.push(polynomial.coefficients),
+                Err(error) => {
+                    return Err(invalid_params(format!("polynomial {index}: {error}")));
+                }
+            }
+        }
+        let mut fixed_counts = BTreeMap::new();
+        for item in input.fixed_counts.unwrap_or_default() {
+            if item.order == 0 {
+                return Err(invalid_params("fixed-count order must be positive"));
+            }
+            let counts = parse_bigint_coefficients(&item.counts)?;
+            if counts.len() != item.order {
+                return Err(invalid_params(format!(
+                    "fixed counts for index {} order {}: expected {} counts, got {}",
+                    item.index,
+                    item.order,
+                    item.order,
+                    counts.len()
+                )));
+            }
+            fixed_counts.insert((item.index, item.order), counts);
+        }
+        let reports = cyclic_sieving_sequence_reports_bigint(
+            &polynomials,
+            first_index,
+            &offsets,
+            &fixed_counts,
+        );
+        Ok(Json(CyclicSievingSequenceResponse {
+            first_index,
+            offsets,
+            items: reports.iter().map(cyclic_sequence_item_response).collect(),
+        }))
+    }
+
+    #[tool(
+        description = "Analyze symmetric decomposition, R-transform, interlacing checks, and magic-basis coordinates."
+    )]
+    pub fn analyze_decomposition(
+        &self,
+        Parameters(input): Parameters<PolynomialBatchInput>,
+    ) -> Result<Json<DecompositionResponse>, McpError> {
+        let batch = parse_batch(&input)?;
+        let items = batch
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| match item {
+                Ok(polynomial) => {
+                    match analyze_symmetric_decomposition_i64(&polynomial.coefficients) {
+                        Ok(analysis) => {
+                            let partial_sum_checks = analysis
+                                .magic
+                                .left_partial_sums
+                                .iter()
+                                .zip(analysis.magic.right_partial_sums.iter())
+                                .map(|(left, right)| left <= right)
+                                .collect();
+                            DecompositionItem {
+                                index,
+                                ok: true,
+                                report: Some(DecompositionReport {
+                                    polynomial,
+                                    reciprocal: displayed(&analysis.reciprocal),
+                                    a: displayed(&analysis.a),
+                                    b: displayed(&analysis.b),
+                                    a_real_rooted: analysis.a_real_rooted,
+                                    b_real_rooted: analysis.b_real_rooted,
+                                    b_interlaces_a: analysis.b_interlaces_a,
+                                    reciprocal_interlaces_input: analysis
+                                        .reciprocal_interlaces_input,
+                                    alternatingly_increasing: analysis.alternatingly_increasing,
+                                    f_polynomial: displayed(&analysis.f_polynomial),
+                                    r_transform_of_f: displayed(&analysis.r_transform_of_f),
+                                    r_a: displayed(&analysis.r_a),
+                                    r_b: displayed(&analysis.r_b),
+                                    r_interlaces_f: analysis.r_interlaces_f,
+                                    magic: MagicBasisReport {
+                                        coordinates: analysis
+                                            .magic
+                                            .coordinates
+                                            .iter()
+                                            .map(ToString::to_string)
+                                            .collect(),
+                                        left_partial_sums: analysis
+                                            .magic
+                                            .left_partial_sums
+                                            .iter()
+                                            .map(ToString::to_string)
+                                            .collect(),
+                                        right_partial_sums: analysis
+                                            .magic
+                                            .right_partial_sums
+                                            .iter()
+                                            .map(ToString::to_string)
+                                            .collect(),
+                                        partial_sum_checks,
+                                        all_nonnegative: analysis.magic.all_nonnegative,
+                                        left_leq_right: analysis.magic.left_leq_right,
+                                    },
+                                }),
+                                error: None,
+                            }
+                        }
+                        Err(error) => DecompositionItem {
+                            index,
+                            ok: false,
+                            report: None,
+                            error: Some(error.to_string()),
+                        },
+                    }
+                }
+                Err(error) => DecompositionItem {
+                    index,
+                    ok: false,
+                    report: None,
+                    error: Some(error),
+                },
+            })
+            .collect();
+        Ok(Json(DecompositionResponse { items }))
+    }
+
+    #[tool(description = "List bundled recurrence-backed OEIS polynomial families.")]
+    pub fn list_oeis_sequences(
+        &self,
+        Parameters(input): Parameters<ListOeisSequencesRequest>,
+    ) -> Result<Json<ListOeisSequencesResponse>, McpError> {
+        let include_experimental = input.include_experimental.unwrap_or(false);
+        let sequences = polytool::oeis::catalog()
+            .iter()
+            .filter(|entry| {
+                include_experimental
+                    || entry.status != polytool::oeis::OeisSequenceStatus::Experimental
+            })
+            .map(oeis_sequence_summary)
+            .collect::<Vec<_>>();
+        Ok(Json(ListOeisSequencesResponse {
+            count: sequences.len(),
+            sequences,
+        }))
+    }
+
+    #[tool(
+        description = "Get metadata and exact recurrence exports for one bundled OEIS polynomial family."
+    )]
+    pub fn get_oeis_sequence(
+        &self,
+        Parameters(input): Parameters<GetOeisSequenceRequest>,
+    ) -> Result<Json<GetOeisSequenceResponse>, McpError> {
+        let entry = polytool::oeis::by_id(&input.id).ok_or_else(|| {
+            invalid_params(format!("unknown bundled OEIS sequence: {}", input.id))
+        })?;
+        let (recurrence, initial_rows, first_index) = entry
+            .recurrence_export_parts()
+            .map_err(|error| invalid_params(error.to_string()))?;
+        Ok(Json(GetOeisSequenceResponse {
+            sequence: oeis_sequence_summary(entry),
+            recurrence: recurrence.to_string(),
+            latex: recurrence.to_latex(),
+            mathematica: recurrence
+                .to_mathematica_definition_rational_indexed(&initial_rows, first_index),
+            sage: recurrence.to_sage_definition_rational_indexed(&initial_rows, first_index),
+            python: recurrence.to_python_definition_rational_indexed(&initial_rows, first_index),
+        }))
+    }
+
+    #[tool(
+        description = "Generate exact polynomial coefficient rows for one bundled recurrence-backed OEIS family."
+    )]
+    pub fn generate_oeis_rows(
+        &self,
+        Parameters(input): Parameters<GenerateOeisRowsRequest>,
+    ) -> Result<Json<GenerateOeisRowsResponse>, McpError> {
+        const MAX_ROWS: usize = 200;
+        if input.rows > MAX_ROWS {
+            return Err(invalid_params(format!(
+                "rows must be at most {MAX_ROWS} for MCP generation"
+            )));
+        }
+        let entry = polytool::oeis::by_id(&input.id).ok_or_else(|| {
+            invalid_params(format!("unknown bundled OEIS sequence: {}", input.id))
+        })?;
+        if entry.status == polytool::oeis::OeisSequenceStatus::Experimental
+            && !input.include_experimental.unwrap_or(false)
+        {
+            return Err(invalid_params(format!(
+                "{} is experimental; set include_experimental to true",
+                entry.id
+            )));
+        }
+        let first_row = input.first_row.unwrap_or(entry.first_row);
+        let generated = entry
+            .generate_rows_from(first_row, input.rows)
+            .map_err(|error| invalid_params(error.to_string()))?;
+        let rows = generated
+            .into_iter()
+            .enumerate()
+            .map(|(offset, coefficients)| {
+                let offset = i64::try_from(offset)
+                    .map_err(|_| invalid_params("OEIS row offset does not fit in i64"))?;
+                let n = first_row
+                    .checked_add(offset)
+                    .ok_or_else(|| invalid_params("OEIS row index overflow"))?;
+                Ok(OeisPolynomialRow {
+                    n,
+                    polynomial: format_poly_bigint_coeffs(&coefficients),
+                    coefficients: coefficients.iter().map(ToString::to_string).collect(),
+                })
+            })
+            .collect::<Result<Vec<_>, McpError>>()?;
+        Ok(Json(GenerateOeisRowsResponse {
+            id: entry.id.to_string(),
+            first_row,
+            row_count: rows.len(),
+            rows,
+        }))
+    }
+
+    #[tool(description = "Generate standard polynomial sequences.")]
+    pub fn generate_sequence(
+        &self,
+        Parameters(input): Parameters<GenerateSequenceRequest>,
+    ) -> Result<Json<GenerateSequenceResponse>, McpError> {
+        if input.max_n > MCP_MAX_SEQUENCE_N {
+            return Err(invalid_params(format!(
+                "max_n must be at most {MCP_MAX_SEQUENCE_N} for MCP sequence generation"
+            )));
+        }
+        let polynomials = generated_sequence_polynomials_bigint(&input.sequence, input.max_n)
+            .into_iter()
+            .map(|coefficients| normalize_bigint_polynomial(coefficients).display)
+            .collect();
+
+        Ok(Json(GenerateSequenceResponse {
+            sequence: input.sequence,
+            max_n: input.max_n,
+            polynomials,
+        }))
+    }
+}
+
+#[tool_handler(router = self.tool_router)]
+impl ServerHandler for PolynomialToolsServer {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo {
+            protocol_version: Default::default(),
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            server_info: Implementation {
+                name: "polytool".to_string(),
+                title: Some("polytool".to_string()),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                description: Some(
+                    "Exact univariate polytool for combinatorial research.".to_string(),
+                ),
+                icons: None,
+                website_url: None,
+            },
+            instructions: Some("Exact univariate polytool for combinatorial research.".to_string()),
+        }
+    }
+}
+
+impl Default for PolynomialToolsServer {
+    fn default() -> Self {
+        Self::new()
+    }
+}

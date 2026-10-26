@@ -35,9 +35,12 @@
   shared parsing, JSON fragments and help text.  `mcp/` and `web/` are adapters
   over the library, not separate implementations.  Put mathematics in the library
   and keep adapters thin.
-- `recurrence.rs` is a facade: its private submodules under `src/recurrence/`
-  are split by concern and re-exported, so public paths stay
-  `polytool::recurrence::*`.
+- `recurrence.rs`, `real_rootedness.rs` and `linalg.rs` are facades: their
+  private submodules (under `src/recurrence/`, `src/real_rootedness/`,
+  `src/linalg/`) are split by concern and re-exported, so public paths stay
+  `polytool::recurrence::*` etc. Add new code to the matching submodule and
+  re-export it from the facade. The MCP crate (`mcp/src/`) is split the same
+  way (requests, responses, parsing, server, tests).
 - Reuse before adding: look for an existing helper in `vec_poly`, `numeric` and
   `real_rootedness` before writing a new coefficient-vector routine, and build
   new real-rootedness checks on `is_real_rooted*` or `exact-real-roots` rather
