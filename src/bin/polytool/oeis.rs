@@ -1,4 +1,11 @@
-//! `polytool oeis`: list, describe and generate bundled OEIS families.
+//! `polytool oeis`: list, describe and generate bundled OEIS families; add new
+//! families to the catalog data file and re-check entries against OEIS data.
+
+mod add;
+mod catalog_file;
+mod check;
+mod sha256;
+mod source;
 
 use crate::input::parse_usize_option;
 use num_bigint::BigInt;
@@ -11,6 +18,8 @@ pub(crate) fn print_oeis_help() {
     println!("  polytool oeis list [--json] [--include-experimental]");
     println!("  polytool oeis info <A-number> [--json]");
     println!("  polytool oeis generate <A-number> --rows <n> [options]");
+    println!("  polytool oeis add <A-number>... [options]   (see `oeis add --help`)");
+    println!("  polytool oeis check [A-number...] [options] (see `oeis check --help`)");
     println!("  polytool oeis --help");
     println!();
     println!("Generate OEIS polynomial rows from bundled exact recurrences.");
@@ -23,9 +32,15 @@ pub(crate) fn print_oeis_help() {
     println!("  --max-terms <n>         B-file cap; never splits a row");
     println!("  --include-experimental  Permit an experimental catalog entry");
     println!();
+    println!("Catalog maintenance (source checkout):");
+    println!("  oeis add     Search a recurrence for OEIS rows, check it on held-out terms,");
+    println!("               and record it with provenance in data/oeis-catalog.jsonl");
+    println!("  oeis check   Re-validate catalog entries against a local OEIS copy");
+    println!();
     println!("Examples:");
     println!("  polytool oeis generate A008292 --rows 6 --format triangle");
     println!("  polytool oeis generate A008292 --rows 30 --format bfile");
+    println!("  polytool oeis add A008292 --oeis-data ~/oeis --dry-run");
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -401,6 +416,9 @@ pub(crate) fn cmd_oeis(args: &[String]) {
         "list" => cmd_oeis_list(rest),
         "info" => cmd_oeis_info(rest),
         "generate" => cmd_oeis_generate(rest),
+        "add" => add::cmd_oeis_add(rest),
+        "check" => check::cmd_oeis_check(rest),
+        "--help" | "-h" | "help" => print_oeis_help(),
         other => {
             eprintln!("unknown oeis subcommand: {other}");
             print_oeis_help();

@@ -30,8 +30,12 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Check bundled OEIS catalog integrity
-        run: python3 scripts/build_oeis_catalog.py --check-bundled
+      # build.rs generates the catalog from data/oeis-catalog.jsonl and rejects
+      # malformed records; these tests check that the data file is canonical
+      # (sorted, one record per line, stable key order), that provenance is
+      # consistent, and that existing entries keep their recorded fingerprints.
+      - name: Check OEIS catalog data
+        run: cargo test --lib oeis::tests
 
       - name: Check lints
         run: cargo clippy --all-targets -- -D warnings
@@ -44,7 +48,7 @@ jobs:
       # polytool file list and package the path dependency on its own.
       - name: Verify package
         run: |
-          cargo package --list > /dev/null
+          cargo package --list | grep -x 'data/oeis-catalog.jsonl' > /dev/null
           cargo package --manifest-path crates/exact-real-roots/Cargo.toml
 
   companions:
