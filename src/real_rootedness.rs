@@ -327,7 +327,8 @@ pub fn is_ultra_log_concave_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 /// a_k^2 · C(n, k-1) · C(n, k+1) ≥ a_(k-1) · a_(k+1) · C(n, k)^2   for 1 ≤ k ≤ n-1.
 /// ```
 ///
-/// For `n = deg p` this is [`is_ultra_log_concave`].  ULC(n) implies ULC(n')
+/// For `n = deg p` this is [`is_ultra_log_concave`]; the limiting condition
+/// as `n → ∞` is [`is_ultra_log_concave_infinite`] (`k a_k^2 ≥ (k+1) a_(k-1) a_(k+1)`).  ULC(n) implies ULC(n')
 /// for every `n' ≥ n` for nonnegative sequences, so a nominal degree above the
 /// actual degree (for example the rank of a matroid, or the size of a ground
 /// set) is a *weaker* condition.  By Newton's inequalities, a real-rooted
@@ -357,6 +358,52 @@ pub fn is_ultra_log_concave_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 pub fn is_ultra_log_concave_of_degree(coeffs: &[i64], n: usize) -> bool {
     let coeffs: Vec<BigInt> = coeffs.iter().map(|&c| BigInt::from(c)).collect();
     is_ultra_log_concave_of_degree_bigint_coeffs(&coeffs, n)
+}
+
+/// Check infinite ultra-log-concavity, ULC(∞), of a coefficient sequence.
+///
+/// The sequence `a_0, a_1, ...` is *ultra-log-concave of infinite order* if
+/// `a_k k!` is log-concave, i.e.
+///
+/// ```text
+/// k · a_k^2 ≥ (k + 1) · a_(k-1) · a_(k+1)   for every k ≥ 1.
+/// ```
+///
+/// This is the limit `n → ∞` of the degree-based condition
+/// [`is_ultra_log_concave_of_degree`] (ULC(n) uses the factors `C(n, k)`, and
+/// `a_k / C(n, k)` tends to a multiple of `a_k k!` as `n` grows), and it is the
+/// weakest of the ULC(n) family: for nonnegative sequences ULC(n) implies
+/// ULC(∞) for every `n`.  The condition does not depend on the nominal degree.  In contrast, [`is_ultra_log_concave`] tests ULC at the
+/// nominal degree `deg p`, which depends on the polynomial's length.  For
+/// example `1 + 3t + 3t^2` is not ULC at its degree 2, but it is ULC(∞).
+///
+/// Conventions: trailing zeros are ignored, the zero polynomial returns `true`,
+/// and (as for [`is_log_concave`]) the inequalities are checked pointwise, with
+/// no check of coefficient signs or internal zeros.
+///
+/// ```
+/// use polytool::{is_ultra_log_concave, is_ultra_log_concave_infinite};
+///
+/// assert!(!is_ultra_log_concave(&[1, 3, 3]));
+/// assert!(is_ultra_log_concave_infinite(&[1, 3, 3]));
+/// // 1 + t + t^2 + t^3 fails at k = 1: 1 · a_1^2 = 1 < 2 · a_0 a_2 = 2.
+/// assert!(!is_ultra_log_concave_infinite(&[1, 1, 1, 1]));
+/// ```
+pub fn is_ultra_log_concave_infinite(coeffs: &[i64]) -> bool {
+    let coeffs: Vec<BigInt> = coeffs.iter().map(|&c| BigInt::from(c)).collect();
+    is_ultra_log_concave_infinite_bigint_coeffs(&coeffs)
+}
+
+/// Check ULC(∞) for `BigInt` coefficients; see [`is_ultra_log_concave_infinite`].
+pub fn is_ultra_log_concave_infinite_bigint_coeffs(coeffs: &[BigInt]) -> bool {
+    let Some(d) = vec_poly::degree(coeffs) else {
+        return true;
+    };
+    // For k ≥ d the right-hand side vanishes, so only 1 ≤ k < d needs checking.
+    (1..d).all(|k| {
+        BigInt::from(k) * &coeffs[k] * &coeffs[k]
+            >= BigInt::from(k + 1) * &coeffs[k - 1] * &coeffs[k + 1]
+    })
 }
 
 /// Check ultra-log-concavity of order `n` for `BigInt` coefficients.
@@ -2011,6 +2058,38 @@ mod tests {
         assert!(is_log_concave(&[1, 2, 1]));
         assert!(is_log_concave(&[1, 3, 3, 1]));
         assert!(!is_log_concave(&[1, 1, 3]));
+    }
+
+    #[test]
+    fn ultra_log_concave_infinite_basics_and_relation_to_degree_based() {
+        assert!(is_ultra_log_concave_infinite(&[]));
+        assert!(is_ultra_log_concave_infinite(&[0, 0]));
+        assert!(is_ultra_log_concave_infinite(&[5]));
+        assert!(is_ultra_log_concave_infinite(&[1, 3, 3]));
+        assert!(!is_ultra_log_concave_infinite(&[1, 1, 1, 1]));
+        // Trailing zeros are ignored.
+        assert!(is_ultra_log_concave_infinite(&[1, 3, 3, 0, 0]));
+        // Poisson weights 1/k! are exactly the boundary case.
+        assert!(is_ultra_log_concave_infinite(&[
+            720, 720, 360, 120, 30, 6, 1
+        ]));
+        // Real-rooted nonnegative polynomials of degree <= n are ULC(n), hence ULC(inf):
+        // check ULC(n) => ULC(inf) on small nonnegative sequences.
+        for a in 0..4i64 {
+            for b in 0..4i64 {
+                for c in 0..4i64 {
+                    for d in 0..4i64 {
+                        let p = [a, b, c, d];
+                        if is_ultra_log_concave(&p) {
+                            assert!(is_ultra_log_concave_infinite(&p), "{p:?}");
+                        }
+                        if is_ultra_log_concave_of_degree(&p, 9) {
+                            assert!(is_ultra_log_concave_infinite(&p), "{p:?}");
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]

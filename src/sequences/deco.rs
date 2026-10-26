@@ -309,7 +309,7 @@ mod tests {
         let max_index = 12;
         assert_eq!(
             polynomials_bigint(max_index, &BigInt::from(0)),
-            eulerian_polynomials_bigint(max_index + 1)
+            eulerian_polynomials_bigint(max_index + 1)[1..]
         );
         assert_eq!(
             polynomials(4, 1),

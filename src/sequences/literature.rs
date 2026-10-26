@@ -7,7 +7,7 @@ use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Zero};
 
-/// Delannoy triangle rows D_0(x), ..., D_max_n(x).
+/// Delannoy triangle rows D_0(x), ..., D_max_n(x); `rows[n]` = D_n.
 ///
 /// D(n,k) counts paths to (n-k,k) with steps (1,0), (0,1), (1,1).
 /// D_0=1, D_1=1+x, D_n=(1+x)D_(n-1)+x D_(n-2).
@@ -29,7 +29,7 @@ pub fn delannoy_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
 /// Uses the four-term recurrence from Section 4 of Mao--Wang,
 /// "The Narayana transformation", arXiv:2607.01572v1:
 /// G_n=(x+3)G_(n-1)+(x-1)G_(n-2)+(x-1)G_(n-3)+xG_(n-4).
-/// Initial rows: 1; 2+x; 5+6x+x^2; 12+25x+10x^2+x^3.
+/// Initial rows: 1; 2+x; 5+6x+x^2; 12+25x+10x^2+x^3.  `rows[n]` = G_n, `max_n + 1` rows.
 pub fn delannoy_square_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     let seeds: [&[i64]; 4] = [&[1], &[2, 1], &[5, 6, 1], &[12, 25, 10, 1]];
     let mut rows: Vec<Vec<BigInt>> = seeds
@@ -54,9 +54,13 @@ pub fn delannoy_square_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
 /// Thus the nonzero-row basis is x times the usual Eulerian polynomial.
 /// This is triangular matrix multiplication, NOT coefficientwise squaring.
 /// The output retains its structural zero constant term for n>=1.
+/// `rows[n]` is the paper's row n, with `max_n + 1` rows.
 pub fn eulerian_square_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     let mut triangle = vec![vec![BigInt::one()]];
-    for row in super::eulerian_polynomials_bigint(max_n) {
+    for row in super::eulerian_polynomials_bigint(max_n)
+        .into_iter()
+        .skip(1)
+    {
         let mut shifted = vec![BigInt::zero()];
         shifted.extend(row);
         triangle.push(shifted);
@@ -65,6 +69,10 @@ pub fn eulerian_square_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
 }
 
 /// Hoggatt polynomials `H_1^[m](q,t), ..., H_max_n^[m](q,t)`, exact integer q>=1.
+///
+/// Indexing: the paper's normalization starts at n=1, so `rows[i]` = `H_{i+1}`
+/// and `max_n` rows are returned (none for `max_n = 0`).  This is the one
+/// generator in `sequences` whose first row is not n=0.
 ///
 /// The coefficient of t^k in row n (1<=n<=max_n, 0<=k<n) is
 /// q^(m*k*(k+1)/2) times the volume generating function of plane partitions
@@ -214,7 +222,7 @@ mod tests {
     fn hoggatt_at_one_matches_narayana_and_baxter() {
         assert_eq!(
             hoggatt_polynomials_bigint(8, 2, 1),
-            super::super::narayana_polynomials_bigint(8)
+            super::super::narayana_polynomials_bigint(8)[1..]
         );
         let h = hoggatt_polynomials_bigint(5, 3, 1);
         assert_eq!(h[0], big(&[1]));

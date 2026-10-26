@@ -7,6 +7,10 @@
 //! normalizing wrapper type with the same operations, use
 //! [`Polynomial<C>`](crate::polynomial::Polynomial).
 //!
+//! The characteristic polynomial of an integer matrix
+//! ([`characteristic_polynomial_bigint`](crate::linalg::characteristic_polynomial_bigint))
+//! is returned in this coefficient-vector format.
+//!
 //! # Conventions
 //!
 //! - **Inputs** may carry trailing zeros, and the empty slice is accepted as

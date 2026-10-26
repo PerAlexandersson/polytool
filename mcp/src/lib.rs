@@ -2207,8 +2207,10 @@ fn generated_sequence_polynomials_bigint(
     max_n: usize,
 ) -> Vec<Vec<BigInt>> {
     match sequence {
-        SequenceKind::Eulerian => eulerian_polynomials_bigint(max_n),
-        SequenceKind::Narayana => narayana_polynomials_bigint(max_n),
+        // The library families start at A_0 = N_0 = 1 (equal to A_1, N_1); the
+        // tool keeps the classical rows A_1..A_max_n and N_1..N_max_n.
+        SequenceKind::Eulerian => eulerian_polynomials_bigint(max_n).split_off(1),
+        SequenceKind::Narayana => narayana_polynomials_bigint(max_n).split_off(1),
         SequenceKind::TypeBEulerian => type_b_eulerian_polynomials_bigint(max_n),
         SequenceKind::ChebyshevT => chebyshev_polynomials_t_bigint(max_n),
         SequenceKind::ChebyshevU => chebyshev_polynomials_u_bigint(max_n),

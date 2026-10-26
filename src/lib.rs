@@ -253,6 +253,8 @@ pub use real_rootedness::{
     is_strictly_real_rooted_hermite_bigint_coeffs,
     is_ultra_log_concave,
     is_ultra_log_concave_bigint_coeffs,
+    is_ultra_log_concave_infinite,
+    is_ultra_log_concave_infinite_bigint_coeffs,
     is_ultra_log_concave_of_degree,
     is_ultra_log_concave_of_degree_bigint_coeffs,
     is_unimodal,

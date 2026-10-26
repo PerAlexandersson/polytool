@@ -1974,8 +1974,16 @@ impl SequenceKind {
 
     fn polynomials(self, max_n: usize) -> Vec<Vec<BigInt>> {
         match self {
-            Self::Eulerian => polytool::sequences::eulerian_polynomials_bigint(max_n),
-            Self::Narayana => polytool::sequences::narayana_polynomials_bigint(max_n),
+            // The library families start at A_0 = N_0 = 1 (equal to A_1, N_1);
+            // the CLI keeps the classical labels A_1..A_max_n and N_1..N_max_n.
+            Self::Eulerian => polytool::sequences::eulerian_polynomials_bigint(max_n)
+                .into_iter()
+                .skip(1)
+                .collect(),
+            Self::Narayana => polytool::sequences::narayana_polynomials_bigint(max_n)
+                .into_iter()
+                .skip(1)
+                .collect(),
             Self::TypeBEulerian => polytool::sequences::type_b_eulerian_polynomials_bigint(max_n),
             Self::ChebyshevT => polytool::sequences::chebyshev_polynomials_t_bigint(max_n),
             Self::ChebyshevU => polytool::sequences::chebyshev_polynomials_u_bigint(max_n),

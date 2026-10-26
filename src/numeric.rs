@@ -1,5 +1,6 @@
 //! Exact integer combinatorial helpers: binomials, factorials, falling
-//! factorials, and multinomials.
+//! factorials, multinomials, and their q-analogues ([`q_integer`],
+//! [`q_factorial`], [`q_binomial`], [`q_catalan`], [`q_narayana`]).
 //!
 //! The arbitrary-precision functions return [`BigInt`] and never overflow.
 //! [`binomial_u128`] is the only machine-integer function and reports overflow
@@ -18,7 +19,7 @@
 
 use num_bigint::BigInt;
 use num_integer::Integer;
-use num_traits::One;
+use num_traits::{One, Zero};
 
 /// The binomial coefficient `C(n, k)` as an exact [`BigInt`].
 ///
@@ -127,6 +128,154 @@ pub fn multinomial_bigint(parts: &[usize]) -> BigInt {
     result
 }
 
+// ---------------------------------------------------------------------------
+// q-analogues
+// ---------------------------------------------------------------------------
+
+/// The zero polynomial in canonical form.
+fn zero_poly() -> Vec<BigInt> {
+    vec![BigInt::from(0)]
+}
+
+/// Exact division of `numerator` by a *monic* `denominator` over `Z`.
+///
+/// # Panics
+/// Panics if the denominator is not monic or does not divide the numerator.
+fn exact_div_monic(numerator: &[BigInt], denominator: &[BigInt]) -> Vec<BigInt> {
+    let den = crate::vec_poly::trim(denominator);
+    let dd = den.len() - 1;
+    assert!(
+        den[dd].is_one(),
+        "q-analogue division needs a monic divisor"
+    );
+    let mut rem = crate::vec_poly::trim(numerator);
+    if rem.len() < den.len() {
+        assert!(rem.iter().all(Zero::is_zero), "inexact q-analogue division");
+        return zero_poly();
+    }
+    let mut quotient = vec![BigInt::from(0); rem.len() - dd];
+    for i in (0..quotient.len()).rev() {
+        let c = rem[i + dd].clone();
+        for (j, d) in den.iter().enumerate() {
+            rem[i + j] -= &c * d;
+        }
+        quotient[i] = c;
+    }
+    assert!(rem.iter().all(Zero::is_zero), "inexact q-analogue division");
+    crate::vec_poly::trim(&quotient)
+}
+
+/// The q-integer `[n]_q = 1 + q + ... + q^(n-1)`, as ascending coefficients.
+///
+/// `[0]_q = 0` is returned as the canonical zero polynomial `[0]`.
+///
+/// ```
+/// use polytool::numeric::q_integer;
+/// assert_eq!(q_integer(3).iter().map(|c| c.to_string()).collect::<Vec<_>>(), ["1", "1", "1"]);
+/// ```
+pub fn q_integer(n: usize) -> Vec<BigInt> {
+    if n == 0 {
+        zero_poly()
+    } else {
+        vec![BigInt::one(); n]
+    }
+}
+
+/// The q-factorial `[n]_q! = [1]_q [2]_q ... [n]_q`, with `[0]_q! = 1`.
+///
+/// Ascending coefficients; the degree is `n (n - 1) / 2`.
+///
+/// ```
+/// use polytool::numeric::q_factorial;
+/// // [3]_q! = (1 + q)(1 + q + q^2) = 1 + 2q + 2q^2 + q^3.
+/// let coefficients: Vec<String> = q_factorial(3).iter().map(|c| c.to_string()).collect();
+/// assert_eq!(coefficients, ["1", "2", "2", "1"]);
+/// ```
+pub fn q_factorial(n: usize) -> Vec<BigInt> {
+    let mut result = vec![BigInt::one()];
+    for i in 2..=n {
+        result = crate::vec_poly::mul(&result, &q_integer(i));
+    }
+    result
+}
+
+/// The Gaussian binomial coefficient `[n choose k]_q`, as ascending
+/// coefficients of a polynomial of degree `k (n - k)`.
+///
+/// Returns the zero polynomial `[0]` when `k > n`.  It generates partitions
+/// in a `k x (n - k)` box by size (equivalently, `k`-subsets by inversions or
+/// words with `k` ones by inversions).  At `q = 1` it is the ordinary binomial
+/// coefficient.
+///
+/// ```
+/// use polytool::numeric::q_binomial;
+/// // [4 choose 2]_q = 1 + q + 2q^2 + q^3 + q^4.
+/// let coefficients: Vec<String> = q_binomial(4, 2).iter().map(|c| c.to_string()).collect();
+/// assert_eq!(coefficients, ["1", "1", "2", "1", "1"]);
+/// ```
+pub fn q_binomial(n: usize, k: usize) -> Vec<BigInt> {
+    if k > n {
+        return zero_poly();
+    }
+    let k = k.min(n - k);
+    // After step i the value is [n - k + i choose i]_q, so each division is exact.
+    let mut result = vec![BigInt::one()];
+    for i in 1..=k {
+        result = exact_div_monic(
+            &crate::vec_poly::mul(&result, &q_integer(n - k + i)),
+            &q_integer(i),
+        );
+    }
+    result
+}
+
+/// MacMahon's q-Catalan polynomial `C_n(q) = [2n choose n]_q / [n + 1]_q`.
+///
+/// This is the *maj/inv* q-Catalan (the hook-formula q-analogue for the
+/// `2 x n` rectangle: up to a power-of-`q` normalization it is the
+/// major-index generating function of Dyck paths, equivalently of standard
+/// Young tableaux of shape `(n, n)`), and is **not** the Carlitz--Riordan
+/// area q-Catalan.  Ascending coefficients, constant term `1`, degree
+/// `n (n - 1)`, palindromic, and `C_n(1)` is the Catalan number.  Also
+/// `C_n(q) = [2n choose n]_q - q [2n choose n + 1]_q`.
+///
+/// ```
+/// use polytool::numeric::q_catalan;
+/// // C_2(q) = 1 + q^2.
+/// let coefficients: Vec<String> = q_catalan(2).iter().map(|c| c.to_string()).collect();
+/// assert_eq!(coefficients, ["1", "0", "1"]);
+/// ```
+pub fn q_catalan(n: usize) -> Vec<BigInt> {
+    exact_div_monic(&q_binomial(2 * n, n), &q_integer(n + 1))
+}
+
+/// The q-Narayana polynomial `q^(k(k-1)) [n choose k]_q [n choose k-1]_q / [n]_q`.
+///
+/// This is exactly the normalization `q^(k(k-1))` of the q-Narayana
+/// polynomial in `qNarayana`; at `q = 1` it is the Narayana number
+/// `N(n,k) = C(n,k) C(n,k-1) / n`.  Ascending coefficients.  It is the zero
+/// polynomial `[0]` unless `1 <= k <= n` (for example when `k = 0`).  For
+/// `1 <= k <= n` it is a genuine polynomial with lowest term `q^(k(k-1))`.
+///
+/// # Panics
+/// Panics if `n == 0`, where `1 / [0]_q` is undefined.
+///
+/// ```
+/// use polytool::numeric::q_narayana;
+/// // q^2 [3 choose 2]_q [3 choose 1]_q / [3]_q = q^2 + q^3 + q^4.
+/// let coefficients: Vec<String> = q_narayana(3, 2).iter().map(|c| c.to_string()).collect();
+/// assert_eq!(coefficients, ["0", "0", "1", "1", "1"]);
+/// ```
+pub fn q_narayana(n: usize, k: usize) -> Vec<BigInt> {
+    assert!(n >= 1, "q_narayana requires n >= 1");
+    if k == 0 || k > n {
+        return zero_poly();
+    }
+    let product = crate::vec_poly::mul(&q_binomial(n, k), &q_binomial(n, k - 1));
+    let quotient = exact_div_monic(&product, &q_integer(n));
+    crate::vec_poly::shift_by(&quotient, k * (k - 1))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,5 +381,111 @@ mod tests {
                 "{parts:?}"
             );
         }
+    }
+
+    // -- q-analogues -------------------------------------------------------
+
+    fn qp(values: &[i64]) -> Vec<BigInt> {
+        values.iter().map(|&v| BigInt::from(v)).collect()
+    }
+
+    fn eval_at_one(p: &[BigInt]) -> BigInt {
+        p.iter().sum()
+    }
+
+    #[test]
+    fn q_integers_and_factorials() {
+        assert_eq!(q_integer(0), qp(&[0]));
+        assert_eq!(q_integer(1), qp(&[1]));
+        assert_eq!(q_integer(4), qp(&[1, 1, 1, 1]));
+        assert_eq!(q_factorial(0), qp(&[1]));
+        assert_eq!(q_factorial(1), qp(&[1]));
+        assert_eq!(q_factorial(3), qp(&[1, 2, 2, 1]));
+        assert_eq!(q_factorial(4), qp(&[1, 3, 5, 6, 5, 3, 1]));
+        for n in 0..9 {
+            assert_eq!(eval_at_one(&q_factorial(n)), factorial_bigint(n));
+        }
+    }
+
+    #[test]
+    fn q_binomials_match_pascal_recurrence_and_binomials() {
+        // [n,k] = [n-1,k-1] + q^k [n-1,k].
+        for n in 1..=10usize {
+            for k in 1..n {
+                let left = q_binomial(n - 1, k - 1);
+                let right = crate::vec_poly::shift_by(&q_binomial(n - 1, k), k);
+                assert_eq!(
+                    q_binomial(n, k),
+                    crate::vec_poly::add(&left, &right),
+                    "n={n} k={k}"
+                );
+            }
+        }
+        for n in 0..=10usize {
+            assert_eq!(q_binomial(n, 0), qp(&[1]));
+            assert_eq!(q_binomial(n, n), qp(&[1]));
+            for k in 0..=n {
+                assert_eq!(eval_at_one(&q_binomial(n, k)), binomial_bigint(n, k));
+                assert_eq!(q_binomial(n, k), q_binomial(n, n - k));
+            }
+            assert_eq!(q_binomial(n, n + 1), qp(&[0]));
+        }
+        assert_eq!(q_binomial(4, 2), qp(&[1, 1, 2, 1, 1]));
+        // [n,k] [k]! [n-k]! = [n]!.
+        let lhs = crate::vec_poly::mul(
+            &q_binomial(7, 3),
+            &crate::vec_poly::mul(&q_factorial(3), &q_factorial(4)),
+        );
+        assert_eq!(lhs, q_factorial(7));
+    }
+
+    #[test]
+    fn q_catalan_values_and_identities() {
+        assert_eq!(q_catalan(0), qp(&[1]));
+        assert_eq!(q_catalan(1), qp(&[1]));
+        assert_eq!(q_catalan(2), qp(&[1, 0, 1]));
+        assert_eq!(q_catalan(3), qp(&[1, 0, 1, 1, 1, 0, 1]));
+        let catalan = [1i64, 1, 2, 5, 14, 42, 132, 429, 1430];
+        for (n, &c) in catalan.iter().enumerate() {
+            let p = q_catalan(n);
+            assert_eq!(eval_at_one(&p), BigInt::from(c));
+            assert_eq!(p.len(), n * n.saturating_sub(1) + 1);
+            let reversed: Vec<BigInt> = p.iter().rev().cloned().collect();
+            assert_eq!(p, reversed, "palindromic n={n}");
+            // C_n(q) = [2n,n] - q [2n,n+1].
+            let difference = crate::vec_poly::sub(
+                &q_binomial(2 * n, n),
+                &crate::vec_poly::shift(&q_binomial(2 * n, n + 1)),
+            );
+            assert_eq!(p, difference, "difference identity n={n}");
+        }
+    }
+
+    #[test]
+    fn q_narayana_values_and_sums() {
+        assert_eq!(q_narayana(1, 1), qp(&[1]));
+        assert_eq!(q_narayana(3, 1), qp(&[1]));
+        assert_eq!(q_narayana(3, 2), qp(&[0, 0, 1, 1, 1]));
+        assert_eq!(q_narayana(3, 3), qp(&[0, 0, 0, 0, 0, 0, 1]));
+        assert_eq!(q_narayana(4, 0), qp(&[0]));
+        assert_eq!(q_narayana(4, 5), qp(&[0]));
+        // N(n,k) at q = 1, and row sums are Catalan numbers.
+        for n in 1..=8usize {
+            let mut total = BigInt::from(0);
+            for k in 1..=n {
+                let p = q_narayana(n, k);
+                let expected = binomial_bigint(n, k) * binomial_bigint(n, k - 1) / BigInt::from(n);
+                assert_eq!(eval_at_one(&p), expected, "N({n},{k})");
+                assert!(p[..k * (k - 1)].iter().all(|c| c.is_zero()));
+                total += eval_at_one(&p);
+            }
+            assert_eq!(total, binomial_bigint(2 * n, n) / BigInt::from(n + 1));
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "n >= 1")]
+    fn q_narayana_rejects_zero_n() {
+        let _ = q_narayana(0, 0);
     }
 }

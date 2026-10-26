@@ -24,7 +24,7 @@ The CLI binary is at `target/release/polytool`.
 Use `polytool --version` (or `polytool -V`) for a single deterministic line:
 
 ```text
-polytool 0.3.0 (git 0123456789ab)
+polytool 0.4.0 (git 0123456789ab)
 ```
 
 The version comes from the crate manifest and the lowercase 12-hex-digit Git
@@ -301,7 +301,11 @@ polytool sequence narayana 5 --json
 
 Supported sequence names are `eulerian`, `narayana`, `type-b-eulerian`,
 `chebyshev-t`, `chebyshev-u`, and `hermite`.
-Generated coefficients use arbitrary-size integers.
+Generated coefficients use arbitrary-size integers.  The CLI and MCP tool list
+`A_1, ..., A_n` and `N_1, ..., N_n` for `eulerian` and `narayana`, and
+`B_0, ..., B_n`, `T_0, ..., T_n`, ... for the others; the library functions
+`polytool::sequences::eulerian_polynomials_bigint` and
+`narayana_polynomials_bigint` additionally include the row `n = 0`.
 
 ### Generate recurrence-backed OEIS families
 
@@ -846,7 +850,49 @@ assert_eq!(vec_poly::derivative(&big), vec![BigInt::from(0), BigInt::from(2)]);
 
 Exact binomials and factorials live in `polytool::numeric`:
 `binomial_bigint`, `factorial_bigint`, `falling_factorial_bigint`,
-`multinomial_bigint`, and the checked `binomial_u128`.
+`multinomial_bigint`, and the checked `binomial_u128`.  Its q-analogues return
+ascending `Vec<BigInt>` polynomials in `q`: `q_integer(n)`, `q_factorial(n)`,
+`q_binomial(n, k)` (Gaussian binomial), `q_catalan(n)` (MacMahon's maj/inv
+`[2n choose n]_q / [n+1]_q`) and `q_narayana(n, k)`
+(`q^(k(k-1)) [n,k]_q [n,k-1]_q / [n]_q`).
+
+### Standard sequences and indexing
+
+`polytool::sequences` generators take `max_n` and return `rows[n]` for
+`n = 0..=max_n` (the n-th member of the family, with `rows[0]` the `n = 0`
+member), so Eulerian rows are `A_0 = 1, A_1 = 1, A_2 = 1 + t, ...`.  The
+OEIS triangles A008292 and A001263 start at `n = 1`, i.e. `rows[1..]`.  The
+two exceptions follow their sources' normalization and say so in their
+rustdoc: `literature::hoggatt_polynomials_bigint` (`rows[i] = H_{i+1}`) and
+the `deco` histogram layers (`rows[N - 1]` for size `N`).  Besides the classical
+families the module provides permutation-statistic generators over `BigInt`:
+`derangement_descent_polynomials_bigint` (derangements of `[n]` by descents
+in one-line notation, OEIS A219836; this is not the excedance triangle
+A046739), `fixed_point_descent_polynomials_bigint` (the bivariate
+fixed-point/descent array `rows[n][j][k]`),
+`binomial_eulerian_polynomials_bigint`, `refined_eulerian_polynomials_bigint`
+(descents by first letter) and `s_eulerian_polynomial_bigint`.
+
+### Characteristic polynomials and closed walks
+
+```rust
+use num_bigint::BigInt;
+use polytool::linalg::{characteristic_polynomial_bigint, closed_walk_counts_bigint};
+
+// Path on three vertices: det(tI - A) = t^3 - 2t.
+let a: Vec<Vec<BigInt>> = [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
+    .iter()
+    .map(|r| r.iter().map(|&x| BigInt::from(x)).collect())
+    .collect();
+let chi = characteristic_polynomial_bigint(&a); // ascending: [0, -2, 0, 1]
+let walks = closed_walk_counts_bigint(&a, 4); // tr(A^k), k = 0..=4: [3, 0, 4, 0, 8]
+# let _ = (chi, walks);
+```
+
+`characteristic_polynomial_bigint` uses the Faddeev--LeVerrier recurrence over
+the integers (exact divisions only).  `is_ultra_log_concave_infinite` tests
+ULC(∞) (`k a_k^2 >= (k+1) a_(k-1) a_(k+1)`), the weakest member of the
+degree-based ULC(n) family tested by `is_ultra_log_concave_of_degree`.
 
 ### Recurrence search
 
@@ -1120,6 +1166,28 @@ The tracked programs in `examples/` are run with
   a weighted renewal recurrence.
 
 ## Changelog
+
+### 0.4.0
+
+Breaking changes:
+
+- `sequences::eulerian_polynomials(_bigint)` and
+  `sequences::narayana_polynomials(_bigint)` now follow the module-wide
+  `rows[n]` convention, include the row `n = 0` (`A_0 = N_0 = [1]`) and return
+  `max_n + 1` rows; previously they returned `max_n` rows with
+  `rows[i] = A_{i+1}` (resp. `N_{i+1}`).  Migrate with `eulerian_polynomials(n)[1..]`
+  to get the old rows.  The CLI `sequence` command and the MCP `generate_sequence`
+  inputs still list `A_1..A_n` and `N_1..N_n`.
+
+Additions:
+
+- `sequences::{derangement_descent_polynomials_bigint,
+  fixed_point_descent_polynomials_bigint, binomial_eulerian_polynomials_bigint,
+  refined_eulerian_polynomials_bigint, s_eulerian_polynomial_bigint}` and an
+  "Indexing conventions" section in the `sequences` module documentation.
+- `linalg::{characteristic_polynomial_bigint, closed_walk_counts_bigint}`.
+- `numeric::{q_integer, q_factorial, q_binomial, q_catalan, q_narayana}`.
+- `is_ultra_log_concave_infinite` / `_bigint_coeffs` (ULC(∞)).
 
 ### 0.3.0
 
