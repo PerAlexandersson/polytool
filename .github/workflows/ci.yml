@@ -39,8 +39,13 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets
 
+      # A full `cargo package` of polytool resolves `exact-real-roots` from
+      # crates.io, where it is not published yet; until it is, check the
+      # polytool file list and package the path dependency on its own.
       - name: Verify package
-        run: cargo package
+        run: |
+          cargo package --list > /dev/null
+          cargo package --manifest-path crates/exact-real-roots/Cargo.toml
 
   companions:
     name: Companion packages
