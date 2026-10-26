@@ -1,6 +1,7 @@
 //! `polytool bench`: recurrence-fixture timings, benchmark comparison and
 //! interlacing timings.
 
+use crate::bench_real_rootedness::{cmd_bench_real_rootedness, print_real_rootedness_help};
 use crate::input::{polynomial_degree_bigint, strip_trailing_zeros_bigint};
 use crate::json_out::json_bool_option;
 use crate::sequence::SequenceKind;
@@ -18,6 +19,7 @@ pub(crate) fn print_bench_help() {
     println!("Usage:");
     println!("  polytool bench recurrence-fixtures [options]");
     println!("  polytool bench interlacing [options]");
+    println!("  polytool bench real-rootedness [options]");
     println!("  polytool bench --help");
     println!();
     println!("Run built-in timing suites and print tab-separated results.");
@@ -26,6 +28,7 @@ pub(crate) fn print_bench_help() {
     println!("  recurrence-fixtures   Time adaptive recurrence search on fixture rows");
     println!("  compare               Compare two recurrence-fixture JSON benchmark runs");
     println!("  interlacing           Time consecutive interlacing checks on a sequence");
+    println!("  real-rootedness       Verdict-checked timing suite on degree 20-80 families");
     println!();
     println!("Recurrence fixture options:");
     println!("  --base <dir>              Fixture directory containing manifest.tsv");
@@ -47,6 +50,8 @@ pub(crate) fn print_bench_help() {
     println!("  --sequence <name>         Sequence name (default: eulerian)");
     println!("  --max-n <n>               Maximum n/index to generate (default: 20)");
     println!("  --repeat <n>              Repeat each pair n times (default: 3)");
+    println!();
+    print_real_rootedness_help();
 }
 
 #[derive(Debug)]
@@ -77,13 +82,13 @@ impl Default for BenchRecurrenceOptions {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum BenchOutputFormat {
+pub(crate) enum BenchOutputFormat {
     Tsv,
     Json,
 }
 
 impl BenchOutputFormat {
-    fn parse(value: &str) -> Result<Self, String> {
+    pub(crate) fn parse(value: &str) -> Result<Self, String> {
         match value {
             "tsv" | "text" => Ok(Self::Tsv),
             "json" => Ok(Self::Json),
@@ -158,6 +163,7 @@ pub(crate) fn cmd_bench(args: &[String]) {
         "recurrence-fixtures" | "recurrence" => cmd_bench_recurrence_fixtures(rest),
         "compare" => cmd_bench_compare(rest),
         "interlacing" => cmd_bench_interlacing(rest),
+        "real-rootedness" | "real-rooted" => cmd_bench_real_rootedness(rest),
         _ => {
             eprintln!("unknown bench subcommand: {subcommand}");
             print_bench_help();

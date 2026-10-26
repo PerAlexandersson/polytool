@@ -8,6 +8,7 @@
 //! fragments and help text.
 
 mod bench;
+mod bench_real_rootedness;
 mod bicyclic_sieving;
 mod bkw_scout;
 mod brenti_recognize;

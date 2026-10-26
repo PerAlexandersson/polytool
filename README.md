@@ -1248,11 +1248,45 @@ Run consecutive interlacing timings for a generated sequence:
 polytool bench interlacing --sequence eulerian --max-n 30 --repeat 5
 ```
 
-Both benchmark subcommands print tab-separated output so results can be
-redirected to a log or pasted into project notes. The recurrence fixture
-benchmark can also append fixture/category summaries with `--summary` and write
-a Markdown report with `--report <path.md>`. Use `--format json` for
-machine-readable per-run records, fixture/category summaries, and adaptive
+Run the real-rootedness regression suite on positive-coefficient families of
+degree 20--80:
+
+```sh
+polytool bench real-rootedness --quick            # small degrees, seconds; used by `cargo test`
+polytool bench real-rootedness                    # degrees 20, 40, 60, 80 (a few minutes)
+polytool bench real-rootedness --degrees 20,40 --repeat 5
+polytool bench real-rootedness --only narayana
+polytool bench real-rootedness --format json > rr-baseline.json
+polytool bench real-rootedness --baseline rr-baseline.json --max-slowdown 2
+```
+
+The suite covers Eulerian, Narayana and type B Eulerian polynomials, h\*-vectors
+(the unit cube, products of two simplices, the cross-polytope, each also
+round-tripped through the Ehrhart polynomial), and positive-coefficient
+counterexamples (a fixed quintic, `1 + t^n`, Eulerian polynomials times
+`1 + t + t^2`, `(1+t)^m (1 + 2t + 2t^2)`, and an Eulerian polynomial with a
+dented middle coefficient).  Each check has an exact expected verdict known
+independently of the implementation: `real_rooted` (exact default test),
+`interlacing` (strict `f << g`, including the `none` verdict for degree gaps),
+`root_count` (distinct real roots by exact root isolation) and
+`hstar_identity` (Ehrhart/h\* conversion round trips).  A wrong verdict, a
+verdict that changes between repeats, or a verdict that differs from the
+`--baseline` run is reported on stderr and makes the command exit with status 1;
+`--max-slowdown <x>` additionally fails checks whose baseline median was at
+least 1 ms and became more than `x` times slower.  The output is TSV by
+default (`case family kind degree coeff_bits expected verdict status repeat
+min_us median_us`, plus `ratio_vs_baseline` with `--baseline`) or JSON
+(`polytool.bench.real-rootedness.v1`).  The suite is deterministic; only the
+timings vary.  The `--quick` mode is exercised by
+`tests/cli_bench_real_rootedness.rs`, so `cargo test` catches verdict
+regressions.  Saved timing runs are not checked in; keep them next to the
+other results under `bench-results/`.
+
+The recurrence and interlacing benchmark subcommands print tab-separated
+output so results can be redirected to a log or pasted into project notes. The
+recurrence fixture benchmark can also append fixture/category summaries with
+`--summary` and write a Markdown report with `--report <path.md>`. Use
+`--format json` for machine-readable per-run records, fixture/category summaries, and adaptive
 search diagnostics. The diagnostic records include rejection counters, modular
 lift counters, and cumulative timing buckets such as derivative precomputation,
 modular prefiltering, modular lifting, exact solving, and held-out
@@ -1968,6 +2002,14 @@ Additions (no breaking changes):
   same structured results (at most 128 rows for `check_tnn_network`; at most
   64 rows of degree at most 64 and bounded search budgets for
   `recognize_brenti_strip_digraph`).
+- CLI `bench real-rootedness`: deterministic, verdict-checked regression suite
+  (real-rootedness, strict interlacing, distinct-real-root counts and h\*
+  conversion round trips) on Eulerian, Narayana, type B Eulerian, h\*-vector
+  and positive-coefficient counterexample families of degree 20--80, with a
+  `--quick` mode run by `cargo test`, TSV/JSON output and `--baseline`
+  comparison.
+- Internal: `linalg::sparse_modular` is split into the row type, a private
+  `solver` submodule and a `tests` submodule; public paths are unchanged.
 
 ### 0.5.0
 

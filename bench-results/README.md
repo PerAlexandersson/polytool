@@ -40,3 +40,12 @@ preferred format before and after search or solver changes. Those diagnostics
 include both search rejection counters and cumulative timing buckets for the
 main recurrence-finder stages, including modular lifting when a prime-field
 candidate is exact-verified before the rational solver fallback.
+
+Real-rootedness regression suite (verdicts are checked against exact expected
+values; the baseline is a saved JSON run, not a checked-in file):
+
+```sh
+polytool bench real-rootedness --repeat 3 --format json \
+  > bench-results/real-rootedness/full.json
+polytool bench real-rootedness --baseline bench-results/real-rootedness/full.json
+```
