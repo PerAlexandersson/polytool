@@ -1,4 +1,19 @@
 //! Named inequalities for Ehrhart h*-vectors.
+//!
+//! The entry point is [`hstar_inequality_report_bigint`], which evaluates the
+//! standard necessary conditions for the h*-vector `(h*_0, ..., h*_d)` of a
+//! `d`-dimensional lattice polytope (nonnegativity, `h*_0 = 1`, Hibi and Stanley
+//! inequalities, the Balletti--Higashitani universal Scott inequality and
+//! Stapledon's shifted decomposition) and returns one
+//! [`HStarInequalityCheck`] per instance, so a failing check can be located
+//! exactly.
+//!
+//! Conventions: `hstar[i]` is `h*_i` (ascending, `BigInt`, exact); `dimension`
+//! is the polytope dimension `d` (inferred as `len - 1` when omitted) and `s` is
+//! the degree of `h*`.  A failed check is evidence that the vector is not an
+//! h*-vector of a lattice polytope of that dimension; passing all checks is
+//! **not** a proof that it is one.  For converting between Ehrhart and h*
+//! polynomials see [`crate::ehrhart_to_hstar`] and [`crate::hstar_to_ehrhart`].
 
 use crate::vec_poly::{self, coeff};
 use num_bigint::BigInt;
@@ -10,28 +25,56 @@ type Q = Ratio<BigInt>;
 /// One named h*-condition or inequality.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HStarInequalityCheck {
+    /// Group the check belongs to (`"basic"`, `"Hibi"`, `"Stanley"`,
+    /// `"Ehrhart interpretation"`, `"Balletti-Higashitani"`, `"Stapledon"`).
     pub family: String,
+    /// Short name of the condition within its family.
     pub name: String,
+    /// The inequality in plain text, using `h*_i`, `d` (dimension) and `s`
+    /// (degree of `h*`).
     pub formula: String,
+    /// Literature reference for the condition.
     pub reference: String,
+    /// URL of the reference, when available.
     pub url: Option<String>,
+    /// Instance index `i` for conditions that are a family indexed by `i`
+    /// (coefficient position or partial-sum length); `None` otherwise.
     pub index: Option<usize>,
+    /// Whether the hypothesis of the condition is met.  Non-applicable checks
+    /// carry `holds = true` and do not affect the overall verdict.
     pub applicable: bool,
+    /// Whether the condition is satisfied (meaningful when `applicable`).
     pub holds: bool,
+    /// Left-hand side of the instance (an inequality `lhs <= rhs` unless the
+    /// formula says otherwise), when it is an integer.
     pub lhs: Option<BigInt>,
+    /// Right-hand side of the instance, when it is an integer.
     pub rhs: Option<BigInt>,
+    /// Rational value formatted as `"p"` or `"p/q"` (used by the Stapledon
+    /// coefficient checks), if any.
     pub value: Option<String>,
+    /// Free-text explanation (why a check is not applicable, which coefficient
+    /// failed, ...); empty when there is nothing to add.
     pub details: String,
 }
 
 /// Complete h*-inequality report for one vector.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HStarInequalityReport {
+    /// The h*-vector, padded with zeros up to index `dimension` during the
+    /// checks and returned with trailing zeros removed (at least one entry).
     pub hstar: Vec<BigInt>,
+    /// The dimension `d` used (supplied, or `len - 1` of the input).
     pub dimension: usize,
+    /// Degree `s` of `h*` (index of the last nonzero entry; 0 for the zero
+    /// vector).
     pub degree: usize,
+    /// Codegree `d + 1 - s` (smallest dilation with an interior lattice
+    /// point), or `None` when `s > d`.
     pub codegree: Option<usize>,
+    /// Whether every check with `applicable = true` holds.
     pub all_applicable_hold: bool,
+    /// All individual checks, in evaluation order.
     pub checks: Vec<HStarInequalityCheck>,
 }
 
@@ -409,6 +452,11 @@ fn add_stapledon(
 }
 
 /// Check the standard named h*-inequalities for a supplied dimension.
+///
+/// `hstar[i]` is `h*_i`; `dimension` is the polytope dimension `d`, defaulting
+/// to `hstar.len() - 1` (0 for an empty slice).  The vector is padded with zeros
+/// to length `d + 1`.  If `h*` has degree larger than `d`, only the basic checks
+/// and a failing `"dimension bound"` check are produced.  Never panics.
 pub fn hstar_inequality_report_bigint(
     hstar: &[BigInt],
     dimension: Option<usize>,

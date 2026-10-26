@@ -11,6 +11,27 @@
 //! ([`bicyclic_sieving_report_bigint`]).  Reference: P. Alexandersson and
 //! N. Amini, *The cone of cyclic sieving phenomena*, Discrete Math. 342 (2019)
 //! 1581-1601, arXiv:1804.01447.
+//!
+//! Entry points: [`cyclic_sieving_report_bigint`] (check one polynomial and group
+//! order against fixed-point counts),
+//! [`cyclic_sieving_sequence_reports_bigint`] (scan a sequence of rows and
+//! candidate orders), [`cyclic_sieving_orbit_decomposition_bigint`],
+//! [`cyclic_sieving_check_orbit_sizes`] and [`bicyclic_sieving_report_bigint`].
+//!
+//! Conventions: polynomials are `&[BigInt]` in ascending degree order (`q^i` has
+//! index `i`); a cyclic group `C_n` of order `n` has generator `g`, and the
+//! "power" `d` in `0..n` stands for `g^d` and the root of unity
+//! `zeta_n^d`.  Fixed-point tables are indexed by `d` (entry `d` is
+//! `fix(g^d)`, entry `0` the size of the set).  All arithmetic is exact `BigInt`.
+//! Functions return `Result<_, String>` with a human-readable message for
+//! invalid input (zero group order, wrong table length, ...) and never panic on
+//! such input, except that [`cyclotomic_polynomial_bigint`],
+//! [`reduce_modulo_cyclic_bigint`] and [`root_of_unity_evaluation_bigint`]
+//! panic on a zero order.  The cost of a full report grows roughly cubically
+//! with the group order (a cyclotomic polynomial is rebuilt for each of the
+//! `n` powers; in a release build order 1000 takes a few seconds and order
+//! 3000 about a minute), so keep orders moderate;
+//! [`bicyclic_sieving_report_bigint`] enforces [`BICYCLIC_MAX_GROUP_SIZE`].
 
 use crate::vec_poly::{degree, is_zero, strip_trailing_zeros};
 use num_bigint::BigInt;
@@ -20,41 +41,68 @@ use std::collections::BTreeMap;
 
 /// Exact evaluation data for one root of unity.
 #[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// Evaluates `P(zeta)` for `zeta = zeta_n^d`, a primitive root of unity of order
+/// `root_order = n / gcd(n, d)` (order 1 for `d = 0`).
 pub struct RootOfUnityEvaluation {
+    /// The group order `n`.
     pub group_order: usize,
+    /// The exponent `d`, reduced modulo `n` (so `0 <= power < n`).
     pub power: usize,
+    /// Multiplicative order of `zeta_n^d`, i.e. `n / gcd(n, d)`.
     pub root_order: usize,
+    /// `P(zeta)` as an integer if it is one (remainder zero or constant),
+    /// otherwise `None`.
     pub integer_value: Option<BigInt>,
+    /// `P(q) mod Phi_{root_order}(q)` in ascending order with trailing zeros
+    /// removed (empty when the remainder is zero); for `root_order = 1` it is
+    /// the single entry `[P(1)]`.
     pub remainder: Vec<BigInt>,
 }
 
 /// One CSP equality check against a supplied fixed-point count.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CyclicSievingPowerCheck {
+    /// The exponent `d` of the group element `g^d`.
     pub power: usize,
+    /// Order of `zeta_n^d`.
     pub root_order: usize,
+    /// The supplied fixed-point count `fix(g^d)`.
     pub expected_fixed_points: BigInt,
+    /// The exact evaluation `P(zeta_n^d)`.
     pub evaluation: RootOfUnityEvaluation,
+    /// Whether `P(zeta_n^d)` is an integer equal to `expected_fixed_points`.
     pub holds: bool,
 }
 
 /// CSP report for one polynomial and one cyclic group order.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CyclicSievingReport {
+    /// The group order `n`.
     pub order: usize,
+    /// The polynomial's coefficients with trailing zeros removed.
     pub coefficients: Vec<BigInt>,
+    /// The supplied fixed-point counts `fix(g^d)`, `d = 0..n-1`, if any.
     pub fixed_counts: Option<Vec<BigInt>>,
+    /// Evaluations `P(zeta_n^d)` for `d = 0..n-1`.
     pub evaluations: Vec<RootOfUnityEvaluation>,
+    /// One check per `d` when `fixed_counts` was supplied, otherwise empty.
     pub checks: Vec<CyclicSievingPowerCheck>,
+    /// `Some(true)` iff counts were supplied and every check holds; `None` when
+    /// no counts were supplied (profile only).
     pub holds: Option<bool>,
 }
 
 /// Sequence-level CSP report for one row and several candidate group orders.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CyclicSievingSequenceItem {
+    /// Zero-based position of the polynomial in the input list.
     pub row: usize,
+    /// Sequence index `first_index + row` of the polynomial.
     pub index: isize,
+    /// The polynomial's coefficients with trailing zeros removed.
     pub coefficients: Vec<BigInt>,
+    /// One report per candidate order `index + offset` that is positive.
     pub candidate_orders: Vec<CyclicSievingReport>,
 }
 
@@ -146,6 +194,8 @@ fn cyclotomic_cached(n: usize, cache: &mut BTreeMap<usize, Vec<BigInt>>) -> Vec<
 }
 
 /// Return the `n`-th cyclotomic polynomial in ascending coefficient order.
+///
+/// Panics if `n == 0`.
 pub fn cyclotomic_polynomial_bigint(n: usize) -> Vec<BigInt> {
     assert!(n >= 1, "cyclotomic index must be positive");
     cyclotomic_cached(n, &mut BTreeMap::new())
@@ -156,6 +206,11 @@ fn evaluate_at_one(coeffs: &[BigInt]) -> BigInt {
 }
 
 /// Exactly reduce `P(q)` at `q = zeta_order^power`.
+///
+/// `power` is taken modulo `group_order`.  The result records the order of the
+/// root of unity, the remainder modulo the cyclotomic polynomial and, when that
+/// remainder is constant, the integer value `P(zeta)`.  Panics if
+/// `group_order == 0`.
 pub fn root_of_unity_evaluation_bigint(
     coeffs: &[BigInt],
     group_order: usize,
@@ -197,6 +252,10 @@ pub fn root_of_unity_evaluation_bigint(
 
 /// Check one CSP candidate.  If `fixed_counts` is `None`, this only profiles
 /// root-of-unity evaluations.
+///
+/// `fixed_counts`, when given, must have exactly `order` entries with entry `d`
+/// equal to `fix(g^d)`; otherwise (or for `order == 0`) an `Err` message is
+/// returned.  The CSP holds iff `P(zeta_order^d) = fix(g^d)` for every `d`.
 pub fn cyclic_sieving_report_bigint(
     coeffs: &[BigInt],
     order: usize,
@@ -245,6 +304,13 @@ pub fn cyclic_sieving_report_bigint(
 }
 
 /// Build sequence CSP profiles for candidate orders `index + offset`.
+///
+/// Row `r` of `polynomials` has sequence index `first_index + r`.  For each
+/// `offset` the candidate group order is `index + offset`; non-positive orders
+/// are skipped.  `fixed_counts` maps `(index, order)` to the fixed-point table
+/// `fix(g^d)`, `d = 0..order-1`; a missing key gives a profile-only report.
+/// A table of the wrong length makes that candidate order be omitted from
+/// `candidate_orders` (no error is reported).
 pub fn cyclic_sieving_sequence_reports_bigint(
     polynomials: &[Vec<BigInt>],
     first_index: isize,
@@ -324,7 +390,7 @@ fn big_mobius_term(mu: i32, value: &BigInt) -> BigInt {
 }
 
 /// Reduce `f(q)` modulo `q^n - 1`; the result has exactly `n` entries
-/// `c_0, ..., c_{n-1}` (ascending order).
+/// `c_0, ..., c_{n-1}` (ascending order).  Panics if `n == 0`.
 pub fn reduce_modulo_cyclic_bigint(coeffs: &[BigInt], n: usize) -> Vec<BigInt> {
     assert!(n >= 1, "group order must be positive");
     let mut out = vec![BigInt::zero(); n];
@@ -385,6 +451,7 @@ pub struct OrbitSizeEntry {
 ///   `a_r >= 0`, which is what `realizable` reports.)
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrbitDecomposition {
+    /// The group order `n`.
     pub order: usize,
     /// The input polynomial with trailing zeros removed.
     pub coefficients: Vec<BigInt>,
@@ -413,6 +480,10 @@ pub struct OrbitDecomposition {
 }
 
 /// Compute the orbit decomposition of `coeffs` for the cyclic group `C_order`.
+///
+/// Returns `Err` only for `order == 0`.  A non-integral polynomial is not an
+/// error: it is reported with `integral == false` and `orbits`,
+/// `fixed_points`, `cone_condition` set to `None`.
 pub fn cyclic_sieving_orbit_decomposition_bigint(
     coeffs: &[BigInt],
     order: usize,
@@ -662,6 +733,7 @@ pub fn orbit_counts_from_fixed_points(
 /// its orbit sizes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrbitSizesCheck {
+    /// The group order `n`.
     pub order: usize,
     /// The supplied multiset of orbit sizes.
     pub orbit_sizes: Vec<usize>,
@@ -684,6 +756,10 @@ pub struct OrbitSizesCheck {
 }
 
 /// Check the CSP for a polynomial and an action given by its orbit sizes.
+///
+/// `orbit_sizes` lists the size of every orbit (a multiset of divisors of
+/// `order`); an `Err` is returned for `order == 0` or an orbit size that does not
+/// divide `order`.
 pub fn cyclic_sieving_check_orbit_sizes(
     coeffs: &[BigInt],
     order: usize,
@@ -746,13 +822,17 @@ pub const BICYCLIC_MAX_GROUP_SIZE: usize = 2500;
 /// `2` if `i + j = 0 (mod 3)` and `-1` otherwise, takes only the values `0` and
 /// `9` on `mu_3 x mu_3`, yet is not in the product span.  (For coprime `n1, n2`
 /// the two notions agree, because the Galois groups act independently.)  We
-/// therefore report `integral` (from exact evaluation) and `product_basis`
+/// therefore report `integral` (from exact evaluation) and `product_basis_form`
 /// separately; the CSP check against a fixed-point table uses the exact
 /// evaluations only.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BicyclicSievingReport {
+    /// Order `n1` of the first cyclic factor (acting on `q`).
     pub order1: usize,
+    /// Order `n2` of the second cyclic factor (acting on `t`).
     pub order2: usize,
+    /// The input coefficient matrix `f[i][j]` (coefficient of `q^i t^j`); rows
+    /// may be ragged and are not trimmed.
     pub coefficient_matrix: Vec<Vec<BigInt>>,
     /// `f mod (q^{n1} - 1, t^{n2} - 1)`, an `n1 x n2` matrix.
     pub reduced_matrix: Vec<Vec<BigInt>>,
@@ -786,6 +866,11 @@ pub struct BicyclicSievingReport {
 }
 
 /// Compute a bicyclic sieving report; see [`BicyclicSievingReport`].
+///
+/// `fixed_table`, when given, must be an `order1 x order2` matrix whose entry
+/// `[d1][d2]` is `fix(g1^d1 g2^d2)`.  Returns `Err` when an order is zero, when
+/// `order1 * order2` exceeds [`BICYCLIC_MAX_GROUP_SIZE`], or when the table has
+/// the wrong shape.
 pub fn bicyclic_sieving_report_bigint(
     coeff_matrix: &[Vec<BigInt>],
     order1: usize,

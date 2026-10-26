@@ -1,6 +1,13 @@
 //! Sturm chains for real root isolation of polynomials with rational coefficients.
 //!
-//! Self-contained implementation replacing the external `find-real-roots-of-polynomial` crate.
+//! [`SturmChain`] is built from the square-free part of an integer polynomial
+//! (`i64` or `BigInt` coefficients in ascending order) with exact rational
+//! arithmetic, and supports exact root counting on intervals
+//! ([`SturmChain::count_roots_in`], [`SturmChain::count_real_roots`]) and
+//! isolation of the real roots by rational intervals
+//! ([`SturmChain::isolate_roots`]).  Repeated roots are counted once.  This is
+//! the slower route for real-rootedness; the default exact tests live in
+//! [`crate::real_rootedness`] and [`crate::root_count`].
 
 use num_bigint::BigInt;
 use num_rational::Ratio;
@@ -173,6 +180,9 @@ fn poly_exact_div(a: &QPoly, b: &QPoly) -> QPoly {
 // ---------------------------------------------------------------------------
 
 /// A Sturm chain for counting and isolating real roots of a square-free polynomial.
+///
+/// Built from the square-free part of the input, so multiple roots of the input
+/// are counted once.  All computations are exact over `Q`.
 pub struct SturmChain {
     chain: Vec<QPoly>,
 }
@@ -253,8 +263,8 @@ impl SturmChain {
 
     /// Count distinct real roots in the open interval (a, b).
     ///
-    /// Sturm's theorem gives the count for (a, b] when f(a) ≠ 0; we correct
-    /// for boundary roots to give the strictly open interval.
+    /// Roots at the endpoints are not counted.  Expects `a <= b`; the result is not
+    /// meaningful otherwise.
     pub fn count_roots_in(&self, a: &Q, b: &Q) -> usize {
         let sa = self.sign_changes_at(a);
         let sb = self.sign_changes_at(b);
@@ -266,7 +276,7 @@ impl SturmChain {
         count
     }
 
-    /// Total number of distinct real roots.
+    /// Total number of distinct real roots (the zero polynomial has none).
     pub fn count_real_roots(&self) -> usize {
         let bound = self.root_bound();
         let neg = -bound.clone();
@@ -306,7 +316,11 @@ impl SturmChain {
     }
 
     /// Find all real roots as isolating intervals, refined to width ≤ epsilon.
-    /// Returns a vector of (lo, hi) pairs.
+    /// Returns a vector of (lo, hi) pairs in increasing order.
+    ///
+    /// Each pair contains exactly one distinct root: in the open interval
+    /// `(lo, hi)`, or `lo == hi` when the root is found exactly (a bisection
+    /// midpoint).
     ///
     /// # Panics
     ///

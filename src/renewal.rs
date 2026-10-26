@@ -8,6 +8,13 @@
 //!
 //! Recognition certifies the structure of an input recurrence, not that a
 //! recurrence fitted to finitely many rows holds for the intended sequence.
+//!
+//! Entry points: [`recognize_weighted_renewal`] turns a
+//! [`Recurrence`] (see [`crate::recurrence`]) into a [`WeightedRenewal`], whose
+//! [`WeightedRenewal::rows`] generates the canonical rows exactly and whose
+//! [`WeightedRenewal::max_interlacing_step`] gives the proven interlacing
+//! distance.  Rows are `Vec<BigRational>` in ascending powers of `t`; recognition
+//! failures are returned as `Err(String)`.
 
 use crate::is_real_rooted_bigint_coeffs;
 use crate::recurrence::{BivarPoly, Recurrence, RecurrenceSign};

@@ -5,6 +5,15 @@
 //! nonnegative, then it is the path matrix of a unique triangular planar network
 //! `Gamma_N(lambda)` satisfying the usual zero-propagation condition.
 //!
+//! Conventions: matrices are exact `BigInt` matrices in *triangular row format*
+//! (row `n` has `n + 1` entries, `rows[n][k]` with `0 <= k <= n`), all indices are
+//! zero-based, and polynomial coefficient vectors are ascending.  Verdicts are exact
+//! (Neville elimination over `BigInt`, rational path-matrix evaluation) and
+//! failures are returned as [`NetworkError`] values rather than panics.
+//! For the underlying TNN test see [`crate::linalg::check_tnn_neville_bigint`];
+//! for planar strip digraphs with height-dependent transitions see
+//! [`crate::brenti_sequence`].
+//!
 //! The main intended workflow is:
 //!
 //! 1. start from a monic polynomial sequence,
@@ -78,7 +87,11 @@ impl<T> CanonicalPlanarNetwork<T> {
 /// Canonical certificate consisting of a coefficient matrix and its network.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanonicalTnnProof {
+    /// The lower-unitriangular coefficient matrix in triangular row format:
+    /// `coefficient_matrix[n][k]` is the coefficient of `t^k` in the `n`-th
+    /// polynomial of the input sequence.
     pub coefficient_matrix: Vec<Vec<BigInt>>,
+    /// The canonical network whose path matrix equals `coefficient_matrix`.
     pub network: CanonicalPlanarNetwork<BigRational>,
 }
 
@@ -102,8 +115,12 @@ impl CanonicalTnnProof {
 /// determinant of the corresponding submatrix.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NegativeMinor {
+    /// Row indices of the minor (strictly increasing, zero-based).
     pub rows: Vec<usize>,
+    /// Column indices of the minor (strictly increasing, zero-based; same
+    /// length as `rows`).
     pub cols: Vec<usize>,
+    /// The exact (negative) value of the minor.
     pub value: BigInt,
 }
 
@@ -140,44 +157,76 @@ impl fmt::Display for NegativeMinor {
 /// `NegativeReducedEntry` names the failing Whitney-reduction step.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkError {
+    /// The matrix has no rows.
     EmptyMatrix,
+    /// The polynomial sequence is empty.
     EmptyPolynomialSequence,
     /// A square input matrix has a row of the wrong length.
     NotSquare {
+        /// Zero-based index of the offending row.
         row: usize,
+        /// Required row length (the number of rows).
         expected: usize,
+        /// Actual row length.
         found: usize,
     },
     /// A square input matrix has a nonzero entry above the diagonal.
     NonzeroAboveDiagonal {
+        /// Row of the first offending entry.
         row: usize,
+        /// Column of the first offending entry (`col > row`).
         col: usize,
+        /// The nonzero value found there.
         value: BigInt,
     },
+    /// The first polynomial of a monic sequence has degree other than 0 or 1.
     UnsupportedStartingDegree {
+        /// Degree of the first supplied polynomial.
         found: usize,
     },
+    /// The polynomial at a position of the sequence does not have degree equal
+    /// to its position (the sequence must have degrees `0, 1, 2, ...`).
     UnexpectedPolynomialDegree {
+        /// Position in the sequence (counting the implicit `P_0 = 1` when the
+        /// input started at degree 1).
         index: usize,
+        /// Required degree.
         expected: usize,
+        /// Actual degree, `None` for the zero polynomial.
         found: Option<usize>,
     },
+    /// A polynomial of the sequence is not monic.
     NonMonicPolynomial {
+        /// Position in the sequence (same convention as
+        /// [`NetworkError::UnexpectedPolynomialDegree`]).
         index: usize,
+        /// Its leading coefficient (`None` for the zero polynomial).
         leading: Option<BigInt>,
     },
+    /// A triangular-format row does not have `row + 1` entries.
     InvalidRowLength {
+        /// Zero-based row index.
         row: usize,
+        /// Required length, `row + 1`.
         expected: usize,
+        /// Actual length.
         found: usize,
     },
+    /// A matrix entry is negative.
     NegativeEntry {
+        /// Row of the entry.
         row: usize,
+        /// Column of the entry.
         col: usize,
+        /// The negative value.
         value: BigInt,
     },
+    /// A diagonal entry is not 1.  For rational input the value is the integer
+    /// part of the entry (see [`chain_polynomials_rational`]).
     NonUnitDiagonal {
+        /// Row (and column) of the diagonal entry.
         row: usize,
+        /// Its value.
         value: BigInt,
     },
     /// Neville elimination proved that the matrix is not totally
@@ -186,18 +235,31 @@ pub enum NetworkError {
     /// one (it always does for matrices with at most
     /// [`EXHAUSTIVE_MINOR_SEARCH_MAX_DIMENSION`] rows).
     NotTnn {
+        /// Message of the failing Neville-elimination step.
         reason: String,
+        /// An explicit negative minor, when the bounded search finds one.
         witness: Option<NegativeMinor>,
     },
+    /// Once the first column of a TNN lower-unitriangular matrix vanishes it
+    /// stays zero; this row has a nonzero first-column entry after a zero.
     ZeroTailViolation {
+        /// Row whose first entry is nonzero after an earlier zero.
         row: usize,
+        /// That nonzero first-column entry.
         value: BigInt,
     },
+    /// A Whitney reduction step produced a negative weight (cannot occur for a
+    /// totally nonnegative input).
     NegativeReducedEntry {
+        /// Row of the reduced matrix.
         row: usize,
+        /// Column of the reduced matrix.
         col: usize,
+        /// The negative reduced value.
         value: BigRational,
     },
+    /// The reconstructed network did not evaluate back to the input matrix
+    /// (internal consistency failure).
     ReconstructionMismatch,
 }
 

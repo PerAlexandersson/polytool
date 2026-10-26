@@ -10,6 +10,18 @@
 //! at complex `x`, computes the characteristic roots in `z`, and ranks points
 //! where the two dominant characteristic roots have nearly equal modulus.
 //! Such points are numerical candidates for off-real BKW accumulation loci.
+//!
+//! Entry points: [`BkwSymbol::from_z_coefficients`] /
+//! [`BkwSymbol::parse_z_coefficient_symbol`] build a symbol,
+//! [`BkwSymbol::roots_at`] and [`BkwSymbol::dominant_tie_at`] analyze one point
+//! `x`, and [`BkwSymbol::scout_equal_modulus_locus`] scans a grid.
+//!
+//! Conventions: symbol coefficients are exact `i64` polynomials in `x`
+//! (ascending degree, entry `i` is the coefficient of `x^i`) and are indexed by
+//! ascending power of `z`.  All root computations are floating point
+//! (Durand--Kerner iteration in `f64`); nothing here is exact or certified.  Use
+//! [`BkwSymbol::mathematica_equal_modulus_query`] to produce an exact follow-up
+//! query.  For the recurrences that produce such symbols see `crate::recurrence`.
 
 use crate::parse::parse_polynomial;
 use crate::real_rootedness::format_poly_var;
@@ -22,18 +34,24 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 /// Small complex-number type used to keep `polytool` dependency-light.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Complex64 {
+    /// Real part.
     pub re: f64,
+    /// Imaginary part.
     pub im: f64,
 }
 
 impl Complex64 {
+    /// The complex number `0`.
     pub const ZERO: Self = Self { re: 0.0, im: 0.0 };
+    /// The complex number `1`.
     pub const ONE: Self = Self { re: 1.0, im: 0.0 };
 
+    /// Build `re + im*i`.
     pub fn new(re: f64, im: f64) -> Self {
         Self { re, im }
     }
 
+    /// Build `radius * (cos(theta) + i sin(theta))`; `theta` is in radians.
     pub fn from_polar(radius: f64, theta: f64) -> Self {
         Self {
             re: radius * theta.cos(),
@@ -41,14 +59,17 @@ impl Complex64 {
         }
     }
 
+    /// Squared modulus `re^2 + im^2`.
     pub fn abs_squared(self) -> f64 {
         self.re.mul_add(self.re, self.im * self.im)
     }
 
+    /// Modulus `sqrt(re^2 + im^2)`.
     pub fn abs(self) -> f64 {
         self.abs_squared().sqrt()
     }
 
+    /// Whether the modulus is at most `tolerance`.
     pub fn is_near_zero(self, tolerance: f64) -> bool {
         self.abs() <= tolerance
     }
@@ -134,10 +155,19 @@ impl Div<f64> for Complex64 {
 /// Errors reported by the BKW scout layer.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BkwError {
+    /// The symbol has no nonzero coefficient.
     EmptySymbol,
+    /// The symbol has z-degree 0, or fewer than two characteristic roots were
+    /// available at the requested point (no tie can be analyzed).
     ConstantSymbol,
+    /// A z-coefficient could not be parsed as a polynomial in `x`; the payload is
+    /// the parser message.
     ParseSymbol(String),
+    /// The leading z-coefficient is numerically zero at the requested `x`
+    /// (within [`BkwRootOptions::leading_zero_tolerance`]), so the number of
+    /// roots would drop.
     LeadingCoefficientVanishes,
+    /// The Durand--Kerner iteration produced a non-finite residual.
     RootFinderFailure(String),
 }
 
@@ -485,8 +515,13 @@ impl BkwSymbol {
 /// Numerical root-finder options for characteristic roots.
 #[derive(Clone, Debug)]
 pub struct BkwRootOptions {
+    /// Maximum number of Durand--Kerner sweeps (default 300).
     pub max_iterations: usize,
+    /// Stop when the largest root update in a sweep is at most this value
+    /// (absolute, default `1e-12`).
     pub tolerance: f64,
+    /// Leading z-coefficients with modulus at most this value are treated as
+    /// zero and dropped (default `1e-10`).
     pub leading_zero_tolerance: f64,
 }
 
@@ -503,16 +538,33 @@ impl Default for BkwRootOptions {
 /// Rectangle/grid options for BKW scout mode.
 #[derive(Clone, Debug)]
 pub struct BkwScoutOptions {
+    /// Lower bound of `Re(x)` for the scanned box (default `-3`).
     pub re_min: f64,
+    /// Upper bound of `Re(x)` for the scanned box (default `3`).
     pub re_max: f64,
+    /// Lower bound of `Im(x)` for the scanned box (default `-3`).
     pub im_min: f64,
+    /// Upper bound of `Im(x)` for the scanned box (default `3`).
     pub im_max: f64,
+    /// Number of grid points along the real axis; values below 1 are treated as
+    /// 1 (a single point at the midpoint).  Default 61.
     pub grid_re: usize,
+    /// Number of grid points along the imaginary axis; same convention as
+    /// `grid_re`.  Default 61.
     pub grid_im: usize,
+    /// Number of best candidates returned (default 20).
     pub max_results: usize,
+    /// If `false`, grid points with `|Im(x)| < min_imaginary_abs` are skipped,
+    /// since real-axis ties are not off-real accumulation points (default
+    /// `false`).
     pub include_real_axis: bool,
+    /// Threshold used by `include_real_axis = false` (default `1e-9`).
     pub min_imaginary_abs: f64,
+    /// Number of local pattern-search refinement rounds applied to each grid
+    /// candidate; `0` disables refinement (default 8).  Refinement stays inside
+    /// the box.
     pub refine_steps: usize,
+    /// Options for the characteristic root finder at each point.
     pub root_options: BkwRootOptions,
 }
 
@@ -537,35 +589,58 @@ impl Default for BkwScoutOptions {
 /// A root together with its modulus and original root index.
 #[derive(Clone, Debug)]
 pub struct BkwRootInfo {
+    /// Position of this root in [`BkwRootComputation::roots`] (the root finder's
+    /// order, before sorting by modulus).
     pub index: usize,
+    /// The characteristic root `z`.
     pub root: Complex64,
+    /// `|root|`.
     pub modulus: f64,
 }
 
 /// Root computation metadata.
 #[derive(Clone, Debug)]
 pub struct BkwRootComputation {
+    /// Characteristic roots `z` of `F(x, z)` at the evaluated `x`, in the
+    /// root finder's (unsorted) order; the count is the z-degree at `x`.
     pub roots: Vec<Complex64>,
+    /// Whether the largest update fell below [`BkwRootOptions::tolerance`]
+    /// within [`BkwRootOptions::max_iterations`] sweeps.
     pub converged: bool,
+    /// Number of sweeps performed.
     pub iterations: usize,
+    /// Largest `|F(x, root)|` over the roots; a floating-point accuracy gauge.
     pub max_residual: f64,
 }
 
 /// Candidate point where the two dominant roots have nearly equal modulus.
 #[derive(Clone, Debug)]
 pub struct BkwScoutCandidate {
+    /// The evaluation point `x`.
     pub x: Complex64,
+    /// Number of characteristic roots at `x` (z-degree after dropping a
+    /// numerically vanishing leading coefficient).
     pub z_degree_at_x: usize,
+    /// All characteristic roots, sorted by decreasing modulus.
     pub roots_by_modulus: Vec<BkwRootInfo>,
+    /// `| |z1| - |z2| | / max(|z1|, |z2|, 1)` for the two largest moduli;
+    /// small values indicate a near tie.  Candidates are ranked by this value.
     pub relative_modulus_gap: f64,
+    /// `| ln|z1| - ln|z2| |`, or `relative_modulus_gap` if a modulus is zero.
     pub log_modulus_gap: f64,
+    /// `|z2| / |z3|`, how far the tied pair dominates the third root; `None`
+    /// when there are only two roots, and infinity when `|z3| = 0`.
     pub dominance_ratio: Option<f64>,
+    /// Maximum residual `|F(x, z)|` of the root computation.
     pub root_residual: f64,
+    /// Whether the root finder met its tolerance.
     pub converged: bool,
+    /// Sweeps used by the root finder.
     pub iterations: usize,
 }
 
 impl BkwScoutCandidate {
+    /// The two largest-modulus roots, or `None` if there are fewer than two.
     pub fn tied_roots(&self) -> Option<(&BkwRootInfo, &BkwRootInfo)> {
         if self.roots_by_modulus.len() < 2 {
             None

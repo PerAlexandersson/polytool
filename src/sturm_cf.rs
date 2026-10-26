@@ -10,6 +10,16 @@
 //! with positive-coefficient signed remainders.  Such a certificate is useful
 //! for turning exact Euclidean data for a Hermite--Biehler pair into a Sturm
 //! chain with negative roots and hence interlacing.
+//!
+//! Entry points: [`check_sturm_continued_fraction_certificate`] (default
+//! options) and [`check_sturm_continued_fraction_certificate_with_options`].
+//! Inputs are exact `BigRational` coefficient slices in ascending degree order;
+//! the check runs exact Euclidean division, never panics on well-formed input,
+//! and reports the first violated condition as a [`SturmContinuedFractionError`]
+//! naming the (1-based) division step.  Here `P_0` is the first and `P_1` the
+//! second polynomial passed in.  For general interlacing tests use
+//! [`crate::check_weak_interlacing`]; for the Sturm chain itself see
+//! [`crate::sturm`].
 
 use crate::vec_poly::{coeff, degree, is_zero, neg, scale, sub, trim};
 use num_rational::BigRational;
@@ -56,33 +66,58 @@ pub struct SturmContinuedFractionSummary {
 /// Error from a failed signed Euclidean/Sturm-CF check.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum SturmContinuedFractionError {
+    /// `P_0` or `P_1` has a coefficient that is not strictly positive (only
+    /// checked when positive remainders are required).
     InitialPolynomialHasNonpositiveCoefficient {
+        /// Which input polynomial: `0` for `P_0`, `1` for `P_1`.
         index: usize,
     },
+    /// The Euclidean quotient is not of degree exactly 1.
     QuotientDegree {
+        /// 1-based division step.
         step: usize,
+        /// Actual quotient degree (`None` if the quotient is zero).
         degree: Option<usize>,
     },
+    /// The linear quotient `alpha x + beta` has `alpha <= 0` or `beta <= 0`.
     QuotientNotPositiveLinear {
+        /// 1-based division step.
         step: usize,
     },
+    /// The roots `-beta_i/alpha_i` of consecutive quotients are not strictly
+    /// increasing.
     QuotientRootsNotIncreasing {
+        /// 1-based division step of the later quotient.
         step: usize,
+        /// Root of the previous quotient.
         previous: Box<BigRational>,
+        /// Root of this quotient (`<= previous`).
         current: Box<BigRational>,
     },
+    /// The signed remainder `P_(i+1)` has a coefficient that is not strictly
+    /// positive.
     SignedRemainderHasNonpositiveCoefficient {
+        /// 1-based division step.
         step: usize,
     },
+    /// The degree of the signed remainder is not exactly one less than that of
+    /// the divisor.
     SignedRemainderDegreeDrop {
+        /// 1-based division step.
         step: usize,
+        /// Degree of the divisor `P_i`.
         previous_degree: usize,
+        /// Degree of the signed remainder `P_(i+1)`.
         next_degree: usize,
     },
+    /// The divisor is the zero polynomial.
     ZeroDivisor {
+        /// 1-based division step.
         step: usize,
     },
+    /// The signed remainder is unexpectedly the zero polynomial.
     ZeroSignedRemainder {
+        /// 1-based division step.
         step: usize,
     },
 }

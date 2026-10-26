@@ -8,8 +8,22 @@
 //! - magic-basis coordinates and the partial-sum inequalities from
 //!   Theorem 2.13 of Brandén--Solus,
 //!
-//! so the web frontend can inspect the full package of decomposition data for a
-//! given polynomial in one shot.
+//! so a client can inspect the full package of decomposition data for a given
+//! polynomial in one shot.
+//!
+//! Entry points: [`analyze_symmetric_decomposition_i64`] /
+//! [`analyze_symmetric_decomposition_bigint`] (the full report),
+//! [`f_polynomial`], [`r_transform`], [`r_decomposition`] (each with a `_i64`
+//! convenience wrapper) and [`is_alternatingly_increasing`].
+//!
+//! Conventions: coefficient vectors are ascending (`coeffs[i]` is the coefficient
+//! of `x^i`).  The transforms take an explicit degree bound `degree` and return
+//! `None` when the polynomial has larger degree.  The `i64` functions use
+//! checked `i64` polynomial arithmetic and panic on overflow; use the
+//! `BigInt` analysis when coefficients can be large.  The `I_d` decomposition
+//! itself is [`crate::stapledon_decomposition`] (same as
+//! `Polynomial::stapledon_decomposition`); magic-basis coordinates live in
+//! [`crate::basis`].
 
 use crate::basis::{
     analyze_magic_basis_bigint, analyze_magic_basis_i64, BasisError, MagicBasisAnalysis,
@@ -27,22 +41,48 @@ use num_rational::Ratio;
 pub type BigRational = Ratio<BigInt>;
 
 /// A structured view of the `I_d` / `R_d` decomposition data of an `i64` polynomial.
+///
+/// Write `p` for the input and `d = degree` for its actual degree (0 for the zero
+/// polynomial).  All vectors are coefficient vectors in ascending degree order.
+/// The `Option<bool>` fields follow the convention of
+/// [`crate::check_weak_interlacing`]: `Some(verdict)` when the degree relation
+/// is admissible and the verdict was decided exactly, `None` when the degrees
+/// do not allow that directed interlacing test.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymmetricDecompositionAnalysis {
+    /// Actual degree `d` of the input (the degree bound used everywhere below).
     pub degree: usize,
+    /// Reversal `x^d p(1/x)` of the input with respect to degree `d`.
     pub reciprocal: Vec<i64>,
+    /// `a` in the `I_d`-decomposition `p = a + x b`: symmetric with center `d/2`.
     pub a: Vec<i64>,
+    /// `b` in `p = a + x b`: symmetric with center `(d-1)/2`.
     pub b: Vec<i64>,
+    /// Whether `a` is real-rooted.
     pub a_real_rooted: bool,
+    /// Whether `b` is real-rooted.
     pub b_real_rooted: bool,
+    /// Whether `b` weakly interlaces `a` (`b << a`).
     pub b_interlaces_a: Option<bool>,
+    /// Whether the reversal of `p` weakly interlaces `p` (`reciprocal << p`).
     pub reciprocal_interlaces_input: Option<bool>,
+    /// Whether the coefficients of `p` satisfy
+    /// `0 <= p_0 <= p_d <= p_1 <= p_{d-1} <= ...`
+    /// (see [`is_alternatingly_increasing`]).
     pub alternatingly_increasing: bool,
+    /// The `f`-polynomial `(1+x)^d p(x/(1+x))` of `p` (see [`f_polynomial`]).
     pub f_polynomial: Vec<i64>,
+    /// `R_d(f)`, the reflection `(-1)^d f(-1-x)` of the `f`-polynomial.
     pub r_transform_of_f: Vec<i64>,
+    /// `~a` in the `R_d`-decomposition `f = ~a + x ~b` of the `f`-polynomial
+    /// (see [`r_decomposition`]).
     pub r_a: Vec<i64>,
+    /// `~b` in the `R_d`-decomposition of the `f`-polynomial.
     pub r_b: Vec<i64>,
+    /// Whether `R_d(f)` weakly interlaces `f`.
     pub r_interlaces_f: Option<bool>,
+    /// Magic-basis coordinates and Theorem 2.13 partial sums of the *input*
+    /// polynomial `p` in the basis `{x^j (1+x)^(d-j)}`.
     pub magic: MagicBasisAnalysis<BigRational>,
 }
 
@@ -51,22 +91,40 @@ pub struct SymmetricDecompositionAnalysis {
 ///
 /// This is the arbitrary-precision counterpart of
 /// [`SymmetricDecompositionAnalysis`]. No coefficient is narrowed to `i64`.
+/// Field meanings are identical to those documented there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymmetricDecompositionAnalysisBigInt {
+    /// Actual degree `d` of the input (the degree bound used everywhere below).
     pub degree: usize,
+    /// Reversal `x^d p(1/x)` of the input with respect to degree `d`.
     pub reciprocal: Vec<BigInt>,
+    /// `a` in the `I_d`-decomposition `p = a + x b` (symmetric, center `d/2`).
     pub a: Vec<BigInt>,
+    /// `b` in `p = a + x b` (symmetric, center `(d-1)/2`).
     pub b: Vec<BigInt>,
+    /// Whether `a` is real-rooted.
     pub a_real_rooted: bool,
+    /// Whether `b` is real-rooted.
     pub b_real_rooted: bool,
+    /// Whether `b` weakly interlaces `a`; `None` if the degrees do not allow it.
     pub b_interlaces_a: Option<bool>,
+    /// Whether the reversal of `p` weakly interlaces `p`; `None` if the degrees
+    /// do not allow it.
     pub reciprocal_interlaces_input: Option<bool>,
+    /// Whether `0 <= p_0 <= p_d <= p_1 <= p_{d-1} <= ...`.
     pub alternatingly_increasing: bool,
+    /// The `f`-polynomial `(1+x)^d p(x/(1+x))`.
     pub f_polynomial: Vec<BigInt>,
+    /// `R_d(f) = (-1)^d f(-1-x)`.
     pub r_transform_of_f: Vec<BigInt>,
+    /// `~a` in the `R_d`-decomposition `f = ~a + x ~b`.
     pub r_a: Vec<BigInt>,
+    /// `~b` in the `R_d`-decomposition `f = ~a + x ~b`.
     pub r_b: Vec<BigInt>,
+    /// Whether `R_d(f)` weakly interlaces `f`; `None` if the degrees do not
+    /// allow it.
     pub r_interlaces_f: Option<bool>,
+    /// Magic-basis coordinates and partial sums of the input polynomial.
     pub magic: MagicBasisAnalysis<BigRational>,
 }
 
@@ -100,7 +158,7 @@ pub fn f_polynomial<C: CoeffRing>(h: &Polynomial<C>, degree: usize) -> Option<Po
     Some(result)
 }
 
-/// Convenience wrapper for `i64` coefficients.
+/// Convenience wrapper for `i64` coefficients (panics on `i64` overflow).
 pub fn f_polynomial_i64(coeffs: &[i64], degree: usize) -> Option<Vec<i64>> {
     let h = Polynomial::<i64>::from_i64_coeffs(coeffs);
     f_polynomial(&h, degree).map(|p| p.coeffs().to_vec())
@@ -129,13 +187,16 @@ pub fn r_transform<C: CoeffRing>(p: &Polynomial<C>, degree: usize) -> Option<Pol
     Some(p.shift(&minus_one).dilate(&minus_one).scale(&sign))
 }
 
-/// Convenience wrapper for `i64` coefficients.
+/// Convenience wrapper for `i64` coefficients (panics on `i64` overflow).
 pub fn r_transform_i64(coeffs: &[i64], degree: usize) -> Option<Vec<i64>> {
     let p = Polynomial::<i64>::from_i64_coeffs(coeffs);
     r_transform(&p, degree).map(|q| q.coeffs().to_vec())
 }
 
 /// Compute the `R_d`-decomposition `p = \tilde a + x \tilde b`.
+///
+/// With `R = R_d(p)` from [`r_transform`], returns
+/// `(~a, ~b) = ((1 + x) p - x R, R - p)`, or `None` when `deg p > degree`.
 pub fn r_decomposition<C: CoeffRing>(
     p: &Polynomial<C>,
     degree: usize,
@@ -149,7 +210,7 @@ pub fn r_decomposition<C: CoeffRing>(
     Some((a_tilde, b_tilde))
 }
 
-/// Convenience wrapper for `i64` coefficients.
+/// Convenience wrapper for `i64` coefficients (panics on `i64` overflow).
 pub fn r_decomposition_i64(coeffs: &[i64], degree: usize) -> Option<(Vec<i64>, Vec<i64>)> {
     let p = Polynomial::<i64>::from_i64_coeffs(coeffs);
     r_decomposition(&p, degree).map(|(a, b)| (a.coeffs().to_vec(), b.coeffs().to_vec()))

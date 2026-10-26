@@ -29,7 +29,8 @@ assert_eq!(count_real_roots_prs_bigint_coeffs(&polynomial), 1);
 bisection: each root is returned either exactly (a `DyadicRational`) or in an
 open interval with dyadic endpoints that are not roots, sorted increasingly.
 
-`polytool` re-exports this API from `polytool::root_count` and its crate root.
+`polytool` re-exports this API from `polytool::root_count` (and the most-used
+items from its crate root).
 
 ## Algorithm lineage
 

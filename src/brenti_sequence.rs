@@ -38,6 +38,17 @@
 //!
 //! [`crate::brenti_recognition`] searches for a strip digraph reproducing a
 //! given finite prefix of rows.
+//!
+//! Entry points: build a [`BrentiStripDigraph`] (directly or with
+//! [`BrentiStripDigraph::from_weight_matrix`]), call
+//! [`BrentiStripDigraph::validate`], compute rows with
+//! [`BrentiStripDigraph::row_polynomial`], and package a verified match with
+//! [`build_brenti_sequence_certificate`].
+//!
+//! Conventions: heights and column indices are zero-based; row `n` is the
+//! polynomial `sum_k M_{n,k} t^k` (ascending coefficients, `t^k` for height `k`)
+//! with rational weights ([`crate::tnn_network::BigRational`]), trimmed as a
+//! [`Polynomial`].  Everything is exact; failures are [`BrentiError`] values.
 
 use crate::{tnn_network::BigRational, Polynomial};
 use num_bigint::BigInt;
@@ -60,6 +71,8 @@ pub struct BrentiEdge {
 /// what a valid strip digraph does and does not certify.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrentiStripDigraph {
+    /// `outgoing[y]` lists the edges leaving height `y`; the heights are
+    /// `0..outgoing.len()`, so the height bound is `outgoing.len() - 1`.
     pub outgoing: Vec<Vec<BrentiEdge>>,
 }
 
@@ -169,6 +182,9 @@ impl BrentiStripDigraph {
     }
 
     /// Weighted path counts from `(0,0)` to `(n,k)` for all tracked heights `k`.
+    ///
+    /// The result has one entry per height (`k = 0..num_heights`), untrimmed.
+    /// The digraph is validated first.
     pub fn row_counts(&self, n: usize) -> Result<Vec<BigRational>, BrentiError> {
         self.validate()?;
 
@@ -213,13 +229,18 @@ impl BrentiStripDigraph {
 /// rows real-rooted (see the module documentation).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrentiSequenceCertificate {
+    /// The validated strip digraph.
     pub digraph: BrentiStripDigraph,
+    /// `row_indices[i]` is the digraph row `n` (zero-based) that equals the
+    /// `i`-th polynomial of the matched sequence.
     pub row_indices: Vec<usize>,
+    /// The matched row polynomials `digraph.row_polynomial(row_indices[i])`.
     pub matched_rows: Vec<Polynomial<BigRational>>,
 }
 
 impl BrentiSequenceCertificate {
-    /// Re-run the structural checks and row matching.
+    /// Re-run the structural checks and row matching against `polys`, where
+    /// `polys[i]` must equal row `row_indices[i]` of the digraph.
     pub fn verify_against_bigint_polynomials(
         &self,
         polys: &[Polynomial<BigInt>],
@@ -250,31 +271,54 @@ impl BrentiSequenceCertificate {
 /// Errors returned by the restricted Brenti certificate machinery.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BrentiError {
+    /// The digraph has no heights.
     EmptyDigraph,
+    /// An edge targets a height above the strip.
     TargetOutOfRange {
+        /// Source height of the edge.
         from: usize,
+        /// Offending target height.
         to: usize,
+        /// Largest valid height.
         max_height: usize,
     },
+    /// An edge has a negative weight.
     NegativeWeight {
+        /// Source height of the edge.
         from: usize,
+        /// Target height of the edge.
         to: usize,
+        /// The negative weight.
         weight: BigRational,
     },
+    /// The monotone-target condition fails: a lower height reaches a target
+    /// above one reached from a higher height.
     NonPlanar {
+        /// The lower height `y`.
         lower_height: usize,
+        /// The higher height `y' > y`.
         upper_height: usize,
+        /// Largest target of `lower_height`.
         lower_max_target: usize,
+        /// Smallest target of `upper_height` (smaller than `lower_max_target`).
         upper_min_target: usize,
     },
+    /// The number of polynomials differs from the number of row indices.
     RowIndexCountMismatch {
+        /// Number of supplied polynomials.
         num_polynomials: usize,
+        /// Number of supplied row indices.
         num_row_indices: usize,
     },
+    /// A digraph row differs from the corresponding polynomial.
     SequenceMismatch {
+        /// Position `i` in the supplied polynomial list.
         sequence_index: usize,
+        /// The digraph row index compared.
         row_index: usize,
+        /// Coefficients of the supplied polynomial (ascending).
         expected: Vec<BigRational>,
+        /// Coefficients of the digraph's row polynomial (ascending, trimmed).
         found: Vec<BigRational>,
     },
 }

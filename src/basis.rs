@@ -9,6 +9,15 @@
 //! - the "magic basis"
 //!   `{ t^i (1+t)^{d-i} }_{i=0}^d`,
 //! - convenience helpers for checking magic positivity.
+//!
+//! Conventions: polynomials and coordinate vectors are ascending (coordinate `j`
+//! belongs to basis element `j`, in the order listed above).  Coordinates are
+//! computed exactly over `Q` and returned as [`BigRational`], also for integer
+//! input.  The ambient degree (`degree`) is an explicit upper bound and may
+//! exceed the actual degree of the input.  Errors are returned as
+//! [`BasisError`]; the `i64` entry points convert to `BigInt`/`Q` first, so
+//! they do not overflow.  For the Brandén--Solus decomposition data built on top
+//! of the magic basis see [`crate::decomposition`].
 
 use crate::numeric::binomial_bigint;
 use crate::polynomial::{CoeffRing, FieldRing};
@@ -23,16 +32,25 @@ pub type BigRational = Ratio<BigInt>;
 /// Errors produced while expanding a polynomial in a basis.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BasisError {
+    /// The supplied basis list is empty.
     EmptyBasis,
+    /// The target polynomial has degree larger than the ambient bound.
     TargetDegreeTooLarge {
+        /// Degree of the target polynomial.
         degree: usize,
+        /// Ambient degree bound (`basis.len() - 1`, or the explicit `degree`).
         basis_degree_bound: usize,
     },
+    /// A basis polynomial has degree larger than the ambient bound.
     BasisPolynomialTooLarge {
+        /// Index of the offending basis polynomial.
         index: usize,
+        /// Its degree.
         degree: usize,
+        /// Ambient degree bound.
         basis_degree_bound: usize,
     },
+    /// The supplied polynomials are linearly dependent, so they are not a basis.
     SingularBasis,
 }
 
@@ -269,10 +287,15 @@ pub fn is_magic_positive_bigint(coeffs: &[BigInt], degree: usize) -> Result<bool
 ///   `c_0 + ... + c_j <= c_d + ... + c_{d-j}` hold for all `0 <= j <= floor(d/2)`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MagicBasisAnalysis<R> {
+    /// Coordinates `c_0, ..., c_d` (length `d + 1`, `d` = the degree bound).
     pub coordinates: Vec<R>,
+    /// `left_partial_sums[j] = c_0 + ... + c_j` for `0 <= j <= floor(d/2)`.
     pub left_partial_sums: Vec<R>,
+    /// `right_partial_sums[j] = c_d + ... + c_{d-j}` for `0 <= j <= floor(d/2)`.
     pub right_partial_sums: Vec<R>,
+    /// Whether every coordinate is `>= 0` ("magic positive").
     pub all_nonnegative: bool,
+    /// Whether `left_partial_sums[j] <= right_partial_sums[j]` for every `j`.
     pub left_leq_right: bool,
 }
 

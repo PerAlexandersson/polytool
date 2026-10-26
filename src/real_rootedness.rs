@@ -1,7 +1,15 @@
 //! Real-rootedness testing, interlacing, log-concavity, and ultra-log-concavity.
 //!
-//! All functions accept polynomials as `i64` coefficient vectors in ascending degree order:
-//! `coeffs[i]` is the coefficient of t^i.
+//! Functions accept polynomials as `i64` coefficient vectors in ascending degree order
+//! (`coeffs[i]` is the coefficient of t^i); the `*_bigint_coeffs` variants take
+//! `&[BigInt]` and are the safe choice when coefficients can exceed `i64`.
+//! Verdicts are exact (no floating point) except [`real_roots`], which returns
+//! rational approximations.  Interlacing functions return `Option<bool>`
+//! (`None` when the degree relation does not allow the directed test; see
+//! [`check_weak_interlacing`]).  Besides real-rootedness and interlacing this
+//! module also holds palindromicity, gamma-positivity, the Stapledon
+//! decomposition, resultants/discriminants, the Ehrhart <-> h* conversions and
+//! the polynomial display helpers (`format_poly*`).
 //!
 //! # Default algorithm: primitive integer root counting
 //!
@@ -10,7 +18,7 @@
 //! tries cheap coefficient tests and then counts positive roots after the
 //! transformation `t ↦ -t`; otherwise it counts all real roots of the
 //! squarefree part directly.  Interlacing uses Bézout matrices, which are
-//! dramatically faster than older rational Sturm chains for that task.
+//! dramatically faster than rational Sturm chains for that task.
 //!
 //! ## Bézout matrix for interlacing
 //!
@@ -189,7 +197,7 @@ pub fn format_poly_bigint_var(coeffs: &[BigInt], var: &str) -> String {
 /// Check if a polynomial is real-rooted using Sturm chains with exact arithmetic.
 ///
 /// This is the slower rational Sturm-chain method. Prefer
-/// [`is_real_rooted`] unless you need the older Sturm-chain route explicitly.
+/// [`is_real_rooted`] unless you need the Sturm-chain route explicitly.
 ///
 /// Returns true for the zero polynomial and for constant/linear polynomials.
 pub fn is_real_rooted_sturm(coeffs: &[i64]) -> bool {
@@ -602,6 +610,10 @@ pub fn is_gamma_positive_ignoring_initial_zeros_bigint_coeffs(coeffs: &[BigInt])
 /// where `a(x)` is symmetric with center `n/2` and `b(x)` is symmetric with center
 /// `(n-1)/2`. This returns the coefficient vectors of `(a(x), b(x))` in ascending
 /// degree order, or `None` if `deg(p) > n`.
+///
+/// Panics if a coefficient of `a` or `b` does not fit in `i64` (their
+/// coefficients are integer combinations of the input's); use
+/// [`stapledon_decomposition_bigint_coeffs`] for large values.
 pub fn stapledon_decomposition(coeffs: &[i64], n: usize) -> Option<(Vec<i64>, Vec<i64>)> {
     let coeffs = coeffs.iter().map(|&c| BigInt::from(c)).collect::<Vec<_>>();
     stapledon_decomposition_bigint_coeffs(&coeffs, n).map(|(a, b)| {
@@ -659,6 +671,12 @@ pub fn has_simple_roots_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 }
 
 /// Find all real roots of a polynomial as rational interval midpoints.
+///
+/// Returns the **distinct** roots in increasing order (multiplicities are not
+/// reported).  A root `0` (from initial zero coefficients) and roots of linear
+/// factors are exact; other roots are the midpoints of isolating intervals of
+/// width at most `1e-6`, so they are approximations with error below `1e-6`.
+/// Use [`is_real_rooted`] for an exact yes/no decision.
 ///
 /// Returns `None` if the polynomial is not real-rooted.
 /// Returns `Some(vec![])` for constant/zero polynomials.
@@ -1461,7 +1479,7 @@ pub fn hermite_matrix_bigint_coeffs(coeffs: &[BigInt]) -> Option<Vec<Vec<BigInt>
 /// strict real-rootedness with the Bézout positive-definite criterion.
 ///
 /// This is kept separate from [`is_real_rooted_bezout_bigint_coeffs`] so the
-/// old semidefinite Bézout implementation remains available for comparison.
+/// semidefinite Bézout implementation remains available for comparison.
 pub fn is_real_rooted_bezout_squarefree_bigint_coeffs(coeffs: &[BigInt]) -> bool {
     let squarefree = squarefree_part_bigint_coeffs(coeffs);
     is_strictly_real_rooted_bezout_bigint_coeffs(&squarefree)
@@ -1611,9 +1629,9 @@ pub fn is_real_rooted_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 }
 
 /// Check if a polynomial with `BigInt` coefficients is real-rooted using the
-/// old semidefinite Bézout-matrix criterion.
+/// semidefinite Bézout-matrix criterion.
 ///
-/// This is the old exact BigInt implementation and is kept public for
+/// Exact, but slower than [`is_real_rooted_bigint_coeffs`]; it is kept public for
 /// benchmarking and cases where the matrix certificate itself is desired.
 pub fn is_real_rooted_bezout_bigint_coeffs(coeffs: &[BigInt]) -> bool {
     let d = match vec_poly::degree(coeffs) {
@@ -1757,6 +1775,9 @@ pub fn resultant(f: &[i64], g: &[i64]) -> BigInt {
 }
 
 /// Compute the resultant for `BigInt` coefficient polynomials.
+///
+/// Same conventions as [`resultant`] (ascending coefficients, `0` if either
+/// polynomial is zero).
 pub fn resultant_bigint_coeffs(f: &[BigInt], g: &[BigInt]) -> BigInt {
     match sylvester_matrix_bigint_coeffs(f, g) {
         Some(mat) => determinant_bigint(&mat),
@@ -1773,14 +1794,19 @@ pub fn resultant_bigint_coeffs(f: &[BigInt], g: &[BigInt]) -> BigInt {
 /// where n = deg(f) and f' is the formal derivative.
 ///
 /// The discriminant is zero iff f has a repeated root. For a polynomial with
-/// roots r_1, ..., r_n, disc(f) = lc(f)^{2n-2} * prod_{i<j} (r_i - r_j)^2
-/// (up to the sign convention).
+/// roots r_1, ..., r_n, disc(f) = lc(f)^{2n-2} * prod_{i<j} (r_i - r_j)^2.
+///
+/// Conventions: the zero polynomial has discriminant `0`, and every nonzero
+/// polynomial of degree at most 1 has discriminant `1`.  The result is exact
+/// (a `BigInt`); coefficients are ascending.
 pub fn discriminant(f: &[i64]) -> BigInt {
     let f_big = f.iter().map(|&c| BigInt::from(c)).collect::<Vec<_>>();
     discriminant_bigint_coeffs(&f_big)
 }
 
 /// Compute the discriminant for a `BigInt` coefficient polynomial.
+///
+/// Same conventions as [`discriminant`].
 pub fn discriminant_bigint_coeffs(f: &[BigInt]) -> BigInt {
     let n = match vec_poly::degree(f) {
         Some(n) => n,
@@ -1918,9 +1944,23 @@ pub fn ehrhart_to_hstar(ehrhart_coeffs: &[Q]) -> Result<Vec<i64>, EhrhartToHstar
 /// supplied representation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EhrhartToHstarError {
+    /// The common denominator passed to [`ehrhart_to_hstar_with_denom`] is zero.
     ZeroDenominator,
-    NonIntegralEntry { index: usize, value: Q },
-    EntryOutOfI64Range { index: usize, value: BigInt },
+    /// An h\*-entry is not an integer (so the input is not the Ehrhart
+    /// polynomial of a lattice polytope).
+    NonIntegralEntry {
+        /// Index `i` of the entry `h*_i`.
+        index: usize,
+        /// The nonintegral value.
+        value: Q,
+    },
+    /// An h\*-entry is an integer but does not fit in `i64`.
+    EntryOutOfI64Range {
+        /// Index `i` of the entry `h*_i`.
+        index: usize,
+        /// The entry.
+        value: BigInt,
+    },
 }
 
 impl std::fmt::Display for EhrhartToHstarError {

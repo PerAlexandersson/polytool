@@ -83,9 +83,12 @@
 //!   discriminant, Ehrhart ↔ h*-vector, display utilities
 //! - [`root_count`] — adaptive exact real-rootedness using primitive integer
 //!   PRS and Uspensky/Descartes root counting
-//! - [`sturm`] — Sturm chains for exact root isolation (used internally)
+//! - [`sturm`] — Sturm chains for exact root counting and isolation (the slower
+//!   alternative to the default real-rootedness path)
 //! - [`sturm_cf`] — signed Euclidean/Sturm continued-fraction certificates
 //! - [`recurrence`] — Adaptive recurrence search for polynomial sequences
+//! - [`renewal`] — Exact recognition of renewal-type recurrences
+//!   `P_n = sum_j r_j t^j P_(n-1-ell*j)` with interlacing consequences
 //! - [`oeis`] — Bundled recurrence-backed OEIS polynomial families
 //! - [`sequences`] — Standard sequences: Eulerian, Narayana, type B Eulerian,
 //!   Chebyshev T/U, Hermite
@@ -104,6 +107,13 @@
 //!   reproduces a given prefix of polynomial rows
 //! - [`interlacing_matrix`] — Finite Athanasiadis--Wagner `Lace(A)`
 //!   interlacing-matrix truncations and exact finite TNN checks
+//! - [`cyclic_sieving`] — Exact cyclic and bicyclic sieving checks via
+//!   root-of-unity evaluation, orbit decompositions and fixed-point tables
+//! - [`hstar_inequalities`] — Named inequalities for Ehrhart h*-vectors
+//!   (Hibi, Stanley, Balletti--Higashitani, Stapledon)
+//! - [`coefficient_tests`] — Coefficient-only real-rootedness criteria
+//!   (Newton inequalities, Kurtz condition) with structured reports
+//! - [`version`] — build-version formatting shared by the CLI
 //! - [`tnn_network`] — Constructive planar-network certificates for
 //!   lower-unitriangular totally nonnegative matrices and monic polynomial
 //!   sequences, structured TNN diagnostics, and Brändén--Saud Maia Leite chain

@@ -9,6 +9,23 @@
 //!   `*` optional for multiplication, `^` for exponent, `**` also accepted)
 //!
 //! All formats produce coefficients in ascending degree order.
+//!
+//! Entry points: [`parse_polynomial`] / [`parse_polynomial_bigint`] for one
+//! line (`i64` with an explicit "does not fit in `i64`" error, or `BigInt`) and
+//! [`parse_polynomials`] / [`parse_polynomials_bigint`] for multi-line input
+//! (blank lines and lines starting with `#` are skipped; the result has one
+//! `Result` per remaining line).  Errors are human-readable `String`s.
+//!
+//! Limits and caveats:
+//!
+//! - Input longer than [`MAX_POLYNOMIAL_INPUT_BYTES`] and polynomials with more
+//!   than [`MAX_POLYNOMIAL_COEFFICIENTS`] coefficients are rejected.
+//! - Coefficients are integers only (no fractions, decimals or scientific
+//!   notation) and a single variable letter is required for the expanded form;
+//!   products and powers of parenthesized sums such as `(1+x)^2` are **not**
+//!   expanded.
+//! - The result is not trimmed: `"1, 2, 0"` gives `[1, 2, 0]` and `"x - x"`
+//!   gives `[0, 0]`; trim with [`crate::vec_poly::trim`] if needed.
 
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;

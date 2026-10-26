@@ -13,6 +13,20 @@
 //! matrix.  A successful finite total-nonnegativity check is useful
 //! computational evidence; it is not, by itself, a proof that the infinite
 //! matrix is totally nonnegative unless a separate finite criterion applies.
+//!
+//! Entry points: [`lace_matrix`] (generic) with the `_i64`/`_bigint` wrappers,
+//! [`lace_matrix_sequence`] for a column vector of polynomials, and the TNN
+//! checks [`check_lace_tnn_neville_bigint`] / [`check_lace_tnn_neville_i64`]
+//! (full total nonnegativity of the finite matrix by Neville elimination) and
+//! [`check_lace_total_nonnegative_i64`] (brute force over minors up to a given
+//! size).
+//!
+//! Conventions: a polynomial is a `Vec<C>` of ascending coefficients (an empty
+//! vector is the zero polynomial); `block_rows` and `block_cols` count how
+//! many `p`-row and `q`-column blocks of the infinite matrix are kept.  Matrix
+//! rows and columns are zero-based.  The checks return `Result<(), String>`
+//! with a message describing the failing minor or malformed input.  The TNN
+//! machinery itself is in [`crate::linalg`].
 
 use crate::linalg::{check_tnn_neville, check_tnn_neville_bigint, check_total_positivity};
 use num_bigint::BigInt;
@@ -26,11 +40,17 @@ pub enum InterlacingMatrixError {
     /// The matrix has no rows.
     EmptyMatrix,
     /// Row `row` has no columns.
-    EmptyRow { row: usize },
+    EmptyRow {
+        /// Zero-based index of the empty row.
+        row: usize,
+    },
     /// Row `row` has a different number of columns than the first row.
     RaggedRows {
+        /// Zero-based index of the offending row.
         row: usize,
+        /// Number of columns of the first row.
         expected: usize,
+        /// Number of columns in row `row`.
         found: usize,
     },
 }
@@ -155,6 +175,9 @@ pub fn lace_matrix_sequence_bigint(
 /// Brute-force finite total-nonnegativity check for a `Lace(A)` truncation.
 ///
 /// This checks all minors up to `max_minor_size` in the finite truncation.
+/// The cost grows combinatorially with the matrix size and `max_minor_size`;
+/// use [`check_lace_tnn_neville_i64`] for a full test of the finite matrix.
+/// Returns `Err` with a message for malformed input or a negative minor.
 pub fn check_lace_total_nonnegative_i64(
     matrix: &[Vec<Vec<i64>>],
     block_rows: usize,

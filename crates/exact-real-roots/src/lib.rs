@@ -21,6 +21,31 @@
 //! An independent Uspensky/Descartes implementation is also available for
 //! exact comparison.  It bounds the roots, applies homographic subdivision,
 //! and uses Descartes' rule of signs to discard or certify open intervals.
+//!
+//! # Entry points
+//!
+//! - Decide real-rootedness: [`is_real_rooted_fast_bigint_coeffs`] (adaptive
+//!   default, also [`is_real_rooted_fast_i64`]);
+//!   [`is_real_rooted_prs_bigint_coeffs`] and
+//!   [`is_real_rooted_uspensky_bigint_coeffs`] force one backend.
+//! - Count distinct real roots: [`count_real_roots_prs_bigint_coeffs`],
+//!   [`count_positive_roots_prs_bigint_coeffs`] and the Uspensky counterparts;
+//!   [`squarefree_degree_bigint_coeffs`] gives the square-free degree to compare
+//!   against.
+//! - Isolate roots: [`isolate_real_roots_bigint_coeffs`] returns sorted
+//!   [`IsolatedRealRoot`] values with exact dyadic endpoints.
+//! - Signs at roots: [`count_root_signs_prs_bigint_coeffs`] and
+//!   [`tarski_query_prs_bigint_coeffs`].
+//! - Coefficient-only filters: [`satisfies_newton_inequalities_bigint`]
+//!   (necessary) and [`satisfies_kurtz_condition_bigint`] (sufficient).
+//!
+//! # Conventions
+//!
+//! Polynomials are `&[BigInt]` (or `&[i64]` in the convenience wrappers) in
+//! ascending degree order: `coeffs[i]` is the coefficient of `t^i`.  Trailing
+//! zeros are ignored, and the zero polynomial and nonzero constants have no
+//! roots and count as real-rooted.  Repeated roots are counted once, so counts
+//! are numbers of *distinct* roots.  All results are exact.
 
 use num_bigint::BigInt;
 use num_integer::Integer;
@@ -1245,7 +1270,9 @@ fn prefers_uspensky_for_one_signed(coeffs: &[BigInt]) -> bool {
 /// Exact real-rootedness optimized for one-signed coefficient polynomials.
 ///
 /// Returns `None` if the nonzero coefficients do not all have the same sign.
-/// Powers of `t` are removed first, since zero is already a real root.
+/// Powers of `t` are removed first, since zero is already a real root.  After
+/// that, polynomials of degree at most 1 always give `Some(true)`, whatever the
+/// signs.
 pub fn is_real_rooted_one_signed_bigint_coeffs(coeffs: &[BigInt]) -> Option<bool> {
     let p = trim_slice(strip_initial_zeros_bigint(coeffs));
     let d = match degree(&p) {
