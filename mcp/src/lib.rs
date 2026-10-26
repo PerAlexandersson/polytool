@@ -2320,22 +2320,12 @@ fn check_family_lace(
     }
 }
 
+/// `C(n, k)`, saturating at `cap + 1` so that callers can compare against `cap`.
 fn binomial_capped(n: usize, k: usize, cap: usize) -> usize {
-    if k > n {
-        return 0;
-    }
-    let k = k.min(n - k);
-    let mut result = 1usize;
-    for divisor in 1..=k {
-        result = result
-            .checked_mul(n - k + divisor)
-            .and_then(|value| value.checked_div(divisor))
-            .unwrap_or(cap.saturating_add(1));
-        if result > cap {
-            return cap.saturating_add(1);
-        }
-    }
-    result
+    let saturated = cap.saturating_add(1);
+    polytool::numeric::binomial_u128(n, k)
+        .and_then(|value| usize::try_from(value).ok())
+        .map_or(saturated, |value| value.min(saturated))
 }
 
 fn recurrence_failure_response(
@@ -4001,6 +3991,17 @@ impl Default for PolynomialToolsServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn binomial_capped_saturates_at_cap_plus_one() {
+        assert_eq!(binomial_capped(10, 3, 1000), 120);
+        assert_eq!(binomial_capped(10, 3, 120), 120);
+        assert_eq!(binomial_capped(10, 3, 119), 120);
+        assert_eq!(binomial_capped(10, 3, 10), 11);
+        assert_eq!(binomial_capped(3, 5, 10), 0);
+        assert_eq!(binomial_capped(200, 100, 250_000), 250_001);
+        assert_eq!(binomial_capped(usize::MAX, 3, usize::MAX), usize::MAX);
+    }
 
     fn coeffs(values: &[i64]) -> PolynomialInput {
         PolynomialInput {

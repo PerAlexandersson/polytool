@@ -118,12 +118,9 @@ struct DecompositionResult {
 // ---------------------------------------------------------------------------
 
 fn strip_trailing_zeros(coeffs: &[BigInt]) -> &[BigInt] {
-    let zero = BigInt::from(0);
-    let end = coeffs.iter().rposition(|c| c != &zero).map_or(0, |i| i + 1);
-    if end == 0 {
-        &[]
-    } else {
-        &coeffs[..end]
+    match vec_poly::degree(coeffs) {
+        Some(degree) => &coeffs[..=degree],
+        None => &[],
     }
 }
 
