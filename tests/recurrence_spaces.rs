@@ -13,8 +13,8 @@ fn run(req: &RecurrenceSpaceRequest) -> RecurrenceSpaces {
     report
 }
 
-// Source snapshot: sqrt-of-2/real-rooted-oeis-proofs at
-// 9bb3970e5ba7877b77572c066bd56fbf8f63f05c, ProofsOeis/A*.lean.
+// Source snapshot: generated recurrence definitions of the OEIS families
+// below (rows checked against the OEIS data).
 // The canonical generator is ConstantLagSource::generate_rows; no floating
 // root calculation or independently reimplemented family generator is used.
 fn fixture(id: &str) -> Value {

@@ -1,6 +1,6 @@
 //! Complete lag/derivative trade-offs for A171608.
-//! Source: sqrt-of-2/real-rooted-oeis-proofs, commit
-//! 9bb3970e5ba7877b77572c066bd56fbf8f63f05c, ProofsOeis/A171608.lean.
+//! Source: the generated A171608 recurrence definition (rows checked against
+//! the OEIS data).
 //! Run: cargo run -p polytool --example recurrence_spaces > spaces.json
 //! Add `-- hermite` for a polynomial-index source, `-- automatic` for n! X^n,
 //! or `-- rescaled` for A007318 rows (1+X)^n after dividing coefficient k by k!.
