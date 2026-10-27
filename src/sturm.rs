@@ -9,11 +9,11 @@
 //! the slower route for real-rootedness; the default exact tests live in
 //! [`crate::real_rootedness`] and [`crate::root_count`].
 
+use crate::BigRational;
 use num_bigint::BigInt;
-use num_rational::Ratio;
 use num_traits::{One, Signed, Zero};
 
-type Q = Ratio<BigInt>;
+type Q = BigRational;
 
 /// A polynomial over Q stored as coefficient vector (ascending degree).
 #[derive(Clone, Debug)]
@@ -265,7 +265,7 @@ impl SturmChain {
     ///
     /// Roots at the endpoints are not counted.  Expects `a <= b`; the result is not
     /// meaningful otherwise.
-    pub fn count_roots_in(&self, a: &Q, b: &Q) -> usize {
+    pub fn count_roots_in(&self, a: &BigRational, b: &BigRational) -> usize {
         let sa = self.sign_changes_at(a);
         let sb = self.sign_changes_at(b);
         let mut count = sa.saturating_sub(sb);
@@ -325,7 +325,7 @@ impl SturmChain {
     /// # Panics
     ///
     /// Panics if `epsilon` is not positive.
-    pub fn isolate_roots(&self, epsilon: &Q) -> Vec<(Q, Q)> {
+    pub fn isolate_roots(&self, epsilon: &BigRational) -> Vec<(BigRational, BigRational)> {
         assert!(
             epsilon.is_positive(),
             "root isolation epsilon must be positive"

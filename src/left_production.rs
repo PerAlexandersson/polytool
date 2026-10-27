@@ -388,7 +388,8 @@ pub struct ProductionTnnFailure {
 /// explicit negative minor, whose value is reported for the unscaled matrix.
 pub fn check_production_tnn(production: &[Vec<BigRational>]) -> Result<(), ProductionTnnFailure> {
     let (scale, matrix) = scaled_square(production);
-    check_tnn_neville_bigint(&matrix).map_err(|reason| {
+    check_tnn_neville_bigint(&matrix).map_err(|error| {
+        let reason = error.to_string();
         let witness = find_negative_minor(&matrix).map(|minor| {
             let size = minor.rows.len() as u32;
             Box::new(RationalNegativeMinor {

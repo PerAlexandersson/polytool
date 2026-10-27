@@ -35,12 +35,14 @@ use crate::real_rootedness::{
     is_real_rooted_bigint_coeffs,
 };
 use num_bigint::BigInt;
-use num_rational::Ratio;
 
 /// Exact rational type used in magic-basis analysis.
-pub type BigRational = Ratio<BigInt>;
+pub use crate::BigRational;
 
-/// A structured view of the `I_d` / `R_d` decomposition data of an `i64` polynomial.
+/// A structured view of the `I_d` / `R_d` decomposition data of a polynomial
+/// with coefficients of type `C`: `i64` (the default, see
+/// [`analyze_symmetric_decomposition_i64`]) or [`BigInt`] (see
+/// [`analyze_symmetric_decomposition_bigint`], which narrows no coefficient).
 ///
 /// Write `p` for the input and `d = degree` for its actual degree (0 for the zero
 /// polynomial).  All vectors are coefficient vectors in ascending degree order.
@@ -49,15 +51,15 @@ pub type BigRational = Ratio<BigInt>;
 /// is admissible and the verdict was decided exactly, `None` when the degrees
 /// do not allow that directed interlacing test.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SymmetricDecompositionAnalysis {
+pub struct SymmetricDecompositionAnalysis<C = i64> {
     /// Actual degree `d` of the input (the degree bound used everywhere below).
     pub degree: usize,
     /// Reversal `x^d p(1/x)` of the input with respect to degree `d`.
-    pub reciprocal: Vec<i64>,
+    pub reciprocal: Vec<C>,
     /// `a` in the `I_d`-decomposition `p = a + x b`: symmetric with center `d/2`.
-    pub a: Vec<i64>,
+    pub a: Vec<C>,
     /// `b` in `p = a + x b`: symmetric with center `(d-1)/2`.
-    pub b: Vec<i64>,
+    pub b: Vec<C>,
     /// Whether `a` is real-rooted.
     pub a_real_rooted: bool,
     /// Whether `b` is real-rooted.
@@ -71,14 +73,14 @@ pub struct SymmetricDecompositionAnalysis {
     /// (see [`is_alternatingly_increasing`]).
     pub alternatingly_increasing: bool,
     /// The `f`-polynomial `(1+x)^d p(x/(1+x))` of `p` (see [`f_polynomial`]).
-    pub f_polynomial: Vec<i64>,
+    pub f_polynomial: Vec<C>,
     /// `R_d(f)`, the reflection `(-1)^d f(-1-x)` of the `f`-polynomial.
-    pub r_transform_of_f: Vec<i64>,
+    pub r_transform_of_f: Vec<C>,
     /// `~a` in the `R_d`-decomposition `f = ~a + x ~b` of the `f`-polynomial
     /// (see [`r_decomposition`]).
-    pub r_a: Vec<i64>,
+    pub r_a: Vec<C>,
     /// `~b` in the `R_d`-decomposition of the `f`-polynomial.
-    pub r_b: Vec<i64>,
+    pub r_b: Vec<C>,
     /// Whether `R_d(f)` weakly interlaces `f`.
     pub r_interlaces_f: Option<bool>,
     /// Magic-basis coordinates and Theorem 2.13 partial sums of the *input*
@@ -86,47 +88,12 @@ pub struct SymmetricDecompositionAnalysis {
     pub magic: MagicBasisAnalysis<BigRational>,
 }
 
-/// A structured view of the `I_d` / `R_d` decomposition data of a `BigInt`
-/// polynomial.
-///
-/// This is the arbitrary-precision counterpart of
-/// [`SymmetricDecompositionAnalysis`]. No coefficient is narrowed to `i64`.
-/// Field meanings are identical to those documented there.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SymmetricDecompositionAnalysisBigInt {
-    /// Actual degree `d` of the input (the degree bound used everywhere below).
-    pub degree: usize,
-    /// Reversal `x^d p(1/x)` of the input with respect to degree `d`.
-    pub reciprocal: Vec<BigInt>,
-    /// `a` in the `I_d`-decomposition `p = a + x b` (symmetric, center `d/2`).
-    pub a: Vec<BigInt>,
-    /// `b` in `p = a + x b` (symmetric, center `(d-1)/2`).
-    pub b: Vec<BigInt>,
-    /// Whether `a` is real-rooted.
-    pub a_real_rooted: bool,
-    /// Whether `b` is real-rooted.
-    pub b_real_rooted: bool,
-    /// Whether `b` weakly interlaces `a`; `None` if the degrees do not allow it.
-    pub b_interlaces_a: Option<bool>,
-    /// Whether the reversal of `p` weakly interlaces `p`; `None` if the degrees
-    /// do not allow it.
-    pub reciprocal_interlaces_input: Option<bool>,
-    /// Whether `0 <= p_0 <= p_d <= p_1 <= p_{d-1} <= ...`.
-    pub alternatingly_increasing: bool,
-    /// The `f`-polynomial `(1+x)^d p(x/(1+x))`.
-    pub f_polynomial: Vec<BigInt>,
-    /// `R_d(f) = (-1)^d f(-1-x)`.
-    pub r_transform_of_f: Vec<BigInt>,
-    /// `~a` in the `R_d`-decomposition `f = ~a + x ~b`.
-    pub r_a: Vec<BigInt>,
-    /// `~b` in the `R_d`-decomposition `f = ~a + x ~b`.
-    pub r_b: Vec<BigInt>,
-    /// Whether `R_d(f)` weakly interlaces `f`; `None` if the degrees do not
-    /// allow it.
-    pub r_interlaces_f: Option<bool>,
-    /// Magic-basis coordinates and partial sums of the input polynomial.
-    pub magic: MagicBasisAnalysis<BigRational>,
-}
+/// Deprecated name of [`SymmetricDecompositionAnalysis`]`<BigInt>`.
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `SymmetricDecompositionAnalysis<BigInt>`"
+)]
+pub type SymmetricDecompositionAnalysisBigInt = SymmetricDecompositionAnalysis<BigInt>;
 
 /// Compute the `f`-polynomial
 ///
@@ -312,7 +279,7 @@ pub fn analyze_symmetric_decomposition_i64(
 /// respect to its actual degree, without narrowing any coefficient.
 pub fn analyze_symmetric_decomposition_bigint(
     coeffs: &[BigInt],
-) -> Result<SymmetricDecompositionAnalysisBigInt, BasisError> {
+) -> Result<SymmetricDecompositionAnalysis<BigInt>, BasisError> {
     let p = Polynomial::<BigInt>::new(coeffs.to_vec());
     let degree = p.degree().unwrap_or(0);
     let input = p.coeffs().to_vec();
@@ -331,7 +298,7 @@ pub fn analyze_symmetric_decomposition_bigint(
 
     let magic = analyze_magic_basis_bigint(p.coeffs(), degree)?;
 
-    Ok(SymmetricDecompositionAnalysisBigInt {
+    Ok(SymmetricDecompositionAnalysis {
         degree,
         reciprocal: reciprocal.coeffs().to_vec(),
         a: a.coeffs().to_vec(),

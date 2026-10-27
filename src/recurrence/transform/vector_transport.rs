@@ -112,9 +112,9 @@ impl RecurrenceTransformation {
     pub fn map_state(
         &self,
         index: usize,
-        state: &[Vec<Q>],
+        state: &[Vec<BigRational>],
         offsets: &[i64],
-    ) -> Result<Vec<Vec<Q>>, TransformError> {
+    ) -> Result<Vec<Vec<BigRational>>, TransformError> {
         if state.len() == 1 {
             return self.map_row(index, &state[0]);
         }
@@ -137,9 +137,9 @@ impl RecurrenceTransformation {
     pub fn inverse_state(
         &self,
         index: usize,
-        image: &[Vec<Q>],
+        image: &[Vec<BigRational>],
         offsets: &[i64],
-    ) -> Result<Vec<Vec<Q>>, TransformError> {
+    ) -> Result<Vec<Vec<BigRational>>, TransformError> {
         if self.component_count() != 1 || image.len() == 1 {
             return Ok(vec![self.inverse_row(index, image)?]);
         }

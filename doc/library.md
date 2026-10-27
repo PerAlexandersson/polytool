@@ -84,6 +84,18 @@ let g = vec![
 assert_eq!(check_interlacing_bigint_coeffs(&f, &g), Some(true));
 ```
 
+Root-location helpers are named for what they return.  `approximate_real_roots`
+(formerly `real_roots`) returns interval midpoints, rational approximations
+accurate to below `1e-6`, and `None` when the polynomial is not real-rooted;
+`real_rootedness::isolate_real_roots_rational_coeffs` (formerly
+`isolate_real_roots_exact`) returns certified enclosures with multiplicities for
+rational coefficients.  Total nonnegativity is tested by
+`linalg::is_totally_nonnegative_neville` (all minors, Neville elimination) and
+`linalg::is_totally_nonnegative_by_minors` (brute force up to a minor size).
+Failures of the diagnostic `check_*` and parsing functions are typed errors
+(`TotalPositivityError`, `InterlacingMatrixError`, `CyclicSievingError`,
+`ParsePolynomialError`) whose `Display` text is the human-readable message.
+
 ## Athanasiadis--Wagner interlacing matrices
 
 ```rust
@@ -102,7 +114,7 @@ assert_eq!(lace, vec![vec![2, 1, 0], vec![8, 6, 1], vec![3, 4, 1]]);
 
 // This is Athanasiadis--Wagner's pairwise-but-not-fully-interlacing example:
 // the 3 x 3 determinant is negative.
-assert!(check_lace_sequence_total_nonnegative_i64(&polys, 1, 3, 3).is_err());
+assert!(check_lace_sequence_totally_nonnegative_by_minors_i64(&polys, 1, 3, 3).is_err());
 ```
 
 For a `p x q` polynomial matrix `A`, `lace_matrix_i64(A, r, c)` returns the
@@ -270,10 +282,11 @@ ascending `Vec<BigInt>` polynomials in `q`: `q_integer(n)`, `q_factorial(n)`,
 `polytool::sequences` generators take `max_n` and return `rows[n]` for
 `n = 0..=max_n` (the n-th member of the family, with `rows[0]` the `n = 0`
 member), so Eulerian rows are `A_0 = 1, A_1 = 1, A_2 = 1 + t, ...`.  The
-OEIS triangles A008292 and A001263 start at `n = 1`, i.e. `rows[1..]`.  The
-two exceptions follow their sources' normalization and say so in their
-rustdoc: `literature::hoggatt_polynomials_bigint` (`rows[i] = H_{i+1}`) and
-the `deco` histogram layers (`rows[N - 1]` for size `N`).  Besides the classical
+OEIS triangles A008292 and A001263 start at `n = 1`, i.e. `rows[1..]`; the
+same holds for `literature::hoggatt_polynomials_bigint`, whose `rows[0]` is the
+zero polynomial.  The one exception follows its source's normalization and
+says so in its rustdoc: the `deco` histogram layers take `max_size` and return
+`rows[N - 1]` for size `N`.  Besides the classical
 families the module provides permutation-statistic generators over `BigInt`:
 `derangement_descent_polynomials_bigint` (derangements of `[n]` by descents
 in one-line notation, OEIS A219836; this is not the excedance triangle

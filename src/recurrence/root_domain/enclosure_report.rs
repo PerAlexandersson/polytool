@@ -5,7 +5,7 @@
 //! enclosures with multiplicities, the degree, the valuation and the exact
 //! real-rootedness verdict, optionally refined to a maximal width and tested
 //! against an interval (constant, index-dependent or a ray).  Enclosures come
-//! from [`crate::real_rootedness::isolate_real_roots_exact`]; their midpoints
+//! from [`crate::real_rootedness::isolate_real_roots_rational_coeffs`]; their midpoints
 //! are representatives only, never certified bounds or roots.
 //!
 //! [`jensen_fixed_cap_check`] tests a diagonal map `x^k -> lambda_k x^k` at a
@@ -15,7 +15,7 @@
 //! degree (a multiplier sequence needs every cap).
 
 use super::*;
-use crate::real_rootedness::{isolate_real_roots_exact, RealInterval};
+use crate::real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval};
 use crate::vec_poly;
 use num_traits::{Signed, Zero};
 use serde::{Deserialize, Serialize};
@@ -125,7 +125,7 @@ pub fn root_enclosures(request: &RootEnclosureRequest) -> Result<RootEnclosureRe
                 "polynomial {index} exceeds degree {ROOT_ENCLOSURES_MAX_DEGREE}"
             ));
         }
-        let mut isolation = isolate_real_roots_exact(&polynomial);
+        let mut isolation = isolate_real_roots_rational_coeffs(&polynomial);
         if let Some(width) = &max_width {
             isolation.refine(width);
         }
@@ -210,7 +210,7 @@ pub struct JensenFixedCapReport {
 /// assert_eq!(jensen_fixed_cap_check(&down, 2).unwrap().status, JensenCapStatus::FailsAtCap);
 /// ```
 pub fn jensen_fixed_cap_check(
-    multipliers: &[Q],
+    multipliers: &[BigRational],
     cap: usize,
 ) -> Result<JensenFixedCapReport, String> {
     if cap > ROOT_ENCLOSURES_MAX_DEGREE {
@@ -228,7 +228,7 @@ pub fn jensen_fixed_cap_check(
         .enumerate()
         .map(|(k, lambda)| Q::from_integer(crate::numeric::binomial_bigint(cap, k)) * lambda)
         .collect();
-    let isolation = isolate_real_roots_exact(&jensen);
+    let isolation = isolate_real_roots_rational_coeffs(&jensen);
     let one_signed = isolation.all_real_roots_in(&RealInterval::at_most(Q::zero()))
         || isolation.all_real_roots_in(&RealInterval::at_least(Q::zero()));
     let status = if !isolation.is_real_rooted() {

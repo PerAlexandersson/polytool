@@ -54,12 +54,11 @@ use crate::real_rootedness::{check_weak_interlacing_bigint_coeffs, is_real_roote
 use crate::root_count::count_root_signs_prs_bigint_coeffs;
 use crate::{check_tnn_neville_bigint, vec_poly, Polynomial};
 use num_bigint::BigInt;
-use num_rational::Ratio;
 use num_traits::{One, Zero};
 use std::fmt;
 
 /// Exact rational type used for canonical network weights.
-pub type BigRational = Ratio<BigInt>;
+pub use crate::BigRational;
 
 /// Canonical triangular planar network `Gamma_N(lambda)`.
 ///
@@ -531,8 +530,8 @@ const MINOR_SEARCH_BUDGET: usize = 200_000;
 pub fn check_lower_unitriangular_tnn(rows: &[Vec<BigInt>]) -> Result<(), NetworkError> {
     validate_lower_unitriangular_nonnegative_matrix(rows)?;
     let padded = pad_to_square_matrix(rows);
-    check_tnn_neville_bigint(&padded).map_err(|reason| NetworkError::NotTnn {
-        reason,
+    check_tnn_neville_bigint(&padded).map_err(|error| NetworkError::NotTnn {
+        reason: error.to_string(),
         witness: find_negative_minor(&padded),
     })
 }

@@ -37,7 +37,7 @@
 //! evidence, never as a proof for larger degrees.
 
 use super::*;
-use crate::real_rootedness::{isolate_real_roots_exact, RealInterval};
+use crate::real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval};
 use crate::vec_poly;
 use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
@@ -171,7 +171,7 @@ fn exact(condition: String, holds: bool, detail: String) -> RootHypothesis {
 
 /// Whether `f` has only real roots, all `<= 0` (exact isolation).
 fn roots_nonpositive(f: &[Q]) -> bool {
-    isolate_real_roots_exact(f).real_rooted_in(&RealInterval::at_most(Q::zero()))
+    isolate_real_roots_rational_coeffs(f).real_rooted_in(&RealInterval::at_most(Q::zero()))
 }
 
 fn diagonal_adapter(
@@ -278,7 +278,7 @@ fn antecedent_adapter(g: &[String], record: &TransformationRecord) -> Result<Map
          injective, so P_n = 0 iff Q_n = 0)",
         poly_text(&g, "x")
     );
-    let real_rooted = isolate_real_roots_exact(&g).is_real_rooted();
+    let real_rooted = isolate_real_roots_rational_coeffs(&g).is_real_rooted();
     implication.hypotheses.push(exact(
         "g is real-rooted".into(),
         real_rooted,
@@ -308,7 +308,7 @@ fn antecedent_interval(
     g: &[Q],
     domain: (usize, Option<usize>),
 ) -> Option<RootInterval> {
-    let g_isolation = isolate_real_roots_exact(g);
+    let g_isolation = isolate_real_roots_rational_coeffs(g);
     if interval.is_index_independent() {
         let real = interval.at(0).ok()?;
         if g_isolation.real_rooted_in(&real) {

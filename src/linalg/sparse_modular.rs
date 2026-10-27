@@ -15,11 +15,13 @@ mod solver;
 #[cfg(test)]
 mod tests;
 
+#[allow(deprecated)]
+pub use solver::sparse_modular_linear_system_consistent;
 pub use solver::{
-    sparse_modular_linear_system_consistency,
-    sparse_modular_linear_system_consistency_with_options, sparse_modular_linear_system_consistent,
-    sparse_modular_linear_system_solution, SparseModEliminationError, SparseModEliminationOptions,
-    SparseModEliminationResult, SparseModEliminationStats, SparseModRowOrder,
+    is_sparse_modular_linear_system_consistent, sparse_modular_linear_system_consistency,
+    sparse_modular_linear_system_consistency_with_options, sparse_modular_linear_system_solution,
+    SparseModEliminationError, SparseModEliminationOptions, SparseModEliminationResult,
+    SparseModEliminationStats, SparseModRowOrder,
 };
 pub(crate) use solver::{
     sparse_modular_linear_system_consistency_prime_unchecked_with_solution_mode,

@@ -90,6 +90,14 @@
 - Interlacing functions return `Option<bool>`: `None` means the degrees do not
   admit that directed test, not "false".  `check_weak_interlacing(f, g)` tests
   `f << g`; use `interlaces_either_order` for the undirected question.
+- Public names are fully spelled out (`denominator`, not `denom`) and name what
+  a function returns or the algorithm it uses (`approximate_real_roots`,
+  `is_totally_nonnegative_neville`); `is_*` returns `bool`, `check_*` a
+  `Result` or `Option<bool>`.  Fallible functions return a typed error with
+  `Display` and `std::error::Error` impls, not `String`.  When a public item is
+  renamed or removed, keep a `#[deprecated(since = "...", note = "renamed to
+  `new_name`")]` alias for one release, use the new name internally (Clippy runs
+  with `-D warnings`), and list the old and new names in `CHANGELOG.md`.
 - Diagnostic report types (`*Report`, `*Check`, `*Error`) are serialized by the
   CLI and MCP server.  Document every public field (meaning, indexing base,
   coefficient order, units), and treat renaming or reordering fields as a schema

@@ -94,11 +94,14 @@ With `--json`, each item keeps its `report` object unchanged and gains
 (`null` unless `--orbit-sizes` is given).
 
 Library API (`polytool::`, all `BigInt`): `cyclic_sieving_orbit_decomposition_bigint(coeffs, n)`,
-`cyclic_sieving_check_orbit_sizes(coeffs, n, orbit_sizes)`,
+`check_cyclic_sieving_orbit_sizes(coeffs, n, orbit_sizes)`,
 `orbit_counts_from_fixed_points(fixed, n)` (Moebius inversion; errors if the
 table is not that of an action), `orbit_counts_from_orbit_sizes`,
 `fixed_points_from_orbit_sizes`, `fixed_points_from_orbit_counts`,
-`reduce_modulo_cyclic_bigint`.
+`reduce_modulo_cyclic_bigint`.  Invalid input is reported as a
+`CyclicSievingError` (zero order, wrong table length, an orbit size that does
+not divide the order, a table that is not that of an action, ...); its
+`Display` text is the message the CLI prints.
 
 ### Bicyclic sieving
 

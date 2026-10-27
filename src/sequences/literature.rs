@@ -68,11 +68,16 @@ pub fn eulerian_square_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     square_triangle(&triangle)
 }
 
-/// Hoggatt polynomials `H_1^[m](q,t), ..., H_max_n^[m](q,t)`, exact integer q>=1.
+/// Hoggatt polynomials `H_0^[m](q,t), ..., H_max_n^[m](q,t)`, exact integer q>=1.
 ///
-/// Indexing: the paper's normalization starts at n=1, so `rows[i]` = `H_{i+1}`
-/// and `max_n` rows are returned (none for `max_n = 0`).  This is the one
-/// generator in `sequences` whose first row is not n=0.
+/// Indexing: `rows[n]` = `H_n` for `0 <= n <= max_n` (`max_n + 1` rows), like
+/// every generator in `sequences`.  The paper's normalization starts at n=1,
+/// and `H_n` has degree at most `n - 1`, so `rows[0]` is the zero polynomial
+/// `[0]` (an empty sum over `k`); use `rows[1..]` for the paper's rows.
+///
+/// **Indexing change in 0.6.0:** earlier versions returned `max_n` rows with
+/// `rows[i]` = `H_{i+1}` (and no rows for `max_n = 0`); use
+/// `hoggatt_polynomials_bigint(n, m, q)[1..]` to reproduce that.
 ///
 /// The coefficient of t^k in row n (1<=n<=max_n, 0<=k<n) is
 /// q^(m*k*(k+1)/2) times the volume generating function of plane partitions
@@ -90,7 +95,7 @@ pub fn hoggatt_polynomials_bigint(max_n: usize, m: usize, q: u32) -> Vec<Vec<Big
     assert!(m >= 1, "Hoggatt box height m must be positive");
     assert!(q >= 1, "Hoggatt specialization q must be positive");
     if max_n == 0 {
-        return Vec::new();
+        return vec![vec![BigInt::zero()]];
     }
     let max_top = max_n.checked_add(m).expect("Hoggatt index overflow") - 2;
     let q = BigInt::from(q);
@@ -106,8 +111,8 @@ pub fn hoggatt_polynomials_bigint(max_n: usize, m: usize, q: u32) -> Vec<Vec<Big
         }
         gaussian.push(row);
     }
-    (1..=max_n)
-        .map(|n| {
+    std::iter::once(vec![BigInt::zero()])
+        .chain((1..=max_n).map(|n| {
             let top = n + m - 2;
             let denominator: BigInt = (1..m).map(|j| &gaussian[top][j]).product();
             (0..n)
@@ -122,7 +127,7 @@ pub fn hoggatt_polynomials_bigint(max_n: usize, m: usize, q: u32) -> Vec<Vec<Big
                     count * pow_usize(&q, exponent)
                 })
                 .collect()
-        })
+        }))
         .collect()
 }
 
@@ -221,14 +226,16 @@ mod tests {
     #[test]
     fn hoggatt_at_one_matches_narayana_and_baxter() {
         assert_eq!(
-            hoggatt_polynomials_bigint(8, 2, 1),
+            hoggatt_polynomials_bigint(8, 2, 1)[1..],
             super::super::narayana_polynomials_bigint(8)[1..]
         );
         let h = hoggatt_polynomials_bigint(5, 3, 1);
-        assert_eq!(h[0], big(&[1]));
-        assert_eq!(h[2], big(&[1, 4, 1]));
-        assert_eq!(h[3], big(&[1, 10, 10, 1]));
-        assert_eq!(h[4], big(&[1, 20, 50, 20, 1]));
+        assert_eq!(h.len(), 6);
+        assert_eq!(h[0], big(&[0]));
+        assert_eq!(h[1], big(&[1]));
+        assert_eq!(h[3], big(&[1, 4, 1]));
+        assert_eq!(h[4], big(&[1, 10, 10, 1]));
+        assert_eq!(h[5], big(&[1, 20, 50, 20, 1]));
     }
 
     #[test]
@@ -236,8 +243,10 @@ mod tests {
         for q in [1, 2, 3, 10] {
             let h = hoggatt_polynomials_bigint(9, 1, q);
             let mut product = vec![BigInt::one()];
-            for n in 1..=9 {
-                assert_eq!(h[n - 1], product);
+            assert_eq!(h.len(), 10);
+            assert_eq!(h[0], big(&[0]));
+            for (n, row) in h.iter().enumerate().skip(1) {
+                assert_eq!(*row, product);
                 let factor = pow_usize(&BigInt::from(q), n);
                 let mut next = vec![BigInt::zero(); product.len() + 1];
                 for (i, c) in product.iter().enumerate() {
@@ -265,7 +274,7 @@ mod tests {
                     }
                 }
                 assert_eq!(
-                    hoggatt_polynomials_bigint(5, m, q)[4][2],
+                    hoggatt_polynomials_bigint(5, m, q)[5][2],
                     weight * pow_usize(&BigInt::from(q), 3 * m)
                 );
             }
@@ -274,8 +283,12 @@ mod tests {
 
     #[test]
     fn empty_family_and_zero_degree_boundaries() {
-        assert!(hoggatt_polynomials_bigint(0, 2, 2).is_empty());
-        assert_eq!(hoggatt_polynomials_bigint(1, 3, 2), vec![big(&[1])]);
+        assert_eq!(hoggatt_polynomials_bigint(0, 2, 2), vec![big(&[0])]);
+        assert_eq!(hoggatt_polynomials_bigint(0, 1, 1), vec![big(&[0])]);
+        assert_eq!(
+            hoggatt_polynomials_bigint(1, 3, 2),
+            vec![big(&[0]), big(&[1])]
+        );
         assert_eq!(delannoy_square_polynomials_bigint(0), vec![big(&[1])]);
         assert_eq!(eulerian_square_polynomials_bigint(0), vec![big(&[1])]);
     }
@@ -298,10 +311,13 @@ mod tests {
                     let right_factor: BigInt = (0..m).map(|j| q_integer(n + j)).product();
                     for k in 0..=n {
                         let left_factor: BigInt = (0..m).map(|j| q_integer(n - k + j)).product();
-                        let previous = rows[n - 1].get(k).cloned().unwrap_or_else(BigInt::zero);
-                        assert_eq!(left_factor * &rows[n][k], &right_factor * previous);
+                        let previous = rows[n].get(k).cloned().unwrap_or_else(BigInt::zero);
+                        assert_eq!(left_factor * &rows[n + 1][k], &right_factor * previous);
                     }
-                    assert_eq!(rows[n][n], pow_usize(&BigInt::from(q), m * n * (n + 1) / 2));
+                    assert_eq!(
+                        rows[n + 1][n],
+                        pow_usize(&BigInt::from(q), m * n * (n + 1) / 2)
+                    );
                 }
             }
         }

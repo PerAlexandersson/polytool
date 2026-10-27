@@ -4,6 +4,7 @@
 //! no modular or floating-point rank decisions are used.
 
 use super::Q;
+use crate::BigRational;
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
 
@@ -12,7 +13,7 @@ use num_traits::{One, Zero};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinearSystemSolution {
     /// One solution, with every free variable set to zero.
-    pub particular: Vec<Q>,
+    pub particular: Vec<BigRational>,
     /// Rank of the coefficient matrix.
     pub rank: usize,
     /// Dimension of the solution space of the associated homogeneous system.
@@ -42,13 +43,30 @@ pub enum RationalKernelError {
     BudgetExceeded(&'static str),
 }
 
+impl std::fmt::Display for RationalKernelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidDimensions => write!(
+                f,
+                "matrix rows do not all have the stated number of columns, or the rank \
+                 certificate is inconsistent"
+            ),
+            Self::BudgetExceeded(limit) => {
+                write!(f, "kernel computation exceeded its limit on {limit}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for RationalKernelError {}
+
 /// A complete nullspace, with a nonsingular minor proving its dimension.
 /// Basis vectors are stored separately (as columns mathematically).
 #[derive(Debug, Clone)]
 pub struct RationalKernel {
     /// Kernel basis; `basis[i]` has one entry per column of the matrix. Entry
     /// `free_columns[i]` of `basis[i]` is one and the other free-column entries are zero.
-    pub basis: Vec<Vec<Q>>,
+    pub basis: Vec<Vec<BigRational>>,
     /// Free columns in ascending order, one per basis vector.
     pub free_columns: Vec<usize>,
     /// Pivot columns in ascending order; their number is the rank.
@@ -57,7 +75,7 @@ pub struct RationalKernel {
     /// the same order.
     pub independent_rows: Vec<usize>,
     /// Inverse of `A[independent_rows, pivot_columns]`.
-    pub inverse_minor: Vec<Vec<Q>>,
+    pub inverse_minor: Vec<Vec<BigRational>>,
 }
 
 struct EliminationBudget {
@@ -121,7 +139,7 @@ fn rational_rref(
 /// `columns` is explicit so a zero-equation matrix has kernel Q^columns.
 /// No modular or floating-point rank decisions are used.
 pub fn rational_kernel_with_certificate(
-    a: &[Vec<Q>],
+    a: &[Vec<BigRational>],
     columns: usize,
     limits: RationalKernelLimits,
 ) -> Result<RationalKernel, RationalKernelError> {
@@ -199,7 +217,10 @@ pub fn rational_kernel_with_certificate(
 /// Returns `None` if the dimensions are invalid or the system is
 /// inconsistent. For an underdetermined consistent system, free variables in
 /// [`LinearSystemSolution::particular`] are set to zero.
-pub fn solve_linear_system_with_rank(a: &[Vec<Q>], b: &[Q]) -> Option<LinearSystemSolution> {
+pub fn solve_linear_system_with_rank(
+    a: &[Vec<BigRational>],
+    b: &[BigRational],
+) -> Option<LinearSystemSolution> {
     let num_rows = a.len();
     if b.len() != num_rows {
         return None;
@@ -256,7 +277,7 @@ pub fn solve_linear_system_with_rank(a: &[Vec<Q>], b: &[Q]) -> Option<LinearSyst
 /// free variables are set to zero. Use [`solve_linear_system_with_rank`] when
 /// the caller needs to distinguish a unique solution from an arbitrary
 /// particular solution.
-pub fn solve_linear_system(a: &[Vec<Q>], b: &[Q]) -> Option<Vec<Q>> {
+pub fn solve_linear_system(a: &[Vec<BigRational>], b: &[BigRational]) -> Option<Vec<BigRational>> {
     solve_linear_system_with_rank(a, b).map(|solution| solution.particular)
 }
 
@@ -267,7 +288,10 @@ pub fn solve_linear_system(a: &[Vec<Q>], b: &[Q]) -> Option<Vec<Q>> {
 /// chosen rows form a full-rank square subsystem, because it does not compute a
 /// full reduced row-echelon form.  Returns `None` if the input is not square or
 /// if a zero pivot proves that the matrix is singular.
-pub fn solve_full_rank_square_linear_system(a: &[Vec<Q>], b: &[Q]) -> Option<Vec<Q>> {
+pub fn solve_full_rank_square_linear_system(
+    a: &[Vec<BigRational>],
+    b: &[BigRational],
+) -> Option<Vec<BigRational>> {
     let n = a.len();
     if b.len() != n || a.iter().any(|row| row.len() != n) {
         return None;
@@ -539,5 +563,23 @@ mod tests {
             &[Q::one(), Q::one()]
         )
         .is_none());
+    }
+
+    #[test]
+    fn kernel_errors_display_and_implement_error() {
+        let error: Box<dyn std::error::Error> = Box::new(RationalKernelError::InvalidDimensions);
+        assert!(error.to_string().contains("number of columns"));
+        let limits = RationalKernelLimits {
+            max_entries: 1,
+            max_operations: 10,
+            max_coefficient_bits: 64,
+        };
+        let error =
+            rational_kernel_with_certificate(&[vec![Q::one(), Q::one()]], 2, limits).unwrap_err();
+        assert_eq!(error, RationalKernelError::BudgetExceeded("matrix entries"));
+        assert_eq!(
+            error.to_string(),
+            "kernel computation exceeded its limit on matrix entries"
+        );
     }
 }

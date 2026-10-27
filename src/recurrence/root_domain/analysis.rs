@@ -19,7 +19,7 @@
 //!   with every interval attempt;
 //! - per-row **observations** ([`RowRootObservation`]): exact rational root
 //!   enclosures with multiplicities from
-//!   [`crate::real_rootedness::isolate_real_roots_exact`].
+//!   [`crate::real_rootedness::isolate_real_roots_rational_coeffs`].
 //!
 //! # Theorem adapters
 //!
@@ -91,7 +91,7 @@
 
 use super::*;
 use crate::real_rootedness::{
-    interlaces_either_order_bigint_coeffs, isolate_real_roots_exact, RealInterval,
+    interlaces_either_order_bigint_coeffs, isolate_real_roots_rational_coeffs, RealInterval,
     RealRootIsolation,
 };
 use crate::vec_poly;
@@ -1277,7 +1277,7 @@ pub(super) fn observe_rows(
                 .map(|(c, p)| (RootSubject::Transformed, c, p)),
         );
         for (subject, component, polynomial) in rows {
-            let isolation = isolate_real_roots_exact(polynomial);
+            let isolation = isolate_real_roots_rational_coeffs(polynomial);
             observations.push(RowRootObservation {
                 subject,
                 component,

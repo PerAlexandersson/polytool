@@ -39,10 +39,9 @@
 //!   ([`search_representations`]).
 
 use num_bigint::BigInt;
-use num_rational::Ratio;
 
 /// Exact rational number used for every coefficient (`num_rational::Ratio<BigInt>`).
-pub type BigRational = Ratio<BigInt>;
+pub use crate::BigRational;
 
 mod base;
 pub use base::*;

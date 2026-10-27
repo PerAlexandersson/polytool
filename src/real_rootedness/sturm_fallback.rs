@@ -9,6 +9,7 @@ use super::resultants::resultant;
 use super::Q;
 use crate::sturm::SturmChain;
 use crate::vec_poly;
+use crate::BigRational;
 use crate::Polynomial;
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
@@ -80,7 +81,8 @@ pub fn has_simple_roots_bigint_coeffs(coeffs: &[BigInt]) -> bool {
     p.has_simple_roots()
 }
 
-/// Find all real roots of a polynomial as rational interval midpoints.
+/// Find all real roots of a polynomial as rational interval midpoints
+/// (approximations typed as rationals; formerly `real_roots`).
 ///
 /// Returns the **distinct** roots in increasing order (multiplicities are not
 /// reported).  A root `0` (from initial zero coefficients) and roots of linear
@@ -92,7 +94,7 @@ pub fn has_simple_roots_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 /// Returns `Some(vec![])` for constant/zero polynomials.
 ///
 /// [`is_real_rooted`]: super::is_real_rooted
-pub fn real_roots(coeffs: &[i64]) -> Option<Vec<Q>> {
+pub fn approximate_real_roots(coeffs: &[i64]) -> Option<Vec<BigRational>> {
     let Some(start) = coeffs.iter().position(|&c| c != 0) else {
         return Some(vec![]);
     };
@@ -133,6 +135,12 @@ pub fn real_roots(coeffs: &[i64]) -> Option<Vec<Q>> {
     } else {
         None
     }
+}
+
+/// Deprecated name of [`approximate_real_roots`].
+#[deprecated(since = "0.6.0", note = "renamed to `approximate_real_roots`")]
+pub fn real_roots(coeffs: &[i64]) -> Option<Vec<BigRational>> {
+    approximate_real_roots(coeffs)
 }
 
 /// Check if roots of p interlace roots of q, using Sturm chains.
@@ -221,24 +229,27 @@ mod tests {
     }
 
     #[test]
-    fn test_real_roots() {
+    fn test_approximate_real_roots() {
         // (t-1)(t-2) = 2 - 3t + t^2
-        let roots = real_roots(&[2, -3, 1]).unwrap();
+        let roots = approximate_real_roots(&[2, -3, 1]).unwrap();
         assert_eq!(roots.len(), 2);
 
         // t^2 + 1: not real-rooted
-        assert!(real_roots(&[1, 0, 1]).is_none());
+        assert!(approximate_real_roots(&[1, 0, 1]).is_none());
 
         // Initial zero coefficients represent a root at zero, not coefficients
         // that may simply be discarded from the returned root set.
-        assert_eq!(real_roots(&[0, 1]), Some(vec![Q::zero()]));
-        assert_eq!(real_roots(&[0, 0, 1]), Some(vec![Q::zero()]));
+        assert_eq!(approximate_real_roots(&[0, 1]), Some(vec![Q::zero()]));
+        assert_eq!(approximate_real_roots(&[0, 0, 1]), Some(vec![Q::zero()]));
     }
 
     #[test]
     fn test_a046741_degree_eight_real_roots_regression() {
         let polynomial = [1, 22, 191, 838, 1982, 2504, 1577, 424, 34];
-        assert_eq!(real_roots(&polynomial).map(|roots| roots.len()), Some(8));
+        assert_eq!(
+            approximate_real_roots(&polynomial).map(|roots| roots.len()),
+            Some(8)
+        );
     }
 
     #[test]

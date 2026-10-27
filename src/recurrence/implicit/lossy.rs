@@ -148,7 +148,11 @@ impl RecurrenceTransformation {
     /// assert!(d.inverse_row(2, &image).is_err());
     /// assert_eq!(d.inverse_row_with_lost_data(2, &image, Some(&lost)).unwrap(), row);
     /// ```
-    pub fn lost_data(&self, index: usize, row: &[Q]) -> Result<Option<Vec<Q>>, TransformError> {
+    pub fn lost_data(
+        &self,
+        index: usize,
+        row: &[BigRational],
+    ) -> Result<Option<Vec<BigRational>>, TransformError> {
         let _ = index;
         self.validate()?;
         match self {
@@ -168,9 +172,9 @@ impl RecurrenceTransformation {
     pub fn inverse_row_with_lost_data(
         &self,
         index: usize,
-        components: &[Vec<Q>],
-        lost: Option<&[Q]>,
-    ) -> Result<Vec<Q>, TransformError> {
+        components: &[Vec<BigRational>],
+        lost: Option<&[BigRational]>,
+    ) -> Result<Vec<BigRational>, TransformError> {
         self.validate()?;
         match (self, lost) {
             (Self::Derivative { order }, Some(lost)) => {
@@ -406,7 +410,7 @@ pub fn lossy_reconstruction(
     order: usize,
     q_description: &GeneratingDescription,
     first_index: usize,
-    source_rows: &[Vec<Q>],
+    source_rows: &[Vec<BigRational>],
     source_conditions: &[DescribedCondition],
 ) -> Result<LossyReconstruction, String> {
     derivative_order_check(order).map_err(|e| e.to_string())?;

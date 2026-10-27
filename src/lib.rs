@@ -160,13 +160,16 @@ pub use linalg::{
     bareiss_leading_principal_minors_bigint, bareiss_leading_principal_minors_polynomial_bigint,
     check_tnn_neville, check_tnn_neville_bigint, check_total_positivity, determinant,
     is_positive_definite, is_positive_definite_bareiss, is_positive_definite_modular,
-    is_positive_semidefinite, is_tnn, is_totally_nonnegative,
+    is_positive_semidefinite, is_sparse_modular_linear_system_consistent,
+    is_totally_nonnegative_by_minors, is_totally_nonnegative_neville,
     modular_leading_principal_minors_bigint, sparse_modular_linear_system_consistency,
-    sparse_modular_linear_system_consistency_with_options, sparse_modular_linear_system_consistent,
-    sparse_modular_linear_system_solution, SparseModEliminationError, SparseModEliminationOptions,
-    SparseModEliminationResult, SparseModEliminationStats, SparseModRow, SparseModRowError,
-    SparseModRowOrder, TotalPositivityError, MODULAR_POSITIVE_DEFINITE_DIMENSION_THRESHOLD,
+    sparse_modular_linear_system_consistency_with_options, sparse_modular_linear_system_solution,
+    SparseModEliminationError, SparseModEliminationOptions, SparseModEliminationResult,
+    SparseModEliminationStats, SparseModRow, SparseModRowError, SparseModRowOrder,
+    TotalPositivityError, MODULAR_POSITIVE_DEFINITE_DIMENSION_THRESHOLD,
 };
+#[allow(deprecated)]
+pub use linalg::{is_tnn, is_totally_nonnegative, sparse_modular_linear_system_consistent};
 
 pub mod parse;
 pub mod real_rooted_enumeration;
@@ -199,40 +202,53 @@ pub use coefficient_tests::{
     coefficient_test_report_bigint, kurtz_condition_report_bigint, newton_inequality_report_bigint,
     CoefficientCriterionReport, CoefficientInequalityCheck, CoefficientTestReport,
 };
+#[allow(deprecated)]
+pub use cyclic_sieving::cyclic_sieving_check_orbit_sizes;
 pub use cyclic_sieving::{
-    bicyclic_sieving_report_bigint, cyclic_sieving_check_orbit_sizes,
+    bicyclic_sieving_report_bigint, check_cyclic_sieving_orbit_sizes,
     cyclic_sieving_orbit_decomposition_bigint, cyclic_sieving_report_bigint,
     cyclic_sieving_sequence_reports_bigint, cyclotomic_polynomial_bigint,
     fixed_points_from_orbit_counts, fixed_points_from_orbit_sizes, orbit_counts_from_fixed_points,
     orbit_counts_from_orbit_sizes, reduce_modulo_cyclic_bigint, root_of_unity_evaluation_bigint,
-    BicyclicSievingReport, CyclicSievingPowerCheck, CyclicSievingReport, CyclicSievingSequenceItem,
-    OrbitDecomposition, OrbitSizeEntry, OrbitSizesCheck, ResidueClass, RootOfUnityEvaluation,
-    BICYCLIC_MAX_GROUP_SIZE,
+    BicyclicSievingReport, CyclicSievingError, CyclicSievingPowerCheck, CyclicSievingReport,
+    CyclicSievingSequenceItem, OrbitDecomposition, OrbitSizeEntry, OrbitSizesCheck, ResidueClass,
+    RootOfUnityEvaluation, BICYCLIC_MAX_GROUP_SIZE,
 };
+#[allow(deprecated)]
+pub use decomposition::SymmetricDecompositionAnalysisBigInt;
 pub use decomposition::{
     analyze_symmetric_decomposition_bigint, analyze_symmetric_decomposition_i64, f_polynomial,
     f_polynomial_i64, is_alternatingly_increasing, is_alternatingly_increasing_bigint,
     r_decomposition, r_decomposition_i64, r_transform, r_transform_i64,
-    SymmetricDecompositionAnalysis, SymmetricDecompositionAnalysisBigInt,
+    SymmetricDecompositionAnalysis,
 };
 pub use hstar_inequalities::{
     hstar_inequality_report_bigint, HStarInequalityCheck, HStarInequalityReport,
 };
 pub use hurwitz::{hurwitz_leading_minors_bigint, hurwitz_matrix_bigint, is_hurwitz_stable_bigint};
+#[allow(deprecated)]
 pub use interlacing_matrix::{
-    check_lace_sequence_total_nonnegative_i64, check_lace_tnn_neville_bigint,
-    check_lace_tnn_neville_i64, check_lace_total_nonnegative_i64,
-    is_lace_sequence_totally_nonnegative_i64, is_lace_totally_nonnegative_i64, lace_matrix,
-    lace_matrix_bigint, lace_matrix_i64, lace_matrix_sequence, lace_matrix_sequence_bigint,
-    lace_matrix_sequence_i64, InterlacingMatrixError,
+    check_lace_sequence_total_nonnegative_i64, check_lace_total_nonnegative_i64,
+    is_lace_sequence_totally_nonnegative_i64, is_lace_totally_nonnegative_i64,
+};
+pub use interlacing_matrix::{
+    check_lace_sequence_totally_nonnegative_by_minors_i64, check_lace_tnn_neville_bigint,
+    check_lace_tnn_neville_i64, check_lace_totally_nonnegative_by_minors_i64,
+    is_lace_sequence_totally_nonnegative_by_minors_i64, is_lace_totally_nonnegative_by_minors_i64,
+    lace_matrix, lace_matrix_bigint, lace_matrix_i64, lace_matrix_sequence,
+    lace_matrix_sequence_bigint, lace_matrix_sequence_i64, InterlacingMatrixError,
 };
 pub use left_production::{
     check_left_production_matrix, left_production_matrix, LeftProductionCertificate,
     LeftProductionError, LeftProductionReport,
 };
+/// Exact rational number type (`Ratio<BigInt>`) used throughout the crate; the
+/// modules that expose it (`basis`, `decomposition`, `recurrence`,
+/// `tnn_network`) re-export this one definition.
+pub use num_rational::BigRational;
 pub use parse::{
     parse_polynomial, parse_polynomial_bigint, parse_polynomials, parse_polynomials_bigint,
-    MAX_POLYNOMIAL_COEFFICIENTS, MAX_POLYNOMIAL_INPUT_BYTES,
+    ParsePolynomialError, MAX_POLYNOMIAL_COEFFICIENTS, MAX_POLYNOMIAL_INPUT_BYTES,
 };
 pub use pf_network::{
     build_pf_rows_certificate, recognize_pf_network, HeightInvariantNetwork, PfNetworkError,
@@ -249,6 +265,7 @@ pub use real_rooted_enumeration::{
     RealRootedEnumerationStatus,
 };
 pub use real_rootedness::{
+    approximate_real_roots,
     // Bézout matrix directly
     bezout_matrix,
     bezout_matrix_bigint_coeffs,
@@ -263,7 +280,7 @@ pub use real_rootedness::{
     discriminant_bigint_coeffs,
     ehrhart_to_hstar,
     ehrhart_to_hstar_bigint,
-    ehrhart_to_hstar_with_denom,
+    ehrhart_to_hstar_with_denominator,
     // Display
     format_poly,
     format_poly_bigint_coeffs,
@@ -316,7 +333,6 @@ pub use real_rootedness::{
     is_ultra_log_concave_of_degree_bigint_coeffs,
     is_unimodal,
     is_unimodal_bigint_coeffs,
-    real_roots,
     // Resultant and discriminant
     resultant,
     resultant_bigint_coeffs,
@@ -330,6 +346,8 @@ pub use real_rootedness::{
 pub use real_rootedness::{
     check_interlacing_bezout, check_weak_interlacing_bezout, is_real_rooted_bezout,
 };
+#[allow(deprecated)]
+pub use real_rootedness::{ehrhart_to_hstar_with_denom, real_roots};
 pub use root_count::{
     bigint_coeffs_to_i64, count_positive_roots_prs_bigint_coeffs,
     count_positive_roots_uspensky_bigint_coeffs, count_real_roots_prs_bigint_coeffs,
@@ -337,10 +355,12 @@ pub use root_count::{
     is_real_rooted_fast_bigint_coeffs, is_real_rooted_fast_i64,
     is_real_rooted_one_signed_bigint_coeffs, is_real_rooted_prs_bigint_coeffs,
     is_real_rooted_uspensky_bigint_coeffs, is_real_rooted_uspensky_i64,
-    primitive_sturm_max_coefficient_bits, satisfies_kurtz_condition_bigint,
-    satisfies_newton_inequalities_bigint, squarefree_degree_bigint_coeffs,
+    primitive_sturm_max_coefficient_bits, satisfies_kurtz_condition_bigint_coeffs,
+    satisfies_newton_inequalities_bigint_coeffs, squarefree_degree_bigint_coeffs,
     tarski_query_prs_bigint_coeffs, RootSignCounts,
 };
+#[allow(deprecated)]
+pub use root_count::{satisfies_kurtz_condition_bigint, satisfies_newton_inequalities_bigint};
 pub use sturm_cf::{
     check_sturm_continued_fraction_certificate,
     check_sturm_continued_fraction_certificate_with_options, SturmContinuedFractionError,
@@ -351,6 +371,6 @@ pub use tnn_network::{
     chain_polynomials_rational, check_chain_polynomials_bigint, check_lower_unitriangular_tnn,
     coefficient_matrix_from_monic_polynomials, evaluate_path_matrix,
     lower_triangular_rows_from_square, reconstruct_canonical_tnn_network,
-    verify_path_matrix_certificate, BigRational, CanonicalPlanarNetwork, CanonicalTnnProof,
+    verify_path_matrix_certificate, CanonicalPlanarNetwork, CanonicalTnnProof,
     ChainPolynomialReport, NegativeMinor, NetworkError,
 };

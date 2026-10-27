@@ -24,9 +24,9 @@
 //! | [`refined_eulerian_polynomials_bigint`] | empty (no first letter) | `max_n + 1`; `rows[n][i]` has first letter `i + 1` |
 //! | [`s_eulerian_polynomial_bigint`] | (one polynomial, not a row family) | n/a |
 //! | [`literature`]: Delannoy, Delannoy-square, Eulerian-square | row 0 (paper normalization) | `max_n + 1` |
-//! | [`literature::hoggatt_polynomials_bigint`] | `H_1` (paper normalization starts at 1) | `max_n` |
+//! | [`literature::hoggatt_polynomials_bigint`] | `H_0 = 0` (the paper's rows start at `H_1`; use `rows[1..]`) | `max_n + 1` |
 //! | [`deco::joint_histograms_bigint`] and the deco layer generators | size `N = 1` | `max_size` |
-//! | [`deco::polynomials_bigint`] | `P_0` | `max_index + 1` |
+//! | [`deco::deco_polynomials_bigint`] | `P_0` | `max_index + 1` |
 //!
 //! The Eulerian row `A_0 = 1` equals `A_1 = 1`; callers that need a family
 //! without repeated rows (for example a consecutive-interlacing check) should

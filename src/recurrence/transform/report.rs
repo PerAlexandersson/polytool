@@ -68,7 +68,7 @@ impl TransformVectorRecurrenceJson {
     pub fn from_recurrence(
         recurrence: &SharedDenominatorVectorRecurrence,
         first_index: usize,
-        initial_state: &[Vec<Q>],
+        initial_state: &[Vec<BigRational>],
     ) -> Self {
         Self {
             first_index,
@@ -107,7 +107,14 @@ impl TransformVectorRecurrenceJson {
     /// Decode the vector system, its first index and initial state.
     pub fn to_recurrence(
         &self,
-    ) -> Result<(SharedDenominatorVectorRecurrence, usize, Vec<Vec<Q>>), String> {
+    ) -> Result<
+        (
+            SharedDenominatorVectorRecurrence,
+            usize,
+            Vec<Vec<BigRational>>,
+        ),
+        String,
+    > {
         let matrix = self
             .matrix
             .iter()

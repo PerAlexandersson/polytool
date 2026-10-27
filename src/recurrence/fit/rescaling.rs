@@ -46,10 +46,12 @@
 //! Related modules: `fit::space` (complete spaces and replay),
 //! `fit::space::propagation` (polynomial-index sources).
 
-use super::{BigRational as Q, ExactRows, RecurrenceMonomial, RecurrenceSpaceLimits};
+use super::{BigRational, ExactRows, RecurrenceMonomial, RecurrenceSpaceLimits};
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
+
+type Q = BigRational;
 
 /// An exact invertible diagonal map on coefficient vectors applied to every
 /// source row before the complete-space search.
@@ -108,9 +110,9 @@ impl RecurrenceCoefficientRescaling {
     /// would exceed `limits.max_coefficient_bits`.
     pub fn rescale_coefficients(
         &self,
-        coefficients: &[Q],
+        coefficients: &[BigRational],
         limits: &RecurrenceSpaceLimits,
-    ) -> Result<Vec<Q>, String> {
+    ) -> Result<Vec<BigRational>, String> {
         self.map(coefficients, limits, false)
     }
 
@@ -119,9 +121,9 @@ impl RecurrenceCoefficientRescaling {
     /// `limits.max_coefficient_bits`.
     pub fn unscale_coefficients(
         &self,
-        coefficients: &[Q],
+        coefficients: &[BigRational],
         limits: &RecurrenceSpaceLimits,
-    ) -> Result<Vec<Q>, String> {
+    ) -> Result<Vec<BigRational>, String> {
         self.map(coefficients, limits, true)
     }
 

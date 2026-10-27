@@ -78,7 +78,7 @@ pub fn joint_histograms(max_size: usize) -> Vec<Vec<Vec<i64>>> {
 ///
 /// The specialization `w = 0` is the ordinary Eulerian family, and `w = 1`
 /// is the unweighted deco family.  The result at index `m` is `P_m(x; w)`.
-pub fn polynomials_bigint(max_index: usize, exception_weight: &BigInt) -> Vec<Vec<BigInt>> {
+pub fn deco_polynomials_bigint(max_index: usize, exception_weight: &BigInt) -> Vec<Vec<BigInt>> {
     let joint_rows = joint_histograms_bigint(max_index + 1);
     let marked_site_weight = exception_weight + BigInt::from(1);
 
@@ -101,11 +101,23 @@ pub fn polynomials_bigint(max_index: usize, exception_weight: &BigInt) -> Vec<Ve
 /// Generate the integer-specialized deco family with checked `i64` coefficients.
 ///
 /// This convenience wrapper panics if a coefficient does not fit in `i64`.
-pub fn polynomials(max_index: usize, exception_weight: i64) -> Vec<Vec<i64>> {
-    bigint_polys_to_i64(polynomials_bigint(
+pub fn deco_polynomials(max_index: usize, exception_weight: i64) -> Vec<Vec<i64>> {
+    bigint_polys_to_i64(deco_polynomials_bigint(
         max_index,
         &BigInt::from(exception_weight),
     ))
+}
+
+/// Deprecated name of [`deco_polynomials_bigint`].
+#[deprecated(since = "0.6.0", note = "renamed to `deco_polynomials_bigint`")]
+pub fn polynomials_bigint(max_index: usize, exception_weight: &BigInt) -> Vec<Vec<BigInt>> {
+    deco_polynomials_bigint(max_index, exception_weight)
+}
+
+/// Deprecated name of [`deco_polynomials`].
+#[deprecated(since = "0.6.0", note = "renamed to `deco_polynomials`")]
+pub fn polynomials(max_index: usize, exception_weight: i64) -> Vec<Vec<i64>> {
+    deco_polynomials(max_index, exception_weight)
 }
 
 /// Generate the fixed eligible-site layers `K_{N,j}(x)`.
@@ -308,11 +320,11 @@ mod tests {
     fn specializations_recover_eulerian_and_deco_rows() {
         let max_index = 12;
         assert_eq!(
-            polynomials_bigint(max_index, &BigInt::from(0)),
+            deco_polynomials_bigint(max_index, &BigInt::from(0)),
             eulerian_polynomials_bigint(max_index + 1)[1..]
         );
         assert_eq!(
-            polynomials(4, 1),
+            deco_polynomials(4, 1),
             vec![
                 vec![1],
                 vec![1, 1],

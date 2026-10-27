@@ -15,9 +15,6 @@
 //! checks TNN for *all* minors in O(n²m) time by performing adjacent-row
 //! subtraction and verifying that no entry becomes negative.
 
-use num_bigint::BigInt;
-use num_rational::Ratio;
-
 // The implementation lives in private submodules; everything public is
 // re-exported below at its historical `linalg::*` path.
 mod definiteness;
@@ -44,20 +41,23 @@ pub use linear_systems::{
     RationalKernelLimits,
 };
 pub use modular::modular_leading_principal_minors_bigint;
+#[allow(deprecated)]
+pub use sparse_modular::sparse_modular_linear_system_consistent;
 pub use sparse_modular::{
-    sparse_modular_linear_system_consistency,
-    sparse_modular_linear_system_consistency_with_options, sparse_modular_linear_system_consistent,
-    sparse_modular_linear_system_solution, SparseModEliminationError, SparseModEliminationOptions,
-    SparseModEliminationResult, SparseModEliminationStats, SparseModRow, SparseModRowError,
-    SparseModRowOrder,
+    is_sparse_modular_linear_system_consistent, sparse_modular_linear_system_consistency,
+    sparse_modular_linear_system_consistency_with_options, sparse_modular_linear_system_solution,
+    SparseModEliminationError, SparseModEliminationOptions, SparseModEliminationResult,
+    SparseModEliminationStats, SparseModRow, SparseModRowError, SparseModRowOrder,
 };
 pub(crate) use sparse_modular::{
     sparse_modular_linear_system_consistency_prime_unchecked_with_solution_mode,
     SparseModSolutionMode,
 };
 pub use total_positivity::{
-    check_tnn_neville, check_tnn_neville_bigint, check_total_positivity, is_tnn,
-    is_totally_nonnegative, TotalPositivityError,
+    check_tnn_neville, check_tnn_neville_bigint, check_total_positivity,
+    is_totally_nonnegative_by_minors, is_totally_nonnegative_neville, TotalPositivityError,
 };
+#[allow(deprecated)]
+pub use total_positivity::{is_tnn, is_totally_nonnegative};
 
-type Q = Ratio<BigInt>;
+type Q = crate::BigRational;

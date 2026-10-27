@@ -14,7 +14,8 @@
 //! line (`i64` with an explicit "does not fit in `i64`" error, or `BigInt`) and
 //! [`parse_polynomials`] / [`parse_polynomials_bigint`] for multi-line input
 //! (blank lines and lines starting with `#` are skipped; the result has one
-//! `Result` per remaining line).  Errors are human-readable `String`s.
+//! `Result` per remaining line).  Errors are [`ParsePolynomialError`] values
+//! whose `Display` text is a human-readable message.
 //!
 //! Limits and caveats:
 //!
@@ -31,8 +32,10 @@
 //!   whitespace inside one term (`"2 3 x"`), a variable followed directly by
 //!   digits (`"x2"`; write `x^2`), and scientific notation (`"1e3"`).
 
-use num_bigint::BigInt;
+use num_bigint::{BigInt, ParseBigIntError};
 use num_traits::ToPrimitive;
+use std::collections::BTreeSet;
+use std::fmt;
 
 /// Largest textual polynomial accepted by the general parser.
 pub const MAX_POLYNOMIAL_INPUT_BYTES: usize = 1_048_576;
@@ -43,19 +46,206 @@ pub const MAX_POLYNOMIAL_INPUT_BYTES: usize = 1_048_576;
 /// allocate every intervening zero coefficient as well.
 pub const MAX_POLYNOMIAL_COEFFICIENTS: usize = 100_001;
 
+/// Reason a polynomial could not be parsed from text.
+///
+/// The `Display` text is a human-readable message that quotes the offending
+/// input.  Fields named `term` hold the signed term (as trimmed text) in which
+/// the problem occurs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ParsePolynomialError {
+    /// The input is longer than [`MAX_POLYNOMIAL_INPUT_BYTES`].
+    InputTooLong {
+        /// Length of the input in bytes.
+        bytes: usize,
+    },
+    /// The input is empty or only whitespace.
+    EmptyInput,
+    /// A coefficient list has more than [`MAX_POLYNOMIAL_COEFFICIENTS`] entries.
+    TooManyCoefficients {
+        /// Number of entries in the list.
+        count: usize,
+    },
+    /// An entry of a coefficient list is not an integer.
+    InvalidInteger {
+        /// The offending entry, trimmed.
+        text: String,
+        /// Why the integer parser rejected it.
+        reason: ParseBigIntError,
+    },
+    /// A coefficient is an integer but does not fit in `i64` (the `i64` entry
+    /// points only).
+    IntegerDoesNotFitI64 {
+        /// The coefficient.
+        value: BigInt,
+    },
+    /// The expanded form contains no variable letter.
+    NoVariable,
+    /// The expanded form uses more than one variable letter.
+    MultipleVariables {
+        /// The letters found, in increasing order.
+        variables: BTreeSet<char>,
+    },
+    /// An exponent does not fit in `usize`.
+    ExponentTooLarge {
+        /// The exponent as written.
+        exponent: String,
+    },
+    /// An exponent exceeds the largest supported degree,
+    /// `MAX_POLYNOMIAL_COEFFICIENTS - 1`.
+    ExponentExceedsMaximumDegree {
+        /// The exponent.
+        degree: usize,
+    },
+    /// A sign is not followed by a term.
+    MissingTermAfterSign {
+        /// The signed term.
+        term: String,
+    },
+    /// Digits separated by whitespace inside one term (`2 3 x`).
+    DigitsSeparatedByWhitespace {
+        /// The signed term.
+        term: String,
+    },
+    /// A coefficient in an expanded term cannot be parsed as an integer.
+    InvalidCoefficient {
+        /// The digits of the coefficient.
+        digits: String,
+        /// Why the integer parser rejected them.
+        reason: ParseBigIntError,
+    },
+    /// A `*` is not preceded by a coefficient.
+    MissingCoefficientBeforeStar {
+        /// The signed term.
+        term: String,
+    },
+    /// `**` directly after a coefficient (`2**x`).
+    DoubleStarAfterCoefficient {
+        /// The signed term.
+        term: String,
+    },
+    /// Text that is neither the variable nor an operator where one is expected.
+    UnexpectedText {
+        /// The unexpected remainder of the term.
+        text: String,
+        /// The signed term.
+        term: String,
+    },
+    /// An exponent is empty or not a nonnegative integer.
+    InvalidExponent {
+        /// The signed term.
+        term: String,
+    },
+    /// Scientific notation such as `1e3`, which is read as the variable `e`.
+    ScientificNotation {
+        /// The signed term.
+        term: String,
+    },
+    /// A variable followed directly by digits (`x2`; write `x^2`).
+    AmbiguousVariableDigits {
+        /// The variable letter.
+        variable: char,
+        /// The digits after the variable.
+        digits: String,
+        /// The signed term.
+        term: String,
+    },
+}
+
+impl fmt::Display for ParsePolynomialError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InputTooLong { bytes } => write!(
+                f,
+                "polynomial input is {bytes} bytes; the limit is {MAX_POLYNOMIAL_INPUT_BYTES}"
+            ),
+            Self::EmptyInput => write!(f, "empty input"),
+            Self::TooManyCoefficients { count } => write!(
+                f,
+                "polynomial has {count} coefficients; the limit is {MAX_POLYNOMIAL_COEFFICIENTS}"
+            ),
+            Self::InvalidInteger { text, reason } => {
+                write!(f, "invalid integer '{text}': {reason}")
+            }
+            Self::IntegerDoesNotFitI64 { value } => {
+                write!(f, "integer '{value}' does not fit in i64")
+            }
+            Self::NoVariable => write!(f, "no variable found"),
+            Self::MultipleVariables { variables } => write!(
+                f,
+                "multiple variables found: {variables:?} (expected a single variable)"
+            ),
+            Self::ExponentTooLarge { exponent } => {
+                write!(f, "polynomial exponent {exponent} is too large")
+            }
+            Self::ExponentExceedsMaximumDegree { degree } => write!(
+                f,
+                "polynomial exponent {degree} exceeds the maximum supported degree {}",
+                MAX_POLYNOMIAL_COEFFICIENTS - 1
+            ),
+            Self::MissingTermAfterSign { term } => {
+                write!(f, "missing term after sign in '{term}'")
+            }
+            Self::DigitsSeparatedByWhitespace { term } => write!(
+                f,
+                "digits separated by whitespace in '{term}'; write one integer"
+            ),
+            Self::InvalidCoefficient { digits, reason } => {
+                write!(f, "cannot parse coefficient '{digits}': {reason}")
+            }
+            Self::MissingCoefficientBeforeStar { term } => {
+                write!(f, "missing coefficient before '*' in '{term}'")
+            }
+            Self::DoubleStarAfterCoefficient { term } => {
+                write!(f, "unexpected '**' after a coefficient in '{term}'")
+            }
+            Self::UnexpectedText { text, term } => {
+                write!(f, "unexpected '{text}' in term '{term}'")
+            }
+            Self::InvalidExponent { term } => {
+                write!(f, "exponent must be a nonnegative integer in '{term}'")
+            }
+            Self::ScientificNotation { term } => write!(
+                f,
+                "scientific notation such as '{term}' is not supported; write the integer"
+            ),
+            Self::AmbiguousVariableDigits {
+                variable,
+                digits,
+                term,
+            } => write!(
+                f,
+                "ambiguous '{variable}{digits}' in '{term}'; write '{variable}^{digits}' for a power"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ParsePolynomialError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidInteger { reason, .. } | Self::InvalidCoefficient { reason, .. } => {
+                Some(reason)
+            }
+            _ => None,
+        }
+    }
+}
+
 /// Parse a single line into polynomial coefficients (ascending degree).
 ///
 /// Tries expanded polynomial format first (if a letter is found),
 /// then falls back to coefficient list parsing.
-pub fn parse_polynomial(input: &str) -> Result<Vec<i64>, String> {
+pub fn parse_polynomial(input: &str) -> Result<Vec<i64>, ParsePolynomialError> {
     parse_polynomial_bigint(input)?
         .into_iter()
-        .map(|coeff| {
-            coeff
-                .to_i64()
-                .ok_or_else(|| format!("integer '{}' does not fit in i64", coeff))
-        })
+        .map(coefficient_to_i64)
         .collect()
+}
+
+fn coefficient_to_i64(coeff: BigInt) -> Result<i64, ParsePolynomialError> {
+    coeff
+        .to_i64()
+        .ok_or(ParsePolynomialError::IntegerDoesNotFitI64 { value: coeff })
 }
 
 /// Parse a single line into arbitrary-size integer polynomial coefficients
@@ -63,16 +253,13 @@ pub fn parse_polynomial(input: &str) -> Result<Vec<i64>, String> {
 ///
 /// Tries expanded polynomial format first (if a letter is found),
 /// then falls back to coefficient list parsing.
-pub fn parse_polynomial_bigint(input: &str) -> Result<Vec<BigInt>, String> {
+pub fn parse_polynomial_bigint(input: &str) -> Result<Vec<BigInt>, ParsePolynomialError> {
     if input.len() > MAX_POLYNOMIAL_INPUT_BYTES {
-        return Err(format!(
-            "polynomial input is {} bytes; the limit is {MAX_POLYNOMIAL_INPUT_BYTES}",
-            input.len()
-        ));
+        return Err(ParsePolynomialError::InputTooLong { bytes: input.len() });
     }
     let s = input.trim();
     if s.is_empty() {
-        return Err("empty input".to_string());
+        return Err(ParsePolynomialError::EmptyInput);
     }
 
     // Strip outer brackets/braces/parens
@@ -87,27 +274,18 @@ pub fn parse_polynomial_bigint(input: &str) -> Result<Vec<BigInt>, String> {
 }
 
 /// Parse multiple lines, skipping blanks and comments.
-pub fn parse_polynomials(input: &str) -> Vec<Result<Vec<i64>, String>> {
+pub fn parse_polynomials(input: &str) -> Vec<Result<Vec<i64>, ParsePolynomialError>> {
     parse_polynomials_bigint(input)
         .into_iter()
         .map(|result| {
-            result.and_then(|coeffs| {
-                coeffs
-                    .into_iter()
-                    .map(|coeff| {
-                        coeff
-                            .to_i64()
-                            .ok_or_else(|| format!("integer '{}' does not fit in i64", coeff))
-                    })
-                    .collect()
-            })
+            result.and_then(|coeffs| coeffs.into_iter().map(coefficient_to_i64).collect())
         })
         .collect()
 }
 
 /// Parse multiple lines into arbitrary-size integer coefficient vectors,
 /// skipping blanks and comments.
-pub fn parse_polynomials_bigint(input: &str) -> Vec<Result<Vec<BigInt>, String>> {
+pub fn parse_polynomials_bigint(input: &str) -> Vec<Result<Vec<BigInt>, ParsePolynomialError>> {
     input
         .lines()
         .filter(|l| {
@@ -122,7 +300,7 @@ pub fn parse_polynomials_bigint(input: &str) -> Vec<Result<Vec<BigInt>, String>>
 // Coefficient list: "1, 2, 3" or "1 2 3"
 // ---------------------------------------------------------------------------
 
-fn parse_coeff_list_bigint(s: &str) -> Result<Vec<BigInt>, String> {
+fn parse_coeff_list_bigint(s: &str) -> Result<Vec<BigInt>, ParsePolynomialError> {
     // Determine separator: comma if present, else whitespace
     let parts: Vec<&str> = if s.contains(',') {
         s.split(',').collect()
@@ -131,22 +309,20 @@ fn parse_coeff_list_bigint(s: &str) -> Result<Vec<BigInt>, String> {
     };
 
     if parts.len() > MAX_POLYNOMIAL_COEFFICIENTS {
-        return Err(format!(
-            "polynomial has {} coefficients; the limit is {MAX_POLYNOMIAL_COEFFICIENTS}",
-            parts.len()
-        ));
+        return Err(ParsePolynomialError::TooManyCoefficients { count: parts.len() });
     }
 
-    let coeffs: Result<Vec<BigInt>, _> = parts
+    parts
         .iter()
         .map(|p| {
             p.trim()
                 .parse::<BigInt>()
-                .map_err(|e| format!("invalid integer '{}': {}", p.trim(), e))
+                .map_err(|reason| ParsePolynomialError::InvalidInteger {
+                    text: p.trim().to_string(),
+                    reason,
+                })
         })
-        .collect();
-
-    coeffs
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -158,22 +334,18 @@ fn has_variable(s: &str) -> bool {
 }
 
 /// Detect which single variable is used (the only ASCII letter in the string).
-fn detect_variable(s: &str) -> Result<char, String> {
-    let vars: std::collections::HashSet<char> =
-        s.chars().filter(|c| c.is_ascii_alphabetic()).collect();
+fn detect_variable(s: &str) -> Result<char, ParsePolynomialError> {
+    let vars: BTreeSet<char> = s.chars().filter(|c| c.is_ascii_alphabetic()).collect();
 
     match vars.len() {
-        0 => Err("no variable found".to_string()),
+        0 => Err(ParsePolynomialError::NoVariable),
         1 => Ok(*vars.iter().next().unwrap()),
-        _ => Err(format!(
-            "multiple variables found: {:?} (expected a single variable)",
-            vars
-        )),
+        _ => Err(ParsePolynomialError::MultipleVariables { variables: vars }),
     }
 }
 
 /// Parse an expanded polynomial string like "3t^2 - 5t + 1" or "x**3 + 2*x - 7".
-fn parse_expanded_bigint(s: &str) -> Result<Vec<BigInt>, String> {
+fn parse_expanded_bigint(s: &str) -> Result<Vec<BigInt>, ParsePolynomialError> {
     let var = detect_variable(s)?;
 
     // Normalize: remove spaces around operators, but keep spacing for tokenizing
@@ -190,14 +362,13 @@ fn parse_expanded_bigint(s: &str) -> Result<Vec<BigInt>, String> {
         let (coeff, deg) = parse_term_bigint(term, var)?;
 
         // Extend coefficient vector if needed
-        let required_len = deg
-            .checked_add(1)
-            .ok_or_else(|| format!("polynomial exponent {deg} is too large"))?;
+        let required_len =
+            deg.checked_add(1)
+                .ok_or_else(|| ParsePolynomialError::ExponentTooLarge {
+                    exponent: deg.to_string(),
+                })?;
         if required_len > MAX_POLYNOMIAL_COEFFICIENTS {
-            return Err(format!(
-                "polynomial exponent {deg} exceeds the maximum supported degree {}",
-                MAX_POLYNOMIAL_COEFFICIENTS - 1
-            ));
+            return Err(ParsePolynomialError::ExponentExceedsMaximumDegree { degree: deg });
         }
         if required_len > coeffs.len() {
             coeffs.resize(required_len, BigInt::from(0));
@@ -248,7 +419,7 @@ fn split_into_terms(s: &str) -> Vec<String> {
 /// Whitespace may separate the coefficient, `*`, the variable, `^`/`**` and
 /// the exponent, but never the digits of one number.  A variable followed
 /// directly by digits (`t2`, or `1e3` read as `e`) is rejected as ambiguous.
-fn parse_term_bigint(term: &str, var: char) -> Result<(BigInt, usize), String> {
+fn parse_term_bigint(term: &str, var: char) -> Result<(BigInt, usize), ParsePolynomialError> {
     let trimmed = term.trim();
     let (negative, rest) = match trimmed.chars().next() {
         Some('+') => (false, trimmed[1..].trim_start()),
@@ -256,7 +427,9 @@ fn parse_term_bigint(term: &str, var: char) -> Result<(BigInt, usize), String> {
         _ => (false, trimmed),
     };
     if rest.is_empty() {
-        return Err(format!("missing term after sign in '{trimmed}'"));
+        return Err(ParsePolynomialError::MissingTermAfterSign {
+            term: trimmed.to_string(),
+        });
     }
 
     let digits_end = rest
@@ -265,16 +438,19 @@ fn parse_term_bigint(term: &str, var: char) -> Result<(BigInt, usize), String> {
     let (digits, after) = rest.split_at(digits_end);
     let after = after.trim_start();
     if after.starts_with(|c: char| c.is_ascii_digit()) {
-        return Err(format!(
-            "digits separated by whitespace in '{trimmed}'; write one integer"
-        ));
+        return Err(ParsePolynomialError::DigitsSeparatedByWhitespace {
+            term: trimmed.to_string(),
+        });
     }
     let magnitude = if digits.is_empty() {
         BigInt::from(1)
     } else {
         digits
             .parse::<BigInt>()
-            .map_err(|e| format!("cannot parse coefficient '{digits}': {e}"))?
+            .map_err(|reason| ParsePolynomialError::InvalidCoefficient {
+                digits: digits.to_string(),
+                reason,
+            })?
     };
     let coeff = if negative { -magnitude } else { magnitude };
 
@@ -283,18 +459,23 @@ fn parse_term_bigint(term: &str, var: char) -> Result<(BigInt, usize), String> {
     }
     let after = match after.strip_prefix('*') {
         Some(_) if digits.is_empty() => {
-            return Err(format!("missing coefficient before '*' in '{trimmed}'"))
+            return Err(ParsePolynomialError::MissingCoefficientBeforeStar {
+                term: trimmed.to_string(),
+            })
         }
         Some(rest) if rest.starts_with('*') => {
-            return Err(format!(
-                "unexpected '**' after a coefficient in '{trimmed}'"
-            ))
+            return Err(ParsePolynomialError::DoubleStarAfterCoefficient {
+                term: trimmed.to_string(),
+            })
         }
         Some(rest) => rest.trim_start(),
         None => after,
     };
     let Some(after_var) = after.strip_prefix(var) else {
-        return Err(format!("unexpected '{after}' in term '{trimmed}'"));
+        return Err(ParsePolynomialError::UnexpectedText {
+            text: after.to_string(),
+            term: trimmed.to_string(),
+        });
     };
     let after_var = after_var.trim_start();
 
@@ -306,24 +487,31 @@ fn parse_term_bigint(term: &str, var: char) -> Result<(BigInt, usize), String> {
     {
         let exponent = exponent.trim();
         if exponent.is_empty() || !exponent.chars().all(|c| c.is_ascii_digit()) {
-            return Err(format!(
-                "exponent must be a nonnegative integer in '{trimmed}'"
-            ));
+            return Err(ParsePolynomialError::InvalidExponent {
+                term: trimmed.to_string(),
+            });
         }
         exponent
             .parse::<usize>()
-            .map_err(|_| format!("polynomial exponent {exponent} is too large"))?
+            .map_err(|_| ParsePolynomialError::ExponentTooLarge {
+                exponent: exponent.to_string(),
+            })?
     } else if after_var.starts_with(|c: char| c.is_ascii_digit()) {
         if (var == 'e' || var == 'E') && !digits.is_empty() {
-            return Err(format!(
-                "scientific notation such as '{trimmed}' is not supported; write the integer"
-            ));
+            return Err(ParsePolynomialError::ScientificNotation {
+                term: trimmed.to_string(),
+            });
         }
-        return Err(format!(
-            "ambiguous '{var}{after_var}' in '{trimmed}'; write '{var}^{after_var}' for a power"
-        ));
+        return Err(ParsePolynomialError::AmbiguousVariableDigits {
+            variable: var,
+            digits: after_var.to_string(),
+            term: trimmed.to_string(),
+        });
     } else {
-        return Err(format!("unexpected '{after_var}' in term '{trimmed}'"));
+        return Err(ParsePolynomialError::UnexpectedText {
+            text: after_var.to_string(),
+            term: trimmed.to_string(),
+        });
     };
 
     Ok((coeff, degree))
@@ -427,11 +615,15 @@ mod tests {
     #[test]
     fn rejects_exponents_that_cannot_be_allocated_safely() {
         let error = parse_polynomial_bigint(&format!("t^{}", usize::MAX)).unwrap_err();
-        assert!(error.contains("too large"));
+        assert!(error.to_string().contains("too large"));
 
         let error =
             parse_polynomial_bigint(&format!("t^{}", MAX_POLYNOMIAL_COEFFICIENTS)).unwrap_err();
-        assert!(error.contains("maximum supported degree"));
+        assert!(matches!(
+            error,
+            ParsePolynomialError::ExponentExceedsMaximumDegree { .. }
+        ));
+        assert!(error.to_string().contains("maximum supported degree"));
     }
 
     #[test]
@@ -439,6 +631,7 @@ mod tests {
         let oversized_text = "1".repeat(MAX_POLYNOMIAL_INPUT_BYTES + 1);
         assert!(parse_polynomial_bigint(&oversized_text)
             .unwrap_err()
+            .to_string()
             .contains("bytes"));
 
         let oversized_list = std::iter::repeat_n("0", MAX_POLYNOMIAL_COEFFICIENTS + 1)
@@ -446,6 +639,7 @@ mod tests {
             .join(",");
         assert!(parse_polynomial_bigint(&oversized_list)
             .unwrap_err()
+            .to_string()
             .contains("coefficients"));
     }
 
@@ -478,11 +672,11 @@ mod tests {
 
     #[test]
     fn rejects_ambiguous_expanded_input() {
-        let error = parse_polynomial("1e3").unwrap_err();
+        let error = parse_polynomial("1e3").unwrap_err().to_string();
         assert!(error.contains("scientific notation"), "{error}");
-        let error = parse_polynomial("2 3 x").unwrap_err();
+        let error = parse_polynomial("2 3 x").unwrap_err().to_string();
         assert!(error.contains("whitespace"), "{error}");
-        let error = parse_polynomial("x2 + 1").unwrap_err();
+        let error = parse_polynomial("x2 + 1").unwrap_err().to_string();
         assert!(error.contains("x^2"), "{error}");
         for bad in ["x^", "x^-1", "*x", "2**x", "2x x", "x +", "2y + x"] {
             assert!(parse_polynomial(bad).is_err(), "{bad} should be rejected");
@@ -503,5 +697,64 @@ mod tests {
         assert_eq!(parse_polynomial("x - x").unwrap(), vec![0]);
         assert_eq!(parse_polynomial("1 + x^2 - x^2").unwrap(), vec![1]);
         assert_eq!(parse_polynomial("1, 2, 0").unwrap(), vec![1, 2, 0]);
+    }
+
+    #[test]
+    fn error_messages_are_stable() {
+        let message = |input: &str| parse_polynomial(input).unwrap_err().to_string();
+        assert_eq!(message("   "), "empty input");
+        assert_eq!(
+            message("2y + x"),
+            "multiple variables found: {'x', 'y'} (expected a single variable)"
+        );
+        assert_eq!(
+            message("1, 2.5"),
+            "invalid integer '2.5': invalid digit found in string"
+        );
+        assert_eq!(
+            message("9223372036854775808"),
+            "integer '9223372036854775808' does not fit in i64"
+        );
+        assert_eq!(
+            message("t^99999999999999999999999"),
+            "polynomial exponent 99999999999999999999999 is too large"
+        );
+        assert_eq!(
+            message("t^100001"),
+            "polynomial exponent 100001 exceeds the maximum supported degree 100000"
+        );
+        assert_eq!(message("x +"), "missing term after sign in '+'");
+        assert_eq!(
+            message("2 3 x"),
+            "digits separated by whitespace in '2 3 x'; write one integer"
+        );
+        assert_eq!(message("*x"), "missing coefficient before '*' in '*x'");
+        assert_eq!(
+            message("2**x"),
+            "unexpected '**' after a coefficient in '2**x'"
+        );
+        assert_eq!(message("2x x"), "unexpected 'x' in term '2x x'");
+        assert_eq!(
+            message("x^"),
+            "exponent must be a nonnegative integer in 'x^'"
+        );
+        assert_eq!(
+            message("1e3"),
+            "scientific notation such as '1e3' is not supported; write the integer"
+        );
+        assert_eq!(
+            message("x2 + 1"),
+            "ambiguous 'x2' in 'x2'; write 'x^2' for a power"
+        );
+        assert_eq!(
+            parse_polynomials("1, 2\nx2")
+                .into_iter()
+                .map(|result| result.map_err(|error| error.to_string()))
+                .collect::<Vec<_>>(),
+            vec![
+                Ok(vec![1, 2]),
+                Err("ambiguous 'x2' in 'x2'; write 'x^2' for a power".to_string())
+            ]
+        );
     }
 }

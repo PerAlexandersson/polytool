@@ -94,6 +94,9 @@ pub(crate) fn read_polys_bigint() -> Vec<Vec<BigInt>> {
 pub(crate) fn read_poly_parse_results_bigint() -> Vec<Result<Vec<BigInt>, String>> {
     let input = read_stdin_or_exit();
     parse_polynomials_bigint(&input)
+        .into_iter()
+        .map(|result| result.map_err(|error| error.to_string()))
+        .collect()
 }
 
 pub(crate) fn read_polys_rational() -> Vec<Vec<RecurrenceBigRational>> {

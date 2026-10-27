@@ -79,7 +79,8 @@ pub struct VectorRecurrenceDenominatorOptions {
     pub denominator_idx_deg: usize,
 }
 
-/// Alias emphasizing that the denominator is shared by every output row.
+/// Deprecated alias of [`VectorRecurrenceDenominatorOptions`].
+#[deprecated(since = "0.6.0", note = "use `VectorRecurrenceDenominatorOptions`")]
 pub type SharedDenominatorVectorRecurrenceOptions = VectorRecurrenceDenominatorOptions;
 
 impl Default for VectorRecurrenceDenominatorOptions {
@@ -156,7 +157,8 @@ pub struct SharedDenominatorVectorRecurrence {
     pub forcing: Option<Vec<BivarPoly>>,
 }
 
-/// Shorter compatibility name for [`SharedDenominatorVectorRecurrence`].
+/// Deprecated alias of [`SharedDenominatorVectorRecurrence`].
+#[deprecated(since = "0.6.0", note = "use `SharedDenominatorVectorRecurrence`")]
 pub type VectorRecurrenceWithDenominator = SharedDenominatorVectorRecurrence;
 
 impl SharedDenominatorVectorRecurrence {
@@ -287,7 +289,8 @@ pub struct SharedDenominatorVectorRecurrenceDiagnostics {
     pub output_components: Vec<usize>,
 }
 
-/// Shorter compatibility name for [`SharedDenominatorVectorRecurrenceFit`].
+/// Deprecated alias of [`SharedDenominatorVectorRecurrenceFit`].
+#[deprecated(since = "0.6.0", note = "use `SharedDenominatorVectorRecurrenceFit`")]
 pub type VectorRecurrenceWithDenominatorFit = SharedDenominatorVectorRecurrenceFit;
 
 /// Why a fixed-bound vector recurrence search could not return a model.

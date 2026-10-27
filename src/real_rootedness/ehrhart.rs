@@ -4,6 +4,7 @@
 //! [`EhrhartToHstarError`] reports inputs that do not give an integral h*-vector.
 
 use super::Q;
+use crate::BigRational;
 use num_bigint::BigInt;
 
 /// Convert an h\*-vector to an Ehrhart polynomial.
@@ -18,13 +19,13 @@ use num_bigint::BigInt;
 ///
 /// Returns the polynomial coefficients as rationals in ascending degree order.
 /// For a valid h\*-vector of a lattice polytope, L(t) has degree d = len(hstar) - 1.
-pub fn hstar_to_ehrhart(hstar: &[i64]) -> Vec<Q> {
+pub fn hstar_to_ehrhart(hstar: &[i64]) -> Vec<BigRational> {
     let hstar = hstar.iter().map(|&c| BigInt::from(c)).collect::<Vec<_>>();
     hstar_to_ehrhart_bigint_coeffs(&hstar)
 }
 
 /// Convert an arbitrary-size integer h\*-vector to an Ehrhart polynomial.
-pub fn hstar_to_ehrhart_bigint_coeffs(hstar: &[BigInt]) -> Vec<Q> {
+pub fn hstar_to_ehrhart_bigint_coeffs(hstar: &[BigInt]) -> Vec<BigRational> {
     if hstar.is_empty() {
         return vec![];
     }
@@ -95,7 +96,7 @@ pub fn hstar_to_ehrhart_bigint_coeffs(hstar: &[BigInt]) -> Vec<Q> {
 /// The h\*-vector entries are always integers for Ehrhart polynomials of lattice
 /// polytopes. Nonintegral results and entries outside `i64` are reported as
 /// errors rather than rounded or panicked on.
-pub fn ehrhart_to_hstar(ehrhart_coeffs: &[Q]) -> Result<Vec<i64>, EhrhartToHstarError> {
+pub fn ehrhart_to_hstar(ehrhart_coeffs: &[BigRational]) -> Result<Vec<i64>, EhrhartToHstarError> {
     ehrhart_to_hstar_bigint(ehrhart_coeffs)?
         .into_iter()
         .enumerate()
@@ -110,7 +111,7 @@ pub fn ehrhart_to_hstar(ehrhart_coeffs: &[Q]) -> Result<Vec<i64>, EhrhartToHstar
 /// supplied representation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EhrhartToHstarError {
-    /// The common denominator passed to [`ehrhart_to_hstar_with_denom`] is zero.
+    /// The common denominator passed to [`ehrhart_to_hstar_with_denominator`] is zero.
     ZeroDenominator,
     /// An h\*-entry is not an integer (so the input is not the Ehrhart
     /// polynomial of a lattice polytope).
@@ -118,7 +119,7 @@ pub enum EhrhartToHstarError {
         /// Index `i` of the entry `h*_i`.
         index: usize,
         /// The nonintegral value.
-        value: Q,
+        value: BigRational,
     },
     /// An h\*-entry is an integer but does not fit in `i64`.
     EntryOutOfI64Range {
@@ -146,7 +147,9 @@ impl std::fmt::Display for EhrhartToHstarError {
 impl std::error::Error for EhrhartToHstarError {}
 
 /// Convert an Ehrhart polynomial to an arbitrary-size integer h\*-vector.
-pub fn ehrhart_to_hstar_bigint(ehrhart_coeffs: &[Q]) -> Result<Vec<BigInt>, EhrhartToHstarError> {
+pub fn ehrhart_to_hstar_bigint(
+    ehrhart_coeffs: &[BigRational],
+) -> Result<Vec<BigInt>, EhrhartToHstarError> {
     if ehrhart_coeffs.is_empty() {
         return Ok(vec![]);
     }
@@ -200,21 +203,34 @@ pub fn ehrhart_to_hstar_bigint(ehrhart_coeffs: &[Q]) -> Result<Vec<BigInt>, Ehrh
 /// Convenience: convert Ehrhart polynomial given as `i64` coefficients of the
 /// **numerator** polynomial when written over a common denominator.
 ///
-/// That is, if L(t) = (a_0 + a_1 t + ... + a_d t^d) / denom, pass `(numerator_coeffs, denom)`.
+/// That is, if L(t) = (a_0 + a_1 t + ... + a_d t^d) / denominator, pass
+/// `(numerator_coeffs, denominator)`.
 /// This is useful when the Ehrhart polynomial is stored in integer-denominator form.
+pub fn ehrhart_to_hstar_with_denominator(
+    numerator_coeffs: &[i64],
+    denominator: i64,
+) -> Result<Vec<i64>, EhrhartToHstarError> {
+    if denominator == 0 {
+        return Err(EhrhartToHstarError::ZeroDenominator);
+    }
+    let denominator_q = Q::from_integer(BigInt::from(denominator));
+    let coeffs: Vec<Q> = numerator_coeffs
+        .iter()
+        .map(|&c| Q::from_integer(BigInt::from(c)) / denominator_q.clone())
+        .collect();
+    ehrhart_to_hstar(&coeffs)
+}
+
+/// Deprecated name of [`ehrhart_to_hstar_with_denominator`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `ehrhart_to_hstar_with_denominator`"
+)]
 pub fn ehrhart_to_hstar_with_denom(
     numerator_coeffs: &[i64],
     denom: i64,
 ) -> Result<Vec<i64>, EhrhartToHstarError> {
-    if denom == 0 {
-        return Err(EhrhartToHstarError::ZeroDenominator);
-    }
-    let denom_q = Q::from_integer(BigInt::from(denom));
-    let coeffs: Vec<Q> = numerator_coeffs
-        .iter()
-        .map(|&c| Q::from_integer(BigInt::from(c)) / denom_q.clone())
-        .collect();
-    ehrhart_to_hstar(&coeffs)
+    ehrhart_to_hstar_with_denominator(numerator_coeffs, denom)
 }
 
 #[cfg(test)]
@@ -293,7 +309,7 @@ mod tests {
         // 2-simplex: L(t) = (t^2 + 3t + 2) / 2
         // numerator = [2, 3, 1], denom = 2
         assert_eq!(
-            ehrhart_to_hstar_with_denom(&[2, 3, 1], 2).unwrap(),
+            ehrhart_to_hstar_with_denominator(&[2, 3, 1], 2).unwrap(),
             vec![1, 0, 0]
         );
     }
@@ -308,7 +324,7 @@ mod tests {
             })
         );
         assert_eq!(
-            ehrhart_to_hstar_with_denom(&[1], 0),
+            ehrhart_to_hstar_with_denominator(&[1], 0),
             Err(EhrhartToHstarError::ZeroDenominator)
         );
     }

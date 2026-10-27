@@ -382,18 +382,23 @@ impl ImplicitRelation {
 
     /// `(L P)_base` when `rows[j]` is `P_(origin + j)` and every referenced row
     /// is present.
-    pub fn residual(&self, rows: &[Vec<Q>], origin: usize, base: usize) -> Option<Vec<Q>> {
+    pub fn residual(
+        &self,
+        rows: &[Vec<BigRational>],
+        origin: usize,
+        base: usize,
+    ) -> Option<Vec<BigRational>> {
         self.op().apply(rows, origin, base)
     }
 
     /// Whether the relation holds exactly at `base`; `None` if a row is missing.
-    pub fn holds_at(&self, rows: &[Vec<Q>], origin: usize, base: usize) -> Option<bool> {
+    pub fn holds_at(&self, rows: &[Vec<BigRational>], origin: usize, base: usize) -> Option<bool> {
         self.residual(rows, origin, base)
             .map(|r| vec_poly::is_zero(&r))
     }
 
     /// Apply a shift-free relation (an operator on one row) to the row at index `n`.
-    pub fn apply_to_row(&self, row: &[Q], n: usize) -> Vec<Q> {
+    pub fn apply_to_row(&self, row: &[BigRational], n: usize) -> Vec<BigRational> {
         self.op().apply_row(row, n)
     }
 
@@ -469,7 +474,7 @@ pub struct ConditionTerm {
     /// The coefficient index `k`.
     pub coefficient_index: usize,
     /// Polynomial in `n`, ascending.
-    pub coeff: Vec<Q>,
+    pub coeff: Vec<BigRational>,
 }
 
 /// A linear condition `sum_j c_j(n) [x^(k_j)] P_(n+i_j) = 0` at base index `n`.
@@ -533,7 +538,12 @@ impl CoefficientCondition {
     }
 
     /// The value of the left side at `base`; `None` if a row is missing.
-    pub fn residual(&self, rows: &[Vec<Q>], origin: usize, base: usize) -> Option<Q> {
+    pub fn residual(
+        &self,
+        rows: &[Vec<BigRational>],
+        origin: usize,
+        base: usize,
+    ) -> Option<BigRational> {
         let n = Q::from_integer(BigInt::from(base));
         let mut sum = Q::zero();
         for term in &self.terms {
@@ -548,7 +558,7 @@ impl CoefficientCondition {
     }
 
     /// Whether the condition holds exactly at `base`; `None` if a row is missing.
-    pub fn holds_at(&self, rows: &[Vec<Q>], origin: usize, base: usize) -> Option<bool> {
+    pub fn holds_at(&self, rows: &[Vec<BigRational>], origin: usize, base: usize) -> Option<bool> {
         self.residual(rows, origin, base).map(|r| r.is_zero())
     }
 
@@ -1220,7 +1230,11 @@ impl ReconstructionCertificate {
     /// combination and compare with `L (T Q)` at every base index `n` whose
     /// rows are available. The comparison holds for any rows when the
     /// identity is valid. Returns the number of base indices replayed.
-    pub fn replay_on_rows(&self, rows: &[Vec<Q>], origin: usize) -> Result<usize, String> {
+    pub fn replay_on_rows(
+        &self,
+        rows: &[Vec<BigRational>],
+        origin: usize,
+    ) -> Result<usize, String> {
         let (l, t, m, h) = self.parts()?;
         let mapped = rows
             .iter()

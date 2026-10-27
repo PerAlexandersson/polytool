@@ -181,7 +181,7 @@ pub(crate) fn check_family_lace(
         Ok(matrix) => {
             let rows = matrix.len();
             let columns = matrix.first().map(Vec::len).unwrap_or(0);
-            let check = check_lace_sequence_total_nonnegative_i64(
+            let check = check_lace_sequence_totally_nonnegative_by_minors_i64(
                 &coefficients,
                 block_rows,
                 block_cols,
@@ -194,7 +194,7 @@ pub(crate) fn check_family_lace(
                 rows,
                 columns,
                 tnn: check.is_ok(),
-                error: check.err(),
+                error: check.err().map(|err| err.to_string()),
                 matrix: request.include_matrix.unwrap_or(false).then_some(matrix),
             }
         }

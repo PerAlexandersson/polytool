@@ -216,7 +216,7 @@ multiplicities (`lower == upper` is an exact rational root; otherwise exactly
 one root lies strictly inside and neither endpoint is a root), degree,
 valuation, `real_rooted` and exact interval verdicts. The MCP `real_roots`
 midpoints are representatives only. In Rust use
-`real_rootedness::{isolate_real_roots_exact, RealInterval}`; fixed-cap diagonal
+`real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval}`; fixed-cap diagonal
 multiplier tests use `recurrence::jensen_fixed_cap_check` (Jensen polynomial
 `T[(1 + x)^N]`, Schur--Malo composition; evidence `fixed_cap`, never a proof
 for larger degrees).

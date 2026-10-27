@@ -27,7 +27,7 @@
 
 use super::*;
 use crate::polynomial::Polynomial;
-use crate::real_rootedness::{isolate_real_roots_exact, RealInterval, RealRootIsolation};
+use crate::real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval, RealRootIsolation};
 use crate::vec_poly;
 use num_traits::{One, Signed, Zero};
 use std::cmp::Ordering;
@@ -544,11 +544,11 @@ pub(super) fn rolle_core(setup: &RolleSetup<'_>, notes: &mut Vec<String>) -> Rol
         });
     }
 
-    let factor_isolation = isolate_real_roots_exact(&form.factor);
+    let factor_isolation = isolate_real_roots_rational_coeffs(&form.factor);
     let seed_isolations: Vec<(usize, RealRootIsolation)> = setup
         .seeds
         .iter()
-        .map(|(k, seed)| (*k, isolate_real_roots_exact(seed)))
+        .map(|(k, seed)| (*k, isolate_real_roots_rational_coeffs(seed)))
         .collect();
     let mut candidates = setup.candidates.clone();
     let hull = std::iter::once(&factor_isolation)

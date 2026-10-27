@@ -192,6 +192,9 @@ fn recurrence_json_output(
 
 fn parse_input(input: &str) -> Vec<Result<Vec<BigInt>, String>> {
     parse_polynomials_bigint(input)
+        .into_iter()
+        .map(|result| result.map_err(|error| error.to_string()))
+        .collect()
 }
 
 fn parse_ok(input: &str) -> (Vec<Vec<BigInt>>, Vec<String>) {

@@ -1,6 +1,6 @@
 //! Exact real-root enclosures with multiplicities, and exact interval tests.
 //!
-//! [`isolate_real_roots_exact`] isolates the distinct real roots of a
+//! [`isolate_real_roots_rational_coeffs`] isolates the distinct real roots of a
 //! polynomial with rational coefficients by rational (dyadic) intervals, using
 //! the exact Sturm bisection of [`exact_real_roots::isolate_real_roots_bigint_coeffs`],
 //! and attaches to every root its exact multiplicity from Yun's square-free
@@ -24,11 +24,12 @@
 //! exactly one distinct root lies in the open interval `(lower, upper)` and
 //! neither endpoint is a root; neighbouring enclosures never overlap.  The
 //! rational midpoint of an enclosure is only a representative: it is neither
-//! a root nor a certified bound (contrast [`super::real_roots`], which returns
+//! a root nor a certified bound (contrast [`super::approximate_real_roots`], which returns
 //! such midpoints).
 
 use super::Q;
 use crate::polynomial::Polynomial;
+use crate::BigRational;
 use exact_real_roots::{isolate_real_roots_bigint_coeffs, DyadicRational, IsolatedRealRoot};
 use num_bigint::BigInt;
 use num_integer::Integer;
@@ -40,10 +41,10 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RealRootEnclosure {
     /// Lower endpoint.  Equal to `upper` exactly when the root is this rational.
-    pub lower: Q,
+    pub lower: BigRational,
     /// Upper endpoint.  When `lower < upper` neither endpoint is a root and the
     /// root lies in the open interval `(lower, upper)`.
-    pub upper: Q,
+    pub upper: BigRational,
     /// Multiplicity of the root (at least 1).
     pub multiplicity: usize,
 }
@@ -62,18 +63,18 @@ impl RealRootEnclosure {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RealInterval {
     /// Lower endpoint; `None` means `-infinity`.
-    pub lower: Option<Q>,
+    pub lower: Option<BigRational>,
     /// Whether a finite lower endpoint belongs to the interval.
     pub lower_closed: bool,
     /// Upper endpoint; `None` means `+infinity`.
-    pub upper: Option<Q>,
+    pub upper: Option<BigRational>,
     /// Whether a finite upper endpoint belongs to the interval.
     pub upper_closed: bool,
 }
 
 impl RealInterval {
     /// The closed interval `[lower, upper]`.
-    pub fn closed(lower: Q, upper: Q) -> Self {
+    pub fn closed(lower: BigRational, upper: BigRational) -> Self {
         Self {
             lower: Some(lower),
             lower_closed: true,
@@ -83,7 +84,7 @@ impl RealInterval {
     }
 
     /// The closed ray `(-infinity, upper]`.
-    pub fn at_most(upper: Q) -> Self {
+    pub fn at_most(upper: BigRational) -> Self {
         Self {
             lower: None,
             lower_closed: false,
@@ -93,7 +94,7 @@ impl RealInterval {
     }
 
     /// The closed ray `[lower, +infinity)`.
-    pub fn at_least(lower: Q) -> Self {
+    pub fn at_least(lower: BigRational) -> Self {
         Self {
             lower: Some(lower),
             lower_closed: true,
@@ -113,7 +114,7 @@ impl RealInterval {
     }
 
     /// The single point `[point, point]`.
-    pub fn point(point: Q) -> Self {
+    pub fn point(point: BigRational) -> Self {
         Self::closed(point.clone(), point)
     }
 
@@ -130,7 +131,7 @@ impl RealInterval {
     }
 
     /// Whether `x` lies in the interval.
-    pub fn contains(&self, x: &Q) -> bool {
+    pub fn contains(&self, x: &BigRational) -> bool {
         let above = match &self.lower {
             None => true,
             Some(a) => x > a || (self.lower_closed && x == a),
@@ -235,7 +236,7 @@ impl RealRootIsolation {
     }
 
     /// Exact position of a distinct root relative to the rational `point`.
-    pub fn compare_root(&self, root: &RealRootEnclosure, point: &Q) -> Ordering {
+    pub fn compare_root(&self, root: &RealRootEnclosure, point: &BigRational) -> Ordering {
         if root.is_exact() {
             return root.lower.cmp(point);
         }
@@ -306,7 +307,7 @@ impl RealRootIsolation {
     /// # Panics
     ///
     /// Panics if `max_width` is not positive.
-    pub fn refine(&mut self, max_width: &Q) {
+    pub fn refine(&mut self, max_width: &BigRational) {
         assert!(max_width.is_positive(), "max_width must be positive");
         let two = Q::from_integer(BigInt::from(2));
         for root in &mut self.roots {
@@ -386,12 +387,12 @@ const DEFAULT_WIDTH_DENOMINATOR: i64 = 1024;
 /// ```
 /// use num_bigint::BigInt;
 /// use num_rational::Ratio;
-/// use polytool::real_rootedness::{isolate_real_roots_exact, RealInterval};
+/// use polytool::real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval};
 ///
 /// let q = |n: i64| Ratio::from_integer(BigInt::from(n));
 /// // x (x + 1)^2 (x^2 - 2): roots -sqrt 2, -1 (double), 0, sqrt 2.
 /// let p = [q(0), q(-2), q(-4), q(-1), q(2), q(1)];
-/// let iso = isolate_real_roots_exact(&p);
+/// let iso = isolate_real_roots_rational_coeffs(&p);
 /// assert!(iso.is_real_rooted());
 /// assert_eq!(iso.valuation, 1);
 /// assert_eq!(iso.roots.len(), 4);
@@ -399,7 +400,7 @@ const DEFAULT_WIDTH_DENOMINATOR: i64 = 1024;
 /// assert!(iso.real_rooted_in(&RealInterval::closed(q(-2), q(2))));
 /// assert!(!iso.real_rooted_in(&RealInterval::closed(q(-1), q(2))));
 /// ```
-pub fn isolate_real_roots_exact(coeffs: &[Q]) -> RealRootIsolation {
+pub fn isolate_real_roots_rational_coeffs(coeffs: &[BigRational]) -> RealRootIsolation {
     let polynomial = Polynomial::new(coeffs.to_vec());
     let Some(degree) = polynomial.degree() else {
         return RealRootIsolation {
@@ -481,6 +482,15 @@ pub fn isolate_real_roots_exact(coeffs: &[Q]) -> RealRootIsolation {
     isolation
 }
 
+/// Deprecated name of [`isolate_real_roots_rational_coeffs`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `isolate_real_roots_rational_coeffs`"
+)]
+pub fn isolate_real_roots_exact(coeffs: &[BigRational]) -> RealRootIsolation {
+    isolate_real_roots_rational_coeffs(coeffs)
+}
+
 /// The rational with the smallest denominator in `[lower, upper]` (`lower <= upper`),
 /// by continued fractions.
 fn simplest_rational_between(lower: &Q, upper: &Q) -> Q {
@@ -515,16 +525,16 @@ mod tests {
 
     #[test]
     fn zero_constant_and_valuation_conventions() {
-        let zero = isolate_real_roots_exact(&[]);
+        let zero = isolate_real_roots_rational_coeffs(&[]);
         assert!(zero.is_zero_polynomial() && zero.is_real_rooted());
         assert!(zero.real_rooted_in(&RealInterval::point(q(5))));
-        let monomial = isolate_real_roots_exact(&poly(&[0, 0, 3]));
+        let monomial = isolate_real_roots_rational_coeffs(&poly(&[0, 0, 3]));
         assert_eq!(monomial.degree, Some(2));
         assert_eq!(monomial.valuation, 2);
         assert_eq!(monomial.roots.len(), 1);
         assert_eq!(monomial.roots[0].multiplicity, 2);
         assert!(monomial.roots[0].is_exact());
-        let c = isolate_real_roots_exact(&poly(&[7]));
+        let c = isolate_real_roots_rational_coeffs(&poly(&[7]));
         assert!(c.is_real_rooted() && c.roots.is_empty() && c.valuation == 0);
     }
 
@@ -532,7 +542,7 @@ mod tests {
     fn repeated_and_endpoint_roots() {
         // (x + 1)^3 x^2 (2x + 1): roots -1 (3), -1/2, 0 (2).
         let p = vec_mul(&[&[1, 3, 3, 1], &[0, 0, 1], &[1, 2]]);
-        let iso = isolate_real_roots_exact(&poly(&p));
+        let iso = isolate_real_roots_rational_coeffs(&poly(&p));
         assert!(iso.is_real_rooted());
         assert_eq!(iso.real_root_count, 6);
         let multiplicities: Vec<_> = iso.roots.iter().map(|r| r.multiplicity).collect();
@@ -560,14 +570,14 @@ mod tests {
     #[test]
     fn irrational_roots_compare_exactly_with_points() {
         // x^2 - 2: compare with 1.414 and 1.415.
-        let iso = isolate_real_roots_exact(&poly(&[-2, 0, 1]));
+        let iso = isolate_real_roots_rational_coeffs(&poly(&[-2, 0, 1]));
         let root = &iso.roots[1];
         assert_eq!(iso.compare_root(root, &r(1414, 1000)), Ordering::Greater);
         assert_eq!(iso.compare_root(root, &r(1415, 1000)), Ordering::Less);
         assert!(!iso.all_real_roots_in(&RealInterval::closed(r(-1414, 1000), q(2))));
         // 1 + x + x^2: no real roots; real roots vacuously in any interval but
         // not real-rooted.
-        let complex = isolate_real_roots_exact(&poly(&[1, 1, 1]));
+        let complex = isolate_real_roots_rational_coeffs(&poly(&[1, 1, 1]));
         assert!(complex.all_real_roots_in(&RealInterval::point(q(0))));
         assert!(!complex.is_real_rooted());
     }

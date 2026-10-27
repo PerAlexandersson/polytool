@@ -1,7 +1,7 @@
 //! Tests of the root-domain contract, theorem adapters and reports.
 
 use super::*;
-use crate::real_rootedness::isolate_real_roots_exact;
+use crate::real_rootedness::isolate_real_roots_rational_coeffs;
 
 fn r(n: i64, d: i64) -> Q {
     Q::new(BigInt::from(n), BigInt::from(d))
@@ -487,8 +487,8 @@ fn derivative_lift_is_one_directional() {
     let q = vec![Q::one(), Q::one(), r(1, 3)];
     let p = vec_poly::derivative(&vec_poly::shift(&q));
     assert_eq!(p, vec![Q::one(), r(2, 1), Q::one()]);
-    assert!(isolate_real_roots_exact(&p).is_real_rooted());
-    assert!(!isolate_real_roots_exact(&q).is_real_rooted());
+    assert!(isolate_real_roots_rational_coeffs(&p).is_real_rooted());
+    assert!(!isolate_real_roots_rational_coeffs(&q).is_real_rooted());
     // As a diagonal map lambda_k = k + 1 (P = (xQ)'), and its inverse.
     let up: Vec<Q> = (1..=9).map(|k| r(k, 1)).collect();
     let down: Vec<Q> = (1..=9).map(|k| r(1, k)).collect();

@@ -1,6 +1,6 @@
 [package]
 name = "polytool"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
@@ -24,7 +24,7 @@ rust_2018_idioms = { level = "warn", priority = -1 }
 unsafe_code = "forbid"
 
 [dependencies]
-exact-real-roots = { version = "0.1.0", path = "crates/exact-real-roots" }
+exact-real-roots = { version = "0.2.0", path = "crates/exact-real-roots" }
 num-bigint = "0.4"
 num-rational = "0.4"
 num-traits = "0.2"

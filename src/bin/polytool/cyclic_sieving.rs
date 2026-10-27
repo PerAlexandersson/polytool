@@ -50,7 +50,7 @@ struct CyclicSievingOptions {
 }
 
 pub(crate) fn parse_bigint_values(input: &str) -> Result<Vec<BigInt>, String> {
-    parse_polynomial_bigint(input)
+    parse_polynomial_bigint(input).map_err(|error| error.to_string())
 }
 
 fn parse_cyclic_sieving_args(args: &[String]) -> Result<CyclicSievingOptions, String> {
@@ -361,7 +361,7 @@ pub(crate) fn cmd_cyclic_sieving(args: &[String]) {
     for coeffs in read_polys_bigint() {
         let coeffs = strip_trailing_zeros_bigint(&coeffs);
         let check = match &options.orbit_sizes {
-            Some(sizes) => match cyclic_sieving_check_orbit_sizes(coeffs, order, sizes) {
+            Some(sizes) => match check_cyclic_sieving_orbit_sizes(coeffs, order, sizes) {
                 Ok(check) => Some(check),
                 Err(error) => {
                     eprintln!("{error}");

@@ -23,11 +23,10 @@ use crate::numeric::binomial_bigint;
 use crate::polynomial::{CoeffRing, FieldRing};
 use crate::Polynomial;
 use num_bigint::BigInt;
-use num_rational::Ratio;
 use std::fmt;
 
 /// Exact rational type used for basis coordinates from integer input.
-pub type BigRational = Ratio<BigInt>;
+pub use crate::BigRational;
 
 /// Errors produced while expanding a polynomial in a basis.
 #[derive(Debug, Clone, PartialEq, Eq)]

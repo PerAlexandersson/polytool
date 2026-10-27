@@ -223,7 +223,7 @@ impl DiagonalWeight {
     }
 
     /// The exact weight `lambda(n,k)`; an error when it is zero or undefined.
-    pub fn weight(&self, n: usize, k: usize) -> Result<Q, TransformError> {
+    pub fn weight(&self, n: usize, k: usize) -> Result<BigRational, TransformError> {
         self.form()?.weight(n, k)
     }
 
@@ -251,7 +251,11 @@ impl DiagonalWeight {
 
     /// `Q_n = T_n P_n` on one row; every weight up to the row degree must be
     /// defined and nonzero.
-    pub fn map_row(&self, index: usize, row: &[Q]) -> Result<Vec<Q>, TransformError> {
+    pub fn map_row(
+        &self,
+        index: usize,
+        row: &[BigRational],
+    ) -> Result<Vec<BigRational>, TransformError> {
         let row = vec_poly::trim(row);
         if let Self::FactorialPower { power } = self {
             order_check(*power, "power")?;
@@ -271,7 +275,11 @@ impl DiagonalWeight {
     }
 
     /// `P_n = T_n^-1 Q_n` on one row.
-    pub fn inverse_row(&self, index: usize, row: &[Q]) -> Result<Vec<Q>, TransformError> {
+    pub fn inverse_row(
+        &self,
+        index: usize,
+        row: &[BigRational],
+    ) -> Result<Vec<BigRational>, TransformError> {
         let row = vec_poly::trim(row);
         if let Self::FactorialPower { power } = self {
             order_check(*power, "power")?;
@@ -561,7 +569,9 @@ pub struct ImplicitTransport {
 // ---------------------------------------------------------------------------
 
 /// Parse `g` (ascending rational strings) and return it with `m = deg g`.
-pub fn derivative_antecedent_parameters(g: &[String]) -> Result<(Vec<Q>, usize), TransformError> {
+pub fn derivative_antecedent_parameters(
+    g: &[String],
+) -> Result<(Vec<BigRational>, usize), TransformError> {
     let g = g
         .iter()
         .map(|c| parse_rational_coeff(c))
@@ -580,7 +590,7 @@ pub fn derivative_antecedent_parameters(g: &[String]) -> Result<(Vec<Q>, usize),
 }
 
 /// `T_g Q = D^m (g Q)/m!` with `m = deg g`.
-pub fn derivative_lift_row(g: &[Q], row: &[Q]) -> Vec<Q> {
+pub fn derivative_lift_row(g: &[BigRational], row: &[BigRational]) -> Vec<BigRational> {
     let g = vec_poly::trim(g);
     let m = vec_poly::degree(&g).unwrap_or(0);
     let mut product = vec_poly::mul(&g, row);
@@ -592,7 +602,7 @@ pub fn derivative_lift_row(g: &[Q], row: &[Q]) -> Vec<Q> {
 
 /// The unique `Q` with `D^m (g Q)/m! = P`, by back substitution from the top
 /// degree: `q_e = (p_e/binom(e+m,m) - sum_(j<m) g_j q_(e+m-j))/g_m`.
-pub fn derivative_antecedent_row(g: &[Q], row: &[Q]) -> Vec<Q> {
+pub fn derivative_antecedent_row(g: &[BigRational], row: &[BigRational]) -> Vec<BigRational> {
     let g = vec_poly::trim(g);
     let row = vec_poly::trim(row);
     let m = vec_poly::degree(&g).unwrap_or(0);

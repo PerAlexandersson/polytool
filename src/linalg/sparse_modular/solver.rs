@@ -620,7 +620,7 @@ where
 
 /// Convenience boolean wrapper around
 /// [`sparse_modular_linear_system_consistency`].
-pub fn sparse_modular_linear_system_consistent<I>(
+pub fn is_sparse_modular_linear_system_consistent<I>(
     rows: I,
     num_vars: usize,
     prime: u64,
@@ -638,6 +638,22 @@ where
         },
     )
     .map(|result| result.consistent)
+}
+
+/// Deprecated name of [`is_sparse_modular_linear_system_consistent`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `is_sparse_modular_linear_system_consistent`"
+)]
+pub fn sparse_modular_linear_system_consistent<I>(
+    rows: I,
+    num_vars: usize,
+    prime: u64,
+) -> Result<bool, SparseModEliminationError>
+where
+    I: IntoIterator<Item = SparseModRow>,
+{
+    is_sparse_modular_linear_system_consistent(rows, num_vars, prime)
 }
 
 /// Return one solution of a sparse linear system over `F_p`, if the system is

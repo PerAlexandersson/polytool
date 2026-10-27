@@ -17,10 +17,9 @@
 
 use crate::vec_poly::{self, coeff};
 use num_bigint::BigInt;
-use num_rational::Ratio;
 use num_traits::{One, Signed, Zero};
 
-type Q = Ratio<BigInt>;
+type Q = crate::BigRational;
 
 /// One named h*-condition or inequality.
 #[derive(Clone, Debug, Eq, PartialEq)]

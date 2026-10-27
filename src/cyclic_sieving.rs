@@ -16,16 +16,16 @@
 //! order against fixed-point counts),
 //! [`cyclic_sieving_sequence_reports_bigint`] (scan a sequence of rows and
 //! candidate orders), [`cyclic_sieving_orbit_decomposition_bigint`],
-//! [`cyclic_sieving_check_orbit_sizes`] and [`bicyclic_sieving_report_bigint`].
+//! [`check_cyclic_sieving_orbit_sizes`] and [`bicyclic_sieving_report_bigint`].
 //!
 //! Conventions: polynomials are `&[BigInt]` in ascending degree order (`q^i` has
 //! index `i`); a cyclic group `C_n` of order `n` has generator `g`, and the
 //! "power" `d` in `0..n` stands for `g^d` and the root of unity
 //! `zeta_n^d`.  Fixed-point tables are indexed by `d` (entry `d` is
 //! `fix(g^d)`, entry `0` the size of the set).  All arithmetic is exact `BigInt`.
-//! Functions return `Result<_, String>` with a human-readable message for
-//! invalid input (zero group order, wrong table length, ...) and never panic on
-//! such input, except that [`cyclotomic_polynomial_bigint`],
+//! Functions return `Result<_, CyclicSievingError>` (its `Display` is a
+//! human-readable message) for invalid input (zero group order, wrong table
+//! length, ...) and never panic on such input, except that [`cyclotomic_polynomial_bigint`],
 //! [`reduce_modulo_cyclic_bigint`] and [`root_of_unity_evaluation_bigint`]
 //! panic on a zero order.  A full report reduces `P` once per divisor of the
 //! group order and its size is linear in the order (one evaluation per
@@ -37,6 +37,141 @@ use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Zero};
 use std::collections::BTreeMap;
+
+/// Invalid input to a cyclic or bicyclic sieving function.
+///
+/// The `Display` text is a human-readable message naming the offending value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CyclicSievingError {
+    /// The cyclic group order is zero.
+    NonpositiveOrder,
+    /// One of the two orders of a bicyclic group is zero.
+    NonpositiveBicyclicOrders,
+    /// A fixed-point table does not have exactly `order` entries.
+    FixedPointCountLength {
+        /// The group order `n`, which is also the required table length.
+        order: usize,
+        /// The length of the table that was supplied.
+        found: usize,
+    },
+    /// An orbit size is zero or does not divide the group order.
+    OrbitSizeDoesNotDivideOrder {
+        /// The offending orbit size.
+        size: usize,
+        /// The group order `n`.
+        order: usize,
+    },
+    /// A prescribed number of orbits is negative.
+    NegativeOrbitCount {
+        /// The orbit size whose count is negative.
+        size: usize,
+    },
+    /// A fixed-point table is not constant on classes of equal `gcd(d, n)`, so
+    /// it is not the table of a `C_n`-action.
+    FixedPointsNotConstantOnGcdClasses {
+        /// The group order `n`.
+        order: usize,
+        /// The power `d` (zero-based, in `0..n`) at which the table fails.
+        power: usize,
+        /// `gcd(d, n)`, the class representative the table is compared with.
+        gcd: usize,
+        /// The table entry `fix(g^d)`.
+        value: BigInt,
+        /// The table entry `fix(g^gcd)`.
+        class_value: BigInt,
+    },
+    /// Mobius inversion of a fixed-point table gives a negative number of
+    /// elements in orbits of size `orbit_size`.
+    NegativeOrbitElementCount {
+        /// The group order `n`.
+        order: usize,
+        /// The orbit size `k`.
+        orbit_size: usize,
+        /// The negative element count `S_k`.
+        element_count: BigInt,
+    },
+    /// Mobius inversion of a fixed-point table gives a number of elements in
+    /// orbits of size `orbit_size` that is not a multiple of it.
+    OrbitElementCountNotDivisible {
+        /// The group order `n`.
+        order: usize,
+        /// The orbit size `k`.
+        orbit_size: usize,
+        /// The element count `S_k`, not divisible by `k`.
+        element_count: BigInt,
+    },
+    /// `order1 * order2` exceeds [`BICYCLIC_MAX_GROUP_SIZE`].
+    BicyclicGroupTooLarge {
+        /// The order of the first cyclic factor.
+        order1: usize,
+        /// The order of the second cyclic factor.
+        order2: usize,
+    },
+    /// A bicyclic fixed-point table is not an `order1 x order2` matrix.
+    BicyclicFixedTableShape {
+        /// The order of the first cyclic factor (required number of rows).
+        order1: usize,
+        /// The order of the second cyclic factor (required row length).
+        order2: usize,
+    },
+}
+
+impl std::fmt::Display for CyclicSievingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NonpositiveOrder => write!(f, "cyclic group order must be positive"),
+            Self::NonpositiveBicyclicOrders => write!(f, "cyclic group orders must be positive"),
+            Self::FixedPointCountLength { order, found } => write!(
+                f,
+                "expected {order} fixed-point counts for order {order}, got {found}"
+            ),
+            Self::OrbitSizeDoesNotDivideOrder { size, order } => {
+                write!(f, "orbit size {size} does not divide the order {order}")
+            }
+            Self::NegativeOrbitCount { size } => {
+                write!(f, "negative number of orbits of size {size}")
+            }
+            Self::FixedPointsNotConstantOnGcdClasses {
+                order,
+                power,
+                gcd,
+                value,
+                class_value,
+            } => write!(
+                f,
+                "fixed-point counts are not those of a C_{order}-action: fix(g^{power}) = {value} \
+                 but fix(g^{gcd}) = {class_value} although gcd({power}, {order}) = {gcd}"
+            ),
+            Self::NegativeOrbitElementCount {
+                order,
+                orbit_size,
+                element_count,
+            } => write!(
+                f,
+                "fixed-point counts are not those of a C_{order}-action: \
+                 S_{orbit_size} = {element_count} is negative"
+            ),
+            Self::OrbitElementCountNotDivisible {
+                order,
+                orbit_size,
+                element_count,
+            } => write!(
+                f,
+                "fixed-point counts are not those of a C_{order}-action: \
+                 S_{orbit_size} = {element_count} is not divisible by {orbit_size}"
+            ),
+            Self::BicyclicGroupTooLarge { order1, order2 } => write!(
+                f,
+                "group order {order1} x {order2} exceeds the limit {BICYCLIC_MAX_GROUP_SIZE}"
+            ),
+            Self::BicyclicFixedTableShape { order1, order2 } => {
+                write!(f, "fixed-point table must be a {order1} x {order2} matrix")
+            }
+        }
+    }
+}
+
+impl std::error::Error for CyclicSievingError {}
 
 /// Exact evaluation data for one root of unity.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -269,16 +404,16 @@ pub fn cyclic_sieving_report_bigint(
     coeffs: &[BigInt],
     order: usize,
     fixed_counts: Option<&[BigInt]>,
-) -> Result<CyclicSievingReport, String> {
+) -> Result<CyclicSievingReport, CyclicSievingError> {
     if order == 0 {
-        return Err("cyclic group order must be positive".to_string());
+        return Err(CyclicSievingError::NonpositiveOrder);
     }
     if let Some(counts) = fixed_counts {
         if counts.len() != order {
-            return Err(format!(
-                "expected {order} fixed-point counts for order {order}, got {}",
-                counts.len()
-            ));
+            return Err(CyclicSievingError::FixedPointCountLength {
+                order,
+                found: counts.len(),
+            });
         }
     }
 
@@ -511,9 +646,9 @@ pub struct OrbitDecomposition {
 pub fn cyclic_sieving_orbit_decomposition_bigint(
     coeffs: &[BigInt],
     order: usize,
-) -> Result<OrbitDecomposition, String> {
+) -> Result<OrbitDecomposition, CyclicSievingError> {
     if order == 0 {
-        return Err("cyclic group order must be positive".to_string());
+        return Err(CyclicSievingError::NonpositiveOrder);
     }
     let n = order;
     let mut coefficients = coeffs.to_vec();
@@ -616,19 +751,17 @@ fn fixed_points_from_entries(entries: &[OrbitSizeEntry], n: usize) -> Vec<BigInt
 pub fn fixed_points_from_orbit_counts(
     orbit_counts: &[(usize, BigInt)],
     order: usize,
-) -> Result<Vec<BigInt>, String> {
+) -> Result<Vec<BigInt>, CyclicSievingError> {
     if order == 0 {
-        return Err("cyclic group order must be positive".to_string());
+        return Err(CyclicSievingError::NonpositiveOrder);
     }
     let mut merged: BTreeMap<usize, BigInt> = BTreeMap::new();
     for (size, count) in orbit_counts {
         if *size == 0 || order % size != 0 {
-            return Err(format!(
-                "orbit size {size} does not divide the order {order}"
-            ));
+            return Err(CyclicSievingError::OrbitSizeDoesNotDivideOrder { size: *size, order });
         }
         if count.sign() == num_bigint::Sign::Minus {
-            return Err(format!("negative number of orbits of size {size}"));
+            return Err(CyclicSievingError::NegativeOrbitCount { size: *size });
         }
         *merged.entry(*size).or_insert_with(BigInt::zero) += count;
     }
@@ -649,9 +782,9 @@ pub fn fixed_points_from_orbit_counts(
 pub fn orbit_counts_from_orbit_sizes(
     orbit_sizes: &[usize],
     order: usize,
-) -> Result<Vec<OrbitSizeEntry>, String> {
+) -> Result<Vec<OrbitSizeEntry>, CyclicSievingError> {
     if order == 0 {
-        return Err("cyclic group order must be positive".to_string());
+        return Err(CyclicSievingError::NonpositiveOrder);
     }
     let mut counts: BTreeMap<usize, BigInt> = divisors(order)
         .into_iter()
@@ -660,11 +793,7 @@ pub fn orbit_counts_from_orbit_sizes(
     for &size in orbit_sizes {
         match counts.get_mut(&size) {
             Some(count) => *count += 1,
-            None => {
-                return Err(format!(
-                    "orbit size {size} does not divide the order {order}"
-                ))
-            }
+            None => return Err(CyclicSievingError::OrbitSizeDoesNotDivideOrder { size, order }),
         }
     }
     Ok(counts
@@ -683,7 +812,7 @@ pub fn orbit_counts_from_orbit_sizes(
 pub fn fixed_points_from_orbit_sizes(
     orbit_sizes: &[usize],
     order: usize,
-) -> Result<Vec<BigInt>, String> {
+) -> Result<Vec<BigInt>, CyclicSievingError> {
     let entries = orbit_counts_from_orbit_sizes(orbit_sizes, order)?;
     Ok(fixed_points_from_entries(&entries, order))
 }
@@ -700,16 +829,16 @@ pub fn fixed_points_from_orbit_sizes(
 pub fn orbit_counts_from_fixed_points(
     fixed_points: &[BigInt],
     order: usize,
-) -> Result<Vec<OrbitSizeEntry>, String> {
+) -> Result<Vec<OrbitSizeEntry>, CyclicSievingError> {
     if order == 0 {
-        return Err("cyclic group order must be positive".to_string());
+        return Err(CyclicSievingError::NonpositiveOrder);
     }
     let n = order;
     if fixed_points.len() != n {
-        return Err(format!(
-            "expected {n} fixed-point counts for order {n}, got {}",
-            fixed_points.len()
-        ));
+        return Err(CyclicSievingError::FixedPointCountLength {
+            order: n,
+            found: fixed_points.len(),
+        });
     }
     let divs = divisors(n);
     // F_j for j | n, using fix(g^n) = fix(g^0).
@@ -717,12 +846,13 @@ pub fn orbit_counts_from_fixed_points(
     for (d, value) in fixed_points.iter().enumerate() {
         let g = gcd_class(d, n);
         if value != f_at(g) {
-            return Err(format!(
-                "fixed-point counts are not those of a C_{n}-action: fix(g^{d}) = {} but \
-                 fix(g^{g}) = {} although gcd({d}, {n}) = {g}",
-                value,
-                f_at(g)
-            ));
+            return Err(CyclicSievingError::FixedPointsNotConstantOnGcdClasses {
+                order: n,
+                power: d,
+                gcd: g,
+                value: value.clone(),
+                class_value: f_at(g).clone(),
+            });
         }
     }
     let mut entries = Vec::with_capacity(divs.len());
@@ -733,15 +863,18 @@ pub fn orbit_counts_from_fixed_points(
         }
         let kk = BigInt::from(k);
         if s_k.sign() == num_bigint::Sign::Minus {
-            return Err(format!(
-                "fixed-point counts are not those of a C_{n}-action: S_{k} = {s_k} is negative"
-            ));
+            return Err(CyclicSievingError::NegativeOrbitElementCount {
+                order: n,
+                orbit_size: k,
+                element_count: s_k,
+            });
         }
         if !(&s_k % &kk).is_zero() {
-            return Err(format!(
-                "fixed-point counts are not those of a C_{n}-action: S_{k} = {s_k} is not \
-                 divisible by {k}"
-            ));
+            return Err(CyclicSievingError::OrbitElementCountNotDivisible {
+                order: n,
+                orbit_size: k,
+                element_count: s_k,
+            });
         }
         entries.push(OrbitSizeEntry {
             orbit_size: k,
@@ -784,11 +917,11 @@ pub struct OrbitSizesCheck {
 /// `orbit_sizes` lists the size of every orbit (a multiset of divisors of
 /// `order`); an `Err` is returned for `order == 0` or an orbit size that does not
 /// divide `order`.
-pub fn cyclic_sieving_check_orbit_sizes(
+pub fn check_cyclic_sieving_orbit_sizes(
     coeffs: &[BigInt],
     order: usize,
     orbit_sizes: &[usize],
-) -> Result<OrbitSizesCheck, String> {
+) -> Result<OrbitSizesCheck, CyclicSievingError> {
     let actual_orbits = orbit_counts_from_orbit_sizes(orbit_sizes, order)?;
     let actual_fixed_points = fixed_points_from_entries(&actual_orbits, order);
     let decomposition = cyclic_sieving_orbit_decomposition_bigint(coeffs, order)?;
@@ -814,6 +947,20 @@ pub fn cyclic_sieving_check_orbit_sizes(
         holds,
         sieving_report,
     })
+}
+
+/// Deprecated name of [`check_cyclic_sieving_orbit_sizes`]; it keeps the former
+/// `String` error (the `Display` text of [`CyclicSievingError`]).
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `check_cyclic_sieving_orbit_sizes`"
+)]
+pub fn cyclic_sieving_check_orbit_sizes(
+    coeffs: &[BigInt],
+    order: usize,
+    orbit_sizes: &[usize],
+) -> Result<OrbitSizesCheck, String> {
+    check_cyclic_sieving_orbit_sizes(coeffs, order, orbit_sizes).map_err(|err| err.to_string())
 }
 
 /// Largest `n1 * n2` accepted by [`bicyclic_sieving_report_bigint`].
@@ -900,23 +1047,19 @@ pub fn bicyclic_sieving_report_bigint(
     order1: usize,
     order2: usize,
     fixed_table: Option<&[Vec<BigInt>]>,
-) -> Result<BicyclicSievingReport, String> {
+) -> Result<BicyclicSievingReport, CyclicSievingError> {
     if order1 == 0 || order2 == 0 {
-        return Err("cyclic group orders must be positive".to_string());
+        return Err(CyclicSievingError::NonpositiveBicyclicOrders);
     }
     if order1
         .checked_mul(order2)
         .is_none_or(|g| g > BICYCLIC_MAX_GROUP_SIZE)
     {
-        return Err(format!(
-            "group order {order1} x {order2} exceeds the limit {BICYCLIC_MAX_GROUP_SIZE}"
-        ));
+        return Err(CyclicSievingError::BicyclicGroupTooLarge { order1, order2 });
     }
     if let Some(table) = fixed_table {
         if table.len() != order1 || table.iter().any(|row| row.len() != order2) {
-            return Err(format!(
-                "fixed-point table must be a {order1} x {order2} matrix"
-            ));
+            return Err(CyclicSievingError::BicyclicFixedTableShape { order1, order2 });
         }
     }
     let (n1, n2) = (order1, order2);
@@ -1196,7 +1339,7 @@ mod tests {
             // fixed points -> orbit counts round trip
             assert_eq!(orbit_counts_from_fixed_points(&fixed, n).unwrap(), actual);
 
-            let check = cyclic_sieving_check_orbit_sizes(&f, n, &sizes).unwrap();
+            let check = check_cyclic_sieving_orbit_sizes(&f, n, &sizes).unwrap();
             assert!(check.holds);
             assert_eq!(check.sieving_report.holds, Some(true));
             assert!(check.mismatched_orbit_sizes.is_empty());
@@ -1208,13 +1351,13 @@ mod tests {
     fn q_binomial_wrong_action_is_rejected() {
         // [4 choose 2]_q = 1 + q + 2q^2 + q^3 + q^4, n = 4: orbits 4,2 (6 elements).
         let f = gaussian_binomial(4, 2);
-        let good = cyclic_sieving_check_orbit_sizes(&f, 4, &[4, 2]).unwrap();
+        let good = check_cyclic_sieving_orbit_sizes(&f, 4, &[4, 2]).unwrap();
         assert!(good.holds);
-        let bad = cyclic_sieving_check_orbit_sizes(&f, 4, &[4, 1, 1]).unwrap();
+        let bad = check_cyclic_sieving_orbit_sizes(&f, 4, &[4, 1, 1]).unwrap();
         assert!(!bad.holds);
         assert_eq!(bad.sieving_report.holds, Some(false));
         assert_eq!(bad.mismatched_orbit_sizes, vec![1, 2]);
-        assert!(cyclic_sieving_check_orbit_sizes(&f, 4, &[3]).is_err());
+        assert!(check_cyclic_sieving_orbit_sizes(&f, 4, &[3]).is_err());
     }
 
     #[test]
@@ -1245,7 +1388,7 @@ mod tests {
         assert!(root_of_unity_evaluation_bigint(&b(&[1, 1]), 3, 1)
             .integer_value
             .is_none());
-        let check = cyclic_sieving_check_orbit_sizes(&b(&[1, 1]), 3, &[1, 1]).unwrap();
+        let check = check_cyclic_sieving_orbit_sizes(&b(&[1, 1]), 3, &[1, 1]).unwrap();
         assert!(!check.holds);
         assert_eq!(check.sieving_report.holds, Some(false));
     }
@@ -1285,17 +1428,74 @@ mod tests {
     #[test]
     fn orbit_counts_from_fixed_points_errors() {
         // wrong length
-        assert!(orbit_counts_from_fixed_points(&b(&[2, 0, 0]), 2).is_err());
+        assert_eq!(
+            orbit_counts_from_fixed_points(&b(&[2, 0, 0]), 2).unwrap_err(),
+            CyclicSievingError::FixedPointCountLength { order: 2, found: 3 }
+        );
         // fix(g^1) depends only on gcd(1,4) = 1, so fix(g) = fix(g^3) must agree
-        assert!(orbit_counts_from_fixed_points(&b(&[4, 1, 0, 0]), 4).is_err());
+        assert!(matches!(
+            orbit_counts_from_fixed_points(&b(&[4, 1, 0, 0]), 4).unwrap_err(),
+            CyclicSievingError::FixedPointsNotConstantOnGcdClasses { .. }
+        ));
         // S_2 = fix(g^2) - fix(g) = 3 is odd
-        assert!(orbit_counts_from_fixed_points(&b(&[5, 2, 5, 2]), 4)
-            .unwrap_err()
-            .contains("not divisible"));
+        assert!(matches!(
+            orbit_counts_from_fixed_points(&b(&[5, 2, 5, 2]), 4).unwrap_err(),
+            CyclicSievingError::OrbitElementCountNotDivisible { orbit_size: 2, .. }
+        ));
         // negative S_2
-        assert!(orbit_counts_from_fixed_points(&b(&[3, 2, 1, 2]), 4)
-            .unwrap_err()
-            .contains("negative"));
+        assert!(matches!(
+            orbit_counts_from_fixed_points(&b(&[3, 2, 1, 2]), 4).unwrap_err(),
+            CyclicSievingError::NegativeOrbitElementCount { orbit_size: 2, .. }
+        ));
+    }
+
+    #[test]
+    fn error_messages_are_stable() {
+        let message = |error: CyclicSievingError| error.to_string();
+        assert_eq!(
+            message(cyclic_sieving_report_bigint(&b(&[1]), 0, None).unwrap_err()),
+            "cyclic group order must be positive"
+        );
+        assert_eq!(
+            message(cyclic_sieving_report_bigint(&b(&[1]), 2, Some(&b(&[1]))).unwrap_err()),
+            "expected 2 fixed-point counts for order 2, got 1"
+        );
+        assert_eq!(
+            message(fixed_points_from_orbit_sizes(&[4], 6).unwrap_err()),
+            "orbit size 4 does not divide the order 6"
+        );
+        assert_eq!(
+            message(fixed_points_from_orbit_counts(&[(2, big(-1))], 4).unwrap_err()),
+            "negative number of orbits of size 2"
+        );
+        assert_eq!(
+            message(orbit_counts_from_fixed_points(&b(&[4, 1, 0, 0]), 4).unwrap_err()),
+            "fixed-point counts are not those of a C_4-action: fix(g^3) = 0 but fix(g^1) = 1 \
+             although gcd(3, 4) = 1"
+        );
+        assert_eq!(
+            message(orbit_counts_from_fixed_points(&b(&[5, 2, 5, 2]), 4).unwrap_err()),
+            "fixed-point counts are not those of a C_4-action: S_2 = 3 is not divisible by 2"
+        );
+        assert_eq!(
+            message(orbit_counts_from_fixed_points(&b(&[3, 2, 1, 2]), 4).unwrap_err()),
+            "fixed-point counts are not those of a C_4-action: S_2 = -1 is negative"
+        );
+        assert_eq!(
+            message(bicyclic_sieving_report_bigint(&[vec![big(1)]], 0, 2, None).unwrap_err()),
+            "cyclic group orders must be positive"
+        );
+        assert_eq!(
+            message(bicyclic_sieving_report_bigint(&[vec![big(1)]], 51, 50, None).unwrap_err()),
+            "group order 51 x 50 exceeds the limit 2500"
+        );
+        assert_eq!(
+            message(
+                bicyclic_sieving_report_bigint(&[vec![big(1)]], 2, 2, Some(&[vec![big(1)]]))
+                    .unwrap_err()
+            ),
+            "fixed-point table must be a 2 x 2 matrix"
+        );
     }
 
     #[test]
@@ -1389,7 +1589,7 @@ mod tests {
         // existing action never matching: CSP fails for every candidate action.
         let f = b(&[10, 1, 0, 3, 0, 1]);
         for sizes in [vec![1; 15], vec![6, 6, 3], vec![6, 6, 1, 1, 1]] {
-            let check = cyclic_sieving_check_orbit_sizes(&f, 6, &sizes).unwrap();
+            let check = check_cyclic_sieving_orbit_sizes(&f, 6, &sizes).unwrap();
             assert!(!check.holds, "{sizes:?}");
         }
     }

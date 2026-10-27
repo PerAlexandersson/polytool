@@ -69,7 +69,9 @@ pub(crate) fn parse_polynomial_input(input: &PolynomialInput) -> Result<Vec<i64>
         (Some(coefficients), None) => validate_mcp_polynomial_length(coefficients.clone()),
         (None, Some(expression)) => {
             validate_mcp_text(expression, "polynomial expression")?;
-            validate_mcp_polynomial_length(parse_polynomial(expression)?)
+            validate_mcp_polynomial_length(
+                parse_polynomial(expression).map_err(|error| error.to_string())?,
+            )
         }
         (Some(_), Some(_)) => {
             Err("expected exactly one of `coefficients` or `expression`, got both".to_string())
@@ -125,7 +127,9 @@ fn parse_bigint_polynomial_input(input: &BigIntPolynomialInput) -> Result<Vec<Bi
         ),
         (None, Some(expression)) => {
             validate_mcp_text(expression, "polynomial expression")?;
-            validate_mcp_polynomial_length(parse_polynomial_bigint(expression)?)
+            validate_mcp_polynomial_length(
+                parse_polynomial_bigint(expression).map_err(|error| error.to_string())?,
+            )
         }
         (Some(_), Some(_)) => {
             Err("expected exactly one of `coefficients` or `expression`, got both".to_string())
@@ -231,6 +235,7 @@ pub(crate) fn parse_batch(input: &PolynomialBatchInput) -> Result<ParsedBatch, M
                 .into_iter()
                 .map(|result| {
                     result
+                        .map_err(|error| error.to_string())
                         .and_then(validate_mcp_polynomial_length)
                         .map(normalize_polynomial)
                 })
@@ -283,6 +288,7 @@ pub(crate) fn parse_bigint_batch(
                 .into_iter()
                 .map(|result| {
                     result
+                        .map_err(|error| error.to_string())
                         .and_then(validate_mcp_polynomial_length)
                         .map(normalize_bigint_polynomial)
                 })

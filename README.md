@@ -45,7 +45,7 @@ The CLI binary is at `target/release/polytool`.
 Use `polytool --version` (or `polytool -V`) for a single deterministic line:
 
 ```text
-polytool 0.5.0 (git 0123456789ab)
+polytool 0.6.0 (git 0123456789ab)
 ```
 
 The version comes from the crate manifest and the lowercase 12-hex-digit Git
@@ -82,7 +82,7 @@ After publishing to crates.io, the dependency would be:
 
 ```toml
 [dependencies]
-polytool = "0.5"
+polytool = "0.6"
 ```
 
 The public API is re-exported from `polytool`, so a downstream crate

@@ -406,24 +406,26 @@ impl PolynomialToolsServer {
             .into_iter()
             .enumerate()
             .map(|(index, item)| match item {
-                Ok(polynomial) => match polytool::real_roots(&polynomial.coefficients) {
-                    Some(roots) => RealRootsItem {
-                        index,
-                        ok: true,
-                        error: None,
-                        polynomial: Some(polynomial),
-                        real_rooted: Some(true),
-                        roots: Some(roots.into_iter().map(format_rational).collect()),
-                    },
-                    None => RealRootsItem {
-                        index,
-                        ok: true,
-                        error: None,
-                        polynomial: Some(polynomial),
-                        real_rooted: Some(false),
-                        roots: None,
-                    },
-                },
+                Ok(polynomial) => {
+                    match polytool::approximate_real_roots(&polynomial.coefficients) {
+                        Some(roots) => RealRootsItem {
+                            index,
+                            ok: true,
+                            error: None,
+                            polynomial: Some(polynomial),
+                            real_rooted: Some(true),
+                            roots: Some(roots.into_iter().map(format_rational).collect()),
+                        },
+                        None => RealRootsItem {
+                            index,
+                            ok: true,
+                            error: None,
+                            polynomial: Some(polynomial),
+                            real_rooted: Some(false),
+                            roots: None,
+                        },
+                    }
+                }
                 Err(error) => RealRootsItem {
                     index,
                     ok: false,
@@ -981,10 +983,10 @@ impl PolynomialToolsServer {
             .orbit_sizes
             .as_ref()
             .map(|sizes| {
-                cyclic_sieving_check_orbit_sizes(&polynomial.coefficients, input.order, sizes)
+                check_cyclic_sieving_orbit_sizes(&polynomial.coefficients, input.order, sizes)
             })
             .transpose()
-            .map_err(invalid_params)?;
+            .map_err(|error| invalid_params(error.to_string()))?;
         let fixed_counts = match &orbit_sizes_check {
             Some(check) => Some(check.actual_fixed_points.clone()),
             None => input
@@ -998,10 +1000,10 @@ impl PolynomialToolsServer {
             input.order,
             fixed_counts.as_deref(),
         )
-        .map_err(invalid_params)?;
+        .map_err(|error| invalid_params(error.to_string()))?;
         let decomposition =
             cyclic_sieving_orbit_decomposition_bigint(&polynomial.coefficients, input.order)
-                .map_err(invalid_params)?;
+                .map_err(|error| invalid_params(error.to_string()))?;
         Ok(Json(CyclicSievingResponse {
             report: cyclic_sieving_report_item(&report),
             orbit_decomposition: orbit_decomposition_item(&decomposition),
@@ -1027,7 +1029,7 @@ impl PolynomialToolsServer {
             .transpose()?;
         let report =
             bicyclic_sieving_report_bigint(&matrix, input.order1, input.order2, table.as_deref())
-                .map_err(invalid_params)?;
+                .map_err(|error| invalid_params(error.to_string()))?;
         Ok(Json(BicyclicSievingResponse {
             order1: report.order1,
             order2: report.order2,

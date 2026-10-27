@@ -243,7 +243,10 @@ impl BkwSymbol {
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
-            coefficients.push(parse_polynomial(trimmed).map_err(BkwError::ParseSymbol)?);
+            coefficients.push(
+                parse_polynomial(trimmed)
+                    .map_err(|error| BkwError::ParseSymbol(error.to_string()))?,
+            );
         }
         Self::from_z_coefficients(coefficients)
     }

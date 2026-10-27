@@ -87,8 +87,12 @@ ordinary pairwise interlacing.
 The crate implements finite truncations through `lace_matrix_i64`,
 `lace_matrix_bigint`, and the sequence wrappers
 `lace_matrix_sequence_i64` / `lace_matrix_sequence_bigint`.  Exact finite TNN
-checks are available with `check_lace_total_nonnegative_i64` and the faster
-Neville-elimination wrappers.
+checks are available with `check_lace_totally_nonnegative_by_minors_i64` and the faster
+Neville-elimination wrappers (`check_lace_tnn_neville_i64`,
+`check_lace_tnn_neville_bigint`).  They return `InterlacingMatrixError`;
+`InterlacingMatrixError::NotTotallyNonnegative` wraps the `TotalPositivityError`
+naming the failing minor or Neville elimination step (the same error type as
+`linalg::check_tnn_neville` and `linalg::check_total_positivity`).
 
 ## Recognizing weighted renewal recurrences
 

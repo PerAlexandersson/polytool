@@ -3,7 +3,7 @@
 //! Functions accept polynomials as `i64` coefficient vectors in ascending degree order
 //! (`coeffs[i]` is the coefficient of t^i); the `*_bigint_coeffs` variants take
 //! `&[BigInt]` and are the safe choice when coefficients can exceed `i64`.
-//! Verdicts are exact (no floating point) except [`real_roots`], which returns
+//! Verdicts are exact (no floating point) except [`approximate_real_roots`], which returns
 //! rational approximations.  Interlacing functions return `Option<bool>`
 //! (`None` when the degree relation does not allow the directed test; see
 //! [`check_weak_interlacing`]).  Besides real-rootedness and interlacing this
@@ -73,16 +73,16 @@
 //!
 //! ## Exact root enclosures
 //!
-//! [`isolate_real_roots_exact`] returns rational isolating intervals (or exact
+//! [`isolate_real_roots_rational_coeffs`] returns rational isolating intervals (or exact
 //! rational roots) with multiplicities, degree and valuation, and
 //! [`RealInterval`] decides exactly whether all (real) roots lie in an
 //! interval or ray.  Use it whenever a root location is a hypothesis of an
-//! argument; [`real_roots`] only returns midpoint representatives.
+//! argument; [`approximate_real_roots`] only returns midpoint representatives.
 //!
 //! ## Sturm chain fallback
 //!
 //! The original Sturm-chain implementations are available as [`is_real_rooted_sturm`],
-//! [`check_interlacing_sturm`], and [`real_roots`] for cases where actual root locations
+//! [`check_interlacing_sturm`], and [`approximate_real_roots`] for cases where actual root locations
 //! are needed.
 //!
 //! References:
@@ -96,9 +96,6 @@
 //!   equations*, Linear and Multilinear Algebra 10 (1981), §2.2.
 //! - MathOverflow discussion of the common-factor caveat:
 //!   <https://mathoverflow.net/questions/403708/bezout-matrices-and-interlacing-roots>
-
-use num_bigint::BigInt;
-use num_rational::Ratio;
 
 // The implementation lives in private submodules; everything public is
 // re-exported below at its historical `real_rootedness::*` path.
@@ -128,12 +125,16 @@ pub use coefficients::{
     stapledon_decomposition, stapledon_decomposition_bigint_coeffs, strip_initial_zeros,
     strip_initial_zeros_bigint_coeffs,
 };
+#[allow(deprecated)]
+pub use ehrhart::ehrhart_to_hstar_with_denom;
 pub use ehrhart::{
-    ehrhart_to_hstar, ehrhart_to_hstar_bigint, ehrhart_to_hstar_with_denom, hstar_to_ehrhart,
+    ehrhart_to_hstar, ehrhart_to_hstar_bigint, ehrhart_to_hstar_with_denominator, hstar_to_ehrhart,
     hstar_to_ehrhart_bigint_coeffs, EhrhartToHstarError,
 };
+#[allow(deprecated)]
+pub use enclosures::isolate_real_roots_exact;
 pub use enclosures::{
-    isolate_real_roots_exact, RealInterval, RealRootEnclosure, RealRootIsolation,
+    isolate_real_roots_rational_coeffs, RealInterval, RealRootEnclosure, RealRootIsolation,
 };
 pub use formatting::{
     format_poly, format_poly_bigint_coeffs, format_poly_bigint_var, format_poly_var,
@@ -154,9 +155,12 @@ pub use real_rooted::{
 pub use resultants::{
     discriminant, discriminant_bigint_coeffs, resultant, resultant_bigint_coeffs, sylvester_matrix,
 };
+pub use sturm_fallback::approximate_real_roots;
+#[allow(deprecated)]
+pub use sturm_fallback::real_roots;
 pub use sturm_fallback::{
     check_interlacing_sturm, has_simple_roots, has_simple_roots_bigint_coeffs,
-    is_real_rooted_sturm, is_real_rooted_sturm_bigint_coeffs, real_roots,
+    is_real_rooted_sturm, is_real_rooted_sturm_bigint_coeffs,
 };
 
-type Q = Ratio<BigInt>;
+type Q = crate::BigRational;

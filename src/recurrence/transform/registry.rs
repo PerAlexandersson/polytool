@@ -624,7 +624,11 @@ impl RecurrenceTransformation {
     ///
     /// Preconditions (degree bound, divisibility, symmetry) are checked exactly
     /// on this row and reported as errors; they are never assumed.
-    pub fn map_row(&self, index: usize, row: &[Q]) -> Result<Vec<Vec<Q>>, TransformError> {
+    pub fn map_row(
+        &self,
+        index: usize,
+        row: &[BigRational],
+    ) -> Result<Vec<Vec<BigRational>>, TransformError> {
         self.validate()?;
         let row = vec_poly::trim(row);
         match self {
@@ -690,8 +694,8 @@ impl RecurrenceTransformation {
     pub fn inverse_row(
         &self,
         index: usize,
-        components: &[Vec<Q>],
-    ) -> Result<Vec<Q>, TransformError> {
+        components: &[Vec<BigRational>],
+    ) -> Result<Vec<BigRational>, TransformError> {
         self.validate()?;
         if components.len() != self.component_count() {
             return Err(TransformError::ComponentCount {
@@ -1643,7 +1647,7 @@ fn transport_symmetric_decomposition(
 /// referenced row is unavailable.
 pub fn transformed_rule_holds_at(
     rule: &Recurrence,
-    rows: &[Vec<Q>],
+    rows: &[Vec<BigRational>],
     origin: usize,
     target: usize,
 ) -> Option<bool> {

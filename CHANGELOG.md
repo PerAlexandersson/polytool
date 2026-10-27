@@ -2,7 +2,79 @@
 
 ## Unreleased
 
-Maintenance (no API changes):
+This release is `polytool` 0.6.0 and `exact-real-roots` 0.2.0.  CLI commands and
+flags, MCP tool names and schemas, and the web export names are unchanged.
+
+Breaking changes:
+
+- `sequences::literature::hoggatt_polynomials_bigint` now follows the
+  `rows[n] = H_n` rule of the other `sequences` generators: it returns
+  `max_n + 1` rows for `n = 0..=max_n`, and `rows[0]` is the zero polynomial
+  `[0]` (it returned `max_n` rows with `rows[i] = H_{i+1}`, and no rows for
+  `max_n = 0`).  Use `hoggatt_polynomials_bigint(n, m, q)[1..]` for the old
+  result.  The `literature_sequence_rows hoggatt` example prints the extra row.
+- Typed errors replace `String` errors; each `Display` text is the former
+  message (checked by tests), and each type implements `std::error::Error`:
+  - `parse::parse_polynomial`, `parse_polynomial_bigint`, `parse_polynomials`
+    and `parse_polynomials_bigint` return `ParsePolynomialError` (new,
+    re-exported at the crate root);
+  - the `cyclic_sieving` functions that returned `Result<_, String>` return
+    `CyclicSievingError` (new, re-exported at the crate root);
+  - `linalg::check_tnn_neville` and `check_tnn_neville_bigint` return the
+    existing `TotalPositivityError`, which gains the variants
+    `InconsistentRowLengths`, `NegativeEntry`, `PositiveEntryBelowZeroPivot`
+    and `NegativeEliminationEntry` for the Neville failures;
+  - the `interlacing_matrix::check_lace_*` functions return
+    `InterlacingMatrixError`, which gains the variant
+    `NotTotallyNonnegative(TotalPositivityError)`.
+  Code that only prints the error, uses `?` or calls `.to_string()` is
+  unaffected; code that compares the `String` or calls `str` methods on it must
+  call `.to_string()` first.
+- `decomposition::SymmetricDecompositionAnalysis` is generic over the
+  coefficient type, `SymmetricDecompositionAnalysis<C = i64>`.  The unparameterized
+  name is unchanged, and `SymmetricDecompositionAnalysisBigInt` is now a
+  deprecated alias of `SymmetricDecompositionAnalysis<BigInt>`.
+- `BigRational` is one definition, `pub use num_rational::BigRational` at the
+  crate root; `basis`, `decomposition`, `recurrence` and `tnn_network` re-export
+  it, so every existing path keeps working (they were four identical type
+  aliases, and `polytool::BigRational` came from `tnn_network`).  Public
+  signatures that used a private `Q` alias now name `BigRational`.
+- `exact-real-roots` 0.2.0 and `polytool` 0.6.0 (lockstep with `polytool-mcp`
+  and `polytool-web`); `polytool` requires `exact-real-roots` 0.2.
+
+Renamed (deprecated aliases kept for one release):
+
+Every old name still compiles and forwards to the new one with a
+`#[deprecated]` warning; the aliases will be removed in the next release.
+
+| Old name | New name |
+|---|---|
+| `exact_real_roots::satisfies_kurtz_condition_bigint` (also `polytool::` and `polytool::root_count::`) | `satisfies_kurtz_condition_bigint_coeffs` |
+| `exact_real_roots::satisfies_newton_inequalities_bigint` (same re-exports) | `satisfies_newton_inequalities_bigint_coeffs` |
+| `real_rootedness::isolate_real_roots_exact` | `isolate_real_roots_rational_coeffs` |
+| `real_rootedness::real_roots` (also `polytool::real_roots`) | `approximate_real_roots` (returns interval midpoints, not exact roots) |
+| `linalg::sparse_modular_linear_system_consistent` | `is_sparse_modular_linear_system_consistent` |
+| `linalg::is_tnn` | `is_totally_nonnegative_neville` |
+| `linalg::is_totally_nonnegative` | `is_totally_nonnegative_by_minors` |
+| `interlacing_matrix::check_lace_total_nonnegative_i64` | `check_lace_totally_nonnegative_by_minors_i64` |
+| `interlacing_matrix::check_lace_sequence_total_nonnegative_i64` | `check_lace_sequence_totally_nonnegative_by_minors_i64` |
+| `interlacing_matrix::is_lace_totally_nonnegative_i64` | `is_lace_totally_nonnegative_by_minors_i64` |
+| `interlacing_matrix::is_lace_sequence_totally_nonnegative_i64` | `is_lace_sequence_totally_nonnegative_by_minors_i64` |
+| `sequences::deco::polynomials` | `sequences::deco::deco_polynomials` |
+| `sequences::deco::polynomials_bigint` | `sequences::deco::deco_polynomials_bigint` |
+| `real_rootedness::ehrhart_to_hstar_with_denom` | `ehrhart_to_hstar_with_denominator` |
+| `cyclic_sieving::cyclic_sieving_check_orbit_sizes` | `check_cyclic_sieving_orbit_sizes` |
+| `decomposition::SymmetricDecompositionAnalysisBigInt` | `SymmetricDecompositionAnalysis<BigInt>` |
+| `recurrence::SharedDenominatorVectorRecurrenceOptions` | `VectorRecurrenceDenominatorOptions` (unused alias, deprecated for removal) |
+| `recurrence::VectorRecurrenceWithDenominator` | `SharedDenominatorVectorRecurrence` (unused alias, deprecated for removal) |
+| `recurrence::VectorRecurrenceWithDenominatorFit` | `SharedDenominatorVectorRecurrenceFit` (unused alias, deprecated for removal) |
+
+The deprecated `interlacing_matrix::check_lace_total_nonnegative_i64`,
+`check_lace_sequence_total_nonnegative_i64` and
+`cyclic_sieving::cyclic_sieving_check_orbit_sizes` keep their former `String`
+error type; the new names return the typed errors above.
+
+Maintenance:
 
 - The recurrence implementation is grouped into private submodules by
   concern; all `polytool::recurrence` paths are unchanged.
@@ -26,8 +98,10 @@ Performance:
   Touchard checks are about 10, 15 and 26 times faster (6.9 s to 0.72 s,
   14.5 s to 0.94 s, 4.9 s to 0.19 s).
 
-Additions (no breaking changes):
+Additions:
 
+- `Display` and `std::error::Error` for `linalg::RationalKernelError`.
+- New error types `ParsePolynomialError` and `CyclicSievingError` (see above).
 - New module `pf_network`: height-shift-invariant planar networks
   (`HeightInvariantNetwork`, `PfStep`, `PfStepType`) with an exact planarity
   test, `build_pf_rows_certificate` / `PfRowsCertificate` (rows plus
