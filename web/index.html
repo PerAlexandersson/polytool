@@ -471,6 +471,61 @@ textarea:focus { outline: none; border-color: var(--c-link); }
 .space-result summary { cursor: pointer; color: var(--c-link); }
 .space-result p { margin: 0.4rem 0; }
 
+/* Transform tab. Evidence labels differ in colour, border style and symbol. */
+.evidence {
+  display: inline-block; margin: 0 0.35rem 0.2rem 0; padding: 0.05rem 0.55rem;
+  border: 1px solid; border-radius: 999px; cursor: help; vertical-align: middle;
+  font: 700 0.72rem 'Raleway', system-ui, sans-serif; letter-spacing: 0.01em; white-space: nowrap;
+}
+.evidence::before { margin-right: 0.3rem; }
+.evidence-certified { color: #fff; background: hsl(155, 50%, 32%); border-color: hsl(155, 50%, 32%); }
+.evidence-certified::before { content: '\2714'; }
+.evidence-transported { color: hsl(268, 45%, 38%); background: hsl(268, 60%, 96%); border-color: hsl(268, 45%, 58%); }
+.evidence-transported::before { content: '\21D2'; }
+.evidence-theorem { color: hsl(185, 65%, 26%); background: hsl(185, 60%, 95%); border: 3px double hsl(185, 50%, 42%); }
+.evidence-theorem::before { content: '\00A7'; }
+.evidence-checked { color: hsl(212, 70%, 34%); background: hsl(212, 80%, 96%); border-color: hsl(212, 60%, 58%); border-style: dotted; }
+.evidence-checked::before { content: '\25C7'; }
+.evidence-fit { color: hsl(32, 85%, 32%); background: hsl(40, 95%, 94%); border-color: hsl(32, 80%, 52%); border-style: dashed; }
+.evidence-fit::before { content: '\2248'; }
+.evidence-assumption { color: var(--c-text-sub); background: transparent; border-color: var(--c-text-muted); border-style: dashed; }
+.evidence-assumption::before { content: '?'; }
+.evidence-fail { color: #fff; background: var(--c-no); border-color: var(--c-no); }
+.evidence-fail::before { content: '\2717'; }
+.evidence-neutral { color: var(--c-text-sub); background: var(--c-bg-gray); border-color: var(--c-border); }
+@media (prefers-color-scheme: dark) {
+  .evidence-transported { color: hsl(268, 70%, 82%); background: hsl(268, 30%, 20%); }
+  .evidence-theorem { color: hsl(185, 60%, 75%); background: hsl(185, 40%, 16%); }
+  .evidence-checked { color: hsl(212, 80%, 78%); background: hsl(212, 40%, 18%); }
+  .evidence-fit { color: hsl(40, 90%, 70%); background: hsl(32, 40%, 16%); }
+}
+.evidence-legend { margin: 0.4rem 0 0.8rem; font-size: 0.85rem; }
+.evidence-legend summary { cursor: pointer; color: var(--c-link); }
+.evidence-legend ul { list-style: none; padding: 0; margin: 0.5rem 0 0; display: grid; gap: 0.35rem; }
+.report-card {
+  border: 1px solid var(--c-border); border-radius: 8px; padding: 0.8rem 0.9rem; margin: 0.8rem 0;
+  background: var(--c-bg-surface); min-width: 0; overflow-wrap: anywhere;
+}
+.report-card h3 { margin: 0 0 0.4rem; font: 700 0.95rem 'Raleway', system-ui, sans-serif; }
+.report-card h4 { margin: 0.9rem 0 0.3rem; font: 700 0.85rem 'Raleway', system-ui, sans-serif; color: var(--c-text-sub); }
+.report-card details { margin: 0.5rem 0; }
+.report-card summary { cursor: pointer; color: var(--c-link); }
+.report-item { border-top: 1px solid var(--c-border); padding: 0.5rem 0; }
+.report-item p { margin: 0.25rem 0; }
+.report-meta { color: var(--c-text-sub); font-size: 0.85rem; }
+.report-text { font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.8rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.report-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.6rem; }
+.report-actions input[type=file] { max-width: 100%; font-size: 0.8rem; }
+.report-rows { overflow-x: auto; margin: 0.4rem 0; }
+.report-rows table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+.report-rows th, .report-rows td { text-align: left; padding: 0.3rem 0.45rem; border-bottom: 1px solid var(--c-border); vertical-align: top; }
+.replay-ok, .replay-fail, .replay-pending { margin: 0.2rem 0 0.6rem; padding: 0.4rem 0.6rem; border-radius: 4px; font-size: 0.85rem; }
+.replay-ok { border-left: 4px solid var(--c-yes); background: color-mix(in srgb, var(--c-yes) 10%, var(--c-bg-surface)); }
+.replay-fail { border-left: 4px solid var(--c-no); background: color-mix(in srgb, var(--c-no) 10%, var(--c-bg-surface)); font-weight: bold; }
+.replay-pending { border-left: 4px solid var(--c-text-muted); background: var(--c-bg-gray); }
+#transformForm > label { font-size: 0.9rem; }
+#transformForm [hidden] { display: none; }
+
 /* Dim manual options when adaptive is selected */
 .options.disabled {
   opacity: 0.35;
@@ -986,6 +1041,7 @@ Lines starting with # are ignored."></textarea>
   <button class="tab active" data-tab="properties" data-workflows="polynomial polynomial-sequence" onclick="switchTab('properties', this)">Overview</button>
   <button class="tab" data-tab="decomposition" data-workflows="polynomial polynomial-sequence" onclick="switchTab('decomposition', this)">Decomposition</button>
   <button class="tab" data-tab="recurrence" data-workflows="polynomial-sequence integer-sequence" onclick="switchTab('recurrence', this)">Recurrence</button>
+  <button class="tab" data-tab="transform" data-workflows="polynomial-sequence" onclick="switchTab('transform', this)">Transform</button>
   <button class="tab" data-tab="oeis" data-workflows="polynomial polynomial-sequence integer-sequence" onclick="switchTab('oeis', this)">OEIS</button>
 </div>
 
@@ -1054,8 +1110,18 @@ Lines starting with # are ignored."></textarea>
           <option value="default">Example: A171608 — compare lengths and derivatives</option>
           <option value="hermite">Example: Hermite polynomials</option>
           <option value="automatic">Example: choose the polynomial degree automatically</option>
+          <option value="binomial">Example: binomial rows with coefficients divided by k!</option>
           <option value="custom">Custom request (JSON)</option>
         </select>
+      </div>
+      <div class="space-field" id="spaceRescalingField" hidden>
+        <label for="spaceRescaling">Rescale coefficients first</label>
+        <select id="spaceRescaling" onchange="spaceControlsChanged()">
+          <option value="0">No rescaling</option>
+          <option value="1">Divide the coefficient of xᵏ by k!</option>
+          <option value="2">Divide the coefficient of xᵏ by (k!)²</option>
+        </select>
+        <small>Searches the rescaled rows Qₙ; the defining recurrence must have constant coefficients.</small>
       </div>
       <p class="space-help" id="spaceSourceHelp">Matches are checked on the rows you supply. Enter more rows for a stronger check.</p>
       <div id="spaceGuided">
@@ -1122,6 +1188,162 @@ Lines starting with # are ignored."></textarea>
   <button class="cancel" onclick="cancelRecurrence()" id="btnCancel" style="display:none">Cancel</button>
   <div id="results-recurrence" class="tab-results"></div>
 </div>
+
+<div id="panel-transform" class="tab-panel">
+  <p class="space-help">Change polynomial coordinates and carry the defining recurrence along exactly. Each result is labelled by what supports it: a finite fit, a consequence of the defining recurrence, a certificate for every index, or a conditional theorem match.</p>
+  <div class="space-form" id="transformForm">
+    <div class="space-field">
+      <label for="transformExample">Example</label>
+      <select id="transformExample" onchange="loadTransformExample(this.value)">
+        <option value="">Choose an example&hellip;</option>
+        <option value="eulerian-f">Eulerian numbers A008292 → f-polynomial, with root location</option>
+        <option value="eulerian-symmetric">Eulerian numbers A008292 → symmetric decomposition</option>
+        <option value="narayana-reversal">Narayana numbers A001263 → reversal</option>
+        <option value="binomial-factorial">Pascal rows A007318 with coefficients divided by k!</option>
+        <option value="weighted-eulerian">A065826 divided by k + 1 → Eulerian rows, proved by reconstruction</option>
+      </select>
+    </div>
+    <div class="space-grid">
+      <div class="space-field">
+        <label for="transformSource">Sequence</label>
+        <select id="transformSource" onchange="transformControlsChanged()">
+          <option value="oeis">Bundled OEIS family</option>
+          <option value="recurrence">Recurrence JSON with initial rows</option>
+          <option value="rows">Polynomials entered above (no defining recurrence)</option>
+        </select>
+      </div>
+      <div class="space-field" id="transformOeisField">
+        <label for="transformOeis">OEIS A-number</label>
+        <input id="transformOeis" list="transformOeisList" value="A008292" autocomplete="off" spellcheck="false" oninput="transformControlsChanged()">
+        <datalist id="transformOeisList"></datalist>
+        <small id="transformOeisName"></small>
+      </div>
+      <div class="space-field" id="transformRowCountField">
+        <label for="transformRowCount">Rows to generate</label>
+        <input id="transformRowCount" type="number" value="8" min="1" max="64" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" id="transformOriginField" hidden>
+        <label for="transformOrigin">Index of the first input row</label>
+        <input id="transformOrigin" type="number" value="1" min="0" max="1000000" oninput="transformControlsChanged()">
+      </div>
+    </div>
+    <div class="space-field" id="transformRecurrenceField" hidden>
+      <label for="transformRecurrence">Recurrence JSON (polytool.recurrence.v1, with initial rows)</label>
+      <textarea id="transformRecurrence" rows="6" spellcheck="false" oninput="transformControlsChanged()"></textarea>
+      <div class="report-actions">
+        <button class="run-small" onclick="useFoundRecurrence()">Use the recurrence found in the Recurrence tab</button>
+        <button class="run-small" onclick="checkSourceTheorems()">Check interlacing theorems for this recurrence</button>
+      </div>
+    </div>
+    <div class="space-grid">
+      <div class="space-field">
+        <label for="transformKind">Transformation</label>
+        <select id="transformKind" onchange="transformControlsChanged()">
+          <optgroup label="Coordinate change (transports the recurrence)">
+            <option value="f_polynomial">f-polynomial · (1+x)ᵈ P(x/(1+x))</option>
+            <option value="reversal">Reversal · xᵈ P(1/x)</option>
+            <option value="affine">Affine substitution · P(ax + b)</option>
+            <option value="mobius">Möbius · (cx+e)ᵈ P((ax+b)/(cx+e))</option>
+            <option value="multiply_power">Multiply by xʳ</option>
+            <option value="divide_power">Divide by xʳ</option>
+            <option value="symmetric_decomposition">Symmetric decomposition · P = a + x b</option>
+            <option value="gamma">Gamma coordinates (rows only)</option>
+          </optgroup>
+          <optgroup label="Implicit relations">
+            <option value="diagonal">Diagonal coefficient map · xᵏ ↦ λ(k) xᵏ</option>
+            <option value="derivative_antecedent">Derivative antecedent · P = Dᵐ(g Q)/m!</option>
+          </optgroup>
+        </select>
+        <small id="transformKindHelp"></small>
+      </div>
+      <div class="space-field" data-transform-param="schedule">
+        <label for="transformScheduleIndex">Degree bound dₙ: first index n₀</label>
+        <input id="transformScheduleIndex" type="number" value="1" min="0" max="1000000" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" data-transform-param="schedule">
+        <label for="transformScheduleDegree">dₙ at n₀</label>
+        <input id="transformScheduleDegree" type="number" value="0" min="0" max="512" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" data-transform-param="schedule">
+        <label for="transformScheduleStep">Step h in dₙ = d₀ + h(n − n₀)</label>
+        <input id="transformScheduleStep" type="number" value="1" min="0" max="16" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" data-transform-param="ab">
+        <label for="transformA">a</label>
+        <input id="transformA" value="1" spellcheck="false" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" data-transform-param="ab">
+        <label for="transformB">b</label>
+        <input id="transformB" value="1" spellcheck="false" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" data-transform-param="ce">
+        <label for="transformC">c</label>
+        <input id="transformC" value="1" spellcheck="false" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" data-transform-param="ce">
+        <label for="transformE">e</label>
+        <input id="transformE" value="1" spellcheck="false" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" data-transform-param="power">
+        <label for="transformPower">Power r</label>
+        <input id="transformPower" type="number" value="1" min="0" max="64" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" data-transform-param="weight">
+        <label for="transformWeight">Weight λ(k)</label>
+        <select id="transformWeight" onchange="transformControlsChanged()">
+          <option value="factorial_power">1/(k!)ᵐ · divide coefficient k by (k!)ᵐ</option>
+          <option value="binomial">binom(k+m, m)</option>
+          <option value="inverse_binomial">1/binom(k+m, m)</option>
+        </select>
+      </div>
+      <div class="space-field" data-transform-param="weight">
+        <label for="transformWeightOrder">m</label>
+        <input id="transformWeightOrder" type="number" value="1" min="1" max="8" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field" data-transform-param="antecedent">
+        <label for="transformG">g (ascending coefficients)</label>
+        <input id="transformG" value="0, 1" spellcheck="false" oninput="transformControlsChanged()">
+      </div>
+    </div>
+    <label><input type="checkbox" id="transformSearch" checked onchange="transformControlsChanged()"> Also fit a recurrence to the new rows (a finite fit)</label><br>
+    <label id="transformRootDomainLabel"><input type="checkbox" id="transformRootDomain" onchange="transformControlsChanged()"> Root location: implications, exact enclosures and induction</label>
+    <div class="space-grid" id="transformIntervalFields" hidden>
+      <div class="space-field">
+        <label for="transformIntervalLower">Candidate interval: lower end</label>
+        <input id="transformIntervalLower" placeholder="−∞ when empty" spellcheck="false" oninput="transformControlsChanged()">
+      </div>
+      <div class="space-field">
+        <label for="transformIntervalUpper">upper end</label>
+        <input id="transformIntervalUpper" placeholder="+∞ when empty" spellcheck="false" oninput="transformControlsChanged()">
+      </div>
+    </div>
+    <p class="space-help space-summary" id="transformSummary" aria-live="polite"></p>
+    <details id="transformAdvanced">
+      <summary>Advanced: request JSON</summary>
+      <p class="space-help">The request sent to polytool. Editing it switches to a custom request; the form above no longer applies until you change a setting.</p>
+      <div class="space-field">
+        <label for="transformEndpoint">Run as</label>
+        <select id="transformEndpoint" onchange="editTransformRequest()">
+          <option value="transform">Coordinate transformation (polytool.recurrence-transform.v1)</option>
+          <option value="implicit">Implicit relations (polytool.recurrence-implicit.v1)</option>
+        </select>
+      </div>
+      <textarea id="transformRequest" rows="9" spellcheck="false" oninput="editTransformRequest()" aria-label="Transformation request JSON"></textarea>
+    </details>
+  </div>
+  <button class="run" onclick="runTransform()" id="btnTransform">Transform</button>
+  <button class="cancel" onclick="cancelTransformJob()" id="btnTransformCancel" style="display:none">Cancel</button>
+  <details class="space-form" id="transformImport">
+    <summary>Import a report and replay it</summary>
+    <p class="space-help">Paste or open a polytool report (coordinate transformation, implicit relations, root enclosures, theorem matches or recurrence search). Replay recomputes it exactly from its embedded request; a changed number or label is rejected.</p>
+    <textarea id="transformImportText" rows="6" spellcheck="false" aria-label="Report JSON to replay"></textarea>
+    <div class="report-actions">
+      <input type="file" id="transformImportFile" accept=".json,application/json" onchange="importTransformFile(this)" aria-label="Open a report file">
+      <button class="run-small" onclick="replayImportedReport()" id="btnTransformImport">Verify report</button>
+    </div>
+  </details>
+  <div id="results-transform" class="tab-results"></div>
+</div>
 </div>
 
 <div id="status" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -1132,9 +1354,9 @@ Lines starting with # are ignored."></textarea>
   Source code: <a href="https://github.com/PerAlexandersson/polytool">polytool</a>.
 </footer>
 
-<script src="pkg/polytool_web.js?v=20261023a"></script>
+<script src="pkg/polytool_web.js?v=20261027a"></script>
 <script>
-const ASSET_VERSION = '20261023a';
+const ASSET_VERSION = '20261027a';
 const EXAMPLES = {
   eulerian: {
     label: 'Eulerian polynomials A_n(t) \u2014 descent generating function on S_n',
@@ -1928,6 +2150,8 @@ function setWorkflow(name, options) {
   const input = document.getElementById('input');
   if (activeWorkflow && input) workflowDrafts[activeWorkflow] = input.value;
   if (recurrenceRunning) cancelRecurrence();
+  if (transformRunning) cancelTransformJob(true);
+  transformEntries = [];
   activeWorkflow = name;
   const config = WORKFLOW_CONFIG[name];
 
@@ -1993,6 +2217,8 @@ async function init() {
     ({ check_properties, check_interlacing_pairs, check_interlacing_pair, find_recurrence,
        generate_recurrence_rows, analyze_decompositions } = wasm_bindgen);
     wasmReady = true;
+    populateTransformCatalog();
+    refreshTransformRequestPreview();
     setStatus('');
   } catch (e) {
     setStatus('Failed to load WASM: ' + e);
@@ -3068,6 +3294,14 @@ function recurrenceSpaceExample(kind) {
     indexed_source: {coefficients: [[['0', '1'], ['0', '1']]], seeds: [['1']]},
     shapes: [{kind: 'automatic_variable_degree', length: 1, index_degree: 1}],
   };
+  if (kind === 'binomial') return {
+    source: {coefficients: [['1', '1']], seeds: [['1']], origin: 0},
+    coefficient_rescaling: {kind: 'factorial_power', power: 1},
+    shapes: [
+      {kind: 'box', length: 1, derivative_order: 1, index_degree: 1, variable_degree: 1, leading_index_degree: 1},
+      {kind: 'box', length: 2, index_degree: 1, variable_degree: 1, leading_index_degree: 1},
+    ],
+  };
   throw new Error('Unknown recurrence example');
 }
 
@@ -3096,6 +3330,9 @@ function readSpaceInteger(id, min, max) {
   return value;
 }
 
+// Sources with a constant-coefficient defining recurrence admit factorial rescaling.
+const SPACE_RESCALING_SOURCES = ['default', 'binomial'];
+
 function buildGuidedSpaceRequest() {
   const mode = document.getElementById('spaceSource').value;
   const request = mode === 'rows' ? {} : recurrenceSpaceExample(mode);
@@ -3110,6 +3347,9 @@ function buildGuidedSpaceRequest() {
     request.row_origin = readSpaceInteger('spaceOrigin', 0, 1000000);
     request.domain_start = request.row_origin;
   }
+  delete request.coefficient_rescaling;
+  const rescaling = SPACE_RESCALING_SOURCES.includes(mode) ? readSpaceInteger('spaceRescaling', 0, 2) : 0;
+  if (rescaling) request.coefficient_rescaling = {kind: 'factorial_power', power: rescaling};
   const length = readSpaceInteger('spaceLength', 1, 4);
   const derivative = activeWorkflow === 'integer-sequence' ? 0 : readSpaceInteger('spaceDerivative', 0, 3);
   const automatic = activeWorkflow !== 'integer-sequence' && mode !== 'rows' && document.getElementById('spaceAutomatic').checked;
@@ -3134,6 +3374,7 @@ function updateSpaceControls() {
   const integer = activeWorkflow === 'integer-sequence';
   document.getElementById('spaceGuided').hidden = custom;
   document.getElementById('spaceOriginField').hidden = mode !== 'rows';
+  document.getElementById('spaceRescalingField').hidden = !SPACE_RESCALING_SOURCES.includes(mode);
   document.getElementById('spaceAutomaticLabel').hidden = mode === 'rows' || integer;
   document.getElementById('spaceDerivative').disabled = integer;
   document.getElementById('spaceVariableDegree').disabled = integer ||
@@ -3144,6 +3385,7 @@ function updateSpaceControls() {
     default: 'Uses A171608: Pₙ₊₄ = 2xPₙ₊₂ − x²Pₙ, starting with 1, 2, 2x, 3x at n = 0. The input above is not used.',
     hermite: 'Uses Hermite polynomials: Pₙ₊₂ = 2xPₙ₊₁ − 2(n + 1)Pₙ, with P₀ = 1 and P₁ = 2x. The input above is not used.',
     automatic: 'Uses Pₙ₊₁ = (n + 1)xPₙ, with P₀ = 1. The input above is not used.',
+    binomial: 'Uses Pₙ₊₁ = (1 + x)Pₙ with P₀ = 1, so Pₙ = (1 + x)ⁿ, and searches Qₙ with the coefficient of xᵏ divided by k!. The input above is not used.',
     custom: 'Uses the request JSON below, including its own rows or defining recurrence. The input above is not used.',
   };
   document.getElementById('spaceSourceHelp').textContent = help[mode];
@@ -3178,12 +3420,14 @@ function changeSpaceSource() {
   const mode = document.getElementById('spaceSource').value;
   if (mode !== 'rows' && mode !== 'custom') {
     const shape = recurrenceSpaceExample(mode).shapes[0];
-    document.getElementById('spaceLength').value = mode === 'default' ? 3 : shape.length;
+    document.getElementById('spaceLength').value = mode === 'default' ? 3 : (mode === 'binomial' ? 2 : shape.length);
     document.getElementById('spaceDerivative').value = mode === 'default' ? 2 : (shape.derivative_order || 0);
     document.getElementById('spaceIndexDegree').value = shape.index_degree || 0;
     document.getElementById('spaceVariableDegree').value = shape.variable_degree || 1;
     document.getElementById('spaceLeaderDegree').value = shape.leading_index_degree || 0;
     document.getElementById('spaceAutomatic').checked = mode === 'automatic';
+    const rescaling = recurrenceSpaceExample(mode).coefficient_rescaling;
+    document.getElementById('spaceRescaling').value = rescaling ? rescaling.power : 0;
   } else if (mode === 'rows') {
     document.getElementById('spaceAutomatic').checked = false;
   }
@@ -3217,10 +3461,10 @@ function spaceFormulaHtml(formula) {
   // Format the backend's forward-index notation; coefficients and indices are unchanged.
   const tex = formula.replace(/ \+ \(-1\) /g, ' - ').replace(/\(-1\) /g, '-')
     .replace(/\(1\) /g, '')
-    .replace(/D\^(\d+)\(P\[n\+(\d+)\]\)/g, (_, order, lag) =>
-      'P_{' + (lag === '0' ? 'n' : 'n+' + lag) + '}' +
+    .replace(/D\^(\d+)\(([PQ])\[n\+(\d+)\]\)/g, (_, order, name, lag) =>
+      name + '_{' + (lag === '0' ? 'n' : 'n+' + lag) + '}' +
       (Number(order) <= 3 ? "'".repeat(Number(order)) : '^{(' + order + ')}'))
-    .replace(/P\[n\+(\d+)\]/g, (_, lag) => 'P_{' + (lag === '0' ? 'n' : 'n+' + lag) + '}')
+    .replace(/([PQ])\[n\+(\d+)\]/g, (_, name, lag) => name + '_{' + (lag === '0' ? 'n' : 'n+' + lag) + '}')
     .replace(/X/g, 'x').replace(/\^(\d+)/g, '^{$1}')
     .replace(/(\d+)\/(\d+)/g, '\\frac{$1}{$2}');
   return '<div class="recurrence-display">' + katexInline(tex) + '</div>';
@@ -3235,6 +3479,9 @@ function renderRecurrenceSpaces(report) {
   html += '<p class="space-help">' + (source
     ? 'Identities below follow from the defining recurrence and initial values.'
     : 'Matches below fit the supplied rows exactly; they may fail on later rows.') + '</p>';
+  const rescaling = report.request.coefficient_rescaling;
+  if (rescaling) html += '<p class="space-help">Formulas name the rescaled rows Q: the coefficient of x^k in P is divided by (k!)^' +
+    esc(rescaling.power) + '.</p>';
   const ordered = report.results.map((result, i) => ({result, i}));
   ordered.sort((a, b) => Number(b.result.status === 'successor_exists') - Number(a.result.status === 'successor_exists'));
   ordered.forEach(({result, i}) => {
@@ -3266,6 +3513,8 @@ function renderRecurrenceSpaces(report) {
         '; in x: ' + esc(result.automatic_degree_bound ? result.automatic_degree_bound.variable_degree : shape.variable_degree || 0) +
         '. Next-term factor degrees: n ≤ ' + esc(shape.leading_index_degree || 0) + ', x ≤ ' + esc(shape.leading_variable_degree || 0) + '.';
     }
+    if (result.rescaling_bound) html += ' Checking ' + esc(result.rescaling_bound.annihilator_power) +
+      ' base indices covers every n for the rescaled rows.';
     if (result.automatic_degree_bound) html += result.certificate
       ? ' The x-degree was chosen automatically to cover all possible x-degrees for existence within the other bounds.'
       : ' The automatic x-degree search is unfinished.';
@@ -3384,6 +3633,8 @@ function startRecurrence(text) {
             (data.mathematica ? '<button class="copy-btn" onclick="copyRec(this,\'mathematica\')">Copy Mathematica</button>' : '') +
             (data.sage ? '<button class="copy-btn" onclick="copyRec(this,\'sage\')">Copy Sage</button>' : '') +
             (data.recurrence_json ? '<button class="copy-btn" onclick="copyRec(this,\'json\')">Copy JSON</button>' : '') +
+            (data.recurrence_json && activeWorkflow === 'polynomial-sequence'
+              ? '<button class="copy-btn" onclick="openTransformWithFoundRecurrence()">Transform or check theorems</button>' : '') +
             '</div>';
           const statsEl = '<div class="recurrence-stats">' +
                           esc(data.unknowns + ' unknowns, ' +
@@ -3431,6 +3682,1012 @@ function cancelRecurrence() {
   document.getElementById('btnCancel').style.display = 'none';
   setResult('Recurrence search cancelled.', 'recurrence');
   setStatus('Cancelled.');
+}
+
+// --- Transform tab: coordinate changes, implicit relations, roots, theorems ---
+
+// Evidence labels used by polytool reports: [short label, tone, explanation].
+// Tones order the strength of support; unknown labels are shown verbatim.
+const EVIDENCE_VOCABULARY = {
+  certified_all_indices: ['Certified for all indices', 'certified', 'Proved for every index of the domain from the defining recurrence.'],
+  completed_recurrence_induction: ['Proved by induction', 'certified', 'A closed induction over the transported recurrence covers every index.'],
+  certified_family_invariant: ['Certified for the family', 'certified', 'Transferred to every index by a map theorem whose conditions are certified.'],
+  certified_by_reconstruction: ['Proved by reconstruction', 'certified', 'An exact reconstruction certificate proves the fitted rule for every index.'],
+  equivalent_description: ['Equivalent description', 'certified', 'The seeds and relations determine exactly the transformed sequence.'],
+  certified: ['Certified', 'certified', 'Proved exactly.'],
+  exact_hypothesis: ['Checked exactly', 'certified', 'This hypothesis of the theorem is verified exactly for the recurrence.'],
+  transported_identity: ['Transported identity', 'transported', 'An exact consequence of the defining recurrence: it holds for every index whenever that rule does.'],
+  conditional_on_source: ['Follows from the defining recurrence', 'transported', 'Holds for every index whenever the defining recurrence does.'],
+  certified_consequence: ['Certified consequence', 'transported', 'Every relation holds for all indices, but together they need not determine the sequence.'],
+  conditional_theorem_match: ['Conditional theorem match', 'theorem', 'The hypotheses of a published theorem are checked exactly. The conclusion applies once the recurrence is known to hold for the intended sequence.'],
+  paper_proof_not_lean_checked: ['Paper proof, not Lean-checked', 'theorem', 'The theorem has a paper proof that has not been formally verified.'],
+  checked_supplied_rows: ['Checked on supplied rows', 'checked', 'Exact on the listed rows only; it says nothing about later indices.'],
+  finite_exact_observation: ['Exact on listed rows', 'checked', 'Exact root isolation of the listed rows only, never a statement about the whole family.'],
+  fixed_cap: ['Up to the degree cap', 'checked', 'Holds for degrees up to the stated cap only.'],
+  finite_fit: ['Finite fit', 'fit', 'Fitted to finitely many rows and checked on the rest. It may fail on later rows.'],
+  exact_fit: ['Finite fit', 'fit', 'Fits the supplied rows exactly. It may fail on later rows.'],
+  finite_evidence_only: ['Finite evidence only', 'fit', 'Supported by finitely many rows; not a proof for all n.'],
+  finite_evidence: ['Finite evidence', 'fit', 'Supported by finitely many rows; not a proof for all n.'],
+  supplied_assumption: ['Your assumption', 'assumption', 'Taken from the request and checked on the listed rows only.'],
+  proposed_interval: ['Proposed window', 'assumption', 'A candidate interval for a proof, not itself proved.'],
+  failed_on_rows: ['Fails on rows', 'fail', 'An exact check failed on a supplied row.'],
+  inconsistent_seeds: ['Inconsistent seeds', 'fail', 'The seeds contradict the relations.'],
+};
+const EVIDENCE_TONES = [
+  ['certified', 'certified_all_indices', 'proved for every index.'],
+  ['transported', 'transported_identity', 'exact consequence of the defining recurrence; as reliable as that rule.'],
+  ['theorem', 'conditional_theorem_match', 'hypotheses checked exactly; the conclusion still needs the recurrence for all n.'],
+  ['checked', 'checked_supplied_rows', 'exact on the listed rows only.'],
+  ['fit', 'finite_fit', 'fitted to finitely many rows; may fail later.'],
+  ['assumption', 'proposed_interval', 'supplied or proposed, not proved.'],
+  ['fail', 'failed_on_rows', 'an exact check failed.'],
+];
+
+function humanizeCode(code) {
+  const text = String(code == null ? 'unlabelled' : code).replace(/_/g, ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function evidenceInfo(code) {
+  const entry = Object.prototype.hasOwnProperty.call(EVIDENCE_VOCABULARY, code) ? EVIDENCE_VOCABULARY[code] : null;
+  if (entry) return {code, label: entry[0], tone: entry[1], help: entry[2]};
+  return {code, label: humanizeCode(code), tone: 'neutral', help: 'Label reported by polytool: ' + String(code)};
+}
+
+function evidenceBadge(code) {
+  const info = evidenceInfo(code);
+  return '<span class="evidence evidence-' + info.tone + '" data-evidence="' + escAttr(code) +
+    '" title="' + escAttr(info.help) + '">' + esc(info.label) + '</span>';
+}
+
+function evidenceLegendHtml() {
+  return '<details class="evidence-legend"><summary>What the labels mean</summary><ul>' +
+    EVIDENCE_TONES.map(([, code, text]) => '<li>' + evidenceBadge(code) + esc(text) + '</li>').join('') +
+    '</ul></details>';
+}
+
+// --- Formulas: polytool's plain-text rules to TeX (coefficients unchanged) ---
+
+function texIndex(lag, sign) {
+  if (!lag || lag === '0') return 'n';
+  return 'n' + (sign || '+') + lag;
+}
+
+function texDerivative(name, index, order) {
+  return name + (order <= 3 ? "'".repeat(order) : '^{(' + order + ')}') + '_{' + index + '}';
+}
+
+function ruleTextTex(text, options) {
+  const opts = options || {};
+  let tex = String(text == null ? '' : text)
+    .replace(/\(1\) (?=[A-Za-z])/g, '')
+    .replace(/D\^(\d+)\s*\(?([A-Za-z])\[n(?:\+(\d+))?\]\)?/g, (_, order, name, lag) =>
+      texDerivative(name, texIndex(lag), Number(order)))
+    .replace(/\bD\s+([A-Za-z])\[n(?:\+(\d+))?\]/g, (_, name, lag) => texDerivative(name, texIndex(lag), 1))
+    .replace(/([A-Za-z])\[n(?:\+(\d+))?\]/g, (_, name, lag) => name + '_{' + texIndex(lag) + '}')
+    .replace(/([A-Za-z])\^\{?\((\d+)\)\}?\((n(?:[+-]\d+)?)\)/g, '$1^{($2)}_{$3}')
+    .replace(/([A-Za-z])('+)\((n(?:[+-]\d+)?)\)/g, '$1$2_{$3}')
+    .replace(/([A-Za-z])\((n(?:[+-]\d+)?)\)/g, '$1_{$2}')
+    .replace(/\^(\d+)/g, '^{$1}')
+    .replace(/(\d+)\/(\d+)/g, '\\frac{$1}{$2}')
+    .replace(/X/g, 'x');
+  if (opts.name) tex = tex.replace(/\bP(?=['^_])/g, opts.name);
+  if (opts.variable) {
+    // Rename the variable t outside TeX control words such as \left.
+    tex = tex.split(/(\\[A-Za-z]+)/).map((part, i) => i % 2 ? part : part.replace(/t/g, opts.variable)).join('');
+  }
+  return tex;
+}
+
+function formulaHtml(tex) {
+  return '<div class="recurrence-display">' + katexInline(tex) + '</div>';
+}
+
+// A scalar polytool.recurrence.v1 record, typeset with the library's LaTeX.
+function recordFormulaTex(record, fallbackText, name) {
+  let latex = null;
+  try {
+    if (typeof wasm_bindgen !== 'undefined' && wasm_bindgen.recurrence_latex) {
+      const shown = JSON.parse(wasm_bindgen.recurrence_latex(JSON.stringify(record)));
+      if (shown.latex) latex = shown.latex;
+    }
+  } catch (_) {}
+  return ruleTextTex(latex || fallbackText || '', {name: name || 'P', variable: 'x'});
+}
+
+function ruleFormulaHtml(rule, name) {
+  if (!rule) return '';
+  if (rule.scalar) return formulaHtml(recordFormulaTex(rule.scalar, rule.text, name));
+  if (rule.text) {
+    return String(rule.text).split('; ').map(line => formulaHtml(ruleTextTex(line, {variable: 'x'}))).join('');
+  }
+  return '';
+}
+
+function rationalTex(value) {
+  const text = String(value).trim();
+  const match = /^(\d+)\/(\d+)$/.exec(text);
+  if (match) return '\\frac{' + match[1] + '}{' + match[2] + '}';
+  return /^\d+$/.test(text) ? text : '\\text{?}';
+}
+
+function rowPolyTex(coeffs, variable) {
+  const v = variable || 'x';
+  const terms = [];
+  (coeffs || []).forEach((raw, k) => {
+    let text = String(raw).trim();
+    const negative = text.startsWith('-');
+    if (negative) text = text.slice(1);
+    if (/^0+(\/\d+)?$/.test(text)) return;
+    const monomial = k === 0 ? '' : (k === 1 ? v : v + '^{' + k + '}');
+    const body = k > 0 && text === '1' ? monomial : rationalTex(text) + monomial;
+    terms.push((terms.length ? (negative ? ' - ' : ' + ') : (negative ? '-' : '')) + body);
+  });
+  return terms.length ? terms.join('') : '0';
+}
+
+function endpointText(endpoint) {
+  const value = String(endpoint.value);
+  const slope = endpoint.per_index;
+  if (!slope || /^0+$/.test(String(slope))) return value;
+  return (value === '0' ? '' : value + ' + ') + slope + '·n';
+}
+
+function intervalText(interval) {
+  if (!interval) return '(−∞, ∞)';
+  const lower = interval.lower ? (interval.lower.closed === false ? '(' : '[') + endpointText(interval.lower) : '(−∞';
+  const upper = interval.upper ? endpointText(interval.upper) + (interval.upper.closed === false ? ')' : ']') : '∞)';
+  return lower + ', ' + upper;
+}
+
+function indexRangeText(first, last) {
+  if (first == null) return '';
+  if (last == null) return 'for every n ≥ ' + first;
+  return first === last ? 'at n = ' + first : 'for n = ' + first + '…' + last;
+}
+
+function rootPropertyText(property, interval) {
+  if (property === 'real_rooted') return 'is real-rooted';
+  if (property === 'real_rooted_in') return 'is real-rooted with every root in ' + intervalText(interval);
+  if (property === 'real_roots_in') return 'has every real root in ' + intervalText(interval);
+  return humanizeCode(property).toLowerCase();
+}
+
+function componentNames(report) {
+  const components = report.transformation && report.transformation.components;
+  const names = (components || []).map(c => /^[A-Za-z]$/.test(String(c.name)) ? String(c.name) : 'Q');
+  return names.length ? names : ['Q'];
+}
+
+function subjectTex(subject, component, names) {
+  return subject === 'source' ? 'P_n' : ((names && names[component || 0]) || 'Q') + '_n';
+}
+
+function metaHtml(text) {
+  return text ? '<p class="report-meta">' + esc(text) + '</p>' : '';
+}
+
+function listItems(items, render) {
+  return (items || []).map(item => '<div class="report-item">' + render(item) + '</div>').join('');
+}
+
+function rootEnclosureText(root) {
+  const multiplicity = root.multiplicity > 1 ? ' ×' + root.multiplicity : '';
+  return (root.lower === root.upper ? root.lower : '(' + root.lower + ', ' + root.upper + ')') + multiplicity;
+}
+
+function rowsTableHtml(title, columns, rows, firstIndex, limit) {
+  if (!rows || !rows.length) return '';
+  const shown = rows.slice(0, limit || 6);
+  let html = '<details><summary>' + esc(title) + ' (' + rows.length + ' rows)</summary><div class="report-rows"><table><thead><tr><th>n</th>' +
+    columns.map(c => '<th>' + katexInline(c) + '</th>').join('') + '</tr></thead><tbody>';
+  shown.forEach((row, i) => {
+    html += '<tr><td>' + esc(firstIndex + i) + '</td>' + row.map(cell => '<td>' + katexInline(rowPolyTex(cell)) + '</td>').join('') + '</tr>';
+  });
+  html += '</tbody></table></div>';
+  if (rows.length > shown.length) html += metaHtml('Showing the first ' + shown.length + ' rows; the exported JSON has all of them.');
+  return html + '</details>';
+}
+
+function conditionsHtml(conditions) {
+  return listItems(conditions, c => evidenceBadge(c.status) + '<strong>' + esc(c.condition) + '</strong>' + metaHtml(c.detail));
+}
+
+function reportActionButton(label, call) {
+  return '<button class="run-small" onclick="' + escAttr(call) + '">' + esc(label) + '</button>';
+}
+
+// --- Report renderers ---
+
+function renderRootDomainSection(rd, names, index) {
+  const rank = {certified: 0, transported: 1, theorem: 2, checked: 3, fit: 4, assumption: 5, fail: 6, neutral: 7};
+  const claims = (rd.claims || []).slice().sort((a, b) =>
+    rank[evidenceInfo(a.evidence).tone] - rank[evidenceInfo(b.evidence).tone]);
+  let html = '<h4>Root location</h4>' +
+    metaHtml('Optional analysis. The algebraic results above never depend on it.');
+  html += listItems(claims, claim =>
+    evidenceBadge(claim.evidence) + '<strong>' + katexInline(subjectTex(claim.subject, claim.component, names)) + ' ' +
+    esc(rootPropertyText(claim.property, claim.interval)) + '</strong> ' + esc(indexRangeText(claim.first_index, claim.last_index)) +
+    metaHtml(claim.derivation) +
+    ((claim.conditional_on || []).length ? '<p class="report-meta">Depends on: ' + esc(claim.conditional_on.join('; ')) + '</p>' : ''));
+  if (!claims.length) html += metaHtml('No root-location claims.');
+  const theorem = rd.recurrence_theorem;
+  if (theorem) {
+    html += '<details><summary>Recurrence step: ' + esc(theorem.matched ? 'matches ' + humanizeCode(theorem.theorem).toLowerCase() : 'no match') + '</summary>' +
+      (theorem.form ? '<p class="report-text">' + esc(theorem.form) + '</p>' : '') + metaHtml(theorem.statement) +
+      listItems(theorem.attempts, attempt => evidenceBadge(attempt.success ? 'completed_recurrence_induction' : 'attempt_failed') +
+        esc(intervalText(attempt.interval) + ' (' + humanizeCode(attempt.origin).toLowerCase() + ')') + metaHtml(attempt.detail)) +
+      (theorem.reason ? metaHtml(theorem.reason) : '') + '</details>';
+  }
+  if ((rd.implications || []).length) {
+    html += '<details><summary>Map theorems (' + rd.implications.length + ')</summary>' +
+      listItems(rd.implications, imp => '<strong>' + esc(humanizeCode(imp.theorem)) + '</strong> · ' + esc(humanizeCode(imp.direction).toLowerCase()) +
+        '<p>' + esc((imp.source_property || '') + (imp.target_property ? ' ⇔ ' + imp.target_property : '')) + '</p>' +
+        metaHtml(imp.statement) +
+        listItems(imp.hypotheses, h => evidenceBadge(h.status) + esc(h.condition) + metaHtml(h.detail)) +
+        (imp.converse ? metaHtml('Converse: ' + imp.converse) : '')) + '</details>';
+  }
+  if ((rd.assumption_checks || []).length) {
+    html += '<details><summary>Assumption checks (' + rd.assumption_checks.length + ')</summary><pre class="report-text">' +
+      esc(JSON.stringify(rd.assumption_checks, null, 2)) + '</pre></details>';
+  }
+  if ((rd.observations || []).length) {
+    html += '<details><summary>Exact root enclosures of the observed rows (' + rd.observations.length + ')</summary>' +
+      '<div class="report-rows"><table><thead><tr><th>Row</th><th>Real-rooted</th><th>Roots</th></tr></thead><tbody>' +
+      rd.observations.map(o => '<tr><td>' + katexInline(subjectTex(o.subject, o.component, names).replace('_n', '_{' + o.index + '}')) +
+        '</td><td>' + (o.real_rooted ? 'yes' : 'no') + '</td><td class="report-text">' +
+        esc((o.roots || []).map(rootEnclosureText).join(', ') || 'none') + '</td></tr>').join('') +
+      '</tbody></table></div>' + metaHtml('Each enclosure contains exactly one root; equal endpoints are exact roots.') + '</details>';
+  }
+  (rd.notes || []).forEach(note => { html += metaHtml(note); });
+  if ((rd.conventions || []).length) {
+    html += '<details><summary>Conventions</summary>' + rd.conventions.map(metaHtml).join('') + '</details>';
+  }
+  return html;
+}
+
+function renderTransformReport(report, index) {
+  const t = report.transformation || {};
+  const names = componentNames(report);
+  let html = '<h4>Coordinate change</h4><p class="report-text">' + esc(t.row_map || t.kind) + '</p>' +
+    metaHtml('Inverse: ' + (t.inverse || 'none')) +
+    metaHtml('Index domain: ' + (t.index_domain || '') + (t.degree_schedule ? '; ' + t.degree_schedule : ''));
+  html += '<div class="report-item">' + evidenceBadge(report.reconstruction_verified ? 'checked_supplied_rows' : 'failed_on_rows') +
+    esc(report.reconstruction_verified ? 'The inverse reproduces all ' + (report.source_rows || []).length + ' source rows exactly.'
+      : 'The inverse did not reproduce every source row.') + '</div>';
+  html += conditionsHtml(report.conditions);
+
+  html += '<h4>Transported recurrence</h4>';
+  const tr = report.transported;
+  if (tr) {
+    html += evidenceBadge(tr.evidence) + ruleFormulaHtml(tr, names[0]) +
+      metaHtml('Holds from index ' + tr.valid_from_index + (tr.valid_to_index != null ? ' to ' + tr.valid_to_index : '') +
+        '; checked on ' + tr.checked_targets + ' transformed rows' + (tr.holds_on_transformed_rows ? '.' : ', where it FAILED.'));
+    if (tr.scalar) html += '<div class="report-actions">' + reportActionButton('Check interlacing theorems for this recurrence', 'checkReportTheorems(' + index + ",'transported')") + '</div>';
+  } else if (report.transport_error) {
+    html += metaHtml('Not transported: ' + report.transport_error);
+  } else {
+    html += metaHtml('No defining recurrence was supplied, so only the rows were mapped.');
+  }
+
+  const search = report.independent_search;
+  if (search) {
+    html += '<h4>Independent fit in the new coordinates</h4>' + evidenceBadge(search.evidence) +
+      '<span class="report-meta">' + esc(humanizeCode(search.status)) + '</span>' + ruleFormulaHtml(search, names[0]) +
+      metaHtml(search.reason) +
+      (search.holds_on_transformed_rows === false ? metaHtml('The fit fails on a transformed row.') : '');
+    if (search.scalar) html += '<div class="report-actions">' + reportActionButton('Check interlacing theorems for the fit', 'checkReportTheorems(' + index + ",'fit')") + '</div>';
+  }
+  if (report.root_domain) html += renderRootDomainSection(report.root_domain, names, index);
+
+  const origin = report.row_origin || 0;
+  const states = report.transformed_states || [];
+  html += rowsTableHtml('Rows', ['P_n'].concat(names.map(n => n + '_n')),
+    (report.source_rows || []).map((row, i) => [row].concat(states[i] || [])), origin);
+  html += '<div class="report-actions">' +
+    (report.source_rule ? reportActionButton('Check theorems for the source recurrence', 'checkReportTheorems(' + index + ",'source')") : '') +
+    reportActionButton('Exact roots of the source rows', 'isolateReportRows(' + index + ",'source')") +
+    reportActionButton('Exact roots of ' + names[0] + 'ₙ', 'isolateReportRows(' + index + ",'transformed')") + '</div>';
+  return html;
+}
+
+function relationHtml(relation) {
+  return evidenceBadge(relation.evidence) + '<span class="report-meta">' + esc(humanizeCode(relation.role || '')) +
+    (relation.first_base != null ? ', base n ≥ ' + relation.first_base : '') + '</span>' +
+    formulaHtml(ruleTextTex(relation.text)) + metaHtml(relation.note);
+}
+
+function renderImplicitReport(report, index) {
+  const t = report.transformation || {};
+  const assessment = report.assessment || {};
+  const description = report.description || {};
+  let html = '<h4>Coefficient map</h4><p class="report-text">' + esc(t.row_map || t.kind) + '</p>' +
+    metaHtml('Inverse: ' + (t.inverse || 'none')) + conditionsHtml(report.map_conditions);
+  html += '<h4>Generating description</h4>' + evidenceBadge(assessment.status) +
+    '<span class="report-meta">' + esc((description.seeds || []).length + ' seed rows from n = ' + description.first_index +
+      (assessment.seeds_consistent === false ? '; the seeds are inconsistent' : '')) + '</span>';
+  html += listItems(description.relations, relationHtml);
+  if ((description.exceptional_index_conditions || []).length) {
+    html += '<p class="report-meta">Coefficient conditions at exceptional indices:</p>' +
+      listItems(description.exceptional_index_conditions, relationHtml);
+  }
+  if ((description.boundary_conditions || []).length) {
+    html += '<p class="report-meta">Supplied boundary conditions:</p>' + listItems(description.boundary_conditions, relationHtml);
+  }
+  if (assessment.uniqueness) {
+    const u = assessment.uniqueness;
+    html += '<details><summary>Why the description is unique</summary>' + evidenceBadge(u.status) + metaHtml(u.statement) +
+      (u.reasons || []).map(metaHtml).join('') + '</details>';
+  }
+  html += '<h4>Transported relations</h4>';
+  html += listItems(report.transports, transport => relationHtml(transport.relation) +
+    metaHtml('From ' + humanizeCode(transport.source).toLowerCase() + '; checked at ' + transport.checked_bases + ' base indices' +
+      (transport.holds_on_transformed_rows ? '.' : ', where it FAILED.')) +
+    (transport.clearing ? '<p>' + evidenceBadge(transport.clearing.exceptional && transport.clearing.exceptional.status) +
+      esc('Common multiplier H = ' + transport.clearing.multiplier_text) + '</p>' +
+      '<details><summary>Clearing statement</summary>' + metaHtml(transport.clearing.statement) + '</details>' : '') +
+    (transport.reconstruction ? '<details><summary>Reconstruction certificate</summary>' + metaHtml(transport.reconstruction.statement) + '</details>' : ''));
+  if ((report.additional_relations || []).length) {
+    html += '<h4>Additional row relations</h4>' + listItems(report.additional_relations, relationHtml);
+  }
+  const search = report.independent_search;
+  if (search) {
+    html += '<h4>Fitted successor rule</h4>' + evidenceBadge(search.evidence) +
+      '<span class="report-meta">' + esc(humanizeCode(search.status)) + '</span>' +
+      (search.relation ? formulaHtml(ruleTextTex(search.relation.text)) : '') + metaHtml(search.reason);
+    if (search.scalar) html += '<div class="report-actions">' + reportActionButton('Check interlacing theorems for the fit', 'checkReportTheorems(' + index + ",'fit')") + '</div>';
+  }
+  const origin = report.row_origin || 0;
+  const transformed = report.transformed_rows || [];
+  html += rowsTableHtml('Rows', ['P_n', 'Q_n'], (report.source_rows || []).map((row, i) => [row, transformed[i] || []]), origin);
+  html += '<div class="report-actions">' +
+    (report.source_rule ? reportActionButton('Check theorems for the source recurrence', 'checkReportTheorems(' + index + ",'source')") : '') +
+    reportActionButton('Exact roots of the source rows', 'isolateReportRows(' + index + ",'source')") +
+    reportActionButton('Exact roots of Qₙ', 'isolateReportRows(' + index + ",'transformed')") + '</div>';
+  return html;
+}
+
+function theoremName(code) {
+  return {weighted_renewal_window: 'Weighted renewal window',
+    fixed_delay_predecessor_window: 'Fixed-delay predecessor window'}[code] || humanizeCode(code);
+}
+
+function referenceHtml(reference) {
+  const text = String(reference || '');
+  if (/^https:\/\/[^\s"'<>]+$/.test(text)) return '<a href="' + escAttr(text) + '" target="_blank" rel="noopener">' + esc(text) + '</a>';
+  return esc(text);
+}
+
+function renderTheoremReport(report) {
+  const evidence = report.finite_evidence || {};
+  let html = evidenceBadge(evidence.status) + '<span class="report-meta">' + esc(humanizeCode(evidence.source)) + '</span>' +
+    formulaHtml(recordFormulaTex(report.recurrence_json, report.recurrence_text, 'P')) + metaHtml(evidence.note);
+  const matches = report.theorem_matches || [];
+  if (!matches.length) html += '<p><strong>No supported theorem matches this recurrence.</strong></p>';
+  html += listItems(matches, m => evidenceBadge(m.status) + evidenceBadge(m.proof_status) +
+    '<p><strong>' + esc(theoremName(m.theorem)) + '</strong></p><p class="report-text">' + esc(m.family) + '</p>' +
+    '<p>' + esc(m.conclusion) + '</p>' +
+    (m.window ? '<p>Interlacing window: <strong>' + esc(m.window.inequality) + '</strong> · ' + esc(m.window.statement) + '</p>' : '') +
+    '<p class="report-meta">Still to show:</p><ul>' + (m.remaining_obligations || []).map(o => '<li>' + esc(o) + '</li>').join('') + '</ul>' +
+    '<details><summary>Hypotheses and boundary rows</summary>' +
+    listItems(m.hypotheses, h => evidenceBadge('exact_hypothesis') + esc(h.statement) + metaHtml(humanizeCode(h.check))) +
+    (m.boundary ? '<div class="report-item">' + evidenceBadge(m.boundary.rows_match_canonical ? 'checked_supplied_rows' : 'failed_on_rows') +
+      esc(humanizeCode(m.boundary.status)) + metaHtml(m.boundary.contract) + '</div>' : '') +
+    '<p class="report-meta">Reference: ' + referenceHtml(m.reference) + '</p></details>');
+  if ((report.rejected_theorems || []).length) {
+    html += '<details><summary>Theorems that do not apply (' + report.rejected_theorems.length + ')</summary>' +
+      listItems(report.rejected_theorems, r => '<strong>' + esc(theoremName(r.theorem)) + '</strong>' + metaHtml(r.reason)) + '</details>';
+  }
+  return html;
+}
+
+function renderRootEnclosureReport(report) {
+  const items = report.items || [];
+  const interval = report.request && report.request.interval;
+  let html = evidenceBadge('finite_exact_observation') +
+    '<span class="report-meta">Exact for these polynomials only.' + (interval ? ' Interval: ' + esc(intervalText(interval)) + '.' : '') + '</span>';
+  html += '<div class="report-rows"><table><thead><tr><th>n</th><th>Degree</th><th>Real-rooted</th><th>Roots (enclosures)</th>' +
+    (interval ? '<th>All roots in interval</th>' : '') + '</tr></thead><tbody>' +
+    items.map(item => '<tr><td>' + esc(item.index) + '</td><td>' + esc(item.degree == null ? 'zero' : item.degree) +
+      '</td><td>' + (item.real_rooted ? 'yes' : 'no') + ' (' + esc(item.real_root_count) + ' real)</td><td class="report-text">' +
+      esc((item.roots || []).map(rootEnclosureText).join(', ') || 'none') + '</td>' +
+      (interval ? '<td>' + (item.real_rooted_in_interval ? 'yes' : 'no') + '</td>' : '') + '</tr>').join('') +
+    '</tbody></table></div>' + metaHtml('Each enclosure contains exactly one root and neither endpoint is a root; equal endpoints are exact rational roots.');
+  return html;
+}
+
+function renderRecurrenceSpacesReport(report) {
+  return listItems(report.results, result => evidenceBadge(result.evidence) +
+    '<span class="report-meta">' + esc(humanizeCode(result.status)) + '</span>' +
+    (result.representatives || []).map(rep => formulaHtml(ruleTextTex(rep.formula))).join('') + metaHtml(result.reason));
+}
+
+// Fallback for report types without a dedicated view: every object carrying
+// an `evidence` label is listed with its text, so no label is lost.
+function renderGenericEvidenceReport(report) {
+  const found = [];
+  const visit = (value, path) => {
+    if (found.length >= 200 || value == null || typeof value !== 'object') return;
+    if (Array.isArray(value)) { value.forEach((item, i) => visit(item, path + '[' + i + ']')); return; }
+    if (typeof value.evidence === 'string') {
+      found.push({path, evidence: value.evidence,
+        text: value.text || value.formula || value.statement || value.recurrence_text || value.status || ''});
+    }
+    Object.keys(value).forEach(key => { if (key !== 'request') visit(value[key], path ? path + '.' + key : key); });
+  };
+  visit(report, '');
+  let html = metaHtml('No dedicated view for ' + (report.schema || 'this report') + ' yet; its evidence labels are listed as reported.');
+  html += listItems(found, item => evidenceBadge(item.evidence) + '<span class="report-meta">' + esc(item.path) + '</span>' +
+    (item.text ? '<p class="report-text">' + esc(item.text) + '</p>' : ''));
+  if (!found.length) html += metaHtml('The report contains no evidence labels.');
+  return html;
+}
+
+// Add a renderer here when a new report schema is supported.
+const REPORT_RENDERERS = {
+  'polytool.recurrence-transform.v1': ['Coordinate transformation', renderTransformReport],
+  'polytool.recurrence-implicit.v1': ['Implicit relations', renderImplicitReport],
+  'polytool.recurrence-theorems.v1': ['Interlacing theorems', renderTheoremReport],
+  'polytool.root-enclosures.v1': ['Exact root enclosures', renderRootEnclosureReport],
+  'polytool.recurrence-spaces.v1': ['Recurrence search', renderRecurrenceSpacesReport],
+};
+
+function replayBannerHtml(entry) {
+  const replay = entry.replay;
+  if (replay === 'running') return '<p class="replay-pending">Replaying the report&hellip;</p>';
+  if (replay && replay.ok) return '<p class="replay-ok">Replay passed: polytool recomputed this report exactly from its embedded request. The labels below keep their meaning; replay does not strengthen them.</p>';
+  if (replay && replay.error) return '<p class="replay-fail">Replay failed: ' + esc(replay.error) + '. Do not rely on this report.</p>';
+  if (entry.origin === 'imported') return '<p class="replay-pending">Imported report, not yet replayed: its content is shown as written in the file.</p>';
+  return '';
+}
+
+function renderReportCard(entry, index) {
+  const report = entry.report || {};
+  const known = Object.prototype.hasOwnProperty.call(REPORT_RENDERERS, report.schema) ? REPORT_RENDERERS[report.schema] : null;
+  const title = entry.title || (known ? known[0] : humanizeCode(report.schema || 'report'));
+  let body = known ? known[1](report, index) : renderGenericEvidenceReport(report);
+  if (entry.replay && entry.replay.error) body = '<details><summary>Show the unverified content</summary>' + body + '</details>';
+  return '<section class="report-card" data-schema="' + escAttr(report.schema || '') + '"><h3>' + esc(title) + '</h3>' +
+    replayBannerHtml(entry) + body +
+    '<div class="report-actions">' +
+    reportActionButton('Copy report JSON', 'copyTransformReport(this,' + index + ')') +
+    reportActionButton('Download JSON', 'downloadTransformReport(' + index + ')') +
+    reportActionButton('Replay (verify)', 'replayTransformReport(' + index + ')') + '</div></section>';
+}
+
+function renderTransformResults() {
+  if (!transformEntries.length) { setResult('', 'transform'); return; }
+  setResult(evidenceLegendHtml() + transformEntries.map(renderReportCard).join(''), 'transform');
+}
+
+function transformReportSummary(report) {
+  if (report.schema === 'polytool.recurrence-transform.v1') {
+    return report.transported ? 'Recurrence transported.' : (report.transport_error ? 'Rows mapped; recurrence not transported.' : 'Rows mapped.');
+  }
+  if (report.schema === 'polytool.recurrence-implicit.v1') return evidenceInfo(report.assessment && report.assessment.status).label + '.';
+  if (report.schema === 'polytool.recurrence-theorems.v1') return (report.theorem_matches || []).length + ' conditional theorem match(es).';
+  if (report.schema === 'polytool.root-enclosures.v1') return (report.items || []).length + ' polynomial(s) isolated.';
+  return 'Report ready.';
+}
+
+// --- Requests ---
+
+const TRANSFORM_PARAMETERS = {
+  multiply_power: ['power'], divide_power: ['power'], reversal: ['schedule'], affine: ['ab'],
+  mobius: ['ab', 'ce', 'schedule'], f_polynomial: ['schedule'], gamma: ['schedule'],
+  symmetric_decomposition: ['schedule'], diagonal: ['weight'], derivative_antecedent: ['antecedent'],
+};
+const TRANSFORM_KIND_HELP = {
+  f_polynomial: 'Qₙ = (1 + x)^dₙ Pₙ(x/(1 + x)) with the declared degree bound dₙ ≥ deg Pₙ.',
+  reversal: 'Qₙ = x^dₙ Pₙ(1/x) with the declared degree bound dₙ ≥ deg Pₙ.',
+  affine: 'Qₙ = Pₙ(ax + b) with rational a ≠ 0 and b, such as 3/2.',
+  mobius: 'Qₙ = (cx + e)^dₙ Pₙ((ax + b)/(cx + e)) with ae − bc ≠ 0.',
+  multiply_power: 'Qₙ = xʳ Pₙ.',
+  divide_power: 'Qₙ = Pₙ/xʳ; every row must be divisible by xʳ.',
+  symmetric_decomposition: 'Pₙ = aₙ + x bₙ with aₙ, bₙ symmetric; the recurrence becomes a two-component system.',
+  gamma: 'Gamma coordinates of symmetric rows; the recurrence is not transported, so only the rows and a fit are reported.',
+  diagonal: 'Qₙ has the coefficient of xᵏ multiplied by λ(k); the recurrence becomes an implicit relation.',
+  derivative_antecedent: 'Qₙ with Pₙ = Dᵐ(g Qₙ)/m!, m = deg g; the recurrence becomes an implicit relation.',
+};
+const IMPLICIT_KINDS = ['diagonal', 'derivative_antecedent'];
+
+function transformValue(id) {
+  return document.getElementById(id).value;
+}
+
+function readTransformInteger(id, min, max) {
+  const field = document.getElementById(id);
+  const value = Number(field.value);
+  if (!String(field.value).trim() || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error('Choose a whole number from ' + min + ' to ' + max + ' for ' +
+      document.querySelector('label[for="' + id + '"]').textContent.trim().toLowerCase() + '.');
+  }
+  return value;
+}
+
+function readTransformRational(id, optional) {
+  const text = String(document.getElementById(id).value).trim().replace(/−/g, '-');
+  if (!text && optional) return null;
+  if (!/^-?\d+(\/[1-9]\d*)?$/.test(text)) {
+    throw new Error('Enter a rational number such as 3 or -3/2 for ' +
+      document.querySelector('label[for="' + id + '"]').textContent.trim().toLowerCase() + '.');
+  }
+  return text;
+}
+
+function transformEndpointFor(kind, source) {
+  return IMPLICIT_KINDS.includes(kind) && source !== 'rows' ? 'implicit' : 'transform';
+}
+
+function buildTransformation(kind) {
+  const schedule = () => ({first_index: readTransformInteger('transformScheduleIndex', 0, 1000000),
+    first_degree: readTransformInteger('transformScheduleDegree', 0, 512),
+    step: readTransformInteger('transformScheduleStep', 0, 16)});
+  switch (kind) {
+    case 'multiply_power': case 'divide_power':
+      return {kind, power: readTransformInteger('transformPower', 0, 64)};
+    case 'affine':
+      return {kind, a: readTransformRational('transformA'), b: readTransformRational('transformB')};
+    case 'mobius':
+      return {kind, a: readTransformRational('transformA'), b: readTransformRational('transformB'),
+        c: readTransformRational('transformC'), e: readTransformRational('transformE'), schedule: schedule()};
+    case 'reversal': case 'f_polynomial': case 'gamma': case 'symmetric_decomposition':
+      return {kind, schedule: schedule()};
+    case 'diagonal': {
+      const weight = transformValue('transformWeight');
+      const order = readTransformInteger('transformWeightOrder', 1, 8);
+      return {kind, weight: weight === 'factorial_power' ? {kind: weight, power: order} : {kind: weight, m: order}};
+    }
+    case 'derivative_antecedent': {
+      const g = String(transformValue('transformG')).split(/[\s,;]+/).filter(Boolean);
+      if (!g.length || !g.every(c => /^-?\d+(\/[1-9]\d*)?$/.test(c))) {
+        throw new Error('Enter the coefficients of g as rational numbers, lowest degree first, such as 0, 1.');
+      }
+      return {kind, g};
+    }
+  }
+  throw new Error('Unknown transformation.');
+}
+
+function transformCandidateInterval() {
+  const lower = readTransformRational('transformIntervalLower', true);
+  const upper = readTransformRational('transformIntervalUpper', true);
+  if (lower === null && upper === null) return null;
+  const interval = {};
+  if (lower !== null) interval.lower = {value: lower};
+  if (upper !== null) interval.upper = {value: upper};
+  return interval;
+}
+
+function buildTransformRequest() {
+  const source = transformValue('transformSource');
+  const kind = transformValue('transformKind');
+  const endpoint = transformEndpointFor(kind, source);
+  const request = {};
+  if (source === 'oeis') {
+    const id = String(transformValue('transformOeis')).trim().toUpperCase();
+    if (!/^A\d{6}$/.test(id)) throw new Error('Enter an OEIS A-number such as A008292.');
+    if (transformCatalog && !transformCatalog.some(entry => entry.id === id)) {
+      throw new Error(id + ' is not in the bundled catalog. Paste its recurrence JSON instead.');
+    }
+    request.oeis_id = id;
+    request.row_count = readTransformInteger('transformRowCount', 1, 64);
+  } else if (source === 'recurrence') {
+    const text = String(transformValue('transformRecurrence')).trim();
+    if (!text) throw new Error('Paste a recurrence JSON record, or use the recurrence found in the Recurrence tab.');
+    if (text.length > 1048576) throw new Error('Recurrence JSON is too large (limit: 1 MiB).');
+    let record;
+    try { record = JSON.parse(text); } catch (error) { throw new Error('Recurrence JSON is not valid JSON: ' + error.message); }
+    if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('Recurrence JSON must be an object.');
+    request.source_recurrence = record;
+    request.row_count = readTransformInteger('transformRowCount', 1, 64);
+  } else {
+    const input = getInput();
+    if (input.length > 1048576) throw new Error('Polynomial input is too large (limit: 1 MiB).');
+    const parsed = JSON.parse(wasm_bindgen.parse_and_format(input));
+    const errors = parsed.filter(row => row.error).map(row => row.error);
+    if (errors.length) throw new Error(errors.join('; '));
+    if (!parsed.length) throw new Error('Enter polynomial rows above, or choose a bundled family.');
+    if (parsed.length > 256) throw new Error('At most 256 rows can be transformed.');
+    request.rows = parsed.map(row => row.coefficients);
+    request.row_origin = readTransformInteger('transformOrigin', 0, 1000000);
+  }
+  request.transformation = buildTransformation(kind);
+  if (document.getElementById('transformSearch').checked) request.search = {};
+  if (endpoint === 'transform' && document.getElementById('transformRootDomain').checked) {
+    const interval = transformCandidateInterval();
+    request.root_domain = interval ? {candidate_intervals: [interval]} : {};
+  }
+  return {endpoint, request};
+}
+
+function transformExample(name) {
+  const examples = {
+    'eulerian-f': {source: 'oeis', oeis: 'A008292', rows: 8, kind: 'f_polynomial', schedule: [1, 0, 1], search: true, roots: true},
+    'eulerian-symmetric': {source: 'oeis', oeis: 'A008292', rows: 8, kind: 'symmetric_decomposition', schedule: [1, 0, 1], search: false, roots: true},
+    'narayana-reversal': {source: 'oeis', oeis: 'A001263', rows: 8, kind: 'reversal', schedule: [1, 0, 1], search: true, roots: true},
+    'binomial-factorial': {source: 'oeis', oeis: 'A007318', rows: 8, kind: 'diagonal', weight: ['factorial_power', 1], search: true, roots: false},
+    'weighted-eulerian': {source: 'oeis', oeis: 'A065826', rows: 9, kind: 'diagonal', weight: ['inverse_binomial', 1], search: true, roots: false},
+  };
+  return examples[name] || null;
+}
+
+function loadTransformExample(name) {
+  const example = transformExample(name);
+  if (!example) return;
+  const set = (id, value) => { document.getElementById(id).value = value; };
+  set('transformSource', example.source);
+  set('transformOeis', example.oeis);
+  set('transformRowCount', example.rows);
+  set('transformKind', example.kind);
+  if (example.schedule) {
+    set('transformScheduleIndex', example.schedule[0]);
+    set('transformScheduleDegree', example.schedule[1]);
+    set('transformScheduleStep', example.schedule[2]);
+  }
+  if (example.weight) {
+    set('transformWeight', example.weight[0]);
+    set('transformWeightOrder', example.weight[1]);
+  }
+  document.getElementById('transformSearch').checked = example.search;
+  document.getElementById('transformRootDomain').checked = example.roots;
+  set('transformIntervalLower', '');
+  set('transformIntervalUpper', '');
+  transformControlsChanged();
+  setStatus('Example loaded. Press Transform.');
+}
+
+function populateTransformCatalog() {
+  if (transformCatalog || !wasmReady) return;
+  try {
+    transformCatalog = JSON.parse(wasm_bindgen.oeis_catalog_index());
+  } catch (_) {
+    transformCatalog = null;
+    return;
+  }
+  const list = document.getElementById('transformOeisList');
+  list.textContent = '';
+  transformCatalog.forEach(entry => {
+    const option = document.createElement('option');
+    option.value = entry.id;
+    option.label = entry.id + ' — ' + String(entry.name).slice(0, 90);
+    list.appendChild(option);
+  });
+  updateTransformControls();
+}
+
+function updateTransformControls() {
+  const source = transformValue('transformSource');
+  const kind = transformValue('transformKind');
+  const endpoint = transformEndpointFor(kind, source);
+  const params = TRANSFORM_PARAMETERS[kind] || [];
+  document.querySelectorAll('[data-transform-param]').forEach(field => {
+    field.hidden = !params.includes(field.dataset.transformParam);
+  });
+  document.getElementById('transformOeisField').hidden = source !== 'oeis';
+  document.getElementById('transformRecurrenceField').hidden = source !== 'recurrence';
+  document.getElementById('transformRowCountField').hidden = source === 'rows';
+  document.getElementById('transformOriginField').hidden = source !== 'rows';
+  const rootBox = document.getElementById('transformRootDomain');
+  rootBox.disabled = endpoint === 'implicit';
+  document.getElementById('transformRootDomainLabel').hidden = endpoint === 'implicit';
+  document.getElementById('transformIntervalFields').hidden = !(rootBox.checked && endpoint === 'transform');
+  document.getElementById('transformKindHelp').textContent = TRANSFORM_KIND_HELP[kind] || '';
+  const id = String(transformValue('transformOeis')).trim().toUpperCase();
+  const entry = transformCatalog && transformCatalog.find(item => item.id === id);
+  document.getElementById('transformOeisName').textContent = entry ? entry.name :
+    (transformCatalog ? 'Not in the bundled catalog (' + transformCatalog.length + ' families).' : '');
+  const sourceText = {oeis: 'the defining recurrence of the bundled family', recurrence: 'the supplied recurrence',
+    rows: 'the rows entered above only (no recurrence, so every result is checked on these rows only)'}[source];
+  document.getElementById('transformSummary').textContent = transformCustom
+    ? 'Custom request: the JSON below is sent unchanged.'
+    : (endpoint === 'implicit' ? 'Implicit relations from ' : 'Coordinate change using ') + sourceText + '.';
+}
+
+function refreshTransformRequestPreview() {
+  if (transformCustom || !wasmReady) return;
+  try {
+    const job = buildTransformRequest();
+    document.getElementById('transformEndpoint').value = job.endpoint;
+    document.getElementById('transformRequest').value = JSON.stringify(job.request, null, 2);
+  } catch (_) {
+    document.getElementById('transformRequest').value = '';
+  }
+}
+
+function invalidateTransformResults() {
+  if (transformRunning) cancelTransformJob(true);
+  if (transformEntries.length) {
+    transformEntries = [];
+    setResult('Settings changed. Press Transform to update the results.', 'transform');
+  }
+}
+
+function transformControlsChanged() {
+  transformCustom = false;
+  updateTransformControls();
+  refreshTransformRequestPreview();
+  invalidateTransformResults();
+}
+
+function transformMainInputChanged() {
+  if (transformValue('transformSource') === 'rows') {
+    refreshTransformRequestPreview();
+    invalidateTransformResults();
+  }
+}
+
+function editTransformRequest() {
+  transformCustom = true;
+  updateTransformControls();
+  invalidateTransformResults();
+}
+
+function prepareTransformRequest() {
+  if (transformCustom) {
+    const text = transformValue('transformRequest');
+    if (!text.trim()) throw new Error('The request JSON is empty.');
+    return {endpoint: transformValue('transformEndpoint'), text};
+  }
+  const job = buildTransformRequest();
+  document.getElementById('transformEndpoint').value = job.endpoint;
+  document.getElementById('transformRequest').value = JSON.stringify(job.request, null, 2);
+  return {endpoint: job.endpoint, text: JSON.stringify(job.request)};
+}
+
+// --- Worker and actions ---
+
+const TRANSFORM_WORKER_FUNCTIONS = ['transform_recurrence', 'transform_recurrence_implicit', 'root_enclosures',
+  'recurrence_theorems', 'verify_report'];
+let transformEntries = [];
+let transformCatalog = null;
+let transformCustom = false;
+let transformWorker = null;
+let transformRunning = false;
+let transformJob = null;
+let transformJobSerial = 0;
+
+function createTransformWorker() {
+  const base = new URL('.', location.href).href;
+  const code = `
+    importScripts('${base}pkg/polytool_web.js?v=${ASSET_VERSION}');
+    const ready = wasm_bindgen({ module_or_path: '${base}pkg/polytool_web_bg.wasm?v=${ASSET_VERSION}' });
+    const allowed = new Set(${JSON.stringify(TRANSFORM_WORKER_FUNCTIONS)});
+    onmessage = async function(e) {
+      await ready;
+      const {id, fn, arg} = e.data;
+      if (!allowed.has(fn)) { postMessage({id, data: JSON.stringify({error: 'unsupported call'})}); return; }
+      try {
+        postMessage({id, data: wasm_bindgen[fn](arg)});
+      } catch (error) {
+        postMessage({id, poisoned: true, data: JSON.stringify({error: 'internal error: ' + (error && error.message || error)})});
+      }
+    };
+  `;
+  const blob = new Blob([code], {type: 'application/javascript'});
+  return new Worker(URL.createObjectURL(blob));
+}
+
+function setTransformBusy(busy, label) {
+  transformRunning = busy;
+  document.getElementById('btnTransform').disabled = busy;
+  document.getElementById('btnTransformImport').disabled = busy;
+  document.getElementById('btnTransformCancel').style.display = busy ? '' : 'none';
+  if (busy) setStatus(label + '…');
+}
+
+function callTransformWorker(fn, arg, label) {
+  if (transformRunning) return Promise.reject(new Error('Another computation is running; wait for it or cancel it.'));
+  if (!transformWorker) transformWorker = createTransformWorker();
+  setTransformBusy(true, label);
+  const id = ++transformJobSerial;
+  return new Promise((resolve, reject) => {
+    transformJob = {id, reject};
+    transformWorker.onmessage = e => {
+      if (e.data.id !== id) return;
+      transformJob = null;
+      setTransformBusy(false);
+      if (e.data.poisoned) { transformWorker.terminate(); transformWorker = null; }
+      resolve(e.data.data);
+    };
+    transformWorker.onerror = e => {
+      transformJob = null;
+      setTransformBusy(false);
+      if (transformWorker) transformWorker.terminate();
+      transformWorker = null;
+      reject(new Error('Worker error: ' + (e.message || 'unknown')));
+    };
+    transformWorker.postMessage({id, fn, arg});
+  });
+}
+
+function cancelTransformJob(silent) {
+  if (!transformRunning) return;
+  if (transformWorker) transformWorker.terminate();
+  transformWorker = null;
+  const job = transformJob;
+  transformJob = null;
+  setTransformBusy(false);
+  if (job) job.reject(Object.assign(new Error('cancelled'), {cancelled: true}));
+  if (!silent) setStatus('Cancelled.');
+}
+
+function showTransformError(prefix, error) {
+  if (error && error.cancelled) {
+    if (!transformEntries.length) setResult('Computation cancelled.', 'transform');
+    return;
+  }
+  setResult(span('err', prefix + (error && error.message || error)), 'transform');
+  setStatus('Error.');
+}
+
+function displayTransformResults(status) {
+  try {
+    renderTransformResults();
+    if (status) setStatus(status);
+  } catch (error) {
+    setResult(span('err', 'Could not display the report: ' + (error && error.message || error)), 'transform');
+    setStatus('Error displaying the report.');
+  }
+}
+
+async function runTransform() {
+  if (!wasmReady) { setStatus('WASM not loaded yet.'); return; }
+  if (transformRunning) return;
+  let job;
+  try {
+    job = prepareTransformRequest();
+  } catch (error) {
+    setResult(span('err', 'Error: ' + error.message), 'transform');
+    setStatus('Check the transformation settings.');
+    return;
+  }
+  transformEntries = [];
+  setResult('Transforming…', 'transform');
+  const started = performance.now();
+  try {
+    const text = await callTransformWorker(job.endpoint === 'implicit' ? 'transform_recurrence_implicit' : 'transform_recurrence',
+      job.text, 'Transforming');
+    const data = JSON.parse(text);
+    if (data.error) {
+      setResult(span('err', 'Request rejected: ' + data.error), 'transform');
+      setStatus('Request rejected.');
+      return;
+    }
+    transformEntries = [{report: data, origin: 'computed', replay: null}];
+    displayTransformResults(transformReportSummary(data) + ' Returned in ' + (performance.now() - started).toFixed(0) + ' ms.');
+  } catch (error) {
+    showTransformError('Error: ', error);
+  }
+}
+
+async function addTransformSubReport(fn, arg, title, label) {
+  if (transformRunning) { setStatus('Wait for the current computation or cancel it.'); return; }
+  try {
+    const data = JSON.parse(await callTransformWorker(fn, arg, label));
+    if (data.error) { setStatus(label + ' rejected: ' + data.error); return; }
+    transformEntries.push({report: data, origin: 'computed', replay: null, title});
+    displayTransformResults(title + ': ' + transformReportSummary(data));
+  } catch (error) {
+    if (!(error && error.cancelled)) setStatus(label + ' failed: ' + (error && error.message || error));
+  }
+}
+
+function checkReportTheorems(index, which) {
+  const report = transformEntries[index] && transformEntries[index].report;
+  if (!report) return;
+  const record = which === 'source' ? report.source_rule
+    : (which === 'transported' ? report.transported && report.transported.scalar
+      : report.independent_search && report.independent_search.scalar);
+  if (!record) { setStatus('No scalar recurrence to check.'); return; }
+  const titles = {source: 'Interlacing theorems: source recurrence', transported: 'Interlacing theorems: transported recurrence',
+    fit: 'Interlacing theorems: fitted recurrence'};
+  addTransformSubReport('recurrence_theorems', JSON.stringify(record), titles[which], 'Checking theorems');
+}
+
+function checkSourceTheorems() {
+  const text = String(transformValue('transformRecurrence')).trim();
+  if (!text) { setStatus('Paste a recurrence JSON record first.'); return; }
+  addTransformSubReport('recurrence_theorems', text, 'Interlacing theorems: supplied recurrence', 'Checking theorems');
+}
+
+function isolateReportRows(index, which) {
+  const report = transformEntries[index] && transformEntries[index].report;
+  if (!report) return;
+  let rows = which === 'source' ? report.source_rows
+    : (report.transformed_rows || (report.transformed_states || []).map(state => state[0] || []));
+  rows = (rows || []).slice(0, 64);
+  if (!rows.length) { setStatus('No rows to isolate.'); return; }
+  const request = {polynomials: rows, first_index: report.row_origin || 0};
+  try {
+    const interval = transformCandidateInterval();
+    if (interval) request.interval = interval;
+  } catch (_) {}
+  addTransformSubReport('root_enclosures', JSON.stringify(request),
+    'Exact roots of the ' + (which === 'source' ? 'source' : 'transformed') + ' rows', 'Isolating roots');
+}
+
+async function copyTransformReport(button, index) {
+  const entry = transformEntries[index];
+  if (!entry) return;
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(entry.report, null, 2));
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = 'Copy report JSON'; }, 1500);
+  } catch (_) {
+    setStatus('Could not copy the report. Check clipboard permission, or use Download JSON.');
+  }
+}
+
+function downloadTransformReport(index) {
+  const entry = transformEntries[index];
+  if (!entry) return;
+  const name = String(entry.report.schema || 'polytool-report').replace(/^polytool\./, '').replace(/[^A-Za-z0-9.-]/g, '-');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([JSON.stringify(entry.report, null, 2) + '\n'], {type: 'application/json'}));
+  link.download = name + '.json';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
+async function replayTransformReport(index) {
+  const entry = transformEntries[index];
+  if (!entry) return;
+  if (transformRunning) { setStatus('Wait for the current computation or cancel it.'); return; }
+  entry.replay = 'running';
+  displayTransformResults();
+  try {
+    const data = JSON.parse(await callTransformWorker('verify_report', JSON.stringify(entry.report), 'Replaying'));
+    entry.replay = data.error ? {error: data.error} : {ok: true, result: data};
+    displayTransformResults(data.error ? 'Replay failed.' : 'Replay passed.');
+  } catch (error) {
+    entry.replay = error && error.cancelled ? null : {error: String(error && error.message || error)};
+    displayTransformResults(error && error.cancelled ? 'Replay cancelled.' : 'Replay failed.');
+  }
+}
+
+function importTransformFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 1048576) { setStatus('The report file exceeds 1 MiB.'); return; }
+  const reader = new FileReader();
+  reader.onload = () => { document.getElementById('transformImportText').value = String(reader.result); setStatus('Report loaded. Press Verify report.'); };
+  reader.onerror = () => setStatus('Could not read the report file.');
+  reader.readAsText(file);
+}
+
+function replayImportedReport() {
+  if (transformRunning) { setStatus('Wait for the current computation or cancel it.'); return; }
+  const text = String(document.getElementById('transformImportText').value).trim();
+  let report;
+  try {
+    if (text.length > 1048576) throw new Error('the report exceeds 1 MiB');
+    report = JSON.parse(text);
+    if (!report || typeof report !== 'object' || Array.isArray(report) || typeof report.schema !== 'string') {
+      throw new Error('a polytool report is a JSON object with a schema field');
+    }
+  } catch (error) {
+    setResult(span('err', 'Cannot import: ' + error.message), 'transform');
+    setStatus('Import rejected.');
+    return;
+  }
+  transformEntries = [{report, origin: 'imported', replay: null}];
+  replayTransformReport(0);
+}
+
+function useFoundRecurrence() {
+  if (!window._lastRecJson) { setStatus('Find a recurrence in the Recurrence tab first.'); return; }
+  document.getElementById('transformRecurrence').value = window._lastRecJson;
+  document.getElementById('transformSource').value = 'recurrence';
+  transformControlsChanged();
+  setStatus('Using the recurrence found in the Recurrence tab.');
+}
+
+function openTransformWithFoundRecurrence() {
+  switchTab('transform');
+  useFoundRecurrence();
 }
 
 // --- OEIS lookup ---
@@ -3944,7 +5201,9 @@ async function runOeis() {
 }
 
 document.getElementById('input').addEventListener('input', spaceMainInputChanged);
+document.getElementById('input').addEventListener('input', transformMainInputChanged);
 installInfoTooltipLayer();
+updateTransformControls();
 const initialWorkflow = location.hash.slice(1);
 setWorkflow(WORKFLOW_CONFIG[initialWorkflow] ? initialWorkflow : 'polynomial', { keepInput: true, skipHash: true });
 init();

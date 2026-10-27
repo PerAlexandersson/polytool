@@ -962,7 +962,11 @@ The recurrence browser regression drives the actual page, Web Worker and WASM
 at desktop and 375-pixel widths. It checks guided full-search controls, exact
 row parsing and origins, example formulas, clipboard copying, backend replay,
 partial-result labels, cancellation, tab routing, stale-input invalidation,
-renderer-error recovery and the older finder modes.
+renderer-error recovery and the older finder modes. In the Transform tab it
+checks the examples, the evidence-label styles, clipboard and download export,
+theorem and root sub-reports, replay of a computed report and of imported
+original and tampered reports, implicit and vector results, stale-setting
+invalidation, cancellation, and the hand-off from the Recurrence tab.
 It uses a temporary localhost server and closes its own browser and server.
 No hosting deployment is involved.
 
@@ -2329,7 +2333,14 @@ Run the web wrapper tests:
 ```sh
 cargo test --manifest-path web/Cargo.toml
 node web/tests/string_safety.mjs
+node --test web/*.test.cjs
 ```
+
+With `POLYTOOL_WASM_DIR` naming a built no-modules bundle, the Node tests also
+run the real WASM exports. With `POLYTOOL_CLI` naming a `polytool` binary as
+well, `recurrence-transforms.test.cjs` checks that the CLI and the browser
+produce identical transform and implicit reports and that each replays the
+other's reports.
 
 ### Web arbitrary-precision contract and build
 
@@ -2364,6 +2375,61 @@ any row is invalid. Rational rows remain
 available through the custom JSON request.
 The WASM exports `find_recurrence_spaces(request_json)` and
 `verify_recurrence_spaces(report_json)` share the Rust backend.
+For the sources `A171608` and the binomial example, the guided form can
+rescale coefficients first (`coefficient_rescaling`, divide the coefficient of
+`x^k` by `k!` or `(k!)^2`). Formulas then name the rescaled rows `Q`.
+
+The **Transform** tab (polynomial-sequence workflow) applies the coordinate
+changes of `recurrence-transform` and the diagonal and antecedent maps of
+`recurrence-implicit` in the browser. The source is a bundled OEIS family
+(searchable by A-number), a `polytool.recurrence.v1` record with initial rows
+(for example the one found in the Recurrence tab), or the rows entered above,
+which have no defining recurrence. The form builds the same JSON request as the
+CLI. **Advanced: request JSON** shows the request and accepts a custom one.
+Root location (`root_domain`) and an independent fit (`search`) are optional.
+Examples cover the Eulerian `f`-polynomial and symmetric decomposition, the
+Narayana reversal, Pascal rows divided by `k!`, and A065826 divided by `k + 1`.
+
+Results are grouped by report section. Each claim carries one evidence label,
+with its own colour, border and symbol:
+
+| Label | Codes | Meaning |
+| --- | --- | --- |
+| Certified (✔) | `certified_all_indices`, `completed_recurrence_induction`, `certified_family_invariant`, `certified_by_reconstruction`, `equivalent_description` | proved for every index |
+| Transported (⇒) | `transported_identity`, `conditional_on_source`, `certified_consequence` | exact consequence of the defining recurrence |
+| Theorem (§) | `conditional_theorem_match`, `paper_proof_not_lean_checked` | hypotheses checked exactly; the remaining obligations are listed |
+| Checked (◇) | `checked_supplied_rows`, `finite_exact_observation`, `fixed_cap` | exact on the listed rows only |
+| Finite fit (≈) | `finite_fit`, `exact_fit`, `finite_evidence_only`, `finite_evidence` | fitted to finitely many rows |
+| Assumption (?) | `supplied_assumption`, `proposed_interval` | supplied or proposed, not proved |
+
+An unknown label is shown verbatim in a neutral style. A report schema without
+a dedicated view is rendered by listing every object that carries an
+`evidence` field. To add a view, add an entry to `REPORT_RENDERERS` in
+`index.html`. Each report card can check the source, transported or fitted
+scalar recurrence against the interlacing theorems
+(`polytool.recurrence-theorems.v1`). It can also compute exact root enclosures
+of the source or transformed rows (`polytool.root-enclosures.v1`), copy or
+download the report JSON, and replay it. **Import a report and replay it**
+accepts any of these schemas or a `polytool.recurrence-spaces.v1` report.
+Replay recomputes the report from its embedded request. A report that fails
+replay is marked as failed, and its content is shown only on request. Replay
+does not strengthen any label.
+
+WASM exports (JSON text in, JSON text out, `{"error": ...}` on failure):
+`transform_recurrence(request)` and `verify_recurrence_transform(report)`;
+`transform_recurrence_implicit(request)` and
+`verify_recurrence_implicit(report)`; `root_enclosures(request)` and
+`verify_root_enclosures(report)` (recompute and compare);
+`recurrence_theorems(recurrence_json)` and `verify_recurrence_theorems(report)`
+(supplied-recurrence reports only); `verify_report(report)`, which dispatches
+on `schema`; `recurrence_latex(recurrence_json)`; and `oeis_catalog_index()`.
+The reports are the library schemas unchanged, so browser reports replay with
+`polytool recurrence-transform --verify` and the MCP verifiers, and CLI
+reports replay in the browser. Requests are limited to 1 MiB. Transformation
+limits above the default `TransformLimits` service ceilings are rejected, as
+in the MCP server. The guided form generates at most 64 rows, and enclosure
+widths must be at least `2^-256`. Computations run in a Web Worker that
+**Cancel** terminates.
 
 The browser wrapper parses polynomial input with `parse_polynomials_bigint`.
 Every integer coefficient returned across its string-based WASM/JSON boundary
@@ -2559,6 +2625,17 @@ Additions (no breaking changes):
   <file|->`; default `recurrence` output is unchanged apart from a stderr note.
   MCP: additive `theorem_matches` field of `find_recurrence` (and the
   `check_polynomial_family` recurrence) and the tool `recurrence_theorems`.
+- Web app: a **Transform** tab for coordinate transformations (with optional
+  root location), implicit relations, exact root enclosures and conditional
+  theorem matches. Every result carries a visually distinct evidence label
+  (finite fit, checked on supplied rows, transported identity, certified for
+  all indices, conditional theorem match). Reports can be copied, downloaded,
+  imported and replayed exactly. New WASM exports `transform_recurrence`,
+  `verify_recurrence_transform`, `transform_recurrence_implicit`,
+  `verify_recurrence_implicit`, `root_enclosures`, `verify_root_enclosures`,
+  `recurrence_theorems`, `verify_recurrence_theorems`, `verify_report`,
+  `recurrence_latex` and `oeis_catalog_index`. The guided full search can
+  rescale coefficients by `(k!)^m`.
 
 ### 0.5.0
 

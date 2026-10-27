@@ -1,4 +1,5 @@
-// Actual Chromium/Worker/WASM regressions. See README for optional prerequisites.
+// Actual Chromium/Worker/WASM regressions for the Recurrence and Transform tabs.
+// See README for optional prerequisites.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -36,6 +37,137 @@ async function request(page, value) {
 }
 const source = {coefficients: [['0', '1']], seeds: [['1']]};
 const shape = {kind: 'box', length: 1, variable_degree: 1};
+
+async function transform(page) {
+  await page.click('#btnTransform');
+  await page.waitForFunction(() => !transformRunning);
+  return page.locator('#results-transform').innerText();
+}
+async function clickAndWait(page, locator) {
+  await locator.click();
+  await page.waitForFunction(() => !transformRunning);
+}
+async function screenshot(page, name) {
+  if (!process.env.POLYTOOL_BROWSER_ARTIFACTS) return;
+  fs.mkdirSync(process.env.POLYTOOL_BROWSER_ARTIFACTS, {recursive: true});
+  await page.screenshot({path: path.join(process.env.POLYTOOL_BROWSER_ARTIFACTS, name + '.png'), fullPage: true});
+}
+const fitsViewport = page => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+
+// Transform tab: guided requests, evidence labels, sub-reports, export, import and replay.
+async function transformChecks(page, width, setDelay) {
+  await page.click('.tab[data-tab="transform"]');
+  assert.ok(await page.locator('#transformOeisList option').count() > 100, 'bundled catalog is listed');
+  assert.equal(await page.locator('#transformRecurrenceField').isVisible(), false);
+  await page.selectOption('#transformExample', 'eulerian-f');
+  assert.match(await page.locator('#transformOeisName').innerText(), /Eulerian/);
+  let text = await transform(page);
+  for (const label of ['Transported identity', 'Finite fit', 'Certified for all indices',
+    'Proved by induction', 'Certified for the family', 'Exact on listed rows', 'Proposed window']) {
+    assert.ok(text.includes(label), label);
+  }
+  const results = page.locator('#results-transform');
+  assert.ok(await results.locator('.katex').count() > 0, 'formulas render as mathematics');
+  const styles = await page.evaluate(() => ['certified', 'transported', 'checked', 'fit', 'assumption'].map(tone => {
+    const badge = document.querySelector('#results-transform .evidence-' + tone);
+    const style = getComputedStyle(badge);
+    return [style.backgroundColor, style.borderStyle, style.color].join('|');
+  }));
+  assert.equal(new Set(styles).size, styles.length, 'evidence classes look different: ' + styles.join(', '));
+  assert.ok(await fitsViewport(page), 'Transform results fit the viewport');
+  await screenshot(page, width + '-transform-eulerian');
+
+  // Export: clipboard and download carry exactly the computed report.
+  await results.locator('button', {hasText: 'Copy report JSON'}).first().click();
+  const copied = await page.evaluate(async () => (await navigator.clipboard.readText()) === JSON.stringify(transformEntries[0].report, null, 2));
+  assert.equal(copied, true);
+  const [download] = await Promise.all([page.waitForEvent('download'),
+    results.locator('button', {hasText: 'Download JSON'}).first().click()]);
+  assert.equal(download.suggestedFilename(), 'recurrence-transform.v1.json');
+  const downloaded = fs.readFileSync(await download.path(), 'utf8');
+  assert.deepEqual(JSON.parse(downloaded), await page.evaluate(() => transformEntries[0].report));
+  await clickAndWait(page, results.locator('button', {hasText: 'Replay (verify)'}).first());
+  assert.match(await results.innerText(), /Replay passed/);
+
+  // Sub-reports: theorem check for the transported rule and exact roots of Q_n.
+  await clickAndWait(page, results.locator('button', {hasText: 'Check interlacing theorems for this recurrence'}));
+  assert.match(await results.innerText(), /Interlacing theorems: transported recurrence/);
+  await clickAndWait(page, results.locator('button', {hasText: /Exact roots of Q/}));
+  text = await results.innerText();
+  assert.match(text, /Exact roots of the transformed rows/);
+  assert.match(text, /Exact for these polynomials only/);
+  assert.equal(await page.evaluate(() => transformEntries.length), 3);
+
+  // Import: a tampered report is rejected, the original replays.
+  const tampered = JSON.parse(downloaded);
+  tampered.transformed_states[4][0][1] = '12345';
+  await page.locator('#transformImport').evaluate(el => { el.open = true; });
+  await page.fill('#transformImportText', JSON.stringify(tampered));
+  await clickAndWait(page, page.locator('#btnTransformImport'));
+  text = await results.innerText();
+  assert.match(text, /Replay failed/);
+  assert.match(text, /Show the unverified content/);
+  await page.fill('#transformImportText', downloaded);
+  await clickAndWait(page, page.locator('#btnTransformImport'));
+  assert.match(await results.innerText(), /Replay passed/);
+  await page.fill('#transformImportText', '{"schema": "polytool.not-a-report.v1"}');
+  await clickAndWait(page, page.locator('#btnTransformImport'));
+  assert.match(await results.innerText(), /Replay failed: no browser replay/);
+
+  // Implicit relations: the fitted rule is upgraded only by the reconstruction certificate.
+  await page.selectOption('#transformExample', 'weighted-eulerian');
+  assert.equal(await page.locator('#transformRootDomain').isDisabled(), true);
+  assert.equal(await page.locator('#transformIntervalFields').isVisible(), false);
+  assert.equal(await page.locator('#transformRootDomainLabel').isVisible(), false);
+  text = await transform(page);
+  assert.match(text, /Implicit relations/);
+  assert.match(text, /Proved by reconstruction/);
+  assert.match(text, /Equivalent description/);
+  await screenshot(page, width + '-transform-implicit');
+  await page.selectOption('#transformExample', 'eulerian-symmetric');
+  text = await transform(page);
+  assert.match(text, /Transported identity/);
+  assert.ok(await results.locator('.recurrence-display').count() >= 2, 'both vector components are shown');
+
+  // Changing a setting clears the stale report; bad input is explained.
+  await page.fill('#transformRowCount', '7');
+  assert.equal(await page.evaluate(() => transformEntries.length), 0);
+  assert.match(await results.innerText(), /Settings changed/);
+  await page.fill('#transformRowCount', '700');
+  assert.match(await transform(page), /whole number from 1 to 64/);
+  await page.fill('#transformRowCount', '8');
+  await page.selectOption('#transformKind', 'affine');
+  await page.fill('#transformA', '0');
+  assert.match(await transform(page), /Request rejected/);
+  await page.fill('#transformA', '1');
+
+  // Cancellation of a slow worker start; the next run succeeds.
+  await page.evaluate(() => { if (transformWorker) transformWorker.terminate(); transformWorker = null; });
+  setDelay(700);
+  await page.click('#btnTransform');
+  await page.click('#btnTransformCancel');
+  assert.match(await results.innerText(), /cancelled/i);
+  assert.equal(await page.evaluate(() => transformRunning), false);
+  setDelay(0);
+  assert.match(await transform(page), /Coordinate transformation/);
+
+  // A recurrence found in the Recurrence tab can be transformed and checked.
+  await page.click('.tab[data-tab="recurrence"]');
+  await page.check('input[name="searchMode"][value="adaptive"]');
+  await page.fill('#input', '1\n1, 1\n1, 4, 1\n1, 11, 11, 1\n1, 26, 66, 26, 1\n1, 57, 302, 302, 57, 1\n' +
+    '1, 120, 1191, 2416, 1191, 120, 1\n1, 247, 4293, 15619, 15619, 4293, 247, 1');
+  await run(page);
+  await page.click('button:has-text("Transform or check theorems")');
+  assert.equal(await page.locator('#transformSource').inputValue(), 'recurrence');
+  await clickAndWait(page, page.locator('button', {hasText: 'Check interlacing theorems for this recurrence'}).first());
+  assert.match(await results.innerText(), /Interlacing theorems: supplied recurrence/);
+  assert.match(await results.innerText(), /Finite evidence only/);
+  await page.selectOption('#transformKind', 'f_polynomial');
+  await page.fill('#transformScheduleIndex', '1');
+  text = await transform(page);
+  assert.match(text, /Transported identity/);
+  assert.ok(await fitsViewport(page), 'Transform page fits the viewport');
+}
 
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -86,7 +218,7 @@ const shape = {kind: 'box', length: 1, variable_degree: 1};
         assert.match(await run(page), /whole number/);
         await page.fill('#spaceOrigin', '1');
 
-        for (const example of ['default', 'hermite', 'automatic']) {
+        for (const example of ['default', 'hermite', 'automatic', 'binomial']) {
           await page.selectOption('#spaceSource', example);
           assert.equal(await page.locator('button[onclick^="copySpaceFormula"]').count(), 0);
           assert.equal(await page.locator('#spaceOriginField').isVisible(), false);
@@ -172,8 +304,9 @@ const shape = {kind: 'box', length: 1, variable_degree: 1};
           assert.match(await page.locator('#status').innerText(), mode === 'representations' ? /Comparison completed/ : /Found in/);
         }
         assert.equal(await page.locator('#tryDenominator').isDisabled(), false);
+        await transformChecks(page, width, ms => { workerDelay = ms; });
         assert.deepEqual(errors, []);
-        console.log(`${width}px: guided controls, exact rows/origins, examples, copy, backend replay, partial search, errors, stale input, tab routing, cancellation and legacy modes passed`);
+        console.log(`${width}px: guided controls, exact rows/origins, examples, copy, backend replay, partial search, errors, stale input, tab routing, cancellation, legacy modes and the Transform tab passed`);
       } finally { await context.close(); }
     }
   } finally {

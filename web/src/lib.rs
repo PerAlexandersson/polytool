@@ -5,6 +5,8 @@ use polytool::*;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
+mod transforms;
+
 // ---------------------------------------------------------------------------
 // Result types (serialized to JSON)
 // ---------------------------------------------------------------------------
