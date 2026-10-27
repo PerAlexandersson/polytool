@@ -94,8 +94,12 @@
 - Keep CLI help detailed and AI-friendly.  Machine-readable commands must retain
   stable JSON schemas; serialize exact integers as strings where the JSON number
   model could lose precision.
-- Update `README.md` and focused tests in the same change when public API, CLI
-  input/output, exactness guarantees, or standalone build behavior changes.
+- Update the documentation and focused tests in the same change when public API,
+  CLI input/output, exactness guarantees, or standalone build behavior changes.
+  `README.md` is a short landing page; the detailed material lives in `doc/`
+  (`cli*.md` for the CLI reference, `library.md`, `mcp.md` and `mcp/README.md`,
+  `web.md`, `development.md`, `algorithms.md`) and in `CHANGELOG.md`.  Put CLI
+  details in the matching `doc/cli*.md` page and release notes in `CHANGELOG.md`.
 - Every module starts with `//!` documentation (purpose, entry points,
   conventions, related modules).  Public items need rustdoc; check with
   `cargo rustdoc -q --lib -p polytool -- -W missing_docs` (it reports none;

@@ -33,13 +33,16 @@ generate separate Mathematica/Python/Sage strings.
 
 `evidence: "exact_fit"` means finite-data verification, not an all-rank proof.
 One preferred fit is retained per length/order pair; neither the menu nor an
-empty cell is a complete description of the annihilating ideal. See the parent
-README for the precise frontier, index, normalization and coverage conventions.
+empty cell is a complete description of the annihilating ideal. See the
+[recurrence documentation](../doc/cli-recurrence.md#several-recurrence-representations)
+for the precise frontier, index, normalization and coverage conventions.
 
 ## Complete recurrence spaces
 
 `find_recurrence_spaces` takes `{"request": {...}}`, where the inner object is
-exactly the `--space` request documented in the parent README. For example:
+exactly the `--space` request documented in the
+[recurrence documentation](../doc/cli-recurrence.md#complete-recurrence-spaces-and-certificates).
+For example:
 
 ```json
 {"request": {
@@ -69,13 +72,15 @@ include the common polynomial propagator and its safe prefix cutoff, the
 proved RHS X-degree cap preserving all allowed leaders, and the sum-of-squares
 leader combination. Index and leader bounds remain explicit; the combination
 can increase coefficient degrees. Replay checks these extra certificates.
-See the parent README's Hermite and automatic-bound examples. No installed
+See the Hermite and automatic-bound examples in the
+[recurrence documentation](../doc/cli-recurrence.md#automatic-variable-degree-collective-leaders-and-indexed-sources). No installed
 server upgrade is implied by a source checkpoint.
 
 ## Coordinate transformations
 
 `transform_recurrence` takes `{"request": {...}}`, where the inner object is the
-`polytool recurrence-transform` request documented in the parent README:
+`polytool recurrence-transform` request documented in the
+[transformation documentation](../doc/cli-recurrence-transforms.md):
 
 ```json
 {"request": {
@@ -95,7 +100,9 @@ it exactly. Both enforce the default resource ceilings and the 1 MiB input cap.
 An optional `"root_domain": {}` in the request attaches root-domain
 information (root implications with direction and hypothesis statuses, claims
 labelled by evidence, the Rolle recurrence match and exact root enclosures);
-see the parent README. Supplied assumptions and the whole section are replayed
+see the
+[root-domain documentation](../doc/cli-recurrence-transforms.md#root-domain-information-for-transformed-results).
+Supplied assumptions and the whole section are replayed
 by `verify_recurrence_transform`.
 
 `exact_root_enclosures` takes `{"request": {"polynomials": [["0", "-2", "0", "1"]],
