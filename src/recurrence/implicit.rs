@@ -269,6 +269,51 @@ impl ImplicitRelation {
         Ok((Self::from_op(&op), r))
     }
 
+    /// The inverse of [`ImplicitRelation::from_recurrence`] for a successor
+    /// relation (no derivative on the leading row `n + R`, `R >= 1`): the
+    /// rule `f(m,x) P_m = sum c(m,x) D^d P_(m-r)` in the target index
+    /// `m = n + R`, and `R`. `None` for other roles.
+    pub fn to_successor_rule(&self) -> Option<(Recurrence, usize)> {
+        let op = self.op();
+        let r = op.max_shift();
+        if r == 0 || op.column(r).max_derivative() != 0 {
+            return None;
+        }
+        let shift = -i64::try_from(r).ok()?;
+        let mut leader = None;
+        let mut terms = Vec::new();
+        for ((i, d), c) in &op.0 {
+            let coeff = c.shift_n(shift);
+            if *i == r {
+                leader = Some(coeff.to_bivar());
+            } else {
+                terms.push(RecurrenceTerm::new(
+                    r - i,
+                    *d,
+                    coeff.scale(&-Q::one()).to_bivar(),
+                ));
+            }
+        }
+        let leader = leader?;
+        let monic = leader.coeffs.iter().enumerate().all(|(a, row)| {
+            row.iter().enumerate().all(|(b, c)| {
+                c == &if a == 0 && b == 0 {
+                    Q::one()
+                } else {
+                    Q::zero()
+                }
+            })
+        });
+        Some((
+            Recurrence {
+                terms,
+                denominator: (!monic).then_some(leader),
+                inhomogeneous: None,
+            },
+            r,
+        ))
+    }
+
     /// Encode as JSON (canonical order, terms merged).
     pub fn to_json(&self) -> ImplicitRelationJson {
         ImplicitRelationJson {

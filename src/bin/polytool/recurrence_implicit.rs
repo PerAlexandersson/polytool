@@ -130,7 +130,13 @@ pub(crate) fn print_recurrence_implicit_help() {
     println!("monic pure-lag source and the identity, factorial_power or derivative map a finite");
     println!("theorem makes the kernel the complete space (certified_complete_space); otherwise");
     println!("relations are finite_fit, or certified_by_division when M o T = sum H S^nu L for");
-    println!("the defining rule L. Exceptional indices of a leader get a coefficient-condition");
+    println!("the defining rule L. Möbius-class maps (multiply_power, divide_power, affine;");
+    println!("reversal, mobius, f_polynomial with an unbounded schedule) need k(max(u+s)+1)");
+    println!("residuals (transported-source theorem), and diagonal weights");
+    println!("c (k!)^(-m) prod f_j(n,k)^(e_j), e_j > 0 (binomial, product), need");
+    println!("k(max(u+s)+w+1) for m = 0 or k(U+m(A+J)+w+1), w the total (n,k) degree");
+    println!("(weight theorem); completeness_basis names the theorem.");
+    println!("Exceptional indices of a leader get a coefficient-condition");
     println!("search; every representative carries a generating description and assessment.");
     println!();
     println!("Exit status: 0 on success, 2 on invalid input or a failed replay.");

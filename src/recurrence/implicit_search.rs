@@ -25,24 +25,78 @@
 //! # Completeness
 //!
 //! When the source is a constant-index monic pure-lag rule
-//! `chi = S^k - sum a_i(x) S^i` valid from its origin and the map is the
-//! identity, a factorial rescaling (`diagonal` with `factorial_power m`) or
-//! plain differentiation (`derivative` of order `m`), a finite theorem bounds
-//! the residuals that must vanish:
+//! `chi = S^k - sum a_i(x) S^i` valid from its origin and the map is one of
+//! the maps below, a finite theorem bounds the residuals that must vanish
+//! (`u`, `s` are the index degree and derivative order of a column
+//! `x^v n^u D^s Q_(n+j)`; `U`, `A`, `J` the maxima of `u`, `v`, `s` over the
+//! support):
 //!
 //! - identity: every column `x^v n^u D^s P_(n+j)` is annihilated by
 //!   `chi^(u+s+1)` (module `space`), so `h = max(u+s) + 1`;
 //! - `Q = D^m P`: the column `x^v n^u D^s Q_(n+j)` is `x^v n^u D^(s+m) P_(n+j)`,
 //!   so `h = max(u+s) + m + 1`;
-//! - factorial rescaling: `h = U + m(A+J) + 1` (module `rescaling`).
+//! - factorial rescaling: `h = U + m(A+J) + 1` (module `rescaling`);
+//! - Möbius-class maps (`multiply_power`, `divide_power`, `affine`, and
+//!   `reversal`, `mobius`, `f_polynomial` with an unbounded degree schedule):
+//!   `h = max(u+s) + 1` (transported-source theorem below);
+//! - diagonal maps with weight `lambda(n,k) = c (k!)^(-m) prod f_j(n,k)^(e_j)`,
+//!   every `e_j > 0` (`binomial {m}`, and `product` weights with
+//!   `factorial_exponent <= 0` and positive exponents): with `w` the total
+//!   `(n,k)` degree of `prod f_j^(e_j)`, `h = max(u+s) + w + 1` for `m = 0`
+//!   and `h = U + m(A+J) + w + 1` for `m >= 1` (weight theorem below).
 //!
-//! The residual is annihilated by the monic operator `chi^h` of order `k h`,
-//! so its vanishing at the `k h` bases `n_0..n_0+kh-1` (`n_0` the domain
-//! start, at least the origin) implies vanishing for every `n >= n_0`. The
-//! kernel of those residual rows is then the complete space of all-index
+//! The residual is annihilated by the monic operator `chi^h` (or `chi~^h`) of
+//! order `k h`, so its vanishing at the `k h` bases `n_0..n_0+kh-1` (`n_0` the
+//! domain start, at least the origin) implies vanishing for every `n >= n_0`.
+//! The kernel of those residual rows is then the complete space of all-index
 //! relations in the support (evidence `certified_complete_space`). This holds
-//! for derivatives on the leader row and for row equations alike. Otherwise a
-//! representative is a `finite_fit`, unless it is proved by right division:
+//! for derivatives on the leader row and for row equations alike.
+//!
+//! **Lemma (monic recurrences over `Q(x)`).** Let `chi = S^k - sum a_i S^i`
+//! with `a_i` in the differential field `(Q(x), D)`, independent of `n`, and
+//! `chi Y = 0` for a sequence of rational functions. Then
+//! `chi^(u+s+1)` annihilates `x^v n^u D^s Y_(n+j)`, and a sequence annihilated
+//! by `chi^h` that vanishes at `k h` consecutive bases vanishes from there on.
+//! The proof in module `space` uses only that `chi` is monic, index free and
+//! commutes with `S`, with multiplication by `x` and with its own coefficient
+//! derivatives (`chi D = D chi - chi'`, `[n, chi] = -S chi_S`); all of this
+//! holds over `Q(x)`.
+//!
+//! **Transported-source theorem.** Let `Q_n = T P_n` for a Möbius-class map:
+//! `Q_n = ell^(d_n) P_n(phi)` with `phi = (a x + b)/ell`, `ell = c x + e`,
+//! `a e - b c != 0`, and `d_n = w + h n` on a domain containing every
+//! `n >= origin` (reversal, `mobius`, `f_polynomial`), or `Q_n = x^r P_n`,
+//! `P_n / x^r`, `P_n(a x + b)`. Then
+//! `Q_(n+k) = ell^(d_(n+k)) sum_i a_i(phi) P_(n+i)(phi)
+//!  = sum_i a~_i Q_(n+i)` with `a~_i = a_i(phi) ell^(h (k - i))` (resp.
+//! `a~_i = a_i` and `a_i(a x + b)`), rational functions independent of `n`.
+//! So `Q` itself satisfies a monic constant-index rule `chi~` of order `k`
+//! over `Q(x)`, and the lemma gives `h = max(u+s) + 1` and the residual count
+//! `k (max(u+s) + 1)`. The identity is one of rational functions; the rows
+//! are polynomials where the map's degree (or divisibility) condition holds,
+//! which `map_row` checks on every generated row. A bounded schedule
+//! (`last_index`) is not covered.
+//!
+//! **Weight theorem.** Let `Q_n = T_n P_n` with
+//! `T_n(x^k) = lambda(n,k) x^k`, `lambda = c (k!)^(-m) Lambda(n,k)` and
+//! `Lambda = prod f_j^(e_j)` a polynomial of total degree `w`. Write
+//! `theta = x D` and `F(x^k) = x^k/(k!)^m`, so `T_n = c F Lambda(n,theta)`.
+//! Multiply a residual by `x^J` and apply `F^-1` (both injective):
+//! `x^J x^a D^j = x^s theta^(j falling)` with `s = a + J - j >= 0`, and
+//! `F^-1 x^s G(theta) F = x^s G(theta) prod_(h=1..s) (theta + h)^m`. A column
+//! `n^u x^a D^j Q_(n+i)` becomes
+//! `c n^u x^s theta^(j falling) prod_(h=1..s) (theta+h)^m Lambda(n+i,theta) P_(n+i)`,
+//! a combination of `n^(u+u') x^v D^t P_(n+i)` with
+//! `u' + t <= j + m s + w` (`theta^e` has derivative order `e`). Hence `chi^h`
+//! annihilates the transformed residual with `h = max(u+j) + w + 1` for
+//! `m = 0` (then `x^J` and `F` are not needed) and `h = U + m(A+J) + w + 1`
+//! for `m >= 1` (as `j + m s <= m (A+J)`). For `Lambda = 1` this is the
+//! factorial theorem. Weights with `1/f_j` (`inverse_binomial`, negative
+//! exponents) or `(k!)^p`, `p > 0`, are not covered: their pulled-back
+//! columns are not polynomial in `theta`.
+//!
+//! Without a finite theorem a representative is a `finite_fit`, unless it is
+//! proved by right division:
 //! for a homogeneous defining rule `L` and a map that is a differential
 //! operator `Q = T P` (identity, `derivative`, a polynomial diagonal weight),
 //! an identity `M o T = sum_nu H_nu o S^nu o L`
@@ -60,9 +114,15 @@
 //! constant-index monic source the truncations `P_n mod x^(K+1)` satisfy a
 //! constant linear recurrence of order `r (K+1)`, so a condition with index
 //! degree `U_c` vanishes for all bases once it vanishes at
-//! `r (K'+1)(U_c+1)` consecutive bases, where `K' = k` (identity, factorial)
-//! or `K' = k + m` (derivative). Found conditions enter the description as
-//! boundary conditions with their own evidence.
+//! `r (K'+1)(U_c+e+1)` consecutive bases, where `K' = k` (identity, factorial,
+//! weights, Möbius-class) or `K' = k + m` (derivative), and `e` is the index
+//! degree of `Lambda` for a weight (`[x^j] Q_n = c Lambda(n,j)/(j!)^m [x^j] P_n`)
+//! and zero otherwise. For a Möbius-class map the truncations of `Q` itself
+//! are used; this needs every `a~_i` to be regular at `x = 0` (power series),
+//! which is checked exactly on the transported source rule. Otherwise (for
+//! example a reversal with `deg a_i > h (k - i)`) conditions are finite fits.
+//! Found conditions enter the description as boundary conditions with their
+//! own evidence.
 //!
 //! [`verify_implicit_relation_search`] reruns the search from the embedded
 //! request, requires equality, re-checks every kernel certificate against
@@ -459,11 +519,145 @@ pub struct ImplicitRelationSearchReport {
 // Context
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Theorem {
     Identity,
     Factorial(usize),
     Derivative(usize),
+    /// A Möbius-class map: `Q` satisfies a monic constant-index recurrence
+    /// of the source order over `Q(x)`; `regular_at_zero` when its
+    /// coefficients have no pole at `x = 0` (needed for conditions).
+    Transported {
+        regular_at_zero: bool,
+    },
+    /// A diagonal weight `scale (k!)^(-m) prod f_j(n,k)^(e_j)` with every
+    /// `e_j > 0`: `total` and `index` are the total `(n,k)` degree and the
+    /// `n` degree of the polynomial part.
+    Weight {
+        m: usize,
+        total: usize,
+        index: usize,
+    },
+}
+
+/// `(total degree, n degree)` of the nonzero entries of `coeffs[a][b]`
+/// (`n^a k^b`); `None` for a zero or unparsable polynomial.
+fn weight_factor_degrees(coeffs: &BivarPolyJson) -> Option<(usize, usize)> {
+    let mut degrees = None;
+    for (a, row) in coeffs.coeffs.iter().enumerate() {
+        for (b, c) in row.iter().enumerate() {
+            if !parse_rational_coeff(c).ok()?.is_zero() {
+                let (t, i) = degrees.unwrap_or((0, 0));
+                degrees = Some((t.max(a + b), i.max(a)));
+            }
+        }
+    }
+    degrees
+}
+
+/// The weight theorem of a diagonal map whose weight is a polynomial in
+/// `(n, k)` times `(k!)^(-m)`.
+fn weight_theorem(weight: &DiagonalWeight) -> Option<Theorem> {
+    match weight {
+        DiagonalWeight::Binomial { m } => Some(Theorem::Weight {
+            m: 0,
+            total: *m,
+            index: 0,
+        }),
+        DiagonalWeight::Product {
+            factorial_exponent,
+            factors,
+            ..
+        } => {
+            if *factorial_exponent > 0 || factors.iter().any(|f| f.exponent <= 0) {
+                return None;
+            }
+            let m = usize::try_from(factorial_exponent.unsigned_abs()).ok()?;
+            let (mut total, mut index) = (0usize, 0usize);
+            for f in factors {
+                let e = usize::try_from(f.exponent).ok()?;
+                let (t, i) = weight_factor_degrees(&f.coeffs)?;
+                total = total.checked_add(t.checked_mul(e)?)?;
+                index = index.checked_add(i.checked_mul(e)?)?;
+            }
+            Some(Theorem::Weight { m, total, index })
+        }
+        _ => None,
+    }
+}
+
+/// Whether the coefficients `a~_i = c_i / f` of the transported source rule
+/// `f Q_m = sum_i c_i Q_(m-i)` are regular at `x = 0`; `None` when the
+/// transported rule is not index free (it always is for a Möbius-class map
+/// of a constant-index pure-lag source).
+fn transported_regular_at_zero(
+    t: &RecurrenceTransformation,
+    json: &RecurrenceJson,
+) -> Option<bool> {
+    let (rule, _, _) = json.to_recurrence_parts().ok()?;
+    let TransportedRecurrence::Scalar(transported) = t.transport(&rule).ok()? else {
+        return None;
+    };
+    let valuation = |p: &BivarPoly| -> Option<Option<usize>> {
+        if p.coeffs.iter().skip(1).flatten().any(|c| !c.is_zero()) {
+            return None;
+        }
+        Some(
+            p.coeffs
+                .first()
+                .and_then(|row| row.iter().position(|c| !c.is_zero())),
+        )
+    };
+    let leader = match &transported.denominator {
+        Some(f) => valuation(f)?.ok_or(()).ok()?,
+        None => 0,
+    };
+    for term in &transported.terms {
+        if term.deriv_order != 0 || term.is_alternating() {
+            return None;
+        }
+        if valuation(&term.coeff)?.is_some_and(|v| v < leader) {
+            return Some(false);
+        }
+    }
+    Some(true)
+}
+
+/// Whether a finite verification theorem of this module covers the map `t`
+/// for the source rule `json` (a constant-index monic pure-lag rule valid
+/// from its first index).
+pub(super) fn finite_theorem_applies(t: &RecurrenceTransformation, json: &RecurrenceJson) -> bool {
+    constant_order(json).is_some() && map_theorem(Some(t), json).is_some()
+}
+
+/// The finite theorem for the map `t` (`None`: the identity) of a
+/// constant-index monic pure-lag source `json`, if one is proved.
+fn map_theorem(t: Option<&RecurrenceTransformation>, json: &RecurrenceJson) -> Option<Theorem> {
+    use RecurrenceTransformation as T;
+    let Some(t) = t else {
+        return Some(Theorem::Identity);
+    };
+    match t {
+        T::Diagonal {
+            weight: DiagonalWeight::FactorialPower { power },
+        } => Some(Theorem::Factorial(*power)),
+        T::Diagonal { weight } => weight_theorem(weight),
+        T::Derivative { order } => Some(Theorem::Derivative(*order)),
+        T::MultiplyPower { .. } | T::DividePower { .. } | T::Affine { .. } => {
+            Some(Theorem::Transported {
+                regular_at_zero: true,
+            })
+        }
+        T::Reversal { schedule } | T::Mobius { schedule, .. } | T::FPolynomial { schedule } => {
+            if schedule.last_index.is_some() {
+                return None;
+            }
+            Some(Theorem::Transported {
+                regular_at_zero: transported_regular_at_zero(t, json)?,
+            })
+        }
+        _ => None,
+    }
 }
 
 struct Context<'a> {
@@ -677,19 +871,9 @@ fn resolve<'a>(
         return Err("domain_start precedes the row origin".into());
     }
     let order = json.as_ref().and_then(constant_order);
-    let theorem = match (&request.transformation, order) {
-        (_, None) => None,
-        (None, Some(_)) => Some(Theorem::Identity),
-        (
-            Some(RecurrenceTransformation::Diagonal {
-                weight: DiagonalWeight::FactorialPower { power },
-            }),
-            Some(_),
-        ) => Some(Theorem::Factorial(*power)),
-        (Some(RecurrenceTransformation::Derivative { order }), Some(_)) => {
-            Some(Theorem::Derivative(*order))
-        }
-        (Some(_), Some(_)) => None,
+    let theorem = match (&json, order) {
+        (Some(json), Some(_)) => map_theorem(request.transformation.as_ref(), json),
+        _ => None,
     };
     let completeness_basis = match (theorem, order, &json) {
         (Some(Theorem::Identity), Some(k), _) => format!(
@@ -703,6 +887,27 @@ fn resolve<'a>(
         (Some(Theorem::Derivative(m)), Some(k), _) => format!(
             "constant-index monic pure-lag source of order {k} under Q = D^{m} P: \
              chi^(u+s+{m}+1) annihilates every column x^v n^u D^s Q[n+j]"
+        ),
+        (Some(Theorem::Transported { regular_at_zero }), Some(k), _) => format!(
+            "constant-index monic pure-lag source of order {k} under a Möbius-class map: Q \
+             satisfies the transported monic rule Q[n+{k}] = sum a~_i(x) Q[n+i] with \
+             coefficients in Q(x) independent of n, so chi~^(u+s+1) annihilates every column \
+             x^v n^u D^s Q[n+j] (transported-source theorem){}",
+            if regular_at_zero {
+                "; the a~_i are regular at x = 0, so coefficient conditions are complete too"
+            } else {
+                "; an a~_i has a pole at x = 0, so coefficient conditions are finite fits"
+            }
+        ),
+        (Some(Theorem::Weight { m, total, index }), Some(k), _) => format!(
+            "constant-index monic pure-lag source of order {k} under a diagonal weight \
+             (k!)^(-{m}) times a polynomial of total degree {total} (index degree {index}) in \
+             (n, k): H = {} + {total} + 1 (weight theorem)",
+            if m == 0 {
+                "max(u+s)".to_string()
+            } else {
+                format!("U + {m}(A+J)")
+            }
         ),
         (None, Some(_), _) => "no finite theorem for this map: results are finite fits unless \
                                certified by division"
@@ -944,11 +1149,30 @@ fn annihilator_power(theorem: Theorem, cols: &[RecurrenceMonomial]) -> Option<us
         .max()
         .unwrap_or(0);
     match theorem {
-        Theorem::Identity => us.checked_add(1),
+        Theorem::Identity | Theorem::Transported { .. } => us.checked_add(1),
         Theorem::Derivative(m) => us.checked_add(m)?.checked_add(1),
         Theorem::Factorial(m) => {
             RecurrenceCoefficientRescaling::FactorialPower { power: m }.annihilator_power(cols)
         }
+        Theorem::Weight { m: 0, total, .. } => us.checked_add(total)?.checked_add(1),
+        Theorem::Weight { m, total, .. } => {
+            RecurrenceCoefficientRescaling::FactorialPower { power: m }
+                .annihilator_power(cols)?
+                .checked_add(total)
+        }
+    }
+}
+
+/// `(K', e)` of the condition theorem: the truncation index `K'` (the
+/// conditions on `[x^j] Q`, `j <= k`, depend on `P_n mod x^(K'+1)`) and the
+/// extra index degree `e` contributed by the map; `None` when no condition
+/// theorem applies.
+fn condition_theorem(theorem: Theorem, k: usize) -> Option<(usize, usize)> {
+    match theorem {
+        Theorem::Identity | Theorem::Factorial(_) => Some((k, 0)),
+        Theorem::Derivative(m) => Some((k.checked_add(m)?, 0)),
+        Theorem::Transported { regular_at_zero } => regular_at_zero.then_some((k, 0)),
+        Theorem::Weight { index, .. } => Some((k, index)),
     }
 }
 
@@ -1075,6 +1299,14 @@ fn context_basis(context: &Context<'_>) -> String {
         ),
         (Some(Theorem::Derivative(m)), Some(k)) => format!(
             "Q = D^{m} P with P satisfying a constant-index monic pure-lag rule of order {k}"
+        ),
+        (Some(Theorem::Transported { .. }), Some(k)) => format!(
+            "Q = T(P) for a Möbius-class map T, so Q satisfies the transported monic rule of \
+             order {k} with index-free coefficients in Q(x)"
+        ),
+        (Some(Theorem::Weight { m, total, .. }), Some(k)) => format!(
+            "Q_n = lambda(n, theta) P_n with lambda = (k!)^(-{m}) times a polynomial of total \
+             degree {total}, P satisfying a constant-index monic pure-lag rule of order {k}"
         ),
         _ => String::new(),
     }
@@ -1214,14 +1446,12 @@ fn condition_search(
         return Ok(search);
     }
     let offset = context.start - context.origin;
-    let truncation = match context.theorem {
-        Some(Theorem::Derivative(m)) => k + m,
-        _ => k,
-    };
-    let (count, complete) = match (context.theorem, context.order) {
-        (Some(_), Some(order)) => match order
-            .checked_mul(truncation + 1)
-            .and_then(|c| c.checked_mul(degree + 1))
+    let condition = context.theorem.and_then(|t| condition_theorem(t, k));
+    let (count, complete) = match (condition, context.order) {
+        (Some((truncation, extra)), Some(order)) => match truncation
+            .checked_add(1)
+            .and_then(|t| order.checked_mul(t))
+            .and_then(|c| c.checked_mul(degree.checked_add(extra)?.checked_add(1)?))
         {
             Some(count) => (count, true),
             None => {

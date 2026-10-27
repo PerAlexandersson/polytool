@@ -31,7 +31,7 @@
 //! data ([`lossy_reconstruction`]), and optional
 //! root-domain information (theorem adapters, exact root enclosures) for
 //! transformed results, and a bounded queue search over equivalent
-//! representations that composes all of these
+//! representations (scalar and vector) that composes all of these
 //! ([`search_representations`]).
 
 use num_bigint::BigInt;

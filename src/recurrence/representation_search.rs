@@ -31,9 +31,48 @@
 //!    the map allows; the `derivative` map always takes this route;
 //! 4. for a factorial diagonal map on a constant-index monic certified source,
 //!    complete recurrence spaces are certified ([`find_recurrence_spaces`]
-//!    with `coefficient_rescaling`) on a bounded menu of supports;
+//!    with `coefficient_rescaling`) on a bounded menu of supports; after a
+//!    Möbius-class map, a polynomial diagonal weight or `derivative`, the
+//!    direct implicit search certifies them ([`search_implicit_relations`],
+//!    transported-source and weight theorems; `implicit_spaces`, one
+//!    successor support per report);
 //! 5. the new coordinates are searched by the bounded fit menu
 //!    ([`find_recurrence_representations_rational`]).
+//!
+//! # Vector representations
+//!
+//! The symmetric decomposition gives two-component states `(a_n, b_n)`.
+//! They are expanded like scalar representations: every scalar bijective map
+//! acts componentwise ([`RecurrenceTransformation::map_state`]; a schedule
+//! acts on `b` at `d_n - 1`), the chain is inverted componentwise, and normal
+//! forms keep one componentwise suffix per component. A certified vector
+//! system of the parent is transported exactly through Möbius-class maps
+//! ([`transport_vector_componentwise`], a [`VectorTransportStep`]); its
+//! evidence is `transported_identity` when the parent system and every degree
+//! condition are certified (degree bounds of the components are inherited
+//! from a certified decomposition: `deg a_n <= d_n`, `deg b_n <= d_n - 1`).
+//! Gamma coordinates of the components of a certified decomposition at the
+//! same schedule have certified symmetry by construction. States are fitted
+//! by a first-order vector system (`vector_fit`, finite evidence). A vector
+//! system with its initial state carries a [`VectorSystemAssessment`]: it
+//! determines the states when its shared left factor is a nonzero polynomial
+//! at every index, certified by one `x`-coefficient without integer roots in
+//! the domain; it is then an `equivalent_generating_description` when its
+//! annihilation is certified and it starts at the row origin. Two vector
+//! representations with identical equivalent systems and initial states are
+//! the same sequence. Lossy and vector-producing maps are rejected on vector
+//! states; the component count enters the ranking.
+//!
+//! # The rank-two gamma case
+//!
+//! When the even and odd parts of a gamma-transported rule are independent,
+//! the step reports the pair (`transported.system`) and the representation
+//! gets a `transported_gamma_system` description with both relations. They
+//! are exact consequences of the source rule where the rows are symmetric,
+//! so the description is certified only when that symmetry is: by its own
+//! step, or by another step of the same edge whose source rule is invariant
+//! under reversal (the symmetry is a property of the rows). Otherwise its
+//! evidence is `checked_supplied_rows` and its label `finite_fit`.
 //!
 //! Every certified scalar description of the new representation is then
 //! available to its children. A representation whose equivalent generating
@@ -80,12 +119,13 @@
 //! (implicit transport and reconstruction), `space` and `rescaling`
 //! (certified complete spaces), `representations` (fit menus).
 
-use super::diagonal::weight_regularity;
+use super::diagonal::{implicit_map_condition_statuses, weight_regularity};
 use super::implicit::{biv_from_json, decode_poly, encode_poly, valuation_exceptional_indices};
-use super::implicit_algebra::binomial;
+use super::implicit_algebra::{binomial, roots_in_domain};
+use super::implicit_search::finite_theorem_applies;
 use super::lossy::coefficient_conditions_of;
 use super::representation_map::{
-    apply_chain, chain_lost_data, invert_chain_with_lost_data, MapNormalForm,
+    apply_chain, chain_lost_data, chain_offsets, invert_chain_with_lost_data, MapNormalForm,
 };
 use super::representation_report::{conventions, label_rank};
 use super::*;
@@ -397,6 +437,7 @@ fn scalar_description(input: ScalarInput<'_>) -> RepresentationDescription {
         provenance: input.provenance,
         also_found_by: Vec::new(),
         note: None,
+        vector_assessment: None,
     };
     let json = item.scalar.as_ref().expect("scalar");
     let assessed = ImplicitRelation::from_recurrence(input.rule).and_then(|(relation, r)| {
@@ -535,6 +576,21 @@ fn find_equal_sequence(
             continue;
         }
         for (i, mine) in node.descriptions.iter().enumerate() {
+            if mine.label == EQUIVALENT_DESCRIPTION_LABEL && mine.vector.is_some() {
+                if let Some(j) = other.descriptions.iter().position(|theirs| {
+                    theirs.label == EQUIVALENT_DESCRIPTION_LABEL && theirs.vector == mine.vector
+                }) {
+                    return Some(RepresentationEquality {
+                        representation: other.id,
+                        other_description: j,
+                        description: i,
+                        certificate: "both descriptions are equivalent vector systems with the \
+                                      same system and initial state; each determines its states \
+                                      uniquely"
+                            .into(),
+                    });
+                }
+            }
             if !equivalent(mine) {
                 continue;
             }
@@ -587,6 +643,31 @@ fn component_names(t: Option<&RecurrenceTransformation>, chain_len: usize) -> Ve
         None => vec![if chain_len == 0 { "P" } else { "Q" }.to_string()],
         Some(t) => t.record().components.into_iter().map(|c| c.name).collect(),
     }
+}
+
+/// `(lag, derivative order)` pairs of the default complete-space menu,
+/// simplest first.
+fn menu_pairs(bounds: &TransformSearchBounds) -> Vec<(usize, usize)> {
+    let mut pairs = (1..=bounds.max_rec_len.max(1))
+        .flat_map(|l| (0..=bounds.max_diff_deg).map(move |j| (l, j)))
+        .collect::<Vec<_>>();
+    pairs.sort_by_key(|&(l, j)| (l + j, l));
+    pairs
+}
+
+/// Maps whose complete spaces come from the direct implicit search.
+fn implicit_space_map(t: &RecurrenceTransformation) -> bool {
+    matches!(
+        t,
+        RecurrenceTransformation::MultiplyPower { .. }
+            | RecurrenceTransformation::DividePower { .. }
+            | RecurrenceTransformation::Affine { .. }
+            | RecurrenceTransformation::Reversal { .. }
+            | RecurrenceTransformation::Mobius { .. }
+            | RecurrenceTransformation::FPolynomial { .. }
+            | RecurrenceTransformation::Diagonal { .. }
+            | RecurrenceTransformation::Derivative { .. }
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -765,6 +846,7 @@ impl Search<'_> {
             descriptions: merge_descriptions(descriptions),
             steps: Vec::new(),
             spaces: Vec::new(),
+            implicit_spaces: Vec::new(),
             fits,
             equal_sequence_as: None,
             expanded: false,
@@ -825,6 +907,7 @@ impl Search<'_> {
             transform: None,
             implicit: None,
             implicit_relation: None,
+            vector_transport: None,
             error: None,
         };
         let built = scalar_rows(parent).and_then(|parent_rows| {
@@ -855,6 +938,7 @@ impl Search<'_> {
                     provenance: "steps[STEP].implicit_relation.description".into(),
                     also_found_by: Vec::new(),
                     note: relation.note.clone(),
+                    vector_assessment: None,
                 });
                 step.implicit_relation = Some(record);
             }
@@ -879,6 +963,7 @@ impl Search<'_> {
             transform: None,
             implicit: None,
             implicit_relation: None,
+            vector_transport: None,
             error: None,
         };
         let row_count = states.len();
@@ -997,12 +1082,14 @@ impl Search<'_> {
                 }));
             }
         } else if let Some(vector) = &transported.vector {
+            let assessment = assess_vector_system(vector).ok();
             items.push(RepresentationDescription {
-                label: if certified {
-                    CERTIFIED_RELATION_LABEL
-                } else {
-                    FINITE_FIT_LABEL
-                }
+                label: vector_label(
+                    certified,
+                    assessment.as_ref(),
+                    vector.first_index == self.origin,
+                    transported.valid_to_index.is_some(),
+                )
                 .into(),
                 kind: "transported_vector_system".into(),
                 evidence: evidence.into(),
@@ -1015,11 +1102,16 @@ impl Search<'_> {
                 provenance,
                 also_found_by: Vec::new(),
                 note: Some(
-                    "the complete component system; uniqueness of vector systems is not \
-                     assessed"
+                    "the complete component system with its initial state; uniqueness is \
+                     vector_assessment"
                         .into(),
                 ),
+                vector_assessment: assessment,
             });
+        } else if let Some(system) = &transported.system {
+            if let Some(item) = gamma_system_item(report, transported, system, certified) {
+                items.push(RepresentationDescription { provenance, ..item });
+            }
         }
     }
 
@@ -1045,6 +1137,7 @@ impl Search<'_> {
             provenance: "steps[STEP].implicit.description".into(),
             also_found_by: Vec::new(),
             note: relation.note.clone(),
+            vector_assessment: None,
         });
         let Some(search) = &report.independent_search else {
             return;
@@ -1084,6 +1177,7 @@ impl Search<'_> {
                         "fitted, then proved for every index by a reconstruction certificate"
                             .into(),
                     ),
+                    vector_assessment: None,
                 });
                 return;
             }
@@ -1190,13 +1284,9 @@ impl Search<'_> {
             }
         } else {
             let bounds = self.request.search.clone();
-            let mut pairs = (1..=bounds.max_rec_len.max(1))
-                .flat_map(|l| (0..=bounds.max_diff_deg).map(move |j| (l, j)))
-                .collect::<Vec<_>>();
-            pairs.sort_by_key(|&(l, j)| (l + j, l));
             let top = bounds.max_idx_deg.max(bounds.max_var_deg);
             let mut successes: Vec<(usize, usize)> = Vec::new();
-            'pairs: for (l, j) in pairs {
+            'pairs: for (l, j) in menu_pairs(&bounds) {
                 if successes.iter().any(|&(sl, sj)| sl <= l && sj <= j) {
                     continue;
                 }
@@ -1258,6 +1348,447 @@ impl Search<'_> {
         }
     }
 
+    /// Complete spaces after a map covered by a finite theorem of the direct
+    /// implicit search (Möbius-class maps, polynomial diagonal weights,
+    /// differentiation), one successor support per embedded report.
+    fn implicit_spaces(
+        &mut self,
+        id: usize,
+        t: &RecurrenceTransformation,
+        parent: &RepresentationNode,
+        node: &mut RepresentationNode,
+        items: &mut Vec<RepresentationDescription>,
+    ) {
+        let source = parent.descriptions.iter().find_map(|d| {
+            let json = d.scalar.as_ref()?;
+            (d.label != FINITE_FIT_LABEL
+                && json.first_index == self.origin
+                && finite_theorem_applies(t, json))
+            .then(|| RecurrenceJson {
+                search: None,
+                ..json.clone()
+            })
+        });
+        let Some(source) = source else {
+            node.notes.push(format!(
+                "complete spaces after {} need a certified constant-index monic pure-lag rule \
+                 of the parent covered by a finite theorem; none is available",
+                t.kind_name()
+            ));
+            return;
+        };
+        let mut tried = 0usize;
+        let mut run = |search: &mut Self,
+                       node: &mut RepresentationNode,
+                       support: ImplicitSearchSupport|
+         -> Option<usize> {
+            if tried >= search.request.limits.max_space_shapes {
+                if tried == search.request.limits.max_space_shapes {
+                    search.event(
+                        "max_space_shapes",
+                        Some(id),
+                        "further complete-space supports were not tried".into(),
+                    );
+                    tried += 1;
+                }
+                return None;
+            }
+            tried += 1;
+            if !search.take_step(id, "complete-space support") {
+                return None;
+            }
+            let request = ImplicitRelationSearchRequest {
+                source_recurrence: Some(source.clone()),
+                oeis_id: None,
+                rows: None,
+                row_origin: None,
+                row_count: None,
+                transformation: Some(t.clone()),
+                domain_start: None,
+                supports: vec![support],
+                conditions: true,
+                condition_index_degree: 1,
+                limits: search.request.limits.space_limits(),
+            };
+            match search_implicit_relations(&request) {
+                Ok(report) => {
+                    if report.results[0].status == "incomplete_budget" {
+                        search.event(
+                            "space_operations",
+                            Some(id),
+                            format!(
+                                "a complete-space support is incomplete: {}",
+                                report.results[0].reason.clone().unwrap_or_default()
+                            ),
+                        );
+                    }
+                    node.implicit_spaces.push(report);
+                    Some(node.implicit_spaces.len() - 1)
+                }
+                Err(error) => {
+                    node.notes
+                        .push(format!("complete-space support failed: {error}"));
+                    None
+                }
+            }
+        };
+        let support = |l: usize, j: usize, u: usize, v: usize| ImplicitSearchSupport {
+            role: SUCCESSOR_SUPPORT.into(),
+            max_shift: l,
+            derivative_order: j,
+            index_degree: u,
+            variable_degree: v,
+        };
+        if !self.request.space_shapes.is_empty() {
+            for shape in self.request.space_shapes.clone() {
+                match shape {
+                    RecurrenceSpaceShape::Box {
+                        length,
+                        derivative_order,
+                        index_degree,
+                        variable_degree,
+                        leading_index_degree,
+                        leading_variable_degree,
+                    } => {
+                        run(
+                            self,
+                            node,
+                            support(
+                                length,
+                                derivative_order,
+                                index_degree.max(leading_index_degree),
+                                variable_degree.max(leading_variable_degree),
+                            ),
+                        );
+                    }
+                    other => node.notes.push(format!(
+                        "space shape {other:?} has no successor-support form; skipped"
+                    )),
+                }
+            }
+        } else {
+            let bounds = self.request.search.clone();
+            let top = bounds.max_idx_deg.max(bounds.max_var_deg);
+            let mut successes: Vec<(usize, usize)> = Vec::new();
+            'pairs: for (l, j) in menu_pairs(&bounds) {
+                if successes.iter().any(|&(sl, sj)| sl <= l && sj <= j) {
+                    continue;
+                }
+                for d in 0..=top {
+                    let shape = support(l, j, d.min(bounds.max_idx_deg), d.min(bounds.max_var_deg));
+                    let Some(index) = run(self, node, shape) else {
+                        break 'pairs;
+                    };
+                    match node.implicit_spaces[index].results[0].status.as_str() {
+                        "relations_found" => {
+                            successes.push((l, j));
+                            break;
+                        }
+                        "absent_in_support" => {}
+                        _ => break,
+                    }
+                }
+            }
+        }
+        let rows = scalar_rows(node).unwrap_or_default();
+        for (s, report) in node.implicit_spaces.iter().enumerate() {
+            let result = &report.results[0];
+            if result.status != "relations_found"
+                || result.evidence != CERTIFIED_COMPLETE_SPACE_EVIDENCE
+            {
+                continue;
+            }
+            for (r, rep) in result.representatives.iter().enumerate() {
+                let provenance = format!("implicit_spaces[{s}].results[0].representatives[{r}]");
+                let Ok(relation) = ImplicitRelation::from_json(&rep.relation.relation) else {
+                    continue;
+                };
+                let label = representation_label(&rep.assessment.status).to_string();
+                let mut item = RepresentationDescription {
+                    label: label.clone(),
+                    kind: "certified_space".into(),
+                    evidence: CERTIFIED_COMPLETE_SPACE_EVIDENCE.into(),
+                    text: rep.relation.text.clone(),
+                    scalar: None,
+                    vector: None,
+                    description: Some(rep.description.clone()),
+                    assessment: Some(rep.assessment.clone()),
+                    cost: relation_cost(&rep.relation.relation),
+                    provenance: provenance.clone(),
+                    also_found_by: Vec::new(),
+                    note: rep.relation.note.clone(),
+                    vector_assessment: None,
+                };
+                if let Some((rule, shift)) = relation.to_successor_rule() {
+                    if rep.relation.first_base == self.origin && rows.len() >= shift {
+                        let json = RecurrenceJson::from_recurrence_rational(
+                            &rule,
+                            self.origin,
+                            &rows[..shift],
+                            None,
+                        );
+                        let scalar = scalar_description(ScalarInput {
+                            kind: "certified_space",
+                            rule: &rule,
+                            json,
+                            evidence: CERTIFIED_COMPLETE_SPACE_EVIDENCE,
+                            valid_from: self.origin + shift,
+                            bounded_domain: false,
+                            symbol: "Q",
+                            provenance,
+                        });
+                        // Keep the representative's description when its
+                        // conditions give a stronger assessment.
+                        if label_rank(&scalar.label) <= label_rank(&label) {
+                            item = scalar;
+                        } else {
+                            item.scalar = scalar.scalar;
+                            item.text = scalar.text;
+                            item.cost = scalar.cost;
+                        }
+                    }
+                }
+                items.push(item);
+            }
+        }
+    }
+
+    /// Map conditions and transported vector systems of an edge from a
+    /// vector parent (a componentwise map).
+    #[allow(clippy::too_many_arguments)]
+    fn vector_steps(
+        &mut self,
+        nodes: &[RepresentationNode],
+        t: &RecurrenceTransformation,
+        parent: &RepresentationNode,
+        offsets: &[i64],
+        states: &[Vec<Vec<Q>>],
+        node: &mut RepresentationNode,
+        items: &mut Vec<RepresentationDescription>,
+    ) {
+        let id = node.id;
+        let transformations = &self.request.transformations;
+        let bounds = component_bounds(transformations, nodes, parent.id);
+        let symmetric = symmetric_decomposition_schedule(transformations, nodes, parent.id);
+        node.map_conditions = vector_map_conditions(
+            t,
+            bounds.as_deref(),
+            symmetric.as_ref(),
+            offsets,
+            &parent.components,
+            self.origin,
+        );
+        if !t.is_mobius_class() {
+            node.notes.push(format!(
+                "vector systems are transported through Möbius-class maps only; {} maps the \
+                 rows componentwise",
+                t.kind_name()
+            ));
+            return;
+        }
+        let sources = parent
+            .descriptions
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.label != FINITE_FIT_LABEL && d.vector.is_some())
+            .map(|(i, _)| i)
+            .take(self.request.limits.max_sources_per_edge)
+            .collect::<Vec<_>>();
+        if sources.is_empty() {
+            node.notes.push(
+                "no certified vector system of the parent to transport; rows are mapped \
+                 componentwise"
+                    .into(),
+            );
+            return;
+        }
+        let bounded = offsets.iter().any(|&o| {
+            t.with_degree_offset(o)
+                .ok()
+                .and_then(|m| m.schedule().and_then(|s| s.last_index))
+                .is_some()
+        });
+        for source in sources {
+            if !self.take_step(id, "vector transport step") {
+                break;
+            }
+            let mut step = RepresentationStep {
+                source_description: Some(source),
+                transform: None,
+                implicit: None,
+                implicit_relation: None,
+                vector_transport: None,
+                error: None,
+            };
+            let built = parent.descriptions[source]
+                .vector
+                .as_ref()
+                .ok_or_else(|| "the source has no vector system".to_string())
+                .and_then(|json| {
+                    build_vector_transport(
+                        t,
+                        offsets,
+                        json,
+                        states,
+                        self.origin,
+                        &node.map_conditions,
+                        &node.components,
+                    )
+                });
+            match built {
+                Ok(record) => {
+                    let assessment = assess_vector_system(&record.transported).ok();
+                    items.push(RepresentationDescription {
+                        label: vector_label(
+                            evidence_is_certified(&record.evidence),
+                            assessment.as_ref(),
+                            record.transported.first_index == self.origin,
+                            bounded,
+                        )
+                        .into(),
+                        kind: "transported_vector_system".into(),
+                        evidence: record.evidence.clone(),
+                        text: record.text.clone(),
+                        scalar: None,
+                        vector: Some(record.transported.clone()),
+                        description: None,
+                        assessment: None,
+                        cost: vector_cost(&record.transported),
+                        provenance: format!(
+                            "steps[{}].vector_transport.transported",
+                            node.steps.len()
+                        ),
+                        also_found_by: Vec::new(),
+                        note: Some(
+                            "the parent's vector system transported componentwise; uniqueness \
+                             is vector_assessment"
+                                .into(),
+                        ),
+                        vector_assessment: assessment,
+                    });
+                    step.vector_transport = Some(record);
+                }
+                Err(error) => step.error = Some(error),
+            }
+            node.steps.push(step);
+        }
+    }
+
+    /// A first-order vector system fitted to the states (finite evidence).
+    fn vector_fits(
+        &mut self,
+        id: usize,
+        states: &[Vec<Vec<Q>>],
+        names: &[String],
+    ) -> (
+        Option<RepresentationFitSummary>,
+        Vec<RepresentationDescription>,
+    ) {
+        if !self.request.fits {
+            return (None, Vec::new());
+        }
+        let summary =
+            |status: &str, found: usize, reason: Option<String>| RepresentationFitSummary {
+                status: status.into(),
+                configurations_considered: usize::from(status == "complete"),
+                fits_found: found,
+                reason,
+            };
+        if states.len() < 3 {
+            return (Some(summary("insufficient_rows", 0, None)), Vec::new());
+        }
+        let request = self.request;
+        let bounds = &request.search;
+        let components = states[0].len();
+        let unknowns = [
+            components * components,
+            bounds.max_idx_deg + 1,
+            bounds.max_var_deg + 1,
+            bounds.max_diff_deg + 1,
+        ]
+        .iter()
+        .try_fold(1usize, |acc, &f| acc.checked_mul(f))
+        .and_then(|matrix| {
+            matrix.checked_add(
+                (bounds.vector_denominator_idx_deg + 1)
+                    .checked_mul(bounds.vector_denominator_var_deg + 1)?,
+            )
+        });
+        if unknowns.is_none_or(|u| u > MAX_VECTOR_FIT_UNKNOWNS) {
+            self.event(
+                "vector_fit_unknowns",
+                Some(id),
+                format!("the vector fit has more than {MAX_VECTOR_FIT_UNKNOWNS} unknowns; not run"),
+            );
+            return (Some(summary("skipped_budget", 0, None)), Vec::new());
+        }
+        if !self.take_step(id, "vector fit") {
+            return (Some(summary("skipped_budget", 0, None)), Vec::new());
+        }
+        let options = VectorRecurrenceDenominatorOptions {
+            var_deg: bounds.max_var_deg,
+            idx_deg: bounds.max_idx_deg,
+            diff_deg: bounds.max_diff_deg,
+            homogeneous: true,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: bounds.vector_held_out_transitions,
+            require_unique: false,
+            denominator_var_deg: bounds.vector_denominator_var_deg,
+            denominator_idx_deg: bounds.vector_denominator_idx_deg,
+        };
+        let fit =
+            match find_vector_recurrence_with_denominator_rational(states, self.origin, &options) {
+                Ok(fit) => fit,
+                Err(error) => {
+                    return (
+                        Some(summary("complete", 0, Some(error.to_string()))),
+                        Vec::new(),
+                    )
+                }
+            };
+        let holds = states.windows(2).enumerate().all(|(i, pair)| {
+            fit.recurrence
+                .holds_transition_rational(&pair[0], &pair[1], self.origin + i)
+        });
+        let json = TransformVectorRecurrenceJson::from_recurrence(
+            &fit.recurrence,
+            self.origin,
+            &states[0],
+        );
+        let text = json.text(names);
+        let (true, Ok(text)) = (holds, text) else {
+            return (
+                Some(summary(
+                    "complete",
+                    0,
+                    Some("the fit fails on a transition".into()),
+                )),
+                Vec::new(),
+            );
+        };
+        let assessment = assess_vector_system(&json).ok();
+        let item = RepresentationDescription {
+            label: FINITE_FIT_LABEL.into(),
+            kind: "vector_fit".into(),
+            evidence: FINITE_FIT_EVIDENCE.into(),
+            text,
+            scalar: None,
+            cost: vector_cost(&json),
+            vector: Some(json),
+            description: None,
+            assessment: None,
+            provenance: "fits".into(),
+            also_found_by: Vec::new(),
+            note: Some(format!(
+                "a first-order system fitted to {} transitions ({} held out); finite evidence",
+                fit.fit_transitions, fit.held_out_transitions
+            )),
+            vector_assessment: assessment,
+        };
+        (Some(summary("complete", 1, None)), vec![item])
+    }
+
     fn child(
         &mut self,
         nodes: &[RepresentationNode],
@@ -1270,11 +1801,19 @@ impl Search<'_> {
         let parent = &nodes[parent_id];
         let id = nodes.len();
         let origin = self.origin;
-        let parent_rows = scalar_rows(parent)?;
-        let states = parent_rows
+        let parent_chain = parent
+            .chain
+            .iter()
+            .map(|&i| &request.transformations[i])
+            .collect::<Vec<_>>();
+        let offsets = chain_offsets(&parent_chain)
+            .pop()
+            .expect("at least one offset list");
+        let vector_parent = parent.components.len() > 1;
+        let states = decode_states(&parent.states)?
             .iter()
             .enumerate()
-            .map(|(i, row)| t.map_row(origin + i, row))
+            .map(|(i, state)| t.map_state(origin + i, state, &offsets))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("{}: {e}", t.kind_name()))?;
         if let Some(degree) = states
@@ -1307,7 +1846,11 @@ impl Search<'_> {
             transformation: Some(ti),
             chain,
             map: form.record(),
-            components: component_names(Some(t), 1),
+            components: if vector_parent {
+                parent.components.clone()
+            } else {
+                component_names(Some(t), 1)
+            },
             row_origin: origin,
             states: encode_states(&states),
             reconstruction_verified,
@@ -1316,12 +1859,51 @@ impl Search<'_> {
             descriptions: Vec::new(),
             steps: Vec::new(),
             spaces: Vec::new(),
+            implicit_spaces: Vec::new(),
             fits: None,
             equal_sequence_as: None,
             expanded: false,
             notes: Vec::new(),
         };
         let mut items = Vec::new();
+        if vector_parent {
+            self.vector_steps(nodes, t, parent, &offsets, &states, &mut node, &mut items);
+        } else {
+            self.scalar_steps(t, parent, &states, &mut node, &mut items);
+        }
+        if node.components.len() == 1 {
+            let rows = states.iter().map(|s| s[0].clone()).collect::<Vec<_>>();
+            let (fits, fitted) = self.fits(id, &rows, "Q");
+            node.fits = fits;
+            items.extend(fitted);
+        } else {
+            let (fits, fitted) = self.vector_fits(id, &states, &node.components);
+            node.fits = fits;
+            items.extend(fitted);
+        }
+        let segments = form.segment_count();
+        for item in &mut items {
+            let conditions = item.description.as_ref().map_or(0, |d| {
+                d.exceptional_index_conditions.len() + d.boundary_conditions.len()
+            });
+            item.cost.reconstruction_cost = segments + conditions;
+        }
+        node.descriptions = merge_descriptions(items);
+        Ok(node)
+    }
+
+    /// Transport steps, complete spaces and map conditions of an edge from a
+    /// scalar parent.
+    fn scalar_steps(
+        &mut self,
+        t: &RecurrenceTransformation,
+        parent: &RepresentationNode,
+        states: &[Vec<Vec<Q>>],
+        node: &mut RepresentationNode,
+        items: &mut Vec<RepresentationDescription>,
+    ) {
+        let id = node.id;
+        let request = self.request;
         let mut conditions = None;
         let sources = self.source_descriptions(parent);
         let implicit_sources = self.implicit_source_descriptions(parent);
@@ -1345,14 +1927,8 @@ impl Search<'_> {
                     break;
                 }
                 let before = items.len();
-                let step = self.implicit_relation_step(
-                    t,
-                    parent,
-                    source,
-                    &rows,
-                    &mut items,
-                    &mut conditions,
-                );
+                let step =
+                    self.implicit_relation_step(t, parent, source, &rows, items, &mut conditions);
                 let index = node.steps.len();
                 for item in &mut items[before..] {
                     item.provenance = item.provenance.replace("STEP", &index.to_string());
@@ -1384,8 +1960,7 @@ impl Search<'_> {
                     break;
                 }
                 let before = items.len();
-                let step =
-                    self.run_step(id, t, parent, source, &states, &mut items, &mut conditions);
+                let step = self.run_step(id, t, parent, source, states, items, &mut conditions);
                 let index = node.steps.len();
                 for item in &mut items[before..] {
                     item.provenance = item.provenance.replace("STEP", &index.to_string());
@@ -1394,32 +1969,19 @@ impl Search<'_> {
             }
         }
         node.map_conditions = conditions.unwrap_or_default();
-        if let RecurrenceTransformation::Diagonal {
-            weight: DiagonalWeight::FactorialPower { power },
-        } = t
-        {
-            if request.certified_spaces {
-                self.spaces(id, *power, parent, &mut node, &mut items);
+        if request.certified_spaces && node.components.len() == 1 {
+            if let RecurrenceTransformation::Diagonal {
+                weight: DiagonalWeight::FactorialPower { power },
+            } = t
+            {
+                self.spaces(id, *power, parent, node, items);
+            } else if implicit_space_map(t) {
+                self.implicit_spaces(id, t, parent, node, items);
             }
         }
-        if node.components.len() == 1 {
-            let rows = states.iter().map(|s| s[0].clone()).collect::<Vec<_>>();
-            let (fits, fitted) = self.fits(id, &rows, "Q");
-            node.fits = fits;
-            items.extend(fitted);
-        } else {
-            node.notes
-                .push("vector representations are not fitted or transformed further".into());
+        if matches!(t, RecurrenceTransformation::Gamma { .. }) {
+            upgrade_gamma_systems(&node.steps, items);
         }
-        let segments = form.segment_count();
-        for item in &mut items {
-            let conditions = item.description.as_ref().map_or(0, |d| {
-                d.exceptional_index_conditions.len() + d.boundary_conditions.len()
-            });
-            item.cost.reconstruction_cost = segments + conditions;
-        }
-        node.descriptions = merge_descriptions(items);
-        Ok(node)
     }
 }
 
@@ -1456,9 +2018,6 @@ pub fn search_representations(
             ));
             continue;
         }
-        if nodes[id].components.len() != 1 {
-            continue;
-        }
         if nodes[id].depth >= request.limits.max_depth {
             if !request.transformations.is_empty() {
                 depth_frontier.push(id);
@@ -1474,6 +2033,15 @@ pub fn search_representations(
                 representation: None,
                 detail: None,
             };
+            let t = &request.transformations[ti];
+            if nodes[id].components.len() > 1 && (t.component_count() > 1 || t.is_lossy()) {
+                edge.detail = Some(format!(
+                    "{} does not act componentwise on a vector representation",
+                    t.kind_name()
+                ));
+                edges.push(edge);
+                continue;
+            }
             let mut chain = nodes[id].chain.clone();
             chain.push(ti);
             let chain_refs = chain
@@ -1580,6 +2148,548 @@ pub fn search_representations(
         steps_used: search.steps_used,
         conventions: conventions(),
     })
+}
+
+// ---------------------------------------------------------------------------
+// Vector representations and the two-relation gamma system
+// ---------------------------------------------------------------------------
+
+/// Uniqueness of a first-order vector system with its initial state: the
+/// states are determined when `q(n, .)` is a nonzero polynomial at every
+/// index `n >= first_index`, certified by a coefficient `[x^j] q(n,x)` (a
+/// polynomial in `n`) with no integer root `n >= first_index`.
+fn assess_vector_system(
+    json: &TransformVectorRecurrenceJson,
+) -> Result<VectorSystemAssessment, String> {
+    let (system, first, _) = json.to_recurrence()?;
+    let width = system
+        .denominator
+        .coeffs
+        .iter()
+        .map(Vec::len)
+        .max()
+        .unwrap_or(0);
+    for j in 0..width {
+        let column = vec_poly::trim(
+            &system
+                .denominator
+                .coeffs
+                .iter()
+                .map(|row| row.get(j).cloned().unwrap_or_else(Q::zero))
+                .collect::<Vec<_>>(),
+        );
+        if vec_poly::is_zero(&column) {
+            continue;
+        }
+        if roots_in_domain(&column, first, None).is_empty() {
+            return Ok(VectorSystemAssessment {
+                status: "certified".into(),
+                denominator_coefficient: Some(j),
+                statement: format!(
+                    "[x^{j}] q(n,x) has no integer root n >= {first}, so q(n, .) is a nonzero \
+                     polynomial and the system determines every state F_(n+1) from F_n; with \
+                     the initial state at index {first} every later state is determined"
+                ),
+            });
+        }
+    }
+    Ok(VectorSystemAssessment {
+        status: "not_certified".into(),
+        denominator_coefficient: None,
+        statement: format!(
+            "every coefficient of q(n,x) in x vanishes at some integer index n >= {first} (or \
+             q = 0): uniqueness is not certified"
+        ),
+    })
+}
+
+/// The search label of a vector system: equivalent when its annihilation is
+/// certified, its uniqueness is certified, it starts at the row origin and
+/// the domain is unbounded; certified when annihilation is; else a fit.
+fn vector_label(
+    certified: bool,
+    assessment: Option<&VectorSystemAssessment>,
+    from_origin: bool,
+    bounded: bool,
+) -> &'static str {
+    if !certified {
+        FINITE_FIT_LABEL
+    } else if assessment.is_some_and(|a| a.status == "certified") && from_origin && !bounded {
+        EQUIVALENT_DESCRIPTION_LABEL
+    } else {
+        CERTIFIED_RELATION_LABEL
+    }
+}
+
+/// The description of a rank-two gamma transport: seeds, the even part and
+/// the odd companion, with the step's evidence.
+fn gamma_system_item(
+    report: &RecurrenceTransformReport,
+    transported: &TransportedRuleReport,
+    system: &GammaRelationSystemJson,
+    certified: bool,
+) -> Option<RepresentationDescription> {
+    let origin = report.row_origin;
+    let first = report.source_rule.as_ref()?.first_index;
+    let seeds = report
+        .transformed_states
+        .get(first.checked_sub(origin)?..transported.valid_from_index.checked_sub(origin)?)?
+        .iter()
+        .map(|state| state.first().cloned())
+        .collect::<Option<Vec<_>>>()?;
+    let evidence = if certified {
+        TRANSPORTED_IDENTITY_EVIDENCE
+    } else {
+        CHECKED_SUPPLIED_ROWS
+    };
+    let description = GeneratingDescription {
+        first_index: first,
+        seeds,
+        relations: system
+            .relations
+            .iter()
+            .map(|r| DescribedRelation {
+                evidence: evidence.into(),
+                ..r.clone()
+            })
+            .collect(),
+        exceptional_index_conditions: Vec::new(),
+        boundary_conditions: Vec::new(),
+    };
+    let mut cost = DescriptionCost {
+        shift_length: 0,
+        derivative_order: 0,
+        coefficient_degree: 0,
+        index_degree: 0,
+        component_count: system.relations.len(),
+        reconstruction_cost: 0,
+    };
+    for relation in &system.relations {
+        let c = relation_cost(&relation.relation);
+        cost.shift_length = cost.shift_length.max(c.shift_length);
+        cost.derivative_order = cost.derivative_order.max(c.derivative_order);
+        cost.coefficient_degree = cost.coefficient_degree.max(c.coefficient_degree);
+        cost.index_degree = cost.index_degree.max(c.index_degree);
+    }
+    let mut item = RepresentationDescription {
+        label: FINITE_FIT_LABEL.into(),
+        kind: "transported_gamma_system".into(),
+        evidence: evidence.into(),
+        text: transported.text.clone(),
+        scalar: None,
+        vector: None,
+        description: Some(description),
+        assessment: None,
+        cost,
+        provenance: String::new(),
+        also_found_by: Vec::new(),
+        note: Some(
+            "the even part and the odd companion of a rank-two gamma transport: together they \
+             carry the source rule where the rows are symmetric (no single scalar rule does)"
+                .into(),
+        ),
+        vector_assessment: None,
+    };
+    assess_gamma_item(&mut item, transported.valid_to_index.is_some());
+    Some(item)
+}
+
+fn assess_gamma_item(item: &mut RepresentationDescription, bounded: bool) {
+    let Some(description) = &item.description else {
+        return;
+    };
+    match assess_generating_description(description) {
+        Ok(assessment) => {
+            let mut label = representation_label(&assessment.status);
+            if bounded && label == EQUIVALENT_DESCRIPTION_LABEL {
+                label = CERTIFIED_RELATION_LABEL;
+            }
+            item.label = label.into();
+            item.assessment = Some(assessment);
+        }
+        Err(_) => {
+            item.label = if evidence_is_certified(&item.evidence) {
+                CERTIFIED_RELATION_LABEL
+            } else {
+                FINITE_FIT_LABEL
+            }
+            .into();
+            item.assessment = None;
+        }
+    }
+}
+
+/// The index `k` of a provenance `steps[k]...`.
+fn step_index_of(provenance: &str) -> Option<usize> {
+    provenance
+        .strip_prefix("steps[")?
+        .split(']')
+        .next()?
+        .parse()
+        .ok()
+}
+
+/// The step of a gamma edge whose report certifies the symmetry condition
+/// (its source rule is invariant under reversal), if any.
+fn symmetry_certifying_step(steps: &[RepresentationStep]) -> Option<usize> {
+    steps.iter().position(|s| {
+        s.source_description.is_some()
+            && s.transform.as_ref().is_some_and(|r| {
+                !r.conditions.is_empty()
+                    && r.conditions
+                        .iter()
+                        .all(|c| c.status == CERTIFIED_ALL_INDICES)
+            })
+    })
+}
+
+/// A two-relation gamma system rests on its certified source rule and on the
+/// symmetry of the rows. When another step of the same edge certifies that
+/// symmetry, the system's relations are exact consequences for every index.
+fn upgrade_gamma_systems(steps: &[RepresentationStep], items: &mut [RepresentationDescription]) {
+    let Some(k) = symmetry_certifying_step(steps) else {
+        return;
+    };
+    for item in items
+        .iter_mut()
+        .filter(|i| i.kind == "transported_gamma_system" && i.evidence == CHECKED_SUPPLIED_ROWS)
+    {
+        let Some(step) = step_index_of(&item.provenance).and_then(|s| steps.get(s)) else {
+            continue;
+        };
+        let Some(report) = &step.transform else {
+            continue;
+        };
+        let Some(transported) = report
+            .transported
+            .as_ref()
+            .filter(|t| t.holds_on_transformed_rows && t.system.is_some())
+        else {
+            continue;
+        };
+        if step.source_description.is_none() || !report.reconstruction_verified {
+            continue;
+        }
+        let Some(description) = item.description.as_mut() else {
+            continue;
+        };
+        for relation in &mut description.relations {
+            relation.evidence = TRANSPORTED_IDENTITY_EVIDENCE.into();
+        }
+        item.evidence = TRANSPORTED_IDENTITY_EVIDENCE.into();
+        item.note = Some(format!(
+            "the even part and the odd companion of a rank-two gamma transport of a certified \
+             rule; the symmetry of the rows is certified by steps[{k}], so both relations hold \
+             for every index"
+        ));
+        assess_gamma_item(item, transported.valid_to_index.is_some());
+    }
+}
+
+/// `first_degree + step (n - first_index)`.
+fn schedule_value(schedule: &DegreeSchedule, n: usize) -> i128 {
+    schedule.first_degree as i128
+        + schedule.step as i128 * (n as i128 - schedule.first_index as i128)
+}
+
+/// Whether `bound(n) <= schedule(n)` at every index `n >= from` of both
+/// domains, with `bound` known from `from` on.
+fn bound_at_most(bound: &DegreeSchedule, schedule: &DegreeSchedule, from: usize) -> bool {
+    if bound.first_index > from {
+        return false;
+    }
+    let start = from.max(schedule.first_index);
+    let end = match (bound.last_index, schedule.last_index) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    };
+    if end.is_some_and(|e| e < start) {
+        return true;
+    }
+    let difference = |n: usize| schedule_value(schedule, n) - schedule_value(bound, n);
+    difference(start) >= 0
+        && match end {
+            Some(e) => difference(e) >= 0,
+            None => schedule.step >= bound.step,
+        }
+}
+
+fn shifted_schedule(schedule: &DegreeSchedule, offset: i64) -> Option<DegreeSchedule> {
+    RecurrenceTransformation::Reversal {
+        schedule: schedule.clone(),
+    }
+    .with_degree_offset(offset)
+    .ok()?
+    .schedule()
+    .cloned()
+}
+
+/// Certified degree bounds `deg F_(n,c) <= B_c(n)` of the components of a
+/// vector representation: from a symmetric decomposition whose degree
+/// condition is certified (`a` at `d_n`, `b` at `d_n - 1`), carried through
+/// componentwise maps whose image degree is controlled.
+fn component_bounds(
+    transformations: &[RecurrenceTransformation],
+    nodes: &[RepresentationNode],
+    id: usize,
+) -> Option<Vec<DegreeSchedule>> {
+    let node = nodes.get(id)?;
+    let t = transformations.get(node.transformation?)?;
+    let parent = nodes.get(node.parent?)?;
+    let certified = !node.map_conditions.is_empty()
+        && node
+            .map_conditions
+            .iter()
+            .all(|c| c.status == CERTIFIED_ALL_INDICES);
+    if parent.components.len() == 1 {
+        let RecurrenceTransformation::SymmetricDecomposition { schedule } = t else {
+            return None;
+        };
+        if !certified {
+            return None;
+        }
+        return t
+            .component_degree_offsets()
+            .iter()
+            .map(|&o| shifted_schedule(schedule, o))
+            .collect();
+    }
+    let bounds = component_bounds(transformations, nodes, parent.id)?;
+    match t {
+        RecurrenceTransformation::Reversal { schedule }
+        | RecurrenceTransformation::Mobius { schedule, .. }
+        | RecurrenceTransformation::FPolynomial { schedule } => {
+            if !certified {
+                return None;
+            }
+            let chain = node
+                .chain
+                .iter()
+                .map(|&i| transformations.get(i))
+                .collect::<Option<Vec<_>>>()?;
+            let offsets = chain_offsets(&chain).pop()?;
+            offsets
+                .iter()
+                .map(|&o| shifted_schedule(schedule, o))
+                .collect()
+        }
+        RecurrenceTransformation::MultiplyPower { power } => bounds
+            .iter()
+            .map(|b| {
+                Some(DegreeSchedule {
+                    first_degree: b.first_degree.checked_add(*power)?,
+                    ..b.clone()
+                })
+            })
+            .collect(),
+        RecurrenceTransformation::Affine { .. }
+        | RecurrenceTransformation::Diagonal { .. }
+        | RecurrenceTransformation::DerivativeAntecedent { .. } => Some(bounds),
+        _ => None,
+    }
+}
+
+/// The schedule of a symmetric decomposition of a scalar representation
+/// whose degree condition is certified: its components are then symmetric
+/// at `d_n` and `d_n - 1` by construction.
+fn symmetric_decomposition_schedule(
+    transformations: &[RecurrenceTransformation],
+    nodes: &[RepresentationNode],
+    id: usize,
+) -> Option<DegreeSchedule> {
+    let node = nodes.get(id)?;
+    let parent = nodes.get(node.parent?)?;
+    let RecurrenceTransformation::SymmetricDecomposition { schedule } =
+        transformations.get(node.transformation?)?
+    else {
+        return None;
+    };
+    (parent.components.len() == 1
+        && !node.map_conditions.is_empty()
+        && node
+            .map_conditions
+            .iter()
+            .all(|c| c.status == CERTIFIED_ALL_INDICES))
+    .then(|| schedule.clone())
+}
+
+/// Preconditions of a componentwise map on a vector representation, one per
+/// component where they depend on it.
+fn vector_map_conditions(
+    t: &RecurrenceTransformation,
+    bounds: Option<&[DegreeSchedule]>,
+    symmetric: Option<&DegreeSchedule>,
+    offsets: &[i64],
+    names: &[String],
+    origin: usize,
+) -> Vec<TransformConditionStatus> {
+    let finite = "exact on every supplied row; finite evidence only";
+    let checked = |condition: String, detail: &str| TransformConditionStatus {
+        condition,
+        status: CHECKED_SUPPLIED_ROWS.into(),
+        detail: detail.into(),
+    };
+    let offset_text = |o: i64| match o {
+        0 => String::new(),
+        o if o < 0 => format!(" - {}", -o),
+        o => format!(" + {o}"),
+    };
+    match t {
+        RecurrenceTransformation::Reversal { schedule }
+        | RecurrenceTransformation::Mobius { schedule, .. }
+        | RecurrenceTransformation::FPolynomial { schedule } => names
+            .iter()
+            .zip(offsets)
+            .enumerate()
+            .map(|(c, (name, &o))| {
+                let condition = format!("deg {name}_n <= d_n{}", offset_text(o));
+                let shifted = shifted_schedule(schedule, o);
+                match (bounds.and_then(|b| b.get(c)), shifted) {
+                    (Some(bound), Some(shifted)) if bound_at_most(bound, &shifted, origin) => {
+                        TransformConditionStatus {
+                            condition,
+                            status: CERTIFIED_ALL_INDICES.into(),
+                            detail: format!(
+                                "the parent's certified bound deg {name}_n <= {} + {}*(n - {}) \
+                                 is at most d_n{} for every index of the domain",
+                                bound.first_degree,
+                                bound.step,
+                                bound.first_index,
+                                offset_text(o)
+                            ),
+                        }
+                    }
+                    _ => checked(condition, finite),
+                }
+            })
+            .collect(),
+        RecurrenceTransformation::DividePower { power } => names
+            .iter()
+            .map(|name| checked(format!("x^{power} divides {name}_n"), finite))
+            .collect(),
+        RecurrenceTransformation::Gamma { schedule } => names
+            .iter()
+            .zip(offsets)
+            .map(|(name, &o)| {
+                let condition = format!(
+                    "x^(d_n{0}) {name}_n(1/x) = {name}_n (symmetry at d_n{0})",
+                    offset_text(o)
+                );
+                if symmetric == Some(schedule) {
+                    TransformConditionStatus {
+                        condition,
+                        status: CERTIFIED_ALL_INDICES.into(),
+                        detail: "the components of a symmetric decomposition at the same \
+                                 schedule are symmetric at d_n and d_n - 1 by construction, \
+                                 and its degree condition is certified"
+                            .into(),
+                    }
+                } else {
+                    checked(condition, finite)
+                }
+            })
+            .collect(),
+        RecurrenceTransformation::Diagonal { .. }
+        | RecurrenceTransformation::DerivativeAntecedent { .. } => {
+            implicit_map_condition_statuses(t, origin)
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Transport the parent's vector system through the componentwise map and
+/// check it on the new states.
+fn build_vector_transport(
+    t: &RecurrenceTransformation,
+    offsets: &[i64],
+    source: &TransformVectorRecurrenceJson,
+    states: &[Vec<Vec<Q>>],
+    origin: usize,
+    conditions: &[TransformConditionStatus],
+    names: &[String],
+) -> Result<VectorTransportStep, String> {
+    let (system, first, initial) = source.to_recurrence()?;
+    let start = first
+        .checked_sub(origin)
+        .filter(|i| *i < states.len())
+        .ok_or("the source system starts outside the rows")?;
+    if t.map_state(first, &initial, offsets)
+        .map_err(|e| e.to_string())?
+        != states[start]
+    {
+        return Err("the mapped initial state differs from the rows".into());
+    }
+    let transported =
+        transport_vector_componentwise(&system, t, offsets).map_err(|e| e.to_string())?;
+    let mut holds = true;
+    let mut checked = 0;
+    for i in start..states.len().saturating_sub(1) {
+        holds &= transported.holds_transition_rational(&states[i], &states[i + 1], origin + i);
+        checked += 1;
+    }
+    let component_maps = offsets
+        .iter()
+        .map(|&o| t.with_degree_offset(o))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    let json = TransformVectorRecurrenceJson::from_recurrence(&transported, first, &states[start]);
+    let certified = holds && conditions.iter().all(|c| c.status == CERTIFIED_ALL_INDICES);
+    Ok(VectorTransportStep {
+        component_maps,
+        text: json.text(names)?,
+        transported: json,
+        evidence: if certified {
+            TRANSPORTED_IDENTITY_EVIDENCE
+        } else {
+            CHECKED_SUPPLIED_ROWS
+        }
+        .into(),
+        holds_on_rows: holds,
+        checked_transitions: checked,
+    })
+}
+
+/// Re-check a vector description on the states: initial state, every
+/// transition from its first index, uniqueness and label.
+fn check_vector_description(
+    item: &RepresentationDescription,
+    states: &[Vec<Vec<Q>>],
+    origin: usize,
+    label: &str,
+) -> Result<(), String> {
+    let Some(json) = &item.vector else {
+        return Ok(());
+    };
+    let (system, first, initial) = json.to_recurrence()?;
+    let start = first
+        .checked_sub(origin)
+        .filter(|i| *i < states.len())
+        .ok_or_else(|| format!("{label}: the system starts outside the rows"))?;
+    if states[start] != initial {
+        return Err(format!("{label}: the initial state differs from the rows"));
+    }
+    for i in start..states.len().saturating_sub(1) {
+        if !system.holds_transition_rational(&states[i], &states[i + 1], origin + i) {
+            return Err(format!("{label}: the system fails at n = {}", origin + i));
+        }
+    }
+    let assessment = assess_vector_system(json)?;
+    if item.vector_assessment.as_ref() != Some(&assessment) {
+        return Err(format!("{label}: the vector assessment does not replay"));
+    }
+    if item.label == EQUIVALENT_DESCRIPTION_LABEL
+        && (assessment.status != "certified"
+            || first != origin
+            || !evidence_is_certified(&item.evidence))
+    {
+        return Err(format!("{label}: the label does not match the assessment"));
+    }
+    if item.label != FINITE_FIT_LABEL && !evidence_is_certified(&item.evidence) {
+        return Err(format!(
+            "{label}: a certified label with uncertified evidence"
+        ));
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -2105,6 +3215,43 @@ pub fn verify_representation_search(report: &RepresentationSearchReport) -> Resu
                 .parent
                 .and_then(|p| report.representations.get(p))
                 .ok_or_else(|| format!("{label}: a step without a parent"))?;
+            if let Some(record) = &step.vector_transport {
+                let t = node
+                    .transformation
+                    .and_then(|i| report.request.transformations.get(i))
+                    .ok_or_else(|| format!("{label}: unknown transformation"))?;
+                let source = step
+                    .source_description
+                    .and_then(|i| parent.descriptions.get(i))
+                    .filter(|d| d.label != FINITE_FIT_LABEL)
+                    .and_then(|d| d.vector.as_ref())
+                    .ok_or_else(|| format!("{label}.steps[{s}]: uncertified source"))?;
+                let parent_chain = parent
+                    .chain
+                    .iter()
+                    .map(|&i| report.request.transformations.get(i))
+                    .collect::<Option<Vec<_>>>()
+                    .ok_or_else(|| format!("{label}: unknown transformation index"))?;
+                let offsets = chain_offsets(&parent_chain)
+                    .pop()
+                    .expect("at least one offset list");
+                let rebuilt = build_vector_transport(
+                    t,
+                    &offsets,
+                    source,
+                    &states,
+                    origin,
+                    &node.map_conditions,
+                    &node.components,
+                )
+                .map_err(|e| format!("{label}.steps[{s}]: {e}"))?;
+                if &rebuilt != record || !record.holds_on_rows {
+                    return Err(format!(
+                        "{label}.steps[{s}]: the vector transport does not replay"
+                    ));
+                }
+                continue;
+            }
             if let Some(record) = &step.implicit_relation {
                 let t = node
                     .transformation
@@ -2151,15 +3298,56 @@ pub fn verify_representation_search(report: &RepresentationSearchReport) -> Resu
         for space in &node.spaces {
             verify_recurrence_spaces(&space.request, space)?;
         }
-        if node.components.len() == 1 {
-            let rows = states.iter().map(|s| s[0].clone()).collect::<Vec<_>>();
-            for (i, item) in node.descriptions.iter().enumerate() {
-                check_description_on_rows(
-                    item,
-                    &rows,
-                    origin,
-                    &format!("{label}.descriptions[{i}]"),
-                )?;
+        for (s, space) in node.implicit_spaces.iter().enumerate() {
+            let label = format!("{label}.implicit_spaces[{s}]");
+            verify_implicit_relation_search(space).map_err(|e| format!("{label}: {e}"))?;
+            let parent = node
+                .parent
+                .and_then(|p| report.representations.get(p))
+                .ok_or_else(|| format!("{label}: a space without a parent"))?;
+            let certified_source = parent.descriptions.iter().any(|d| {
+                d.label != FINITE_FIT_LABEL
+                    && d.scalar.as_ref().map(|json| RecurrenceJson {
+                        search: None,
+                        ..json.clone()
+                    }) == space.request.source_recurrence
+            });
+            if !certified_source {
+                return Err(format!(
+                    "{label}: the source is not a certified description of the parent"
+                ));
+            }
+            let map = node
+                .transformation
+                .and_then(|i| report.request.transformations.get(i));
+            if space.request.transformation.as_ref() != map {
+                return Err(format!("{label}: the map is not the edge map"));
+            }
+        }
+        let certifying = symmetry_certifying_step(&node.steps);
+        for (i, item) in node.descriptions.iter().enumerate() {
+            let item_label = format!("{label}.descriptions[{i}]");
+            if node.components.len() == 1 {
+                let rows = states.iter().map(|s| s[0].clone()).collect::<Vec<_>>();
+                check_description_on_rows(item, &rows, origin, &item_label)?;
+            }
+            check_vector_description(item, &states, origin, &item_label)?;
+            if item.kind == "transported_gamma_system"
+                && evidence_is_certified(&item.evidence)
+                && step_index_of(&item.provenance)
+                    .and_then(|k| node.steps.get(k))
+                    .and_then(|s| s.transform.as_ref())
+                    .is_none_or(|r| {
+                        !r.conditions
+                            .iter()
+                            .all(|c| c.status == CERTIFIED_ALL_INDICES)
+                            && certifying.is_none()
+                    })
+            {
+                return Err(format!(
+                    "{item_label}: a certified gamma system without a certified symmetry \
+                     condition"
+                ));
             }
         }
     }
@@ -2222,5 +3410,116 @@ mod tests {
             schedule: DegreeSchedule::new(0, 0, 1),
         };
         assert!(transport_condition(&reversal, &condition).is_none());
+    }
+
+    fn pascal_source(rule: &Recurrence) -> RecurrenceJson {
+        RecurrenceJson::from_recurrence_rational(rule, 0, &[vec![q(1)]], None)
+    }
+
+    fn bivar(rows: &[&[i64]]) -> BivarPoly {
+        BivarPoly::from_coefficients_normalized(
+            rows.iter()
+                .map(|r| r.iter().map(|&c| q(c)).collect())
+                .collect(),
+        )
+    }
+
+    fn gamma_step(rule: &Recurrence, source: usize) -> RepresentationStep {
+        let map = RecurrenceTransformation::Gamma {
+            schedule: DegreeSchedule::new(0, 0, 1),
+        };
+        let request = RecurrenceTransformRequest::from_source(map, pascal_source(rule), 8);
+        RepresentationStep {
+            source_description: Some(source),
+            transform: Some(transform_recurrence(&request).unwrap()),
+            implicit: None,
+            implicit_relation: None,
+            vector_transport: None,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn gamma_systems_are_certified_only_with_a_certified_symmetry() {
+        // (1 + x)^n: an invariant rule and a rank-two rule for the same rows.
+        let invariant = Recurrence {
+            terms: vec![RecurrenceTerm::new(1, 0, bivar(&[&[1, 1]]))],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let rank_two = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(1, 0, bivar(&[&[1, 2], &[0, -1]])),
+                RecurrenceTerm::new(1, 1, bivar(&[&[0, 1, 1]])),
+            ],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let certifying = gamma_step(&invariant, 0);
+        let coupled = gamma_step(&rank_two, 1);
+        let report = coupled.transform.as_ref().unwrap();
+        assert_eq!(report.conditions[0].status, CHECKED_SUPPLIED_ROWS);
+        assert_eq!(
+            certifying.transform.as_ref().unwrap().conditions[0].status,
+            CERTIFIED_ALL_INDICES
+        );
+        let transported = report.transported.as_ref().unwrap();
+        let item = || RepresentationDescription {
+            provenance: "steps[1].transform.transported".into(),
+            ..gamma_system_item(
+                report,
+                transported,
+                transported.system.as_ref().unwrap(),
+                false,
+            )
+            .unwrap()
+        };
+        let mut alone = vec![item()];
+        upgrade_gamma_systems(std::slice::from_ref(&coupled), &mut alone);
+        assert_eq!(alone[0].label, FINITE_FIT_LABEL);
+        assert_eq!(alone[0].evidence, CHECKED_SUPPLIED_ROWS);
+        // Another step of the edge certifies the symmetry of the rows.
+        let steps = vec![certifying, coupled.clone()];
+        assert_eq!(symmetry_certifying_step(&steps), Some(0));
+        let mut items = vec![item()];
+        upgrade_gamma_systems(&steps, &mut items);
+        assert_eq!(items[0].evidence, TRANSPORTED_IDENTITY_EVIDENCE);
+        assert_eq!(items[0].label, EQUIVALENT_DESCRIPTION_LABEL);
+        assert!(items[0].note.as_ref().unwrap().contains("steps[0]"));
+        let description = items[0].description.as_ref().unwrap();
+        assert!(description
+            .relations
+            .iter()
+            .all(|r| r.evidence == TRANSPORTED_IDENTITY_EVIDENCE));
+        assert_eq!(
+            items[0].assessment.as_ref().unwrap().status,
+            EQUIVALENT_DESCRIPTION
+        );
+        // A step without a certified source certifies nothing.
+        let mut uncertified = steps.clone();
+        uncertified[0].source_description = None;
+        assert_eq!(symmetry_certifying_step(&uncertified), None);
+    }
+
+    #[test]
+    fn degree_bounds_compare_on_the_whole_domain() {
+        let bound = DegreeSchedule::new(1, 1, 1);
+        assert!(bound_at_most(&bound, &DegreeSchedule::new(1, 1, 1), 1));
+        assert!(bound_at_most(&bound, &DegreeSchedule::new(0, 0, 2), 1));
+        // Smaller at the start, or a smaller slope on an unbounded domain.
+        assert!(!bound_at_most(&bound, &DegreeSchedule::new(1, 0, 1), 1));
+        assert!(!bound_at_most(&bound, &DegreeSchedule::new(1, 5, 0), 1));
+        // ... but fine on a bounded domain that ends in time.
+        assert!(bound_at_most(
+            &bound,
+            &DegreeSchedule::new(1, 5, 0).with_last_index(5),
+            1
+        ));
+        // A bound known only from a later index proves nothing earlier.
+        assert!(!bound_at_most(
+            &DegreeSchedule::new(2, 0, 1),
+            &DegreeSchedule::new(0, 9, 1),
+            1
+        ));
     }
 }

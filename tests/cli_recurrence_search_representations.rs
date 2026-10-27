@@ -62,3 +62,42 @@ fn cli_search_round_trips_and_replays() {
     let help = call(&["--help"], "");
     assert!(String::from_utf8_lossy(&help.stdout).contains("duplicate_map"));
 }
+
+const EULERIAN_VECTOR: &str = r#"{"oeis_id":"A008292","row_count":8,
+  "limits":{"max_depth":2,"max_representations":8},
+  "transformations":[
+    {"kind":"symmetric_decomposition","schedule":{"first_index":1,"first_degree":1,"step":1}},
+    {"kind":"f_polynomial","schedule":{"first_index":1,"first_degree":1,"step":1}}]}"#;
+
+#[test]
+fn cli_transforms_vector_representations_and_replays() {
+    let output = call(&["--compact"], EULERIAN_VECTOR);
+    assert!(output.status.success(), "{output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let report: RepresentationSearchReport = serde_json::from_value(value.clone()).unwrap();
+    verify_representation_search(&report).unwrap();
+    // Decomposition, then f-polynomials of both components.
+    let node = report
+        .representations
+        .iter()
+        .find(|n| n.chain == [0, 1])
+        .unwrap();
+    assert_eq!(node.components, ["a", "b"]);
+    let step = node.steps[0].vector_transport.as_ref().unwrap();
+    assert_eq!(step.evidence, "transported_identity");
+    assert!(node.descriptions.iter().any(|d| {
+        d.kind == "transported_vector_system"
+            && d.label == "equivalent_generating_description"
+            && d.vector_assessment.as_ref().unwrap().status == "certified"
+    }));
+    let verified = call(&["--verify"], &value.to_string());
+    assert!(verified.status.success(), "{verified:?}");
+    let mut tampered = value;
+    tampered["representations"][node.id]["steps"][0]["vector_transport"]["evidence"] =
+        "checked_supplied_rows".into();
+    let rejected = call(&["--verify"], &tampered.to_string());
+    assert_eq!(rejected.status.code(), Some(2));
+    let help = call(&["--help"], "");
+    let help = String::from_utf8_lossy(&help.stdout);
+    assert!(help.contains("componentwise") && help.contains("implicit_spaces"));
+}

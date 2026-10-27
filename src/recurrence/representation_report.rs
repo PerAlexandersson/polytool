@@ -29,6 +29,11 @@ pub const DEFAULT_REPRESENTATION_ROW_COUNT: usize = 12;
 /// Largest number of transformations in one request.
 pub const MAX_REPRESENTATION_TRANSFORMATIONS: usize = 32;
 
+/// Largest number of unknowns of the first-order vector fit of a vector
+/// representation (matrix entries and left factor at the search bounds); a
+/// larger fit is skipped with the budget event `vector_fit_unknowns`.
+pub const MAX_VECTOR_FIT_UNKNOWNS: usize = 512;
+
 /// The search label of a description with the given assessment status
 /// (`equivalent_description`, `certified_consequence`, ...).
 pub fn representation_label(assessment_status: &str) -> &'static str {
@@ -248,7 +253,9 @@ pub struct RepresentationSearchRequest {
     /// Run the fit menu in every scalar representation (default `true`).
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub fits: bool,
-    /// Certify complete spaces after factorial diagonal maps (default `true`).
+    /// Certify complete spaces after factorial diagonal maps, Möbius-class
+    /// maps, polynomial diagonal weights and differentiation of a certified
+    /// constant-index monic rule (default `true`).
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub certified_spaces: bool,
     /// Explicit complete-space supports; empty means the default menu
@@ -318,7 +325,8 @@ pub struct DescriptionCost {
     pub coefficient_degree: usize,
     /// Largest power of the index `n` in a coefficient (0 means index independent).
     pub index_degree: usize,
-    /// Number of components of the state.
+    /// Number of components of the state (the number of coupled relations
+    /// for the two-relation gamma system).
     pub component_count: usize,
     /// Maps to invert back to the source plus coefficient conditions.
     pub reconstruction_cost: usize,
@@ -332,8 +340,11 @@ pub struct RepresentationDescription {
     /// `equivalent_generating_description`.
     pub label: String,
     /// `defining_rule`, `transported_rule`, `transported_vector_system`,
-    /// `implicit_transport`, `reconstruction_certified_fit`, `certified_space`
-    /// or `finite_fit`.
+    /// `transported_gamma_system` (the even part and odd companion of a
+    /// rank-two gamma transport), `implicit_transport`,
+    /// `reconstruction_certified_fit`, `certified_space`, `finite_fit` or
+    /// `vector_fit` (a first-order vector system fitted to a vector
+    /// representation).
     pub kind: String,
     /// Evidence of annihilation (`defining`, `transported_identity`,
     /// `certified_by_reconstruction`, `certified_complete_space`,
@@ -363,6 +374,48 @@ pub struct RepresentationDescription {
     /// Further explanation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// Uniqueness of `vector` with its initial state, for vector systems.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vector_assessment: Option<VectorSystemAssessment>,
+}
+
+/// Whether a first-order vector system `q(n,x) F_(n+1) = M F_n (+ G)` with
+/// its initial state determines the states: it does when `q(n, x)` is a
+/// nonzero polynomial in `x` at every index of the domain, certified by a
+/// coefficient `[x^j] q` with no integer root in the domain.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct VectorSystemAssessment {
+    /// `certified` or `not_certified`.
+    pub status: String,
+    /// The power `j` of `x` whose coefficient of `q` certifies `q(n, .) != 0`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub denominator_coefficient: Option<usize>,
+    /// The argument or why it fails.
+    pub statement: String,
+}
+
+/// A certified vector system of the parent transported through a
+/// componentwise Möbius-class map ([`transport_vector_componentwise`]).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct VectorTransportStep {
+    /// The map applied to each component, with the schedule shifted by the
+    /// component's degree offset.
+    pub component_maps: Vec<RecurrenceTransformation>,
+    /// The transported system with the mapped initial state.
+    pub transported: TransformVectorRecurrenceJson,
+    /// Human-readable form.
+    pub text: String,
+    /// `transported_identity` when the parent system is certified, every
+    /// map condition is certified and the system holds on the rows; else
+    /// `checked_supplied_rows`.
+    pub evidence: String,
+    /// Whether every transition of the new rows from the system's first
+    /// index satisfies the transported system.
+    pub holds_on_rows: bool,
+    /// Number of transitions checked.
+    pub checked_transitions: usize,
 }
 
 /// One replayable backend call of an edge.
@@ -384,6 +437,10 @@ pub struct RepresentationStep {
     /// (diagonal maps, derivative antecedents and the lossy `derivative`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implicit_relation: Option<ImplicitRelationStep>,
+    /// A certified vector system of a vector parent transported through a
+    /// componentwise Möbius-class map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vector_transport: Option<VectorTransportStep>,
     /// Why the step failed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -489,7 +546,8 @@ pub struct RepresentationNode {
     pub chain: Vec<usize>,
     /// Normal form of the composite map.
     pub map: RepresentationMapRecord,
-    /// Component names (`P` for the source, `Q`, or `a`, `b`).
+    /// Component names (`P` for the source, `Q`, or `a`, `b`; maps after a
+    /// vector map act componentwise and keep the names).
     pub components: Vec<String>,
     /// Original index of the first row.
     pub row_origin: usize,
@@ -513,6 +571,13 @@ pub struct RepresentationNode {
     /// Certified complete-space reports, one per tried support.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spaces: Vec<RecurrenceSpaces>,
+    /// Complete-space searches after Möbius-class maps, polynomial diagonal
+    /// weights and differentiation (`polytool.recurrence-implicit-search.v1`
+    /// reports with one successor support each), from the parent's certified
+    /// constant-index monic rule; see [`search_implicit_relations`] for the
+    /// finite verification theorems.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub implicit_spaces: Vec<ImplicitRelationSearchReport>,
     /// The fit menu.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fits: Option<RepresentationFitSummary>,
@@ -549,7 +614,8 @@ pub struct RepresentationEdge {
 #[serde(deny_unknown_fields)]
 pub struct RepresentationBudgetEvent {
     /// The limit (`max_representations`, `max_steps`, `max_space_shapes`,
-    /// `fit_candidates`, `space_operations`, `implicit_fit_candidates`).
+    /// `fit_candidates`, `space_operations`, `implicit_fit_candidates`,
+    /// `vector_fit_unknowns`).
     pub limit: String,
     /// The representation concerned.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -619,6 +685,11 @@ pub(super) fn conventions() -> Vec<String> {
          count, reconstruction cost, then label",
         "lossy maps (derivative) record the forgotten coefficients in lost_data; the parent is \
          described through them only together with conditions pinning the lost data",
+        "vector representations (a, b) are mapped componentwise by scalar bijective maps, a \
+         schedule shifted by the component's degree offset (b at d_n - 1); their systems are \
+         transported through Möbius-class maps and fitted as first-order vector systems",
+        "a rank-two gamma transport is the two-relation system of its even part and odd \
+         companion, certified only where the symmetry of the rows is certified",
     ]
     .into_iter()
     .map(String::from)

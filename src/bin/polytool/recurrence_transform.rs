@@ -39,6 +39,12 @@ pub(crate) fn print_recurrence_transform_help() {
     println!(
         "                                                 parts of the identity are proportional)"
     );
+    println!(
+        "                                                 (otherwise transported.system: the even"
+    );
+    println!(
+        "                                                 part and its odd companion, two relations)"
+    );
     println!("                     symmetric_decomposition {{schedule}}");
     println!("                                     (a_n, b_n) with P_n = a_n + x b_n");
     println!("                   a, b, c, e are exact rationals as strings (\"3/2\").");
@@ -72,6 +78,9 @@ pub(crate) fn print_recurrence_transform_help() {
     println!("                      checked_supplied_rows (finite evidence)");
     println!("  transported         evidence transported_identity: exact consequence of");
     println!("                      the source rule, with transformed seeds");
+    println!("  transported.system  rank-two gamma case: [even part, odd companion] as");
+    println!("                      implicit relations of the gamma rows, exact consequences");
+    println!("                      where the rows are symmetric (see conditions)");
     println!("  independent_search  evidence finite_fit, kept separately");
     println!("  root_domain         implications (direction, hypotheses with status,");
     println!("                      converse), claims labelled finite_exact_observation,");

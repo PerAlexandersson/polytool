@@ -88,6 +88,20 @@ impl TransformVectorRecurrenceJson {
         }
     }
 
+    /// Human-readable form `(q) F_i(n+1) = ...`, one equation per component,
+    /// with the given component names.
+    pub fn text(&self, names: &[String]) -> Result<String, String> {
+        let (system, _, _) = self.to_recurrence()?;
+        if names.len() != system.dimension() {
+            return Err(format!(
+                "{} component names for a {}-component system",
+                names.len(),
+                system.dimension()
+            ));
+        }
+        Ok(vector_text(&system, names))
+    }
+
     /// Decode the vector system, its first index and initial state.
     pub fn to_recurrence(
         &self,
@@ -356,12 +370,33 @@ pub struct TransportedRuleReport {
     /// Vector system with its initial state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vector: Option<TransformVectorRecurrenceJson>,
+    /// The rank-two gamma case: the even part and its odd companion, two
+    /// relations of `Q` that together carry the source rule on symmetric
+    /// rows (no single scalar rule does).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<GammaRelationSystemJson>,
     /// Human-readable form.
     pub text: String,
     /// Whether the rule holds exactly at every checked target.
     pub holds_on_transformed_rows: bool,
     /// Number of targets checked.
     pub checked_targets: usize,
+}
+
+/// The rank-two gamma case of a transported rule ([`GammaRelationSystem`]).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct GammaRelationSystemJson {
+    /// `[even part, odd companion]` as implicit relations of the gamma rows
+    /// `Q[n+i]` (base index `n`), each with its first base and the evidence
+    /// `transported_identity`: an exact consequence of the source rule at
+    /// every target where the rows involved are symmetric at their indices
+    /// (the map's image condition, reported in `conditions`).
+    pub relations: Vec<DescribedRelation>,
+    /// The split index `N` of the cleared identity.
+    pub split_index: usize,
+    /// The power of `1 + x` multiplied in after dividing by `(1 + x)^(d_m)`.
+    pub cleared_power: usize,
 }
 
 /// An independent search in the new coordinates.
@@ -867,7 +902,10 @@ pub fn transform_recurrence(
                 ));
                 transported_rule = Some(transported);
             }
-            Err(error) => transport_error = Some(error.to_string()),
+            Err(error) => match gamma_system_report(transformation, s, origin, &states) {
+                Some(report) => transported_report = Some(report),
+                None => transport_error = Some(error.to_string()),
+            },
         }
     }
     let conditions = condition_statuses(transformation, source.as_ref(), transported_rule.as_ref());
@@ -920,6 +958,69 @@ pub fn transform_recurrence(
     })
 }
 
+/// The rank-two gamma case as a two-relation system, when it can be stated
+/// exactly ([`GammaTransport::relation_system`]).
+fn gamma_system_report(
+    transformation: &RecurrenceTransformation,
+    source: &ResolvedSource,
+    origin: usize,
+    states: &[Vec<Vec<Q>>],
+) -> Option<TransportedRuleReport> {
+    let RecurrenceTransformation::Gamma { schedule } = transformation else {
+        return None;
+    };
+    let gamma = transport_gamma(&source.rule, schedule).ok()?;
+    let system = gamma.relation_system().ok()?;
+    let valid_from = source.first_index + source.seeds.len();
+    let valid_to = schedule.last_index;
+    let rows = states.iter().map(|s| s[0].clone()).collect::<Vec<_>>();
+    let end = origin + rows.len();
+    let mut holds = true;
+    let mut relations = Vec::new();
+    for (relation, shift, note) in [
+        (
+            &system.even,
+            system.even_shift,
+            "even part of the gamma-transported identity",
+        ),
+        (
+            &system.odd,
+            system.odd_shift,
+            "odd companion of the gamma-transported identity",
+        ),
+    ] {
+        let first_base = valid_from.checked_sub(shift)?;
+        for base in first_base..end.saturating_sub(relation.max_shift()) {
+            if valid_to.is_some_and(|last| base + shift > last) {
+                break;
+            }
+            holds &= relation.holds_at(&rows, origin, base) != Some(false);
+        }
+        relations.push(
+            DescribedRelation::new(relation, first_base, TRANSPORTED_IDENTITY_EVIDENCE, "Q")
+                .with_note(note),
+        );
+    }
+    let checked_targets = (valid_from..end)
+        .filter(|t| valid_to.is_none_or(|last| *t <= last))
+        .count();
+    Some(TransportedRuleReport {
+        evidence: TRANSPORTED_IDENTITY_EVIDENCE.to_string(),
+        valid_from_index: valid_from,
+        valid_to_index: valid_to,
+        scalar: None,
+        vector: None,
+        text: format!("even: {}; odd: {}", relations[0].text, relations[1].text),
+        system: Some(GammaRelationSystemJson {
+            relations,
+            split_index: gamma.split_index,
+            cleared_power: gamma.cleared_power,
+        }),
+        holds_on_transformed_rows: holds,
+        checked_targets,
+    })
+}
+
 fn transported_report_for(
     transformation: &RecurrenceTransformation,
     transported: &TransportedRecurrence,
@@ -951,6 +1052,7 @@ fn transported_report_for(
                     None,
                 )),
                 vector: None,
+                system: None,
                 text: rule_text(rule),
                 holds_on_transformed_rows: holds,
                 checked_targets: targets.len(),
@@ -974,6 +1076,7 @@ fn transported_report_for(
                     valid_from - 1,
                     &states[valid_from - 1 - origin],
                 )),
+                system: None,
                 text: vector_text(system, &component_names(transformation)),
                 holds_on_transformed_rows: holds,
                 checked_targets: targets.len(),

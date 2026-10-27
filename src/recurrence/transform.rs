@@ -61,8 +61,11 @@
 //! because `Q(x)` is the quadratic extension of `Q(z)` by
 //! `w = (1 - x)/(1 + x)`, `w^2 = 1 - 4z`.  When the parts are proportional
 //! (for example when the rule is invariant under reversal at `d_n`) the part
-//! with a nonzero leader is the transported scalar rule; otherwise transport
-//! is reported as unsupported with both parts.  Canonical Eulerian A008292
+//! with a nonzero leader is the transported scalar rule; otherwise
+//! [`RecurrenceTransformation::transport`] reports transport as unsupported
+//! with both parts, and [`transform_recurrence`] states the rank-two case as
+//! the two-relation system of the even part and its odd companion
+//! ([`GammaTransport::relation_system`], report field `transported.system`).  Canonical Eulerian A008292
 //! (`E_1 = 1`, `d_n = n - 1`) gives
 //! `G_m = (1 + 2(m - 2) z) G_(m-1) + z (1 - 4z) G'_(m-1)`.  The gamma rule
 //! holds where the rows involved are symmetric, which is the map's image
@@ -89,6 +92,12 @@
 //! implicit relations (module `diagonal`, reports in `implicit_report`).
 //! The lossy map `derivative` (`Q_n = D^m P_n`) is registered as well; its
 //! lost coefficients, reconstruction and transport live in module `lossy`.
+//!
+//! Scalar bijective maps also act componentwise on vector states, with
+//! schedules shifted by each component's degree offset, and first-order
+//! vector systems are transported exactly through Möbius-class maps
+//! ([`RecurrenceTransformation::map_state`],
+//! [`transport_vector_componentwise`]; submodule `transform_vector`).
 
 use super::*;
 use crate::decomposition::f_polynomial;
@@ -1669,6 +1678,10 @@ pub use gamma::*;
 #[path = "transform_report.rs"]
 mod report;
 pub use report::*;
+
+#[path = "transform_vector.rs"]
+mod vector_transport;
+pub use vector_transport::*;
 
 #[cfg(test)]
 #[path = "transform_tests.rs"]

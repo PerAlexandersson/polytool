@@ -38,7 +38,14 @@
 //! at index `d_n`: the odd part is a genuine companion constraint, and no
 //! single scalar rule carries the source rule; [`transport_gamma`] then
 //! returns both parts and the obstruction, and
-//! [`RecurrenceTransformation::transport`] reports it as unsupported.
+//! [`RecurrenceTransformation::transport`] reports it as unsupported. The pair
+//! itself is an exact description: [`GammaTransport::relation_system`] states
+//! both parts as homogeneous implicit relations of `G` (the even part and its
+//! odd companion, which together are equivalent to the source rule on
+//! symmetric rows), and transform reports carry them as `transported.system`
+//! with evidence `transported_identity`, conditional on the symmetry
+//! condition. A rule with an additive term or `(-1)^n` factors has no such
+//! homogeneous form and stays unsupported.
 //!
 //! Every transported relation is an exact consequence of the source rule at
 //! targets where the rows `P_(m-r), ..., P_m` are symmetric at their
@@ -382,6 +389,77 @@ pub fn transport_gamma(
         scalar,
         obstruction,
     })
+}
+
+/// The rank-two gamma case as a coupled system of two relations of `G`:
+/// the even part and its odd companion (see [`GammaTransport::relation_system`]).
+#[derive(Debug, Clone)]
+pub struct GammaRelationSystem {
+    /// The even part (`A` coefficients) in implicit form at base `n = m - even_shift`.
+    pub even: ImplicitRelation,
+    /// The largest offset `R_e` of the even part: its base is `m - R_e`.
+    pub even_shift: usize,
+    /// The odd companion (`B` coefficients) in implicit form at base `n = m - odd_shift`.
+    pub odd: ImplicitRelation,
+    /// The largest offset `R_o` of the odd part.
+    pub odd_shift: usize,
+}
+
+impl GammaTransport {
+    /// The even part and the odd companion as two homogeneous implicit
+    /// relations of `G`, when the parts are independent (rank two) and can
+    /// be stated exactly: the source rule has no additive term and no
+    /// `(-1)^n` factors.
+    ///
+    /// Both relations hold exactly at every target `m` where the source rule
+    /// holds and the rows `P_(m-r), ..., P_m` are symmetric at their indices
+    /// (the map's image condition); together they are equivalent to the
+    /// source rule on symmetric rows, since `1` and `w = (1 - x)/(1 + x)` are
+    /// linearly independent over `Q(z)`. An odd part whose leader vanishes
+    /// is a constraint on earlier rows (for a first-order rule a row
+    /// differential equation of `G_(m-1)`).
+    ///
+    /// ```
+    /// use polytool::recurrence::*;
+    ///
+    /// // (1 + x)^n from P_m = (1 + 2x - m x) P_(m-1) + (x + x^2) P'_(m-1), a
+    /// // rule that is not invariant under reversal at d_n = n.
+    /// let json: RecurrenceJson = serde_json::from_str(
+    ///     r#"{"schema": "polytool.recurrence.v1", "first_index": 0,
+    ///         "initial_polynomials": [["1"]],
+    ///         "recurrence": {"terms": [
+    ///           {"offset": 1, "deriv_order": 0, "sign": "none",
+    ///            "coeff": {"coeffs": [["1", "2"], ["0", "-1"]]}},
+    ///           {"offset": 1, "deriv_order": 1, "sign": "none",
+    ///            "coeff": {"coeffs": [["0", "1", "1"]]}}]}}"#,
+    /// )
+    /// .unwrap();
+    /// let (rule, _, _) = json.to_recurrence_parts().unwrap();
+    /// let gamma = transport_gamma(&rule, &DegreeSchedule::new(0, 0, 1)).unwrap();
+    /// assert!(gamma.scalar.is_none());
+    /// // The gamma rows are G_n = 1: a successor rule and a row equation.
+    /// let system = gamma.relation_system().unwrap();
+    /// assert_eq!(system.even.text("Q"), "Q[n+1] - Q[n] = 0");
+    /// assert_eq!(system.odd.text("Q"), "-x D Q[n] = 0");
+    /// ```
+    pub fn relation_system(&self) -> Result<GammaRelationSystem, String> {
+        if self.proportional {
+            return Err(
+                "the parts are proportional: the scalar rule carries the source rule".into(),
+            );
+        }
+        let (even, even_shift) = ImplicitRelation::from_recurrence(&self.even.relation)?;
+        let (odd, odd_shift) = ImplicitRelation::from_recurrence(&self.odd.relation)?;
+        if even.is_zero() || odd.is_zero() {
+            return Err("a part of the gamma-transported identity vanishes".into());
+        }
+        Ok(GammaRelationSystem {
+            even,
+            even_shift,
+            odd,
+            odd_shift,
+        })
+    }
 }
 
 /// Whether two rules define the same row map: their left factors and every

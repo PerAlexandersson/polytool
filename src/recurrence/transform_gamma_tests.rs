@@ -262,3 +262,94 @@ fn symmetric_gamma_and_split_rows() {
     assert_eq!(even, vec![Q::new(3.into(), 2.into())]);
     assert_eq!(odd, vec![Q::new((-1).into(), 2.into())]);
 }
+
+/// The rank-two case is reported as the two-relation system of the even part
+/// and its odd companion; both hold on the gamma rows and replay exactly.
+#[test]
+fn rank_two_gamma_reports_carry_the_two_relation_system() {
+    // The second-derivative Eulerian rule of the test above.
+    let rule = Recurrence {
+        terms: vec![
+            RecurrenceTerm::new(1, 0, bivar(&[&[1, -1], &[0, 1]])),
+            RecurrenceTerm::new(2, 0, bivar(&[&[0, -2, 2], &[0, 1, -1]])),
+            RecurrenceTerm::new(2, 1, bivar(&[&[0, 2, -6, 4], &[0, 0, 1, -1]])),
+            RecurrenceTerm::new(2, 2, bivar(&[&[0, 0, 1, -2, 1]])),
+        ],
+        denominator: None,
+        inhomogeneous: None,
+    };
+    let (eulerian, seeds, _) = catalog("A008292");
+    let rows = generate(&eulerian, &seeds, 1, 12);
+    let source = RecurrenceJson::from_recurrence_rational(&rule, 1, &rows[..2], None);
+    let map = RecurrenceTransformation::Gamma {
+        schedule: DegreeSchedule::new(1, 0, 1),
+    };
+    let report = transform_recurrence(&RecurrenceTransformRequest::from_source(
+        map.clone(),
+        source.clone(),
+        12,
+    ))
+    .unwrap();
+    assert!(report.transport_error.is_none());
+    assert_eq!(report.conditions[0].status, CHECKED_SUPPLIED_ROWS);
+    let transported = report.transported.as_ref().unwrap();
+    assert!(transported.scalar.is_none() && transported.vector.is_none());
+    assert!(transported.holds_on_transformed_rows);
+    assert_eq!(transported.valid_from_index, 3);
+    let system = transported.system.as_ref().unwrap();
+    let gamma = transport_gamma(&rule, &DegreeSchedule::new(1, 0, 1)).unwrap();
+    let expected = gamma.relation_system().unwrap();
+    assert_eq!(system.split_index, gamma.split_index);
+    let even = ImplicitRelation::from_json(&system.relations[0].relation).unwrap();
+    let odd = ImplicitRelation::from_json(&system.relations[1].relation).unwrap();
+    assert!(even.same_relation(&expected.even) && odd.same_relation(&expected.odd));
+    assert_eq!(system.relations[0].role, SUCCESSOR_ROLE);
+    // The odd part has no leader: a relation among earlier rows.
+    assert!(odd.max_shift() < even.max_shift());
+    assert!(system
+        .relations
+        .iter()
+        .all(|r| r.evidence == TRANSPORTED_IDENTITY_EVIDENCE));
+    assert_eq!(system.relations[0].first_base, 3 - expected.even_shift);
+    assert_eq!(system.relations[1].first_base, 3 - expected.odd_shift);
+    verify_recurrence_transform(&report).unwrap();
+    // Tampering with a relation or its domain is caught by the replay.
+    let mut tampered = report.clone();
+    tampered
+        .transported
+        .as_mut()
+        .unwrap()
+        .system
+        .as_mut()
+        .unwrap()
+        .relations[1]
+        .first_base = 0;
+    assert!(verify_recurrence_transform(&tampered).is_err());
+    let mut tampered = report;
+    tampered
+        .transported
+        .as_mut()
+        .unwrap()
+        .system
+        .as_mut()
+        .unwrap()
+        .relations
+        .pop();
+    assert!(verify_recurrence_transform(&tampered).is_err());
+    // An additive term cannot be stated as homogeneous relations: refused.
+    let inhomogeneous = Recurrence {
+        terms: vec![RecurrenceTerm::new(1, 0, bivar(&[&[1, 2]]))],
+        denominator: None,
+        inhomogeneous: Some(bivar(&[&[1, 1]])),
+    };
+    let gamma = transport_gamma(&inhomogeneous, &DegreeSchedule::new(0, 0, 0));
+    assert!(gamma.map_or(true, |g| g.relation_system().is_err()));
+    // Proportional parts have a scalar rule instead.
+    let (eulerian_rule, _, _) = catalog("A008292");
+    assert!(
+        transport_gamma(&eulerian_rule, &DegreeSchedule::new(1, 0, 1))
+            .unwrap()
+            .relation_system()
+            .is_err()
+    );
+}

@@ -132,3 +132,40 @@ fn cli_attaches_and_replays_implicit_root_domain() {
         Some(2)
     );
 }
+
+#[test]
+fn cli_certifies_complete_spaces_after_mobius_maps_and_weights() {
+    for (map, theorem) in [
+        (
+            r#"{"kind":"reversal","schedule":{"first_index":0,"first_degree":0,"step":1}}"#,
+            "transported-source theorem",
+        ),
+        (
+            r#"{"kind":"diagonal","weight":{"kind":"binomial","m":1}}"#,
+            "weight theorem",
+        ),
+    ] {
+        let request = format!(
+            r#"{{"oeis_id":"A007318","transformation":{map},
+              "supports":[{{"role":"successor","max_shift":1,"index_degree":1,"variable_degree":2}}]}}"#
+        );
+        let output = call(&["--search", "--compact"], &request);
+        assert!(output.status.success(), "{output:?}");
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert!(report["source"]["completeness_basis"]
+            .as_str()
+            .unwrap()
+            .contains(theorem));
+        assert_eq!(report["results"][0]["evidence"], "certified_complete_space");
+        let verified = call(&["--verify-search"], &report.to_string());
+        assert!(verified.status.success(), "{verified:?}");
+        let mut tampered = report;
+        tampered["results"][0]["residual_count"] = serde_json::json!(1);
+        assert_eq!(
+            call(&["--verify-search"], &tampered.to_string())
+                .status
+                .code(),
+            Some(2)
+        );
+    }
+}

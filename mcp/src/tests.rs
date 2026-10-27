@@ -2125,3 +2125,83 @@ fn gamma_transport_and_implicit_root_domain_tools() {
         .unwrap();
     assert_eq!(checked["verified"], true);
 }
+
+#[test]
+fn vector_representations_and_gamma_systems_through_the_mcp_tools() {
+    let server = PolynomialToolsServer::new();
+    let schedule = json!({"first_index": 1, "first_degree": 1, "step": 1});
+    let request = json!({"oeis_id": "A008292", "row_count": 8,
+        "limits": {"max_depth": 2, "max_representations": 8},
+        "transformations": [
+            {"kind": "symmetric_decomposition", "schedule": schedule},
+            {"kind": "f_polynomial", "schedule": schedule}]});
+    let Json(report) = server
+        .search_recurrence_representations(Parameters(RecurrenceRepresentationSearchToolRequest {
+            request,
+        }))
+        .unwrap();
+    let parsed: polytool::recurrence::RepresentationSearchReport =
+        serde_json::from_value(json!(report)).unwrap();
+    let node = parsed
+        .representations
+        .iter()
+        .find(|n| n.chain == [0, 1])
+        .unwrap();
+    assert!(node.steps[0].vector_transport.is_some());
+    assert!(node
+        .descriptions
+        .iter()
+        .any(|d| d.kind == "transported_vector_system"
+            && d.label == "equivalent_generating_description"));
+    let Json(checked) = server
+        .verify_recurrence_representation_search(Parameters(
+            VerifyRecurrenceRepresentationSearchToolRequest {
+                report: json!(report),
+            },
+        ))
+        .unwrap();
+    assert_eq!(checked["verified"], true);
+    let mut tampered = json!(report);
+    tampered["representations"][node.id]["steps"][0]["vector_transport"]["checked_transitions"] =
+        json!(0);
+    assert!(server
+        .verify_recurrence_representation_search(Parameters(
+            VerifyRecurrenceRepresentationSearchToolRequest { report: tampered }
+        ))
+        .is_err());
+
+    // A rank-two gamma transport: the two-relation system.
+    let request = json!({"row_count": 6,
+        "source_recurrence": {"schema": "polytool.recurrence.v1", "first_index": 0,
+            "initial_polynomials": [["1"]],
+            "recurrence": {"terms": [
+                {"offset": 1, "deriv_order": 0, "sign": "none",
+                 "coeff": {"coeffs": [["1", "2"], ["0", "-1"]]}},
+                {"offset": 1, "deriv_order": 1, "sign": "none",
+                 "coeff": {"coeffs": [["0", "1", "1"]]}}]}},
+        "transformation": {"kind": "gamma",
+            "schedule": {"first_index": 0, "first_degree": 0, "step": 1}}});
+    let Json(report) = server
+        .transform_recurrence(Parameters(RecurrenceTransformToolRequest { request }))
+        .unwrap();
+    let system = &report["transported"]["system"]["relations"];
+    assert_eq!(system[0]["text"], "Q[n+1] - Q[n] = 0");
+    assert_eq!(system[1]["text"], "-x D Q[n] = 0");
+    assert!(report.get("transport_error").is_none_or(|e| e.is_null()));
+
+    // Complete spaces after a reversal (transported-source theorem).
+    let request = json!({"oeis_id": "A007318",
+        "transformation": {"kind": "reversal",
+            "schedule": {"first_index": 0, "first_degree": 0, "step": 1}},
+        "supports": [{"role": "successor", "max_shift": 1, "variable_degree": 1}]});
+    let Json(report) = server
+        .search_implicit_relations(Parameters(
+            crate::requests::ImplicitRelationSearchToolRequest { request },
+        ))
+        .unwrap();
+    assert!(report["source"]["completeness_basis"]
+        .as_str()
+        .unwrap()
+        .contains("transported-source"));
+    assert_eq!(report["results"][0]["evidence"], "certified_complete_space");
+}

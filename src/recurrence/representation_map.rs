@@ -23,6 +23,13 @@
 //!   `derivative_antecedent`, the lossy `derivative`) are equal only when their
 //!   parameters are equal.
 //!
+//! Maps after a vector map (`symmetric_decomposition`) act componentwise,
+//! with schedules shifted by the component's degree offset (`b` at
+//! `d_n - 1`). The normal form then keeps the segments up to the vector map
+//! and, per component, the reduced normal form of the componentwise suffix;
+//! a suffix that reduces to the identity on every component is dropped, so
+//! a reversal applied twice at the same bounds deduplicates on vectors too.
+//!
 //! Identity segments are removed. Equality of normal forms is a sufficient,
 //! exact certificate of equal maps; unequal normal forms never imply unequal
 //! maps, so such representations are simply kept apart. Rows are never
@@ -75,8 +82,100 @@ enum Segment {
 #[derive(Debug, Clone)]
 pub(super) struct MapNormalForm {
     segments: Vec<Segment>,
+    /// For a chain with a vector map followed by componentwise maps: the
+    /// normal form of the componentwise suffix of every component (schedules
+    /// shifted by the component's degree offset); empty otherwise, and empty
+    /// when every component suffix reduces to the identity.
+    components: Vec<Vec<Segment>>,
+    /// Names of the components of the vector map, for the record.
+    component_names: Vec<String>,
     first_index: usize,
     last_index: Option<usize>,
+}
+
+/// Reduce a chain of scalar maps to segments (merging consecutive Möbius and
+/// diagonal maps and dropping identity segments).
+fn reduce_segments(chain: &[&RecurrenceTransformation]) -> Result<Vec<Segment>, String> {
+    let mut segments: Vec<Segment> = Vec::new();
+    for t in chain {
+        let segment = if let Some(m) = MobiusSegment::from_transformation(t)? {
+            Segment::Mobius(Box::new(m))
+        } else if let RecurrenceTransformation::Diagonal { weight } = t {
+            Segment::Diagonal(vec![weight.clone()])
+        } else {
+            Segment::Opaque((*t).clone())
+        };
+        let merged = match (segments.last(), &segment) {
+            (Some(Segment::Mobius(inner)), Segment::Mobius(outer)) => {
+                Some(Segment::Mobius(Box::new(inner.then(outer)?)))
+            }
+            (Some(Segment::Diagonal(inner)), Segment::Diagonal(outer)) => {
+                let mut weights = inner.clone();
+                weights.extend(outer.iter().cloned());
+                Some(Segment::Diagonal(weights))
+            }
+            _ => None,
+        };
+        let segment = match merged {
+            Some(merged) => {
+                segments.pop();
+                merged
+            }
+            None => segment,
+        };
+        let identity = match &segment {
+            Segment::Mobius(m) => m.is_identity(),
+            Segment::Diagonal(weights) => diagonal_identity(weights)?,
+            Segment::Opaque(_) => false,
+        };
+        if !identity {
+            segments.push(segment);
+        }
+    }
+    Ok(segments)
+}
+
+fn segments_equal(a: &[Segment], b: &[Segment]) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b).all(|pair| match pair {
+            (Segment::Mobius(a), Segment::Mobius(b)) => a == b,
+            (Segment::Diagonal(a), Segment::Diagonal(b)) => {
+                diagonal_products_equal(a, b).unwrap_or(false)
+            }
+            (Segment::Opaque(a), Segment::Opaque(b)) => a == b,
+            _ => false,
+        })
+}
+
+fn segment_text(segment: &Segment) -> String {
+    match segment {
+        Segment::Mobius(m) => m.text(),
+        Segment::Diagonal(weights) => format!(
+            "Q_n(x) = sum_k lambda(n,k) [x^k]P_n x^k with lambda = {}",
+            weights
+                .iter()
+                .map(|w| format!("({})", w.formula()))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+        Segment::Opaque(t) => t.record().row_map,
+    }
+}
+
+/// The degree offsets of the state entering each map of `chain`, and of the
+/// final state (`chain.len() + 1` entries): `[0]` for scalar states, the
+/// offsets of the vector map for vector states.
+pub(super) fn chain_offsets(chain: &[&RecurrenceTransformation]) -> Vec<Vec<i64>> {
+    let mut offsets = vec![vec![0]];
+    for t in chain {
+        let last = offsets.last().expect("nonempty").clone();
+        offsets.push(if t.component_count() > 1 {
+            t.component_degree_offsets()
+        } else {
+            last
+        });
+    }
+    offsets
 }
 
 fn parse(text: &str, name: &str) -> Result<Q, String> {
@@ -327,7 +426,6 @@ impl MapNormalForm {
         chain: &[&RecurrenceTransformation],
         origin: usize,
     ) -> Result<Self, String> {
-        let mut segments: Vec<Segment> = Vec::new();
         let mut first_index = origin;
         let mut last_index: Option<usize> = None;
         for t in chain {
@@ -338,42 +436,37 @@ impl MapNormalForm {
                     (a, b) => a.or(b),
                 };
             }
-            let segment = if let Some(m) = MobiusSegment::from_transformation(t)? {
-                Segment::Mobius(Box::new(m))
-            } else if let RecurrenceTransformation::Diagonal { weight } = t {
-                Segment::Diagonal(vec![weight.clone()])
-            } else {
-                Segment::Opaque((*t).clone())
-            };
-            let merged = match (segments.last(), &segment) {
-                (Some(Segment::Mobius(inner)), Segment::Mobius(outer)) => {
-                    Some(Segment::Mobius(Box::new(inner.then(outer)?)))
-                }
-                (Some(Segment::Diagonal(inner)), Segment::Diagonal(outer)) => {
-                    let mut weights = inner.clone();
-                    weights.extend(outer.iter().cloned());
-                    Some(Segment::Diagonal(weights))
-                }
-                _ => None,
-            };
-            let segment = match merged {
-                Some(merged) => {
-                    segments.pop();
-                    merged
-                }
-                None => segment,
-            };
-            let identity = match &segment {
-                Segment::Mobius(m) => m.is_identity(),
-                Segment::Diagonal(weights) => diagonal_identity(weights)?,
-                Segment::Opaque(_) => false,
-            };
-            if !identity {
-                segments.push(segment);
+        }
+        let split = chain
+            .iter()
+            .position(|t| t.component_count() > 1)
+            .map_or(chain.len(), |p| p + 1);
+        let segments = reduce_segments(&chain[..split])?;
+        let mut components = Vec::new();
+        let mut component_names = Vec::new();
+        if split < chain.len() {
+            let vector = chain[split - 1];
+            component_names = vector
+                .record()
+                .components
+                .into_iter()
+                .map(|c| c.name)
+                .collect();
+            for offset in vector.component_degree_offsets() {
+                let shifted = chain[split..]
+                    .iter()
+                    .map(|t| t.with_degree_offset(offset).map_err(|e| e.to_string()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                components.push(reduce_segments(&shifted.iter().collect::<Vec<_>>())?);
+            }
+            if components.iter().all(Vec::is_empty) {
+                components.clear();
             }
         }
         Ok(Self {
             segments,
+            components,
+            component_names,
             first_index,
             last_index,
         })
@@ -381,49 +474,45 @@ impl MapNormalForm {
 
     /// Number of segments (maps to invert when reconstructing the source).
     pub(super) fn segment_count(&self) -> usize {
-        self.segments.len()
+        self.segments.len() + self.components.iter().map(Vec::len).max().unwrap_or(0)
     }
 
     /// Whether the two normal forms are certified equal maps on the same
     /// index domain. `false` means "not certified equal".
     pub(super) fn certified_equal(&self, other: &Self) -> bool {
-        if self.first_index != other.first_index
-            || self.last_index != other.last_index
-            || self.segments.len() != other.segments.len()
-        {
-            return false;
-        }
-        self.segments
-            .iter()
-            .zip(&other.segments)
-            .all(|pair| match pair {
-                (Segment::Mobius(a), Segment::Mobius(b)) => a == b,
-                (Segment::Diagonal(a), Segment::Diagonal(b)) => {
-                    diagonal_products_equal(a, b).unwrap_or(false)
-                }
-                (Segment::Opaque(a), Segment::Opaque(b)) => a == b,
-                _ => false,
-            })
+        self.first_index == other.first_index
+            && self.last_index == other.last_index
+            && segments_equal(&self.segments, &other.segments)
+            && self.components.len() == other.components.len()
+            && self
+                .components
+                .iter()
+                .zip(&other.components)
+                .all(|(a, b)| segments_equal(a, b))
     }
 
     /// The readable record.
     pub(super) fn record(&self) -> RepresentationMapRecord {
-        let segments = self
-            .segments
-            .iter()
-            .map(|segment| match segment {
-                Segment::Mobius(m) => m.text(),
-                Segment::Diagonal(weights) => format!(
-                    "Q_n(x) = sum_k lambda(n,k) [x^k]P_n x^k with lambda = {}",
-                    weights
+        let mut segments = self.segments.iter().map(segment_text).collect::<Vec<_>>();
+        for (c, component) in self.components.iter().enumerate() {
+            let name = self
+                .component_names
+                .get(c)
+                .cloned()
+                .unwrap_or_else(|| c.to_string());
+            segments.push(if component.is_empty() {
+                format!("componentwise on {name}: the identity")
+            } else {
+                format!(
+                    "componentwise on {name}: {}",
+                    component
                         .iter()
-                        .map(|w| format!("({})", w.formula()))
+                        .map(segment_text)
                         .collect::<Vec<_>>()
-                        .join(" ")
-                ),
-                Segment::Opaque(t) => t.record().row_map,
-            })
-            .collect::<Vec<_>>();
+                        .join("; then ")
+                )
+            });
+        }
         RepresentationMapRecord {
             identity: segments.is_empty(),
             segments,
@@ -436,25 +525,20 @@ impl MapNormalForm {
 }
 
 /// Apply `chain` (in order) to scalar source rows `rows[i] = P_(origin + i)`,
-/// returning the image states `[row][component]`.
+/// returning the image states `[row][component]`. Maps after a vector map
+/// act componentwise ([`RecurrenceTransformation::map_state`]).
 pub(super) fn apply_chain(
     chain: &[&RecurrenceTransformation],
     origin: usize,
     rows: &[Vec<Q>],
 ) -> Result<Vec<Vec<Vec<Q>>>, String> {
+    let offsets = chain_offsets(chain);
     let mut states = rows.iter().map(|r| vec![r.clone()]).collect::<Vec<_>>();
     for (step, t) in chain.iter().enumerate() {
         let mut next = Vec::with_capacity(states.len());
         for (i, state) in states.iter().enumerate() {
-            if state.len() != 1 {
-                return Err(format!(
-                    "map {step} ({}) needs a scalar row; the state has {} components",
-                    t.kind_name(),
-                    state.len()
-                ));
-            }
             next.push(
-                t.map_row(origin + i, &state[0])
+                t.map_state(origin + i, state, &offsets[step])
                     .map_err(|e| format!("map {step} ({}): {e}", t.kind_name()))?,
             );
         }
@@ -485,6 +569,7 @@ pub(super) fn invert_chain_with_lost_data(
     if lost.iter().any(|r| r.chain_position >= chain.len()) {
         return Err("a lost-data record lies outside the chain".into());
     }
+    let offsets = chain_offsets(chain);
     let mut current = states.to_vec();
     for (step, t) in chain.iter().enumerate().rev() {
         let record = lost.iter().find(|r| r.chain_position == step);
@@ -498,14 +583,34 @@ pub(super) fn invert_chain_with_lost_data(
                         .and_then(|row| super::implicit::decode_poly(row))
                 })
                 .transpose()?;
-            let row = t
-                .inverse_row_with_lost_data(origin + i, state, lost_row.as_deref())
-                .map_err(|e| format!("inverse of map {step} ({}): {e}", t.kind_name()))?;
-            previous.push(vec![row]);
+            let error =
+                |e: TransformError| format!("inverse of map {step} ({}): {e}", t.kind_name());
+            if offsets[step].len() > 1 {
+                if lost_row.is_some() {
+                    return Err(format!("lost data of map {step} on a vector state"));
+                }
+                previous.push(
+                    t.inverse_state(origin + i, state, &offsets[step])
+                        .map_err(error)?,
+                );
+            } else {
+                previous.push(vec![t
+                    .inverse_row_with_lost_data(origin + i, state, lost_row.as_deref())
+                    .map_err(error)?]);
+            }
         }
         current = previous;
     }
-    Ok(current.into_iter().map(|mut s| s.remove(0)).collect())
+    current
+        .into_iter()
+        .map(|mut s| {
+            if s.len() == 1 {
+                Ok(s.remove(0))
+            } else {
+                Err("the inverted chain does not end in scalar rows".to_string())
+            }
+        })
+        .collect()
 }
 
 /// The lost data of every lossy map of `chain` applied to the scalar source
