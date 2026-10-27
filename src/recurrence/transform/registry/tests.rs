@@ -720,3 +720,40 @@ fn transformation_json_is_tagged_and_strict() {
     );
     assert_eq!(record.index_domain, "n >= 1");
 }
+
+#[test]
+fn contains_index_follows_the_schedule_domain() {
+    // Maps with a schedule are defined on first_index..=last_index (when bounded);
+    // maps without one (diagonal, derivative) have no index restriction.  The oracle
+    // is `DegreeSchedule::contains` itself on the schedule and the literal interval.
+    let unbounded = RecurrenceTransformation::Reversal {
+        schedule: DegreeSchedule::new(2, 2, 1),
+    };
+    assert!(!unbounded.contains_index(0));
+    assert!(!unbounded.contains_index(1));
+    for index in [2, 3, 10, 1_000_000] {
+        assert!(unbounded.contains_index(index), "index {index}");
+    }
+
+    let bounded = RecurrenceTransformation::Gamma {
+        schedule: DegreeSchedule::new(1, 1, 1).with_last_index(4),
+    };
+    let inside: Vec<usize> = (0..8).filter(|&i| bounded.contains_index(i)).collect();
+    assert_eq!(inside, vec![1, 2, 3, 4]);
+    assert_eq!(
+        inside,
+        (0..8)
+            .filter(|&i| bounded.schedule().unwrap().contains(i))
+            .collect::<Vec<_>>()
+    );
+
+    for map in [
+        RecurrenceTransformation::Derivative { order: 1 },
+        RecurrenceTransformation::Diagonal {
+            weight: DiagonalWeight::FactorialPower { power: 1 },
+        },
+    ] {
+        assert!(map.schedule().is_none());
+        assert!([0, 1, 7, 1 << 20].iter().all(|&i| map.contains_index(i)));
+    }
+}

@@ -153,6 +153,41 @@ mod tests {
     }
 
     #[test]
+    fn test_sylvester_matrix_layout_and_determinant_is_resultant() {
+        // f = 1 + 2t + 3t^2 (n = 2), g = 4 + 5t (m = 1): size 3, one shifted copy of
+        // f (descending) followed by two shifted copies of g.
+        let mat = sylvester_matrix(&[1, 2, 3], &[4, 5]).unwrap();
+        let expected: Vec<Vec<BigInt>> = vec![vec![3, 2, 1], vec![5, 4, 0], vec![0, 5, 4]]
+            .into_iter()
+            .map(|row| row.into_iter().map(BigInt::from).collect())
+            .collect();
+        assert_eq!(mat, expected);
+
+        // Oracle for the determinant: Res(f, g) = lc(f)^m * prod g(r_i) over the roots
+        // r_i of f, here f = (t-1)(t-2)(t-4) monic with roots 1, 2, 4.
+        let f = [-8, 14, -7, 1];
+        let g = [3, -1, 0, 2];
+        let eval = |t: i64| g.iter().rev().fold(0i64, |acc, &c| acc * t + c);
+        let by_roots = BigInt::from(eval(1) * eval(2) * eval(4));
+        let mat = sylvester_matrix(&f, &g).unwrap();
+        assert_eq!(mat.len(), 6);
+        assert!(mat.iter().all(|row| row.len() == 6));
+        assert_eq!(crate::linalg::determinant(&mat), by_roots);
+        assert_eq!(resultant(&f, &g), by_roots);
+        // Antisymmetry Res(g, f) = (-1)^{nm} Res(f, g), here n = m = 3.
+        assert_eq!(resultant(&g, &f), -by_roots);
+
+        // Trailing zero coefficients are ignored (degrees come from the trimmed form).
+        assert_eq!(
+            sylvester_matrix(&[1, 2, 3, 0, 0], &[4, 5, 0]).unwrap(),
+            sylvester_matrix(&[1, 2, 3], &[4, 5]).unwrap()
+        );
+        // The zero polynomial has no Sylvester matrix.
+        assert!(sylvester_matrix(&[], &[1, 1]).is_none());
+        assert!(sylvester_matrix(&[1, 1], &[0, 0]).is_none());
+    }
+
+    #[test]
     fn test_discriminant() {
         // disc(t^2 - 1) = disc((t-1)(t+1)). Roots 1,-1.
         // disc = (-1)^{2*1/2} * Res(t^2-1, 2t) / 1

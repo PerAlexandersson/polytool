@@ -300,3 +300,36 @@ impl BivarPoly {
             .count()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn constant(value: i64) -> BivarPoly {
+        BivarPoly {
+            coeffs: vec![vec![BigRational::from_integer(BigInt::from(value))]],
+        }
+    }
+
+    #[test]
+    fn weyl_operator_zero_detection() {
+        // The canonical zero, explicit zero coefficients (also ragged and nested), and
+        // nonzero operators in any derivative slot.
+        assert!(WeylOperator::zero().is_zero());
+        assert!(WeylOperator::new(vec![constant(0), constant(0)]).is_zero());
+        let ragged_zero = BivarPoly {
+            coeffs: vec![vec![], vec![BigRational::zero(), BigRational::zero()]],
+        };
+        assert!(WeylOperator::new(vec![ragged_zero]).is_zero());
+        assert!(!WeylOperator::identity().is_zero());
+        assert!(!WeylOperator::new(vec![constant(0), constant(0), constant(3)]).is_zero());
+        // A nonzero entry hidden at high degree in the second variable.
+        let hidden = BivarPoly {
+            coeffs: vec![
+                vec![BigRational::zero()],
+                vec![BigRational::zero(), BigRational::zero(), BigRational::one()],
+            ],
+        };
+        assert!(!WeylOperator::new(vec![hidden]).is_zero());
+    }
+}

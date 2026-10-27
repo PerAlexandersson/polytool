@@ -1325,6 +1325,56 @@ mod tests {
     }
 
     #[test]
+    fn row_polynomials_follow_the_three_term_recurrence() {
+        // Network for P_n = (1 + t) P_{n-1} + 2 t P_{n-2}, P_0 = 1: steps of length 1
+        // with rises 0 and 1 (weight 1) and, from column 2 on, a step of length 2,
+        // rise 1 and weight 2.  The oracle is the recurrence on coefficient vectors.
+        let last = 7;
+        let network = HeightInvariantNetwork {
+            steps: (1..=last)
+                .map(|n| {
+                    let mut column = vec![step(1, 0, 1), step(1, 1, 1)];
+                    if n >= 2 {
+                        column.push(step(2, 1, 2));
+                    }
+                    column
+                })
+                .collect(),
+        };
+        network.validate().unwrap();
+        let mut rows: Vec<Vec<i64>> = vec![vec![1]];
+        for n in 1..=last {
+            let mut next = vec![0i64; n + 1];
+            for (k, c) in rows[n - 1].iter().enumerate() {
+                next[k] += c;
+                next[k + 1] += c;
+            }
+            if n >= 2 {
+                for (k, c) in rows[n - 2].iter().enumerate() {
+                    next[k + 1] += 2 * c;
+                }
+            }
+            while next.last() == Some(&0) {
+                next.pop();
+            }
+            rows.push(next);
+        }
+        for (n, expected) in rows.iter().enumerate() {
+            let expected_poly = Polynomial::new(expected.iter().map(|&v| q(v)).collect());
+            assert_eq!(network.row_polynomial(n).unwrap(), expected_poly, "row {n}");
+        }
+        let prefix = network.row_polynomials_prefix(last).unwrap();
+        assert_eq!(prefix.len(), last + 1);
+        for (n, poly) in prefix.iter().enumerate() {
+            assert_eq!(poly, &network.row_polynomial(n).unwrap());
+        }
+        assert!(matches!(
+            network.row_polynomial(last + 1),
+            Err(PfNetworkError::RowOutOfRange { .. })
+        ));
+    }
+
+    #[test]
     fn invalid_networks_rejected() {
         let crossing = HeightInvariantNetwork {
             steps: vec![vec![step(1, 0, 1), step(1, 2, 1)]],

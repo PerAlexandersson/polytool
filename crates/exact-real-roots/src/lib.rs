@@ -2276,6 +2276,68 @@ mod tests {
     }
 
     #[test]
+    fn test_uspensky_i64_wrapper_agrees_with_bigint_and_prs_on_grid() {
+        // Every polynomial of degree <= 4 with coefficients in -2..=2: the `i64` wrapper
+        // must equal the `BigInt` Uspensky test and the independent PRS test.
+        for degree in 0usize..=4 {
+            let total = 5usize.pow((degree + 1) as u32);
+            for mut mask in 0..total {
+                let mut coeffs = Vec::with_capacity(degree + 1);
+                for _ in 0..=degree {
+                    coeffs.push((mask % 5) as i64 - 2);
+                    mask /= 5;
+                }
+                let bigint = b(&coeffs);
+                let expected = is_real_rooted_prs_bigint_coeffs(&bigint);
+                assert_eq!(is_real_rooted_uspensky_i64(&coeffs), expected, "{coeffs:?}");
+                assert_eq!(is_real_rooted_uspensky_bigint_coeffs(&bigint), expected);
+            }
+        }
+        // Known cases: Eulerian A_4 (A008292) is real-rooted, t^2 + 1 and the
+        // classical non-real-rooted 1 + 43t + 196t^2 + 168t^3 + 23t^4 + t^5 are not.
+        assert!(is_real_rooted_uspensky_i64(&[1, 11, 11, 1]));
+        assert!(!is_real_rooted_uspensky_i64(&[1, 0, 1]));
+        assert!(!is_real_rooted_uspensky_i64(&[1, 43, 196, 168, 23, 1]));
+        assert!(is_real_rooted_uspensky_i64(&[]));
+        assert!(is_real_rooted_uspensky_i64(&[7]));
+        // Repeated roots count once: (t - 1)^2 (t + 2) and t^3 are real-rooted.
+        assert!(is_real_rooted_uspensky_i64(&[2, -3, 0, 1]));
+        assert!(is_real_rooted_uspensky_i64(&[0, 0, 0, 1]));
+    }
+
+    #[test]
+    fn test_primitive_sturm_max_coefficient_bits_known_chains() {
+        // Hand/independent computation of the primitive Sturm chains:
+        //   t^2 - 2:            [-2, 0, 1], [0, 1], [1]                         -> 2 bits
+        //   (t-1)(t-2)(t-3):    [-6, 11, -6, 1], [11, -12, 3], [-2, 1], [1]     -> 4 bits
+        //   Eulerian A_4:       [1, 11, 11, 1], [11, 22, 3], [7, 11], [1]       -> 5 bits
+        assert_eq!(primitive_sturm_max_coefficient_bits(&b(&[-2, 0, 1])), 2);
+        assert_eq!(
+            primitive_sturm_max_coefficient_bits(&b(&[-6, 11, -6, 1])),
+            4
+        );
+        assert_eq!(primitive_sturm_max_coefficient_bits(&b(&[1, 11, 11, 1])), 5);
+        // Zero polynomial and constants.
+        assert_eq!(primitive_sturm_max_coefficient_bits(&[]), 0);
+        assert_eq!(primitive_sturm_max_coefficient_bits(&b(&[0, 0])), 0);
+        assert_eq!(primitive_sturm_max_coefficient_bits(&b(&[1000])), 1);
+        // The chain is built from the primitive squarefree part: scaling by content
+        // and repeating factors do not change it ((t-1)^3 has squarefree part t - 1).
+        let scale = BigInt::from(10).pow(30);
+        let scaled: Vec<BigInt> = b(&[-6, 11, -6, 1]).iter().map(|c| c * &scale).collect();
+        assert_eq!(primitive_sturm_max_coefficient_bits(&scaled), 4);
+        assert_eq!(primitive_sturm_max_coefficient_bits(&b(&[-1, 3, -3, 1])), 1);
+        // The chain always contains the squarefree polynomial itself, so the value is
+        // at least the bit size of its largest coefficient.
+        let mut product = vec![BigInt::one()];
+        for root in 1..=12 {
+            product = poly_mul(&product, &[BigInt::from(-root), BigInt::one()]);
+        }
+        let largest = product.iter().map(|c| c.bits()).max().unwrap();
+        assert!(primitive_sturm_max_coefficient_bits(&product) >= largest);
+    }
+
+    #[test]
     fn test_uspensky_agrees_with_prs_on_deterministic_higher_degree_cases() {
         let mut state = 0x9e37_79b9_7f4a_7c15u64;
         for degree in 5usize..=8 {

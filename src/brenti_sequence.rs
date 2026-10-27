@@ -478,6 +478,30 @@ mod tests {
     }
 
     #[test]
+    fn test_row_polynomials_prefix_and_max_height_for_pascal_strip() {
+        // Oracle: row n of the Pascal strip (heights 0..=4) is (1+t)^n for n <= 4,
+        // i.e. the binomial coefficients.
+        let digraph = pascal_strip(4);
+        assert_eq!(digraph.max_height(), Some(4));
+        assert_eq!(digraph.num_heights(), 5);
+        let rows = digraph.row_polynomials_prefix(4).unwrap();
+        assert_eq!(rows.len(), 5);
+        let mut binomial = vec![1i64];
+        for (n, row) in rows.iter().enumerate() {
+            let expected: Vec<BigRational> = binomial.iter().map(|&v| br(v)).collect();
+            assert_eq!(row, &Polynomial::new(expected), "row {n}");
+            assert_eq!(row, &digraph.row_polynomial(n).unwrap());
+            let mut next = vec![1i64; binomial.len() + 1];
+            for k in 1..binomial.len() {
+                next[k] = binomial[k - 1] + binomial[k];
+            }
+            binomial = next;
+        }
+        // An empty digraph has no maximal height.
+        assert_eq!(BrentiStripDigraph { outgoing: vec![] }.max_height(), None);
+    }
+
+    #[test]
     fn test_nonplanar_strip_rejected() {
         let digraph = BrentiStripDigraph {
             outgoing: vec![

@@ -1104,6 +1104,44 @@ mod tests {
     }
 
     #[test]
+    fn test_vertical_weight_and_certificate_path_matrix() {
+        // Pascal's triangle (OEIS A007318) is the path matrix of the all-ones network.
+        let polys = vec![
+            bi_poly(&[1, 1]),
+            bi_poly(&[1, 2, 1]),
+            bi_poly(&[1, 3, 3, 1]),
+            bi_poly(&[1, 4, 6, 4, 1]),
+        ];
+        let proof = build_totally_nonnegative_certificate_from_monic_polynomials(&polys).unwrap();
+        assert_eq!(proof.network.num_rows(), 5);
+        // `lambda[n][k]` is defined exactly for 0 <= k <= n < num_rows - 1.
+        for n in 0..6 {
+            for k in 0..6 {
+                let weight = proof.network.vertical_weight(n, k);
+                if k <= n && n < 4 {
+                    assert_eq!(weight, Some(&br(1)), "weight ({n}, {k})");
+                } else {
+                    assert_eq!(weight, None, "weight ({n}, {k})");
+                }
+            }
+        }
+        // The stored network evaluates back to the stored integer matrix.
+        let evaluated = proof.evaluated_path_matrix();
+        assert_eq!(evaluated.len(), proof.coefficient_matrix.len());
+        for (row, expected) in evaluated.iter().zip(&proof.coefficient_matrix) {
+            let integers: Vec<BigInt> = row.iter().map(|q| q.to_integer()).collect();
+            assert!(row.iter().all(|q| q.is_integer()));
+            assert_eq!(&integers, expected);
+        }
+        assert!(proof.verify());
+        // Tampering with a weight is detected by `verify` and changes the path matrix.
+        let mut tampered = proof.clone();
+        tampered.network.lambda[3][1] = br(2);
+        assert!(!tampered.verify());
+        assert_ne!(tampered.evaluated_path_matrix(), evaluated);
+    }
+
+    #[test]
     fn test_reconstruct_pascal_network() {
         let rows = bi_rows(&[&[1], &[1, 1], &[1, 2, 1], &[1, 3, 3, 1]]);
         let network = reconstruct_canonical_totally_nonnegative_network(&rows).unwrap();

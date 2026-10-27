@@ -872,6 +872,40 @@ mod tests {
     }
 
     #[test]
+    fn tied_roots_returns_two_largest_moduli_with_vieta_relations() {
+        // z^2 - x z + 1 at x = 3: roots (3 +- sqrt 5)/2, product 1 and sum 3 (Vieta).
+        let symbol = BkwSymbol::parse_z_coefficient_symbol("1; -x; 1").unwrap();
+        let candidate = symbol
+            .dominant_tie_at(Complex64::new(3.0, 0.0), &BkwRootOptions::default())
+            .unwrap();
+        let (first, second) = candidate.tied_roots().unwrap();
+        let golden = (3.0 + 5.0_f64.sqrt()) / 2.0;
+        assert!((first.modulus - golden).abs() < 1e-8);
+        assert!((second.modulus - 1.0 / golden).abs() < 1e-8);
+        assert!((first.modulus * second.modulus - 1.0).abs() < 1e-8);
+        let sum = first.root + second.root;
+        assert!((sum.re - 3.0).abs() < 1e-8 && sum.im.abs() < 1e-8);
+        // The pair is the first two entries of `roots_by_modulus`.
+        assert_eq!(first.index, candidate.roots_by_modulus[0].index);
+        assert_eq!(second.index, candidate.roots_by_modulus[1].index);
+
+        // At x = 0 the roots are +-i: an exact modulus tie.
+        let tie = symbol
+            .dominant_tie_at(Complex64::new(0.0, 0.0), &BkwRootOptions::default())
+            .unwrap();
+        let (a, b) = tie.tied_roots().unwrap();
+        assert!((a.modulus - b.modulus).abs() < 1e-8);
+        assert!(tie.relative_modulus_gap < 1e-8);
+
+        // Fewer than two roots: no pair.
+        let single = BkwScoutCandidate {
+            roots_by_modulus: vec![a.clone()],
+            ..tie
+        };
+        assert!(single.tied_roots().is_none());
+    }
+
+    #[test]
     fn mathematica_query_contains_symbol() {
         let symbol = BkwSymbol::parse_z_coefficient_symbol("1; -x; 1").unwrap();
         let query = symbol.mathematica_equal_modulus_query();

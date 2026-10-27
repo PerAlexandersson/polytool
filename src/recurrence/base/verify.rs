@@ -525,6 +525,139 @@ mod tests {
         ));
     }
 
+    fn bivar(rows: &[&[i64]]) -> BivarPoly {
+        BivarPoly {
+            coeffs: rows
+                .iter()
+                .map(|row| row.iter().map(|&c| br(c, 1)).collect())
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn recurrence_holds_at_rational_checks_each_one_based_row() {
+        // Fibonacci polynomials (OEIS A011973 rows): P_n = P_{n-1} + t P_{n-2},
+        // P_1 = P_2 = 1.  `coeffs[i][j]` is the coefficient of n^i t^j.
+        let rec = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(1, 0, bivar(&[&[1]])),
+                RecurrenceTerm::new(2, 0, bivar(&[&[0, 1]])),
+            ],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let mut rows: Vec<Vec<i64>> = vec![vec![1], vec![1]];
+        for n in 2..8 {
+            let mut next = rows[n - 1].clone();
+            next.resize(rows[n - 2].len() + 1, 0);
+            for (k, c) in rows[n - 2].iter().enumerate() {
+                next[k + 1] += c;
+            }
+            rows.push(next);
+        }
+        let polys = i64_polys_to_rational(&rows);
+        // Rows 1 and 2 lack the previous polynomials; rows 3..=8 satisfy the identity.
+        assert!(!recurrence_holds_at_rational(&polys, &rec, 0));
+        assert!(!recurrence_holds_at_rational(&polys, &rec, 1));
+        assert!(!recurrence_holds_at_rational(&polys, &rec, 2));
+        for nn in 3..=polys.len() {
+            assert!(recurrence_holds_at_rational(&polys, &rec, nn), "row {nn}");
+        }
+        assert!(!recurrence_holds_at_rational(&polys, &rec, polys.len() + 1));
+        assert!(recurrence_holds_rational(&polys, &rec, 2));
+
+        // Perturbing P_5 (index 4) breaks exactly the rows that read it: 5, 6 and 7.
+        let mut broken = polys.clone();
+        broken[4][0] += BigRational::one();
+        let failing: Vec<usize> = (3..=broken.len())
+            .filter(|&nn| !recurrence_holds_at_rational(&broken, &rec, nn))
+            .collect();
+        assert_eq!(failing, vec![5, 6, 7]);
+        assert!(!recurrence_holds_rational(&broken, &rec, 2));
+        assert!(recurrence_holds_from_rational(&broken, &rec, 2, 8));
+    }
+
+    #[test]
+    fn recurrence_holds_at_rational_handles_signs_denominators_and_forcing() {
+        // Alternating sign: P_n = (-1)^n P_{n-1} on 1, 1, -1, -1, 1, 1 (the sign is
+        // applied to the term for the 1-based row n).
+        let alternating = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(1, 0, bivar(&[&[1]])).with_sign(RecurrenceSign::AlternatingN)
+            ],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let signs =
+            i64_polys_to_rational(&[vec![1], vec![1], vec![-1], vec![-1], vec![1], vec![1]]);
+        for nn in 2..=6 {
+            assert!(
+                recurrence_holds_at_rational(&signs, &alternating, nn),
+                "row {nn}"
+            );
+        }
+        // Without the sign the same sequence fails exactly where the sign flips.
+        let plain = Recurrence {
+            terms: vec![RecurrenceTerm::new(1, 0, bivar(&[&[1]]))],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let failing: Vec<usize> = (2..=6)
+            .filter(|&nn| !recurrence_holds_at_rational(&signs, &plain, nn))
+            .collect();
+        assert_eq!(failing, vec![3, 5]);
+
+        // Inhomogeneous: P_n = 2 P_{n-1} + 1 on 1, 3, 7, 15, 31 (OEIS A000225).
+        let mersenne = i64_polys_to_rational(&[vec![1], vec![3], vec![7], vec![15], vec![31]]);
+        let affine = Recurrence {
+            terms: vec![RecurrenceTerm::new(1, 0, bivar(&[&[2]]))],
+            denominator: None,
+            inhomogeneous: Some(bivar(&[&[1]])),
+        };
+        assert!((2..=5).all(|nn| recurrence_holds_at_rational(&mersenne, &affine, nn)));
+
+        // Left factor in n (rows are 1-based, row nn holds C_{nn-1}, A000108):
+        // nn P_nn = (4 nn - 6) P_{nn-1}, from (m + 1) C_m = 2 (2 m - 1) C_{m-1}.
+        let catalan =
+            i64_polys_to_rational(&[vec![1], vec![1], vec![2], vec![5], vec![14], vec![42]]);
+        let catalan_rec = Recurrence {
+            terms: vec![RecurrenceTerm::new(1, 0, bivar(&[&[-6], &[4]]))],
+            denominator: Some(bivar(&[&[0], &[1]])),
+            inhomogeneous: None,
+        };
+        assert!((2..=6).all(|nn| recurrence_holds_at_rational(&catalan, &catalan_rec, nn)));
+        let mut off = catalan.clone();
+        off[5][0] += BigRational::one();
+        assert!(!recurrence_holds_at_rational(&off, &catalan_rec, 6));
+        assert!(recurrence_holds_at_rational(&off, &catalan_rec, 5));
+
+        // Derivative term with a left factor: rows t^{nn-1}, and
+        // (nn - 2) P_nn = t^2 D P_{nn-1} since D t^{nn-2} = (nn - 2) t^{nn-3}.
+        let monomials: Vec<Vec<BigRational>> = (0..6usize)
+            .map(|m| {
+                let mut row = vec![BigRational::zero(); m + 1];
+                row[m] = BigRational::one();
+                row
+            })
+            .collect();
+        let derivative_rec = Recurrence {
+            terms: vec![RecurrenceTerm::new(1, 1, bivar(&[&[0, 0, 1]]))],
+            denominator: Some(bivar(&[&[-2], &[1]])),
+            inhomogeneous: None,
+        };
+        assert!((2..=6).all(|nn| recurrence_holds_at_rational(&monomials, &derivative_rec, nn)));
+        // Dropping the left factor leaves P_nn = t^2 D P_{nn-1} = (nn - 2) P_nn, which is
+        // true only where nn - 2 = 1.
+        let no_factor = Recurrence {
+            denominator: None,
+            ..derivative_rec
+        };
+        let holding: Vec<usize> = (2..=6)
+            .filter(|&nn| recurrence_holds_at_rational(&monomials, &no_factor, nn))
+            .collect();
+        assert_eq!(holding, vec![3]);
+    }
+
     #[test]
     fn huge_recurrence_lengths_do_not_overflow() {
         let rows = vec![vec![br(1, 1)], vec![br(1, 1)]];

@@ -597,3 +597,36 @@ fn divide_power_has_a_complete_space() {
     assert_eq!(report.rows[3], vec!["1", "3", "3", "1"]);
     verify_implicit_relation_search(&report).unwrap();
 }
+
+#[test]
+fn from_oeis_request_equals_the_json_request_and_finds_the_pascal_relation() {
+    // `from_oeis` is the request for a bundled family with an optional map and default
+    // fields: it equals the minimal deserialized JSON request.
+    let built = ImplicitRelationSearchRequest::from_oeis(
+        "A007318",
+        Some(RecurrenceTransformation::Diagonal {
+            weight: DiagonalWeight::FactorialPower { power: 1 },
+        }),
+    );
+    let minimal = request(json!({"oeis_id": "A007318", "transformation": factorial_map()}));
+    assert_eq!(built, minimal);
+    assert!(built.conditions && built.condition_index_degree == 1);
+    assert!(built.source_recurrence.is_none() && built.rows.is_none());
+    assert!(built.supports.is_empty());
+
+    // With the explicit support of the first test it finds the same relation.
+    let mut supported = built.clone();
+    supported.supports = request(json!({
+        "oeis_id": "A007318",
+        "supports": [{"role": "implicit_successor", "max_shift": 1, "derivative_order": 1}]
+    }))
+    .supports;
+    let report = search_implicit_relations(&supported).unwrap();
+    verify_implicit_relation_search(&report).unwrap();
+    // Pascal rows divided by factorials, Q_n = sum_k C(n,k) x^k / k!, satisfy
+    // D Q_{n+1} = D Q_n + Q_n.
+    assert_eq!(
+        report.results[0].representatives[0].relation.text,
+        "D Q[n+1] - D Q[n] - Q[n] = 0"
+    );
+}

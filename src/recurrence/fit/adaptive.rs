@@ -1126,6 +1126,28 @@ mod tests {
     }
 
     #[test]
+    fn adaptive_with_alternating_sign_builder_toggles_the_search_space() {
+        let polys: Vec<Vec<i64>> = [1, 1, -1, -1, 1, 1, -1, -1]
+            .iter()
+            .map(|&c| vec![c])
+            .collect();
+        let base = AdaptiveSearchOptions {
+            max_rec_len: 1,
+            max_var_deg: 0,
+            max_idx_deg: 0,
+            max_diff_deg: 0,
+            ..Default::default()
+        };
+        assert!(!base.try_alternating_sign);
+        assert!(find_recurrence_adaptive(&polys, &base).is_none());
+        let enabled = base.clone().with_alternating_sign(true);
+        assert!(enabled.try_alternating_sign);
+        let result = find_recurrence_adaptive(&polys, &enabled).unwrap();
+        assert_eq!(format!("{}", result.recurrence), "P(n) = (-1)^n P(n-1)");
+        assert!(!enabled.with_alternating_sign(false).try_alternating_sign);
+    }
+
+    #[test]
     fn adaptive_alternating_sign() {
         let polys: Vec<Vec<i64>> = vec![
             vec![1],

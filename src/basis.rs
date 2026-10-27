@@ -533,6 +533,64 @@ mod tests {
     }
 
     #[test]
+    fn test_bernstein_coordinates_bigint_reconstruct_and_match_i64() {
+        // Oracle: sum_j c_j * B_{j,d}(t) must reproduce the polynomial, and the
+        // BigInt entry point must agree with the i64 one.
+        let cases: [(&[i64], usize); 4] = [
+            (&[1, 2, 3], 2),
+            (&[1, 2, 3], 5),
+            (&[-4, 0, 7, 0, 1], 6),
+            (&[0, 0, 0, 1], 3),
+        ];
+        for (coeffs, degree) in cases {
+            let big: Vec<BigInt> = coeffs.iter().map(|&c| bi(c)).collect();
+            let coords = bernstein_basis_coordinates_bigint(&big, degree).unwrap();
+            assert_eq!(
+                coords,
+                bernstein_basis_coordinates_i64(coeffs, degree).unwrap()
+            );
+            let basis = bernstein_basis_bigint(degree);
+            for i in 0..=degree {
+                let reconstructed = coords
+                    .iter()
+                    .zip(&basis)
+                    .fold(br(0), |sum, (c, b)| sum + c * br_from_big(b.coeff(i)));
+                let expected = coeffs.get(i).copied().unwrap_or(0);
+                assert_eq!(reconstructed, br(expected), "{coeffs:?} degree {degree}");
+            }
+        }
+    }
+
+    fn br_from_big(value: BigInt) -> BigRational {
+        BigRational::from_integer(value)
+    }
+
+    #[test]
+    fn test_is_magic_positive_bigint_agrees_with_i64_and_coordinates() {
+        // 1 + 3t + t^2 has magic coordinates (1, 1, -1) (see above); (1+2t)^3 is
+        // magic positive.  The BigInt variant must agree, also beyond i64 range.
+        for (coeffs, degree, expected) in [
+            (vec![1i64, 6, 12, 8], 3usize, true),
+            (vec![1, 3, 1], 2, false),
+            (vec![0, 0, 1], 2, true),
+            // In degree 4, t^2 = t^2 ((1 + t) - t)^2 has coordinates (0, 0, 1, -2, 1).
+            (vec![0, 0, 1], 4, false),
+        ] {
+            let big: Vec<BigInt> = coeffs.iter().map(|&c| bi(c)).collect();
+            assert_eq!(is_magic_positive_bigint(&big, degree).unwrap(), expected);
+            assert_eq!(is_magic_positive_i64(&coeffs, degree).unwrap(), expected);
+        }
+        // Scaling by 2^100 preserves the sign pattern of the coordinates.
+        let scale = BigInt::from(1u8) << 100usize;
+        let big: Vec<BigInt> = [1i64, 3, 1].iter().map(|&c| bi(c) * &scale).collect();
+        assert!(!is_magic_positive_bigint(&big, 2).unwrap());
+        let big: Vec<BigInt> = [1i64, 6, 12, 8].iter().map(|&c| bi(c) * &scale).collect();
+        assert!(is_magic_positive_bigint(&big, 3).unwrap());
+        // Degree bound too small is an error, not `false`.
+        assert!(is_magic_positive_bigint(&[bi(1), bi(1), bi(1)], 1).is_err());
+    }
+
+    #[test]
     fn test_singular_basis_rejected() {
         let target = Polynomial::<BigRational>::from_i64_coeffs(&[1, 2]);
         let basis = vec![

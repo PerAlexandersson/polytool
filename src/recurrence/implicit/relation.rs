@@ -1362,3 +1362,73 @@ pub fn find_reconstruction_certificate(
     certificate.verify_identity().ok()?;
     Some(certificate)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bivar(rows: &[&[i64]]) -> BivarPoly {
+        BivarPoly {
+            coeffs: rows
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|&c| Q::from_integer(BigInt::from(c)))
+                        .collect()
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn max_derivative_and_shift_follow_the_terms_of_the_relation() {
+        // Pascal rows over factorials (Q_n = P_n / n!, OEIS A007318):
+        // n Q_n = (n + x) Q_(n-1) + x Q'_(n-1), which has derivative order 1 and shift 1.
+        let derivative_rule = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(1, 0, bivar(&[&[0, 1], &[1]])),
+                RecurrenceTerm::new(1, 1, bivar(&[&[0, 1]])),
+            ],
+            denominator: Some(bivar(&[&[0], &[1]])),
+            inhomogeneous: None,
+        };
+        let (relation, shift) = ImplicitRelation::from_recurrence(&derivative_rule).unwrap();
+        assert_eq!(shift, 1);
+        assert_eq!(relation.max_shift(), 1);
+        assert_eq!(relation.max_derivative(), 1);
+        // The derivative sits on the earlier row only, so the leader row is plain.
+        assert_eq!(relation.role(), SUCCESSOR_ROLE);
+        // The value survives the JSON round trip.
+        let decoded = ImplicitRelation::from_json(&relation.to_json()).unwrap();
+        assert_eq!(decoded.max_derivative(), 1);
+
+        // A pure shift rule (three-term Pascal recurrence) has derivative order 0.
+        let pure_shift = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(1, 0, bivar(&[&[-1, 1], &[2]])),
+                RecurrenceTerm::new(2, 0, bivar(&[&[1], &[-1]])),
+            ],
+            denominator: Some(bivar(&[&[0], &[1]])),
+            inhomogeneous: None,
+        };
+        let (relation, shift) = ImplicitRelation::from_recurrence(&pure_shift).unwrap();
+        assert_eq!(shift, 2);
+        assert_eq!(relation.max_shift(), 2);
+        assert_eq!(relation.max_derivative(), 0);
+        assert_eq!(relation.role(), SUCCESSOR_ROLE);
+
+        // The highest derivative order is reported wherever it occurs, and the empty
+        // relation has none.
+        let mut mixed = relation.clone();
+        mixed.terms.push(ImplicitTerm {
+            shift: 0,
+            deriv_order: 3,
+            coeff: bivar(&[&[1]]),
+        });
+        assert_eq!(mixed.max_derivative(), 3);
+        assert_eq!(mixed.max_shift(), 2);
+        let empty = ImplicitRelation::default();
+        assert_eq!(empty.max_derivative(), 0);
+        assert!(empty.is_zero());
+    }
+}

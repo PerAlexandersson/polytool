@@ -438,3 +438,85 @@ fn test_sparse_modular_solver_rejects_bad_inputs() {
     let mut row = SparseModRow::new(0, 101).unwrap();
     assert_eq!(row.add_entry(0, 1, 0), Err(SparseModRowError::ZeroModulus));
 }
+
+#[test]
+fn test_sparse_mod_row_from_signed_entries_matches_unsigned_construction() {
+    // Oracle: reducing signed entries by hand and using the unsigned constructor.
+    let prime = 101;
+    let signed = SparseModRow::from_signed_entries(
+        [(3, -2), (1, 5), (3, 2), (0, -101), (4, 203)],
+        -4,
+        prime,
+    )
+    .unwrap();
+    // Column 3 cancels, column 0 is a multiple of the prime, column 4 reduces to 1.
+    let unsigned = SparseModRow::from_entries([(1, 5), (4, 1)], 97, prime).unwrap();
+    assert_eq!(signed, unsigned);
+    assert_eq!(signed.entries(), &[(1, 5), (4, 1)]);
+    assert_eq!(signed.rhs(), 97);
+    assert!(SparseModRow::from_signed_entries([(0, 1)], 0, 0).is_err());
+}
+
+#[test]
+fn test_sparse_mod_row_is_satisfied_by_agrees_with_direct_evaluation() {
+    // Row: 2 x_0 + 3 x_2 = 5 (mod 7).
+    let prime = 7;
+    let row = SparseModRow::from_entries([(0, 2), (2, 3)], 5, prime).unwrap();
+    for x0 in 0..prime {
+        for x2 in 0..prime {
+            let solution = [x0, 4, x2];
+            let expected = (2 * x0 + 3 * x2) % prime == 5;
+            assert_eq!(row.is_satisfied_by(&solution, prime).unwrap(), expected);
+        }
+    }
+    // A solution vector missing a referenced column never satisfies the row.
+    assert!(!row.is_satisfied_by(&[1, 1], prime).unwrap());
+    assert!(row.is_satisfied_by(&[0, 0, 4], 0).is_err());
+}
+
+#[test]
+fn test_is_sparse_modular_linear_system_consistent_matches_dense_on_pseudorandom_systems() {
+    // Deterministic linear congruential generator; the oracle is the dense
+    // elimination `dense_modular_linear_system_consistent` above.
+    let mut state: u64 = 0x2545_f491_4f6c_dd1d;
+    let mut next = |modulus: u64| {
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (state >> 33) % modulus
+    };
+    let prime = 7;
+    let mut seen_consistent = 0;
+    let mut seen_inconsistent = 0;
+    for _ in 0..200 {
+        let num_vars = 2 + next(3) as usize;
+        let num_rows = 1 + next(5) as usize;
+        let aug: Vec<Vec<u64>> = (0..num_rows)
+            .map(|_| {
+                (0..=num_vars)
+                    .map(|col| {
+                        if col < num_vars && next(2) == 0 {
+                            0
+                        } else {
+                            next(prime)
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        let expected = dense_modular_linear_system_consistent(aug.clone(), num_vars, prime);
+        let actual = is_sparse_modular_linear_system_consistent(
+            sparse_rows_from_dense_aug(&aug, num_vars, prime),
+            num_vars,
+            prime,
+        )
+        .unwrap();
+        assert_eq!(actual, expected, "{aug:?}");
+        if expected {
+            seen_consistent += 1;
+        } else {
+            seen_inconsistent += 1;
+        }
+    }
+    assert!(seen_consistent > 10 && seen_inconsistent > 10);
+}

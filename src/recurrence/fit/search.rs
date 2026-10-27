@@ -572,6 +572,35 @@ mod tests {
     }
 
     #[test]
+    fn with_alternating_sign_builder_toggles_the_search_space() {
+        // P_n = (-1)^n P_{n-1} is found exactly when alternating terms are allowed
+        // (same sequence as `alternating_sign_terms`).
+        let polys: Vec<Vec<i64>> = [1, 1, -1, -1, 1, 1, -1, -1]
+            .iter()
+            .map(|&c| vec![c])
+            .collect();
+        let base = RecurrenceOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            rec_len: 1,
+            homogeneous: true,
+            ..Default::default()
+        };
+        assert!(!base.alternating_sign);
+        let enabled = base.clone().with_alternating_sign(true);
+        assert!(enabled.alternating_sign);
+        assert!(find_polynomial_recurrence(&polys, &base).is_none());
+        let rec = find_polynomial_recurrence(&polys, &enabled).expect("alternating recurrence");
+        assert!(rec.terms.iter().any(RecurrenceTerm::is_alternating));
+        // The builder only changes that flag, and can switch it off again.
+        let disabled = enabled.clone().with_alternating_sign(false);
+        assert!(!disabled.alternating_sign);
+        assert_eq!(disabled.rec_len, base.rec_len);
+        assert!(find_polynomial_recurrence(&polys, &disabled).is_none());
+    }
+
+    #[test]
     fn alternating_sign_terms() {
         // P_n = (-1)^n P_{n-1}; with P_1=1 this gives pairs 1,1,-1,-1,...
         let polys: Vec<Vec<i64>> = vec![

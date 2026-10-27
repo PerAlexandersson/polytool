@@ -2208,3 +2208,292 @@ fn vector_representations_and_gamma_systems_through_the_mcp_tools() {
         .contains("transported-source"));
     assert_eq!(report["results"][0]["evidence"], "certified_complete_space");
 }
+
+fn i64_batch(polynomials: &[&[i64]]) -> PolynomialBatchInput {
+    PolynomialBatchInput {
+        polynomials: Some(polynomials.iter().map(|values| coeffs(values)).collect()),
+        text: None,
+    }
+}
+
+/// Coefficients (ascending) of the product of the linear factors `t - r`.
+fn product_of_linear_factors(roots: &[i64]) -> Vec<i64> {
+    roots.iter().fold(vec![1], |acc, &root| {
+        let mut next = vec![0; acc.len() + 1];
+        for (degree, &c) in acc.iter().enumerate() {
+            next[degree + 1] += c;
+            next[degree] -= root * c;
+        }
+        next
+    })
+}
+
+fn parse_rational_text(text: &str) -> f64 {
+    match text.split_once('/') {
+        Some((numerator, denominator)) => {
+            numerator.parse::<f64>().unwrap() / denominator.parse::<f64>().unwrap()
+        }
+        None => text.parse::<f64>().unwrap(),
+    }
+}
+
+#[test]
+fn parse_polynomials_normalizes_every_input_form_and_keeps_errors() {
+    let server = PolynomialToolsServer::new();
+    // Coefficient lists drop trailing zeros; expressions and text lines parse to the
+    // same normalized polynomial, so the three forms must agree.
+    let Json(coefficients) = server
+        .parse_polynomials(Parameters(i64_batch(&[
+            &[1, 2, 3, 0, 0],
+            &[0],
+            &[-4, 0, 1],
+        ])))
+        .unwrap();
+    assert_eq!(coefficients.items.len(), 3);
+    assert_eq!(coefficients.items[0].coefficients, Some(vec![1, 2, 3]));
+    assert_eq!(coefficients.items[0].degree, Some(2));
+    assert_eq!(
+        coefficients.items[0].polynomial.as_deref(),
+        Some("1 + 2t + 3t^2")
+    );
+    assert_eq!(coefficients.items[2].coefficients, Some(vec![-4, 0, 1]));
+
+    let Json(expressions) = server
+        .parse_polynomials(Parameters(PolynomialBatchInput {
+            polynomials: Some(vec![expr("3t^2 + 2t + 1"), expr("t^2 - 4")]),
+            text: None,
+        }))
+        .unwrap();
+    assert_eq!(expressions.items[0], coefficients.items[0].clone());
+    assert_eq!(expressions.items[1].coefficients, Some(vec![-4, 0, 1]));
+
+    // Plain text: one polynomial per line, a bad line is reported without
+    // discarding its neighbors, and indices follow the line order.
+    let Json(text) = server
+        .parse_polynomials(Parameters(PolynomialBatchInput {
+            polynomials: None,
+            text: Some("1,2,3\nnot a polynomial\n1,1".to_string()),
+        }))
+        .unwrap();
+    assert_eq!(text.items.len(), 3);
+    assert!(text.items[0].ok && text.items[2].ok);
+    assert!(!text.items[1].ok);
+    assert!(text.items[1].error.is_some());
+    assert!(text.items[1].coefficients.is_none());
+    assert_eq!(text.items[1].index, 1);
+    assert_eq!(text.items[2].coefficients, Some(vec![1, 1]));
+
+    // Exactly one of `polynomials` and `text` must be given.
+    assert!(server
+        .parse_polynomials(Parameters(PolynomialBatchInput {
+            polynomials: None,
+            text: None,
+        }))
+        .is_err());
+}
+
+#[test]
+fn interlacing_sequence_reports_chebyshev_pairs_and_malformed_neighbors() {
+    let server = PolynomialToolsServer::new();
+    // Chebyshev polynomials of the first kind T_0..T_3 (OEIS A028297): the roots
+    // cos((2k-1) pi / 2n) of consecutive T_n strictly interlace.
+    let chebyshev = BigIntPolynomialBatchInput {
+        polynomials: Some(vec![
+            bigint_coeffs(&["1"]),
+            bigint_coeffs(&["0", "1"]),
+            bigint_coeffs(&["-1", "0", "2"]),
+            bigint_coeffs(&["0", "-3", "0", "4"]),
+        ]),
+        text: None,
+    };
+    let Json(response) = server
+        .check_interlacing_sequence(Parameters(chebyshev))
+        .unwrap();
+    assert_eq!(response.items.len(), 4);
+    assert!(response.items.iter().all(|item| item.ok));
+    assert_eq!(response.pairs.len(), 3);
+    for (index, pair) in response.pairs.iter().enumerate() {
+        assert!(pair.ok);
+        assert_eq!(pair.pair_index, index);
+        assert_eq!((pair.left_index, pair.right_index), (index, index + 1));
+        let result = pair.result.as_ref().unwrap();
+        assert_eq!(result.strict, Some(true), "T_{index}, T_{}", index + 1);
+        assert_eq!(result.status, "strictly_interlace");
+    }
+    assert_eq!(response.pairs[2].result.as_ref().unwrap().q.degree, 3);
+
+    // A real-rooted pair that does not interlace: the root 5 lies outside the two roots
+    // {0, 3} (equal degrees are not admissible for the directed test and give `None`).
+    let Json(response) = server
+        .check_interlacing_sequence(Parameters(BigIntPolynomialBatchInput {
+            polynomials: Some(vec![
+                bigint_coeffs(&["-5", "1"]),
+                bigint_coeffs(&["0", "-3", "1"]),
+            ]),
+            text: None,
+        }))
+        .unwrap();
+    let result = response.pairs[0].result.as_ref().unwrap();
+    assert_eq!(result.strict, Some(false));
+    assert_eq!(result.status, "do_not_interlace");
+
+    // A malformed entry makes both adjacent pairs report an error, naming it.
+    let Json(response) = server
+        .check_interlacing_sequence(Parameters(BigIntPolynomialBatchInput {
+            polynomials: None,
+            text: Some("1,1\nbad + x\n1,2,1".to_string()),
+        }))
+        .unwrap();
+    assert_eq!(response.items.len(), 3);
+    assert!(!response.items[1].ok);
+    assert_eq!(response.pairs.len(), 2);
+    for pair in &response.pairs {
+        assert!(!pair.ok);
+        assert!(pair.result.is_none());
+        assert!(pair.error.as_deref().unwrap().contains("polynomial 1"));
+    }
+
+    // Fewer than two polynomials give no pairs.
+    let Json(single) = server
+        .check_interlacing_sequence(Parameters(BigIntPolynomialBatchInput {
+            polynomials: Some(vec![bigint_coeffs(&["1", "1"])]),
+            text: None,
+        }))
+        .unwrap();
+    assert_eq!(single.items.len(), 1);
+    assert!(single.pairs.is_empty());
+}
+
+#[test]
+fn real_roots_returns_distinct_roots_within_documented_accuracy() {
+    let server = PolynomialToolsServer::new();
+    // (t + 3) t (t - 1) (t - 2)^2: distinct roots -3, 0, 1, 2, reported increasing and
+    // without multiplicity; roots of linear factors and 0 are exact.
+    let repeated = product_of_linear_factors(&[-3, 0, 1, 2, 2]);
+    // t^2 - 2 has roots +-sqrt(2), approximated by midpoints of isolating intervals
+    // of width at most 1e-6.
+    let Json(response) = server
+        .real_roots(Parameters(i64_batch(&[
+            &repeated,
+            &[-2, 0, 1],
+            &[1, 0, 1],
+            &[5],
+        ])))
+        .unwrap();
+    assert_eq!(response.items.len(), 4);
+
+    let first = &response.items[0];
+    assert_eq!(first.real_rooted, Some(true));
+    let roots: Vec<f64> = first
+        .roots
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|root| parse_rational_text(root))
+        .collect();
+    assert_eq!(roots.len(), 4);
+    for (found, expected) in roots.iter().zip([-3.0, 0.0, 1.0, 2.0]) {
+        assert!((found - expected).abs() < 1e-6, "{found} vs {expected}");
+    }
+
+    let second = &response.items[1];
+    let roots: Vec<f64> = second
+        .roots
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|root| parse_rational_text(root))
+        .collect();
+    assert_eq!(roots.len(), 2);
+    assert!((roots[0] + 2.0_f64.sqrt()).abs() < 1e-6);
+    assert!((roots[1] - 2.0_f64.sqrt()).abs() < 1e-6);
+
+    // t^2 + 1 has no real roots; a nonzero constant is real-rooted with no roots.
+    assert_eq!(response.items[2].real_rooted, Some(false));
+    assert!(response.items[2].roots.is_none());
+    assert_eq!(response.items[3].real_rooted, Some(true));
+    assert_eq!(response.items[3].roots, Some(vec![]));
+
+    // A malformed entry is reported in place.
+    let Json(response) = server
+        .real_roots(Parameters(PolynomialBatchInput {
+            polynomials: None,
+            text: Some("-1,1\nbad + x".to_string()),
+        }))
+        .unwrap();
+    assert_eq!(response.items[0].roots, Some(vec!["1".to_string()]));
+    assert!(!response.items[1].ok);
+    assert!(response.items[1].error.is_some());
+    assert!(response.items[1].real_rooted.is_none());
+}
+
+#[test]
+fn analyze_decomposition_reports_symmetric_decomposition_of_a_small_example() {
+    let server = PolynomialToolsServer::new();
+    // h = 1 + 4t + 2t^2 = a + t b with a = 1 + 3t + t^2 (symmetric about d/2 = 1) and
+    // b = 1 + t (symmetric about (d-1)/2): a + t b = 1 + 4t + 2t^2.  Then
+    // f(h) = (1+t)^2 + 4t(1+t) + 2t^2 = 1 + 6t + 7t^2, and the magic coordinates
+    // (1, 2, -1) satisfy h = (1+t)^2 + 2t(1+t) - t^2.
+    let Json(response) = server
+        .analyze_decomposition(Parameters(i64_batch(&[&[1, 4, 2]])))
+        .unwrap();
+    let item = &response.items[0];
+    assert!(item.ok);
+    let report = item.report.as_ref().unwrap();
+    assert_eq!(report.polynomial.coefficients, vec![1, 4, 2]);
+    assert_eq!(report.polynomial.degree, 2);
+    assert_eq!(report.reciprocal.coefficients, vec![2, 4, 1]);
+    assert_eq!(report.a.coefficients, vec![1, 3, 1]);
+    assert_eq!(report.b.coefficients, vec![1, 1]);
+    // Recomposition p = a + t b.
+    let mut recomposed = report.a.coefficients.clone();
+    for (degree, c) in report.b.coefficients.iter().enumerate() {
+        recomposed[degree + 1] += c;
+    }
+    assert_eq!(recomposed, report.polynomial.coefficients);
+    assert!(report.a_real_rooted && report.b_real_rooted);
+    assert_eq!(report.b_interlaces_a, Some(true));
+    assert_eq!(report.reciprocal_interlaces_input, Some(true));
+    assert!(report.alternatingly_increasing);
+    assert_eq!(report.f_polynomial.coefficients, vec![1, 6, 7]);
+    assert_eq!(report.r_transform_of_f.coefficients, vec![2, 8, 7]);
+    assert_eq!(report.r_a.coefficients, vec![1, 5, 5]);
+    assert_eq!(report.r_b.coefficients, vec![1, 2]);
+    assert_eq!(report.r_interlaces_f, Some(true));
+    assert_eq!(report.magic.coordinates, vec!["1", "2", "-1"]);
+    assert_eq!(report.magic.left_partial_sums, vec!["1", "3"]);
+    assert_eq!(report.magic.right_partial_sums, vec!["-1", "1"]);
+    assert_eq!(report.magic.partial_sum_checks, vec![false, false]);
+    assert!(!report.magic.all_nonnegative);
+    assert!(!report.magic.left_leq_right);
+
+    // (1 + 2t)^3 = ((1 + t) + t)^3 has magic coordinates (1, 3, 3, 1) (binomial
+    // coefficients), equal left and right partial sums (1, 4), so every check holds.
+    let Json(response) = server
+        .analyze_decomposition(Parameters(i64_batch(&[&[1, 6, 12, 8]])))
+        .unwrap();
+    let magic = &response.items[0].report.as_ref().unwrap().magic;
+    assert_eq!(magic.coordinates, vec!["1", "3", "3", "1"]);
+    assert_eq!(magic.left_partial_sums, vec!["1", "4"]);
+    assert_eq!(magic.right_partial_sums, vec!["1", "4"]);
+    assert_eq!(magic.partial_sum_checks, vec![true, true]);
+    assert!(magic.all_nonnegative && magic.left_leq_right);
+
+    // A malformed entry is reported in place; supplying both input forms is an error.
+    let Json(response) = server
+        .analyze_decomposition(Parameters(PolynomialBatchInput {
+            polynomials: None,
+            text: Some("1,4,2\nbad + x".to_string()),
+        }))
+        .unwrap();
+    assert!(response.items[0].ok);
+    assert!(!response.items[1].ok);
+    assert!(response.items[1].report.is_none());
+    assert!(response.items[1].error.is_some());
+    assert!(server
+        .analyze_decomposition(Parameters(PolynomialBatchInput {
+            polynomials: Some(vec![coeffs(&[1, 4, 1])]),
+            text: Some("1,1".to_string()),
+        }))
+        .is_err());
+}

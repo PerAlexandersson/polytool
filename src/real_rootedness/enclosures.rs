@@ -609,6 +609,42 @@ mod tests {
         .is_empty());
     }
 
+    #[test]
+    fn whole_line_is_the_top_element_of_the_interval_lattice() {
+        let line = RealInterval::whole_line();
+        assert!(line.lower.is_none() && line.upper.is_none());
+        assert!(!line.is_empty());
+        assert_eq!(line.to_string(), "(-inf, +inf)");
+        // Contains every sample point and every other interval; only itself contains it.
+        let others = [
+            RealInterval::closed(q(-3), q(5)),
+            RealInterval::at_most(q(0)),
+            RealInterval::at_least(r(1, 2)),
+            RealInterval::point(q(7)),
+            RealInterval::whole_line(),
+        ];
+        for x in [q(-1000), r(-1, 3), q(0), r(22, 7), q(10_000)] {
+            assert!(line.contains(&x));
+        }
+        for other in &others {
+            assert!(other.is_subset_of(&line));
+            // hull with the whole line is the whole line, in either order.
+            assert_eq!(line.hull(other), line);
+            assert_eq!(other.hull(&line), line);
+            assert_eq!(
+                other.is_subset_of(&line) && line.is_subset_of(other),
+                other == &line
+            );
+        }
+        // Every real root of any polynomial lies in the whole line, so the
+        // real-rootedness test relative to it is plain real-rootedness.
+        let rooted = isolate_real_roots_rational_coeffs(&poly(&[-6, 11, -6, 1]));
+        assert!(rooted.real_rooted_in(&line));
+        let complex = isolate_real_roots_rational_coeffs(&poly(&[1, 0, 1]));
+        assert!(!complex.real_rooted_in(&line));
+        assert!(complex.all_real_roots_in(&line));
+    }
+
     fn vec_mul(factors: &[&[i64]]) -> Vec<i64> {
         factors
             .iter()

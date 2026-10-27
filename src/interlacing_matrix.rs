@@ -450,6 +450,36 @@ mod tests {
     }
 
     #[test]
+    fn bigint_sequence_truncation_matches_i64_and_matrix_form() {
+        // Oracle: the i64 variant, and the general matrix form with a single column
+        // of polynomials (a column vector is a `k x 1` matrix of polynomials).
+        let polynomials = vec![vec![1, 1], vec![1, 2, 1], vec![1, 3, 3, 1]];
+        let big: Vec<Vec<BigInt>> = polynomials
+            .iter()
+            .map(|p| p.iter().map(|&c| BigInt::from(c)).collect())
+            .collect();
+        let expected = lace_matrix_sequence_i64(&polynomials, 4, 5).unwrap();
+        let actual = lace_matrix_sequence_bigint(&big, 4, 5).unwrap();
+        let widened: Vec<Vec<BigInt>> = expected
+            .iter()
+            .map(|row| row.iter().map(|&c| BigInt::from(c)).collect())
+            .collect();
+        assert_eq!(actual, widened);
+        let as_matrix: Vec<Vec<Vec<BigInt>>> = big.iter().map(|p| vec![p.clone()]).collect();
+        assert_eq!(lace_matrix_bigint(&as_matrix, 4, 5).unwrap(), actual);
+        // Entries beyond the i64 range survive.
+        let huge = BigInt::from(1u8) << 80usize;
+        let lace =
+            lace_matrix_sequence_bigint(&[vec![huge.clone(), BigInt::from(1)]], 2, 2).unwrap();
+        assert_eq!(lace[0][0], huge);
+        // An empty sequence is rejected.
+        assert_eq!(
+            lace_matrix_sequence_bigint(&[], 2, 2),
+            Err(InterlacingMatrixError::EmptyMatrix)
+        );
+    }
+
+    #[test]
     fn polynomial_matrix_truncation_uses_block_toeplitz_form() {
         let matrix = vec![vec![vec![1], vec![2, 3]], vec![vec![4, 5], vec![6, 7, 8]]];
         let lace = lace_matrix_i64(&matrix, 2, 3).unwrap();

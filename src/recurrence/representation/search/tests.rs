@@ -164,3 +164,39 @@ fn degree_bounds_compare_on_the_whole_domain() {
         1
     ));
 }
+
+#[test]
+fn from_oeis_request_equals_the_json_request_and_finds_the_pascal_rule() {
+    // `from_oeis` is documented as the request for a bundled family with the given
+    // maps and otherwise default fields: it must equal the deserialized minimal JSON
+    // request, and running it finds the factorial-divided Pascal rows.
+    let factorial = RecurrenceTransformation::Diagonal {
+        weight: DiagonalWeight::FactorialPower { power: 1 },
+    };
+    let built = RepresentationSearchRequest::from_oeis("A007318", vec![factorial]);
+    let parsed: RepresentationSearchRequest = serde_json::from_value(serde_json::json!({
+        "oeis_id": "A007318",
+        "transformations": [
+            {"kind": "diagonal", "weight": {"kind": "factorial_power", "power": 1}}
+        ]
+    }))
+    .unwrap();
+    assert_eq!(built, parsed);
+    assert_eq!(built.oeis_id.as_deref(), Some("A007318"));
+    assert!(built.source_recurrence.is_none() && built.rows.is_none());
+    assert!(built.fits && built.certified_spaces);
+
+    let mut limited = built.clone();
+    limited.limits.max_depth = 1;
+    let report = search_representations(&limited).unwrap();
+    verify_representation_search(&report).unwrap();
+    assert_eq!(report.source.kind, "oeis");
+    // The factorial-divided rows of Pascal's triangle (A007318): Q_3 = 1 + 3x + 3x^2/2 + x^3/6.
+    let node = report
+        .representations
+        .iter()
+        .find(|node| node.chain == [0usize])
+        .expect("one-step representation");
+    assert_eq!(node.states[3][0], vec!["1", "3", "3/2", "1/6"]);
+    assert!(node.reconstruction_verified);
+}

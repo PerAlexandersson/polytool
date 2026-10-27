@@ -345,6 +345,65 @@ mod tests {
     }
 
     #[test]
+    fn test_bezout_bigint_coeffs_agrees_with_default_backend_and_i64() {
+        // Oracle: the primitive-PRS default backend and the i64 Bezout test.
+        let cases: Vec<Vec<i64>> = vec![
+            vec![],
+            vec![0],
+            vec![5],
+            vec![1, 1],
+            vec![1, 2, 1],
+            vec![1, 11, 11, 1],
+            vec![1, 0, 1],
+            vec![-6, 11, -6, 1],
+            vec![-2, 1, -2, 1],
+            vec![0, 0, 1, -2, 1],
+            vec![1, 0, 2, 0, 1],
+            vec![1, 43, 196, 168, 23, 1],
+            vec![1, 5, 10, 10, 5, 1],
+            vec![24, -50, 35, -10, 1],
+        ];
+        for coeffs in cases {
+            let big: Vec<BigInt> = coeffs.iter().copied().map(BigInt::from).collect();
+            let bezout = is_real_rooted_bezout_bigint_coeffs(&big);
+            assert_eq!(
+                bezout,
+                is_real_rooted_bigint_coeffs(&big),
+                "default backend on {coeffs:?}"
+            );
+            assert_eq!(bezout, is_real_rooted_bezout(&coeffs), "i64 on {coeffs:?}");
+        }
+        // Coefficients far beyond i64: (t + 10^30)(t - 10^30 + 1) is real-rooted, while
+        // t^2 + 10^40 is not; trailing zero coefficients are ignored.
+        let m = BigInt::from(10u8).pow(30);
+        // Expand (t + m)(t - (m - 1)) = t^2 + t - m (m - 1).
+        let rooted = vec![-(&m * (&m - 1u8)), BigInt::from(1), BigInt::from(1)];
+        assert!(is_real_rooted_bezout_bigint_coeffs(&rooted));
+        let not_rooted = vec![BigInt::from(10u8).pow(40), BigInt::from(0), BigInt::from(1)];
+        assert!(!is_real_rooted_bezout_bigint_coeffs(&not_rooted));
+        let padded = vec![
+            BigInt::from(1),
+            BigInt::from(0),
+            BigInt::from(1),
+            BigInt::from(0),
+        ];
+        assert!(!is_real_rooted_bezout_bigint_coeffs(&padded));
+        // Large scale of a real-rooted cubic, with a content that is not an i64.
+        let scale = BigInt::from(10u8).pow(40);
+        let scaled: Vec<BigInt> = [-6i64, 11, -6, 1]
+            .iter()
+            .map(|&c| BigInt::from(c) * &scale)
+            .collect();
+        assert!(is_real_rooted_bezout_bigint_coeffs(&scaled));
+        // A cubic with a huge coefficient: compare against the default backend.
+        let big_cubic = vec![BigInt::from(1), BigInt::from(1), -&m, BigInt::from(1)];
+        assert_eq!(
+            is_real_rooted_bezout_bigint_coeffs(&big_cubic),
+            is_real_rooted_bigint_coeffs(&big_cubic)
+        );
+    }
+
+    #[test]
     fn test_default_real_rooted_bigint_coeffs() {
         let rr: Vec<BigInt> = [1_i64, 3, 3, 1].into_iter().map(BigInt::from).collect();
         assert!(is_real_rooted_bigint_coeffs(&rr));

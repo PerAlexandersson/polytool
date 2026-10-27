@@ -16,6 +16,8 @@ mod responses;
 mod server;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_validation;
 mod theorems;
 
 pub use requests::EnumerateRealRootedRequest;

@@ -1047,6 +1047,176 @@ mod tests {
     }
 
     #[test]
+    fn companion_i64_finder_recovers_fibonacci_and_transitions_hold() {
+        // F_{n+1} = F_n + F_{n-1} (OEIS A000045) as a lag-2 scalar system: the
+        // companion state (F_{n-1}, F_n) maps to (F_n, F_{n+1}).
+        let mut fib = vec![1_i64, 1];
+        for n in 2..14 {
+            fib.push(fib[n - 1] + fib[n - 2]);
+        }
+        let states: Vec<Vec<Vec<i64>>> = fib.iter().map(|&f| vec![vec![f]]).collect();
+        let opts = VectorRecurrenceOptions {
+            var_deg: 0,
+            idx_deg: 0,
+            diff_deg: 0,
+            held_out_transitions: 2,
+            ..Default::default()
+        };
+        let fit = find_companion_vector_recurrence(&states, 0, 2, &opts).unwrap();
+        // The integer wrapper agrees with the rational entry point.
+        let rational = find_companion_vector_recurrence_rational(
+            &i64_vector_states_to_rational(&states),
+            0,
+            2,
+            &opts,
+        )
+        .unwrap();
+        assert_eq!(fit, rational);
+        assert!(fit.rows.iter().all(|row| row.nullity == 0));
+        let one = || bounded_weyl(0, 0, 0, &[(0, 0, 0, 1)]);
+        assert!(fit.recurrence.matrix[0][0].is_zero());
+        assert_eq!(fit.recurrence.matrix[0][1], WeylOperator::identity());
+        assert_eq!(fit.recurrence.matrix[1], vec![one(), one()]);
+        assert_eq!(fit.recurrence.forcing, None);
+        // Every consecutive companion transition (including held-out ones) holds exactly,
+        // and a perturbed target does not.
+        let rational_states = i64_vector_states_to_rational(&states);
+        for n in 1..fib.len() - 1 {
+            let companion = vec![
+                rational_states[n - 1][0].clone(),
+                rational_states[n][0].clone(),
+            ];
+            let next = vec![
+                rational_states[n][0].clone(),
+                rational_states[n + 1][0].clone(),
+            ];
+            assert!(fit
+                .recurrence
+                .holds_transition_rational(&companion, &next, n));
+            let mut wrong = next.clone();
+            wrong[1][0] += BigRational::one();
+            assert!(!fit
+                .recurrence
+                .holds_transition_rational(&companion, &wrong, n));
+        }
+        // A state of the wrong dimension is rejected instead of panicking.
+        assert!(!fit.recurrence.holds_transition_rational(
+            &rational_states[1],
+            &rational_states[2],
+            1
+        ));
+        // Lag zero is invalid.
+        assert_eq!(
+            find_companion_vector_recurrence(&states, 0, 0, &opts),
+            Err(VectorRecurrenceFitError::InvalidLag)
+        );
+    }
+
+    #[test]
+    fn denominator_i64_finders_agree_with_rational_and_recover_known_recurrences() {
+        // Catalan numbers (OEIS A000108): (n + 2) C_{n+1} = (4 n + 2) C_n.  The
+        // normalized denominator (constant term 1) is q = 1 + n / 2.
+        let catalan: [i64; 14] = [
+            1, 1, 2, 5, 14, 42, 132, 429, 1430, 4862, 16796, 58786, 208012, 742900,
+        ];
+        let states: Vec<Vec<Vec<i64>>> = catalan.iter().map(|&c| vec![vec![c]]).collect();
+        let rational_states = i64_vector_states_to_rational(&states);
+        let opts = VectorRecurrenceDenominatorOptions {
+            var_deg: 0,
+            idx_deg: 1,
+            diff_deg: 0,
+            homogeneous: true,
+            forcing_var_deg: 0,
+            forcing_idx_deg: 0,
+            held_out_transitions: 2,
+            require_unique: true,
+            denominator_var_deg: 0,
+            denominator_idx_deg: 1,
+        };
+        let fit = find_vector_recurrence_with_denominator(&states, 0, &opts).unwrap();
+        assert_eq!(
+            fit,
+            find_vector_recurrence_with_denominator_rational(&rational_states, 0, &opts).unwrap()
+        );
+        assert_eq!(
+            fit.recurrence.denominator,
+            BivarPoly {
+                coeffs: vec![vec![br(1, 1)], vec![br(1, 2)]],
+            }
+        );
+        assert_eq!(fit.nullity, 0);
+        for n in 0..catalan.len() - 1 {
+            assert!(fit.recurrence.holds_transition_rational(
+                &rational_states[n],
+                &rational_states[n + 1],
+                n
+            ));
+        }
+
+        // Central Delannoy numbers (OEIS A001850) need two previous terms:
+        // (n + 1) a_{n+1} = (6 n + 3) a_n - n a_{n-1}.  In the lag-2 companion the
+        // shift row carries the denominator q = 1 + n.
+        let mut delannoy = vec![1_i64, 3];
+        for n in 1..13 {
+            delannoy.push(
+                (3 * (2 * n + 1) * delannoy[n as usize] - n * delannoy[n as usize - 1]) / (n + 1),
+            );
+        }
+        assert_eq!(&delannoy[..6], &[1, 3, 13, 63, 321, 1683]);
+        let states: Vec<Vec<Vec<i64>>> = delannoy.iter().map(|&c| vec![vec![c]]).collect();
+        let rational_states = i64_vector_states_to_rational(&states);
+        let opts = VectorRecurrenceDenominatorOptions {
+            idx_deg: 1,
+            denominator_idx_deg: 1,
+            ..opts
+        };
+        let companion =
+            find_companion_vector_recurrence_with_denominator(&states, 0, 2, &opts).unwrap();
+        assert_eq!(
+            companion,
+            find_companion_vector_recurrence_with_denominator_rational(
+                &rational_states,
+                0,
+                2,
+                &opts
+            )
+            .unwrap()
+        );
+        let denominator = bounded_bivar(1, 0, &[(0, 0, 1), (1, 0, 1)]);
+        assert_eq!(companion.recurrence.denominator, denominator);
+        assert!(companion.recurrence.matrix[0][0].is_zero());
+        assert_eq!(
+            companion.recurrence.matrix[0][1],
+            WeylOperator::new(vec![denominator])
+        );
+        assert_eq!(
+            companion.recurrence.matrix[1][0].coefficients[0],
+            bounded_bivar(1, 0, &[(1, 0, -1)])
+        );
+        assert_eq!(
+            companion.recurrence.matrix[1][1].coefficients[0],
+            bounded_bivar(1, 0, &[(0, 0, 3), (1, 0, 6)])
+        );
+        for n in 1..delannoy.len() - 1 {
+            let source = vec![
+                rational_states[n - 1][0].clone(),
+                rational_states[n][0].clone(),
+            ];
+            let target = vec![
+                rational_states[n][0].clone(),
+                rational_states[n + 1][0].clone(),
+            ];
+            assert!(companion
+                .recurrence
+                .holds_transition_rational(&source, &target, n));
+        }
+        assert_eq!(
+            find_companion_vector_recurrence_with_denominator(&states, 0, 0, &opts),
+            Err(VectorRecurrenceFitError::InvalidLag.into())
+        );
+    }
+
+    #[test]
     fn shared_denominator_finder_recovers_n_dependent_factor_and_forcing() {
         // n P_(n+1) = (n+1) P_n, with P_n = n.  The normalized recurrence
         // has q(n) = n; q = 1 would require a non-polynomial coefficient.
