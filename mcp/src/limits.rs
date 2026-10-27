@@ -24,3 +24,19 @@ pub(crate) const MCP_MAX_PF_NETWORK_ROWS: usize = 64;
 pub(crate) const MCP_MAX_PF_NETWORK_DEGREE: usize = 64;
 pub(crate) const MCP_MAX_PF_NETWORK_STEP: usize = 8;
 pub(crate) const MCP_MAX_LEFT_PRODUCTION_ROWS: usize = 32;
+/// `enumerate_real_rooted`: largest degree (the search is exponential in the
+/// number of free coefficients, so degree alone does not bound the work).
+pub(crate) const MCP_MAX_ENUMERATE_DEGREE: usize = 32;
+/// `enumerate_real_rooted`: largest bit length of a prescribed leading coefficient.
+pub(crate) const MCP_MAX_ENUMERATE_PREFIX_BITS: u64 = 256;
+/// `enumerate_real_rooted`: default and largest number of tower nodes
+/// (about 5000 nodes per second at degree 32 in release builds).
+pub(crate) const MCP_DEFAULT_ENUMERATE_NODES: u64 = 5_000;
+pub(crate) const MCP_MAX_ENUMERATE_NODES: u64 = 25_000;
+/// `enumerate_real_rooted`: default and largest number of returned polynomials.
+pub(crate) const MCP_DEFAULT_ENUMERATE_RESULTS: usize = 500;
+pub(crate) const MCP_MAX_ENUMERATE_RESULTS: usize = 2_000;
+/// `enumerate_real_rooted`: default and largest coefficient bit length of a
+/// derivative-tower polynomial.
+pub(crate) const MCP_DEFAULT_ENUMERATE_COEFFICIENT_BITS: u64 = 1_024;
+pub(crate) const MCP_MAX_ENUMERATE_COEFFICIENT_BITS: u64 = 2_048;

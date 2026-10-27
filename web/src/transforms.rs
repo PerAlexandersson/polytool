@@ -4,12 +4,14 @@
 //! Every export takes and returns JSON text.  Reports are the library's
 //! versioned schemas unchanged (`polytool.recurrence-transform.v1`,
 //! `polytool.recurrence-implicit.v1`, `polytool.root-enclosures.v1`,
-//! `polytool.recurrence-theorems.v1`), so a report produced in the browser
+//! `polytool.recurrence-theorems.v1`,
+//! `polytool.recurrence-representation-search.v1`), so a report produced in the browser
 //! replays with the CLI and MCP verifiers and vice versa.  Failures are
 //! returned as `{"error": "..."}`.
 //!
 //! CPU use is bounded by the library limit types: requests above the default
-//! service ceilings of [`TransformLimits`] are rejected, as in the MCP
+//! service ceilings of [`TransformLimits`] (and, for representation searches,
+//! [`RepresentationSearchLimits::service_ceiling`]) are rejected, as in the MCP
 //! server, and the root-domain section is validated by the library.  The
 //! browser additionally caps request size at 1 MiB and the refinement width
 //! of root enclosures at `2^-256`.  The page runs these exports in a Web
@@ -18,7 +20,8 @@
 use num_bigint::BigInt;
 use polytool::recurrence::{
     ImplicitTransformReport, ImplicitTransformRequest, RecurrenceJson, RecurrenceTransformReport,
-    RecurrenceTransformRequest, RootEnclosureReport, RootEnclosureRequest, TransformLimits,
+    RecurrenceTransformRequest, RepresentationSearchLimits, RepresentationSearchReport,
+    RepresentationSearchRequest, RootEnclosureReport, RootEnclosureRequest, TransformLimits,
 };
 use polytool::renewal::RecurrenceTheoremReport;
 use wasm_bindgen::prelude::*;
@@ -34,6 +37,7 @@ const IMPLICIT_SCHEMA: &str = "polytool.recurrence-implicit.v1";
 const ROOT_ENCLOSURES_SCHEMA: &str = "polytool.root-enclosures.v1";
 const THEOREMS_SCHEMA: &str = "polytool.recurrence-theorems.v1";
 const SPACES_SCHEMA: &str = "polytool.recurrence-spaces.v1";
+const REPRESENTATION_SEARCH_SCHEMA: &str = "polytool.recurrence-representation-search.v1";
 
 fn respond(run: impl FnOnce() -> Result<serde_json::Value, String>) -> String {
     match run() {
@@ -58,6 +62,10 @@ fn check_schema(found: &str, expected: &str) -> Result<(), String> {
         return Err(format!("expected schema {expected}, found {found}"));
     }
     Ok(())
+}
+
+fn check_search_limits(limits: &RepresentationSearchLimits) -> Result<(), String> {
+    limits.check_ceiling(&RepresentationSearchLimits::service_ceiling())
 }
 
 fn check_limits(limits: &TransformLimits) -> Result<(), String> {
@@ -267,6 +275,54 @@ pub fn recurrence_latex(recurrence_json: &str) -> String {
     })
 }
 
+/// Same `polytool.recurrence-representation-search.v1` contract as the CLI
+/// `recurrence-search-representations` and the MCP tool
+/// `search_recurrence_representations`: a bounded queue search over
+/// equivalent representations.  Limits above
+/// [`RepresentationSearchLimits::service_ceiling`] are rejected.
+#[wasm_bindgen]
+pub fn search_recurrence_representations(request_json: &str) -> String {
+    respond(|| {
+        bounded(request_json, "representation-search request")?;
+        let request: RepresentationSearchRequest =
+            serde_json::from_str(request_json).map_err(|e| e.to_string())?;
+        check_search_limits(&request.limits)?;
+        let report = to_value(polytool::recurrence::search_representations(&request)?)?;
+        // A report the replay would refuse for its size is never handed out.
+        if report.to_string().len() > MAX_JSON_BYTES {
+            return Err(
+                "the representation-search report exceeds 1 MiB; lower the depth, the number of \
+                 representations or the rows"
+                    .into(),
+            );
+        }
+        Ok(report)
+    })
+}
+
+fn verify_representation_search_value(report_json: &str) -> Result<serde_json::Value, String> {
+    bounded(report_json, "representation-search report")?;
+    let report: RepresentationSearchReport =
+        serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+    check_schema(&report.schema, REPRESENTATION_SEARCH_SCHEMA)?;
+    check_search_limits(&report.request.limits)?;
+    polytool::recurrence::verify_representation_search(&report)?;
+    Ok(serde_json::json!({
+        "schema": REPRESENTATION_SEARCH_SCHEMA,
+        "verified": true,
+        "status": report.status,
+        "representations": report.representations.len(),
+        "descriptions": report.ranked.len(),
+    }))
+}
+
+/// Rerun a representation search from its embedded request, require equality,
+/// and replay every embedded step and certificate with its own verifier.
+#[wasm_bindgen]
+pub fn verify_recurrence_representation_search(report_json: &str) -> String {
+    respond(|| verify_representation_search_value(report_json))
+}
+
 /// Replay any supported report, dispatching on its `schema` field.
 ///
 /// Returns `{"schema", "verified": true, ...}` or `{"error"}`; an unknown
@@ -286,6 +342,7 @@ pub fn verify_report(report_json: &str) -> String {
             IMPLICIT_SCHEMA => verify_implicit_value(report_json),
             ROOT_ENCLOSURES_SCHEMA => verify_enclosures_value(report_json),
             THEOREMS_SCHEMA => verify_theorems_value(report_json),
+            REPRESENTATION_SEARCH_SCHEMA => verify_representation_search_value(report_json),
             SPACES_SCHEMA => {
                 let checked: serde_json::Value =
                     serde_json::from_str(&crate::verify_recurrence_spaces(report_json))
@@ -427,6 +484,94 @@ mod tests {
 
         let latex = parse(&recurrence_latex(&record.to_string()));
         assert!(latex["latex"].as_str().unwrap().contains("P(n)"));
+    }
+
+    fn pascal_search_request() -> Value {
+        json!({
+            "oeis_id": "A007318", "row_count": 8, "limits": {"max_depth": 1},
+            "transformations": [{"kind": "diagonal",
+                "weight": {"kind": "factorial_power", "power": 1}}]
+        })
+    }
+
+    #[test]
+    fn representation_search_round_trips_and_rejects_tampering() {
+        let report = search_recurrence_representations(&pascal_search_request().to_string());
+        let value = parse(&report);
+        assert_eq!(value["schema"], REPRESENTATION_SEARCH_SCHEMA, "{value}");
+        assert_eq!(value["status"], "complete");
+        let descriptions = value["representations"][1]["descriptions"]
+            .as_array()
+            .unwrap();
+        assert!(descriptions
+            .iter()
+            .any(|d| d["label"] == "equivalent_generating_description"
+                && d["evidence"] == "certified_complete_space"));
+        let checked = parse(&verify_recurrence_representation_search(&report));
+        assert_eq!(checked["verified"], true, "{checked}");
+        assert_eq!(checked["representations"], 2);
+        assert_eq!(parse(&verify_report(&report))["verified"], true);
+
+        let mut tampered = value.clone();
+        tampered["representations"][1]["states"][2][0][1] = json!("3");
+        assert!(parse(&verify_report(&tampered.to_string()))["error"].is_string());
+        let mut relabelled = value.clone();
+        relabelled["ranked"][0]["label"] = json!("finite_fit");
+        assert!(parse(&verify_recurrence_representation_search(
+            &relabelled.to_string()
+        ))["error"]
+            .is_string());
+        let mut other_schema = value;
+        other_schema["schema"] = json!(TRANSFORM_SCHEMA);
+        assert!(parse(&verify_recurrence_representation_search(
+            &other_schema.to_string()
+        ))["error"]
+            .as_str()
+            .unwrap()
+            .contains("expected schema"));
+    }
+
+    #[test]
+    fn representation_search_limits_and_size_are_bounded() {
+        for limits in [
+            json!({"max_depth": 5}),
+            json!({"max_representations": 65}),
+            json!({"max_steps": 100_000}),
+            json!({"max_coefficient_bits": 100_000}),
+        ] {
+            let mut request = pascal_search_request();
+            request["limits"] = limits;
+            let error = parse(&search_recurrence_representations(&request.to_string()));
+            assert!(
+                error["error"].as_str().unwrap().contains("service ceiling"),
+                "{error}"
+            );
+        }
+        let huge = " ".repeat(MAX_JSON_BYTES + 1);
+        assert!(parse(&search_recurrence_representations(&huge))["error"]
+            .as_str()
+            .unwrap()
+            .contains("1 MiB"));
+        assert!(
+            parse(&verify_recurrence_representation_search(&huge))["error"]
+                .as_str()
+                .unwrap()
+                .contains("1 MiB")
+        );
+        // Unknown fields and malformed requests are rejected, not ignored.
+        assert!(
+            parse(&search_recurrence_representations(r#"{"unknown": 1}"#))["error"].is_string()
+        );
+        assert!(parse(&search_recurrence_representations("{}"))["error"].is_string());
+        // Limits embedded in a report to replay are held to the same ceiling.
+        let mut report = parse(&search_recurrence_representations(
+            &pascal_search_request().to_string(),
+        ));
+        report["request"]["limits"]["max_depth"] = json!(99);
+        assert!(parse(&verify_report(&report.to_string()))["error"]
+            .as_str()
+            .unwrap()
+            .contains("service ceiling"));
     }
 
     #[test]

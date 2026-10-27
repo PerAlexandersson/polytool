@@ -835,3 +835,50 @@ pub struct LeftProductionResponse {
     /// Fixed guardrail: the criterion is sufficient, not necessary.
     pub note: String,
 }
+
+/// The limits that were applied by `enumerate_real_rooted`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct EnumerateRealRootedLimits {
+    pub max_nodes: u64,
+    pub max_results: usize,
+    pub max_coefficient_bits: u64,
+}
+
+/// Search counters of `enumerate_real_rooted` (no wall-clock times).
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct EnumerateRealRootedStats {
+    pub derivative_levels: usize,
+    pub nodes_examined: u64,
+    pub nodes_pruned: u64,
+    pub exact_root_isolations: u64,
+    pub refinement_steps: u64,
+    pub endpoint_tests: u64,
+    pub final_verifications: u64,
+    pub results_emitted: usize,
+    pub polynomials_by_level: Vec<u64>,
+}
+
+/// Result of `enumerate_real_rooted`; the fields are those of
+/// `polytool enumerate-real-rooted --json`.
+#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
+pub struct EnumerateRealRootedResponse {
+    /// Always `enumerate-real-rooted`.
+    pub command: String,
+    pub degree: usize,
+    /// The prescribed prefix `a_0, a_1, ...` as exact integer strings.
+    pub leading_coefficients_descending: Vec<String>,
+    /// Always `ascending`: every output polynomial lists `c_0, ..., c_n`.
+    pub output_coefficient_order: String,
+    /// `complete` (the full set, possibly empty) or `resource_limit` (an
+    /// initial segment of the full set in output order).
+    pub status: String,
+    /// `max_nodes`, `max_results` or `max_coefficient_bits` when `status` is
+    /// `resource_limit`.
+    pub limit_reached: Option<String>,
+    pub limits: EnumerateRealRootedLimits,
+    pub count: usize,
+    /// Real-rooted polynomials as ascending exact integer strings, sorted
+    /// lexicographically by `(a_t, ..., a_n)`.
+    pub polynomials: Vec<Vec<String>>,
+    pub stats: EnumerateRealRootedStats,
+}

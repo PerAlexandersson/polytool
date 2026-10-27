@@ -526,6 +526,49 @@ textarea:focus { outline: none; border-color: var(--c-link); }
 #transformForm > label { font-size: 0.9rem; }
 #transformForm [hidden] { display: none; }
 
+/* Representation search: map tree, budget notices and descriptions. Markers differ in
+   border style and text, not only in colour. */
+.rep-tree, .rep-tree ul { list-style: none; margin: 0; padding: 0; }
+.rep-tree ul { margin: 0.2rem 0 0.2rem 0.45rem; padding-left: 0.7rem; border-left: 2px solid var(--c-border); }
+.rep-tree li { margin: 0.35rem 0; min-width: 0; overflow-wrap: anywhere; }
+.rep-link {
+  font: 700 0.8rem 'Fira Code', 'Consolas', monospace; padding: 0.1rem 0.45rem; margin: 0 0.2rem 0 0;
+  border: 1px solid var(--c-border); border-radius: 4px; background: var(--c-bg-gray);
+  color: var(--c-link); cursor: pointer;
+}
+.rep-link:hover { border-color: var(--c-brand); }
+.rep-tag, .rep-outcome {
+  display: inline-block; margin: 0 0.3rem 0.15rem 0; padding: 0 0.45rem; border: 1px solid var(--c-border);
+  border-radius: 4px; font-size: 0.75rem; color: var(--c-text-sub); vertical-align: middle;
+}
+.rep-tag-equal { border-style: double; border-width: 3px; }
+.rep-tag-equal::before { content: '\2261\00A0'; }
+.rep-tag-frontier { border-style: dashed; }
+.rep-edge-duplicate .rep-outcome { border-style: double; border-width: 3px; }
+.rep-edge-duplicate .rep-outcome::before { content: '\2261\00A0'; }
+.rep-edge-rejected .rep-outcome { border-style: dotted; border-width: 2px; }
+.rep-edge-rejected .rep-outcome::before { content: '\2717\00A0'; }
+.rep-edge-skipped .rep-outcome { border-style: dashed; border-width: 2px; }
+.rep-edge-skipped .rep-outcome::before { content: '\23F8\00A0'; }
+.rep-status { display: inline-block; padding: 0.1rem 0.6rem; border: 2px solid; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
+.rep-status-complete { border-style: solid; border-color: hsl(155, 50%, 32%); }
+.rep-status-complete::before { content: '\2714\00A0'; }
+.rep-status-partial { border-style: dashed; border-color: hsl(32, 80%, 45%); }
+.rep-status-partial::before { content: '\26A0\00A0'; }
+.rep-budget {
+  margin: 0.6rem 0; padding: 0.5rem 0.7rem; border: 2px dashed hsl(32, 80%, 45%); border-radius: 6px;
+  background: color-mix(in srgb, hsl(40, 95%, 50%) 10%, var(--c-bg-surface)); font-size: 0.9rem;
+}
+.rep-budget ul { margin: 0.3rem 0 0; padding-left: 1.1rem; }
+.rep-budget p { margin: 0.2rem 0; }
+.rep-equal { margin: 0.5rem 0; padding: 0.4rem 0.6rem; border: 3px double var(--c-border); border-radius: 4px; font-size: 0.9rem; }
+.rep-detail { border-top: 1px solid var(--c-border); padding-top: 0.3rem; }
+.rep-detail > summary { overflow-wrap: anywhere; }
+.rep-description .recurrence-display { padding: 0.5rem 0; text-align: left; }
+#repMapList { display: grid; gap: 0.3rem; margin: 0.4rem 0; }
+#repMapList label { display: flex; align-items: flex-start; gap: 0.4rem; font-weight: normal; min-width: 0; overflow-wrap: anywhere; }
+#repMapList input { margin-top: 0.25rem; flex: none; }
+
 /* Dim manual options when adaptive is selected */
 .options.disabled {
   opacity: 0.35;
@@ -1190,7 +1233,7 @@ Lines starting with # are ignored."></textarea>
 </div>
 
 <div id="panel-transform" class="tab-panel">
-  <p class="space-help">Change polynomial coordinates and carry the defining recurrence along exactly. Each result is labelled by what supports it: a finite fit, a consequence of the defining recurrence, a certificate for every index, or a conditional theorem match.</p>
+  <p class="space-help">Change polynomial coordinates and carry the defining recurrence along exactly, or search a bounded set of coordinate changes for equivalent descriptions. Each result is labelled by what supports it: a finite fit, a consequence of the defining recurrence, a certificate for every index, or a conditional theorem match.</p>
   <div class="space-form" id="transformForm">
     <div class="space-field">
       <label for="transformExample">Example</label>
@@ -1201,9 +1244,19 @@ Lines starting with # are ignored."></textarea>
         <option value="narayana-reversal">Narayana numbers A001263 → reversal</option>
         <option value="binomial-factorial">Pascal rows A007318 with coefficients divided by k!</option>
         <option value="weighted-eulerian">A065826 divided by k + 1 → Eulerian rows, proved by reconstruction</option>
+        <option value="search-pascal">Search: Pascal rows A007318 with k! maps, certified complete spaces</option>
+        <option value="search-eulerian">Search: A065826 → Eulerian rows → f-polynomial</option>
+        <option value="search-budget">Search: Pascal rows with three maps, equal sequences and a budget limit</option>
       </select>
     </div>
     <div class="space-grid">
+      <div class="space-field">
+        <label for="transformMode">Mode</label>
+        <select id="transformMode" onchange="transformControlsChanged()">
+          <option value="single">Apply one transformation</option>
+          <option value="search">Search representations</option>
+        </select>
+      </div>
       <div class="space-field">
         <label for="transformSource">Sequence</label>
         <select id="transformSource" onchange="transformControlsChanged()">
@@ -1235,6 +1288,7 @@ Lines starting with # are ignored."></textarea>
         <button class="run-small" onclick="checkSourceTheorems()">Check interlacing theorems for this recurrence</button>
       </div>
     </div>
+    <div id="transformSingleFields">
     <div class="space-grid">
       <div class="space-field">
         <label for="transformKind">Transformation</label>
@@ -1317,6 +1371,44 @@ Lines starting with # are ignored."></textarea>
         <input id="transformIntervalUpper" placeholder="+∞ when empty" spellcheck="false" oninput="transformControlsChanged()">
       </div>
     </div>
+    </div>
+    <div id="transformSearchFields" hidden>
+      <fieldset>
+        <legend>Allowed transformations</legend>
+        <p class="space-help">Every representation is mapped by each checked transformation, up to the depth limit. Equal normal forms are merged, never equal-looking rows.</p>
+        <div id="repMapList"></div>
+      </fieldset>
+      <div class="space-grid">
+        <div class="space-field">
+          <label for="repScheduleIndex">Degree bound dₙ: first index n₀</label>
+          <input id="repScheduleIndex" type="number" value="0" min="0" max="1000000" oninput="transformControlsChanged()">
+          <small>Used by f-polynomial, reversal, symmetric decomposition and gamma.</small>
+        </div>
+        <div class="space-field">
+          <label for="repScheduleDegree">dₙ at n₀</label>
+          <input id="repScheduleDegree" type="number" value="0" min="0" max="512" oninput="transformControlsChanged()">
+        </div>
+        <div class="space-field">
+          <label for="repScheduleStep">Step h in dₙ = d₀ + h(n − n₀)</label>
+          <input id="repScheduleStep" type="number" value="1" min="0" max="16" oninput="transformControlsChanged()">
+        </div>
+        <div class="space-field">
+          <label for="repWeightOrder">Diagonal order m</label>
+          <input id="repWeightOrder" type="number" value="1" min="1" max="8" oninput="transformControlsChanged()">
+        </div>
+        <div class="space-field">
+          <label for="repMaxDepth">Maps composed (depth, 1 to 3)</label>
+          <input id="repMaxDepth" type="number" value="2" min="1" max="3" oninput="transformControlsChanged()">
+        </div>
+        <div class="space-field">
+          <label for="repMaxRepresentations">Most representations (2 to 24)</label>
+          <input id="repMaxRepresentations" type="number" value="12" min="2" max="24" oninput="transformControlsChanged()">
+        </div>
+      </div>
+      <label><input type="checkbox" id="repFits" checked onchange="transformControlsChanged()"> Fit recurrences in every new representation (finite fits)</label><br>
+      <label><input type="checkbox" id="repSpaces" checked onchange="transformControlsChanged()"> Certify complete spaces after factorial diagonal maps</label>
+      <p class="space-help">The search stops at its budgets and reports each one it reaches. The result can be replayed exactly.</p>
+    </div>
     <p class="space-help space-summary" id="transformSummary" aria-live="polite"></p>
     <details id="transformAdvanced">
       <summary>Advanced: request JSON</summary>
@@ -1326,6 +1418,7 @@ Lines starting with # are ignored."></textarea>
         <select id="transformEndpoint" onchange="editTransformRequest()">
           <option value="transform">Coordinate transformation (polytool.recurrence-transform.v1)</option>
           <option value="implicit">Implicit relations (polytool.recurrence-implicit.v1)</option>
+          <option value="representations">Representation search (polytool.recurrence-representation-search.v1)</option>
         </select>
       </div>
       <textarea id="transformRequest" rows="9" spellcheck="false" oninput="editTransformRequest()" aria-label="Transformation request JSON"></textarea>
@@ -1335,7 +1428,7 @@ Lines starting with # are ignored."></textarea>
   <button class="cancel" onclick="cancelTransformJob()" id="btnTransformCancel" style="display:none">Cancel</button>
   <details class="space-form" id="transformImport">
     <summary>Import a report and replay it</summary>
-    <p class="space-help">Paste or open a polytool report (coordinate transformation, implicit relations, root enclosures, theorem matches or recurrence search). Replay recomputes it exactly from its embedded request; a changed number or label is rejected.</p>
+    <p class="space-help">Paste or open a polytool report (coordinate transformation, implicit relations, root enclosures, theorem matches, recurrence search or representation search). Replay recomputes it exactly from its embedded request; a changed number or label is rejected.</p>
     <textarea id="transformImportText" rows="6" spellcheck="false" aria-label="Report JSON to replay"></textarea>
     <div class="report-actions">
       <input type="file" id="transformImportFile" accept=".json,application/json" onchange="importTransformFile(this)" aria-label="Open a report file">
@@ -1354,9 +1447,9 @@ Lines starting with # are ignored."></textarea>
   Source code: <a href="https://github.com/PerAlexandersson/polytool">polytool</a>.
 </footer>
 
-<script src="pkg/polytool_web.js?v=20261027a"></script>
+<script src="pkg/polytool_web.js?v=20261027b"></script>
 <script>
-const ASSET_VERSION = '20261027a';
+const ASSET_VERSION = '20261027b';
 const EXAMPLES = {
   eulerian: {
     label: 'Eulerian polynomials A_n(t) \u2014 descent generating function on S_n',
@@ -3694,6 +3787,10 @@ const EVIDENCE_VOCABULARY = {
   certified_family_invariant: ['Certified for the family', 'certified', 'Transferred to every index by a map theorem whose conditions are certified.'],
   certified_by_reconstruction: ['Proved by reconstruction', 'certified', 'An exact reconstruction certificate proves the fitted rule for every index.'],
   equivalent_description: ['Equivalent description', 'certified', 'The seeds and relations determine exactly the transformed sequence.'],
+  equivalent_generating_description: ['Equivalent generating description', 'certified', 'Certified annihilation, sufficient initial or boundary data and a certified uniqueness argument: the description determines exactly this sequence.'],
+  certified_complete_space: ['Certified complete space', 'certified', 'Proved for every index as a member of a certified complete space of relations.'],
+  certified_annihilating_relation: ['Certified annihilating relation', 'transported', 'The relation holds for every index of the domain, but it is not certified to determine the sequence.'],
+  defining: ['Defining rule', 'transported', 'The source rule itself; every other result is relative to it.'],
   certified: ['Certified', 'certified', 'Proved exactly.'],
   exact_hypothesis: ['Checked exactly', 'certified', 'This hypothesis of the theorem is verified exactly for the recurrence.'],
   transported_identity: ['Transported identity', 'transported', 'An exact consequence of the defining recurrence: it holds for every index whenever that rule does.'],
@@ -4102,6 +4199,242 @@ function renderRecurrenceSpacesReport(report) {
     (result.representatives || []).map(rep => formulaHtml(ruleTextTex(rep.formula))).join('') + metaHtml(result.reason));
 }
 
+// --- Representation search report (polytool.recurrence-representation-search.v1) ---
+
+function weightLabel(weight) {
+  const w = weight || {};
+  if (w.kind === 'factorial_power') return 'coefficient of xᵏ ÷ ' + (w.power === 1 ? 'k!' : '(k!)^' + w.power);
+  if (w.kind === 'binomial') return 'coefficient of xᵏ × binom(k+' + w.m + ', ' + w.m + ')';
+  if (w.kind === 'inverse_binomial') return 'coefficient of xᵏ ÷ binom(k+' + w.m + ', ' + w.m + ')';
+  return humanizeCode(w.kind || 'weight');
+}
+
+// A short name for one allowed map of the request; all text is escaped by the caller.
+function transformationShortLabel(t) {
+  const kind = String((t && t.kind) || 'map');
+  if (kind === 'diagonal') return 'Diagonal: ' + weightLabel(t.weight);
+  if (kind === 'affine') return 'Substitute x ↦ ' + t.a + 'x + ' + t.b;
+  if (kind === 'multiply_power') return 'Multiply by x^' + t.power;
+  if (kind === 'divide_power') return 'Divide by x^' + t.power;
+  if (kind === 'derivative_antecedent') return 'Derivative antecedent, g = ' + (Array.isArray(t.g) ? t.g : []).join(', ');
+  return humanizeCode(kind);
+}
+
+function representationMapLabel(report, index) {
+  const list = (report.request && report.request.transformations) || [];
+  return Object.prototype.hasOwnProperty.call(list, index) ? transformationShortLabel(list[index]) : 'map ' + index;
+}
+
+function representationChainLabel(report, rep) {
+  if (!rep.chain || !rep.chain.length) return 'source';
+  return rep.chain.map(i => representationMapLabel(report, i)).join(' → ');
+}
+
+function descriptionCostText(cost) {
+  const c = cost || {};
+  return 'shift ' + c.shift_length + ' · derivative order ' + c.derivative_order + ' · coefficient degree ' +
+    c.coefficient_degree + ' · index degree ' + c.index_degree + ' · ' + c.component_count +
+    (c.component_count === 1 ? ' component' : ' components') + ' · reconstruction cost ' + c.reconstruction_cost;
+}
+
+function descriptionFormulaHtml(description, name) {
+  if (description.scalar) return formulaHtml(recordFormulaTex(description.scalar, description.text, name));
+  return String(description.text || '').split('; ')
+    .map(line => formulaHtml(ruleTextTex(line, {variable: 'x', name}))).join('');
+}
+
+function repComponentName(rep) {
+  const first = rep && rep.components && rep.components[0];
+  return /^[A-Za-z]$/.test(String(first)) ? String(first) : 'Q';
+}
+
+function showRepresentation(card, id) {
+  const element = document.getElementById('rep-' + card + '-' + id);
+  if (!element) return;
+  element.open = true;
+  if (element.scrollIntoView) element.scrollIntoView({block: 'nearest'});
+}
+
+function representationLinkButton(card, id) {
+  return '<button class="rep-link" onclick="showRepresentation(' + Number(card) + ',' + Number(id) + ')">#' + esc(id) + '</button>';
+}
+
+function repEdgeOutcome(edge, report, card) {
+  const label = representationMapLabel(report, edge.transformation);
+  const detail = edge.detail ? '<span class="report-meta"> ' + esc(edge.detail) + '</span>' : '';
+  if (edge.outcome === 'duplicate_map') {
+    return '<li class="rep-edge rep-edge-duplicate"><span class="rep-outcome">Duplicate map</span> ' + esc(label) +
+      (edge.representation != null ? ' has the same normal form as ' + representationLinkButton(card, edge.representation) : '') + detail + '</li>';
+  }
+  if (edge.outcome === 'rejected') {
+    return '<li class="rep-edge rep-edge-rejected"><span class="rep-outcome">Rejected</span> ' + esc(label) + detail + '</li>';
+  }
+  if (edge.outcome === 'skipped_budget') {
+    return '<li class="rep-edge rep-edge-skipped"><span class="rep-outcome">Skipped: budget</span> ' + esc(label) + detail + '</li>';
+  }
+  return '<li class="rep-edge"><span class="rep-outcome">' + esc(humanizeCode(edge.outcome)) + '</span> ' + esc(label) + detail + '</li>';
+}
+
+// The tree of maps: source, then every attempted map application in queue order.
+function representationTreeHtml(report, card) {
+  const reps = new Map((report.representations || []).map(rep => [rep.id, rep]));
+  const children = new Map();
+  (report.edges || []).forEach(edge => {
+    if (!children.has(edge.parent)) children.set(edge.parent, []);
+    children.get(edge.parent).push(edge);
+  });
+  const frontier = new Set(report.depth_frontier || []);
+  const visited = new Set();
+  const nodeHtml = (id, edge, level) => {
+    const rep = reps.get(id);
+    if (!rep || visited.has(id) || level > 12) return '';
+    visited.add(id);
+    const best = (rep.descriptions || [])[0];
+    let html = '<li class="rep-node">' + representationLinkButton(card, id) + ' <strong>' +
+      esc(edge ? representationMapLabel(report, edge.transformation) : 'Source') + '</strong> ';
+    if (best) html += evidenceBadge(best.label);
+    if (rep.equal_sequence_as) {
+      html += '<span class="rep-tag rep-tag-equal">same sequence as #' + esc(rep.equal_sequence_as.representation) + '</span>';
+    }
+    if (frontier.has(id)) html += '<span class="rep-tag rep-tag-frontier">depth limit: not expanded</span>';
+    else if (!rep.expanded && !rep.equal_sequence_as) html += '<span class="rep-tag rep-tag-frontier">not expanded</span>';
+    const kids = (children.get(id) || []).map(next => next.outcome === 'new_representation' && next.representation != null
+      ? nodeHtml(next.representation, next, level + 1) : repEdgeOutcome(next, report, card)).join('');
+    return html + (kids ? '<ul>' + kids + '</ul>' : '') + '</li>';
+  };
+  return '<ul class="rep-tree">' + nodeHtml(0, null, 0) + '</ul>';
+}
+
+function repBudgetHtml(report) {
+  const events = report.budget || [];
+  const frontier = report.depth_frontier || [];
+  let html = '';
+  if (events.length || report.status === 'budget_exhausted') {
+    html += '<div class="rep-budget" role="note"><strong>Budget exhausted: this search is incomplete.</strong>' +
+      '<p class="report-meta">A missing description or representation below is not evidence that it does not exist.</p><ul>' +
+      events.map(event => '<li><span class="rep-outcome">' + esc(humanizeCode(event.limit)) + '</span>' +
+        (event.representation != null ? ' at representation ' + esc(event.representation) : '') + ': ' + esc(event.detail) + '</li>').join('') +
+      '</ul></div>';
+  }
+  if (frontier.length) {
+    const depth = report.request && report.request.limits && report.request.limits.max_depth;
+    html += '<div class="rep-budget rep-depth" role="note">Depth limit' + (depth != null ? ' (' + esc(depth) + ')' : '') +
+      ' reached: the allowed maps were not applied to ' + frontier.map(id => '#' + esc(id)).join(', ') + '.</div>';
+  }
+  return html;
+}
+
+function renderRepresentationDescription(description, rep) {
+  const sameCode = description.label === description.evidence;
+  let html = '<div class="report-item rep-description">' + evidenceBadge(description.label) +
+    (sameCode ? '' : evidenceBadge(description.evidence)) +
+    '<span class="report-meta">' + esc(humanizeCode(description.kind)) + '</span>' +
+    descriptionFormulaHtml(description, repComponentName(rep)) +
+    '<p class="report-meta">' + esc(descriptionCostText(description.cost)) + '</p>';
+  const found = [description.provenance].concat(description.also_found_by || []).filter(Boolean);
+  if (found.length) html += '<p class="report-meta">Found by: ' + esc(found.join(', ')) + '</p>';
+  if (description.description) {
+    const d = description.description;
+    html += '<p class="report-meta">' + esc((d.seeds || []).length + ' seed rows from n = ' + d.first_index +
+      ((d.exceptional_index_conditions || []).length ? '; ' + d.exceptional_index_conditions.length + ' exceptional-index condition(s)' : '') +
+      ((d.boundary_conditions || []).length ? '; ' + d.boundary_conditions.length + ' boundary condition(s)' : '')) + '</p>';
+  }
+  html += metaHtml(description.note);
+  const u = description.assessment && description.assessment.uniqueness;
+  if (u) {
+    html += '<details><summary>Why the description is unique</summary>' + evidenceBadge(u.status) + metaHtml(u.statement) +
+      (u.reasons || []).map(metaHtml).join('') + '</details>';
+  } else if (description.assessment) {
+    html += '<p class="report-meta">' + evidenceBadge(description.assessment.status) + '</p>';
+  }
+  return html + '</div>';
+}
+
+// Small searches open every representation; larger ones open on request (tree links).
+const REPRESENTATION_OPEN_LIMIT = 6;
+
+function renderRepresentationNode(report, rep, card) {
+  const best = (rep.descriptions || [])[0];
+  const origin = rep.row_origin || 0;
+  const columns = (rep.components || ['Q']).map(c => c + '_n');
+  const open = (report.representations || []).length <= REPRESENTATION_OPEN_LIMIT ? ' open' : '';
+  let html = '<details class="rep-detail" id="rep-' + Number(card) + '-' + Number(rep.id) + '"' + open + '><summary><strong>Representation ' +
+    esc(rep.id) + '</strong> · ' + esc(representationChainLabel(report, rep)) + ' · ' + esc((rep.descriptions || []).length) +
+    ' description(s) ' + (best ? evidenceBadge(best.label) : '') + '</summary>';
+  const segments = (rep.map && rep.map.segments) || [];
+  html += '<h4>Coordinate map</h4>' + (rep.map && rep.map.identity
+    ? '<p class="report-meta">Identity: the source rows.</p>'
+    : segments.map(segment => '<p class="report-text">' + esc(segment) + '</p>').join('')) +
+    metaHtml('Index domain: ' + ((rep.map && rep.map.index_domain) || '') + '; components: ' + (rep.components || []).join(', '));
+  if (rep.depth > 0) {
+    html += '<div class="report-item">' + evidenceBadge(rep.reconstruction_verified ? 'checked_supplied_rows' : 'failed_on_rows') +
+      esc(rep.reconstruction_verified ? 'Inverting the whole chain reproduces all source rows exactly.'
+        : 'Inverting the chain did not reproduce every source row.') + '</div>';
+  }
+  if (rep.equal_sequence_as) {
+    html += '<div class="rep-equal"><strong>Same sequence as representation ' + esc(rep.equal_sequence_as.representation) +
+      '.</strong> ' + esc(rep.equal_sequence_as.certificate) + '</div>';
+  }
+  html += conditionsHtml(rep.map_conditions);
+  (rep.notes || []).forEach(note => { html += metaHtml(note); });
+  html += '<h4>Descriptions, simplest first</h4>';
+  html += (rep.descriptions || []).length
+    ? rep.descriptions.map(description => renderRepresentationDescription(description, rep)).join('')
+    : metaHtml('No description was found in this representation.');
+  if (rep.fits) {
+    html += metaHtml('Fit menu: ' + humanizeCode(rep.fits.status).toLowerCase() + '; ' + rep.fits.configurations_considered +
+      ' configurations considered, ' + rep.fits.fits_found + ' fit(s) found' + (rep.fits.reason ? '. ' + rep.fits.reason : '.'));
+  }
+  (rep.steps || []).forEach(step => { if (step.error) html += metaHtml('A transport step failed: ' + step.error); });
+  if ((rep.steps || []).length || (rep.spaces || []).length) {
+    html += metaHtml('Embedded certificates: ' + (rep.steps || []).length + ' transport step(s) and ' + (rep.spaces || []).length +
+      ' complete-space report(s); Replay checks each with its own verifier.');
+  }
+  html += rowsTableHtml('Rows', columns, rep.states || [], origin);
+  return html + '</details>';
+}
+
+function renderRepresentationSearchReport(report, index) {
+  const reps = report.representations || [];
+  const source = report.source || {};
+  const complete = report.status === 'complete';
+  let html = '<p><span class="rep-status ' + (complete ? 'rep-status-complete' : 'rep-status-partial') + '">' +
+    (complete ? 'Complete within the requested limits' : 'Budget exhausted: incomplete') + '</span> ' +
+    '<span class="report-meta">' + esc(reps.length) + ' representation(s), ' + esc((report.ranked || []).length) +
+    ' description(s), ' + esc(report.steps_used == null ? '?' : report.steps_used) + ' backend call(s)</span></p>';
+  html += repBudgetHtml(report);
+  html += '<h4>Source</h4><p class="report-meta">' + esc({defining_rule: 'Supplied defining rule', oeis: 'Bundled OEIS family',
+    rows_only: 'Rows only'}[source.kind] || humanizeCode(source.kind)) + '; ' + esc(source.row_count == null ? '?' : source.row_count) +
+    ' rows from n = ' + esc(source.row_origin == null ? '?' : source.row_origin) + '.</p>';
+  if (source.kind === 'rows_only') {
+    html += metaHtml('There is no defining rule, so every description is a finite fit to these rows.');
+  } else if (source.rule) {
+    html += formulaHtml(recordFormulaTex(source.rule, null, 'P'));
+  }
+  const maps = (report.request && report.request.transformations) || [];
+  html += '<p class="report-meta">Allowed maps: ' + esc(maps.map(transformationShortLabel).join('; ') || 'none') + '.</p>';
+  html += '<h4>Representations and maps</h4>' +
+    '<p class="report-meta">Each representation applies every allowed map. Maps are merged only when their normal forms are certified equal, never by comparing rows.</p>' +
+    representationTreeHtml(report, index);
+  const ranked = (report.ranked || []).slice(0, 6);
+  if (ranked.length) {
+    html += '<h4>Simplest descriptions overall</h4>' + listItems(ranked, item => {
+      const rep = reps.find(r => r.id === item.representation);
+      const description = rep && (rep.descriptions || [])[item.description];
+      return representationLinkButton(index, item.representation) + evidenceBadge(item.label) +
+        (description ? descriptionFormulaHtml(description, repComponentName(rep)) : '<p class="report-text">' + esc(item.text) + '</p>') +
+        '<p class="report-meta">' + esc(descriptionCostText(item.cost)) + '</p>';
+    });
+    if ((report.ranked || []).length > ranked.length) html += metaHtml('Showing the first ' + ranked.length + ' of ' + report.ranked.length + '; every representation below lists its own.');
+  }
+  html += '<h4>Each representation</h4>' + reps.map(rep => renderRepresentationNode(report, rep, index)).join('');
+  html += metaHtml('Certification is relative to the defining source, the maps actually enumerated and the finite supports searched.');
+  if ((report.conventions || []).length) {
+    html += '<details><summary>Conventions</summary>' + report.conventions.map(metaHtml).join('') + '</details>';
+  }
+  return html;
+}
+
 // Fallback for report types without a dedicated view: every object carrying
 // an `evidence` label is listed with its text, so no label is lost.
 function renderGenericEvidenceReport(report) {
@@ -4130,6 +4463,7 @@ const REPORT_RENDERERS = {
   'polytool.recurrence-theorems.v1': ['Interlacing theorems', renderTheoremReport],
   'polytool.root-enclosures.v1': ['Exact root enclosures', renderRootEnclosureReport],
   'polytool.recurrence-spaces.v1': ['Recurrence search', renderRecurrenceSpacesReport],
+  'polytool.recurrence-representation-search.v1': ['Representation search', renderRepresentationSearchReport],
 };
 
 function replayBannerHtml(entry) {
@@ -4167,6 +4501,11 @@ function transformReportSummary(report) {
   if (report.schema === 'polytool.recurrence-implicit.v1') return evidenceInfo(report.assessment && report.assessment.status).label + '.';
   if (report.schema === 'polytool.recurrence-theorems.v1') return (report.theorem_matches || []).length + ' conditional theorem match(es).';
   if (report.schema === 'polytool.root-enclosures.v1') return (report.items || []).length + ' polynomial(s) isolated.';
+  if (report.schema === 'polytool.recurrence-representation-search.v1') {
+    const certified = (report.ranked || []).filter(item => item.label !== 'finite_fit').length;
+    return (report.representations || []).length + ' representation(s), ' + certified + ' certified description(s)' +
+      (report.status === 'complete' ? '.' : '; budget exhausted, the search is incomplete.');
+  }
   return 'Report ready.';
 }
 
@@ -4215,6 +4554,60 @@ function readTransformRational(id, optional) {
   return text;
 }
 
+// Representation search: browser bounds are inside the library's service ceiling.
+const REPRESENTATION_BOUNDS = {depth: [1, 3, 2], representations: [2, 24, 12], rows: [1, 24]};
+const REPRESENTATION_MAPS = [
+  {id: 'diag_fact', label: 'Diagonal: divide the coefficient of xᵏ by (k!)ᵐ', checked: true,
+    build: o => ({kind: 'diagonal', weight: {kind: 'factorial_power', power: o.order}})},
+  {id: 'diag_inverse_binomial', label: 'Diagonal: divide the coefficient of xᵏ by binom(k+m, m)',
+    build: o => ({kind: 'diagonal', weight: {kind: 'inverse_binomial', m: o.order}})},
+  {id: 'diag_binomial', label: 'Diagonal: multiply the coefficient of xᵏ by binom(k+m, m)',
+    build: o => ({kind: 'diagonal', weight: {kind: 'binomial', m: o.order}})},
+  {id: 'f_polynomial', label: 'f-polynomial · (1+x)ᵈ P(x/(1+x))', checked: true,
+    build: o => ({kind: 'f_polynomial', schedule: o.schedule})},
+  {id: 'reversal', label: 'Reversal · xᵈ P(1/x)', checked: true,
+    build: o => ({kind: 'reversal', schedule: o.schedule})},
+  {id: 'symmetric_decomposition', label: 'Symmetric decomposition · P = a + x b',
+    build: o => ({kind: 'symmetric_decomposition', schedule: o.schedule})},
+  {id: 'gamma', label: 'Gamma coordinates (rows only)', build: o => ({kind: 'gamma', schedule: o.schedule})},
+  {id: 'shift', label: 'Substitute x ↦ x + 1', build: () => ({kind: 'affine', a: '1', b: '1'})},
+  {id: 'negate', label: 'Substitute x ↦ −x', build: () => ({kind: 'affine', a: '-1', b: '0'})},
+  {id: 'multiply_x', label: 'Multiply by x', build: () => ({kind: 'multiply_power', power: 1})},
+  {id: 'divide_x', label: 'Divide by x', build: () => ({kind: 'divide_power', power: 1})},
+  {id: 'derivative_antecedent', label: 'Derivative antecedent · P = D(x Q)',
+    build: () => ({kind: 'derivative_antecedent', g: ['0', '1']})},
+];
+
+function transformMode() {
+  return transformValue('transformMode') === 'search' ? 'search' : 'single';
+}
+
+function populateRepresentationMaps() {
+  const list = document.getElementById('repMapList');
+  if (!list || list.dataset.ready) return;
+  list.dataset.ready = '1';
+  list.innerHTML = REPRESENTATION_MAPS.map(map => '<label><input type="checkbox" id="repMap_' + map.id + '"' +
+    (map.checked ? ' checked' : '') + ' onchange="transformControlsChanged()"> <span>' + esc(map.label) + '</span></label>').join('');
+}
+
+function buildRepresentationFields(request) {
+  populateRepresentationMaps();
+  const options = {
+    schedule: {first_index: readTransformInteger('repScheduleIndex', 0, 1000000),
+      first_degree: readTransformInteger('repScheduleDegree', 0, 512),
+      step: readTransformInteger('repScheduleStep', 0, 16)},
+    order: readTransformInteger('repWeightOrder', 1, 8),
+  };
+  const maps = REPRESENTATION_MAPS.filter(map => document.getElementById('repMap_' + map.id).checked);
+  if (!maps.length) throw new Error('Select at least one transformation to search with.');
+  request.transformations = maps.map(map => map.build(options));
+  request.limits = {max_depth: readTransformInteger('repMaxDepth', REPRESENTATION_BOUNDS.depth[0], REPRESENTATION_BOUNDS.depth[1]),
+    max_representations: readTransformInteger('repMaxRepresentations', REPRESENTATION_BOUNDS.representations[0],
+      REPRESENTATION_BOUNDS.representations[1])};
+  if (!document.getElementById('repFits').checked) request.fits = false;
+  if (!document.getElementById('repSpaces').checked) request.certified_spaces = false;
+}
+
 function transformEndpointFor(kind, source) {
   return IMPLICIT_KINDS.includes(kind) && source !== 'rows' ? 'implicit' : 'transform';
 }
@@ -4261,8 +4654,10 @@ function transformCandidateInterval() {
 
 function buildTransformRequest() {
   const source = transformValue('transformSource');
+  const searching = transformMode() === 'search';
   const kind = transformValue('transformKind');
-  const endpoint = transformEndpointFor(kind, source);
+  const endpoint = searching ? 'representations' : transformEndpointFor(kind, source);
+  const rowMax = searching ? REPRESENTATION_BOUNDS.rows[1] : 64;
   const request = {};
   if (source === 'oeis') {
     const id = String(transformValue('transformOeis')).trim().toUpperCase();
@@ -4271,7 +4666,7 @@ function buildTransformRequest() {
       throw new Error(id + ' is not in the bundled catalog. Paste its recurrence JSON instead.');
     }
     request.oeis_id = id;
-    request.row_count = readTransformInteger('transformRowCount', 1, 64);
+    request.row_count = readTransformInteger('transformRowCount', 1, rowMax);
   } else if (source === 'recurrence') {
     const text = String(transformValue('transformRecurrence')).trim();
     if (!text) throw new Error('Paste a recurrence JSON record, or use the recurrence found in the Recurrence tab.');
@@ -4280,7 +4675,7 @@ function buildTransformRequest() {
     try { record = JSON.parse(text); } catch (error) { throw new Error('Recurrence JSON is not valid JSON: ' + error.message); }
     if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('Recurrence JSON must be an object.');
     request.source_recurrence = record;
-    request.row_count = readTransformInteger('transformRowCount', 1, 64);
+    request.row_count = readTransformInteger('transformRowCount', 1, rowMax);
   } else {
     const input = getInput();
     if (input.length > 1048576) throw new Error('Polynomial input is too large (limit: 1 MiB).');
@@ -4291,6 +4686,10 @@ function buildTransformRequest() {
     if (parsed.length > 256) throw new Error('At most 256 rows can be transformed.');
     request.rows = parsed.map(row => row.coefficients);
     request.row_origin = readTransformInteger('transformOrigin', 0, 1000000);
+  }
+  if (searching) {
+    buildRepresentationFields(request);
+    return {endpoint, request};
   }
   request.transformation = buildTransformation(kind);
   if (document.getElementById('transformSearch').checked) request.search = {};
@@ -4308,6 +4707,12 @@ function transformExample(name) {
     'narayana-reversal': {source: 'oeis', oeis: 'A001263', rows: 8, kind: 'reversal', schedule: [1, 0, 1], search: true, roots: true},
     'binomial-factorial': {source: 'oeis', oeis: 'A007318', rows: 8, kind: 'diagonal', weight: ['factorial_power', 1], search: true, roots: false},
     'weighted-eulerian': {source: 'oeis', oeis: 'A065826', rows: 9, kind: 'diagonal', weight: ['inverse_binomial', 1], search: true, roots: false},
+    'search-pascal': {mode: 'search', source: 'oeis', oeis: 'A007318', rows: 10, maps: ['diag_fact'], schedule: [0, 0, 1],
+      depth: 1, representations: 8},
+    'search-eulerian': {mode: 'search', source: 'oeis', oeis: 'A065826', rows: 9, maps: ['diag_inverse_binomial', 'f_polynomial'],
+      schedule: [1, 0, 1], depth: 2, representations: 12},
+    'search-budget': {mode: 'search', source: 'oeis', oeis: 'A007318', rows: 8, maps: ['reversal', 'f_polynomial', 'diag_fact'],
+      schedule: [0, 0, 1], depth: 2, representations: 6},
   };
   return examples[name] || null;
 }
@@ -4315,12 +4720,25 @@ function transformExample(name) {
 function loadTransformExample(name) {
   const example = transformExample(name);
   if (!example) return;
+  populateRepresentationMaps();
   const set = (id, value) => { document.getElementById(id).value = value; };
+  set('transformMode', example.mode || 'single');
+  if (example.mode === 'search') {
+    REPRESENTATION_MAPS.forEach(map => { document.getElementById('repMap_' + map.id).checked = example.maps.includes(map.id); });
+    set('repScheduleIndex', example.schedule[0]);
+    set('repScheduleDegree', example.schedule[1]);
+    set('repScheduleStep', example.schedule[2]);
+    set('repWeightOrder', example.order || 1);
+    set('repMaxDepth', example.depth);
+    set('repMaxRepresentations', example.representations);
+    document.getElementById('repFits').checked = true;
+    document.getElementById('repSpaces').checked = true;
+  }
   set('transformSource', example.source);
   set('transformOeis', example.oeis);
   set('transformRowCount', example.rows);
-  set('transformKind', example.kind);
-  if (example.schedule) {
+  if (example.kind) set('transformKind', example.kind);
+  if (example.mode !== 'search' && example.schedule) {
     set('transformScheduleIndex', example.schedule[0]);
     set('transformScheduleDegree', example.schedule[1]);
     set('transformScheduleStep', example.schedule[2]);
@@ -4329,8 +4747,10 @@ function loadTransformExample(name) {
     set('transformWeight', example.weight[0]);
     set('transformWeightOrder', example.weight[1]);
   }
-  document.getElementById('transformSearch').checked = example.search;
-  document.getElementById('transformRootDomain').checked = example.roots;
+  if (example.mode !== 'search') {
+    document.getElementById('transformSearch').checked = example.search;
+    document.getElementById('transformRootDomain').checked = example.roots;
+  }
   set('transformIntervalLower', '');
   set('transformIntervalUpper', '');
   transformControlsChanged();
@@ -4357,9 +4777,15 @@ function populateTransformCatalog() {
 }
 
 function updateTransformControls() {
+  populateRepresentationMaps();
   const source = transformValue('transformSource');
   const kind = transformValue('transformKind');
+  const searching = transformMode() === 'search';
   const endpoint = transformEndpointFor(kind, source);
+  document.getElementById('transformSingleFields').hidden = searching;
+  document.getElementById('transformSearchFields').hidden = !searching;
+  document.getElementById('btnTransform').textContent = searching ? 'Search representations' : 'Transform';
+  document.getElementById('transformRowCount').max = searching ? REPRESENTATION_BOUNDS.rows[1] : 64;
   const params = TRANSFORM_PARAMETERS[kind] || [];
   document.querySelectorAll('[data-transform-param]').forEach(field => {
     field.hidden = !params.includes(field.dataset.transformParam);
@@ -4381,7 +4807,8 @@ function updateTransformControls() {
     rows: 'the rows entered above only (no recurrence, so every result is checked on these rows only)'}[source];
   document.getElementById('transformSummary').textContent = transformCustom
     ? 'Custom request: the JSON below is sent unchanged.'
-    : (endpoint === 'implicit' ? 'Implicit relations from ' : 'Coordinate change using ') + sourceText + '.';
+    : (searching ? 'Bounded search over equivalent representations, starting from '
+      : (endpoint === 'implicit' ? 'Implicit relations from ' : 'Coordinate change using ')) + sourceText + '.';
 }
 
 function refreshTransformRequestPreview() {
@@ -4438,7 +4865,9 @@ function prepareTransformRequest() {
 // --- Worker and actions ---
 
 const TRANSFORM_WORKER_FUNCTIONS = ['transform_recurrence', 'transform_recurrence_implicit', 'root_enclosures',
-  'recurrence_theorems', 'verify_report'];
+  'recurrence_theorems', 'verify_report', 'search_recurrence_representations'];
+const TRANSFORM_ENDPOINT_FUNCTIONS = {transform: 'transform_recurrence', implicit: 'transform_recurrence_implicit',
+  representations: 'search_recurrence_representations'};
 let transformEntries = [];
 let transformCatalog = null;
 let transformCustom = false;
@@ -4543,11 +4972,11 @@ async function runTransform() {
     return;
   }
   transformEntries = [];
-  setResult('Transforming…', 'transform');
+  setResult(job.endpoint === 'representations' ? 'Searching representations…' : 'Transforming…', 'transform');
   const started = performance.now();
   try {
-    const text = await callTransformWorker(job.endpoint === 'implicit' ? 'transform_recurrence_implicit' : 'transform_recurrence',
-      job.text, 'Transforming');
+    const text = await callTransformWorker(TRANSFORM_ENDPOINT_FUNCTIONS[job.endpoint] || 'transform_recurrence',
+      job.text, job.endpoint === 'representations' ? 'Searching representations' : 'Transforming');
     const data = JSON.parse(text);
     if (data.error) {
       setResult(span('err', 'Request rejected: ' + data.error), 'transform');

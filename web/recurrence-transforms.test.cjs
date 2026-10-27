@@ -169,11 +169,11 @@ test('replay states, imports and unknown future report types', async () => {
   assert.match(failed, /Replay failed: &lt;img/);
   assert.match(failed, /<details><summary>Show the unverified content/);
   // A later report type renders through the generic evidence renderer.
-  const future = {schema: 'polytool.recurrence-representation-search.v1', request: {evidence: 'ignored'},
+  const future = {schema: 'polytool.future-report.v1', request: {evidence: 'ignored'},
     candidates: [{evidence: 'certified_by_reconstruction', text: 'Q[n+1] = x Q[n]'},
       {nested: {evidence: 'some_new_label', statement: unsafe}}]};
   const generic = context.renderReportCard({report: future, origin: 'imported', replay: null}, 0);
-  assert.match(generic, /No dedicated view for polytool.recurrence-representation-search.v1/);
+  assert.match(generic, /No dedicated view for polytool.future-report.v1/);
   assert.match(generic, /Proved by reconstruction/);
   assert.match(generic, /Some new label/);
   assert.doesNotMatch(generic, /ignored|<img/);
@@ -381,4 +381,287 @@ test('actual WASM: theorem matches, enclosures, spaces and browser limits', {
   const formulaContext = vm.createContext({katexInline: tex => tex});
   vm.runInContext(slice('function spaceFormulaHtml(', 'function renderRecurrenceSpaces('), formulaContext);
   assert.match(formulaContext.spaceFormulaHtml(spaces.results[0].representatives[0].formula), /Q_\{n\+1\}.*Q'_\{n\}|Q_\{n\}'/);
+});
+
+// --- Representation search view ---
+
+function syntheticSearchReport() {
+  const cost = {shift_length: 1, derivative_order: 1, coefficient_degree: 1, index_degree: 0, component_count: 1,
+    reconstruction_cost: 2};
+  const description = (label, evidence, kind, text, extra) => Object.assign({label, kind, evidence, text, cost,
+    provenance: 'steps[0]'}, extra || {});
+  return {
+    schema: 'polytool.recurrence-representation-search.v1', status: 'budget_exhausted',
+    request: {transformations: [{kind: 'diagonal', weight: {kind: 'factorial_power', power: 1}},
+      {kind: 'affine', a: '-1', b: '0'}, {kind: 'gamma', schedule: {first_index: 0, first_degree: 0, step: 1}}],
+    limits: {max_depth: 1}},
+    source: {kind: 'oeis', row_origin: 0, row_count: 3},
+    representations: [
+      {id: 0, depth: 0, chain: [], map: {identity: true, segments: [], index_domain: 'n >= 0'}, components: ['P'],
+        row_origin: 0, states: [[['1']], [['1', '1']], [['1', '2', '1']]], reconstruction_verified: true, expanded: true,
+        descriptions: [description('equivalent_generating_description', 'defining', 'defining_rule', 'P(n) = (1 + t) P(n-1)')]},
+      {id: 1, depth: 1, parent: 0, transformation: 0, chain: [0], map: {identity: false, index_domain: 'n >= 0',
+        segments: ['Q_n(x) = ' + unsafe]}, components: ['Q'], row_origin: 0,
+      states: [[['1']], [['1', '1']], [['1', '2', '1/2']]], reconstruction_verified: true, expanded: false,
+      notes: ['note ' + unsafe],
+      descriptions: [
+        description('equivalent_generating_description', 'certified_complete_space', 'certified_space',
+          '(n) P(n) = (n + t) P(n-1) + t P\'(n-1)', {assessment: {status: 'equivalent_description',
+            uniqueness: {status: 'certified', statement: 'unique', reasons: [unsafe]}}, also_found_by: ['fits']}),
+        description('certified_annihilating_relation', 'transported_identity', 'implicit_transport', 'D Q[n+1] - D Q[n] - Q[n] = 0'),
+        description('finite_fit', 'finite_fit', 'finite_fit', 'P(n) = (1 + t) P(n-1)'),
+      ],
+      fits: {status: 'complete', configurations_considered: 42, fits_found: 3},
+      steps: [{source_description: 0, error: 'step ' + unsafe}], spaces: []},
+      {id: 2, depth: 1, parent: 0, transformation: 1, chain: [1], map: {identity: false, index_domain: 'n >= 0', segments: ['Q_n(x) = P_n(-x)']},
+        components: ['Q'], row_origin: 0, states: [[['1']]], reconstruction_verified: false, expanded: true,
+        equal_sequence_as: {representation: 0, other_description: 0, description: 0, certificate: 'same relations ' + unsafe},
+        descriptions: [description('finite_fit', 'finite_fit', 'finite_fit', 'P(n) = (1 - t) P(n-1)')]},
+    ],
+    edges: [
+      {parent: 0, transformation: 0, outcome: 'new_representation', representation: 1},
+      {parent: 0, transformation: 1, outcome: 'new_representation', representation: 2},
+      {parent: 0, transformation: 2, outcome: 'rejected', detail: 'gamma: ' + unsafe},
+      {parent: 2, transformation: 1, outcome: 'duplicate_map', representation: 0, detail: 'certified equal map normal forms'},
+      {parent: 2, transformation: 0, outcome: 'skipped_budget', detail: 'transformations[0] was not applied'},
+    ],
+    ranked: [{representation: 0, description: 0, label: 'equivalent_generating_description', text: 'P(n) = (1 + t) P(n-1)', cost},
+      {representation: 1, description: 0, label: 'equivalent_generating_description', text: 'x', cost}],
+    depth_frontier: [1],
+    budget: [{limit: 'max_representations', representation: 2, detail: 'transformations[0] was not applied ' + unsafe}],
+    steps_used: 12, conventions: ['convention ' + unsafe],
+  };
+}
+
+test('representation search view marks maps, duplicates, budget events and evidence', () => {
+  const {context} = pageContext();
+  const card = context.renderReportCard({report: syntheticSearchReport(), origin: 'computed', replay: null}, 3);
+  assert.doesNotMatch(card, /No dedicated view|<img|undefined|NaN|\[object Object\]/);
+  assert.match(card, /<h3>Representation search<\/h3>/);
+  assert.match(card, /&lt;img src=x onerror=alert\(1\)&gt;/);
+  // The tree: source, new representations, duplicate, rejected and skipped edges, equal sequence, frontier.
+  const tree = card.slice(card.indexOf('class="rep-tree"'), card.indexOf('Simplest descriptions overall'));
+  assert.match(tree, /rep-link" onclick="showRepresentation\(3,0\)">#0<\/button> <strong>Source/);
+  assert.match(tree, /<strong>Diagonal: coefficient of xᵏ ÷ k!<\/strong>/);
+  assert.match(tree, /rep-tag-equal">same sequence as #0/);
+  assert.match(tree, /rep-tag-frontier">depth limit: not expanded/);
+  assert.match(tree, /rep-edge-duplicate"><span class="rep-outcome">Duplicate map<\/span>[^<]*Substitute x ↦ -1x \+ 0 has the same normal form as <button[^>]*>#0/);
+  assert.match(tree, /rep-edge-rejected"><span class="rep-outcome">Rejected<\/span> Gamma/);
+  assert.match(tree, /rep-edge-skipped"><span class="rep-outcome">Skipped: budget<\/span>/);
+  // Budget events are visible and state that the search is incomplete.
+  assert.match(card, /class="rep-status rep-status-partial">Budget exhausted: incomplete/);
+  assert.match(card, /class="rep-budget"[^>]*>.*Max representations.*at representation 2/s);
+  assert.match(card, /Depth limit \(1\) reached.*#1/);
+  // Descriptions keep the six-class scheme: label and evidence badges with their own classes.
+  const one = card.slice(card.indexOf('id="rep-3-1"'), card.indexOf('id="rep-3-2"'));
+  assert.match(one, /evidence-certified[^>]*data-evidence="equivalent_generating_description"[^>]*>Equivalent generating description/);
+  assert.match(one, /evidence-certified[^>]*data-evidence="certified_complete_space"[^>]*>Certified complete space/);
+  assert.match(one, /evidence-transported[^>]*data-evidence="certified_annihilating_relation"[^>]*>Certified annihilating relation/);
+  assert.match(one, /evidence-transported[^>]*data-evidence="transported_identity"/);
+  assert.match(one, /evidence-fit[^>]*data-evidence="finite_fit"[^>]*>Finite fit/);
+  assert.equal((one.match(/data-evidence="finite_fit"/g) || []).length, 1, 'label equal to evidence is shown once');
+  assert.match(one, /\(n\) Q_\{n\} = \(n \+ x\) Q_\{n-1\} \+ x Q'_\{n-1\}/);
+  assert.match(one, /Q'_\{n\+1\} - Q'_\{n\} - Q_\{n\} = 0/);
+  assert.match(one, /shift 1 · derivative order 1 · coefficient degree 1 · index degree 0 · 1 component · reconstruction cost 2/);
+  assert.match(one, /Found by: steps\[0\], fits/);
+  assert.match(one, /Why the description is unique.*evidence-certified[^>]*>Certified/s);
+  assert.match(one, /Fit menu: complete; 42 configurations considered, 3 fit\(s\) found/);
+  assert.match(one, /A transport step failed: step &lt;img/);
+  assert.match(one, /<th><k>Q_n<\/k><\/th>/);
+  const two = card.slice(card.indexOf('id="rep-3-2"'));
+  assert.match(two, /Same sequence as representation 0\./);
+  assert.match(two, /evidence-fail[^>]*>Fails on rows/);
+  // Every evidence class used by the search has a distinct tone and none is neutral.
+  for (const code of ['equivalent_generating_description', 'certified_complete_space', 'certified_annihilating_relation', 'defining']) {
+    assert.doesNotMatch(context.evidenceBadge(code), /evidence-neutral/, code);
+  }
+  assert.equal(context.transformReportSummary(syntheticSearchReport()),
+    '3 representation(s), 2 certified description(s); budget exhausted, the search is incomplete.');
+  // A malformed or minimal report renders without failing.
+  const minimal = context.renderReportCard({report: {schema: 'polytool.recurrence-representation-search.v1'},
+    origin: 'imported', replay: null}, 0);
+  assert.match(minimal, /Representation search/);
+  assert.doesNotMatch(minimal, /undefined|NaN/);
+});
+
+test('representation search requests follow the form and stay within browser bounds', () => {
+  const {context, document} = pageContext();
+  const set = (id, value) => { document.getElementById(id).value = value; };
+  const request = () => JSON.parse(JSON.stringify(context.buildTransformRequest()));
+  vm.runInContext(`transformCatalog = [{id: "A007318", name: "Pascal"}, {id: "A065826", name: "Weighted"}, {id: "A008292", name: "Eulerian"}]`, context);
+  context.loadTransformExample('search-pascal');
+  assert.equal(document.getElementById('transformMode').value, 'search');
+  context.updateTransformControls();
+  assert.equal(document.getElementById('transformSearchFields').hidden, false);
+  assert.equal(document.getElementById('transformSingleFields').hidden, true);
+  assert.equal(document.getElementById('btnTransform').textContent, 'Search representations');
+  assert.match(document.getElementById('transformSummary').textContent, /representations/);
+  assert.deepEqual(request(), {endpoint: 'representations', request: {oeis_id: 'A007318', row_count: 10,
+    transformations: [{kind: 'diagonal', weight: {kind: 'factorial_power', power: 1}}],
+    limits: {max_depth: 1, max_representations: 8}}});
+  // The checklist, the shared schedule and the optional switches reach the request.
+  context.loadTransformExample('search-eulerian');
+  const eulerian = request();
+  assert.deepEqual(eulerian.request.transformations, [{kind: 'diagonal', weight: {kind: 'inverse_binomial', m: 1}},
+    {kind: 'f_polynomial', schedule: {first_index: 1, first_degree: 0, step: 1}}]);
+  assert.deepEqual(eulerian.request.limits, {max_depth: 2, max_representations: 12});
+  for (const id of ['reversal', 'symmetric_decomposition', 'gamma', 'shift', 'negate', 'multiply_x', 'divide_x',
+    'derivative_antecedent', 'diag_binomial']) {
+    document.getElementById('repMap_' + id).checked = true;
+  }
+  document.getElementById('repFits').checked = false;
+  document.getElementById('repSpaces').checked = false;
+  const all = request().request;
+  assert.equal(all.transformations.length, 11);
+  assert.deepEqual(all.transformations.filter(t => t.kind === 'affine'), [{kind: 'affine', a: '1', b: '1'}, {kind: 'affine', a: '-1', b: '0'}]);
+  assert.deepEqual(all.transformations.find(t => t.kind === 'derivative_antecedent'), {kind: 'derivative_antecedent', g: ['0', '1']});
+  assert.equal(all.fits, false);
+  assert.equal(all.certified_spaces, false);
+  // Bounds and validation.
+  set('repMaxDepth', '4');
+  assert.throws(() => context.buildTransformRequest(), /from 1 to 3/);
+  set('repMaxDepth', '3');
+  set('repMaxRepresentations', '25');
+  assert.throws(() => context.buildTransformRequest(), /from 2 to 24/);
+  set('repMaxRepresentations', '24');
+  set('transformRowCount', '25');
+  assert.throws(() => context.buildTransformRequest(), /from 1 to 24/);
+  set('transformRowCount', '10');
+  vm.runInContext('REPRESENTATION_MAPS.forEach(map => { document.getElementById("repMap_" + map.id).checked = false; })', context);
+  assert.throws(() => context.buildTransformRequest(), /Select at least one transformation/);
+  // Rows only and recurrence sources share the single-transformation parsing.
+  document.getElementById('repMap_reversal').checked = true;
+  set('transformSource', 'recurrence');
+  set('transformRecurrence', '{');
+  assert.throws(() => context.buildTransformRequest(), /not valid JSON/);
+  set('transformRecurrence', '{"schema": "polytool.recurrence.v1"}');
+  assert.equal(request().request.source_recurrence.schema, 'polytool.recurrence.v1');
+  // A custom request keeps its endpoint and is sent unchanged.
+  document.getElementById('transformRequest').value = '{"oeis_id": "A007318"}';
+  document.getElementById('transformEndpoint').value = 'representations';
+  context.editTransformRequest();
+  assert.deepEqual(JSON.parse(JSON.stringify(context.prepareTransformRequest())),
+    {endpoint: 'representations', text: '{"oeis_id": "A007318"}'});
+  // The worker exposes the search and the single-transformation modes still build as before.
+  assert.ok(vm.runInContext('TRANSFORM_WORKER_FUNCTIONS', context).includes('search_recurrence_representations'));
+  assert.equal(vm.runInContext('TRANSFORM_ENDPOINT_FUNCTIONS.representations', context), 'search_recurrence_representations');
+  context.loadTransformExample('eulerian-f');
+  assert.equal(document.getElementById('transformMode').value, 'single');
+  assert.equal(context.buildTransformRequest().endpoint, 'transform');
+});
+
+test('actual WASM: representation search runs, renders, replays and rejects tampering', {
+  skip: !process.env.POLYTOOL_WASM_DIR,
+}, async () => {
+  const wasm = await loadWasm();
+  const {context, document} = pageContext({wasm_bindgen: wasm});
+  for (const name of ['search_recurrence_representations', 'verify_recurrence_representation_search']) {
+    assert.equal(typeof wasm[name], 'function', name);
+  }
+  context.populateTransformCatalog();
+  const best = report => report.ranked[0];
+  const expected = {
+    'search-pascal': report => {
+      assert.equal(report.status, 'complete');
+      const found = report.representations[1].descriptions.filter(d => d.evidence === 'certified_complete_space');
+      assert.ok(found.length >= 2 && found.every(d => d.label === 'equivalent_generating_description'));
+    },
+    'search-eulerian': report => {
+      assert.ok(report.representations.some(r => r.descriptions.some(d => d.evidence === 'certified_by_reconstruction')));
+      assert.ok(report.representations.length >= 3);
+    },
+    'search-budget': report => {
+      assert.equal(report.status, 'budget_exhausted');
+      assert.ok(report.budget.some(event => event.limit === 'max_representations'));
+      assert.ok(report.representations.some(r => r.equal_sequence_as));
+      assert.ok(report.edges.some(edge => edge.outcome === 'skipped_budget'));
+    },
+  };
+  for (const [name, check] of Object.entries(expected)) {
+    context.loadTransformExample(name);
+    const job = context.prepareTransformRequest();
+    assert.equal(job.endpoint, 'representations');
+    const raw = wasm.search_recurrence_representations(job.text);
+    const report = JSON.parse(raw);
+    assert.ok(!report.error, name + ': ' + raw);
+    assert.equal(report.schema, 'polytool.recurrence-representation-search.v1');
+    check(report);
+    assert.ok(best(report));
+    const card = context.renderReportCard({report, origin: 'computed', replay: null}, 0);
+    assert.match(card, /class="rep-tree"/);
+    assert.match(card, /data-evidence="equivalent_generating_description"/);
+    assert.doesNotMatch(card, /No dedicated view|undefined|NaN|\[object Object\]/, name);
+    if (report.status === 'budget_exhausted') assert.match(card, /Budget exhausted: this search is incomplete/);
+    for (const rep of report.representations) assert.ok(card.includes('id="rep-0-' + rep.id + '"'), name + ' rep ' + rep.id);
+    assert.match(context.transformReportSummary(report), /representation\(s\)/);
+    // Compact, pretty-printed and reparsed forms replay, through both exports.
+    for (const text of [raw, JSON.stringify(report, null, 2)]) {
+      const checked = JSON.parse(wasm.verify_report(text));
+      assert.equal(checked.verified, true, name);
+      assert.equal(checked.representations, report.representations.length);
+      assert.equal(JSON.parse(wasm.verify_recurrence_representation_search(text)).status, report.status);
+    }
+    if (process.env.POLYTOOL_CLI) {
+      cliVerify('recurrence-search-representations', report);
+      const cli = spawnSync(process.env.POLYTOOL_CLI, ['recurrence-search-representations'], {input: job.text, encoding: 'utf8'});
+      assert.equal(cli.status, 0, cli.stderr);
+      assert.deepEqual(JSON.parse(cli.stdout), report, name + ': CLI and browser reports agree');
+    }
+    // Tampered numbers, labels and budget events are rejected.
+    const tamperedState = JSON.parse(raw);
+    tamperedState.representations[1].states[2][0][0] = '7';
+    assert.ok(JSON.parse(wasm.verify_report(JSON.stringify(tamperedState))).error, name + ' state');
+    const relabelled = JSON.parse(raw);
+    const target = relabelled.representations.flatMap(r => r.descriptions).find(d => d.label === 'finite_fit' || d.label === 'certified_annihilating_relation');
+    if (target) {
+      target.label = 'equivalent_generating_description';
+      assert.ok(JSON.parse(wasm.verify_recurrence_representation_search(JSON.stringify(relabelled))).error, name + ' label');
+    }
+    const hidden = JSON.parse(raw);
+    if (hidden.budget) {
+      delete hidden.budget;
+      hidden.status = 'complete';
+      assert.ok(JSON.parse(wasm.verify_report(JSON.stringify(hidden))).error, name + ' hidden budget');
+    }
+    const reranked = JSON.parse(raw);
+    reranked.ranked.reverse();
+    assert.ok(JSON.parse(wasm.verify_report(JSON.stringify(reranked))).error, name + ' ranking');
+  }
+
+  // Duplicate maps, rejected maps and the depth frontier from a hand-written request.
+  const mixed = {oeis_id: 'A007318', row_count: 8, limits: {max_depth: 2, max_representations: 12},
+    transformations: [{kind: 'affine', a: '-1', b: '0'},
+      {kind: 'gamma', schedule: {first_index: 0, first_degree: 0, step: 1}}, {kind: 'divide_power', power: 1}]};
+  const mixedReport = JSON.parse(wasm.search_recurrence_representations(JSON.stringify(mixed)));
+  assert.ok(mixedReport.edges.some(edge => edge.outcome === 'duplicate_map'));
+  assert.ok(mixedReport.edges.some(edge => edge.outcome === 'rejected'));
+  const mixedCard = context.renderReportCard({report: mixedReport, origin: 'computed', replay: null}, 0);
+  assert.match(mixedCard, /rep-edge-duplicate/);
+  assert.match(mixedCard, /rep-edge-rejected/);
+  assert.match(mixedCard, /Depth limit \(2\) reached/);
+  assert.equal(JSON.parse(wasm.verify_report(JSON.stringify(mixedReport))).verified, true);
+  // Rows only: every description is a finite fit, and the page says so.
+  const rowsOnly = JSON.parse(wasm.search_recurrence_representations(JSON.stringify({
+    rows: [['1'], ['1', '1'], ['1', '2', '1'], ['1', '3', '3', '1'], ['1', '4', '6', '4', '1'], ['1', '5', '10', '10', '5', '1']],
+    row_origin: 0, limits: {max_depth: 1}, transformations: [{kind: 'diagonal', weight: {kind: 'factorial_power', power: 1}}]})));
+  assert.equal(rowsOnly.source.kind, 'rows_only');
+  assert.ok(rowsOnly.ranked.every(item => item.label === 'finite_fit'));
+  assert.match(context.renderReportCard({report: rowsOnly, origin: 'computed', replay: null}, 0), /every description is a finite fit/);
+
+  // Limits above the service ceiling, request size and malformed requests are rejected, never run.
+  const base = {oeis_id: 'A007318', transformations: [{kind: 'reversal', schedule: {first_index: 0, first_degree: 0, step: 1}}]};
+  for (const limits of [{max_depth: 5}, {max_representations: 65}, {max_steps: 100000}, {max_operations: 100000000}]) {
+    assert.match(JSON.parse(wasm.search_recurrence_representations(JSON.stringify(Object.assign({limits}, base)))).error,
+      /service ceiling/, JSON.stringify(limits));
+  }
+  assert.match(JSON.parse(wasm.search_recurrence_representations(' '.repeat(1048577))).error, /1 MiB/);
+  assert.ok(JSON.parse(wasm.search_recurrence_representations('{"oeis_id": 1}')).error);
+  assert.ok(JSON.parse(wasm.search_recurrence_representations('{"unknown": true}')).error);
+  const oversized = JSON.parse(wasm.search_recurrence_representations(JSON.stringify(Object.assign({}, base, {limits: {max_depth: 1}}))));
+  oversized.request.limits.max_depth = 99;
+  assert.match(JSON.parse(wasm.verify_report(JSON.stringify(oversized))).error, /service ceiling/);
+  const wrongSchema = JSON.parse(JSON.stringify(oversized));
+  wrongSchema.request.limits.max_depth = 1;
+  wrongSchema.schema = 'polytool.recurrence-transform.v1';
+  assert.ok(JSON.parse(wasm.verify_recurrence_representation_search(JSON.stringify(wrongSchema))).error);
 });

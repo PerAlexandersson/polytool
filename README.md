@@ -966,7 +966,10 @@ renderer-error recovery and the older finder modes. In the Transform tab it
 checks the examples, the evidence-label styles, clipboard and download export,
 theorem and root sub-reports, replay of a computed report and of imported
 original and tampered reports, implicit and vector results, stale-setting
-invalidation, cancellation, and the hand-off from the Recurrence tab.
+invalidation, cancellation, and the hand-off from the Recurrence tab. It also
+drives the representation-search mode: checklist and bounds, the tree, budget
+and equal-sequence markers, duplicate and rejected maps, replay, a tampered or
+relabelled import, and the phone layout.
 It uses a temporary localhost server and closes its own browser and server.
 No hosting deployment is involved.
 
@@ -2363,8 +2366,9 @@ answer.  `real_rooted_antiderivative_constant_multiples_bigint` restricts the
 kernel to multiples of a modulus, and `antiderivative_exact_bigint` /
 `antiderivative_rational_bigint` give zero-constant antiderivatives (the
 integral version reports any non-exact division).  The search statistics are
-deterministic counters; no wall-clock times are recorded.  The operation is
-not yet exposed through the MCP server.
+deterministic counters; no wall-clock times are recorded.  The MCP tool
+`enumerate_real_rooted` exposes the operation with conservative ceilings (see
+the MCP server section).
 
 ## MCP server
 
@@ -2433,6 +2437,19 @@ Available MCP tools:
 - `assess_generating_description`
 - `search_recurrence_representations`
 - `verify_recurrence_representation_search`
+- `enumerate_real_rooted`
+
+`enumerate_real_rooted` takes `{"degree", "leading_coefficients_descending",
+"max_results", "max_nodes", "max_coefficient_bits"}` (the options of
+`polytool enumerate-real-rooted`; the prefix `a_0, a_1, ...` is descending,
+`leading_desc` is accepted as an alias) and returns the fields of its JSON
+output with ascending exact integer strings.  Unlike the CLI, the MCP server
+bounds the work: degree at most 32, at most 33 prefix coefficients of at most
+256 bits, `max_nodes` default 5000 and at most 25000, `max_results` default 500
+and at most 2000, `max_coefficient_bits` default 1024 and at most 2048.  A
+larger value is rejected and a limit cannot be lifted.  A budget that stops the
+search yields `status: "resource_limit"` with `limit_reached`, never an empty
+"complete" answer.
 
 `check_tnn_network` and `recognize_brenti_strip_digraph` return the same
 fields as the JSON output of `polytool tnn-network` and
@@ -2587,6 +2604,27 @@ limits above the default `TransformLimits` service ceilings are rejected, as
 in the MCP server. The guided form generates at most 64 rows, and enclosure
 widths must be at least `2^-256`. Computations run in a Web Worker that
 **Cancel** terminates.
+
+`search_recurrence_representations(request)` and
+`verify_recurrence_representation_search(report)` run and replay the bounded
+representation search (`polytool.recurrence-representation-search.v1`);
+`verify_report` dispatches that schema as well. Limits above
+`RepresentationSearchLimits::service_ceiling()` are rejected, as in the MCP
+server, and a report larger than 1 MiB is refused at the source because its
+replay would be. In the Transform tab, the mode **Search representations**
+offers a checklist of allowed maps (shared degree-bound and diagonal-order
+fields), depth 1 to 3, at most 24 representations and at most 24 rows. The
+dedicated view shows the status and every budget event (an incomplete search
+is labelled as such), the tree of maps with duplicate, rejected and skipped
+applications and `equal_sequence_as` marked by symbol and border as well as
+colour, the simplest descriptions overall, and for each representation its map,
+reconstruction check, ranked descriptions with their label, evidence and
+uniqueness argument, and its rows. The labels `equivalent_generating_description`
+and `certified_complete_space` use the certified style,
+`certified_annihilating_relation` and `defining` the transported style, and
+`finite_fit` the fit style, so the six-class scheme is unchanged. Small searches
+(at most six representations) open every representation; larger ones open from
+the tree links.
 
 The browser wrapper parses polynomial input with `parse_polynomials_bigint`.
 Every integer coefficient returned across its string-based WASM/JSON boundary

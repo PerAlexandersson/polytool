@@ -693,3 +693,25 @@ pub struct RecurrenceRepresentationSearchToolRequest {
 pub struct VerifyRecurrenceRepresentationSearchToolRequest {
     pub report: serde_json::Value,
 }
+
+/// Input of `enumerate_real_rooted`: all real-rooted integer polynomials of
+/// one degree with prescribed leading coefficients.  The fields mirror the
+/// options of `polytool enumerate-real-rooted`.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EnumerateRealRootedRequest {
+    /// Degree `n` of the polynomials, from 2 to 32.
+    pub degree: usize,
+    /// The first `t` leading coefficients `a_0, a_1, ..., a_(t-1)` in
+    /// **descending** order (`3 <= t <= n + 1`, `a_0 != 0`; JSON integers or
+    /// exact decimal strings of at most 256 bits).
+    #[serde(alias = "leading_desc")]
+    pub leading_coefficients_descending: Vec<BigIntCoefficientInput>,
+    /// Stop after this many polynomials (default 500, maximum 2000).
+    pub max_results: Option<usize>,
+    /// Stop after this many search nodes (default 5000, maximum 25000).
+    pub max_nodes: Option<u64>,
+    /// Stop when a derivative-tower coefficient needs more than this many
+    /// bits (default 1024, maximum 2048).
+    pub max_coefficient_bits: Option<u64>,
+}

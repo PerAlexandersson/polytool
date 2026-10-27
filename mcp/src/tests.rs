@@ -1839,3 +1839,200 @@ fn representation_search_tools_round_trip_and_replay() {
         }))
         .is_err());
 }
+
+fn enumerate_request(value: serde_json::Value) -> EnumerateRealRootedRequest {
+    serde_json::from_value(value).expect("valid enumerate_real_rooted request")
+}
+
+#[test]
+fn enumerate_real_rooted_lists_the_cubic_family_in_ascending_order() {
+    let server = PolynomialToolsServer::new();
+    let Json(response) = server
+        .enumerate_real_rooted(Parameters(enumerate_request(json!({
+            "degree": 3, "leading_coefficients_descending": [1, 0, -3]
+        }))))
+        .unwrap();
+    assert_eq!(response.command, "enumerate-real-rooted");
+    assert_eq!(response.status, "complete");
+    assert_eq!(response.limit_reached, None);
+    assert_eq!(response.output_coefficient_order, "ascending");
+    assert_eq!(response.leading_coefficients_descending, ["1", "0", "-3"]);
+    // x^3 - 3x + c is real-rooted exactly for c = -2, ..., 2.
+    let expected: Vec<Vec<String>> = (-2..=2)
+        .map(|c: i32| vec![c.to_string(), "-3".into(), "0".into(), "1".into()])
+        .collect();
+    assert_eq!(response.polynomials, expected);
+    assert_eq!(response.count, 5);
+    assert_eq!(response.stats.results_emitted, 5);
+    assert_eq!(response.limits.max_nodes, 5_000);
+    assert_eq!(response.limits.max_results, 500);
+    assert_eq!(response.limits.max_coefficient_bits, 1_024);
+    // The JSON field names are those of the CLI.
+    let value = json!(response);
+    for field in [
+        "command",
+        "degree",
+        "leading_coefficients_descending",
+        "output_coefficient_order",
+        "status",
+        "limit_reached",
+        "limits",
+        "count",
+        "polynomials",
+        "stats",
+    ] {
+        assert!(value.get(field).is_some(), "missing field {field}");
+    }
+    assert!(value["limit_reached"].is_null());
+    for field in [
+        "derivative_levels",
+        "nodes_examined",
+        "polynomials_by_level",
+    ] {
+        assert!(value["stats"].get(field).is_some(), "missing stat {field}");
+    }
+}
+
+#[test]
+fn enumerate_real_rooted_accepts_string_coefficients_and_the_cli_alias() {
+    let server = PolynomialToolsServer::new();
+    let Json(response) = server
+        .enumerate_real_rooted(Parameters(enumerate_request(json!({
+            "degree": 4, "leading_desc": ["1", "0", "-4"]
+        }))))
+        .unwrap();
+    assert_eq!(response.status, "complete");
+    // (x^2 - 2)^2 and x^2 (x^2 - 4) are real-rooted members.
+    for expected in [["4", "0", "-4", "0", "1"], ["0", "0", "-4", "0", "1"]] {
+        assert!(response
+            .polynomials
+            .iter()
+            .any(|p| p.iter().map(String::as_str).eq(expected)));
+    }
+    // A negative leading coefficient is allowed.
+    let Json(negative) = server
+        .enumerate_real_rooted(Parameters(enumerate_request(json!({
+            "degree": 3, "leading_coefficients_descending": ["-1", "0", "3"]
+        }))))
+        .unwrap();
+    assert_eq!(negative.count, 5);
+}
+
+#[test]
+fn enumerate_real_rooted_reports_each_budget_as_a_resource_limit() {
+    let server = PolynomialToolsServer::new();
+    let Json(by_results) = server
+        .enumerate_real_rooted(Parameters(enumerate_request(json!({
+            "degree": 3, "leading_coefficients_descending": [1, 0, -3], "max_results": 2
+        }))))
+        .unwrap();
+    assert_eq!(by_results.status, "resource_limit");
+    assert_eq!(by_results.limit_reached.as_deref(), Some("max_results"));
+    assert_eq!(by_results.count, 2);
+    // An initial segment of the complete sorted list.
+    assert_eq!(by_results.polynomials[0][0], "-2");
+    assert_eq!(by_results.polynomials[1][0], "-1");
+
+    let Json(by_nodes) = server
+        .enumerate_real_rooted(Parameters(enumerate_request(json!({
+            "degree": 10, "leading_coefficients_descending": [1, 0, -15], "max_nodes": 3
+        }))))
+        .unwrap();
+    assert_eq!(by_nodes.status, "resource_limit");
+    assert_eq!(by_nodes.limit_reached.as_deref(), Some("max_nodes"));
+    assert!(by_nodes.stats.nodes_examined <= 3);
+
+    let Json(by_bits) = server
+        .enumerate_real_rooted(Parameters(enumerate_request(json!({
+            "degree": 8, "leading_coefficients_descending": [1, 0, -15],
+            "max_coefficient_bits": 4
+        }))))
+        .unwrap();
+    assert_eq!(by_bits.status, "resource_limit");
+    assert_eq!(
+        by_bits.limit_reached.as_deref(),
+        Some("max_coefficient_bits")
+    );
+}
+
+#[test]
+fn enumerate_real_rooted_rejects_invalid_and_excessive_requests() {
+    let server = PolynomialToolsServer::new();
+    let call = |value: serde_json::Value| {
+        server.enumerate_real_rooted(Parameters(enumerate_request(value)))
+    };
+    let message = |value: serde_json::Value| {
+        call(value)
+            .err()
+            .expect("request is rejected")
+            .message
+            .to_string()
+    };
+    assert!(
+        message(json!({"degree": 1, "leading_coefficients_descending": [1, 0, 1]}))
+            .contains("degree must be at least 2")
+    );
+    assert!(
+        message(json!({"degree": 3, "leading_coefficients_descending": [1, 0]}))
+            .contains("leading coefficients")
+    );
+    assert!(
+        message(json!({"degree": 3, "leading_coefficients_descending": [0, 0, 1]}))
+            .contains("nonzero")
+    );
+    assert!(
+        message(json!({"degree": 3, "leading_coefficients_descending": [1, 0, "x"]}))
+            .contains("invalid integer")
+    );
+    // Ceilings on the degree, the budgets and the prefix size.
+    assert!(
+        message(json!({"degree": 33, "leading_coefficients_descending": [1, 0, -3]}))
+            .contains("degree = 33 exceeds the MCP limit 32")
+    );
+    for (name, value) in [
+        ("max_nodes", 25_001u64),
+        ("max_results", 2_001),
+        ("max_coefficient_bits", 2_049),
+    ] {
+        let text = message(json!({"degree": 3,
+            "leading_coefficients_descending": [1, 0, -3], name: value}));
+        assert!(
+            text.contains(name) && text.contains("exceeds the MCP limit"),
+            "{text}"
+        );
+    }
+    let huge = format!("1{}", "0".repeat(100));
+    assert!(
+        message(json!({"degree": 3, "leading_coefficients_descending": [1, 0, huge]}))
+            .contains("bits")
+    );
+    assert!(
+        message(json!({"degree": 32, "leading_coefficients_descending": vec![1; 34]}))
+            .contains("at most 33 leading coefficients")
+    );
+    // Unknown fields are refused by the schema.
+    assert!(serde_json::from_value::<EnumerateRealRootedRequest>(
+        json!({"degree": 3, "leading_coefficients_descending": [1, 0, -3], "unbounded": true})
+    )
+    .is_err());
+}
+
+#[test]
+fn enumerate_real_rooted_schema_documents_the_cli_fields() {
+    let schema = serde_json::to_value(schemars::schema_for!(EnumerateRealRootedRequest)).unwrap();
+    assert_eq!(schema["additionalProperties"], false);
+    let properties = schema["properties"].as_object().expect("schema properties");
+    for name in [
+        "degree",
+        "leading_coefficients_descending",
+        "max_results",
+        "max_nodes",
+        "max_coefficient_bits",
+    ] {
+        assert!(properties.contains_key(name), "missing {name}");
+    }
+    let required = schema["required"].as_array().expect("required fields");
+    assert!(required.contains(&json!("degree")));
+    assert!(required.contains(&json!("leading_coefficients_descending")));
+    assert!(!required.contains(&json!("max_nodes")));
+}

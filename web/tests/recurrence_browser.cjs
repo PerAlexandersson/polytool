@@ -169,6 +169,123 @@ async function transformChecks(page, width, setDelay) {
   assert.ok(await fitsViewport(page), 'Transform page fits the viewport');
 }
 
+
+// Transform tab, "Search representations": checklist, tree, budget, replay, tamper and phone layout.
+async function representationChecks(page, width) {
+  const results = page.locator('#results-transform');
+  await page.click('.tab[data-tab="transform"]');
+  await page.selectOption('#transformExample', 'search-pascal');
+  assert.equal(await page.locator('#transformMode').inputValue(), 'search');
+  assert.equal(await page.locator('#transformSearchFields').isVisible(), true);
+  assert.equal(await page.locator('#transformKind').isVisible(), false);
+  assert.equal(await page.locator('#btnTransform').innerText(), 'Search representations');
+  assert.equal(await page.locator('#repMapList input[type=checkbox]').count(), 12);
+  assert.equal(await page.locator('#repMap_diag_fact').isChecked(), true);
+  assert.equal(await page.locator('#repMap_gamma').isChecked(), false);
+  assert.equal(await page.locator('#transformEndpoint').inputValue(), 'representations');
+  assert.equal(JSON.parse(await page.locator('#transformRequest').inputValue()).limits.max_depth, 1);
+  assert.ok(await fitsViewport(page), 'the search form fits the viewport');
+  await screenshot(page, width + '-representation-form');
+
+  let text = await transform(page);
+  assert.match(text, /Representation search/);
+  assert.match(text, /Complete within the requested limits/);
+  for (const label of ['Equivalent generating description', 'Certified complete space', 'Transported identity']) {
+    assert.ok(text.includes(label), label);
+  }
+  assert.ok(await results.locator('.rep-tree').isVisible(), 'the map tree is shown');
+  assert.ok(await results.locator('.katex').count() > 0, 'formulas render as mathematics');
+  const styles = await page.evaluate(() => ['certified', 'transported', 'fit'].map(tone => {
+    const badge = document.querySelector('#results-transform .evidence-' + tone);
+    if (!badge) return 'missing';
+    const style = getComputedStyle(badge);
+    return [style.backgroundColor, style.borderStyle, style.color].join('|');
+  }));
+  assert.ok(!styles.includes('missing'), 'certified, transported and finite-fit badges are shown: ' + styles.join(', '));
+  assert.equal(new Set(styles).size, styles.length, 'evidence classes look different');
+  assert.ok(await fitsViewport(page), 'the representation tree and descriptions fit the viewport');
+  // The tree links open the representation's section.
+  assert.equal(await page.evaluate(() => document.getElementById('rep-0-1').open), true, 'small searches open every representation');
+  await page.evaluate(() => { document.getElementById('rep-0-1').open = false; });
+  await results.locator('.rep-tree .rep-link', {hasText: '#1'}).first().click();
+  assert.equal(await page.evaluate(() => document.getElementById('rep-0-1').open), true);
+  assert.ok(await fitsViewport(page), 'an opened representation fits the viewport');
+  await screenshot(page, width + '-representation-pascal');
+
+  // Replay, export, and a tampered import.
+  await clickAndWait(page, results.locator('button', {hasText: 'Replay (verify)'}).first());
+  assert.match(await results.innerText(), /Replay passed/);
+  const [download] = await Promise.all([page.waitForEvent('download'),
+    results.locator('button', {hasText: 'Download JSON'}).first().click()]);
+  assert.equal(download.suggestedFilename(), 'recurrence-representation-search.v1.json');
+  const downloaded = fs.readFileSync(await download.path(), 'utf8');
+  const tampered = JSON.parse(downloaded);
+  tampered.representations[1].states[2][0][1] = '3';
+  await page.locator('#transformImport').evaluate(el => { el.open = true; });
+  await page.fill('#transformImportText', JSON.stringify(tampered));
+  await clickAndWait(page, page.locator('#btnTransformImport'));
+  text = await results.innerText();
+  assert.match(text, /Replay failed/);
+  assert.match(text, /Show the unverified content/);
+  const relabelled = JSON.parse(downloaded);
+  relabelled.representations[0].descriptions[0].label = 'finite_fit';
+  await page.fill('#transformImportText', JSON.stringify(relabelled));
+  await clickAndWait(page, page.locator('#btnTransformImport'));
+  assert.match(await results.innerText(), /Replay failed/);
+  await page.fill('#transformImportText', downloaded);
+  await clickAndWait(page, page.locator('#btnTransformImport'));
+  assert.match(await results.innerText(), /Replay passed/);
+  assert.ok(await results.locator('.rep-tree').isVisible(), 'an imported report uses the dedicated view');
+
+  // Budget events and equal sequences are visible.
+  await page.selectOption('#transformExample', 'search-budget');
+  text = await transform(page);
+  assert.match(text, /Budget exhausted: incomplete/);
+  assert.match(text, /Budget exhausted: this search is incomplete/);
+  assert.match(text, /Max representations/);
+  assert.match(text, /same sequence as #0/);
+  assert.match(text, /Skipped: budget/);
+  assert.ok(await results.locator('.rep-budget').first().isVisible());
+  assert.ok(await fitsViewport(page), 'the budget notice fits the viewport');
+  await screenshot(page, width + '-representation-budget');
+
+  // Duplicate and rejected maps from the checklist; bounds are enforced in the form.
+  await page.selectOption('#transformExample', 'search-pascal');
+  await page.uncheck('#repMap_diag_fact');
+  await page.check('#repMap_negate');
+  await page.check('#repMap_gamma');
+  await page.check('#repMap_divide_x');
+  await page.fill('#repMaxDepth', '2');
+  text = await transform(page);
+  assert.ok(await results.locator('.rep-edge-duplicate').count() >= 1, 'a duplicate map is marked');
+  assert.ok(await results.locator('.rep-edge-rejected').count() >= 1, 'a rejected map is marked');
+  assert.match(text, /Depth limit \(2\) reached/);
+  assert.ok(await fitsViewport(page), 'duplicate and rejected edges fit the viewport');
+  await page.fill('#repMaxDepth', '4');
+  assert.equal(await page.evaluate(() => transformEntries.length), 0);
+  assert.match(await results.innerText(), /Settings changed/);
+  assert.match(await transform(page), /whole number from 1 to 3/);
+  await page.fill('#repMaxDepth', '1');
+  await page.fill('#repMaxRepresentations', '25');
+  assert.match(await transform(page), /whole number from 2 to 24/);
+  await page.fill('#repMaxRepresentations', '8');
+  await page.locator('#repMapList input[type=checkbox]:checked').evaluateAll(boxes => boxes.forEach(box => box.click()));
+  assert.match(await transform(page), /Select at least one transformation/);
+  // A custom request above the service ceiling is rejected by the export, not run.
+  await page.locator('#transformAdvanced').evaluate(el => { el.open = true; });
+  await page.fill('#transformRequest', JSON.stringify({oeis_id: 'A007318', limits: {max_depth: 9},
+    transformations: [{kind: 'divide_power', power: 1}]}));
+  assert.match(await transform(page), /Request rejected: max_depth = 9 exceeds the service ceiling/);
+
+  // Back to a single transformation: the form and the button follow.
+  await page.selectOption('#transformExample', 'eulerian-f');
+  assert.equal(await page.locator('#transformMode').inputValue(), 'single');
+  assert.equal(await page.locator('#btnTransform').innerText(), 'Transform');
+  assert.equal(await page.locator('#transformSearchFields').isVisible(), false);
+  assert.equal(await page.locator('#transformKind').isVisible(), true);
+  assert.match(await transform(page), /Coordinate transformation/);
+}
+
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
@@ -305,8 +422,9 @@ async function transformChecks(page, width, setDelay) {
         }
         assert.equal(await page.locator('#tryDenominator').isDisabled(), false);
         await transformChecks(page, width, ms => { workerDelay = ms; });
+        await representationChecks(page, width);
         assert.deepEqual(errors, []);
-        console.log(`${width}px: guided controls, exact rows/origins, examples, copy, backend replay, partial search, errors, stale input, tab routing, cancellation, legacy modes and the Transform tab passed`);
+        console.log(`${width}px: guided controls, exact rows/origins, examples, copy, backend replay, partial search, errors, stale input, tab routing, cancellation, legacy modes and the Transform tab and representation search passed`);
       } finally { await context.close(); }
     }
   } finally {

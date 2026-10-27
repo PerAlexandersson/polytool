@@ -1406,6 +1406,18 @@ impl PolynomialToolsServer {
             ),
         ])))
     }
+
+    #[tool(
+        description = "List EVERY real-rooted integer polynomial p(x) = a_0 x^n + a_1 x^(n-1) + ... + a_n of degree n whose first t leading coefficients are prescribed (3 <= t <= n + 1, a_0 != 0 of either sign); reducible polynomials and repeated roots are included. Exact Greaves--Syatriadi derivative-tower search (arXiv:2504.09241) with certified endpoints; no floating point. Arguments: degree (2..=32), leading_coefficients_descending (a_0, a_1, ..., a_(t-1) in DESCENDING order; integers or exact decimal strings of at most 256 bits; alias leading_desc), and optional budgets max_results (default 500, maximum 2000), max_nodes (default 5000, maximum 25000), max_coefficient_bits (default 1024, maximum 2048); a larger value is rejected. Returns the fields of `polytool enumerate-real-rooted --json`: polynomials as ASCENDING exact integer strings c_0..c_n (c_k = a_(n-k)) sorted lexicographically by (a_t, ..., a_n), count, status complete (the full set, possibly empty) or resource_limit (an initial segment of the full sorted set; limit_reached names max_nodes, max_results or max_coefficient_bits), the applied limits, and deterministic search stats. A complete enumeration is a certified finite computation for that one prefix, not a statement about a family; with only two prescribed coefficients the set can be infinite, which is why t >= 3 is required."
+    )]
+    pub fn enumerate_real_rooted(
+        &self,
+        Parameters(input): Parameters<crate::requests::EnumerateRealRootedRequest>,
+    ) -> Result<Json<crate::responses::EnumerateRealRootedResponse>, McpError> {
+        Ok(Json(crate::enumeration::enumerate_real_rooted_response(
+            &input,
+        )?))
+    }
 }
 
 #[tool_handler(router = self.tool_router)]

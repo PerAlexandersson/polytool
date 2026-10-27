@@ -874,6 +874,44 @@ Example arguments:
 }
 ```
 
+### `enumerate_real_rooted`
+
+List every real-rooted integer polynomial of one degree with prescribed
+leading coefficients (the Greaves--Syatriadi derivative-tower search with exact
+certified endpoints; the same operation as `polytool enumerate-real-rooted`).
+Reducible polynomials and repeated roots are included.
+
+Example arguments:
+
+```json
+{
+  "degree": 3,
+  "leading_coefficients_descending": [1, 0, -3],
+  "max_results": 100
+}
+```
+
+`leading_coefficients_descending` lists `a_0, a_1, ..., a_(t-1)` of
+`a_0 x^n + a_1 x^(n-1) + ... + a_n` in **descending** order, with
+`3 <= t <= n + 1` and `a_0 != 0` of either sign (JSON integers or exact decimal
+strings; `leading_desc` is accepted as an alias). The result has the fields of
+the CLI's JSON output: `command`, `degree`, `leading_coefficients_descending`,
+`output_coefficient_order` (always `ascending`), `status`, `limit_reached`,
+`limits`, `count`, `polynomials` and `stats`. Each polynomial is a list of exact
+integer strings `c_0, ..., c_n` in **ascending** order, sorted
+lexicographically by `(a_t, ..., a_n)`; for the example the five polynomials
+`x^3 - 3x + c`, `c = -2, ..., 2`.
+
+`status` is `complete` (the full set, possibly empty) or `resource_limit` (an
+initial segment of the full sorted set; `limit_reached` is `max_nodes`,
+`max_results` or `max_coefficient_bits`). The server enforces ceilings that the
+CLI does not: degree at most 32, at most 256 bits per prescribed coefficient,
+`max_nodes` default 5000 and at most 25000, `max_results` default 500 and at
+most 2000, `max_coefficient_bits` default 1024 and at most 2048. A larger value
+is an `invalid_params` error, and the budgets cannot be lifted. A complete
+enumeration is a certified finite computation for one prefix, not a statement
+about a family.
+
 ## Development
 
 Run the MCP server tests:

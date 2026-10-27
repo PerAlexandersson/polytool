@@ -83,6 +83,7 @@ fn lists_tools_and_calls_properties() {
     assert!(tool_names.contains(&"bicyclic_sieving"));
     assert!(tool_names.contains(&"check_polynomial_family"));
     assert!(tool_names.contains(&"find_recurrence"));
+    assert!(tool_names.contains(&"enumerate_real_rooted"));
     for name in ["check_tnn_network", "recognize_brenti_strip_digraph"] {
         let tool = tools_array
             .iter()

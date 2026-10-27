@@ -4,6 +4,7 @@
 //! response types below are their JSON schemas.  Exact integers and rationals
 //! are serialized as strings.
 
+mod enumeration;
 mod family;
 mod limits;
 mod parsing;
@@ -17,6 +18,7 @@ mod server;
 mod tests;
 mod theorems;
 
+pub use requests::EnumerateRealRootedRequest;
 pub use requests::RecurrenceTheoremsRequest;
 pub use requests::{
     AssessGeneratingDescriptionToolRequest, RecurrenceImplicitToolRequest,
@@ -61,6 +63,9 @@ pub use responses::{
     RealRootsItem, RealRootsResponse, RecurrenceSearchStatus, ResidueClassItem, ResultantResponse,
     RootOfUnityEvaluationItem, StripDigraphEdgeItem, StripDigraphItem, TnnFailureItem,
     TnnNetworkResponse,
+};
+pub use responses::{
+    EnumerateRealRootedLimits, EnumerateRealRootedResponse, EnumerateRealRootedStats,
 };
 pub use responses::{
     LeftProductionResponse, PfNetworkItem, PfNetworkOptionsItem, PfNetworkResponse,
