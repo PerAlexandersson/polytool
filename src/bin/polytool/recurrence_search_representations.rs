@@ -33,6 +33,11 @@ pub(crate) fn print_recurrence_search_representations_help() {
     println!("                     registry: multiply_power, divide_power, reversal, affine,");
     println!("                     mobius, f_polynomial, gamma, symmetric_decomposition,");
     println!("                     diagonal, derivative_antecedent)");
+    println!(
+        "                     and the lossy derivative {{\"kind\":\"derivative\",\"order\":m}}:"
+    );
+    println!("                     its lost coefficients are recorded (lost_data) and the parent");
+    println!("                     is assessed through Q with and without them");
     println!("  search             fit bounds {{max_rec_len, max_var_deg, max_idx_deg,");
     println!("                     max_diff_deg, try_denominator, max_candidates}}");
     println!("                     (default 2, 2, 1, 1, true, 2000)");
@@ -58,6 +63,10 @@ pub(crate) fn print_recurrence_search_representations_help() {
     println!("  ranked             all descriptions by shift length, derivative order,");
     println!("                     coefficient degree, index degree, components, reconstruction");
     println!("  budget, status     limits that cut work; status complete | budget_exhausted");
+    println!("  steps[k].implicit_relation  a certified (also implicit-only) parent relation");
+    println!("                     transported through diagonal, derivative_antecedent or");
+    println!("                     derivative maps, with carried conditions and, for lossy maps,");
+    println!("                     the parent's description with and without the lost data");
     println!();
     println!("Options:");
     println!("  --verify    Replay a report: rerun the search, replay every step and space");

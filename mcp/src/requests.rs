@@ -715,3 +715,19 @@ pub struct EnumerateRealRootedRequest {
     /// bits (default 1024, maximum 2048).
     pub max_coefficient_bits: Option<u64>,
 }
+
+/// Direct implicit-relation search request
+/// (`polytool::recurrence::ImplicitRelationSearchRequest`); the library
+/// validates the strict schema.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ImplicitRelationSearchToolRequest {
+    pub request: serde_json::Value,
+}
+
+/// A `polytool.recurrence-implicit-search.v1` report to replay exactly.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VerifyImplicitRelationSearchToolRequest {
+    pub report: serde_json::Value,
+}

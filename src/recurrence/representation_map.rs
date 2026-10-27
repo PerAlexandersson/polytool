@@ -20,12 +20,14 @@
 //!   multiply. Two products are equal when the powers of `k!` agree and the
 //!   rational parts agree as polynomials after cross multiplication.
 //! - **Opaque segments** (`gamma`, `symmetric_decomposition`,
-//!   `derivative_antecedent`) are equal only when their parameters are equal.
+//!   `derivative_antecedent`, the lossy `derivative`) are equal only when their
+//!   parameters are equal.
 //!
 //! Identity segments are removed. Equality of normal forms is a sufficient,
 //! exact certificate of equal maps; unequal normal forms never imply unequal
 //! maps, so such representations are simply kept apart. Rows are never
-//! compared for deduplication.
+//! compared for deduplication. A chain with lossy maps is inverted with the
+//! lost data recorded for each of them (`LostDataRecord`).
 
 use super::diagonal::diagonal_products_equal;
 use super::*;
@@ -462,23 +464,82 @@ pub(super) fn apply_chain(
 }
 
 /// Undo `chain` on image states, returning the reconstructed source rows.
+#[cfg(test)]
 pub(super) fn invert_chain(
     chain: &[&RecurrenceTransformation],
     origin: usize,
     states: &[Vec<Vec<Q>>],
 ) -> Result<Vec<Vec<Q>>, String> {
+    invert_chain_with_lost_data(chain, origin, states, &[])
+}
+
+/// Undo `chain` on image states with the recorded lost data of its lossy
+/// maps, returning the reconstructed source rows. A lossy map without a
+/// record (or a record at a bijective map) is an error.
+pub(super) fn invert_chain_with_lost_data(
+    chain: &[&RecurrenceTransformation],
+    origin: usize,
+    states: &[Vec<Vec<Q>>],
+    lost: &[LostDataRecord],
+) -> Result<Vec<Vec<Q>>, String> {
+    if lost.iter().any(|r| r.chain_position >= chain.len()) {
+        return Err("a lost-data record lies outside the chain".into());
+    }
     let mut current = states.to_vec();
     for (step, t) in chain.iter().enumerate().rev() {
+        let record = lost.iter().find(|r| r.chain_position == step);
         let mut previous = Vec::with_capacity(current.len());
         for (i, state) in current.iter().enumerate() {
+            let lost_row = record
+                .map(|r| {
+                    r.rows
+                        .get(i)
+                        .ok_or_else(|| format!("lost data of map {step} misses row {i}"))
+                        .and_then(|row| super::implicit::decode_poly(row))
+                })
+                .transpose()?;
             let row = t
-                .inverse_row(origin + i, state)
+                .inverse_row_with_lost_data(origin + i, state, lost_row.as_deref())
                 .map_err(|e| format!("inverse of map {step} ({}): {e}", t.kind_name()))?;
             previous.push(vec![row]);
         }
         current = previous;
     }
     Ok(current.into_iter().map(|mut s| s.remove(0)).collect())
+}
+
+/// The lost data of every lossy map of `chain` applied to the scalar source
+/// rows `rows[i] = P_(origin + i)`.
+pub(super) fn chain_lost_data(
+    chain: &[&RecurrenceTransformation],
+    origin: usize,
+    rows: &[Vec<Q>],
+) -> Result<Vec<LostDataRecord>, String> {
+    let mut records = Vec::new();
+    for (position, t) in chain.iter().enumerate() {
+        let RecurrenceTransformation::Derivative { order } = t else {
+            continue;
+        };
+        let entering = apply_chain(&chain[..position], origin, rows)?;
+        let mut lost = Vec::with_capacity(entering.len());
+        for (i, state) in entering.iter().enumerate() {
+            let row = state
+                .first()
+                .filter(|_| state.len() == 1)
+                .ok_or_else(|| format!("map {position} needs scalar rows"))?;
+            let data = t
+                .lost_data(origin + i, row)
+                .map_err(|e| format!("map {position}: {e}"))?
+                .unwrap_or_default();
+            lost.push(super::implicit::encode_poly(&data));
+        }
+        records.push(LostDataRecord {
+            chain_position: position,
+            order: *order,
+            rows: lost,
+        });
+    }
+    Ok(records)
 }
 
 #[cfg(test)]

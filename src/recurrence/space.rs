@@ -558,7 +558,7 @@ fn encode_polys(polys: &[Poly]) -> ExactRows {
         .map(|p| p.coeffs().iter().map(ToString::to_string).collect())
         .collect()
 }
-fn encode_matrix(matrix: &[Vec<Q>]) -> ExactRows {
+pub(super) fn encode_matrix(matrix: &[Vec<Q>]) -> ExactRows {
     matrix
         .iter()
         .map(|r| r.iter().map(ToString::to_string).collect())
@@ -954,7 +954,10 @@ fn column_at(
     Ok(p)
 }
 
-fn residual_matrix(
+/// The residual matrix of the support `cols` at the `count` base indices
+/// from `start`: one row per `X`-coefficient of each residual, one column per
+/// monomial. Columns at lag `target` enter positively, the others negatively.
+pub(super) fn residual_matrix(
     rows: &[Poly],
     origin: usize,
     start: usize,
@@ -1483,12 +1486,76 @@ fn leader_coverage(
     }))
 }
 
-fn kernel_limits(l: &RecurrenceSpaceLimits) -> RationalKernelLimits {
+pub(super) fn kernel_limits(l: &RecurrenceSpaceLimits) -> RationalKernelLimits {
     RationalKernelLimits {
         max_entries: l.max_matrix_entries,
         max_operations: l.max_operations,
         max_coefficient_bits: l.max_coefficient_bits,
     }
+}
+
+/// Check an exact kernel certificate against `matrix` (`width` columns):
+/// dimensions, every basis vector is a null vector with the unit
+/// free-column witness, and `inverse_minor` inverts the rank minor. Returns
+/// the parsed basis. Shared by the complete-space and implicit-relation
+/// verifiers.
+pub(super) fn check_kernel_certificate(
+    matrix: &[Vec<Q>],
+    width: usize,
+    cert: &RecurrenceSpaceCertificate,
+    limits: &RecurrenceSpaceLimits,
+) -> Result<Vec<Vec<Q>>, String> {
+    let basis = parse_matrix(&cert.basis, limits)?;
+    let inverse = parse_matrix(&cert.inverse_minor, limits)?;
+    let rank = cert.pivot_columns.len();
+    let dimension = basis.len();
+    let verify_work = matrix
+        .len()
+        .checked_mul(width)
+        .and_then(|x| x.checked_mul(dimension + rank + 1))
+        .and_then(|x| rank.checked_pow(3).and_then(|y| x.checked_add(y)))
+        .ok_or("verification work overflow")?;
+    if verify_work > limits.max_operations {
+        return Err("certificate verification arithmetic budget".into());
+    }
+    let partition: BTreeSet<_> = cert
+        .pivot_columns
+        .iter()
+        .chain(&cert.free_columns)
+        .copied()
+        .collect();
+    if rank + dimension != width
+        || cert.free_columns.len() != dimension
+        || partition != (0..width).collect()
+        || cert.independent_rows.len() != rank
+        || inverse.len() != rank
+        || inverse.iter().any(|r| r.len() != rank)
+        || cert.independent_rows.iter().any(|&i| i >= matrix.len())
+        || basis.iter().any(|v| v.len() != width)
+    {
+        return Err("invalid kernel dimensions".into());
+    }
+    for (i, v) in basis.iter().enumerate() {
+        if matrix.iter().any(|r| !dot(r, v).is_zero()) {
+            return Err("invalid null vector".into());
+        }
+        for (j, &c) in cert.free_columns.iter().enumerate() {
+            if v[c] != if i == j { Q::one() } else { Q::zero() } {
+                return Err("invalid basis independence witness".into());
+            }
+        }
+    }
+    for (i, inverse_row) in inverse.iter().enumerate() {
+        for j in 0..rank {
+            let sum: Q = (0..rank)
+                .map(|t| &inverse_row[t] * &matrix[cert.independent_rows[t]][cert.pivot_columns[j]])
+                .sum();
+            if sum != if i == j { Q::one() } else { Q::zero() } {
+                return Err("invalid rank minor inverse".into());
+            }
+        }
+    }
+    Ok(basis)
 }
 
 /// Return every identity in each requested finite coefficient support.
@@ -1780,59 +1847,9 @@ pub fn verify_recurrence_spaces(
             return Err("equation count mismatch".into());
         }
         let cert = result.certificate.as_ref().unwrap();
-        let basis = parse_matrix(&cert.basis, &request.limits)?;
-        let inverse = parse_matrix(&cert.inverse_minor, &request.limits)?;
+        let basis = check_kernel_certificate(&matrix, cols.len(), cert, &request.limits)?;
         let rank = cert.pivot_columns.len();
         let dimension = basis.len();
-        let width = cols.len();
-        let verify_work = matrix
-            .len()
-            .checked_mul(width)
-            .and_then(|x| x.checked_mul(dimension + rank + 1))
-            .and_then(|x| rank.checked_pow(3).and_then(|y| x.checked_add(y)))
-            .ok_or("verification work overflow")?;
-        if verify_work > request.limits.max_operations {
-            return Err("certificate verification arithmetic budget".into());
-        }
-        let partition: BTreeSet<_> = cert
-            .pivot_columns
-            .iter()
-            .chain(&cert.free_columns)
-            .copied()
-            .collect();
-        if rank + dimension != width
-            || cert.free_columns.len() != dimension
-            || partition != (0..width).collect()
-            || cert.independent_rows.len() != rank
-            || inverse.len() != rank
-            || inverse.iter().any(|r| r.len() != rank)
-            || cert.independent_rows.iter().any(|&i| i >= matrix.len())
-            || basis.iter().any(|v| v.len() != width)
-        {
-            return Err("invalid kernel dimensions".into());
-        }
-        for (i, v) in basis.iter().enumerate() {
-            if matrix.iter().any(|r| !dot(r, v).is_zero()) {
-                return Err("invalid null vector".into());
-            }
-            for (j, &c) in cert.free_columns.iter().enumerate() {
-                if v[c] != if i == j { Q::one() } else { Q::zero() } {
-                    return Err("invalid basis independence witness".into());
-                }
-            }
-        }
-        for (i, inverse_row) in inverse.iter().enumerate() {
-            for j in 0..rank {
-                let sum: Q = (0..rank)
-                    .map(|t| {
-                        &inverse_row[t] * &matrix[cert.independent_rows[t]][cert.pivot_columns[j]]
-                    })
-                    .sum();
-                if sum != if i == j { Q::one() } else { Q::zero() } {
-                    return Err("invalid rank minor inverse".into());
-                }
-            }
-        }
         let leading: Vec<_> = cols
             .iter()
             .enumerate()

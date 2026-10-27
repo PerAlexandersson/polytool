@@ -2036,3 +2036,55 @@ fn enumerate_real_rooted_schema_documents_the_cli_fields() {
     assert!(required.contains(&json!("leading_coefficients_descending")));
     assert!(!required.contains(&json!("max_nodes")));
 }
+
+#[test]
+fn implicit_search_tools_find_replay_and_reject_tampering() {
+    let server = PolynomialToolsServer::new();
+    let request = json!({"oeis_id": "A007318",
+        "transformation": {"kind": "diagonal",
+            "weight": {"kind": "factorial_power", "power": 1}},
+        "supports": [{"role": "implicit_successor", "max_shift": 1, "derivative_order": 1}]});
+    let Json(report) = server
+        .search_implicit_relations(Parameters(
+            crate::requests::ImplicitRelationSearchToolRequest {
+                request: request.clone(),
+            },
+        ))
+        .unwrap();
+    assert_eq!(report["schema"], "polytool.recurrence-implicit-search.v1");
+    let representative = &report["results"][0]["representatives"][0];
+    assert_eq!(
+        representative["relation"]["text"],
+        "D Q[n+1] - D Q[n] - Q[n] = 0"
+    );
+    assert_eq!(
+        representative["relation"]["evidence"],
+        "certified_complete_space"
+    );
+    assert_eq!(
+        representative["assessment"]["status"],
+        "equivalent_description"
+    );
+    let Json(checked) = server
+        .verify_implicit_relation_search(Parameters(
+            crate::requests::VerifyImplicitRelationSearchToolRequest {
+                report: json!(report),
+            },
+        ))
+        .unwrap();
+    assert_eq!(checked["verified"], true);
+    let mut tampered = json!(report);
+    tampered["rows"][3][1] = json!("5");
+    assert!(server
+        .verify_implicit_relation_search(Parameters(
+            crate::requests::VerifyImplicitRelationSearchToolRequest { report: tampered }
+        ))
+        .is_err());
+    let mut excessive = request;
+    excessive["limits"] = json!({"max_rows": 100000});
+    assert!(server
+        .search_implicit_relations(Parameters(
+            crate::requests::ImplicitRelationSearchToolRequest { request: excessive }
+        ))
+        .is_err());
+}

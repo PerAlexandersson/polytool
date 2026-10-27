@@ -74,6 +74,8 @@
 //! The diagonal maps `T_n(x^k) = lambda(n,k) x^k` and derivative antecedents
 //! `P_n = D^m(g Q_n)/m!` are registered here but transport relations as
 //! implicit relations (module `diagonal`, reports in `implicit_report`).
+//! The lossy map `derivative` (`Q_n = D^m P_n`) is registered as well; its
+//! lost coefficients, reconstruction and transport live in module `lossy`.
 
 use super::*;
 use crate::decomposition::f_polynomial;
@@ -330,7 +332,7 @@ impl std::error::Error for TransformError {}
 /// Rational parameters are integer or `num/den` strings.  The JSON form is
 /// tagged by `kind` (`multiply_power`, `divide_power`, `reversal`, `affine`,
 /// `mobius`, `f_polynomial`, `gamma`, `symmetric_decomposition`, `diagonal`,
-/// `derivative_antecedent`).
+/// `derivative_antecedent`, `derivative`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RecurrenceTransformation {
@@ -404,6 +406,17 @@ pub enum RecurrenceTransformation {
     DerivativeAntecedent {
         /// Ascending rational coefficients of `g`, as strings.
         g: Vec<String>,
+    },
+    /// `Q_n = D^order P_n`: plain differentiation, a lossy map. The
+    /// coefficients `[x^0..x^(order-1)] P_n` are lost; reconstruction needs
+    /// them as recorded boundary data
+    /// ([`RecurrenceTransformation::inverse_row_with_lost_data`]), and
+    /// [`RecurrenceTransformation::inverse_row`] rejects the map. Relations
+    /// are transported as implicit relations
+    /// ([`RecurrenceTransformation::transport_implicit`]).
+    Derivative {
+        /// The derivative order `m >= 1`.
+        order: usize,
     },
 }
 
@@ -489,6 +502,7 @@ impl RecurrenceTransformation {
             Self::SymmetricDecomposition { .. } => "symmetric_decomposition",
             Self::Diagonal { .. } => "diagonal",
             Self::DerivativeAntecedent { .. } => "derivative_antecedent",
+            Self::Derivative { .. } => "derivative",
         }
     }
 
@@ -577,6 +591,7 @@ impl RecurrenceTransformation {
             Self::DerivativeAntecedent { g } => {
                 derivative_antecedent_parameters(g)?;
             }
+            Self::Derivative { order } => derivative_order_check(*order)?,
             _ => {}
         }
         Ok(())
@@ -644,6 +659,7 @@ impl RecurrenceTransformation {
                 let (g, _) = derivative_antecedent_parameters(g)?;
                 Ok(vec![derivative_antecedent_row(&g, &row)])
             }
+            Self::Derivative { order } => Ok(vec![derivative_row(*order, &row)]),
         }
     }
 
@@ -725,6 +741,7 @@ impl RecurrenceTransformation {
                 let (g, _) = derivative_antecedent_parameters(g)?;
                 Ok(vec_poly::trim(&derivative_lift_row(&g, &image)))
             }
+            Self::Derivative { order } => Err(lossy_inverse_error(index, *order)),
         }
     }
 
@@ -788,7 +805,7 @@ impl RecurrenceTransformation {
             Self::SymmetricDecomposition { schedule } => {
                 transport_symmetric_decomposition(rule, schedule).map(TransportedRecurrence::Vector)
             }
-            Self::Diagonal { .. } | Self::DerivativeAntecedent { .. } => {
+            Self::Diagonal { .. } | Self::DerivativeAntecedent { .. } | Self::Derivative { .. } => {
                 Err(TransformError::TransportUnsupported(
                     "this map transports implicit relations: use transport_implicit or \
                      implicit_transform_recurrence"
@@ -906,6 +923,10 @@ impl RecurrenceTransformation {
             ),
             Self::Diagonal { .. } | Self::DerivativeAntecedent { .. } => {
                 let (row_map, inverse, conditions, transport) = implicit_map_record(self);
+                (row_map, inverse, conditions, scalar(), transport)
+            }
+            Self::Derivative { order } => {
+                let (row_map, inverse, conditions, transport) = lossy_map_record(*order);
                 (row_map, inverse, conditions, scalar(), transport)
             }
         };

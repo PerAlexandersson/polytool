@@ -89,6 +89,12 @@ pub const CERTIFIED_BY_RECONSTRUCTION_EVIDENCE: &str = "certified_by_reconstruct
 /// theorem (`find_recurrence_spaces`, status `conditional_on_source`).
 pub const CERTIFIED_COMPLETE_SPACE_EVIDENCE: &str = "certified_complete_space";
 
+/// Evidence: a fitted relation `M` of `Q = T P` with an exact operator
+/// identity `M o T = sum_nu H_nu o S^nu o L` for the defining rule `L` of `P`
+/// (right division by `L`): `M` holds at every base where `L` holds at the
+/// bases `n + nu`. See `search_implicit_relations`.
+pub const CERTIFIED_BY_DIVISION_EVIDENCE: &str = "certified_by_division";
+
 /// Evidence: an exact consequence of a supplied source relation that is
 /// itself verified only on the supplied rows.
 pub const TRANSPORTED_SUPPLIED_EVIDENCE: &str = "transported_supplied_relation";
@@ -121,6 +127,7 @@ pub fn evidence_is_certified(evidence: &str) -> bool {
         TRANSPORTED_IDENTITY_EVIDENCE,
         CERTIFIED_BY_RECONSTRUCTION_EVIDENCE,
         CERTIFIED_COMPLETE_SPACE_EVIDENCE,
+        CERTIFIED_BY_DIVISION_EVIDENCE,
     ]
     .contains(&evidence)
 }
@@ -878,6 +885,26 @@ fn indicial(leader: &DOp, top: bool) -> Option<(i64, Biv)> {
         }
     }
     Some((v, phi))
+}
+
+/// The certified exceptional coefficient indices of the valuation grading of
+/// the leader of `relation` on bases `n >= start`: the indices `k` at which
+/// the lowest coefficient of a difference of two solutions is not determined
+/// by the relation, so that a coefficient condition must pin `[x^k]` of the
+/// new row. `None` for a row equation, a singular leader or an uncertified
+/// zero set.
+pub(super) fn valuation_exceptional_indices(
+    relation: &ImplicitRelation,
+    start: usize,
+) -> Option<Vec<usize>> {
+    let op = relation.op();
+    let r = op.max_shift();
+    if r == 0 {
+        return None;
+    }
+    let (_, phi) = indicial(&op.column(r), false)?;
+    let analysis = analyze_zeros(&phi, start, None);
+    (analysis.certified && analysis.singular_indices.is_empty()).then_some(analysis.uniform_indices)
 }
 
 fn uniqueness_argument(

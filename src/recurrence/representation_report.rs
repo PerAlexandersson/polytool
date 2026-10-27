@@ -379,9 +379,67 @@ pub struct RepresentationStep {
     /// A `polytool.recurrence-implicit.v1` report.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implicit: Option<ImplicitTransformReport>,
+    /// A certified relation of the parent (a scalar rule in implicit form or
+    /// an implicit-only relation) transported by the implicit machinery
+    /// (diagonal maps, derivative antecedents and the lossy `derivative`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implicit_relation: Option<ImplicitRelationStep>,
     /// Why the step failed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+/// A parent relation transported into the new coordinates by
+/// [`RecurrenceTransformation::transport_implicit`], with the parent's
+/// coefficient conditions carried along where the map allows it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ImplicitRelationStep {
+    /// The parent's relation (parent coordinates) with its domain and evidence.
+    pub source_relation: DescribedRelation,
+    /// The transported relation (`transported_identity` when the source and
+    /// the map hypotheses are certified, else `checked_supplied_rows`).
+    pub relation: DescribedRelation,
+    /// Clearing data of a diagonal map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clearing: Option<ClearingCertificate>,
+    /// The recorded operator identity of the transport (derivative
+    /// antecedents, the lossy derivative map, polynomial inverse weights).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub certificate: Option<ReconstructionCertificate>,
+    /// Parent conditions that could not be carried into the new coordinates
+    /// (they refer to lost coefficients), as `list[i]` references.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dropped_conditions: Vec<String>,
+    /// Seeds, the transported relation, the exceptional-index conditions of
+    /// the clearing and the carried parent conditions.
+    pub description: GeneratingDescription,
+    /// Assessment of `description`.
+    pub assessment: DescriptionAssessment,
+    /// For the lossy `derivative` map: the description of the parent through
+    /// the new coordinates, with and without the lost data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lossy: Option<LossyReconstruction>,
+    /// Whether the relation and conditions hold at every checked base of the
+    /// new rows.
+    pub holds_on_rows: bool,
+    /// Number of base indices checked.
+    pub checked_bases: usize,
+}
+
+/// The data a lossy map of the chain forgets, recorded so that the source
+/// rows can be rebuilt exactly.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct LostDataRecord {
+    /// Position in `chain` of the lossy map.
+    pub chain_position: usize,
+    /// The derivative order `m`: the coefficients `[x^0..x^(m-1)]` of the
+    /// rows entering the map are lost.
+    pub order: usize,
+    /// `rows[i]`: the lost coefficients of the row with index
+    /// `row_origin + i` entering the map, ascending rational strings.
+    pub rows: Vec<Vec<String>>,
 }
 
 /// Outcome of the fit menu in one representation.
@@ -437,8 +495,13 @@ pub struct RepresentationNode {
     pub row_origin: usize,
     /// Rows: `[row][component][coefficient]`, ascending rational strings.
     pub states: Vec<Vec<Vec<String>>>,
-    /// Whether inverting the whole chain reproduces the source rows exactly.
+    /// Whether inverting the whole chain reproduces the source rows exactly
+    /// (with the recorded `lost_data` for lossy maps).
     pub reconstruction_verified: bool,
+    /// The data forgotten by every lossy map of the chain; empty for chains
+    /// of bijective maps.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lost_data: Vec<LostDataRecord>,
     /// Preconditions and image conditions of the edge map (from its first step).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub map_conditions: Vec<TransformConditionStatus>,
@@ -554,6 +617,8 @@ pub(super) fn conventions() -> Vec<String> {
         "duplicate maps are detected by certified equality of normal forms, never by rows",
         "ranking: shift length, derivative order, coefficient degree, index degree, component \
          count, reconstruction cost, then label",
+        "lossy maps (derivative) record the forgotten coefficients in lost_data; the parent is \
+         described through them only together with conditions pinning the lost data",
     ]
     .into_iter()
     .map(String::from)

@@ -43,6 +43,7 @@ use crate::requests::{
     PolynomialBatchInput, RecurrenceSpacesToolRequest, TnnNetworkRequest,
     VerifyRecurrenceSpacesToolRequest,
 };
+use crate::requests::{ImplicitRelationSearchToolRequest, VerifyImplicitRelationSearchToolRequest};
 use crate::requests::{
     RecurrenceRepresentationSearchToolRequest, VerifyRecurrenceRepresentationSearchToolRequest,
 };
@@ -1356,7 +1357,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Bounded queue search over equivalent representations of one polynomial sequence. request: {source_recurrence (polytool.recurrence.v1 with seeds and first_index) | oeis_id | rows (exploratory fits only), row_origin, row_count (default 12), transformations: [registry maps as in transform_recurrence / transform_recurrence_implicit: multiply_power, divide_power, reversal, affine, mobius, f_polynomial, gamma, symmetric_decomposition, diagonal, derivative_antecedent], search (fit bounds, default max_rec_len 2, max_var_deg 2, max_idx_deg 1, max_diff_deg 1, try_denominator true, max_candidates 2000), fits (default true), certified_spaces (default true: complete spaces after factorial diagonal maps), space_shapes, root_domain (optional, attached to coordinate-change steps), limits {max_depth 2, max_representations 16, max_steps 160, max_sources_per_edge 2, max_space_shapes 16, ...}}. Each representation applies every allowed map, deduplicates maps by certified equality of normal forms (never by matching rows), reconstructs the source exactly, transports its certified relations (replayable polytool.recurrence-transform.v1 / polytool.recurrence-implicit.v1 steps), certifies complete spaces, fits the new coordinates, and feeds certified relations to later steps. Returns polytool.recurrence-representation-search.v1: representations with ranked descriptions labelled finite_fit, certified_annihilating_relation or equivalent_generating_description (with seeds, conditions and a uniqueness assessment), edges (new_representation, duplicate_map, rejected, skipped_budget), a global ranking (shift length, derivative order, coefficient degree, index degree, components, reconstruction cost), budget events and status complete | budget_exhausted."
+        description = "Bounded queue search over equivalent representations of one polynomial sequence. request: {source_recurrence (polytool.recurrence.v1 with seeds and first_index) | oeis_id | rows (exploratory fits only), row_origin, row_count (default 12), transformations: [registry maps as in transform_recurrence / transform_recurrence_implicit: multiply_power, divide_power, reversal, affine, mobius, f_polynomial, gamma, symmetric_decomposition, diagonal, derivative_antecedent, and the lossy derivative {order} whose lost coefficients are recorded as lost_data], search (fit bounds, default max_rec_len 2, max_var_deg 2, max_idx_deg 1, max_diff_deg 1, try_denominator true, max_candidates 2000), fits (default true), certified_spaces (default true: complete spaces after factorial diagonal maps), space_shapes, root_domain (optional, attached to coordinate-change steps), limits {max_depth 2, max_representations 16, max_steps 160, max_sources_per_edge 2, max_space_shapes 16, ...}}. Each representation applies every allowed map, deduplicates maps by certified equality of normal forms (never by matching rows), reconstructs the source exactly, transports its certified relations (replayable polytool.recurrence-transform.v1 / polytool.recurrence-implicit.v1 steps), certifies complete spaces, fits the new coordinates, and feeds certified relations to later steps (implicit-only relations through diagonal, derivative_antecedent and derivative maps as implicit_relation steps; for the lossy map the parent's description is assessed with and without the lost data). Returns polytool.recurrence-representation-search.v1: representations with ranked descriptions labelled finite_fit, certified_annihilating_relation or equivalent_generating_description (with seeds, conditions and a uniqueness assessment), edges (new_representation, duplicate_map, rejected, skipped_budget), a global ranking (shift length, derivative order, coefficient degree, index degree, components, reconstruction cost), budget events and status complete | budget_exhausted."
     )]
     pub fn search_recurrence_representations(
         &self,
@@ -1417,6 +1418,61 @@ impl PolynomialToolsServer {
         Ok(Json(crate::enumeration::enumerate_real_rooted_response(
             &input,
         )?))
+    }
+
+    #[tool(
+        description = "Search implicit differential relations sum c(n,x) D^j Q[n+i] = 0 (derivatives on any row, the newest included) directly from exact rows. request: {source_recurrence (polytool.recurrence.v1 with seeds) | oeis_id | rows + row_origin (finite fits only), row_count (default 12), transformation (optional scalar registry map Q = T(P), e.g. diagonal factorial_power, derivative_antecedent, or the lossy {kind: derivative, order: m}), domain_start, supports: [{role: successor | implicit_successor | row_equation, max_shift, derivative_order, index_degree, variable_degree}] (default implicit_successor (1,1,1,1) and row_equation (0,2,1,1)), conditions (default true), condition_index_degree (default 1), limits (complete-space limits)}. Each support is one exact kernel with a rank certificate. With a constant-index monic pure-lag source and the identity, factorial_power or derivative map a finite theorem makes the kernel the complete space of all-index relations (certified_complete_space); otherwise representatives are finite_fit, or certified_by_division when M o T = sum H_nu S^nu L for the defining rule L. Empty leader projections are absent_in_support (rows_only_obstruction). Exceptional indices of a leader trigger a coefficient-condition search (complete under the same source by a truncation theorem). Returns polytool.recurrence-implicit-search.v1 with representatives (role, evidence, generating description and assessment: equivalent_description, certified_consequence, finite_evidence)."
+    )]
+    pub fn search_implicit_relations(
+        &self,
+        Parameters(input): Parameters<ImplicitRelationSearchToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.request.to_string(), "implicit-search request")
+            .map_err(invalid_params)?;
+        let request: polytool::recurrence::ImplicitRelationSearchRequest =
+            serde_json::from_value(input.request).map_err(|e| invalid_params(e.to_string()))?;
+        request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        let report =
+            polytool::recurrence::search_implicit_relations(&request).map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize implicit search")
+        else {
+            unreachable!()
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Replay a polytool.recurrence-implicit-search.v1 report from search_implicit_relations: rerun the search from its embedded request and require equality, re-check every kernel and condition certificate against matrices rebuilt from the reported rows, every relation and condition on the rows, every division certificate and every assessment."
+    )]
+    pub fn verify_implicit_relation_search(
+        &self,
+        Parameters(input): Parameters<VerifyImplicitRelationSearchToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.report.to_string(), "implicit-search report")
+            .map_err(invalid_params)?;
+        let report: polytool::recurrence::ImplicitRelationSearchReport =
+            serde_json::from_value(input.report).map_err(|e| invalid_params(e.to_string()))?;
+        report
+            .request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(invalid_params)?;
+        polytool::recurrence::verify_implicit_relation_search(&report).map_err(invalid_params)?;
+        Ok(Json(BTreeMap::from([
+            ("verified".into(), json!(true)),
+            (
+                "results".into(),
+                json!(report
+                    .results
+                    .iter()
+                    .map(|r| json!({"status": r.status, "evidence": r.evidence}))
+                    .collect::<Vec<_>>()),
+            ),
+        ])))
     }
 }
 

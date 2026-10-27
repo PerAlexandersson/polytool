@@ -1445,9 +1445,101 @@ assess_generating_description, DiagonalWeight,
 RecurrenceTransformation::transport_implicit, find_reconstruction_certificate,
 ReconstructionCertificate, implicit_transform_recurrence,
 verify_recurrence_implicit}`. The MCP tools are `transform_recurrence_implicit`,
-`verify_recurrence_implicit` and `assess_generating_description`. A
-general search over implicit relations is not part of this release: fits are
-successor rules, and implicit relations come from transport or input.
+`verify_recurrence_implicit` and `assess_generating_description`.
+
+#### Searching implicit relations directly
+
+`polytool recurrence-implicit --search` fits implicit relations
+`sum c(n,x) D^j Q[n+i] = 0` directly to exact rows, with derivatives allowed
+on every row. The rows come from a defining rule (`source_recurrence`), a
+bundled family (`oeis_id`) or `rows` (finite fits only), optionally after a
+scalar registry map (`transformation`). Each entry of `supports`
+(`role`, `max_shift`, `derivative_order`, `index_degree`, `variable_degree`)
+is one ansatz box:
+
+| `role` | Leader | Shift |
+| --- | --- | --- |
+| `successor` | no derivative on the row `n + R` | `max_shift >= 1` |
+| `implicit_successor` | derivatives on every row | `max_shift >= 1` |
+| `row_equation` | one row | `max_shift = 0` |
+
+The columns and residual matrix are those of the complete-space search, and
+every support gives one exact kernel with a rank certificate. Basis vectors
+with independent leader projections (every basis vector of a row equation)
+are the representatives, each in canonical form with its role, evidence,
+generating description and assessment. A support whose kernel has no leader
+is `absent_in_support` (`rows_only_obstruction`).
+
+Completeness is certified when the source is a constant-index monic
+pure-lag rule `chi = S^k - sum a_i(x) S^i` valid from its origin and the map
+is the identity, `factorial_power` or `derivative`. Then every column
+`x^v n^u D^s Q[n+j]` is annihilated by a power of `chi`: `h = max(u+s) + 1`
+for the identity, `max(u+s) + m + 1` for `Q = D^m P` and `U + m(A+J) + 1`
+for the factorial rescaling. Vanishing at `k h` consecutive bases then
+implies vanishing for all bases, with derivatives on the leader and for row
+equations alike, and the kernel is the complete space
+(`certified_complete_space`). Otherwise representatives are `finite_fit`,
+unless an identity `M o T = sum H_nu S^nu L` with the defining rule `L`
+(right division; `T` the identity, `D^m` or a polynomial diagonal weight)
+proves them at every base where `L` holds (`certified_by_division`).
+
+When a uniqueness argument fails only at certified exceptional indices of the
+valuation grading, coefficient conditions `sum c(n) [x^j] Q[n+i] = 0` that pin
+`[x^k]` of the new row are searched as well (`conditions`,
+`condition_index_degree`). Under the same source the truncations
+`P_n mod x^(K+1)` satisfy a constant linear recurrence of order `k (K+1)`,
+so the condition space is complete from `k (K'+1)(U_c+1)` bases (`K' = k`, or
+`k + m` after `D^m`). For A007318 divided by `k!` the search recovers
+`D Q[n+1] - D Q[n] - Q[n] = 0` with the condition
+`[x^0] Q[n+1] - [x^0] Q[n] = 0` (an equivalent description, both complete)
+and the row equation `x D^2 Q[n] + (1 + x) D Q[n] - n Q[n] = 0`
+(a consequence: a row equation does not determine later rows):
+
+```sh
+echo '{"oeis_id":"A007318",
+  "transformation":{"kind":"diagonal","weight":{"kind":"factorial_power","power":1}},
+  "supports":[{"role":"implicit_successor","max_shift":1,"derivative_order":1},
+    {"role":"row_equation","derivative_order":2,"index_degree":1,"variable_degree":1}]}' \
+  | polytool recurrence-implicit --search > search.json
+polytool recurrence-implicit --verify-search < search.json
+```
+
+`--verify-search` reruns the search, requires equality, and re-checks every
+kernel and condition certificate against matrices rebuilt from the reported
+rows, every relation and condition on the rows, every division certificate
+and every assessment. The report is `polytool.recurrence-implicit-search.v1`
+(`source` with `constant_index_order` and `completeness_basis`, `rows`,
+`results[i]` with `status`, `evidence`, `monomials`, `annihilator_power`,
+`residual_count`, `certificate`, `representatives[j]` with `relation`,
+`division_certificate`, `condition_searches`, `description`, `assessment`).
+In Rust, see `recurrence::{search_implicit_relations,
+verify_implicit_relation_search, ImplicitRelationSearchRequest,
+ImplicitSearchSupport}`; the MCP tools are `search_implicit_relations` and
+`verify_implicit_relation_search`.
+
+#### The lossy derivative map
+
+The registry map `{"kind": "derivative", "order": m}` sends `P_n` to
+`Q_n = D^m P_n` and forgets `[x^0..x^(m-1)] P_n`
+(`RecurrenceTransformation::lost_data`). With these coefficients
+`P_n = I^m Q_n + L_n` is rebuilt exactly
+(`inverse_row_with_lost_data`); `inverse_row`, and therefore
+`recurrence-transform`, rejects the map. A relation `L` of `P` is transported
+by `transport_implicit` to `M = D^(m+r) L D^(-m)`, where
+`r = max(0, max (deg_x c - d))` over the terms `c(n,x) D^d` of `L` makes
+`D^(m+r) L` right divisible by `D^m`. The identity `M o D^m = D^(m+r) o L` is
+recorded as a replayable certificate; `M` is a consequence of `L`. Conversely
+a relation `M` of `Q` pulls back to `M o D^m` and a condition of `Q` to one of
+`P` (`[x^k] Q = (k+m)!/k! [x^(k+m)] P`). The leader of `M o D^m` kills
+`x^0..x^(m-1)`, so a description of `P` through `Q` is equivalent only
+together with conditions pinning the lost coefficients
+(`lossy_reconstruction`, `LossyReconstruction`). For the Eulerian rows
+A008292 and `m = 1` the transported rule is
+`D Q[n+1] + (-x + x^2) D^2 Q[n] + (-3 + 4 x - n x) D Q[n] + (2 - 2 n) Q[n] = 0`;
+with `[x^0] P[n+1] - [x^0] P[n] = 0` and
+`[x^1] P[n+1] - 2 [x^1] P[n] - n [x^0] P[n] = 0` the pulled-back description
+of `P` is equivalent, and without these lost-data conditions it is a
+certified consequence.
 
 #### Searching equivalent representations
 
@@ -1480,8 +1572,12 @@ representation below `limits.max_depth` every allowed map is applied in turn:
    symmetric-decomposition maps use a `polytool.recurrence-transform.v1`
    step. Diagonal maps and derivative antecedents use a
    `polytool.recurrence-implicit.v1` step, whose successor fit can be proved
-   by reconstruction. Without a certified parent relation the step only maps
-   rows.
+   by reconstruction. A parent with certified implicit relations but no
+   certified scalar rule feeds them to diagonal maps, derivative antecedents
+   and the lossy `derivative` map as `implicit_relation` steps
+   (`transport_implicit`), carrying its coefficient conditions where the map
+   allows; the `derivative` map always takes this route. Without a certified
+   parent relation the step only maps rows.
 4. After a `factorial_power` diagonal map of a constant-index monic
    certified rule, complete spaces are certified on a bounded menu of
    supports. Lags run over `1..=max_rec_len` and derivative orders over
@@ -1514,6 +1610,14 @@ requested bound: unexpanded representations at `max_depth` are listed in
 `depth_frontier`. An optional `root_domain` request is attached to every
 coordinate-change step, with the evidence labels of the previous section.
 Discovery never depends on it.
+
+A `derivative` map records the coefficients it forgets in the node's
+`lost_data` (`{chain_position, order, rows}`); the chain is inverted with
+them, and replay recomputes them from the source rows. Its
+`implicit_relation` steps carry a `lossy` record: the parent's description
+through `Q` with the conditions that pin the lost coefficients, and without
+every condition that refers to them, each assessed. For A008292 the first is
+an `equivalent_description` and the second a `certified_consequence`.
 
 ```sh
 echo '{"oeis_id":"A007318","row_count":10,"limits":{"max_depth":1},
@@ -1581,7 +1685,8 @@ The schema, for renderers:
 | `source` | `kind` (`defining_rule`, `oeis`, `rows_only`), `rule` (with seeds), `row_origin`, `row_count` |
 | `representations[i]` | `id`, `depth`, `parent`, `transformation` (index into `request.transformations`), `chain` (indices in application order), `map` (`identity`, `segments`, `index_domain`), `components`, `row_origin`, `states[row][component]` (ascending rational strings), `reconstruction_verified`, `map_conditions`, `descriptions`, `steps`, `spaces`, `fits`, `equal_sequence_as`, `expanded`, `notes` |
 | `representations[i].descriptions[j]` | `label`, `kind` (`defining_rule`, `transported_rule`, `transported_vector_system`, `implicit_transport`, `reconstruction_certified_fit`, `certified_space`, `finite_fit`), `evidence`, `text`, optional `scalar` (`polytool.recurrence.v1` with seeds, original indices), `vector`, `description` (generating description), `assessment`, `cost`, `provenance`, `also_found_by`, `note` |
-| `representations[i].steps[k]` | `source_description` (parent description used as the defining rule, absent for rows only), one of `transform` / `implicit` (embedded reports), or `error` |
+| `representations[i].steps[k]` | `source_description` (parent description used as the defining rule, absent for rows only), one of `transform` / `implicit` (embedded reports) / `implicit_relation` (`source_relation`, `relation`, `clearing`, `certificate`, `dropped_conditions`, `description`, `assessment`, `lossy`, `holds_on_rows`, `checked_bases`), or `error` |
+| `representations[i].lost_data[k]` | for each lossy map of the chain: `chain_position`, `order`, `rows` (the forgotten coefficients of the rows entering the map) |
 | `edges[k]` | `parent`, `transformation`, `outcome` (`new_representation`, `duplicate_map`, `rejected`, `skipped_budget`), `representation`, `detail` |
 | `ranked[k]` | `representation`, `description`, `label`, `text`, `cost` |
 | `depth_frontier`, `budget`, `steps_used`, `conventions` | unexpanded representations at `max_depth`; budget events `{limit, representation, detail}`; backend calls; conventions |
@@ -1599,10 +1704,10 @@ its rows. In Rust, see `recurrence::{RepresentationSearchRequest,
 RepresentationSearchLimits, search_representations, RepresentationSearchReport,
 verify_representation_search, representation_label}`; the MCP tools are
 `search_recurrence_representations` and
-`verify_recurrence_representation_search`. Not yet covered: a general search
-over implicit relations (implicit relations come from transport), lossy maps
-such as plain differentiation, and transformations of vector
-representations.
+`verify_recurrence_representation_search`. Not yet covered: transformations
+of vector representations, implicit transport through Möbius-class maps, and
+complete spaces after maps other than factorial rescaling and
+differentiation.
 
 ### Scout BKW equal-modulus loci
 
@@ -2437,6 +2542,8 @@ Available MCP tools:
 - `assess_generating_description`
 - `search_recurrence_representations`
 - `verify_recurrence_representation_search`
+- `search_implicit_relations`
+- `verify_implicit_relation_search`
 - `enumerate_real_rooted`
 
 `enumerate_real_rooted` takes `{"degree", "leading_coefficients_descending",
@@ -2784,6 +2891,38 @@ Additions (no breaking changes):
   `search_recurrence_representations`,
   `verify_recurrence_representation_search`. Existing commands and defaults
   are unchanged.
+- Direct search for implicit relations:
+  `recurrence::{search_implicit_relations, verify_implicit_relation_search,
+  ImplicitRelationSearchRequest, ImplicitSearchSupport,
+  ImplicitRelationSearchReport}` fit `sum c(n,x) D^j Q[n+i] = 0` with
+  derivatives on every row (roles `successor`, `implicit_successor`,
+  `row_equation`) as one exact kernel per support with a rank certificate,
+  reusing the complete-space columns. A constant-index monic pure-lag source
+  under the identity, `factorial_power` or `derivative` map certifies the
+  complete space (`certified_complete_space`); other fits are `finite_fit` or
+  `certified_by_division` (new evidence `CERTIFIED_BY_DIVISION_EVIDENCE`,
+  `M o T = sum H_nu S^nu L`). Coefficient conditions for exceptional indices
+  are searched with a truncation theorem, and every representative carries a
+  generating description and assessment.
+  `polytool.recurrence-implicit-search.v1` reports; CLI
+  `recurrence-implicit --search` / `--verify-search`; MCP tools
+  `search_implicit_relations`, `verify_implicit_relation_search`.
+- Lossy registry map `derivative` (`Q_n = D^m P_n`):
+  `RecurrenceTransformation::{is_lossy, lost_data,
+  inverse_row_with_lost_data}` (`inverse_row` rejects it), implicit transport
+  `M = D^(m+r) L D^(-m)` with a recorded identity, pullbacks
+  (`pull_back_relation_through_derivative`,
+  `pull_back_condition_through_derivative`,
+  `push_condition_through_derivative`, `relation_coefficient_condition`) and
+  `lossy_reconstruction` / `LossyReconstruction`, which assesses the
+  description of the source through `Q` with and without the lost data.
+- Representation search: certified implicit-only relations of a parent are
+  transported through diagonal maps, derivative antecedents and the
+  `derivative` map as `implicit_relation` steps (`ImplicitRelationStep`) with
+  carried coefficient conditions; lossy chains record `lost_data`
+  (`LostDataRecord`) and are inverted with it. Replay re-transports every
+  such step and recomputes the lost data. Reports without these maps are
+  unchanged apart from one added convention line.
 - `vec_poly::{exact_div_by_t, exact_div_by_t_minus_one, exact_div_by_t_minus,
   sum, prefix_sums, mul_linear, mul_linear_pow, has_nonnegative_coefficients,
   evaluate_homogeneous, evaluate_at_ratio}`: exact division by `t` and

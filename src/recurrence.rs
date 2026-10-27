@@ -25,7 +25,10 @@
 //! (also after factorial coefficient rescaling), exact coordinate
 //! transformations with recurrence transport, implicit differential
 //! relations (derivatives on any row, row equations) with diagonal transport,
-//! derivative antecedents, reconstruction data and certificates, and optional
+//! derivative antecedents, reconstruction data and certificates, a direct
+//! search for implicit relations with completeness certificates
+//! ([`search_implicit_relations`]), the lossy derivative map with its lost
+//! data ([`lossy_reconstruction`]), and optional
 //! root-domain information (theorem adapters, exact root enclosures) for
 //! transformed results, and a bounded queue search over equivalent
 //! representations that composes all of these
@@ -89,6 +92,10 @@ mod representation_report;
 pub use representation_report::*;
 mod representation_search;
 pub use representation_search::*;
+mod lossy;
+pub use lossy::*;
+mod implicit_search;
+pub use implicit_search::*;
 
 #[cfg(test)]
 mod test_support;

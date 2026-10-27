@@ -438,3 +438,126 @@ fn limits_are_reported_as_budget_outcomes() {
     .is_err());
     assert!(search_representations(&request(json!({"transformations": []}))).is_err());
 }
+
+#[test]
+fn lossy_derivative_of_eulerian_rows_needs_the_lost_constants() {
+    let report = run(json!({
+        "oeis_id": "A008292",
+        "row_count": 9,
+        "transformations": [{"kind": "derivative", "order": 1}],
+        "fits": false,
+        "limits": {"max_depth": 1}
+    }));
+    let node = node_with_chain(&report, &[0]);
+    assert!(node.reconstruction_verified);
+    // The lost data: the constant terms A_n(0) = 1.
+    assert_eq!(node.lost_data.len(), 1);
+    assert_eq!(node.lost_data[0].order, 1);
+    assert!(node.lost_data[0].rows.iter().all(|r| r == &vec!["1"]));
+    let step = node.steps[0].implicit_relation.as_ref().unwrap();
+    assert_eq!(step.source_relation.evidence, DEFINING_EVIDENCE);
+    assert_eq!(step.relation.evidence, TRANSPORTED_IDENTITY_EVIDENCE);
+    assert_eq!(
+        step.relation.text,
+        "D Q[n+1] + (-x + x^2) D^2 Q[n] + (-3 + 4 x - n x) D Q[n] + (2 - 2 n) Q[n] = 0"
+    );
+    step.certificate
+        .as_ref()
+        .unwrap()
+        .verify_identity()
+        .unwrap();
+    // The derivative rows alone: a certified consequence.
+    let description = node
+        .descriptions
+        .iter()
+        .find(|d| d.kind == "implicit_transport")
+        .unwrap();
+    assert_eq!(description.label, CERTIFIED_RELATION_LABEL);
+    // The parent through Q: equivalent with the lost constants, a consequence without.
+    let lossy = step.lossy.as_ref().unwrap();
+    assert_eq!(
+        lossy.with_lost_data_assessment.status,
+        EQUIVALENT_DESCRIPTION
+    );
+    assert_eq!(
+        lossy.without_lost_data_assessment.status,
+        CERTIFIED_CONSEQUENCE
+    );
+    assert!(lossy
+        .with_lost_data
+        .boundary_conditions
+        .iter()
+        .any(|c| c.text == "[x^0] P[n+1] - [x^0] P[n] = 0"));
+    assert!(!lossy.lost_data_conditions.is_empty());
+    assert!(lossy.without_lost_data.boundary_conditions.is_empty());
+
+    // The lost data is part of the replay.
+    let mut tampered = report.clone();
+    tampered.representations[1].lost_data[0].rows[2] = vec!["2".into()];
+    assert!(verify_representation_search(&tampered).is_err());
+    let mut tampered = report;
+    tampered.representations[1].steps[0]
+        .implicit_relation
+        .as_mut()
+        .unwrap()
+        .lossy
+        .as_mut()
+        .unwrap()
+        .without_lost_data_assessment
+        .status = EQUIVALENT_DESCRIPTION.into();
+    assert!(verify_representation_search(&tampered).is_err());
+}
+
+#[test]
+fn implicit_only_parent_feeds_the_next_diagonal_step() {
+    let report = run(json!({
+        "oeis_id": "A007318",
+        "row_count": 10,
+        "transformations": [
+            {"kind": "diagonal", "weight": {"kind": "factorial_power", "power": 1}}
+        ],
+        "fits": false,
+        "certified_spaces": false,
+        "search": {"max_rec_len": 1, "max_var_deg": 0, "max_idx_deg": 0,
+                   "max_diff_deg": 0, "max_candidates": 50},
+        "limits": {"max_depth": 2}
+    }));
+    // Representation 1 has the implicit rule only.
+    let child = node_with_chain(&report, &[0]);
+    assert!(child.descriptions.iter().all(|d| d.scalar.is_none()));
+    assert_eq!(child.descriptions[0].text, "D Q[n+1] - D Q[n] - Q[n] = 0");
+    // Representation 2 transports it (with its constant condition).
+    let grandchild = node_with_chain(&report, &[0, 0]);
+    assert_eq!(grandchild.steps.len(), 1);
+    let step = grandchild.steps[0].implicit_relation.as_ref().unwrap();
+    assert_eq!(step.source_relation.text, "D Q[n+1] - D Q[n] - Q[n] = 0");
+    assert_eq!(step.relation.evidence, TRANSPORTED_IDENTITY_EVIDENCE);
+    assert_eq!(
+        step.relation.text,
+        "x D^2 Q[n+1] + D Q[n+1] - x D^2 Q[n] - D Q[n] - Q[n] = 0"
+    );
+    assert!(step
+        .description
+        .exceptional_index_conditions
+        .iter()
+        .any(|c| c.text == "[x^0] Q[n+1] - [x^0] Q[n] = 0"));
+    assert_eq!(step.assessment.status, EQUIVALENT_DESCRIPTION);
+    let best = &grandchild.descriptions[0];
+    assert_eq!(best.label, EQUIVALENT_DESCRIPTION_LABEL);
+    assert_eq!(best.provenance, "steps[0].implicit_relation.description");
+
+    // A step whose recorded source differs from the parent's relation is rejected.
+    let mut tampered = report.clone();
+    let index = tampered
+        .representations
+        .iter()
+        .position(|n| n.chain == [0, 0])
+        .unwrap();
+    tampered.representations[index].steps[0]
+        .implicit_relation
+        .as_mut()
+        .unwrap()
+        .source_relation
+        .first_base = 1;
+    assert!(verify_representation_search(&tampered).is_err());
+}

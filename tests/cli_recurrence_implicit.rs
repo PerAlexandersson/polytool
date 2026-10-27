@@ -73,3 +73,39 @@ fn cli_rejects_other_maps_and_unknown_options() {
     let help = call(&["--help"], "");
     assert!(String::from_utf8_lossy(&help.stdout).contains("derivative_antecedent"));
 }
+
+#[test]
+fn cli_searches_implicit_relations_directly_and_replays_them() {
+    let request = r#"{"oeis_id":"A007318",
+      "transformation":{"kind":"diagonal","weight":{"kind":"factorial_power","power":1}},
+      "supports":[{"role":"implicit_successor","max_shift":1,"derivative_order":1},
+        {"role":"row_equation","derivative_order":2,"index_degree":1,"variable_degree":1}]}"#;
+    let output = call(&["--search", "--compact"], request);
+    assert!(output.status.success(), "{output:?}");
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["schema"], "polytool.recurrence-implicit-search.v1");
+    let implicit = &report["results"][0]["representatives"][0];
+    assert_eq!(implicit["relation"]["text"], "D Q[n+1] - D Q[n] - Q[n] = 0");
+    assert_eq!(implicit["assessment"]["status"], "equivalent_description");
+    let row = &report["results"][1]["representatives"][0];
+    assert_eq!(
+        row["relation"]["text"],
+        "x D^2 Q[n] + (1 + x) D Q[n] - n Q[n] = 0"
+    );
+    assert_eq!(row["relation"]["role"], "row_equation");
+    let verified = call(&["--verify-search"], &report.to_string());
+    assert!(verified.status.success(), "{verified:?}");
+    let mut tampered = report.clone();
+    tampered["results"][1]["representatives"][0]["relation"]["evidence"] =
+        serde_json::json!("finite_fit");
+    assert_eq!(
+        call(&["--verify-search"], &tampered.to_string())
+            .status
+            .code(),
+        Some(2)
+    );
+    assert_eq!(
+        call(&["--search", "--verify"], request).status.code(),
+        Some(2)
+    );
+}

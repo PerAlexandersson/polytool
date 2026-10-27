@@ -646,7 +646,9 @@ impl RecurrenceTransformation {
     /// exceptional-index conditions) and `derivative_antecedent`
     /// (substitution `L T_g Q = 0`). The result is an exact consequence of
     /// the source relation; with the exceptional-index conditions it is
-    /// equivalent to it when the exceptional set is certified.
+    /// equivalent to it when the exceptional set is certified. The lossy map
+    /// `derivative` gives `M = D^(m+r) L D^(-m)` with a recorded identity
+    /// `M o D^m = D^(m+r) o L` (a consequence only; see module `lossy`).
     ///
     /// ```
     /// use polytool::recurrence::*;
@@ -685,9 +687,10 @@ impl RecurrenceTransformation {
                     reconstruction,
                 })
             }
+            Self::Derivative { order } => transport_derivative(relation, *order),
             _ => Err(TransformError::TransportUnsupported(format!(
-                "implicit transport supports diagonal and derivative_antecedent maps; use \
-                 transport for {}",
+                "implicit transport supports diagonal, derivative_antecedent and derivative \
+                 maps; use transport for {}",
                 self.kind_name()
             ))),
         }

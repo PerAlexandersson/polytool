@@ -586,7 +586,8 @@ fn condition_statuses(
     let degree_condition = "deg P_n <= d_n";
     match transformation {
         RecurrenceTransformation::MultiplyPower { .. }
-        | RecurrenceTransformation::Affine { .. } => Vec::new(),
+        | RecurrenceTransformation::Affine { .. }
+        | RecurrenceTransformation::Derivative { .. } => Vec::new(),
         RecurrenceTransformation::Diagonal { .. }
         | RecurrenceTransformation::DerivativeAntecedent { .. } => {
             implicit_map_condition_statuses(transformation, source.map_or(0, |s| s.first_index))
