@@ -12,6 +12,11 @@ Maintenance (no API changes):
   references moved to `doc/`, and release notes to this file.
 - The web page is split into `index.html`, `app.css` and `js/*.js`; serve the
   whole `web/` directory.
+- The MCP server uses `rmcp` 3.8 (was 0.16) and needs Rust 1.89. Tool names,
+  descriptions and results are unchanged; input/output schemas encode
+  optional fields as `"type": [..., "null"]` instead of `nullable: true` and
+  drop the root `title`/`description`; arguments that fail to deserialize are
+  reported in-band (`isError: true`) instead of as JSON-RPC errors.
 
 Performance:
 

@@ -260,7 +260,10 @@ values are serialized as strings such as `"3/2"` or `"1"`.
 
 For batch tools, invalid polynomial lines become per-item errors. Invalid
 top-level request shapes, such as providing both `text` and `polynomials`, are
-reported as MCP invalid-params errors.
+reported as MCP invalid-params errors. Arguments that do not deserialize into
+the tool's input type (wrong JSON types or unknown fields) are instead returned
+as a tool result with `isError: true` and a `failed to deserialize parameters:
+...` text block, so that clients can show them to the model.
 
 ## Tools
 

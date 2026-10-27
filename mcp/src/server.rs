@@ -70,7 +70,7 @@ use polytool::recurrence::{
 use polytool::*;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::{Implementation, ServerCapabilities, ServerInfo},
+    model::{Implementation, ServerCapabilities, ServerConfig},
     tool, tool_handler, tool_router, ErrorData as McpError, Json, ServerHandler,
 };
 use serde_json::json;
@@ -1482,22 +1482,14 @@ impl PolynomialToolsServer {
 
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for PolynomialToolsServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: Default::default(),
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
-            server_info: Implementation {
-                name: "polytool".to_string(),
-                title: Some("polytool".to_string()),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                description: Some(
-                    "Exact univariate polytool for combinatorial research.".to_string(),
-                ),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some("Exact univariate polytool for combinatorial research.".to_string()),
-        }
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(
+                Implementation::new("polytool", env!("CARGO_PKG_VERSION"))
+                    .with_title("polytool")
+                    .with_description("Exact univariate polytool for combinatorial research."),
+            )
+            .with_instructions("Exact univariate polytool for combinatorial research.")
     }
 }
 
