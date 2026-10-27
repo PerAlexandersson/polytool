@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const source = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+import {createRequire} from 'node:module';
+
+const source = createRequire(import.meta.url)('./page_source.cjs').loadPage().js;
 
 function between(start, end) {
   const startIndex = source.indexOf(start);

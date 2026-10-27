@@ -274,7 +274,9 @@ invalidation, cancellation, and the hand-off from the Recurrence tab. It also
 drives the representation-search mode: checklist and bounds, the tree, budget
 and equal-sequence markers, duplicate and rejected maps, replay, a tampered or
 relabelled import, and the phone layout.
-It uses a temporary localhost server and closes its own browser and server.
+It uses a temporary localhost server (serving `index.html`, `app.css`,
+`js/*.js` and `favicon.svg` from `web/`, and `pkg/` from `POLYTOOL_WASM_DIR`)
+and closes its own browser and server.
 No hosting deployment is involved.
 
 With Playwright/Chromium installed and a no-modules WASM build available:

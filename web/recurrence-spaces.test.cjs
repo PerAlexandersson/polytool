@@ -3,7 +3,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
-const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+const pageJs = require('./tests/page_source.cjs').loadPage().js;
 
 test('space display leads with formulas, preserves scope, and omits certificates', async () => {
   let displayed = '', copied = '', status = '';
@@ -12,9 +12,9 @@ test('space display leads with formulas, preserves scope, and omits certificates
     navigator: {clipboard: {writeText: async text => {copied = text;}}},
     setTimeout: () => {}, setStatus: text => {status = text;},
   });
-  const start = html.indexOf('function recurrenceSpaceSummary(');
-  vm.runInContext(html.slice(html.indexOf('function esc('), html.indexOf('async function run(')), sandbox);
-  vm.runInContext(html.slice(start, html.indexOf('function createWorker(', start)), sandbox);
+  const start = pageJs.indexOf('function recurrenceSpaceSummary(');
+  vm.runInContext(pageJs.slice(pageJs.indexOf('function esc('), pageJs.indexOf('async function run(')), sandbox);
+  vm.runInContext(pageJs.slice(start, pageJs.indexOf('function createWorker(', start)), sandbox);
   const report = {request: {domain_start: 3, shapes: [{kind: 'box', length: 2, derivative_order: 1}]}, results: [
     {status: 'successor_exists', evidence: 'exact_fit', certificate: {basis: [['1']]},
       representatives: [{formula: '<unsafe>', singular_ranks: ['51'], requires_x_division: true},
@@ -58,9 +58,9 @@ test('actual WASM finds and replays a complete space', {skip: !process.env.POLYT
   assert.equal(report.schema, 'polytool.recurrence-spaces.v1');
   assert.equal(report.results[0].evidence, 'conditional_on_source');
   assert.equal(JSON.parse(wasm.verify_recurrence_spaces(JSON.stringify(report))).verified_completed_claims, true);
-  const exampleStart = html.indexOf('function recurrenceSpaceExample(');
+  const exampleStart = pageJs.indexOf('function recurrenceSpaceExample(');
   const exampleContext = vm.createContext({});
-  vm.runInContext(html.slice(exampleStart, html.indexOf('function renderRecurrenceSpaces(', exampleStart)), exampleContext);
+  vm.runInContext(pageJs.slice(exampleStart, pageJs.indexOf('function renderRecurrenceSpaces(', exampleStart)), exampleContext);
   const menu = JSON.parse(wasm.find_recurrence_spaces(JSON.stringify(exampleContext.recurrenceSpaceExample('default'))));
   assert.equal(menu.results.length, 3);
   assert.equal(menu.frontier.length, 3);

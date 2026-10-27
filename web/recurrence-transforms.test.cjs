@@ -8,13 +8,13 @@ const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
 const {test} = require('node:test');
 
-const html = fs.readFileSync(process.env.POLYTOOL_HTML || path.join(__dirname, 'index.html'), 'utf8');
+const pageJs = require('./tests/page_source.cjs').loadPage().js;
 
 function slice(start, end) {
-  const from = html.indexOf(start);
-  const to = html.indexOf(end, from);
+  const from = pageJs.indexOf(start);
+  const to = pageJs.indexOf(end, from);
   assert.ok(from >= 0 && to > from, `missing ${start} .. ${end}`);
-  return html.slice(from, to);
+  return pageJs.slice(from, to);
 }
 
 // A minimal DOM: elements are created on first use and keep value/checked/hidden.

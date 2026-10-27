@@ -1,17 +1,17 @@
 // Run: node --test web/input-normalization.test.cjs
-// Optional POLYTOOL_HTML=/path/to/index.html checks the staged/live page.
+// Optional POLYTOOL_HTML=/path/to/index.html checks a staged page and its sibling asset files.
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const htmlPath = process.env.POLYTOOL_HTML || path.join(__dirname, 'index.html');
-const html = fs.readFileSync(htmlPath, 'utf8');
-const start = html.indexOf('function stripCommentOnlyLines(');
-const end = html.indexOf('function copyRec(', start);
+const page = require('./tests/page_source.cjs').loadPage();
+const pageJs = page.js;
+const start = pageJs.indexOf('function stripCommentOnlyLines(');
+const end = pageJs.indexOf('function copyRec(', start);
 assert.ok(start >= 0 && end > start);
 const context = vm.createContext({ document: { getElementById: () => ({ value: '' }) } });
-vm.runInContext(html.slice(start, end), context);
+vm.runInContext(pageJs.slice(start, end), context);
 const normalize = value => context.normalizePolynomialInput(value);
 const integerTerms = value => context.parseIntegerSequenceInput(value);
 
@@ -98,9 +98,9 @@ for (const input of ['1, 2.5, 3', '1, nope, 3', '1,,2']) {
 }
 
 test('page scripts remain syntactically valid', () => {
-  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-    if (/type=["'](?:application\/ld\+json|importmap)["']/.test(match[1])) continue;
-    if (match[2].trim()) new vm.Script(match[2]);
+  assert.ok(page.scripts.some(item => item.url && item.url.startsWith('js/')));
+  for (const item of page.scripts) {
+    if (item.text.trim()) new vm.Script(item.text, {filename: item.file || 'inline script'});
   }
 });
 

@@ -1,5 +1,5 @@
 // Actual Chromium/Worker/WASM regressions for the Recurrence and Transform tabs.
-// See README for optional prerequisites.
+// See doc/cli-recurrence.md (browser verification) for optional prerequisites.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -9,16 +9,19 @@ const {chromium} = require(process.env.POLYTOOL_PLAYWRIGHT || 'playwright');
 const wasmDir = process.env.POLYTOOL_WASM_DIR;
 assert.ok(wasmDir, 'Set POLYTOOL_WASM_DIR to a built no-modules WASM bundle');
 const webDir = path.resolve(__dirname, '..');
-const files = {
-  '/': [path.join(webDir, 'index.html'), 'text/html'],
-  '/favicon.svg': [path.join(webDir, 'favicon.svg'), 'image/svg+xml'],
-  '/pkg/polytool_web.js': [path.join(wasmDir, 'polytool_web.js'), 'text/javascript'],
-  '/pkg/polytool_web_bg.wasm': [path.join(wasmDir, 'polytool_web_bg.wasm'), 'application/wasm'],
-};
+const types = {'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml'};
+// Static page assets (index.html, app.css, js/*.js, favicon.svg) come from web/; pkg/ from the WASM bundle.
+function resolveAsset(name) {
+  if (name === '/pkg/polytool_web.js') return [path.join(wasmDir, 'polytool_web.js'), 'text/javascript'];
+  if (name === '/pkg/polytool_web_bg.wasm') return [path.join(wasmDir, 'polytool_web_bg.wasm'), 'application/wasm'];
+  const relative = name === '/' ? 'index.html' : name.slice(1);
+  if (relative.startsWith('pkg/') || !/^(?:index\.html|app\.css|favicon\.svg|js\/[\w.-]+\.js)$/.test(relative)) return null;
+  return [path.join(webDir, relative), types[path.extname(relative)]];
+}
 let workerDelay = 0;
 const server = http.createServer((req, res) => {
   const name = new URL(req.url, 'http://localhost').pathname;
-  const file = files[name];
+  const file = resolveAsset(name);
   if (!file) { res.writeHead(404); res.end(); return; }
   const send = () => { res.writeHead(200, {'Content-Type': file[1]}); res.end(fs.readFileSync(file[0])); };
   if (workerDelay && name.endsWith('.wasm')) setTimeout(send, workerDelay);

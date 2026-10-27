@@ -4,11 +4,11 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 
-const html = fs.readFileSync(process.env.POLYTOOL_HTML || path.join(__dirname, 'index.html'), 'utf8');
+const pageJs = require('./tests/page_source.cjs').loadPage().js;
 
 test('comparison selection changes exported formula and preserves checked domain', () => {
-  const start = html.indexOf('function renderRecurrenceMenu(');
-  const end = html.indexOf('function createWorker(', start);
+  const start = pageJs.indexOf('function renderRecurrenceMenu(');
+  const end = pageJs.indexOf('function createWorker(', start);
   assert.ok(start >= 0 && end > start);
   let displayed = '';
   let copied = '';
@@ -36,7 +36,7 @@ test('comparison selection changes exported formula and preserves checked domain
     setResult: value => { displayed = value; },
     renderRecurrenceExtension: n => `<extension rows="${n}">`,
   });
-  vm.runInContext(html.slice(start, end), sandbox);
+  vm.runInContext(pageJs.slice(start, end), sandbox);
   sandbox.renderRecurrenceMenu(0);
   assert.match(displayed, /partial comparison/);
   assert.match(displayed, /not proofs for all n/);
@@ -82,9 +82,9 @@ test('actual WASM returns a menu and its selection generates exact rows', {
   const bad = JSON.parse(wasm.find_recurrence_representations('1\n2\n???\n4', 2, 0, 0, 0, false, false, false, 10, 0, 0));
   assert.match(bad.error, /invalid polynomial input/);
   // Exercise the actual browser example and the denominator-zero-constant chart.
-  const sampleStart = html.indexOf('  A171608: {');
-  const sampleEnd = html.indexOf('  A001263: {', sampleStart);
-  const sample = vm.runInNewContext('({' + html.slice(sampleStart, sampleEnd) + '})').A171608;
+  const sampleStart = pageJs.indexOf('  A171608: {');
+  const sampleEnd = pageJs.indexOf('  A001263: {', sampleStart);
+  const sample = vm.runInNewContext('({' + pageJs.slice(sampleStart, sampleEnd) + '})').A171608;
   assert.equal(sample.lines.length, 41);
   const tradeoffs = JSON.parse(wasm.find_recurrence_representations(
     sample.lines.slice(1).join('\n'), 3, 3, 1, 2, false, true, false, 2000, 0, 1));

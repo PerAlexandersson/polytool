@@ -20,7 +20,10 @@ node web/tests/string_safety.mjs
 node --test web/*.test.cjs
 ```
 
-With `POLYTOOL_WASM_DIR` naming a built no-modules bundle, the Node tests also
+The Node tests read the page as a browser does: `index.html`, then `app.css`
+and `js/*.js` (`POLYTOOL_HTML` may name a staged `index.html`, whose sibling
+`app.css` and `js/` are used). With `POLYTOOL_WASM_DIR` naming a built
+no-modules bundle, the Node tests also
 run the real WASM exports. With `POLYTOOL_CLI` naming a `polytool` binary as
 well, `recurrence-transforms.test.cjs` checks that the CLI and the browser
 produce identical transform and implicit reports and that each replays the

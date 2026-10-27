@@ -142,5 +142,10 @@ wasm-pack build web --target no-modules --release --out-dir pkg
 ```
 
 `web/build.sh` runs the same build from inside `web/`. The page `web/index.html`
-loads `pkg/polytool_web.js` and `pkg/polytool_web_bg.wasm`; serve the `web/`
-directory (for example with `python3 -m http.server`) to try it locally.
+is markup only: styles are in `web/app.css` and the application scripts in
+`web/js/` (classic scripts, loaded in the order listed in `index.html`), and
+it loads `pkg/polytool_web.js` and `pkg/polytool_web_bg.wasm`. Serve the
+whole `web/` directory (for example with `python3 -m http.server`) to try it
+locally. When a served file changes, bump `ASSET_VERSION` in `web/js/config.js`
+together with the `?v=` queries in `index.html`; `page-assets.test.cjs` checks
+that they agree.

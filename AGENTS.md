@@ -40,6 +40,15 @@
   shared parsing, JSON fragments and help text.  `mcp/` and `web/` are adapters
   over the library, not separate implementations.  Put mathematics in the library
   and keep adapters thin.
+- The web page `web/index.html` is markup only. Styles are in `web/app.css` and the
+  classic (non-module) scripts in `web/js/`, loaded in the order listed in
+  `index.html`, so a later file may use earlier globals. `ASSET_VERSION`
+  (`js/config.js`) must equal the `?v=` query on every local asset in `index.html`;
+  bump it for every change to a served file (`web/tests/page_source.cjs` and
+  `web/page-assets.test.cjs` check this). The two Web Workers are still created
+  from blob strings (`createWorker` in `js/recurrence.js`, `createTransformWorker`
+  in `js/transform.js`) that import `pkg/polytool_web.js`; deployments must copy
+  `app.css` and `js/*.js` next to `index.html`.
 - `recurrence.rs`, `real_rootedness.rs` and `linalg.rs` are facades: their
   private submodules (under `src/recurrence/`, `src/real_rootedness/`,
   `src/linalg/`) are split by concern and re-exported, so public paths stay
