@@ -1,3 +1,5 @@
+//! WebAssembly interface for polytool: each export takes text or JSON and returns a JSON string.
+
 use num_bigint::BigInt;
 use polytool::recurrence::BigRational as RecurrenceBigRational;
 use polytool::recurrence::*;
@@ -242,6 +244,7 @@ fn parse_coefficient_array_json(input: &str) -> Result<Vec<BigInt>, String> {
 // WASM exports
 // ---------------------------------------------------------------------------
 
+/// Real-rootedness, root counts, gamma-positivity and log-concavity of each input polynomial, as JSON.
 #[wasm_bindgen]
 pub fn check_properties(input: &str) -> String {
     let mut results: Vec<serde_json::Value> = Vec::new();
@@ -296,6 +299,7 @@ pub fn check_properties(input: &str) -> String {
     serde_json::to_string(&results).unwrap()
 }
 
+/// Interlacing status of each consecutive pair of input polynomials, as JSON.
 #[wasm_bindgen]
 pub fn check_interlacing_pairs(input: &str) -> String {
     let (polys, _) = parse_ok(input);
@@ -325,6 +329,7 @@ pub fn check_interlacing_pairs(input: &str) -> String {
     serde_json::to_string(&results).unwrap()
 }
 
+/// Resultant of the first two input polynomials, as JSON.
 #[wasm_bindgen]
 pub fn compute_resultant(input: &str) -> String {
     let (polys, _) = parse_ok(input);
@@ -340,6 +345,7 @@ pub fn compute_resultant(input: &str) -> String {
     .to_string()
 }
 
+/// Discriminant of each input polynomial, as JSON.
 #[wasm_bindgen]
 pub fn compute_discriminant(input: &str) -> String {
     let mut results: Vec<serde_json::Value> = Vec::new();
@@ -361,7 +367,9 @@ pub fn compute_discriminant(input: &str) -> String {
     serde_json::to_string(&results).unwrap()
 }
 
+/// Search for a recurrence satisfied by the input polynomial rows (at least three), as JSON.
 #[wasm_bindgen]
+// The exported signature is the JavaScript API: one argument per search bound.
 #[allow(clippy::too_many_arguments)]
 pub fn find_recurrence(
     input: &str,
@@ -444,7 +452,9 @@ pub fn find_recurrence(
     }
 }
 
+/// Search for representations of the input rows through recurrence transformations, as JSON.
 #[wasm_bindgen]
+// The exported signature is the JavaScript API: one argument per search bound.
 #[allow(clippy::too_many_arguments)]
 pub fn find_recurrence_representations(
     input: &str,
@@ -540,6 +550,7 @@ pub fn verify_recurrence_spaces(report_json: &str) -> String {
     }
 }
 
+/// Generate rows (at most 1000) from a recurrence given as JSON; returns them as JSON.
 #[wasm_bindgen]
 pub fn generate_recurrence_rows(recurrence_json: &str, total_rows: usize) -> String {
     if total_rows > 1000 {
@@ -590,6 +601,7 @@ pub fn generate_recurrence_rows(recurrence_json: &str, total_rows: usize) -> Str
     .expect("serialize generated recurrence rows")
 }
 
+/// Symmetric-decomposition analysis of each input polynomial, as JSON.
 #[wasm_bindgen]
 pub fn analyze_decompositions(input: &str) -> String {
     let mut results: Vec<serde_json::Value> = Vec::new();
@@ -685,6 +697,7 @@ pub fn check_interlacing_pair(p_json: &str, q_json: &str) -> String {
     serde_json::json!({"strict": strict, "weak": weak}).to_string()
 }
 
+/// Parse each input polynomial and echo its formatted form and coefficients, as JSON.
 #[wasm_bindgen]
 pub fn parse_and_format(input: &str) -> String {
     let mut results: Vec<ParsedOrError> = Vec::new();

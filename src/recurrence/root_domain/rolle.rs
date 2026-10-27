@@ -396,7 +396,6 @@ pub(super) struct RolleOutcome {
     pub(super) full_degree: bool,
 }
 
-#[allow(clippy::too_many_arguments)]
 fn check_attempt(
     form: &RolleForm,
     factor_isolation: &RealRootIsolation,

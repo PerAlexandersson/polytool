@@ -1,3 +1,5 @@
+//! CLI tests for recurrence transformations.
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 

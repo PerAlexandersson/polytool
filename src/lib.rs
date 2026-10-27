@@ -1,6 +1,3 @@
-#![forbid(unsafe_code)]
-#![warn(missing_docs)]
-
 //! Dense univariate polynomial toolkit for combinatorial research.
 //!
 //! Provides [`Polynomial<C>`] with generic coefficients, plus specialized routines

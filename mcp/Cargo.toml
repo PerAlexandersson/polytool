@@ -14,6 +14,12 @@ publish = false
 name = "polytool-mcp"
 path = "src/main.rs"
 
+# `missing_docs` is deliberately absent: the request and response types derive
+# `JsonSchema`, so their doc comments become the published tool schemas.
+[lints.rust]
+rust_2018_idioms = { level = "warn", priority = -1 }
+unsafe_code = "forbid"
+
 [dependencies]
 polytool = { path = ".." }
 num-bigint = "0.4"

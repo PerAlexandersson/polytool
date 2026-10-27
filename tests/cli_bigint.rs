@@ -1,3 +1,5 @@
+//! CLI handling of big-integer coefficients, malformed input and oversized input.
+
 use std::fs;
 use std::io::Write;
 use std::process::{Command, Output, Stdio};

@@ -1,3 +1,5 @@
+//! CLI tests for implicit recurrence transformations.
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 

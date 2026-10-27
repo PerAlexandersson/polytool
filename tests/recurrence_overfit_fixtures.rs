@@ -1,3 +1,5 @@
+//! Recurrence overfit-detection fixtures.
+
 use polytool::recurrence::parse_rational_coeff;
 use std::fs;
 use std::path::{Path, PathBuf};

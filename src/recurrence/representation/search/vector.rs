@@ -6,17 +6,16 @@ use super::*;
 impl Search<'_> {
     /// Map conditions and transported vector systems of an edge from a
     /// vector parent (a componentwise map).
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn vector_steps(
         &mut self,
         nodes: &[RepresentationNode],
-        t: &RecurrenceTransformation,
-        parent: &RepresentationNode,
+        edge: &Edge<'_>,
         offsets: &[i64],
         states: &[Vec<Vec<Q>>],
         node: &mut RepresentationNode,
         items: &mut Vec<RepresentationDescription>,
     ) {
+        let Edge { t, parent } = *edge;
         let id = node.id;
         let transformations = &self.request.transformations;
         let bounds = component_bounds(transformations, nodes, parent.id);

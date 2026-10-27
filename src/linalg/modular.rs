@@ -63,11 +63,8 @@ fn leading_principal_hadamard_squared_bounds(mat: &[Vec<BigInt>]) -> Option<Vec<
     let mut bounds = Vec::with_capacity(n);
     for k in 1..=n {
         let mut product = BigInt::one();
-        for i in 0..k {
-            let mut row_square_sum = BigInt::zero();
-            for j in 0..k {
-                row_square_sum += &mat[i][j] * &mat[i][j];
-            }
+        for row in &mat[..k] {
+            let row_square_sum: BigInt = row[..k].iter().map(|entry| entry * entry).sum();
             product *= row_square_sum;
         }
         bounds.push(product);
@@ -199,14 +196,16 @@ fn determinant_mod_prime_prefix(mat: &[Vec<u64>], size: usize, prime: u64) -> u6
         let pivot = a[k][k];
         det = mul_mod_u64(det, pivot, prime);
         let inverse = mod_inverse_prime(pivot, prime).expect("nonzero pivot modulo prime");
-        for i in (k + 1)..size {
-            if a[i][k] == 0 {
+        let (pivot_rows, below) = a.split_at_mut(k + 1);
+        let pivot_row = &pivot_rows[k];
+        for row in &mut below[..size - k - 1] {
+            if row[k] == 0 {
                 continue;
             }
-            let factor = mul_mod_u64(a[i][k], inverse, prime);
-            for j in (k + 1)..size {
-                let sub = mul_mod_u64(factor, a[k][j], prime);
-                a[i][j] = sub_mod_u64(a[i][j], sub, prime);
+            let factor = mul_mod_u64(row[k], inverse, prime);
+            for (target, &source) in row[(k + 1)..size].iter_mut().zip(&pivot_row[(k + 1)..size]) {
+                let sub = mul_mod_u64(factor, source, prime);
+                *target = sub_mod_u64(*target, sub, prime);
             }
         }
     }
@@ -291,7 +290,6 @@ pub(super) fn is_prime_u64(n: u64) -> bool {
         if n == p {
             return true;
         }
-        #[allow(clippy::manual_is_multiple_of)]
         if n % p == 0 {
             return false;
         }

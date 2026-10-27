@@ -11,6 +11,11 @@ repository = "https://github.com/PerAlexandersson/polytool"
 keywords = ["polynomials", "real-rootedness", "sturm", "subresultants"]
 categories = ["mathematics", "science"]
 
+[lints.rust]
+missing_docs = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unsafe_code = "forbid"
+
 [dependencies]
 num-bigint = "0.4"
 num-integer = "0.1"

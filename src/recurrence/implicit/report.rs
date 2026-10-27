@@ -357,15 +357,18 @@ pub fn implicit_transform_recurrence(
     } else {
         CHECKED_SUPPLIED_ROWS
     };
+    let transformed = TransformedRows {
+        origin,
+        q_rows: &q_rows,
+        max_degree,
+    };
     let defining_report = transport_report(
         transformation,
         "defining_rule",
         &defining,
         first_base,
         defining_evidence,
-        origin,
-        &q_rows,
-        max_degree,
+        &transformed,
     )?;
 
     for (i, supplied) in request.source_relations.iter().enumerate() {
@@ -383,9 +386,7 @@ pub fn implicit_transform_recurrence(
             &relation,
             supplied.first_base,
             TRANSPORTED_SUPPLIED_EVIDENCE,
-            origin,
-            &q_rows,
-            max_degree,
+            &transformed,
         )?;
         additional.push(report.relation.clone().with_note(format!(
             "transported from source_relations[{i}], which is checked on the supplied rows only"
@@ -525,17 +526,27 @@ fn check_on_rows(
     Ok(count)
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The transformed rows `Q_n` that transported relations are checked on.
+struct TransformedRows<'a> {
+    origin: usize,
+    q_rows: &'a [Vec<Q>],
+    /// Largest degree among the source rows.
+    max_degree: usize,
+}
+
 fn transport_report(
     transformation: &RecurrenceTransformation,
     label: &str,
     relation: &ImplicitRelation,
     first_base: usize,
     evidence: &str,
-    origin: usize,
-    q_rows: &[Vec<Q>],
-    max_degree: usize,
+    transformed: &TransformedRows<'_>,
 ) -> Result<ImplicitTransportReport, String> {
+    let TransformedRows {
+        origin,
+        q_rows,
+        max_degree,
+    } = *transformed;
     let transport = transformation
         .transport_implicit(relation, first_base)
         .map_err(|e| format!("{label}: {e}"))?;

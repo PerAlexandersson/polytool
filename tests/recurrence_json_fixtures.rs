@@ -1,3 +1,5 @@
+//! Recurrence JSON fixtures: the manifest matches the files and the rows replay.
+
 use polytool::recurrence::{
     format_rational_coeff, parse_rational_coeff, BigRational, RecurrenceJson,
 };

@@ -1,3 +1,5 @@
+//! CLI tests for recurrence representation search.
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 

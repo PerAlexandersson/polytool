@@ -105,8 +105,8 @@ pub fn characteristic_polynomial_bigint(mat: &[Vec<BigInt>]) -> Vec<BigInt> {
         );
         let c = -(trace / divisor);
         m = am;
-        for i in 0..n {
-            m[i][i] += &c;
+        for (i, row) in m.iter_mut().enumerate() {
+            row[i] += &c;
         }
         coefficients[n - k] = c;
     }

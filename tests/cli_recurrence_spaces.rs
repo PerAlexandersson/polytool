@@ -1,3 +1,5 @@
+//! CLI tests for spaces of recurrences.
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 

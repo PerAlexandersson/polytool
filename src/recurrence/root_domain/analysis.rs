@@ -771,7 +771,6 @@ impl Geometry {
             },
             RecurrenceTransformation::Gamma { .. } => Self::Gamma,
             RecurrenceTransformation::SymmetricDecomposition { .. } => Self::Symmetric,
-            #[allow(unreachable_patterns)]
             _ => Self::Unsupported,
         })
     }
@@ -1714,16 +1713,13 @@ pub(crate) fn analyze_root_domain(
 
     // The recurrence theorem match of the transported rule.
     let recurrence_theorem = inputs.transported.as_ref().map(|transported| {
-        rolle_induction(
-            inputs,
-            transported,
-            &geometry,
-            &candidates,
+        let context = RolleContext {
+            geometry: &geometry,
+            supplied: &candidates,
             all_certified,
-            &conditional,
-            &mut claims,
-            &mut notes,
-        )
+            conditional: &conditional,
+        };
+        rolle_induction(inputs, transported, &context, &mut claims, &mut notes)
     });
 
     Ok(RootDomainReport {
@@ -1744,17 +1740,30 @@ fn integer_row(row: &[Q]) -> Vec<BigInt> {
         .collect()
 }
 
-#[allow(clippy::too_many_arguments)]
+/// What the analysis established before the recurrence theorem is matched.
+struct RolleContext<'a> {
+    geometry: &'a Geometry,
+    /// Candidate intervals supplied with the request.
+    supplied: &'a [(RootInterval, String)],
+    /// Whether every map condition is certified for all indices.
+    all_certified: bool,
+    /// Labels of the assumptions the claims depend on.
+    conditional: &'a [String],
+}
+
 fn rolle_induction(
     inputs: &RootDomainInputs<'_>,
     transported: &TransportedInput<'_>,
-    geometry: &Geometry,
-    supplied: &[(RootInterval, String)],
-    all_certified: bool,
-    conditional: &[String],
+    context: &RolleContext<'_>,
     claims: &mut Vec<RootDomainClaim>,
     notes: &mut Vec<String>,
 ) -> RecurrenceRootTheorem {
+    let RolleContext {
+        geometry,
+        supplied,
+        all_certified,
+        conditional,
+    } = *context;
     let rule = match transported.rule {
         TransportedRecurrence::Scalar(rule) => rule,
         _ => return unmatched_theorem("only scalar transported rules are matched"),

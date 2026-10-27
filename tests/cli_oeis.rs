@@ -1,3 +1,5 @@
+//! The `polytool oeis` subcommands.
+
 use std::process::{Command, Output};
 
 fn run_polytool(args: &[&str]) -> Output {

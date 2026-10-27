@@ -1,3 +1,5 @@
+//! Public interlacing API tests.
+
 use num_bigint::BigInt;
 use polytool::{check_interlacing, check_interlacing_bigint_coeffs, check_weak_interlacing};
 

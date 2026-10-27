@@ -3,6 +3,12 @@
 
 use super::*;
 
+/// An edge of the search tree being expanded: a transformation applied to its parent node.
+pub(super) struct Edge<'a> {
+    pub(super) t: &'a RecurrenceTransformation,
+    pub(super) parent: &'a RepresentationNode,
+}
+
 pub(super) struct Search<'a> {
     pub(super) request: &'a RepresentationSearchRequest,
     pub(super) origin: usize,
@@ -200,17 +206,16 @@ impl Search<'_> {
             .collect()
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn run_step(
         &mut self,
         id: usize,
-        t: &RecurrenceTransformation,
-        parent: &RepresentationNode,
+        edge: &Edge<'_>,
         source: Option<usize>,
         states: &[Vec<Vec<Q>>],
         items: &mut Vec<RepresentationDescription>,
         conditions: &mut Option<Vec<TransformConditionStatus>>,
     ) -> RepresentationStep {
+        let Edge { t, parent } = *edge;
         let mut step = RepresentationStep {
             source_description: source,
             transform: None,
@@ -377,7 +382,8 @@ impl Search<'_> {
         };
         let mut items = Vec::new();
         if vector_parent {
-            self.vector_steps(nodes, t, parent, &offsets, &states, &mut node, &mut items);
+            let edge = Edge { t, parent };
+            self.vector_steps(nodes, &edge, &offsets, &states, &mut node, &mut items);
         } else {
             self.scalar_steps(t, parent, &states, &mut node, &mut items);
         }
@@ -470,7 +476,8 @@ impl Search<'_> {
                     break;
                 }
                 let before = items.len();
-                let step = self.run_step(id, t, parent, source, states, items, &mut conditions);
+                let edge = Edge { t, parent };
+                let step = self.run_step(id, &edge, source, states, items, &mut conditions);
                 let index = node.steps.len();
                 for item in &mut items[before..] {
                     item.provenance = item.provenance.replace("STEP", &index.to_string());

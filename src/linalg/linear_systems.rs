@@ -96,15 +96,15 @@ fn rational_rref(
         origins.swap(row, pr);
         let value = aug[row][col].clone();
         let snapshot = aug[row][col..].to_vec();
-        for r in 0..aug.len() {
-            if r == row || aug[r][col].is_zero() {
+        for (r, target_row) in aug.iter_mut().enumerate() {
+            if r == row || target_row[col].is_zero() {
                 continue;
             }
-            let factor = &aug[r][col] / &value;
+            let factor = &target_row[col] / &value;
             if let Some(b) = budget.as_deref_mut() {
                 b.check(&factor)?;
             }
-            for (entry, pivot) in aug[r][col..].iter_mut().zip(&snapshot) {
+            for (entry, pivot) in target_row[col..].iter_mut().zip(&snapshot) {
                 *entry -= pivot * &factor;
                 if let Some(b) = budget.as_deref_mut() {
                     b.check(entry)?;
@@ -367,19 +367,19 @@ fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option
         }
 
         let pivot_tail = aug[col][col + 1..=n].to_vec();
-        for row in (col + 1)..n {
-            let row_pivot = aug[row][col].clone();
-            aug[row][col] = BigInt::zero();
-            for (offset, target_col) in ((col + 1)..=n).enumerate() {
+        for target_row in &mut aug[(col + 1)..n] {
+            let row_pivot = target_row[col].clone();
+            target_row[col] = BigInt::zero();
+            for (cell, tail) in target_row[(col + 1)..=n].iter_mut().zip(&pivot_tail) {
                 let numerator = if row_pivot.is_zero() {
-                    &aug[row][target_col] * &pivot
+                    &*cell * &pivot
                 } else {
-                    &aug[row][target_col] * &pivot - &row_pivot * &pivot_tail[offset]
+                    &*cell * &pivot - &row_pivot * tail
                 };
                 if &numerator % &denom != BigInt::zero() {
                     return None;
                 }
-                aug[row][target_col] = numerator / &denom;
+                *cell = numerator / &denom;
             }
         }
         denom = pivot;

@@ -82,24 +82,23 @@ pub fn is_positive_semidefinite(mat: &[Vec<BigInt>]) -> bool {
         }
         if a[k][k].is_zero() {
             // All entries below must also be zero
-            for i in (k + 1)..n {
-                if !a[i][k].is_zero() {
-                    return false;
-                }
+            if a[(k + 1)..n].iter().any(|row| !row[k].is_zero()) {
+                return false;
             }
             continue;
         }
         let pivot = a[k][k].clone();
-        for i in (k + 1)..n {
-            if a[i][k].is_zero() {
+        let pivot_row = a[k].clone();
+        for row in &mut a[(k + 1)..n] {
+            if row[k].is_zero() {
                 continue;
             }
-            let factor = a[i][k].clone() / pivot.clone();
-            for j in (k + 1)..n {
-                let sub = factor.clone() * a[k][j].clone();
-                a[i][j] -= sub;
+            let factor = row[k].clone() / pivot.clone();
+            for (target, source) in row[(k + 1)..n].iter_mut().zip(&pivot_row[(k + 1)..n]) {
+                let sub = factor.clone() * source.clone();
+                *target -= sub;
             }
-            a[i][k] = Q::zero();
+            row[k] = Q::zero();
         }
     }
     true
@@ -110,14 +109,7 @@ fn is_symmetric_bigint_matrix(mat: &[Vec<BigInt>]) -> bool {
     if !is_square_bigint_matrix(mat) {
         return false;
     }
-    for i in 0..n {
-        for j in (i + 1)..n {
-            if mat[i][j] != mat[j][i] {
-                return false;
-            }
-        }
-    }
-    true
+    (0..n).all(|i| ((i + 1)..n).all(|j| mat[i][j] == mat[j][i]))
 }
 
 fn bigint_to_q(mat: &[Vec<BigInt>]) -> Vec<Vec<Q>> {
@@ -135,11 +127,11 @@ mod tests {
 
     fn shifted_hilbert_like_matrix(size: usize) -> Vec<Vec<BigInt>> {
         let mut mat = vec![vec![BigInt::zero(); size]; size];
-        for i in 0..size {
-            for j in 0..size {
-                mat[i][j] = BigInt::from((i + j + 1) as i64);
+        for (i, row) in mat.iter_mut().enumerate() {
+            for (j, entry) in row.iter_mut().enumerate() {
+                *entry = BigInt::from((i + j + 1) as i64);
             }
-            mat[i][i] += BigInt::from((size * size) as i64);
+            row[i] += BigInt::from((size * size) as i64);
         }
         mat
     }

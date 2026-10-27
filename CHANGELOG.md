@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+Maintenance (no API changes):
+
+- The recurrence implementation is grouped into private submodules by
+  concern; all `polytool::recurrence` paths are unchanged.
+- Lints are configured in each package's `[lints]` table (`missing_docs`,
+  `rust_2018_idioms`, `forbid(unsafe_code)`).
+- The README is a landing page; the CLI, library, MCP, web and algorithm
+  references moved to `doc/`, and release notes to this file.
+- The web page is split into `index.html`, `app.css` and `js/*.js`; serve the
+  whole `web/` directory.
+
 Performance:
 
 - The default exact real-rootedness test no longer switches large

@@ -110,10 +110,14 @@
   `web.md`, `development.md`, `algorithms.md`) and in `CHANGELOG.md`.  Put CLI
   details in the matching `doc/cli*.md` page and release notes in `CHANGELOG.md`.
 - Every module starts with `//!` documentation (purpose, entry points,
-  conventions, related modules).  Public items need rustdoc; check with
-  `cargo rustdoc -q --lib -p polytool -- -W missing_docs` (it reports none;
-  keep it that way, including in the generated OEIS catalog, whose generator
-  emits accessor docs).  Doc examples must compile as doctests and
+  conventions, related modules).  Public items need rustdoc: each package's
+  `[lints.rust]` table in `Cargo.toml` sets `missing_docs`,
+  `rust_2018_idioms` and `forbid(unsafe_code)` (kept identical to the root
+  `[workspace.lints]`, since the standalone repository has no workspace;
+  `mcp/` omits `missing_docs` because its doc comments become the published
+  tool schemas), and Clippy with `-D warnings` enforces it, also in the
+  generated OEIS catalog, whose generator emits accessor docs.  Examples and
+  integration tests need a `//!` line too.  Doc examples must compile as doctests and
   must not use APIs newer than the declared `rust-version` (1.82).
 - This directory is published as a standalone repository: do not put local
   paths, private project names or workflow notes into code, comments, docs or

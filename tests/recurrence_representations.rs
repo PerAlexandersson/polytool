@@ -1,3 +1,5 @@
+//! Recurrence representation search through the library API.
+
 use num_traits::Zero;
 use polytool::recurrence::*;
 

@@ -1,3 +1,5 @@
+//! Spaces of recurrences, through the library API.
+
 use polytool::recurrence::*;
 use serde_json::{json, Value};
 

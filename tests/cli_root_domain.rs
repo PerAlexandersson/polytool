@@ -1,3 +1,5 @@
+//! CLI tests for root-domain analysis of recurrences.
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 

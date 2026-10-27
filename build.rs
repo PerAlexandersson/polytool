@@ -14,6 +14,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::process::Command;
 
+// The schema file is shared with the library, which uses more of it than this script.
 #[allow(dead_code)]
 mod oeis_catalog {
     use serde::{Deserialize, Serialize};
@@ -290,6 +291,7 @@ fn render_oeis_catalog(records: &[OeisCatalogRecord]) -> String {
     out.push_str("];\n\n");
     for (index, record) in records.iter().enumerate() {
         let _ = writeln!(out, "{}", accessor_doc(&record.id, &record.name));
+        // The generated accessors are named after the OEIS A-numbers (`A000045`).
         let _ = writeln!(out, "#[allow(non_snake_case)]");
         let _ = writeln!(
             out,

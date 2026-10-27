@@ -1,3 +1,5 @@
+//! CLI tests for `--version` output and time budgets.
+
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 

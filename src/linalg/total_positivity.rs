@@ -188,14 +188,15 @@ fn check_tnn_neville_rational_rows(a: &mut [Vec<Q>]) -> Result<(), String> {
             let multiplier = a[i][k].clone() / a[i - 1][k].clone();
             debug_assert!(multiplier >= Q::zero());
 
-            for j in k..ncols {
-                let sub = multiplier.clone() * a[i - 1][j].clone();
-                a[i][j] -= sub;
+            let (above, below) = a.split_at_mut(i);
+            for (target, source) in below[0][k..ncols].iter_mut().zip(&above[i - 1][k..ncols]) {
+                let sub = multiplier.clone() * source.clone();
+                *target -= sub;
             }
             a[i][k] = Q::zero();
 
-            for j in (k + 1)..ncols {
-                if a[i][j] < Q::zero() {
+            for (j, entry) in a[i].iter().enumerate().take(ncols).skip(k + 1) {
+                if *entry < Q::zero() {
                     return Err(format!(
                         "Neville elimination: entry [{},{}] became negative \
                          (multiplier at column {}, rows [{},{}])",
@@ -310,9 +311,9 @@ pub fn check_tnn_neville_bigint(mat: &[Vec<BigInt>]) -> Result<(), String> {
         .map(|row| row.iter().map(|v| Q::from_integer(v.clone())).collect())
         .collect();
 
-    for i in 0..nrows {
-        for j in 0..ncols {
-            if a[i][j] < Q::zero() {
+    for (i, row) in a.iter().enumerate() {
+        for (j, entry) in row.iter().enumerate() {
+            if *entry < Q::zero() {
                 return Err(format!("Entry [{},{}] < 0", i, j));
             }
         }
