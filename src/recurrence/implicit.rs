@@ -84,6 +84,11 @@ pub const DEFINING_EVIDENCE: &str = "defining";
 /// certificate, source uniqueness and initial agreement.
 pub const CERTIFIED_BY_RECONSTRUCTION_EVIDENCE: &str = "certified_by_reconstruction";
 
+/// Evidence: a member of a complete recurrence space certified for every
+/// index from a supplied (or certified) source by a finite verification
+/// theorem (`find_recurrence_spaces`, status `conditional_on_source`).
+pub const CERTIFIED_COMPLETE_SPACE_EVIDENCE: &str = "certified_complete_space";
+
 /// Evidence: an exact consequence of a supplied source relation that is
 /// itself verified only on the supplied rows.
 pub const TRANSPORTED_SUPPLIED_EVIDENCE: &str = "transported_supplied_relation";
@@ -115,6 +120,7 @@ pub fn evidence_is_certified(evidence: &str) -> bool {
         DEFINING_EVIDENCE,
         TRANSPORTED_IDENTITY_EVIDENCE,
         CERTIFIED_BY_RECONSTRUCTION_EVIDENCE,
+        CERTIFIED_COMPLETE_SPACE_EVIDENCE,
     ]
     .contains(&evidence)
 }

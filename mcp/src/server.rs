@@ -44,6 +44,9 @@ use crate::requests::{
     VerifyRecurrenceSpacesToolRequest,
 };
 use crate::requests::{
+    RecurrenceRepresentationSearchToolRequest, VerifyRecurrenceRepresentationSearchToolRequest,
+};
+use crate::requests::{
     RecurrenceTransformToolRequest, RootEnclosuresToolRequest, VerifyRecurrenceTransformToolRequest,
 };
 use crate::responses::{
@@ -1350,6 +1353,58 @@ impl PolynomialToolsServer {
         Parameters(input): Parameters<crate::requests::LeftProductionRequest>,
     ) -> Result<Json<crate::responses::LeftProductionResponse>, McpError> {
         Ok(Json(left_production_response(&input)?))
+    }
+
+    #[tool(
+        description = "Bounded queue search over equivalent representations of one polynomial sequence. request: {source_recurrence (polytool.recurrence.v1 with seeds and first_index) | oeis_id | rows (exploratory fits only), row_origin, row_count (default 12), transformations: [registry maps as in transform_recurrence / transform_recurrence_implicit: multiply_power, divide_power, reversal, affine, mobius, f_polynomial, gamma, symmetric_decomposition, diagonal, derivative_antecedent], search (fit bounds, default max_rec_len 2, max_var_deg 2, max_idx_deg 1, max_diff_deg 1, try_denominator true, max_candidates 2000), fits (default true), certified_spaces (default true: complete spaces after factorial diagonal maps), space_shapes, root_domain (optional, attached to coordinate-change steps), limits {max_depth 2, max_representations 16, max_steps 160, max_sources_per_edge 2, max_space_shapes 16, ...}}. Each representation applies every allowed map, deduplicates maps by certified equality of normal forms (never by matching rows), reconstructs the source exactly, transports its certified relations (replayable polytool.recurrence-transform.v1 / polytool.recurrence-implicit.v1 steps), certifies complete spaces, fits the new coordinates, and feeds certified relations to later steps. Returns polytool.recurrence-representation-search.v1: representations with ranked descriptions labelled finite_fit, certified_annihilating_relation or equivalent_generating_description (with seeds, conditions and a uniqueness assessment), edges (new_representation, duplicate_map, rejected, skipped_budget), a global ranking (shift length, derivative order, coefficient degree, index degree, components, reconstruction cost), budget events and status complete | budget_exhausted."
+    )]
+    pub fn search_recurrence_representations(
+        &self,
+        Parameters(input): Parameters<RecurrenceRepresentationSearchToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.request.to_string(), "representation-search request")
+            .map_err(invalid_params)?;
+        let request: polytool::recurrence::RepresentationSearchRequest =
+            serde_json::from_value(input.request).map_err(|e| invalid_params(e.to_string()))?;
+        request
+            .limits
+            .check_ceiling(&polytool::recurrence::RepresentationSearchLimits::service_ceiling())
+            .map_err(invalid_params)?;
+        let report =
+            polytool::recurrence::search_representations(&request).map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize representation search")
+        else {
+            unreachable!()
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Replay a polytool.recurrence-representation-search.v1 report from search_recurrence_representations: rerun the search from its embedded request and require equality, replay every embedded transform/implicit step and complete-space certificate with its own verifier, check that each step's defining rule is a certified description of its parent, re-derive every representation from the original source rows (map and exact inverse), and re-check every description on its rows."
+    )]
+    pub fn verify_recurrence_representation_search(
+        &self,
+        Parameters(input): Parameters<VerifyRecurrenceRepresentationSearchToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.report.to_string(), "representation-search report")
+            .map_err(invalid_params)?;
+        let report: polytool::recurrence::RepresentationSearchReport =
+            serde_json::from_value(input.report).map_err(|e| invalid_params(e.to_string()))?;
+        report
+            .request
+            .limits
+            .check_ceiling(&polytool::recurrence::RepresentationSearchLimits::service_ceiling())
+            .map_err(invalid_params)?;
+        polytool::recurrence::verify_representation_search(&report).map_err(invalid_params)?;
+        Ok(Json(BTreeMap::from([
+            ("verified".into(), json!(true)),
+            ("status".into(), json!(report.status)),
+            (
+                "representations".into(),
+                json!(report.representations.len()),
+            ),
+        ])))
     }
 }
 

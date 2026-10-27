@@ -36,6 +36,9 @@ pub use requests::{
 };
 pub use requests::{LeftProductionRequest, PfNetworkRequest};
 pub use requests::{
+    RecurrenceRepresentationSearchToolRequest, VerifyRecurrenceRepresentationSearchToolRequest,
+};
+pub use requests::{
     RecurrenceTransformToolRequest, RootEnclosuresToolRequest, VerifyRecurrenceTransformToolRequest,
 };
 pub use responses::{

@@ -1788,3 +1788,54 @@ fn recurrence_implicit_tools_transport_assess_and_replay() {
         }))
         .is_err());
 }
+
+#[test]
+fn representation_search_tools_round_trip_and_replay() {
+    let server = PolynomialToolsServer::new();
+    let request = json!({"oeis_id": "A007318", "row_count": 8,
+        "limits": {"max_depth": 1},
+        "transformations": [{"kind": "diagonal",
+            "weight": {"kind": "factorial_power", "power": 1}}]});
+    let Json(report) = server
+        .search_recurrence_representations(Parameters(RecurrenceRepresentationSearchToolRequest {
+            request: request.clone(),
+        }))
+        .unwrap();
+    assert_eq!(
+        report["schema"],
+        "polytool.recurrence-representation-search.v1"
+    );
+    assert_eq!(report["status"], "complete");
+    let descriptions = report["representations"][1]["descriptions"]
+        .as_array()
+        .unwrap();
+    assert!(descriptions.iter().any(
+        |d| d["label"] == "equivalent_generating_description" && d["kind"] == "certified_space"
+    ));
+    // The MCP JSON is the crate report.
+    let parsed: polytool::recurrence::RepresentationSearchReport =
+        serde_json::from_value(json!(report)).unwrap();
+    assert_eq!(json!(parsed), json!(report));
+    let Json(checked) = server
+        .verify_recurrence_representation_search(Parameters(
+            VerifyRecurrenceRepresentationSearchToolRequest {
+                report: json!(report),
+            },
+        ))
+        .unwrap();
+    assert_eq!(checked["verified"], true);
+    let mut tampered = json!(report);
+    tampered["representations"][1]["states"][2][0][1] = json!("3");
+    assert!(server
+        .verify_recurrence_representation_search(Parameters(
+            VerifyRecurrenceRepresentationSearchToolRequest { report: tampered }
+        ))
+        .is_err());
+    let mut excessive = request;
+    excessive["limits"] = json!({"max_depth": 100});
+    assert!(server
+        .search_recurrence_representations(Parameters(RecurrenceRepresentationSearchToolRequest {
+            request: excessive
+        }))
+        .is_err());
+}

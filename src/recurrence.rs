@@ -27,7 +27,9 @@
 //! relations (derivatives on any row, row equations) with diagonal transport,
 //! derivative antecedents, reconstruction data and certificates, and optional
 //! root-domain information (theorem adapters, exact root enclosures) for
-//! transformed results.
+//! transformed results, and a bounded queue search over equivalent
+//! representations that composes all of these
+//! ([`search_representations`]).
 
 use num_bigint::BigInt;
 use num_rational::Ratio;
@@ -81,6 +83,12 @@ mod diagonal;
 pub use diagonal::*;
 mod implicit_report;
 pub use implicit_report::*;
+mod representation_map;
+pub use representation_map::RepresentationMapRecord;
+mod representation_report;
+pub use representation_report::*;
+mod representation_search;
+pub use representation_search::*;
 
 #[cfg(test)]
 mod test_support;

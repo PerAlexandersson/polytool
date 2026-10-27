@@ -1446,6 +1446,161 @@ verify_recurrence_implicit}`. The MCP tools are `transform_recurrence_implicit`,
 general search over implicit relations is not part of this release: fits are
 successor rules, and implicit relations come from transport or input.
 
+#### Searching equivalent representations
+
+`polytool recurrence-search-representations` composes the coordinate changes,
+transports, certified spaces and fits above into one bounded queue search
+over representations of a sequence. The source is a defining rule with seeds
+and origin (`source_recurrence`), a bundled family (`oeis_id`), or rows only
+(`rows`, `row_origin`; every result is then a finite fit). `transformations`
+is the allowed set of registry maps. Representation 0 is the source; for each
+representation below `limits.max_depth` every allowed map is applied in turn:
+
+1. The composite map from the source is reduced to a normal form.
+   Möbius-class maps (`multiply_power`, `divide_power`, `affine`, `reversal`,
+   `mobius`, `f_polynomial`) compose to
+   `Q_n(x) = K_0 K_1^n prod (x + s)^(u + v n) P_n((a x + b)/(c x + e))`,
+   consecutive diagonal maps multiply their weights, and identity segments
+   are removed. A map whose normal form is certified equal to an existing
+   one is a `duplicate_map` edge. Rows are never compared: reversal twice at
+   the same degree bound is the identity and deduplicates, while bounds `n`
+   and `n + 1` give `x P_n`, a new representation. The palindromic rows of
+   A007318 equal their reversal, but that map is a separate representation.
+   It is marked `equal_sequence_as` only because both carry identical
+   equivalent generating descriptions.
+2. The rows are mapped exactly, and the source rows are rebuilt by inverting
+   the whole chain (`reconstruction_verified`). The original source stays
+   the reference.
+3. Known relations are transported. Every certified scalar description of
+   the parent (at most `max_sources_per_edge`, simplest first) becomes the
+   defining rule of an embedded, replayable step. Möbius-class, gamma and
+   symmetric-decomposition maps use a `polytool.recurrence-transform.v1`
+   step. Diagonal maps and derivative antecedents use a
+   `polytool.recurrence-implicit.v1` step, whose successor fit can be proved
+   by reconstruction. Without a certified parent relation the step only maps
+   rows.
+4. After a `factorial_power` diagonal map of a constant-index monic
+   certified rule, complete spaces are certified on a bounded menu of
+   supports. Lags run over `1..=max_rec_len` and derivative orders over
+   `0..=max_diff_deg`. Uniform degrees increase up to the search bounds, the
+   menu stops at the first success, and supports dominated by a success are
+   skipped. `space_shapes` replaces the menu.
+5. The new coordinates are fitted by the bounded menu (`search`, default
+   lags 2, `x`-degree 2, index degree 1, derivative order 1, left factors in
+   `n`, 2000 candidates).
+
+Certified descriptions of a new representation feed its children.
+Descriptions of the same relation are merged; the strongest label is kept
+and the other provenances are listed in `also_found_by`. Each description has
+one of three labels:
+
+| `label` | Meaning |
+| --- | --- |
+| `finite_fit` | fitted to finitely many rows, or resting on a condition checked on rows only |
+| `certified_annihilating_relation` | annihilation proved for every index of the domain, uniqueness not certified |
+| `equivalent_generating_description` | certified annihilation, sufficient initial or boundary data, and a certified uniqueness argument (`assess_generating_description`) |
+
+Certification is relative to the defining source, the maps actually
+enumerated and the finite supports searched. Descriptions are ranked by shift
+length, derivative order, coefficient degree, index degree, component count
+and reconstruction cost (normal-form segments plus coefficient conditions),
+then by label. Every limit that cuts work (`max_representations`,
+`max_steps`, `max_space_shapes`, fit or elimination budgets) is listed in
+`budget`, and the status is then `budget_exhausted`. The depth limit is a
+requested bound: unexpanded representations at `max_depth` are listed in
+`depth_frontier`. An optional `root_domain` request is attached to every
+coordinate-change step, with the evidence labels of the previous section.
+Discovery never depends on it.
+
+```sh
+echo '{"oeis_id":"A007318","row_count":10,"limits":{"max_depth":1},
+  "transformations":[{"kind":"diagonal","weight":{"kind":"factorial_power","power":1}}]}' \
+  | polytool recurrence-search-representations > report.json
+polytool recurrence-search-representations --verify < report.json
+```
+
+For A007318 divided coefficientwise by `k!`, representation 1 has three
+equivalent descriptions. The first is the transported implicit rule
+`Q'_(n+1) = Q'_n + Q_n` with its exceptional constant condition. The other
+two are certified complete-space members: the first-order derivative rule
+`n Q_n = (n + x) Q_(n-1) + x Q'_(n-1)` and the three-term rule
+`n Q_n = (2n - 1 + x) Q_(n-1) - (n - 1) Q_(n-2)`. Without the constant
+condition the implicit rule is only a `certified_annihilating_relation`.
+For A065826 with `inverse_binomial {m: 1}` and `f_polynomial` (schedule
+`d_n = n - 1` from index 1), the first map gives the Eulerian rows with a
+reconstruction-certified rule. The second map transports that rule to
+`Q_(n+1) = (x (1 + x) Q_n)'`. An excerpt of a report:
+
+```json
+{"schema": "polytool.recurrence-representation-search.v1", "status": "complete",
+ "source": {"kind": "oeis", "row_origin": 0, "row_count": 10,
+            "rule": {"schema": "polytool.recurrence.v1", "...": "..."}},
+ "representations": [
+  {"id": 0, "depth": 0, "chain": [], "map": {"identity": true, "segments": [],
+   "index_domain": "n >= 0"}, "components": ["P"], "...": "..."},
+  {"id": 1, "depth": 1, "parent": 0, "transformation": 0, "chain": [0],
+   "map": {"identity": false, "index_domain": "n >= 0", "segments":
+     ["Q_n(x) = sum_k lambda(n,k) [x^k]P_n x^k with lambda = (1/(k!)^1)"]},
+   "components": ["Q"], "row_origin": 0,
+   "states": [[["1"]], [["1", "1"]], [["1", "2", "1/2"]], "..."],
+   "reconstruction_verified": true, "expanded": false,
+   "descriptions": [
+    {"label": "equivalent_generating_description", "kind": "certified_space",
+     "evidence": "certified_complete_space",
+     "text": "(n) P(n) = (n + t) P(n-1) + t P'(n-1)",
+     "scalar": {"schema": "polytool.recurrence.v1", "first_index": 0,
+                "initial_polynomials": [["1"]], "recurrence": {"...": "..."}},
+     "description": {"first_index": 0, "seeds": [["1"]], "relations": ["..."],
+                     "exceptional_index_conditions": [], "boundary_conditions": []},
+     "assessment": {"status": "equivalent_description", "...": "..."},
+     "cost": {"shift_length": 1, "derivative_order": 1, "coefficient_degree": 1,
+              "index_degree": 1, "component_count": 1, "reconstruction_cost": 1},
+     "provenance": "spaces[4].results[0].representatives[0]",
+     "also_found_by": ["fits"]}, "..."],
+   "steps": [{"source_description": 0, "implicit": {"schema":
+     "polytool.recurrence-implicit.v1", "...": "..."}}],
+   "spaces": [{"schema": "polytool.recurrence-spaces.v1", "...": "..."}],
+   "fits": {"status": "complete", "configurations_considered": 42, "fits_found": 3}}],
+ "edges": [{"parent": 0, "transformation": 0, "outcome": "new_representation",
+            "representation": 1}],
+ "ranked": [{"representation": 0, "description": 0,
+             "label": "equivalent_generating_description",
+             "text": "P(n) = (1 + t) P(n-1)", "cost": {"...": "..."}}, "..."],
+ "steps_used": 10, "conventions": ["..."]}
+```
+
+The schema, for renderers:
+
+| Path | Content |
+| --- | --- |
+| `schema`, `status` | `polytool.recurrence-representation-search.v1`; `complete` or `budget_exhausted` |
+| `request` | the request, retained for replay |
+| `source` | `kind` (`defining_rule`, `oeis`, `rows_only`), `rule` (with seeds), `row_origin`, `row_count` |
+| `representations[i]` | `id`, `depth`, `parent`, `transformation` (index into `request.transformations`), `chain` (indices in application order), `map` (`identity`, `segments`, `index_domain`), `components`, `row_origin`, `states[row][component]` (ascending rational strings), `reconstruction_verified`, `map_conditions`, `descriptions`, `steps`, `spaces`, `fits`, `equal_sequence_as`, `expanded`, `notes` |
+| `representations[i].descriptions[j]` | `label`, `kind` (`defining_rule`, `transported_rule`, `transported_vector_system`, `implicit_transport`, `reconstruction_certified_fit`, `certified_space`, `finite_fit`), `evidence`, `text`, optional `scalar` (`polytool.recurrence.v1` with seeds, original indices), `vector`, `description` (generating description), `assessment`, `cost`, `provenance`, `also_found_by`, `note` |
+| `representations[i].steps[k]` | `source_description` (parent description used as the defining rule, absent for rows only), one of `transform` / `implicit` (embedded reports), or `error` |
+| `edges[k]` | `parent`, `transformation`, `outcome` (`new_representation`, `duplicate_map`, `rejected`, `skipped_budget`), `representation`, `detail` |
+| `ranked[k]` | `representation`, `description`, `label`, `text`, `cost` |
+| `depth_frontier`, `budget`, `steps_used`, `conventions` | unexpanded representations at `max_depth`; budget events `{limit, representation, detail}`; backend calls; conventions |
+
+Successor-rule `text` uses the `polytool.recurrence.v1` display (`P(n)`,
+variable `t`, target index), and implicit relations use `Q[n+i]` with base
+index `n`. A renderer should distinguish `finite_fit` from the two certified
+labels and show `evidence` and `assessment.uniqueness` for certified results.
+`--verify` reruns the search from the embedded request and requires equality.
+It then replays every embedded step and space certificate with its own
+verifier and checks that each step's defining rule is a certified
+description of its parent. Every representation is re-derived from the
+source rows (map and exact inverse), and every description is re-checked on
+its rows. In Rust, see `recurrence::{RepresentationSearchRequest,
+RepresentationSearchLimits, search_representations, RepresentationSearchReport,
+verify_representation_search, representation_label}`; the MCP tools are
+`search_recurrence_representations` and
+`verify_recurrence_representation_search`. Not yet covered: a general search
+over implicit relations (implicit relations come from transport), lossy maps
+such as plain differentiation, and transformations of vector
+representations.
+
 ### Scout BKW equal-modulus loci
 
 For a polynomial recurrence with characteristic symbol
@@ -2276,6 +2431,8 @@ Available MCP tools:
 - `transform_recurrence_implicit`
 - `verify_recurrence_implicit`
 - `assess_generating_description`
+- `search_recurrence_representations`
+- `verify_recurrence_representation_search`
 
 `check_tnn_network` and `recognize_brenti_strip_digraph` return the same
 fields as the JSON output of `polytool tnn-network` and
@@ -2571,6 +2728,24 @@ Additions (no breaking changes):
   `polytool.recurrence-implicit.v1` reports; CLI `recurrence-implicit`
   (`--verify`, `--assess`); MCP tools `transform_recurrence_implicit`,
   `verify_recurrence_implicit`, `assess_generating_description`.
+- Bounded search over equivalent representations:
+  `recurrence::{search_representations, verify_representation_search,
+  RepresentationSearchRequest, RepresentationSearchLimits,
+  RepresentationSearchReport, representation_label}`. A breadth-first queue
+  applies a request-specified set of registry maps, deduplicates maps by
+  certified equality of normal forms (never by matching rows), reconstructs
+  the source exactly, transports certified relations through embedded
+  replayable transform/implicit steps, certifies complete spaces after
+  factorial maps, fits the new coordinates and feeds certified relations to
+  later steps. Descriptions are labelled `finite_fit`,
+  `certified_annihilating_relation` or `equivalent_generating_description`
+  and ranked; limits produce explicit budget events. New evidence label
+  `certified_complete_space` (`CERTIFIED_COMPLETE_SPACE_EVIDENCE`).
+  `polytool.recurrence-representation-search.v1` reports; CLI
+  `recurrence-search-representations` (`--verify`); MCP tools
+  `search_recurrence_representations`,
+  `verify_recurrence_representation_search`. Existing commands and defaults
+  are unchanged.
 - `vec_poly::{exact_div_by_t, exact_div_by_t_minus_one, exact_div_by_t_minus,
   sum, prefix_sums, mul_linear, mul_linear_pow, has_nonnegative_coefficients,
   evaluate_homogeneous, evaluate_at_ratio}`: exact division by `t` and

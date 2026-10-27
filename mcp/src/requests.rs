@@ -677,3 +677,19 @@ pub struct LeftProductionRequest {
     /// Index of the first row: 1 (default, `P_0 = 1` is prepended) or 0.
     pub first_row_index: Option<usize>,
 }
+
+/// Structured representation-search request
+/// (`polytool::recurrence::RepresentationSearchRequest`); the library
+/// validates the strict schema.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecurrenceRepresentationSearchToolRequest {
+    pub request: serde_json::Value,
+}
+
+/// A `polytool.recurrence-representation-search.v1` report to replay exactly.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VerifyRecurrenceRepresentationSearchToolRequest {
+    pub report: serde_json::Value,
+}

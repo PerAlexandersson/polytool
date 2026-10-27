@@ -989,6 +989,41 @@ pub(super) fn weight_regularity(
     Ok(statuses)
 }
 
+/// Whether the products of two lists of diagonal weights agree: the powers of
+/// `k!` are equal and the rational parts agree as polynomials in `(n, k)`
+/// after cross multiplication. Equal products give equal maps wherever both
+/// are defined; `false` only means that equality is not certified.
+pub(super) fn diagonal_products_equal(
+    left: &[DiagonalWeight],
+    right: &[DiagonalWeight],
+) -> Result<bool, TransformError> {
+    let combine = |weights: &[DiagonalWeight]| -> Result<(i64, Biv, Biv), TransformError> {
+        let mut factorial = 0i64;
+        let mut numerator = Biv::one();
+        let mut denominator = Biv::one();
+        for weight in weights {
+            let form = weight.form()?;
+            numerator = numerator.scale(&form.scale);
+            factorial = factorial
+                .checked_add(form.factorial)
+                .ok_or_else(|| TransformError::Limit("factorial exponent overflow".into()))?;
+            for (f, e) in &form.factors {
+                let power = f.pow(e.unsigned_abs() as usize);
+                if *e > 0 {
+                    numerator = numerator.mul(&power);
+                } else {
+                    denominator = denominator.mul(&power);
+                }
+            }
+        }
+        Ok((factorial, numerator, denominator))
+    };
+    let (left_factorial, left_numerator, left_denominator) = combine(left)?;
+    let (right_factorial, right_numerator, right_denominator) = combine(right)?;
+    Ok(left_factorial == right_factorial
+        && left_numerator.mul(&right_denominator) == right_numerator.mul(&left_denominator))
+}
+
 /// Zeros `[n, k]` of the theta-dependent factors of a clearing multiplier
 /// with `n` in `bases` and `0 <= k <= max_k` (finite evidence).
 pub(super) fn observed_multiplier_zeros(
