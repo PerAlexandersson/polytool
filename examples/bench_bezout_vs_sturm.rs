@@ -5,58 +5,14 @@
 use polytool::real_rootedness::*;
 use std::time::Instant;
 
-/// Compute Eulerian polynomials A_1(t), A_2(t), ..., A_n(t) using the recurrence
-/// A_n(t) = (1 + (n-1)t) A_{n-1}(t) + t(1-t) A'_{n-1}(t).
-fn eulerian_polynomials(max_n: usize) -> Vec<Vec<i64>> {
-    let mut polys = Vec::new();
-    polys.push(vec![1i64]); // A_1 = 1
-
-    for n in 2..=max_n {
-        let prev = &polys[n - 2];
-        let d = prev.len();
-
-        // Derivative of prev
-        let mut dp = vec![0i64; d.saturating_sub(1)];
-        for k in 1..d {
-            dp[k - 1] = prev[k] * k as i64;
-        }
-
-        // (1 + (n-1)t) * prev
-        let mut term1 = vec![0i64; d + 1];
-        for k in 0..d {
-            term1[k] += prev[k];
-            term1[k + 1] += prev[k] * (n as i64 - 1);
-        }
-
-        // t(1-t) * dp = t*dp - t^2*dp
-        let dp_len = dp.len();
-        let mut term2 = vec![0i64; dp_len + 2];
-        for k in 0..dp_len {
-            term2[k + 1] += dp[k]; // t * dp
-            term2[k + 2] -= dp[k]; // -t^2 * dp
-        }
-
-        // Sum
-        let len = term1.len().max(term2.len());
-        let mut result = vec![0i64; len];
-        for k in 0..term1.len() {
-            result[k] += term1[k];
-        }
-        for k in 0..term2.len() {
-            result[k] += term2[k];
-        }
-        // Trim trailing zeros
-        while result.last() == Some(&0) {
-            result.pop();
-        }
-        polys.push(result);
-    }
-    polys
-}
+/// Largest `n` for which the Sturm interlacing check is timed.
+const STURM_INTERLACING_MAX_N: usize = 10;
 
 fn main() {
-    let max_n = 30;
-    let polys = eulerian_polynomials(max_n);
+    // A_21 has a coefficient above i64::MAX, so the i64 benchmark stops at A_20.
+    let max_n = 20;
+    // polys[i] = A_{i+1}(t).
+    let polys = polytool::sequences::eulerian_polynomials(max_n)[1..].to_vec();
 
     println!("=== Real-rootedness: Sturm vs explicit Bézout vs default ===");
     println!(
@@ -128,8 +84,9 @@ fn main() {
         if n < 4 {
             continue;
         }
-        let f = &polys[i]; // A_{n}(t), degree n-1
-        let g = &polys[i - 1]; // A_{n-1}(t), degree n-2
+        // check_interlacing(f, g) tests f ≪ g with deg g = deg f + 1.
+        let f = &polys[i - 1]; // A_{n-1}(t), degree n-2
+        let g = &polys[i]; // A_{n}(t), degree n-1
 
         let iters = if n < 10 {
             100
@@ -139,11 +96,17 @@ fn main() {
             3
         };
 
-        let t0 = Instant::now();
-        for _ in 0..iters {
-            let _ = check_interlacing_sturm(f, g);
-        }
-        let sturm_us = t0.elapsed().as_micros() as f64 / iters as f64;
+        // The Sturm interlacing check roughly doubles in cost per degree
+        // (about 4 s per call at n = 12), so it is timed only up to n = 10.
+        let sturm_us = if n <= STURM_INTERLACING_MAX_N {
+            let t0 = Instant::now();
+            for _ in 0..iters {
+                let _ = check_interlacing_sturm(f, g);
+            }
+            t0.elapsed().as_micros() as f64 / iters as f64
+        } else {
+            f64::INFINITY
+        };
 
         let t0 = Instant::now();
         for _ in 0..iters {
@@ -151,7 +114,7 @@ fn main() {
         }
         let bezout_us = t0.elapsed().as_micros() as f64 / iters as f64;
 
-        let deg = f.len() - 1;
+        let deg = g.len() - 1;
         let result = check_interlacing(f, g);
         println!(
             "{:>4} {:>8} {:>12.1} {:>12.1}  {} (interlaces: {:?})",
