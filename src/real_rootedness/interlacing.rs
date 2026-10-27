@@ -29,9 +29,14 @@ use num_traits::{Signed, Zero};
 /// Returns `Some(true)` if f ≪ g, `Some(false)` if not,
 /// or `None` if deg(g) ≠ deg(f) + 1.
 ///
+/// Convention: the zero polynomial interlaces every real-rooted `g`
+/// (vacuously), so `f = 0` returns `Some(is_real_rooted(g))` whatever the
+/// degree of `g`.
+///
 /// # Limitations
 ///
-/// - Requires deg(g) = deg(f) + 1 exactly; returns `None` otherwise.
+/// - Requires deg(g) = deg(f) + 1 exactly for nonzero `f`; returns `None`
+///   otherwise.
 /// - The Bézout matrix is singular when f and g share a root, so this function
 ///   returns `Some(false)` in that case.
 ///

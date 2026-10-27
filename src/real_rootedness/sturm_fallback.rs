@@ -85,9 +85,11 @@ pub fn has_simple_roots_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 /// (approximations typed as rationals; formerly `real_roots`).
 ///
 /// Returns the **distinct** roots in increasing order (multiplicities are not
-/// reported).  A root `0` (from initial zero coefficients) and roots of linear
-/// factors are exact; other roots are the midpoints of isolating intervals of
-/// width at most `1e-6`, so they are approximations with error below `1e-6`.
+/// reported).  A root `0` (from initial zero coefficients) and the root of an
+/// input that is linear after removing powers of `t` are exact; all other
+/// roots, even rational ones of a linear factor, are the midpoints of
+/// isolating intervals of width at most `1e-6`, so they are approximations
+/// with error below `1e-6`.
 /// Use [`is_real_rooted`] for an exact yes/no decision.
 ///
 /// Returns `None` if the polynomial is not real-rooted.
@@ -151,7 +153,9 @@ pub fn real_roots(coeffs: &[i64]) -> Option<Vec<BigRational>> {
 /// Convention: `check_interlacing_sturm(f, g)` checks f ≪ g (f has smaller degree).
 ///
 /// Returns `None` if either polynomial is not real-rooted.
-/// Returns `Some(false)` if deg(g) ≠ deg(f) + 1.
+/// Returns `Some(false)` if deg(g) ≠ deg(f) + 1 for nonzero `f`; `f = 0`
+/// gives `Some(true)` for real-rooted `g`, the convention of
+/// [`check_interlacing`].
 ///
 /// [`check_interlacing`]: super::check_interlacing
 pub fn check_interlacing_sturm(f: &[i64], g: &[i64]) -> Option<bool> {
@@ -159,7 +163,11 @@ pub fn check_interlacing_sturm(f: &[i64], g: &[i64]) -> Option<bool> {
         return None;
     }
 
-    let (Some(df), Some(dg)) = (vec_poly::degree(f), vec_poly::degree(g)) else {
+    // Same convention as `check_interlacing`: 0 ≪ g for every real-rooted g.
+    let Some(df) = vec_poly::degree(f) else {
+        return Some(true);
+    };
+    let Some(dg) = vec_poly::degree(g) else {
         return Some(false);
     };
     if dg != df + 1 {
@@ -200,6 +208,50 @@ pub fn check_interlacing_sturm(f: &[i64], g: &[i64]) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zero_first_argument_follows_the_check_interlacing_convention() {
+        // 0 ≪ g vacuously for every real-rooted g, in both methods.
+        for g in [vec![-1, 1], vec![-1, 0, 1], vec![0, -1, 0, 1]] {
+            assert_eq!(check_interlacing_sturm(&[0], &g), Some(true), "{g:?}");
+            assert_eq!(
+                super::super::check_interlacing(&[0], &g),
+                Some(true),
+                "{g:?}"
+            );
+        }
+        // A non-real-rooted g is rejected by both.
+        assert_eq!(
+            super::super::check_interlacing(&[0], &[1, 0, 1]),
+            Some(false)
+        );
+        assert_eq!(check_interlacing_sturm(&[0], &[1, 0, 1]), None);
+    }
+
+    #[test]
+    fn approximate_roots_of_a_quadratic_are_within_the_documented_error() {
+        // (3t - 1)(t - 5): not linear, so both roots are interval midpoints.
+        let roots = approximate_real_roots(&[5, -16, 3]).unwrap();
+        let tolerance = Q::new(BigInt::from(1), BigInt::from(1_000_000));
+        let exact = [
+            Q::new(BigInt::from(1), BigInt::from(3)),
+            Q::from_integer(BigInt::from(5)),
+        ];
+        for (root, expected) in roots.iter().zip(&exact) {
+            assert!(
+                num_traits::Signed::abs(&(root - expected)) < tolerance,
+                "{root} vs {expected}"
+            );
+        }
+        // A linear input after removing powers of t has an exact root.
+        assert_eq!(
+            approximate_real_roots(&[0, 0, -2, 3]).unwrap(),
+            vec![
+                Q::from_integer(BigInt::from(0)),
+                Q::new(BigInt::from(2), BigInt::from(3))
+            ]
+        );
+    }
 
     #[test]
     fn test_sturm_zero_polynomial_edge_cases() {

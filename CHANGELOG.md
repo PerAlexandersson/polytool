@@ -492,6 +492,21 @@ Additions:
   `ImplicitRelation::to_successor_rule` converts a successor relation back to
   a rule.
 
+Real-rootedness contracts (found by a differential review; no default
+real-rootedness or interlacing verdict changed):
+
+- `satisfies_newton_inequalities_bigint_coeffs` now checks Newton's
+  inequalities for coefficients of any sign, so it is a true necessary
+  condition (it returned `false` for real-rooted polynomials with a negative
+  coefficient, e.g. `(t - 1)(t - 2)`).
+- `check_interlacing_sturm(0, g)` now returns `Some(true)` for real-rooted `g`,
+  the documented convention of `check_interlacing`; both docs state it.
+- `approximate_real_roots` docs: only a root `0` and the root of a linear
+  input are exact.
+- `tests/real_rootedness_differential.rs` compares every exact method against
+  ground truth on about 84,000 cases (ignored by default; run with
+  `--ignored`).
+
 ## 0.5.0
 
 Breaking changes:

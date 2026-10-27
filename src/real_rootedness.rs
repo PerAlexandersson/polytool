@@ -15,9 +15,9 @@
 //!
 //! The default real-rootedness functions use the primitive integer PRS path in
 //! [`crate::root_count`].  For one-signed coefficient polynomials, this first
-//! tries cheap coefficient tests and then counts positive roots after the
-//! transformation `t ↦ -t`; otherwise it counts all real roots of the
-//! squarefree part directly.  Interlacing uses Bézout matrices, which are
+//! tries cheap coefficient tests (Kurtz, Newton) and then counts the distinct
+//! real roots with the subresultant PRS; otherwise it counts all real roots of
+//! the squarefree part directly.  Interlacing uses Bézout matrices, which are
 //! dramatically faster than rational Sturm chains for that task.
 //!
 //! ## Bézout matrix for interlacing

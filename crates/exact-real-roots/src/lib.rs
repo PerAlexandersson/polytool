@@ -1152,19 +1152,19 @@ pub fn count_root_signs_prs_bigint_coeffs(
     }
 }
 
-/// Check Newton's inequalities for a nonnegative coefficient sequence.
+/// Check Newton's inequalities
+/// `a_k^2 binom(d,k-1) binom(d,k+1) >= a_{k-1} a_{k+1} binom(d,k)^2`.
 ///
-/// This is a cheap necessary condition for real-rootedness.  It is exact and
-/// works with arbitrary-size coefficients.
+/// They hold for every real-rooted polynomial with real coefficients, of any
+/// signs (the products `a_{k-1} a_{k+1}` and `a_k^2` are sign-invariant under
+/// `t -> -t` and scaling), so this is a cheap necessary condition for
+/// real-rootedness.  It is exact and works with arbitrary-size coefficients.
 pub fn satisfies_newton_inequalities_bigint_coeffs(coeffs: &[BigInt]) -> bool {
     let p = trim_slice(strip_initial_zeros_bigint(coeffs));
     let d = match degree(&p) {
         Some(d) if d >= 2 => d,
         _ => return true,
     };
-    if p.iter().any(|c| c.is_negative()) {
-        return false;
-    }
 
     let mut binom = vec![BigInt::one(); d + 1];
     for k in 1..=d {
@@ -1614,6 +1614,22 @@ pub fn isolate_real_roots_bigint_coeffs(coeffs: &[BigInt]) -> Vec<IsolatedRealRo
 mod tests {
     use super::*;
     use num_rational::BigRational;
+
+    #[test]
+    fn newton_inequalities_hold_for_real_rooted_polynomials_of_any_sign() {
+        let big = |v: &[i64]| v.iter().map(|&c| BigInt::from(c)).collect::<Vec<_>>();
+        // (t - 1)(t - 2), -(1 + t)^2 and (t + 1)(t - 3)(t - 4) are real-rooted.
+        for p in [vec![2, -3, 1], vec![-1, -2, -1], vec![12, 5, -6, 1]] {
+            assert!(
+                satisfies_newton_inequalities_bigint_coeffs(&big(&p)),
+                "{p:?}"
+            );
+        }
+        // 1 - t + t^2 has complex roots and violates the inequality at k = 1.
+        assert!(!satisfies_newton_inequalities_bigint_coeffs(&big(&[
+            1, -1, 1
+        ])));
+    }
 
     fn b(v: &[i64]) -> Vec<BigInt> {
         v.iter().map(|&x| BigInt::from(x)).collect()
