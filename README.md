@@ -1562,7 +1562,7 @@ names the one used and `results[i].annihilator_power` its exponent `h`:
 In the first theorem the lemma of the complete-space module holds verbatim
 over the differential field `Q(x)`: a monic, index-free `chi~` commutes with
 `S`, `x` and its coefficient derivatives. The theorems are proved in the
-module documentation of `implicit_search`. Weights with negative exponents
+module documentation of `src/recurrence/implicit/search.rs`. Weights with negative exponents
 (`inverse_binomial`), `(k!)^p` with `p > 0`, derivative antecedents, gamma
 and bounded schedules are not covered and stay finite fits; a request whose
 rows cannot reach the required count is `incomplete_budget`, never certified

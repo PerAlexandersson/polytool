@@ -44,8 +44,11 @@
   private submodules (under `src/recurrence/`, `src/real_rootedness/`,
   `src/linalg/`) are split by concern and re-exported, so public paths stay
   `polytool::recurrence::*` etc. Add new code to the matching submodule and
-  re-export it from the facade. The MCP crate (`mcp/src/`) is split the same
-  way (requests, responses, parsing, server, tests).
+  re-export it from the facade. `src/recurrence/` is grouped one level deeper
+  (`base`, `fit`, `transform`, `implicit`, `root_domain`, `representation`);
+  each group has a `<group>.rs` facade that re-exports its members, and a
+  cross-group helper is `pub(in crate::recurrence)`. The MCP crate (`mcp/src/`)
+  is split the same way (requests, responses, parsing, server, tests).
 - Reuse before adding: look for an existing helper in `vec_poly`, `numeric` and
   `real_rootedness` before writing a new coefficient-vector routine, and build
   new real-rootedness checks on `is_real_rooted*` or `exact-real-roots` rather

@@ -17,22 +17,26 @@
 //!
 //! Both searches reduce to solving linear systems over the rationals.
 //!
-//! The implementation is split by concern into private submodules whose
-//! public items are re-exported here: core types, vector systems, exact
-//! verification, modular prefiltering, fixed-shape and vector search,
-//! display/export, row generation, JSON, parameter counting, candidate
-//! enumeration, adaptive search, representation menus, complete spaces
-//! (also after factorial coefficient rescaling), exact coordinate
-//! transformations with recurrence transport, implicit differential
-//! relations (derivatives on any row, row equations) with diagonal transport,
-//! derivative antecedents, reconstruction data and certificates, a direct
-//! search for implicit relations with completeness certificates
-//! ([`search_implicit_relations`]), the lossy derivative map with its lost
-//! data ([`lossy_reconstruction`]), and optional
-//! root-domain information (theorem adapters, exact root enclosures) for
-//! transformed results, and a bounded queue search over equivalent
-//! representations (scalar and vector) that composes all of these
-//! ([`search_representations`]).
+//! The implementation lives in private submodule groups whose public items
+//! are re-exported here:
+//!
+//! - `base`: core types, vector systems, polynomial helpers, exact
+//!   verification, modular prefiltering, evaluation, display/export, JSON and
+//!   parameter counting;
+//! - `fit`: fixed-shape and vector search, candidate enumeration, adaptive
+//!   search, representation menus, and complete bounded spaces with
+//!   certificates (also after factorial coefficient rescaling);
+//! - `transform`: exact coordinate transformations with transport of
+//!   recurrences, gamma coordinates, vector transport and reports;
+//! - `implicit`: implicit differential relations, diagonal transport,
+//!   derivative antecedents, reconstruction certificates, the direct search
+//!   [`search_implicit_relations`] and the lossy derivative map
+//!   ([`lossy_reconstruction`]);
+//! - `root_domain`: optional root-domain information (theorem adapters, exact
+//!   root enclosures) for transformed results;
+//! - `representation`: the bounded queue search over equivalent
+//!   representations (scalar and vector) that composes all of these
+//!   ([`search_representations`]).
 
 use num_bigint::BigInt;
 use num_rational::Ratio;
@@ -40,62 +44,18 @@ use num_rational::Ratio;
 /// Exact rational number used for every coefficient (`num_rational::Ratio<BigInt>`).
 pub type BigRational = Ratio<BigInt>;
 
-mod types;
-pub use types::*;
-mod vector;
-pub use vector::*;
-mod poly_ops;
-use poly_ops::*;
-mod verify;
-pub use verify::*;
-mod modular;
-use modular::*;
-mod search;
-pub use search::*;
-mod vector_search;
-pub use vector_search::*;
-mod display;
-pub use display::*;
-mod evaluate;
-mod export;
-pub use evaluate::*;
-mod json;
-pub use json::*;
-mod counting;
-pub use counting::*;
-mod candidates;
-use candidates::*;
-mod adaptive;
-pub use adaptive::*;
-mod representations;
-pub use representations::*;
-mod space;
-pub use space::*;
-mod rescaling;
-pub use rescaling::*;
-mod transform;
-pub use transform::*;
+mod base;
+pub use base::*;
+mod fit;
+pub use fit::*;
+mod implicit;
+pub use implicit::*;
+mod representation;
+pub use representation::*;
 mod root_domain;
 pub use root_domain::*;
-mod root_enclosure_report;
-pub use root_enclosure_report::*;
-mod implicit;
-mod implicit_algebra;
-pub use implicit::*;
-mod diagonal;
-pub use diagonal::*;
-mod implicit_report;
-pub use implicit_report::*;
-mod representation_map;
-pub use representation_map::RepresentationMapRecord;
-mod representation_report;
-pub use representation_report::*;
-mod representation_search;
-pub use representation_search::*;
-mod lossy;
-pub use lossy::*;
-mod implicit_search;
-pub use implicit_search::*;
+mod transform;
+pub use transform::*;
 
 #[cfg(test)]
 mod test_support;
