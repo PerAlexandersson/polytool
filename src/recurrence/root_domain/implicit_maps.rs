@@ -78,11 +78,12 @@ struct IndexFreeWeight {
     factors: Vec<(Vec<Q>, i64)>,
 }
 
-fn index_free_weight(weight: &DiagonalWeight) -> Result<Option<IndexFreeWeight>, String> {
+fn index_free_weight(weight: &DiagonalWeight) -> Result<Option<IndexFreeWeight>, RecurrenceError> {
     let linear = |t: usize| vec![Q::from_integer(BigInt::from(t)), Q::one()];
     Ok(Some(match weight {
         DiagonalWeight::FactorialPower { power } => IndexFreeWeight {
-            factorial: -i64::try_from(*power).map_err(|_| "power overflow")?,
+            factorial: -i64::try_from(*power)
+                .map_err(|_| RecurrenceError::LimitExceeded("power overflow".into()))?,
             factors: Vec::new(),
         },
         DiagonalWeight::Binomial { m } => IndexFreeWeight {
@@ -106,10 +107,10 @@ fn index_free_weight(weight: &DiagonalWeight) -> Result<Option<IndexFreeWeight>,
                     .iter()
                     .map(|row| {
                         row.iter()
-                            .map(|c| parse_rational_coeff(c))
-                            .collect::<Result<Vec<Q>, String>>()
+                            .map(|c| parse_rational_coeff(c).map_err(RecurrenceError::from))
+                            .collect::<Result<Vec<Q>, RecurrenceError>>()
                     })
-                    .collect::<Result<Vec<_>, String>>()?;
+                    .collect::<Result<Vec<_>, RecurrenceError>>()?;
                 if rows.iter().skip(1).any(|row| !vec_poly::is_zero(row)) {
                     return Ok(None);
                 }
@@ -179,7 +180,7 @@ fn diagonal_adapter(
     record: &TransformationRecord,
     map_conditions: &[TransformConditionStatus],
     notes: &mut Vec<String>,
-) -> Result<MapAdapter, String> {
+) -> Result<MapAdapter, RecurrenceError> {
     let mut implication = base_implication(record, "polya_schur_multiplier_sequence");
     implication.hypotheses = condition_hypotheses(map_conditions);
     let map_uncertified = uncertified(map_conditions);
@@ -268,8 +269,11 @@ fn diagonal_adapter(
     })
 }
 
-fn antecedent_adapter(g: &[String], record: &TransformationRecord) -> Result<MapAdapter, String> {
-    let (g, m) = derivative_antecedent_parameters(g).map_err(|e| e.to_string())?;
+fn antecedent_adapter(
+    g: &[String],
+    record: &TransformationRecord,
+) -> Result<MapAdapter, RecurrenceError> {
+    let (g, m) = derivative_antecedent_parameters(g)?;
     let mut implication = base_implication(record, "rolle_derivative_antecedent");
     implication.direction = RootImplicationDirection::TargetToSource;
     implication.statement = format!(
@@ -324,12 +328,12 @@ fn antecedent_interval(
     ))
 }
 
-fn decode_rows(rows: &[Vec<String>]) -> Result<Vec<Vec<Q>>, String> {
+fn decode_rows(rows: &[Vec<String>]) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     rows.iter()
         .map(|row| {
             row.iter()
-                .map(|c| parse_rational_coeff(c))
-                .collect::<Result<Vec<Q>, String>>()
+                .map(|c| parse_rational_coeff(c).map_err(RecurrenceError::from))
+                .collect::<Result<Vec<Q>, RecurrenceError>>()
                 .map(|r| vec_poly::trim(&r))
         })
         .collect()
@@ -346,7 +350,7 @@ fn decode_rows(rows: &[Vec<String>]) -> Result<Vec<Vec<Q>>, String> {
 pub fn analyze_implicit_root_domain(
     report: &ImplicitTransformReport,
     request: &RootDomainRequest,
-) -> Result<ImplicitRootDomainReport, String> {
+) -> Result<ImplicitRootDomainReport, RecurrenceError> {
     request.validate()?;
     let transformation = &report.request.transformation;
     let record = transformation.record();
@@ -370,11 +374,11 @@ pub fn analyze_implicit_root_domain(
         }
         RecurrenceTransformation::DerivativeAntecedent { g } => antecedent_adapter(g, &record)?,
         other => {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "implicit root-domain analysis needs a diagonal or derivative_antecedent map, \
                  not {}",
                 other.kind_name()
-            ))
+            )))
         }
     };
 
@@ -406,10 +410,10 @@ pub fn analyze_implicit_root_domain(
     let mut assumption_checks = Vec::new();
     for (k, assumption) in request.assumptions.iter().enumerate() {
         if assumption.component != 0 {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "assumption {k}: component {} does not exist",
                 assumption.component
-            ));
+            )));
         }
         let Some((first, label)) = check_assumption(
             k,

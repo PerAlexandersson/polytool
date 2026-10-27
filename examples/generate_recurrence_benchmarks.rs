@@ -1,10 +1,14 @@
-//! Generate benchmark fixtures for adaptive recurrence search.
-//!
-//! Run from the repository root:
+//! Generate the synthetic benchmark fixtures (`01`--`23`) for adaptive
+//! recurrence search into an output directory:
 //!
 //! ```text
-//! cargo run -p polytool --example generate_recurrence_benchmarks
+//! cargo run -p polytool --example generate_recurrence_benchmarks -- OUT_DIR
 //! ```
+//!
+//! The checked-in suite in `fixtures/recurrence-benchmarks/` also holds the
+//! curated OEIS fixtures, which this generator does not know; writing its
+//! manifest and README there would drop them. Generate into a scratch
+//! directory and copy the `rows/` files you want to refresh.
 
 use num_bigint::BigInt;
 use num_rational::BigRational;
@@ -502,8 +506,11 @@ fn write_readme(base: &Path, fixtures: &[Fixture], row_count: usize) -> std::io:
 }
 
 fn main() -> std::io::Result<()> {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/recurrence-benchmarks");
-    let base = base_dir.as_path();
+    let Some(out_dir) = std::env::args().nth(1) else {
+        eprintln!("Usage: generate_recurrence_benchmarks OUT_DIR");
+        std::process::exit(2);
+    };
+    let base = Path::new(&out_dir);
     fs::create_dir_all(base.join("rows"))?;
 
     let fixtures = fixtures();

@@ -150,19 +150,21 @@ pub(super) fn build_implicit_relation_step(
     parent_rows: &[Vec<Q>],
     rows: &[Vec<Q>],
     origin: usize,
-) -> Result<(ImplicitRelationStep, Vec<TransformConditionStatus>), String> {
+) -> Result<(ImplicitRelationStep, Vec<TransformConditionStatus>), RecurrenceError> {
     let description = parent
         .description
         .as_ref()
-        .ok_or("the parent description has no generating description")?;
+        .ok_or(RecurrenceError::InvalidInput(
+            "the parent description has no generating description".into(),
+        ))?;
     let [source] = description.relations.as_slice() else {
-        return Err("the parent description needs exactly one relation".into());
+        return Err(RecurrenceError::InvalidInput(
+            "the parent description needs exactly one relation".into(),
+        ));
     };
     let relation = ImplicitRelation::from_json(&source.relation)?;
     let map_conditions = match t {
-        RecurrenceTransformation::Diagonal { weight } => {
-            weight_regularity(weight, origin).map_err(|e| e.to_string())?
-        }
+        RecurrenceTransformation::Diagonal { weight } => weight_regularity(weight, origin)?,
         RecurrenceTransformation::DerivativeAntecedent { .. } => vec![TransformConditionStatus {
             condition: "T_g bijective".into(),
             status: CERTIFIED_ALL_INDICES.into(),
@@ -180,10 +182,10 @@ pub(super) fn build_implicit_relation_step(
                 .into(),
         }],
         other => {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "implicit relations are not transported through {}",
                 other.kind_name()
-            ))
+            )))
         }
     };
     let map_certified = map_conditions
@@ -196,9 +198,7 @@ pub(super) fn build_implicit_relation_step(
         CHECKED_SUPPLIED_ROWS
     };
     let first_base = source.first_base;
-    let transport = t
-        .transport_implicit(&relation, first_base)
-        .map_err(|e| e.to_string())?;
+    let transport = t.transport_implicit(&relation, first_base)?;
     let mut exceptional = Vec::new();
     for (k, condition) in &transport.exceptional_conditions {
         push_unique(
@@ -293,7 +293,9 @@ pub(super) fn build_implicit_relation_step(
     let r = transport.relation.max_shift();
     let seed_end = (first_base + r).max(origin + 1);
     if rows.len() < seed_end - origin {
-        return Err("too few rows for the seeds of the transported relation".into());
+        return Err(RecurrenceError::InvalidInput(
+            "too few rows for the seeds of the transported relation".into(),
+        ));
     }
     let note = match t {
         RecurrenceTransformation::Derivative { .. } => {
@@ -351,7 +353,7 @@ fn description_holds(
     description: &GeneratingDescription,
     rows: &[Vec<Q>],
     origin: usize,
-) -> Result<(bool, usize), String> {
+) -> Result<(bool, usize), RecurrenceError> {
     let mut holds = true;
     let mut checked = 0;
     for record in &description.relations {
@@ -382,30 +384,36 @@ pub(super) fn verify_implicit_relation_step(
     record: &ImplicitRelationStep,
     rows: &[Vec<Q>],
     origin: usize,
-) -> Result<(), String> {
+) -> Result<(), RecurrenceError> {
     let source = ImplicitRelation::from_json(&record.source_relation.relation)?;
-    let transport = t
-        .transport_implicit(&source, record.source_relation.first_base)
-        .map_err(|e| e.to_string())?;
+    let transport = t.transport_implicit(&source, record.source_relation.first_base)?;
     let relation = ImplicitRelation::from_json(&record.relation.relation)?;
     if !relation.same_relation(&transport.relation) {
-        return Err("the transported relation does not replay".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "the transported relation does not replay".into(),
+        ));
     }
     if let Some(certificate) = &record.certificate {
         certificate.verify_identity()?;
     }
     if !record.holds_on_rows || !description_holds(&record.description, rows, origin)?.0 {
-        return Err("the transported description fails on the rows".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "the transported description fails on the rows".into(),
+        ));
     }
     if assess_generating_description(&record.description)? != record.assessment {
-        return Err("the assessment does not replay".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "the assessment does not replay".into(),
+        ));
     }
     if let Some(lossy) = &record.lossy {
         if assess_generating_description(&lossy.with_lost_data)? != lossy.with_lost_data_assessment
             || assess_generating_description(&lossy.without_lost_data)?
                 != lossy.without_lost_data_assessment
         {
-            return Err("the lossy reconstruction assessments do not replay".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "the lossy reconstruction assessments do not replay".into(),
+            ));
         }
     }
     Ok(())

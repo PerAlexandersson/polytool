@@ -156,12 +156,12 @@ impl RecurrenceJson {
     /// Convert this JSON record back to a recurrence and initial rows.
     pub fn to_recurrence_parts(
         &self,
-    ) -> Result<(Recurrence, usize, Vec<Vec<BigRational>>), String> {
+    ) -> Result<(Recurrence, usize, Vec<Vec<BigRational>>), RecurrenceError> {
         if self.schema != RECURRENCE_JSON_SCHEMA {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "unsupported recurrence JSON schema `{}`",
                 self.schema
-            ));
+            )));
         }
         let recurrence = self.recurrence.to_recurrence()?;
         let initial_polynomials = self
@@ -173,11 +173,11 @@ impl RecurrenceJson {
                     .enumerate()
                     .map(|(coeff_idx, coeff)| {
                         parse_rational_coeff(coeff).map_err(|e| {
-                            format!(
+                            RecurrenceError::InvalidInput(format!(
                                 "invalid initial coefficient at row {}, coefficient {}: {e}",
                                 row_idx + 1,
                                 coeff_idx
-                            )
+                            ))
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()
@@ -207,7 +207,7 @@ impl RecurrenceJsonData {
         }
     }
 
-    fn to_recurrence(&self) -> Result<Recurrence, String> {
+    fn to_recurrence(&self) -> Result<Recurrence, RecurrenceError> {
         Ok(Recurrence {
             terms: self
                 .terms
@@ -242,11 +242,15 @@ impl RecurrenceTermJson {
         }
     }
 
-    fn to_term(&self) -> Result<RecurrenceTerm, String> {
+    fn to_term(&self) -> Result<RecurrenceTerm, RecurrenceError> {
         let sign = match self.sign.as_str() {
             "none" => RecurrenceSign::None,
             "alternating_n" => RecurrenceSign::AlternatingN,
-            other => return Err(format!("unsupported recurrence sign `{other}`")),
+            other => {
+                return Err(RecurrenceError::Unsupported(format!(
+                    "unsupported recurrence sign `{other}`"
+                )))
+            }
         };
         Ok(RecurrenceTerm {
             offset: self.offset,
@@ -268,7 +272,7 @@ impl BivarPolyJson {
         }
     }
 
-    fn to_bivar(&self) -> Result<BivarPoly, String> {
+    fn to_bivar(&self) -> Result<BivarPoly, RecurrenceError> {
         let coeffs = self
             .coeffs
             .iter()
@@ -278,7 +282,9 @@ impl BivarPolyJson {
                     .enumerate()
                     .map(|(j, coeff)| {
                         parse_rational_coeff(coeff).map_err(|e| {
-                            format!("invalid bivariate coefficient ({i},{j}) `{coeff}`: {e}")
+                            RecurrenceError::InvalidInput(format!(
+                                "invalid bivariate coefficient ({i},{j}) `{coeff}`: {e}"
+                            ))
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()

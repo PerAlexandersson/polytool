@@ -247,9 +247,9 @@ impl RootInterval {
     }
 
     /// The concrete interval at the original index `index`.
-    pub fn at(&self, index: usize) -> Result<RealInterval, String> {
+    pub fn at(&self, index: usize) -> Result<RealInterval, RecurrenceError> {
         let n = Q::from_integer(BigInt::from(index));
-        let value = |end: &RootEndpoint| -> Result<Q, String> {
+        let value = |end: &RootEndpoint| -> Result<Q, RecurrenceError> {
             let constant = parse_rational_coeff(&end.value)?;
             let slope = match &end.per_index {
                 Some(p) => parse_rational_coeff(p)?,
@@ -267,7 +267,7 @@ impl RootInterval {
         })
     }
 
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), RecurrenceError> {
         self.at(0).map(|_| ())
     }
 }
@@ -354,7 +354,7 @@ impl Default for RootDomainRequest {
 impl RootDomainRequest {
     /// Reject malformed intervals and limits above the library ceilings
     /// [`ROOT_DOMAIN_MAX_ITEMS`] and [`ROOT_DOMAIN_MAX_DEGREE`].
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), RecurrenceError> {
         for (name, value) in [
             ("max_candidate_intervals", self.max_candidate_intervals),
             ("max_observed_rows", self.max_observed_rows),
@@ -362,15 +362,15 @@ impl RootDomainRequest {
             ("assumptions", self.assumptions.len()),
         ] {
             if value > ROOT_DOMAIN_MAX_ITEMS {
-                return Err(format!(
+                return Err(RecurrenceError::LimitExceeded(format!(
                     "root_domain.{name} = {value} exceeds {ROOT_DOMAIN_MAX_ITEMS}"
-                ));
+                )));
             }
         }
         if self.max_observed_degree > ROOT_DOMAIN_MAX_DEGREE {
-            return Err(format!(
+            return Err(RecurrenceError::LimitExceeded(format!(
                 "root_domain.max_observed_degree exceeds {ROOT_DOMAIN_MAX_DEGREE}"
-            ));
+            )));
         }
         for interval in &self.candidate_intervals {
             interval.validate()?;
@@ -378,22 +378,28 @@ impl RootDomainRequest {
         for (k, assumption) in self.assumptions.iter().enumerate() {
             match (&assumption.property, &assumption.interval) {
                 (RootProperty::RealRooted, Some(_)) => {
-                    return Err(format!(
+                    return Err(RecurrenceError::InvalidInput(format!(
                         "assumption {k}: real_rooted takes no interval (use real_rooted_in)"
-                    ))
+                    )))
                 }
                 (RootProperty::RealRootedIn | RootProperty::RealRootsIn, None) => {
-                    return Err(format!("assumption {k}: the property needs an interval"))
+                    return Err(RecurrenceError::InvalidInput(format!(
+                        "assumption {k}: the property needs an interval"
+                    )))
                 }
                 (_, Some(interval)) => interval.validate()?,
                 _ => {}
             }
             if assumption.subject == RootSubject::Source && assumption.component != 0 {
-                return Err(format!("assumption {k}: the source has one component"));
+                return Err(RecurrenceError::InvalidInput(format!(
+                    "assumption {k}: the source has one component"
+                )));
             }
             if let (Some(first), Some(last)) = (assumption.first_index, assumption.last_index) {
                 if last < first {
-                    return Err(format!("assumption {k}: last_index precedes first_index"));
+                    return Err(RecurrenceError::InvalidInput(format!(
+                        "assumption {k}: last_index precedes first_index"
+                    )));
                 }
             }
         }
@@ -730,7 +736,7 @@ pub(super) fn q(value: i64) -> Q {
 }
 
 impl Geometry {
-    fn of(transformation: &RecurrenceTransformation) -> Result<Self, String> {
+    fn of(transformation: &RecurrenceTransformation) -> Result<Self, RecurrenceError> {
         let parse = |text: &str| parse_rational_coeff(text);
         Ok(match transformation {
             RecurrenceTransformation::MultiplyPower { power } => Self::Monomial {
@@ -877,8 +883,8 @@ pub(super) fn uncertified(conditions: &[TransformConditionStatus]) -> Vec<String
 /// ```
 pub fn root_implication(
     transformation: &RecurrenceTransformation,
-) -> Result<RootImplication, String> {
-    transformation.validate().map_err(|e| e.to_string())?;
+) -> Result<RootImplication, RecurrenceError> {
+    transformation.validate()?;
     let geometry = Geometry::of(transformation)?;
     let record = transformation.record();
     let hypotheses = record
@@ -1385,7 +1391,7 @@ pub(super) fn check_assumption(
         &mut Vec<RootDomainClaim>,
         &mut Vec<String>,
     ),
-) -> Result<Option<(usize, String)>, String> {
+) -> Result<Option<(usize, String)>, RecurrenceError> {
     let (assumption_checks, claims, notes) = sinks;
     let first = assumption.first_index.unwrap_or(domain_first);
     let mut checked = Vec::new();
@@ -1457,7 +1463,7 @@ pub(super) fn check_assumption(
 
 pub(crate) fn analyze_root_domain(
     inputs: &RootDomainInputs<'_>,
-) -> Result<RootDomainReport, String> {
+) -> Result<RootDomainReport, RecurrenceError> {
     let request = inputs.request;
     request.validate()?;
     let transformation = inputs.transformation;
@@ -1629,10 +1635,10 @@ pub(crate) fn analyze_root_domain(
     let mut assumption_checks = Vec::new();
     for (k, assumption) in request.assumptions.iter().enumerate() {
         if assumption.subject == RootSubject::Transformed && assumption.component >= components {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "assumption {k}: component {} does not exist",
                 assumption.component
-            ));
+            )));
         }
         let Some((first, label)) = check_assumption(
             k,

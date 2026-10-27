@@ -45,7 +45,7 @@
   `index.html`, so a later file may use earlier globals. `ASSET_VERSION`
   (`js/config.js`) must equal the `?v=` query on every local asset in `index.html`;
   bump it for every change to a served file (`web/tests/page_source.cjs` and
-  `web/page-assets.test.cjs` check this). The two Web Workers are still created
+  `web/tests/page-assets.test.cjs` check this). The two Web Workers are still created
   from blob strings (`createWorker` in `js/recurrence.js`, `createTransformWorker`
   in `js/transform.js`) that import `pkg/polytool_web.js`; deployments must copy
   `app.css` and `js/*.js` next to `index.html`.
@@ -94,7 +94,11 @@
   a function returns or the algorithm it uses (`approximate_real_roots`,
   `is_totally_nonnegative_neville`); `is_*` returns `bool`, `check_*` a
   `Result` or `Option<bool>`.  Fallible functions return a typed error with
-  `Display` and `std::error::Error` impls, not `String`.  When a public item is
+  `Display` and `std::error::Error` impls, not `String` (`recurrence::RecurrenceError`
+  covers the recurrence reports, searches and replays; keep any `String` fields of
+  serialized report structs, whose JSON schemas are fixed).  A public function
+  that panics on caller-reachable invalid input documents it in a `# Panics`
+  section, or returns an error when it is meant to be fallible.  When a public item is
   renamed or removed, keep a `#[deprecated(since = "...", note = "renamed to
   `new_name`")]` alias for one release, use the new name internally (Clippy runs
   with `-D warnings`), and list the old and new names in `CHANGELOG.md`.

@@ -4,9 +4,10 @@
 use num_bigint::BigInt;
 use polytool::numeric::binomial_bigint;
 use polytool::{
-    check_chain_polynomials_bigint, check_lower_unitriangular_tnn, evaluate_path_matrix,
-    is_real_rooted_bigint_coeffs, lower_triangular_rows_from_square,
-    reconstruct_canonical_tnn_network, BigRational, CanonicalPlanarNetwork, NetworkError,
+    check_chain_polynomials_bigint, check_lower_unitriangular_totally_nonnegative,
+    evaluate_path_matrix, is_real_rooted_bigint_coeffs, lower_triangular_rows_from_square,
+    reconstruct_canonical_totally_nonnegative_network, BigRational, CanonicalPlanarNetwork,
+    NetworkError,
 };
 
 fn bi(v: i64) -> BigInt {
@@ -62,7 +63,11 @@ fn network_matrix(lambda: Vec<Vec<i64>>) -> Vec<Vec<BigInt>> {
 
 fn assert_theorem_holds(rows: &[Vec<BigInt>]) {
     let report = check_chain_polynomials_bigint(rows).unwrap();
-    assert!(report.is_tnn(), "{:?}", report.tnn);
+    assert!(
+        report.is_totally_nonnegative(),
+        "{:?}",
+        report.totally_nonnegative_verdict
+    );
     assert!(report.chain_conclusion_holds(), "{:?}", report);
     assert!(!report.contradicts_theorem());
     for (n, p) in report.chain_polynomials.iter().enumerate() {
@@ -111,7 +116,7 @@ fn tnn_matrices_give_real_rooted_interlacing_chain_polynomials() {
 fn all_ones_triangle_is_tnn_but_its_last_row_is_not_real_rooted() {
     let rows = rows_i64(&[&[1], &[1, 1], &[1, 1, 1]]);
     let report = check_chain_polynomials_bigint(&rows).unwrap();
-    assert!(report.is_tnn());
+    assert!(report.is_totally_nonnegative());
     assert_eq!(
         report.chain_polynomials,
         rows_i64(&[&[1], &[0, 1], &[0, 1, 1]])
@@ -126,8 +131,8 @@ fn non_tnn_matrices_report_a_negative_minor() {
     // Lower-triangular Toeplitz matrix of 1 + t + t^2, which is not PF.
     let rows = rows_i64(&[&[1], &[1, 1], &[1, 1, 1], &[0, 1, 1, 1]]);
     let report = check_chain_polynomials_bigint(&rows).unwrap();
-    match &report.tnn {
-        Err(NetworkError::NotTnn {
+    match &report.totally_nonnegative_verdict {
+        Err(NetworkError::NotTotallyNonnegative {
             witness: Some(witness),
             ..
         }) => {
@@ -139,8 +144,8 @@ fn non_tnn_matrices_report_a_negative_minor() {
     assert!(!report.contradicts_theorem());
     // The canonical-network reconstruction reports the same diagnosis.
     assert!(matches!(
-        reconstruct_canonical_tnn_network(&rows),
-        Err(NetworkError::NotTnn {
+        reconstruct_canonical_totally_nonnegative_network(&rows),
+        Err(NetworkError::NotTotallyNonnegative {
             witness: Some(_),
             ..
         })
@@ -154,7 +159,7 @@ fn chain_report_keeps_tnn_and_shape_errors_apart() {
     let report = check_chain_polynomials_bigint(&rows).unwrap();
     assert_eq!(report.chain_polynomials[1], vec![bi(0), bi(-1)]);
     assert!(matches!(
-        report.tnn,
+        report.totally_nonnegative_verdict,
         Err(NetworkError::NegativeEntry { row: 1, col: 0, .. })
     ));
     // Without TNN the conclusion can fail: p_2 = t (1 - 3t) has the zero 1/3.
@@ -163,7 +168,7 @@ fn chain_report_keeps_tnn_and_shape_errors_apart() {
     assert_eq!(report.chain_polynomials[2], vec![bi(0), bi(1), bi(-3)]);
     assert!(report.real_rooted[2]);
     assert!(!report.roots_in_minus_one_zero[2]);
-    assert!(!report.is_tnn() && !report.chain_conclusion_holds());
+    assert!(!report.is_totally_nonnegative() && !report.chain_conclusion_holds());
     // Shape errors are returned directly.
     assert_eq!(
         check_chain_polynomials_bigint(&rows_i64(&[&[1], &[1, 2]])),
@@ -182,7 +187,7 @@ fn chain_report_keeps_tnn_and_shape_errors_apart() {
 fn square_input_is_converted_with_diagnostics() {
     let square = rows_i64(&[&[1, 0, 0], &[2, 1, 0], &[1, 2, 1]]);
     let rows = lower_triangular_rows_from_square(&square).unwrap();
-    assert!(check_lower_unitriangular_tnn(&rows).is_ok());
+    assert!(check_lower_unitriangular_totally_nonnegative(&rows).is_ok());
     let upper = rows_i64(&[&[1, 0, 0], &[2, 1, 3], &[1, 2, 1]]);
     assert_eq!(
         lower_triangular_rows_from_square(&upper),

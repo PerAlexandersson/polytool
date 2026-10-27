@@ -15,10 +15,13 @@ recurrences.
 Some later OEIS fixtures use recurrence-generated 50-row extensions when the
 curated source prefix was shorter or contained non-integer JSON number syntax.
 
-Regenerate from the repository root with:
+The synthetic fixtures can be regenerated into a scratch directory (the
+generator does not know the OEIS fixtures, so never point it at this
+directory), after which the chosen `rows/` files are copied back and the JSON
+records refreshed:
 
 ```sh
-cargo run -p polytool --example generate_recurrence_benchmarks
+cargo run -p polytool --example generate_recurrence_benchmarks -- /tmp/recurrence-benchmarks
 bash fixtures/recurrence-benchmarks/regenerate-json.sh
 ```
 

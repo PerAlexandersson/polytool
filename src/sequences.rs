@@ -67,6 +67,11 @@ pub mod literature;
 ///
 /// **Indexing change in 0.4.0:** earlier versions returned `max_n` rows with
 /// `polys[i]` = A_{i+1}; use `eulerian_polynomials(n)[1..]` to reproduce that.
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`; use
+/// [`eulerian_polynomials_bigint`] for larger `max_n`.
 pub fn eulerian_polynomials(max_n: usize) -> Vec<Vec<i64>> {
     bigint_polys_to_i64(eulerian_polynomials_bigint(max_n))
 }
@@ -281,6 +286,11 @@ pub fn shifted_legendre_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
 ///
 /// **Indexing change in 0.4.0:** earlier versions returned `max_n` rows with
 /// `polys[i]` = N_{i+1}; use `narayana_polynomials(n)[1..]` to reproduce that.
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`; use
+/// [`narayana_polynomials_bigint`] for larger `max_n`.
 pub fn narayana_polynomials(max_n: usize) -> Vec<Vec<i64>> {
     bigint_polys_to_i64(narayana_polynomials_bigint(max_n))
 }
@@ -296,6 +306,11 @@ pub fn narayana_polynomials(max_n: usize) -> Vec<Vec<i64>> {
 ///
 /// Returns `polys[n]` = B_n(t) for `0 <= n <= max_n` (`max_n + 1` rows), so
 /// `polys[0]` = B_0 = `[1]`.
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`; use
+/// [`type_b_eulerian_polynomials_bigint`] for larger `max_n`.
 pub fn type_b_eulerian_polynomials(max_n: usize) -> Vec<Vec<i64>> {
     bigint_polys_to_i64(type_b_eulerian_polynomials_bigint(max_n))
 }
@@ -307,6 +322,11 @@ pub fn type_b_eulerian_polynomials(max_n: usize) -> Vec<Vec<i64>> {
 /// Properties: real-rooted (roots are cos(kπ/n)), consecutive T_n interlace.
 ///
 /// Returns `polys[n]` = T_n(t) for `0 <= n <= max_n` (`max_n + 1` rows).
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`; use
+/// [`chebyshev_polynomials_t_bigint`] for larger `max_n`.
 pub fn chebyshev_polynomials_t(max_n: usize) -> Vec<Vec<i64>> {
     bigint_polys_to_i64(chebyshev_polynomials_t_bigint(max_n))
 }
@@ -319,6 +339,11 @@ pub fn chebyshev_polynomials_t(max_n: usize) -> Vec<Vec<i64>> {
 /// and T_n and U_{n-1} interlace (T'_n = n U_{n-1}).
 ///
 /// Returns `polys[n]` = U_n(t) for `0 <= n <= max_n` (`max_n + 1` rows).
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`; use
+/// [`chebyshev_polynomials_u_bigint`] for larger `max_n`.
 pub fn chebyshev_polynomials_u(max_n: usize) -> Vec<Vec<i64>> {
     bigint_polys_to_i64(chebyshev_polynomials_u_bigint(max_n))
 }
@@ -331,6 +356,11 @@ pub fn chebyshev_polynomials_u(max_n: usize) -> Vec<Vec<i64>> {
 /// These are the orthogonal polynomials for the standard Gaussian measure.
 ///
 /// Returns `polys[n]` = He_n(t) for `0 <= n <= max_n` (`max_n + 1` rows).
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`; use
+/// [`hermite_polynomials_bigint`] for larger `max_n`.
 pub fn hermite_polynomials(max_n: usize) -> Vec<Vec<i64>> {
     bigint_polys_to_i64(hermite_polynomials_bigint(max_n))
 }

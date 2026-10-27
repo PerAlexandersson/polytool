@@ -329,6 +329,8 @@ fn cyclotomic_cached(n: usize, cache: &mut BTreeMap<usize, Vec<BigInt>>) -> Vec<
 
 /// Return the `n`-th cyclotomic polynomial in ascending coefficient order.
 ///
+/// # Panics
+///
 /// Panics if `n == 0`.
 pub fn cyclotomic_polynomial_bigint(n: usize) -> Vec<BigInt> {
     assert!(n >= 1, "cyclotomic index must be positive");
@@ -343,8 +345,11 @@ fn evaluate_at_one(coeffs: &[BigInt]) -> BigInt {
 ///
 /// `power` is taken modulo `group_order`.  The result records the order of the
 /// root of unity, the remainder modulo the cyclotomic polynomial and, when that
-/// remainder is constant, the integer value `P(zeta)`.  Panics if
-/// `group_order == 0`.
+/// remainder is constant, the integer value `P(zeta)`.
+///
+/// # Panics
+///
+/// Panics if `group_order == 0`.
 pub fn root_of_unity_evaluation_bigint(
     coeffs: &[BigInt],
     group_order: usize,
@@ -469,7 +474,12 @@ pub fn cyclic_sieving_report_bigint(
 /// are skipped.  `fixed_counts` maps `(index, order)` to the fixed-point table
 /// `fix(g^d)`, `d = 0..order-1`; a missing key gives a profile-only report.
 /// A table of the wrong length makes that candidate order be omitted from
-/// `candidate_orders` (no error is reported).
+/// `candidate_orders` (no error is reported), as does a candidate order that
+/// does not fit in `isize`.
+///
+/// # Panics
+///
+/// Panics if `first_index + row` overflows `isize` for some row.
 pub fn cyclic_sieving_sequence_reports_bigint(
     polynomials: &[Vec<BigInt>],
     first_index: isize,
@@ -480,10 +490,15 @@ pub fn cyclic_sieving_sequence_reports_bigint(
         .iter()
         .enumerate()
         .map(|(row, coeffs)| {
-            let index = first_index + row as isize;
+            let index = isize::try_from(row)
+                .ok()
+                .and_then(|row| first_index.checked_add(row))
+                .expect("sequence index overflows isize");
             let mut candidate_orders = Vec::new();
             for &offset in offsets {
-                let order_index = index + offset;
+                let Some(order_index) = index.checked_add(offset) else {
+                    continue;
+                };
                 if order_index <= 0 {
                     continue;
                 }
@@ -549,7 +564,11 @@ fn big_mobius_term(mu: i32, value: &BigInt) -> BigInt {
 }
 
 /// Reduce `f(q)` modulo `q^n - 1`; the result has exactly `n` entries
-/// `c_0, ..., c_{n-1}` (ascending order).  Panics if `n == 0`.
+/// `c_0, ..., c_{n-1}` (ascending order).
+///
+/// # Panics
+///
+/// Panics if `n == 0`.
 pub fn reduce_modulo_cyclic_bigint(coeffs: &[BigInt], n: usize) -> Vec<BigInt> {
     assert!(n >= 1, "group order must be positive");
     let mut out = vec![BigInt::zero(); n];
@@ -1730,5 +1749,20 @@ mod tests {
             .map(|row| row[0].clone().unwrap())
             .collect();
         assert_eq!(col, dec.fixed_points.unwrap());
+    }
+
+    #[test]
+    fn sequence_reports_skip_candidate_orders_that_overflow() {
+        let polynomials = vec![vec![BigInt::from(1), BigInt::from(1)]];
+        let items = cyclic_sieving_sequence_reports_bigint(
+            &polynomials,
+            1,
+            &[isize::MAX, 1],
+            &BTreeMap::new(),
+        );
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].index, 1);
+        assert_eq!(items[0].candidate_orders.len(), 1);
+        assert_eq!(items[0].candidate_orders[0].order, 2);
     }
 }

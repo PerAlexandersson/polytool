@@ -1,6 +1,7 @@
 //! Requests, results and certificates of complete bounded recurrence spaces.
 
 use super::*;
+use crate::recurrence::RecurrenceError;
 
 /// Exact polynomial coefficient rows use ascending powers and rational strings.
 pub type ExactRows = Vec<Vec<String>>;
@@ -33,7 +34,7 @@ impl ConstantLagSource {
         &self,
         count: usize,
         limits: &RecurrenceSpaceLimits,
-    ) -> Result<ExactRows, String> {
+    ) -> Result<ExactRows, RecurrenceError> {
         let request = RecurrenceSpaceRequest {
             source: Some(self.clone()),
             source_recurrence: None,
@@ -54,10 +55,14 @@ impl ConstantLagSource {
     /// Adapt the existing backward recurrence JSON. Extra initial rows must
     /// be checked separately by the caller; they are returned as consistency rows.
     /// The original index is retained, including one-based input origins.
-    pub fn from_recurrence_json(json: &RecurrenceJson) -> Result<(Self, ExactRows), String> {
-        let (rec, origin, initial) = json.to_recurrence_parts().map_err(|e| e.to_string())?;
+    pub fn from_recurrence_json(
+        json: &RecurrenceJson,
+    ) -> Result<(Self, ExactRows), RecurrenceError> {
+        let (rec, origin, initial) = json.to_recurrence_parts()?;
         if rec.inhomogeneous.is_some() {
-            return Err("source must be homogeneous".into());
+            return Err(RecurrenceError::InvalidInput(
+                "source must be homogeneous".into(),
+            ));
         }
         if let Some(d) = &rec.denominator {
             if d.coeffs.iter().enumerate().any(|(n, row)| {
@@ -70,12 +75,16 @@ impl ConstantLagSource {
                 })
             }) || d.coeffs.first().and_then(|r| r.first()) != Some(&Q::one())
             {
-                return Err("source must be monic (denominator one)".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "source must be monic (denominator one)".into(),
+                ));
             }
         }
         let k = rec.max_offset();
         if k == 0 || initial.len() < k {
-            return Err("source needs positive order and sufficient seeds".into());
+            return Err(RecurrenceError::InvalidInput(
+                "source needs positive order and sufficient seeds".into(),
+            ));
         }
         let mut a = vec![Polynomial::<Q>::zero(); k];
         for term in rec.terms {
@@ -90,7 +99,9 @@ impl ConstantLagSource {
                     .flatten()
                     .any(|x| !x.is_zero())
             {
-                return Err("source must be pure-lag and independent of the index".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "source must be pure-lag and independent of the index".into(),
+                ));
             }
             a[k - term.offset] = a[k - term.offset].clone()
                 + Polynomial::new(term.coeff.coeffs.first().cloned().unwrap_or_default());
@@ -222,7 +233,7 @@ impl Default for RecurrenceSpaceLimits {
 
 impl RecurrenceSpaceLimits {
     /// Reject requests that raise a service's configured resource ceilings.
-    pub fn check_ceiling(&self, ceiling: &Self) -> Result<(), String> {
+    pub fn check_ceiling(&self, ceiling: &Self) -> Result<(), RecurrenceError> {
         if self.max_shapes > ceiling.max_shapes
             || self.max_rows > ceiling.max_rows
             || self.max_columns > ceiling.max_columns
@@ -231,7 +242,9 @@ impl RecurrenceSpaceLimits {
             || self.max_operations > ceiling.max_operations
             || self.max_coefficient_bits > ceiling.max_coefficient_bits
         {
-            return Err("requested limits exceed recurrence-space service ceilings".into());
+            return Err(RecurrenceError::LimitExceeded(
+                "requested limits exceed recurrence-space service ceilings".into(),
+            ));
         }
         Ok(())
     }
@@ -342,19 +355,27 @@ impl RecurrenceSpaceRepresentative {
     /// all coefficient polynomials are substituted accordingly. Supply seeds
     /// through the declared domain and every singular target before generation.
     /// This conversion does not itself verify an untrusted report.
-    pub fn to_recurrence(&self, result: &RecurrenceSpaceResult) -> Result<Recurrence, String> {
+    pub fn to_recurrence(
+        &self,
+        result: &RecurrenceSpaceResult,
+    ) -> Result<Recurrence, RecurrenceError> {
         if self.coefficients.len() != result.monomials.len() {
-            return Err("coefficient dimension mismatch".into());
+            return Err(RecurrenceError::InvalidInput(
+                "coefficient dimension mismatch".into(),
+            ));
         }
         let limits = RecurrenceSpaceLimits::default();
-        let shift = i64::try_from(result.target_lag).map_err(|_| "target index overflow")?;
+        let shift = i64::try_from(result.target_lag)
+            .map_err(|_| RecurrenceError::LimitExceeded("target index overflow".into()))?;
         if result.monomials.iter().any(|c| {
             c.index_degree > limits.max_degree
                 || c.variable_degree > limits.max_degree
                 || c.lag > result.target_lag
                 || (c.lag == result.target_lag && c.derivative_order != 0)
         }) {
-            return Err("invalid recurrence support".into());
+            return Err(RecurrenceError::InvalidInput(
+                "invalid recurrence support".into(),
+            ));
         }
         let coefficients: Vec<_> = self
             .coefficients
@@ -375,7 +396,9 @@ impl RecurrenceSpaceRepresentative {
             }
         }
         if denominator.is_none() {
-            return Err("zero successor coefficient".into());
+            return Err(RecurrenceError::InvalidInput(
+                "zero successor coefficient".into(),
+            ));
         }
         Ok(Recurrence {
             terms,
@@ -428,7 +451,7 @@ pub struct RecurrenceLeaderCoverage {
 }
 impl RecurrenceLeaderCoverage {
     /// Convert the combined formula to the existing backward row evaluator.
-    pub fn to_recurrence(&self, target_lag: usize) -> Result<Recurrence, String> {
+    pub fn to_recurrence(&self, target_lag: usize) -> Result<Recurrence, RecurrenceError> {
         let result = empty_result(target_lag, self.monomials.clone(), 0);
         RecurrenceSpaceRepresentative {
             basis_index: 0,

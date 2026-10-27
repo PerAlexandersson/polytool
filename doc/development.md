@@ -17,7 +17,7 @@ Run the web wrapper tests:
 ```sh
 cargo test --manifest-path web/Cargo.toml
 node web/tests/string_safety.mjs
-node --test web/*.test.cjs
+node --test web/tests/*.test.cjs
 ```
 
 The Node tests read the page as a browser does: `index.html`, then `app.css`
@@ -46,8 +46,8 @@ The tracked programs in `examples/` are run with
   fixture suite in `fixtures/recurrence-benchmarks/`.
 - `brenti_recognition`: recognizes the Pascal rows as rows of a planar strip
   digraph and checks the chain polynomials of a small TNN matrix.
-- `generate_recurrence_benchmarks`: regenerates the recurrence benchmark
-  fixtures.
+- `generate_recurrence_benchmarks OUT_DIR`: regenerates the synthetic
+  recurrence benchmark fixtures into a scratch directory.
 - `literature_sequence_rows`: exports exact literature families (Delannoy,
   Eulerian-square, Hoggatt) as polytool-compatible coefficient rows.
 - `recognize_renewal`: reads recurrence JSON on stdin and reports whether it is

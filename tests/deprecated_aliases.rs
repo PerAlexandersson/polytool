@@ -95,3 +95,79 @@ fn deprecated_decomposition_alias_is_the_generic_type() {
         2
     );
 }
+
+fn bigint_rows(rows: &[&[i64]]) -> Vec<Vec<BigInt>> {
+    rows.iter().map(|row| big(row)).collect()
+}
+
+#[test]
+fn renamed_totally_nonnegative_checks_forward() {
+    let pascal = vec![vec![1, 0], vec![1, 1], vec![1, 2]];
+    assert_eq!(
+        check_tnn_neville(&pascal),
+        check_totally_nonnegative_neville(&pascal)
+    );
+    let bad = vec![vec![1, 2], vec![3, 4]];
+    assert_eq!(
+        check_tnn_neville(&bad),
+        check_totally_nonnegative_neville(&bad)
+    );
+    let bigint_bad = bigint_rows(&[&[1, 2], &[3, 4]]);
+    assert_eq!(
+        check_tnn_neville_bigint(&bigint_bad),
+        check_totally_nonnegative_neville_bigint(&bigint_bad)
+    );
+    let lace = vec![vec![vec![1, 1]]];
+    assert_eq!(
+        check_lace_tnn_neville_i64(&lace, 4, 5),
+        check_lace_totally_nonnegative_neville_i64(&lace, 4, 5)
+    );
+    let lace_bigint = vec![vec![big(&[1, 1])]];
+    assert_eq!(
+        check_lace_tnn_neville_bigint(&lace_bigint, 4, 5),
+        check_lace_totally_nonnegative_neville_bigint(&lace_bigint, 4, 5)
+    );
+}
+
+#[test]
+fn renamed_tnn_network_items_forward() {
+    let rows = bigint_rows(&[&[1], &[1, 1], &[1, 2, 1]]);
+    assert_eq!(
+        check_lower_unitriangular_tnn(&rows),
+        check_lower_unitriangular_totally_nonnegative(&rows)
+    );
+    assert_eq!(
+        reconstruct_canonical_tnn_network(&rows),
+        reconstruct_canonical_totally_nonnegative_network(&rows)
+    );
+    let monic: Vec<Polynomial<BigInt>> = [&[1][..], &[1, 1], &[1, 2, 1]]
+        .iter()
+        .map(|coefficients| Polynomial::new(big(coefficients)))
+        .collect();
+    let old: CanonicalTnnProof = build_tnn_certificate_from_monic_polynomials(&monic).unwrap();
+    let new: CanonicalTotallyNonnegativeProof =
+        build_totally_nonnegative_certificate_from_monic_polynomials(&monic).unwrap();
+    assert_eq!(old, new);
+    let report = check_chain_polynomials_bigint(&rows).unwrap();
+    assert_eq!(report.is_tnn(), report.is_totally_nonnegative());
+}
+
+#[test]
+fn renamed_left_production_items_forward() {
+    use polytool::left_production::{
+        check_production_tnn, check_production_totally_nonnegative, ProductionTnnFailure,
+        ProductionTotallyNonnegativeFailure,
+    };
+    let negative = vec![
+        vec![BigRational::from_integer(BigInt::from(1))],
+        vec![
+            BigRational::from_integer(BigInt::from(-1)),
+            BigRational::from_integer(BigInt::from(1)),
+        ],
+    ];
+    let old: Result<(), ProductionTnnFailure> = check_production_tnn(&negative);
+    let new: Result<(), ProductionTotallyNonnegativeFailure> =
+        check_production_totally_nonnegative(&negative);
+    assert_eq!(old, new);
+    assert!(old.is_err());
+}

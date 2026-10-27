@@ -20,28 +20,39 @@ pub fn format_rational_coeff(r: &BigRational) -> String {
 }
 
 /// Parse an exact rational coefficient from an integer or `num/den` string.
-pub fn parse_rational_coeff(input: &str) -> Result<BigRational, String> {
+pub fn parse_rational_coeff(input: &str) -> Result<BigRational, ParseRationalError> {
     let token = input.trim();
     if token.is_empty() {
-        return Err("empty rational coefficient".to_string());
+        return Err(ParseRationalError::Empty);
     }
     if let Some((num, den)) = token.split_once('/') {
-        let numerator = num
-            .trim()
-            .parse::<BigInt>()
-            .map_err(|e| format!("invalid numerator `{}`: {e}", num.trim()))?;
-        let denominator = den
-            .trim()
-            .parse::<BigInt>()
-            .map_err(|e| format!("invalid denominator `{}`: {e}", den.trim()))?;
+        let numerator =
+            num.trim()
+                .parse::<BigInt>()
+                .map_err(|e| ParseRationalError::InvalidNumerator {
+                    text: num.trim().to_string(),
+                    message: e.to_string(),
+                })?;
+        let denominator =
+            den.trim()
+                .parse::<BigInt>()
+                .map_err(|e| ParseRationalError::InvalidDenominator {
+                    text: den.trim().to_string(),
+                    message: e.to_string(),
+                })?;
         if denominator.is_zero() {
-            return Err(format!("zero denominator in coefficient `{token}`"));
+            return Err(ParseRationalError::ZeroDenominator {
+                token: token.to_string(),
+            });
         }
         Ok(BigRational::new(numerator, denominator))
     } else {
         let integer = token
             .parse::<BigInt>()
-            .map_err(|e| format!("invalid integer `{token}`: {e}"))?;
+            .map_err(|e| ParseRationalError::InvalidInteger {
+                token: token.to_string(),
+                message: e.to_string(),
+            })?;
         Ok(BigRational::from_integer(integer))
     }
 }

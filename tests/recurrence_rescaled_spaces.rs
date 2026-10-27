@@ -238,6 +238,7 @@ fn source_recurrence_input_and_source_coordinate_consistency_rows() {
     rescaled_rows.rows.as_mut().unwrap()[2] = vec!["1".into(), "2".into(), "1/2".into()];
     assert!(find_recurrence_spaces(&rescaled_rows)
         .unwrap_err()
+        .to_string()
         .contains("disagree"));
 }
 
@@ -355,6 +356,7 @@ fn theorem_hypotheses_are_validated() {
     let zero_power = rescaled_request(binomial_source(0), 0, 0, shapes.clone());
     assert!(find_recurrence_spaces(&zero_power)
         .unwrap_err()
+        .to_string()
         .contains("m >= 1"));
     let mut huge = rescaled_request(binomial_source(0), 600, 0, shapes.clone());
     assert!(find_recurrence_spaces(&huge).is_err());
@@ -370,6 +372,7 @@ fn theorem_hypotheses_are_validated() {
     }));
     assert!(find_recurrence_spaces(&rows_only.unwrap())
         .unwrap_err()
+        .to_string()
         .contains("constant-index monic source"));
     let indexed: RecurrenceSpaceRequest = serde_json::from_value(json!({
         "indexed_source": {"coefficients": [[["0","1"],["0","1"]]], "seeds": [["1"]]},
@@ -386,6 +389,7 @@ fn theorem_hypotheses_are_validated() {
     );
     assert!(find_recurrence_spaces(&automatic)
         .unwrap_err()
+        .to_string()
         .contains("automatic_variable_degree"));
     let before_origin = rescaled_request(binomial_source(2), 1, 1, shapes.clone());
     assert!(find_recurrence_spaces(&before_origin).is_err());

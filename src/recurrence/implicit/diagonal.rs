@@ -263,7 +263,7 @@ impl DiagonalWeight {
             return RecurrenceCoefficientRescaling::FactorialPower { power: *power }
                 .rescale_coefficients(&row, &RecurrenceSpaceLimits::default())
                 .map(|r| vec_poly::trim(&r))
-                .map_err(TransformError::Limit);
+                .map_err(|error| TransformError::Limit(error.to_string()));
         }
         let form = self.form()?;
         let mapped = row
@@ -286,7 +286,7 @@ impl DiagonalWeight {
             return RecurrenceCoefficientRescaling::FactorialPower { power: *power }
                 .unscale_coefficients(&row, &RecurrenceSpaceLimits::default())
                 .map(|r| vec_poly::trim(&r))
-                .map_err(TransformError::Limit);
+                .map_err(|error| TransformError::Limit(error.to_string()));
         }
         let form = self.form()?;
         let mapped = row
@@ -574,7 +574,7 @@ pub fn derivative_antecedent_parameters(
 ) -> Result<(Vec<BigRational>, usize), TransformError> {
     let g = g
         .iter()
-        .map(|c| parse_rational_coeff(c))
+        .map(|c| parse_rational_coeff(c).map_err(RecurrenceError::from))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| TransformError::InvalidParameter(format!("g: {e}")))?;
     let g = vec_poly::trim(&g);

@@ -75,7 +75,7 @@ impl Search<'_> {
                 });
                 step.implicit_relation = Some(record);
             }
-            Err(error) => step.error = Some(error),
+            Err(error) => step.error = Some(error.to_string()),
         }
         step
     }

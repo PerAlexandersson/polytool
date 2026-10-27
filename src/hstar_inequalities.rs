@@ -487,7 +487,7 @@ pub fn hstar_inequality_report_bigint(
         add_stapledon(&mut checks, &h, dimension, degree);
     }
 
-    let codegree = (degree <= dimension).then_some(dimension + 1 - degree);
+    let codegree = (degree <= dimension).then(|| dimension + 1 - degree);
     let all_applicable_hold = checks
         .iter()
         .filter(|check| check.applicable)
@@ -540,6 +540,14 @@ mod tests {
         assert!(report.checks.iter().any(|check| {
             check.family == "Balletti-Higashitani" && check.applicable && !check.holds
         }));
+    }
+
+    #[test]
+    fn dimension_far_below_the_degree_reports_instead_of_panicking() {
+        let report = hstar_inequality_report_bigint(&b(&[1, 0, 0, 1]), Some(0));
+        assert_eq!(report.degree, 3);
+        assert_eq!(report.codegree, None);
+        assert!(!report.all_applicable_hold);
     }
 
     #[test]

@@ -298,12 +298,14 @@ fn source_adapter_preserves_origin_and_rejects_inconsistent_extra_seeds() {
         .push(vec!["7".into()]);
     assert!(find_recurrence_spaces(&bad)
         .unwrap_err()
+        .to_string()
         .contains("disagree"));
     // Additional supplied rows must not mask contradictory initial data.
     bad.rows = Some(vec![vec!["3".into()]]);
     bad.row_origin = 7;
     assert!(find_recurrence_spaces(&bad)
         .unwrap_err()
+        .to_string()
         .contains("disagree"));
 }
 
@@ -368,6 +370,7 @@ fn automatic_variable_degree_preserves_the_leader_space() {
     req.rows = Some(vec![vec!["1".into()]; 8]);
     assert!(find_recurrence_spaces(&req)
         .unwrap_err()
+        .to_string()
         .contains("defining source"));
 }
 

@@ -28,6 +28,7 @@ use super::{
     RecurrenceJson, RecurrenceRescalingBound, RecurrenceSign, RecurrenceTerm,
 };
 use crate::linalg::{rational_kernel_with_certificate, RationalKernelError, RationalKernelLimits};
+use crate::recurrence::RecurrenceError;
 use crate::{sturm::SturmChain, Polynomial};
 use num_bigint::BigInt;
 use num_integer::Integer;
@@ -58,50 +59,68 @@ pub(in crate::recurrence) fn encode_matrix(matrix: &[Vec<Q>]) -> ExactRows {
         .map(|r| r.iter().map(ToString::to_string).collect())
         .collect()
 }
-fn checked_q(s: &str, limits: &RecurrenceSpaceLimits) -> Result<Q, String> {
+fn checked_q(s: &str, limits: &RecurrenceSpaceLimits) -> Result<Q, RecurrenceError> {
     if s.len() as u64 > limits.max_coefficient_bits.saturating_add(32) {
-        return Err("coefficient text exceeds bit budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "coefficient text exceeds bit budget".into(),
+        ));
     }
     let q = parse_rational_coeff(s)?;
     if q.numer().bits().max(q.denom().bits()) > limits.max_coefficient_bits {
-        return Err("coefficient exceeds bit budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "coefficient exceeds bit budget".into(),
+        ));
     }
     Ok(q)
 }
-fn parse_matrix(rows: &ExactRows, limits: &RecurrenceSpaceLimits) -> Result<Vec<Vec<Q>>, String> {
+fn parse_matrix(
+    rows: &ExactRows,
+    limits: &RecurrenceSpaceLimits,
+) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     if rows
         .len()
         .checked_mul(rows.iter().map(Vec::len).max().unwrap_or(0))
         .is_none_or(|n| n > limits.max_matrix_entries)
     {
-        return Err("matrix exceeds entry budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "matrix exceeds entry budget".into(),
+        ));
     }
     rows.iter()
         .map(|r| r.iter().map(|x| checked_q(x, limits)).collect())
         .collect()
 }
-fn parse_polys(rows: &ExactRows, limits: &RecurrenceSpaceLimits) -> Result<Vec<Poly>, String> {
+fn parse_polys(
+    rows: &ExactRows,
+    limits: &RecurrenceSpaceLimits,
+) -> Result<Vec<Poly>, RecurrenceError> {
     if rows.len() > limits.max_rows
         || rows
             .iter()
             .any(|r| r.len().saturating_sub(1) > limits.max_degree)
     {
-        return Err("input rows exceed row/degree budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "input rows exceed row/degree budget".into(),
+        ));
     }
     Ok(parse_matrix(rows, limits)?
         .into_iter()
         .map(Poly::new)
         .collect())
 }
-fn poly_budget(p: &Poly, limits: &RecurrenceSpaceLimits) -> Result<(), String> {
+fn poly_budget(p: &Poly, limits: &RecurrenceSpaceLimits) -> Result<(), RecurrenceError> {
     if p.degree().unwrap_or(0) > limits.max_degree {
-        return Err("polynomial degree budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "polynomial degree budget".into(),
+        ));
     }
     if p.coeffs()
         .iter()
         .any(|x| x.numer().bits().max(x.denom().bits()) > limits.max_coefficient_bits)
     {
-        return Err("coefficient bit budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "coefficient bit budget".into(),
+        ));
     }
     Ok(())
 }
@@ -115,19 +134,21 @@ struct Input {
     rescaling: Option<RecurrenceCoefficientRescaling>,
 }
 
-fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
+fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, RecurrenceError> {
     let lim = &request.limits;
     if request.shapes.len() > lim.max_shapes {
-        return Err("too many requested shapes".into());
+        return Err(RecurrenceError::LimitExceeded(
+            "too many requested shapes".into(),
+        ));
     }
     if let Some(rescaling) = &request.coefficient_rescaling {
         rescaling.validate(lim)?;
         if request.source.is_none() && request.source_recurrence.is_none() {
-            return Err(
+            return Err(RecurrenceError::InvalidInput(
                 "coefficient_rescaling requires a constant-index monic source \
                         (source or source_recurrence)"
                     .into(),
-            );
+            ));
         }
     }
     if usize::from(request.source.is_some())
@@ -135,20 +156,28 @@ fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
         + usize::from(request.indexed_source.is_some())
         > 1
     {
-        return Err("provide exactly one source form".into());
+        return Err(RecurrenceError::InvalidInput(
+            "provide exactly one source form".into(),
+        ));
     }
     if let Some(src) = &request.indexed_source {
         if src.coefficients.is_empty()
             || src.coefficients.len() > lim.max_rows
             || src.seeds.len() != src.coefficients.len()
         {
-            return Err("indexed source needs exactly k seeds for positive order k".into());
+            return Err(RecurrenceError::InvalidInput(
+                "indexed source needs exactly k seeds for positive order k".into(),
+            ));
         }
         if request.domain_start < src.origin {
-            return Err("domain starts before source origin".into());
+            return Err(RecurrenceError::InvalidInput(
+                "domain starts before source origin".into(),
+            ));
         }
         if request.rows.is_some() && request.row_origin != src.origin {
-            return Err("consistency row_origin must equal source origin".into());
+            return Err(RecurrenceError::InvalidInput(
+                "consistency row_origin must equal source origin".into(),
+            ));
         }
         return Ok(Input {
             a: None,
@@ -178,7 +207,9 @@ fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
                 .iter()
                 .any(|t| t.offset > lim.max_rows)
         {
-            return Err("source recurrence exceeds limits".into());
+            return Err(RecurrenceError::LimitExceeded(
+                "source recurrence exceeds limits".into(),
+            ));
         }
         for p in json
             .recurrence
@@ -193,7 +224,9 @@ fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
                     .iter()
                     .any(|r| r.len().saturating_sub(1) > lim.max_degree)
             {
-                return Err("source coefficient degree budget".into());
+                return Err(RecurrenceError::BudgetExhausted(
+                    "source coefficient degree budget".into(),
+                ));
             }
             parse_matrix(&p.coeffs, lim)?;
         }
@@ -215,13 +248,19 @@ fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
         let a = parse_polys(&src.coefficients, lim)?;
         let rows = parse_polys(&src.seeds, lim)?;
         if a.is_empty() || rows.len() != a.len() {
-            return Err("source requires exactly k seeds for positive order k".into());
+            return Err(RecurrenceError::InvalidInput(
+                "source requires exactly k seeds for positive order k".into(),
+            ));
         }
         if request.domain_start < src.origin {
-            return Err("domain starts before the source origin".into());
+            return Err(RecurrenceError::InvalidInput(
+                "domain starts before the source origin".into(),
+            ));
         }
         if request.rows.is_some() && request.row_origin != src.origin {
-            return Err("consistency row_origin must equal source origin".into());
+            return Err(RecurrenceError::InvalidInput(
+                "consistency row_origin must equal source origin".into(),
+            ));
         }
         let mut consistency = supplied
             .map(|r| parse_polys(r, lim))
@@ -230,7 +269,9 @@ fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
         if let Some((_, initial)) = &adapted {
             let original = parse_polys(initial, lim)?;
             if !original.iter().zip(&consistency).all(|(a, b)| a == b) {
-                return Err("supplied rows disagree with source_recurrence initial rows".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "supplied rows disagree with source_recurrence initial rows".into(),
+                ));
             }
             if original.len() > consistency.len() {
                 consistency = original;
@@ -245,9 +286,13 @@ fn prepare(request: &RecurrenceSpaceRequest) -> Result<Input, String> {
             rescaling: request.coefficient_rescaling,
         })
     } else {
-        let rows = supplied.ok_or("provide a source recurrence or finite rows")?;
+        let rows = supplied.ok_or(RecurrenceError::InvalidInput(
+            "provide a source recurrence or finite rows".into(),
+        ))?;
         if request.domain_start < request.row_origin {
-            return Err("domain starts before row_origin".into());
+            return Err(RecurrenceError::InvalidInput(
+                "domain starts before row_origin".into(),
+            ));
         }
         Ok(Input {
             a: None,
@@ -264,10 +309,10 @@ fn source_rows(
     input: &Input,
     count: usize,
     limits: &RecurrenceSpaceLimits,
-) -> Result<Vec<Poly>, String> {
+) -> Result<Vec<Poly>, RecurrenceError> {
     let needed = count.max(input.consistency.len());
     if needed > limits.max_rows {
-        return Err("source row budget".into());
+        return Err(RecurrenceError::BudgetExhausted("source row budget".into()));
     }
     let mut rows = input.rows.clone();
     let mut operations = limits.max_operations;
@@ -283,19 +328,25 @@ fn source_rows(
             let a = if let Some(a) = &input.a {
                 a
             } else {
-                let rank = input
-                    .origin
-                    .checked_add(start)
-                    .ok_or("source rank overflow")?;
+                let rank =
+                    input
+                        .origin
+                        .checked_add(start)
+                        .ok_or(RecurrenceError::LimitExceeded(
+                            "source rank overflow".into(),
+                        ))?;
                 let source = input.indexed_a.as_ref().unwrap();
                 let work = source
                     .iter()
                     .flat_map(|p| &p.coeffs)
                     .map(Vec::len)
                     .sum::<usize>();
-                operations = operations
-                    .checked_sub(work)
-                    .ok_or("source arithmetic budget")?;
+                operations =
+                    operations
+                        .checked_sub(work)
+                        .ok_or(RecurrenceError::BudgetExhausted(
+                            "source arithmetic budget".into(),
+                        ))?;
                 evaluated = source
                     .iter()
                     .map(|p| propagation::evaluate(p, rank, limits))
@@ -308,16 +359,23 @@ fn source_rows(
                     .coeffs()
                     .len()
                     .checked_mul(rows[start + i].coeffs().len())
-                    .ok_or("source work overflow")?;
-                operations = operations
-                    .checked_sub(work)
-                    .ok_or("source arithmetic budget")?;
+                    .ok_or(RecurrenceError::LimitExceeded(
+                        "source work overflow".into(),
+                    ))?;
+                operations =
+                    operations
+                        .checked_sub(work)
+                        .ok_or(RecurrenceError::BudgetExhausted(
+                            "source arithmetic budget".into(),
+                        ))?;
                 if c.degree()
                     .unwrap_or(0)
                     .saturating_add(rows[start + i].degree().unwrap_or(0))
                     > limits.max_degree
                 {
-                    return Err("source degree budget".into());
+                    return Err(RecurrenceError::BudgetExhausted(
+                        "source degree budget".into(),
+                    ));
                 }
                 p = p + c.clone() * rows[start + i].clone();
                 poly_budget(&p, limits)?;
@@ -325,7 +383,9 @@ fn source_rows(
             rows.push(p);
         }
         if !input.consistency.iter().zip(&rows).all(|(a, b)| a == b) {
-            return Err("supplied rows disagree with the source recurrence and seeds".into());
+            return Err(RecurrenceError::InvalidInput(
+                "supplied rows disagree with the source recurrence and seeds".into(),
+            ));
         }
     }
     Ok(rows)
@@ -334,10 +394,12 @@ fn source_rows(
 fn shape_columns(
     shape: &RecurrenceSpaceShape,
     limits: &RecurrenceSpaceLimits,
-) -> Result<(usize, Vec<RecurrenceMonomial>), String> {
+) -> Result<(usize, Vec<RecurrenceMonomial>), RecurrenceError> {
     let (target, mut cols) = match shape {
         RecurrenceSpaceShape::AutomaticVariableDegree { .. } => {
-            return Err("unresolved automatic shape".into())
+            return Err(RecurrenceError::InvalidInput(
+                "unresolved automatic shape".into(),
+            ))
         }
         RecurrenceSpaceShape::Explicit {
             target_lag,
@@ -367,7 +429,7 @@ fn shape_columns(
                 .and_then(|r| lhs.and_then(|l| r.checked_add(l)))
                 .is_none_or(|n| n > limits.max_columns)
             {
-                return Err("column budget".into());
+                return Err(RecurrenceError::BudgetExhausted("column budget".into()));
             }
             let mut cols = Vec::new();
             for n in 0..=*leading_index_degree {
@@ -402,7 +464,9 @@ fn shape_columns(
             .iter()
             .any(|c| c.lag > target || (c.lag == target && c.derivative_order != 0))
     {
-        return Err("invalid successor support".into());
+        return Err(RecurrenceError::InvalidInput(
+            "invalid successor support".into(),
+        ));
     }
     if cols.len() > limits.max_columns
         || cols.iter().any(|c| {
@@ -411,11 +475,15 @@ fn shape_columns(
                 .any(|d| *d > limits.max_degree)
         })
     {
-        return Err("support degree/column budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "support degree/column budget".into(),
+        ));
     }
     cols.sort();
     if cols.windows(2).any(|w| w[0] == w[1]) {
-        return Err("duplicate support monomial".into());
+        return Err(RecurrenceError::InvalidInput(
+            "duplicate support monomial".into(),
+        ));
     }
     Ok((target, cols))
 }
@@ -427,21 +495,24 @@ fn column_at(
     rank: usize,
     origin: usize,
     limits: &RecurrenceSpaceLimits,
-) -> Result<Poly, String> {
+) -> Result<Poly, RecurrenceError> {
     let row = rank
         .checked_sub(origin)
         .and_then(|n| n.checked_add(c.lag))
         .and_then(|i| rows.get(i))
-        .ok_or("missing row")?;
+        .ok_or(RecurrenceError::InvalidInput("missing row".into()))?;
     let mut p = if c.derivative_order > row.degree().unwrap_or(0) {
         Poly::zero()
     } else {
         row.nth_derivative(c.derivative_order)
     };
     if p.degree().unwrap_or(0).saturating_add(c.variable_degree) > limits.max_degree {
-        return Err("residual degree budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "residual degree budget".into(),
+        ));
     }
-    let power = u32::try_from(c.index_degree).map_err(|_| "index degree overflow")?;
+    let power = u32::try_from(c.index_degree)
+        .map_err(|_| RecurrenceError::LimitExceeded("index degree overflow".into()))?;
     let factor = Q::from_integer(BigInt::from(rank).pow(power));
     p = p.scale(&factor) * Poly::monomial(Q::one(), c.variable_degree);
     poly_budget(&p, limits)?;
@@ -459,27 +530,33 @@ pub(in crate::recurrence) fn residual_matrix(
     target: usize,
     cols: &[RecurrenceMonomial],
     lim: &RecurrenceSpaceLimits,
-) -> Result<Vec<Vec<Q>>, String> {
+) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     let mut matrix = Vec::new();
     let mut operations = lim.max_operations;
     for offset in 0..count {
-        let n = start.checked_add(offset).ok_or("rank overflow")?;
+        let n = start
+            .checked_add(offset)
+            .ok_or(RecurrenceError::LimitExceeded("rank overflow".into()))?;
         for c in cols {
             let p = rows
                 .get(
                     n.checked_sub(origin)
                         .and_then(|i| i.checked_add(c.lag))
-                        .ok_or("rank overflow")?,
+                        .ok_or(RecurrenceError::LimitExceeded("rank overflow".into()))?,
                 )
-                .ok_or("missing row")?;
+                .ok_or(RecurrenceError::InvalidInput("missing row".into()))?;
             let work = p
                 .coeffs()
                 .len()
                 .checked_mul(c.derivative_order.saturating_add(2))
-                .ok_or("residual work overflow")?;
+                .ok_or(RecurrenceError::LimitExceeded(
+                    "residual work overflow".into(),
+                ))?;
             operations = operations
                 .checked_sub(work)
-                .ok_or("residual arithmetic budget")?;
+                .ok_or(RecurrenceError::BudgetExhausted(
+                    "residual arithmetic budget".into(),
+                ))?;
         }
         let values: Vec<_> = cols
             .iter()
@@ -501,7 +578,9 @@ pub(in crate::recurrence) fn residual_matrix(
                 .and_then(|r| r.checked_mul(cols.len()))
                 .is_none_or(|x| x > lim.max_matrix_entries)
             {
-                return Err("matrix entry budget".into());
+                return Err(RecurrenceError::BudgetExhausted(
+                    "matrix entry budget".into(),
+                ));
             }
             for x in 0..=degree {
                 matrix.push(values.iter().map(|p| p.coeff(x)).collect());
@@ -702,7 +781,7 @@ fn prepare_shape(
     request: &RecurrenceSpaceRequest,
     supplied: Option<&RecurrencePropagationCertificate>,
     verifying: bool,
-) -> Result<ShapeData, String> {
+) -> Result<ShapeData, RecurrenceError> {
     let lim = &request.limits;
     let mut resolved = match shape {
         RecurrenceSpaceShape::AutomaticVariableDegree {
@@ -713,12 +792,14 @@ fn prepare_shape(
             leading_variable_degree,
         } => {
             if input.a.is_none() && input.indexed_a.is_none() {
-                return Err("automatic degree requires a defining source".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "automatic degree requires a defining source".into(),
+                ));
             }
             if input.rescaling.is_some() {
-                return Err(
+                return Err(RecurrenceError::Unsupported(
                     "automatic_variable_degree is not supported with coefficient_rescaling".into(),
-                );
+                ));
             }
             RecurrenceSpaceShape::Box {
                 length: *length,
@@ -735,21 +816,25 @@ fn prepare_shape(
     let h = if let Some(rescaling) = &input.rescaling {
         rescaling
             .annihilator_power(&cols)
-            .ok_or("rescaled h overflow")?
+            .ok_or(RecurrenceError::LimitExceeded("rescaled h overflow".into()))?
     } else {
         cols.iter()
             .map(|c| c.index_degree.checked_add(c.derivative_order))
             .collect::<Option<Vec<_>>>()
-            .ok_or("support degree overflow")?
+            .ok_or(RecurrenceError::LimitExceeded(
+                "support degree overflow".into(),
+            ))?
             .into_iter()
             .max()
             .unwrap_or(0)
             .checked_add(1)
-            .ok_or("h overflow")?
+            .ok_or(RecurrenceError::LimitExceeded("h overflow".into()))?
     };
     let propagation = if let Some(a) = &input.indexed_a {
         if verifying {
-            let cert = supplied.ok_or("missing indexed-source propagation certificate")?;
+            let cert = supplied.ok_or(RecurrenceError::InvalidInput(
+                "missing indexed-source propagation certificate".into(),
+            ))?;
             propagation::verify(a, &cols, request.domain_start, cert, lim)?;
             Some(cert.clone())
         } else {
@@ -757,7 +842,9 @@ fn prepare_shape(
         }
     } else {
         if supplied.is_some() {
-            return Err("unexpected propagation certificate".into());
+            return Err(RecurrenceError::InvalidInput(
+                "unexpected propagation certificate".into(),
+            ));
         }
         None
     };
@@ -766,9 +853,14 @@ fn prepare_shape(
         cert.regular_from
             .checked_sub(request.domain_start)
             .and_then(|n| n.checked_add(cert.coefficients.len() - 1))
-            .ok_or("propagation bound overflow")?
+            .ok_or(RecurrenceError::LimitExceeded(
+                "propagation bound overflow".into(),
+            ))?
     } else if let Some(a) = &input.a {
-        h.checked_mul(a.len()).ok_or("residual bound overflow")?
+        h.checked_mul(a.len())
+            .ok_or(RecurrenceError::LimitExceeded(
+                "residual bound overflow".into(),
+            ))?
     } else {
         input
             .rows
@@ -778,7 +870,7 @@ fn prepare_shape(
     let required = offset
         .checked_add(count)
         .and_then(|n| n.checked_add(target))
-        .ok_or("row bound overflow")?;
+        .ok_or(RecurrenceError::LimitExceeded("row bound overflow".into()))?;
     let mut rows = source_rows(input, required, lim)?;
     let mut rescaling_bound = None;
     if let Some(rescaling) = input.rescaling {
@@ -793,8 +885,15 @@ fn prepare_shape(
             })
             .collect::<Result<_, _>>()?;
         let initial = rows
-            .get(offset..offset.checked_add(target).ok_or("row bound overflow")?)
-            .ok_or("missing rescaled initial rows")?;
+            .get(
+                offset
+                    ..offset
+                        .checked_add(target)
+                        .ok_or(RecurrenceError::LimitExceeded("row bound overflow".into()))?,
+            )
+            .ok_or(RecurrenceError::InvalidInput(
+                "missing rescaled initial rows".into(),
+            ))?;
         rescaling_bound = Some(RecurrenceRescalingBound::new(
             rescaling,
             order,
@@ -813,18 +912,24 @@ fn prepare_shape(
             ..request
                 .domain_start
                 .checked_add(count)
-                .ok_or("rank overflow")?
+                .ok_or(RecurrenceError::LimitExceeded("rank overflow".into()))?
         {
             for c in &cols {
                 let row = rows
                     .get(n - input.origin + c.lag)
-                    .ok_or("missing bound row")?;
+                    .ok_or(RecurrenceError::InvalidInput("missing bound row".into()))?;
                 let cost = row
                     .coeffs()
                     .len()
                     .checked_mul(c.derivative_order.saturating_add(2))
-                    .ok_or("bound arithmetic budget")?;
-                work = work.checked_sub(cost).ok_or("bound arithmetic budget")?;
+                    .ok_or(RecurrenceError::BudgetExhausted(
+                        "bound arithmetic budget".into(),
+                    ))?;
+                work = work
+                    .checked_sub(cost)
+                    .ok_or(RecurrenceError::BudgetExhausted(
+                        "bound arithmetic budget".into(),
+                    ))?;
                 let p = column_at(c, &rows, n, input.origin, lim)?;
                 if c.lag == target {
                     leader_degree = leader_degree.max(p.degree().unwrap_or(0));
@@ -843,15 +948,17 @@ fn prepare_shape(
             0
         } else {
             let first = leader_degree
-                .checked_add(
-                    (rank_upper_bound - 1)
-                        .checked_mul(rhs_degree)
-                        .ok_or("automatic degree budget")?,
-                )
-                .ok_or("automatic degree budget")?;
+                .checked_add((rank_upper_bound - 1).checked_mul(rhs_degree).ok_or(
+                    RecurrenceError::BudgetExhausted("automatic degree budget".into()),
+                )?)
+                .ok_or(RecurrenceError::BudgetExhausted(
+                    "automatic degree budget".into(),
+                ))?;
             let second = rank_upper_bound
                 .checked_mul(rhs_degree)
-                .ok_or("automatic degree budget")?
+                .ok_or(RecurrenceError::BudgetExhausted(
+                    "automatic degree budget".into(),
+                ))?
                 .saturating_sub(1);
             first.max(second)
         };
@@ -868,7 +975,9 @@ fn prepare_shape(
             *v = variable_degree;
         }
         cols = shape_columns(&resolved, lim)
-            .map_err(|error| format!("automatic RHS X-degree {variable_degree}: {error}"))?
+            .map_err(|error| {
+                error.with_context(format!("automatic RHS X-degree {variable_degree}"))
+            })?
             .1;
     }
     Ok(ShapeData {
@@ -887,7 +996,7 @@ fn prepare_shape(
 fn leader_coverage(
     result: &RecurrenceSpaceResult,
     limits: &RecurrenceSpaceLimits,
-) -> Result<Option<RecurrenceLeaderCoverage>, String> {
+) -> Result<Option<RecurrenceLeaderCoverage>, RecurrenceError> {
     if result.representatives.is_empty() {
         return Ok(None);
     }
@@ -928,17 +1037,19 @@ fn leader_coverage(
             {
                 remaining = remaining
                     .checked_sub(1)
-                    .ok_or("leader combination arithmetic budget")?;
-                let n = a
-                    .index_degree
-                    .checked_add(b.index_degree)
-                    .ok_or("leader combination degree budget")?;
-                let x = a
-                    .variable_degree
-                    .checked_add(b.variable_degree)
-                    .ok_or("leader combination degree budget")?;
+                    .ok_or(RecurrenceError::BudgetExhausted(
+                        "leader combination arithmetic budget".into(),
+                    ))?;
+                let n = a.index_degree.checked_add(b.index_degree).ok_or(
+                    RecurrenceError::BudgetExhausted("leader combination degree budget".into()),
+                )?;
+                let x = a.variable_degree.checked_add(b.variable_degree).ok_or(
+                    RecurrenceError::BudgetExhausted("leader combination degree budget".into()),
+                )?;
                 if n > limits.max_degree || x > limits.max_degree {
-                    return Err("leader combination degree budget".into());
+                    return Err(RecurrenceError::BudgetExhausted(
+                        "leader combination degree budget".into(),
+                    ));
                 }
                 let key = RecurrenceMonomial {
                     index_degree: n,
@@ -948,10 +1059,14 @@ fn leader_coverage(
                 let c = combined.entry(key).or_insert_with(Q::zero);
                 *c += ac * bc;
                 if c.numer().bits().max(c.denom().bits()) > limits.max_coefficient_bits {
-                    return Err("leader combination coefficient budget".into());
+                    return Err(RecurrenceError::BudgetExhausted(
+                        "leader combination coefficient budget".into(),
+                    ));
                 }
                 if combined.len() > limits.max_matrix_entries {
-                    return Err("leader combination entry budget".into());
+                    return Err(RecurrenceError::BudgetExhausted(
+                        "leader combination entry budget".into(),
+                    ));
                 }
             }
         }
@@ -998,7 +1113,7 @@ pub(in crate::recurrence) fn check_kernel_certificate(
     width: usize,
     cert: &RecurrenceSpaceCertificate,
     limits: &RecurrenceSpaceLimits,
-) -> Result<Vec<Vec<Q>>, String> {
+) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     let basis = parse_matrix(&cert.basis, limits)?;
     let inverse = parse_matrix(&cert.inverse_minor, limits)?;
     let rank = cert.pivot_columns.len();
@@ -1008,9 +1123,13 @@ pub(in crate::recurrence) fn check_kernel_certificate(
         .checked_mul(width)
         .and_then(|x| x.checked_mul(dimension + rank + 1))
         .and_then(|x| rank.checked_pow(3).and_then(|y| x.checked_add(y)))
-        .ok_or("verification work overflow")?;
+        .ok_or(RecurrenceError::LimitExceeded(
+            "verification work overflow".into(),
+        ))?;
     if verify_work > limits.max_operations {
-        return Err("certificate verification arithmetic budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "certificate verification arithmetic budget".into(),
+        ));
     }
     let partition: BTreeSet<_> = cert
         .pivot_columns
@@ -1027,15 +1146,19 @@ pub(in crate::recurrence) fn check_kernel_certificate(
         || cert.independent_rows.iter().any(|&i| i >= matrix.len())
         || basis.iter().any(|v| v.len() != width)
     {
-        return Err("invalid kernel dimensions".into());
+        return Err(RecurrenceError::InvalidInput(
+            "invalid kernel dimensions".into(),
+        ));
     }
     for (i, v) in basis.iter().enumerate() {
         if matrix.iter().any(|r| !dot(r, v).is_zero()) {
-            return Err("invalid null vector".into());
+            return Err(RecurrenceError::InvalidInput("invalid null vector".into()));
         }
         for (j, &c) in cert.free_columns.iter().enumerate() {
             if v[c] != if i == j { Q::one() } else { Q::zero() } {
-                return Err("invalid basis independence witness".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "invalid basis independence witness".into(),
+                ));
             }
         }
     }
@@ -1045,7 +1168,9 @@ pub(in crate::recurrence) fn check_kernel_certificate(
                 .map(|t| &inverse_row[t] * &matrix[cert.independent_rows[t]][cert.pivot_columns[j]])
                 .sum();
             if sum != if i == j { Q::one() } else { Q::zero() } {
-                return Err("invalid rank minor inverse".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "invalid rank minor inverse".into(),
+                ));
             }
         }
     }
@@ -1057,7 +1182,7 @@ pub(in crate::recurrence) fn check_kernel_certificate(
 /// they describe finite fits. Negative dual certificates need only the rows.
 pub fn find_recurrence_spaces(
     request: &RecurrenceSpaceRequest,
-) -> Result<RecurrenceSpaces, String> {
+) -> Result<RecurrenceSpaces, RecurrenceError> {
     let input = prepare(request)?;
     let symbol = row_symbol(input.rescaling.is_some());
     // A contradictory source is invalid input, not an incomplete search.
@@ -1066,9 +1191,9 @@ pub fn find_recurrence_spaces(
     for shape in &request.shapes {
         let data = match prepare_shape(shape, &input, request, None, false) {
             Ok(data) => data,
-            Err(error) if error.contains("budget") => {
+            Err(error @ RecurrenceError::BudgetExhausted(_)) => {
                 let mut result = empty_result(shape_target(shape), Vec::new(), 0);
-                result.reason = Some(error);
+                result.reason = Some(error.to_string());
                 results.push(result);
                 continue;
             }
@@ -1111,7 +1236,7 @@ pub fn find_recurrence_spaces(
         ) {
             Ok(m) => m,
             Err(e) => {
-                result.reason = Some(e);
+                result.reason = Some(e.to_string());
                 results.push(result);
                 continue;
             }
@@ -1128,7 +1253,11 @@ pub fn find_recurrence_spaces(
                 results.push(result);
                 continue;
             }
-            Err(_) => return Err("invalid residual matrix".into()),
+            Err(_) => {
+                return Err(RecurrenceError::InvalidInput(
+                    "invalid residual matrix".into(),
+                ))
+            }
         };
         let leading: Vec<_> = cols
             .iter()
@@ -1160,7 +1289,7 @@ pub fn find_recurrence_spaces(
                     .pivot_columns
                     .iter()
                     .position(|&c| c == i)
-                    .ok_or("missing dual pivot")?;
+                    .ok_or(RecurrenceError::InvalidInput("missing dual pivot".into()))?;
                 duals.push(RecurrenceSpaceDual {
                     coordinate: i,
                     weights: kernel.inverse_minor[p]
@@ -1274,12 +1403,14 @@ fn frontier(request: &RecurrenceSpaceRequest, results: &[RecurrenceSpaceResult])
 pub fn verify_recurrence_spaces(
     request: &RecurrenceSpaceRequest,
     report: &RecurrenceSpaces,
-) -> Result<(), String> {
+) -> Result<(), RecurrenceError> {
     if report.schema != "polytool.recurrence-spaces.v1"
         || &report.request != request
         || report.results.len() != request.shapes.len()
     {
-        return Err("report/request mismatch".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "report/request mismatch".into(),
+        ));
     }
     let input = prepare(request)?;
     let symbol = row_symbol(input.rescaling.is_some());
@@ -1292,7 +1423,9 @@ pub fn verify_recurrence_spaces(
                 || result.leader_coverage.is_some()
                 || (result.rescaling_bound.is_some() && request.coefficient_rescaling.is_none())
             {
-                return Err("uncertified claim".into());
+                return Err(RecurrenceError::VerificationFailed(
+                    "uncertified claim".into(),
+                ));
             }
             continue;
         }
@@ -1314,7 +1447,9 @@ pub fn verify_recurrence_spaces(
             || propagation != result.propagation
             || rescaling_bound != result.rescaling_bound
         {
-            return Err("support or bound mismatch".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "support or bound mismatch".into(),
+            ));
         }
         if (count == 0 && propagation.is_none())
             || count != result.residual_count
@@ -1323,10 +1458,14 @@ pub fn verify_recurrence_spaces(
                     .checked_sub(1)
                     .and_then(|n| input.origin.checked_add(n))
         {
-            return Err("residual range mismatch".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "residual range mismatch".into(),
+            ));
         }
         if result.all_checked_rows_zero != rows.iter().all(Poly::is_zero) {
-            return Err("degeneracy mismatch".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "degeneracy mismatch".into(),
+            ));
         }
         let matrix = residual_matrix(
             &rows,
@@ -1338,7 +1477,9 @@ pub fn verify_recurrence_spaces(
             &request.limits,
         )?;
         if matrix.len() != result.equations {
-            return Err("equation count mismatch".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "equation count mismatch".into(),
+            ));
         }
         let cert = result.certificate.as_ref().unwrap();
         let basis = check_kernel_certificate(&matrix, cols.len(), cert, &request.limits)?;
@@ -1360,10 +1501,14 @@ pub fn verify_recurrence_spaces(
             dimension,
             kernel_limits(&request.limits),
         )
-        .map_err(|_| "projection verification budget")?;
+        .map_err(|_| {
+            RecurrenceError::VerificationFailed("projection verification budget".into())
+        })?;
         let projection_rank = projected.pivot_columns.len();
         if projection_rank != result.successor_projection_rank {
-            return Err("successor projection mismatch".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "successor projection mismatch".into(),
+            ));
         }
         let absent = projection_rank == 0;
         let evidence = if absent {
@@ -1381,11 +1526,15 @@ pub fn verify_recurrence_spaces(
             }
             || result.evidence != evidence
         {
-            return Err("claim/evidence mismatch".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "claim/evidence mismatch".into(),
+            ));
         }
         if absent {
             if cert.absence_duals.len() != leading.len() {
-                return Err("missing absence duals".into());
+                return Err(RecurrenceError::VerificationFailed(
+                    "missing absence duals".into(),
+                ));
             }
             for (&coordinate, dual) in leading.iter().zip(&cert.absence_duals) {
                 let weights: Vec<_> = dual
@@ -1394,19 +1543,25 @@ pub fn verify_recurrence_spaces(
                     .map(|s| checked_q(s, &request.limits))
                     .collect::<Result<_, _>>()?;
                 if dual.coordinate != coordinate || weights.len() != rank {
-                    return Err("invalid dual dimensions".into());
+                    return Err(RecurrenceError::VerificationFailed(
+                        "invalid dual dimensions".into(),
+                    ));
                 }
                 for (c, _) in cols.iter().enumerate() {
                     let sum: Q = (0..rank)
                         .map(|i| &weights[i] * &matrix[cert.independent_rows[i]][c])
                         .sum();
                     if sum != if c == coordinate { Q::one() } else { Q::zero() } {
-                        return Err("invalid absence dual".into());
+                        return Err(RecurrenceError::VerificationFailed(
+                            "invalid absence dual".into(),
+                        ));
                     }
                 }
             }
         } else if !cert.absence_duals.is_empty() {
-            return Err("spurious absence duals".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "spurious absence duals".into(),
+            ));
         }
         let expected: Vec<_> = projected
             .pivot_columns
@@ -1414,17 +1569,23 @@ pub fn verify_recurrence_spaces(
             .map(|&i| representative(&cols, &basis[i], target, i, symbol))
             .collect();
         if result.representatives != expected {
-            return Err("representative or singular-rank mismatch".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "representative or singular-rank mismatch".into(),
+            ));
         }
         if result.leader_coverage.is_some()
             && (!request.include_leader_coverage
                 || result.leader_coverage != leader_coverage(result, &request.limits)?)
         {
-            return Err("leader coverage mismatch".into());
+            return Err(RecurrenceError::VerificationFailed(
+                "leader coverage mismatch".into(),
+            ));
         }
     }
     if report.frontier != frontier(request, &report.results) {
-        return Err("frontier mismatch".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "frontier mismatch".into(),
+        ));
     }
     Ok(())
 }

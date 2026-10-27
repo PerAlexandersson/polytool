@@ -583,7 +583,8 @@ pub struct LaceCheckResponse {
     pub max_minor_size: usize,
     pub rows: usize,
     pub columns: usize,
-    pub tnn: bool,
+    #[serde(rename = "tnn")]
+    pub totally_nonnegative: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -621,7 +622,8 @@ pub struct NegativeMinorItem {
 
 /// Why a matrix is not lower-unitriangular TNN.
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
-pub struct TnnFailureItem {
+#[schemars(rename = "TnnFailureItem")]
+pub struct TotallyNonnegativeFailureItem {
     /// Snake-case `NetworkError` variant, e.g. `not_tnn`, `negative_entry`,
     /// `non_monic_polynomial`, `nonzero_above_diagonal`.
     pub kind: String,
@@ -673,7 +675,7 @@ pub struct ChainPolynomialsItem {
 
 /// Result of `check_tnn_network`.
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
-pub struct TnnNetworkResponse {
+pub struct TotallyNonnegativeNetworkResponse {
     /// `polynomials` or `matrix`.
     pub input_mode: String,
     pub input_rows: usize,
@@ -682,8 +684,9 @@ pub struct TnnNetworkResponse {
     /// Triangular rows `r_{n,k}` (`k <= n`) as exact integer strings.
     pub coefficient_matrix: Option<Vec<Vec<String>>>,
     /// The coefficient matrix is lower-unitriangular and totally nonnegative.
-    pub tnn: bool,
-    pub failure: Option<TnnFailureItem>,
+    #[serde(rename = "tnn")]
+    pub totally_nonnegative: bool,
+    pub failure: Option<TotallyNonnegativeFailureItem>,
     /// Canonical network weights: `lambda[n][k]` is the weight of the
     /// vertical edge `(n+1,k) -> (n,k)` of `Gamma_N(lambda)` (exact rationals).
     pub lambda: Option<Vec<Vec<String>>>,
@@ -822,7 +825,8 @@ pub struct LeftProductionResponse {
     /// The left production matrix `Q_N` (triangular rows, exact rationals).
     pub production_matrix: Vec<Vec<String>>,
     /// `Q_N` is totally nonnegative.
-    pub tnn: bool,
+    #[serde(rename = "tnn")]
+    pub totally_nonnegative: bool,
     pub failure_reason: Option<String>,
     pub negative_minor: Option<RationalNegativeMinorItem>,
     /// When TNN: the certificate re-verified (regeneration, TNN, Toeplitz

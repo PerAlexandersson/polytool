@@ -145,7 +145,7 @@ impl RepresentationSearchLimits {
     }
 
     /// Reject limits above a service ceiling.
-    pub fn check_ceiling(&self, ceiling: &Self) -> Result<(), String> {
+    pub fn check_ceiling(&self, ceiling: &Self) -> Result<(), RecurrenceError> {
         let pairs = [
             ("max_depth", self.max_depth, ceiling.max_depth),
             (
@@ -184,16 +184,16 @@ impl RepresentationSearchLimits {
         ];
         for (name, value, limit) in pairs {
             if value > limit {
-                return Err(format!(
+                return Err(RecurrenceError::LimitExceeded(format!(
                     "{name} = {value} exceeds the service ceiling {limit}"
-                ));
+                )));
             }
         }
         if self.max_coefficient_bits > ceiling.max_coefficient_bits {
-            return Err(format!(
+            return Err(RecurrenceError::LimitExceeded(format!(
                 "max_coefficient_bits = {} exceeds the service ceiling {}",
                 self.max_coefficient_bits, ceiling.max_coefficient_bits
-            ));
+            )));
         }
         Ok(())
     }

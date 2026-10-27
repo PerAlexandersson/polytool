@@ -597,14 +597,19 @@ where
 /// The matrix is `mat[row][col]`, where each entry is a polynomial. The
 /// permanent is defined for square matrices; a nonempty matrix must therefore
 /// have exactly as many columns as rows, and every row must have the same
-/// length. A rectangular or ragged matrix causes a panic. The empty matrix has
-/// permanent one, represented by the constant polynomial `[1]`.
+/// length. The empty matrix has permanent one, represented by the constant
+/// polynomial `[1]`.
 ///
 /// The computation uses the standard subset dynamic program: after processing
 /// row `r`, the entry for a column subset records the sum of products obtained
 /// by assigning rows `0..=r` to those columns. This avoids the factorial work
 /// of a Laplace expansion while retaining exact arithmetic (fixed-width
 /// coefficient types panic on overflow, see the module documentation).
+///
+/// # Panics
+///
+/// Panics if the matrix is rectangular but not square, is ragged, or has at
+/// least `usize::BITS` rows, and on coefficient overflow for fixed-width types.
 pub fn permanent<C: CoeffRing>(mat: &[Vec<Vec<C>>]) -> Vec<C> {
     let n = mat.len();
     if n == 0 {

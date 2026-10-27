@@ -1,4 +1,4 @@
-// Run: node --test web/recurrence-transforms.test.cjs
+// Run: node --test web/tests/recurrence-transforms.test.cjs
 // POLYTOOL_WASM_DIR=/path/to/no-modules-bundle also runs the actual WASM checks;
 // POLYTOOL_CLI=/path/to/polytool additionally replays browser reports with the CLI.
 const fs = require('node:fs');
@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const {spawnSync} = require('node:child_process');
 const {test} = require('node:test');
 
-const pageJs = require('./tests/page_source.cjs').loadPage().js;
+const pageJs = require('./page_source.cjs').loadPage().js;
 
 function slice(start, end) {
   const from = pageJs.indexOf(start);

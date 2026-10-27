@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "identity_status": "caller_must_establish_recurrence_for_all_indices",
             "formalization_status": "paper_proof_not_lean_checked"
         }),
-        Err(reason) => serde_json::json!({"recognized": false, "reason": reason}),
+        Err(reason) => serde_json::json!({"recognized": false, "reason": reason.to_string()}),
     };
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())

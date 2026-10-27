@@ -1159,7 +1159,10 @@ fn family_check_can_require_finite_lace_tnn() {
         response.first_failure.as_deref(),
         Some("finite Lace truncation is not TNN up to minors of size 3")
     );
-    assert_eq!(response.lace.as_ref().map(|l| l.tnn), Some(false));
+    assert_eq!(
+        response.lace.as_ref().map(|l| l.totally_nonnegative),
+        Some(false)
+    );
     assert!(response
         .lace
         .as_ref()
@@ -1297,14 +1300,14 @@ fn mcp_bounds_generation_and_reports_exact_conversion_errors() {
             include_matrix: Some(false),
         },
     );
-    assert!(!oversized_lace.tnn);
+    assert!(!oversized_lace.totally_nonnegative);
     assert!(oversized_lace
         .error
         .is_some_and(|error| error.contains("exceeds MCP limits")));
 }
 
-fn tnn_request(text: &str, chain: bool) -> TnnNetworkRequest {
-    TnnNetworkRequest {
+fn tnn_request(text: &str, chain: bool) -> TotallyNonnegativeNetworkRequest {
+    TotallyNonnegativeNetworkRequest {
         polynomials: None,
         text: Some(text.to_string()),
         matrix: None,
@@ -1345,7 +1348,7 @@ fn tnn_network_certifies_pascal_with_chain_polynomials() {
         .unwrap();
     assert_eq!(response.input_mode, "polynomials");
     assert!(response.prepended_p0);
-    assert!(response.tnn);
+    assert!(response.totally_nonnegative);
     assert_eq!(response.failure, None);
     assert_eq!(response.certificate_verified, Some(true));
     let lambda = response.lambda.as_ref().unwrap();
@@ -1371,7 +1374,7 @@ fn tnn_network_certifies_pascal_with_chain_polynomials() {
 fn tnn_network_guardrail_example_makes_no_row_claim() {
     let server = PolynomialToolsServer::new();
     let Json(response) = server
-        .check_tnn_network(Parameters(TnnNetworkRequest {
+        .check_tnn_network(Parameters(TotallyNonnegativeNetworkRequest {
             polynomials: None,
             text: None,
             matrix: Some(int_matrix(&[&[1, 0, 0], &[1, 1, 0], &[1, 1, 1]])),
@@ -1379,7 +1382,7 @@ fn tnn_network_guardrail_example_makes_no_row_claim() {
         }))
         .unwrap();
     assert_eq!(response.input_mode, "matrix");
-    assert!(response.tnn);
+    assert!(response.totally_nonnegative);
     assert_eq!(response.certificate_verified, Some(true));
     assert_eq!(
         response.lambda,
@@ -1404,14 +1407,14 @@ fn tnn_network_guardrail_example_makes_no_row_claim() {
 fn tnn_network_reports_negative_minor_and_shape_failures() {
     let server = PolynomialToolsServer::new();
     let Json(response) = server
-        .check_tnn_network(Parameters(TnnNetworkRequest {
+        .check_tnn_network(Parameters(TotallyNonnegativeNetworkRequest {
             polynomials: None,
             text: None,
             matrix: Some(int_matrix(&[&[1], &[1, 1], &[2, 0, 1]])),
             chain: Some(true),
         }))
         .unwrap();
-    assert!(!response.tnn);
+    assert!(!response.totally_nonnegative);
     assert_eq!(response.lambda, None);
     let failure = response.failure.as_ref().unwrap();
     assert_eq!(failure.kind, "not_tnn");
@@ -1441,7 +1444,7 @@ fn tnn_network_reports_negative_minor_and_shape_failures() {
     assert_eq!(non_monic.coefficient_matrix, None);
 
     let Json(above) = server
-        .check_tnn_network(Parameters(TnnNetworkRequest {
+        .check_tnn_network(Parameters(TotallyNonnegativeNetworkRequest {
             polynomials: None,
             text: None,
             matrix: Some(int_matrix(&[&[1, 2], &[1, 1]])),
@@ -1455,7 +1458,7 @@ fn tnn_network_reports_negative_minor_and_shape_failures() {
 #[test]
 fn tnn_network_validates_input_shape_and_limits() {
     let server = PolynomialToolsServer::new();
-    let both = server.check_tnn_network(Parameters(TnnNetworkRequest {
+    let both = server.check_tnn_network(Parameters(TotallyNonnegativeNetworkRequest {
         polynomials: None,
         text: Some("1".to_string()),
         matrix: Some(int_matrix(&[&[1]])),
@@ -1465,7 +1468,7 @@ fn tnn_network_validates_input_shape_and_limits() {
     let bad = server.check_tnn_network(Parameters(tnn_request("1\n1,x", false)));
     assert!(format!("{:?}", bad.err().unwrap()).contains("polynomial 1"));
     let rows = crate::limits::MCP_MAX_TNN_NETWORK_ROWS + 1;
-    let too_many = server.check_tnn_network(Parameters(TnnNetworkRequest {
+    let too_many = server.check_tnn_network(Parameters(TotallyNonnegativeNetworkRequest {
         polynomials: None,
         text: None,
         matrix: Some(vec![vec![BigIntCoefficientInput::from(1)]; rows]),
@@ -1635,7 +1638,7 @@ fn left_production_certifies_stirling_and_rejects_eulerian() {
             None,
         )))
         .unwrap();
-    assert!(stirling.tnn);
+    assert!(stirling.totally_nonnegative);
     assert!(stirling.rows_certified_pf);
     assert_eq!(stirling.certificate_verified, Some(true));
     assert_eq!(stirling.production_matrix[4], vec!["0", "1", "3", "3", "1"]);
@@ -1647,7 +1650,7 @@ fn left_production_certifies_stirling_and_rejects_eulerian() {
             None,
         )))
         .unwrap();
-    assert!(!eulerian.tnn);
+    assert!(!eulerian.totally_nonnegative);
     assert!(!eulerian.rows_certified_pf);
     assert_eq!(eulerian.production_matrix[4][2], "-5");
     assert_eq!(eulerian.negative_minor.unwrap().value, "-5");

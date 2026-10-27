@@ -258,6 +258,7 @@ pub fn q_catalan(n: usize) -> Vec<BigInt> {
 /// `1 <= k <= n` it is a genuine polynomial with lowest term `q^(k(k-1))`.
 ///
 /// # Panics
+///
 /// Panics if `n == 0`, where `1 / [0]_q` is undefined.
 ///
 /// ```

@@ -69,7 +69,7 @@ use crate::tnn_network::{
     evaluate_path_matrix, find_negative_minor, reconstruct_lambda_from_q_rows, BigRational,
     CanonicalPlanarNetwork,
 };
-use crate::{check_tnn_neville_bigint, Polynomial};
+use crate::{check_totally_nonnegative_neville_bigint, Polynomial};
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
@@ -116,7 +116,7 @@ pub enum LeftProductionError {
         row: usize,
     },
     /// The production matrix is not totally nonnegative.
-    NotTnn {
+    NotTotallyNonnegative {
         /// The Neville-elimination diagnosis.
         reason: String,
     },
@@ -161,7 +161,7 @@ impl fmt::Display for LeftProductionError {
                 "the triangle regenerated from the production matrix differs in row {}",
                 row
             ),
-            Self::NotTnn { reason } => {
+            Self::NotTotallyNonnegative { reason } => {
                 write!(
                     f,
                     "production matrix is not totally nonnegative: {}",
@@ -374,7 +374,7 @@ fn scaled_square(production: &[Vec<Q>]) -> (BigInt, Vec<Vec<BigInt>>) {
 
 /// Why a production matrix is not totally nonnegative.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProductionTnnFailure {
+pub struct ProductionTotallyNonnegativeFailure {
     /// The Neville-elimination diagnosis.
     pub reason: String,
     /// An explicit negative minor, when the bounded search finds one.
@@ -384,11 +384,13 @@ pub struct ProductionTnnFailure {
 /// Decide exactly whether a rational lower-triangular matrix (triangular row
 /// format) is totally nonnegative.  The matrix is scaled by the positive lcm
 /// of its denominators and tested by exact Neville elimination
-/// ([`check_tnn_neville_bigint`]); on failure a bounded search looks for an
+/// ([`check_totally_nonnegative_neville_bigint`]); on failure a bounded search looks for an
 /// explicit negative minor, whose value is reported for the unscaled matrix.
-pub fn check_production_tnn(production: &[Vec<BigRational>]) -> Result<(), ProductionTnnFailure> {
+pub fn check_production_totally_nonnegative(
+    production: &[Vec<BigRational>],
+) -> Result<(), ProductionTotallyNonnegativeFailure> {
     let (scale, matrix) = scaled_square(production);
-    check_tnn_neville_bigint(&matrix).map_err(|error| {
+    check_totally_nonnegative_neville_bigint(&matrix).map_err(|error| {
         let reason = error.to_string();
         let witness = find_negative_minor(&matrix).map(|minor| {
             let size = minor.rows.len() as u32;
@@ -398,8 +400,26 @@ pub fn check_production_tnn(production: &[Vec<BigRational>]) -> Result<(), Produ
                 cols: minor.cols,
             })
         });
-        ProductionTnnFailure { reason, witness }
+        ProductionTotallyNonnegativeFailure { reason, witness }
     })
+}
+
+/// Deprecated name of [`ProductionTotallyNonnegativeFailure`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `ProductionTotallyNonnegativeFailure`"
+)]
+pub type ProductionTnnFailure = ProductionTotallyNonnegativeFailure;
+
+/// Deprecated name of [`check_production_totally_nonnegative`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `check_production_totally_nonnegative`"
+)]
+pub fn check_production_tnn(
+    production: &[Vec<BigRational>],
+) -> Result<(), ProductionTotallyNonnegativeFailure> {
+    check_production_totally_nonnegative(production)
 }
 
 /// A claimed left-production certificate: the triangle and its production
@@ -432,8 +452,8 @@ impl LeftProductionCertificate {
                 return Err(LeftProductionError::RegeneratedMismatch { row: n });
             }
         }
-        check_production_tnn(&self.production_matrix).map_err(|failure| {
-            LeftProductionError::NotTnn {
+        check_production_totally_nonnegative(&self.production_matrix).map_err(|failure| {
+            LeftProductionError::NotTotallyNonnegative {
                 reason: failure.reason,
             }
         })?;
@@ -477,7 +497,7 @@ pub struct LeftProductionReport {
     /// The leading block `Q_N` of the left production matrix.
     pub production_matrix: Vec<Vec<BigRational>>,
     /// Whether `Q_N` is totally nonnegative.
-    pub tnn: bool,
+    pub totally_nonnegative: bool,
     /// When not TNN: the Neville-elimination diagnosis.
     pub failure_reason: Option<String>,
     /// When not TNN and found: an explicit negative minor of `Q_N`.
@@ -492,7 +512,7 @@ impl LeftProductionReport {
     /// Whether the report certifies (Chen--Fu--Ruan) that every row
     /// `P_0, ..., P_N` is PF and that `A_N` and its reversal are TNN.
     pub fn rows_certified_pf(&self) -> bool {
-        self.tnn && self.certificate_verified == Some(true)
+        self.totally_nonnegative && self.certificate_verified == Some(true)
     }
 }
 
@@ -506,7 +526,7 @@ impl fmt::Display for LeftProductionReport {
                  and the triangle and its reversal are TNN (Chen--Fu--Ruan); this prefix only",
                 last, last
             )
-        } else if self.tnn {
+        } else if self.totally_nonnegative {
             write!(
                 f,
                 "Q_{} is TNN but the certificate failed re-verification",
@@ -580,13 +600,13 @@ pub fn check_left_production_matrix(
 ) -> Result<LeftProductionReport, LeftProductionError> {
     let triangle = triangle_from_polynomials(polys, first_row_index)?;
     let production_matrix = left_production_matrix(&triangle)?;
-    let verdict = check_production_tnn(&production_matrix);
-    let tnn = verdict.is_ok();
+    let verdict = check_production_totally_nonnegative(&production_matrix);
+    let totally_nonnegative = verdict.is_ok();
     let (failure_reason, negative_minor) = match verdict {
         Ok(()) => (None, None),
         Err(failure) => (Some(failure.reason), failure.witness.map(|minor| *minor)),
     };
-    let (certificate_verified, network) = if tnn {
+    let (certificate_verified, network) = if totally_nonnegative {
         let certificate = LeftProductionCertificate {
             triangle: triangle.clone(),
             production_matrix: production_matrix.clone(),
@@ -601,7 +621,7 @@ pub fn check_left_production_matrix(
     Ok(LeftProductionReport {
         triangle,
         production_matrix,
-        tnn,
+        totally_nonnegative,
         failure_reason,
         negative_minor,
         certificate_verified,
@@ -714,7 +734,7 @@ mod tests {
         let report = check_left_production_matrix(&polys(&eulerian(3)), 0).unwrap();
         assert!(report.rows_certified_pf(), "{}", report);
         let report = check_left_production_matrix(&polys(&eulerian(6)), 0).unwrap();
-        assert!(!report.tnn);
+        assert!(!report.totally_nonnegative);
         assert_eq!(report.production_matrix[4][2], q(-5));
         let minor = report.negative_minor.expect("a witness");
         assert!(minor.value < Q::zero());
@@ -724,7 +744,7 @@ mod tests {
         // Q_4 = [.., [1, 3, 2, 4, 1]] has the minor 2 * 2 - 3 * 3 < 0, and
         // q_{5,1} = -1.
         let report = check_left_production_matrix(&polys(&narayana(6)), 0).unwrap();
-        assert!(!report.tnn);
+        assert!(!report.totally_nonnegative);
         assert_eq!(
             report.production_matrix[4],
             vec![q(1), q(3), q(2), q(4), q(1)]

@@ -200,6 +200,159 @@ pub struct OeisCatalogRecord {
     pub provenance: OeisCatalogProvenance,
 }
 
+/// Why a catalog data file or one catalog record was rejected.
+///
+/// Every variant that concerns one record carries its A-number in `id`.  The
+/// [`Display`](std::fmt::Display) text of each variant is the message of the
+/// former `String` error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OeisCatalogError {
+    /// A data-file line is not a valid JSON catalog record.
+    InvalidJsonLine {
+        /// One-based line number in the data file.
+        line: usize,
+        /// The deserialization error.
+        message: String,
+    },
+    /// The record id is not an upper-case seven-character A-number.
+    InvalidId {
+        /// The offending id.
+        id: String,
+    },
+    /// The record name is empty.
+    EmptyName {
+        /// The record id.
+        id: String,
+    },
+    /// A prefix or initial row entry is not an exact rational string.
+    InvalidRowCoefficient {
+        /// The record id.
+        id: String,
+        /// The offending entry.
+        value: String,
+    },
+    /// The record has no initial rows.
+    NoInitialRows {
+        /// The record id.
+        id: String,
+    },
+    /// A recurrence coefficient is not an exact rational string.
+    InvalidRecurrenceCoefficient {
+        /// The record id.
+        id: String,
+        /// The offending entry.
+        value: String,
+    },
+    /// A recurrence polynomial lists the same monomial twice.
+    DuplicateMonomial {
+        /// The record id.
+        id: String,
+        /// Power of `n` of the repeated monomial.
+        n_degree: usize,
+        /// Power of `t` of the repeated monomial.
+        t_degree: usize,
+    },
+    /// A recurrence term has offset 0.
+    ZeroOffsetTerm {
+        /// The record id.
+        id: String,
+    },
+    /// `rows_sha256` is not 64 lowercase hexadecimal digits.
+    InvalidRowsSha256 {
+        /// The record id.
+        id: String,
+    },
+    /// `verification_rows` exceeds `source_rows`.
+    MoreVerificationRowsThanSourceRows {
+        /// The record id.
+        id: String,
+    },
+    /// The status is `verified` but no rows were held out.
+    VerifiedWithoutHeldOutRows {
+        /// The record id.
+        id: String,
+    },
+    /// Rows were held out but the status is not `verified`.
+    HeldOutRowsWithoutVerifiedStatus {
+        /// The record id.
+        id: String,
+    },
+    /// `fixture_slug` is present unless the source is `benchmark_fixture`, or
+    /// missing for it.
+    FixtureSlugMismatch {
+        /// The record id.
+        id: String,
+    },
+    /// `fixture_slug` is the empty string.
+    EmptyFixtureSlug {
+        /// The record id.
+        id: String,
+    },
+    /// A `polytool_recurrence_search` record lacks `fit_rows`, `checked_terms`
+    /// or `search_options`.
+    MissingSearchProvenance {
+        /// The record id.
+        id: String,
+    },
+    /// Two consecutive records are not in strictly increasing A-number order.
+    UnsortedRecords {
+        /// The earlier record's id.
+        first: String,
+        /// The following record's id.
+        second: String,
+    },
+}
+
+impl std::fmt::Display for OeisCatalogError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidJsonLine { line, message } => write!(f, "line {line}: {message}"),
+            Self::InvalidId { id } => write!(f, "`{id}` is not an upper-case A-number"),
+            Self::EmptyName { id } => write!(f, "{id}: empty name"),
+            Self::InvalidRowCoefficient { id, value } => {
+                write!(f, "{id}: invalid row coefficient `{value}`")
+            }
+            Self::NoInitialRows { id } => write!(f, "{id}: no initial rows"),
+            Self::InvalidRecurrenceCoefficient { id, value } => {
+                write!(f, "{id}: invalid recurrence coefficient `{value}`")
+            }
+            Self::DuplicateMonomial {
+                id,
+                n_degree,
+                t_degree,
+            } => write!(f, "{id}: duplicate monomial n^{n_degree} t^{t_degree}"),
+            Self::ZeroOffsetTerm { id } => write!(f, "{id}: recurrence term with offset 0"),
+            Self::InvalidRowsSha256 { id } => {
+                write!(f, "{id}: rows_sha256 is not a lowercase SHA-256")
+            }
+            Self::MoreVerificationRowsThanSourceRows { id } => {
+                write!(f, "{id}: more verification rows than source rows")
+            }
+            Self::VerifiedWithoutHeldOutRows { id } => {
+                write!(f, "{id}: verified without held-out rows")
+            }
+            Self::HeldOutRowsWithoutVerifiedStatus { id } => {
+                write!(f, "{id}: held-out rows recorded but status is not verified")
+            }
+            Self::FixtureSlugMismatch { id } => write!(
+                f,
+                "{id}: fixture_slug must be present exactly for benchmark_fixture"
+            ),
+            Self::EmptyFixtureSlug { id } => write!(f, "{id}: empty fixture_slug"),
+            Self::MissingSearchProvenance { id } => write!(
+                f,
+                "{id}: polytool_recurrence_search needs fit_rows, checked_terms and search_options"
+            ),
+            Self::UnsortedRecords { first, second } => write!(
+                f,
+                "records are not strictly sorted by A-number: {first} before {second}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for OeisCatalogError {}
+
 impl OeisCatalogRecord {
     /// Serialize as one canonical data-file line (no trailing newline).
     pub fn to_jsonl_line(&self) -> String {
@@ -215,14 +368,17 @@ impl OeisCatalogRecord {
 
     /// Parse a whole data file, then check it with [`Self::validate_all`].
     /// Blank lines are ignored.
-    pub fn parse_jsonl(text: &str) -> Result<Vec<Self>, String> {
+    pub fn parse_jsonl(text: &str) -> Result<Vec<Self>, OeisCatalogError> {
         let mut records = Vec::new();
         for (line_index, line) in text.lines().enumerate() {
             if line.trim().is_empty() {
                 continue;
             }
             let record: Self = serde_json::from_str(line)
-                .map_err(|error| format!("line {}: {error}", line_index + 1))?;
+                .map_err(|error| OeisCatalogError::InvalidJsonLine {
+                    line: line_index + 1,
+                    message: error.to_string(),
+                })?;
             records.push(record);
         }
         Self::validate_all(&records)?;
@@ -232,14 +388,15 @@ impl OeisCatalogRecord {
     /// Check one record's internal consistency: A-number syntax, exact
     /// rational coefficient strings, and provenance fields matching the
     /// status and source.
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), OeisCatalogError> {
         let id = &self.id;
+        let error_id = || id.clone();
         let bytes = id.as_bytes();
         if bytes.len() != 7 || bytes[0] != b'A' || !bytes[1..].iter().all(u8::is_ascii_digit) {
-            return Err(format!("`{id}` is not an upper-case A-number"));
+            return Err(OeisCatalogError::InvalidId { id: error_id() });
         }
         if self.name.trim().is_empty() {
-            return Err(format!("{id}: empty name"));
+            return Err(OeisCatalogError::EmptyName { id: error_id() });
         }
         let is_rational = |value: &str| {
             let value = value.strip_prefix('-').unwrap_or(value);
@@ -256,11 +413,14 @@ impl OeisCatalogRecord {
         let rows = self.prefix_rows.iter().chain(&self.initial_rows);
         for value in rows.flatten() {
             if !is_rational(value) {
-                return Err(format!("{id}: invalid row coefficient `{value}`"));
+                return Err(OeisCatalogError::InvalidRowCoefficient {
+                    id: error_id(),
+                    value: value.clone(),
+                });
             }
         }
         if self.initial_rows.is_empty() {
-            return Err(format!("{id}: no initial rows"));
+            return Err(OeisCatalogError::NoInitialRows { id: error_id() });
         }
         let recurrence = &self.recurrence;
         let polynomials = recurrence
@@ -273,63 +433,66 @@ impl OeisCatalogRecord {
             let mut seen = Vec::new();
             for (n_degree, t_degree, value) in polynomial {
                 if !is_rational(value) {
-                    return Err(format!("{id}: invalid recurrence coefficient `{value}`"));
+                    return Err(OeisCatalogError::InvalidRecurrenceCoefficient {
+                        id: error_id(),
+                        value: value.clone(),
+                    });
                 }
                 if seen.contains(&(n_degree, t_degree)) {
-                    return Err(format!("{id}: duplicate monomial n^{n_degree} t^{t_degree}"));
+                    return Err(OeisCatalogError::DuplicateMonomial {
+                        id: error_id(),
+                        n_degree: *n_degree,
+                        t_degree: *t_degree,
+                    });
                 }
                 seen.push((n_degree, t_degree));
             }
         }
         if recurrence.terms.iter().any(|term| term.offset == 0) {
-            return Err(format!("{id}: recurrence term with offset 0"));
+            return Err(OeisCatalogError::ZeroOffsetTerm { id: error_id() });
         }
         let provenance = &self.provenance;
         let sha = &provenance.rows_sha256;
         if sha.len() != 64 || !sha.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
-            return Err(format!("{id}: rows_sha256 is not a lowercase SHA-256"));
+            return Err(OeisCatalogError::InvalidRowsSha256 { id: error_id() });
         }
         if provenance.verification_rows > provenance.source_rows {
-            return Err(format!("{id}: more verification rows than source rows"));
+            return Err(OeisCatalogError::MoreVerificationRowsThanSourceRows { id: error_id() });
         }
         if provenance.status == OeisSequenceStatus::Verified && provenance.verification_rows == 0 {
-            return Err(format!("{id}: verified without held-out rows"));
+            return Err(OeisCatalogError::VerifiedWithoutHeldOutRows { id: error_id() });
         }
         if provenance.status != OeisSequenceStatus::Verified && provenance.verification_rows != 0 {
-            return Err(format!("{id}: held-out rows recorded but status is not verified"));
+            return Err(OeisCatalogError::HeldOutRowsWithoutVerifiedStatus { id: error_id() });
         }
         let is_fixture = provenance.source == OeisProvenanceSource::BenchmarkFixture;
         if is_fixture != provenance.fixture_slug.is_some() {
-            return Err(format!(
-                "{id}: fixture_slug must be present exactly for benchmark_fixture"
-            ));
+            return Err(OeisCatalogError::FixtureSlugMismatch { id: error_id() });
         }
         if provenance.fixture_slug.as_deref() == Some("") {
-            return Err(format!("{id}: empty fixture_slug"));
+            return Err(OeisCatalogError::EmptyFixtureSlug { id: error_id() });
         }
         if provenance.source == OeisProvenanceSource::PolytoolRecurrenceSearch
             && (provenance.fit_rows.is_none()
                 || provenance.checked_terms.is_none()
                 || provenance.search_options.is_none())
         {
-            return Err(format!(
-                "{id}: polytool_recurrence_search needs fit_rows, checked_terms and search_options"
-            ));
+            return Err(OeisCatalogError::MissingSearchProvenance { id: error_id() });
         }
         Ok(())
     }
 
     /// Validate every record and check that ids are strictly increasing.
-    pub fn validate_all(records: &[Self]) -> Result<(), String> {
+    pub fn validate_all(records: &[Self]) -> Result<(), OeisCatalogError> {
         for record in records {
             record.validate()?;
         }
         for pair in records.windows(2) {
             if pair[0].id >= pair[1].id {
-                return Err(format!(
-                    "records are not strictly sorted by A-number: {} before {}",
-                    pair[0].id, pair[1].id
-                ));
+                return Err(OeisCatalogError::UnsortedRecords {
+                    first: pair[0].id.clone(),
+                    second: pair[1].id.clone(),
+                });
             }
         }
         Ok(())

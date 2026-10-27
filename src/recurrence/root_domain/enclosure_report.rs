@@ -96,11 +96,13 @@ pub struct RootEnclosureReport {
 ///
 /// Each verdict is exact for the supplied polynomial; it says nothing about
 /// any other member of a family.
-pub fn root_enclosures(request: &RootEnclosureRequest) -> Result<RootEnclosureReport, String> {
+pub fn root_enclosures(
+    request: &RootEnclosureRequest,
+) -> Result<RootEnclosureReport, RecurrenceError> {
     if request.polynomials.len() > ROOT_ENCLOSURES_MAX_POLYNOMIALS {
-        return Err(format!(
+        return Err(RecurrenceError::LimitExceeded(format!(
             "at most {ROOT_ENCLOSURES_MAX_POLYNOMIALS} polynomials are accepted"
-        ));
+        )));
     }
     let max_width = request
         .max_width
@@ -108,22 +110,24 @@ pub fn root_enclosures(request: &RootEnclosureRequest) -> Result<RootEnclosureRe
         .map(parse_rational_coeff)
         .transpose()?;
     if max_width.as_ref().is_some_and(|w| !w.is_positive()) {
-        return Err("max_width must be positive".into());
+        return Err(RecurrenceError::InvalidInput(
+            "max_width must be positive".into(),
+        ));
     }
     let mut items = Vec::with_capacity(request.polynomials.len());
     for (position, text) in request.polynomials.iter().enumerate() {
         let index = request
             .first_index
             .checked_add(position)
-            .ok_or("index overflow")?;
+            .ok_or(RecurrenceError::LimitExceeded("index overflow".into()))?;
         let polynomial = text
             .iter()
-            .map(|c| parse_rational_coeff(c))
+            .map(|c| parse_rational_coeff(c).map_err(RecurrenceError::from))
             .collect::<Result<Vec<_>, _>>()?;
         if vec_poly::degree(&polynomial).is_some_and(|d| d > ROOT_ENCLOSURES_MAX_DEGREE) {
-            return Err(format!(
+            return Err(RecurrenceError::LimitExceeded(format!(
                 "polynomial {index} exceeds degree {ROOT_ENCLOSURES_MAX_DEGREE}"
-            ));
+            )));
         }
         let mut isolation = isolate_real_roots_rational_coeffs(&polynomial);
         if let Some(width) = &max_width {
@@ -212,15 +216,17 @@ pub struct JensenFixedCapReport {
 pub fn jensen_fixed_cap_check(
     multipliers: &[BigRational],
     cap: usize,
-) -> Result<JensenFixedCapReport, String> {
+) -> Result<JensenFixedCapReport, RecurrenceError> {
     if cap > ROOT_ENCLOSURES_MAX_DEGREE {
-        return Err(format!("cap exceeds {ROOT_ENCLOSURES_MAX_DEGREE}"));
+        return Err(RecurrenceError::LimitExceeded(format!(
+            "cap exceeds {ROOT_ENCLOSURES_MAX_DEGREE}"
+        )));
     }
     if multipliers.len() <= cap {
-        return Err(format!(
+        return Err(RecurrenceError::InvalidInput(format!(
             "need lambda_0..lambda_{cap} ({} multipliers given)",
             multipliers.len()
-        ));
+        )));
     }
     let lambdas = &multipliers[..=cap];
     let jensen: Vec<Q> = lambdas

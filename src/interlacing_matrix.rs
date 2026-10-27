@@ -16,7 +16,7 @@
 //!
 //! Entry points: [`lace_matrix`] (generic) with the `_i64`/`_bigint` wrappers,
 //! [`lace_matrix_sequence`] for a column vector of polynomials, and the TNN
-//! checks [`check_lace_tnn_neville_bigint`] / [`check_lace_tnn_neville_i64`]
+//! checks [`check_lace_totally_nonnegative_neville_bigint`] / [`check_lace_totally_nonnegative_neville_i64`]
 //! (full total nonnegativity of the finite matrix by Neville elimination) and
 //! [`check_lace_totally_nonnegative_by_minors_i64`] (brute force over minors up to a given
 //! size).
@@ -32,7 +32,8 @@
 //! TNN machinery itself is in [`crate::linalg`].
 
 use crate::linalg::{
-    check_tnn_neville, check_tnn_neville_bigint, check_total_positivity, TotalPositivityError,
+    check_total_positivity, check_totally_nonnegative_neville,
+    check_totally_nonnegative_neville_bigint, TotalPositivityError,
 };
 use num_bigint::BigInt;
 use num_traits::Zero;
@@ -63,6 +64,14 @@ pub enum InterlacingMatrixError {
     /// The finite `Lace(A)` truncation is not totally nonnegative; the payload
     /// says which minor or elimination step failed.
     NotTotallyNonnegative(TotalPositivityError),
+    /// The requested truncation has more rows or columns than `usize` can
+    /// count, or more entries than a single allocation can hold.
+    SizeOverflow {
+        /// Requested number of block rows.
+        block_rows: usize,
+        /// Requested number of block columns.
+        block_cols: usize,
+    },
 }
 
 impl fmt::Display for InterlacingMatrixError {
@@ -86,6 +95,14 @@ impl fmt::Display for InterlacingMatrixError {
             Self::NotTotallyNonnegative(err) => {
                 write!(f, "finite Lace truncation is not TNN: {err}")
             }
+            Self::SizeOverflow {
+                block_rows,
+                block_cols,
+            } => write!(
+                f,
+                "finite Lace truncation with {block_rows} block rows and {block_cols} block \
+                 columns is too large"
+            ),
         }
     }
 }
@@ -109,6 +126,11 @@ impl Error for InterlacingMatrixError {
 /// indices interpreted as zero.
 ///
 /// Empty coefficient vectors are allowed and represent the zero polynomial.
+///
+/// A truncation whose dimensions or byte size overflow `usize`/`isize` is
+/// rejected with [`InterlacingMatrixError::SizeOverflow`]; the result is
+/// allocated in full, so a request that is representable but larger than the
+/// available memory aborts the process.
 pub fn lace_matrix<C>(
     matrix: &[Vec<Vec<C>>],
     block_rows: usize,
@@ -118,7 +140,19 @@ where
     C: Clone + Zero,
 {
     let (p, q) = validate_rectangular_matrix(matrix)?;
-    let mut result = vec![vec![C::zero(); q * block_cols]; p * block_rows];
+    let overflow = InterlacingMatrixError::SizeOverflow {
+        block_rows,
+        block_cols,
+    };
+    let rows = p.checked_mul(block_rows).ok_or(overflow.clone())?;
+    let columns = q.checked_mul(block_cols).ok_or(overflow.clone())?;
+    let bytes = rows
+        .checked_mul(columns)
+        .and_then(|cells| cells.checked_mul(std::mem::size_of::<C>().max(1)));
+    if bytes.is_none_or(|bytes| bytes > isize::MAX as usize) {
+        return Err(overflow);
+    }
+    let mut result = vec![vec![C::zero(); columns]; rows];
 
     for rb in 0..block_rows {
         for cb in rb..block_cols {
@@ -196,7 +230,7 @@ pub fn lace_matrix_sequence_bigint(
 ///
 /// This checks all minors up to `max_minor_size` in the finite truncation.
 /// The cost grows combinatorially with the matrix size and `max_minor_size`;
-/// use [`check_lace_tnn_neville_i64`] for a full test of the finite matrix.
+/// use [`check_lace_totally_nonnegative_neville_i64`] for a full test of the finite matrix.
 /// Returns an [`InterlacingMatrixError`] for malformed input or a negative
 /// minor ([`InterlacingMatrixError::NotTotallyNonnegative`]).
 pub fn check_lace_totally_nonnegative_by_minors_i64(
@@ -321,23 +355,50 @@ pub fn is_lace_sequence_totally_nonnegative_i64(
 }
 
 /// Neville-elimination TNN check for a finite integer `Lace(A)` truncation.
-pub fn check_lace_tnn_neville_i64(
+pub fn check_lace_totally_nonnegative_neville_i64(
     matrix: &[Vec<Vec<i64>>],
     block_rows: usize,
     block_cols: usize,
 ) -> Result<(), InterlacingMatrixError> {
     let lace = lace_matrix_i64(matrix, block_rows, block_cols)?;
-    check_tnn_neville(&lace).map_err(InterlacingMatrixError::NotTotallyNonnegative)
+    check_totally_nonnegative_neville(&lace).map_err(InterlacingMatrixError::NotTotallyNonnegative)
 }
 
 /// Neville-elimination TNN check for a finite `BigInt` `Lace(A)` truncation.
-pub fn check_lace_tnn_neville_bigint(
+pub fn check_lace_totally_nonnegative_neville_bigint(
     matrix: &[Vec<Vec<BigInt>>],
     block_rows: usize,
     block_cols: usize,
 ) -> Result<(), InterlacingMatrixError> {
     let lace = lace_matrix_bigint(matrix, block_rows, block_cols)?;
-    check_tnn_neville_bigint(&lace).map_err(InterlacingMatrixError::NotTotallyNonnegative)
+    check_totally_nonnegative_neville_bigint(&lace)
+        .map_err(InterlacingMatrixError::NotTotallyNonnegative)
+}
+
+/// Deprecated name of [`check_lace_totally_nonnegative_neville_i64`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `check_lace_totally_nonnegative_neville_i64`"
+)]
+pub fn check_lace_tnn_neville_i64(
+    matrix: &[Vec<Vec<i64>>],
+    block_rows: usize,
+    block_cols: usize,
+) -> Result<(), InterlacingMatrixError> {
+    check_lace_totally_nonnegative_neville_i64(matrix, block_rows, block_cols)
+}
+
+/// Deprecated name of [`check_lace_totally_nonnegative_neville_bigint`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `check_lace_totally_nonnegative_neville_bigint`"
+)]
+pub fn check_lace_tnn_neville_bigint(
+    matrix: &[Vec<Vec<BigInt>>],
+    block_rows: usize,
+    block_cols: usize,
+) -> Result<(), InterlacingMatrixError> {
+    check_lace_totally_nonnegative_neville_bigint(matrix, block_rows, block_cols)
 }
 
 fn validate_rectangular_matrix<C>(
@@ -442,7 +503,7 @@ mod tests {
             ]
         );
         assert!(check_lace_totally_nonnegative_by_minors_i64(&matrix, 4, 5, 4).is_ok());
-        assert!(check_lace_tnn_neville_i64(&matrix, 4, 5).is_ok());
+        assert!(check_lace_totally_nonnegative_neville_i64(&matrix, 4, 5).is_ok());
     }
 
     #[test]
@@ -468,7 +529,7 @@ mod tests {
     fn check_errors_wrap_total_positivity_errors_with_stable_text() {
         let polynomials = vec![vec![2, 1], vec![8, 6, 1], vec![3, 4, 1]];
         let column: Vec<Vec<Vec<i64>>> = polynomials.iter().map(|p| vec![p.clone()]).collect();
-        let neville = check_lace_tnn_neville_i64(&column, 1, 3).unwrap_err();
+        let neville = check_lace_totally_nonnegative_neville_i64(&column, 1, 3).unwrap_err();
         assert!(matches!(
             neville,
             InterlacingMatrixError::NotTotallyNonnegative(_)
@@ -491,8 +552,29 @@ mod tests {
 
         let empty: Vec<Vec<Vec<i64>>> = Vec::new();
         assert_eq!(
-            check_lace_tnn_neville_i64(&empty, 1, 1).unwrap_err(),
+            check_lace_totally_nonnegative_neville_i64(&empty, 1, 1).unwrap_err(),
             InterlacingMatrixError::EmptyMatrix
+        );
+    }
+
+    #[test]
+    fn oversized_truncations_report_a_size_overflow() {
+        let matrix = vec![vec![vec![1, 1]]];
+        let overflow = lace_matrix_i64(&matrix, usize::MAX, 2).unwrap_err();
+        assert_eq!(
+            overflow,
+            InterlacingMatrixError::SizeOverflow {
+                block_rows: usize::MAX,
+                block_cols: 2
+            }
+        );
+        assert!(overflow.to_string().contains("too large"));
+        assert_eq!(
+            lace_matrix_sequence_i64(&[vec![1, 1]], 1, usize::MAX).unwrap_err(),
+            InterlacingMatrixError::SizeOverflow {
+                block_rows: 1,
+                block_cols: usize::MAX
+            }
         );
     }
 }

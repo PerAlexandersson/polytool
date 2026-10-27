@@ -73,7 +73,9 @@ impl Search<'_> {
             let built = parent.descriptions[source]
                 .vector
                 .as_ref()
-                .ok_or_else(|| "the source has no vector system".to_string())
+                .ok_or_else(|| {
+                    RecurrenceError::InvalidInput("the source has no vector system".to_string())
+                })
                 .and_then(|json| {
                     build_vector_transport(
                         t,
@@ -118,7 +120,7 @@ impl Search<'_> {
                     });
                     step.vector_transport = Some(record);
                 }
-                Err(error) => step.error = Some(error),
+                Err(error) => step.error = Some(error.to_string()),
             }
             node.steps.push(step);
         }
@@ -246,7 +248,7 @@ impl Search<'_> {
 /// polynomial in `n`) with no integer root `n >= first_index`.
 pub(super) fn assess_vector_system(
     json: &TransformVectorRecurrenceJson,
-) -> Result<VectorSystemAssessment, String> {
+) -> Result<VectorSystemAssessment, RecurrenceError> {
     let (system, first, _) = json.to_recurrence()?;
     let width = system
         .denominator
@@ -700,20 +702,20 @@ pub(super) fn build_vector_transport(
     origin: usize,
     conditions: &[TransformConditionStatus],
     names: &[String],
-) -> Result<VectorTransportStep, String> {
+) -> Result<VectorTransportStep, RecurrenceError> {
     let (system, first, initial) = source.to_recurrence()?;
     let start = first
         .checked_sub(origin)
         .filter(|i| *i < states.len())
-        .ok_or("the source system starts outside the rows")?;
-    if t.map_state(first, &initial, offsets)
-        .map_err(|e| e.to_string())?
-        != states[start]
-    {
-        return Err("the mapped initial state differs from the rows".into());
+        .ok_or(RecurrenceError::InvalidInput(
+            "the source system starts outside the rows".into(),
+        ))?;
+    if t.map_state(first, &initial, offsets)? != states[start] {
+        return Err(RecurrenceError::InvalidInput(
+            "the mapped initial state differs from the rows".into(),
+        ));
     }
-    let transported =
-        transport_vector_componentwise(&system, t, offsets).map_err(|e| e.to_string())?;
+    let transported = transport_vector_componentwise(&system, t, offsets)?;
     let mut holds = true;
     let mut checked = 0;
     for i in start..states.len().saturating_sub(1) {
@@ -723,8 +725,7 @@ pub(super) fn build_vector_transport(
     let component_maps = offsets
         .iter()
         .map(|&o| t.with_degree_offset(o))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+        .collect::<Result<Vec<_>, _>>()?;
     let json = TransformVectorRecurrenceJson::from_recurrence(&transported, first, &states[start]);
     let certified = holds && conditions.iter().all(|c| c.status == CERTIFIED_ALL_INDICES);
     Ok(VectorTransportStep {
@@ -749,7 +750,7 @@ pub(super) fn check_vector_description(
     states: &[Vec<Vec<Q>>],
     origin: usize,
     label: &str,
-) -> Result<(), String> {
+) -> Result<(), RecurrenceError> {
     let Some(json) = &item.vector else {
         return Ok(());
     };
@@ -757,30 +758,41 @@ pub(super) fn check_vector_description(
     let start = first
         .checked_sub(origin)
         .filter(|i| *i < states.len())
-        .ok_or_else(|| format!("{label}: the system starts outside the rows"))?;
+        .ok_or_else(|| {
+            RecurrenceError::InvalidInput(format!("{label}: the system starts outside the rows"))
+        })?;
     if states[start] != initial {
-        return Err(format!("{label}: the initial state differs from the rows"));
+        return Err(RecurrenceError::InvalidInput(format!(
+            "{label}: the initial state differs from the rows"
+        )));
     }
     for i in start..states.len().saturating_sub(1) {
         if !system.holds_transition_rational(&states[i], &states[i + 1], origin + i) {
-            return Err(format!("{label}: the system fails at n = {}", origin + i));
+            return Err(RecurrenceError::InvalidInput(format!(
+                "{label}: the system fails at n = {}",
+                origin + i
+            )));
         }
     }
     let assessment = assess_vector_system(json)?;
     if item.vector_assessment.as_ref() != Some(&assessment) {
-        return Err(format!("{label}: the vector assessment does not replay"));
+        return Err(RecurrenceError::InvalidInput(format!(
+            "{label}: the vector assessment does not replay"
+        )));
     }
     if item.label == EQUIVALENT_DESCRIPTION_LABEL
         && (assessment.status != "certified"
             || first != origin
             || !evidence_is_certified(&item.evidence))
     {
-        return Err(format!("{label}: the label does not match the assessment"));
+        return Err(RecurrenceError::InvalidInput(format!(
+            "{label}: the label does not match the assessment"
+        )));
     }
     if item.label != FINITE_FIT_LABEL && !evidence_is_certified(&item.evidence) {
-        return Err(format!(
+        return Err(RecurrenceError::InvalidInput(format!(
             "{label}: a certified label with uncertified evidence"
-        ));
+        )));
     }
     Ok(())
 }

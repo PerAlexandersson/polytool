@@ -135,7 +135,7 @@ fn report_json(report: &LeftProductionReport, first_row_index: usize, rows: usiz
         rows,
         matrix_json(&report.triangle),
         matrix_json(&report.production_matrix),
-        report.tnn,
+        report.totally_nonnegative,
         json_option(report.failure_reason.as_deref(), json_string),
         json_option(report.negative_minor.as_ref(), minor_json),
         json_option(report.certificate_verified, |v| v.to_string()),
@@ -167,7 +167,7 @@ fn print_report_text(report: &LeftProductionReport, first_row_index: usize, rows
             "- Conclusion: rows P_0..P_{last} are PF (real-rooted, nonpositive zeros); the \
              triangle and its reversal are TNN"
         );
-    } else if report.tnn {
+    } else if report.totally_nonnegative {
         println!("- Verdict: Q_{last} is TNN, but the certificate FAILED re-verification");
     } else {
         println!("- Verdict: Q_{last} is not TNN; nothing follows about the rows");

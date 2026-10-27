@@ -21,12 +21,16 @@ fn bivar_json(p: &BivarPoly) -> BivarPolyJson {
     }
 }
 
-fn bivar_from_json(p: &BivarPolyJson) -> Result<BivarPoly, String> {
+fn bivar_from_json(p: &BivarPolyJson) -> Result<BivarPoly, RecurrenceError> {
     let coeffs = p
         .coeffs
         .iter()
-        .map(|row| row.iter().map(|c| parse_rational_coeff(c)).collect())
-        .collect::<Result<Vec<Vec<Q>>, String>>()?;
+        .map(|row| {
+            row.iter()
+                .map(|c| parse_rational_coeff(c).map_err(RecurrenceError::from))
+                .collect()
+        })
+        .collect::<Result<Vec<Vec<Q>>, RecurrenceError>>()?;
     Ok(BivarPoly::from_coefficients_normalized(coeffs))
 }
 
@@ -37,9 +41,9 @@ fn encode_row(row: &[Q]) -> Vec<String> {
         .collect()
 }
 
-fn decode_row(row: &[String]) -> Result<Vec<Q>, String> {
+fn decode_row(row: &[String]) -> Result<Vec<Q>, RecurrenceError> {
     row.iter()
-        .map(|c| parse_rational_coeff(c))
+        .map(|c| parse_rational_coeff(c).map_err(RecurrenceError::from))
         .collect::<Result<Vec<_>, _>>()
         .map(|r| vec_poly::trim(&r))
 }
@@ -92,14 +96,14 @@ impl TransformVectorRecurrenceJson {
 
     /// Human-readable form `(q) F_i(n+1) = ...`, one equation per component,
     /// with the given component names.
-    pub fn text(&self, names: &[String]) -> Result<String, String> {
+    pub fn text(&self, names: &[String]) -> Result<String, RecurrenceError> {
         let (system, _, _) = self.to_recurrence()?;
         if names.len() != system.dimension() {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "{} component names for a {}-component system",
                 names.len(),
                 system.dimension()
-            ));
+            )));
         }
         Ok(vector_text(&system, names))
     }
@@ -113,7 +117,7 @@ impl TransformVectorRecurrenceJson {
             usize,
             Vec<Vec<BigRational>>,
         ),
-        String,
+        RecurrenceError,
     > {
         let matrix = self
             .matrix
@@ -260,7 +264,7 @@ impl Default for TransformLimits {
 
 impl TransformLimits {
     /// Reject limits above a service ceiling.
-    pub fn check_ceiling(&self, ceiling: &Self) -> Result<(), String> {
+    pub fn check_ceiling(&self, ceiling: &Self) -> Result<(), RecurrenceError> {
         let pairs = [
             ("max_rows", self.max_rows, ceiling.max_rows),
             ("max_degree", self.max_degree, ceiling.max_degree),
@@ -282,9 +286,9 @@ impl TransformLimits {
         ];
         for (name, value, limit) in pairs {
             if value > limit {
-                return Err(format!(
+                return Err(RecurrenceError::LimitExceeded(format!(
                     "{name} = {value} exceeds the service ceiling {limit}"
-                ));
+                )));
             }
         }
         Ok(())
@@ -477,21 +481,26 @@ struct ResolvedSource {
     json: RecurrenceJson,
 }
 
-fn resolve_source(request: &RecurrenceTransformRequest) -> Result<Option<ResolvedSource>, String> {
+fn resolve_source(
+    request: &RecurrenceTransformRequest,
+) -> Result<Option<ResolvedSource>, RecurrenceError> {
     if request.source_recurrence.is_some() && request.oeis_id.is_some() {
-        return Err("give at most one of source_recurrence and oeis_id".into());
+        return Err(RecurrenceError::InvalidInput(
+            "give at most one of source_recurrence and oeis_id".into(),
+        ));
     }
     let resolved = if let Some(json) = &request.source_recurrence {
         let (rule, first_index, seeds) = json.to_recurrence_parts()?;
         Some((rule, first_index, seeds))
     } else if let Some(id) = &request.oeis_id {
-        let definition =
-            crate::oeis::by_id(id).ok_or_else(|| format!("unknown OEIS family `{id}`"))?;
-        let (rule, seeds, first_row) = definition
-            .recurrence_export_parts()
-            .map_err(|e| e.to_string())?;
-        let first_index = usize::try_from(first_row)
-            .map_err(|_| format!("OEIS family `{id}` starts at a negative row index"))?;
+        let definition = crate::oeis::by_id(id)
+            .ok_or_else(|| RecurrenceError::InvalidInput(format!("unknown OEIS family `{id}`")))?;
+        let (rule, seeds, first_row) = definition.recurrence_export_parts()?;
+        let first_index = usize::try_from(first_row).map_err(|_| {
+            RecurrenceError::InvalidInput(format!(
+                "OEIS family `{id}` starts at a negative row index"
+            ))
+        })?;
         Some((rule, first_index, seeds))
     } else {
         None
@@ -500,17 +509,23 @@ fn resolve_source(request: &RecurrenceTransformRequest) -> Result<Option<Resolve
         return Ok(None);
     };
     if rule.terms.iter().any(|t| t.offset == 0) {
-        return Err("source rule terms need positive offsets".into());
+        return Err(RecurrenceError::InvalidInput(
+            "source rule terms need positive offsets".into(),
+        ));
     }
     if seeds.is_empty() || rule.max_offset() > seeds.len() {
-        return Err("source rule needs at least max-offset seeds".into());
+        return Err(RecurrenceError::InvalidInput(
+            "source rule needs at least max-offset seeds".into(),
+        ));
     }
     if rule
         .terms
         .iter()
         .any(|t| t.deriv_order > request.limits.max_rule_derivative_order)
     {
-        return Err("source rule derivative order exceeds max_rule_derivative_order".into());
+        return Err(RecurrenceError::LimitExceeded(
+            "source rule derivative order exceeds max_rule_derivative_order".into(),
+        ));
     }
     let json = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
     Ok(Some(ResolvedSource {
@@ -524,7 +539,7 @@ fn resolve_source(request: &RecurrenceTransformRequest) -> Result<Option<Resolve
 fn resolve_rows(
     request: &RecurrenceTransformRequest,
     source: Option<&ResolvedSource>,
-) -> Result<(usize, Vec<Vec<Q>>), String> {
+) -> Result<(usize, Vec<Vec<Q>>), RecurrenceError> {
     let limit = request.limits.max_rows;
     let explicit = request
         .rows
@@ -537,50 +552,67 @@ fn resolve_rows(
         .transpose()?;
     let origin = match (request.row_origin, source) {
         (Some(origin), Some(s)) if origin != s.first_index => {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "row_origin {origin} differs from the source first index {}",
                 s.first_index
-            ))
+            )))
         }
         (Some(origin), _) => origin,
         (None, Some(s)) => s.first_index,
         (None, None) => 0,
     };
     let rows = match (explicit, source) {
-        (None, None) => return Err("give rows, source_recurrence or oeis_id".into()),
+        (None, None) => {
+            return Err(RecurrenceError::InvalidInput(
+                "give rows, source_recurrence or oeis_id".into(),
+            ))
+        }
         (Some(rows), None) => rows,
         (explicit, Some(s)) => {
             let count = explicit
                 .as_ref()
                 .map_or(request.row_count.unwrap_or(10), Vec::len);
             if count > limit {
-                return Err(format!("{count} rows exceed max_rows = {limit}"));
+                return Err(RecurrenceError::LimitExceeded(format!(
+                    "{count} rows exceed max_rows = {limit}"
+                )));
             }
             let count = count.max(s.seeds.len());
             let generated = s
                 .rule
                 .generate_rows_rational(&s.seeds, s.first_index, count)
-                .map_err(|e| format!("source rule generation failed: {e}"))?
+                .map_err(|e| {
+                    RecurrenceError::InvalidInput(format!("source rule generation failed: {e}"))
+                })?
                 .into_iter()
                 .map(|r| vec_poly::trim(&r))
                 .collect::<Vec<_>>();
             if let Some(rows) = explicit {
                 if rows != generated[..rows.len()] {
-                    return Err("rows disagree with the rows generated by the source rule".into());
+                    return Err(RecurrenceError::InvalidInput(
+                        "rows disagree with the rows generated by the source rule".into(),
+                    ));
                 }
             }
             generated
         }
     };
     if rows.is_empty() {
-        return Err("at least one row is required".into());
+        return Err(RecurrenceError::InvalidInput(
+            "at least one row is required".into(),
+        ));
     }
     if rows.len() > limit {
-        return Err(format!("{} rows exceed max_rows = {limit}", rows.len()));
+        return Err(RecurrenceError::LimitExceeded(format!(
+            "{} rows exceed max_rows = {limit}",
+            rows.len()
+        )));
     }
     if let Some(degree) = rows.iter().filter_map(|r| vec_poly::degree(r)).max() {
         if degree > request.limits.max_degree {
-            return Err(format!("row degree {degree} exceeds max_degree"));
+            return Err(RecurrenceError::LimitExceeded(format!(
+                "row degree {degree} exceeds max_degree"
+            )));
         }
     }
     Ok((origin, rows))
@@ -712,7 +744,7 @@ fn rule_text(rule: &Recurrence) -> String {
 fn search_bounds_check(
     bounds: &TransformSearchBounds,
     limits: &TransformLimits,
-) -> Result<(), String> {
+) -> Result<(), RecurrenceError> {
     let degree = [
         bounds.max_rec_len,
         bounds.max_var_deg,
@@ -725,16 +757,16 @@ fn search_bounds_check(
     .max()
     .unwrap_or(0);
     if degree > limits.max_search_degree {
-        return Err(format!(
+        return Err(RecurrenceError::LimitExceeded(format!(
             "search bound {degree} exceeds max_search_degree = {}",
             limits.max_search_degree
-        ));
+        )));
     }
     if bounds.max_candidates > limits.max_search_candidates {
-        return Err(format!(
+        return Err(RecurrenceError::LimitExceeded(format!(
             "max_candidates {} exceeds max_search_candidates = {}",
             bounds.max_candidates, limits.max_search_candidates
-        ));
+        )));
     }
     Ok(())
 }
@@ -865,9 +897,9 @@ fn component_names(transformation: &RecurrenceTransformation) -> Vec<String> {
 /// domain rejects the request.
 pub fn transform_recurrence(
     request: &RecurrenceTransformRequest,
-) -> Result<RecurrenceTransformReport, String> {
+) -> Result<RecurrenceTransformReport, RecurrenceError> {
     let transformation = &request.transformation;
-    transformation.validate().map_err(|e| e.to_string())?;
+    transformation.validate()?;
     if let Some(bounds) = &request.search {
         search_bounds_check(bounds, &request.limits)?;
     }
@@ -879,19 +911,15 @@ pub fn transform_recurrence(
     for (i, row) in rows.iter().enumerate() {
         let index = origin + i;
         if let Some(schedule) = transformation.schedule() {
-            let bound = schedule.degree_at(index).map_err(|e| e.to_string())?;
+            let bound = schedule.degree_at(index)?;
             if bound > request.limits.max_degree {
-                return Err(format!(
+                return Err(RecurrenceError::LimitExceeded(format!(
                     "degree bound {bound} at index {index} exceeds max_degree"
-                ));
+                )));
             }
         }
-        let state = transformation
-            .map_row(index, row)
-            .map_err(|e| e.to_string())?;
-        let back = transformation
-            .inverse_row(index, &state)
-            .map_err(|e| e.to_string())?;
+        let state = transformation.map_row(index, row)?;
+        let back = transformation.inverse_row(index, &state)?;
         reconstruction_verified &= vec_poly::trim(&back) == vec_poly::trim(row);
         states.push(state);
     }
@@ -1100,23 +1128,34 @@ fn transported_report_for(
 /// requires the result to equal the report.  The transported rule is replayed
 /// as an identity of the supplied source rule; it is not evidence that the
 /// source rule itself is true.
-pub fn verify_recurrence_transform(report: &RecurrenceTransformReport) -> Result<(), String> {
+pub fn verify_recurrence_transform(
+    report: &RecurrenceTransformReport,
+) -> Result<(), RecurrenceError> {
     if report.schema != RECURRENCE_TRANSFORM_SCHEMA {
-        return Err(format!("unsupported schema `{}`", report.schema));
+        return Err(RecurrenceError::InvalidInput(format!(
+            "unsupported schema `{}`",
+            report.schema
+        )));
     }
     let replay = transform_recurrence(&report.request)?;
     if &replay != report {
-        return Err("report does not match its exact replay".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "report does not match its exact replay".into(),
+        ));
     }
     if !report.reconstruction_verified {
-        return Err("exact reconstruction failed".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "exact reconstruction failed".into(),
+        ));
     }
     if report
         .transported
         .as_ref()
         .is_some_and(|t| !t.holds_on_transformed_rows)
     {
-        return Err("transported rule fails on the transformed rows".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "transported rule fails on the transformed rows".into(),
+        ));
     }
     Ok(())
 }

@@ -90,6 +90,7 @@ pub fn eulerian_square_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
 /// m=3,q=1 gives Baxter descent rows. No root property is assumed.
 ///
 /// # Panics
+///
 /// Panics for m=0 or q=0, or index/exponent arithmetic exceeding usize.
 pub fn hoggatt_polynomials_bigint(max_n: usize, m: usize, q: u32) -> Vec<Vec<BigInt>> {
     assert!(m >= 1, "Hoggatt box height m must be positive");

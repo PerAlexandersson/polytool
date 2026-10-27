@@ -36,7 +36,7 @@ fn main() {
         .map(|row: Vec<i64>| row.into_iter().map(BigInt::from).collect())
         .collect();
     let report = check_chain_polynomials_bigint(&matrix).expect("lower-unitriangular input");
-    println!("\nmatrix TNN: {}", report.is_tnn());
+    println!("\nmatrix TNN: {}", report.is_totally_nonnegative());
     for (n, p) in report.chain_polynomials.iter().enumerate() {
         println!(
             "  p_{} = {}  (real-rooted in [-1,0]: {})",

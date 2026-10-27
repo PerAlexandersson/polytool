@@ -570,13 +570,39 @@ mod tests {
         record.validate().unwrap();
         let mut verified_without_holdout = record.clone();
         verified_without_holdout.provenance.status = OeisSequenceStatus::Verified;
-        assert!(verified_without_holdout.validate().is_err());
+        assert_eq!(
+            verified_without_holdout.validate().unwrap_err(),
+            OeisCatalogError::VerifiedWithoutHeldOutRows {
+                id: record.id.clone()
+            }
+        );
         let mut bad_id = record.clone();
         bad_id.id = "a001263".to_string();
-        assert!(bad_id.validate().is_err());
+        let error = bad_id.validate().unwrap_err();
+        assert_eq!(
+            error,
+            OeisCatalogError::InvalidId {
+                id: "a001263".to_string()
+            }
+        );
+        assert_eq!(error.to_string(), "`a001263` is not an upper-case A-number");
         record.initial_rows[0][0] = "1/0".to_string();
-        assert!(record.validate().is_err());
-        assert!(OeisCatalogRecord::parse_jsonl("{\"id\":\"A000001\"}").is_err());
+        assert!(matches!(
+            record.validate().unwrap_err(),
+            OeisCatalogError::InvalidRowCoefficient { .. }
+        ));
+        let error = OeisCatalogRecord::parse_jsonl("{\"id\":\"A000001\"}").unwrap_err();
+        assert!(matches!(
+            &error,
+            OeisCatalogError::InvalidJsonLine { line: 1, .. }
+        ));
+        assert!(error.to_string().starts_with("line 1: "));
+        let records = OeisCatalogRecord::parse_jsonl(&text).unwrap();
+        let swapped = vec![records[1].clone(), records[0].clone()];
+        let error = OeisCatalogRecord::validate_all(&swapped).unwrap_err();
+        assert!(error
+            .to_string()
+            .starts_with("records are not strictly sorted by A-number: "));
     }
 
     #[test]

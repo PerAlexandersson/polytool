@@ -86,7 +86,7 @@ impl Search<'_> {
             AdaptiveSearchBudget::limited(self.request.search.max_candidates),
         ) {
             Ok(menu) => menu,
-            Err(error) => return (Some(summary("failed", Some(error))), Vec::new()),
+            Err(error) => return (Some(summary("failed", Some(error.to_string()))), Vec::new()),
         };
         let exhausted = menu.status == RepresentationSearchStatus::BudgetExhausted;
         if exhausted {
@@ -265,7 +265,7 @@ impl Search<'_> {
                         step.implicit = Some(report);
                     }
                 }
-                Err(error) => step.error = Some(error),
+                Err(error) => step.error = Some(error.to_string()),
             }
         } else {
             let request = RecurrenceTransformRequest {
@@ -298,7 +298,7 @@ impl Search<'_> {
                         step.transform = Some(report);
                     }
                 }
-                Err(error) => step.error = Some(error),
+                Err(error) => step.error = Some(error.to_string()),
             }
         }
         step
@@ -310,7 +310,7 @@ impl Search<'_> {
         parent_id: usize,
         ti: usize,
         form: &MapNormalForm,
-    ) -> Result<RepresentationNode, String> {
+    ) -> Result<RepresentationNode, RecurrenceError> {
         let request = self.request;
         let t = &request.transformations[ti];
         let parent = &nodes[parent_id];
@@ -330,7 +330,7 @@ impl Search<'_> {
             .enumerate()
             .map(|(i, state)| t.map_state(origin + i, state, &offsets))
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("{}: {e}", t.kind_name()))?;
+            .map_err(|e| RecurrenceError::InvalidInput(format!("{}: {e}", t.kind_name())))?;
         if let Some(degree) = states
             .iter()
             .flatten()
@@ -338,7 +338,9 @@ impl Search<'_> {
             .max()
         {
             if degree > request.limits.max_degree {
-                return Err(format!("mapped row degree {degree} exceeds max_degree"));
+                return Err(RecurrenceError::LimitExceeded(format!(
+                    "mapped row degree {degree} exceeds max_degree"
+                )));
             }
         }
         let mut chain = parent.chain.clone();
@@ -352,7 +354,9 @@ impl Search<'_> {
             invert_chain_with_lost_data(&chain_refs, origin, &states, &lost_data)
                 .is_ok_and(|back| back == self.source_rows);
         if !reconstruction_verified {
-            return Err("inverting the chain does not reproduce the source rows".into());
+            return Err(RecurrenceError::InvalidInput(
+                "inverting the chain does not reproduce the source rows".into(),
+            ));
         }
         let mut node = RepresentationNode {
             id,
@@ -509,7 +513,7 @@ impl Search<'_> {
 /// rejected edge, and every limit that cuts work is a budget event.
 pub fn search_representations(
     request: &RepresentationSearchRequest,
-) -> Result<RepresentationSearchReport, String> {
+) -> Result<RepresentationSearchReport, RecurrenceError> {
     validate(request)?;
     let source = resolve(request)?;
     let mut search = Search {
@@ -568,7 +572,7 @@ pub fn search_representations(
             let form = match MapNormalForm::from_chain(&chain_refs, source.origin) {
                 Ok(form) => form,
                 Err(error) => {
-                    edge.detail = Some(error);
+                    edge.detail = Some(error.to_string());
                     edges.push(edge);
                     continue;
                 }
@@ -608,7 +612,7 @@ pub fn search_representations(
                     forms.push(form);
                     queue.push_back(new_id);
                 }
-                Err(error) => edge.detail = Some(error),
+                Err(error) => edge.detail = Some(error.to_string()),
             }
             edges.push(edge);
         }

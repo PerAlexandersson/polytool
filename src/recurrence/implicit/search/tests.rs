@@ -247,7 +247,7 @@ fn invalid_supports_and_maps_are_rejected() {
                            "schedule": {"first_index": 0, "first_degree": 0, "step": 1}}
     })))
     .unwrap_err();
-    assert!(error.contains("scalar"));
+    assert!(error.to_string().contains("scalar"));
 }
 
 // ---------------------------------------------------------------------------

@@ -28,6 +28,7 @@
 //! [`recognize_fixed_delay_predecessor`] recognizes
 //! `P_n = P_(n-1) + w(n) t P_(n-L)` among fitted [`Recurrence`] values.
 
+use super::RenewalError;
 use crate::polynomial::Polynomial;
 use crate::recurrence::{
     format_rational_coeff, parse_rational_coeff, BigRational, BivarPoly, Recurrence, RecurrenceSign,
@@ -211,7 +212,7 @@ fn evaluate(coefficients: &[BigRational], n: usize) -> BigRational {
 
 /// Find the certificate shift for a nonzero polynomial weight with positive
 /// leading coefficient, or explain why none was found.
-fn polynomial_weight_shift(coefficients: &[BigRational]) -> Result<usize, String> {
+fn polynomial_weight_shift(coefficients: &[BigRational]) -> Result<usize, RenewalError> {
     let ok = |c: usize| {
         taylor_shift(coefficients, c)
             .iter()
@@ -220,10 +221,9 @@ fn polynomial_weight_shift(coefficients: &[BigRational]) -> Result<usize, String
     let mut hi = 1usize;
     while !ok(hi) {
         if hi > MAX_POLYNOMIAL_WEIGHT_SHIFT {
-            return Err(format!(
-                "weight nonnegativity not certified: no shift c <= {MAX_POLYNOMIAL_WEIGHT_SHIFT} \
-                 makes w(c+m) coefficientwise nonnegative"
-            ));
+            return Err(RenewalError::WeightShiftNotFound {
+                max_shift: MAX_POLYNOMIAL_WEIGHT_SHIFT,
+            });
         }
         hi *= 2;
     }
@@ -238,15 +238,17 @@ fn polynomial_weight_shift(coefficients: &[BigRational]) -> Result<usize, String
         }
     }
     if hi > MAX_POLYNOMIAL_WEIGHT_SHIFT {
-        return Err(format!(
-            "weight nonnegativity not certified: the certificate shift {hi} exceeds \
-             {MAX_POLYNOMIAL_WEIGHT_SHIFT}"
-        ));
+        return Err(RenewalError::WeightShiftTooLarge {
+            shift: hi,
+            max_shift: MAX_POLYNOMIAL_WEIGHT_SHIFT,
+        });
     }
     Ok(hi)
 }
 
-fn certify_polynomial_weight(coefficients: &[BigRational]) -> Result<WeightCertificate, String> {
+fn certify_polynomial_weight(
+    coefficients: &[BigRational],
+) -> Result<WeightCertificate, RenewalError> {
     let coefficients = trim(coefficients.to_vec());
     let Some(leading) = coefficients.last() else {
         return Ok(WeightCertificate::Polynomial {
@@ -268,20 +270,21 @@ fn certify_polynomial_weight(coefficients: &[BigRational]) -> Result<WeightCerti
         let value =
             crate::vec_poly::evaluate(&coefficients, &BigRational::from_integer(witness.clone()));
         debug_assert!(value.is_negative());
-        return Err(format!(
-            "weight is negative: w({witness}) = {} (negative leading coefficient)",
-            format_rational_coeff(&value)
-        ));
+        return Err(RenewalError::NegativeLeadingCoefficient {
+            index: witness,
+            value: format_rational_coeff(&value),
+        });
     }
     let shift = polynomial_weight_shift(&coefficients)?;
     let mut checked_values = Vec::with_capacity(shift - 1);
     for n in 1..shift {
         let value = evaluate(&coefficients, n);
         if value.is_negative() {
-            return Err(format!(
-                "weight is negative: w({n}) = {}",
-                format_rational_coeff(&value)
-            ));
+            return Err(RenewalError::NegativeWeight {
+                kind: None,
+                index: n,
+                value: format_rational_coeff(&value),
+            });
         }
         checked_values.push(value);
     }
@@ -293,13 +296,13 @@ fn certify_polynomial_weight(coefficients: &[BigRational]) -> Result<WeightCerti
     })
 }
 
-fn certify_values(values: &[BigRational], what: &str) -> Result<(), String> {
+fn certify_values(values: &[BigRational], kind: &'static str) -> Result<(), RenewalError> {
     match values.iter().position(Signed::is_negative) {
-        Some(k) => Err(format!(
-            "weight is negative: {what} w({}) = {}",
-            k + 1,
-            format_rational_coeff(&values[k])
-        )),
+        Some(k) => Err(RenewalError::NegativeWeight {
+            kind: Some(kind),
+            index: k + 1,
+            value: format_rational_coeff(&values[k]),
+        }),
         None => Ok(()),
     }
 }
@@ -360,11 +363,9 @@ impl VariablePredecessorRecurrence {
     /// Certify the hypotheses exactly.  Errors name a violating index or
     /// explain why no exact certificate was found; failure is never decided by
     /// sampling.
-    pub fn certify(&self) -> Result<VariablePredecessorCertificate, String> {
+    pub fn certify(&self) -> Result<VariablePredecessorCertificate, RenewalError> {
         let predecessor = match &self.predecessor {
-            PredecessorRule::FixedDelay { delay: 0 } => {
-                return Err("predecessor p(n) = n violates p(n) < n (delay must be >= 1)".into())
-            }
+            PredecessorRule::FixedDelay { delay: 0 } => return Err(RenewalError::ZeroDelay),
             PredecessorRule::FixedDelay { delay } => {
                 PredecessorCertificate::FixedDelay { delay: *delay }
             }
@@ -372,14 +373,17 @@ impl VariablePredecessorRecurrence {
                 for (k, &p) in values.iter().enumerate() {
                     let n = k + 1;
                     if p >= n {
-                        return Err(format!("predecessor p({n}) = {p} violates p(n) < n"));
+                        return Err(RenewalError::PredecessorNotBelowIndex {
+                            index: n,
+                            predecessor: p,
+                        });
                     }
                     if k > 0 && p < values[k - 1] {
-                        return Err(format!(
-                            "predecessor decreases: p({}) = {} > p({n}) = {p}",
-                            n - 1,
-                            values[k - 1]
-                        ));
+                        return Err(RenewalError::PredecessorDecreases {
+                            index: n,
+                            previous: values[k - 1],
+                            predecessor: p,
+                        });
                     }
                 }
                 PredecessorCertificate::ExplicitPrefix {
@@ -393,7 +397,7 @@ impl VariablePredecessorRecurrence {
             }
             PredecessorWeight::Periodic { values } => {
                 if values.is_empty() {
-                    return Err("periodic weight needs a positive period".into());
+                    return Err(RenewalError::EmptyPeriod);
                 }
                 certify_values(values, "periodic")?;
                 WeightCertificate::Periodic {
@@ -447,14 +451,13 @@ impl VariablePredecessorRecurrence {
 
     /// Certify the hypotheses for every `n >= 1`.  Finite predecessor or
     /// weight lists are rejected: they certify only a prefix.
-    pub fn certify_all_indices(&self) -> Result<VariablePredecessorCertificate, String> {
+    pub fn certify_all_indices(&self) -> Result<VariablePredecessorCertificate, RenewalError> {
         let certificate = self.certify()?;
         match certificate.scope {
             CertificateScope::AllIndices => Ok(certificate),
-            CertificateScope::Prefix { last_index } => Err(format!(
-                "finite predecessor/weight data certifies only n <= {last_index}; a global \
-                 claim needs a symbolic rule"
-            )),
+            CertificateScope::Prefix { last_index } => {
+                Err(RenewalError::FiniteDataOnly { last_index })
+            }
         }
     }
 
@@ -467,16 +470,19 @@ impl VariablePredecessorRecurrence {
     pub fn verify_certificate(
         &self,
         certificate: &VariablePredecessorCertificate,
-    ) -> Result<(), String> {
-        let parse = |values: &[String]| -> Result<Vec<BigRational>, String> {
-            values.iter().map(|v| parse_rational_coeff(v)).collect()
+    ) -> Result<(), RenewalError> {
+        let parse = |values: &[String]| -> Result<Vec<BigRational>, RenewalError> {
+            values
+                .iter()
+                .map(|v| parse_rational_coeff(v).map_err(RenewalError::from))
+                .collect()
         };
         let derived = self.certify()?;
         if certificate.scope != derived.scope
             || certificate.predecessor != derived.predecessor
             || certificate.interlacing_window != derived.interlacing_window
         {
-            return Err("certificate scope, predecessor or window does not match".into());
+            return Err(RenewalError::CertificateScopeMismatch);
         }
         match (&self.weight, &certificate.weight) {
             (
@@ -490,13 +496,13 @@ impl VariablePredecessorRecurrence {
             ) => {
                 let coefficients = trim(coefficients.clone());
                 if parse(stored)? != coefficients || *shift == 0 {
-                    return Err("certificate weight polynomial does not match".into());
+                    return Err(RenewalError::CertificateWeightPolynomialMismatch);
                 }
                 let shifted = parse(shifted_coefficients)?;
                 if shifted != taylor_shift(&coefficients, *shift)
                     || shifted.iter().any(Signed::is_negative)
                 {
-                    return Err("shifted weight coefficients are wrong or negative".into());
+                    return Err(RenewalError::CertificateShiftedCoefficientsInvalid);
                 }
                 let values = parse(checked_values)?;
                 if values.len() != shift - 1
@@ -506,12 +512,12 @@ impl VariablePredecessorRecurrence {
                         .enumerate()
                         .any(|(k, v)| *v != evaluate(&coefficients, k + 1))
                 {
-                    return Err("checked weight values are wrong or negative".into());
+                    return Err(RenewalError::CertificateCheckedValuesInvalid);
                 }
                 Ok(())
             }
             (_, stored) if *stored == derived.weight => Ok(()),
-            _ => Err("certificate weight does not match".into()),
+            _ => Err(RenewalError::CertificateWeightMismatch),
         }
     }
 
@@ -527,7 +533,7 @@ impl VariablePredecessorRecurrence {
     /// This is the library generator for the family.  Errors when an index is
     /// outside the supplied finite data or when `p(n) >= n`; the weight sign is
     /// not checked here (see [`certify`](Self::certify)).
-    pub fn rows(&self, total_rows: usize) -> Result<Vec<Vec<BigRational>>, String> {
+    pub fn rows(&self, total_rows: usize) -> Result<Vec<Vec<BigRational>>, RenewalError> {
         let mut rows: Vec<Vec<BigRational>> = Vec::with_capacity(total_rows);
         for n in 0..total_rows {
             if n == 0 {
@@ -535,10 +541,13 @@ impl VariablePredecessorRecurrence {
                 continue;
             }
             let (Some(p), Some(w)) = (self.predecessor_at(n), self.weight_at(n)) else {
-                return Err(format!("p({n}) or w({n}) is not defined"));
+                return Err(RenewalError::UndefinedIndex { index: n });
             };
             if p >= n {
-                return Err(format!("predecessor p({n}) = {p} violates p(n) < n"));
+                return Err(RenewalError::PredecessorNotBelowIndex {
+                    index: n,
+                    predecessor: p,
+                });
             }
             let mut row = rows[n - 1].clone();
             let previous = &rows[p];
@@ -629,7 +638,7 @@ impl VariablePredecessorRecurrence {
 /// indices; compare initial rows before applying the theorem.
 pub fn recognize_fixed_delay_predecessor(
     recurrence: &Recurrence,
-) -> Result<VariablePredecessorRecurrence, String> {
+) -> Result<VariablePredecessorRecurrence, RenewalError> {
     let scalar = |p: &BivarPoly| -> Option<BigRational> {
         let mut value = BigRational::zero();
         for (i, row) in p.coeffs.iter().enumerate() {
@@ -647,20 +656,20 @@ pub fn recognize_fixed_delay_predecessor(
         None => BigRational::one(),
         Some(p) => scalar(p)
             .filter(|c| !c.is_zero())
-            .ok_or("LHS must be a nonzero constant")?,
+            .ok_or(RenewalError::NonconstantLeftFactor)?,
     };
     if recurrence
         .inhomogeneous
         .as_ref()
         .is_some_and(|p| scalar(p) != Some(BigRational::zero()))
     {
-        return Err("recurrence must be homogeneous".into());
+        return Err(RenewalError::NotHomogeneous);
     }
     // (offset, n-power, t-power) -> coefficient
     let mut terms = BTreeMap::<(usize, usize, usize), BigRational>::new();
     for term in &recurrence.terms {
         if term.deriv_order != 0 || term.sign != RecurrenceSign::None {
-            return Err("derivatives and alternating signs are unsupported".into());
+            return Err(RenewalError::UnsupportedTermKind);
         }
         for (i, row) in term.coeff.coeffs.iter().enumerate() {
             for (j, c) in row.iter().enumerate() {
@@ -672,22 +681,22 @@ pub fn recognize_fixed_delay_predecessor(
     }
     terms.retain(|_, c| !c.is_zero());
     if terms.remove(&(1, 0, 0)) != Some(BigRational::one()) {
-        return Err("coefficient of P_(n-1) must be 1 (+ w(n) t) after normalization".into());
+        return Err(RenewalError::PreviousCoefficientNotOneWithWeight);
     }
     let mut delay = None;
     let mut weight = Vec::new();
     for ((offset, i, j), c) in terms {
         if j != 1 || offset == 0 {
-            return Err("only P_(n-1) and one term w(n) t P_(n-L) are supported".into());
+            return Err(RenewalError::UnsupportedWeightedTerm);
         }
         if delay.is_some_and(|d| d != offset) {
-            return Err("more than one weighted lag".into());
+            return Err(RenewalError::MultipleWeightedLags);
         }
         delay = Some(offset);
         weight.resize(weight.len().max(i + 1), BigRational::zero());
         weight[i] = c;
     }
-    let delay = delay.ok_or("no weighted term w(n) t P_(n-L)")?;
+    let delay = delay.ok_or(RenewalError::NoWeightedTerm)?;
     Ok(VariablePredecessorRecurrence::fixed_delay(
         delay,
         PredecessorWeight::Polynomial {
@@ -830,17 +839,21 @@ mod tests {
         // Positive at n = 1..9 (so sampling would accept it), negative at n = 10.
         let late = VariablePredecessorRecurrence::fixed_delay(2, poly(&[qq(199, 2), q(-20), q(1)]));
         let error = late.certify().unwrap_err();
-        assert!(error.contains("w(10) = -1/2"), "{error}");
+        assert!(error.to_string().contains("w(10) = -1/2"), "{error}");
         // Negative leading coefficient: witness beyond the Cauchy bound.
         let falling = VariablePredecessorRecurrence::fixed_delay(1, poly(&[q(100), q(-1)]));
-        assert!(falling.certify().unwrap_err().contains("w(101)"));
+        assert!(falling
+            .certify()
+            .unwrap_err()
+            .to_string()
+            .contains("w(101)"));
         let periodic = VariablePredecessorRecurrence::fixed_delay(
             2,
             PredecessorWeight::Periodic {
                 values: vec![q(1), q(-1)],
             },
         );
-        assert!(periodic.certify().unwrap_err().contains("w(2)"));
+        assert!(periodic.certify().unwrap_err().to_string().contains("w(2)"));
         let empty = VariablePredecessorRecurrence::fixed_delay(
             2,
             PredecessorWeight::Periodic { values: vec![] },
@@ -852,7 +865,11 @@ mod tests {
             predecessor: PredecessorRule::Explicit { values: vec![0, 2] },
             weight: poly(&[q(1)]),
         };
-        assert!(too_large.certify().unwrap_err().contains("p(2) = 2"));
+        assert!(too_large
+            .certify()
+            .unwrap_err()
+            .to_string()
+            .contains("p(2) = 2"));
         assert!(too_large.rows(3).is_err());
         let decreasing = VariablePredecessorRecurrence {
             predecessor: PredecessorRule::Explicit {
@@ -860,7 +877,11 @@ mod tests {
             },
             weight: poly(&[q(1)]),
         };
-        assert!(decreasing.certify().unwrap_err().contains("decreases"));
+        assert!(decreasing
+            .certify()
+            .unwrap_err()
+            .to_string()
+            .contains("decreases"));
     }
 
     #[test]
@@ -950,6 +971,7 @@ mod tests {
         ));
         assert!(recognize_fixed_delay_predecessor(&bad)
             .unwrap_err()
+            .to_string()
             .contains("more than one"));
     }
 }

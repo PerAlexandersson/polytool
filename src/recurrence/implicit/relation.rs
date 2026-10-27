@@ -147,11 +147,15 @@ pub(super) fn biv_json(p: &Biv) -> BivarPolyJson {
     }
 }
 
-pub(in crate::recurrence) fn biv_from_json(p: &BivarPolyJson) -> Result<Biv, String> {
+pub(in crate::recurrence) fn biv_from_json(p: &BivarPolyJson) -> Result<Biv, RecurrenceError> {
     p.coeffs
         .iter()
-        .map(|row| row.iter().map(|c| parse_rational_coeff(c)).collect())
-        .collect::<Result<Vec<Vec<Q>>, String>>()
+        .map(|row| {
+            row.iter()
+                .map(|c| parse_rational_coeff(c).map_err(RecurrenceError::from))
+                .collect()
+        })
+        .collect::<Result<Vec<Vec<Q>>, RecurrenceError>>()
         .map(Biv::new)
 }
 
@@ -162,9 +166,9 @@ pub(in crate::recurrence) fn encode_poly(p: &[Q]) -> Vec<String> {
         .collect()
 }
 
-pub(in crate::recurrence) fn decode_poly(p: &[String]) -> Result<Vec<Q>, String> {
+pub(in crate::recurrence) fn decode_poly(p: &[String]) -> Result<Vec<Q>, RecurrenceError> {
     p.iter()
-        .map(|c| parse_rational_coeff(c))
+        .map(|c| parse_rational_coeff(c).map_err(RecurrenceError::from))
         .collect::<Result<Vec<_>, _>>()
         .map(|r| vec_poly::trim(&r))
 }
@@ -242,15 +246,20 @@ impl ImplicitRelation {
     ///
     /// Rules with `(-1)^n` factors or an additive term are rejected: implicit
     /// relations are homogeneous and sign free.
-    pub fn from_recurrence(rule: &Recurrence) -> Result<(Self, usize), String> {
+    pub fn from_recurrence(rule: &Recurrence) -> Result<(Self, usize), RecurrenceError> {
         if rule.terms.iter().any(RecurrenceTerm::is_alternating) {
-            return Err("implicit relations carry no (-1)^n factors".into());
+            return Err(RecurrenceError::InvalidInput(
+                "implicit relations carry no (-1)^n factors".into(),
+            ));
         }
         if rule.inhomogeneous.as_ref().is_some_and(|g| !g.is_zero()) {
-            return Err("implicit relations are homogeneous; the rule has an additive term".into());
+            return Err(RecurrenceError::InvalidInput(
+                "implicit relations are homogeneous; the rule has an additive term".into(),
+            ));
         }
         let r = rule.max_offset();
-        let shift = i64::try_from(r).map_err(|_| "offset overflow")?;
+        let shift = i64::try_from(r)
+            .map_err(|_| RecurrenceError::LimitExceeded("offset overflow".into()))?;
         let mut op = DOp::default();
         let leader = rule
             .denominator
@@ -331,7 +340,7 @@ impl ImplicitRelation {
     }
 
     /// Decode from JSON.
-    pub fn from_json(json: &ImplicitRelationJson) -> Result<Self, String> {
+    pub fn from_json(json: &ImplicitRelationJson) -> Result<Self, RecurrenceError> {
         let mut op = DOp::default();
         for term in &json.terms {
             op.add_term((term.shift, term.deriv_order), biv_from_json(&term.coeff)?);
@@ -579,7 +588,7 @@ impl CoefficientCondition {
     }
 
     /// Decode from JSON.
-    pub fn from_json(json: &CoefficientConditionJson) -> Result<Self, String> {
+    pub fn from_json(json: &CoefficientConditionJson) -> Result<Self, RecurrenceError> {
         Ok(Self {
             terms: json
                 .terms
@@ -591,7 +600,7 @@ impl CoefficientCondition {
                         coeff: decode_poly(&t.coeff)?,
                     })
                 })
-                .collect::<Result<Vec<_>, String>>()?,
+                .collect::<Result<Vec<_>, RecurrenceError>>()?,
         }
         .canonical())
     }
@@ -804,21 +813,23 @@ struct ParsedCondition {
 /// the argument needs (for example a lost constant term) removes the claim.
 pub fn assess_generating_description(
     description: &GeneratingDescription,
-) -> Result<DescriptionAssessment, String> {
+) -> Result<DescriptionAssessment, RecurrenceError> {
     let seeds = description
         .seeds
         .iter()
         .map(|row| decode_poly(row))
         .collect::<Result<Vec<_>, _>>()?;
     if seeds.is_empty() {
-        return Err("a generating description needs at least one seed row".into());
+        return Err(RecurrenceError::InvalidInput(
+            "a generating description needs at least one seed row".into(),
+        ));
     }
     let first = description.first_index;
     let relations = description
         .relations
         .iter()
         .map(|r| Ok((ImplicitRelation::from_json(&r.relation)?, r.first_base)))
-        .collect::<Result<Vec<_>, String>>()?;
+        .collect::<Result<Vec<_>, RecurrenceError>>()?;
     let mut conditions = Vec::new();
     for (list, records) in [
         (
@@ -1180,7 +1191,7 @@ pub struct ReconstructionCertificate {
 /// `(L, T, M, [(nu, H_nu)])` of a certificate.
 type CertificateParts = (DOp, DOp, DOp, Vec<(usize, DOp)>);
 
-fn shift_free_from_json(terms: &[OperatorTermJson]) -> Result<DOp, String> {
+fn shift_free_from_json(terms: &[OperatorTermJson]) -> Result<DOp, RecurrenceError> {
     let mut op = DOp::default();
     for term in terms {
         op.add_term((0, term.deriv_order), biv_from_json(&term.coeff)?);
@@ -1198,7 +1209,7 @@ fn shift_free_to_json(op: &DOp) -> Vec<OperatorTermJson> {
 }
 
 impl ReconstructionCertificate {
-    fn parts(&self) -> Result<CertificateParts, String> {
+    fn parts(&self) -> Result<CertificateParts, RecurrenceError> {
         let l = ImplicitRelation::from_json(&self.source_relation)?.op();
         let t = shift_free_from_json(&self.map)?;
         let m = ImplicitRelation::from_json(&self.target_relation)?.op();
@@ -1206,13 +1217,13 @@ impl ReconstructionCertificate {
             .multipliers
             .iter()
             .map(|mu| Ok((mu.shift, shift_free_from_json(&mu.differentiations)?)))
-            .collect::<Result<Vec<_>, String>>()?;
+            .collect::<Result<Vec<_>, RecurrenceError>>()?;
         Ok((l, t, m, h))
     }
 
     /// Check `L o T = sum_nu H_nu o S^nu o M` exactly in the Ore algebra
     /// (`S n = (n + 1) S`, `D x = x D + 1`).
-    pub fn verify_identity(&self) -> Result<(), String> {
+    pub fn verify_identity(&self) -> Result<(), RecurrenceError> {
         let (l, t, m, h) = self.parts()?;
         let left = l.compose(&t);
         let right = h.iter().fold(DOp::default(), |acc, (nu, op)| {
@@ -1221,7 +1232,9 @@ impl ReconstructionCertificate {
         if left == right {
             Ok(())
         } else {
-            Err("reconstruction identity L o T = sum H_nu S^nu M fails".into())
+            Err(RecurrenceError::VerificationFailed(
+                "reconstruction identity L o T = sum H_nu S^nu M fails".into(),
+            ))
         }
     }
 
@@ -1234,7 +1247,7 @@ impl ReconstructionCertificate {
         &self,
         rows: &[Vec<BigRational>],
         origin: usize,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, RecurrenceError> {
         let (l, t, m, h) = self.parts()?;
         let mapped = rows
             .iter()
@@ -1267,7 +1280,9 @@ impl ReconstructionCertificate {
                 continue;
             }
             if vec_poly::trim(&left) != vec_poly::trim(&right) {
-                return Err(format!("replay fails at base n = {base}"));
+                return Err(RecurrenceError::VerificationFailed(format!(
+                    "replay fails at base n = {base}"
+                )));
             }
             checked += 1;
         }

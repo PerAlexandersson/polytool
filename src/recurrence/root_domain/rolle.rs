@@ -68,26 +68,36 @@ fn trim_rows(mut rows: Vec<Vec<Q>>) -> Vec<Vec<Q>> {
     rows
 }
 
-pub(super) fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, String> {
+pub(super) fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, RecurrenceError> {
     let rule = canonical_recurrence(rule);
     if rule.denominator.is_some() {
-        return Err("the left factor f(n,x) is not a nonzero constant".into());
+        return Err(RecurrenceError::InvalidInput(
+            "the left factor f(n,x) is not a nonzero constant".into(),
+        ));
     }
     if rule
         .inhomogeneous
         .as_ref()
         .is_some_and(|g| !bivar_rows(g).is_empty())
     {
-        return Err("the rule has an additive term".into());
+        return Err(RecurrenceError::InvalidInput(
+            "the rule has an additive term".into(),
+        ));
     }
     if rule.terms.is_empty() {
-        return Err("the rule has no terms".into());
+        return Err(RecurrenceError::InvalidInput(
+            "the rule has no terms".into(),
+        ));
     }
     if rule.terms.iter().any(|t| t.offset != 1) {
-        return Err("only first-order rules (every offset 1) are matched".into());
+        return Err(RecurrenceError::Unsupported(
+            "only first-order rules (every offset 1) are matched".into(),
+        ));
     }
     if rule.terms.iter().any(RecurrenceTerm::is_alternating) {
-        return Err("(-1)^n factors are not matched".into());
+        return Err(RecurrenceError::Unsupported(
+            "(-1)^n factors are not matched".into(),
+        ));
     }
     let order = rule.terms.iter().map(|t| t.deriv_order).max().unwrap_or(0);
     let coefficient = |k: usize| -> Vec<Vec<Q>> {
@@ -99,7 +109,9 @@ pub(super) fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, String> {
     };
     let top = coefficient(order);
     if top.is_empty() {
-        return Err("the top coefficient vanishes".into());
+        return Err(RecurrenceError::InvalidInput(
+            "the top coefficient vanishes".into(),
+        ));
     }
     // Leibniz: the coefficient of D^k is C(j,k) d^(j-k)/dx^(j-k) G(m,x).
     let mut derivative = top.clone();
@@ -112,11 +124,11 @@ pub(super) fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, String> {
                 .collect(),
         );
         if coefficient(k) != expected {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "the coefficient of D^{k} is not C({order},{k}) times the {}-th x-derivative of \
                  the top coefficient g(n,x)",
                 order - k
-            ));
+            )));
         }
     }
     // Separable: G = s(m) g(x).
@@ -156,11 +168,11 @@ pub(super) fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, String> {
         debug_assert!(remainder.is_zero());
         let quotient = vec_poly::trim(quotient.coeffs());
         if vec_poly::degree(&quotient).is_some_and(|d| d > 1) {
-            return Err(
+            return Err(RecurrenceError::InvalidInput(
                 "the top coefficient g(n,x) is neither s(n) g(x) nor g(x) times a \
                         factor linear in x with index-dependent coefficients"
                     .into(),
-            );
+            ));
         }
         constant.push(vec_poly::coeff(&quotient, 0));
         slope.push(vec_poly::coeff(&quotient, 1));
@@ -180,7 +192,7 @@ pub(super) fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, String> {
 // ---------------------------------------------------------------------------
 
 /// `(value, per_index)` of an endpoint `value + per_index * n`.
-fn endpoint_parts(end: &RootEndpoint) -> Result<(Q, Q), String> {
+fn endpoint_parts(end: &RootEndpoint) -> Result<(Q, Q), RecurrenceError> {
     let value = parse_rational_coeff(&end.value)?;
     let slope = match &end.per_index {
         Some(p) => parse_rational_coeff(p)?,
@@ -211,18 +223,19 @@ pub(super) fn domain_hull(
     interval: &RootInterval,
     first: usize,
     last: Option<usize>,
-) -> Result<RealInterval, String> {
-    let end = |end: &Option<RootEndpoint>, max: bool| -> Result<(Option<Q>, bool), String> {
-        match end {
-            None => Ok((None, false)),
-            Some(e) => {
-                let (value, slope) = endpoint_parts(e)?;
-                let extreme = affine_extreme(&value, &slope, first, last, max);
-                let closed = extreme.is_some() && e.closed;
-                Ok((extreme, closed))
+) -> Result<RealInterval, RecurrenceError> {
+    let end =
+        |end: &Option<RootEndpoint>, max: bool| -> Result<(Option<Q>, bool), RecurrenceError> {
+            match end {
+                None => Ok((None, false)),
+                Some(e) => {
+                    let (value, slope) = endpoint_parts(e)?;
+                    let extreme = affine_extreme(&value, &slope, first, last, max);
+                    let closed = extreme.is_some() && e.closed;
+                    Ok((extreme, closed))
+                }
             }
-        }
-    };
+        };
     let (lower, lower_closed) = end(&interval.lower, false)?;
     let (upper, upper_closed) = end(&interval.upper, true)?;
     Ok(RealInterval {
@@ -235,7 +248,7 @@ pub(super) fn domain_hull(
 
 /// Whether `I_(n-1) ⊆ I_n` for every `n`: the lower end does not increase and
 /// the upper end does not decrease.
-pub(super) fn grows_with_index(interval: &RootInterval) -> Result<bool, String> {
+pub(super) fn grows_with_index(interval: &RootInterval) -> Result<bool, RecurrenceError> {
     let lower = match &interval.lower {
         Some(e) => !endpoint_parts(e)?.1.is_positive(),
         None => true,
@@ -253,7 +266,7 @@ pub(super) fn contains_point_throughout(
     point: &Q,
     first: usize,
     last: Option<usize>,
-) -> Result<bool, String> {
+) -> Result<bool, RecurrenceError> {
     let lower_ok = match &interval.lower {
         None => true,
         Some(e) => {
@@ -283,8 +296,8 @@ pub(super) fn affine_interval_image(
     interval: &RootInterval,
     alpha: &Q,
     beta: &Q,
-) -> Result<RootInterval, String> {
-    let map = |end: &Option<RootEndpoint>| -> Result<Option<RootEndpoint>, String> {
+) -> Result<RootInterval, RecurrenceError> {
+    let map = |end: &Option<RootEndpoint>| -> Result<Option<RootEndpoint>, RecurrenceError> {
         end.as_ref()
             .map(|e| {
                 let (value, slope) = endpoint_parts(e)?;
@@ -318,7 +331,7 @@ fn certify_linear_root(
     linear: &LinearIndexFactor,
     interval: &RootInterval,
     start: usize,
-) -> Result<String, String> {
+) -> Result<String, RecurrenceError> {
     let (constant, slope) = match index_polynomial_sign_from(&linear.slope, start) {
         Some(Ordering::Greater) => (linear.constant.clone(), linear.slope.clone()),
         Some(Ordering::Less) => (
@@ -326,11 +339,11 @@ fn certify_linear_root(
             vec_poly::neg(&linear.slope),
         ),
         _ => {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "the coefficient l(m) = {} of x in the index-dependent factor is not certified \
                  nonzero for m >= {start}",
                 poly_text(&linear.slope, "m")
-            ))
+            )))
         }
     };
     let root = format!(
@@ -346,10 +359,10 @@ fn certify_linear_root(
             &vec_poly::mul(&[value, per_index], &slope),
         );
         if !index_polynomial_nonnegative_from(&excess, start, !lower.closed) {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "the root {root} of the index-dependent factor is not certified to lie above \
                  the lower end of I_m for every m >= {start} (Taylor-shift criterion)"
-            ));
+            )));
         }
     }
     if let Some(upper) = &interval.upper {
@@ -357,10 +370,10 @@ fn certify_linear_root(
         // upper(m) l(m) + c(m) >= 0 (> 0 for an open end).
         let excess = vec_poly::add(&vec_poly::mul(&[value, per_index], &slope), &constant);
         if !index_polynomial_nonnegative_from(&excess, start, !upper.closed) {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "the root {root} of the index-dependent factor is not certified to lie below \
                  the upper end of I_m for every m >= {start} (Taylor-shift criterion)"
-            ));
+            )));
         }
     }
     Ok(format!(
@@ -404,15 +417,15 @@ fn check_attempt(
     valid_from: usize,
     first: usize,
     name: &str,
-) -> Result<String, String> {
+) -> Result<String, RecurrenceError> {
     let dependent = !interval.is_index_independent();
     let mut steps = Vec::new();
     if dependent {
         if !grows_with_index(interval)? {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "{interval} does not grow with the index (I_(m-1) is not contained in I_m), so \
                  the Rolle step is not certified"
-            ));
+            )));
         }
         steps.push("I_(m-1) ⊆ I_m for every m (lower slope <= 0, upper slope >= 0)".to_string());
     }
@@ -423,10 +436,10 @@ fn check_attempt(
         } else {
             interval.to_string()
         };
-        return Err(format!(
+        return Err(RecurrenceError::InvalidInput(format!(
             "g = {} is not real-rooted in {place}",
             poly_text(&form.factor, "x")
-        ));
+        )));
     }
     if dependent {
         steps.push(format!(
@@ -439,7 +452,9 @@ fn check_attempt(
     for (k, isolation) in seed_isolations {
         let at = interval.at(*k)?;
         if !isolation.real_rooted_in(&at) {
-            return Err(format!("the seed {name}_{k} is not real-rooted in {at}"));
+            return Err(RecurrenceError::InvalidInput(format!(
+                "the seed {name}_{k} is not real-rooted in {at}"
+            )));
         }
     }
     let mut detail = format!(
@@ -483,7 +498,7 @@ pub(super) fn rolle_core(setup: &RolleSetup<'_>, notes: &mut Vec<String>) -> Rol
     let form = match match_rolle_form(setup.rule) {
         Ok(form) => form,
         Err(reason) => {
-            report.reason = Some(reason);
+            report.reason = Some(reason.to_string());
             return failed(report);
         }
     };
@@ -582,7 +597,7 @@ pub(super) fn rolle_core(setup: &RolleSetup<'_>, notes: &mut Vec<String>) -> Rol
             interval: interval.clone(),
             origin,
             success,
-            detail: outcome.unwrap_or_else(|reason| reason),
+            detail: outcome.unwrap_or_else(|reason| reason.to_string()),
         });
         if success {
             proven = Some(interval);

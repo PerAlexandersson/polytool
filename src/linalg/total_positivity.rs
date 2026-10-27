@@ -1,7 +1,7 @@
 //! Total non-negativity: brute-force minor enumeration and Neville elimination.
 //!
 //! [`check_total_positivity`] enumerates minors up
-//! to a given size (exponential); [`check_tnn_neville`]
+//! to a given size (exponential); [`check_totally_nonnegative_neville`]
 //! and its `BigInt` variant decide total non-negativity of all minors in
 //! `O(n^2 m)` exact rational operations.  All checks report failures as a
 //! [`TotalPositivityError`]; [`is_totally_nonnegative_neville`] and
@@ -14,7 +14,7 @@ use num_traits::Zero;
 
 /// Exact failure reported by the total-positivity checks: brute-force minor
 /// enumeration ([`check_total_positivity`]) and Neville elimination
-/// ([`check_tnn_neville`], [`check_tnn_neville_bigint`]).
+/// ([`check_totally_nonnegative_neville`], [`check_totally_nonnegative_neville_bigint`]).
 ///
 /// The first three variants come from minor enumeration, the remaining ones
 /// from Neville elimination (a failed elimination step is reported instead of
@@ -58,7 +58,7 @@ pub enum TotalPositivityError {
         row: usize,
         /// Zero-based column index of the entry.
         column: usize,
-        /// The entry.  The `i64` entry point ([`check_tnn_neville`]) reports it
+        /// The entry.  The `i64` entry point ([`check_totally_nonnegative_neville`]) reports it
         /// and the `BigInt` entry point leaves it `None`, matching the
         /// original error messages.
         value: Option<BigInt>,
@@ -239,7 +239,9 @@ pub fn is_totally_nonnegative(mat: &[Vec<i64>], max_minor_size: usize) -> bool {
 
 // Neville elimination on the rows of an exact rational matrix: the shared
 // kernel of the `i64` and `BigInt` entry points, which also apply it to the transpose.
-fn check_tnn_neville_rational_rows(a: &mut [Vec<Q>]) -> Result<(), TotalPositivityError> {
+fn check_totally_nonnegative_neville_rational_rows(
+    a: &mut [Vec<Q>],
+) -> Result<(), TotalPositivityError> {
     let nrows = a.len();
     let ncols = a.first().map_or(0, Vec::len);
     let min_dim = nrows.min(ncols);
@@ -297,12 +299,12 @@ fn check_tnn_neville_rational_rows(a: &mut [Vec<Q>]) -> Result<(), TotalPositivi
 /// describing the first failure: ragged rows
 /// ([`TotalPositivityError::InconsistentRowLengths`]), a negative entry, or a
 /// failed elimination step. An empty
-/// matrix and a matrix with no columns are TNN. Use [`check_tnn_neville_bigint`]
+/// matrix and a matrix with no columns are TNN. Use [`check_totally_nonnegative_neville_bigint`]
 /// when entries may not fit in `i64`.
 ///
 /// # Example
 /// ```
-/// use polytool::linalg::check_tnn_neville;
+/// use polytool::linalg::check_totally_nonnegative_neville;
 /// let pascal = vec![
 ///     vec![1, 0, 0],
 ///     vec![1, 1, 0],
@@ -310,9 +312,9 @@ fn check_tnn_neville_rational_rows(a: &mut [Vec<Q>]) -> Result<(), TotalPositivi
 ///     vec![1, 3, 3],
 ///     vec![1, 4, 6],
 /// ];
-/// assert!(check_tnn_neville(&pascal).is_ok());
+/// assert!(check_totally_nonnegative_neville(&pascal).is_ok());
 /// ```
-pub fn check_tnn_neville(mat: &[Vec<i64>]) -> Result<(), TotalPositivityError> {
+pub fn check_totally_nonnegative_neville(mat: &[Vec<i64>]) -> Result<(), TotalPositivityError> {
     let nrows = mat.len();
     if nrows == 0 {
         return Ok(());
@@ -348,7 +350,7 @@ pub fn check_tnn_neville(mat: &[Vec<i64>]) -> Result<(), TotalPositivityError> {
         }
     }
 
-    check_tnn_neville_rational_rows(&mut a)?;
+    check_totally_nonnegative_neville_rational_rows(&mut a)?;
 
     // Row elimination detects the initial minors involving the first column;
     // applying the same test to the transpose checks the complementary family
@@ -360,13 +362,22 @@ pub fn check_tnn_neville(mat: &[Vec<i64>]) -> Result<(), TotalPositivityError> {
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    check_tnn_neville_rational_rows(&mut transpose)
+    check_totally_nonnegative_neville_rational_rows(&mut transpose)
+}
+
+/// Deprecated name of [`check_totally_nonnegative_neville`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `check_totally_nonnegative_neville`"
+)]
+pub fn check_tnn_neville(mat: &[Vec<i64>]) -> Result<(), TotalPositivityError> {
+    check_totally_nonnegative_neville(mat)
 }
 
 /// Fast TNN check via Neville elimination. Returns bool.
-/// Equivalent to `check_tnn_neville(mat).is_ok()`.
+/// Equivalent to `check_totally_nonnegative_neville(mat).is_ok()`.
 pub fn is_totally_nonnegative_neville(mat: &[Vec<i64>]) -> bool {
-    check_tnn_neville(mat).is_ok()
+    check_totally_nonnegative_neville(mat).is_ok()
 }
 
 /// Deprecated name of [`is_totally_nonnegative_neville`].
@@ -377,7 +388,9 @@ pub fn is_tnn(mat: &[Vec<i64>]) -> bool {
 
 /// Check TNN via Neville elimination on a BigInt matrix.
 /// Use this when entries may overflow i64.
-pub fn check_tnn_neville_bigint(mat: &[Vec<BigInt>]) -> Result<(), TotalPositivityError> {
+pub fn check_totally_nonnegative_neville_bigint(
+    mat: &[Vec<BigInt>],
+) -> Result<(), TotalPositivityError> {
     let nrows = mat.len();
     if nrows == 0 {
         return Ok(());
@@ -407,7 +420,7 @@ pub fn check_tnn_neville_bigint(mat: &[Vec<BigInt>]) -> Result<(), TotalPositivi
         }
     }
 
-    check_tnn_neville_rational_rows(&mut a)?;
+    check_totally_nonnegative_neville_rational_rows(&mut a)?;
     let mut transpose = (0..ncols)
         .map(|j| {
             (0..nrows)
@@ -415,7 +428,16 @@ pub fn check_tnn_neville_bigint(mat: &[Vec<BigInt>]) -> Result<(), TotalPositivi
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    check_tnn_neville_rational_rows(&mut transpose)
+    check_totally_nonnegative_neville_rational_rows(&mut transpose)
+}
+
+/// Deprecated name of [`check_totally_nonnegative_neville_bigint`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `check_totally_nonnegative_neville_bigint`"
+)]
+pub fn check_tnn_neville_bigint(mat: &[Vec<BigInt>]) -> Result<(), TotalPositivityError> {
+    check_totally_nonnegative_neville_bigint(mat)
 }
 
 fn extract_submatrix_i64(mat: &[Vec<i64>], rows: &[usize], cols: &[usize]) -> Vec<Vec<BigInt>> {
@@ -480,7 +502,7 @@ mod tests {
             vec![1, 4, 6],
         ];
         assert!(is_totally_nonnegative_neville(&pascal));
-        assert!(check_tnn_neville(&pascal).is_ok());
+        assert!(check_totally_nonnegative_neville(&pascal).is_ok());
         assert!(check_total_positivity(&pascal, 3, false).is_ok());
     }
 
@@ -499,14 +521,14 @@ mod tests {
     #[test]
     fn test_tnn_rejects_row_swap_false_positive() {
         let permutation = vec![vec![0, 1], vec![1, 0]];
-        assert!(check_tnn_neville(&permutation).is_err());
+        assert!(check_totally_nonnegative_neville(&permutation).is_err());
 
         let permutation_bigint = vec![vec![bi(0), bi(1)], vec![bi(1), bi(0)]];
-        assert!(check_tnn_neville_bigint(&permutation_bigint).is_err());
+        assert!(check_totally_nonnegative_neville_bigint(&permutation_bigint).is_err());
 
         // Moving an all-zero suffix row remains safe and avoids rejecting a
         // genuinely TNN rank-deficient matrix.
-        assert!(check_tnn_neville(&[vec![0, 0], vec![1, 1]]).is_ok());
+        assert!(check_totally_nonnegative_neville(&[vec![0, 0], vec![1, 1]]).is_ok());
     }
 
     #[test]
@@ -519,8 +541,10 @@ mod tests {
                 found_columns: 1,
             })
         );
-        assert!(check_tnn_neville(&[vec![1, 0], vec![1]]).is_err());
-        assert!(check_tnn_neville_bigint(&[vec![bi(1), bi(0)], vec![bi(1)]]).is_err());
+        assert!(check_totally_nonnegative_neville(&[vec![1, 0], vec![1]]).is_err());
+        assert!(
+            check_totally_nonnegative_neville_bigint(&[vec![bi(1), bi(0)], vec![bi(1)]]).is_err()
+        );
     }
 
     #[test]
@@ -581,7 +605,7 @@ mod tests {
     fn test_tnn_neville_vs_brute() {
         // Verify Neville and brute-force agree on a 3x3 matrix
         let m = vec![vec![1, 1, 0], vec![0, 1, 1], vec![0, 0, 1]];
-        let neville = check_tnn_neville(&m).is_ok();
+        let neville = check_totally_nonnegative_neville(&m).is_ok();
         let brute = check_total_positivity(&m, 3, false).is_ok();
         assert_eq!(neville, brute);
     }
@@ -594,7 +618,7 @@ mod tests {
                 matrix[entry / 3][entry % 3] = i64::from((bits >> entry) & 1);
             }
             assert_eq!(
-                check_tnn_neville(&matrix).is_ok(),
+                check_totally_nonnegative_neville(&matrix).is_ok(),
                 check_total_positivity(&matrix, 3, false).is_ok(),
                 "Neville and brute-force checks disagree for {matrix:?}"
             );
@@ -604,41 +628,41 @@ mod tests {
     #[test]
     fn test_tnn_bigint() {
         let m = vec![vec![bi(1), bi(1)], vec![bi(0), bi(1)]];
-        assert!(check_tnn_neville_bigint(&m).is_ok());
+        assert!(check_totally_nonnegative_neville_bigint(&m).is_ok());
     }
 
     #[test]
     fn neville_error_messages_are_stable() {
         assert_eq!(
-            check_tnn_neville(&[vec![1, 2], vec![3]]).unwrap_err(),
+            check_totally_nonnegative_neville(&[vec![1, 2], vec![3]]).unwrap_err(),
             TotalPositivityError::InconsistentRowLengths
         );
         assert_eq!(
-            check_tnn_neville(&[vec![1, 2], vec![3]])
+            check_totally_nonnegative_neville(&[vec![1, 2], vec![3]])
                 .unwrap_err()
                 .to_string(),
             "matrix rows have inconsistent lengths"
         );
         assert_eq!(
-            check_tnn_neville(&[vec![1, -2], vec![3, 4]])
+            check_totally_nonnegative_neville(&[vec![1, -2], vec![3, 4]])
                 .unwrap_err()
                 .to_string(),
             "Entry [0,1] = -2 < 0"
         );
         assert_eq!(
-            check_tnn_neville_bigint(&[vec![bi(1), bi(-2)], vec![bi(3), bi(4)]])
+            check_totally_nonnegative_neville_bigint(&[vec![bi(1), bi(-2)], vec![bi(3), bi(4)]])
                 .unwrap_err()
                 .to_string(),
             "Entry [0,1] < 0"
         );
         assert_eq!(
-            check_tnn_neville(&[vec![0, 1], vec![1, 0]])
+            check_totally_nonnegative_neville(&[vec![0, 1], vec![1, 0]])
                 .unwrap_err()
                 .to_string(),
             "Neville elimination: positive entry [1,0] below zero pivot with nonzero \
              pivot-row suffix"
         );
-        let error = check_tnn_neville(&[vec![1, 2], vec![3, 4]]).unwrap_err();
+        let error = check_totally_nonnegative_neville(&[vec![1, 2], vec![3, 4]]).unwrap_err();
         assert_eq!(
             error,
             TotalPositivityError::NegativeEliminationEntry {

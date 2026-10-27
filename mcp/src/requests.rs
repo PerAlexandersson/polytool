@@ -586,7 +586,7 @@ pub struct AssessGeneratingDescriptionToolRequest {
 /// or `matrix`.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct TnnNetworkRequest {
+pub struct TotallyNonnegativeNetworkRequest {
     /// Monic polynomial rows `P_0, P_1, ...` with `deg P_n = n` (ascending
     /// coefficients); `P_0 = 1` is prepended when the first row has degree 1.
     pub polynomials: Option<Vec<BigIntPolynomialInput>>,

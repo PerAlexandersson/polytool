@@ -34,7 +34,7 @@ pub(crate) fn load_catalog(path: &Path) -> Result<Vec<OeisCatalogRecord>, String
 /// is replaced atomically (written next to it, then renamed).
 pub(crate) fn write_catalog(path: &Path, records: &mut [OeisCatalogRecord]) -> Result<(), String> {
     records.sort_by(|left, right| left.id.cmp(&right.id));
-    OeisCatalogRecord::validate_all(records)?;
+    OeisCatalogRecord::validate_all(records).map_err(|error| error.to_string())?;
     let mut text = String::new();
     for record in records.iter() {
         text.push_str(&record.to_jsonl_line());

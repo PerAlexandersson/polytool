@@ -8,9 +8,10 @@ use polytool::sequences::{
     type_b_eulerian_polynomials_bigint,
 };
 use polytool::{
-    check_tnn_neville_bigint, is_real_rooted_bigint_coeffs, recognize_brenti_strip_digraph,
-    BigRational, BrentiEdge, BrentiRecognition, BrentiRecognitionError, BrentiRecognitionOptions,
-    BrentiStripDigraph, BrentiWeightDomain, Polynomial,
+    check_totally_nonnegative_neville_bigint, is_real_rooted_bigint_coeffs,
+    recognize_brenti_strip_digraph, BigRational, BrentiEdge, BrentiRecognition,
+    BrentiRecognitionError, BrentiRecognitionOptions, BrentiStripDigraph, BrentiWeightDomain,
+    Polynomial,
 };
 
 fn bi(v: i64) -> BigInt {
@@ -359,7 +360,11 @@ fn random_planar_digraphs_are_recovered() {
                     matrix[n + 1][k] = c.clone();
                 }
             }
-            assert!(check_tnn_neville_bigint(&matrix).is_ok(), "{:?}", matrix);
+            assert!(
+                check_totally_nonnegative_neville_bigint(&matrix).is_ok(),
+                "{:?}",
+                matrix
+            );
             assert!(digraph.validate().is_ok());
         }
         recovered += 1;

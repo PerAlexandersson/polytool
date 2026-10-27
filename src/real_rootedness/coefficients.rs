@@ -384,6 +384,8 @@ pub fn is_gamma_positive_ignoring_initial_zeros_bigint_coeffs(coeffs: &[BigInt])
 /// `(n-1)/2`. This returns the coefficient vectors of `(a(x), b(x))` in ascending
 /// degree order, or `None` if `deg(p) > n`.
 ///
+/// # Panics
+///
 /// Panics if a coefficient of `a` or `b` does not fit in `i64` (their
 /// coefficients are integer combinations of the input's); use
 /// [`stapledon_decomposition_bigint_coeffs`] for large values.

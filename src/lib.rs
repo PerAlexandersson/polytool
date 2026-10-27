@@ -158,18 +158,22 @@ pub mod version;
 pub use linalg::{
     bareiss_determinant_bigint, bareiss_determinant_polynomial_bigint,
     bareiss_leading_principal_minors_bigint, bareiss_leading_principal_minors_polynomial_bigint,
-    check_tnn_neville, check_tnn_neville_bigint, check_total_positivity, determinant,
-    is_positive_definite, is_positive_definite_bareiss, is_positive_definite_modular,
-    is_positive_semidefinite, is_sparse_modular_linear_system_consistent,
-    is_totally_nonnegative_by_minors, is_totally_nonnegative_neville,
-    modular_leading_principal_minors_bigint, sparse_modular_linear_system_consistency,
+    check_total_positivity, check_totally_nonnegative_neville,
+    check_totally_nonnegative_neville_bigint, determinant, is_positive_definite,
+    is_positive_definite_bareiss, is_positive_definite_modular, is_positive_semidefinite,
+    is_sparse_modular_linear_system_consistent, is_totally_nonnegative_by_minors,
+    is_totally_nonnegative_neville, modular_leading_principal_minors_bigint,
+    sparse_modular_linear_system_consistency,
     sparse_modular_linear_system_consistency_with_options, sparse_modular_linear_system_solution,
     SparseModEliminationError, SparseModEliminationOptions, SparseModEliminationResult,
     SparseModEliminationStats, SparseModRow, SparseModRowError, SparseModRowOrder,
     TotalPositivityError, MODULAR_POSITIVE_DEFINITE_DIMENSION_THRESHOLD,
 };
 #[allow(deprecated)]
-pub use linalg::{is_tnn, is_totally_nonnegative, sparse_modular_linear_system_consistent};
+pub use linalg::{
+    check_tnn_neville, check_tnn_neville_bigint, is_tnn, is_totally_nonnegative,
+    sparse_modular_linear_system_consistent,
+};
 
 pub mod parse;
 pub mod real_rooted_enumeration;
@@ -228,15 +232,17 @@ pub use hstar_inequalities::{
 pub use hurwitz::{hurwitz_leading_minors_bigint, hurwitz_matrix_bigint, is_hurwitz_stable_bigint};
 #[allow(deprecated)]
 pub use interlacing_matrix::{
-    check_lace_sequence_total_nonnegative_i64, check_lace_total_nonnegative_i64,
+    check_lace_sequence_total_nonnegative_i64, check_lace_tnn_neville_bigint,
+    check_lace_tnn_neville_i64, check_lace_total_nonnegative_i64,
     is_lace_sequence_totally_nonnegative_i64, is_lace_totally_nonnegative_i64,
 };
 pub use interlacing_matrix::{
-    check_lace_sequence_totally_nonnegative_by_minors_i64, check_lace_tnn_neville_bigint,
-    check_lace_tnn_neville_i64, check_lace_totally_nonnegative_by_minors_i64,
-    is_lace_sequence_totally_nonnegative_by_minors_i64, is_lace_totally_nonnegative_by_minors_i64,
-    lace_matrix, lace_matrix_bigint, lace_matrix_i64, lace_matrix_sequence,
-    lace_matrix_sequence_bigint, lace_matrix_sequence_i64, InterlacingMatrixError,
+    check_lace_sequence_totally_nonnegative_by_minors_i64,
+    check_lace_totally_nonnegative_by_minors_i64, check_lace_totally_nonnegative_neville_bigint,
+    check_lace_totally_nonnegative_neville_i64, is_lace_sequence_totally_nonnegative_by_minors_i64,
+    is_lace_totally_nonnegative_by_minors_i64, lace_matrix, lace_matrix_bigint, lace_matrix_i64,
+    lace_matrix_sequence, lace_matrix_sequence_bigint, lace_matrix_sequence_i64,
+    InterlacingMatrixError,
 };
 pub use left_production::{
     check_left_production_matrix, left_production_matrix, LeftProductionCertificate,
@@ -366,11 +372,17 @@ pub use sturm_cf::{
     check_sturm_continued_fraction_certificate_with_options, SturmContinuedFractionError,
     SturmContinuedFractionOptions, SturmContinuedFractionSummary,
 };
+#[allow(deprecated)]
 pub use tnn_network::{
-    build_tnn_certificate_from_monic_polynomials, chain_polynomials_bigint,
-    chain_polynomials_rational, check_chain_polynomials_bigint, check_lower_unitriangular_tnn,
-    coefficient_matrix_from_monic_polynomials, evaluate_path_matrix,
-    lower_triangular_rows_from_square, reconstruct_canonical_tnn_network,
-    verify_path_matrix_certificate, CanonicalPlanarNetwork, CanonicalTnnProof,
-    ChainPolynomialReport, NegativeMinor, NetworkError,
+    build_tnn_certificate_from_monic_polynomials, check_lower_unitriangular_tnn,
+    reconstruct_canonical_tnn_network, CanonicalTnnProof,
+};
+pub use tnn_network::{
+    build_totally_nonnegative_certificate_from_monic_polynomials, chain_polynomials_bigint,
+    chain_polynomials_rational, check_chain_polynomials_bigint,
+    check_lower_unitriangular_totally_nonnegative, coefficient_matrix_from_monic_polynomials,
+    evaluate_path_matrix, lower_triangular_rows_from_square,
+    reconstruct_canonical_totally_nonnegative_network, verify_path_matrix_certificate,
+    CanonicalPlanarNetwork, CanonicalTotallyNonnegativeProof, ChainPolynomialReport, NegativeMinor,
+    NetworkError,
 };

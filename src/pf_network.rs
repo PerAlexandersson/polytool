@@ -1385,8 +1385,14 @@ mod tests {
                 .collect()
         };
         let row = vec![q(1), q(1), q(1)];
-        assert!(crate::check_tnn_neville_bigint(&to_int(toeplitz_window(&row, 3))).is_ok());
-        assert!(crate::check_tnn_neville_bigint(&to_int(toeplitz_window(&row, 4))).is_err());
+        assert!(
+            crate::check_totally_nonnegative_neville_bigint(&to_int(toeplitz_window(&row, 3)))
+                .is_ok()
+        );
+        assert!(
+            crate::check_totally_nonnegative_neville_bigint(&to_int(toeplitz_window(&row, 4)))
+                .is_err()
+        );
     }
 
     #[test]

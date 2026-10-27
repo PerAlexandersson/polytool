@@ -140,10 +140,9 @@ pub(super) fn scalar_description(input: ScalarInput<'_>) -> RepresentationDescri
     };
     let json = item.scalar.as_ref().expect("scalar");
     let assessed = ImplicitRelation::from_recurrence(input.rule).and_then(|(relation, r)| {
-        let first_base = input
-            .valid_from
-            .checked_sub(r)
-            .ok_or_else(|| "the rule starts before its leader shift".to_string())?;
+        let first_base = input.valid_from.checked_sub(r).ok_or_else(|| {
+            RecurrenceError::InvalidInput("the rule starts before its leader shift".to_string())
+        })?;
         let description = GeneratingDescription {
             first_index: json.first_index,
             seeds: json.initial_polynomials.clone(),
@@ -325,14 +324,16 @@ pub(super) fn encode_states(states: &[Vec<Vec<Q>>]) -> Vec<Vec<Vec<String>>> {
         .collect()
 }
 
-pub(super) fn decode_states(states: &[Vec<Vec<String>>]) -> Result<Vec<Vec<Vec<Q>>>, String> {
+pub(super) fn decode_states(
+    states: &[Vec<Vec<String>>],
+) -> Result<Vec<Vec<Vec<Q>>>, RecurrenceError> {
     states
         .iter()
         .map(|s| s.iter().map(|c| decode_poly(c)).collect())
         .collect()
 }
 
-pub(super) fn scalar_rows(node: &RepresentationNode) -> Result<Vec<Vec<Q>>, String> {
+pub(super) fn scalar_rows(node: &RepresentationNode) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     node.states
         .iter()
         .map(|s| decode_poly(&s[0]))

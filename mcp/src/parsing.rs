@@ -31,8 +31,8 @@ pub(crate) type FamilySourceParse = (
     Result<Vec<NormalizedPolynomial>, Vec<ParsePolynomialItem>>,
 );
 
-pub(crate) fn invalid_params(message: impl Into<String>) -> McpError {
-    McpError::invalid_params(message.into(), None)
+pub(crate) fn invalid_params(message: impl std::fmt::Display) -> McpError {
+    McpError::invalid_params(message.to_string(), None)
 }
 
 pub(crate) fn validate_mcp_text(text: &str, description: &str) -> Result<(), String> {

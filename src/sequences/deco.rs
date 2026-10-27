@@ -69,7 +69,10 @@ pub fn joint_histograms_bigint(max_size: usize) -> Vec<JointHistogramBigInt> {
 
 /// Generate the joint histograms with checked `i64` coefficients.
 ///
-/// This convenience wrapper panics if a coefficient does not fit in `i64`.
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`.
 pub fn joint_histograms(max_size: usize) -> Vec<Vec<Vec<i64>>> {
     bigint_tables_to_i64(joint_histograms_bigint(max_size))
 }
@@ -100,7 +103,10 @@ pub fn deco_polynomials_bigint(max_index: usize, exception_weight: &BigInt) -> V
 
 /// Generate the integer-specialized deco family with checked `i64` coefficients.
 ///
-/// This convenience wrapper panics if a coefficient does not fit in `i64`.
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`.
 pub fn deco_polynomials(max_index: usize, exception_weight: i64) -> Vec<Vec<i64>> {
     bigint_polys_to_i64(deco_polynomials_bigint(
         max_index,
@@ -145,7 +151,10 @@ pub fn eligible_site_layers_bigint(max_size: usize) -> Vec<Vec<Vec<BigInt>>> {
 
 /// Generate the fixed eligible-site layers with checked `i64` coefficients.
 ///
-/// This convenience wrapper panics if a coefficient does not fit in `i64`.
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`.
 pub fn eligible_site_layers(max_size: usize) -> Vec<Vec<Vec<i64>>> {
     bigint_tables_to_i64(eligible_site_layers_bigint(max_size))
 }
@@ -184,7 +193,10 @@ pub fn selected_join_layers_bigint(max_size: usize) -> Vec<Vec<Vec<BigInt>>> {
 
 /// Generate the fixed selected-join layers with checked `i64` coefficients.
 ///
-/// This convenience wrapper panics if a coefficient does not fit in `i64`.
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`.
 pub fn selected_join_layers(max_size: usize) -> Vec<Vec<Vec<i64>>> {
     bigint_tables_to_i64(selected_join_layers_bigint(max_size))
 }
@@ -242,7 +254,10 @@ pub fn selected_join_gamma_layers_bigint(max_size: usize) -> Vec<Vec<Vec<BigInt>
 
 /// Generate selected-join gamma layers with checked `i64` coefficients.
 ///
-/// This convenience wrapper panics if a coefficient does not fit in `i64`.
+///
+/// # Panics
+///
+/// Panics if a coefficient does not fit in `i64`.
 pub fn selected_join_gamma_layers(max_size: usize) -> Vec<Vec<Vec<i64>>> {
     bigint_tables_to_i64(selected_join_gamma_layers_bigint(max_size))
 }

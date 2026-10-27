@@ -18,12 +18,12 @@ use crate::parsing::{bigint_strings, invalid_params, parse_bigint_batch, parse_b
 use crate::requests::{
     BigIntCoefficientInput, BigIntPolynomialBatchInput, BigIntPolynomialInput,
     BrentiRecognitionRequest, BrentiWeightsInput, LeftProductionRequest, PfNetworkRequest,
-    TnnNetworkRequest,
+    TotallyNonnegativeNetworkRequest,
 };
 use crate::responses::{
     BrentiRecognitionOptionsItem, BrentiRecognitionResponse, ChainInterlacingItem,
     ChainPolynomialItem, ChainPolynomialsItem, NegativeMinorItem, StripDigraphEdgeItem,
-    StripDigraphItem, TnnFailureItem, TnnNetworkResponse,
+    StripDigraphItem, TotallyNonnegativeFailureItem, TotallyNonnegativeNetworkResponse,
 };
 use crate::responses::{
     LeftProductionResponse, PfNetworkItem, PfNetworkOptionsItem, PfNetworkResponse,
@@ -70,7 +70,9 @@ fn parse_rows(
         .collect()
 }
 
-fn parse_tnn_input(input: &TnnNetworkRequest) -> Result<(bool, Vec<Vec<BigInt>>), McpError> {
+fn parse_tnn_input(
+    input: &TotallyNonnegativeNetworkRequest,
+) -> Result<(bool, Vec<Vec<BigInt>>), McpError> {
     let given = [
         input.polynomials.is_some(),
         input.text.is_some(),
@@ -117,14 +119,14 @@ fn network_error_kind(error: &NetworkError) -> &'static str {
         NetworkError::InvalidRowLength { .. } => "invalid_row_length",
         NetworkError::NegativeEntry { .. } => "negative_entry",
         NetworkError::NonUnitDiagonal { .. } => "non_unit_diagonal",
-        NetworkError::NotTnn { .. } => "not_tnn",
+        NetworkError::NotTotallyNonnegative { .. } => "not_tnn",
         NetworkError::ZeroTailViolation { .. } => "zero_tail_violation",
         NetworkError::NegativeReducedEntry { .. } => "negative_reduced_entry",
         NetworkError::ReconstructionMismatch => "reconstruction_mismatch",
     }
 }
 
-pub(crate) fn tnn_failure_item(error: &NetworkError) -> TnnFailureItem {
+pub(crate) fn tnn_failure_item(error: &NetworkError) -> TotallyNonnegativeFailureItem {
     let (row, col, value) = match error {
         NetworkError::NotSquare { row, .. } | NetworkError::InvalidRowLength { row, .. } => {
             (Some(*row), None, None)
@@ -155,7 +157,7 @@ pub(crate) fn tnn_failure_item(error: &NetworkError) -> TnnFailureItem {
         _ => (None, None, None),
     };
     let witness = match error {
-        NetworkError::NotTnn {
+        NetworkError::NotTotallyNonnegative {
             witness: Some(minor),
             ..
         } => Some(NegativeMinorItem {
@@ -165,7 +167,7 @@ pub(crate) fn tnn_failure_item(error: &NetworkError) -> TnnFailureItem {
         }),
         _ => None,
     };
-    TnnFailureItem {
+    TotallyNonnegativeFailureItem {
         kind: network_error_kind(error).to_string(),
         message: error.to_string(),
         row,
@@ -229,8 +231,8 @@ fn rational_rows(rows: &[Vec<BigRational>]) -> Vec<Vec<String>> {
 
 /// Run `check_tnn_network`.
 pub(crate) fn tnn_network_response(
-    input: &TnnNetworkRequest,
-) -> Result<TnnNetworkResponse, McpError> {
+    input: &TotallyNonnegativeNetworkRequest,
+) -> Result<TotallyNonnegativeNetworkResponse, McpError> {
     let (matrix_mode, lines) = parse_tnn_input(input)?;
     let input_rows = lines.len();
     let rows = if matrix_mode {
@@ -247,9 +249,9 @@ pub(crate) fn tnn_network_response(
     let verdict = rows
         .as_ref()
         .map_err(Clone::clone)
-        .and_then(|r| check_lower_unitriangular_tnn(r));
+        .and_then(|r| check_lower_unitriangular_totally_nonnegative(r));
     let (lambda, certificate_verified) = match (&rows, &verdict) {
-        (Ok(r), Ok(())) => match reconstruct_canonical_tnn_network(r) {
+        (Ok(r), Ok(())) => match reconstruct_canonical_totally_nonnegative_network(r) {
             Ok(network) => (
                 Some(rational_rows(&network.lambda)),
                 Some(verify_path_matrix_certificate(r, &network)),
@@ -265,7 +267,7 @@ pub(crate) fn tnn_network_response(
                 .and_then(|r| check_chain_polynomials_bigint(r)),
         )
     });
-    Ok(TnnNetworkResponse {
+    Ok(TotallyNonnegativeNetworkResponse {
         input_mode: if matrix_mode { "matrix" } else { "polynomials" }.to_string(),
         input_rows,
         prepended_p0,
@@ -273,7 +275,7 @@ pub(crate) fn tnn_network_response(
             .as_ref()
             .ok()
             .map(|r| r.iter().map(|row| bigint_strings(row)).collect()),
-        tnn: verdict.is_ok(),
+        totally_nonnegative: verdict.is_ok(),
         failure: verdict.as_ref().err().map(tnn_failure_item),
         lambda,
         certificate_verified,
@@ -602,7 +604,7 @@ pub(crate) fn left_production_response(
             .map(|row| bigint_strings(row))
             .collect(),
         production_matrix: rational_rows(&report.production_matrix),
-        tnn: report.tnn,
+        totally_nonnegative: report.totally_nonnegative,
         failure_reason: report.failure_reason.clone(),
         negative_minor: report
             .negative_minor

@@ -40,7 +40,7 @@ use crate::requests::{
     CyclicSievingSequenceRequest, EhrhartHstarMode, EhrhartHstarRequest, FindRecurrenceRequest,
     GenerateOeisRowsRequest, GenerateRecurrenceRowsRequest, GenerateSequenceRequest,
     GetOeisSequenceRequest, HStarInequalitiesRequest, ListOeisSequencesRequest,
-    PolynomialBatchInput, RecurrenceSpacesToolRequest, TnnNetworkRequest,
+    PolynomialBatchInput, RecurrenceSpacesToolRequest, TotallyNonnegativeNetworkRequest,
     VerifyRecurrenceSpacesToolRequest,
 };
 use crate::requests::{ImplicitRelationSearchToolRequest, VerifyImplicitRelationSearchToolRequest};
@@ -60,7 +60,7 @@ use crate::responses::{
     InterlacingProfileResponse, InterlacingSequenceResponse, ListOeisSequencesResponse,
     MagicBasisReport, OeisPolynomialRow, ParsePolynomialsResponse, PolynomialPropertiesItem,
     PolynomialPropertiesResponse, RealRootsItem, RealRootsResponse, RecurrenceSearchStatus,
-    ResultantResponse, TnnNetworkResponse,
+    ResultantResponse, TotallyNonnegativeNetworkResponse,
 };
 use num_bigint::BigInt;
 use polytool::recurrence::{
@@ -1327,8 +1327,8 @@ impl PolynomialToolsServer {
     )]
     pub fn check_tnn_network(
         &self,
-        Parameters(input): Parameters<TnnNetworkRequest>,
-    ) -> Result<Json<TnnNetworkResponse>, McpError> {
+        Parameters(input): Parameters<TotallyNonnegativeNetworkRequest>,
+    ) -> Result<Json<TotallyNonnegativeNetworkResponse>, McpError> {
         Ok(Json(tnn_network_response(&input)?))
     }
 

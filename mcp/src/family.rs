@@ -144,7 +144,7 @@ pub(crate) fn check_family_lace(
                 max_minor_size: request.max_minor_size.unwrap_or(0),
                 rows: 0,
                 columns: block_cols,
-                tnn: false,
+                totally_nonnegative: false,
                 error: Some("finite Lace matrix row count overflow".to_string()),
                 matrix: None,
             };
@@ -169,7 +169,7 @@ pub(crate) fn check_family_lace(
             max_minor_size,
             rows,
             columns: block_cols,
-            tnn: false,
+            totally_nonnegative: false,
             error: Some(format!(
                 "finite Lace request exceeds MCP limits ({MCP_MAX_LACE_MATRIX_CELLS} matrix cells and {MCP_MAX_LACE_MINORS} checked minors)"
             )),
@@ -193,7 +193,7 @@ pub(crate) fn check_family_lace(
                 max_minor_size,
                 rows,
                 columns,
-                tnn: check.is_ok(),
+                totally_nonnegative: check.is_ok(),
                 error: check.err().map(|err| err.to_string()),
                 matrix: request.include_matrix.unwrap_or(false).then_some(matrix),
             }
@@ -204,7 +204,7 @@ pub(crate) fn check_family_lace(
             max_minor_size: request.max_minor_size.unwrap_or(0),
             rows: 0,
             columns: 0,
-            tnn: false,
+            totally_nonnegative: false,
             error: Some(error.to_string()),
             matrix: None,
         },
@@ -350,7 +350,7 @@ pub(crate) fn first_family_failure(
     }
 
     if let Some(lace) = lace {
-        if !lace.tnn {
+        if !lace.totally_nonnegative {
             return Some(format!(
                 "finite Lace truncation is not TNN up to minors of size {}",
                 lace.max_minor_size
@@ -460,7 +460,11 @@ pub(crate) fn family_markdown(
         out.push_str(&format!(
             "- Checked minors up to size `{}`: {}.\n",
             lace.max_minor_size,
-            if lace.tnn { "TNN" } else { "not TNN" }
+            if lace.totally_nonnegative {
+                "TNN"
+            } else {
+                "not TNN"
+            }
         ));
         if let Some(error) = &lace.error {
             out.push_str(&format!("- Failure: `{error}`\n"));

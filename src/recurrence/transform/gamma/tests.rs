@@ -209,6 +209,7 @@ fn gamma_transport_rejects_non_symmetric_rules_and_rows() {
     let request = RecurrenceTransformRequest::from_source(map, source, 4);
     assert!(transform_recurrence(&request)
         .unwrap_err()
+        .to_string()
         .contains("not symmetric"));
 
     // An additive term picks up the index-dependent factor (1 + x)^(-d_m).

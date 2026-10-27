@@ -10,6 +10,12 @@ use num_bigint::BigInt;
 use num_traits::{One, Zero};
 
 /// Compute the determinant of a BigInt matrix using fraction-free elimination.
+///
+/// The `0 x 0` matrix has determinant `1`.
+///
+/// # Panics
+///
+/// Panics if `mat` is not square (a ragged or rectangular matrix).
 pub fn determinant(mat: &[Vec<BigInt>]) -> BigInt {
     assert!(
         is_square_bigint_matrix(mat),
@@ -72,6 +78,7 @@ pub fn determinant(mat: &[Vec<BigInt>]) -> BigInt {
 /// `BigInt` operations.
 ///
 /// # Panics
+///
 /// Panics if `mat` is not square.
 pub fn characteristic_polynomial_bigint(mat: &[Vec<BigInt>]) -> Vec<BigInt> {
     assert!(
@@ -120,6 +127,7 @@ pub fn characteristic_polynomial_bigint(mat: &[Vec<BigInt>]) -> Vec<BigInt> {
 /// be any square integer matrix.  Returns `max_len + 1` values.
 ///
 /// # Panics
+///
 /// Panics if `adjacency` is not square.
 pub fn closed_walk_counts_bigint(adjacency: &[Vec<BigInt>], max_len: usize) -> Vec<BigInt> {
     assert!(

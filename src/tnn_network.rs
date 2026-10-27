@@ -10,7 +10,7 @@
 //! zero-based, and polynomial coefficient vectors are ascending.  Verdicts are exact
 //! (Neville elimination over `BigInt`, rational path-matrix evaluation) and
 //! failures are returned as [`NetworkError`] values rather than panics.
-//! For the underlying TNN test see [`crate::linalg::check_tnn_neville_bigint`];
+//! For the underlying TNN test see [`crate::linalg::check_totally_nonnegative_neville_bigint`];
 //! for planar strip digraphs with height-dependent transitions see
 //! [`crate::brenti_sequence`].
 //!
@@ -25,7 +25,7 @@
 //! When a matrix is rejected, [`NetworkError`] says why: a malformed shape
 //! (row length, nonzero entry above the diagonal, non-unit diagonal), a
 //! negative entry, or a failure of total non-negativity.  In the last case
-//! [`check_lower_unitriangular_tnn`] also searches for an explicit
+//! [`check_lower_unitriangular_totally_nonnegative`] also searches for an explicit
 //! [`NegativeMinor`] whose exact value can be recomputed independently.
 //!
 //! # Chain polynomials
@@ -52,7 +52,7 @@
 use crate::linalg::determinant;
 use crate::real_rootedness::{check_weak_interlacing_bigint_coeffs, is_real_rooted_bigint_coeffs};
 use crate::root_count::count_root_signs_prs_bigint_coeffs;
-use crate::{check_tnn_neville_bigint, vec_poly, Polynomial};
+use crate::{check_totally_nonnegative_neville_bigint, vec_poly, Polynomial};
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
 use std::fmt;
@@ -85,7 +85,7 @@ impl<T> CanonicalPlanarNetwork<T> {
 
 /// Canonical certificate consisting of a coefficient matrix and its network.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalTnnProof {
+pub struct CanonicalTotallyNonnegativeProof {
     /// The lower-unitriangular coefficient matrix in triangular row format:
     /// `coefficient_matrix[n][k]` is the coefficient of `t^k` in the `n`-th
     /// polynomial of the input sequence.
@@ -94,7 +94,14 @@ pub struct CanonicalTnnProof {
     pub network: CanonicalPlanarNetwork<BigRational>,
 }
 
-impl CanonicalTnnProof {
+/// Deprecated name of [`CanonicalTotallyNonnegativeProof`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `CanonicalTotallyNonnegativeProof`"
+)]
+pub type CanonicalTnnProof = CanonicalTotallyNonnegativeProof;
+
+impl CanonicalTotallyNonnegativeProof {
     /// Recompute the path matrix of the stored network.
     pub fn evaluated_path_matrix(&self) -> Vec<Vec<BigRational>> {
         evaluate_path_matrix(&self.network)
@@ -151,7 +158,7 @@ impl fmt::Display for NegativeMinor {
 ///
 /// The shape variants (`InvalidRowLength`, `NotSquare`,
 /// `NonzeroAboveDiagonal`, `NonUnitDiagonal`) and `NegativeEntry` name the
-/// offending entry.  `NotTnn` carries the Neville-elimination diagnosis and,
+/// offending entry.  `NotTotallyNonnegative` carries the Neville-elimination diagnosis and,
 /// when the bounded search finds one, an explicit [`NegativeMinor`].
 /// `NegativeReducedEntry` names the failing Whitney-reduction step.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -233,7 +240,7 @@ pub enum NetworkError {
     /// `witness` is an explicit negative minor when the bounded search finds
     /// one (it always does for matrices with at most
     /// [`EXHAUSTIVE_MINOR_SEARCH_MAX_DIMENSION`] rows).
-    NotTnn {
+    NotTotallyNonnegative {
         /// Message of the failing Neville-elimination step.
         reason: String,
         /// An explicit negative minor, when the bounded search finds one.
@@ -322,7 +329,7 @@ impl fmt::Display for NetworkError {
                 "matrix is not lower triangular: entry ({},{}) = {} lies above the diagonal",
                 row, col, value
             ),
-            Self::NotTnn { reason, witness } => {
+            Self::NotTotallyNonnegative { reason, witness } => {
                 write!(f, "matrix is not totally nonnegative: {}", reason)?;
                 if let Some(witness) = witness {
                     write!(f, "; witness: {}", witness)?;
@@ -500,8 +507,8 @@ const MINOR_SEARCH_BUDGET: usize = 200_000;
 /// totally nonnegative, with a structured diagnosis on failure.
 ///
 /// The decision is made by exact Neville elimination
-/// ([`check_tnn_neville_bigint`]) on the zero-padded square matrix.  On
-/// failure, [`NetworkError::NotTnn`] carries the elimination message and an
+/// ([`check_totally_nonnegative_neville_bigint`]) on the zero-padded square matrix.  On
+/// failure, [`NetworkError::NotTotallyNonnegative`] carries the elimination message and an
 /// explicit [`NegativeMinor`] found by a search that first tries structured
 /// families (contiguous rows against contiguous or initial columns) and then
 /// all minors, exhaustively for matrices with at most
@@ -511,14 +518,14 @@ const MINOR_SEARCH_BUDGET: usize = 200_000;
 ///
 /// ```
 /// use num_bigint::BigInt;
-/// use polytool::tnn_network::{check_lower_unitriangular_tnn, NetworkError};
+/// use polytool::tnn_network::{check_lower_unitriangular_totally_nonnegative, NetworkError};
 ///
 /// let rows: Vec<Vec<BigInt>> = vec![vec![1], vec![1, 1], vec![2, 0, 1]]
 ///     .into_iter()
 ///     .map(|r: Vec<i64>| r.into_iter().map(BigInt::from).collect())
 ///     .collect();
-/// match check_lower_unitriangular_tnn(&rows) {
-///     Err(NetworkError::NotTnn { witness: Some(minor), .. }) => {
+/// match check_lower_unitriangular_totally_nonnegative(&rows) {
+///     Err(NetworkError::NotTotallyNonnegative { witness: Some(minor), .. }) => {
 ///         // rows {1,2}, columns {0,1}: 1*0 - 1*2 = -2
 ///         assert_eq!(minor.rows, vec![1, 2]);
 ///         assert_eq!(minor.cols, vec![0, 1]);
@@ -527,24 +534,37 @@ const MINOR_SEARCH_BUDGET: usize = 200_000;
 ///     other => panic!("unexpected {:?}", other),
 /// }
 /// ```
-pub fn check_lower_unitriangular_tnn(rows: &[Vec<BigInt>]) -> Result<(), NetworkError> {
+pub fn check_lower_unitriangular_totally_nonnegative(
+    rows: &[Vec<BigInt>],
+) -> Result<(), NetworkError> {
     validate_lower_unitriangular_nonnegative_matrix(rows)?;
     let padded = pad_to_square_matrix(rows);
-    check_tnn_neville_bigint(&padded).map_err(|error| NetworkError::NotTnn {
-        reason: error.to_string(),
-        witness: find_negative_minor(&padded),
+    check_totally_nonnegative_neville_bigint(&padded).map_err(|error| {
+        NetworkError::NotTotallyNonnegative {
+            reason: error.to_string(),
+            witness: find_negative_minor(&padded),
+        }
     })
+}
+
+/// Deprecated name of [`check_lower_unitriangular_totally_nonnegative`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `check_lower_unitriangular_totally_nonnegative`"
+)]
+pub fn check_lower_unitriangular_tnn(rows: &[Vec<BigInt>]) -> Result<(), NetworkError> {
+    check_lower_unitriangular_totally_nonnegative(rows)
 }
 
 /// Reconstruct the canonical network certificate from a lower-unitriangular TNN matrix.
 ///
-/// Errors are those of [`check_lower_unitriangular_tnn`], plus the Whitney
+/// Errors are those of [`check_lower_unitriangular_totally_nonnegative`], plus the Whitney
 /// reduction diagnostics [`NetworkError::ZeroTailViolation`] and
 /// [`NetworkError::NegativeReducedEntry`] (which cannot occur for a TNN input).
-pub fn reconstruct_canonical_tnn_network(
+pub fn reconstruct_canonical_totally_nonnegative_network(
     rows: &[Vec<BigInt>],
 ) -> Result<CanonicalPlanarNetwork<BigRational>, NetworkError> {
-    check_lower_unitriangular_tnn(rows)?;
+    check_lower_unitriangular_totally_nonnegative(rows)?;
 
     let first_zero = rows
         .iter()
@@ -573,19 +593,48 @@ pub fn reconstruct_canonical_tnn_network(
     Ok(network)
 }
 
+/// Deprecated name of [`reconstruct_canonical_totally_nonnegative_network`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `reconstruct_canonical_totally_nonnegative_network`"
+)]
+pub fn reconstruct_canonical_tnn_network(
+    rows: &[Vec<BigInt>],
+) -> Result<CanonicalPlanarNetwork<BigRational>, NetworkError> {
+    reconstruct_canonical_totally_nonnegative_network(rows)
+}
+
 /// Build a full canonical TNN certificate from a monic polynomial sequence.
-pub fn build_tnn_certificate_from_monic_polynomials(
+pub fn build_totally_nonnegative_certificate_from_monic_polynomials(
     polys: &[Polynomial<BigInt>],
-) -> Result<CanonicalTnnProof, NetworkError> {
+) -> Result<CanonicalTotallyNonnegativeProof, NetworkError> {
     let coefficient_matrix = coefficient_matrix_from_monic_polynomials(polys)?;
-    let network = reconstruct_canonical_tnn_network(&coefficient_matrix)?;
-    Ok(CanonicalTnnProof {
+    let network = reconstruct_canonical_totally_nonnegative_network(&coefficient_matrix)?;
+    Ok(CanonicalTotallyNonnegativeProof {
         coefficient_matrix,
         network,
     })
 }
 
+/// Deprecated name of [`build_totally_nonnegative_certificate_from_monic_polynomials`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `build_totally_nonnegative_certificate_from_monic_polynomials`"
+)]
+pub fn build_tnn_certificate_from_monic_polynomials(
+    polys: &[Polynomial<BigInt>],
+) -> Result<CanonicalTotallyNonnegativeProof, NetworkError> {
+    build_totally_nonnegative_certificate_from_monic_polynomials(polys)
+}
+
 /// Evaluate the triangular path matrix of `Gamma_N(lambda)`.
+///
+/// # Panics
+///
+/// Panics if `network` is malformed, that is, if `lambda[n]` does not have
+/// exactly `n + 1` entries for every row `n`.  Networks built by
+/// [`reconstruct_canonical_totally_nonnegative_network`] always have this shape;
+/// [`verify_path_matrix_certificate`] checks it instead of panicking.
 pub fn evaluate_path_matrix(
     network: &CanonicalPlanarNetwork<BigRational>,
 ) -> Vec<Vec<BigRational>> {
@@ -619,11 +668,19 @@ pub fn evaluate_path_matrix(
 }
 
 /// Check whether a network evaluates back to a given integer matrix.
+///
+/// A malformed network (some `lambda[n]` without exactly `n + 1` entries)
+/// evaluates to nothing and is rejected with `false`.
 pub fn verify_path_matrix_certificate(
     rows: &[Vec<BigInt>],
     network: &CanonicalPlanarNetwork<BigRational>,
 ) -> bool {
-    evaluate_path_matrix(network) == bigint_triangular_to_q(rows)
+    let well_formed = network
+        .lambda
+        .iter()
+        .enumerate()
+        .all(|(n, row)| row.len() == n + 1);
+    well_formed && evaluate_path_matrix(network) == bigint_triangular_to_q(rows)
 }
 
 /// Chain polynomials of a lower-unitriangular integer matrix.
@@ -724,8 +781,8 @@ pub struct ChainPolynomialReport {
     /// `p_0, ..., p_N`, ascending coefficients, zero polynomial as `[0]`.
     pub chain_polynomials: Vec<Vec<BigInt>>,
     /// TNN verdict of the input matrix, with diagnostics on failure
-    /// (see [`check_lower_unitriangular_tnn`]).
-    pub tnn: Result<(), NetworkError>,
+    /// (see [`check_lower_unitriangular_totally_nonnegative`]).
+    pub totally_nonnegative_verdict: Result<(), NetworkError>,
     /// Whether `p_n` is real-rooted (the zero polynomial counts as real-rooted).
     pub real_rooted: Vec<bool>,
     /// Whether `p_n` is real-rooted with all zeros in `[-1, 0]`.
@@ -739,8 +796,14 @@ pub struct ChainPolynomialReport {
 
 impl ChainPolynomialReport {
     /// Whether the matrix is totally nonnegative.
+    pub fn is_totally_nonnegative(&self) -> bool {
+        self.totally_nonnegative_verdict.is_ok()
+    }
+
+    /// Deprecated name of [`ChainPolynomialReport::is_totally_nonnegative`].
+    #[deprecated(since = "0.6.0", note = "renamed to `is_totally_nonnegative`")]
     pub fn is_tnn(&self) -> bool {
-        self.tnn.is_ok()
+        self.is_totally_nonnegative()
     }
 
     /// Whether every chain polynomial is real-rooted in `[-1, 0]` and
@@ -752,7 +815,7 @@ impl ChainPolynomialReport {
     /// `true` would contradict Brändén--Saud Maia Leite, Theorem 3.7: the
     /// matrix is TNN but the chain-polynomial conclusion fails.
     pub fn contradicts_theorem(&self) -> bool {
-        self.is_tnn() && !self.chain_conclusion_holds()
+        self.is_totally_nonnegative() && !self.chain_conclusion_holds()
     }
 }
 
@@ -764,7 +827,7 @@ impl ChainPolynomialReport {
 /// checks of real-rootedness, location of the zeros in `[-1, 0]`, and
 /// interlacing `p_n ≺ p_{n+1}`.  Only shape errors (row lengths, unit
 /// diagonal) are returned as `Err`; a negative entry or a failing minor
-/// appears in [`ChainPolynomialReport::tnn`].
+/// appears in [`ChainPolynomialReport::totally_nonnegative_verdict`].
 ///
 /// The theorem is about the chain polynomials, **not** about the row
 /// polynomials `sum_k r_{n,k} t^k`: `[[1,0,0],[1,1,0],[1,1,1]]` is TNN, its
@@ -774,7 +837,7 @@ pub fn check_chain_polynomials_bigint(
     rows: &[Vec<BigInt>],
 ) -> Result<ChainPolynomialReport, NetworkError> {
     let chain_polynomials = chain_polynomials_bigint(rows)?;
-    let tnn = check_lower_unitriangular_tnn(rows);
+    let totally_nonnegative_verdict = check_lower_unitriangular_totally_nonnegative(rows);
     let is_zero = |p: &[BigInt]| vec_poly::degree(p).is_none();
     let real_rooted: Vec<bool> = chain_polynomials
         .iter()
@@ -803,7 +866,7 @@ pub fn check_chain_polynomials_bigint(
         .collect();
     Ok(ChainPolynomialReport {
         chain_polynomials,
-        tnn,
+        totally_nonnegative_verdict,
         real_rooted,
         roots_in_minus_one_zero,
         interlacing,
@@ -1043,7 +1106,7 @@ mod tests {
     #[test]
     fn test_reconstruct_pascal_network() {
         let rows = bi_rows(&[&[1], &[1, 1], &[1, 2, 1], &[1, 3, 3, 1]]);
-        let network = reconstruct_canonical_tnn_network(&rows).unwrap();
+        let network = reconstruct_canonical_totally_nonnegative_network(&rows).unwrap();
         assert_eq!(
             network.lambda,
             vec![vec![br(1)], vec![br(1), br(1)], vec![br(1), br(1), br(1)],]
@@ -1063,15 +1126,15 @@ mod tests {
             .collect();
         assert_eq!(rows, bi_rows(&[&[1], &[2, 1], &[0, 3, 1]]));
 
-        let reconstructed = reconstruct_canonical_tnn_network(&rows).unwrap();
+        let reconstructed = reconstruct_canonical_totally_nonnegative_network(&rows).unwrap();
         assert_eq!(reconstructed, network);
     }
 
     #[test]
     fn test_reconstruct_rejects_non_tnn_matrix() {
         let rows = bi_rows(&[&[1], &[1, 1], &[2, 0, 1]]);
-        match reconstruct_canonical_tnn_network(&rows) {
-            Err(NetworkError::NotTnn {
+        match reconstruct_canonical_totally_nonnegative_network(&rows) {
+            Err(NetworkError::NotTotallyNonnegative {
                 witness: Some(witness),
                 ..
             }) => {
@@ -1080,7 +1143,10 @@ mod tests {
                 assert_eq!(witness.cols, vec![0, 1]);
                 assert_eq!(witness.value, bi(-2));
             }
-            other => panic!("expected NotTnn with witness, got {:?}", other),
+            other => panic!(
+                "expected NotTotallyNonnegative with witness, got {:?}",
+                other
+            ),
         }
     }
 
@@ -1090,9 +1156,9 @@ mod tests {
         // 2x2 minors are nonnegative (the sequence is log-concave), but the
         // sequence is not PF, so a 3x3 minor is negative.
         let rows = bi_rows(&[&[1], &[1, 1], &[1, 1, 1], &[0, 1, 1, 1]]);
-        let error = check_lower_unitriangular_tnn(&rows).unwrap_err();
+        let error = check_lower_unitriangular_totally_nonnegative(&rows).unwrap_err();
         match error {
-            NetworkError::NotTnn {
+            NetworkError::NotTotallyNonnegative {
                 witness: Some(witness),
                 ..
             } => {
@@ -1101,7 +1167,10 @@ mod tests {
                 assert_eq!(witness.cols, vec![0, 1, 2]);
                 assert_eq!(witness.value, bi(-1));
             }
-            other => panic!("expected NotTnn with witness, got {:?}", other),
+            other => panic!(
+                "expected NotTotallyNonnegative with witness, got {:?}",
+                other
+            ),
         }
     }
 
@@ -1113,12 +1182,12 @@ mod tests {
             for b in 0..=2 {
                 for c in 0..=2 {
                     let rows = bi_rows(&[&[1], &[a, 1], &[b, c, 1]]);
-                    match check_lower_unitriangular_tnn(&rows) {
+                    match check_lower_unitriangular_totally_nonnegative(&rows) {
                         Ok(()) => {
                             let padded = pad_to_square_matrix(&rows);
                             assert_eq!(find_negative_minor(&padded), None, "{:?}", rows);
                         }
-                        Err(NetworkError::NotTnn {
+                        Err(NetworkError::NotTotallyNonnegative {
                             witness: Some(w), ..
                         }) => assert!(w.verify(&rows)),
                         other => panic!("unexpected {:?} for {:?}", other, rows),
@@ -1152,7 +1221,7 @@ mod tests {
             })
         );
         assert_eq!(
-            check_lower_unitriangular_tnn(&bi_rows(&[&[1], &[-1, 1]])),
+            check_lower_unitriangular_totally_nonnegative(&bi_rows(&[&[1], &[-1, 1]])),
             Err(NetworkError::NegativeEntry {
                 row: 1,
                 col: 0,
@@ -1160,7 +1229,7 @@ mod tests {
             })
         );
         assert_eq!(
-            check_lower_unitriangular_tnn(&bi_rows(&[&[1], &[1, 2]])),
+            check_lower_unitriangular_totally_nonnegative(&bi_rows(&[&[1], &[1, 2]])),
             Err(NetworkError::NonUnitDiagonal {
                 row: 1,
                 value: bi(2)
@@ -1185,7 +1254,7 @@ mod tests {
         .collect();
         assert_eq!(chain, expected);
         let report = check_chain_polynomials_bigint(&rows).unwrap();
-        assert!(report.is_tnn());
+        assert!(report.is_totally_nonnegative());
         assert!(report.chain_conclusion_holds());
         assert!(!report.contradicts_theorem());
     }
@@ -1212,7 +1281,7 @@ mod tests {
         let rows = bi_rows(&[&[1], &[0, 1], &[0, 0, 1]]);
         let report = check_chain_polynomials_bigint(&rows).unwrap();
         assert_eq!(report.chain_polynomials[1], vec![bi(0)]);
-        assert!(report.is_tnn());
+        assert!(report.is_totally_nonnegative());
         assert!(report.chain_conclusion_holds());
     }
 
@@ -1223,11 +1292,26 @@ mod tests {
             bi_poly(&[1, 2, 1]),
             bi_poly(&[1, 3, 3, 1]),
         ];
-        let proof = build_tnn_certificate_from_monic_polynomials(&polys).unwrap();
+        let proof = build_totally_nonnegative_certificate_from_monic_polynomials(&polys).unwrap();
         assert!(proof.verify());
         assert_eq!(
             proof.coefficient_matrix,
             bi_rows(&[&[1], &[1, 1], &[1, 2, 1], &[1, 3, 3, 1]])
         );
+    }
+
+    #[test]
+    fn malformed_networks_fail_verification_instead_of_panicking() {
+        let rows = bi_rows(&[&[1], &[1, 1]]);
+        let ragged = CanonicalPlanarNetwork {
+            lambda: vec![vec![BigRational::one(), BigRational::one()]],
+        };
+        assert!(!verify_path_matrix_certificate(&rows, &ragged));
+        let wrong_row = CanonicalPlanarNetwork {
+            lambda: vec![vec![BigRational::one()], vec![BigRational::one()]],
+        };
+        assert!(!verify_path_matrix_certificate(&rows, &wrong_row));
+        let good = reconstruct_canonical_totally_nonnegative_network(&rows).unwrap();
+        assert!(verify_path_matrix_certificate(&rows, &good));
     }
 }

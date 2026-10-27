@@ -245,7 +245,11 @@ impl CoeffRing for num_rational::Ratio<i64> {
 /// Extends [`CoeffRing`] with division, enabling polynomial GCD, exact division,
 /// and related algorithms that require inverting leading coefficients.
 pub trait FieldRing: CoeffRing {
-    /// Exact division. Panics if `other` is zero.
+    /// Exact division.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `other` is zero.
     fn field_div(self, other: Self) -> Self;
 }
 
@@ -654,6 +658,8 @@ impl<C: FieldRing> Polynomial<C> {
     /// Polynomial long division. Returns `(quotient, remainder)` such that
     /// `self = quotient * divisor + remainder` with `deg(remainder) < deg(divisor)`.
     ///
+    /// # Panics
+    ///
     /// Panics if `divisor` is zero.
     pub fn div_rem(&self, divisor: &Self) -> (Self, Self) {
         assert!(!divisor.is_zero(), "division by zero polynomial");
@@ -751,7 +757,9 @@ impl<C: FieldRing> Polynomial<C> {
 
     /// Exact division: `self / divisor`, assuming the division is exact.
     ///
-    /// Panics if `divisor` does not divide `self` exactly.
+    /// # Panics
+    ///
+    /// Panics if `divisor` is zero or does not divide `self` exactly.
     pub fn exact_div(&self, divisor: &Self) -> Self {
         let (q, r) = self.div_rem(divisor);
         assert!(r.is_zero(), "exact_div: nonzero remainder");
@@ -783,6 +791,8 @@ impl<C: FieldRing> Polynomial<C> {
     ///
     /// Uses Newton's divided differences for numerical stability, then converts
     /// to standard (monomial) form.
+    ///
+    /// # Panics
     ///
     /// Panics if `points` and `values` have different lengths, or if any two
     /// points coincide.

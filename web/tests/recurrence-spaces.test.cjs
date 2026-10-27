@@ -3,7 +3,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
-const pageJs = require('./tests/page_source.cjs').loadPage().js;
+const pageJs = require('./page_source.cjs').loadPage().js;
 
 test('space display leads with formulas, preserves scope, and omits certificates', async () => {
   let displayed = '', copied = '', status = '';

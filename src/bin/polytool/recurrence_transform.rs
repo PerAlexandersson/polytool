@@ -125,7 +125,7 @@ pub(crate) fn cmd_recurrence_transform(args: &[String]) {
         serde_json::from_str::<RecurrenceTransformReport>(&input)
             .map_err(|e| e.to_string())
             .and_then(|report| {
-                verify_recurrence_transform(&report)?;
+                verify_recurrence_transform(&report).map_err(|e| e.to_string())?;
                 Ok(json!({
                     "verified": true,
                     "transported": report.transported.is_some(),
@@ -135,7 +135,7 @@ pub(crate) fn cmd_recurrence_transform(args: &[String]) {
     } else {
         serde_json::from_str::<RecurrenceTransformRequest>(&input)
             .map_err(|e| e.to_string())
-            .and_then(|request| transform_recurrence(&request))
+            .and_then(|request| transform_recurrence(&request).map_err(|e| e.to_string()))
             .and_then(|report| serde_json::to_value(report).map_err(|e| e.to_string()))
     };
     match outcome {

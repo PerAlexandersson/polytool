@@ -200,19 +200,24 @@ impl ImplicitSearchSupport {
     pub fn monomials(
         &self,
         limits: &RecurrenceSpaceLimits,
-    ) -> Result<Vec<RecurrenceMonomial>, String> {
+    ) -> Result<Vec<RecurrenceMonomial>, RecurrenceError> {
         match self.role.as_str() {
             SUCCESSOR_SUPPORT | IMPLICIT_SUCCESSOR_SUPPORT if self.max_shift == 0 => {
-                return Err(format!("a {} support needs max_shift >= 1", self.role))
+                return Err(RecurrenceError::InvalidInput(format!(
+                    "a {} support needs max_shift >= 1",
+                    self.role
+                )))
             }
             ROW_EQUATION_SUPPORT if self.max_shift != 0 => {
-                return Err("a row_equation support has max_shift = 0".into())
+                return Err(RecurrenceError::InvalidInput(
+                    "a row_equation support has max_shift = 0".into(),
+                ))
             }
             SUCCESSOR_SUPPORT | IMPLICIT_SUCCESSOR_SUPPORT | ROW_EQUATION_SUPPORT => {}
             other => {
-                return Err(format!(
+                return Err(RecurrenceError::InvalidInput(format!(
                     "unknown support role `{other}` (successor, implicit_successor, row_equation)"
-                ))
+                )))
             }
         }
         if [
@@ -224,14 +229,18 @@ impl ImplicitSearchSupport {
         .any(|d| *d > limits.max_degree)
             || self.max_shift > limits.max_rows
         {
-            return Err("support degree budget".into());
+            return Err(RecurrenceError::BudgetExhausted(
+                "support degree budget".into(),
+            ));
         }
         let count = (self.max_shift + 1)
             .checked_mul(self.derivative_order + 1)
             .and_then(|c| c.checked_mul(self.index_degree + 1))
             .and_then(|c| c.checked_mul(self.variable_degree + 1));
         if count.is_none_or(|c| c > limits.max_columns) {
-            return Err("support column budget".into());
+            return Err(RecurrenceError::BudgetExhausted(
+                "support column budget".into(),
+            ));
         }
         let mut cols = Vec::new();
         for lag in 0..=self.max_shift {
@@ -682,7 +691,7 @@ struct Context<'a> {
 impl Context<'_> {
     /// Make at least `count` rows available (from the origin) when a rule
     /// generates them; rows-only contexts keep their rows.
-    fn ensure(&mut self, count: usize) -> Result<(), String> {
+    fn ensure(&mut self, count: usize) -> Result<(), RecurrenceError> {
         if count <= self.rows.len() {
             return Ok(());
         }
@@ -690,15 +699,17 @@ impl Context<'_> {
             return Ok(());
         };
         if count > self.request.limits.max_rows {
-            return Err("row budget".into());
+            return Err(RecurrenceError::BudgetExhausted("row budget".into()));
         }
         let generated = rule
             .generate_rows_rational(seeds, self.origin, count.max(seeds.len()))
-            .map_err(|e| format!("source rule generation failed: {e}"))?;
+            .map_err(|e| {
+                RecurrenceError::InvalidInput(format!("source rule generation failed: {e}"))
+            })?;
         for row in generated.iter().skip(self.source_rows.len()) {
             let row = vec_poly::trim(row);
             if vec_poly::degree(&row).unwrap_or(0) > self.request.limits.max_degree {
-                return Err("row degree budget".into());
+                return Err(RecurrenceError::BudgetExhausted("row degree budget".into()));
             }
             let index = self.origin + self.source_rows.len();
             let mapped = map_row(self.request.transformation.as_ref(), index, &row)?;
@@ -717,19 +728,19 @@ fn map_row(
     t: Option<&RecurrenceTransformation>,
     index: usize,
     row: &[Q],
-) -> Result<Vec<Q>, String> {
+) -> Result<Vec<Q>, RecurrenceError> {
     let Some(t) = t else {
         return Ok(vec_poly::trim(row));
     };
     let mut state = t
         .map_row(index, row)
-        .map_err(|e| format!("{}: {e}", t.kind_name()))?;
+        .map_err(|e| RecurrenceError::InvalidInput(format!("{}: {e}", t.kind_name())))?;
     if state.len() != 1 {
-        return Err(format!(
+        return Err(RecurrenceError::InvalidInput(format!(
             "{} gives {} components; the search needs scalar rows",
             t.kind_name(),
             state.len()
-        ));
+        )));
     }
     Ok(vec_poly::trim(&state.remove(0)))
 }
@@ -803,16 +814,17 @@ fn constant_order(json: &RecurrenceJson) -> Option<usize> {
 
 fn resolve<'a>(
     request: &'a ImplicitRelationSearchRequest,
-) -> Result<(Context<'a>, ImplicitSearchSource, Vec<String>), String> {
+) -> Result<(Context<'a>, ImplicitSearchSource, Vec<String>), RecurrenceError> {
     let limits = &request.limits;
     let mut notes = Vec::new();
     if let Some(t) = &request.transformation {
-        t.validate().map_err(|e| format!("transformation: {e}"))?;
+        t.validate()
+            .map_err(|e| RecurrenceError::InvalidInput(format!("transformation: {e}")))?;
         if t.component_count() != 1 {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "{} gives vector rows; the search needs a scalar map",
                 t.kind_name()
-            ));
+            )));
         }
     }
     let explicit = request
@@ -826,20 +838,24 @@ fn resolve<'a>(
         .transpose()?;
     let defining = match (&request.source_recurrence, &request.oeis_id) {
         (Some(_), Some(_)) => {
-            return Err("give at most one of source_recurrence and oeis_id".into())
+            return Err(RecurrenceError::InvalidInput(
+                "give at most one of source_recurrence and oeis_id".into(),
+            ))
         }
         (Some(json), None) => {
             let (rule, first, seeds) = json.to_recurrence_parts()?;
             Some(("defining_rule", rule, first, seeds))
         }
         (None, Some(id)) => {
-            let definition =
-                crate::oeis::by_id(id).ok_or_else(|| format!("unknown OEIS family `{id}`"))?;
-            let (rule, seeds, first_row) = definition
-                .recurrence_export_parts()
-                .map_err(|e| e.to_string())?;
-            let first = usize::try_from(first_row)
-                .map_err(|_| format!("OEIS family `{id}` starts at a negative row index"))?;
+            let definition = crate::oeis::by_id(id).ok_or_else(|| {
+                RecurrenceError::InvalidInput(format!("unknown OEIS family `{id}`"))
+            })?;
+            let (rule, seeds, first_row) = definition.recurrence_export_parts()?;
+            let first = usize::try_from(first_row).map_err(|_| {
+                RecurrenceError::InvalidInput(format!(
+                    "OEIS family `{id}` starts at a negative row index"
+                ))
+            })?;
             Some(("oeis", rule, first, seeds))
         }
         (None, None) => None,
@@ -848,23 +864,27 @@ fn resolve<'a>(
         .row_count
         .unwrap_or(DEFAULT_IMPLICIT_SEARCH_ROW_COUNT);
     if row_count > limits.max_rows {
-        return Err(format!(
+        return Err(RecurrenceError::LimitExceeded(format!(
             "{row_count} rows exceed max_rows = {}",
             limits.max_rows
-        ));
+        )));
     }
     let (kind, rule, origin, json) = match defining {
         Some((kind, rule, first, seeds)) => {
             if rule.terms.iter().any(|t| t.offset == 0) {
-                return Err("source rule terms need positive offsets".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "source rule terms need positive offsets".into(),
+                ));
             }
             if seeds.is_empty() || rule.max_offset() > seeds.len() {
-                return Err("source rule needs at least max-offset seeds".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "source rule needs at least max-offset seeds".into(),
+                ));
             }
             if request.row_origin.is_some_and(|o| o != first) {
-                return Err(format!(
+                return Err(RecurrenceError::InvalidInput(format!(
                     "row_origin differs from the source first index {first}"
-                ));
+                )));
             }
             let json = RecurrenceJson::from_recurrence_rational(&rule, first, &seeds, None);
             (kind, Some((rule, seeds)), first, Some(json))
@@ -873,7 +893,9 @@ fn resolve<'a>(
     };
     let start = request.domain_start.unwrap_or(origin);
     if start < origin {
-        return Err("domain_start precedes the row origin".into());
+        return Err(RecurrenceError::InvalidInput(
+            "domain_start precedes the row origin".into(),
+        ));
     }
     let order = json.as_ref().and_then(constant_order);
     let theorem = match (&json, order) {
@@ -927,9 +949,9 @@ fn resolve<'a>(
     let defining_relation = match &rule {
         Some((r, seeds)) => match ImplicitRelation::from_recurrence(r) {
             Ok((relation, shift)) => {
-                let first_base = (origin + seeds.len())
-                    .checked_sub(shift)
-                    .ok_or("the rule starts before its leader shift")?;
+                let first_base = (origin + seeds.len()).checked_sub(shift).ok_or(
+                    RecurrenceError::InvalidInput("the rule starts before its leader shift".into()),
+                )?;
                 Some((relation, first_base))
             }
             Err(error) => {
@@ -962,18 +984,22 @@ fn resolve<'a>(
     match &explicit {
         Some(rows) if context.rule.is_none() => {
             if rows.is_empty() {
-                return Err("at least one row is required".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "at least one row is required".into(),
+                ));
             }
             if rows.len() > limits.max_rows {
-                return Err(format!(
+                return Err(RecurrenceError::LimitExceeded(format!(
                     "{} rows exceed max_rows = {}",
                     rows.len(),
                     limits.max_rows
-                ));
+                )));
             }
             for (i, row) in rows.iter().enumerate() {
                 if vec_poly::degree(row).unwrap_or(0) > limits.max_degree {
-                    return Err("row degree exceeds max_degree".into());
+                    return Err(RecurrenceError::LimitExceeded(
+                        "row degree exceeds max_degree".into(),
+                    ));
                 }
                 let mapped = map_row(request.transformation.as_ref(), origin + i, row)?;
                 context.source_rows.push(vec_poly::trim(row));
@@ -987,11 +1013,15 @@ fn resolve<'a>(
                 .zip(rows)
                 .any(|(a, b)| *a != vec_poly::trim(b))
             {
-                return Err("rows disagree with the rows generated by the source rule".into());
+                return Err(RecurrenceError::InvalidInput(
+                    "rows disagree with the rows generated by the source rule".into(),
+                ));
             }
         }
         None if context.rule.is_none() => {
-            return Err("give source_recurrence, oeis_id or rows".into())
+            return Err(RecurrenceError::InvalidInput(
+                "give source_recurrence, oeis_id or rows".into(),
+            ))
         }
         None => context.ensure(row_count)?,
     }
@@ -1028,7 +1058,7 @@ fn homogeneous_matrix(
     count: usize,
     cols: &[RecurrenceMonomial],
     limits: &RecurrenceSpaceLimits,
-) -> Result<Vec<Vec<Q>>, String> {
+) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     // No column has lag usize::MAX, so every column enters negatively and the
     // kernel is that of the homogeneous ansatz.
     residual_matrix(rows, origin, start, count, usize::MAX, cols, limits)
@@ -1042,26 +1072,31 @@ fn condition_matrix(
     count: usize,
     cols: &[ConditionMonomial],
     limits: &RecurrenceSpaceLimits,
-) -> Result<Vec<Vec<Q>>, String> {
+) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     if count
         .checked_mul(cols.len())
         .is_none_or(|e| e > limits.max_matrix_entries)
     {
-        return Err("condition matrix entry budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "condition matrix entry budget".into(),
+        ));
     }
     (start..start + count)
         .map(|n| {
             cols.iter()
                 .map(|c| {
-                    let row = rows
-                        .get(n + c.shift - origin)
-                        .ok_or("missing row for a condition")?;
+                    let row =
+                        rows.get(n + c.shift - origin)
+                            .ok_or(RecurrenceError::InvalidInput(
+                                "missing row for a condition".into(),
+                            ))?;
                     let value = row
                         .get(c.coefficient_index)
                         .cloned()
                         .unwrap_or_else(Q::zero);
-                    let power =
-                        u32::try_from(c.index_degree).map_err(|_| "index degree overflow")?;
+                    let power = u32::try_from(c.index_degree).map_err(|_| {
+                        RecurrenceError::LimitExceeded("index degree overflow".into())
+                    })?;
                     Ok(value * Q::from_integer(BigInt::from(n).pow(power)))
                 })
                 .collect()
@@ -1112,13 +1147,13 @@ fn projection(
     basis: &[Vec<Q>],
     leading: &[usize],
     limits: &RecurrenceSpaceLimits,
-) -> Result<Vec<usize>, String> {
+) -> Result<Vec<usize>, RecurrenceError> {
     let matrix = leading
         .iter()
         .map(|&i| basis.iter().map(|v| v[i].clone()).collect::<Vec<_>>())
         .collect::<Vec<_>>();
     let kernel = rational_kernel_with_certificate(&matrix, basis.len(), kernel_limits(limits))
-        .map_err(|_| "projection budget".to_string())?;
+        .map_err(|_| RecurrenceError::BudgetExhausted("projection budget".to_string()))?;
     Ok(kernel.pivot_columns)
 }
 
@@ -1184,13 +1219,13 @@ fn condition_theorem(theorem: Theorem, k: usize) -> Option<(usize, usize)> {
 fn run_support(
     context: &mut Context<'_>,
     support: &ImplicitSearchSupport,
-) -> Result<ImplicitSupportResult, String> {
+) -> Result<ImplicitSupportResult, RecurrenceError> {
     let limits = &context.request.limits;
     let mut result = empty_result(support);
     let cols = match support.monomials(limits) {
         Ok(cols) => cols,
-        Err(error) if error.contains("budget") => {
-            result.reason = Some(error);
+        Err(error @ RecurrenceError::BudgetExhausted(_)) => {
+            result.reason = Some(error.to_string());
             return Ok(result);
         }
         Err(error) => return Err(error),
@@ -1218,8 +1253,8 @@ fn run_support(
     let needed = offset + count + r;
     if complete {
         if let Err(error) = context.ensure(needed) {
-            if error.contains("budget") {
-                result.reason = Some(error);
+            if matches!(error, RecurrenceError::BudgetExhausted(_)) {
+                result.reason = Some(error.to_string());
                 return Ok(result);
             }
             return Err(error);
@@ -1237,7 +1272,7 @@ fn run_support(
         match homogeneous_matrix(&polys, context.origin, context.start, count, &cols, limits) {
             Ok(m) => m,
             Err(error) => {
-                result.reason = Some(error);
+                result.reason = Some(error.to_string());
                 return Ok(result);
             }
         };
@@ -1249,13 +1284,17 @@ fn run_support(
             result.reason = Some(e.into());
             return Ok(result);
         }
-        Err(_) => return Err("invalid residual matrix".into()),
+        Err(_) => {
+            return Err(RecurrenceError::InvalidInput(
+                "invalid residual matrix".into(),
+            ))
+        }
     };
     let leading = leader_columns(&cols, r);
     let pivots = match projection(&kernel.basis, &leading, limits) {
         Ok(p) => p,
         Err(error) => {
-            result.reason = Some(error);
+            result.reason = Some(error.to_string());
             return Ok(result);
         }
     };
@@ -1324,7 +1363,7 @@ fn representative(
     basis_index: usize,
     r: usize,
     complete: bool,
-) -> Result<ImplicitSearchRepresentative, String> {
+) -> Result<ImplicitSearchRepresentative, RecurrenceError> {
     let relation = relation_from_vector(cols, vector).canonical();
     let symbol = context.symbol;
     let mut first_base = context.start;
@@ -1349,11 +1388,13 @@ fn representative(
     for base in first_base..end {
         if relation.holds_at(&context.rows, context.origin, base) == Some(false) {
             if complete || division.is_some() {
-                return Err(format!(
+                return Err(RecurrenceError::InvalidInput(format!(
                     "internal: a certified relation fails at base {base}"
-                ));
+                )));
             }
-            return Err(format!("internal: a fitted relation fails at base {base}"));
+            return Err(RecurrenceError::InvalidInput(format!(
+                "internal: a fitted relation fails at base {base}"
+            )));
         }
     }
     let note = match evidence {
@@ -1366,7 +1407,9 @@ fn representative(
     let described = DescribedRelation::new(&relation, first_base, evidence, symbol).with_note(note);
     let seed_end = (first_base + r).max(context.start + 1);
     if context.rows.len() < seed_end - context.origin {
-        return Err("internal: missing seed rows".into());
+        return Err(RecurrenceError::InvalidInput(
+            "internal: missing seed rows".into(),
+        ));
     }
     let seeds = context.rows[context.start - context.origin..seed_end - context.origin]
         .iter()
@@ -1431,7 +1474,7 @@ fn condition_search(
     k: usize,
     r: usize,
     first_base: usize,
-) -> Result<ImplicitConditionSearch, String> {
+) -> Result<ImplicitConditionSearch, RecurrenceError> {
     let degree = context.request.condition_index_degree;
     let cols = condition_columns(r, k, degree);
     let mut search = ImplicitConditionSearch {
@@ -1469,8 +1512,8 @@ fn condition_search(
     let needed = offset + count + r;
     if complete {
         if let Err(error) = context.ensure(needed) {
-            if error.contains("budget") {
-                search.reason = Some(error);
+            if matches!(error, RecurrenceError::BudgetExhausted(_)) {
+                search.reason = Some(error.to_string());
                 return Ok(search);
             }
             return Err(error);
@@ -1492,7 +1535,7 @@ fn condition_search(
     ) {
         Ok(m) => m,
         Err(error) => {
-            search.reason = Some(error);
+            search.reason = Some(error.to_string());
             return Ok(search);
         }
     };
@@ -1503,7 +1546,11 @@ fn condition_search(
             search.reason = Some(e.into());
             return Ok(search);
         }
-        Err(_) => return Err("invalid condition matrix".into()),
+        Err(_) => {
+            return Err(RecurrenceError::InvalidInput(
+                "invalid condition matrix".into(),
+            ))
+        }
     };
     search.certificate = Some(certificate_of(&kernel));
     if kernel.basis.is_empty() {
@@ -1591,14 +1638,16 @@ fn condition_search(
 /// ```
 pub fn search_implicit_relations(
     request: &ImplicitRelationSearchRequest,
-) -> Result<ImplicitRelationSearchReport, String> {
+) -> Result<ImplicitRelationSearchReport, RecurrenceError> {
     if request.supports.len() > MAX_IMPLICIT_SEARCH_SUPPORTS {
-        return Err(format!(
+        return Err(RecurrenceError::LimitExceeded(format!(
             "at most {MAX_IMPLICIT_SEARCH_SUPPORTS} supports are supported"
-        ));
+        )));
     }
     if request.condition_index_degree > 8 {
-        return Err("condition_index_degree is at most 8".into());
+        return Err(RecurrenceError::LimitExceeded(
+            "condition_index_degree is at most 8".into(),
+        ));
     }
     let supports = if request.supports.is_empty() {
         default_implicit_search_supports()
@@ -1646,13 +1695,18 @@ pub fn search_implicit_relations(
 /// division certificate and every assessment.
 pub fn verify_implicit_relation_search(
     report: &ImplicitRelationSearchReport,
-) -> Result<(), String> {
+) -> Result<(), RecurrenceError> {
     if report.schema != RECURRENCE_IMPLICIT_SEARCH_SCHEMA {
-        return Err(format!("unsupported schema `{}`", report.schema));
+        return Err(RecurrenceError::InvalidInput(format!(
+            "unsupported schema `{}`",
+            report.schema
+        )));
     }
     let replay = search_implicit_relations(&report.request)?;
     if &replay != report {
-        return Err("report does not match its exact replay".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "report does not match its exact replay".into(),
+        ));
     }
     let limits = &report.request.limits;
     let origin = report.source.row_origin;
@@ -1670,7 +1724,9 @@ pub fn verify_implicit_relation_search(
         let label = format!("results[{s}]");
         let Some(certificate) = &result.certificate else {
             if !result.representatives.is_empty() {
-                return Err(format!("{label}: representatives without a certificate"));
+                return Err(RecurrenceError::VerificationFailed(format!(
+                    "{label}: representatives without a certificate"
+                )));
             }
             continue;
         };
@@ -1683,32 +1739,38 @@ pub fn verify_implicit_relation_search(
             limits,
         )?;
         let basis = check_kernel_certificate(&matrix, result.monomials.len(), certificate, limits)
-            .map_err(|e| format!("{label}: {e}"))?;
+            .map_err(|e| RecurrenceError::VerificationFailed(format!("{label}: {e}")))?;
         let leading = leader_columns(&result.monomials, result.support.max_shift);
         if projection(&basis, &leading, limits)?.len() != result.leader_projection_rank {
-            return Err(format!("{label}: leader projection mismatch"));
+            return Err(RecurrenceError::VerificationFailed(format!(
+                "{label}: leader projection mismatch"
+            )));
         }
         for (i, rep) in result.representatives.iter().enumerate() {
             let label = format!("{label}.representatives[{i}]");
-            let vector = basis
-                .get(rep.basis_index)
-                .ok_or_else(|| format!("{label}: unknown basis index"))?;
+            let vector = basis.get(rep.basis_index).ok_or_else(|| {
+                RecurrenceError::VerificationFailed(format!("{label}: unknown basis index"))
+            })?;
             let relation = ImplicitRelation::from_json(&rep.relation.relation)?;
             if !relation.same_relation(&relation_from_vector(&result.monomials, vector)) {
-                return Err(format!("{label}: the relation is not its kernel vector"));
+                return Err(RecurrenceError::VerificationFailed(format!(
+                    "{label}: the relation is not its kernel vector"
+                )));
             }
             let end = (origin + rows.len()).saturating_sub(relation.max_shift());
             for base in rep.relation.first_base..end {
                 if relation.holds_at(&rows, origin, base) == Some(false) {
-                    return Err(format!("{label}: the relation fails at base {base}"));
+                    return Err(RecurrenceError::VerificationFailed(format!(
+                        "{label}: the relation fails at base {base}"
+                    )));
                 }
             }
             if let Some(division) = &rep.division_certificate {
                 division.verify_identity()?;
                 if division.source_relation != relation.to_json() {
-                    return Err(format!(
+                    return Err(RecurrenceError::VerificationFailed(format!(
                         "{label}: the division certificate is for another relation"
-                    ));
+                    )));
                 }
             }
             for search in &rep.condition_searches {
@@ -1725,25 +1787,37 @@ pub fn verify_implicit_relation_search(
                 )?;
                 let basis =
                     check_kernel_certificate(&matrix, search.monomials.len(), certificate, limits)
-                        .map_err(|e| format!("{label}: condition search: {e}"))?;
+                        .map_err(|e| {
+                            RecurrenceError::VerificationFailed(format!(
+                                "{label}: condition search: {e}"
+                            ))
+                        })?;
                 if let (Some(i), Some(condition)) = (search.chosen_basis_index, &search.condition) {
-                    let vector = basis
-                        .get(i)
-                        .ok_or_else(|| format!("{label}: unknown condition basis index"))?;
+                    let vector = basis.get(i).ok_or_else(|| {
+                        RecurrenceError::VerificationFailed(format!(
+                            "{label}: unknown condition basis index"
+                        ))
+                    })?;
                     let parsed = CoefficientCondition::from_json(&condition.condition)?;
                     if parsed != condition_from_vector(&search.monomials, vector) {
-                        return Err(format!("{label}: the condition is not its kernel vector"));
+                        return Err(RecurrenceError::VerificationFailed(format!(
+                            "{label}: the condition is not its kernel vector"
+                        )));
                     }
                     let end = (origin + rows.len()).saturating_sub(parsed.max_shift());
                     for base in condition.first_base..end {
                         if parsed.holds_at(&rows, origin, base) == Some(false) {
-                            return Err(format!("{label}: a condition fails at base {base}"));
+                            return Err(RecurrenceError::VerificationFailed(format!(
+                                "{label}: a condition fails at base {base}"
+                            )));
                         }
                     }
                 }
             }
             if assess_generating_description(&rep.description)? != rep.assessment {
-                return Err(format!("{label}: the assessment does not replay"));
+                return Err(RecurrenceError::VerificationFailed(format!(
+                    "{label}: the assessment does not replay"
+                )));
             }
         }
     }

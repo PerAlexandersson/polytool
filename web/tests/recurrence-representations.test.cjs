@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 
-const pageJs = require('./tests/page_source.cjs').loadPage().js;
+const pageJs = require('./page_source.cjs').loadPage().js;
 
 test('comparison selection changes exported formula and preserves checked domain', () => {
   const start = pageJs.indexOf('function renderRecurrenceMenu(');

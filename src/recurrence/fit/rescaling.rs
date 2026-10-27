@@ -47,6 +47,7 @@
 //! `fit::space::propagation` (polynomial-index sources).
 
 use super::{BigRational, ExactRows, RecurrenceMonomial, RecurrenceSpaceLimits};
+use crate::recurrence::RecurrenceError;
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
@@ -78,13 +79,17 @@ impl RecurrenceCoefficientRescaling {
 
     /// Check the theorem's hypothesis `m >= 1` and the resource bound
     /// `m <= limits.max_degree`.
-    pub fn validate(&self, limits: &RecurrenceSpaceLimits) -> Result<(), String> {
+    pub fn validate(&self, limits: &RecurrenceSpaceLimits) -> Result<(), RecurrenceError> {
         let m = self.power();
         if m == 0 {
-            return Err("factorial rescaling needs power m >= 1".into());
+            return Err(RecurrenceError::InvalidInput(
+                "factorial rescaling needs power m >= 1".into(),
+            ));
         }
         if m > limits.max_degree || u32::try_from(m).is_err() {
-            return Err("factorial rescaling power exceeds the degree limit".into());
+            return Err(RecurrenceError::LimitExceeded(
+                "factorial rescaling power exceeds the degree limit".into(),
+            ));
         }
         Ok(())
     }
@@ -112,7 +117,7 @@ impl RecurrenceCoefficientRescaling {
         &self,
         coefficients: &[BigRational],
         limits: &RecurrenceSpaceLimits,
-    ) -> Result<Vec<BigRational>, String> {
+    ) -> Result<Vec<BigRational>, RecurrenceError> {
         self.map(coefficients, limits, false)
     }
 
@@ -123,7 +128,7 @@ impl RecurrenceCoefficientRescaling {
         &self,
         coefficients: &[BigRational],
         limits: &RecurrenceSpaceLimits,
-    ) -> Result<Vec<BigRational>, String> {
+    ) -> Result<Vec<BigRational>, RecurrenceError> {
         self.map(coefficients, limits, true)
     }
 
@@ -132,10 +137,11 @@ impl RecurrenceCoefficientRescaling {
         coefficients: &[Q],
         limits: &RecurrenceSpaceLimits,
         inverse: bool,
-    ) -> Result<Vec<Q>, String> {
+    ) -> Result<Vec<Q>, RecurrenceError> {
         self.validate(limits)?;
         let m = self.power();
-        let power = u32::try_from(m).map_err(|_| "rescaling power overflow")?;
+        let power = u32::try_from(m)
+            .map_err(|_| RecurrenceError::LimitExceeded("rescaling power overflow".into()))?;
         let max_bits = limits.max_coefficient_bits;
         let mut factorial = BigInt::one();
         let mut out = Vec::with_capacity(coefficients.len());
@@ -155,12 +161,16 @@ impl RecurrenceCoefficientRescaling {
                 .saturating_mul(m as u64)
                 .saturating_sub(other.bits());
             if lower > max_bits {
-                return Err("rescaling coefficient bit budget".into());
+                return Err(RecurrenceError::BudgetExhausted(
+                    "rescaling coefficient bit budget".into(),
+                ));
             }
             let scale = Q::from_integer(factorial.pow(power));
             let value = if inverse { c * scale } else { c / scale };
             if value.numer().bits().max(value.denom().bits()) > max_bits {
-                return Err("rescaling coefficient bit budget".into());
+                return Err(RecurrenceError::BudgetExhausted(
+                    "rescaling coefficient bit budget".into(),
+                ));
             }
             out.push(value);
         }
@@ -199,14 +209,20 @@ impl RecurrenceRescalingBound {
         monomials: &[RecurrenceMonomial],
         initial_rows: ExactRows,
         domain_start: usize,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, RecurrenceError> {
         let max = |f: fn(&RecurrenceMonomial) -> usize| monomials.iter().map(f).max().unwrap_or(0);
-        let annihilator_power = rescaling
-            .annihilator_power(monomials)
-            .ok_or("rescaled annihilator power overflow")?;
-        let count = annihilator_power
-            .checked_mul(source_order)
-            .ok_or("rescaled residual bound overflow")?;
+        let annihilator_power =
+            rescaling
+                .annihilator_power(monomials)
+                .ok_or(RecurrenceError::LimitExceeded(
+                    "rescaled annihilator power overflow".into(),
+                ))?;
+        let count =
+            annihilator_power
+                .checked_mul(source_order)
+                .ok_or(RecurrenceError::LimitExceeded(
+                    "rescaled residual bound overflow".into(),
+                ))?;
         let m = rescaling.power();
         let statement = format!(
             "Q[n] = T(P[n]) with T(X^k) = X^k/(k!)^{m}, where P satisfies the supplied monic \
@@ -259,7 +275,7 @@ mod tests {
         let t = RecurrenceCoefficientRescaling::FactorialPower { power: 3 };
         let row = vec![Q::one(); 8];
         let error = t.rescale_coefficients(&row, &limits).unwrap_err();
-        assert!(error.contains("budget"));
+        assert!(error.to_string().contains("budget"));
     }
 
     #[test]

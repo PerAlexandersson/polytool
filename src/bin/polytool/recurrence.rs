@@ -524,7 +524,7 @@ fn cmd_recurrence_space(args: &[String]) {
         serde_json::from_str::<RecurrenceSpaces>(&input)
             .map_err(|e| e.to_string())
             .and_then(|report| {
-                verify_recurrence_spaces(&report.request, &report)?;
+                verify_recurrence_spaces(&report.request, &report).map_err(|e| e.to_string())?;
                 let incomplete = report
                     .results
                     .iter()
@@ -539,7 +539,7 @@ fn cmd_recurrence_space(args: &[String]) {
         serde_json::from_str::<RecurrenceSpaceRequest>(&input)
             .map_err(|e| e.to_string())
             .and_then(|request| {
-                let report = find_recurrence_spaces(&request)?;
+                let report = find_recurrence_spaces(&request).map_err(|e| e.to_string())?;
                 let incomplete = report.results.iter().any(|r| r.certificate.is_none());
                 Ok((
                     serde_json::to_value(report).map_err(|e| e.to_string())?,

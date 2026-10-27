@@ -1,11 +1,11 @@
-// Run: node --test web/page-assets.test.cjs
+// Run: node --test web/tests/page-assets.test.cjs
 // The page is markup plus separate static assets: no inline style or script, every local
 // asset exists, and all cache-busting versions agree with ASSET_VERSION.
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
-const {loadPage} = require('./tests/page_source.cjs');
+const {loadPage} = require('./page_source.cjs');
 
 const page = loadPage();
 const version = /const ASSET_VERSION = '([^']+)';/.exec(page.js);

@@ -37,6 +37,12 @@
 //! - `representation`: the bounded queue search over equivalent
 //!   representations (scalar and vector) that composes all of these
 //!   ([`search_representations`]).
+//!
+//! Report, search and replay functions that can reject their input return
+//! [`RecurrenceError`] (and [`parse_rational_coeff`] a [`ParseRationalError`]);
+//! the core types keep their own finer-grained errors
+//! ([`RecurrenceEvaluationError`], [`VectorRecurrenceFitError`],
+//! [`TransformError`], ...).  Each `Display` text is the full message.
 
 use num_bigint::BigInt;
 
@@ -45,6 +51,8 @@ pub use crate::BigRational;
 
 mod base;
 pub use base::*;
+mod error;
+pub use error::{ParseRationalError, RecurrenceError};
 mod fit;
 pub use fit::*;
 mod implicit;

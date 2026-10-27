@@ -183,38 +183,50 @@ struct Source {
     json: RecurrenceJson,
 }
 
-fn resolve(request: &ImplicitTransformRequest) -> Result<Source, String> {
+fn resolve(request: &ImplicitTransformRequest) -> Result<Source, RecurrenceError> {
     let (rule, first_index, seeds) = match (&request.source_recurrence, &request.oeis_id) {
-        (Some(_), Some(_)) => return Err("give only one of source_recurrence and oeis_id".into()),
+        (Some(_), Some(_)) => {
+            return Err(RecurrenceError::InvalidInput(
+                "give only one of source_recurrence and oeis_id".into(),
+            ))
+        }
         (None, None) => {
-            return Err(
+            return Err(RecurrenceError::InvalidInput(
                 "implicit transport needs a defining rule: source_recurrence or oeis_id".into(),
-            )
+            ))
         }
         (Some(json), None) => json.to_recurrence_parts()?,
         (None, Some(id)) => {
-            let definition =
-                crate::oeis::by_id(id).ok_or_else(|| format!("unknown OEIS family `{id}`"))?;
-            let (rule, seeds, first_row) = definition
-                .recurrence_export_parts()
-                .map_err(|e| e.to_string())?;
-            let first = usize::try_from(first_row)
-                .map_err(|_| format!("OEIS family `{id}` starts at a negative row index"))?;
+            let definition = crate::oeis::by_id(id).ok_or_else(|| {
+                RecurrenceError::InvalidInput(format!("unknown OEIS family `{id}`"))
+            })?;
+            let (rule, seeds, first_row) = definition.recurrence_export_parts()?;
+            let first = usize::try_from(first_row).map_err(|_| {
+                RecurrenceError::InvalidInput(format!(
+                    "OEIS family `{id}` starts at a negative row index"
+                ))
+            })?;
             (rule, first, seeds)
         }
     };
     if rule.terms.iter().any(|t| t.offset == 0) {
-        return Err("source rule terms need positive offsets".into());
+        return Err(RecurrenceError::InvalidInput(
+            "source rule terms need positive offsets".into(),
+        ));
     }
     if seeds.is_empty() || rule.max_offset() > seeds.len() {
-        return Err("source rule needs at least max-offset seeds".into());
+        return Err(RecurrenceError::InvalidInput(
+            "source rule needs at least max-offset seeds".into(),
+        ));
     }
     if rule
         .terms
         .iter()
         .any(|t| t.deriv_order > request.limits.max_rule_derivative_order)
     {
-        return Err("source rule derivative order exceeds max_rule_derivative_order".into());
+        return Err(RecurrenceError::LimitExceeded(
+            "source rule derivative order exceeds max_rule_derivative_order".into(),
+        ));
     }
     let json = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
     Ok(Source {
@@ -228,7 +240,7 @@ fn resolve(request: &ImplicitTransformRequest) -> Result<Source, String> {
 fn check_search_bounds(
     bounds: &TransformSearchBounds,
     limits: &TransformLimits,
-) -> Result<(), String> {
+) -> Result<(), RecurrenceError> {
     let degree = [
         bounds.max_rec_len,
         bounds.max_var_deg,
@@ -239,16 +251,16 @@ fn check_search_bounds(
     .max()
     .unwrap_or(0);
     if degree > limits.max_search_degree {
-        return Err(format!(
+        return Err(RecurrenceError::LimitExceeded(format!(
             "search bound {degree} exceeds max_search_degree = {}",
             limits.max_search_degree
-        ));
+        )));
     }
     if bounds.max_candidates > limits.max_search_candidates {
-        return Err(format!(
+        return Err(RecurrenceError::LimitExceeded(format!(
             "max_candidates {} exceeds max_search_candidates = {}",
             bounds.max_candidates, limits.max_search_candidates
-        ));
+        )));
     }
     Ok(())
 }
@@ -272,19 +284,19 @@ fn checked_bases(first_base: usize, r: usize, origin: usize, len: usize) -> std:
 /// Supplied relations and conditions that fail on the rows reject the request.
 pub fn implicit_transform_recurrence(
     request: &ImplicitTransformRequest,
-) -> Result<ImplicitTransformReport, String> {
+) -> Result<ImplicitTransformReport, RecurrenceError> {
     let transformation = &request.transformation;
-    transformation.validate().map_err(|e| e.to_string())?;
+    transformation.validate()?;
     if !matches!(
         transformation,
         RecurrenceTransformation::Diagonal { .. }
             | RecurrenceTransformation::DerivativeAntecedent { .. }
     ) {
-        return Err(format!(
+        return Err(RecurrenceError::InvalidInput(format!(
             "implicit transport needs a diagonal or derivative_antecedent map, not {}; use \
              transform_recurrence",
             transformation.kind_name()
-        ));
+        )));
     }
     if let Some(bounds) = &request.search {
         check_search_bounds(bounds, &request.limits)?;
@@ -293,15 +305,15 @@ pub fn implicit_transform_recurrence(
     let origin = source.first_index;
     let count = request.row_count.unwrap_or(10);
     if count > request.limits.max_rows {
-        return Err(format!(
+        return Err(RecurrenceError::LimitExceeded(format!(
             "{count} rows exceed max_rows = {}",
             request.limits.max_rows
-        ));
+        )));
     }
     let rows = source
         .rule
         .generate_rows_rational(&source.seeds, origin, count.max(source.seeds.len()))
-        .map_err(|e| format!("source rule generation failed: {e}"))?
+        .map_err(|e| RecurrenceError::InvalidInput(format!("source rule generation failed: {e}")))?
         .into_iter()
         .map(|r| vec_poly::trim(&r))
         .collect::<Vec<_>>();
@@ -311,13 +323,13 @@ pub fn implicit_transform_recurrence(
         .max()
         .unwrap_or(0);
     if max_degree > request.limits.max_degree {
-        return Err(format!("row degree {max_degree} exceeds max_degree"));
+        return Err(RecurrenceError::LimitExceeded(format!(
+            "row degree {max_degree} exceeds max_degree"
+        )));
     }
 
     let map_conditions = match transformation {
-        RecurrenceTransformation::Diagonal { weight } => {
-            weight_regularity(weight, origin).map_err(|e| e.to_string())?
-        }
+        RecurrenceTransformation::Diagonal { weight } => weight_regularity(weight, origin)?,
         _ => vec![TransformConditionStatus {
             condition: "T_g bijective".into(),
             status: CERTIFIED_ALL_INDICES.into(),
@@ -334,12 +346,8 @@ pub fn implicit_transform_recurrence(
     let mut reconstruction_verified = true;
     for (i, row) in rows.iter().enumerate() {
         let index = origin + i;
-        let state = transformation
-            .map_row(index, row)
-            .map_err(|e| e.to_string())?;
-        let back = transformation
-            .inverse_row(index, &state)
-            .map_err(|e| e.to_string())?;
+        let state = transformation.map_row(index, row)?;
+        let back = transformation.inverse_row(index, &state)?;
         reconstruction_verified &= vec_poly::trim(&back) == vec_poly::trim(row);
         q_rows.push(vec_poly::trim(&state[0]));
     }
@@ -413,9 +421,9 @@ pub fn implicit_transform_recurrence(
         let r = condition.max_shift();
         for base in checked_bases(supplied.first_base, r, origin, q_rows.len()) {
             if condition.holds_at(&q_rows, origin, base) == Some(false) {
-                return Err(format!(
+                return Err(RecurrenceError::InvalidInput(format!(
                     "boundary_conditions[{i}] fails on the transformed rows at base n = {base}"
-                ));
+                )));
             }
         }
         boundary.push(
@@ -481,7 +489,7 @@ pub fn implicit_transform_recurrence(
 pub fn implicit_transform_recurrence_with_root_domain(
     request: &ImplicitTransformRequest,
     root_domain: Option<&RootDomainRequest>,
-) -> Result<ImplicitTransformReport, String> {
+) -> Result<ImplicitTransformReport, RecurrenceError> {
     let mut report = implicit_transform_recurrence(request)?;
     if let Some(root_request) = root_domain {
         report.root_domain = Some(analyze_implicit_root_domain(&report, root_request)?);
@@ -494,15 +502,16 @@ pub fn implicit_transform_recurrence_with_root_domain(
 /// ([`RootDomainRequest`], `{}` for the defaults).
 pub fn parse_implicit_transform_input(
     mut value: serde_json::Value,
-) -> Result<(ImplicitTransformRequest, Option<RootDomainRequest>), String> {
+) -> Result<(ImplicitTransformRequest, Option<RootDomainRequest>), RecurrenceError> {
     let root_domain = value
         .as_object_mut()
         .and_then(|fields| fields.remove("root_domain"));
-    let request = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    let request =
+        serde_json::from_value(value).map_err(|e| RecurrenceError::InvalidInput(e.to_string()))?;
     let root_domain = root_domain
         .map(serde_json::from_value)
         .transpose()
-        .map_err(|e| format!("root_domain: {e}"))?;
+        .map_err(|e| RecurrenceError::InvalidInput(format!("root_domain: {e}")))?;
     Ok((request, root_domain))
 }
 
@@ -512,15 +521,19 @@ fn check_on_rows(
     origin: usize,
     rows: &[Vec<Q>],
     label: &str,
-) -> Result<usize, String> {
+) -> Result<usize, RecurrenceError> {
     if relation.is_zero() {
-        return Err(format!("{label} is the zero relation"));
+        return Err(RecurrenceError::InvalidInput(format!(
+            "{label} is the zero relation"
+        )));
     }
     let bases = checked_bases(first_base, relation.max_shift(), origin, rows.len());
     let count = bases.len();
     for base in bases {
         if relation.holds_at(rows, origin, base) == Some(false) {
-            return Err(format!("{label} fails on the rows at base n = {base}"));
+            return Err(RecurrenceError::InvalidInput(format!(
+                "{label} fails on the rows at base n = {base}"
+            )));
         }
     }
     Ok(count)
@@ -541,7 +554,7 @@ fn transport_report(
     first_base: usize,
     evidence: &str,
     transformed: &TransformedRows<'_>,
-) -> Result<ImplicitTransportReport, String> {
+) -> Result<ImplicitTransportReport, RecurrenceError> {
     let TransformedRows {
         origin,
         q_rows,
@@ -549,7 +562,7 @@ fn transport_report(
     } = *transformed;
     let transport = transformation
         .transport_implicit(relation, first_base)
-        .map_err(|e| format!("{label}: {e}"))?;
+        .map_err(|e| RecurrenceError::InvalidInput(format!("{label}: {e}")))?;
     let r = transport.relation.max_shift();
     let bases = checked_bases(first_base, r, origin, q_rows.len());
     let mut holds = true;
@@ -722,19 +735,25 @@ fn upgrade(
     fitted_first_base: usize,
     initial: usize,
     steps: &mut Vec<String>,
-) -> Result<ReconstructionCertificate, String> {
+) -> Result<ReconstructionCertificate, RecurrenceError> {
     let source = context.source;
     let origin = context.origin;
     if !context.map_certified {
-        return Err("the map hypotheses are not certified for all indices".into());
+        return Err(RecurrenceError::InvalidInput(
+            "the map hypotheses are not certified for all indices".into(),
+        ));
     }
     let t = transformation
         .reconstruction_operator()
-        .ok_or("the map Q -> P is not a differential operator with polynomial coefficients")?;
-    let certificate = find_reconstruction_certificate(context.defining, &t, fitted).ok_or(
+        .ok_or(RecurrenceError::InvalidInput(
+            "the map Q -> P is not a differential operator with polynomial coefficients".into(),
+        ))?;
+    let certificate = find_reconstruction_certificate(context.defining, &t, fitted)
+        .ok_or(RecurrenceError::InvalidInput(
         "no reconstruction certificate: the fit is not proportional to L o T and its leader is \
-         not a nonzero constant",
-    )?;
+             not a nonzero constant"
+            .into(),
+    ))?;
     certificate.verify_identity()?;
     steps.push(format!(
         "identity: L o T = sum_nu H_nu o S^nu o M holds in the Ore algebra ({} multipliers)",
@@ -745,10 +764,10 @@ fn upgrade(
         let analysis =
             super::algebra::analyze_zeros(&super::algebra::Biv::from_bivar(f), valid_from, None);
         if !analysis.singular_indices.is_empty() {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "the source leader vanishes identically at targets {:?}",
                 analysis.singular_indices
-            ));
+            )));
         }
     }
     steps.push(format!(
@@ -759,7 +778,7 @@ fn upgrade(
     let total = valid_from.max(fitted_first_base + r_l) + 1 - origin;
     let generated = rule
         .generate_rows_rational(&context.q_rows[..initial], origin, total.max(initial))
-        .map_err(|e| format!("generation from the fit failed: {e}"))?
+        .map_err(|e| RecurrenceError::InvalidInput(format!("generation from the fit failed: {e}")))?
         .into_iter()
         .map(|r| vec_poly::trim(&r))
         .collect::<Vec<_>>();
@@ -767,9 +786,9 @@ fn upgrade(
         let index = origin + j;
         let image = t.apply_to_row(&generated[j], index);
         if vec_poly::trim(&image) != vec_poly::trim(seed) {
-            return Err(format!(
+            return Err(RecurrenceError::InvalidInput(format!(
                 "initial agreement fails at the source seed index {index}"
-            ));
+            )));
         }
     }
     steps.push(format!(
@@ -785,7 +804,9 @@ fn upgrade(
     let direct = context.defining_first_base..fitted_first_base.max(context.defining_first_base);
     for base in direct.clone() {
         if context.defining.holds_at(&mapped, origin, base) != Some(true) {
-            return Err(format!("L (T Q*) fails at the uncovered base n = {base}"));
+            return Err(RecurrenceError::InvalidInput(format!(
+                "L (T Q*) fails at the uncovered base n = {base}"
+            )));
         }
     }
     steps.push(format!(
@@ -806,19 +827,26 @@ fn upgrade(
 /// Replay a report exactly from its embedded request, then re-check every
 /// reconstruction certificate symbolically and by deriving its identities on
 /// the transformed rows.
-pub fn verify_recurrence_implicit(report: &ImplicitTransformReport) -> Result<(), String> {
+pub fn verify_recurrence_implicit(report: &ImplicitTransformReport) -> Result<(), RecurrenceError> {
     if report.schema != RECURRENCE_IMPLICIT_SCHEMA {
-        return Err(format!("unsupported schema `{}`", report.schema));
+        return Err(RecurrenceError::InvalidInput(format!(
+            "unsupported schema `{}`",
+            report.schema
+        )));
     }
     let replay = implicit_transform_recurrence_with_root_domain(
         &report.request,
         report.root_domain.as_ref().map(|r| &r.request),
     )?;
     if &replay != report {
-        return Err("report does not match its exact replay".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "report does not match its exact replay".into(),
+        ));
     }
     if !report.reconstruction_verified {
-        return Err("exact reconstruction failed".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "exact reconstruction failed".into(),
+        ));
     }
     let rows = report
         .transformed_rows
@@ -844,11 +872,15 @@ pub fn verify_recurrence_implicit(report: &ImplicitTransformReport) -> Result<()
         .iter()
         .any(|t| !t.holds_on_transformed_rows)
     {
-        return Err("a transported relation fails on the transformed rows".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "a transported relation fails on the transformed rows".into(),
+        ));
     }
     let assessment = assess_generating_description(&report.description)?;
     if assessment != report.assessment {
-        return Err("the description assessment does not replay".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "the description assessment does not replay".into(),
+        ));
     }
     Ok(())
 }

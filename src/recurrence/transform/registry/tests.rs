@@ -695,6 +695,7 @@ fn uncertified_preconditions_and_images_are_rejected() {
     };
     assert!(transform_recurrence(&request)
         .unwrap_err()
+        .to_string()
         .contains("does not divide row 1"));
 }
 

@@ -125,7 +125,7 @@ fn row_differential_equation_is_stored_without_being_a_successor_rule() {
         {"shift": 0, "deriv_order": 1, "coeff": {"coeffs": [["1"]]}}
     ]}, "first_base": 0}]);
     let error = implicit_transform_recurrence(&request(wrong)).unwrap_err();
-    assert!(error.contains("target_relations[0] fails"));
+    assert!(error.to_string().contains("target_relations[0] fails"));
 }
 
 fn eulerian_rows(count: usize) -> Vec<Vec<String>> {
@@ -224,7 +224,7 @@ fn zero_weights_are_rejected() {
                 "factors": [{"coeffs": {"coeffs": factor}, "exponent": 1}]}}
         });
         let error = implicit_transform_recurrence(&request(value)).unwrap_err();
-        assert!(error.contains("vanishes"), "{error}");
+        assert!(error.to_string().contains("vanishes"), "{error}");
     }
     let weight = DiagonalWeight::Product {
         scale: "1".into(),

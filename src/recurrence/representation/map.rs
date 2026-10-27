@@ -95,7 +95,7 @@ pub(super) struct MapNormalForm {
 
 /// Reduce a chain of scalar maps to segments (merging consecutive Möbius and
 /// diagonal maps and dropping identity segments).
-fn reduce_segments(chain: &[&RecurrenceTransformation]) -> Result<Vec<Segment>, String> {
+fn reduce_segments(chain: &[&RecurrenceTransformation]) -> Result<Vec<Segment>, RecurrenceError> {
     let mut segments: Vec<Segment> = Vec::new();
     for t in chain {
         let segment = if let Some(m) = MobiusSegment::from_transformation(t)? {
@@ -178,24 +178,27 @@ pub(super) fn chain_offsets(chain: &[&RecurrenceTransformation]) -> Vec<Vec<i64>
     offsets
 }
 
-fn parse(text: &str, name: &str) -> Result<Q, String> {
-    parse_rational_coeff(text).map_err(|e| format!("{name}: {e}"))
+fn parse(text: &str, name: &str) -> Result<Q, RecurrenceError> {
+    parse_rational_coeff(text).map_err(|e| RecurrenceError::InvalidInput(format!("{name}: {e}")))
 }
 
-fn checked_exponent(value: Option<i128>) -> Result<i128, String> {
-    value
-        .filter(|v| v.abs() <= MAX_EXPONENT)
-        .ok_or_else(|| "map normal form exponent overflow".to_string())
+fn checked_exponent(value: Option<i128>) -> Result<i128, RecurrenceError> {
+    value.filter(|v| v.abs() <= MAX_EXPONENT).ok_or_else(|| {
+        RecurrenceError::LimitExceeded("map normal form exponent overflow".to_string())
+    })
 }
 
-fn power(base: &Q, exponent: i128) -> Result<Q, String> {
+fn power(base: &Q, exponent: i128) -> Result<Q, RecurrenceError> {
     if exponent == 0 {
         return Ok(Q::one());
     }
     if base.is_zero() {
-        return Err("zero base with a nonzero exponent in a map normal form".into());
+        return Err(RecurrenceError::InvalidInput(
+            "zero base with a nonzero exponent in a map normal form".into(),
+        ));
     }
-    let e = u32::try_from(exponent.unsigned_abs()).map_err(|_| "exponent overflow")?;
+    let e = u32::try_from(exponent.unsigned_abs())
+        .map_err(|_| RecurrenceError::LimitExceeded("exponent overflow".into()))?;
     let value = Q::new(base.numer().pow(e), base.denom().pow(e));
     Ok(if exponent > 0 { value } else { value.recip() })
 }
@@ -222,7 +225,7 @@ impl MobiusSegment {
     }
 
     /// Multiply by `(x + shift)^(u + v n)`.
-    fn add_factor(&mut self, shift: Q, exponent: (i128, i128)) -> Result<(), String> {
+    fn add_factor(&mut self, shift: Q, exponent: (i128, i128)) -> Result<(), RecurrenceError> {
         let entry = self.factors.entry(shift.clone()).or_insert((0, 0));
         entry.0 = checked_exponent(entry.0.checked_add(exponent.0))?;
         entry.1 = checked_exponent(entry.1.checked_add(exponent.1))?;
@@ -233,14 +236,19 @@ impl MobiusSegment {
     }
 
     /// Multiply by `base^(u + v n)`.
-    fn add_constant(&mut self, base: &Q, exponent: (i128, i128)) -> Result<(), String> {
+    fn add_constant(&mut self, base: &Q, exponent: (i128, i128)) -> Result<(), RecurrenceError> {
         self.constant.0 *= power(base, exponent.0)?;
         self.constant.1 *= power(base, exponent.1)?;
         Ok(())
     }
 
     /// Multiply by `(alpha x + beta)^(u + v n)` with `(alpha, beta) != 0`.
-    fn add_linear(&mut self, alpha: &Q, beta: &Q, exponent: (i128, i128)) -> Result<(), String> {
+    fn add_linear(
+        &mut self,
+        alpha: &Q,
+        beta: &Q,
+        exponent: (i128, i128),
+    ) -> Result<(), RecurrenceError> {
         if alpha.is_zero() {
             self.add_constant(beta, exponent)
         } else {
@@ -249,16 +257,18 @@ impl MobiusSegment {
         }
     }
 
-    fn from_transformation(t: &RecurrenceTransformation) -> Result<Option<Self>, String> {
+    fn from_transformation(t: &RecurrenceTransformation) -> Result<Option<Self>, RecurrenceError> {
         let mut segment = Self::identity();
-        let schedule_exponent = |s: &DegreeSchedule| -> Result<(i128, i128), String> {
+        let schedule_exponent = |s: &DegreeSchedule| -> Result<(i128, i128), RecurrenceError> {
             let w = (s.first_degree as i128)
                 .checked_sub(
                     (s.step as i128)
                         .checked_mul(s.first_index as i128)
                         .unwrap_or(0),
                 )
-                .ok_or("degree schedule overflow")?;
+                .ok_or(RecurrenceError::LimitExceeded(
+                    "degree schedule overflow".into(),
+                ))?;
             Ok((
                 checked_exponent(Some(w))?,
                 checked_exponent(Some(s.step as i128))?,
@@ -268,7 +278,7 @@ impl MobiusSegment {
             let exponent = schedule_exponent(s)?;
             seg.add_linear(&c, &e, exponent)?;
             seg.matrix = [a, b, c, e];
-            Ok::<(), String>(())
+            Ok::<(), RecurrenceError>(())
         };
         match t {
             RecurrenceTransformation::MultiplyPower { power } => {
@@ -324,7 +334,7 @@ impl MobiusSegment {
 
     /// The composite `outer o inner` (`inner` applied first):
     /// `R = B(x) A(phi_B(x)) P(phi_A(phi_B(x)))`.
-    fn then(&self, outer: &Self) -> Result<Self, String> {
+    fn then(&self, outer: &Self) -> Result<Self, RecurrenceError> {
         let [a, b, c, e] = &outer.matrix;
         let mut result = Self {
             matrix: multiply(&self.matrix, &outer.matrix),
@@ -415,8 +425,8 @@ fn multiply(left: &[Q; 4], right: &[Q; 4]) -> [Q; 4] {
     [a * e + b * g, a * f + b * h, c * e + d * g, c * f + d * h]
 }
 
-fn diagonal_identity(weights: &[DiagonalWeight]) -> Result<bool, String> {
-    diagonal_products_equal(weights, &[]).map_err(|e| e.to_string())
+fn diagonal_identity(weights: &[DiagonalWeight]) -> Result<bool, RecurrenceError> {
+    diagonal_products_equal(weights, &[]).map_err(RecurrenceError::from)
 }
 
 impl MapNormalForm {
@@ -425,7 +435,7 @@ impl MapNormalForm {
     pub(super) fn from_chain(
         chain: &[&RecurrenceTransformation],
         origin: usize,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, RecurrenceError> {
         let mut first_index = origin;
         let mut last_index: Option<usize> = None;
         for t in chain {
@@ -455,7 +465,7 @@ impl MapNormalForm {
             for offset in vector.component_degree_offsets() {
                 let shifted = chain[split..]
                     .iter()
-                    .map(|t| t.with_degree_offset(offset).map_err(|e| e.to_string()))
+                    .map(|t| t.with_degree_offset(offset).map_err(RecurrenceError::from))
                     .collect::<Result<Vec<_>, _>>()?;
                 components.push(reduce_segments(&shifted.iter().collect::<Vec<_>>())?);
             }
@@ -531,7 +541,7 @@ pub(super) fn apply_chain(
     chain: &[&RecurrenceTransformation],
     origin: usize,
     rows: &[Vec<Q>],
-) -> Result<Vec<Vec<Vec<Q>>>, String> {
+) -> Result<Vec<Vec<Vec<Q>>>, RecurrenceError> {
     let offsets = chain_offsets(chain);
     let mut states = rows.iter().map(|r| vec![r.clone()]).collect::<Vec<_>>();
     for (step, t) in chain.iter().enumerate() {
@@ -539,7 +549,12 @@ pub(super) fn apply_chain(
         for (i, state) in states.iter().enumerate() {
             next.push(
                 t.map_state(origin + i, state, &offsets[step])
-                    .map_err(|e| format!("map {step} ({}): {e}", t.kind_name()))?,
+                    .map_err(|e| {
+                        RecurrenceError::InvalidInput(format!(
+                            "map {step} ({}): {e}",
+                            t.kind_name()
+                        ))
+                    })?,
             );
         }
         states = next;
@@ -553,7 +568,7 @@ pub(super) fn invert_chain(
     chain: &[&RecurrenceTransformation],
     origin: usize,
     states: &[Vec<Vec<Q>>],
-) -> Result<Vec<Vec<Q>>, String> {
+) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     invert_chain_with_lost_data(chain, origin, states, &[])
 }
 
@@ -565,9 +580,11 @@ pub(super) fn invert_chain_with_lost_data(
     origin: usize,
     states: &[Vec<Vec<Q>>],
     lost: &[LostDataRecord],
-) -> Result<Vec<Vec<Q>>, String> {
+) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     if lost.iter().any(|r| r.chain_position >= chain.len()) {
-        return Err("a lost-data record lies outside the chain".into());
+        return Err(RecurrenceError::InvalidInput(
+            "a lost-data record lies outside the chain".into(),
+        ));
     }
     let offsets = chain_offsets(chain);
     let mut current = states.to_vec();
@@ -579,15 +596,25 @@ pub(super) fn invert_chain_with_lost_data(
                 .map(|r| {
                     r.rows
                         .get(i)
-                        .ok_or_else(|| format!("lost data of map {step} misses row {i}"))
+                        .ok_or_else(|| {
+                            RecurrenceError::InvalidInput(format!(
+                                "lost data of map {step} misses row {i}"
+                            ))
+                        })
                         .and_then(|row| crate::recurrence::implicit::decode_poly(row))
                 })
                 .transpose()?;
-            let error =
-                |e: TransformError| format!("inverse of map {step} ({}): {e}", t.kind_name());
+            let error = |e: TransformError| {
+                RecurrenceError::InvalidInput(format!(
+                    "inverse of map {step} ({}): {e}",
+                    t.kind_name()
+                ))
+            };
             if offsets[step].len() > 1 {
                 if lost_row.is_some() {
-                    return Err(format!("lost data of map {step} on a vector state"));
+                    return Err(RecurrenceError::InvalidInput(format!(
+                        "lost data of map {step} on a vector state"
+                    )));
                 }
                 previous.push(
                     t.inverse_state(origin + i, state, &offsets[step])
@@ -607,7 +634,9 @@ pub(super) fn invert_chain_with_lost_data(
             if s.len() == 1 {
                 Ok(s.remove(0))
             } else {
-                Err("the inverted chain does not end in scalar rows".to_string())
+                Err(RecurrenceError::InvalidInput(
+                    "the inverted chain does not end in scalar rows".to_string(),
+                ))
             }
         })
         .collect()
@@ -619,7 +648,7 @@ pub(super) fn chain_lost_data(
     chain: &[&RecurrenceTransformation],
     origin: usize,
     rows: &[Vec<Q>],
-) -> Result<Vec<LostDataRecord>, String> {
+) -> Result<Vec<LostDataRecord>, RecurrenceError> {
     let mut records = Vec::new();
     for (position, t) in chain.iter().enumerate() {
         let RecurrenceTransformation::Derivative { order } = t else {
@@ -628,13 +657,12 @@ pub(super) fn chain_lost_data(
         let entering = apply_chain(&chain[..position], origin, rows)?;
         let mut lost = Vec::with_capacity(entering.len());
         for (i, state) in entering.iter().enumerate() {
-            let row = state
-                .first()
-                .filter(|_| state.len() == 1)
-                .ok_or_else(|| format!("map {position} needs scalar rows"))?;
+            let row = state.first().filter(|_| state.len() == 1).ok_or_else(|| {
+                RecurrenceError::InvalidInput(format!("map {position} needs scalar rows"))
+            })?;
             let data = t
                 .lost_data(origin + i, row)
-                .map_err(|e| format!("map {position}: {e}"))?
+                .map_err(|e| RecurrenceError::InvalidInput(format!("map {position}: {e}")))?
                 .unwrap_or_default();
             lost.push(crate::recurrence::implicit::encode_poly(&data));
         }

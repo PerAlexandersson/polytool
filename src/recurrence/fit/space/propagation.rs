@@ -3,6 +3,7 @@
 //! We retain exact row-operation multipliers. Replay checks polynomial
 //! identities, without searching for a dependence or dividing at integer ranks.
 use super::*;
+use crate::recurrence::RecurrenceError;
 use num_traits::ToPrimitive;
 type PolynomialMatrix = Vec<Vec<BivarPoly>>;
 
@@ -32,7 +33,7 @@ impl IndexedLagSource {
         &self,
         count: usize,
         limits: &RecurrenceSpaceLimits,
-    ) -> Result<ExactRows, String> {
+    ) -> Result<ExactRows, RecurrenceError> {
         let request = RecurrenceSpaceRequest {
             source: None,
             source_recurrence: None,
@@ -87,30 +88,38 @@ impl<'a> Arithmetic<'a> {
             remaining: limits.max_operations,
         }
     }
-    fn spend(&mut self, n: usize) -> Result<(), String> {
+    fn spend(&mut self, n: usize) -> Result<(), RecurrenceError> {
         self.remaining = self
             .remaining
             .checked_sub(n)
-            .ok_or("polynomial propagation arithmetic budget")?;
+            .ok_or(RecurrenceError::BudgetExhausted(
+                "polynomial propagation arithmetic budget".into(),
+            ))?;
         Ok(())
     }
-    fn check(&self, p: &BivarPoly) -> Result<(), String> {
+    fn check(&self, p: &BivarPoly) -> Result<(), RecurrenceError> {
         if p.coeffs.len().saturating_sub(1) > self.limits.max_degree
             || p.coeffs
                 .iter()
                 .any(|r| r.len().saturating_sub(1) > self.limits.max_degree)
         {
-            return Err("polynomial propagation degree budget".into());
+            return Err(RecurrenceError::BudgetExhausted(
+                "polynomial propagation degree budget".into(),
+            ));
         }
         if p.coeffs.iter().map(Vec::len).sum::<usize>() > self.limits.max_matrix_entries {
-            return Err("polynomial propagation entry budget".into());
+            return Err(RecurrenceError::BudgetExhausted(
+                "polynomial propagation entry budget".into(),
+            ));
         }
         if p.coeffs
             .iter()
             .flatten()
             .any(|q| q.numer().bits().max(q.denom().bits()) > self.limits.max_coefficient_bits)
         {
-            return Err("polynomial propagation coefficient budget".into());
+            return Err(RecurrenceError::BudgetExhausted(
+                "polynomial propagation coefficient budget".into(),
+            ));
         }
         Ok(())
     }
@@ -119,7 +128,7 @@ impl<'a> Arithmetic<'a> {
         a: &BivarPoly,
         b: &BivarPoly,
         minus: bool,
-    ) -> Result<BivarPoly, String> {
+    ) -> Result<BivarPoly, RecurrenceError> {
         let n = a.coeffs.len().max(b.coeffs.len());
         let x = a
             .coeffs
@@ -131,12 +140,13 @@ impl<'a> Arithmetic<'a> {
         if n.checked_mul(x)
             .is_none_or(|v| v > self.limits.max_matrix_entries)
         {
-            return Err("polynomial propagation entry budget".into());
+            return Err(RecurrenceError::BudgetExhausted(
+                "polynomial propagation entry budget".into(),
+            ));
         }
-        self.spend(
-            n.checked_mul(x)
-                .ok_or("polynomial propagation entry budget")?,
-        )?;
+        self.spend(n.checked_mul(x).ok_or(RecurrenceError::BudgetExhausted(
+            "polynomial propagation entry budget".into(),
+        ))?)?;
         let mut out = vec![vec![Q::zero(); x]; n];
         for (i, row) in a.coeffs.iter().enumerate() {
             for (j, c) in row.iter().enumerate() {
@@ -156,7 +166,11 @@ impl<'a> Arithmetic<'a> {
         self.check(&p)?;
         Ok(p)
     }
-    pub(super) fn mul(&mut self, a: &BivarPoly, b: &BivarPoly) -> Result<BivarPoly, String> {
+    pub(super) fn mul(
+        &mut self,
+        a: &BivarPoly,
+        b: &BivarPoly,
+    ) -> Result<BivarPoly, RecurrenceError> {
         if a.is_zero() || b.is_zero() {
             return Ok(zero());
         }
@@ -164,26 +178,28 @@ impl<'a> Arithmetic<'a> {
         let nb = b.coeffs.len();
         let xa = a.coeffs.iter().map(Vec::len).max().unwrap_or(0);
         let xb = b.coeffs.iter().map(Vec::len).max().unwrap_or(0);
-        let n = na
-            .checked_add(nb)
-            .and_then(|v| v.checked_sub(1))
-            .ok_or("polynomial propagation degree budget")?;
-        let x = xa
-            .checked_add(xb)
-            .and_then(|v| v.checked_sub(1))
-            .ok_or("polynomial propagation degree budget")?;
+        let n = na.checked_add(nb).and_then(|v| v.checked_sub(1)).ok_or(
+            RecurrenceError::BudgetExhausted("polynomial propagation degree budget".into()),
+        )?;
+        let x = xa.checked_add(xb).and_then(|v| v.checked_sub(1)).ok_or(
+            RecurrenceError::BudgetExhausted("polynomial propagation degree budget".into()),
+        )?;
         if n.saturating_sub(1) > self.limits.max_degree
             || x.saturating_sub(1) > self.limits.max_degree
             || n.checked_mul(x)
                 .is_none_or(|v| v > self.limits.max_matrix_entries)
         {
-            return Err("polynomial propagation degree/entry budget".into());
+            return Err(RecurrenceError::BudgetExhausted(
+                "polynomial propagation degree/entry budget".into(),
+            ));
         }
         let work = na
             .checked_mul(xa)
             .and_then(|v| v.checked_mul(nb))
             .and_then(|v| v.checked_mul(xb))
-            .ok_or("polynomial propagation arithmetic budget")?;
+            .ok_or(RecurrenceError::BudgetExhausted(
+                "polynomial propagation arithmetic budget".into(),
+            ))?;
         self.spend(work)?;
         let mut out = vec![vec![Q::zero(); x]; n];
         for (i, ar) in a.coeffs.iter().enumerate() {
@@ -199,29 +215,36 @@ impl<'a> Arithmetic<'a> {
         self.check(&p)?;
         Ok(p)
     }
-    fn shift(&mut self, p: &BivarPoly, amount: usize) -> Result<BivarPoly, String> {
+    fn shift(&mut self, p: &BivarPoly, amount: usize) -> Result<BivarPoly, RecurrenceError> {
         self.spend(
             p.coeffs
                 .len()
                 .checked_mul(p.coeffs.iter().map(Vec::len).sum())
                 .and_then(|v| v.checked_mul(2))
-                .ok_or("polynomial propagation arithmetic budget")?,
+                .ok_or(RecurrenceError::BudgetExhausted(
+                    "polynomial propagation arithmetic budget".into(),
+                ))?,
         )?;
         let q = trim(
-            p.shift_index(i64::try_from(amount).map_err(|_| "shift overflow")?)
-                .coeffs,
+            p.shift_index(
+                i64::try_from(amount)
+                    .map_err(|_| RecurrenceError::LimitExceeded("shift overflow".into()))?,
+            )
+            .coeffs,
         );
         self.check(&q)?;
         Ok(q)
     }
-    fn derivative(&mut self, p: &BivarPoly, d: usize) -> Result<BivarPoly, String> {
+    fn derivative(&mut self, p: &BivarPoly, d: usize) -> Result<BivarPoly, RecurrenceError> {
         self.spend(
             p.coeffs
                 .iter()
                 .map(Vec::len)
                 .sum::<usize>()
                 .checked_mul(d.saturating_add(1))
-                .ok_or("polynomial propagation arithmetic budget")?,
+                .ok_or(RecurrenceError::BudgetExhausted(
+                    "polynomial propagation arithmetic budget".into(),
+                ))?,
         )?;
         let q = trim(
             p.coeffs
@@ -255,11 +278,16 @@ fn one() -> BivarPoly {
 fn encode(p: &BivarPoly) -> ExactRows {
     encode_matrix(&p.coeffs)
 }
-pub(super) fn parse(p: &ExactRows, lim: &RecurrenceSpaceLimits) -> Result<BivarPoly, String> {
+pub(super) fn parse(
+    p: &ExactRows,
+    lim: &RecurrenceSpaceLimits,
+) -> Result<BivarPoly, RecurrenceError> {
     if p.len().saturating_sub(1) > lim.max_degree
         || p.iter().any(|r| r.len().saturating_sub(1) > lim.max_degree)
     {
-        return Err("source coefficient degree budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "source coefficient degree budget".into(),
+        ));
     }
     Ok(trim(parse_matrix(p, lim)?))
 }
@@ -267,7 +295,7 @@ pub(super) fn evaluate(
     p: &BivarPoly,
     n: usize,
     lim: &RecurrenceSpaceLimits,
-) -> Result<Poly, String> {
+) -> Result<Poly, RecurrenceError> {
     let rank = Q::from_integer(BigInt::from(n));
     let mut out = Poly::zero();
     for row in p.coeffs.iter().rev() {
@@ -276,15 +304,22 @@ pub(super) fn evaluate(
     }
     Ok(out)
 }
-fn matrix_budget(rows: &[Vec<BivarPoly>], lim: &RecurrenceSpaceLimits) -> Result<(), String> {
+fn matrix_budget(
+    rows: &[Vec<BivarPoly>],
+    lim: &RecurrenceSpaceLimits,
+) -> Result<(), RecurrenceError> {
     let mut size = 0usize;
     for p in rows.iter().flatten() {
         size = size
             .checked_add(1 + p.coeffs.iter().map(Vec::len).sum::<usize>())
-            .ok_or("propagation matrix entry budget")?;
+            .ok_or(RecurrenceError::BudgetExhausted(
+                "propagation matrix entry budget".into(),
+            ))?;
     }
     if size > lim.max_matrix_entries {
-        return Err("propagation matrix entry budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "propagation matrix entry budget".into(),
+        ));
     }
     Ok(())
 }
@@ -295,15 +330,19 @@ fn replace_entry(
     value: BivarPoly,
     retained: &mut usize,
     lim: &RecurrenceSpaceLimits,
-) -> Result<(), String> {
+) -> Result<(), RecurrenceError> {
     let old = entry.coeffs.iter().map(Vec::len).sum::<usize>();
     let new = value.coeffs.iter().map(Vec::len).sum::<usize>();
     let size = retained
         .checked_sub(old)
         .and_then(|n| n.checked_add(new))
-        .ok_or("propagation matrix entry budget")?;
+        .ok_or(RecurrenceError::BudgetExhausted(
+            "propagation matrix entry budget".into(),
+        ))?;
     if size > lim.max_matrix_entries {
-        return Err("propagation matrix entry budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "propagation matrix entry budget".into(),
+        ));
     }
     *retained = size;
     *entry = value;
@@ -313,16 +352,22 @@ fn transition(
     a: &[BivarPoly],
     s: usize,
     ar: &mut Arithmetic<'_>,
-) -> Result<Vec<Vec<BivarPoly>>, String> {
+) -> Result<Vec<Vec<BivarPoly>>, RecurrenceError> {
     let k = a.len();
     let q = k
-        .checked_mul(s.checked_add(1).ok_or("jet dimension budget")?)
-        .ok_or("jet dimension budget")?;
+        .checked_mul(s.checked_add(1).ok_or(RecurrenceError::BudgetExhausted(
+            "jet dimension budget".into(),
+        ))?)
+        .ok_or(RecurrenceError::BudgetExhausted(
+            "jet dimension budget".into(),
+        ))?;
     if q > ar.limits.max_columns
         || q.checked_mul(q)
             .is_none_or(|v| v > ar.limits.max_matrix_entries)
     {
-        return Err("jet dimension budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "jet dimension budget".into(),
+        ));
     }
     let mut t = vec![vec![zero(); q]; q];
     let mut retained = q * q;
@@ -362,7 +407,7 @@ fn advance(
     rows: &[Vec<BivarPoly>],
     t: &[Vec<BivarPoly>],
     ar: &mut Arithmetic<'_>,
-) -> Result<Vec<Vec<BivarPoly>>, String> {
+) -> Result<Vec<Vec<BivarPoly>>, RecurrenceError> {
     let q = t.len();
     let mut out = vec![vec![zero(); q]; rows.len()];
     let mut retained = q * rows.len();
@@ -383,7 +428,7 @@ fn setup(
     a: &[BivarPoly],
     cols: &[RecurrenceMonomial],
     ar: &mut Arithmetic<'_>,
-) -> Result<(PolynomialMatrix, PolynomialMatrix), String> {
+) -> Result<(PolynomialMatrix, PolynomialMatrix), RecurrenceError> {
     let basic: BTreeSet<_> = cols
         .iter()
         .map(|c| (c.lag, c.derivative_order, c.index_degree))
@@ -398,12 +443,16 @@ fn setup(
         .and_then(|v| v.checked_mul(v))
         .is_none_or(|v| v > ar.limits.max_matrix_entries / 2)
     {
-        return Err("propagation dependence dimension budget".into());
+        return Err(RecurrenceError::BudgetExhausted(
+            "propagation dependence dimension budget".into(),
+        ));
     }
     let mut v = Vec::new();
     for (lag, d, u) in basic {
         if lag > ar.limits.max_rows {
-            return Err("propagation lag budget".into());
+            return Err(RecurrenceError::BudgetExhausted(
+                "propagation lag budget".into(),
+            ));
         }
         let mut row = vec![zero(); q];
         row[d * k] = one();
@@ -427,10 +476,14 @@ fn finish(
     q: usize,
     m: usize,
     start: usize,
-) -> Result<RecurrencePropagationCertificate, String> {
-    let leading = coefficients.last().ok_or("empty propagation relation")?;
+) -> Result<RecurrencePropagationCertificate, RecurrenceError> {
+    let leading = coefficients.last().ok_or(RecurrenceError::InvalidInput(
+        "empty propagation relation".into(),
+    ))?;
     if leading.is_zero() {
-        return Err("zero propagation leader".into());
+        return Err(RecurrenceError::InvalidInput(
+            "zero propagation leader".into(),
+        ));
     }
     let width = leading.coeffs.iter().map(Vec::len).max().unwrap_or(0);
     let polynomials: Vec<_> = (0..width)
@@ -450,10 +503,14 @@ fn finish(
         for root in roots {
             let n = root
                 .parse::<BigInt>()
-                .map_err(|_| "invalid exceptional rank")?
+                .map_err(|_| RecurrenceError::InvalidInput("invalid exceptional rank".into()))?
                 .to_usize()
-                .ok_or("exceptional rank row budget")?;
-            regular = regular.max(n.checked_add(1).ok_or("exceptional rank row budget")?);
+                .ok_or(RecurrenceError::BudgetExhausted(
+                    "exceptional rank row budget".into(),
+                ))?;
+            regular = regular.max(n.checked_add(1).ok_or(RecurrenceError::BudgetExhausted(
+                "exceptional rank row budget".into(),
+            ))?);
         }
         "exact_integer_zeros"
     } else {
@@ -473,9 +530,13 @@ fn finish(
             best = Some(best.map_or(bound.clone(), |b| b.min(bound)));
         }
         regular = regular.max(
-            best.ok_or("zero propagation leader")?
-                .to_usize()
-                .ok_or("exceptional rank row budget")?,
+            best.ok_or(RecurrenceError::InvalidInput(
+                "zero propagation leader".into(),
+            ))?
+            .to_usize()
+            .ok_or(RecurrenceError::BudgetExhausted(
+                "exceptional rank row budget".into(),
+            ))?,
         );
         "coefficient_root_bound"
     };
@@ -494,7 +555,7 @@ pub(super) fn build(
     cols: &[RecurrenceMonomial],
     start: usize,
     lim: &RecurrenceSpaceLimits,
-) -> Result<RecurrencePropagationCertificate, String> {
+) -> Result<RecurrencePropagationCertificate, RecurrenceError> {
     let mut ar = Arithmetic::new(lim);
     let (t, mut w) = setup(a, cols, &mut ar)?;
     let q = t.len();
@@ -544,15 +605,21 @@ pub(super) fn build(
             for p in r.iter().chain(c) {
                 entries = entries
                     .checked_add(1 + p.coeffs.iter().map(Vec::len).sum::<usize>())
-                    .ok_or("propagation basis entry budget")?;
+                    .ok_or(RecurrenceError::BudgetExhausted(
+                        "propagation basis entry budget".into(),
+                    ))?;
             }
         }
         if entries > lim.max_matrix_entries {
-            return Err("propagation basis entry budget".into());
+            return Err(RecurrenceError::BudgetExhausted(
+                "propagation basis entry budget".into(),
+            ));
         }
         w = advance(&w, &t, &mut ar)?;
     }
-    Err("polynomial dependence dimension invariant failed".into())
+    Err(RecurrenceError::InvalidInput(
+        "polynomial dependence dimension invariant failed".into(),
+    ))
 }
 
 pub(super) fn verify(
@@ -561,13 +628,15 @@ pub(super) fn verify(
     start: usize,
     cert: &RecurrencePropagationCertificate,
     lim: &RecurrenceSpaceLimits,
-) -> Result<(), String> {
+) -> Result<(), RecurrenceError> {
     let mut ar = Arithmetic::new(lim);
     let (t, mut w) = setup(a, cols, &mut ar)?;
     let q = t.len();
     let m = w.len();
     if cert.coefficients.is_empty() || cert.coefficients.len() - 1 > q * m {
-        return Err("invalid propagation order".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "invalid propagation order".into(),
+        ));
     }
     let coeffs = cert
         .coefficients
@@ -589,10 +658,14 @@ pub(super) fn verify(
         }
     }
     if residual.iter().flatten().any(|p| !p.is_zero()) {
-        return Err("invalid polynomial propagation identity".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "invalid polynomial propagation identity".into(),
+        ));
     }
     if &finish(coeffs, q, m, start)? != cert {
-        return Err("propagation cutoff or metadata mismatch".into());
+        return Err(RecurrenceError::VerificationFailed(
+            "propagation cutoff or metadata mismatch".into(),
+        ));
     }
     Ok(())
 }

@@ -25,11 +25,65 @@ Breaking changes:
     `InconsistentRowLengths`, `NegativeEntry`, `PositiveEntryBelowZeroPivot`
     and `NegativeEliminationEntry` for the Neville failures;
   - the `interlacing_matrix::check_lace_*` functions return
-    `InterlacingMatrixError`, which gains the variant
-    `NotTotallyNonnegative(TotalPositivityError)`.
+    `InterlacingMatrixError`, which gains the variants
+    `NotTotallyNonnegative(TotalPositivityError)` and `SizeOverflow`;
+  - `oeis::OeisCatalogRecord::{parse_jsonl, validate, validate_all}` return
+    `oeis::OeisCatalogError` (new, one variant per rejected condition);
+  - `renewal::{WeightedRenewal::new, recognize_weighted_renewal,
+    recognize_fixed_delay_predecessor}`,
+    `VariablePredecessorRecurrence::{certify, certify_all_indices,
+    verify_certificate, rows}` and `RecurrenceTheoremReport::for_supplied`
+    return `renewal::RenewalError` (new);
+  - `recurrence::parse_rational_coeff` returns `recurrence::ParseRationalError`
+    (new), and every other public `recurrence` function that returned
+    `Result<_, String>` returns `recurrence::RecurrenceError` (new): the
+    `Display` text is the former message, and the variant says whether the input
+    is invalid (`InvalidInput`), unsupported, over a service ceiling
+    (`LimitExceeded`), out of computation budget (`BudgetExhausted`, the search
+    is incomplete rather than invalid), or a failed certificate replay
+    (`VerificationFailed`); `Transform`, `Oeis` and `Rational` wrap
+    `TransformError`, `OeisSequenceError` and `ParseRationalError`.  The
+    functions are `RecurrenceJson::to_recurrence_parts`,
+    `find_recurrence_representations{,_rational}`, `find_recurrence_spaces`,
+    `verify_recurrence_spaces`, `RecurrenceCoefficientRescaling::{validate,
+    rescale_coefficients, unscale_coefficients}`,
+    `ConstantLagSource::{generate_rows, from_recurrence_json}`,
+    `IndexedLagSource::generate_rows`, `RecurrenceSpaceLimits::check_ceiling`,
+    `RecurrenceSpaceRepresentative::to_recurrence`,
+    `RecurrenceLeaderCoverage::to_recurrence`,
+    `GammaTransport::relation_system`,
+    `TransformVectorRecurrenceJson::{text, to_recurrence}`,
+    `TransformLimits::check_ceiling`, `transform_recurrence`,
+    `verify_recurrence_transform`, `RepresentationSearchLimits::check_ceiling`,
+    `search_representations`, `verify_representation_search`,
+    `lossy_reconstruction`, `ImplicitRelation::{from_recurrence, from_json}`,
+    `CoefficientCondition::from_json`, `assess_generating_description`,
+    `ReconstructionCertificate::{verify_identity, replay_on_rows}`,
+    `implicit_transform_recurrence{,_with_root_domain}`,
+    `parse_implicit_transform_input`, `verify_recurrence_implicit`,
+    `ImplicitSearchSupport::monomials`, `search_implicit_relations`,
+    `verify_implicit_relation_search`, `RootInterval::at`,
+    `RootDomainRequest::validate`, `root_implication`, `root_enclosures`,
+    `jensen_fixed_cap_check` and `analyze_implicit_root_domain`.  The
+    `String` fields of the serialized report structs, and so every JSON schema,
+    are unchanged.
   Code that only prints the error, uses `?` or calls `.to_string()` is
   unaffected; code that compares the `String` or calls `str` methods on it must
-  call `.to_string()` first.
+  call `.to_string()` first.  The deprecated aliases that keep a `String` error
+  are listed below.
+- Spelled-out `tnn` names: public fields and enum variants cannot keep an alias,
+  so `ChainPolynomialReport::tnn` is now `totally_nonnegative_verdict` (a
+  `Result<(), NetworkError>`), `LeftProductionReport::tnn` is
+  `totally_nonnegative`, and the variants `NetworkError::NotTnn` and
+  `LeftProductionError::NotTnn` are `NotTotallyNonnegative`.  The methods and
+  functions in the table below keep deprecated aliases.  CLI commands and flags
+  (`tnn-network`), MCP tool names (`check_tnn_network`), JSON field names
+  (`tnn`, `not_tnn`) and the `tnn_network` module path are unchanged.  In
+  `polytool-mcp` the request, response and item types are now
+  `TotallyNonnegativeNetworkRequest`, `TotallyNonnegativeNetworkResponse` and
+  `TotallyNonnegativeFailureItem` (deprecated aliases keep the old names; the
+  schema name `TnnFailureItem` and every JSON field are unchanged), and the fields named `tnn` are
+  `totally_nonnegative` in Rust (still `tnn` in JSON).
 - `decomposition::SymmetricDecompositionAnalysis` is generic over the
   coefficient type, `SymmetricDecompositionAnalysis<C = i64>`.  The unparameterized
   name is unchanged, and `SymmetricDecompositionAnalysisBigInt` is now a
@@ -55,6 +109,17 @@ Every old name still compiles and forwards to the new one with a
 | `real_rootedness::real_roots` (also `polytool::real_roots`) | `approximate_real_roots` (returns interval midpoints, not exact roots) |
 | `linalg::sparse_modular_linear_system_consistent` | `is_sparse_modular_linear_system_consistent` |
 | `linalg::is_tnn` | `is_totally_nonnegative_neville` |
+| `linalg::check_tnn_neville` (also `polytool::`) | `check_totally_nonnegative_neville` |
+| `linalg::check_tnn_neville_bigint` (also `polytool::`) | `check_totally_nonnegative_neville_bigint` |
+| `interlacing_matrix::check_lace_tnn_neville_i64` (also `polytool::`) | `check_lace_totally_nonnegative_neville_i64` |
+| `interlacing_matrix::check_lace_tnn_neville_bigint` (also `polytool::`) | `check_lace_totally_nonnegative_neville_bigint` |
+| `tnn_network::check_lower_unitriangular_tnn` (also `polytool::`) | `check_lower_unitriangular_totally_nonnegative` |
+| `tnn_network::reconstruct_canonical_tnn_network` (also `polytool::`) | `reconstruct_canonical_totally_nonnegative_network` |
+| `tnn_network::build_tnn_certificate_from_monic_polynomials` (also `polytool::`) | `build_totally_nonnegative_certificate_from_monic_polynomials` |
+| `tnn_network::CanonicalTnnProof` (also `polytool::`) | `CanonicalTotallyNonnegativeProof` |
+| `tnn_network::ChainPolynomialReport::is_tnn` | `ChainPolynomialReport::is_totally_nonnegative` |
+| `left_production::check_production_tnn` | `check_production_totally_nonnegative` |
+| `left_production::ProductionTnnFailure` | `ProductionTotallyNonnegativeFailure` |
 | `linalg::is_totally_nonnegative` | `is_totally_nonnegative_by_minors` |
 | `interlacing_matrix::check_lace_total_nonnegative_i64` | `check_lace_totally_nonnegative_by_minors_i64` |
 | `interlacing_matrix::check_lace_sequence_total_nonnegative_i64` | `check_lace_sequence_totally_nonnegative_by_minors_i64` |
@@ -72,7 +137,26 @@ Every old name still compiles and forwards to the new one with a
 The deprecated `interlacing_matrix::check_lace_total_nonnegative_i64`,
 `check_lace_sequence_total_nonnegative_i64` and
 `cyclic_sieving::cyclic_sieving_check_orbit_sizes` keep their former `String`
-error type; the new names return the typed errors above.
+error type (they are the only public functions that do); the new names return
+the typed errors above.  `exact-real-roots` has no `Result<_, String>` API.
+
+Fixes:
+
+- `hstar_inequality_report_bigint` no longer panics (debug) or wraps
+  (release) when the supplied dimension is more than one below the degree of
+  `h*`; the report has `codegree: None` and a failing `dimension bound` check.
+- `tnn_network::verify_path_matrix_certificate` (and
+  `CanonicalTotallyNonnegativeProof::verify`) returns `false` for a malformed
+  network (a row `lambda[n]` without `n + 1` entries) instead of panicking.
+- `interlacing_matrix::lace_matrix*` return `InterlacingMatrixError::SizeOverflow`
+  for truncations whose size overflows, instead of panicking.
+- `cyclic_sieving_sequence_reports_bigint` skips candidate orders whose index
+  overflows `isize`; `recurrence_holds_rational` and
+  `recurrence_holds_from_rational` accept `rec_len = usize::MAX`.
+- Rustdoc: every public function that panics on caller-reachable invalid input
+  (zero divisors, non-square matrices, a non-monic or inexact division, an
+  `i64` convenience wrapper whose result does not fit) documents it under a
+  `# Panics` section.
 
 Maintenance:
 
@@ -83,7 +167,13 @@ Maintenance:
 - The README is a landing page; the CLI, library, MCP, web and algorithm
   references moved to `doc/`, and release notes to this file.
 - The web page is split into `index.html`, `app.css` and `js/*.js`; serve the
-  whole `web/` directory.
+  whole `web/` directory. All web tests live in `web/tests/`
+  (`node --test web/tests/*.test.cjs`).
+- The `generate_recurrence_benchmarks` example takes an output directory and
+  no longer writes into `fixtures/recurrence-benchmarks/`, whose manifest it
+  would have truncated to the synthetic fixtures.
+- Examples: `bench_bezout_vs_sturm` no longer overflows and passes the
+  interlacing arguments in the documented order.
 - The MCP server uses `rmcp` 3.8 (was 0.16) and needs Rust 1.89. Tool names,
   descriptions and results are unchanged; input/output schemas encode
   optional fields as `"type": [..., "null"]` instead of `nullable: true` and

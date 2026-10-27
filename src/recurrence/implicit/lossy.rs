@@ -412,8 +412,8 @@ pub fn lossy_reconstruction(
     first_index: usize,
     source_rows: &[Vec<BigRational>],
     source_conditions: &[DescribedCondition],
-) -> Result<LossyReconstruction, String> {
-    derivative_order_check(order).map_err(|e| e.to_string())?;
+) -> Result<LossyReconstruction, RecurrenceError> {
+    derivative_order_check(order)?;
     let symbol = "P";
     let mut relations = Vec::new();
     let mut seed_count = q_description.seeds.len().max(1);
@@ -431,26 +431,27 @@ pub fn lossy_reconstruction(
             ),
         );
     }
-    let pull = |records: &[DescribedCondition]| -> Result<Vec<DescribedCondition>, String> {
-        records
-            .iter()
-            .map(|record| {
-                let condition = CoefficientCondition::from_json(&record.condition)?;
-                let pulled = pull_back_condition_through_derivative(&condition, order);
-                Ok(DescribedCondition::new(
-                    &pulled,
-                    record.first_base,
-                    &record.evidence,
-                    record.coefficient_index.map(|k| k + order),
-                    symbol,
-                )
-                .with_note(format!(
-                    "pulled back from {} through D^{order}",
-                    record.text
-                )))
-            })
-            .collect()
-    };
+    let pull =
+        |records: &[DescribedCondition]| -> Result<Vec<DescribedCondition>, RecurrenceError> {
+            records
+                .iter()
+                .map(|record| {
+                    let condition = CoefficientCondition::from_json(&record.condition)?;
+                    let pulled = pull_back_condition_through_derivative(&condition, order);
+                    Ok(DescribedCondition::new(
+                        &pulled,
+                        record.first_base,
+                        &record.evidence,
+                        record.coefficient_index.map(|k| k + order),
+                        symbol,
+                    )
+                    .with_note(format!(
+                        "pulled back from {} through D^{order}",
+                        record.text
+                    )))
+                })
+                .collect()
+        };
     let exceptional = pull(&q_description.exceptional_index_conditions)?;
     let mut boundary = pull(&q_description.boundary_conditions)?;
     for record in source_conditions {
@@ -463,9 +464,9 @@ pub fn lossy_reconstruction(
         }
     }
     if source_rows.len() < seed_count {
-        return Err(format!(
+        return Err(RecurrenceError::InvalidInput(format!(
             "lossy reconstruction needs {seed_count} source rows for the seeds"
-        ));
+        )));
     }
     let with_lost_data = GeneratingDescription {
         first_index,
@@ -477,7 +478,9 @@ pub fn lossy_reconstruction(
         exceptional_index_conditions: exceptional,
         boundary_conditions: boundary,
     };
-    let lost = |records: &[DescribedCondition], list: &str| -> Result<Vec<String>, String> {
+    let lost = |records: &[DescribedCondition],
+                list: &str|
+     -> Result<Vec<String>, RecurrenceError> {
         let mut labels = Vec::new();
         for (i, record) in records.iter().enumerate() {
             if condition_refers_below(&CoefficientCondition::from_json(&record.condition)?, order) {
@@ -494,16 +497,19 @@ pub fn lossy_reconstruction(
         &with_lost_data.boundary_conditions,
         "boundary_conditions",
     )?);
-    let keep = |records: &[DescribedCondition]| -> Result<Vec<DescribedCondition>, String> {
-        let mut kept = Vec::new();
-        for record in records {
-            if !condition_refers_below(&CoefficientCondition::from_json(&record.condition)?, order)
-            {
-                kept.push(record.clone());
+    let keep =
+        |records: &[DescribedCondition]| -> Result<Vec<DescribedCondition>, RecurrenceError> {
+            let mut kept = Vec::new();
+            for record in records {
+                if !condition_refers_below(
+                    &CoefficientCondition::from_json(&record.condition)?,
+                    order,
+                ) {
+                    kept.push(record.clone());
+                }
             }
-        }
-        Ok(kept)
-    };
+            Ok(kept)
+        };
     let without_lost_data = GeneratingDescription {
         exceptional_index_conditions: keep(&with_lost_data.exceptional_index_conditions)?,
         boundary_conditions: keep(&with_lost_data.boundary_conditions)?,
@@ -538,7 +544,7 @@ pub(in crate::recurrence) fn coefficient_conditions_of(
     relation: &DescribedRelation,
     indices: &[usize],
     symbol: &str,
-) -> Result<Vec<DescribedCondition>, String> {
+) -> Result<Vec<DescribedCondition>, RecurrenceError> {
     let parsed = ImplicitRelation::from_json(&relation.relation)?;
     let mut out = Vec::new();
     for &k in indices {

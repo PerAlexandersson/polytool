@@ -88,7 +88,7 @@ fn parse_tnn_network_args(args: &[String]) -> Result<TnnNetworkOptions, String> 
 }
 
 /// Exact analysis shared by the text and JSON printers.
-struct TnnNetworkAnalysis {
+struct TotallyNonnegativeNetworkAnalysis {
     input_mode: &'static str,
     input_rows: usize,
     prepended_p0: bool,
@@ -99,8 +99,8 @@ struct TnnNetworkAnalysis {
     chain: Option<Result<ChainPolynomialReport, NetworkError>>,
 }
 
-impl TnnNetworkAnalysis {
-    fn tnn(&self) -> bool {
+impl TotallyNonnegativeNetworkAnalysis {
+    fn totally_nonnegative(&self) -> bool {
         self.verdict.is_ok()
     }
 
@@ -109,7 +109,7 @@ impl TnnNetworkAnalysis {
             Some(Ok(report)) => !report.contradicts_theorem(),
             _ => true,
         };
-        self.tnn() && self.certificate_verified == Some(true) && chain_ok
+        self.totally_nonnegative() && self.certificate_verified == Some(true) && chain_ok
     }
 }
 
@@ -125,7 +125,10 @@ fn matrix_rows(lines: Vec<Vec<BigInt>>) -> Result<Vec<Vec<BigInt>>, NetworkError
     }
 }
 
-fn analyze(lines: Vec<Vec<BigInt>>, options: &TnnNetworkOptions) -> TnnNetworkAnalysis {
+fn analyze(
+    lines: Vec<Vec<BigInt>>,
+    options: &TnnNetworkOptions,
+) -> TotallyNonnegativeNetworkAnalysis {
     let input_rows = lines.len();
     let (input_mode, rows) = if options.matrix {
         ("matrix", matrix_rows(lines))
@@ -140,9 +143,9 @@ fn analyze(lines: Vec<Vec<BigInt>>, options: &TnnNetworkOptions) -> TnnNetworkAn
     let verdict = rows
         .as_ref()
         .map_err(Clone::clone)
-        .and_then(|r| check_lower_unitriangular_tnn(r));
+        .and_then(|r| check_lower_unitriangular_totally_nonnegative(r));
     let (lambda, certificate_verified) = match (&rows, &verdict) {
-        (Ok(r), Ok(())) => match reconstruct_canonical_tnn_network(r) {
+        (Ok(r), Ok(())) => match reconstruct_canonical_totally_nonnegative_network(r) {
             Ok(network) => {
                 let verified = verify_path_matrix_certificate(r, &network);
                 (Some(network.lambda), Some(verified))
@@ -156,7 +159,7 @@ fn analyze(lines: Vec<Vec<BigInt>>, options: &TnnNetworkOptions) -> TnnNetworkAn
             .map_err(Clone::clone)
             .and_then(|r| check_chain_polynomials_bigint(r))
     });
-    TnnNetworkAnalysis {
+    TotallyNonnegativeNetworkAnalysis {
         input_mode,
         input_rows,
         prepended_p0,
@@ -181,7 +184,7 @@ pub(crate) fn network_error_kind(error: &NetworkError) -> &'static str {
         NetworkError::InvalidRowLength { .. } => "invalid_row_length",
         NetworkError::NegativeEntry { .. } => "negative_entry",
         NetworkError::NonUnitDiagonal { .. } => "non_unit_diagonal",
-        NetworkError::NotTnn { .. } => "not_tnn",
+        NetworkError::NotTotallyNonnegative { .. } => "not_tnn",
         NetworkError::ZeroTailViolation { .. } => "zero_tail_violation",
         NetworkError::NegativeReducedEntry { .. } => "negative_reduced_entry",
         NetworkError::ReconstructionMismatch => "reconstruction_mismatch",
@@ -260,7 +263,7 @@ fn json_bigint_rows(rows: &[Vec<BigInt>]) -> String {
 fn network_error_json(error: &NetworkError) -> String {
     let (row, col, value) = network_error_location(error);
     let witness = match error {
-        NetworkError::NotTnn {
+        NetworkError::NotTotallyNonnegative {
             witness: Some(minor),
             ..
         } => format!(
@@ -336,7 +339,7 @@ fn chain_json(chain: &Result<ChainPolynomialReport, NetworkError>) -> String {
     )
 }
 
-fn analysis_json(analysis: &TnnNetworkAnalysis) -> String {
+fn analysis_json(analysis: &TotallyNonnegativeNetworkAnalysis) -> String {
     format!(
         "{{\"schema\":\"polytool.tnn-network.v1\",\"input_mode\":{},\"input_rows\":{},\
          \"prepended_p0\":{},\"coefficient_matrix\":{},\"tnn\":{},\"failure\":{},\
@@ -348,7 +351,7 @@ fn analysis_json(analysis: &TnnNetworkAnalysis) -> String {
             .coefficient_matrix
             .as_deref()
             .map_or("null".to_string(), json_bigint_rows),
-        analysis.tnn(),
+        analysis.totally_nonnegative(),
         analysis
             .verdict
             .as_ref()
@@ -422,12 +425,12 @@ fn print_chain_text(chain: &Result<ChainPolynomialReport, NetworkError>) {
     );
     if report.contradicts_theorem() {
         println!("- WARNING: the matrix is TNN but the conclusion fails (contradicts the theorem)");
-    } else if !report.is_tnn() {
+    } else if !report.is_totally_nonnegative() {
         println!("- The matrix is not TNN, so the theorem does not apply to these polynomials.");
     }
 }
 
-fn print_analysis_text(analysis: &TnnNetworkAnalysis) {
+fn print_analysis_text(analysis: &TotallyNonnegativeNetworkAnalysis) {
     println!("TNN network check");
     println!(
         "- Input: {} {} row(s){}",
@@ -454,7 +457,7 @@ fn print_analysis_text(analysis: &TnnNetworkAnalysis) {
         Err(error) => {
             println!("- Verdict: not lower-unitriangular TNN");
             println!("- Reason ({}): {error}", network_error_kind(error));
-            if let NetworkError::NotTnn {
+            if let NetworkError::NotTotallyNonnegative {
                 witness: Some(minor),
                 ..
             } = error

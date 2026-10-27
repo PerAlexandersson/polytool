@@ -92,9 +92,16 @@ accurate to below `1e-6`, and `None` when the polynomial is not real-rooted;
 rational coefficients.  Total nonnegativity is tested by
 `linalg::is_totally_nonnegative_neville` (all minors, Neville elimination) and
 `linalg::is_totally_nonnegative_by_minors` (brute force up to a minor size).
-Failures of the diagnostic `check_*` and parsing functions are typed errors
-(`TotalPositivityError`, `InterlacingMatrixError`, `CyclicSievingError`,
-`ParsePolynomialError`) whose `Display` text is the human-readable message.
+Failures of the diagnostic `check_*`, parsing and report functions are typed
+errors that implement `Display` and `std::error::Error`: `TotalPositivityError`,
+`InterlacingMatrixError`, `CyclicSievingError`, `ParsePolynomialError`,
+`NetworkError`, `oeis::OeisCatalogError`, `renewal::RenewalError`, and, for the
+recurrence reports, searches and certificate replays, `recurrence::RecurrenceError`
+(with `recurrence::ParseRationalError` for coefficient strings).  Public
+functions never return `Result<_, String>`; the `Display` text is the
+human-readable message.  Functions that cannot fail on well-formed input but
+reject a precondition by panicking (zero divisors, non-square matrices, `i64`
+overflow of a convenience wrapper) say so in a `# Panics` rustdoc section.
 
 ## Athanasiadis--Wagner interlacing matrices
 
@@ -140,8 +147,8 @@ let to_rows = |rows: Vec<Vec<i64>>| -> Vec<Vec<BigInt>> {
 
 // TNN check with a structured diagnosis: rows {1,2}, columns {0,1} give -2.
 let bad = to_rows(vec![vec![1], vec![1, 1], vec![2, 0, 1]]);
-match check_lower_unitriangular_tnn(&bad) {
-    Err(NetworkError::NotTnn { witness: Some(minor), .. }) => {
+match check_lower_unitriangular_totally_nonnegative(&bad) {
+    Err(NetworkError::NotTotallyNonnegative { witness: Some(minor), .. }) => {
         assert_eq!(minor.value, BigInt::from(-2));
     }
     other => panic!("{:?}", other),
@@ -150,7 +157,7 @@ match check_lower_unitriangular_tnn(&bad) {
 // Chain polynomials p_0 = 1, p_n = t * sum_{k<n} r_{n,k} p_k.
 let ones = to_rows(vec![vec![1], vec![1, 1], vec![1, 1, 1]]);
 let report = check_chain_polynomials_bigint(&ones).unwrap();
-assert!(report.is_tnn() && report.chain_conclusion_holds());
+assert!(report.is_totally_nonnegative() && report.chain_conclusion_holds());
 
 // Search for a planar strip digraph reproducing the rows (1+t)^n.
 let rows: Vec<Polynomial<BigInt>> = (1..=4)
@@ -160,7 +167,7 @@ let result = recognize_brenti_strip_digraph(&rows, &BrentiRecognitionOptions::de
 assert!(result.is_certified());
 ```
 
-- `tnn_network::check_lower_unitriangular_tnn` decides total nonnegativity
+- `tnn_network::check_lower_unitriangular_totally_nonnegative` decides total nonnegativity
   of a lower-unitriangular matrix exactly; on failure `NetworkError` names the
   bad entry or shape problem, or gives a `NegativeMinor` (rows, columns, exact
   value).  `lower_triangular_rows_from_square` converts a square matrix with

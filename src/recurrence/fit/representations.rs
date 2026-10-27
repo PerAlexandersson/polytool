@@ -324,7 +324,7 @@ pub fn find_recurrence_representations_rational(
     input: &[Vec<BigRational>],
     search: &AdaptiveSearchOptions,
     budget: AdaptiveSearchBudget,
-) -> Result<RecurrenceRepresentations, String> {
+) -> Result<RecurrenceRepresentations, RecurrenceError> {
     for (low, high) in [
         (search.min_rec_len.max(1), search.max_rec_len),
         (search.min_diff_deg, search.max_diff_deg),
@@ -334,12 +334,16 @@ pub fn find_recurrence_representations_rational(
         (search.min_inhomo_idx_deg, search.max_inhomo_idx_deg),
     ] {
         if low > high {
-            return Err(format!("invalid recurrence search range {low}..={high}"));
+            return Err(RecurrenceError::InvalidInput(format!(
+                "invalid recurrence search range {low}..={high}"
+            )));
         }
     }
     let polys = input.get(search.skip_prefix..).unwrap_or(&[]);
     if polys.len() < 3 {
-        return Err("need at least 3 polynomials after skip_prefix".into());
+        return Err(RecurrenceError::InvalidInput(
+            "need at least 3 polynomials after skip_prefix".into(),
+        ));
     }
     // Bound the report allocation independently of the solver budget.
     let cells = (search.max_rec_len - search.min_rec_len.max(1) + 1)
@@ -348,11 +352,17 @@ pub fn find_recurrence_representations_rational(
                 .max_diff_deg
                 .checked_sub(search.min_diff_deg)
                 .and_then(|d| d.checked_add(1))
-                .ok_or("search size overflow")?,
+                .ok_or(RecurrenceError::LimitExceeded(
+                    "search size overflow".into(),
+                ))?,
         )
-        .ok_or("search size overflow")?;
+        .ok_or(RecurrenceError::LimitExceeded(
+            "search size overflow".into(),
+        ))?;
     if cells > 10_000 {
-        return Err("at most 10000 length/derivative cells are supported".into());
+        return Err(RecurrenceError::LimitExceeded(
+            "at most 10000 length/derivative cells are supported".into(),
+        ));
     }
     let mut coverage = BTreeMap::new();
     for r in search.min_rec_len.max(1)..=search.max_rec_len {
@@ -510,6 +520,6 @@ pub fn find_recurrence_representations(
     polys: &[Vec<i64>],
     search: &AdaptiveSearchOptions,
     budget: AdaptiveSearchBudget,
-) -> Result<RecurrenceRepresentations, String> {
+) -> Result<RecurrenceRepresentations, RecurrenceError> {
     find_recurrence_representations_rational(&i64_polys_to_rational(polys), search, budget)
 }

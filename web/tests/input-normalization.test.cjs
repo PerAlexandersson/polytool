@@ -1,11 +1,11 @@
-// Run: node --test web/input-normalization.test.cjs
+// Run: node --test web/tests/input-normalization.test.cjs
 // Optional POLYTOOL_HTML=/path/to/index.html checks a staged page and its sibling asset files.
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const page = require('./tests/page_source.cjs').loadPage();
+const page = require('./page_source.cjs').loadPage();
 const pageJs = page.js;
 const start = pageJs.indexOf('function stripCommentOnlyLines(');
 const end = pageJs.indexOf('function copyRec(', start);

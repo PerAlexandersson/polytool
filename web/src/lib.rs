@@ -509,7 +509,7 @@ pub fn find_recurrence_representations(
         AdaptiveSearchBudget::limited(max_candidates as usize),
     ) {
         Ok(report) => serde_json::to_string(&report).expect("serialize recurrence menu"),
-        Err(message) => fail(&message),
+        Err(message) => fail(&message.to_string()),
     }
 }
 
@@ -522,9 +522,14 @@ pub fn find_recurrence_spaces(request_json: &str) -> String {
         }
         let request: polytool::recurrence::RecurrenceSpaceRequest =
             serde_json::from_str(request_json).map_err(|e| e.to_string())?;
-        request.limits.check_ceiling(&Default::default())?;
-        serde_json::to_value(polytool::recurrence::find_recurrence_spaces(&request)?)
-            .map_err(|e| e.to_string())
+        request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(|e| e.to_string())?;
+        serde_json::to_value(
+            polytool::recurrence::find_recurrence_spaces(&request).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())
     };
     match run() {
         Ok(value) => value.to_string(),
@@ -541,8 +546,13 @@ pub fn verify_recurrence_spaces(report_json: &str) -> String {
         }
         let report: polytool::recurrence::RecurrenceSpaces =
             serde_json::from_str(report_json).map_err(|e| e.to_string())?;
-        report.request.limits.check_ceiling(&Default::default())?;
-        polytool::recurrence::verify_recurrence_spaces(&report.request, &report)?;
+        report
+            .request
+            .limits
+            .check_ceiling(&Default::default())
+            .map_err(|e| e.to_string())?;
+        polytool::recurrence::verify_recurrence_spaces(&report.request, &report)
+            .map_err(|e| e.to_string())?;
         Ok(
             serde_json::json!({"verified_completed_claims":true,"incomplete_shapes":report.results.iter().filter(|r|r.certificate.is_none()).count()}),
         )
@@ -574,7 +584,7 @@ pub fn generate_recurrence_rows(recurrence_json: &str, total_rows: usize) -> Str
     };
     let (recurrence, first_index, initial_polynomials) = match parsed.to_recurrence_parts() {
         Ok(parts) => parts,
-        Err(error) => return serde_json::json!({"error": error}).to_string(),
+        Err(error) => return serde_json::json!({"error": error.to_string()}).to_string(),
     };
     let generated =
         match recurrence.generate_rows_rational(&initial_polynomials, first_index, total_rows) {

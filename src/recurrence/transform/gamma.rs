@@ -443,16 +443,18 @@ impl GammaTransport {
     /// assert_eq!(system.even.text("Q"), "Q[n+1] - Q[n] = 0");
     /// assert_eq!(system.odd.text("Q"), "-x D Q[n] = 0");
     /// ```
-    pub fn relation_system(&self) -> Result<GammaRelationSystem, String> {
+    pub fn relation_system(&self) -> Result<GammaRelationSystem, RecurrenceError> {
         if self.proportional {
-            return Err(
+            return Err(RecurrenceError::InvalidInput(
                 "the parts are proportional: the scalar rule carries the source rule".into(),
-            );
+            ));
         }
         let (even, even_shift) = ImplicitRelation::from_recurrence(&self.even.relation)?;
         let (odd, odd_shift) = ImplicitRelation::from_recurrence(&self.odd.relation)?;
         if even.is_zero() || odd.is_zero() {
-            return Err("a part of the gamma-transported identity vanishes".into());
+            return Err(RecurrenceError::InvalidInput(
+                "a part of the gamma-transported identity vanishes".into(),
+            ));
         }
         Ok(GammaRelationSystem {
             even,

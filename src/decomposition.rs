@@ -130,7 +130,11 @@ pub fn f_polynomial<C: CoeffRing>(h: &Polynomial<C>, degree: usize) -> Option<Po
     Some(result * one_plus_x.pow(degree - actual))
 }
 
-/// Convenience wrapper for `i64` coefficients (panics on `i64` overflow).
+/// Convenience wrapper for `i64` coefficients.
+///
+/// # Panics
+///
+/// Panics if an intermediate coefficient overflows `i64`.
 pub fn f_polynomial_i64(coeffs: &[i64], degree: usize) -> Option<Vec<i64>> {
     let h = Polynomial::<i64>::from_i64_coeffs(coeffs);
     f_polynomial(&h, degree).map(|p| p.coeffs().to_vec())
@@ -159,7 +163,11 @@ pub fn r_transform<C: CoeffRing>(p: &Polynomial<C>, degree: usize) -> Option<Pol
     Some(p.shift(&minus_one).dilate(&minus_one).scale(&sign))
 }
 
-/// Convenience wrapper for `i64` coefficients (panics on `i64` overflow).
+/// Convenience wrapper for `i64` coefficients.
+///
+/// # Panics
+///
+/// Panics if an intermediate coefficient overflows `i64`.
 pub fn r_transform_i64(coeffs: &[i64], degree: usize) -> Option<Vec<i64>> {
     let p = Polynomial::<i64>::from_i64_coeffs(coeffs);
     r_transform(&p, degree).map(|q| q.coeffs().to_vec())
@@ -182,7 +190,11 @@ pub fn r_decomposition<C: CoeffRing>(
     Some((a_tilde, b_tilde))
 }
 
-/// Convenience wrapper for `i64` coefficients (panics on `i64` overflow).
+/// Convenience wrapper for `i64` coefficients.
+///
+/// # Panics
+///
+/// Panics if an intermediate coefficient overflows `i64`.
 pub fn r_decomposition_i64(coeffs: &[i64], degree: usize) -> Option<(Vec<i64>, Vec<i64>)> {
     let p = Polynomial::<i64>::from_i64_coeffs(coeffs);
     r_decomposition(&p, degree).map(|(a, b)| (a.coeffs().to_vec(), b.coeffs().to_vec()))

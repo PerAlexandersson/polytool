@@ -166,7 +166,9 @@ pub(crate) fn cmd_recurrence_theorems(args: &[String]) {
             serde_json::from_str::<RecurrenceJson>(&text)
                 .map_err(|e| format!("failed to parse recurrence JSON: {e}"))
         })
-        .and_then(|record| RecurrenceTheoremReport::for_supplied(&record));
+        .and_then(|record| {
+            RecurrenceTheoremReport::for_supplied(&record).map_err(|e| e.to_string())
+        });
     let report = match report {
         Ok(report) => report,
         Err(error) => {

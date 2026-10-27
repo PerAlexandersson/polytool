@@ -439,7 +439,7 @@ pub fn recurrence_holds_from_rational(
     rec_len: usize,
     start_nn: usize,
 ) -> bool {
-    let first = start_nn.max(rec_len + 1);
+    let first = start_nn.max(rec_len.saturating_add(1));
     let rec_n_degree = recurrence_n_degree(rec);
     (first..=polys.len())
         .all(|nn| recurrence_holds_at_rational_with_degree(polys, rec, nn, rec_n_degree))
@@ -452,7 +452,7 @@ pub(in crate::recurrence) fn recurrence_holds_from_rational_with_derivs(
     rec_len: usize,
     start_nn: usize,
 ) -> bool {
-    let first = start_nn.max(rec_len + 1);
+    let first = start_nn.max(rec_len.saturating_add(1));
     let scaled = scale_recurrence_to_integer(rec);
     if rational_polys_have_integer_coeffs(polys) {
         return (first..=polys.len())
@@ -469,7 +469,7 @@ pub fn recurrence_holds_rational(
     rec: &Recurrence,
     rec_len: usize,
 ) -> bool {
-    recurrence_holds_from_rational(polys, rec, rec_len, rec_len + 1)
+    recurrence_holds_from_rational(polys, rec, rec_len, rec_len.saturating_add(1))
 }
 
 pub(in crate::recurrence) fn recurrence_holds_rational_with_derivs(
@@ -478,7 +478,13 @@ pub(in crate::recurrence) fn recurrence_holds_rational_with_derivs(
     rec: &Recurrence,
     rec_len: usize,
 ) -> bool {
-    recurrence_holds_from_rational_with_derivs(polys, derivs, rec, rec_len, rec_len + 1)
+    recurrence_holds_from_rational_with_derivs(
+        polys,
+        derivs,
+        rec,
+        rec_len,
+        rec_len.saturating_add(1),
+    )
 }
 
 #[cfg(test)]
@@ -517,5 +523,17 @@ mod tests {
             1,
             2
         ));
+    }
+
+    #[test]
+    fn huge_recurrence_lengths_do_not_overflow() {
+        let rows = vec![vec![br(1, 1)], vec![br(1, 1)]];
+        let rec = Recurrence {
+            terms: vec![],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        assert!(recurrence_holds_rational(&rows, &rec, usize::MAX));
+        assert!(recurrence_holds_from_rational(&rows, &rec, usize::MAX, 0));
     }
 }

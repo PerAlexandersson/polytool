@@ -62,7 +62,7 @@ pub(crate) fn cmd_root_enclosures(args: &[String]) {
     let input = read_stdin_or_exit();
     let outcome = serde_json::from_str::<RootEnclosureRequest>(&input)
         .map_err(|e| e.to_string())
-        .and_then(|request| root_enclosures(&request));
+        .and_then(|request| root_enclosures(&request).map_err(|e| e.to_string()));
     match outcome {
         Ok(report) => {
             let text = if compact {

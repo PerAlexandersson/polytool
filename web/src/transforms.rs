@@ -65,11 +65,15 @@ fn check_schema(found: &str, expected: &str) -> Result<(), String> {
 }
 
 fn check_search_limits(limits: &RepresentationSearchLimits) -> Result<(), String> {
-    limits.check_ceiling(&RepresentationSearchLimits::service_ceiling())
+    limits
+        .check_ceiling(&RepresentationSearchLimits::service_ceiling())
+        .map_err(|e| e.to_string())
 }
 
 fn check_limits(limits: &TransformLimits) -> Result<(), String> {
-    limits.check_ceiling(&TransformLimits::default())
+    limits
+        .check_ceiling(&TransformLimits::default())
+        .map_err(|e| e.to_string())
 }
 
 /// Reject refinement widths below `2^-MAX_WIDTH_BITS`; the library rejects
@@ -78,7 +82,7 @@ fn check_enclosure_request(request: &RootEnclosureRequest) -> Result<(), String>
     let Some(width) = &request.max_width else {
         return Ok(());
     };
-    let width = polytool::recurrence::parse_rational_coeff(width)?;
+    let width = polytool::recurrence::parse_rational_coeff(width).map_err(|e| e.to_string())?;
     let numerator: BigInt = width.numer().clone();
     if numerator > BigInt::from(0) && width.denom().bits() > numerator.bits() + MAX_WIDTH_BITS {
         return Err(format!(
@@ -113,7 +117,7 @@ pub fn transform_recurrence(request_json: &str) -> String {
         let request: RecurrenceTransformRequest =
             serde_json::from_str(request_json).map_err(|e| e.to_string())?;
         check_limits(&request.limits)?;
-        to_value(polytool::recurrence::transform_recurrence(&request)?)
+        to_value(polytool::recurrence::transform_recurrence(&request).map_err(|e| e.to_string())?)
     })
 }
 
@@ -123,7 +127,7 @@ fn verify_transform_value(report_json: &str) -> Result<serde_json::Value, String
         serde_json::from_str(report_json).map_err(|e| e.to_string())?;
     check_schema(&report.schema, TRANSFORM_SCHEMA)?;
     check_limits(&report.request.limits)?;
-    polytool::recurrence::verify_recurrence_transform(&report)?;
+    polytool::recurrence::verify_recurrence_transform(&report).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({
         "schema": TRANSFORM_SCHEMA,
         "verified": true,
@@ -151,13 +155,15 @@ pub fn transform_recurrence_implicit(request_json: &str) -> String {
         bounded(request_json, "recurrence-implicit request")?;
         let value: serde_json::Value =
             serde_json::from_str(request_json).map_err(|e| e.to_string())?;
-        let (request, root_domain) = polytool::recurrence::parse_implicit_transform_input(value)?;
+        let (request, root_domain) = polytool::recurrence::parse_implicit_transform_input(value)
+            .map_err(|e| e.to_string())?;
         check_limits(&request.limits)?;
         to_value(
             polytool::recurrence::implicit_transform_recurrence_with_root_domain(
                 &request,
                 root_domain.as_ref(),
-            )?,
+            )
+            .map_err(|e| e.to_string())?,
         )
     })
 }
@@ -168,7 +174,7 @@ fn verify_implicit_value(report_json: &str) -> Result<serde_json::Value, String>
         serde_json::from_str(report_json).map_err(|e| e.to_string())?;
     check_schema(&report.schema, IMPLICIT_SCHEMA)?;
     check_limits(&report.request.limits)?;
-    polytool::recurrence::verify_recurrence_implicit(&report)?;
+    polytool::recurrence::verify_recurrence_implicit(&report).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({
         "schema": IMPLICIT_SCHEMA,
         "verified": true,
@@ -194,7 +200,7 @@ pub fn root_enclosures(request_json: &str) -> String {
         let request: RootEnclosureRequest =
             serde_json::from_str(request_json).map_err(|e| e.to_string())?;
         check_enclosure_request(&request)?;
-        to_value(polytool::recurrence::root_enclosures(&request)?)
+        to_value(polytool::recurrence::root_enclosures(&request).map_err(|e| e.to_string())?)
     })
 }
 
@@ -204,7 +210,8 @@ fn verify_enclosures_value(report_json: &str) -> Result<serde_json::Value, Strin
         serde_json::from_str(report_json).map_err(|e| e.to_string())?;
     check_schema(&report.schema, ROOT_ENCLOSURES_SCHEMA)?;
     check_enclosure_request(&report.request)?;
-    let recomputed = polytool::recurrence::root_enclosures(&report.request)?;
+    let recomputed =
+        polytool::recurrence::root_enclosures(&report.request).map_err(|e| e.to_string())?;
     if recomputed != report {
         return Err("root enclosures differ from the exact recomputation".into());
     }
@@ -252,7 +259,8 @@ fn verify_theorems_value(report_json: &str) -> Result<serde_json::Value, String>
             report.finite_evidence.source
         ));
     }
-    let recomputed = RecurrenceTheoremReport::for_supplied(&report.recurrence_json)?;
+    let recomputed = RecurrenceTheoremReport::for_supplied(&report.recurrence_json)
+        .map_err(|e| e.to_string())?;
     if recomputed != report {
         return Err("theorem report differs from the exact recomputation".into());
     }
@@ -276,7 +284,7 @@ pub fn verify_recurrence_theorems(report_json: &str) -> String {
 pub fn recurrence_latex(recurrence_json: &str) -> String {
     respond(|| {
         let record = parse_record(recurrence_json)?;
-        let (recurrence, _, _) = record.to_recurrence_parts()?;
+        let (recurrence, _, _) = record.to_recurrence_parts().map_err(|e| e.to_string())?;
         Ok(serde_json::json!({
             "text": recurrence.to_string(),
             "latex": recurrence.to_latex(),
@@ -296,7 +304,9 @@ pub fn search_recurrence_representations(request_json: &str) -> String {
         let request: RepresentationSearchRequest =
             serde_json::from_str(request_json).map_err(|e| e.to_string())?;
         check_search_limits(&request.limits)?;
-        let report = to_value(polytool::recurrence::search_representations(&request)?)?;
+        let report = to_value(
+            polytool::recurrence::search_representations(&request).map_err(|e| e.to_string())?,
+        )?;
         // A report the replay would refuse for its size is never handed out.
         if report.to_string().len() > MAX_JSON_BYTES {
             return Err(
@@ -315,7 +325,7 @@ fn verify_representation_search_value(report_json: &str) -> Result<serde_json::V
         serde_json::from_str(report_json).map_err(|e| e.to_string())?;
     check_schema(&report.schema, REPRESENTATION_SEARCH_SCHEMA)?;
     check_search_limits(&report.request.limits)?;
-    polytool::recurrence::verify_representation_search(&report)?;
+    polytool::recurrence::verify_representation_search(&report).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({
         "schema": REPRESENTATION_SEARCH_SCHEMA,
         "verified": true,

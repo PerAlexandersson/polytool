@@ -26,7 +26,7 @@ use super::predecessor::{
     VariablePredecessorRecurrence, WeightCertificate, PAPER_PROOF_STATUS,
     VARIABLE_PREDECESSOR_REFERENCE,
 };
-use super::{recognize_weighted_renewal, WeightedRenewal};
+use super::{recognize_weighted_renewal, RenewalError, WeightedRenewal};
 use crate::recurrence::{
     format_rational_coeff, AdaptiveSearchResult, BigRational, Recurrence, RecurrenceJson,
 };
@@ -530,7 +530,7 @@ pub fn match_recurrence_theorems(
             .push(renewal_match(&family, first_index, rows)),
         Err(reason) => out
             .rejected_theorems
-            .push(reject(WEIGHTED_RENEWAL_THEOREM, reason)),
+            .push(reject(WEIGHTED_RENEWAL_THEOREM, reason.to_string())),
     }
     match recognize_fixed_delay_predecessor(recurrence)
         .and_then(|family| family.certify().map(|cert| (family, cert)))
@@ -541,7 +541,7 @@ pub fn match_recurrence_theorems(
         }
         Err(reason) => out
             .rejected_theorems
-            .push(reject(FIXED_DELAY_PREDECESSOR_THEOREM, reason)),
+            .push(reject(FIXED_DELAY_PREDECESSOR_THEOREM, reason.to_string())),
     }
     out
 }
@@ -573,7 +573,7 @@ impl RecurrenceTheoremMatch {
 impl RecurrenceTheoremReport {
     /// Report for a caller-supplied recurrence record; its initial rows are
     /// compared with the canonical boundary rows.
-    pub fn for_supplied(record: &RecurrenceJson) -> Result<Self, String> {
+    pub fn for_supplied(record: &RecurrenceJson) -> Result<Self, RenewalError> {
         let (recurrence, first_index, rows) = record.to_recurrence_parts()?;
         let matches = match_recurrence_theorems(&recurrence, first_index, &rows);
         Ok(Self {

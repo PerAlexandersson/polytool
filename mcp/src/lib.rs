@@ -33,7 +33,7 @@ pub use requests::{
     GenerateRecurrenceRowsRequest, GenerateSequenceRequest, GetOeisSequenceRequest,
     HStarInequalitiesRequest, LaceCheckRequest, ListOeisSequencesRequest, PolynomialBatchInput,
     PolynomialInput, RationalCoefficientInput, RecurrenceSearchOptionsInput,
-    RecurrenceSpacesToolRequest, SequenceKind, TnnNetworkRequest,
+    RecurrenceSpacesToolRequest, SequenceKind, TotallyNonnegativeNetworkRequest,
     VerifyRecurrenceSpacesToolRequest,
 };
 pub use requests::{LeftProductionRequest, PfNetworkRequest};
@@ -61,8 +61,8 @@ pub use responses::{
     OrbitDecompositionItem, OrbitSizeEntryItem, OrbitSizesCheckItem, ParsePolynomialItem,
     ParsePolynomialsResponse, PolynomialPropertiesItem, PolynomialPropertiesResponse,
     RealRootsItem, RealRootsResponse, RecurrenceSearchStatus, ResidueClassItem, ResultantResponse,
-    RootOfUnityEvaluationItem, StripDigraphEdgeItem, StripDigraphItem, TnnFailureItem,
-    TnnNetworkResponse,
+    RootOfUnityEvaluationItem, StripDigraphEdgeItem, StripDigraphItem,
+    TotallyNonnegativeFailureItem, TotallyNonnegativeNetworkResponse,
 };
 pub use responses::{
     EnumerateRealRootedLimits, EnumerateRealRootedResponse, EnumerateRealRootedStats,
@@ -72,3 +72,21 @@ pub use responses::{
     PfNetworkStepItem, ProductionNetworkItem, RationalNegativeMinorItem,
 };
 pub use server::PolynomialToolsServer;
+
+/// Deprecated name of [`TotallyNonnegativeNetworkRequest`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `TotallyNonnegativeNetworkRequest`"
+)]
+pub type TnnNetworkRequest = TotallyNonnegativeNetworkRequest;
+
+/// Deprecated name of [`TotallyNonnegativeNetworkResponse`].
+#[deprecated(
+    since = "0.6.0",
+    note = "renamed to `TotallyNonnegativeNetworkResponse`"
+)]
+pub type TnnNetworkResponse = TotallyNonnegativeNetworkResponse;
+
+/// Deprecated name of [`TotallyNonnegativeFailureItem`].
+#[deprecated(since = "0.6.0", note = "renamed to `TotallyNonnegativeFailureItem`")]
+pub type TnnFailureItem = TotallyNonnegativeFailureItem;

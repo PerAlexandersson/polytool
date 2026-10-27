@@ -90,7 +90,7 @@ The additive Rust APIs are
 `recurrence::find_recurrence_representations_rational` and the `i64` convenience
 wrapper `find_recurrence_representations`. Both take rows, existing
 `AdaptiveSearchOptions`, and an `AdaptiveSearchBudget`, and return
-`Result<RecurrenceRepresentations, String>`. The MCP tool
+`Result<RecurrenceRepresentations, RecurrenceError>`. The MCP tool
 `find_recurrence_representations` accepts the same inputs and controls as
 `find_recurrence`. Existing single-result APIs and schemas are unchanged.
 
@@ -291,7 +291,7 @@ Run from the parent workspace, or omit the initial `polytool/` in a standalone
 checkout. `POLYTOOL_PLAYWRIGHT` can name the installed Playwright module and
 `POLYTOOL_CHROMIUM` an existing Chromium executable. Optional
 `POLYTOOL_BROWSER_ARTIFACTS` writes screenshots outside the source checkout.
-The ordinary `node --test polytool/web/*.test.cjs` checks remain useful, but
+The ordinary `node --test polytool/web/tests/*.test.cjs` checks remain useful, but
 the browser test additionally checks real DOM events and visible rendering.
 A viewport test does not substitute for real-device or screen-reader testing.
 
