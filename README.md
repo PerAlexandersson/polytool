@@ -1251,8 +1251,34 @@ pole. An additive term `g` is transported only when `ell^(d_n)` does not
 depend on `n` (`h = 0`, or constant `ell` with `ell^h = 1`). The symmetric
 decomposition turns a first-order rule without `(-1)^n` factors into the
 complete two-component shared-denominator vector system for `(a_n, b_n)`.
-Gamma coordinates are not transported (the substitution `y = x/(1+x)^2` is
-quadratic); search the gamma rows instead.
+
+Gamma coordinates `P_n = (1 + x)^(d_n) G_n(z)`, `z = x/(1 + x)^2`, are a
+quadratic substitution and are transported differently
+(`recurrence::transport_gamma`). With `u = 1 + x` and `z' = (1 - x)/u^3`,
+`D^k [u^d G(z)] = sum_i u^(d - k - 2i) T_(k,i) G^(i)(z)` with `T_(0,0) = 1` and
+`T_(k+1,i) = (d - k - 2i) T_(k,i) + u T_(k,i)' + (1 - x) T_(k,i-1)`. The rule
+is divided by `u^(d_m)` and multiplied by the power of `u` that clears every
+denominator; then each coefficient splits at an index `N` into its symmetric
+and antisymmetric parts, `E = u^N A(z) + (1 - x) u^(N-1) B(z)`. Since
+`w = (1 - x)/(1 + x)` satisfies `w^2 = 1 - 4z` and `x -> 1/x` fixes `z` and
+negates `w`, the identity is equivalent to two relations: the even part (all
+`A`) and the odd part (all `B`). When they are proportional (for a rule that
+is invariant under reversal at `d_n`) the part with a nonzero leader is the
+transported scalar rule; otherwise the transport error names both parts (the
+odd part is a companion constraint, and no single scalar rule carries the
+source rule). The symmetry condition is certified for every index when the
+reversal-transported rule defines the same row map as the source rule, its
+left factor is provably nonzero at every target, and the seeds are symmetric.
+For the canonical families (row index 1 of degree 0, `d_n = n - 1`):
+
+| Family | Gamma rule |
+| --- | --- |
+| Eulerian A008292 | `G_m = (1 + 2(m - 2) z) G_(m-1) + z (1 - 4z) G'_(m-1)` |
+| Narayana A001263 | `(m + 1) G_m = (2m - 1) G_(m-1) - (m - 2)(1 - 4z) G_(m-2)` |
+| type B Eulerian A060187 | `G_m = (1 + 4(m - 2) z) G_(m-1) + 2z (1 - 4z) G'_(m-1)` |
+
+A rule such as `P_m = (1 + 2x) P_(m-1)` has the independent parts
+`G_m = (3/2) G_(m-1)` and `0 = -(1/2) G_(m-1)` and is not transported.
 
 The transported rule (`evidence: "transported_identity"`, a replayable
 `polytool.recurrence.v1` record with transformed seeds) is an exact
@@ -1310,7 +1336,7 @@ without it are unchanged. The section keeps apart
 | `nonnegative_coefficient_window` | nonnegative coefficients put the real roots of `P_n` in `(-inf, 0]`; for the `f`-polynomial every real root of `Q_n` lies in `[-1, 0]` (`-1` records missing top degree, `0` the valuation) | proposes a window only |
 | `gamma_quarter_bound` | `P_n` is real-rooted iff every root of the gamma polynomial is real and at most `1/4` (`G = 1 - z` at `d = 2` gives `1 + x + x^2`) | equivalent |
 | `hermite_kakeya_obreschkoff_symmetric_pair` | real-rooted interlacing `a_n`, `x b_n` give real-rooted `P_n = a_n + x b_n` | components to `P_n` only |
-| `rolle_derivative_of_product` | roots of `g` and `Q_(m-1)` in an interval `I` put the roots of `s(m) D^j(g Q_(m-1))` in `I` (zero allowed) | recurrence step |
+| `rolle_derivative_of_product` | roots of `g` and `Q_(m-1)` in an interval `I` put the roots of `s(m) D^j(g Q_(m-1))` in `I` (zero allowed); also `g(x)(c(m) + l(m) x)` and intervals `I_n` with `I_(m-1) ⊆ I_m` | recurrence step |
 
 Real-rooted components alone do not suffice for the symmetric pair
 (`a = (1 + x)^3`, `b = x` give `1 + 3x + 4x^2 + x^3`), and its converse fails
@@ -1347,6 +1373,21 @@ end is infinite (a ray) and `value + per_index * n` depends on the index (for
 checked exactly on the observed rows (`assumption_checks`), transferred through
 equivalences with its label in `conditional_on`, and replayed with the report.
 Finite exact checks are never promoted to statements about every index.
+
+Index-dependent candidate intervals `[l_0 + l_1 n, u_0 + u_1 n]` are tried in
+the induction. The step needs `I_(m-1) ⊆ I_m` (`l_1 <= 0`, `u_1 >= 0`), `g`
+real-rooted in the first `I_m`, and, for a factor `g(x)(c(m) + l(m) x)` with
+an index-dependent linear part, a certified sign of `l(m)` and the root
+`-c(m)/l(m)` in `I_m` for every `m`; these polynomial inequalities in `m` are
+certified when every Taylor coefficient at the first target has the right
+sign, and an attempt that cannot be certified fails. Under `Q_n(x) = P_n(-x)`
+the rule `Q_m = (x (x + m) Q_(m-1))'` closes on `[-n, 0]`, and the affine map
+gives `P_n` real-rooted in `[0, n]`. Index-dependent intervals map exactly
+through affine maps; through a Möbius map with a pole their hull over the
+index domain is mapped and the claim says so. In gamma coordinates a completed
+induction for `G_n` transfers to `P_n` only when every interval lies in
+`(-inf, 1/4]`: `P_m = (1 + x^2) P_(m-1)` gives `G_m = (1 - 2z) G_(m-1)`,
+proved real-rooted at `1/2`, and no conclusion for `P_n`.
 
 `polytool root-enclosures` (MCP `exact_root_enclosures`) is the exact interval
 interface: for `{"polynomials": [["0", "0", "1", "3", "3", "1"]],
@@ -1437,6 +1478,23 @@ echo '{"oeis_id":"A065826","row_count":9,"search":{},
   | polytool recurrence-implicit > report.json
 polytool recurrence-implicit --verify < report.json
 ```
+
+An optional `"root_domain": {}` (or the fields of `recurrence-transform`)
+adds a `root_domain` section with its own request. Adapters, each with its
+direction and exact hypotheses: `polya_schur_multiplier_sequence` for an
+index-free weight `scale (k!)^p prod f_j(k)^(e_j)` (`P_n` real-rooted gives
+`Q_n` real-rooted when `p <= 0`, every `e_j > 0` and every `f_j` has only real
+roots, all `<= 0`: Laguerre's theorem, `1/k!` and products; the reverse when
+`1/lambda` qualifies, as for `inverse_binomial`), and
+`rolle_derivative_antecedent` (`Q_n` real-rooted with `g` real-rooted gives
+`P_n = D^m(g Q_n)/m!` real-rooted with roots in the hull of the roots of `g`
+and the interval of `Q_n`; never the converse). The defining rule of `P_n`
+and a successor rule of `Q_n` certified by reconstruction are matched against
+Rolle's theorem (`source_rule_theorem`, `fitted_rule_theorem`), and a
+completed induction is transferred only in the adapter's direction. An
+index-free weight is also tested by `jensen_fixed_cap` at the largest
+observed degree (`fixed_cap` evidence). Binomial rows divided by `k!` thus
+give real-rooted `sum_k binom(n,k) x^k/k!` for every `n`.
 
 `--verify` replays the report exactly and re-checks every reconstruction
 certificate symbolically and on the rows. In Rust, see
@@ -2988,6 +3046,27 @@ Additions (no breaking changes):
   `recurrence_theorems`, `verify_recurrence_theorems`, `verify_report`,
   `recurrence_latex` and `oeis_catalog_index`. The guided full search can
   rescale coefficients by `(k!)^m`.
+- `recurrence::transport_gamma` and gamma transport in
+  `RecurrenceTransformation::transport`: derivative rules are transported into
+  gamma coordinates by clearing powers of `1 + x` and splitting the identity
+  into its symmetric and antisymmetric parts; proportional parts give the
+  scalar gamma rule (Eulerian, Narayana and type B Eulerian are covered by
+  tests that regenerate the gamma rows), independent parts are reported with
+  both relations. The gamma symmetry condition is also certified for rules
+  with a left factor that is provably nonzero at every target.
+- Root domain: the Rolle induction accepts factors `g(x)(c(m) + l(m) x)`
+  (new optional field `index_linear_factor`) and index-dependent candidate
+  intervals, checked symbolically (`I_(m-1) ⊆ I_m`, Taylor-shift sign
+  certificates); index-dependent intervals map exactly through affine maps
+  and through their index-domain hull otherwise; gamma inductions transfer
+  to `P_n` only inside `(-inf, 1/4]`. New hypothesis status `violated`.
+- Implicit reports: optional `root_domain` (`ImplicitRootDomainReport`,
+  `analyze_implicit_root_domain`, `implicit_transform_recurrence_with_root_domain`,
+  `parse_implicit_transform_input`) with multiplier-sequence and
+  Rolle-antecedent adapters, Rolle inductions on the defining rule and on a
+  certified fit, assumptions and a fixed-cap Jensen test; accepted by CLI
+  `recurrence-implicit` and MCP `transform_recurrence_implicit`, replayed by
+  `--verify` / `verify_recurrence_implicit`.
 
 ### 0.5.0
 

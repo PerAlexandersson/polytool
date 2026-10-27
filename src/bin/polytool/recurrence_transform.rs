@@ -33,6 +33,12 @@ pub(crate) fn print_recurrence_transform_help() {
         "                     f_polynomial {{schedule}}     Q_n = (1 + x)^(d_n) P_n(x/(1 + x))"
     );
     println!("                     gamma {{schedule}}            gamma coordinates at symmetry index d_n");
+    println!(
+        "                                                 (rules transported when the even and odd"
+    );
+    println!(
+        "                                                 parts of the identity are proportional)"
+    );
     println!("                     symmetric_decomposition {{schedule}}");
     println!("                                     (a_n, b_n) with P_n = a_n + x b_n");
     println!("                   a, b, c, e are exact rationals as strings (\"3/2\").");

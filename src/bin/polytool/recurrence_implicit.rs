@@ -4,10 +4,10 @@
 
 use crate::input::{is_help_arg, read_stdin_or_exit};
 use polytool::recurrence::{
-    assess_generating_description, implicit_transform_recurrence, search_implicit_relations,
-    verify_implicit_relation_search, verify_recurrence_implicit, GeneratingDescription,
-    ImplicitRelationSearchReport, ImplicitRelationSearchRequest, ImplicitTransformReport,
-    ImplicitTransformRequest,
+    assess_generating_description, implicit_transform_recurrence_with_root_domain,
+    parse_implicit_transform_input, search_implicit_relations, verify_implicit_relation_search,
+    verify_recurrence_implicit, GeneratingDescription, ImplicitRelationSearchReport,
+    ImplicitRelationSearchRequest, ImplicitTransformReport,
 };
 use serde_json::json;
 
@@ -65,6 +65,13 @@ pub(crate) fn print_recurrence_implicit_help() {
     println!("  search           {{}} or bounds: fit a successor rule to Q and try to prove it");
     println!("                   by a reconstruction certificate L o T = sum H_nu S^nu M");
     println!("  limits           {{max_rows, max_degree, ...}} resource limits");
+    println!("  root_domain      optional {{}} or {{candidate_intervals, assumptions, ...}} as in");
+    println!("                   recurrence-transform: multiplier-sequence (diagonal) and Rolle");
+    println!("                   (derivative antecedent) adapters with their direction, Rolle");
+    println!("                   inductions on the defining rule of P and on a certified fit of");
+    println!(
+        "                   Q, assumptions, a fixed-cap Jensen test and exact root enclosures"
+    );
     println!();
     println!("A relation is {{\"terms\": [{{\"shift\": i, \"deriv_order\": d, \"coeff\": {{\"coeffs\": ...}}}}]}}");
     println!("meaning sum c(n,x) D^d Q[n+i] = 0 (coeffs[a][b] multiplies n^a x^b); a");
@@ -86,6 +93,9 @@ pub(crate) fn print_recurrence_implicit_help() {
     );
     println!("  additional_relations  stored relations outside the description (row equations)");
     println!("  independent_search finite_fit, or certified_by_reconstruction after an upgrade");
+    println!("  root_domain        when requested: its request, implications, claims (with");
+    println!("                     evidence labels), Rolle theorems, jensen_fixed_cap (fixed_cap");
+    println!("                     evidence only), assumption checks and observations");
     println!();
     println!("Options:");
     println!("  --verify    Replay a report exactly and re-check every certificate");
@@ -210,9 +220,12 @@ pub(crate) fn cmd_recurrence_implicit(args: &[String]) {
             .and_then(|description| assess_generating_description(&description))
             .and_then(|assessment| serde_json::to_value(assessment).map_err(|e| e.to_string()))
     } else {
-        serde_json::from_str::<ImplicitTransformRequest>(&input)
+        serde_json::from_str::<serde_json::Value>(&input)
             .map_err(|e| e.to_string())
-            .and_then(|request| implicit_transform_recurrence(&request))
+            .and_then(parse_implicit_transform_input)
+            .and_then(|(request, root_domain)| {
+                implicit_transform_recurrence_with_root_domain(&request, root_domain.as_ref())
+            })
             .and_then(|report| serde_json::to_value(report).map_err(|e| e.to_string()))
     };
     match outcome {

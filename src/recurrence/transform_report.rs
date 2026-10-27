@@ -635,19 +635,23 @@ fn condition_statuses(
             let condition = "x^(d_n) P_n(1/x) = P_n";
             let certificate = source.and_then(|s| {
                 let reversed = reversal_rule(&s.rule, schedule)?;
-                let canonical = canonical_recurrence(&s.rule);
-                (reversed.denominator.is_none()
-                    && canonical.denominator.is_none()
-                    && same_canonical_recurrence(&reversed, &s.rule))
-                .then(|| {
-                    format!(
-                        "the reversal-transported rule equals the denominator-free source \
-                             rule and the seeds at indices {}..{} are symmetric; induction over \
-                             the domain",
-                        s.first_index,
-                        s.first_index + s.seeds.len()
-                    )
-                })
+                let valid_from = s.first_index + s.seeds.len();
+                let leader = canonical_recurrence(&s.rule).denominator;
+                let leader_nonzero = leader.as_ref().is_none_or(|f| {
+                    super::super::root_domain::bivariate_leader_nonvanishing(f, valid_from)
+                });
+                (leader_nonzero && super::gamma::rules_proportional(&reversed, &s.rule)).then(
+                    || {
+                        format!(
+                            "the reversal-transported rule defines the same row map as the source \
+                         rule, whose left factor is a nonzero polynomial at every target \
+                         m >= {valid_from}, and the seeds at indices {}..{} are symmetric; the \
+                         reversed rows satisfy the same rule with the same seeds, so they \
+                         coincide with the rows by induction over the domain",
+                            s.first_index, valid_from
+                        )
+                    },
+                )
             });
             vec![match certificate {
                 Some(detail) => certified(condition, detail),

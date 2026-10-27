@@ -2088,3 +2088,40 @@ fn implicit_search_tools_find_replay_and_reject_tampering() {
         ))
         .is_err());
 }
+
+#[test]
+fn gamma_transport_and_implicit_root_domain_tools() {
+    let server = PolynomialToolsServer::new();
+    let request = json!({"oeis_id":"A008292","row_count":6,
+        "transformation":{"kind":"gamma",
+            "schedule":{"first_index":1,"first_degree":0,"step":1}}});
+    let Json(report) = server
+        .transform_recurrence(Parameters(RecurrenceTransformToolRequest { request }))
+        .unwrap();
+    assert_eq!(
+        report["transported"]["text"],
+        "P(n) = (1 - 4t + 2nt) P(n-1) + (t - 4t^2) P'(n-1)"
+    );
+
+    let request = json!({"oeis_id":"A007318","row_count":6,"root_domain":{},
+        "transformation":{"kind":"diagonal","weight":{"kind":"factorial_power","power":1}}});
+    let Json(report) = server
+        .transform_recurrence_implicit(Parameters(RecurrenceImplicitToolRequest { request }))
+        .unwrap();
+    let root = &report["root_domain"];
+    assert_eq!(
+        root["implications"][0]["theorem"],
+        "polya_schur_multiplier_sequence"
+    );
+    assert!(root["claims"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|c| c["evidence"] == "certified_family_invariant"));
+    let Json(checked) = server
+        .verify_recurrence_implicit(Parameters(VerifyRecurrenceImplicitToolRequest {
+            report: json!(report),
+        }))
+        .unwrap();
+    assert_eq!(checked["verified"], true);
+}

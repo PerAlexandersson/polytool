@@ -109,3 +109,26 @@ fn cli_searches_implicit_relations_directly_and_replays_them() {
         Some(2)
     );
 }
+
+#[test]
+fn cli_attaches_and_replays_implicit_root_domain() {
+    let request = r#"{"oeis_id":"A007318","row_count":6,"root_domain":{},
+      "transformation":{"kind":"diagonal","weight":{"kind":"factorial_power","power":1}}}"#;
+    let output = call(&["--compact"], request);
+    assert!(output.status.success(), "{output:?}");
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let root = &report["root_domain"];
+    assert_eq!(
+        root["implications"][0]["theorem"],
+        "polya_schur_multiplier_sequence"
+    );
+    assert_eq!(root["jensen_fixed_cap"]["evidence"], "fixed_cap");
+    let verified = call(&["--verify"], &report.to_string());
+    assert!(verified.status.success(), "{verified:?}");
+    let mut tampered = report.clone();
+    tampered["root_domain"]["claims"] = serde_json::json!([]);
+    assert_eq!(
+        call(&["--verify"], &tampered.to_string()).status.code(),
+        Some(2)
+    );
+}

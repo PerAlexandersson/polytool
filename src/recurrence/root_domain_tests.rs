@@ -310,18 +310,26 @@ fn escaping_roots_index_dependent_interval_and_rays() {
         .unwrap();
     let hull = target_obs.interval.as_ref().unwrap().at(0).unwrap();
     assert!(hull.is_subset_of(&RealInterval::closed(r(-1, 1), r(0, 1))));
-    assert!(root.notes.iter().any(|n| n.contains("index-dependent")));
     assert!(root
         .assumption_checks
         .iter()
         .all(|c| c.status == "consistent_with_rows" && c.checked_indices.len() == 12));
-    // Index-dependent: only real-rootedness transfers; the ray maps to [-1, 0].
+    // The Möbius image of [-n, -n] has endpoints rational in n, so its hull
+    // over n >= 0, (-inf, 0], is mapped (to [-1, 0]); the ray maps exactly.
     let transferred: Vec<_> = claims_with(root, RootEvidence::SuppliedAssumption)
         .into_iter()
         .filter(|c| c.subject == RootSubject::Transformed)
         .collect();
     assert_eq!(transferred.len(), 2);
-    assert_eq!(transferred[0].property, RootProperty::RealRooted);
+    assert_eq!(transferred[0].property, RootProperty::RealRootedIn);
+    assert_eq!(
+        transferred[0].interval.as_ref().unwrap().to_string(),
+        "[-1, 0]"
+    );
+    assert!(transferred[0]
+        .derivation
+        .contains("hull over the index domain"));
+    assert!(!transferred[1].derivation.contains("hull"));
     assert_eq!(
         transferred[1].interval.as_ref().unwrap().to_string(),
         "[-1, 0]"

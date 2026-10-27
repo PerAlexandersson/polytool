@@ -51,9 +51,22 @@
 //! that factor is index independent (`h = 0`, or a constant `ell` with
 //! `ell^h = 1`).  The symmetric decomposition transports a first-order rule
 //! without alternating signs to the complete two-component
-//! [`SharedDenominatorVectorRecurrence`]; no component is selected.  Gamma
-//! coordinates are a quadratic substitution and are not transported; search
-//! the gamma rows directly.
+//! [`SharedDenominatorVectorRecurrence`]; no component is selected.
+//!
+//! Gamma coordinates `P_n = (1 + x)^(d_n) G_n(x/(1 + x)^2)` are a quadratic
+//! substitution, so they are transported differently ([`transport_gamma`]):
+//! derivatives of `(1 + x)^d G(z)` are expanded by the chain rule, a power of
+//! `1 + x` is cleared, and the identity is split into its symmetric and
+//! antisymmetric parts, which are two relations among the `G^(i)_(m-r)`
+//! because `Q(x)` is the quadratic extension of `Q(z)` by
+//! `w = (1 - x)/(1 + x)`, `w^2 = 1 - 4z`.  When the parts are proportional
+//! (for example when the rule is invariant under reversal at `d_n`) the part
+//! with a nonzero leader is the transported scalar rule; otherwise transport
+//! is reported as unsupported with both parts.  Canonical Eulerian A008292
+//! (`E_1 = 1`, `d_n = n - 1`) gives
+//! `G_m = (1 + 2(m - 2) z) G_(m-1) + z (1 - 4z) G'_(m-1)`.  The gamma rule
+//! holds where the rows involved are symmetric, which is the map's image
+//! condition.
 //!
 //! # Reports
 //!
@@ -797,11 +810,17 @@ impl RecurrenceTransformation {
                 );
                 transport_scalar(rule, &gauge).map(TransportedRecurrence::Scalar)
             }
-            Self::Gamma { .. } => Err(TransformError::TransportUnsupported(
-                "gamma coordinates are a quadratic substitution y = x/(1+x)^2 and x is not a \
-                 polynomial in y; search the gamma rows directly"
-                    .into(),
-            )),
+            Self::Gamma { schedule } => {
+                let gamma = transport_gamma(rule, schedule)?;
+                match gamma.scalar {
+                    Some(scalar) => Ok(TransportedRecurrence::Scalar(scalar)),
+                    None => Err(TransformError::TransportUnsupported(
+                        gamma
+                            .obstruction
+                            .unwrap_or_else(|| "no scalar gamma rule".into()),
+                    )),
+                }
+            }
             Self::SymmetricDecomposition { schedule } => {
                 transport_symmetric_decomposition(rule, schedule).map(TransportedRecurrence::Vector)
             }
@@ -896,7 +915,11 @@ impl RecurrenceTransformation {
                     "inverse: deg Q_n <= floor(d_n/2)".to_string(),
                 ],
                 scalar(),
-                "unsupported: search the gamma rows directly".to_string(),
+                "scalar: the identity is cleared of powers of 1 + x and split into its \
+                 symmetric and antisymmetric parts (w = (1 - x)/(1 + x), w^2 = 1 - 4z); \
+                 proportional parts give the scalar rule in G, independent parts are reported \
+                 as unsupported; valid where the rows involved are symmetric"
+                    .to_string(),
             ),
             Self::SymmetricDecomposition { .. } => (
                 "P_n(x) = a_n(x) + x b_n(x), (a_n, b_n) = ((P_n - x Pbar_n)/(1 - x), \
@@ -1638,6 +1661,10 @@ pub fn transformed_rule_holds_at(
     }
     Some(vec_poly::trim(&lhs) == vec_poly::trim(&rhs))
 }
+
+#[path = "transform_gamma.rs"]
+mod gamma;
+pub use gamma::*;
 
 #[path = "transform_report.rs"]
 mod report;

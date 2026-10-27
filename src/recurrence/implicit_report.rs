@@ -169,6 +169,11 @@ pub struct ImplicitTransformReport {
     /// The successor-rule search, when requested.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub independent_search: Option<ImplicitSearchReport>,
+    /// Root-domain analysis, when requested
+    /// ([`implicit_transform_recurrence_with_root_domain`]); it carries its
+    /// own request for replay.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_domain: Option<ImplicitRootDomainReport>,
 }
 
 struct Source {
@@ -464,7 +469,40 @@ pub fn implicit_transform_recurrence(
         assessment,
         additional_relations: additional,
         independent_search,
+        root_domain: None,
     })
+}
+
+/// [`implicit_transform_recurrence`] followed, when `root_domain` is given, by
+/// [`analyze_implicit_root_domain`]; the analysis (with its request) is stored
+/// in the report's `root_domain` field and replayed by
+/// [`verify_recurrence_implicit`].
+pub fn implicit_transform_recurrence_with_root_domain(
+    request: &ImplicitTransformRequest,
+    root_domain: Option<&RootDomainRequest>,
+) -> Result<ImplicitTransformReport, String> {
+    let mut report = implicit_transform_recurrence(request)?;
+    if let Some(root_request) = root_domain {
+        report.root_domain = Some(analyze_implicit_root_domain(&report, root_request)?);
+    }
+    Ok(report)
+}
+
+/// Parse a JSON implicit-transport request: the fields of
+/// [`ImplicitTransformRequest`] plus an optional `root_domain`
+/// ([`RootDomainRequest`], `{}` for the defaults).
+pub fn parse_implicit_transform_input(
+    mut value: serde_json::Value,
+) -> Result<(ImplicitTransformRequest, Option<RootDomainRequest>), String> {
+    let root_domain = value
+        .as_object_mut()
+        .and_then(|fields| fields.remove("root_domain"));
+    let request = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    let root_domain = root_domain
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|e| format!("root_domain: {e}"))?;
+    Ok((request, root_domain))
 }
 
 fn check_on_rows(
@@ -764,7 +802,10 @@ pub fn verify_recurrence_implicit(report: &ImplicitTransformReport) -> Result<()
     if report.schema != RECURRENCE_IMPLICIT_SCHEMA {
         return Err(format!("unsupported schema `{}`", report.schema));
     }
-    let replay = implicit_transform_recurrence(&report.request)?;
+    let replay = implicit_transform_recurrence_with_root_domain(
+        &report.request,
+        report.root_domain.as_ref().map(|r| &r.request),
+    )?;
     if &replay != report {
         return Err("report does not match its exact replay".into());
     }

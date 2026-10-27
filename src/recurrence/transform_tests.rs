@@ -539,12 +539,14 @@ fn gamma_symmetry_is_certified_from_the_source_rule() {
     let report = transform_recurrence(&request).unwrap();
     assert_eq!(report.conditions[0].status, CERTIFIED_ALL_INDICES);
     assert_eq!(report.transformed_states[3][0], vec!["1", "8"]);
-    assert!(report.transported.is_none());
-    assert!(report
-        .transport_error
-        .as_ref()
-        .unwrap()
-        .contains("gamma rows directly"));
+    // The gamma rule G_m = (1 + 2(m-2)z) G_(m-1) + z(1 - 4z) G'_(m-1).
+    let transported = report.transported.as_ref().unwrap();
+    assert!(transported.holds_on_transformed_rows);
+    assert_eq!(
+        transported.text,
+        "P(n) = (1 - 4t + 2nt) P(n-1) + (t - 4t^2) P'(n-1)"
+    );
+    assert!(report.transport_error.is_none());
 
     let rows_only = RecurrenceTransformRequest {
         source_recurrence: None,

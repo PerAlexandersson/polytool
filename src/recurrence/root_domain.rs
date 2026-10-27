@@ -63,10 +63,22 @@
 //!   domain.  The canonical Eulerian rows A008292 under the `f`-polynomial map
 //!   give `Q_(n+1) = (x(1 + x) Q_n)'`, `Q_1 = 1`, closed on `[-1, 0]`; the
 //!   Möbius equivalence then makes every Eulerian polynomial real-rooted.
+//!   The factor may also be `g(x) (c(m) + l(m) x)` with an index-dependent
+//!   linear part, and candidate intervals may have endpoints affine in `n`;
+//!   the step `I_(m-1) ⊆ I_m` and the root `-c(m)/l(m)` in `I_m` are then
+//!   checked symbolically (Taylor-shift sign certificates at the first
+//!   target), and attempts that cannot be certified are reported as failed.
+//!   In gamma coordinates a completed induction for `G_n` is transferred to
+//!   `P_n` only when every interval lies in `(-inf, 1/4]`.
 //!
-//! Fixed-cap diagonal multiplier tests (Jensen polynomials) are in
-//! [`jensen_fixed_cap_check`]; their evidence is kept separate from a proof
-//! for every degree.
+//! Index-dependent intervals map exactly through affine maps and monomial
+//! factors; through a Möbius map with a pole (whose image endpoints are
+//! rational in `n`) their hull over the index domain is mapped instead, and
+//! the claim says so.  Fixed-cap diagonal multiplier tests (Jensen
+//! polynomials) are in [`jensen_fixed_cap_check`]; their evidence is kept
+//! separate from a proof for every degree.  Diagonal maps and derivative
+//! antecedents (implicit transports) have their own adapters in
+//! [`analyze_implicit_root_domain`].
 //!
 //! # Evidence
 //!
@@ -172,6 +184,9 @@ pub enum HypothesisStatus {
     Assumed,
     /// Not checked.
     NotChecked,
+    /// Shown false exactly (for example a fixed polynomial with a non-real
+    /// root); the implication does not apply.
+    Violated,
 }
 
 /// One endpoint `value + per_index * n` of a [`RootInterval`].
@@ -495,12 +510,26 @@ pub struct RecurrenceRootTheorem {
     /// The scalar `s(m)` in the target index, ascending rational strings in `m`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub index_scalar: Option<Vec<String>>,
+    /// The index-dependent linear part of the factor, when the rule is
+    /// `Q_m = D^j (g(x) (c(m) + l(m) x) Q_(m-1))` (then `index_scalar` is `1`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_linear_factor: Option<IndexLinearFactorJson>,
     /// Exact degree formula of the generated rows, when `s(m)` provably never
     /// vanishes and `deg g >= j`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub degree_formula: Option<String>,
     /// Interval attempts, in order (bounded by `max_candidate_intervals`).
     pub attempts: Vec<IntervalAttempt>,
+}
+
+/// The index-dependent linear part `c(m) + l(m) x` of a Rolle factor.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct IndexLinearFactorJson {
+    /// `c(m)`, ascending rational strings in the target index `m`.
+    pub constant: Vec<String>,
+    /// `l(m)`, ascending rational strings in the target index `m`.
+    pub slope: Vec<String>,
 }
 
 /// An exact enclosure of one distinct real root.
@@ -977,18 +1006,6 @@ pub fn root_implication(
 // Recurrence theorem: Rolle's theorem for derivatives of products
 // ---------------------------------------------------------------------------
 
-/// `Q_m = s(m) D^j (g Q_(m-1))`.
-struct RolleForm {
-    factor: Vec<Q>,
-    order: usize,
-    scalar: Vec<Q>,
-}
-
-const ROLLE_STATEMENT: &str =
-    "if every root of g and of Q_(m-1) is real and lies in an interval I, then \
-     s(m) D^j (g Q_(m-1)) is zero or real-rooted with every root in I (Rolle's theorem; the \
-     scalar s(m) does not move roots); with the seeds checked exactly this closes an induction";
-
 /// Trimmed rows of a bivariate polynomial (`[n power][x power]`, zero is empty).
 fn bivar_rows(p: &BivarPoly) -> Vec<Vec<Q>> {
     let mut rows: Vec<Vec<Q>> = p
@@ -1010,80 +1027,6 @@ fn binomial(n: usize, k: usize) -> Q {
     Q::from_integer(crate::numeric::binomial_bigint(n, k))
 }
 
-fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, String> {
-    let rule = canonical_recurrence(rule);
-    if rule.denominator.is_some() {
-        return Err("the left factor f(n,x) is not a nonzero constant".into());
-    }
-    if rule
-        .inhomogeneous
-        .as_ref()
-        .is_some_and(|g| !bivar_rows(g).is_empty())
-    {
-        return Err("the rule has an additive term".into());
-    }
-    if rule.terms.is_empty() {
-        return Err("the rule has no terms".into());
-    }
-    if rule.terms.iter().any(|t| t.offset != 1) {
-        return Err("only first-order rules (every offset 1) are matched".into());
-    }
-    if rule.terms.iter().any(RecurrenceTerm::is_alternating) {
-        return Err("(-1)^n factors are not matched".into());
-    }
-    let order = rule.terms.iter().map(|t| t.deriv_order).max().unwrap_or(0);
-    let coefficient = |k: usize| -> Vec<Vec<Q>> {
-        rule.terms
-            .iter()
-            .find(|t| t.deriv_order == k)
-            .map(|t| bivar_rows(&t.coeff))
-            .unwrap_or_default()
-    };
-    let top = coefficient(order);
-    let factor = top
-        .iter()
-        .find(|row| !row.is_empty())
-        .cloned()
-        .ok_or("the top coefficient vanishes")?;
-    let lead = factor.last().expect("nonzero factor").clone();
-    let mut scalar = Vec::with_capacity(top.len());
-    for row in &top {
-        let s = row.last().map_or_else(Q::zero, |c| c / &lead);
-        if vec_poly::trim(row) != vec_poly::trim(&vec_poly::scale(&factor, &s)) {
-            return Err("the top coefficient is not of the form s(n) g(x)".into());
-        }
-        scalar.push(s);
-    }
-    vec_poly::strip_trailing_zeros(&mut scalar);
-    let mut derivative = factor.clone();
-    for k in (0..order).rev() {
-        derivative = vec_poly::derivative(&derivative);
-        let base = vec_poly::scale(&derivative, &binomial(order, k));
-        let mut expected: Vec<Vec<Q>> = scalar
-            .iter()
-            .map(|s| {
-                let mut row = vec_poly::scale(&base, s);
-                vec_poly::strip_trailing_zeros(&mut row);
-                row
-            })
-            .collect();
-        while expected.last().is_some_and(Vec::is_empty) {
-            expected.pop();
-        }
-        if coefficient(k) != expected {
-            return Err(format!(
-                "the coefficient of D^{k} is not s(n) C({order},{k}) g^({})(x)",
-                order - k
-            ));
-        }
-    }
-    Ok(RolleForm {
-        factor,
-        order,
-        scalar,
-    })
-}
-
 /// Whether the polynomial `s(m)` provably never vanishes for `m >= first_target`:
 /// one-signed coefficients, and a nonzero constant term or `first_target >= 1`.
 fn scalar_nonvanishing(scalar: &[Q], first_target: usize) -> bool {
@@ -1093,6 +1036,54 @@ fn scalar_nonvanishing(scalar: &[Q], first_target: usize) -> bool {
     let one_signed =
         scalar.iter().all(|c| !c.is_negative()) || scalar.iter().all(|c| !c.is_positive());
     one_signed && (!constant.is_zero() || first_target >= 1)
+}
+
+/// The sign of a polynomial `p(m)` (ascending in `m`) on every real
+/// `m >= start`, certified when every coefficient of the Taylor shift
+/// `p(start + t)` has that sign and its constant term is nonzero; `None` when
+/// this sufficient criterion fails (which proves nothing).
+pub(crate) fn index_polynomial_sign_from(p: &[Q], start: usize) -> Option<std::cmp::Ordering> {
+    let shifted = vec_poly::trim(&vec_poly::compose(
+        p,
+        &[Q::from_integer(BigInt::from(start)), Q::one()],
+    ));
+    let constant = shifted.first()?;
+    if constant.is_positive() && shifted.iter().all(|c| !c.is_negative()) {
+        Some(std::cmp::Ordering::Greater)
+    } else if constant.is_negative() && shifted.iter().all(|c| !c.is_positive()) {
+        Some(std::cmp::Ordering::Less)
+    } else {
+        None
+    }
+}
+
+/// Whether `p(m) >= 0` (or `> 0` when `strict`) for every real `m >= start`,
+/// by the Taylor-shift criterion of [`index_polynomial_sign_from`] (the zero
+/// polynomial is nonnegative).
+fn index_polynomial_nonnegative_from(p: &[Q], start: usize, strict: bool) -> bool {
+    let shifted = vec_poly::trim(&vec_poly::compose(
+        p,
+        &[Q::from_integer(BigInt::from(start)), Q::one()],
+    ));
+    if vec_poly::is_zero(&shifted) {
+        return !strict;
+    }
+    shifted.iter().all(|c| !c.is_negative()) && (!strict || shifted[0].is_positive())
+}
+
+/// Whether `f(m, x)` is a nonzero polynomial in `x` at every integer
+/// `m >= start`: some `x`-coefficient has a certified sign
+/// ([`index_polynomial_sign_from`]).
+pub(crate) fn bivariate_leader_nonvanishing(f: &BivarPoly, start: usize) -> bool {
+    let rows = bivar_rows(f);
+    let width = rows.iter().map(Vec::len).max().unwrap_or(0);
+    (0..width).any(|j| {
+        let column: Vec<Q> = rows
+            .iter()
+            .map(|row| row.get(j).cloned().unwrap_or_else(Q::zero))
+            .collect();
+        index_polynomial_sign_from(&column, start).is_some()
+    })
 }
 
 fn poly_text(p: &[Q], variable: &str) -> String {
@@ -1177,64 +1168,101 @@ fn property_text(property: RootProperty, interval: Option<&RootInterval>) -> Str
     }
 }
 
-/// Transfer `property` on `interval` through a scalar equivalence.
+/// Image of `interval` (possibly index-dependent, on the indices
+/// `first <= n (<= last)`) under a scalar equivalence.  Index-independent
+/// intervals map exactly; index-dependent ones map exactly through affine maps
+/// (endpoints stay affine in `n`) and through monomial factors that add no
+/// root outside them; otherwise (a Möbius map with a pole, whose image
+/// endpoints are rational in `n`) the hull over the index domain, an
+/// index-independent superset, is mapped and `exact` is `false`.
+fn interval_image(
+    geometry: &Geometry,
+    to_target: bool,
+    interval: &RootInterval,
+    full_degree: bool,
+    first: usize,
+    last: Option<usize>,
+) -> Option<(RootInterval, bool)> {
+    let map = |real: &RealInterval| {
+        if to_target {
+            geometry.forward(real)
+        } else {
+            geometry.backward(real, full_degree)
+        }
+    };
+    if interval.is_index_independent() {
+        let image = map(&interval.at(0).ok()?)?;
+        return Some((RootInterval::from_real(&image), true));
+    }
+    match geometry {
+        Geometry::Monomial { power, multiply } => {
+            let adds_zero = *power > 0 && *multiply == to_target;
+            if !adds_zero || contains_point_throughout(interval, &Q::zero(), first, last).ok()? {
+                return Some((interval.clone(), true));
+            }
+        }
+        Geometry::Mobius { a, b, c, e, .. } if c.is_zero() => {
+            // Forward y -> (e y - b)/a, backward y -> (a y + b)/e.
+            let (alpha, beta) = if to_target {
+                (e / a, -(b / a))
+            } else {
+                (a / e, b / e)
+            };
+            return affine_interval_image(interval, &alpha, &beta)
+                .ok()
+                .map(|image| (image, true));
+        }
+        _ => {}
+    }
+    let image = map(&domain_hull(interval, first, last).ok()?)?;
+    Some((RootInterval::from_real(&image), false))
+}
+
+/// Transfer `property` on `interval` through a scalar equivalence; the flag
+/// is `false` when an index-dependent interval was replaced by its hull.
 fn transfer(
     geometry: &Geometry,
     to_target: bool,
     property: RootProperty,
     interval: Option<&RootInterval>,
     full_degree: bool,
-) -> Option<(RootProperty, Option<RootInterval>)> {
+    domain: (usize, Option<usize>),
+) -> Option<(RootProperty, Option<RootInterval>, bool)> {
     if !geometry.is_scalar_equivalence() {
         return None;
     }
     let image = interval
-        .filter(|i| i.is_index_independent())
-        .and_then(|i| i.at(0).ok())
-        .and_then(|i| {
-            if to_target {
-                geometry.forward(&i)
-            } else {
-                geometry.backward(&i, full_degree)
-            }
-        });
+        .and_then(|i| interval_image(geometry, to_target, i, full_degree, domain.0, domain.1));
     match (property, image) {
-        (RootProperty::RealRooted, _) => Some((RootProperty::RealRooted, None)),
-        (p, Some(image)) => Some((p, Some(RootInterval::from_real(&image)))),
-        (RootProperty::RealRootedIn, None) => Some((RootProperty::RealRooted, None)),
+        (RootProperty::RealRooted, _) => Some((RootProperty::RealRooted, None, true)),
+        (p, Some((image, exact))) => Some((p, Some(image), exact)),
+        (RootProperty::RealRootedIn, None) => Some((RootProperty::RealRooted, None, true)),
         (RootProperty::RealRootsIn, None) => None,
     }
 }
 
-pub(crate) fn analyze_root_domain(
-    inputs: &RootDomainInputs<'_>,
-) -> Result<RootDomainReport, String> {
-    let request = inputs.request;
-    request.validate()?;
-    let transformation = inputs.transformation;
-    let geometry = Geometry::of(transformation)?;
-    let record = transformation.record();
-    let names: Vec<String> = record.components.iter().map(|c| c.name.clone()).collect();
-    let components = transformation.component_count();
-    let last_index = transformation.schedule().and_then(|s| s.last_index);
-    let domain_first = transformation
-        .schedule()
-        .map_or(inputs.origin, |s| s.first_index.max(inputs.origin));
-    let mut notes = Vec::new();
-    let mut claims = Vec::new();
+const HULL_NOTE: &str = "; the index-dependent interval is mapped through its hull over the \
+                         index domain (an index-independent superset)";
 
+/// Exact isolation of the first `max_observed_rows` rows: the source row and
+/// every component of the transformed state at each index.
+fn observe_rows(
+    request: &RootDomainRequest,
+    origin: usize,
+    rows: &[Vec<Q>],
+    states: &[Vec<Vec<Q>>],
+    notes: &mut Vec<String>,
+) -> (
+    BTreeMap<IsolationKey, RealRootIsolation>,
+    Vec<RowRootObservation>,
+) {
     // Exact isolation of the observed rows.
     let mut isolations: BTreeMap<IsolationKey, RealRootIsolation> = BTreeMap::new();
     let mut observations = Vec::new();
     let mut skipped = Vec::new();
-    for (i, row) in inputs
-        .rows
-        .iter()
-        .enumerate()
-        .take(request.max_observed_rows)
-    {
-        let index = inputs.origin + i;
-        let state = &inputs.states[i];
+    for (i, row) in rows.iter().enumerate().take(request.max_observed_rows) {
+        let index = origin + i;
+        let state = &states[i];
         let too_large = std::iter::once(row)
             .chain(state.iter())
             .any(|p| vec_poly::degree(p).is_some_and(|d| d > request.max_observed_degree));
@@ -1263,11 +1291,11 @@ pub(crate) fn analyze_root_domain(
             isolations.insert((subject, component, index), isolation);
         }
     }
-    if inputs.rows.len() > request.max_observed_rows {
+    if rows.len() > request.max_observed_rows {
         notes.push(format!(
             "roots isolated on the first {} of {} rows (max_observed_rows)",
             request.max_observed_rows,
-            inputs.rows.len()
+            rows.len()
         ));
     }
     if !skipped.is_empty() {
@@ -1277,7 +1305,17 @@ pub(crate) fn analyze_root_domain(
         ));
     }
 
-    // Finite exact observation claims, one per subject and component.
+    (isolations, observations)
+}
+
+/// Finite exact observation claims, one per subject and component.
+fn observation_claims(
+    isolations: &BTreeMap<IsolationKey, RealRootIsolation>,
+    components: usize,
+    names: &[String],
+    claims: &mut Vec<RootDomainClaim>,
+    notes: &mut Vec<String>,
+) {
     let subjects = std::iter::once((RootSubject::Source, 0))
         .chain((0..components).map(|c| (RootSubject::Transformed, c)));
     for (subject, component) in subjects {
@@ -1298,7 +1336,7 @@ pub(crate) fn analyze_root_domain(
             .iter()
             .filter_map(|(_, iso)| iso.enclosure_hull())
             .reduce(|a, b| a.hull(&b));
-        let name = subject_name(subject, component, &names);
+        let name = subject_name(subject, component, names);
         let (property, interval) = match (&hull, failing.is_empty()) {
             (Some(h), true) => (RootProperty::RealRootedIn, Some(RootInterval::from_real(h))),
             (None, true) => (RootProperty::RealRooted, None),
@@ -1331,6 +1369,117 @@ pub(crate) fn analyze_root_domain(
             derivation,
         });
     }
+}
+
+/// Check supplied assumption `k` exactly on the observed rows, record the
+/// check and the supplied claim, and return its first index and label, or
+/// `None` when the rows refute it.
+fn check_assumption(
+    k: usize,
+    assumption: &RootAssumption,
+    isolations: &BTreeMap<IsolationKey, RealRootIsolation>,
+    domain_first: usize,
+    names: &[String],
+    sinks: (
+        &mut Vec<AssumptionCheck>,
+        &mut Vec<RootDomainClaim>,
+        &mut Vec<String>,
+    ),
+) -> Result<Option<(usize, String)>, String> {
+    let (assumption_checks, claims, notes) = sinks;
+    let first = assumption.first_index.unwrap_or(domain_first);
+    let mut checked = Vec::new();
+    let mut refuted_at = None;
+    for ((subject, component, index), isolation) in isolations {
+        if *subject != assumption.subject
+            || *component != assumption.component
+            || *index < first
+            || assumption.last_index.is_some_and(|last| *index > last)
+        {
+            continue;
+        }
+        let interval = assumption
+            .interval
+            .as_ref()
+            .map(|i| i.at(*index))
+            .transpose()?;
+        checked.push(*index);
+        if refuted_at.is_none()
+            && !property_holds(isolation, assumption.property, interval.as_ref())
+        {
+            refuted_at = Some(*index);
+        }
+    }
+    let status = match (checked.is_empty(), refuted_at) {
+        (_, Some(_)) => "refuted_on_rows",
+        (true, None) => "not_checked",
+        (false, None) => "consistent_with_rows",
+    };
+    assumption_checks.push(AssumptionCheck {
+        assumption: k,
+        status: status.into(),
+        checked_indices: checked,
+        refuted_at,
+    });
+    let name = subject_name(assumption.subject, assumption.component, names);
+    let label = format!(
+        "assumption {k}: {name}_n {} for n >= {first}{}",
+        property_text(assumption.property, assumption.interval.as_ref()),
+        assumption
+            .last_index
+            .map_or(String::new(), |last| format!(" and n <= {last}"))
+    );
+    claims.push(RootDomainClaim {
+        subject: assumption.subject,
+        component: assumption.component,
+        property: assumption.property,
+        interval: assumption.interval.clone(),
+        first_index: first,
+        last_index: assumption.last_index,
+        evidence: RootEvidence::SuppliedAssumption,
+        conditional_on: vec![label.clone()],
+        derivation: format!(
+            "supplied in the request{}",
+            assumption
+                .note
+                .as_ref()
+                .map_or(String::new(), |note| format!(" ({note})"))
+        ),
+    });
+    if refuted_at.is_some() {
+        notes.push(format!(
+            "{label} is refuted on the rows; nothing is transferred"
+        ));
+        return Ok(None);
+    }
+    Ok(Some((first, label)))
+}
+
+pub(crate) fn analyze_root_domain(
+    inputs: &RootDomainInputs<'_>,
+) -> Result<RootDomainReport, String> {
+    let request = inputs.request;
+    request.validate()?;
+    let transformation = inputs.transformation;
+    let geometry = Geometry::of(transformation)?;
+    let record = transformation.record();
+    let names: Vec<String> = record.components.iter().map(|c| c.name.clone()).collect();
+    let components = transformation.component_count();
+    let last_index = transformation.schedule().and_then(|s| s.last_index);
+    let domain_first = transformation
+        .schedule()
+        .map_or(inputs.origin, |s| s.first_index.max(inputs.origin));
+    let mut notes = Vec::new();
+    let mut claims = Vec::new();
+
+    let (isolations, observations) = observe_rows(
+        request,
+        inputs.origin,
+        inputs.rows,
+        inputs.states,
+        &mut notes,
+    );
+    observation_claims(&isolations, components, &names, &mut claims, &mut notes);
 
     // The map's implication with hypothesis statuses.
     let mut implication = root_implication(transformation)?;
@@ -1380,16 +1529,11 @@ pub(crate) fn analyze_root_domain(
     let mut implications = vec![implication];
 
     // The nonnegative-coefficient window.
-    let mut candidates: Vec<(RealInterval, String)> = Vec::new();
-    for interval in &request.candidate_intervals {
-        match interval.is_index_independent() {
-            true => candidates.push((interval.at(0)?, "supplied".into())),
-            false => notes.push(format!(
-                "candidate interval {interval} is index-dependent and is not used in the \
-                 induction"
-            )),
-        }
-    }
+    let mut candidates: Vec<(RootInterval, String)> = request
+        .candidate_intervals
+        .iter()
+        .map(|interval| (interval.clone(), "supplied".to_string()))
+        .collect();
     if request.default_window {
         if let Some(window) = geometry.forward(&RealInterval::at_most(Q::zero())) {
             let negative: Vec<usize> = inputs
@@ -1476,7 +1620,7 @@ pub(crate) fn analyze_root_domain(
                                  proofs, not a proof of real-rootedness"
                         .into(),
                 });
-                candidates.push((window, "default_window".into()));
+                candidates.push((window_json.clone(), "default_window".into()));
             }
         }
     }
@@ -1490,78 +1634,25 @@ pub(crate) fn analyze_root_domain(
                 assumption.component
             ));
         }
-        let first = assumption.first_index.unwrap_or(domain_first);
-        let mut checked = Vec::new();
-        let mut refuted_at = None;
-        for ((subject, component, index), isolation) in &isolations {
-            if *subject != assumption.subject
-                || *component != assumption.component
-                || *index < first
-                || assumption.last_index.is_some_and(|last| *index > last)
-            {
-                continue;
-            }
-            let interval = assumption
-                .interval
-                .as_ref()
-                .map(|i| i.at(*index))
-                .transpose()?;
-            checked.push(*index);
-            if refuted_at.is_none()
-                && !property_holds(isolation, assumption.property, interval.as_ref())
-            {
-                refuted_at = Some(*index);
-            }
-        }
-        let status = match (checked.is_empty(), refuted_at) {
-            (_, Some(_)) => "refuted_on_rows",
-            (true, None) => "not_checked",
-            (false, None) => "consistent_with_rows",
-        };
-        assumption_checks.push(AssumptionCheck {
-            assumption: k,
-            status: status.into(),
-            checked_indices: checked,
-            refuted_at,
-        });
-        let name = subject_name(assumption.subject, assumption.component, &names);
-        let label = format!(
-            "assumption {k}: {name}_n {} for n >= {first}{}",
-            property_text(assumption.property, assumption.interval.as_ref()),
-            assumption
-                .last_index
-                .map_or(String::new(), |last| format!(" and n <= {last}"))
-        );
-        claims.push(RootDomainClaim {
-            subject: assumption.subject,
-            component: assumption.component,
-            property: assumption.property,
-            interval: assumption.interval.clone(),
-            first_index: first,
-            last_index: assumption.last_index,
-            evidence: RootEvidence::SuppliedAssumption,
-            conditional_on: vec![label.clone()],
-            derivation: format!(
-                "supplied in the request{}",
-                assumption
-                    .note
-                    .as_ref()
-                    .map_or(String::new(), |note| format!(" ({note})"))
-            ),
-        });
-        if refuted_at.is_some() {
-            notes.push(format!(
-                "{label} is refuted on the rows; nothing is transferred"
-            ));
+        let Some((first, label)) = check_assumption(
+            k,
+            assumption,
+            &isolations,
+            domain_first,
+            &names,
+            (&mut assumption_checks, &mut claims, &mut notes),
+        )?
+        else {
             continue;
-        }
+        };
         let to_target = assumption.subject == RootSubject::Source;
-        if let Some((property, interval)) = transfer(
+        if let Some((property, interval, exact)) = transfer(
             &geometry,
             to_target,
             assumption.property,
             assumption.interval.as_ref(),
             false,
+            (first, assumption.last_index),
         ) {
             let mut conditional_on = vec![label];
             conditional_on.extend(conditional.iter().cloned());
@@ -1578,7 +1669,11 @@ pub(crate) fn analyze_root_domain(
                 last_index: assumption.last_index,
                 evidence: RootEvidence::SuppliedAssumption,
                 conditional_on,
-                derivation: format!("transferred from assumption {k} by {}", geometry.theorem()),
+                derivation: format!(
+                    "transferred from assumption {k} by {}{}",
+                    geometry.theorem(),
+                    if exact { "" } else { HULL_NOTE }
+                ),
             });
         } else if matches!(geometry, Geometry::Gamma) {
             let quarter = RealInterval::at_most(Q::new(BigInt::one(), BigInt::from(4)));
@@ -1590,7 +1685,8 @@ pub(crate) fn analyze_root_domain(
                 )),
                 (false, RootProperty::RealRootedIn)
                     if assumption.interval.as_ref().is_some_and(|i| {
-                        i.is_index_independent() && i.at(0).is_ok_and(|i| i.is_subset_of(&quarter))
+                        domain_hull(i, first, assumption.last_index)
+                            .is_ok_and(|hull| hull.is_subset_of(&quarter))
                     }) =>
                 {
                     Some((RootSubject::Source, RootProperty::RealRooted, None))
@@ -1652,163 +1748,55 @@ fn rolle_induction(
     inputs: &RootDomainInputs<'_>,
     transported: &TransportedInput<'_>,
     geometry: &Geometry,
-    supplied: &[(RealInterval, String)],
+    supplied: &[(RootInterval, String)],
     all_certified: bool,
     conditional: &[String],
     claims: &mut Vec<RootDomainClaim>,
     notes: &mut Vec<String>,
 ) -> RecurrenceRootTheorem {
-    let mut report = RecurrenceRootTheorem {
-        theorem: "rolle_derivative_of_product".into(),
-        statement: ROLLE_STATEMENT.into(),
-        matched: false,
-        reason: None,
-        form: None,
-        factor: None,
-        derivative_order: None,
-        index_scalar: None,
-        degree_formula: None,
-        attempts: Vec::new(),
-    };
     let rule = match transported.rule {
         TransportedRecurrence::Scalar(rule) => rule,
-        _ => {
-            report.reason = Some("only scalar transported rules are matched".into());
-            return report;
-        }
+        _ => return unmatched_theorem("only scalar transported rules are matched"),
     };
-    let form = match match_rolle_form(rule) {
-        Ok(form) => form,
-        Err(reason) => {
-            report.reason = Some(reason);
-            return report;
-        }
-    };
-    let names: Vec<String> = inputs
+    let name = inputs
         .transformation
         .record()
         .components
         .into_iter()
         .map(|c| c.name)
-        .collect();
-    let name = names.first().cloned().unwrap_or_else(|| "Q".into());
+        .next()
+        .unwrap_or_else(|| "Q".into());
     let first = transported.first_index;
     let valid_from = transported.valid_from;
     let last_index = inputs.transformation.schedule().and_then(|s| s.last_index);
-    report.matched = true;
-    report.form = Some(format!(
-        "{name}_m = s(m) D^{} (g {name}_(m-1)) for m >= {valid_from}, s(m) = {}, g = {}",
-        form.order,
-        poly_text(&form.scalar, "m"),
-        poly_text(&form.factor, "x")
-    ));
-    report.factor = Some(encode(&form.factor));
-    report.derivative_order = Some(form.order);
-    report.index_scalar = Some(encode(&form.scalar));
-
-    let seeds: Vec<(usize, &Vec<Q>)> = (first..valid_from)
+    let seeds: Vec<(usize, Vec<Q>)> = (first..valid_from)
         .filter_map(|k| {
             k.checked_sub(inputs.origin)
                 .and_then(|i| inputs.states.get(i))
-                .map(|state| (k, &state[0]))
+                .map(|state| (k, state[0].clone()))
         })
         .collect();
-    if seeds.len() != valid_from - first {
-        report.reason = Some("the transformed seeds are not available".into());
-        report.matched = false;
-        return report;
-    }
-
-    // Exact degree tracking.
-    let factor_degree = form.factor.len() - 1;
-    let (last_seed_index, last_seed) = *seeds.last().expect("at least one seed");
-    let mut full_degree = false;
-    if factor_degree >= form.order
-        && scalar_nonvanishing(&form.scalar, valid_from)
-        && !vec_poly::is_zero(last_seed)
-    {
-        let start = vec_poly::degree(last_seed).expect("nonzero seed");
-        let slope = factor_degree - form.order;
-        report.degree_formula = Some(format!(
-            "deg {name}_n = {start} + {slope} (n - {last_seed_index}) for n >= {last_seed_index}"
-        ));
-        full_degree = inputs.transformation.schedule().is_some_and(|schedule| {
-            i64::try_from(slope).is_ok_and(|s| s == schedule.step)
-                && seeds.iter().all(|(k, seed)| {
-                    schedule
-                        .degree_at(*k)
-                        .is_ok_and(|d| vec_poly::degree(seed) == Some(d))
-                })
-        });
-    }
-
-    // Candidate intervals: supplied, default window, then the root hull.
-    let factor_isolation = isolate_real_roots_exact(&form.factor);
-    let seed_isolations: Vec<(usize, RealRootIsolation)> = seeds
-        .iter()
-        .map(|(k, seed)| (*k, isolate_real_roots_exact(seed)))
-        .collect();
-    let mut candidates: Vec<(RealInterval, String)> = supplied.to_vec();
-    let hull = std::iter::once(&factor_isolation)
-        .chain(seed_isolations.iter().map(|(_, iso)| iso))
-        .filter_map(RealRootIsolation::enclosure_hull)
-        .reduce(|a, b| a.hull(&b));
-    if let Some(hull) = hull {
-        candidates.push((hull, "root_hull".into()));
-    }
-    let limit = inputs.request.max_candidate_intervals;
-    if candidates.len() > limit {
-        notes.push(format!(
-            "{} candidate intervals were not tried (max_candidate_intervals = {limit})",
-            candidates.len() - limit
-        ));
-        candidates.truncate(limit);
-    }
-    let mut success = None;
-    for (interval, origin) in candidates {
-        let detail = if !factor_isolation.real_rooted_in(&interval) {
-            format!(
-                "g = {} is not real-rooted in {interval}",
-                poly_text(&form.factor, "x")
-            )
-        } else if let Some((k, _)) = seed_isolations
-            .iter()
-            .find(|(_, iso)| !iso.real_rooted_in(&interval))
-        {
-            format!("the seed {name}_{k} is not real-rooted in {interval}")
-        } else {
-            String::new()
-        };
-        let ok = detail.is_empty();
-        report.attempts.push(IntervalAttempt {
-            interval: RootInterval::from_real(&interval),
-            origin,
-            success: ok,
-            detail: if ok {
-                format!(
-                    "exact: g and the seeds {name}_{first}..{name}_{} are real-rooted in \
-                     {interval}",
-                    valid_from - 1
-                )
-            } else {
-                detail
-            },
-        });
-        if ok {
-            success = Some(interval);
-            break;
-        }
-    }
-    let Some(interval) = success else {
-        notes.push("no candidate interval closes the Rolle induction".into());
-        return report;
+    let outcome = rolle_core(
+        &RolleSetup {
+            rule,
+            name: name.clone(),
+            first,
+            valid_from,
+            seeds,
+            candidates: supplied.to_vec(),
+            limit: inputs.request.max_candidate_intervals,
+            schedule: inputs.transformation.schedule(),
+        },
+        notes,
+    );
+    let Some(interval) = outcome.proven.clone() else {
+        return outcome.theorem;
     };
-    let interval_json = RootInterval::from_real(&interval);
     claims.push(RootDomainClaim {
         subject: RootSubject::Transformed,
         component: 0,
         property: RootProperty::RealRootedIn,
-        interval: Some(interval_json.clone()),
+        interval: Some(interval.clone()),
         first_index: first,
         last_index,
         evidence: RootEvidence::CompletedRecurrenceInduction,
@@ -1825,16 +1813,21 @@ fn rolle_induction(
              the supplied rows"
                 .into(),
         );
-        return report;
+        return outcome.theorem;
+    }
+    if matches!(geometry, Geometry::Gamma) {
+        gamma_transfer(&interval, (first, last_index), &name, claims, notes);
+        return outcome.theorem;
     }
     match transfer(
         geometry,
         false,
         RootProperty::RealRootedIn,
-        Some(&interval_json),
-        full_degree,
+        Some(&interval),
+        outcome.full_degree,
+        (first, last_index),
     ) {
-        Some((property, source_interval)) => claims.push(RootDomainClaim {
+        Some((property, source_interval, exact)) => claims.push(RootDomainClaim {
             subject: RootSubject::Source,
             component: 0,
             property,
@@ -1845,14 +1838,15 @@ fn rolle_induction(
             conditional_on: Vec::new(),
             derivation: format!(
                 "the completed induction for {name}_n and {} (target to source; every map \
-                 condition certified for all indices){}",
+                 condition certified for all indices){}{}",
                 geometry.theorem(),
-                if full_degree {
+                if outcome.full_degree {
                     "; deg Q_n = d_n by the degree formula, so no root of P_n is added at the \
                      image of infinity"
                 } else {
                     ""
-                }
+                },
+                if exact { "" } else { HULL_NOTE }
             ),
         }),
         None => notes.push(format!(
@@ -1860,8 +1854,66 @@ fn rolle_induction(
             geometry.theorem()
         )),
     }
-    report
+    outcome.theorem
 }
+
+/// Transfer a completed induction for the gamma rows `G_n` to `P_n`: only
+/// when every interval `I_n` lies in `(-inf, 1/4]` (`gamma_quarter_bound`);
+/// real-rootedness of `G_n` alone proves nothing about `P_n`.
+fn gamma_transfer(
+    interval: &RootInterval,
+    domain: (usize, Option<usize>),
+    name: &str,
+    claims: &mut Vec<RootDomainClaim>,
+    notes: &mut Vec<String>,
+) {
+    let quarter = RealInterval::at_most(Q::new(BigInt::one(), BigInt::from(4)));
+    let hull = match domain_hull(interval, domain.0, domain.1) {
+        Ok(hull) if hull.is_subset_of(&quarter) => hull,
+        _ => {
+            notes.push(format!(
+                "the induction proves {name}_n real-rooted in {interval}, which is not contained \
+                 in (-inf, 1/4] for every index: no conclusion for P_n (gamma_quarter_bound needs \
+                 every root of the gamma polynomial at most 1/4; real-rootedness alone is \
+                 insufficient)"
+            ));
+            return;
+        }
+    };
+    let nonpositive = hull.is_subset_of(&RealInterval::at_most(Q::zero()));
+    claims.push(RootDomainClaim {
+        subject: RootSubject::Source,
+        component: 0,
+        property: if nonpositive {
+            RootProperty::RealRootedIn
+        } else {
+            RootProperty::RealRooted
+        },
+        interval: nonpositive.then(|| RootInterval::from_real(&RealInterval::at_most(Q::zero()))),
+        first_index: domain.0,
+        last_index: domain.1,
+        evidence: RootEvidence::CertifiedFamilyInvariant,
+        conditional_on: Vec::new(),
+        derivation: format!(
+            "the completed induction puts every root of {name}_n in {interval}, contained in \
+             (-inf, 1/4] for every index (hull {hull}); gamma_quarter_bound with the symmetry \
+             certified for all indices gives real-rooted P_n{}",
+            if nonpositive {
+                "; roots of the gamma polynomial at most 0 put every root of P_n in (-inf, 0]"
+            } else {
+                ""
+            }
+        ),
+    });
+}
+
+#[path = "root_domain_rolle.rs"]
+mod rolle;
+use rolle::*;
+
+#[path = "root_domain_implicit.rs"]
+mod implicit_maps;
+pub use implicit_maps::*;
 
 #[cfg(test)]
 #[path = "root_domain_tests.rs"]
