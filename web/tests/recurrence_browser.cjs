@@ -116,9 +116,10 @@ async function transformChecks(page, width, setDelay) {
 
   // Implicit relations: the fitted rule is upgraded only by the reconstruction certificate.
   await page.selectOption('#transformExample', 'weighted-eulerian');
-  assert.equal(await page.locator('#transformRootDomain').isDisabled(), true);
+  assert.equal(await page.locator('#transformRootDomain').isDisabled(), false);
+  assert.equal(await page.locator('#transformRootDomain').isChecked(), false);
   assert.equal(await page.locator('#transformIntervalFields').isVisible(), false);
-  assert.equal(await page.locator('#transformRootDomainLabel').isVisible(), false);
+  assert.equal(await page.locator('#transformRootDomainLabel').isVisible(), true);
   text = await transform(page);
   assert.match(text, /Implicit relations/);
   assert.match(text, /Proved by reconstruction/);
@@ -128,6 +129,67 @@ async function transformChecks(page, width, setDelay) {
   text = await transform(page);
   assert.match(text, /Transported identity/);
   assert.ok(await results.locator('.recurrence-display').count() >= 2, 'both vector components are shown');
+
+  // Root location now applies to implicit transforms: the multiplier-sequence adapter and the fixed-cap Jensen test.
+  await page.selectOption('#transformExample', 'binomial-factorial-roots');
+  assert.equal(await page.locator('#transformRootDomain').isChecked(), true);
+  assert.equal(await page.locator('#transformIntervalFields').isVisible(), true);
+  assert.deepEqual(await page.evaluate(() => Object.keys(JSON.parse(document.getElementById('transformRequest').value))
+    .includes('root_domain')), true);
+  text = await transform(page);
+  assert.match(text, /Implicit relations/);
+  assert.match(text, /Root location/);
+  for (const label of ['Certified for the family', 'Proved by induction', 'Fixed degree cap only', 'Exact on listed rows']) {
+    assert.ok(text.includes(label), label);
+  }
+  assert.match(text, /Finite check only: not a proof for degree 8 or more/);
+  const capStyles = await page.evaluate(() => ['fixed_cap', 'certified_family_invariant'].map(code => {
+    const badge = document.querySelector('#results-transform [data-evidence="' + code + '"]');
+    const style = getComputedStyle(badge);
+    return [style.backgroundColor, style.borderStyle, style.color].join('|');
+  }));
+  assert.notEqual(capStyles[0], capStyles[1], 'fixed-cap evidence looks different from certified: ' + capStyles.join(' vs '));
+  assert.ok(await results.locator('.cap-note').isVisible(), 'the Jensen test has its own block');
+  assert.ok(await fitsViewport(page), 'implicit root location fits the viewport');
+  await screenshot(page, width + '-transform-implicit-roots');
+  await clickAndWait(page, results.locator('button', {hasText: 'Replay (verify)'}).first());
+  assert.match(await results.innerText(), /Replay passed/);
+  const implicitJson = await page.evaluate(() => JSON.stringify(transformEntries[0].report));
+  const tamperedImplicit = JSON.parse(implicitJson);
+  tamperedImplicit.root_domain.jensen_fixed_cap.evidence = 'certified_all_indices';
+  await page.locator('#transformImport').evaluate(el => { el.open = true; });
+  await page.fill('#transformImportText', JSON.stringify(tamperedImplicit));
+  await clickAndWait(page, page.locator('#btnTransformImport'));
+  text = await results.innerText();
+  assert.match(text, /Replay failed/);
+  assert.match(text, /Show the unverified content/);
+  await page.fill('#transformImportText', implicitJson);
+  await clickAndWait(page, page.locator('#btnTransformImport'));
+  assert.match(await results.innerText(), /Replay passed/);
+
+  // An index-dependent candidate interval, typed as a formula in n, is shown readably.
+  await page.selectOption('#transformExample', 'eulerian-growing');
+  assert.equal(await page.locator('#transformIntervalLower').inputValue(), '-1-n');
+  text = await transform(page);
+  assert.match(text, /\[-1-n, 0\]/);
+  assert.ok(await fitsViewport(page), 'index-dependent intervals fit the viewport');
+  await page.fill('#transformIntervalLower', '-1-x');
+  assert.match(await transform(page), /linear function of n/);
+  await page.fill('#transformIntervalLower', '');
+
+  // Gamma coordinates are transported (Eulerian), with the polynomial and the rule in z.
+  await page.selectOption('#transformExample', 'eulerian-gamma');
+  assert.doesNotMatch(await page.locator('#transformKindHelp').innerText(), /not transported/i);
+  text = await transform(page);
+  assert.match(text, /Transported identity/);
+  assert.match(text, /gamma polynomial in z/);
+  assert.match(text, /Map theorems \(1\)/);
+  assert.doesNotMatch(text, /Not transported/);
+  assert.ok(await results.locator('.katex').count() > 0, 'the gamma rule renders as mathematics');
+  assert.ok(await fitsViewport(page), 'the gamma report fits the viewport');
+  await screenshot(page, width + '-transform-gamma');
+  await clickAndWait(page, results.locator('button', {hasText: 'Replay (verify)'}).first());
+  assert.match(await results.innerText(), /Replay passed/);
 
   // Changing a setting clears the stale report; bad input is explained.
   await page.fill('#transformRowCount', '7');
@@ -255,6 +317,7 @@ async function representationChecks(page, width) {
   await page.check('#repMap_negate');
   await page.check('#repMap_gamma');
   await page.check('#repMap_divide_x');
+  await page.check('#repMap_multiply_x');
   await page.fill('#repMaxDepth', '2');
   text = await transform(page);
   assert.ok(await results.locator('.rep-edge-duplicate').count() >= 1, 'a duplicate map is marked');

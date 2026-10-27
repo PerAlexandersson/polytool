@@ -100,7 +100,7 @@ test('rule texts become TeX without changing coefficients', () => {
   assert.equal(context.rowPolyTex(['\\href{x}']), '\\text{?}');
   assert.equal(context.intervalText({lower: {value: '-1', closed: true}, upper: {value: '0'}}), '[-1, 0]');
   assert.equal(context.intervalText({upper: {value: '0', closed: false}}), '(−∞, 0)');
-  assert.equal(context.intervalText({lower: {value: '0', per_index: '-1'}}), '[-1·n, ∞)');
+  assert.equal(context.intervalText({lower: {value: '0', per_index: '-1'}}), '[-n, ∞)');
   assert.equal(context.indexRangeText(1, null), 'for every n ≥ 1');
   assert.equal(context.indexRangeText(1, 8), 'for n = 1…8');
 });
@@ -214,6 +214,115 @@ test('theorem and root reports state what remains to be shown', () => {
   assert.match(rootCard, /\(-3, -5\/2\), 0/);
 });
 
+test('index-dependent interval ends read as formulas in n', () => {
+  const {context} = pageContext();
+  const end = (value, per_index, closed) => ({value, per_index, closed});
+  assert.equal(context.intervalText({lower: end('-1', '-1', true), upper: {value: '0'}}), '[-1-n, 0]');
+  assert.equal(context.intervalText({lower: {value: '-1'}, upper: end('0', '1', false)}), '[-1, n)');
+  assert.equal(context.intervalText({lower: end('0', '-1/2', true), upper: end('3/2', '3/2', true)}), '[-n/2, 3/2+3n/2]');
+  assert.equal(context.intervalText({lower: end('-5', '2', true)}), '[-5+2n, ∞)');
+  assert.equal(context.intervalText({lower: end('-5', '0', true), upper: {value: '1'}}), '[-5, 1]');
+  assert.equal(context.intervalText({lower: end('<img>', '1', true)}), '[?, ∞)');
+  assert.equal(context.intervalText({lower: end('0', 'x', true)}), '[?, ∞)');
+});
+
+function syntheticImplicitReport() {
+  const certifiedInduction = {evidence: 'completed_recurrence_induction', subject: 'source', component: 0, property: 'real_rooted_in',
+    interval: {lower: {value: '-1', per_index: '-1'}, upper: {value: '0'}}, first_index: 0, derivation: 'Rolle on the defining rule', conditional_on: []};
+  return {
+    schema: 'polytool.recurrence-implicit.v1', request: {transformation: {kind: 'diagonal'}},
+    transformation: {kind: 'diagonal', row_map: 'Q_n = T_n P_n', inverse: 'P_n = ...'},
+    map_conditions: [], row_origin: 0, source_rows: [['1'], ['1', '1']], transformed_rows: [['1'], ['1', '1']],
+    reconstruction_verified: true, transports: [],
+    description: {first_index: 0, seeds: [['1']], relations: [], exceptional_index_conditions: [], boundary_conditions: []},
+    assessment: {status: 'equivalent_description', seeds_consistent: true},
+    root_domain: {
+      request: {}, conventions: ['c'], assumption_checks: [], notes: ['note ' + unsafe],
+      implications: [{theorem: 'polya_schur_multiplier_sequence', direction: 'source_to_target', source_property: 'P_n real-rooted',
+        target_property: 'Q_n real-rooted', statement: 's', hypotheses: [
+          {condition: 'lambda defined', status: 'certified_all_indices', detail: 'd'},
+          {condition: 'f_j real roots', status: 'exact_fixed_polynomial', detail: 'd'},
+          {condition: 'bad', status: 'violated', detail: unsafe}]}],
+      claims: [
+        {evidence: 'finite_exact_observation', subject: 'transformed', component: 0, property: 'real_rooted',
+          first_index: 0, last_index: 7, derivation: 'exact', conditional_on: []},
+        {evidence: 'certified_family_invariant', subject: 'transformed', component: 0, property: 'real_rooted',
+          first_index: 0, derivation: 'induction and multiplier sequence', conditional_on: []},
+        certifiedInduction],
+      source_rule_theorem: {theorem: 'rolle_derivative_of_product', matched: true, statement: 's', form: 'P_m = (1 + x) P_(m-1)',
+        attempts: [{interval: {lower: {value: '-1'}, upper: {value: '-1'}}, origin: 'root_hull', success: true, detail: 'ok'},
+          {interval: {lower: {value: '0'}}, origin: 'supplied', success: false, detail: 'no'}]},
+      fitted_rule_theorem: {theorem: 'rolle_derivative_of_product', matched: false, statement: 's', reason: 'not of Rolle form', attempts: []},
+      jensen_fixed_cap: {evidence: 'fixed_cap', cap: 7, multipliers: ['1', '1'], jensen_polynomial: ['1', '7', '21/2'],
+        roots: [{lower: '-2', upper: '-3/2', multiplicity: 1}], real_rooted: true, status: 'preserves_up_to_cap',
+        statement: 'every real-rooted polynomial of degree at most 7 has a real-rooted image; ' + unsafe},
+      observations: [{subject: 'transformed', component: 0, index: 1, real_rooted: true,
+        roots: [{lower: '-1', upper: '-1', multiplicity: 1}]}],
+    },
+  };
+}
+
+test('implicit reports render the root-domain section with weaker fixed-cap evidence', () => {
+  const {context} = pageContext();
+  const card = context.renderReportCard({report: syntheticImplicitReport(), origin: 'computed', replay: null}, 0);
+  assert.doesNotMatch(card, /<img|undefined|NaN|\[object Object\]/);
+  const roots = card.slice(card.indexOf('<h4>Root location</h4>'));
+  assert.ok(roots.length > 0, 'the implicit report has a root-location section');
+  // Certified claims first, finite observation last; intervals read as formulas in n.
+  assert.ok(roots.indexOf('Certified for the family') < roots.indexOf('Exact on listed rows'));
+  assert.ok(roots.indexOf('Proved by induction') < roots.indexOf('Exact on listed rows'));
+  assert.match(roots, /every root in \[-1-n, 0\]/);
+  assert.match(roots, /Defining rule of Pₙ: matches rolle derivative of product/);
+  assert.match(roots, /Certified successor rule of Qₙ: no match/);
+  assert.match(roots, /\[-1, -1\] \(root hull\)/);
+  assert.match(roots, /Map theorems \(1\)/);
+  assert.match(roots, /evidence-fail[^>]*data-evidence="violated"/);
+  assert.match(roots, /evidence-certified[^>]*data-evidence="certified_all_indices"/);
+  // The Jensen test is in its own muted block with the fixed-cap label and an explicit warning.
+  const cap = roots.slice(roots.indexOf('class="cap-note"'), roots.indexOf('Jensen polynomial and its roots'));
+  assert.match(cap, /evidence-checked[^>]*data-evidence="fixed_cap"[^>]*>Fixed degree cap only/);
+  assert.match(cap, /evidence-checked[^>]*data-evidence="preserves_up_to_cap"/);
+  assert.match(cap, /Jensen test at degree 7/);
+  assert.match(cap, /Finite check only: not a proof for degree 8 or more/);
+  assert.doesNotMatch(cap, /evidence-certified/);
+  assert.match(roots, /J_\{7\}\(x\) = 1 \+ 7x \+ \\frac\{21\}\{2\}x\^\{2\}/);
+  assert.match(roots, /&lt;img/);
+  const tone = code => /evidence-(\w+)/.exec(context.evidenceBadge(code))[1];
+  assert.equal(tone('fixed_cap'), 'checked');
+  assert.notEqual(tone('fixed_cap'), tone('certified_family_invariant'));
+  assert.notEqual(tone('fixed_cap'), tone('completed_recurrence_induction'));
+  assert.equal(tone('fails_at_cap'), 'fail');
+  // A report without the section renders as before; an unknown Jensen status stays visible.
+  const plain = syntheticImplicitReport();
+  delete plain.root_domain;
+  assert.doesNotMatch(context.renderReportCard({report: plain, origin: 'computed', replay: null}, 0), /Root location/);
+  const odd = syntheticImplicitReport();
+  odd.root_domain.jensen_fixed_cap.status = 'future_status';
+  assert.match(context.renderReportCard({report: odd, origin: 'computed', replay: null}, 0), /evidence-neutral[^>]*>Future status/);
+});
+
+test('gamma reports show the transported rule and rows in z', () => {
+  const {context} = pageContext();
+  const report = syntheticTransformReport();
+  report.transformation = {kind: 'gamma', row_map: 'P_n(x) = sum_i Q_(n,i) x^i (1 + x)^(d_n - 2i)', inverse: 'inverse',
+    index_domain: 'n >= 1', components: [{name: 'Q'}]};
+  report.transported.text = 'P(n) = (1 - 4t + 2nt) P(n-1) + (t - 4t^2) P\'(n-1)';
+  const card = context.renderReportCard({report, origin: 'computed', replay: null}, 0);
+  assert.match(card, /Q_\{n\} = \(1 - 4z \+ 2nz\) Q_\{n-1\} \+ \(z - 4z\^\{2\}\) Q'_\{n-1\}/);
+  assert.match(card, /gamma polynomial in z = x\/\(1 \+ x\)²/);
+  assert.match(card, /<td><k>1 \+ 2z<\/k><\/td>/);
+  assert.match(card, /<td><k>1 \+ x<\/k><\/td>/);
+  assert.doesNotMatch(card, /undefined|NaN/);
+  const refused = syntheticTransformReport();
+  refused.transformation = {kind: 'gamma', components: [{name: 'Q'}]};
+  refused.transported = null;
+  refused.transport_error = 'the even and odd parts are independent: ' + unsafe;
+  const refusedCard = context.renderReportCard({report: refused, origin: 'computed', replay: null}, 0);
+  assert.match(refusedCard, /Not transported: the even and odd parts are independent: &lt;img/);
+  assert.doesNotMatch(refusedCard, /<img/);
+  assert.match(vm.runInContext('TRANSFORM_KIND_HELP.gamma', context), /transported when its symmetric and antisymmetric parts are proportional/);
+});
+
 test('guided requests follow the form and reject bad parameters', () => {
   const {context, document} = pageContext();
   vm.runInContext('transformCatalog = [{id: "A008292", name: "Eulerian"}, {id: "A007318", name: "Pascal"}]', context);
@@ -230,9 +339,41 @@ test('guided requests follow the form and reject bad parameters', () => {
   job = context.buildTransformRequest();
   assert.equal(job.endpoint, 'implicit');
   assert.equal(job.request.root_domain, undefined);
-  assert.equal(document.getElementById('transformRootDomain').disabled, true);
+  assert.equal(document.getElementById('transformRootDomain').disabled, false);
   assert.deepEqual(JSON.parse(JSON.stringify(job.request.transformation)),
     {kind: 'diagonal', weight: {kind: 'factorial_power', power: 1}});
+  // Root location applies to implicit (diagonal) transforms too, with the same candidate intervals.
+  context.loadTransformExample('binomial-factorial-roots');
+  job = context.buildTransformRequest();
+  assert.equal(job.endpoint, 'implicit');
+  assert.deepEqual(JSON.parse(JSON.stringify(job.request.root_domain)), {});
+  assert.equal(document.getElementById('transformIntervalFields').hidden, false);
+  document.getElementById('transformIntervalLower').value = '-1-n';
+  document.getElementById('transformIntervalUpper').value = '0';
+  job = context.buildTransformRequest();
+  assert.deepEqual(JSON.parse(JSON.stringify(job.request.root_domain)),
+    {candidate_intervals: [{lower: {value: '-1', per_index: '-1'}, upper: {value: '0'}}]});
+  context.loadTransformExample('binomial-factorial');
+  assert.equal(context.buildTransformRequest().request.root_domain, undefined);
+  assert.equal(document.getElementById('transformIntervalFields').hidden, true);
+  // Interval ends: rationals and linear functions of the index.
+  const endpoint = text => {
+    document.getElementById('transformIntervalLower').value = text;
+    document.getElementById('transformIntervalUpper').value = '';
+    return JSON.parse(JSON.stringify(context.transformCandidateInterval())).lower;
+  };
+  assert.deepEqual(endpoint('-3/2'), {value: '-3/2'});
+  assert.deepEqual(endpoint('n'), {value: '0', per_index: '1'});
+  assert.deepEqual(endpoint('-n'), {value: '0', per_index: '-1'});
+  assert.deepEqual(endpoint('\u22121 \u2212 n'), {value: '-1', per_index: '-1'});
+  assert.deepEqual(endpoint('1/2+3n/2'), {value: '1/2', per_index: '3/2'});
+  assert.deepEqual(endpoint('2n'), {value: '0', per_index: '2'});
+  assert.deepEqual(endpoint('-1/2-n/2'), {value: '-1/2', per_index: '-1/2'});
+  for (const bad of ['x', '1/0', '1+', 'n/0', '2^n', '--1']) {
+    document.getElementById('transformIntervalLower').value = bad;
+    assert.throws(() => context.transformCandidateInterval(), /rational number or a linear function of n/, bad);
+  }
+  document.getElementById('transformIntervalLower').value = '';
   document.getElementById('transformOeis').value = 'A999999';
   assert.throws(() => context.buildTransformRequest(), /not in the bundled catalog/);
   document.getElementById('transformOeis').value = 'A007318';
@@ -285,7 +426,24 @@ test('actual WASM: every example transforms, renders, replays and rejects tamper
       assert.deepEqual(report.transformation.components.map(c => c.name), ['a', 'b']);
     },
     'narayana-reversal': report => assert.ok(report.transported.scalar),
+    'eulerian-gamma': report => {
+      assert.equal(report.transported.evidence, 'transported_identity');
+      assert.ok(report.transported.scalar, 'the gamma rule is transported');
+      assert.equal(report.conditions[0].status, 'certified_all_indices');
+      assert.equal(report.root_domain.implications[0].theorem, 'gamma_quarter_bound');
+    },
+    'eulerian-growing': report => {
+      const attempt = report.root_domain.recurrence_theorem.attempts[0];
+      assert.equal(attempt.success, true);
+      assert.deepEqual(attempt.interval.lower, {value: '-1', per_index: '-1', closed: true});
+      assert.ok(report.root_domain.claims.some(c => c.evidence === 'completed_recurrence_induction'));
+    },
     'binomial-factorial': report => assert.equal(report.assessment.status, 'equivalent_description'),
+    'binomial-factorial-roots': report => {
+      assert.equal(report.assessment.status, 'equivalent_description');
+      assert.equal(report.root_domain.jensen_fixed_cap.evidence, 'fixed_cap');
+      assert.ok(report.root_domain.claims.some(c => c.evidence === 'certified_family_invariant' && c.subject === 'transformed'));
+    },
     'weighted-eulerian': report => assert.equal(report.independent_search.evidence, 'certified_by_reconstruction'),
   };
   for (const [name, check] of Object.entries(expected)) {
@@ -335,6 +493,104 @@ test('actual WASM: every example transforms, renders, replays and rejects tamper
     assert.equal(roots.items.length, states.length);
     assert.equal(JSON.parse(wasm.verify_report(JSON.stringify(roots))).verified, true);
   }
+});
+
+test('actual WASM: implicit root-domain export, rendering, replay and tampering', {
+  skip: !process.env.POLYTOOL_WASM_DIR,
+}, async () => {
+  const wasm = await loadWasm();
+  const {context, document} = pageContext({wasm_bindgen: wasm});
+  context.populateTransformCatalog();
+  context.loadTransformExample('binomial-factorial-roots');
+  const job = context.prepareTransformRequest();
+  assert.equal(job.endpoint, 'implicit');
+  assert.deepEqual(JSON.parse(job.text).root_domain, {});
+  const raw = wasm.transform_recurrence_implicit(job.text);
+  const report = JSON.parse(raw);
+  assert.ok(!report.error, raw);
+  const root = report.root_domain;
+  assert.equal(root.implications[0].theorem, 'polya_schur_multiplier_sequence');
+  assert.equal(root.jensen_fixed_cap.evidence, 'fixed_cap');
+  assert.equal(root.jensen_fixed_cap.status, 'preserves_up_to_cap');
+
+  // The page shows certified claims, the fixed-cap block and the Rolle matches of both rules.
+  const card = context.renderReportCard({report, origin: 'computed', replay: null}, 0);
+  assert.doesNotMatch(card, /undefined|NaN|\[object Object\]/);
+  assert.match(card, /<h4>Root location<\/h4>/);
+  assert.match(card, /evidence-certified[^>]*data-evidence="certified_family_invariant"/);
+  assert.match(card, /evidence-checked[^>]*data-evidence="fixed_cap"[^>]*>Fixed degree cap only/);
+  assert.match(card, /Finite check only: not a proof for degree 8 or more/);
+  assert.match(card, /Defining rule of Pₙ: matches rolle derivative of product/);
+  assert.match(card, /Polya schur multiplier sequence/i);
+  assert.equal(card.includes('Certified for the family'), true);
+  assert.ok(card.indexOf('Certified for the family') < card.indexOf('Exact on listed rows'));
+
+  // Replay: compact, pretty and reparsed text, through both exports; the section is recognised.
+  for (const text of [raw, JSON.stringify(report, null, 2)]) {
+    const checked = JSON.parse(wasm.verify_report(text));
+    assert.equal(checked.verified, true);
+    assert.equal(checked.root_domain, true);
+    assert.equal(JSON.parse(wasm.verify_recurrence_implicit(text)).root_domain, true);
+  }
+  if (process.env.POLYTOOL_CLI) {
+    cliVerify('recurrence-implicit', report);
+    const cli = spawnSync(process.env.POLYTOOL_CLI, ['recurrence-implicit'], {input: job.text, encoding: 'utf8'});
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.deepEqual(JSON.parse(cli.stdout), report, 'CLI and browser reports agree');
+  }
+
+  // Tampering inside the root-domain section is rejected, whatever it touches.
+  const edits = {
+    'Jensen evidence promoted': r => { r.root_domain.jensen_fixed_cap.evidence = 'certified_all_indices'; },
+    'Jensen verdict changed': r => { r.root_domain.jensen_fixed_cap.status = 'fails_at_cap'; },
+    'Jensen polynomial changed': r => { r.root_domain.jensen_fixed_cap.jensen_polynomial[1] = '8'; },
+    'finite claim promoted': r => {
+      r.root_domain.claims.find(c => c.evidence === 'finite_exact_observation').evidence = 'certified_family_invariant';
+    },
+    'claim dropped': r => { r.root_domain.claims.pop(); },
+    'hypothesis status changed': r => { r.root_domain.implications[0].hypotheses[0].status = 'assumed'; },
+    'request changed': r => { r.root_domain.request.max_observed_rows = 3; },
+    'observation changed': r => { r.root_domain.observations[2].real_rooted = false; },
+    'source rows changed': r => { r.source_rows[3][1] = '99'; },
+  };
+  for (const [name, edit] of Object.entries(edits)) {
+    const tampered = JSON.parse(raw);
+    edit(tampered);
+    assert.ok(JSON.parse(wasm.verify_report(JSON.stringify(tampered))).error, name);
+  }
+  // A report without the section is a different, valid report: it replays and says it has no root-domain section.
+  const stripped = JSON.parse(raw);
+  delete stripped.root_domain;
+  const strippedCheck = JSON.parse(wasm.verify_report(JSON.stringify(stripped)));
+  assert.equal(strippedCheck.verified, true);
+  assert.equal(strippedCheck.root_domain, false);
+
+  // A bad root-domain section is reported by the export, and the page shows it as rejected.
+  const bad = JSON.parse(job.text);
+  bad.root_domain = {candidate_intervals: [{lower: {value: 'abc'}}]};
+  assert.ok(JSON.parse(wasm.transform_recurrence_implicit(JSON.stringify(bad))).error);
+  bad.root_domain = {unknown_field: 1};
+  assert.match(JSON.parse(wasm.transform_recurrence_implicit(JSON.stringify(bad))).error, /root_domain/);
+
+  // An index-dependent candidate interval typed into the form reaches the library and is displayed as a formula.
+  context.loadTransformExample('eulerian-growing');
+  assert.equal(document.getElementById('transformIntervalLower').value, '-1-n');
+  const growing = context.prepareTransformRequest();
+  const growingReport = JSON.parse(wasm.transform_recurrence(growing.text));
+  assert.ok(!growingReport.error, JSON.stringify(growingReport));
+  const growingCard = context.renderReportCard({report: growingReport, origin: 'computed', replay: null}, 0);
+  assert.match(growingCard, /\[-1-n, 0\]/);
+  assert.equal(JSON.parse(wasm.verify_report(JSON.stringify(growingReport))).verified, true);
+
+  // Gamma: the Eulerian rule is transported and shown in z; the report replays.
+  context.loadTransformExample('eulerian-gamma');
+  const gamma = context.prepareTransformRequest();
+  const gammaReport = JSON.parse(wasm.transform_recurrence(gamma.text));
+  const gammaCard = context.renderReportCard({report: gammaReport, origin: 'computed', replay: null}, 0);
+  assert.match(gammaCard, /evidence-transported[^>]*data-evidence="transported_identity"/);
+  assert.doesNotMatch(gammaCard, /not transported/i);
+  assert.match(gammaCard, /gamma polynomial in z/);
+  assert.equal(JSON.parse(wasm.verify_report(JSON.stringify(gammaReport))).verified, true);
 });
 
 test('actual WASM: theorem matches, enclosures, spaces and browser limits', {
@@ -631,10 +887,13 @@ test('actual WASM: representation search runs, renders, replays and rejects tamp
   // Duplicate maps, rejected maps and the depth frontier from a hand-written request.
   const mixed = {oeis_id: 'A007318', row_count: 8, limits: {max_depth: 2, max_representations: 12},
     transformations: [{kind: 'affine', a: '-1', b: '0'},
-      {kind: 'gamma', schedule: {first_index: 0, first_degree: 0, step: 1}}, {kind: 'divide_power', power: 1}]};
+      {kind: 'gamma', schedule: {first_index: 0, first_degree: 0, step: 1}}, {kind: 'divide_power', power: 1},
+      {kind: 'multiply_power', power: 1}]};
   const mixedReport = JSON.parse(wasm.search_recurrence_representations(JSON.stringify(mixed)));
   assert.ok(mixedReport.edges.some(edge => edge.outcome === 'duplicate_map'));
   assert.ok(mixedReport.edges.some(edge => edge.outcome === 'rejected'));
+  // The symmetric Pascal rows have a transported gamma description (Gamma is no longer rejected at the source).
+  assert.ok(mixedReport.edges.some(edge => edge.parent === 0 && edge.transformation === 1 && edge.outcome === 'new_representation'));
   const mixedCard = context.renderReportCard({report: mixedReport, origin: 'computed', replay: null}, 0);
   assert.match(mixedCard, /rep-edge-duplicate/);
   assert.match(mixedCard, /rep-edge-rejected/);

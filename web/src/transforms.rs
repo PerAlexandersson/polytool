@@ -19,9 +19,9 @@
 
 use num_bigint::BigInt;
 use polytool::recurrence::{
-    ImplicitTransformReport, ImplicitTransformRequest, RecurrenceJson, RecurrenceTransformReport,
-    RecurrenceTransformRequest, RepresentationSearchLimits, RepresentationSearchReport,
-    RepresentationSearchRequest, RootEnclosureReport, RootEnclosureRequest, TransformLimits,
+    ImplicitTransformReport, RecurrenceJson, RecurrenceTransformReport, RecurrenceTransformRequest,
+    RepresentationSearchLimits, RepresentationSearchReport, RepresentationSearchRequest,
+    RootEnclosureReport, RootEnclosureRequest, TransformLimits,
 };
 use polytool::renewal::RecurrenceTheoremReport;
 use wasm_bindgen::prelude::*;
@@ -141,16 +141,24 @@ pub fn verify_recurrence_transform(report_json: &str) -> String {
 
 /// Same `polytool.recurrence-implicit.v1` contract as the CLI
 /// `recurrence-implicit` and the MCP tool `transform_recurrence_implicit`.
+///
+/// The request may carry a top-level `root_domain` (as in
+/// `recurrence-transform`); the library parses and validates it and stores the
+/// analysis, with its request, in the report's `root_domain` section.
 #[wasm_bindgen]
 pub fn transform_recurrence_implicit(request_json: &str) -> String {
     respond(|| {
         bounded(request_json, "recurrence-implicit request")?;
-        let request: ImplicitTransformRequest =
+        let value: serde_json::Value =
             serde_json::from_str(request_json).map_err(|e| e.to_string())?;
+        let (request, root_domain) = polytool::recurrence::parse_implicit_transform_input(value)?;
         check_limits(&request.limits)?;
-        to_value(polytool::recurrence::implicit_transform_recurrence(
-            &request,
-        )?)
+        to_value(
+            polytool::recurrence::implicit_transform_recurrence_with_root_domain(
+                &request,
+                root_domain.as_ref(),
+            )?,
+        )
     })
 }
 
@@ -166,6 +174,7 @@ fn verify_implicit_value(report_json: &str) -> Result<serde_json::Value, String>
         "verified": true,
         "assessment": report.assessment.status,
         "independent_search": report.independent_search.map(|search| search.evidence),
+        "root_domain": report.root_domain.is_some(),
     }))
 }
 
@@ -429,6 +438,169 @@ mod tests {
         let mut tampered = value;
         tampered["assessment"]["status"] = json!("certified_consequence");
         assert!(parse(&verify_recurrence_implicit(&tampered.to_string()))["error"].is_string());
+    }
+
+    fn binomial_root_domain_request() -> Value {
+        json!({
+            "oeis_id": "A007318", "row_count": 8, "search": {}, "root_domain": {},
+            "transformation": {"kind": "diagonal",
+                "weight": {"kind": "factorial_power", "power": 1}}
+        })
+    }
+
+    #[test]
+    fn implicit_root_domain_round_trips_and_rejects_tampering() {
+        let report = transform_recurrence_implicit(&binomial_root_domain_request().to_string());
+        let value = parse(&report);
+        assert_eq!(value["schema"], IMPLICIT_SCHEMA, "{value}");
+        let root = &value["root_domain"];
+        let claims = root["claims"].as_array().unwrap();
+        for evidence in [
+            "completed_recurrence_induction",
+            "certified_family_invariant",
+            "finite_exact_observation",
+        ] {
+            assert!(
+                claims.iter().any(|c| c["evidence"] == evidence),
+                "{evidence}"
+            );
+        }
+        assert_eq!(
+            root["implications"][0]["theorem"],
+            "polya_schur_multiplier_sequence"
+        );
+        // The Jensen test is labelled as the weaker, fixed-cap evidence.
+        assert_eq!(root["jensen_fixed_cap"]["evidence"], "fixed_cap");
+        assert_eq!(root["jensen_fixed_cap"]["status"], "preserves_up_to_cap");
+        let checked = parse(&verify_recurrence_implicit(&report));
+        assert_eq!(checked["verified"], true, "{checked}");
+        assert_eq!(checked["root_domain"], true);
+        assert_eq!(parse(&verify_report(&report))["verified"], true);
+        // A report without a root-domain section still replays and says so.
+        let mut plain_request = binomial_root_domain_request();
+        plain_request.as_object_mut().unwrap().remove("root_domain");
+        let plain = transform_recurrence_implicit(&plain_request.to_string());
+        assert!(parse(&plain).get("root_domain").is_none());
+        assert_eq!(parse(&verify_report(&plain))["root_domain"], false);
+
+        // Relabelled evidence, a promoted claim, a doctored Jensen verdict and a
+        // changed root-domain request all fail the replay.
+        let mut relabelled = value.clone();
+        relabelled["root_domain"]["jensen_fixed_cap"]["evidence"] = json!("certified_all_indices");
+        assert!(parse(&verify_report(&relabelled.to_string()))["error"].is_string());
+        let mut promoted = value.clone();
+        let position = claims
+            .iter()
+            .position(|c| c["evidence"] == "finite_exact_observation")
+            .unwrap();
+        promoted["root_domain"]["claims"][position]["evidence"] =
+            json!("certified_family_invariant");
+        assert!(parse(&verify_recurrence_implicit(&promoted.to_string()))["error"].is_string());
+        let mut verdict = value.clone();
+        verdict["root_domain"]["jensen_fixed_cap"]["status"] = json!("fails_at_cap");
+        assert!(parse(&verify_report(&verdict.to_string()))["error"].is_string());
+        let mut request = value;
+        request["root_domain"]["request"]["max_observed_rows"] = json!(2);
+        assert!(parse(&verify_report(&request.to_string()))["error"].is_string());
+    }
+
+    #[test]
+    fn implicit_root_domain_is_validated() {
+        let mut request = binomial_root_domain_request();
+        request["root_domain"] = json!({"unknown": 1});
+        let error = parse(&transform_recurrence_implicit(&request.to_string()));
+        assert!(
+            error["error"].as_str().unwrap().contains("root_domain"),
+            "{error}"
+        );
+        request["root_domain"] = json!({"max_observed_rows": 10_000_000});
+        assert!(parse(&transform_recurrence_implicit(&request.to_string()))["error"].is_string());
+        // A report that embeds an oversized root-domain request is refused by the replay.
+        let mut report = parse(&transform_recurrence_implicit(
+            &binomial_root_domain_request().to_string(),
+        ));
+        report["root_domain"]["request"]["max_observed_rows"] = json!(10_000_000);
+        assert!(parse(&verify_report(&report.to_string()))["error"].is_string());
+        // Service ceilings of the transport apply with a root-domain section too.
+        let mut limited = binomial_root_domain_request();
+        limited["limits"] = json!({"max_rows": 1_000_000});
+        assert!(
+            parse(&transform_recurrence_implicit(&limited.to_string()))["error"]
+                .as_str()
+                .unwrap()
+                .contains("service ceiling")
+        );
+    }
+
+    #[test]
+    fn gamma_transport_round_trips_and_refuses_rank_two_rules() {
+        let request = json!({
+            "oeis_id": "A008292", "row_count": 8, "search": {}, "root_domain": {},
+            "transformation": {"kind": "gamma",
+                "schedule": {"first_index": 1, "first_degree": 0, "step": 1}}
+        });
+        let report = transform_recurrence(&request.to_string());
+        let value = parse(&report);
+        assert_eq!(
+            value["transported"]["evidence"], "transported_identity",
+            "{value}"
+        );
+        assert!(value["transported"]["scalar"].is_object());
+        assert_eq!(value["conditions"][0]["status"], "certified_all_indices");
+        assert_eq!(
+            value["root_domain"]["implications"][0]["theorem"],
+            "gamma_quarter_bound"
+        );
+        assert_eq!(parse(&verify_report(&report))["verified"], true);
+        let mut tampered = value.clone();
+        tampered["transported"]["evidence"] = json!("certified_all_indices");
+        assert!(parse(&verify_recurrence_transform(&tampered.to_string()))["error"].is_string());
+        let mut rows = value;
+        rows["transformed_states"][4][0][1] = json!("12345");
+        assert!(parse(&verify_report(&rows.to_string()))["error"].is_string());
+
+        // P_m = (1 + 2x) P_(m-1) is not reversal invariant (independent
+        // symmetric and antisymmetric parts, and non-symmetric rows): the
+        // request is refused with an explanation, not answered with a rule.
+        let rank_two = json!({
+            "row_count": 5,
+            "source_recurrence": {
+                "schema": "polytool.recurrence.v1", "first_index": 0,
+                "initial_polynomials": [["1"]],
+                "recurrence": {"terms": [{"offset": 1, "deriv_order": 0, "sign": "none",
+                    "coeff": {"coeffs": [["1", "2"]]}}]}
+            },
+            "transformation": {"kind": "gamma",
+                "schedule": {"first_index": 0, "first_degree": 0, "step": 1}}
+        });
+        let refused = parse(&transform_recurrence(&rank_two.to_string()));
+        assert!(
+            refused["error"].as_str().unwrap().contains("not symmetric"),
+            "{refused}"
+        );
+    }
+
+    #[test]
+    fn index_dependent_intervals_replay() {
+        let request = json!({
+            "oeis_id": "A008292", "row_count": 8,
+            "root_domain": {"default_window": false, "candidate_intervals": [
+                {"lower": {"value": "-1", "per_index": "-1"}, "upper": {"value": "0"}}]},
+            "transformation": {"kind": "f_polynomial",
+                "schedule": {"first_index": 1, "first_degree": 0, "step": 1}}
+        });
+        let report = transform_recurrence(&request.to_string());
+        let value = parse(&report);
+        let attempts = value["root_domain"]["recurrence_theorem"]["attempts"]
+            .as_array()
+            .unwrap();
+        assert_eq!(attempts[0]["success"], true, "{value}");
+        assert_eq!(attempts[0]["interval"]["lower"]["per_index"], "-1");
+        assert_eq!(parse(&verify_report(&report))["verified"], true);
+        let mut tampered = value;
+        tampered["root_domain"]["recurrence_theorem"]["attempts"][0]["interval"]["lower"]
+            ["per_index"] = json!("-2");
+        assert!(parse(&verify_report(&tampered.to_string()))["error"].is_string());
     }
 
     #[test]

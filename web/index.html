@@ -499,6 +499,10 @@ textarea:focus { outline: none; border-color: var(--c-link); }
   .evidence-checked { color: hsl(212, 80%, 78%); background: hsl(212, 40%, 18%); }
   .evidence-fit { color: hsl(40, 90%, 70%); background: hsl(32, 40%, 16%); }
 }
+/* A fixed-cap (Jensen) test is a finite check, never a proof for larger degrees: dotted, muted block. */
+.cap-note { border: 1px dotted hsl(212, 60%, 58%); border-radius: 6px; padding: 0.4rem 0.6rem; margin: 0.4rem 0; }
+.cap-note .cap-warning { font-weight: 700; color: hsl(212, 70%, 34%); font-size: 0.85rem; margin: 0.25rem 0; }
+@media (prefers-color-scheme: dark) { .cap-note .cap-warning { color: hsl(212, 80%, 78%); } }
 .evidence-legend { margin: 0.4rem 0 0.8rem; font-size: 0.85rem; }
 .evidence-legend summary { cursor: pointer; color: var(--c-link); }
 .evidence-legend ul { list-style: none; padding: 0; margin: 0.5rem 0 0; display: grid; gap: 0.35rem; }
@@ -1241,8 +1245,11 @@ Lines starting with # are ignored."></textarea>
         <option value="">Choose an example&hellip;</option>
         <option value="eulerian-f">Eulerian numbers A008292 → f-polynomial, with root location</option>
         <option value="eulerian-symmetric">Eulerian numbers A008292 → symmetric decomposition</option>
+        <option value="eulerian-gamma">Eulerian numbers A008292 → gamma coordinates, transported</option>
+        <option value="eulerian-growing">Eulerian numbers A008292 → f-polynomial, root window [−1−n, 0] growing with n</option>
         <option value="narayana-reversal">Narayana numbers A001263 → reversal</option>
         <option value="binomial-factorial">Pascal rows A007318 with coefficients divided by k!</option>
+        <option value="binomial-factorial-roots">Pascal rows A007318 divided by k!, with root location (multiplier sequence)</option>
         <option value="weighted-eulerian">A065826 divided by k + 1 → Eulerian rows, proved by reconstruction</option>
         <option value="search-pascal">Search: Pascal rows A007318 with k! maps, certified complete spaces</option>
         <option value="search-eulerian">Search: A065826 → Eulerian rows → f-polynomial</option>
@@ -1301,7 +1308,7 @@ Lines starting with # are ignored."></textarea>
             <option value="multiply_power">Multiply by xʳ</option>
             <option value="divide_power">Divide by xʳ</option>
             <option value="symmetric_decomposition">Symmetric decomposition · P = a + x b</option>
-            <option value="gamma">Gamma coordinates (rows only)</option>
+            <option value="gamma">Gamma coordinates · P = Σ Qᵢ xⁱ(1+x)^(d−2i)</option>
           </optgroup>
           <optgroup label="Implicit relations">
             <option value="diagonal">Diagonal coefficient map · xᵏ ↦ λ(k) xᵏ</option>
@@ -1360,11 +1367,11 @@ Lines starting with # are ignored."></textarea>
       </div>
     </div>
     <label><input type="checkbox" id="transformSearch" checked onchange="transformControlsChanged()"> Also fit a recurrence to the new rows (a finite fit)</label><br>
-    <label id="transformRootDomainLabel"><input type="checkbox" id="transformRootDomain" onchange="transformControlsChanged()"> Root location: implications, exact enclosures and induction</label>
+    <label id="transformRootDomainLabel"><input type="checkbox" id="transformRootDomain" onchange="transformControlsChanged()"> Root location: implications, exact enclosures, induction and, for diagonal maps, a fixed-cap test</label>
     <div class="space-grid" id="transformIntervalFields" hidden>
       <div class="space-field">
         <label for="transformIntervalLower">Candidate interval: lower end</label>
-        <input id="transformIntervalLower" placeholder="−∞ when empty" spellcheck="false" oninput="transformControlsChanged()">
+        <input id="transformIntervalLower" placeholder="−∞ if empty; e.g. −1 or −1−n" spellcheck="false" oninput="transformControlsChanged()">
       </div>
       <div class="space-field">
         <label for="transformIntervalUpper">upper end</label>
@@ -1447,9 +1454,9 @@ Lines starting with # are ignored."></textarea>
   Source code: <a href="https://github.com/PerAlexandersson/polytool">polytool</a>.
 </footer>
 
-<script src="pkg/polytool_web.js?v=20261027b"></script>
+<script src="pkg/polytool_web.js?v=20261027c"></script>
 <script>
-const ASSET_VERSION = '20261027b';
+const ASSET_VERSION = '20261027c';
 const EXAMPLES = {
   eulerian: {
     label: 'Eulerian polynomials A_n(t) \u2014 descent generating function on S_n',
@@ -3800,7 +3807,17 @@ const EVIDENCE_VOCABULARY = {
   paper_proof_not_lean_checked: ['Paper proof, not Lean-checked', 'theorem', 'The theorem has a paper proof that has not been formally verified.'],
   checked_supplied_rows: ['Checked on supplied rows', 'checked', 'Exact on the listed rows only; it says nothing about later indices.'],
   finite_exact_observation: ['Exact on listed rows', 'checked', 'Exact root isolation of the listed rows only, never a statement about the whole family.'],
-  fixed_cap: ['Up to the degree cap', 'checked', 'Holds for degrees up to the stated cap only.'],
+  fixed_cap: ['Fixed degree cap only', 'checked', 'A finite check up to the stated degree cap. It is not a proof for larger degrees and does not make a claim certified.'],
+  preserves_up_to_cap: ['Preserved up to the cap', 'checked', 'Every real-rooted polynomial of degree at most the cap keeps real-rootedness; nothing is said about larger degrees.'],
+  fails_at_cap: ['Fails at the cap', 'fail', 'An exact witness: a real-rooted polynomial of the cap degree whose image is not real-rooted.'],
+  inconclusive: ['Inconclusive', 'neutral', 'The test draws no conclusion.'],
+  exact_fixed_polynomial: ['Exact for a fixed polynomial', 'certified', 'A fixed polynomial checked exactly: a proof for that polynomial.'],
+  assumed: ['Assumed', 'assumption', 'Supplied in the request and not proved.'],
+  not_checked: ['Not checked', 'assumption', 'This hypothesis was not checked.'],
+  violated: ['Violated', 'fail', 'Shown false exactly; the implication does not apply.'],
+  attempt_failed: ['Attempt failed', 'fail', 'This interval did not close the induction.'],
+  consistent_with_rows: ['Consistent with rows', 'checked', 'Holds on the observed rows only.'],
+  refuted_on_rows: ['Refuted on rows', 'fail', 'An exact check failed on an observed row.'],
   finite_fit: ['Finite fit', 'fit', 'Fitted to finitely many rows and checked on the rest. It may fail on later rows.'],
   exact_fit: ['Finite fit', 'fit', 'Fits the supplied rows exactly. It may fail on later rows.'],
   finite_evidence_only: ['Finite evidence only', 'fit', 'Supported by finitely many rows; not a proof for all n.'],
@@ -3881,7 +3898,7 @@ function formulaHtml(tex) {
 }
 
 // A scalar polytool.recurrence.v1 record, typeset with the library's LaTeX.
-function recordFormulaTex(record, fallbackText, name) {
+function recordFormulaTex(record, fallbackText, name, variable) {
   let latex = null;
   try {
     if (typeof wasm_bindgen !== 'undefined' && wasm_bindgen.recurrence_latex) {
@@ -3889,16 +3906,21 @@ function recordFormulaTex(record, fallbackText, name) {
       if (shown.latex) latex = shown.latex;
     }
   } catch (_) {}
-  return ruleTextTex(latex || fallbackText || '', {name: name || 'P', variable: 'x'});
+  return ruleTextTex(latex || fallbackText || '', {name: name || 'P', variable: variable || 'x'});
 }
 
-function ruleFormulaHtml(rule, name) {
+function ruleFormulaHtml(rule, name, variable) {
   if (!rule) return '';
-  if (rule.scalar) return formulaHtml(recordFormulaTex(rule.scalar, rule.text, name));
+  if (rule.scalar) return formulaHtml(recordFormulaTex(rule.scalar, rule.text, name, variable));
   if (rule.text) {
-    return String(rule.text).split('; ').map(line => formulaHtml(ruleTextTex(line, {variable: 'x'}))).join('');
+    return String(rule.text).split('; ').map(line => formulaHtml(ruleTextTex(line, {variable: variable || 'x'}))).join('');
   }
   return '';
+}
+
+// Gamma polynomials are written in z = x/(1 + x)^2, everything else in x.
+function transformVariable(report) {
+  return report && report.transformation && report.transformation.kind === 'gamma' ? 'z' : 'x';
 }
 
 function rationalTex(value) {
@@ -3923,11 +3945,19 @@ function rowPolyTex(coeffs, variable) {
   return terms.length ? terms.join('') : '0';
 }
 
+// An endpoint `value + per_index * n`, written as -1-n, n/2, 1/2+3n/2 or -n.
 function endpointText(endpoint) {
-  const value = String(endpoint.value);
-  const slope = endpoint.per_index;
-  if (!slope || /^0+$/.test(String(slope))) return value;
-  return (value === '0' ? '' : value + ' + ') + slope + '·n';
+  const value = String(endpoint.value).trim();
+  const slope = String(endpoint.per_index == null ? '0' : endpoint.per_index).trim();
+  if (!/^-?\d+(\/\d+)?$/.test(value)) return '?';
+  const match = /^(-?)(\d+)(?:\/(\d+))?$/.exec(slope);
+  if (!match) return '?';
+  if (/^0+$/.test(match[2])) return value;
+  const numerator = /^0*1$/.test(match[2]) ? '' : match[2].replace(/^0+(?=\d)/, '');
+  const denominator = match[3] && !/^0*1$/.test(match[3]) ? '/' + match[3].replace(/^0+(?=\d)/, '') : '';
+  const term = match[1] + numerator + 'n' + denominator;
+  if (/^-?0+$/.test(value)) return term;
+  return value + (term.startsWith('-') ? '' : '+') + term;
 }
 
 function intervalText(interval) {
@@ -3973,13 +4003,13 @@ function rootEnclosureText(root) {
   return (root.lower === root.upper ? root.lower : '(' + root.lower + ', ' + root.upper + ')') + multiplicity;
 }
 
-function rowsTableHtml(title, columns, rows, firstIndex, limit) {
+function rowsTableHtml(title, columns, rows, firstIndex, limit, variables) {
   if (!rows || !rows.length) return '';
   const shown = rows.slice(0, limit || 6);
   let html = '<details><summary>' + esc(title) + ' (' + rows.length + ' rows)</summary><div class="report-rows"><table><thead><tr><th>n</th>' +
     columns.map(c => '<th>' + katexInline(c) + '</th>').join('') + '</tr></thead><tbody>';
   shown.forEach((row, i) => {
-    html += '<tr><td>' + esc(firstIndex + i) + '</td>' + row.map(cell => '<td>' + katexInline(rowPolyTex(cell)) + '</td>').join('') + '</tr>';
+    html += '<tr><td>' + esc(firstIndex + i) + '</td>' + row.map((cell, j) => '<td>' + katexInline(rowPolyTex(cell, variables && variables[j])) + '</td>').join('') + '</tr>';
   });
   html += '</tbody></table></div>';
   if (rows.length > shown.length) html += metaHtml('Showing the first ' + shown.length + ' rows; the exported JSON has all of them.');
@@ -3996,6 +4026,24 @@ function reportActionButton(label, call) {
 
 // --- Report renderers ---
 
+// The Jensen test of an index-free diagonal weight: evidence `fixed_cap`, never a proof for larger degrees.
+function jensenCapHtml(jensen) {
+  const cap = Number(jensen.cap);
+  const verdicts = {
+    preserves_up_to_cap: 'The weight keeps every real-rooted polynomial of degree at most ' + cap + ' real-rooted.',
+    fails_at_cap: '(1 + x)^' + cap + ' is real-rooted but its image is not: the weight does not preserve real-rootedness.',
+    inconclusive: 'The test is inconclusive at degree ' + cap + '.',
+  };
+  const known = Object.prototype.hasOwnProperty.call(verdicts, jensen.status);
+  return '<div class="cap-note" data-evidence-block="fixed_cap">' + evidenceBadge(jensen.evidence || 'fixed_cap') +
+    evidenceBadge(jensen.status) + '<strong>Jensen test at degree ' + esc(cap) + '</strong>' +
+    '<p class="cap-warning">Finite check only: not a proof for degree ' + esc(cap + 1) + ' or more.</p>' +
+    metaHtml(known ? verdicts[jensen.status] : '') + metaHtml(jensen.statement) +
+    '<details><summary>Jensen polynomial and its roots</summary>' +
+    formulaHtml('J_{' + cap + '}(x) = ' + rowPolyTex(jensen.jensen_polynomial)) +
+    '<p class="report-text">' + esc((jensen.roots || []).map(rootEnclosureText).join(', ') || 'no real roots') + '</p></details></div>';
+}
+
 function renderRootDomainSection(rd, names, index) {
   const rank = {certified: 0, transported: 1, theorem: 2, checked: 3, fit: 4, assumption: 5, fail: 6, neutral: 7};
   const claims = (rd.claims || []).slice().sort((a, b) =>
@@ -4008,14 +4056,17 @@ function renderRootDomainSection(rd, names, index) {
     metaHtml(claim.derivation) +
     ((claim.conditional_on || []).length ? '<p class="report-meta">Depends on: ' + esc(claim.conditional_on.join('; ')) + '</p>' : ''));
   if (!claims.length) html += metaHtml('No root-location claims.');
-  const theorem = rd.recurrence_theorem;
-  if (theorem) {
-    html += '<details><summary>Recurrence step: ' + esc(theorem.matched ? 'matches ' + humanizeCode(theorem.theorem).toLowerCase() : 'no match') + '</summary>' +
+  [['Recurrence step', rd.recurrence_theorem], ['Defining rule of Pₙ', rd.source_rule_theorem],
+    ['Certified successor rule of ' + names[0] + 'ₙ', rd.fitted_rule_theorem]].forEach(([title, theorem]) => {
+    if (!theorem) return;
+    html += '<details><summary>' + esc(title) + ': ' +
+      esc(theorem.matched ? 'matches ' + humanizeCode(theorem.theorem).toLowerCase() : 'no match') + '</summary>' +
       (theorem.form ? '<p class="report-text">' + esc(theorem.form) + '</p>' : '') + metaHtml(theorem.statement) +
       listItems(theorem.attempts, attempt => evidenceBadge(attempt.success ? 'completed_recurrence_induction' : 'attempt_failed') +
         esc(intervalText(attempt.interval) + ' (' + humanizeCode(attempt.origin).toLowerCase() + ')') + metaHtml(attempt.detail)) +
       (theorem.reason ? metaHtml(theorem.reason) : '') + '</details>';
-  }
+  });
+  if (rd.jensen_fixed_cap) html += jensenCapHtml(rd.jensen_fixed_cap);
   if ((rd.implications || []).length) {
     html += '<details><summary>Map theorems (' + rd.implications.length + ')</summary>' +
       listItems(rd.implications, imp => '<strong>' + esc(humanizeCode(imp.theorem)) + '</strong> · ' + esc(humanizeCode(imp.direction).toLowerCase()) +
@@ -4049,6 +4100,9 @@ function renderTransformReport(report, index) {
   let html = '<h4>Coordinate change</h4><p class="report-text">' + esc(t.row_map || t.kind) + '</p>' +
     metaHtml('Inverse: ' + (t.inverse || 'none')) +
     metaHtml('Index domain: ' + (t.index_domain || '') + (t.degree_schedule ? '; ' + t.degree_schedule : ''));
+  if (transformVariable(report) === 'z') {
+    html += metaHtml(names[0] + 'ₙ is the gamma polynomial in z = x/(1 + x)², so the transported rule and the rows below use z.');
+  }
   html += '<div class="report-item">' + evidenceBadge(report.reconstruction_verified ? 'checked_supplied_rows' : 'failed_on_rows') +
     esc(report.reconstruction_verified ? 'The inverse reproduces all ' + (report.source_rows || []).length + ' source rows exactly.'
       : 'The inverse did not reproduce every source row.') + '</div>';
@@ -4057,7 +4111,7 @@ function renderTransformReport(report, index) {
   html += '<h4>Transported recurrence</h4>';
   const tr = report.transported;
   if (tr) {
-    html += evidenceBadge(tr.evidence) + ruleFormulaHtml(tr, names[0]) +
+    html += evidenceBadge(tr.evidence) + ruleFormulaHtml(tr, names[0], transformVariable(report)) +
       metaHtml('Holds from index ' + tr.valid_from_index + (tr.valid_to_index != null ? ' to ' + tr.valid_to_index : '') +
         '; checked on ' + tr.checked_targets + ' transformed rows' + (tr.holds_on_transformed_rows ? '.' : ', where it FAILED.'));
     if (tr.scalar) html += '<div class="report-actions">' + reportActionButton('Check interlacing theorems for this recurrence', 'checkReportTheorems(' + index + ",'transported')") + '</div>';
@@ -4070,7 +4124,7 @@ function renderTransformReport(report, index) {
   const search = report.independent_search;
   if (search) {
     html += '<h4>Independent fit in the new coordinates</h4>' + evidenceBadge(search.evidence) +
-      '<span class="report-meta">' + esc(humanizeCode(search.status)) + '</span>' + ruleFormulaHtml(search, names[0]) +
+      '<span class="report-meta">' + esc(humanizeCode(search.status)) + '</span>' + ruleFormulaHtml(search, names[0], transformVariable(report)) +
       metaHtml(search.reason) +
       (search.holds_on_transformed_rows === false ? metaHtml('The fit fails on a transformed row.') : '');
     if (search.scalar) html += '<div class="report-actions">' + reportActionButton('Check interlacing theorems for the fit', 'checkReportTheorems(' + index + ",'fit')") + '</div>';
@@ -4080,7 +4134,8 @@ function renderTransformReport(report, index) {
   const origin = report.row_origin || 0;
   const states = report.transformed_states || [];
   html += rowsTableHtml('Rows', ['P_n'].concat(names.map(n => n + '_n')),
-    (report.source_rows || []).map((row, i) => [row].concat(states[i] || [])), origin);
+    (report.source_rows || []).map((row, i) => [row].concat(states[i] || [])), origin, undefined,
+    ['x'].concat(names.map(() => transformVariable(report))));
   html += '<div class="report-actions">' +
     (report.source_rule ? reportActionButton('Check theorems for the source recurrence', 'checkReportTheorems(' + index + ",'source')") : '') +
     reportActionButton('Exact roots of the source rows', 'isolateReportRows(' + index + ",'source')") +
@@ -4134,6 +4189,7 @@ function renderImplicitReport(report, index) {
       (search.relation ? formulaHtml(ruleTextTex(search.relation.text)) : '') + metaHtml(search.reason);
     if (search.scalar) html += '<div class="report-actions">' + reportActionButton('Check interlacing theorems for the fit', 'checkReportTheorems(' + index + ",'fit')") + '</div>';
   }
+  if (report.root_domain) html += renderRootDomainSection(report.root_domain, ['Q'], index);
   const origin = report.row_origin || 0;
   const transformed = report.transformed_rows || [];
   html += rowsTableHtml('Rows', ['P_n', 'Q_n'], (report.source_rows || []).map((row, i) => [row, transformed[i] || []]), origin);
@@ -4524,7 +4580,7 @@ const TRANSFORM_KIND_HELP = {
   multiply_power: 'Qₙ = xʳ Pₙ.',
   divide_power: 'Qₙ = Pₙ/xʳ; every row must be divisible by xʳ.',
   symmetric_decomposition: 'Pₙ = aₙ + x bₙ with aₙ, bₙ symmetric; the recurrence becomes a two-component system.',
-  gamma: 'Gamma coordinates of symmetric rows; the recurrence is not transported, so only the rows and a fit are reported.',
+  gamma: 'Pₙ = Σᵢ Qₙ,ᵢ xⁱ(1 + x)^(dₙ−2i) for symmetric rows, so Qₙ is a polynomial in z = x/(1 + x)². The recurrence is transported when its symmetric and antisymmetric parts are proportional (Eulerian, Narayana, type B Eulerian); otherwise the reason is shown and only the rows and a fit are reported.',
   diagonal: 'Qₙ has the coefficient of xᵏ multiplied by λ(k); the recurrence becomes an implicit relation.',
   derivative_antecedent: 'Qₙ with Pₙ = Dᵐ(g Qₙ)/m!, m = deg g; the recurrence becomes an implicit relation.',
 };
@@ -4569,7 +4625,7 @@ const REPRESENTATION_MAPS = [
     build: o => ({kind: 'reversal', schedule: o.schedule})},
   {id: 'symmetric_decomposition', label: 'Symmetric decomposition · P = a + x b',
     build: o => ({kind: 'symmetric_decomposition', schedule: o.schedule})},
-  {id: 'gamma', label: 'Gamma coordinates (rows only)', build: o => ({kind: 'gamma', schedule: o.schedule})},
+  {id: 'gamma', label: 'Gamma coordinates · P = Σ Qᵢ xⁱ(1+x)^(d−2i)', build: o => ({kind: 'gamma', schedule: o.schedule})},
   {id: 'shift', label: 'Substitute x ↦ x + 1', build: () => ({kind: 'affine', a: '1', b: '1'})},
   {id: 'negate', label: 'Substitute x ↦ −x', build: () => ({kind: 'affine', a: '-1', b: '0'})},
   {id: 'multiply_x', label: 'Multiply by x', build: () => ({kind: 'multiply_power', power: 1})},
@@ -4642,13 +4698,29 @@ function buildTransformation(kind) {
   throw new Error('Unknown transformation.');
 }
 
+// An interval end: a rational, or an affine function of the index n such as -1-n, n/2 or 1/2+3n/2.
+function readTransformEndpoint(id) {
+  const text = String(document.getElementById(id).value).trim().replace(/−/g, '-').replace(/\s+/g, '').replace(/\*/g, '');
+  if (!text) return null;
+  const constant = /^(-?\d+(?:\/[1-9]\d*)?)$/.exec(text);
+  if (constant) return {value: constant[1]};
+  // [constant] [+|-] [integer] n [/ denominator]: -1-n, n/2, 1/2+3n/2.
+  const affine = /^(?:(-?\d+(?:\/[1-9]\d*)?)(?=[+-]))?([+-]?)(\d+)?n(?:\/([1-9]\d*))?$/.exec(text);
+  if (affine) {
+    return {value: affine[1] || '0',
+      per_index: (affine[2] === '-' ? '-' : '') + (affine[3] || '1') + (affine[4] ? '/' + affine[4] : '')};
+  }
+  throw new Error('Enter an interval end as a rational number or a linear function of n, such as -1, 3/2, -1-n or n/2, for ' +
+    document.querySelector('label[for="' + id + '"]').textContent.trim().toLowerCase() + '.');
+}
+
 function transformCandidateInterval() {
-  const lower = readTransformRational('transformIntervalLower', true);
-  const upper = readTransformRational('transformIntervalUpper', true);
+  const lower = readTransformEndpoint('transformIntervalLower');
+  const upper = readTransformEndpoint('transformIntervalUpper');
   if (lower === null && upper === null) return null;
   const interval = {};
-  if (lower !== null) interval.lower = {value: lower};
-  if (upper !== null) interval.upper = {value: upper};
+  if (lower !== null) interval.lower = lower;
+  if (upper !== null) interval.upper = upper;
   return interval;
 }
 
@@ -4693,7 +4765,7 @@ function buildTransformRequest() {
   }
   request.transformation = buildTransformation(kind);
   if (document.getElementById('transformSearch').checked) request.search = {};
-  if (endpoint === 'transform' && document.getElementById('transformRootDomain').checked) {
+  if (document.getElementById('transformRootDomain').checked) {
     const interval = transformCandidateInterval();
     request.root_domain = interval ? {candidate_intervals: [interval]} : {};
   }
@@ -4705,7 +4777,11 @@ function transformExample(name) {
     'eulerian-f': {source: 'oeis', oeis: 'A008292', rows: 8, kind: 'f_polynomial', schedule: [1, 0, 1], search: true, roots: true},
     'eulerian-symmetric': {source: 'oeis', oeis: 'A008292', rows: 8, kind: 'symmetric_decomposition', schedule: [1, 0, 1], search: false, roots: true},
     'narayana-reversal': {source: 'oeis', oeis: 'A001263', rows: 8, kind: 'reversal', schedule: [1, 0, 1], search: true, roots: true},
+    'eulerian-gamma': {source: 'oeis', oeis: 'A008292', rows: 8, kind: 'gamma', schedule: [1, 0, 1], search: true, roots: true},
+    'eulerian-growing': {source: 'oeis', oeis: 'A008292', rows: 8, kind: 'f_polynomial', schedule: [1, 0, 1], search: false, roots: true,
+      interval: ['-1-n', '0']},
     'binomial-factorial': {source: 'oeis', oeis: 'A007318', rows: 8, kind: 'diagonal', weight: ['factorial_power', 1], search: true, roots: false},
+    'binomial-factorial-roots': {source: 'oeis', oeis: 'A007318', rows: 8, kind: 'diagonal', weight: ['factorial_power', 1], search: false, roots: true},
     'weighted-eulerian': {source: 'oeis', oeis: 'A065826', rows: 9, kind: 'diagonal', weight: ['inverse_binomial', 1], search: true, roots: false},
     'search-pascal': {mode: 'search', source: 'oeis', oeis: 'A007318', rows: 10, maps: ['diag_fact'], schedule: [0, 0, 1],
       depth: 1, representations: 8},
@@ -4751,8 +4827,8 @@ function loadTransformExample(name) {
     document.getElementById('transformSearch').checked = example.search;
     document.getElementById('transformRootDomain').checked = example.roots;
   }
-  set('transformIntervalLower', '');
-  set('transformIntervalUpper', '');
+  set('transformIntervalLower', example.interval ? example.interval[0] : '');
+  set('transformIntervalUpper', example.interval ? example.interval[1] : '');
   transformControlsChanged();
   setStatus('Example loaded. Press Transform.');
 }
@@ -4795,9 +4871,7 @@ function updateTransformControls() {
   document.getElementById('transformRowCountField').hidden = source === 'rows';
   document.getElementById('transformOriginField').hidden = source !== 'rows';
   const rootBox = document.getElementById('transformRootDomain');
-  rootBox.disabled = endpoint === 'implicit';
-  document.getElementById('transformRootDomainLabel').hidden = endpoint === 'implicit';
-  document.getElementById('transformIntervalFields').hidden = !(rootBox.checked && endpoint === 'transform');
+  document.getElementById('transformIntervalFields').hidden = !rootBox.checked;
   document.getElementById('transformKindHelp').textContent = TRANSFORM_KIND_HELP[kind] || '';
   const id = String(transformValue('transformOeis')).trim().toUpperCase();
   const entry = transformCatalog && transformCatalog.find(item => item.id === id);
@@ -5030,7 +5104,10 @@ function isolateReportRows(index, which) {
   const request = {polynomials: rows, first_index: report.row_origin || 0};
   try {
     const interval = transformCandidateInterval();
-    if (interval) request.interval = interval;
+    // Root enclosures take fixed endpoints; an index-dependent candidate interval is not applied to them.
+    if (interval && !(interval.lower && interval.lower.per_index) && !(interval.upper && interval.upper.per_index)) {
+      request.interval = interval;
+    }
   } catch (_) {}
   addTransformSubReport('root_enclosures', JSON.stringify(request),
     'Exact roots of the ' + (which === 'source' ? 'source' : 'transformed') + ' rows', 'Isolating roots');
