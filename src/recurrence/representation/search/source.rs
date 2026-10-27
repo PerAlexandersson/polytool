@@ -18,7 +18,7 @@ pub(super) fn validate(request: &RepresentationSearchRequest) -> Result<(), Recu
     }
     for (i, t) in request.transformations.iter().enumerate() {
         t.validate()
-            .map_err(|e| RecurrenceError::InvalidInput(format!("transformations[{i}]: {e}")))?;
+            .map_err(|e| RecurrenceError::from(e).with_context(format!("transformations[{i}]")))?;
     }
     let bounds = &request.search;
     let degree = [
@@ -53,7 +53,7 @@ pub(super) fn validate(request: &RepresentationSearchRequest) -> Result<(), Recu
         root.validate()?;
     }
     if request.space_shapes.len() > limits.max_space_shapes {
-        return Err(RecurrenceError::InvalidInput(
+        return Err(RecurrenceError::LimitExceeded(
             "more space_shapes than max_space_shapes".into(),
         ));
     }

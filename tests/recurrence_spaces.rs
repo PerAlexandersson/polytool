@@ -587,3 +587,47 @@ fn indexed_zero_order_and_original_origin_are_checked() {
         vec![vec!["2"], vec!["16"], vec!["144"]]
     );
 }
+
+#[test]
+fn tampered_kernel_certificates_are_verification_failures() {
+    let req = request(
+        json!({"coefficients":[["2"]],"seeds":[["1"]]}),
+        json!([box_shape(1, 0, 0, 0)]),
+    );
+    let report = run(&req);
+    let reject = |mutate: &dyn Fn(&mut RecurrenceSpaceCertificate)| {
+        let mut bad = report.clone();
+        mutate(bad.results[0].certificate.as_mut().unwrap());
+        verify_recurrence_spaces(&req, &bad).unwrap_err()
+    };
+    for (what, error) in [
+        ("null vector", reject(&|c| c.basis[0][0] = "999".into())),
+        (
+            "rank minor inverse",
+            reject(&|c| c.inverse_minor[0][0] = "0".into()),
+        ),
+        ("kernel dimensions", reject(&|c| c.free_columns.clear())),
+    ] {
+        assert!(
+            matches!(error, RecurrenceError::VerificationFailed(_)),
+            "{what}: {error:?}"
+        );
+    }
+}
+
+#[test]
+fn certificate_verification_budget_is_not_a_failed_verification() {
+    // With 256 operations the search succeeds, but replaying its certificate needs
+    // more arithmetic: the budget is reported, not a mismatch.
+    let mut req = request(
+        json!({"coefficients":[["0","1"]],"seeds":[["1"]]}),
+        json!([box_shape(1, 1, 1, 1)]),
+    );
+    req.limits.max_operations = 256;
+    let report = find_recurrence_spaces(&req).unwrap();
+    assert_eq!(report.results[0].status, "successor_exists");
+    assert!(matches!(
+        verify_recurrence_spaces(&req, &report).unwrap_err(),
+        RecurrenceError::BudgetExhausted(_)
+    ));
+}

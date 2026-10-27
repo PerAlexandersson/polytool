@@ -83,6 +83,16 @@ fn nonintegral_ehrhart_conversion_is_a_clean_error() {
 }
 
 #[test]
+fn enormous_hstar_dimension_is_refused_before_any_allocation() {
+    for dimension in ["4097", "1099511627776", "18446744073709551615"] {
+        let output = run_polytool(&["hstar-inequalities", "--dimension", dimension], "1,0,1\n");
+        assert!(output.stdout.is_empty(), "{dimension}");
+        let stderr = String::from_utf8(output.stderr).expect("stderr is utf8");
+        assert!(stderr.contains("exceeds the maximum 4096"), "{stderr}");
+    }
+}
+
+#[test]
 fn explicit_hstar_dimension_reports_degree_violation() {
     let output = run_polytool(
         &["hstar-inequalities", "--dimension", "1", "--json"],

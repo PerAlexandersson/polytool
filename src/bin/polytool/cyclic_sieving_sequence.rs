@@ -165,12 +165,18 @@ pub(crate) fn cmd_cyclic_sieving_sequence(args: &[String]) {
         .into_iter()
         .map(|coeffs| strip_trailing_zeros_bigint(&coeffs).to_vec())
         .collect::<Vec<_>>();
-    let reports = cyclic_sieving_sequence_reports_bigint(
+    let reports = match cyclic_sieving_sequence_reports_bigint(
         &polynomials,
         options.first_index,
         &options.offsets,
         &options.fixed_counts,
-    );
+    ) {
+        Ok(reports) => reports,
+        Err(error) => {
+            eprintln!("{error}");
+            return;
+        }
+    };
     if options.format == OutputFormat::Json {
         let items = reports
             .iter()

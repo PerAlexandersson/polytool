@@ -9,6 +9,11 @@ use wasm_bindgen::prelude::*;
 
 mod transforms;
 
+/// The `Display` text of an error, for the exports' `Result<_, String>` plumbing.
+fn error_text<E: std::fmt::Display>(error: E) -> String {
+    error.to_string()
+}
+
 // ---------------------------------------------------------------------------
 // Result types (serialized to JSON)
 // ---------------------------------------------------------------------------
@@ -193,7 +198,7 @@ fn recurrence_json_output(
 fn parse_input(input: &str) -> Vec<Result<Vec<BigInt>, String>> {
     parse_polynomials_bigint(input)
         .into_iter()
-        .map(|result| result.map_err(|error| error.to_string()))
+        .map(|result| result.map_err(error_text))
         .collect()
 }
 
@@ -521,15 +526,15 @@ pub fn find_recurrence_spaces(request_json: &str) -> String {
             return Err("recurrence-space request exceeds 1 MiB".into());
         }
         let request: polytool::recurrence::RecurrenceSpaceRequest =
-            serde_json::from_str(request_json).map_err(|e| e.to_string())?;
+            serde_json::from_str(request_json).map_err(error_text)?;
         request
             .limits
             .check_ceiling(&Default::default())
-            .map_err(|e| e.to_string())?;
+            .map_err(error_text)?;
         serde_json::to_value(
-            polytool::recurrence::find_recurrence_spaces(&request).map_err(|e| e.to_string())?,
+            polytool::recurrence::find_recurrence_spaces(&request).map_err(error_text)?,
         )
-        .map_err(|e| e.to_string())
+        .map_err(error_text)
     };
     match run() {
         Ok(value) => value.to_string(),
@@ -545,14 +550,14 @@ pub fn verify_recurrence_spaces(report_json: &str) -> String {
             return Err("recurrence-space report exceeds 1 MiB".into());
         }
         let report: polytool::recurrence::RecurrenceSpaces =
-            serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+            serde_json::from_str(report_json).map_err(error_text)?;
         report
             .request
             .limits
             .check_ceiling(&Default::default())
-            .map_err(|e| e.to_string())?;
+            .map_err(error_text)?;
         polytool::recurrence::verify_recurrence_spaces(&report.request, &report)
-            .map_err(|e| e.to_string())?;
+            .map_err(error_text)?;
         Ok(
             serde_json::json!({"verified_completed_claims":true,"incomplete_shapes":report.results.iter().filter(|r|r.certificate.is_none()).count()}),
         )

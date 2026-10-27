@@ -200,3 +200,67 @@ fn from_oeis_request_equals_the_json_request_and_finds_the_pascal_rule() {
     assert_eq!(node.states[3][0], vec!["1", "3", "3/2", "1/6"]);
     assert!(node.reconstruction_verified);
 }
+
+fn decoded_states(node: &RepresentationNode) -> Vec<Vec<Vec<Q>>> {
+    node.states
+        .iter()
+        .map(|state| {
+            state
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|c| parse_rational_coeff(c).unwrap())
+                        .collect()
+                })
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn vector_description_replay_failures_are_verification_failures() {
+    let schedule = serde_json::json!({"first_index": 1, "first_degree": 1, "step": 1});
+    let request: RepresentationSearchRequest = serde_json::from_value(serde_json::json!({
+        "oeis_id": "A008292",
+        "row_count": 6,
+        "transformations": [{"kind": "symmetric_decomposition", "schedule": schedule}],
+        "limits": {"max_depth": 1}
+    }))
+    .unwrap();
+    let report = search_representations(&request).unwrap();
+    let node = report
+        .representations
+        .iter()
+        .find(|n| n.chain == [0])
+        .unwrap();
+    let item = &node.descriptions[0];
+    let states = decoded_states(node);
+    let origin = node.row_origin;
+    check_vector_description(item, &states, origin, "label").unwrap();
+
+    // Each way the replay can disagree with the rows is a failed verification.
+    let failed = |item: &RepresentationDescription, states: &[Vec<Vec<Q>>], needle: &str| {
+        let error = check_vector_description(item, states, origin, "label").unwrap_err();
+        assert!(
+            matches!(&error, RecurrenceError::VerificationFailed(message)
+                if message.contains(needle)),
+            "{error:?}"
+        );
+    };
+    let mut changed = item.clone();
+    changed.vector.as_mut().unwrap().initial_state[0][0] = "7".into();
+    failed(&changed, &states, "the initial state differs from the rows");
+    let mut changed = item.clone();
+    changed.vector.as_mut().unwrap().first_index = origin + states.len();
+    failed(&changed, &states, "the system starts outside the rows");
+    let mut shifted = states.clone();
+    let last = shifted.len() - 1;
+    shifted[last][0][0] += q(1);
+    failed(item, &shifted, "the system fails at n");
+    let mut changed = item.clone();
+    changed.vector_assessment = None;
+    failed(&changed, &states, "the vector assessment does not replay");
+    let mut changed = item.clone();
+    changed.evidence = FINITE_FIT_EVIDENCE.into();
+    failed(&changed, &states, "the label does not match the assessment");
+}

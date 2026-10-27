@@ -29,7 +29,9 @@
 //! [`reduce_modulo_cyclic_bigint`] and [`root_of_unity_evaluation_bigint`]
 //! panic on a zero order.  A full report reduces `P` once per divisor of the
 //! group order and its size is linear in the order (one evaluation per
-//! power); [`bicyclic_sieving_report_bigint`] enforces
+//! power), so [`cyclic_sieving_report_bigint`] and
+//! [`cyclic_sieving_sequence_reports_bigint`] reject orders above
+//! [`CYCLIC_SIEVING_MAX_ORDER`]; [`bicyclic_sieving_report_bigint`] enforces
 //! [`BICYCLIC_MAX_GROUP_SIZE`].
 
 use crate::vec_poly::{degree, is_zero, strip_trailing_zeros};
@@ -37,6 +39,14 @@ use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Zero};
 use std::collections::BTreeMap;
+
+/// Largest cyclic group order accepted by [`cyclic_sieving_report_bigint`] and
+/// [`cyclic_sieving_sequence_reports_bigint`] (one million).
+///
+/// A report holds one evaluation per power of the generator, so its size is
+/// linear in the order; larger orders are rejected with
+/// [`CyclicSievingError::OrderTooLarge`] instead of being allocated.
+pub const CYCLIC_SIEVING_MAX_ORDER: usize = 1_000_000;
 
 /// Invalid input to a cyclic or bicyclic sieving function.
 ///
@@ -100,6 +110,21 @@ pub enum CyclicSievingError {
         /// The element count `S_k`, not divisible by `k`.
         element_count: BigInt,
     },
+    /// A group order exceeds [`CYCLIC_SIEVING_MAX_ORDER`].
+    OrderTooLarge {
+        /// The offending order (a sequence candidate order `index + offset` may
+        /// exceed `usize`, hence `u128`).
+        order: u128,
+        /// The supported maximum, [`CYCLIC_SIEVING_MAX_ORDER`].
+        maximum: usize,
+    },
+    /// In a sequence scan, `first_index + row` does not fit in `isize`.
+    SequenceIndexOverflow {
+        /// The requested index of row 0.
+        first_index: isize,
+        /// The first row whose index overflows.
+        row: usize,
+    },
     /// `order1 * order2` exceeds [`BICYCLIC_MAX_GROUP_SIZE`].
     BicyclicGroupTooLarge {
         /// The order of the first cyclic factor.
@@ -159,6 +184,14 @@ impl std::fmt::Display for CyclicSievingError {
                 f,
                 "fixed-point counts are not those of a C_{order}-action: \
                  S_{orbit_size} = {element_count} is not divisible by {orbit_size}"
+            ),
+            Self::OrderTooLarge { order, maximum } => write!(
+                f,
+                "cyclic group order {order} exceeds the supported maximum {maximum}"
+            ),
+            Self::SequenceIndexOverflow { first_index, row } => write!(
+                f,
+                "sequence index overflows: first index {first_index} plus row {row}"
             ),
             Self::BicyclicGroupTooLarge { order1, order2 } => write!(
                 f,
@@ -405,6 +438,11 @@ fn evaluate_at_root_order(
 /// `fixed_counts`, when given, must have exactly `order` entries with entry `d`
 /// equal to `fix(g^d)`; otherwise (or for `order == 0`) an `Err` message is
 /// returned.  The CSP holds iff `P(zeta_order^d) = fix(g^d)` for every `d`.
+///
+/// # Errors
+///
+/// [`CyclicSievingError::OrderTooLarge`] when `order` exceeds
+/// [`CYCLIC_SIEVING_MAX_ORDER`] (checked before anything is allocated).
 pub fn cyclic_sieving_report_bigint(
     coeffs: &[BigInt],
     order: usize,
@@ -412,6 +450,12 @@ pub fn cyclic_sieving_report_bigint(
 ) -> Result<CyclicSievingReport, CyclicSievingError> {
     if order == 0 {
         return Err(CyclicSievingError::NonpositiveOrder);
+    }
+    if order > CYCLIC_SIEVING_MAX_ORDER {
+        return Err(CyclicSievingError::OrderTooLarge {
+            order: order as u128,
+            maximum: CYCLIC_SIEVING_MAX_ORDER,
+        });
     }
     if let Some(counts) = fixed_counts {
         if counts.len() != order {
@@ -474,28 +518,49 @@ pub fn cyclic_sieving_report_bigint(
 /// are skipped.  `fixed_counts` maps `(index, order)` to the fixed-point table
 /// `fix(g^d)`, `d = 0..order-1`; a missing key gives a profile-only report.
 /// A table of the wrong length makes that candidate order be omitted from
-/// `candidate_orders` (no error is reported), as does a candidate order that
-/// does not fit in `isize`.
+/// `candidate_orders` (no error is reported).
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if `first_index + row` overflows `isize` for some row.
+/// The whole scan is validated before any report is built:
+/// [`CyclicSievingError::SequenceIndexOverflow`] when `first_index + row` does
+/// not fit in `isize` for some row, and [`CyclicSievingError::OrderTooLarge`]
+/// when a positive candidate order `index + offset` (computed without overflow)
+/// exceeds [`CYCLIC_SIEVING_MAX_ORDER`].
 pub fn cyclic_sieving_sequence_reports_bigint(
     polynomials: &[Vec<BigInt>],
     first_index: isize,
     offsets: &[isize],
     fixed_counts: &BTreeMap<(isize, usize), Vec<BigInt>>,
-) -> Vec<CyclicSievingSequenceItem> {
-    polynomials
-        .iter()
-        .enumerate()
-        .map(|(row, coeffs)| {
-            let index = isize::try_from(row)
+) -> Result<Vec<CyclicSievingSequenceItem>, CyclicSievingError> {
+    let mut indices = Vec::with_capacity(polynomials.len());
+    for row in 0..polynomials.len() {
+        indices.push(
+            isize::try_from(row)
                 .ok()
                 .and_then(|row| first_index.checked_add(row))
-                .expect("sequence index overflows isize");
+                .ok_or(CyclicSievingError::SequenceIndexOverflow { first_index, row })?,
+        );
+    }
+    for &index in &indices {
+        for &offset in offsets {
+            let order = index as i128 + offset as i128;
+            if order > CYCLIC_SIEVING_MAX_ORDER as i128 {
+                return Err(CyclicSievingError::OrderTooLarge {
+                    order: order as u128,
+                    maximum: CYCLIC_SIEVING_MAX_ORDER,
+                });
+            }
+        }
+    }
+    Ok(polynomials
+        .iter()
+        .zip(indices)
+        .enumerate()
+        .map(|(row, (coeffs, index))| {
             let mut candidate_orders = Vec::new();
             for &offset in offsets {
+                // `None` only for a negative overflow, i.e. a non-positive order.
                 let Some(order_index) = index.checked_add(offset) else {
                     continue;
                 };
@@ -517,7 +582,7 @@ pub fn cyclic_sieving_sequence_reports_bigint(
                 candidate_orders,
             }
         })
-        .collect()
+        .collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -1752,17 +1817,80 @@ mod tests {
     }
 
     #[test]
-    fn sequence_reports_skip_candidate_orders_that_overflow() {
+    fn sequence_reports_reject_overflowing_and_oversized_candidate_orders() {
         let polynomials = vec![vec![BigInt::from(1), BigInt::from(1)]];
-        let items = cyclic_sieving_sequence_reports_bigint(
+        // A candidate order that does not fit in `isize` is an error, not a skip.
+        let overflow = cyclic_sieving_sequence_reports_bigint(
             &polynomials,
             1,
             &[isize::MAX, 1],
             &BTreeMap::new(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            overflow,
+            CyclicSievingError::OrderTooLarge {
+                order: isize::MAX as u128 + 1,
+                maximum: CYCLIC_SIEVING_MAX_ORDER
+            }
         );
+        // So is one that fits but is far beyond the supported maximum.
+        let huge = (CYCLIC_SIEVING_MAX_ORDER as isize) + 1;
+        let oversized =
+            cyclic_sieving_sequence_reports_bigint(&polynomials, 0, &[huge], &BTreeMap::new())
+                .unwrap_err();
+        assert_eq!(
+            oversized,
+            CyclicSievingError::OrderTooLarge {
+                order: huge as u128,
+                maximum: CYCLIC_SIEVING_MAX_ORDER
+            }
+        );
+        assert!(oversized
+            .to_string()
+            .contains("exceeds the supported maximum"));
+        // Non-positive candidate orders are still skipped, and small ones work.
+        let items =
+            cyclic_sieving_sequence_reports_bigint(&polynomials, 1, &[-5, 1], &BTreeMap::new())
+                .unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].index, 1);
         assert_eq!(items[0].candidate_orders.len(), 1);
         assert_eq!(items[0].candidate_orders[0].order, 2);
+    }
+
+    #[test]
+    fn sequence_reports_reject_an_index_that_overflows() {
+        let polynomials = vec![vec![BigInt::from(1)]; 2];
+        let error = cyclic_sieving_sequence_reports_bigint(
+            &polynomials,
+            isize::MAX,
+            &[0],
+            &BTreeMap::new(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            CyclicSievingError::SequenceIndexOverflow {
+                first_index: isize::MAX,
+                row: 1
+            }
+        );
+        assert!(error.to_string().contains("overflows"));
+    }
+
+    #[test]
+    fn report_rejects_an_order_beyond_the_maximum_without_allocating() {
+        let p = vec![BigInt::from(1)];
+        for order in [CYCLIC_SIEVING_MAX_ORDER + 1, usize::MAX / 2, usize::MAX] {
+            assert_eq!(
+                cyclic_sieving_report_bigint(&p, order, None).unwrap_err(),
+                CyclicSievingError::OrderTooLarge {
+                    order: order as u128,
+                    maximum: CYCLIC_SIEVING_MAX_ORDER
+                }
+            );
+        }
+        assert!(cyclic_sieving_report_bigint(&p, CYCLIC_SIEVING_MAX_ORDER, Some(&[])).is_err());
     }
 }

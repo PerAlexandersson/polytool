@@ -134,7 +134,7 @@ pub(crate) fn check_family_lace(
         .unwrap_or_else(|| polynomials.len().max(1));
     let block_cols = request
         .block_cols
-        .unwrap_or_else(|| block_rows + max_degree + 1);
+        .unwrap_or_else(|| block_rows.saturating_add(max_degree).saturating_add(1));
     let rows = match polynomials.len().checked_mul(block_rows) {
         Some(rows) => rows,
         None => {
@@ -153,16 +153,23 @@ pub(crate) fn check_family_lace(
     let max_minor_size = request
         .max_minor_size
         .unwrap_or_else(|| rows.min(block_cols).min(4));
+    // Each dimension is bounded on its own: the product bound alone lets
+    // `block_cols = 0` through for any number of rows.
     let cells = rows.checked_mul(block_cols);
-    let minor_count =
-        (1..=max_minor_size.min(rows).min(block_cols)).try_fold(0usize, |total, size| {
-            binomial_capped(rows, size, MCP_MAX_LACE_MINORS)
-                .checked_mul(binomial_capped(block_cols, size, MCP_MAX_LACE_MINORS))
-                .and_then(|count| total.checked_add(count))
-        });
-    if cells.is_none_or(|cells| cells > MCP_MAX_LACE_MATRIX_CELLS)
-        || minor_count.is_none_or(|count| count > MCP_MAX_LACE_MINORS)
-    {
+    let within_cells = rows <= MCP_MAX_LACE_MATRIX_CELLS
+        && block_cols <= MCP_MAX_LACE_MATRIX_CELLS
+        && cells.is_some_and(|cells| cells <= MCP_MAX_LACE_MATRIX_CELLS);
+    // Evaluated only for a matrix within the cell bound, so the number of sizes
+    // summed over is small.
+    let within_minors = within_cells
+        && (1..=max_minor_size.min(rows).min(block_cols))
+            .try_fold(0usize, |total, size| {
+                binomial_capped(rows, size, MCP_MAX_LACE_MINORS)
+                    .checked_mul(binomial_capped(block_cols, size, MCP_MAX_LACE_MINORS))
+                    .and_then(|count| total.checked_add(count))
+            })
+            .is_some_and(|count| count <= MCP_MAX_LACE_MINORS);
+    if !within_cells || !within_minors {
         return LaceCheckResponse {
             block_rows,
             block_cols,

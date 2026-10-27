@@ -179,7 +179,7 @@ pub(super) fn chain_offsets(chain: &[&RecurrenceTransformation]) -> Vec<Vec<i64>
 }
 
 fn parse(text: &str, name: &str) -> Result<Q, RecurrenceError> {
-    parse_rational_coeff(text).map_err(|e| RecurrenceError::InvalidInput(format!("{name}: {e}")))
+    parse_rational_coeff(text).map_err(|e| RecurrenceError::from(e).with_context(name))
 }
 
 fn checked_exponent(value: Option<i128>) -> Result<i128, RecurrenceError> {
@@ -550,10 +550,8 @@ pub(super) fn apply_chain(
             next.push(
                 t.map_state(origin + i, state, &offsets[step])
                     .map_err(|e| {
-                        RecurrenceError::InvalidInput(format!(
-                            "map {step} ({}): {e}",
-                            t.kind_name()
-                        ))
+                        RecurrenceError::from(e)
+                            .with_context(format!("map {step} ({})", t.kind_name()))
                     })?,
             );
         }
@@ -605,10 +603,8 @@ pub(super) fn invert_chain_with_lost_data(
                 })
                 .transpose()?;
             let error = |e: TransformError| {
-                RecurrenceError::InvalidInput(format!(
-                    "inverse of map {step} ({}): {e}",
-                    t.kind_name()
-                ))
+                RecurrenceError::from(e)
+                    .with_context(format!("inverse of map {step} ({})", t.kind_name()))
             };
             if offsets[step].len() > 1 {
                 if lost_row.is_some() {
@@ -662,7 +658,7 @@ pub(super) fn chain_lost_data(
             })?;
             let data = t
                 .lost_data(origin + i, row)
-                .map_err(|e| RecurrenceError::InvalidInput(format!("map {position}: {e}")))?
+                .map_err(|e| RecurrenceError::from(e).with_context(format!("map {position}")))?
                 .unwrap_or_default();
             lost.push(crate::recurrence::implicit::encode_poly(&data));
         }

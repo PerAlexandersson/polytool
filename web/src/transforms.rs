@@ -17,6 +17,7 @@
 //! of root enclosures at `2^-256`.  The page runs these exports in a Web
 //! Worker that the user can cancel.
 
+use crate::error_text;
 use num_bigint::BigInt;
 use polytool::recurrence::{
     ImplicitTransformReport, RecurrenceJson, RecurrenceTransformReport, RecurrenceTransformRequest,
@@ -54,7 +55,7 @@ fn bounded(json: &str, what: &str) -> Result<(), String> {
 }
 
 fn to_value(value: impl serde::Serialize) -> Result<serde_json::Value, String> {
-    serde_json::to_value(value).map_err(|e| e.to_string())
+    serde_json::to_value(value).map_err(error_text)
 }
 
 fn check_schema(found: &str, expected: &str) -> Result<(), String> {
@@ -67,13 +68,13 @@ fn check_schema(found: &str, expected: &str) -> Result<(), String> {
 fn check_search_limits(limits: &RepresentationSearchLimits) -> Result<(), String> {
     limits
         .check_ceiling(&RepresentationSearchLimits::service_ceiling())
-        .map_err(|e| e.to_string())
+        .map_err(error_text)
 }
 
 fn check_limits(limits: &TransformLimits) -> Result<(), String> {
     limits
         .check_ceiling(&TransformLimits::default())
-        .map_err(|e| e.to_string())
+        .map_err(error_text)
 }
 
 /// Reject refinement widths below `2^-MAX_WIDTH_BITS`; the library rejects
@@ -82,7 +83,7 @@ fn check_enclosure_request(request: &RootEnclosureRequest) -> Result<(), String>
     let Some(width) = &request.max_width else {
         return Ok(());
     };
-    let width = polytool::recurrence::parse_rational_coeff(width).map_err(|e| e.to_string())?;
+    let width = polytool::recurrence::parse_rational_coeff(width).map_err(error_text)?;
     let numerator: BigInt = width.numer().clone();
     if numerator > BigInt::from(0) && width.denom().bits() > numerator.bits() + MAX_WIDTH_BITS {
         return Err(format!(
@@ -115,19 +116,19 @@ pub fn transform_recurrence(request_json: &str) -> String {
     respond(|| {
         bounded(request_json, "recurrence-transform request")?;
         let request: RecurrenceTransformRequest =
-            serde_json::from_str(request_json).map_err(|e| e.to_string())?;
+            serde_json::from_str(request_json).map_err(error_text)?;
         check_limits(&request.limits)?;
-        to_value(polytool::recurrence::transform_recurrence(&request).map_err(|e| e.to_string())?)
+        to_value(polytool::recurrence::transform_recurrence(&request).map_err(error_text)?)
     })
 }
 
 fn verify_transform_value(report_json: &str) -> Result<serde_json::Value, String> {
     bounded(report_json, "recurrence-transform report")?;
     let report: RecurrenceTransformReport =
-        serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+        serde_json::from_str(report_json).map_err(error_text)?;
     check_schema(&report.schema, TRANSFORM_SCHEMA)?;
     check_limits(&report.request.limits)?;
-    polytool::recurrence::verify_recurrence_transform(&report).map_err(|e| e.to_string())?;
+    polytool::recurrence::verify_recurrence_transform(&report).map_err(error_text)?;
     Ok(serde_json::json!({
         "schema": TRANSFORM_SCHEMA,
         "verified": true,
@@ -153,28 +154,26 @@ pub fn verify_recurrence_transform(report_json: &str) -> String {
 pub fn transform_recurrence_implicit(request_json: &str) -> String {
     respond(|| {
         bounded(request_json, "recurrence-implicit request")?;
-        let value: serde_json::Value =
-            serde_json::from_str(request_json).map_err(|e| e.to_string())?;
-        let (request, root_domain) = polytool::recurrence::parse_implicit_transform_input(value)
-            .map_err(|e| e.to_string())?;
+        let value: serde_json::Value = serde_json::from_str(request_json).map_err(error_text)?;
+        let (request, root_domain) =
+            polytool::recurrence::parse_implicit_transform_input(value).map_err(error_text)?;
         check_limits(&request.limits)?;
         to_value(
             polytool::recurrence::implicit_transform_recurrence_with_root_domain(
                 &request,
                 root_domain.as_ref(),
             )
-            .map_err(|e| e.to_string())?,
+            .map_err(error_text)?,
         )
     })
 }
 
 fn verify_implicit_value(report_json: &str) -> Result<serde_json::Value, String> {
     bounded(report_json, "recurrence-implicit report")?;
-    let report: ImplicitTransformReport =
-        serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+    let report: ImplicitTransformReport = serde_json::from_str(report_json).map_err(error_text)?;
     check_schema(&report.schema, IMPLICIT_SCHEMA)?;
     check_limits(&report.request.limits)?;
-    polytool::recurrence::verify_recurrence_implicit(&report).map_err(|e| e.to_string())?;
+    polytool::recurrence::verify_recurrence_implicit(&report).map_err(error_text)?;
     Ok(serde_json::json!({
         "schema": IMPLICIT_SCHEMA,
         "verified": true,
@@ -198,20 +197,18 @@ pub fn root_enclosures(request_json: &str) -> String {
     respond(|| {
         bounded(request_json, "root-enclosures request")?;
         let request: RootEnclosureRequest =
-            serde_json::from_str(request_json).map_err(|e| e.to_string())?;
+            serde_json::from_str(request_json).map_err(error_text)?;
         check_enclosure_request(&request)?;
-        to_value(polytool::recurrence::root_enclosures(&request).map_err(|e| e.to_string())?)
+        to_value(polytool::recurrence::root_enclosures(&request).map_err(error_text)?)
     })
 }
 
 fn verify_enclosures_value(report_json: &str) -> Result<serde_json::Value, String> {
     bounded(report_json, "root-enclosures report")?;
-    let report: RootEnclosureReport =
-        serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+    let report: RootEnclosureReport = serde_json::from_str(report_json).map_err(error_text)?;
     check_schema(&report.schema, ROOT_ENCLOSURES_SCHEMA)?;
     check_enclosure_request(&report.request)?;
-    let recomputed =
-        polytool::recurrence::root_enclosures(&report.request).map_err(|e| e.to_string())?;
+    let recomputed = polytool::recurrence::root_enclosures(&report.request).map_err(error_text)?;
     if recomputed != report {
         return Err("root enclosures differ from the exact recomputation".into());
     }
@@ -250,8 +247,7 @@ pub fn recurrence_theorems(recurrence_json: &str) -> String {
 
 fn verify_theorems_value(report_json: &str) -> Result<serde_json::Value, String> {
     bounded(report_json, "recurrence-theorems report")?;
-    let report: RecurrenceTheoremReport =
-        serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+    let report: RecurrenceTheoremReport = serde_json::from_str(report_json).map_err(error_text)?;
     check_schema(&report.schema, THEOREMS_SCHEMA)?;
     if report.finite_evidence.source != "supplied_recurrence" {
         return Err(format!(
@@ -259,8 +255,8 @@ fn verify_theorems_value(report_json: &str) -> Result<serde_json::Value, String>
             report.finite_evidence.source
         ));
     }
-    let recomputed = RecurrenceTheoremReport::for_supplied(&report.recurrence_json)
-        .map_err(|e| e.to_string())?;
+    let recomputed =
+        RecurrenceTheoremReport::for_supplied(&report.recurrence_json).map_err(error_text)?;
     if recomputed != report {
         return Err("theorem report differs from the exact recomputation".into());
     }
@@ -284,7 +280,7 @@ pub fn verify_recurrence_theorems(report_json: &str) -> String {
 pub fn recurrence_latex(recurrence_json: &str) -> String {
     respond(|| {
         let record = parse_record(recurrence_json)?;
-        let (recurrence, _, _) = record.to_recurrence_parts().map_err(|e| e.to_string())?;
+        let (recurrence, _, _) = record.to_recurrence_parts().map_err(error_text)?;
         Ok(serde_json::json!({
             "text": recurrence.to_string(),
             "latex": recurrence.to_latex(),
@@ -302,11 +298,10 @@ pub fn search_recurrence_representations(request_json: &str) -> String {
     respond(|| {
         bounded(request_json, "representation-search request")?;
         let request: RepresentationSearchRequest =
-            serde_json::from_str(request_json).map_err(|e| e.to_string())?;
+            serde_json::from_str(request_json).map_err(error_text)?;
         check_search_limits(&request.limits)?;
-        let report = to_value(
-            polytool::recurrence::search_representations(&request).map_err(|e| e.to_string())?,
-        )?;
+        let report =
+            to_value(polytool::recurrence::search_representations(&request).map_err(error_text)?)?;
         // A report the replay would refuse for its size is never handed out.
         if report.to_string().len() > MAX_JSON_BYTES {
             return Err(
@@ -322,10 +317,10 @@ pub fn search_recurrence_representations(request_json: &str) -> String {
 fn verify_representation_search_value(report_json: &str) -> Result<serde_json::Value, String> {
     bounded(report_json, "representation-search report")?;
     let report: RepresentationSearchReport =
-        serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+        serde_json::from_str(report_json).map_err(error_text)?;
     check_schema(&report.schema, REPRESENTATION_SEARCH_SCHEMA)?;
     check_search_limits(&report.request.limits)?;
-    polytool::recurrence::verify_representation_search(&report).map_err(|e| e.to_string())?;
+    polytool::recurrence::verify_representation_search(&report).map_err(error_text)?;
     Ok(serde_json::json!({
         "schema": REPRESENTATION_SEARCH_SCHEMA,
         "verified": true,
@@ -350,8 +345,7 @@ pub fn verify_recurrence_representation_search(report_json: &str) -> String {
 pub fn verify_report(report_json: &str) -> String {
     respond(|| {
         bounded(report_json, "report")?;
-        let value: serde_json::Value =
-            serde_json::from_str(report_json).map_err(|e| e.to_string())?;
+        let value: serde_json::Value = serde_json::from_str(report_json).map_err(error_text)?;
         let schema = value
             .get("schema")
             .and_then(serde_json::Value::as_str)
@@ -365,7 +359,7 @@ pub fn verify_report(report_json: &str) -> String {
             SPACES_SCHEMA => {
                 let checked: serde_json::Value =
                     serde_json::from_str(&crate::verify_recurrence_spaces(report_json))
-                        .map_err(|e| e.to_string())?;
+                        .map_err(error_text)?;
                 if let Some(error) = checked.get("error").and_then(serde_json::Value::as_str) {
                     return Err(error.to_string());
                 }

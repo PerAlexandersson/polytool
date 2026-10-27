@@ -1146,17 +1146,19 @@ pub(in crate::recurrence) fn check_kernel_certificate(
         || cert.independent_rows.iter().any(|&i| i >= matrix.len())
         || basis.iter().any(|v| v.len() != width)
     {
-        return Err(RecurrenceError::InvalidInput(
+        return Err(RecurrenceError::VerificationFailed(
             "invalid kernel dimensions".into(),
         ));
     }
     for (i, v) in basis.iter().enumerate() {
         if matrix.iter().any(|r| !dot(r, v).is_zero()) {
-            return Err(RecurrenceError::InvalidInput("invalid null vector".into()));
+            return Err(RecurrenceError::VerificationFailed(
+                "invalid null vector".into(),
+            ));
         }
         for (j, &c) in cert.free_columns.iter().enumerate() {
             if v[c] != if i == j { Q::one() } else { Q::zero() } {
-                return Err(RecurrenceError::InvalidInput(
+                return Err(RecurrenceError::VerificationFailed(
                     "invalid basis independence witness".into(),
                 ));
             }
@@ -1168,7 +1170,7 @@ pub(in crate::recurrence) fn check_kernel_certificate(
                 .map(|t| &inverse_row[t] * &matrix[cert.independent_rows[t]][cert.pivot_columns[j]])
                 .sum();
             if sum != if i == j { Q::one() } else { Q::zero() } {
-                return Err(RecurrenceError::InvalidInput(
+                return Err(RecurrenceError::VerificationFailed(
                     "invalid rank minor inverse".into(),
                 ));
             }
@@ -1501,8 +1503,13 @@ pub fn verify_recurrence_spaces(
             dimension,
             kernel_limits(&request.limits),
         )
-        .map_err(|_| {
-            RecurrenceError::VerificationFailed("projection verification budget".into())
+        .map_err(|error| match error {
+            RationalKernelError::BudgetExceeded(_) => {
+                RecurrenceError::BudgetExhausted("projection verification budget".into())
+            }
+            RationalKernelError::InvalidDimensions => {
+                RecurrenceError::VerificationFailed("projection verification dimensions".into())
+            }
         })?;
         let projection_rank = projected.pivot_columns.len();
         if projection_rank != result.successor_projection_rank {

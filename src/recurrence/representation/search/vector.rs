@@ -759,16 +759,18 @@ pub(super) fn check_vector_description(
         .checked_sub(origin)
         .filter(|i| *i < states.len())
         .ok_or_else(|| {
-            RecurrenceError::InvalidInput(format!("{label}: the system starts outside the rows"))
+            RecurrenceError::VerificationFailed(format!(
+                "{label}: the system starts outside the rows"
+            ))
         })?;
     if states[start] != initial {
-        return Err(RecurrenceError::InvalidInput(format!(
+        return Err(RecurrenceError::VerificationFailed(format!(
             "{label}: the initial state differs from the rows"
         )));
     }
     for i in start..states.len().saturating_sub(1) {
         if !system.holds_transition_rational(&states[i], &states[i + 1], origin + i) {
-            return Err(RecurrenceError::InvalidInput(format!(
+            return Err(RecurrenceError::VerificationFailed(format!(
                 "{label}: the system fails at n = {}",
                 origin + i
             )));
@@ -776,7 +778,7 @@ pub(super) fn check_vector_description(
     }
     let assessment = assess_vector_system(json)?;
     if item.vector_assessment.as_ref() != Some(&assessment) {
-        return Err(RecurrenceError::InvalidInput(format!(
+        return Err(RecurrenceError::VerificationFailed(format!(
             "{label}: the vector assessment does not replay"
         )));
     }
@@ -785,12 +787,12 @@ pub(super) fn check_vector_description(
             || first != origin
             || !evidence_is_certified(&item.evidence))
     {
-        return Err(RecurrenceError::InvalidInput(format!(
+        return Err(RecurrenceError::VerificationFailed(format!(
             "{label}: the label does not match the assessment"
         )));
     }
     if item.label != FINITE_FIT_LABEL && !evidence_is_certified(&item.evidence) {
-        return Err(RecurrenceError::InvalidInput(format!(
+        return Err(RecurrenceError::VerificationFailed(format!(
             "{label}: a certified label with uncertified evidence"
         )));
     }

@@ -734,7 +734,7 @@ fn map_row(
     };
     let mut state = t
         .map_row(index, row)
-        .map_err(|e| RecurrenceError::InvalidInput(format!("{}: {e}", t.kind_name())))?;
+        .map_err(|e| RecurrenceError::from(e).with_context(t.kind_name()))?;
     if state.len() != 1 {
         return Err(RecurrenceError::InvalidInput(format!(
             "{} gives {} components; the search needs scalar rows",
@@ -819,7 +819,7 @@ fn resolve<'a>(
     let mut notes = Vec::new();
     if let Some(t) = &request.transformation {
         t.validate()
-            .map_err(|e| RecurrenceError::InvalidInput(format!("transformation: {e}")))?;
+            .map_err(|e| RecurrenceError::from(e).with_context("transformation"))?;
         if t.component_count() != 1 {
             return Err(RecurrenceError::InvalidInput(format!(
                 "{} gives vector rows; the search needs a scalar map",
@@ -1739,7 +1739,7 @@ pub fn verify_implicit_relation_search(
             limits,
         )?;
         let basis = check_kernel_certificate(&matrix, result.monomials.len(), certificate, limits)
-            .map_err(|e| RecurrenceError::VerificationFailed(format!("{label}: {e}")))?;
+            .map_err(|e| e.with_context(&label))?;
         let leading = leader_columns(&result.monomials, result.support.max_shift);
         if projection(&basis, &leading, limits)?.len() != result.leader_projection_rank {
             return Err(RecurrenceError::VerificationFailed(format!(
@@ -1787,11 +1787,7 @@ pub fn verify_implicit_relation_search(
                 )?;
                 let basis =
                     check_kernel_certificate(&matrix, search.monomials.len(), certificate, limits)
-                        .map_err(|e| {
-                            RecurrenceError::VerificationFailed(format!(
-                                "{label}: condition search: {e}"
-                            ))
-                        })?;
+                        .map_err(|e| e.with_context(format!("{label}: condition search")))?;
                 if let (Some(i), Some(condition)) = (search.chosen_basis_index, &search.condition) {
                     let vector = basis.get(i).ok_or_else(|| {
                         RecurrenceError::VerificationFailed(format!(

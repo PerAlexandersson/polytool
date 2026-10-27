@@ -21,6 +21,13 @@ use num_traits::{One, Signed, Zero};
 
 type Q = crate::BigRational;
 
+/// Largest polytope dimension [`hstar_inequality_report_bigint`] works with.
+///
+/// The report pads `h*` with zeros up to the dimension and solves a linear
+/// system of that size (cost cubic in the dimension), so a larger dimension is
+/// answered with a failing `"dimension limit"` check instead of being run.
+pub const HSTAR_INEQUALITIES_MAX_DIMENSION: usize = 4096;
+
 /// One named h*-condition or inequality.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HStarInequalityCheck {
@@ -455,13 +462,49 @@ fn add_stapledon(
 /// `hstar[i]` is `h*_i`; `dimension` is the polytope dimension `d`, defaulting
 /// to `hstar.len() - 1` (0 for an empty slice).  The vector is padded with zeros
 /// to length `d + 1`.  If `h*` has degree larger than `d`, only the basic checks
-/// and a failing `"dimension bound"` check are produced.  Never panics.
+/// and a failing `"dimension bound"` check are produced.
+///
+/// A dimension above [`HSTAR_INEQUALITIES_MAX_DIMENSION`] (also when inferred
+/// from a longer input) is not run: nothing is padded, the report has
+/// `codegree: None` and the single applicable, failing check `"dimension
+/// limit"` (family `"basic"`), so it is never mistaken for a pass.  Never
+/// panics and allocates at most `max(hstar.len(), d + 1)` entries for an
+/// accepted dimension.
 pub fn hstar_inequality_report_bigint(
     hstar: &[BigInt],
     dimension: Option<usize>,
 ) -> HStarInequalityReport {
     let inferred_dimension = hstar.len().saturating_sub(1);
     let dimension = dimension.unwrap_or(inferred_dimension);
+    if dimension > HSTAR_INEQUALITIES_MAX_DIMENSION {
+        let mut h = hstar.to_vec();
+        while h.len() > 1 && h.last().is_some_and(|c| c.is_zero()) {
+            h.pop();
+        }
+        let mut c = check(
+            "basic",
+            "dimension limit",
+            "d <= supported maximum",
+            "Implementation limit of this library",
+            None,
+            true,
+            false,
+        );
+        c.lhs = Some(BigInt::from(dimension));
+        c.rhs = Some(BigInt::from(HSTAR_INEQUALITIES_MAX_DIMENSION));
+        c.details = format!(
+            "dimension {dimension} exceeds the supported maximum \
+             {HSTAR_INEQUALITIES_MAX_DIMENSION}; no inequality was checked"
+        );
+        return HStarInequalityReport {
+            degree: degree(&h),
+            hstar: h,
+            dimension,
+            codegree: None,
+            all_applicable_hold: false,
+            checks: vec![c],
+        };
+    }
     let mut h = pad_to_dimension(hstar.to_vec(), dimension);
     let degree = degree(&h);
     let mut checks = Vec::new();
@@ -548,6 +591,37 @@ mod tests {
         assert_eq!(report.degree, 3);
         assert_eq!(report.codegree, None);
         assert!(!report.all_applicable_hold);
+    }
+
+    #[test]
+    fn enormous_dimension_reports_a_limit_instead_of_panicking() {
+        let report = hstar_inequality_report_bigint(&b(&[1, 4, 1]), Some(usize::MAX));
+        assert_eq!(report.dimension, usize::MAX);
+        assert_eq!(report.hstar, b(&[1, 4, 1]));
+        assert_eq!(report.degree, 2);
+        assert_eq!(report.codegree, None);
+        assert!(!report.all_applicable_hold);
+        assert_eq!(report.checks.len(), 1);
+        assert_eq!(report.checks[0].name, "dimension limit");
+        assert!(report.checks[0].applicable && !report.checks[0].holds);
+    }
+
+    #[test]
+    fn dimension_limit_boundary() {
+        // Just above the limit no vector is allocated, whatever the request.
+        let above = HSTAR_INEQUALITIES_MAX_DIMENSION + 1;
+        let report = hstar_inequality_report_bigint(&b(&[1]), Some(above));
+        assert_eq!(report.hstar, b(&[1]));
+        assert_eq!(report.checks[0].name, "dimension limit");
+        // An input longer than the limit with the dimension inferred is also refused.
+        let long = vec![BigInt::one(); above + 1];
+        let report = hstar_inequality_report_bigint(&long, None);
+        assert_eq!(report.checks[0].name, "dimension limit");
+        assert_eq!(report.hstar.len(), long.len());
+        // A moderate dimension far above the degree still runs the checks.
+        let report = hstar_inequality_report_bigint(&b(&[1]), Some(20));
+        assert!(report.all_applicable_hold);
+        assert_eq!(report.dimension, 20);
     }
 
     #[test]

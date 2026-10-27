@@ -173,8 +173,8 @@ impl RecurrenceJson {
                     .enumerate()
                     .map(|(coeff_idx, coeff)| {
                         parse_rational_coeff(coeff).map_err(|e| {
-                            RecurrenceError::InvalidInput(format!(
-                                "invalid initial coefficient at row {}, coefficient {}: {e}",
+                            RecurrenceError::from(e).with_context(format!(
+                                "invalid initial coefficient at row {}, coefficient {}",
                                 row_idx + 1,
                                 coeff_idx
                             ))
@@ -247,7 +247,7 @@ impl RecurrenceTermJson {
             "none" => RecurrenceSign::None,
             "alternating_n" => RecurrenceSign::AlternatingN,
             other => {
-                return Err(RecurrenceError::Unsupported(format!(
+                return Err(RecurrenceError::InvalidInput(format!(
                     "unsupported recurrence sign `{other}`"
                 )))
             }
@@ -282,8 +282,8 @@ impl BivarPolyJson {
                     .enumerate()
                     .map(|(j, coeff)| {
                         parse_rational_coeff(coeff).map_err(|e| {
-                            RecurrenceError::InvalidInput(format!(
-                                "invalid bivariate coefficient ({i},{j}) `{coeff}`: {e}"
+                            RecurrenceError::from(e).with_context(format!(
+                                "invalid bivariate coefficient ({i},{j}) `{coeff}`"
                             ))
                         })
                     })

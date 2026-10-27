@@ -78,8 +78,11 @@ impl std::error::Error for ParseRationalError {}
 /// exact recomputation (`verify_*`, replay) are [`VerificationFailed`]; a
 /// malformed or inconsistent request, option or JSON record is
 /// [`InvalidInput`]; a documented ceiling on the request that was exceeded is
-/// [`LimitExceeded`]; an exhausted computation budget is [`BudgetExhausted`]; and a construction that does not apply to the supplied
-/// recurrence is [`Unsupported`].
+/// [`LimitExceeded`]; an exhausted computation budget is [`BudgetExhausted`];
+/// and a construction that does not apply to the supplied recurrence is
+/// [`Unsupported`].  A typed source error that also has a position
+/// to report ("map 2: ...") is a [`Context`](RecurrenceError::Context), whose
+/// [`source`](std::error::Error::source) is the typed error.
 ///
 /// [`VerificationFailed`]: RecurrenceError::VerificationFailed
 /// [`InvalidInput`]: RecurrenceError::InvalidInput
@@ -106,6 +109,16 @@ pub enum RecurrenceError {
     Transform(TransformError),
     /// A bundled OEIS family could not supply its recurrence.
     Oeis(OeisSequenceError),
+    /// A typed error ([`Rational`](Self::Rational), [`Transform`](Self::Transform)
+    /// or [`Oeis`](Self::Oeis)) with the field, row or step it arose in
+    /// prefixed.  The [`Display`](fmt::Display) text is `"{context}: {source}"`
+    /// and [`source`](std::error::Error::source) returns the wrapped error.
+    Context {
+        /// What the error arose in, for example `"map 2"` or `"transformations[1]"`.
+        context: String,
+        /// The wrapped typed error.
+        source: Box<RecurrenceError>,
+    },
 }
 
 impl RecurrenceError {
@@ -113,7 +126,8 @@ impl RecurrenceError {
     /// variant, so a caller that distinguishes an exhausted budget from invalid
     /// input still can.  The wrapping variants ([`Transform`](Self::Transform),
     /// [`Oeis`](Self::Oeis), [`Rational`](Self::Rational)) become
-    /// [`InvalidInput`](Self::InvalidInput).
+    /// [`Context`](Self::Context), which keeps them as the
+    /// [`source`](std::error::Error::source).
     pub(crate) fn with_context(self, context: impl fmt::Display) -> Self {
         match self {
             Self::InvalidInput(message) => Self::InvalidInput(format!("{context}: {message}")),
@@ -125,7 +139,17 @@ impl RecurrenceError {
             Self::VerificationFailed(message) => {
                 Self::VerificationFailed(format!("{context}: {message}"))
             }
-            other => Self::InvalidInput(format!("{context}: {other}")),
+            Self::Context {
+                context: inner,
+                source,
+            } => Self::Context {
+                context: format!("{context}: {inner}"),
+                source,
+            },
+            other => Self::Context {
+                context: context.to_string(),
+                source: Box::new(other),
+            },
         }
     }
 }
@@ -141,6 +165,7 @@ impl fmt::Display for RecurrenceError {
             Self::Rational(error) => error.fmt(f),
             Self::Transform(error) => error.fmt(f),
             Self::Oeis(error) => error.fmt(f),
+            Self::Context { context, source } => write!(f, "{context}: {source}"),
         }
     }
 }
@@ -151,6 +176,13 @@ impl std::error::Error for RecurrenceError {
             Self::Rational(error) => Some(error),
             Self::Transform(error) => Some(error),
             Self::Oeis(error) => Some(error),
+            // The wrapped typed error itself, not its `RecurrenceError` wrapper.
+            Self::Context { source, .. } => match source.as_ref() {
+                Self::Rational(error) => Some(error),
+                Self::Transform(error) => Some(error),
+                Self::Oeis(error) => Some(error),
+                other => Some(other),
+            },
             _ => None,
         }
     }
@@ -218,5 +250,38 @@ mod tests {
             TransformError::SingularMobius.to_string()
         );
         assert!(transform.source().is_some());
+    }
+
+    #[test]
+    fn context_keeps_the_variant_or_the_typed_source() {
+        // Message variants keep their variant.
+        let budget = RecurrenceError::BudgetExhausted("rows".into()).with_context("space 1");
+        assert_eq!(
+            budget,
+            RecurrenceError::BudgetExhausted("space 1: rows".into())
+        );
+        // Typed errors are wrapped, not flattened: the text is as before, and
+        // `source()` still reaches the original.
+        let wrapped = RecurrenceError::from(TransformError::SingularMobius).with_context("map 3");
+        assert_eq!(
+            wrapped.to_string(),
+            format!("map 3: {}", TransformError::SingularMobius)
+        );
+        let source = wrapped.source().expect("typed source");
+        assert_eq!(
+            source.downcast_ref::<TransformError>(),
+            Some(&TransformError::SingularMobius)
+        );
+        let again = wrapped.with_context("outer");
+        assert!(again.to_string().starts_with("outer: map 3: "));
+        assert!(again.source().is_some());
+        let rational = RecurrenceError::from(ParseRationalError::Empty).with_context("a");
+        assert_eq!(rational.to_string(), "a: empty rational coefficient");
+        assert_eq!(
+            rational
+                .source()
+                .and_then(|source| source.downcast_ref::<ParseRationalError>()),
+            Some(&ParseRationalError::Empty)
+        );
     }
 }

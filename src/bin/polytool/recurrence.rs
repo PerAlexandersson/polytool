@@ -2,6 +2,7 @@
 //! `polytool recurrence-generate`.
 
 use crate::help::print_rational_coefficient_input_help;
+use crate::input::error_text;
 use crate::input::{
     is_help_arg, next_option_value, parse_usize_option, read_limited_text, read_polys_rational,
     read_stdin_or_exit, OutputFormat,
@@ -522,9 +523,9 @@ fn cmd_recurrence_space(args: &[String]) {
     let input = read_stdin_or_exit();
     let outcome: Result<(Value, bool), String> = if verify {
         serde_json::from_str::<RecurrenceSpaces>(&input)
-            .map_err(|e| e.to_string())
+            .map_err(error_text)
             .and_then(|report| {
-                verify_recurrence_spaces(&report.request, &report).map_err(|e| e.to_string())?;
+                verify_recurrence_spaces(&report.request, &report).map_err(error_text)?;
                 let incomplete = report
                     .results
                     .iter()
@@ -537,12 +538,12 @@ fn cmd_recurrence_space(args: &[String]) {
             })
     } else {
         serde_json::from_str::<RecurrenceSpaceRequest>(&input)
-            .map_err(|e| e.to_string())
+            .map_err(error_text)
             .and_then(|request| {
-                let report = find_recurrence_spaces(&request).map_err(|e| e.to_string())?;
+                let report = find_recurrence_spaces(&request).map_err(error_text)?;
                 let incomplete = report.results.iter().any(|r| r.certificate.is_none());
                 Ok((
-                    serde_json::to_value(report).map_err(|e| e.to_string())?,
+                    serde_json::to_value(report).map_err(error_text)?,
                     incomplete,
                 ))
             })

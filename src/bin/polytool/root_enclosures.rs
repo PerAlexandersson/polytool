@@ -1,6 +1,7 @@
 //! `polytool root-enclosures`: exact rational root enclosures with
 //! multiplicities and exact interval tests.
 
+use crate::input::error_text;
 use crate::input::{is_help_arg, read_stdin_or_exit};
 use polytool::recurrence::{root_enclosures, RootEnclosureRequest};
 
@@ -61,8 +62,8 @@ pub(crate) fn cmd_root_enclosures(args: &[String]) {
     }
     let input = read_stdin_or_exit();
     let outcome = serde_json::from_str::<RootEnclosureRequest>(&input)
-        .map_err(|e| e.to_string())
-        .and_then(|request| root_enclosures(&request).map_err(|e| e.to_string()));
+        .map_err(error_text)
+        .and_then(|request| root_enclosures(&request).map_err(error_text));
     match outcome {
         Ok(report) => {
             let text = if compact {

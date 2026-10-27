@@ -26,7 +26,8 @@ echo "1, 20, 1, 0" | polytool hstar-inequalities --dimension 3 --json
 The report includes basic Ehrhart h\*-conditions, Stanley and Hibi inequalities,
 the Balletti--Higashitani universal Scott inequality when applicable, and
 Stapledon-derived nonnegativity checks.  Failures include the named inequality
-and a reference.
+and a reference.  `--dimension` is at most 4096; a longer h\*-vector with the
+dimension inferred gets a failing `dimension limit` check instead of a run.
 
 ## Cyclic sieving checks
 
@@ -43,6 +44,9 @@ a sequence, the default candidate orders for row index `n` are
 ```sh
 polytool cyclic-sieving-sequence --first-index 2 < polys.txt
 ```
+
+A candidate order above 1000000, or a row index that overflows, is an error
+instead of a (very large) report.
 
 Optional fixed-count files use lines of the form:
 

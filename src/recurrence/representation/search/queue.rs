@@ -330,7 +330,7 @@ impl Search<'_> {
             .enumerate()
             .map(|(i, state)| t.map_state(origin + i, state, &offsets))
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| RecurrenceError::InvalidInput(format!("{}: {e}", t.kind_name())))?;
+            .map_err(|e| RecurrenceError::from(e).with_context(t.kind_name()))?;
         if let Some(degree) = states
             .iter()
             .flatten()

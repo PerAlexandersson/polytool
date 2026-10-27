@@ -328,6 +328,10 @@ real-rootedness is required, while gamma-positivity, log-concavity,
 palindromicity, and consecutive interlacing are reported but only required
 when their `require_*` flags are set.  A requested `lace` check is required to
 be TNN, and a requested recurrence search is required to find a recurrence.
+The `lace` truncation is limited to 16384 matrix rows and 16384 block columns
+(each on its own, so `block_cols: 0` does not admit an arbitrary `block_rows`),
+16384 matrix cells and 250000 checked minors; a larger request is reported in
+`lace.error`.
 
 ### `polynomial_properties`
 
@@ -718,7 +722,8 @@ Example arguments:
 Check named Ehrhart h*-vector inequalities.  The report includes basic
 conditions, Stanley and Hibi inequalities, the Balletti-Higashitani universal
 Scott inequality when applicable, and Stapledon-derived nonnegativity checks.
-Failures include the named inequality and reference text.
+Failures include the named inequality and reference text.  `dimension` is at
+most 4096 (larger values are rejected as invalid parameters).
 
 Example arguments:
 
@@ -776,6 +781,9 @@ equalities and lists `mismatches`.
 For a sequence `P_n(q)`, profile candidate orders
 `n-2,n-1,n,n+1,n+2,n+3` by default.  Use `first_index` when the first input row
 is not indexed by zero.  Optional fixed counts are keyed by `index` and `order`.
+Every positive candidate order `first_index + position + offset` must be at most
+10000, as for `cyclic_sieving`; non-positive orders are skipped, and an index
+that overflows is rejected as an invalid parameter.
 
 ```json
 {

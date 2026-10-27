@@ -182,7 +182,9 @@ pub struct FamilyCheckOptions {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LaceCheckRequest {
+    /// Number of block rows (default: one per polynomial); the matrix may have at most 16384 rows (polynomial count times `block_rows`), whatever `block_cols` is.
     pub block_rows: Option<usize>,
+    /// Number of block columns (default: `block_rows + max_degree + 1`); at most 16384.
     pub block_cols: Option<usize>,
     pub max_minor_size: Option<usize>,
     pub include_matrix: Option<bool>,
@@ -409,6 +411,7 @@ pub struct EhrhartHstarRequest {
 pub struct HStarInequalitiesRequest {
     pub polynomials: Option<Vec<BigIntPolynomialInput>>,
     pub text: Option<String>,
+    /// Polytope dimension `d` (default: length of each h*-vector minus one); at most 4096.
     pub dimension: Option<usize>,
 }
 
@@ -451,6 +454,7 @@ pub struct CyclicSievingSequenceRequest {
     pub polynomials: Option<Vec<BigIntPolynomialInput>>,
     pub text: Option<String>,
     pub first_index: Option<isize>,
+    /// Candidate order offsets (default `[-2, -1, 0, 1, 2, 3]`); every positive candidate order `first_index + position + offset` must be at most 10000, non-positive ones are skipped.
     pub offsets: Option<Vec<isize>>,
     pub fixed_counts: Option<Vec<CyclicSievingFixedCountsInput>>,
 }

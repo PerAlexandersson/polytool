@@ -273,6 +273,14 @@ impl PolynomialToolsServer {
         &self,
         Parameters(input): Parameters<HStarInequalitiesRequest>,
     ) -> Result<Json<HStarInequalitiesResponse>, McpError> {
+        if input
+            .dimension
+            .is_some_and(|dimension| dimension > MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL)
+        {
+            return Err(invalid_params(format!(
+                "`dimension` may be at most {MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL}"
+            )));
+        }
         let batch = parse_bigint_batch(&BigIntPolynomialBatchInput {
             polynomials: input.polynomials,
             text: input.text,
@@ -1104,12 +1112,32 @@ impl PolynomialToolsServer {
             }
             fixed_counts.insert((item.index, item.order), counts);
         }
+        // Bound every candidate order `first_index + row + offset` like the
+        // single-order tool, before any index arithmetic can overflow.
+        for row in 0..polynomials.len() as i128 {
+            let index = first_index as i128 + row;
+            if index > isize::MAX as i128 {
+                return Err(invalid_params(
+                    "`first_index` plus the polynomial position overflows",
+                ));
+            }
+            for &offset in &offsets {
+                let order = index + offset as i128;
+                if order > MCP_MAX_CYCLIC_ORDER as i128 {
+                    return Err(invalid_params(format!(
+                        "candidate order {order} (index {index} plus offset {offset}) exceeds \
+                         the MCP limit {MCP_MAX_CYCLIC_ORDER}"
+                    )));
+                }
+            }
+        }
         let reports = cyclic_sieving_sequence_reports_bigint(
             &polynomials,
             first_index,
             &offsets,
             &fixed_counts,
-        );
+        )
+        .map_err(|error| invalid_params(error.to_string()))?;
         Ok(Json(CyclicSievingSequenceResponse {
             first_index,
             offsets,

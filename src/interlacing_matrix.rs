@@ -40,6 +40,13 @@ use num_traits::Zero;
 use std::error::Error;
 use std::fmt;
 
+/// Largest number of rows or columns [`lace_matrix`] will build (`u32::MAX`).
+///
+/// A truncation beyond it could not be stored (its row headers alone would
+/// take over 100 GB), so it is rejected with
+/// [`InterlacingMatrixError::SizeOverflow`] instead of being allocated.
+pub const MAX_LACE_DIMENSION: usize = u32::MAX as usize;
+
 /// Error returned by the `Lace(A)` constructions and total-nonnegativity
 /// checks: a polynomial matrix that is not rectangular, or a finite truncation
 /// that is not totally nonnegative.
@@ -65,7 +72,8 @@ pub enum InterlacingMatrixError {
     /// says which minor or elimination step failed.
     NotTotallyNonnegative(TotalPositivityError),
     /// The requested truncation has more rows or columns than `usize` can
-    /// count, or more entries than a single allocation can hold.
+    /// count or than [`MAX_LACE_DIMENSION`] allows, or its row headers and
+    /// entries together are more than a single allocation can hold.
     SizeOverflow {
         /// Requested number of block rows.
         block_rows: usize,
@@ -127,10 +135,13 @@ impl Error for InterlacingMatrixError {
 ///
 /// Empty coefficient vectors are allowed and represent the zero polynomial.
 ///
-/// A truncation whose dimensions or byte size overflow `usize`/`isize` is
-/// rejected with [`InterlacingMatrixError::SizeOverflow`]; the result is
-/// allocated in full, so a request that is representable but larger than the
-/// available memory aborts the process.
+/// A truncation is rejected with [`InterlacingMatrixError::SizeOverflow`] when
+/// its number of rows or columns exceeds [`MAX_LACE_DIMENSION`] (about 4.3
+/// billion), or when the byte size of the result, counting both the outer
+/// vector of rows and the entries of every row, overflows `isize`.  The
+/// result is allocated in full, so a request below these ceilings that is
+/// larger than the available memory still aborts the process; callers that
+/// accept untrusted sizes should bound `block_rows * block_cols` themselves.
 pub fn lace_matrix<C>(
     matrix: &[Vec<Vec<C>>],
     block_rows: usize,
@@ -146,15 +157,23 @@ where
     };
     let rows = p.checked_mul(block_rows).ok_or(overflow.clone())?;
     let columns = q.checked_mul(block_cols).ok_or(overflow.clone())?;
-    let bytes = rows
+    if rows > MAX_LACE_DIMENSION || columns > MAX_LACE_DIMENSION {
+        return Err(overflow);
+    }
+    // Two allocations: the outer vector of `rows` row headers, and `rows * columns`
+    // entries (zero-sized entries are counted as one byte to stay conservative).
+    let entry_bytes = rows
         .checked_mul(columns)
         .and_then(|cells| cells.checked_mul(std::mem::size_of::<C>().max(1)));
+    let header_bytes = rows.checked_mul(std::mem::size_of::<Vec<C>>());
+    let bytes = entry_bytes.and_then(|entries| entries.checked_add(header_bytes?));
     if bytes.is_none_or(|bytes| bytes > isize::MAX as usize) {
         return Err(overflow);
     }
     let mut result = vec![vec![C::zero(); columns]; rows];
 
-    for rb in 0..block_rows {
+    // Block rows at or beyond `block_cols` have no entry on or above the diagonal.
+    for rb in 0..block_rows.min(block_cols) {
         for cb in rb..block_cols {
             let coeff_index = cb - rb;
             for i in 0..p {
@@ -605,6 +624,35 @@ mod tests {
                 block_rows: 1,
                 block_cols: usize::MAX
             }
+        );
+    }
+
+    #[test]
+    fn zero_columns_do_not_hide_an_enormous_row_count() {
+        // The row allocation (`Vec<Vec<C>>`) is counted even when every row is
+        // empty, and the block loops never run for the missing columns.
+        let matrix = vec![vec![vec![1, 1]]];
+        for block_rows in [usize::MAX, usize::MAX / 2, 100_000_000_000_000_000] {
+            assert_eq!(
+                lace_matrix_i64(&matrix, block_rows, 0).unwrap_err(),
+                InterlacingMatrixError::SizeOverflow {
+                    block_rows,
+                    block_cols: 0
+                },
+                "block_rows = {block_rows}"
+            );
+        }
+        assert_eq!(
+            lace_matrix_sequence_i64(&[vec![1, 1]], usize::MAX, 0).unwrap_err(),
+            InterlacingMatrixError::SizeOverflow {
+                block_rows: usize::MAX,
+                block_cols: 0
+            }
+        );
+        // Small truncations with no columns are still allowed.
+        assert_eq!(
+            lace_matrix_i64(&matrix, 2, 0).unwrap(),
+            vec![Vec::<i64>::new(); 2]
         );
     }
 }

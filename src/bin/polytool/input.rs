@@ -91,11 +91,17 @@ pub(crate) fn read_polys_bigint() -> Vec<Vec<BigInt>> {
         .collect()
 }
 
+/// The `Display` text of an error, for the `Result<_, String>` plumbing of the
+/// subcommands.
+pub(crate) fn error_text<E: std::fmt::Display>(error: E) -> String {
+    error.to_string()
+}
+
 pub(crate) fn read_poly_parse_results_bigint() -> Vec<Result<Vec<BigInt>, String>> {
     let input = read_stdin_or_exit();
     parse_polynomials_bigint(&input)
         .into_iter()
-        .map(|result| result.map_err(|error| error.to_string()))
+        .map(|result| result.map_err(error_text))
         .collect()
 }
 

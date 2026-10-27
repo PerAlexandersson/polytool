@@ -2,6 +2,7 @@
 //! implicit differential relations with reconstruction data, uniqueness
 //! arguments, reconstruction certificates and exact replay.
 
+use crate::input::error_text;
 use crate::input::{is_help_arg, read_stdin_or_exit};
 use polytool::recurrence::{
     assess_generating_description, implicit_transform_recurrence_with_root_domain,
@@ -189,14 +190,14 @@ pub(crate) fn cmd_recurrence_implicit(args: &[String]) {
     let input = read_stdin_or_exit();
     let outcome = if search {
         serde_json::from_str::<ImplicitRelationSearchRequest>(&input)
-            .map_err(|e| e.to_string())
-            .and_then(|request| search_implicit_relations(&request).map_err(|e| e.to_string()))
-            .and_then(|report| serde_json::to_value(report).map_err(|e| e.to_string()))
+            .map_err(error_text)
+            .and_then(|request| search_implicit_relations(&request).map_err(error_text))
+            .and_then(|report| serde_json::to_value(report).map_err(error_text))
     } else if verify_search {
         serde_json::from_str::<ImplicitRelationSearchReport>(&input)
-            .map_err(|e| e.to_string())
+            .map_err(error_text)
             .and_then(|report| {
-                verify_implicit_relation_search(&report).map_err(|e| e.to_string())?;
+                verify_implicit_relation_search(&report).map_err(error_text)?;
                 Ok(json!({
                     "verified": true,
                     "results": report
@@ -208,9 +209,9 @@ pub(crate) fn cmd_recurrence_implicit(args: &[String]) {
             })
     } else if verify {
         serde_json::from_str::<ImplicitTransformReport>(&input)
-            .map_err(|e| e.to_string())
+            .map_err(error_text)
             .and_then(|report| {
-                verify_recurrence_implicit(&report).map_err(|e| e.to_string())?;
+                verify_recurrence_implicit(&report).map_err(error_text)?;
                 Ok(json!({
                     "verified": true,
                     "assessment": report.assessment.status,
@@ -222,20 +223,18 @@ pub(crate) fn cmd_recurrence_implicit(args: &[String]) {
             })
     } else if assess {
         serde_json::from_str::<GeneratingDescription>(&input)
-            .map_err(|e| e.to_string())
-            .and_then(|description| {
-                assess_generating_description(&description).map_err(|e| e.to_string())
-            })
-            .and_then(|assessment| serde_json::to_value(assessment).map_err(|e| e.to_string()))
+            .map_err(error_text)
+            .and_then(|description| assess_generating_description(&description).map_err(error_text))
+            .and_then(|assessment| serde_json::to_value(assessment).map_err(error_text))
     } else {
         serde_json::from_str::<serde_json::Value>(&input)
-            .map_err(|e| e.to_string())
-            .and_then(|value| parse_implicit_transform_input(value).map_err(|e| e.to_string()))
+            .map_err(error_text)
+            .and_then(|value| parse_implicit_transform_input(value).map_err(error_text))
             .and_then(|(request, root_domain)| {
                 implicit_transform_recurrence_with_root_domain(&request, root_domain.as_ref())
-                    .map_err(|e| e.to_string())
+                    .map_err(error_text)
             })
-            .and_then(|report| serde_json::to_value(report).map_err(|e| e.to_string()))
+            .and_then(|report| serde_json::to_value(report).map_err(error_text))
     };
     match outcome {
         Ok(value) => {

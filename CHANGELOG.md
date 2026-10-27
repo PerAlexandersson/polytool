@@ -7,6 +7,13 @@ flags, MCP tool names and schemas, and the web export names are unchanged.
 
 Breaking changes:
 
+- `cyclic_sieving::cyclic_sieving_sequence_reports_bigint` returns
+  `Result<Vec<CyclicSievingSequenceItem>, CyclicSievingError>` (it panicked or
+  silently skipped candidates); `CyclicSievingError` gains the variants
+  `OrderTooLarge` and `SequenceIndexOverflow`, and
+  `RecurrenceError` gains `Context`.
+- `tnn_network::CanonicalTotallyNonnegativeProof::evaluated_path_matrix` returns
+  `Option<Vec<Vec<BigRational>>>` (`None` for a malformed network).
 - `sequences::literature::hoggatt_polynomials_bigint` now follows the
   `rows[n] = H_n` rule of the other `sequences` generators: it returns
   `max_n + 1` rows for `n = 0..=max_n`, and `rows[0]` is the zero polynomial
@@ -149,10 +156,48 @@ Fixes:
   `CanonicalTotallyNonnegativeProof::verify`) returns `false` for a malformed
   network (a row `lambda[n]` without `n + 1` entries) instead of panicking.
 - `interlacing_matrix::lace_matrix*` return `InterlacingMatrixError::SizeOverflow`
-  for truncations whose size overflows, instead of panicking.
-- `cyclic_sieving_sequence_reports_bigint` skips candidate orders whose index
-  overflows `isize`; `recurrence_holds_rational` and
-  `recurrence_holds_from_rational` accept `rec_len = usize::MAX`.
+  for truncations whose size overflows, instead of panicking.  The size check
+  now counts the outer vector of rows as well as the entries (so `block_cols = 0`
+  no longer admits any `block_rows`, which panicked with a capacity overflow or
+  aborted), rejects more than the new `MAX_LACE_DIMENSION` (`u32::MAX`) rows or
+  columns, and the block loops no longer iterate over rows beyond `block_cols`.
+  The MCP `check_polynomial_family` `lace` check bounds the rows and the block
+  columns each by 16384 (the request fields' descriptions say so) and no longer
+  overflows when `block_rows` is `usize::MAX` and `block_cols` is omitted.
+- `cyclic_sieving_sequence_reports_bigint` no longer panics when
+  `first_index + row` overflows `isize` and no longer allocates a report for
+  a huge candidate order: it returns `CyclicSievingError::SequenceIndexOverflow`
+  or `CyclicSievingError::OrderTooLarge` (new variants), and
+  `cyclic_sieving_report_bigint` rejects an order above the new
+  `CYCLIC_SIEVING_MAX_ORDER` (1000000) before allocating.  Candidate orders that
+  overflow `isize` were skipped before; they are now `OrderTooLarge`.  The MCP
+  `cyclic_sieving_sequence` tool and the CLI report these as errors; the MCP tool
+  also requires every positive candidate order to be at most 10000, like
+  `cyclic_sieving` (the `offsets` field's description says so).
+- `hstar_inequality_report_bigint` no longer overflows `dimension + 1` or
+  allocates a vector of the requested length for an absurd `dimension`: a
+  dimension above the new `HSTAR_INEQUALITIES_MAX_DIMENSION` (4096), also when
+  inferred from a longer input, gives a report with the single failing
+  `dimension limit` check.  The MCP `hstar_inequalities` tool (`dimension`) and
+  `polytool hstar-inequalities --dimension` reject larger values.
+- `recurrence`: budget exhaustion while replaying a certificate
+  (`verify_implicit_relation_search`, `verify_representation_search`) is
+  `RecurrenceError::BudgetExhausted` instead of `VerificationFailed`;
+  `check_kernel_certificate` failures of a tampered certificate (null vector,
+  basis witness, rank minor inverse, kernel dimensions) and the replay checks of
+  vector descriptions are `VerificationFailed` instead of `InvalidInput`;
+  exceeding `max_space_shapes` is `LimitExceeded` and an unknown recurrence
+  `sign` is `InvalidInput`.  `Display` texts are unchanged.
+- `recurrence`: a `ParseRationalError` or `TransformError` raised while
+  mapping or parsing is no longer flattened into an `InvalidInput` string:
+  `RecurrenceError::with_context` wraps it in the new
+  `RecurrenceError::Context { context, source }` variant, with the same
+  `Display` text, and `Error::source` returns the original typed error.
+- `tnn_network::CanonicalTotallyNonnegativeProof::evaluated_path_matrix` no
+  longer panics on a hand-built network with a malformed `lambda`; it returns
+  `None` (see Breaking changes).
+- `recurrence_holds_rational` and `recurrence_holds_from_rational` accept
+  `rec_len = usize::MAX`.
 - Rustdoc: every public function that panics on caller-reachable invalid input
   (zero divisors, non-square matrices, a non-monic or inexact division, an
   `i64` convenience wrapper whose result does not fit) documents it under a

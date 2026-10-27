@@ -2,6 +2,7 @@
 //! over equivalent representations (coordinate changes, transported and
 //! certified relations, fits) with exact replay.
 
+use crate::input::error_text;
 use crate::input::{is_help_arg, read_stdin_or_exit};
 use polytool::recurrence::{
     search_representations, verify_representation_search, RepresentationSearchReport,
@@ -118,9 +119,9 @@ pub(crate) fn cmd_recurrence_search_representations(args: &[String]) {
     let input = read_stdin_or_exit();
     let outcome = if verify {
         serde_json::from_str::<RepresentationSearchReport>(&input)
-            .map_err(|e| e.to_string())
+            .map_err(error_text)
             .and_then(|report| {
-                verify_representation_search(&report).map_err(|e| e.to_string())?;
+                verify_representation_search(&report).map_err(error_text)?;
                 let equivalent = report
                     .representations
                     .iter()
@@ -136,9 +137,9 @@ pub(crate) fn cmd_recurrence_search_representations(args: &[String]) {
             })
     } else {
         serde_json::from_str::<RepresentationSearchRequest>(&input)
-            .map_err(|e| e.to_string())
-            .and_then(|request| search_representations(&request).map_err(|e| e.to_string()))
-            .and_then(|report| serde_json::to_value(report).map_err(|e| e.to_string()))
+            .map_err(error_text)
+            .and_then(|request| search_representations(&request).map_err(error_text))
+            .and_then(|report| serde_json::to_value(report).map_err(error_text))
     };
     match outcome {
         Ok(value) => {

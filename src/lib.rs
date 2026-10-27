@@ -216,7 +216,7 @@ pub use cyclic_sieving::{
     orbit_counts_from_orbit_sizes, reduce_modulo_cyclic_bigint, root_of_unity_evaluation_bigint,
     BicyclicSievingReport, CyclicSievingError, CyclicSievingPowerCheck, CyclicSievingReport,
     CyclicSievingSequenceItem, OrbitDecomposition, OrbitSizeEntry, OrbitSizesCheck, ResidueClass,
-    RootOfUnityEvaluation, BICYCLIC_MAX_GROUP_SIZE,
+    RootOfUnityEvaluation, BICYCLIC_MAX_GROUP_SIZE, CYCLIC_SIEVING_MAX_ORDER,
 };
 #[allow(deprecated)]
 pub use decomposition::SymmetricDecompositionAnalysisBigInt;
@@ -228,6 +228,7 @@ pub use decomposition::{
 };
 pub use hstar_inequalities::{
     hstar_inequality_report_bigint, HStarInequalityCheck, HStarInequalityReport,
+    HSTAR_INEQUALITIES_MAX_DIMENSION,
 };
 pub use hurwitz::{hurwitz_leading_minors_bigint, hurwitz_matrix_bigint, is_hurwitz_stable_bigint};
 #[allow(deprecated)]
@@ -242,7 +243,7 @@ pub use interlacing_matrix::{
     check_lace_totally_nonnegative_neville_i64, is_lace_sequence_totally_nonnegative_by_minors_i64,
     is_lace_totally_nonnegative_by_minors_i64, lace_matrix, lace_matrix_bigint, lace_matrix_i64,
     lace_matrix_sequence, lace_matrix_sequence_bigint, lace_matrix_sequence_i64,
-    InterlacingMatrixError,
+    InterlacingMatrixError, MAX_LACE_DIMENSION,
 };
 pub use left_production::{
     check_left_production_matrix, left_production_matrix, LeftProductionCertificate,

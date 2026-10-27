@@ -412,6 +412,29 @@ fn family_lace_limits_and_shape_errors() {
         .as_deref()
         .unwrap()
         .contains("row count overflow"));
+    // Zero columns must not hide an enormous row count (the row allocation alone
+    // would abort the process), and an overflowing default column count must not
+    // panic.
+    for (block_rows, block_cols) in [
+        (100_000_000_000_000_000, Some(0)),
+        (usize::MAX / 2, Some(0)),
+        (usize::MAX, None),
+        (1_000_000, Some(1)),
+        (1, Some(1_000_000_000)),
+    ] {
+        let huge = lace_response(lace(Some(block_rows), block_cols, Some(1)), &pascal);
+        assert!(!huge.totally_nonnegative, "{block_rows} {block_cols:?}");
+        assert!(huge.matrix.is_none());
+        assert!(
+            huge.error
+                .as_deref()
+                .unwrap()
+                .contains("exceeds MCP limits")
+                || huge.error.as_deref().unwrap().contains("overflow"),
+            "{:?}",
+            huge.error
+        );
+    }
     // Truncating to one column keeps just the first column of each block row.
     let narrow = lace_response(lace(Some(2), Some(1), Some(1)), &pascal);
     assert!(narrow.totally_nonnegative);
@@ -1254,6 +1277,29 @@ fn sieving_tools_reject_invalid_parameters() {
         ..base()
     })
     .contains("`offsets` may not be empty"));
+    // An overflowing first index or a huge candidate order is a parameter error,
+    // not a panic or an enormous allocation.
+    for (first_index, offsets) in [
+        (isize::MAX, vec![0]),
+        (isize::MAX - 1, vec![0]),
+        (0, vec![isize::MAX]),
+        (0, vec![10_001]),
+        (1_000_000_000_000, vec![0, 1]),
+    ] {
+        let error = sequence(CyclicSievingSequenceRequest {
+            polynomials: Some(vec![
+                bigint_coeffs(&["1", "1"]),
+                bigint_coeffs(&["1", "1", "1"]),
+            ]),
+            first_index: Some(first_index),
+            offsets: Some(offsets.clone()),
+            ..base()
+        });
+        assert!(
+            error.contains("overflows") || error.contains("exceeds the MCP limit"),
+            "{first_index} {offsets:?}: {error}"
+        );
+    }
     assert!(sequence(CyclicSievingSequenceRequest {
         text: Some("1,1\nbad + x".to_string()),
         polynomials: None,
@@ -1972,6 +2018,17 @@ fn batch_tools_report_malformed_entries_in_place() {
         }))
         .unwrap();
     assert!(hstar.items[0].ok && !hstar.items[1].ok);
+    for dimension in [4097, 1 << 40, usize::MAX] {
+        let refused = server.hstar_inequalities(Parameters(HStarInequalitiesRequest {
+            polynomials: Some(vec![bigint_coeffs(&["1", "4", "1"])]),
+            text: None,
+            dimension: Some(dimension),
+        }));
+        assert!(
+            message(refused.err().expect("dimension limit")).contains("at most 4096"),
+            "{dimension}"
+        );
+    }
     assert!(hstar.items[1].error.is_some());
     assert!(hstar.items[1].checks.is_empty() && hstar.items[1].dimension.is_none());
 

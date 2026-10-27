@@ -183,9 +183,7 @@ pub fn verify_representation_search(
                     &node.map_conditions,
                     &node.components,
                 )
-                .map_err(|e| {
-                    RecurrenceError::VerificationFailed(format!("{label}.steps[{s}]: {e}"))
-                })?;
+                .map_err(|e| e.with_context(format!("{label}.steps[{s}]")))?;
                 if &rebuilt != record || !record.holds_on_rows {
                     return Err(RecurrenceError::VerificationFailed(format!(
                         "{label}.steps[{s}]: the vector transport does not replay"
@@ -218,9 +216,8 @@ pub fn verify_representation_search(
                     )));
                 }
                 let rows = states.iter().map(|s| s[0].clone()).collect::<Vec<_>>();
-                verify_implicit_relation_step(t, record, &rows, origin).map_err(|e| {
-                    RecurrenceError::VerificationFailed(format!("{label}.steps[{s}]: {e}"))
-                })?;
+                verify_implicit_relation_step(t, record, &rows, origin)
+                    .map_err(|e| e.with_context(format!("{label}.steps[{s}]")))?;
                 continue;
             }
             let source = step
@@ -260,8 +257,7 @@ pub fn verify_representation_search(
         }
         for (s, space) in node.implicit_spaces.iter().enumerate() {
             let label = format!("{label}.implicit_spaces[{s}]");
-            verify_implicit_relation_search(space)
-                .map_err(|e| RecurrenceError::VerificationFailed(format!("{label}: {e}")))?;
+            verify_implicit_relation_search(space).map_err(|e| e.with_context(&label))?;
             let parent = node
                 .parent
                 .and_then(|p| report.representations.get(p))

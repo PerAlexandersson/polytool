@@ -599,6 +599,32 @@ fn divide_power_has_a_complete_space() {
 }
 
 #[test]
+fn a_rejected_row_map_keeps_its_typed_source() {
+    use std::error::Error;
+    // P_0 = 1 is not divisible by x, so `divide_power` rejects the first row.
+    let source = json!({
+        "schema": "polytool.recurrence.v1", "first_index": 0,
+        "initial_polynomials": [["1"]],
+        "recurrence": {"terms": [{"offset": 1, "deriv_order": 0, "sign": "none",
+                                  "coeff": {"coeffs": [["1", "1"]]}}]}
+    });
+    let error = search_implicit_relations(&request(json!({
+        "source_recurrence": source,
+        "transformation": {"kind": "divide_power", "power": 1},
+        "supports": [{"role": "successor", "max_shift": 1, "index_degree": 1,
+                      "variable_degree": 1}]
+    })))
+    .unwrap_err();
+    assert!(error.to_string().starts_with("divide_power: "), "{error}");
+    assert!(
+        error
+            .source()
+            .is_some_and(|source| source.downcast_ref::<TransformError>().is_some()),
+        "{error:?}"
+    );
+}
+
+#[test]
 fn from_oeis_request_equals_the_json_request_and_finds_the_pascal_relation() {
     // `from_oeis` is the request for a bundled family with an optional map and default
     // fields: it equals the minimal deserialized JSON request.
@@ -628,5 +654,26 @@ fn from_oeis_request_equals_the_json_request_and_finds_the_pascal_relation() {
     assert_eq!(
         report.results[0].representatives[0].relation.text,
         "D Q[n+1] - D Q[n] - Q[n] = 0"
+    );
+}
+
+#[test]
+fn verification_budget_exhaustion_keeps_its_variant() {
+    // With 64 operations the search still certifies the relation, but replaying
+    // the kernel certificate needs more arithmetic than that: the replay reports
+    // the exhausted budget, not a failed verification.
+    let mut req = request(json!({
+        "oeis_id": "A007318",
+        "transformation": factorial_map(),
+        "supports": [{"role": "implicit_successor", "max_shift": 1, "derivative_order": 1}]
+    }));
+    req.limits.max_operations = 64;
+    let report = search_implicit_relations(&req).unwrap();
+    assert_eq!(report.results[0].status, "relations_found");
+    let error = verify_implicit_relation_search(&report).unwrap_err();
+    assert!(
+        matches!(&error, RecurrenceError::BudgetExhausted(message)
+            if message == "results[0]: certificate verification arithmetic budget"),
+        "{error:?}"
     );
 }

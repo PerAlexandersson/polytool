@@ -999,3 +999,69 @@ fn oversized_vector_fits_are_budget_events() {
         .iter()
         .any(|d| d.kind == "transported_vector_system" && d.label == EQUIVALENT_DESCRIPTION_LABEL));
 }
+
+#[test]
+fn replay_budget_exhaustion_keeps_its_variant() {
+    // With 64 operations the search still certifies its implicit spaces, but
+    // replaying their kernel certificates needs more arithmetic: the replay
+    // reports the exhausted budget, not a failed verification.
+    let report = search_representations(&request(json!({
+        "source_recurrence": fibonacci_rule(),
+        "transformations": [
+            {"kind": "reversal", "schedule": {"first_index": 0, "first_degree": 0, "step": 1}}
+        ],
+        "limits": {"max_depth": 1, "max_operations": 64}
+    })))
+    .unwrap();
+    let error = verify_representation_search(&report).unwrap_err();
+    assert!(
+        matches!(&error, RecurrenceError::BudgetExhausted(message)
+            if message.contains("implicit_spaces[") && message.contains("budget")),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn too_many_space_shapes_exceed_a_limit() {
+    let mut value = factorial_request();
+    value["limits"]["max_space_shapes"] = json!(0);
+    value["space_shapes"] = json!([{"kind": "box", "length": 1, "derivative_order": 0,
+        "index_degree": 0, "variable_degree": 0, "leading_index_degree": 0}]);
+    let error = search_representations(&request(value)).unwrap_err();
+    assert_eq!(
+        error,
+        RecurrenceError::LimitExceeded("more space_shapes than max_space_shapes".into())
+    );
+}
+
+#[test]
+fn typed_errors_are_wrapped_with_context_not_flattened() {
+    use std::error::Error;
+    // A malformed transformation keeps its `TransformError` as the source.
+    let mut value = factorial_request();
+    value["transformations"] = json!([
+        {"kind": "reversal", "schedule": {"first_index": 0, "first_degree": 0, "step": 0}},
+        {"kind": "mobius", "a": "0", "b": "0", "c": "0", "e": "0",
+         "schedule": {"first_index": 0, "first_degree": 0, "step": 1}}
+    ]);
+    let error = search_representations(&request(value)).unwrap_err();
+    let rendered = error.to_string();
+    assert!(rendered.starts_with("transformations["), "{rendered}");
+    assert!(
+        error
+            .source()
+            .is_some_and(|source| source.downcast_ref::<TransformError>().is_some()),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn an_unknown_recurrence_sign_is_invalid_input() {
+    let mut rule = fibonacci_rule();
+    rule["recurrence"]["terms"][0]["sign"] = json!("sideways");
+    let json: RecurrenceJson = serde_json::from_value(rule).unwrap();
+    assert_eq!(
+        json.to_recurrence_parts().unwrap_err(),
+        RecurrenceError::InvalidInput("unsupported recurrence sign `sideways`".into())
+    );
+}

@@ -18,7 +18,7 @@ pub(crate) fn print_hstar_inequalities_help() {
     print_coefficient_input_help();
     println!();
     println!("Options:");
-    println!("  --dimension <d>  Use dimension d instead of len(h*)-1");
+    println!("  --dimension <d>  Use dimension d instead of len(h*)-1 (at most 4096)");
     println!("  --json           Emit machine-readable JSON");
     println!();
     println!("Example:");
@@ -116,9 +116,16 @@ fn parse_hstar_inequality_args(args: &[String]) -> Result<HStarInequalityOptions
                 let value = args
                     .get(i)
                     .ok_or_else(|| "--dimension expects a nonnegative integer".to_string())?;
-                options.dimension = Some(value.parse().map_err(|_| {
+                let dimension: usize = value.parse().map_err(|_| {
                     format!("--dimension expects a nonnegative integer, got '{value}'")
-                })?);
+                })?;
+                if dimension > HSTAR_INEQUALITIES_MAX_DIMENSION {
+                    return Err(format!(
+                        "--dimension {dimension} exceeds the maximum \
+                         {HSTAR_INEQUALITIES_MAX_DIMENSION}"
+                    ));
+                }
+                options.dimension = Some(dimension);
             }
             other => return Err(format!("unknown hstar-inequalities option: {other}")),
         }

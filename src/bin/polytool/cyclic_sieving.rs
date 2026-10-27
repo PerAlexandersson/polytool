@@ -1,6 +1,7 @@
 //! `polytool cyclic-sieving`: one cyclic sieving order.
 
 use crate::help::print_coefficient_input_help;
+use crate::input::error_text;
 use crate::input::{read_polys_bigint, strip_trailing_zeros_bigint, OutputFormat};
 use crate::json_out::{json_bigint_vec, json_bool_option, json_string, json_usize_vec};
 use num_bigint::BigInt;
@@ -50,7 +51,7 @@ struct CyclicSievingOptions {
 }
 
 pub(crate) fn parse_bigint_values(input: &str) -> Result<Vec<BigInt>, String> {
-    parse_polynomial_bigint(input).map_err(|error| error.to_string())
+    parse_polynomial_bigint(input).map_err(error_text)
 }
 
 fn parse_cyclic_sieving_args(args: &[String]) -> Result<CyclicSievingOptions, String> {

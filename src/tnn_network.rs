@@ -103,8 +103,12 @@ pub type CanonicalTnnProof = CanonicalTotallyNonnegativeProof;
 
 impl CanonicalTotallyNonnegativeProof {
     /// Recompute the path matrix of the stored network.
-    pub fn evaluated_path_matrix(&self) -> Vec<Vec<BigRational>> {
-        evaluate_path_matrix(&self.network)
+    ///
+    /// Returns `None` for a malformed network (some `lambda[n]` without exactly
+    /// `n + 1` entries; the fields are public, so a certificate can be built by
+    /// hand), the same condition [`verify`](Self::verify) rejects.
+    pub fn evaluated_path_matrix(&self) -> Option<Vec<Vec<BigRational>>> {
+        is_well_formed_network(&self.network).then(|| evaluate_path_matrix(&self.network))
     }
 
     /// Check that the stored network evaluates back to the stored matrix.
@@ -675,12 +679,17 @@ pub fn verify_path_matrix_certificate(
     rows: &[Vec<BigInt>],
     network: &CanonicalPlanarNetwork<BigRational>,
 ) -> bool {
-    let well_formed = network
+    is_well_formed_network(network) && evaluate_path_matrix(network) == bigint_triangular_to_q(rows)
+}
+
+/// Whether `lambda[n]` has exactly `n + 1` entries for every row `n`, the shape
+/// [`evaluate_path_matrix`] requires.
+fn is_well_formed_network(network: &CanonicalPlanarNetwork<BigRational>) -> bool {
+    network
         .lambda
         .iter()
         .enumerate()
-        .all(|(n, row)| row.len() == n + 1);
-    well_formed && evaluate_path_matrix(network) == bigint_triangular_to_q(rows)
+        .all(|(n, row)| row.len() == n + 1)
 }
 
 /// Chain polynomials of a lower-unitriangular integer matrix.
@@ -1126,7 +1135,7 @@ mod tests {
             }
         }
         // The stored network evaluates back to the stored integer matrix.
-        let evaluated = proof.evaluated_path_matrix();
+        let evaluated = proof.evaluated_path_matrix().unwrap();
         assert_eq!(evaluated.len(), proof.coefficient_matrix.len());
         for (row, expected) in evaluated.iter().zip(&proof.coefficient_matrix) {
             let integers: Vec<BigInt> = row.iter().map(|q| q.to_integer()).collect();
@@ -1138,7 +1147,24 @@ mod tests {
         let mut tampered = proof.clone();
         tampered.network.lambda[3][1] = br(2);
         assert!(!tampered.verify());
-        assert_ne!(tampered.evaluated_path_matrix(), evaluated);
+        assert_ne!(tampered.evaluated_path_matrix().unwrap(), evaluated);
+    }
+
+    #[test]
+    fn evaluated_path_matrix_of_a_malformed_network_is_none() {
+        let polys = vec![bi_poly(&[1]), bi_poly(&[1, 1]), bi_poly(&[1, 2, 1])];
+        let proof = build_totally_nonnegative_certificate_from_monic_polynomials(&polys).unwrap();
+        assert!(proof.evaluated_path_matrix().is_some());
+        for malformed in [
+            vec![vec![]],
+            vec![vec![br(1), br(1)]],
+            vec![vec![br(1)], vec![br(1)]],
+        ] {
+            let mut tampered = proof.clone();
+            tampered.network.lambda = malformed;
+            assert_eq!(tampered.evaluated_path_matrix(), None);
+            assert!(!tampered.verify());
+        }
     }
 
     #[test]

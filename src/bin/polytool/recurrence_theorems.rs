@@ -1,6 +1,7 @@
 //! `polytool recurrence-theorems` and the theorem-match output of
 //! `polytool recurrence --theorem-matches`.
 
+use crate::input::error_text;
 use crate::input::{is_help_arg, read_limited_text};
 use polytool::recurrence::{
     AdaptiveSearchOptions, AdaptiveSearchResult, BigRational, RecurrenceJson, RecurrenceJsonSearch,
@@ -166,9 +167,7 @@ pub(crate) fn cmd_recurrence_theorems(args: &[String]) {
             serde_json::from_str::<RecurrenceJson>(&text)
                 .map_err(|e| format!("failed to parse recurrence JSON: {e}"))
         })
-        .and_then(|record| {
-            RecurrenceTheoremReport::for_supplied(&record).map_err(|e| e.to_string())
-        });
+        .and_then(|record| RecurrenceTheoremReport::for_supplied(&record).map_err(error_text));
     let report = match report {
         Ok(report) => report,
         Err(error) => {

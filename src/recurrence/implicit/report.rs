@@ -562,7 +562,7 @@ fn transport_report(
     } = *transformed;
     let transport = transformation
         .transport_implicit(relation, first_base)
-        .map_err(|e| RecurrenceError::InvalidInput(format!("{label}: {e}")))?;
+        .map_err(|e| RecurrenceError::from(e).with_context(label))?;
     let r = transport.relation.max_shift();
     let bases = checked_bases(first_base, r, origin, q_rows.len());
     let mut holds = true;
