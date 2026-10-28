@@ -111,6 +111,8 @@
 //!   polynomial recurrences
 //! - [`decomposition`] — `I_d` / `R_d` symmetric decompositions, `f`-polynomials,
 //!   alternatingly increasing checks, and Brandén--Solus-style magic-basis analysis
+//! - [`factorization`] — Exact irreducible factorization over `Q` for univariate
+//!   polynomials and monic-in-first-variable bivariate polynomials
 //! - [`brenti_sequence`] — Planar strip digraphs with height-dependent
 //!   transitions; their path matrices are totally nonnegative (they do not by
 //!   themselves certify real-rooted rows)
@@ -143,6 +145,7 @@ pub mod brenti_sequence;
 pub mod coefficient_tests;
 pub mod cyclic_sieving;
 pub mod decomposition;
+pub mod factorization;
 pub mod hstar_inequalities;
 pub mod hurwitz;
 pub mod interlacing_matrix;
