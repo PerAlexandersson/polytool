@@ -556,6 +556,31 @@ pub struct VeroneseSectionLiftsRequest {
     pub max_candidates: Option<usize>,
 }
 
+/// Certify one candidate Veronese-section lift of a sequence `Q_n(y)`.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CertifyVeroneseSectionLiftRequest {
+    /// The sequence as `polytool.recurrence.v1` JSON text: homogeneous, no
+    /// `(-1)^n` factors; index-dependent coefficients, derivatives on earlier
+    /// rows and a denominator `f(n, y)` are allowed; order at most 12.
+    pub recurrence_json: String,
+    /// The candidate object: `{"modulus": r, "residue": j, "parent": <a
+    /// polytool.recurrence.v1 record whose denominator is free of x>,
+    /// "index_shift": s, "gauge": {"kind": "none"} | {"kind": "ratio",
+    /// "numerator": [..], "denominator": [..], "initial_value": ".."} |
+    /// {"kind": "closed", "numerator": [..], "denominator": [..]}}` with
+    /// `2 <= r <= 4`, `|s| <= 4` and ascending exact rational strings in `n`.
+    pub candidate: serde_json::Value,
+    /// Rows compared exactly (default 16, at most 64).
+    pub checked_rows: Option<usize>,
+    /// Parent attestations `{"label", "recurrence", "first_index",
+    /// "statement", "source"}` (at most 8); applied only to an identical
+    /// parent record and reported as a conditional verdict.
+    pub attestations: Option<Vec<serde_json::Value>>,
+    /// Try the root-domain parent route (default true).
+    pub try_root_domain: Option<bool>,
+}
+
 /// Structured recurrence-space request; the library validates the strict schema.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

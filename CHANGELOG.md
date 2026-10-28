@@ -260,6 +260,20 @@ Performance:
 
 Additions:
 
+- `recurrence::certify_veronese_section_lift` certifies one candidate
+  Veronese-section lift `Q_n = lambda(n) V_(r,j)(P_(n+s))` for inputs with
+  index-dependent coefficients and derivatives: the parent rule is transported
+  to the section matrices (`x -> X`, `D -> DD`, an algebra homomorphism), the
+  input relation is pseudo-divided by it, and a zero remainder with exact
+  checks at the finitely many exceptional bases proves the identity for every
+  `n` (`VeroneseForwardDivisionCertificate`, replayed by `verify()`).  The
+  parent is then proved by the periodic-product rule, a canonical paper
+  theorem, an unconditional root-domain claim (e.g. Eulerian through the
+  `f`-polynomial), or conditionally by a caller-supplied attestation.  Verdicts
+  keep the identity, the parent proof and Lean replay (`not_attempted`) apart;
+  schema `polytool.recurrence-veronese-certificate.v1`; MCP tool
+  `certify_veronese_section_lift`.  Example: the even sections of the Eulerian
+  polynomials are proved real-rooted this way.
 - Symmetric-companion lifts: `recurrence::find_symmetric_companion_lifts`
   takes a palindromic sequence `A_n` (scalar recurrence, derivatives allowed,
   with seeds and a symmetry schedule `d_n = d_0 + n - n_0`, supplied or

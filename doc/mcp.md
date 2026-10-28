@@ -39,6 +39,7 @@ Available MCP tools:
 - `verify_implicit_relation_search`
 - `enumerate_real_rooted`
 - `find_veronese_section_lifts`
+- `certify_veronese_section_lift`
 
 `enumerate_real_rooted` takes `{"degree", "leading_coefficients_descending",
 "max_results", "max_nodes", "max_coefficient_bits"}` (the options of
@@ -73,6 +74,18 @@ status, of which only `proved_product_parent` is a proof.  The MCP server
 bounds the work: recurrence order at most 12, `max_modulus` at most 6,
 `parent_rows` default 12 and at most 64, `max_candidates` default 256 and at
 most 4096.
+
+`certify_veronese_section_lift` takes `{"recurrence_json", "candidate",
+"checked_rows", "attestations", "try_root_domain"}` and returns the
+`polytool.recurrence-veronese-certificate.v1` report of
+`recurrence::certify_veronese_section_lift` for one candidate lift
+`Q_n = lambda(n) V_(r,j)(P_(n+s))`: the identity status (`certified` with a
+replayable forward-division certificate, `supported_by_rows` or `refuted`),
+the parent proof and the verdict, of which only `proved` is a proof.  The MCP
+server bounds the work: input and parent order at most 12, modulus at most 4,
+`|index_shift|` at most 4, derivative order at most 6, `checked_rows` default
+16 and at most 64, at most 8 attestations, and the library's budget of 10000
+operator terms.
 
 Every MCP tool that takes polynomial coefficients accepts arbitrary-size exact
 integers: `parse_polynomials`, `check_polynomial_family`,

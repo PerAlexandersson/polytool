@@ -479,6 +479,68 @@ was exhausted.  The report types implement `Serialize`
 algorithm and the argument that `d` identifying rows prove the identity for
 all `n` are in [algorithms.md](algorithms.md#veronese-section-lifts).
 
+### Certifying one candidate (index-dependent and differential inputs)
+
+`recurrence::certify_veronese_section_lift` checks one candidate
+`Q_n = lambda(n) V_(r,j)(P_(n+s))` for an input whose rule may have
+index-dependent coefficients, derivatives on earlier rows and a denominator
+`f(n, y)`.  The candidate (`VeroneseSectionCandidate`) gives the modulus
+(2 to 4), the residue, the parent as a `polytool.recurrence.v1` record whose
+denominator is free of `x`, an index shift `|s| <= 4` and a gauge
+(`VeroneseSectionGauge::{None, Ratio, Closed}`).  The result
+(`VeroneseSectionCertification`, `polytool.recurrence-veronese-certificate.v1`)
+records the identity status (`Certified` with a replayable
+`VeroneseForwardDivisionCertificate`, `SupportedByRows`, `Refuted`), the
+parent proof (periodic product, paper theorem, root-domain claim, or a
+caller-supplied `VeroneseParentAttestation`, which only gives a conditional
+verdict) and the verdict.  `verify()` replays the certificate.
+
+```rust
+use polytool::recurrence::*;
+
+let q = |n: i64| BigRational::from_integer(n.into());
+// m (m - 1) Q_m = 2 (m - 1) Q_(m-1) + (y - 1) Q_(m-2), Q_0 = Q_1 = 1:
+// the even sections of (1 + x)^m divided by m!.
+let input = Recurrence {
+    terms: vec![
+        RecurrenceTerm::new(1, 0, BivarPoly { coeffs: vec![vec![q(-2)], vec![q(2)]] }),
+        RecurrenceTerm::new(2, 0, BivarPoly { coeffs: vec![vec![q(-1), q(1)]] }),
+    ],
+    denominator: Some(BivarPoly { coeffs: vec![vec![q(0)], vec![q(-1)], vec![q(1)]] }),
+    inhomogeneous: None,
+};
+let parent = Recurrence {
+    terms: vec![RecurrenceTerm::new(1, 0, BivarPoly { coeffs: vec![vec![q(1), q(1)]] })],
+    denominator: None,
+    inhomogeneous: None,
+};
+let candidate = VeroneseSectionCandidate {
+    modulus: 2,
+    residue: 0,
+    parent: RecurrenceJson::from_recurrence_rational(&parent, 0, &[vec![q(1)]], None),
+    index_shift: 0,
+    // lambda(n) / lambda(n - 1) = 1 / n, lambda(0) = 1.
+    gauge: VeroneseSectionGauge::Ratio {
+        numerator: vec!["1".into()],
+        denominator: vec!["0".into(), "1".into()],
+        initial_value: "1".into(),
+    },
+};
+let result = certify_veronese_section_lift(
+    &input,
+    &[vec![q(1)], vec![q(1)]],
+    0,
+    &candidate,
+    &VeroneseSectionCertifyOptions::default(),
+)?;
+assert_eq!(result.verdict, VeroneseSectionVerdict::Proved);
+result.verify()?;
+# Ok::<(), RecurrenceError>(())
+```
+
+The transport conventions, the pseudo-division and the soundness argument are
+in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
+
 ## Symmetric-companion lifts
 
 `recurrence::find_symmetric_companion_lifts` recognizes a palindromic sequence

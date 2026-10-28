@@ -693,6 +693,53 @@ status `proved_product_parent`.  Only that status is a proof; an open status
 is finite evidence, and an empty `lifts` list means only that the bounded
 search found nothing.
 
+### `certify_veronese_section_lift`
+
+Certify one candidate lift `Q_n = lambda(n) V_(r,j)(P_(n+s))` of the sequence
+`Q_n(y)` of a supplied `recurrence_json` (`polytool.recurrence.v1`; index-
+dependent coefficients, derivatives on earlier rows and a denominator
+`f(n, y)` are allowed; homogeneous, no `(-1)^n` factors, order at most 12),
+and try to prove its parent.  The `candidate` object has `modulus` (2 to 4),
+`residue`, `parent` (a `polytool.recurrence.v1` record whose denominator is
+free of `x`), `index_shift` (`|s| <= 4`, default 0) and `gauge`
+(`{"kind": "none"}` (default), `{"kind": "ratio", "numerator": [...],
+"denominator": [...], "initial_value": "..."}` for
+`lambda(n)/lambda(n-1) = a(n)/b(n)` and `lambda(n0)`, or `{"kind": "closed",
+"numerator": [...], "denominator": [...]}`; ascending exact strings in `n`).
+Optional: `checked_rows` (default 16, at most 64), `attestations` (at most 8
+objects `{"label", "recurrence", "first_index", "statement", "source"}`) and
+`try_root_domain` (default true).
+
+Example arguments (the even sections of `(1 + x)^n`):
+
+```json
+{
+  "recurrence_json": "{\"schema\":\"polytool.recurrence.v1\",\"first_index\":0,\"initial_polynomials\":[[\"1\"],[\"1\"]],\"recurrence\":{\"terms\":[{\"offset\":1,\"deriv_order\":0,\"sign\":\"none\",\"coeff\":{\"coeffs\":[[\"2\"]]}},{\"offset\":2,\"deriv_order\":0,\"sign\":\"none\",\"coeff\":{\"coeffs\":[[\"-1\",\"1\"]]}}]}}",
+  "candidate": {
+    "modulus": 2,
+    "residue": 0,
+    "parent": {"schema": "polytool.recurrence.v1", "first_index": 0,
+               "initial_polynomials": [["1"]],
+               "recurrence": {"terms": [{"offset": 1, "deriv_order": 0, "sign": "none",
+                                         "coeff": {"coeffs": [["1", "1"]]}}]}}
+  }
+}
+```
+
+The response is `polytool.recurrence-veronese-certificate.v1`: `candidate`,
+`input_first_index`, `identifying_rows`, `rows_compared`, `identity`
+(`status` `certified` with `kind: "forward_division"` and the replayable
+`certificate`, `supported_by_rows` with `rows`, or `refuted` with `index`),
+`parent_proof` (`status` `proved`, `conditional_on_attestation`, `not_proved`
+or `refuted`, the `route` `periodic_product`, `paper_theorem`, `root_domain`
+or `attestation`, every `attempt` and the checked parent rows), `verdict`
+(`proved`, `conditional_on_attestation`, `identity_certified_parent_open`,
+`identity_certified_parent_refuted`, `identity_supported_by_rows` or
+`identity_refuted`), `statement`, `lean_replay: "not_attempted"` and `notes`.
+Only `proved` shows that every `Q_n` is zero or real-rooted with nonpositive
+roots; `supported_by_rows` is finite evidence.  For the example the verdict
+is `proved` by a periodic product parent.
+
 ### `resultant`
 
 Compute the exact resultant of two polynomials.

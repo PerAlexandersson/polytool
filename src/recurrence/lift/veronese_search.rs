@@ -2,6 +2,7 @@
 //! factorization of `chi(L, x^r)`, enumeration of monic divisors, and the
 //! per-candidate work (norm, seed solve, verification, parent triage).
 
+use super::parent_proof::periodic_product_parent;
 use super::veronese_algebra::*;
 use super::*;
 use crate::factorization::{
@@ -794,12 +795,10 @@ pub(super) fn evaluate_veronese_section_lift_candidate(
         // Step 5: parent triage; step 6: order-one product parents.
         let parent_row_check =
             check_parent_rows(&parent_rows[..parent_rows_to_check], prepared.first_index);
-        // `G = L^k - c(x)` gives `P_(n0 + k m + i) = c^m P_(n0 + i)`.
-        let product_parent_proved = (1..parent_order).all(|power| parent.coeff(power).is_zero())
-            && classify_row(&polynomial_row(&(-parent.coeff(0)))).has_nonpositive_real_roots()
-            && parent_seeds
-                .iter()
-                .all(|seed| classify_row(seed).has_nonpositive_real_roots());
+        // `G = L^k - c(x)` gives `P_(n0 + k m + i) = c^m P_(n0 + i)` (the
+        // periodic-product route shared with `certify_veronese_section_lift`).
+        let product_parent_proved =
+            periodic_product_parent(&parent_recurrence, &parent_seeds).is_ok();
         let status = parent_status(product_parent_proved, &parent_row_check);
         if product_parent_proved && status != VeroneseSectionLiftStatus::ProvedProductParent {
             return Err(RecurrenceError::VerificationFailed(

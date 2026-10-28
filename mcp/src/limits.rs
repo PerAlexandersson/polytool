@@ -51,3 +51,11 @@ pub(crate) const MCP_MAX_VERONESE_PARENT_ROWS: usize = 64;
 /// parents tried per modulus.
 pub(crate) const MCP_DEFAULT_VERONESE_CANDIDATES: usize = 256;
 pub(crate) const MCP_MAX_VERONESE_CANDIDATES: usize = 4_096;
+/// `certify_veronese_section_lift`: largest order of the input and the
+/// parent recurrences.
+pub(crate) const MCP_MAX_VERONESE_CERTIFY_ORDER: usize = 12;
+/// `certify_veronese_section_lift`: default and largest number of compared rows.
+pub(crate) const MCP_DEFAULT_VERONESE_CHECKED_ROWS: usize = 16;
+pub(crate) const MCP_MAX_VERONESE_CHECKED_ROWS: usize = 64;
+/// `certify_veronese_section_lift`: largest number of parent attestations.
+pub(crate) const MCP_MAX_VERONESE_ATTESTATIONS: usize = 8;

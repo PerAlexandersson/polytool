@@ -3,7 +3,10 @@
 //! hypothesis) implies that of the input.
 //!
 //! - Veronese-section lifts, [`find_veronese_section_lifts`]: the input is a
-//!   coefficient section `V_(r,j)(P_n)` of a parent with nonpositive roots.
+//!   coefficient section `V_(r,j)(P_n)` of a parent with nonpositive roots;
+//!   [`certify_veronese_section_lift`] certifies one candidate lift for inputs
+//!   with index-dependent and differential terms (forward certificate) and
+//!   runs the parent provers.
 //! - Symmetric-companion lifts, [`find_symmetric_companion_lifts`] and
 //!   [`verify_symmetric_companion_certificate`]: the input is the symmetric
 //!   part `A_n` of `P_n = A_n + x B_n` with a first-order derivative parent
@@ -22,6 +25,14 @@
 //!   work behind a crate-internal entry point that takes `G` directly;
 //! - `veronese_report`: the report types and their
 //!   `polytool.recurrence-veronese-lifts.v1` JSON form;
+//! - `section_operators`: the transport `phi` of operators to section
+//!   matrices (`x -> X`, `D -> DD`);
+//! - `section_certify`: gauges, pseudo-division by a transported parent
+//!   system and [`VeroneseForwardDivisionCertificate`];
+//! - `parent_proof`: the parent provers (periodic product, paper theorem,
+//!   root domain, attestation), shared with the search;
+//! - `section_report`: [`certify_veronese_section_lift`] and its
+//!   `polytool.recurrence-veronese-certificate.v1` report;
 //! - `symmetric_companion`: operators, search, certificate and verifier, and
 //!   the `polytool.recurrence-symmetric-companion.v1` report.
 //!
@@ -30,6 +41,18 @@
 
 use super::*;
 
+mod parent_proof;
+pub use parent_proof::{
+    VeroneseParentAttestation, VeroneseParentProof, VeroneseParentProofAttempt,
+    VeroneseParentProofRoute, VeroneseParentProofStatus,
+};
+mod section_certify;
+pub use section_certify::{
+    VeroneseDivisionQuotient, VeroneseForwardDivisionCertificate, VeroneseSectionGauge,
+};
+mod section_operators;
+mod section_report;
+pub use section_report::*;
 mod veronese_algebra;
 mod veronese_report;
 pub use veronese_report::*;
@@ -38,6 +61,8 @@ pub use veronese_search::{
     find_veronese_section_lifts, VeroneseSectionLiftOptions, MAX_VERONESE_SECTION_MODULUS,
 };
 
+#[cfg(test)]
+mod section_tests;
 #[cfg(test)]
 mod veronese_tests;
 

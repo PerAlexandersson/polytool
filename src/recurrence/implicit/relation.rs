@@ -445,7 +445,7 @@ fn join_signed(parts: &[String]) -> String {
     text
 }
 
-pub(super) fn op_text(op: &DOp, symbol: &str) -> String {
+pub(in crate::recurrence) fn op_text(op: &DOp, symbol: &str) -> String {
     if op.is_zero() {
         return "0 = 0".into();
     }

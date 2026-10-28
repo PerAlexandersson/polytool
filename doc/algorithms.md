@@ -270,6 +270,76 @@ replay format for the identification certificate.  The CLI command is
 `polytool recurrence-veronese-lifts`; the MCP tool is
 `find_veronese_section_lifts`.
 
+### Certifying one candidate (v2)
+
+`recurrence::certify_veronese_section_lift(&input, rows, n0, &candidate,
+&options)` certifies a candidate `Q_n = lambda(n) V_(r,j)(P_(n+s))` for an
+input with index-dependent coefficients, derivatives on earlier rows and a
+denominator `f(n, y)` (its leading row carries no derivative), and a parent
+whose leader is free of `x`.  Bounds: `r <= 4`, `|s| <= 4`, derivative order
+at most 6, at most 10000 operator terms, at most 64 compared rows; hitting one
+is a typed error.
+
+**Transport.**  Write `P(x) = sum_(a<r) x^a F_a(x^r)`, `y = x^r`; an
+operator matrix acts by `(A F)_b = sum_a A[b][a] F_a`.  Multiplication by `x`
+is `X` with `X[0][r-1] = y` and `X[b][b-1] = 1`; differentiation is `DD` with
+`DD[b][b+1] = (b+1) + r y D_y` (`b < r-1`) and `DD[r-1][0] = r D_y`; `n` and
+`S` act diagonally.  Since `DD X - X DD = I`, the map
+`phi(sum c(n, x) D^d S^i) = sum c(n, X) DD^d S^i` is a homomorphism of Ore
+algebras, and the sections of `(L P)_n` are `(phi(L) F)_n`.  In Euler form,
+`x^s a(n, theta_x)` sends component `b` to `(b + s) mod r` with the factor
+`y^floor((b+s)/r) a(n, r theta_y + b)`.  These conventions are tested against
+direct section computations on rows.
+
+**Gauge.**  With `lambda(n)/lambda(n-1) = a(n)/b(n)` (checked nonzero for
+every `n > n0`, and `lambda(n0) != 0`), the parent relation
+`sum c_(i,d)(n, x) D^d P_(n+i) = 0` (leader `g(n) S^k`) becomes
+`sum c_(i,d)(n+s, x) prod_(t=i+1..k) a(n+t) prod_(t=1..i) b(n+t) D^d P~_(n+i) = 0`
+for `P~_n = lambda(n) P_(n+s)`; its leader stays free of `x`.
+
+**Pseudo-division.**  `e_j^T M` (`M` the input rule as a relation at base `n`)
+is divided by `Phi = phi(L~)`, whose shift-`k` part is `g~(n) S^k I`: while
+the remainder has a shift `m >= k`, multiply it (and the recorded quotients)
+by `g~(n + m - k)` and subtract `c o S^(m-k) o Phi` for its top coefficient
+row `c`.  The result is `w(n) e_j^T M = sum_nu H_nu S^nu Phi + R`, `R` of
+shift `< k`, rechecked with exact operator arithmetic.
+
+**Soundness.**  The first rows (at least the `K` identifying rows) are
+compared exactly; a difference refutes the candidate at that index.  With
+`R = 0`, `w(n) (M V_j(P~))_n = sum_nu H_nu (phi(L~) F~)_(n+nu) = 0` at every base
+`n` where `L~` holds (`n >= max(n0, p0 + Kp - k - s)`).  `w` depends on `n`
+only; its integer roots, and the bases between `n0 + K - R` and that bound,
+are evaluated exactly on the compared rows.  So `V_j(P~)` satisfies `M`
+wherever `Q` does (bases `n >= n0 + K - R`); the difference `S = Q - V_j(P~)`
+then satisfies `f(m, y) S_m = (earlier rows)` for every target `m >= n0 + K`,
+`f(m, .)` is never the zero polynomial there (checked from the exact integer
+roots of its coefficients), and `S` vanishes at the identifying rows, so
+`S = 0`.  With `R != 0` the identity is only `supported_by_rows`.
+
+**Parent.**  The parent statement (every used `P_m` is zero or real-rooted
+with coefficients of one sign) is proved by a periodic product
+`P_(n+k) = c(x) P_n`, by `match_recurrence_theorems` with a canonical
+boundary, or by a root-domain claim of `transform_recurrence` (maps: identity,
+`f_polynomial` and `reversal` with a degree schedule fitted to the first rows,
+the inverse `f`-map; accepted only for an unconditional all-index claim that
+the source is real-rooted in an interval ending at or below 0).  The Eulerian
+parent A008292 is proved by the `f_polynomial` route.  A caller attestation
+matching the parent record exactly gives a conditional verdict.  A checked
+parent row that fails refutes the parent statement.
+
+Examples (tests): the even sections of the Eulerian polynomials satisfy a
+monic order-3 successor recurrence with second derivatives on the earlier
+rows; its forward certificate and the `f_polynomial` parent proof give
+`proved`.  The even Narayana sections satisfy an order-4 recurrence with a
+leader depending on `y` (multiplier `w(n) = (n+3)(n+4)(n+5)`); the identity is
+certified and the order-two Narayana parent stays open.  Gauged and shifted
+binomial sections (`V_(2,0)((1+x)^n)/n!`, `2^n V_(3,1)((1+x)^(n+2))`) are
+proved.
+
+Limitations: inputs whose leading row carries a derivative, the reverse
+(reconstruction) certificate, candidate search and Lean replay are not part
+of this stage.
+
 ## Symmetric-companion lifts
 
 `recurrence::find_symmetric_companion_lifts(&Recurrence, initial_rows,

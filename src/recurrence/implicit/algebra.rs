@@ -103,7 +103,7 @@ impl Biv {
 
     /// A polynomial in `n` only.
     #[cfg(test)]
-    pub(super) fn from_n(p: &[Q]) -> Self {
+    pub(in crate::recurrence) fn from_n(p: &[Q]) -> Self {
         Self::new(p.iter().map(|c| vec![c.clone()]).collect())
     }
 
@@ -180,7 +180,7 @@ impl Biv {
         Self::new(rows)
     }
 
-    pub(super) fn pow(&self, exponent: usize) -> Self {
+    pub(in crate::recurrence) fn pow(&self, exponent: usize) -> Self {
         (0..exponent).fold(Self::one(), |acc, _| acc.mul(self))
     }
 
@@ -258,7 +258,7 @@ impl Biv {
     }
 
     /// Smallest power of `y` with a nonzero coefficient.
-    pub(super) fn y_valuation(&self) -> Option<usize> {
+    pub(in crate::recurrence) fn y_valuation(&self) -> Option<usize> {
         self.0
             .iter()
             .filter_map(|row| row.iter().position(|c| !c.is_zero()))
@@ -266,7 +266,7 @@ impl Biv {
     }
 
     /// Divide by `y^e` (the caller guarantees divisibility).
-    pub(super) fn div_y_power(&self, e: usize) -> Self {
+    pub(in crate::recurrence) fn div_y_power(&self, e: usize) -> Self {
         Self::new(
             self.0
                 .iter()
@@ -277,7 +277,7 @@ impl Biv {
 
     /// Multiply by `y^e`.
     #[cfg(test)]
-    pub(super) fn mul_y_power(&self, e: usize) -> Self {
+    pub(in crate::recurrence) fn mul_y_power(&self, e: usize) -> Self {
         Self::new(
             self.0
                 .iter()
@@ -293,12 +293,12 @@ impl Biv {
     }
 
     /// Lexicographically leading coefficient: highest power of `n`, then of `y`.
-    pub(super) fn leading(&self) -> Option<&Q> {
+    pub(in crate::recurrence) fn leading(&self) -> Option<&Q> {
         self.0.last().and_then(|row| row.last())
     }
 
     /// `(lead, p / lead)`; the zero polynomial is returned unchanged with lead 1.
-    pub(super) fn monic(&self) -> (Q, Self) {
+    pub(in crate::recurrence) fn monic(&self) -> (Q, Self) {
         match self.leading() {
             Some(lead) => {
                 let lead = lead.clone();
@@ -410,7 +410,7 @@ impl DOp {
     }
 
     /// Smallest power of `x` dividing every coefficient.
-    pub(super) fn x_valuation(&self) -> usize {
+    pub(in crate::recurrence) fn x_valuation(&self) -> usize {
         self.0
             .values()
             .filter_map(Biv::y_valuation)
@@ -418,7 +418,7 @@ impl DOp {
             .unwrap_or(0)
     }
 
-    pub(super) fn div_x_power(&self, e: usize) -> Self {
+    pub(in crate::recurrence) fn div_x_power(&self, e: usize) -> Self {
         let mut out = Self::default();
         for (key, c) in &self.0 {
             out.add_term(*key, c.div_y_power(e));
@@ -427,7 +427,7 @@ impl DOp {
     }
 
     #[cfg(test)]
-    pub(super) fn mul_x_power(&self, e: usize) -> Self {
+    pub(in crate::recurrence) fn mul_x_power(&self, e: usize) -> Self {
         let mut out = Self::default();
         for (key, c) in &self.0 {
             out.add_term(*key, c.mul_y_power(e));
@@ -437,7 +437,7 @@ impl DOp {
 
     /// Leading coefficient: largest `(shift, derivative)` key, then the
     /// lexicographically leading coefficient of its polynomial.
-    pub(super) fn leading(&self) -> Option<Q> {
+    pub(in crate::recurrence) fn leading(&self) -> Option<Q> {
         self.0
             .values()
             .next_back()
@@ -446,7 +446,7 @@ impl DOp {
 
     /// `(lead, e, N)` with `self = lead x^e N`, `N` having no common power of
     /// `x` and leading coefficient one.
-    pub(super) fn normalize(&self) -> (Q, usize, Self) {
+    pub(in crate::recurrence) fn normalize(&self) -> (Q, usize, Self) {
         let e = self.x_valuation();
         let stripped = self.div_x_power(e);
         let lead = stripped.leading().unwrap_or_else(Q::one);
@@ -496,9 +496,9 @@ impl DOp {
 
 /// `sum x^s a_(i,s)(n,theta) S^i`, keyed by `(shift i, x power s)`, with
 /// coefficients in `(n, theta)`.
-pub(super) type ThetaOp = BTreeMap<(usize, usize), Biv>;
+pub(in crate::recurrence) type ThetaOp = BTreeMap<(usize, usize), Biv>;
 
-pub(super) fn theta_add(op: &mut ThetaOp, key: (usize, usize), c: Biv) {
+pub(in crate::recurrence) fn theta_add(op: &mut ThetaOp, key: (usize, usize), c: Biv) {
     if c.is_zero() {
         return;
     }
@@ -510,7 +510,7 @@ pub(super) fn theta_add(op: &mut ThetaOp, key: (usize, usize), c: Biv) {
 }
 
 /// `theta (theta - 1) ... (theta - d + 1)`.
-pub(super) fn falling_factorial(d: usize) -> Vec<Q> {
+pub(in crate::recurrence) fn falling_factorial(d: usize) -> Vec<Q> {
     (0..d).fold(vec![Q::one()], |acc, t| {
         vec_poly::mul(&acc, &[-q_usize(t), Q::one()])
     })
@@ -530,7 +530,7 @@ fn stirling2(max: usize) -> Vec<Vec<Q>> {
 
 /// `(J, x^J L)` in Euler form with `J` the largest derivative order, using
 /// `x^d D^d = theta (theta - 1) ... (theta - d + 1)`.
-pub(super) fn to_theta(op: &DOp) -> (usize, ThetaOp) {
+pub(in crate::recurrence) fn to_theta(op: &DOp) -> (usize, ThetaOp) {
     let j_max = op.max_derivative();
     let mut out = ThetaOp::new();
     for ((i, d), c) in &op.0 {
@@ -552,7 +552,7 @@ pub(super) fn to_theta(op: &DOp) -> (usize, ThetaOp) {
 
 /// The normal-ordered form of an Euler-form operator, using
 /// `theta^m = sum_d S(m, d) x^d D^d`.
-pub(super) fn from_theta(op: &ThetaOp) -> DOp {
+pub(in crate::recurrence) fn from_theta(op: &ThetaOp) -> DOp {
     let max_m = op.values().filter_map(Biv::y_degree).max().unwrap_or(0);
     let table = stirling2(max_m);
     let mut out = DOp::default();
@@ -579,7 +579,7 @@ pub(super) fn from_theta(op: &ThetaOp) -> DOp {
 // ---------------------------------------------------------------------------
 
 /// Nonnegative integer roots of a nonzero univariate rational polynomial.
-pub(super) fn nonnegative_integer_roots(p: &[Q]) -> BTreeSet<BigInt> {
+pub(in crate::recurrence) fn nonnegative_integer_roots(p: &[Q]) -> BTreeSet<BigInt> {
     let p = vec_poly::trim(p);
     let mut roots = BTreeSet::new();
     let Some(degree) = vec_poly::degree(&p) else {
@@ -631,15 +631,15 @@ pub(in crate::recurrence) fn roots_in_domain(
 
 /// Exact description of the zeros of `p(n,k)` with `n` in the domain and `k >= 0`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct ZeroAnalysis {
+pub(in crate::recurrence) struct ZeroAnalysis {
     /// Indices `n` of the domain where `p(n, .)` vanishes identically.
-    pub(super) singular_indices: Vec<usize>,
+    pub(in crate::recurrence) singular_indices: Vec<usize>,
     /// Indices `k >= 0` with `p(n, k) = 0` for every `n` of the domain.
-    pub(super) uniform_indices: Vec<usize>,
+    pub(in crate::recurrence) uniform_indices: Vec<usize>,
     /// Whether the zero set is exactly `singular x N  union  domain x uniform`.
-    pub(super) certified: bool,
+    pub(in crate::recurrence) certified: bool,
     /// How the description was obtained.
-    pub(super) certificate: String,
+    pub(in crate::recurrence) certificate: String,
 }
 
 /// Univariate polynomial gcd over the rationals (monic, zero for all-zero input).
@@ -652,7 +652,7 @@ fn gcd_all(polys: &[Vec<Q>]) -> Vec<Q> {
 }
 
 /// The content `c(n) = gcd_j [k^j] p` and primitive part `p / c(n)`.
-pub(super) fn content_and_primitive(p: &Biv) -> (Vec<Q>, Biv) {
+pub(in crate::recurrence) fn content_and_primitive(p: &Biv) -> (Vec<Q>, Biv) {
     let width = p.y_degree().map_or(0, |d| d + 1);
     let columns = (0..width).map(|j| p.y_coefficient(j)).collect::<Vec<_>>();
     let content = gcd_all(&columns);
@@ -776,7 +776,11 @@ pub(in crate::recurrence) fn biv_text(p: &Biv, variable: &str) -> String {
 /// `psi(k)` has the uniform zero set of its nonnegative integer roots, and
 /// `psi(first + u, k)` with coefficients of one strict sign has no zeros.
 /// Anything else is reported as uncertified; no prefix testing is used.
-pub(super) fn analyze_zeros(p: &Biv, first: usize, last: Option<usize>) -> ZeroAnalysis {
+pub(in crate::recurrence) fn analyze_zeros(
+    p: &Biv,
+    first: usize,
+    last: Option<usize>,
+) -> ZeroAnalysis {
     if p.is_zero() {
         return ZeroAnalysis {
             singular_indices: Vec::new(),

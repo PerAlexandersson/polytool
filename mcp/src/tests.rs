@@ -2615,3 +2615,83 @@ fn veronese_section_lifts_finds_the_worked_example() {
     assert_eq!(rows.polynomials[3], vec!["1", "3", "3", "1"]);
     assert_eq!(report["exhausted_budget"], false);
 }
+
+fn certify_request(
+    candidate: serde_json::Value,
+) -> crate::requests::CertifyVeroneseSectionLiftRequest {
+    crate::requests::CertifyVeroneseSectionLiftRequest {
+        recurrence_json: VERONESE_WORKED_JSON.to_string(),
+        candidate,
+        ..Default::default()
+    }
+}
+
+fn binomial_parent_candidate(modulus: usize, residue: usize) -> serde_json::Value {
+    json!({
+        "modulus": modulus,
+        "residue": residue,
+        "parent": {
+            "schema": "polytool.recurrence.v1",
+            "first_index": 0,
+            "initial_polynomials": [["1"]],
+            "recurrence": {"terms": [
+                {"offset": 1, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["1", "1"]]}}
+            ]}
+        }
+    })
+}
+
+#[test]
+fn certify_veronese_section_lift_proves_the_worked_example() {
+    let server = PolynomialToolsServer::new();
+    let Json(report) = server
+        .certify_veronese_section_lift(Parameters(certify_request(binomial_parent_candidate(2, 0))))
+        .unwrap();
+    assert_eq!(
+        report["schema"],
+        "polytool.recurrence-veronese-certificate.v1"
+    );
+    assert_eq!(report["verdict"], "proved");
+    assert_eq!(report["identity"]["status"], "certified");
+    assert_eq!(report["identity"]["kind"], "forward_division");
+    assert_eq!(report["parent_proof"]["route"], "periodic_product");
+    assert_eq!(report["lean_replay"], "not_attempted");
+    // The report deserializes and replays in the library.
+    let value = serde_json::Value::Object(report.into_iter().collect());
+    let certification: polytool::recurrence::VeroneseSectionCertification =
+        serde_json::from_value(value).unwrap();
+    certification.verify().unwrap();
+
+    // The odd sections of (1 + x)^n differ: refuted with the index.
+    let Json(report) = server
+        .certify_veronese_section_lift(Parameters(certify_request(binomial_parent_candidate(2, 1))))
+        .unwrap();
+    assert_eq!(report["verdict"], "identity_refuted");
+    assert_eq!(report["identity"]["index"], 0);
+}
+
+#[test]
+fn certify_veronese_section_lift_validates_limits() {
+    let server = PolynomialToolsServer::new();
+    let over = [
+        crate::requests::CertifyVeroneseSectionLiftRequest {
+            checked_rows: Some(65),
+            ..certify_request(binomial_parent_candidate(2, 0))
+        },
+        certify_request(binomial_parent_candidate(5, 0)),
+        certify_request(json!({"modulus": 2})),
+        crate::requests::CertifyVeroneseSectionLiftRequest {
+            attestations: Some(vec![json!({}); 9]),
+            ..certify_request(binomial_parent_candidate(2, 0))
+        },
+        crate::requests::CertifyVeroneseSectionLiftRequest {
+            attestations: Some(vec![json!({"label": "x"})]),
+            ..certify_request(binomial_parent_candidate(2, 0))
+        },
+    ];
+    for request in over {
+        assert!(server
+            .certify_veronese_section_lift(Parameters(request))
+            .is_err());
+    }
+}

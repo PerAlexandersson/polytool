@@ -889,6 +889,99 @@ impl PolynomialToolsServer {
         Ok(Json(fields.into_iter().collect()))
     }
 
+    #[tool(
+        description = "Certify one candidate Veronese-section lift Q_n = lambda(n) V_(r,j)(P_(n+s)) of a sequence Q_n(y) given as a polytool.recurrence.v1 record (index-dependent coefficients, derivatives on earlier rows and a denominator f(n,y) allowed; order at most 12), where V_(r,j)(P)(y) = sum_k [x^(r k + j)] P(x) y^k. The candidate gives modulus r (2..4), residue j, the parent P as a polytool.recurrence.v1 record whose denominator is free of x, an index shift s (|s| <= 4) and a gauge lambda (none, ratio lambda(n)/lambda(n-1) = a(n)/b(n) with lambda(n0), or closed a(n)/b(n)). Rows are compared exactly (a difference refutes the candidate); then e_j^T M (M the input rule) is pseudo-divided by the transported parent system phi(L~) (x -> X, D -> section derivative matrix): remainder zero gives a forward certificate w(n) e_j^T M = sum H_nu S^nu phi(L~), which with the exceptional bases (roots of w) and the identifying rows checked exactly proves the identity for all n >= n0; a nonzero remainder leaves supported_by_rows (evidence only). The parent is then proved by a periodic product P_(n+k) = c(x) P_n, a paper theorem (match_recurrence_theorems, canonical boundary), or a root-domain claim of transform_recurrence (identity, f_polynomial, reversal, inverse f-map; source real-rooted in (-inf, 0], unconditional, all indices), or matched to a caller attestation (conditional verdict). Returns polytool.recurrence-veronese-certificate.v1: candidate, identity (status certified with the replayable forward_division certificate | supported_by_rows | refuted with index), parent_proof (status proved | conditional_on_attestation | not_proved | refuted, route, attempts), verdict (proved | conditional_on_attestation | identity_certified_parent_open | identity_certified_parent_refuted | identity_supported_by_rows | identity_refuted), statement, lean_replay not_attempted, notes. Only verdict proved is a proof that every Q_n is zero or real-rooted with nonpositive roots."
+    )]
+    pub fn certify_veronese_section_lift(
+        &self,
+        Parameters(input): Parameters<crate::requests::CertifyVeroneseSectionLiftRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        use crate::limits::{
+            MCP_DEFAULT_VERONESE_CHECKED_ROWS, MCP_MAX_VERONESE_ATTESTATIONS,
+            MCP_MAX_VERONESE_CERTIFY_ORDER, MCP_MAX_VERONESE_CHECKED_ROWS,
+        };
+        use polytool::recurrence::{
+            certify_veronese_section_lift, VeroneseParentAttestation, VeroneseSectionCandidate,
+            VeroneseSectionCertifyOptions,
+        };
+        validate_mcp_text(&input.recurrence_json, "recurrence JSON").map_err(invalid_params)?;
+        let record: RecurrenceJson = serde_json::from_str(&input.recurrence_json)
+            .map_err(|error| invalid_params(format!("failed to parse recurrence JSON: {error}")))?;
+        let (recurrence, first_index, initial_rows) = record
+            .to_recurrence_parts()
+            .map_err(|error| invalid_params(format!("invalid recurrence JSON: {error}")))?;
+        validate_recurrence_for_generation(&recurrence, &initial_rows)?;
+        let candidate: VeroneseSectionCandidate = serde_json::from_value(input.candidate)
+            .map_err(|error| invalid_params(format!("invalid candidate: {error}")))?;
+        let (parent, _, parent_rows) = candidate
+            .parent
+            .to_recurrence_parts()
+            .map_err(|error| invalid_params(format!("invalid parent record: {error}")))?;
+        validate_recurrence_for_generation(&parent, &parent_rows)?;
+        for (name, order) in [
+            ("input", recurrence.max_offset()),
+            ("parent", parent.max_offset()),
+        ] {
+            if order > MCP_MAX_VERONESE_CERTIFY_ORDER {
+                return Err(invalid_params(format!(
+                    "{name} recurrence order {order} exceeds the MCP limit \
+                     {MCP_MAX_VERONESE_CERTIFY_ORDER} for certify_veronese_section_lift"
+                )));
+            }
+        }
+        let attestations = input.attestations.unwrap_or_default();
+        if attestations.len() > MCP_MAX_VERONESE_ATTESTATIONS {
+            return Err(invalid_params(format!(
+                "{} attestations exceed the MCP limit {MCP_MAX_VERONESE_ATTESTATIONS}",
+                attestations.len()
+            )));
+        }
+        let attestations = attestations
+            .into_iter()
+            .map(|value| {
+                let attestation: VeroneseParentAttestation = serde_json::from_value(value)
+                    .map_err(|error| invalid_params(format!("invalid attestation: {error}")))?;
+                let (rule, _, rows) =
+                    attestation
+                        .recurrence
+                        .to_recurrence_parts()
+                        .map_err(|error| {
+                            invalid_params(format!("invalid attestation record: {error}"))
+                        })?;
+                validate_recurrence_for_generation(&rule, &rows)?;
+                Ok(attestation)
+            })
+            .collect::<Result<Vec<_>, McpError>>()?;
+        let checked_rows = input
+            .checked_rows
+            .unwrap_or(MCP_DEFAULT_VERONESE_CHECKED_ROWS);
+        if checked_rows > MCP_MAX_VERONESE_CHECKED_ROWS {
+            return Err(invalid_params(format!(
+                "checked_rows = {checked_rows} exceeds the MCP limit {MCP_MAX_VERONESE_CHECKED_ROWS}"
+            )));
+        }
+        let options = VeroneseSectionCertifyOptions {
+            checked_rows,
+            attestations,
+            try_root_domain: input.try_root_domain.unwrap_or(true),
+            ..Default::default()
+        };
+        let certification = certify_veronese_section_lift(
+            &recurrence,
+            &initial_rows,
+            first_index,
+            &candidate,
+            &options,
+        )
+        .map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(certification).expect("serialize Veronese certification")
+        else {
+            unreachable!("the Veronese certification is an object")
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
     #[tool(description = "Compute the exact resultant of two polynomials.")]
     pub fn resultant(
         &self,
