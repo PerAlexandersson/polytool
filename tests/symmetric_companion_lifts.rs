@@ -1,6 +1,6 @@
 //! End-to-end tests of `recurrence::find_symmetric_companion_lifts` and
 //! `recurrence::verify_symmetric_companion_certificate` on the worked
-//! `1/k`-Eulerian fixture (rust-workspace issue 9), through the public API.
+//! `1/k`-Eulerian fixture, through the public API.
 
 use num_bigint::BigInt;
 use polytool::recurrence::{
