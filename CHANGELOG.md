@@ -252,8 +252,9 @@ Additions:
   `chi(L, x^r)` for the input characteristic polynomial `chi` and solving for
   the parent seeds exactly.  If every parent row is real-rooted with
   coefficients of one sign, every `Q_n` is zero or real-rooted; each lift
-  reports exact checks of its first parent rows, and order-one parents
-  `P_n = c^n P_0` are proved outright.  Report types
+  reports exact checks of its first parent rows, and parents
+  `P_(n+k) = c(x) P_n` (including every order-one parent) with real-rooted,
+  one-sign `c` and seeds are proved outright.  Report types
   `VeroneseSectionLiftReport`, `VeroneseSectionLift`,
   `VeroneseSectionLiftStatus`, `VeroneseSectionLiftRejection` (JSON schema
   `polytool.recurrence-veronese-lifts.v1`); CLI `recurrence-veronese-lifts`;

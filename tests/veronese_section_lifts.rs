@@ -380,3 +380,25 @@ fn cli_finds_the_worked_example() {
     assert!(text.contains("Lift 1: modulus 2, residue 0 [proved_product_parent]"));
     assert!(text.contains("parent G(L, x) = L - 1 - x"));
 }
+
+#[test]
+fn binomial_rows_of_one_parity_have_a_proved_period_two_parent() {
+    // A109446: C(n, k) with n - k even.  Its residue alternates with n for the
+    // parent (1 + x)^n, so the fixed-residue parent has P_(n+2) = (1 + x)^2 P_n
+    // with seeds P_0 = x, P_1 = 1 + x.
+    let definition = polytool::oeis::catalog()
+        .iter()
+        .find(|definition| definition.id == "A109446")
+        .expect("A109446 is in the catalog");
+    let (rule, initial_rows, first_index) = definition.recurrence_export_parts().unwrap();
+    let report = find_veronese_section_lifts(
+        &rule,
+        &initial_rows,
+        usize::try_from(first_index).unwrap(),
+        &VeroneseSectionLiftOptions::default(),
+    )
+    .unwrap();
+    let lift = find(&report, 2, 1, "L^2 - 1 - 2x - x^2").expect("period-two parent");
+    assert_eq!(lift.status, VeroneseSectionLiftStatus::ProvedProductParent);
+    assert_eq!(lift.parent_initial_rows, rows(&[&[0, 1], &[1, 1]]));
+}

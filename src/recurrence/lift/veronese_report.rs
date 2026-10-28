@@ -17,8 +17,10 @@ pub const VERONESE_SECTION_LIFT_SCHEMA: &str = "polytool.recurrence-veronese-lif
 /// Status of one Veronese-section lift.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VeroneseSectionLiftStatus {
-    /// The parent has order one, `P_n = c(x)^(n - n0) P_(n0)`, and both `c` and
-    /// `P_(n0)` are nonzero, real-rooted and have coefficients of one sign.
+    /// The parent is `P_(n+k) = c(x) P_n` (characteristic polynomial
+    /// `L^k - c(x)`, for example any order-one parent), so
+    /// `P_(n0 + k m + i) = c^m P_(n0 + i)`, and `c` and the `k` seeds are
+    /// nonzero, real-rooted and have coefficients of one sign.
     /// Every parent row is then real-rooted with nonpositive roots, so every
     /// input row `Q_n`, `n >= n0`, is zero or real-rooted with nonpositive
     /// roots.
@@ -88,9 +90,9 @@ impl VeroneseSectionLiftStatus {
     /// One-sentence explanation of the status.
     pub fn statement(&self) -> String {
         match self {
-            Self::ProvedProductParent => "order-one parent P_n = c^(n - n0) P_(n0) with c and \
-                 P_(n0) real-rooted with coefficients of one sign: every parent row has only \
-                 nonpositive real roots, so every input row Q_n (n >= n0) is zero or \
+            Self::ProvedProductParent => "parent P_(n+k) = c P_n, so P_(n0+km+i) = c^m P_(n0+i), \
+                 with c and the k seeds real-rooted with coefficients of one sign: every parent \
+                 row has only nonpositive real roots, so every input row Q_n (n >= n0) is zero or \
                  real-rooted with nonpositive roots"
                 .into(),
             Self::ParentRealRootednessOpen => "every checked parent row is real-rooted with \
