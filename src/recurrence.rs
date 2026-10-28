@@ -37,9 +37,9 @@
 //! - `representation`: the bounded queue search over equivalent
 //!   representations (scalar and vector) that composes all of these
 //!   ([`search_representations`]);
-//! - `lift`: Veronese-section lifts ([`find_veronese_section_lifts`]):
-//!   parent sequences whose coefficient sections are the given sequence, so
-//!   that real-rootedness of the parent transfers to it.
+//! - `lift`: parent sequences whose real-rootedness transfers to the given
+//!   sequence: Veronese-section lifts ([`find_veronese_section_lifts`]) and
+//!   symmetric-companion lifts ([`find_symmetric_companion_lifts`]).
 //!
 //! Report, search and replay functions that can reject their input return
 //! [`RecurrenceError`] (and [`parse_rational_coeff`] a [`ParseRationalError`]);

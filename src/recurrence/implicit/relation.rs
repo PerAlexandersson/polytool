@@ -136,7 +136,7 @@ pub fn evidence_is_certified(evidence: &str) -> bool {
 // JSON helpers
 // ---------------------------------------------------------------------------
 
-pub(super) fn biv_json(p: &Biv) -> BivarPolyJson {
+pub(in crate::recurrence) fn biv_json(p: &Biv) -> BivarPolyJson {
     BivarPolyJson {
         coeffs: p
             .to_bivar()
@@ -218,7 +218,7 @@ pub struct ImplicitRelationJson {
 }
 
 impl ImplicitRelation {
-    pub(super) fn op(&self) -> DOp {
+    pub(in crate::recurrence) fn op(&self) -> DOp {
         let mut op = DOp::default();
         for term in &self.terms {
             op.add_term((term.shift, term.deriv_order), Biv::from_bivar(&term.coeff));
@@ -226,7 +226,7 @@ impl ImplicitRelation {
         op
     }
 
-    pub(super) fn from_op(op: &DOp) -> Self {
+    pub(in crate::recurrence) fn from_op(op: &DOp) -> Self {
         Self {
             terms: op
                 .0

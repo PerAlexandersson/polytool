@@ -260,6 +260,22 @@ Performance:
 
 Additions:
 
+- Symmetric-companion lifts: `recurrence::find_symmetric_companion_lifts`
+  takes a palindromic sequence `A_n` (scalar recurrence, derivatives allowed,
+  with seeds and a symmetry schedule `d_n = d_0 + n - n_0`, supplied or
+  inferred) and searches parameters `a_n, b_n, c_n` (degree at most 1 in `n`)
+  such that the reconstructed companion `B_n = [A_(n+1) - U_n A_n]/(epsilon_n x)`
+  makes `P_n = A_n + x B_n` satisfy `P_(n+1) = (a_n + b_n x) P_n + c_n x (1-x) P_n'`.
+  Certificates (`SymmetricCompanionCertificate`, replayed by
+  `verify_symmetric_companion_certificate`) prove the identity for every `n`
+  by exact operator identities; the interlacing-preservation route
+  (Brändén--Solus) is reported separately with its sign and seed hypotheses
+  (`a_n >= 0`, `0 <= delta_n <= c_n`, nonnegative interlacing seed pair).
+  Schema `polytool.recurrence-symmetric-companion.v1`.
+- `sequences::literature::one_over_k_eulerian_polynomials_rational` and
+  `one_over_k_eulerian_symmetric_parts_rational`: the `1/k`-Eulerian
+  polynomials (`A_(n+1) = (1 + k n x) A_n + k x (1-x) A_n'`, exact rational
+  `k`) and their symmetric decompositions.
 - `approximate_real_roots_bigint_coeffs` (the `i64` `approximate_real_roots`
   now calls it) and `linalg::check_total_positivity_bigint` (bounded-minor
   total positivity with `BigInt` entries, sharing one kernel with the `i64`

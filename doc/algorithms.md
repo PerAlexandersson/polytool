@@ -269,3 +269,100 @@ recurrences), parameterized seeds when `O(y)` is rank deficient, and an exact
 replay format for the identification certificate.  The CLI command is
 `polytool recurrence-veronese-lifts`; the MCP tool is
 `find_veronese_section_lifts`.
+
+## Symmetric-companion lifts
+
+`recurrence::find_symmetric_companion_lifts(&Recurrence, initial_rows,
+first_index, &SymmetricCompanionLiftOptions)` inverts the symmetric
+decomposition: given a scalar recurrence `M` and seeds for a palindromic
+sequence `A_n` (symmetric at `d_n = d_(n0) + (n - n0)`, an ambient index that
+allows degree deficits and zero rows), it looks for a parent rule
+
+```text
+P_(n+1) = (a_n + b_n x) P_n + c_n x (1 - x) D P_n,   P_n = A_n + x B_n.
+```
+
+With `delta_n = b_n - a_n - c_n d_n`, `epsilon_n = c_n - delta_n` and
+`H(d, a, c) f = [a + (a + c d) x] f + c x (1 - x) f'`, the decomposition
+evolves as `A_(n+1) = U_n A_n + epsilon_n x B_n`,
+`B_(n+1) = delta_n A_n + V_n B_n` with `U_n = H(d_n, a_n, c_n)` and
+`V_n = H(d_n - 1, a_n + delta_n, c_n)`.  Eliminating
+`B_n = R_n / (epsilon_n x)`, `R_n = A_(n+1) - U_n A_n`, gives the operator
+
+```text
+E = eps_n S^2 - [eps_n U_(n+1) + eps_(n+1) Vt_n] S
+    + [eps_(n+1) Vt_n U_n - eps_n eps_(n+1) delta_n x],   Vt_n = V_n - c_n (1 - x).
+```
+
+**Search.**  `a_n`, `c_n`, `epsilon_n` are exact rational polynomials of
+degree at most `max_parameter_degree_in_n` (0 or 1), tried in increasing
+degree on `fit_rows` rows.  `R_n(0) = 0` fixes `a_n` by exact interpolation of
+`A_(n+1)(0) / A_n(0)` (an unknown when every constant term vanishes; ratios
+that fit no polynomial of the degree are an obstruction).  Substituting `B` in
+the second equation gives `G_n = eps_n R_(n+1) - eps_(n+1) Vt_n R_n -
+eps_n eps_(n+1) delta_n x A_n = 0`, of degree at most three in the unknown
+coefficients with an `epsilon` factor in every monomial.  Its `x`-coefficients
+form a homogeneous linear system in those monomials (at most
+`max_linearized_monomials` columns).  A one-dimensional exact kernel gives the
+point directly (scale from `t k[e]^2 = k[e^2]`, coordinates `k[v e] / k[e]`,
+full consistency check).  Otherwise the independent equations, together with
+`z epsilon(n0) = 1`, are solved exactly: lex Gröbner basis (Buchberger), the
+rational roots of its univariate element (`polytool::factorization`),
+substitution and recursion, within `max_groebner_steps`.  A positive
+dimensional system or a budget stop is reported as `underdetermined` or
+`budget_exceeded` (`exhausted_budget`).  The search finds rational solutions
+only, and it stops after the first degree with a certified lift.
+
+**Certificate.**  `verify_symmetric_companion_certificate` replays a recorded
+certificate without the search.  It recomputes `E`, the companion seed and the
+parent from the parameters, then establishes for every `n >= n0`:
+
+1. `(E A)_n = 0`: an exact Ore-algebra identity `g(n) E = sum_nu H_nu S^nu M`
+   (right division when `M` has a constant leader, `g = 1`; for an order-two
+   source with an `x`-free leader `f`, `f(n + 2) E = eps_n M`).  `M` holds at
+   every base whose leading row the source rule generates; the remaining
+   bases and the roots of `g` are checked on exact rows.
+2. `eps_n != 0` on the domain (exact integer roots); a vanishing coupling is
+   `unsupported`, never cancelled.
+3. `R_n(0) = 0`: the derivative terms of `E` vanish at `x = 0` and the
+   projection factors as `(eps_n S - g_n) o (S - a_n)`, so
+   `w_n = A_(n+1)(0) - a_n A_n(0)` satisfies `eps_n w_(n+1) = g_n w_n`; with
+   `w_(n0) = 0` it vanishes identically.
+4. The second equation: `(E A)_n = eps_n E_(n+1) + eps_n eps_(n+1) x F_n -
+   eps_(n+1) Vt_n E_n` (with `E_n`, `F_n` the residuals of the two equations)
+   is checked as two operator identities (the `B` component is
+   `Vt_n x = x V_n`); with `E_n = 0` by definition, `F_n = 0`.
+5. Symmetry by induction on pairs from the two seeds, since `H(d, a, c)` maps
+   symmetric-at-`d` to symmetric-at-`(d + 1)` and `x` adds two; `d_(n0) >= 1`.
+6. The collapse identities `L_n = U_n + delta_n x`,
+   `L_n x = eps_n x + x V_n` give the parent rule.
+
+A row replay of `self_check_rows` indices is a defensive check only.
+
+**Real-rootedness.**  For `d >= 1`, `r >= 0` and `0 <= eta <= c`, the step
+`(a, b) -> (H(d, r, c) a + (c - eta) x b, eta a + H(d - 1, r + eta, c) b)` maps
+pairs with nonnegative coefficients, `deg a <= d`, `deg b <= d - 1` and
+`b <= a` to such pairs (partial fractions of `b / a` give `R' <= 0` and
+`R + x R' >= 0`, which control the sign of `b+` at the roots of `a+`; boundary
+cases by limits), and `a + x b` is then real-rooted (Brändén--Solus,
+arXiv:1808.04141, Theorem 2.6).  The route applies when the identity is
+certified, `a_n >= 0` and `0 <= delta_n <= c_n` for all integers `n >= n0`
+(exact for degree at most one), `d_(n0) >= 1`, and `A_(n0)`, `B_(n0)` are
+nonnegative with `B_(n0) <= A_(n0)`.  Here `f <= g` is directed weak
+interlacing with `g` holding the rightmost root, which for nonzero rows is
+`check_weak_interlacing(f, g) == Some(true)`; a zero member is accepted when
+the other is real-rooted.  Real-rootedness of the parent alone is never used
+for `A_n`.
+
+Worked fixture (Ma--Ma--Yeh--Yeh, arXiv:2102.00899): the symmetric parts of
+the `1/k`-Eulerian polynomials, given only their eliminated recurrence and
+`A_2 = 1 + x`, `A_3 = 1 + (3k + 1) x + x^2`, give `a_n = 1`, `b_n = k n`,
+`c_n = k`, `delta_n = k - 1`, `epsilon_n = 1`, `B_2 = k - 1`, `P_2 = 1 + k x`
+for `k = 1` (zero companion), `2`, `3/2`, and the theorem applies.  With
+`A_3 = 1 + 8x + x^2` and `k = 2` the same rule with `B_2 = 2` is a separately
+valid certificate.
+
+Limitations: parameters of degree at most one in `n`; only rational
+solutions; a derivation of `E` from orders other than one (with a constant
+leader) or two is not attempted, which leaves the identity a `candidate`; no
+CLI or MCP adapter and no integration into `search_representations` yet.

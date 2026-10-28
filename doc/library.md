@@ -304,6 +304,11 @@ fixed-point/descent array `rows[n][j][k]`),
 `shifted_legendre_polynomials_bigint` gives the shifted Legendre polynomials
 `P~_n(x) = P_n(2x - 1) = sum_k (-1)^(n+k) C(n,k) C(n+k,k) x^k` on `[0, 1]`
 (`P~_n(1) = 1`, coefficients up to sign in OEIS A063007).
+`literature::one_over_k_eulerian_polynomials_rational(max_n, &k)` gives the
+`1/k`-Eulerian polynomials (Savage--Viswanathan) for an exact rational `k`
+(`A_0 = 1`, `A_(n+1) = (1 + k n x) A_n + k x (1 - x) A_n'`, `k = 1` the
+Eulerian rows), and `one_over_k_eulerian_symmetric_parts_rational` their
+symmetric decompositions `(a_n, b_n)` with respect to `d_n = n - 1`.
 
 ## Lazy rows
 
@@ -473,6 +478,75 @@ was exhausted.  The report types implement `Serialize`
 (`polytool.recurrence-veronese-lifts.v1`, exact rationals as strings).  The
 algorithm and the argument that `d` identifying rows prove the identity for
 all `n` are in [algorithms.md](algorithms.md#veronese-section-lifts).
+
+## Symmetric-companion lifts
+
+`recurrence::find_symmetric_companion_lifts` recognizes a palindromic sequence
+`A_n`, given by a scalar recurrence and seeds, as the symmetric part of a
+parent `P_n = A_n + x B_n` with a first-order rule
+`P_(n+1) = (a_n + b_n x) P_n + c_n x (1 - x) D P_n`, and certifies the
+reconstruction for every index.  The parameters are searched as exact
+rational polynomials of degree at most one in `n`; the symmetry schedule
+`d_n = d_(n0) + (n - n0)` is supplied or inferred.  The input recurrence may
+have derivatives; its left factor must be free of `x`, with no `(-1)^n`
+factors and no inhomogeneous term.
+
+```rust
+use polytool::recurrence::*;
+
+let q = |n: i64| BigRational::from_integer(n.into());
+let term = |offset, derivative, rows: &[&[i64]]| {
+    RecurrenceTerm::new(
+        offset,
+        derivative,
+        BivarPoly::from_coefficients_normalized(
+            rows.iter().map(|r| r.iter().map(|&c| q(c)).collect()).collect(),
+        ),
+    )
+};
+// The symmetric parts of the 1/2-Eulerian polynomials (target index m):
+// A_m = [1 + (4m - 7) x] A_(m-1) + 4x(1 - x) A'_(m-1)
+//       - [(6m - 15) x + (4m^2 - 22m + 30) x^2] A_(m-2)
+//       - x(1 - x)[6 + (8m - 26) x] A'_(m-2) - 4x^2 (1 - x)^2 A''_(m-2).
+let recurrence = Recurrence {
+    terms: vec![
+        term(1, 0, &[&[1, -7], &[0, 4]]),
+        term(1, 1, &[&[0, 4, -4]]),
+        term(2, 0, &[&[0, 15, -30], &[0, -6, 22], &[0, 0, -4]]),
+        term(2, 1, &[&[0, -6, 32, -26], &[0, 0, -8, 8]]),
+        term(2, 2, &[&[0, 0, -4, 8, -4]]),
+    ],
+    denominator: None,
+    inhomogeneous: None,
+};
+let seeds = vec![vec![q(1), q(1)], vec![q(1), q(7), q(1)]]; // A_2, A_3
+let report = find_symmetric_companion_lifts(
+    &recurrence,
+    &seeds,
+    2,
+    &SymmetricCompanionLiftOptions::default(),
+)?;
+let lift = report.proving_lift().expect("certified, theorem applies");
+// P_(n+1) = (1 + 2n x) P_n + 2x(1 - x) P_n', P_2 = 1 + 2x, B_2 = 1.
+assert_eq!(lift.certificate.companion_seed, vec!["1".to_string()]);
+let replay = verify_symmetric_companion_certificate(&lift.certificate, 10)?;
+assert!(replay.is_certified() && replay.theorem_applies());
+# Ok::<(), RecurrenceError>(())
+```
+
+Each lift carries a replayable `SymmetricCompanionCertificate` (source and
+seeds, schedule, the parameter witnesses `a, b, c, delta, epsilon` as
+polynomials in `n`, the eliminated operator with its derivation from the
+source rule, the companion seed and the parent as a `polytool.recurrence.v1`
+record) and the verifier's statuses, kept apart: the identity (`certified`,
+`candidate`, `unsupported` for a vanishing coupling, `rejected`), the
+real-rootedness route through the preservation theorem (`theorem_applies`
+only when `a_n >= 0`, `0 <= delta_n <= c_n`, `d_n >= 1` and the initial pair is
+nonnegative with `B <= A`), and the Lean replay (`not_attempted`).  A failed
+hypothesis means only that this route fails.  The report serializes as
+`polytool.recurrence-symmetric-companion.v1` (exact rationals as strings).
+The algorithm and the soundness argument are in
+[algorithms.md](algorithms.md#symmetric-companion-lifts).
 
 ## Shared-denominator vector recurrences
 

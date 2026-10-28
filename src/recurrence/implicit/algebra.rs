@@ -20,11 +20,11 @@ use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub(super) fn q(value: i64) -> Q {
+pub(in crate::recurrence) fn q(value: i64) -> Q {
     Q::from_integer(BigInt::from(value))
 }
 
-pub(super) fn q_usize(value: usize) -> Q {
+pub(in crate::recurrence) fn q_usize(value: usize) -> Q {
     Q::from_integer(BigInt::from(value))
 }
 
@@ -61,7 +61,7 @@ pub(in crate::recurrence) fn factorial(t: usize) -> Q {
 pub(in crate::recurrence) struct Biv(Vec<Vec<Q>>);
 
 impl Biv {
-    pub(super) fn new(mut rows: Vec<Vec<Q>>) -> Self {
+    pub(in crate::recurrence) fn new(mut rows: Vec<Vec<Q>>) -> Self {
         for row in &mut rows {
             vec_poly::strip_trailing_zeros(row);
         }
@@ -71,24 +71,24 @@ impl Biv {
         Self(rows)
     }
 
-    pub(super) fn rows(&self) -> &[Vec<Q>] {
+    pub(in crate::recurrence) fn rows(&self) -> &[Vec<Q>] {
         &self.0
     }
 
-    pub(super) fn zero() -> Self {
+    pub(in crate::recurrence) fn zero() -> Self {
         Self(Vec::new())
     }
 
-    pub(super) fn constant(c: Q) -> Self {
+    pub(in crate::recurrence) fn constant(c: Q) -> Self {
         Self::new(vec![vec![c]])
     }
 
-    pub(super) fn one() -> Self {
+    pub(in crate::recurrence) fn one() -> Self {
         Self::constant(Q::one())
     }
 
     /// `c n^n_power y^y_power`.
-    pub(super) fn monomial(n_power: usize, y_power: usize, c: Q) -> Self {
+    pub(in crate::recurrence) fn monomial(n_power: usize, y_power: usize, c: Q) -> Self {
         let mut rows = vec![Vec::new(); n_power + 1];
         let mut row = vec![Q::zero(); y_power + 1];
         row[y_power] = c;
@@ -97,7 +97,7 @@ impl Biv {
     }
 
     /// A polynomial in `y` only.
-    pub(super) fn from_y(p: &[Q]) -> Self {
+    pub(in crate::recurrence) fn from_y(p: &[Q]) -> Self {
         Self::new(vec![p.to_vec()])
     }
 
@@ -107,20 +107,20 @@ impl Biv {
         Self::new(p.iter().map(|c| vec![c.clone()]).collect())
     }
 
-    pub(super) fn from_bivar(p: &BivarPoly) -> Self {
+    pub(in crate::recurrence) fn from_bivar(p: &BivarPoly) -> Self {
         Self::new(p.coeffs.clone())
     }
 
-    pub(super) fn to_bivar(&self) -> BivarPoly {
+    pub(in crate::recurrence) fn to_bivar(&self) -> BivarPoly {
         BivarPoly::from_coefficients_normalized(self.0.clone())
     }
 
-    pub(super) fn is_zero(&self) -> bool {
+    pub(in crate::recurrence) fn is_zero(&self) -> bool {
         self.0.is_empty()
     }
 
     /// The constant value, when the polynomial is a constant (zero included).
-    pub(super) fn as_constant(&self) -> Option<Q> {
+    pub(in crate::recurrence) fn as_constant(&self) -> Option<Q> {
         match self.0.as_slice() {
             [] => Some(Q::zero()),
             [row] if row.len() == 1 => Some(row[0].clone()),
@@ -128,15 +128,15 @@ impl Biv {
         }
     }
 
-    pub(super) fn is_n_free(&self) -> bool {
+    pub(in crate::recurrence) fn is_n_free(&self) -> bool {
         self.0.len() <= 1
     }
 
-    pub(super) fn is_y_free(&self) -> bool {
+    pub(in crate::recurrence) fn is_y_free(&self) -> bool {
         self.0.iter().all(|row| row.len() <= 1)
     }
 
-    pub(super) fn add(&self, other: &Self) -> Self {
+    pub(in crate::recurrence) fn add(&self, other: &Self) -> Self {
         let len = self.0.len().max(other.0.len());
         Self::new(
             (0..len)
@@ -149,7 +149,7 @@ impl Biv {
         )
     }
 
-    pub(super) fn scale(&self, c: &Q) -> Self {
+    pub(in crate::recurrence) fn scale(&self, c: &Q) -> Self {
         if c.is_zero() {
             return Self::zero();
         }
@@ -161,7 +161,7 @@ impl Biv {
         )
     }
 
-    pub(super) fn mul(&self, other: &Self) -> Self {
+    pub(in crate::recurrence) fn mul(&self, other: &Self) -> Self {
         if self.is_zero() || other.is_zero() {
             return Self::zero();
         }
@@ -212,17 +212,17 @@ impl Biv {
         result
     }
 
-    pub(super) fn shift_n(&self, dn: i64) -> Self {
+    pub(in crate::recurrence) fn shift_n(&self, dn: i64) -> Self {
         self.shift(&q(dn), &Q::zero())
     }
 
     /// `d/dy`.
-    pub(super) fn dy(&self) -> Self {
+    pub(in crate::recurrence) fn dy(&self) -> Self {
         Self::new(self.0.iter().map(|row| vec_poly::derivative(row)).collect())
     }
 
     /// The polynomial in `y` obtained at `n = value`.
-    pub(super) fn eval_n(&self, value: &Q) -> Vec<Q> {
+    pub(in crate::recurrence) fn eval_n(&self, value: &Q) -> Vec<Q> {
         let mut result = vec![Q::zero()];
         for row in self.0.iter().rev() {
             result = vec_poly::scale(&result, value);
@@ -243,7 +243,7 @@ impl Biv {
     }
 
     /// Coefficient of `y^j` as a polynomial in `n`.
-    pub(super) fn y_coefficient(&self, j: usize) -> Vec<Q> {
+    pub(in crate::recurrence) fn y_coefficient(&self, j: usize) -> Vec<Q> {
         vec_poly::trim(
             &self
                 .0
@@ -253,7 +253,7 @@ impl Biv {
         )
     }
 
-    pub(super) fn y_degree(&self) -> Option<usize> {
+    pub(in crate::recurrence) fn y_degree(&self) -> Option<usize> {
         self.0.iter().filter_map(|row| vec_poly::degree(row)).max()
     }
 
@@ -316,10 +316,10 @@ impl Biv {
 /// `sum c_(i,d)(n,x) D^d S^i`, keyed by `(shift i, derivative order d)`;
 /// zero coefficients are never stored.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct DOp(pub(super) BTreeMap<(usize, usize), Biv>);
+pub(in crate::recurrence) struct DOp(pub(in crate::recurrence) BTreeMap<(usize, usize), Biv>);
 
 impl DOp {
-    pub(super) fn add_term(&mut self, key: (usize, usize), coefficient: Biv) {
+    pub(in crate::recurrence) fn add_term(&mut self, key: (usize, usize), coefficient: Biv) {
         if coefficient.is_zero() {
             return;
         }
@@ -330,17 +330,17 @@ impl DOp {
         }
     }
 
-    pub(super) fn single(shift: usize, derivative: usize, coefficient: Biv) -> Self {
+    pub(in crate::recurrence) fn single(shift: usize, derivative: usize, coefficient: Biv) -> Self {
         let mut op = Self::default();
         op.add_term((shift, derivative), coefficient);
         op
     }
 
-    pub(super) fn is_zero(&self) -> bool {
+    pub(in crate::recurrence) fn is_zero(&self) -> bool {
         self.0.is_empty()
     }
 
-    pub(super) fn add(&self, other: &Self) -> Self {
+    pub(in crate::recurrence) fn add(&self, other: &Self) -> Self {
         let mut sum = self.clone();
         for (key, c) in &other.0 {
             sum.add_term(*key, c.clone());
@@ -348,7 +348,7 @@ impl DOp {
         sum
     }
 
-    pub(super) fn scale(&self, c: &Q) -> Self {
+    pub(in crate::recurrence) fn scale(&self, c: &Q) -> Self {
         let mut out = Self::default();
         for (key, coefficient) in &self.0 {
             out.add_term(*key, coefficient.scale(c));
@@ -356,20 +356,20 @@ impl DOp {
         out
     }
 
-    pub(super) fn sub(&self, other: &Self) -> Self {
+    pub(in crate::recurrence) fn sub(&self, other: &Self) -> Self {
         self.add(&other.scale(&q(-1)))
     }
 
-    pub(super) fn max_shift(&self) -> usize {
+    pub(in crate::recurrence) fn max_shift(&self) -> usize {
         self.0.keys().map(|(i, _)| *i).max().unwrap_or(0)
     }
 
-    pub(super) fn max_derivative(&self) -> usize {
+    pub(in crate::recurrence) fn max_derivative(&self) -> usize {
         self.0.keys().map(|(_, d)| *d).max().unwrap_or(0)
     }
 
     /// The terms at shift `i`, as a shift-zero operator.
-    pub(super) fn column(&self, shift: usize) -> Self {
+    pub(in crate::recurrence) fn column(&self, shift: usize) -> Self {
         let mut out = Self::default();
         for ((i, d), c) in &self.0 {
             if *i == shift {
@@ -380,7 +380,7 @@ impl DOp {
     }
 
     /// The composition `self o other`.
-    pub(super) fn compose(&self, other: &Self) -> Self {
+    pub(in crate::recurrence) fn compose(&self, other: &Self) -> Self {
         let mut out = Self::default();
         for ((i, a), c) in &self.0 {
             let dn = q_usize(*i);
@@ -400,7 +400,7 @@ impl DOp {
     }
 
     /// `S^nu o self`.
-    pub(super) fn shifted(&self, nu: usize) -> Self {
+    pub(in crate::recurrence) fn shifted(&self, nu: usize) -> Self {
         let mut out = Self::default();
         let dn = q_usize(nu);
         for ((i, d), c) in &self.0 {
@@ -455,7 +455,12 @@ impl DOp {
     }
 
     /// `(self Q)_n` when rows `Q_(origin)..` cover every referenced index.
-    pub(super) fn apply(&self, rows: &[Vec<Q>], origin: usize, n: usize) -> Option<Vec<Q>> {
+    pub(in crate::recurrence) fn apply(
+        &self,
+        rows: &[Vec<Q>],
+        origin: usize,
+        n: usize,
+    ) -> Option<Vec<Q>> {
         let value = q_usize(n);
         let mut sum = vec![Q::zero()];
         for ((i, d), c) in &self.0 {
@@ -471,7 +476,7 @@ impl DOp {
     }
 
     /// Apply a shift-free operator to one row at index `n`.
-    pub(super) fn apply_row(&self, row: &[Q], n: usize) -> Vec<Q> {
+    pub(in crate::recurrence) fn apply_row(&self, row: &[Q], n: usize) -> Vec<Q> {
         let value = q_usize(n);
         let mut sum = vec![Q::zero()];
         for ((_, d), c) in &self.0 {
@@ -675,7 +680,7 @@ pub(super) fn content_and_primitive(p: &Biv) -> (Vec<Q>, Biv) {
     (content, Biv::new(rows))
 }
 
-pub(super) fn poly_text(p: &[Q], variable: &str) -> String {
+pub(in crate::recurrence) fn poly_text(p: &[Q], variable: &str) -> String {
     let p = vec_poly::trim(p);
     let mut parts = Vec::new();
     for (i, c) in p.iter().enumerate() {
@@ -714,7 +719,7 @@ pub(super) fn poly_text(p: &[Q], variable: &str) -> String {
 }
 
 /// Text of a polynomial in `(n, y)`.
-pub(super) fn biv_text(p: &Biv, variable: &str) -> String {
+pub(in crate::recurrence) fn biv_text(p: &Biv, variable: &str) -> String {
     let mut parts = Vec::new();
     let width = p.y_degree().map_or(0, |d| d + 1);
     for j in 0..width {
