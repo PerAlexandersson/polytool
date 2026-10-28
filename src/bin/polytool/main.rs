@@ -33,6 +33,7 @@ mod recurrence_implicit;
 mod recurrence_search_representations;
 mod recurrence_theorems;
 mod recurrence_transform;
+mod recurrence_veronese_lifts;
 mod resultant;
 mod root_enclosures;
 mod sequence;
@@ -63,6 +64,7 @@ use crate::recurrence_implicit::cmd_recurrence_implicit;
 use crate::recurrence_search_representations::cmd_recurrence_search_representations;
 use crate::recurrence_theorems::cmd_recurrence_theorems;
 use crate::recurrence_transform::cmd_recurrence_transform;
+use crate::recurrence_veronese_lifts::cmd_recurrence_veronese_lifts;
 use crate::resultant::{cmd_discriminant, cmd_resultant};
 use crate::root_enclosures::cmd_root_enclosures;
 use crate::sequence::cmd_sequence;
@@ -140,6 +142,7 @@ fn main() {
         "recurrence-generate" => cmd_recurrence_generate(rest),
         "recurrence-transform" => cmd_recurrence_transform(rest),
         "recurrence-theorems" => cmd_recurrence_theorems(rest),
+        "recurrence-veronese-lifts" => cmd_recurrence_veronese_lifts(rest),
         "root-enclosures" => cmd_root_enclosures(rest),
         "recurrence-implicit" => cmd_recurrence_implicit(rest),
         "recurrence-search-representations" => cmd_recurrence_search_representations(rest),

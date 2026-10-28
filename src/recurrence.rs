@@ -36,7 +36,10 @@
 //!   root enclosures) for transformed results;
 //! - `representation`: the bounded queue search over equivalent
 //!   representations (scalar and vector) that composes all of these
-//!   ([`search_representations`]).
+//!   ([`search_representations`]);
+//! - `lift`: Veronese-section lifts ([`find_veronese_section_lifts`]):
+//!   parent sequences whose coefficient sections are the given sequence, so
+//!   that real-rootedness of the parent transfers to it.
 //!
 //! Report, search and replay functions that can reject their input return
 //! [`RecurrenceError`] (and [`parse_rational_coeff`] a [`ParseRationalError`]);
@@ -57,6 +60,8 @@ mod fit;
 pub use fit::*;
 mod implicit;
 pub use implicit::*;
+mod lift;
+pub use lift::*;
 mod representation;
 pub use representation::*;
 mod root_domain;

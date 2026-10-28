@@ -420,6 +420,60 @@ if let Some(rec) = find_polynomial_recurrence(&polys, &opts) {
 }
 ```
 
+## Veronese-section lifts
+
+`recurrence::find_veronese_section_lifts` looks for parents `P_n(x)` whose
+coefficient section `V_(r,j)(P_n)(y) = sum_k [x^(r k + j)] P_n(x) y^k` is a
+given recurrence-defined sequence `Q_n(y)`.  A real-rooted parent with
+coefficients of one sign transfers real-rootedness to its sections, so a lift
+with status `ProvedProductParent` proves that every `Q_n` is zero or
+real-rooted with nonpositive roots.  The input recurrence must have
+derivative-free, non-alternating terms with coefficients independent of `n`,
+a constant (or no) denominator and no inhomogeneous term.
+
+```rust
+use polytool::recurrence::*;
+
+let q = |n: i64| BigRational::from_integer(n.into());
+// Q_(n+2) = 2 Q_(n+1) + (y - 1) Q_n, Q_0 = Q_1 = 1.
+let recurrence = Recurrence {
+    terms: vec![
+        RecurrenceTerm::new(1, 0, BivarPoly { coeffs: vec![vec![q(2)]] }),
+        RecurrenceTerm::new(2, 0, BivarPoly { coeffs: vec![vec![q(-1), q(1)]] }),
+    ],
+    denominator: None,
+    inhomogeneous: None,
+};
+let rows = vec![vec![q(1)], vec![q(1)]];
+let report = find_veronese_section_lifts(
+    &recurrence,
+    &rows,
+    0,
+    &VeroneseSectionLiftOptions::default(), // max_modulus 4, 12 parent rows, 256 candidates
+)?;
+let best = &report.lifts[0]; // proved lifts first
+assert_eq!((best.modulus, best.residue), (2, 0));
+assert_eq!(
+    format_characteristic_polynomial(&best.parent_characteristic_polynomial, "x"),
+    "L - 1 - x"
+); // P_n = (1 + x) P_(n-1), P_0 = 1
+assert_eq!(best.status, VeroneseSectionLiftStatus::ProvedProductParent);
+// The parent as a polytool.recurrence.v1 record for the other recurrence tools.
+let parent_json = best.parent_recurrence_json();
+# let _ = parent_json;
+# Ok::<(), RecurrenceError>(())
+```
+
+The report lists the input characteristic polynomial `chi(L, y)`, the lifts
+(modulus, residue, parent characteristic polynomial `G(L, x)`, section
+characteristic polynomial `N(L, y)`, cofactor `chi / N`, parent recurrence and
+seeds, exact parent-row checks and status), the rejected candidates with a
+reason, moduli whose factorization failed, and whether the candidate budget
+was exhausted.  The report types implement `Serialize`
+(`polytool.recurrence-veronese-lifts.v1`, exact rationals as strings).  The
+algorithm and the argument that `d` identifying rows prove the identity for
+all `n` are in [algorithms.md](algorithms.md#veronese-section-lifts).
+
 ## Shared-denominator vector recurrences
 
 `find_vector_recurrence_with_denominator_rational` (and its integer wrapper)

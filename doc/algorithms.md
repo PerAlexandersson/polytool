@@ -189,3 +189,83 @@ Default `recurrence` output is unchanged: a match is only noted on stderr, and
 `recurrence-theorems` exits 0 with a match, 1 without, 2 on invalid input. The
 MCP `find_recurrence` response gains the additive `theorem_matches` field, and
 the MCP tool `recurrence_theorems` checks a supplied record.
+
+## Veronese-section lifts
+
+`recurrence::find_veronese_section_lifts(&Recurrence, initial_rows,
+first_index, &VeroneseSectionLiftOptions)` recognizes a recurrence-defined
+sequence `Q_n(y)` as a coefficient section of a parent sequence `P_n(x)`:
+
+```text
+V_(r,j)(P)(y) = sum_k [x^(r k + j)] P(x) y^k,   Q_n = V_(r,j)(P_n)  (n >= n0).
+```
+
+The transfer theorem: if `P` is real-rooted with coefficients of one sign
+(all roots in `(-inf, 0]`), every section is zero or real-rooted with
+nonpositive roots.  The coefficient sequence of `P` is a Pólya frequency
+sequence (Aissen--Schoenberg--Whitney, Edrei), and the Toeplitz matrix of
+`a_(r k + j)` is the submatrix of the Toeplitz matrix of `a` with rows `r i`
+and columns `r k + j`, so it is totally nonnegative as well.
+
+Supported input: derivative-free terms without `(-1)^n` factors and with
+coefficients independent of `n`, an absent or nonzero constant denominator, no
+inhomogeneous term.  With `Q_m = sum_k c_k(y) Q_(m-k)` and order `d`, the
+characteristic polynomial is `chi(L, y) = L^d - sum_k c_k(y) L^(d-k)`.
+
+A parent with monic characteristic polynomial `G(L, x)` (`P_(n+e) = -sum_i
+g_i(x) P_(n+i)`) has all `r` sections satisfying the recurrence with
+characteristic polynomial `N = Norm_r(G) = prod_(w^r=1) G(L, w x)`, written in
+`y = x^r`: `N(E, x^r)` is a multiple of `G(E, x)` with coefficients in
+`Q[x^r]`, which commute with taking sections.  `N` is computed exactly as the
+determinant of multiplication by `G` on `1, x, ..., x^(r-1)` in
+`Q[L, y][x]/(x^r - y)` (cofactor expansion, `r <= 6`).
+
+For each modulus `r = 2..max_modulus` (at most `d`):
+
+1. factor `F(L, x) = chi(L, x^r)` over `Q` (`polytool::factorization`); a
+   failure records the modulus in `skipped_moduli`;
+2. enumerate the monic divisors `G` of `F`, nonconstant with
+   `r deg_L G <= d`, by increasing `L`-degree and then `x`-degree, at most
+   `max_parent_candidates` per modulus (`exhausted_budget` when reached);
+3. keep `G` when `N` divides `chi` in `Q[y][L]` (the quotient is the reported
+   `cofactor`);
+4. for each residue `j`, solve the `r e` seed sections `s_(i,a)(y)` of
+   `P_(n0+i) = sum_a x^a s_(i,a)(x^r)` from `V_j(P_n) = Q_n` on the first `d`
+   rows.  The map is linear with polynomial matrix `O(y)` (column `(i,a)` is
+   `V_j` of the rows from the basis seed `x^a` at position `i`), solved by
+   fraction-free elimination with row pivoting over `Q[y]`; the seeds must be
+   polynomials (`seeds_not_polynomial`), rank below `r e` is not supported
+   (`seeds_not_determined`), and the rows from the solved seeds must match all
+   `d` identifying rows (`row_mismatch`);
+5. check the first `parent_rows_to_check` parent rows exactly (nonzero, one
+   coefficient sign, real-rooted after clearing denominators);
+6. an order-one parent `G = L - c(x)` gives `P_n = c^(n-n0) P_(n0)`; when `c`
+   and `P_(n0)` are real-rooted with coefficients of one sign the lift is
+   `proved_product_parent`.  Order-two and higher parents with passing rows
+   are `parent_real_rootedness_open` (finite evidence only); a failing row
+   gives `parent_row_zero`, `parent_row_mixed_signs` or
+   `parent_row_not_real_rooted` with its index.
+
+Why `d` matching rows prove the identity for all `n`: `S_n = V_j(P_n) - Q_n`
+satisfies the `chi` recurrence at every target `>= n0 + d` (the sections
+satisfy `N`, and `N | chi`), `chi` is monic of order `d`, and `S` vanishes at
+the `d` identifying indices, so `S = 0`.  A few further rows are compared as a
+defensive self-check.
+
+Example: `Q_(n+2) = 2 Q_(n+1) + (y - 1) Q_n`, `Q_0 = Q_1 = 1` has
+`chi = (L - 1)^2 - y`, and `chi(L, x^2) = (L - 1 - x)(L - 1 + x)`.  The norm of
+`L - 1 - x` is `chi` itself, the seed is `P_0 = 1`, and the parent is
+`(1 + x)^n`: proved.  The conjugate `L - 1 + x` (parent `(1 - x)^n`) is listed
+with `parent_row_mixed_signs` at index 1.  The trivial lift `Q_n(x^r)` has a
+norm of degree `r d > d` and never appears.  For the even sections of the
+Fibonacci polynomials (`chi = L^4 - 2L^3 + L^2 - y`) the parent
+`G = L^2 - L - x` with seeds `1, 1` is found with an open status.
+
+Limitations of this version: no `n`-dependent or differential recurrences,
+modulus at most 6, undetermined seeds are rejected rather than parametrized,
+and only order-one parents are proved.  Natural next steps are proved parent
+templates of higher order (for example interlacing-preserving matrix
+recurrences), parameterized seeds when `O(y)` is rank deficient, and an exact
+replay format for the identification certificate.  The CLI command is
+`polytool recurrence-veronese-lifts`; the MCP tool is
+`find_veronese_section_lifts`.

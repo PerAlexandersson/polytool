@@ -2497,3 +2497,94 @@ fn analyze_decomposition_reports_symmetric_decomposition_of_a_small_example() {
         }))
         .is_err());
 }
+
+const VERONESE_WORKED_JSON: &str = r#"{"schema":"polytool.recurrence.v1","first_index":0,
+"initial_polynomials":[["1"],["1"]],"recurrence":{"terms":[
+{"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["2"]]}},
+{"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","1"]]}}]}}"#;
+
+fn veronese_request(json: &str) -> crate::requests::VeroneseSectionLiftsRequest {
+    crate::requests::VeroneseSectionLiftsRequest {
+        recurrence_json: json.to_string(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn veronese_section_lifts_validates_input_and_limits() {
+    let server = PolynomialToolsServer::new();
+    // Over-limit options are rejected before any search.
+    for request in [
+        crate::requests::VeroneseSectionLiftsRequest {
+            max_modulus: Some(7),
+            ..veronese_request(VERONESE_WORKED_JSON)
+        },
+        crate::requests::VeroneseSectionLiftsRequest {
+            parent_rows: Some(65),
+            ..veronese_request(VERONESE_WORKED_JSON)
+        },
+        crate::requests::VeroneseSectionLiftsRequest {
+            max_candidates: Some(4097),
+            ..veronese_request(VERONESE_WORKED_JSON)
+        },
+    ] {
+        assert!(server
+            .find_veronese_section_lifts(Parameters(request))
+            .is_err());
+    }
+    // Unsupported recurrences (alternating sign) and malformed JSON are errors.
+    let alternating = VERONESE_WORKED_JSON.replacen("\"none\"", "\"alternating_n\"", 1);
+    let Err(error) = server.find_veronese_section_lifts(Parameters(veronese_request(&alternating)))
+    else {
+        panic!("alternating recurrence accepted")
+    };
+    assert!(error.message.contains("alternating"));
+    assert!(server
+        .find_veronese_section_lifts(Parameters(veronese_request("{}")))
+        .is_err());
+    // The order cap.
+    let terms: Vec<String> = (1..=13)
+        .map(|offset| {
+            format!(
+                r#"{{"offset":{offset},"deriv_order":0,"sign":"none","coeff":{{"coeffs":[["1"]]}}}}"#
+            )
+        })
+        .collect();
+    let long = format!(
+        r#"{{"schema":"polytool.recurrence.v1","first_index":0,"initial_polynomials":[{}],"recurrence":{{"terms":[{}]}}}}"#,
+        vec![r#"["1"]"#; 13].join(","),
+        terms.join(",")
+    );
+    let Err(error) = server.find_veronese_section_lifts(Parameters(veronese_request(&long))) else {
+        panic!("order-13 recurrence accepted")
+    };
+    assert!(error.message.contains("order 13"));
+}
+
+#[test]
+fn veronese_section_lifts_finds_the_worked_example() {
+    let server = PolynomialToolsServer::new();
+    let Json(report) = server
+        .find_veronese_section_lifts(Parameters(veronese_request(VERONESE_WORKED_JSON)))
+        .unwrap();
+    assert_eq!(report["schema"], "polytool.recurrence-veronese-lifts.v1");
+    assert_eq!(
+        report["input_characteristic_polynomial_text"],
+        "L^2 - 2L + 1 - y"
+    );
+    let best = &report["lifts"][0];
+    assert_eq!(best["status"], "proved_product_parent");
+    assert_eq!(best["modulus"], 2);
+    assert_eq!(best["residue"], 0);
+    assert_eq!(best["parent_characteristic_polynomial_text"], "L - 1 - x");
+    // The parent record feeds generate_recurrence_rows: (1 + x)^n.
+    let Json(rows) = server
+        .generate_recurrence_rows(Parameters(GenerateRecurrenceRowsRequest {
+            recurrence_json: best["parent_recurrence"].to_string(),
+            rows: Some(4),
+            additional: None,
+        }))
+        .unwrap();
+    assert_eq!(rows.polynomials[3], vec!["1", "3", "3", "1"]);
+    assert_eq!(report["exhausted_budget"], false);
+}

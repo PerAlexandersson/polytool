@@ -521,6 +521,26 @@ pub struct RecurrenceTheoremsRequest {
     pub recurrence_json: String,
 }
 
+/// A supplied `polytool.recurrence.v1` record for the sequence `Q_n(y)` and
+/// the bounds of the Veronese-section lift search.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VeroneseSectionLiftsRequest {
+    /// The sequence as `polytool.recurrence.v1` JSON text (for example
+    /// `recurrence_json` from `find_recurrence`): constant coefficients in `n`,
+    /// no derivative, alternating or inhomogeneous terms, a constant or no
+    /// denominator, order at most 12.
+    pub recurrence_json: String,
+    /// Largest modulus `r` tried, 2 to 6 (default 4).
+    pub max_modulus: Option<usize>,
+    /// Number of parent rows checked exactly for real roots and one
+    /// coefficient sign (default 12, at most 64).
+    pub parent_rows: Option<usize>,
+    /// Candidate parent characteristic polynomials tried per modulus
+    /// (default 256, at most 4096).
+    pub max_candidates: Option<usize>,
+}
+
 /// Structured recurrence-space request; the library validates the strict schema.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

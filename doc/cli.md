@@ -14,7 +14,7 @@ are documented on separate pages:
   automatic variable degree, rescaling, machine-readable JSON.
 - [Recurrence transformations and implicit relations](cli-recurrence-transforms.md):
   coordinate transformations, root-domain information, implicit differential
-  relations, the lossy derivative map.
+  relations, the lossy derivative map, Veronese-section lifts.
 - [Searching equivalent representations](cli-recurrence-representations.md):
   the bounded queue search over representations.
 - [Ehrhart conversion, cyclic sieving and Stapledon decomposition](cli-ehrhart-sieving.md).

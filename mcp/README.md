@@ -633,6 +633,46 @@ Example arguments: `{"recurrence_json": "{ ... }"}`. The response uses
 `reference`. Predecessor matches embed the replayable `variable_predecessor`
 certificate.
 
+### `find_veronese_section_lifts`
+
+Search for parent sequences `P_n(x)` whose Veronese coefficient section
+`V_(r,j)(P_n)(y) = sum_k [x^(r k + j)] P_n(x) y^k` is the sequence `Q_n(y)` of
+a supplied `recurrence_json` string (`polytool.recurrence.v1`), for every
+`n >= n0`.  A real-rooted parent with coefficients of one sign has zero or
+real-rooted sections, so a lift can transfer real-rootedness to `Q_n`.
+
+Supported input: derivative-free terms without `(-1)^n` factors and with
+coefficients independent of `n`, a constant or no denominator, no
+inhomogeneous term, order at most 12.  Optional bounds: `max_modulus` (2 to 6,
+default 4), `parent_rows` (parent rows checked exactly, default 12, at most
+64) and `max_candidates` (candidate parents per modulus, default 256, at most
+4096).
+
+Example arguments:
+
+```json
+{
+  "recurrence_json": "{\"schema\":\"polytool.recurrence.v1\",\"first_index\":0,\"initial_polynomials\":[[\"1\"],[\"1\"]],\"recurrence\":{\"terms\":[{\"offset\":1,\"deriv_order\":0,\"sign\":\"none\",\"coeff\":{\"coeffs\":[[\"2\"]]}},{\"offset\":2,\"deriv_order\":0,\"sign\":\"none\",\"coeff\":{\"coeffs\":[[\"-1\",\"1\"]]}}]}}",
+  "max_modulus": 3
+}
+```
+
+The response is `polytool.recurrence-veronese-lifts.v1`:
+`input_characteristic_polynomial` (`[i][j]` is the coefficient of `L^i y^j`,
+exact strings) with `input_characteristic_polynomial_text`, `lifts`,
+`rejected_candidates`, `skipped_moduli` and `exhausted_budget`.  Each lift has
+`modulus`, `residue`, `status` (`proved_product_parent`,
+`parent_real_rootedness_open`, `parent_row_zero`, `parent_row_mixed_signs` or
+`parent_row_not_real_rooted`), `failing_row_index`, `statement`, the parent
+characteristic polynomial `G(L, x)`, the section characteristic polynomial
+`N(L, y)` and the `cofactor` `chi / N` (each with a `_text` form),
+`parent_recurrence` (a `polytool.recurrence.v1` record with the parent seeds,
+accepted by `generate_recurrence_rows`) and `parent_row_check`.  For the
+example the first lift is `G = L - 1 - x` with seed `1`, the parent `(1 + x)^n`,
+status `proved_product_parent`.  Only that status is a proof; an open status
+is finite evidence, and an empty `lifts` list means only that the bounded
+search found nothing.
+
 ### `resultant`
 
 Compute the exact resultant of two polynomials.

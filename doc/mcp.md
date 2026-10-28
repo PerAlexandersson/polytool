@@ -38,6 +38,7 @@ Available MCP tools:
 - `search_implicit_relations`
 - `verify_implicit_relation_search`
 - `enumerate_real_rooted`
+- `find_veronese_section_lifts`
 
 `enumerate_real_rooted` takes `{"degree", "leading_coefficients_descending",
 "max_results", "max_nodes", "max_coefficient_bits"}` (the options of
@@ -61,6 +62,17 @@ certificate, say nothing about real-rootedness of the row polynomials.
 prove PF (real-rooted) rows, and their notes say what they do not prove (at
 most 64 rows of degree at most 64 and steps of length and rise at most 8 for
 `recognize_pf_network`; at most 32 rows for `check_left_production_matrix`).
+
+`find_veronese_section_lifts` takes `{"recurrence_json", "max_modulus",
+"parent_rows", "max_candidates"}` (the options of
+`polytool recurrence-veronese-lifts`) and returns its
+`polytool.recurrence-veronese-lifts.v1` report: parents `P_n(x)` whose
+coefficient sections are the supplied sequence, each with its
+`parent_recurrence` record (usable with `generate_recurrence_rows`) and a
+status, of which only `proved_product_parent` is a proof.  The MCP server
+bounds the work: recurrence order at most 12, `max_modulus` at most 6,
+`parent_rows` default 12 and at most 64, `max_candidates` default 256 and at
+most 4096.
 
 The MCP property, interlacing, resultant, discriminant, Ehrhart conversion,
 sequence-generation, and recurrence tools accept arbitrary-size integer

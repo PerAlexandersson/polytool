@@ -438,3 +438,69 @@ with `[x^0] P[n+1] - [x^0] P[n] = 0` and
 `[x^1] P[n+1] - 2 [x^1] P[n] - n [x^0] P[n] = 0` the pulled-back description
 of `P` is equivalent, and without these lost-data conditions it is a
 certified consequence.
+
+### Veronese-section lifts
+
+`polytool recurrence-veronese-lifts` reads a `polytool.recurrence.v1` record
+for a sequence `Q_n(y)` (from `--recurrence <file|->`, default stdin) and
+searches for parent sequences `P_n(x)` with `Q_n = V_(r,j)(P_n)` for every
+`n >= n0`, where `V_(r,j)(P)(y) = sum_k [x^(r k + j)] P(x) y^k`.  A real-rooted
+parent with coefficients of one sign has zero or real-rooted sections, so a
+lift can transfer real-rootedness to `Q_n`.  The recurrence must have
+derivative-free terms without `(-1)^n` factors and with coefficients
+independent of `n`, a constant (or no) denominator and no inhomogeneous term;
+other input exits with status 2.
+
+```sh
+cat > even.json <<'JSON'
+{"schema":"polytool.recurrence.v1","first_index":0,
+ "initial_polynomials":[["1"],["1"]],
+ "recurrence":{"terms":[
+   {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["2"]]}},
+   {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","1"]]}}]}}
+JSON
+polytool recurrence-veronese-lifts --recurrence even.json
+```
+
+```text
+Input characteristic polynomial: chi(L, y) = L^2 - 2L + 1 - y
+Lift 1: modulus 2, residue 0 [proved_product_parent]
+  parent G(L, x) = L - 1 - x
+  section N(L, y) = L^2 - 2L + 1 - y; cofactor chi/N = 1
+  parent recurrence (t = x): P(n) = (1 + t) P(n-1)
+  parent seed P_0 = 1
+  parent rows checked: 12 (first zero: none, first mixed signs: none, first not real-rooted: none)
+  order-one parent P_n = c^(n - n0) P_(n0) with c and P_(n0) real-rooted with ...
+Lift 2: modulus 2, residue 1 [proved_product_parent]
+  ...
+Lift 3: modulus 2, residue 0 [parent_row_mixed_signs]
+  parent G(L, x) = L - 1 + x
+  ...
+```
+
+Options: `--max-modulus <r>` (2 to 6, default 4), `--parent-rows <n>` (parent
+rows checked exactly, default 12), `--max-candidates <n>` (candidate parents
+per modulus, default 256) and `--json` for the
+`polytool.recurrence-veronese-lifts.v1` report.  Its fields are `schema`,
+`input_characteristic_polynomial` (`[i][j]` is the coefficient of `L^i y^j`,
+exact strings) with `_text`, `lifts`, `rejected_candidates`, `skipped_moduli`
+and `exhausted_budget`.  Each lift has `modulus`, `residue`, `status`,
+`failing_row_index`, `statement`, `parent_characteristic_polynomial`
+(`[i][j]` of `L^i x^j`), `section_characteristic_polynomial`, `cofactor` (each
+with a `_text` form), `parent_recurrence` (a `polytool.recurrence.v1` record
+with the parent seeds, accepted by `recurrence-generate` and the other
+recurrence commands) and `parent_row_check` (`rows_checked` and the first
+absolute index of a zero, mixed-sign or non-real-rooted row).  Rejections have
+`modulus`, `residue` (null when independent of it),
+`parent_characteristic_polynomial`, `reason` (`norm_does_not_divide`,
+`seeds_not_determined`, `seeds_not_polynomial` or `row_mismatch`) and
+`row_index`.
+
+Only `proved_product_parent` is a proof (an order-one parent
+`P_n = c^(n-n0) P_(n0)` with `c` and `P_(n0)` real-rooted of one sign);
+`parent_real_rootedness_open` means that the checked parent rows pass, which
+is finite evidence.  Every listed lift is an exact identity for all `n`: the
+parent's sections satisfy a recurrence dividing `chi`, so `d` matching rows
+determine the sequence (see [algorithms.md](algorithms.md#veronese-section-lifts)).
+The command exits 0 with at least one lift, 1 with none (the search is
+bounded, so this proves nothing) and 2 on invalid or unsupported input.

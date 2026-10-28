@@ -827,6 +827,76 @@ impl PolynomialToolsServer {
         crate::theorems::supplied_theorem_report(&input.recurrence_json).map(Json)
     }
 
+    #[tool(
+        description = "Search for Veronese-section lifts of a sequence Q_n(y) given as a polytool.recurrence.v1 record: parents P_n(x) with a constant-coefficient recurrence and polynomial seeds such that Q_n = V_(r,j)(P_n) for all n >= n0, where V_(r,j)(P)(y) = sum_k [x^(r k + j)] P(x) y^k. A real-rooted parent with coefficients of one sign has zero or real-rooted sections (Polya frequency sequences), so a lift transfers real-rootedness. Supported input: derivative-free terms with coefficients independent of n, no (-1)^n factors, a constant or no denominator, no inhomogeneous term, order at most 12. For each modulus r = 2..max_modulus, chi(L, x^r) is factored over Q and each monic divisor G with r deg_L G <= d is kept when its norm prod_(w^r=1) G(L, w x) divides chi; seeds are solved exactly and the first d rows compared, which proves the identity for all n. Returns polytool.recurrence-veronese-lifts.v1: input_characteristic_polynomial ([i][j] = coefficient of L^i y^j, exact strings, with _text), lifts (modulus, residue, status proved_product_parent | parent_real_rootedness_open | parent_row_zero | parent_row_mixed_signs | parent_row_not_real_rooted, failing_row_index, statement, parent/section characteristic polynomials and cofactor with _text forms, parent_recurrence as a polytool.recurrence.v1 record with seeds for generate_recurrence_rows, parent_row_check), rejected_candidates (reason norm_does_not_divide | seeds_not_determined | seeds_not_polynomial | row_mismatch), skipped_moduli and exhausted_budget. Only proved_product_parent is a proof; the search is bounded and finding nothing proves nothing."
+    )]
+    pub fn find_veronese_section_lifts(
+        &self,
+        Parameters(input): Parameters<crate::requests::VeroneseSectionLiftsRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        use crate::limits::{
+            MCP_DEFAULT_VERONESE_CANDIDATES, MCP_DEFAULT_VERONESE_PARENT_ROWS,
+            MCP_MAX_VERONESE_CANDIDATES, MCP_MAX_VERONESE_PARENT_ROWS,
+            MCP_MAX_VERONESE_RECURRENCE_ORDER,
+        };
+        use polytool::recurrence::{
+            find_veronese_section_lifts, VeroneseSectionLiftOptions, MAX_VERONESE_SECTION_MODULUS,
+        };
+        validate_mcp_text(&input.recurrence_json, "recurrence JSON").map_err(invalid_params)?;
+        let record: RecurrenceJson = serde_json::from_str(&input.recurrence_json)
+            .map_err(|error| invalid_params(format!("failed to parse recurrence JSON: {error}")))?;
+        let (recurrence, first_index, initial_rows) = record
+            .to_recurrence_parts()
+            .map_err(|error| invalid_params(format!("invalid recurrence JSON: {error}")))?;
+        validate_recurrence_for_generation(&recurrence, &initial_rows)?;
+        if recurrence.max_offset() > MCP_MAX_VERONESE_RECURRENCE_ORDER {
+            return Err(invalid_params(format!(
+                "recurrence order {} exceeds the MCP limit {MCP_MAX_VERONESE_RECURRENCE_ORDER} \
+                 for find_veronese_section_lifts",
+                recurrence.max_offset()
+            )));
+        }
+        let bounded = |value: Option<usize>, default: usize, max: usize, name: &str| {
+            let value = value.unwrap_or(default);
+            if value > max {
+                Err(invalid_params(format!(
+                    "{name} = {value} exceeds the MCP limit {max}"
+                )))
+            } else {
+                Ok(value)
+            }
+        };
+        let options = VeroneseSectionLiftOptions {
+            max_modulus: bounded(
+                input.max_modulus,
+                VeroneseSectionLiftOptions::default().max_modulus,
+                MAX_VERONESE_SECTION_MODULUS,
+                "max_modulus",
+            )?,
+            parent_rows_to_check: bounded(
+                input.parent_rows,
+                MCP_DEFAULT_VERONESE_PARENT_ROWS,
+                MCP_MAX_VERONESE_PARENT_ROWS,
+                "parent_rows",
+            )?,
+            max_parent_candidates: bounded(
+                input.max_candidates,
+                MCP_DEFAULT_VERONESE_CANDIDATES,
+                MCP_MAX_VERONESE_CANDIDATES,
+                "max_candidates",
+            )?,
+            ..Default::default()
+        };
+        let report = find_veronese_section_lifts(&recurrence, &initial_rows, first_index, &options)
+            .map_err(invalid_params)?;
+        let serde_json::Value::Object(fields) =
+            serde_json::to_value(report).expect("serialize Veronese lift report")
+        else {
+            unreachable!("the Veronese lift report is an object")
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
     #[tool(description = "Compute the exact resultant of two polynomials.")]
     pub fn resultant(
         &self,

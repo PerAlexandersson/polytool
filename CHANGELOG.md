@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-This release is `polytool` 0.6.0 and `exact-real-roots` 0.2.0.  CLI commands and
-flags, MCP tool names and schemas, and the web export names are unchanged.
+This release is `polytool` 0.6.0 and `exact-real-roots` 0.2.0.  Existing CLI
+commands and flags, MCP tool names and schemas, and the web export names are
+unchanged; new commands and tools are listed under Additions.
 
 Breaking changes:
 
@@ -235,6 +236,27 @@ Performance:
 
 Additions:
 
+- `factorization`: exact irreducible factorization over Q.
+  `irreducible_factorization_bigint_coeffs` / `_rational_coeffs`
+  (`_with_budget`) return a `RationalPolynomialFactorization` (constant and
+  primitive integer factors with multiplicities; Yun squarefree decomposition,
+  Berlekamp modulo a small prime, Hensel lifting, Zassenhaus recombination);
+  `irreducible_factorization_monic_bivariate` (`_with_budget`) factors a
+  polynomial monic in its first variable by a squarefree specialization and
+  Hensel lifting.  Errors are `PolynomialFactorizationError`.
+- Veronese-section lifts: `recurrence::find_veronese_section_lifts` takes a
+  constant-coefficient, derivative-free recurrence for `Q_n(y)` with its
+  initial rows and returns parent recurrences `P_n(x)` with an exact identity
+  `Q_n = V_(r,j)(P_n)` (the coefficients of `x^(rk+j)`), found by factoring
+  `chi(L, x^r)` for the input characteristic polynomial `chi` and solving for
+  the parent seeds exactly.  If every parent row is real-rooted with
+  coefficients of one sign, every `Q_n` is zero or real-rooted; each lift
+  reports exact checks of its first parent rows, and order-one parents
+  `P_n = c^n P_0` are proved outright.  Report types
+  `VeroneseSectionLiftReport`, `VeroneseSectionLift`,
+  `VeroneseSectionLiftStatus`, `VeroneseSectionLiftRejection` (JSON schema
+  `polytool.recurrence-veronese-lifts.v1`); CLI `recurrence-veronese-lifts`;
+  MCP tool `find_veronese_section_lifts`.
 - Lazy row iterators.  `recurrence::RecurrenceRowIterator` (made with
   `Recurrence::generate_rows_rational_iter(initial_rows, first_index)`) yields the seed
   rows and then one exactly evaluated row per `next`, with

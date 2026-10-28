@@ -20,6 +20,7 @@ use crate::recurrence_implicit::print_recurrence_implicit_help;
 use crate::recurrence_search_representations::print_recurrence_search_representations_help;
 use crate::recurrence_theorems::print_recurrence_theorems_help;
 use crate::recurrence_transform::print_recurrence_transform_help;
+use crate::recurrence_veronese_lifts::print_recurrence_veronese_lifts_help;
 use crate::root_enclosures::print_root_enclosures_help;
 use crate::sequence::print_sequence_help;
 use crate::stapledon::print_stapledon_help;
@@ -74,6 +75,8 @@ pub(crate) fn print_top_level_help() {
     println!("                    Change polynomial coordinates and transport a recurrence");
     println!("  recurrence-theorems");
     println!("                    Conditional interlacing theorem matches for recurrence JSON");
+    println!("  recurrence-veronese-lifts");
+    println!("                    Parent sequences whose coefficient sections are the sequence");
     println!("  root-enclosures   Exact rational root enclosures with multiplicities");
     println!("  recurrence-implicit");
     println!("                    Diagonal maps and antecedents: implicit relations, uniqueness");
@@ -227,6 +230,7 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "recurrence-generate" => print_recurrence_generate_help(),
         "recurrence-transform" => print_recurrence_transform_help(),
         "recurrence-theorems" => print_recurrence_theorems_help(),
+        "recurrence-veronese-lifts" => print_recurrence_veronese_lifts_help(),
         "root-enclosures" => print_root_enclosures_help(),
         "recurrence-implicit" => print_recurrence_implicit_help(),
         "recurrence-search-representations" => print_recurrence_search_representations_help(),

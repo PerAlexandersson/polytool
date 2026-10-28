@@ -40,3 +40,14 @@ pub(crate) const MCP_MAX_ENUMERATE_RESULTS: usize = 2_000;
 /// derivative-tower polynomial.
 pub(crate) const MCP_DEFAULT_ENUMERATE_COEFFICIENT_BITS: u64 = 1_024;
 pub(crate) const MCP_MAX_ENUMERATE_COEFFICIENT_BITS: u64 = 2_048;
+/// `find_veronese_section_lifts`: largest recurrence order (largest offset);
+/// the work grows with the factorization of `chi(L, x^r)` of `L`-degree `d`.
+pub(crate) const MCP_MAX_VERONESE_RECURRENCE_ORDER: usize = 12;
+/// `find_veronese_section_lifts`: default and largest number of parent rows
+/// checked exactly.
+pub(crate) const MCP_DEFAULT_VERONESE_PARENT_ROWS: usize = 12;
+pub(crate) const MCP_MAX_VERONESE_PARENT_ROWS: usize = 64;
+/// `find_veronese_section_lifts`: default and largest number of candidate
+/// parents tried per modulus.
+pub(crate) const MCP_DEFAULT_VERONESE_CANDIDATES: usize = 256;
+pub(crate) const MCP_MAX_VERONESE_CANDIDATES: usize = 4_096;
