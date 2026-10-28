@@ -1,9 +1,13 @@
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
 
-use super::arithmetic::{add_q, div_rem_q, evaluate_q, mul_q, scale_q, sub_q, trim_q, Q};
+use super::arithmetic::{
+    add_q, derivative_q, div_rem_q, evaluate_q, exact_div_q, gcd_q, monic_q, mul_q, scale_q, sub_q,
+    trim_q, Q,
+};
 use super::univariate::factor_rational;
 use super::{MonicBivariateFactor, PolynomialFactorizationError};
+use crate::Polynomial;
 
 type Bivariate = Vec<Vec<Q>>;
 type Series = Vec<Vec<Q>>;
@@ -16,6 +20,101 @@ pub(super) fn factor(
     if input.len() == 1 {
         return Ok(Vec::new());
     }
+    let radical = squarefree_part_in_first_variable(&input)?;
+    if radical.len() == input.len() {
+        return factor_squarefree(&input, budget);
+    }
+    let mut remaining = input;
+    let mut factors = Vec::new();
+    for factor in factor_squarefree(&radical, budget)? {
+        let mut multiplicity = 0;
+        loop {
+            let (quotient, remainder) = bivariate_div_rem(&remaining, &factor.coefficients);
+            if !remainder.is_empty() {
+                break;
+            }
+            remaining = quotient;
+            multiplicity += 1;
+        }
+        factors.push(MonicBivariateFactor {
+            coefficients: factor.coefficients,
+            multiplicity,
+        });
+    }
+    // The interpolated radical is a true divisor; if it missed a factor (all
+    // sampled points degenerate), the cofactor is not 1 and the input is
+    // reported as unsupported rather than factored incompletely.
+    if remaining != [vec![Q::one()]] || factors.iter().any(|factor| factor.multiplicity == 0) {
+        return Err(PolynomialFactorizationError::NoGoodSpecialization);
+    }
+    Ok(factors)
+}
+
+/// The monic squarefree part of `input` in its first variable, `input`
+/// divided by `gcd(input, d input / ds)` over `Q(x)`.
+///
+/// For all but finitely many `x0`, the radical of `input(s, x0)` has the
+/// largest degree and equals the specialization of the radical, whose
+/// coefficients lie in `Q[x]` (a monic divisor of a monic polynomial over the
+/// integrally closed `Q[x]`) with `x`-degree at most that of `input`.  The
+/// radical is interpolated from such points and checked to divide `input`.
+fn squarefree_part_in_first_variable(
+    input: &[Vec<Q>],
+) -> Result<Bivariate, PolynomialFactorizationError> {
+    let x_degree = input
+        .iter()
+        .map(|row| row.len().saturating_sub(1))
+        .max()
+        .unwrap_or(0);
+    let needed = x_degree + 1;
+    let mut best_degree = 0;
+    let mut samples: Vec<(Q, Vec<Q>)> = Vec::new();
+    for point in specialization_points().take(2 * needed + 16) {
+        let value = evaluate_at_x(input, &point);
+        let common = gcd_q(&value, &derivative_q(&value));
+        let radical = monic_q(&exact_div_q(&value, &common));
+        let degree = radical.len() - 1;
+        if degree > best_degree {
+            best_degree = degree;
+            samples.clear();
+        }
+        if degree == best_degree {
+            samples.push((Q::from_integer(point), radical));
+        }
+    }
+    if samples.len() < needed {
+        return Err(PolynomialFactorizationError::NoGoodSpecialization);
+    }
+    samples.truncate(needed);
+    let points = samples
+        .iter()
+        .map(|(point, _)| point.clone())
+        .collect::<Vec<_>>();
+    let radical = (0..=best_degree)
+        .map(|s_degree| {
+            let values = samples
+                .iter()
+                .map(|(_, radical)| radical.get(s_degree).cloned().unwrap_or_else(Q::zero))
+                .collect::<Vec<_>>();
+            trim_q(
+                Polynomial::lagrange_interpolation(&points, &values)
+                    .coeffs()
+                    .to_vec(),
+            )
+        })
+        .collect::<Vec<_>>();
+    if !bivariate_div_rem(input, &radical).1.is_empty() {
+        return Err(PolynomialFactorizationError::NoGoodSpecialization);
+    }
+    Ok(radical)
+}
+
+/// Factor a monic, squarefree-in-`s` bivariate polynomial.
+fn factor_squarefree(
+    input: &[Vec<Q>],
+    budget: usize,
+) -> Result<Vec<MonicBivariateFactor>, PolynomialFactorizationError> {
+    let input = input.to_vec();
     let x_degree = input
         .iter()
         .map(|row| row.len().saturating_sub(1))
@@ -36,7 +135,7 @@ pub(super) fn factor(
         break;
     }
     let (x0, factorization) =
-        selected_specialization.ok_or(PolynomialFactorizationError::NotSquarefree)?;
+        selected_specialization.ok_or(PolynomialFactorizationError::NoGoodSpecialization)?;
     let base_factors = factorization
         .factors
         .iter()

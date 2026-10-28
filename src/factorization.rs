@@ -2,7 +2,8 @@
 //!
 //! The univariate entry points use squarefree decomposition followed by the
 //! Zassenhaus modular factorization algorithm.  The bivariate entry points use
-//! a squarefree specialization and Hensel lifting in the translated variable.
+//! an interpolated squarefree decomposition, a squarefree specialization and
+//! Hensel lifting in the translated variable.
 //! Coefficients are always exact, and coefficient vectors use ascending degree
 //! order.  Related arithmetic lives in [`crate::polynomial`] and
 //! [`crate::vec_poly`].  The implementation follows the presentation of
@@ -34,9 +35,10 @@ pub enum PolynomialFactorizationError {
     /// A bivariate input is not monic in its first variable (the coefficient
     /// row of the highest power of the first variable is not the constant 1).
     NotMonicInFirstVariable,
-    /// A bivariate input is not squarefree as a polynomial in its first
-    /// variable over `Q(x)`, or no squarefree specialization was found.
-    NotSquarefree,
+    /// No usable specialization `x = x0` was found among the sampled points
+    /// (every sampled point was degenerate for the squarefree decomposition or
+    /// the Hensel lifting).  This does not happen for generic inputs.
+    NoGoodSpecialization,
     /// The recombination step needed more subset trials than allowed.
     RecombinationBudgetExceeded {
         /// The subset-trial limit that was hit.
@@ -54,9 +56,9 @@ impl fmt::Display for PolynomialFactorizationError {
                     "the bivariate polynomial is not monic in its first variable"
                 )
             }
-            Self::NotSquarefree => write!(
+            Self::NoGoodSpecialization => write!(
                 formatter,
-                "the polynomial is not squarefree in its first variable"
+                "no usable specialization of the second variable was found"
             ),
             Self::RecombinationBudgetExceeded { limit } => {
                 write!(
@@ -143,9 +145,9 @@ pub fn irreducible_factorization_rational_coeffs_with_budget(
 /// Factor a monic-in-`s` bivariate polynomial over `Q`.
 ///
 /// `coefficients[i][j]` is the coefficient of `s^i x^j`; the row of the top
-/// power of `s` must be the constant 1.  The input must be squarefree as a
-/// polynomial in `s` over `Q(x)`; repeated factors give
-/// [`PolynomialFactorizationError::NotSquarefree`].  The factors are sorted by
+/// power of `s` must be the constant 1.  Repeated factors are found by an
+/// interpolated squarefree decomposition and returned with their
+/// multiplicities.  The factors are sorted by
 /// `s`-degree, then `x`-degree, then coefficients, and their product is the
 /// input.
 ///

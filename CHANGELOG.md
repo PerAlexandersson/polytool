@@ -242,8 +242,9 @@ Additions:
   primitive integer factors with multiplicities; Yun squarefree decomposition,
   Berlekamp modulo a small prime, Hensel lifting, Zassenhaus recombination);
   `irreducible_factorization_monic_bivariate` (`_with_budget`) factors a
-  polynomial monic in its first variable by a squarefree specialization and
-  Hensel lifting.  Errors are `PolynomialFactorizationError`.
+  polynomial monic in its first variable, with multiplicities (interpolated
+  squarefree decomposition, a squarefree specialization and Hensel lifting).
+  Errors are `PolynomialFactorizationError`.
 - Veronese-section lifts: `recurrence::find_veronese_section_lifts` takes a
   constant-coefficient, derivative-free recurrence for `Q_n(y)` with its
   initial rows and returns parent recurrences `P_n(x)` with an exact identity

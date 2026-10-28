@@ -230,11 +230,31 @@ fn bivariate_irreducible_and_errors() {
         irreducible_factorization_monic_bivariate(&[vec![q(2)], vec![q(2)]]),
         Err(PolynomialFactorizationError::NotMonicInFirstVariable)
     );
+    // (s - x)^2
     let repeated = vec![vec![q(0), q(0), q(1)], vec![q(0), q(-2)], vec![q(1)]];
     assert_eq!(
-        irreducible_factorization_monic_bivariate(&repeated),
-        Err(PolynomialFactorizationError::NotSquarefree)
+        irreducible_factorization_monic_bivariate(&repeated).unwrap(),
+        vec![MonicBivariateFactor {
+            coefficients: vec![vec![q(0), q(-1)], vec![q(1)]],
+            multiplicity: 2,
+        }]
     );
+    // (s - 1)^3 (s^2 - x) (s - x)
+    let factors = [
+        vec![vec![q(-1)], vec![q(1)]],
+        vec![vec![q(0), q(-1)], vec![], vec![q(1)]],
+        vec![vec![q(0), q(-1)], vec![q(1)]],
+    ];
+    let mut product = vec![vec![q(1)]];
+    for (factor, power) in factors.iter().zip([3, 1, 1]) {
+        for _ in 0..power {
+            product = bivariate_mul(&product, factor);
+        }
+    }
+    let result = irreducible_factorization_monic_bivariate(&product).unwrap();
+    let multiplicities: Vec<usize> = result.iter().map(|factor| factor.multiplicity).collect();
+    assert_eq!(multiplicities, vec![3, 1, 1]);
+    assert_eq!(reconstruct_bivariate(&result), product);
 }
 
 #[test]
