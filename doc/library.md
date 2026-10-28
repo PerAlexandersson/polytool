@@ -541,6 +541,25 @@ result.verify()?;
 The transport conventions, the pseudo-division and the soundness argument are
 in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 
+### The common lift summary
+
+Every lift report carries a `lift_summary` (`recurrence::LiftSummary`): the
+operation (`veronese_section` with modulus and residue, `symmetric_companion`
+with `d_(n0)`), the parent record, the identity status (`certified` with its
+method, `supported_by_rows`, `unsupported`, `refuted`), the root transfer
+(theorem, the parent root region and the input root region as
+`RootInterval`s; the Veronese route needs parent roots in `(-inf, 0]`, the
+symmetric-companion route an interlacing pair instead), the hypotheses with
+their exact sign decisions, the parent proof (`proved` with a route, `open`,
+`failed`, `attested`) and the verdict of `lift_verdict`: `proved` exactly when
+the identity is certified, the parent is proved and every hypothesis is
+verified, `route_failed` when the identity is refuted, the parent fails or a
+hypothesis fails (which says nothing against the input).
+`VeroneseSectionLift::lift_summary`,
+`VeroneseSectionCertification::recompute_lift_summary` and
+`SymmetricCompanionLift::recompute_lift_summary` compute it from the detailed
+report, which stays authoritative.
+
 ## Symmetric-companion lifts
 
 `recurrence::find_symmetric_companion_lifts` recognizes a palindromic sequence
@@ -609,6 +628,43 @@ hypothesis means only that this route fails.  The report serializes as
 `polytool.recurrence-symmetric-companion.v1` (exact rationals as strings).
 The algorithm and the soundness argument are in
 [algorithms.md](algorithms.md#symmetric-companion-lifts).
+
+## Exact sign decisions for an integer index
+
+`decide_index_rational_function_sign(p, q, &range, condition)` decides
+`p(n) / q(n) R 0` for every integer `n` of an `IntegerRange`, exactly.  A
+vanishing denominator is a failure, a failure names the smallest failing
+index, and `undecided` happens only over the `IndexSignBudget`.
+
+```rust
+use num_bigint::BigInt;
+use polytool::{
+    decide_index_rational_function_sign, BigRational, IndexSignCondition, IndexSignDecision,
+    IntegerRange,
+};
+
+let q = |n: i64| BigRational::from_integer(BigInt::from(n));
+// (n^2 - 5n + 7) / (2n - 5) > 0 for n >= 3: the numerator has no real root
+// and the denominator changes sign between 2 and 3.
+let decision = decide_index_rational_function_sign(
+    &[q(7), q(-5), q(1)],
+    &[q(-5), q(2)],
+    &IntegerRange::starting_at(3),
+    IndexSignCondition::Positive,
+);
+let IndexSignDecision::Holds { certificate } = &decision else { unreachable!() };
+certificate.verify().unwrap();
+// From n = 0 it fails at n = 0 (value -7/5).
+let decision = decide_index_rational_function_sign(
+    &[q(7), q(-5), q(1)],
+    &[q(-5), q(2)],
+    &IntegerRange::starting_at(0),
+    IndexSignCondition::Positive,
+);
+assert_eq!(decision.failing_index(), Some(&BigInt::from(0)));
+```
+
+The algorithm is in [algorithms.md](algorithms.md#exact-sign-decisions-for-an-integer-index).
 
 ## Shared-denominator vector recurrences
 

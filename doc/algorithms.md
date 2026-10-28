@@ -392,8 +392,8 @@ parent from the parameters, then establishes for every `n >= n0`:
    source with an `x`-free leader `f`, `f(n + 2) E = eps_n M`).  `M` holds at
    every base whose leading row the source rule generates; the remaining
    bases and the roots of `g` are checked on exact rows.
-2. `eps_n != 0` on the domain (exact integer roots); a vanishing coupling is
-   `unsupported`, never cancelled.
+2. `eps_n != 0` on the domain (the exact index sign checker); a vanishing
+   coupling is `unsupported`, never cancelled.
 3. `R_n(0) = 0`: the derivative terms of `E` vanish at `x = 0` and the
    projection factors as `(eps_n S - g_n) o (S - a_n)`, so
    `w_n = A_(n+1)(0) - a_n A_n(0)` satisfies `eps_n w_(n+1) = g_n w_n`; with
@@ -417,7 +417,7 @@ pairs with nonnegative coefficients, `deg a <= d`, `deg b <= d - 1` and
 cases by limits), and `a + x b` is then real-rooted (Brändén--Solus,
 arXiv:1808.04141, Theorem 2.6).  The route applies when the identity is
 certified, `a_n >= 0` and `0 <= delta_n <= c_n` for all integers `n >= n0`
-(exact for degree at most one), `d_(n0) >= 1`, and `A_(n0)`, `B_(n0)` are
+(decided exactly by the index sign checker, below), `d_(n0) >= 1`, and `A_(n0)`, `B_(n0)` are
 nonnegative with `B_(n0) <= A_(n0)`.  Here `f <= g` is directed weak
 interlacing with `g` holding the rightmost root, which for nonzero rows is
 `check_weak_interlacing(f, g) == Some(true)`; a zero member is accepted when
@@ -436,3 +436,54 @@ Limitations: parameters of degree at most one in `n`; only rational
 solutions; a derivation of `E` from orders other than one (with a constant
 leader) or two is not attempted, which leaves the identity a `candidate`; no
 CLI or MCP adapter and no integration into `search_representations` yet.
+
+## Exact sign decisions for an integer index
+
+`decide_index_rational_function_sign(p, q, range, condition)` decides
+`p(n) / q(n) R 0` for every integer `n` in `[first, last]` or `[first, +inf)`,
+with `R` among `> 0`, `>= 0`, `< 0`, `<= 0`, `!= 0`, `= 0`, without floating
+point.
+
+1. **Taylor shift.**  If the coefficients of `p(first + u)` have one sign, and
+   those of `q(first + u)` too with a nonzero constant term, the sign of `f` is
+   known at `u = 0` and for every real `u > 0`; when the condition holds for
+   both, the shifted coefficients are the certificate.
+2. **Sign samples.**  Otherwise each nonzero polynomial gets a Sturm chain
+   (`sturm::SturmChain`, on a positive integer multiple).  With `U` the
+   ceiling of the Cauchy bound, every real root lies in `(-U, U)`.  The part
+   `[max(first, -U), min(last, U)]` of the range is bisected at integer
+   midpoints: a window `(l, h)` with no root (one Sturm count) is not split,
+   and a window of width one with roots is recorded as a root cell.  The
+   samples are `first`, `last`, every window end, and `l + 1` for a root-free
+   window both of whose ends are roots.  So between consecutive samples
+   `s < t` with `t - s >= 2` the polynomial has no root and does not vanish at
+   both ends, and beyond the last sample of an unbounded range it has no root
+   and does not vanish at the sample.  Hence its sign at every integer of the
+   range is the sign at a sample.  The samples of `p` and `q` are merged (a
+   refinement keeps both properties), `p` and `q` are evaluated exactly at
+   each, and the smallest failing index is read off (a vanishing denominator
+   fails every condition).
+
+Each polynomial needs `O(deg * log U)` Sturm counts, independent of the length
+of the range, so the decision is complete; the budget (degree, bisection
+steps) is the only source of `undecided`.  The certificate replay recomputes
+the signs, recounts the roots in every gap of length at least two and beyond
+the last sample (up to the Cauchy bound), checks the root cells and the
+condition, and rechecks the Taylor-shift data.
+
+## Common lift summary
+
+Every lift report carries a `LiftSummary`: operation, parent, identity status,
+root transfer (theorem, parent and input root regions), hypotheses (sign
+hypotheses with the decision above), parent proof and verdict.  The verdict is
+computed by one function, `lift_verdict`: `route_failed` if the identity is
+refuted, the parent fails or a hypothesis fails; `proved` if the identity is
+certified, the parent is proved and every hypothesis is verified;
+`conditional_on_attestation` with an attested parent instead; `open`
+otherwise.  The mappings preserve each operation's own verdict: a Veronese
+v1 lift is proved exactly for `proved_product_parent` (its identity is
+certified by the identifying rows), a v2 certification exactly for
+`VeroneseSectionVerdict::Proved`, and a symmetric-companion lift exactly when
+the preservation theorem applies (its parent proof is the preservation
+induction).  A `route_failed` or `open` summary says nothing against
+real-rootedness of the input.

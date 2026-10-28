@@ -144,3 +144,109 @@ fn eulerian_parent_is_proved_by_the_root_domain_route() {
     let open = prove_parent(&record, first_index, &[], false).unwrap();
     assert_eq!(open.status, VeroneseParentProofStatus::NotProved);
 }
+
+/// `f(n, t) P_n = sum c_k(n, t) D^d P_(n-k)` from `(k, d, rows)`, `rows[i][j]`
+/// the coefficient of `n^i t^j`.
+fn summary_rule(terms: &[(usize, usize, &[&[i64]])]) -> Recurrence {
+    Recurrence {
+        terms: terms
+            .iter()
+            .map(|(offset, order, coefficients)| {
+                RecurrenceTerm::new(
+                    *offset,
+                    *order,
+                    BivarPoly::from_coefficients_normalized(
+                        coefficients
+                            .iter()
+                            .map(|r| r.iter().map(|&c| q(c)).collect())
+                            .collect(),
+                    ),
+                )
+            })
+            .collect(),
+        denominator: None,
+        inhomogeneous: None,
+    }
+}
+
+#[test]
+fn lift_summaries_of_proved_and_refuted_certifications() {
+    // The even sections of the Eulerian polynomials (A008292), proved through
+    // the root-domain parent route.
+    let input = summary_rule(&[
+        (1, 0, &[&[-1], &[1]]),
+        (1, 1, &[&[0, 4]]),
+        (2, 0, &[&[2, 4], &[-1, -4], &[0, 1]]),
+        (2, 1, &[&[0, 0, 12], &[0, -4, -4]]),
+        (2, 2, &[&[0, 0, -4, 4]]),
+        (3, 0, &[&[0, 12], &[0, -19], &[0, 8], &[0, -1]]),
+        (3, 1, &[&[0, -6, 18], &[0, 6, -22], &[0, 0, 4]]),
+        (3, 2, &[&[0, 0, -4, 4], &[0, 0, 4, -4]]),
+    ]);
+    let (parent_rule, parent_seeds, first_row) = crate::oeis::by_id("A008292")
+        .unwrap()
+        .recurrence_export_parts()
+        .unwrap();
+    assert_eq!(first_row, 1);
+    let even: Vec<Vec<BigRational>> = parent_rule
+        .generate_rows_rational(&parent_seeds, 1, 3)
+        .unwrap()
+        .iter()
+        .map(|row| row.iter().step_by(2).cloned().collect())
+        .collect();
+    let candidate = VeroneseSectionCandidate {
+        modulus: 2,
+        residue: 0,
+        parent: RecurrenceJson::from_recurrence_rational(&parent_rule, 1, &parent_seeds, None),
+        index_shift: 0,
+        gauge: VeroneseSectionGauge::None,
+    };
+    let options = VeroneseSectionCertifyOptions::default();
+    let certification =
+        certify_veronese_section_lift(&input, &even, 1, &candidate, &options).unwrap();
+    assert_eq!(certification.verdict, VeroneseSectionVerdict::Proved);
+    let summary = certification.lift_summary.clone().expect("summary present");
+    assert_eq!(summary, certification.recompute_lift_summary());
+    assert_eq!(summary.verdict, LiftVerdict::Proved);
+    assert!(summary.is_consistent());
+    assert_eq!(summary.input_first_index, 1);
+    assert_eq!(
+        summary.identity,
+        LiftIdentityStatus::Certified {
+            method: "forward_division".into()
+        }
+    );
+    assert!(matches!(
+        &summary.parent_proof,
+        LiftParentProof::Proved { route, .. } if route == "root_domain"
+    ));
+    assert_eq!(summary.parent.gauge, Some(VeroneseSectionGauge::None));
+    assert_eq!(summary.hypotheses.len(), 1);
+    assert_eq!(summary.hypotheses[0].status, LiftHypothesisStatus::Verified);
+    certification.verify().unwrap();
+
+    // A tampered summary is refused by the replay.
+    let mut tampered = certification.clone();
+    if let Some(summary) = tampered.lift_summary.as_mut() {
+        summary.verdict = LiftVerdict::Open;
+    }
+    assert!(tampered.verify().is_err());
+    // A record without the field (written before it existed) still replays.
+    let mut legacy = serde_json::to_value(&certification).unwrap();
+    legacy.as_object_mut().unwrap().remove("lift_summary");
+    let legacy: VeroneseSectionCertification = serde_json::from_value(legacy).unwrap();
+    assert!(legacy.lift_summary.is_none());
+    legacy.verify().unwrap();
+
+    // A wrong seed row is refuted at index 3.
+    let mut wrong = even.clone();
+    wrong[2] = vec![q(1), q(2)];
+    let refuted = certify_veronese_section_lift(&input, &wrong, 1, &candidate, &options).unwrap();
+    let summary = refuted.lift_summary.clone().unwrap();
+    assert_eq!(summary.verdict, LiftVerdict::RouteFailed);
+    assert!(matches!(
+        summary.identity,
+        LiftIdentityStatus::Refuted { index: Some(3), .. }
+    ));
+    refuted.verify().unwrap();
+}

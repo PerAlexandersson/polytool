@@ -4,12 +4,15 @@
 //! Every exact rational is an integer or `num/den` string; recurrences are
 //! `polytool.recurrence.v1` records with their seeds.
 
+use super::super::lift_summary::symmetric_companion_root_transfer;
 use super::certificate::{
-    SymmetricCompanionCertificate, SymmetricCompanionIdentityStatus,
+    decide_on_domain, sign_hypotheses, SymmetricCompanionCertificate,
+    SymmetricCompanionCheckStatus, SymmetricCompanionIdentityStatus,
     SymmetricCompanionRealRootednessStatus, SymmetricCompanionVerification,
 };
 use super::operators::CompanionParameters;
 use super::source::PreparedSource;
+use crate::integer_range_sign::{IndexSignCondition, IndexSignDecision};
 use crate::recurrence::implicit::algebra::poly_text;
 use crate::recurrence::*;
 use serde::{Deserialize, Serialize};
@@ -131,6 +134,12 @@ pub struct SymmetricCompanionLift {
     pub parent_rule: String,
     /// Comparison of the parent rule with the source rule.
     pub comparison: String,
+    /// The uniform [`LiftSummary`] of this lift
+    /// ([`SymmetricCompanionLift::recompute_lift_summary`]); always present in
+    /// reports of this version, optional in JSON for records written before
+    /// the field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lift_summary: Option<LiftSummary>,
 }
 
 impl SymmetricCompanionLift {
@@ -171,13 +180,21 @@ impl SymmetricCompanionLift {
              derivative order {source_derivatives}",
             source.order
         );
+        let lift_summary = Some(lift_summary(&certificate, &verification));
         Self {
             certificate,
             verification,
             companion_formula,
             parent_rule,
             comparison,
+            lift_summary,
         }
+    }
+
+    /// The [`LiftSummary`] of this lift, computed from the certificate and
+    /// the verification (see the free function behind it).
+    pub fn recompute_lift_summary(&self) -> LiftSummary {
+        lift_summary(&self.certificate, &self.verification)
     }
 
     fn rank(&self) -> usize {
@@ -270,4 +287,135 @@ impl SymmetricCompanionLiftReport {
         serde_json::to_string_pretty(self)
             .map_err(|e| RecurrenceError::InvalidInput(format!("cannot serialize the report: {e}")))
     }
+}
+
+/// The [`LiftSummary`] of a certificate and its verification.
+///
+/// `certified` maps to a certified identity (method
+/// `coupled_system_elimination`), `candidate` (no obligation fails and the
+/// exact rows agree) to `supported_by_rows`, `unsupported` and `rejected` to
+/// the matching statuses with the first such obligation as the reason.  The
+/// parent statement is proved (route `interlacing_preservation_induction`)
+/// exactly when the preservation theorem applies, and open otherwise.  The
+/// hypotheses are the theorem's; the three sign hypotheses carry the exact
+/// decision of [`crate::decide_index_polynomial_sign`].  The summary is
+/// proved exactly when [`SymmetricCompanionVerification::theorem_applies`].
+pub(super) fn lift_summary(
+    certificate: &SymmetricCompanionCertificate,
+    verification: &SymmetricCompanionVerification,
+) -> LiftSummary {
+    use SymmetricCompanionCheckStatus as Status;
+    let n0 = certificate.source.first_index;
+    let d0 = certificate.symmetry_degree_at_first_index;
+    let first_with = |status: Status| {
+        verification
+            .identities
+            .iter()
+            .find(|check| check.status == status)
+            .map(|check| format!("{}: {}", check.name, check.evidence))
+            .unwrap_or_default()
+    };
+    let identity = match verification.identity_status {
+        SymmetricCompanionIdentityStatus::Certified => LiftIdentityStatus::Certified {
+            method: "coupled_system_elimination".into(),
+        },
+        SymmetricCompanionIdentityStatus::Candidate => LiftIdentityStatus::SupportedByRows {
+            rows: verification.self_checked_rows,
+        },
+        SymmetricCompanionIdentityStatus::Unsupported => LiftIdentityStatus::Unsupported {
+            reason: first_with(Status::Unsupported),
+        },
+        SymmetricCompanionIdentityStatus::Rejected => LiftIdentityStatus::Refuted {
+            index: None,
+            reason: first_with(Status::Failed),
+        },
+    };
+    // The sign decisions behind the verifier's sign hypotheses.
+    let decisions: Vec<(&str, IndexSignDecision, String)> = match certificate.parameters.values() {
+        Ok((a, _, c, _, epsilon)) => {
+            let parameters = CompanionParameters::new(a, c, epsilon, n0, d0);
+            sign_hypotheses(&parameters)
+                .into_iter()
+                .map(|(name, _, p)| {
+                    let decision = decide_on_domain(&p, n0, IndexSignCondition::Nonnegative);
+                    (name, decision, format!("p(n) = {}", poly_text(&p, "n")))
+                })
+                .collect()
+        }
+        Err(_) => Vec::new(),
+    };
+    let hypotheses = verification
+        .hypotheses
+        .iter()
+        .map(|check| {
+            let status = match check.status {
+                Status::Verified => LiftHypothesisStatus::Verified,
+                Status::Failed => LiftHypothesisStatus::Failed { witness: None },
+                Status::Unresolved | Status::Unsupported => LiftHypothesisStatus::Unresolved,
+            };
+            let decided = decisions
+                .iter()
+                .find(|(name, _, _)| *name == check.name)
+                .map(|(_, decision, function)| {
+                    LiftHypothesis::from_sign_decision(
+                        &check.name,
+                        &check.statement,
+                        decision.clone(),
+                        function,
+                    )
+                });
+            match decided {
+                // The verifier made the same decision; it adds the witness and
+                // the replayable certificate.
+                Some(decided)
+                    if std::mem::discriminant(&decided.status)
+                        == std::mem::discriminant(&status) =>
+                {
+                    decided
+                }
+                _ => LiftHypothesis {
+                    name: check.name.clone(),
+                    statement: check.statement.clone(),
+                    status,
+                    evidence: check.evidence.clone(),
+                    sign_decision: None,
+                },
+            }
+        })
+        .collect();
+    let parent_proof = if verification.theorem_applies() {
+        LiftParentProof::Proved {
+            route: "interlacing_preservation_induction".into(),
+            statement: format!(
+                "the preservation theorem carries the pair B_n <= A_n with nonnegative \
+                 coefficients from n0 = {n0} on, so every P_n = A_n + x B_n (n >= {n0}) is zero \
+                 or real-rooted"
+            ),
+        }
+    } else {
+        LiftParentProof::Open {
+            statement: "the preservation induction needs the certified identity and every \
+                        hypothesis; it is not established"
+                .into(),
+        }
+    };
+    LiftSummary::new(
+        LiftOperation::SymmetricCompanion {
+            symmetry_degree_at_first_index: d0,
+        },
+        n0,
+        LiftParent {
+            recurrence: certificate.parent.clone(),
+            relation: format!(
+                "A_n is the symmetric part at d_n = {d0} + (n - {n0}) of P_n = A_n + x B_n for \
+                 every n >= {n0}"
+            ),
+            gauge: None,
+            index_shift: 0,
+        },
+        identity,
+        symmetric_companion_root_transfer(n0),
+        hypotheses,
+        parent_proof,
+    )
 }

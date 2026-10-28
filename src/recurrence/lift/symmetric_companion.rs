@@ -101,8 +101,9 @@
 //!    epsilon_n M`.  `M` holds at every base whose leading row is generated
 //!    by the source rule; the finitely many remaining bases, and roots of
 //!    `g`, are checked on exact rows.
-//! 2. **`epsilon_n != 0`**, by exact integer roots; a vanishing coupling is
-//!    reported as unsupported, never cancelled.
+//! 2. **`epsilon_n != 0`**, decided exactly ([`crate::integer_range_sign`]);
+//!    a vanishing coupling is reported as unsupported with its index, never
+//!    cancelled.
 //! 3. **`R_n(0) = 0`.**  The derivative terms of `E` vanish at `x = 0`, and
 //!    its constant-term projection factors exactly as
 //!    `(epsilon_n S - g_n) o (S - a_n)`, `g_n = epsilon_(n+1) (a_n - epsilon_n)`.
@@ -153,8 +154,9 @@
 //! `1/k`-Eulerian example.
 //!
 //! The route applies when the identity is certified, `a_n >= 0` and
-//! `0 <= delta_n <= c_n` for every integer `n >= n0` (exact sign analysis of
-//! the shifted polynomials; exact for degree at most one), `d_(n0) >= 1`,
+//! `0 <= delta_n <= c_n` for every integer `n >= n0` (decided exactly by
+//! [`crate::integer_range_sign`]; a failure names the smallest failing
+//! index), `d_(n0) >= 1`,
 //! `A_(n0)`, `B_(n0)` have nonnegative coefficients and `B_(n0) <= A_(n0)`.
 //! Induction then shows that every `A_n`, `B_n`, `P_n` is zero or real-rooted.
 //! Real-rootedness of the parent alone is never accepted for `A_n`, and a

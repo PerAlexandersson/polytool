@@ -7,6 +7,9 @@ use super::operators::{
     CompanionParameters,
 };
 use super::source::PreparedSource;
+use crate::integer_range_sign::{
+    decide_index_polynomial_sign, IndexSignCondition, IndexSignDecision, IntegerRange,
+};
 use crate::real_rootedness::check_weak_interlacing_bigint_coeffs;
 use crate::recurrence::implicit::algebra::{poly_text, roots_in_domain, Biv, DOp};
 use crate::recurrence::implicit::biv_json;
@@ -14,7 +17,7 @@ use crate::recurrence::*;
 use crate::vec_poly;
 use num_bigint::BigInt;
 use num_integer::Integer;
-use num_traits::{One, Signed, Zero};
+use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
 
 type Q = BigRational;
@@ -396,34 +399,51 @@ fn mismatch(what: &str) -> RecurrenceError {
     ))
 }
 
-/// `p(n) >= 0` for every integer `n >= n0`: verified when `p(n0 + u)` has
-/// nonnegative coefficients; for degree at most one the converse holds, so a
-/// failure is exact; otherwise unresolved.
-fn nonnegative_on_domain(p: &[Q], n0: usize) -> (SymmetricCompanionCheckStatus, String) {
-    let shifted = vec_poly::trim(&vec_poly::compose(
-        p,
-        &[Q::from_integer(n0.into()), Q::one()],
-    ));
-    let text = poly_text(&shifted, "u");
-    if shifted.iter().all(|c| !c.is_negative()) {
-        return (
-            SymmetricCompanionCheckStatus::Verified,
-            format!("with n = {n0} + u the polynomial is {text}, with nonnegative coefficients"),
-        );
-    }
-    if vec_poly::degree(&shifted).unwrap_or(0) <= 1 {
-        return (
-            SymmetricCompanionCheckStatus::Failed,
-            format!(
-                "with n = {n0} + u the polynomial is {text}, of degree at most one with a \
-                 negative coefficient, so it is negative for some integer n >= {n0}"
-            ),
-        );
-    }
-    (
-        SymmetricCompanionCheckStatus::Unresolved,
-        format!("with n = {n0} + u the polynomial is {text}; its sign is not decided"),
-    )
+/// The exact decision of `p(n) R 0` for every integer `n >= n0`.
+pub(super) fn decide_on_domain(
+    p: &[Q],
+    n0: usize,
+    condition: IndexSignCondition,
+) -> IndexSignDecision {
+    decide_index_polynomial_sign(p, &IntegerRange::starting_at(n0), condition)
+}
+
+/// `p(n) >= 0` for every integer `n >= n0`, decided exactly
+/// ([`decide_index_polynomial_sign`]): verified, failed with the smallest
+/// failing index, or unresolved only when the checker's budget is exceeded.
+pub(super) fn nonnegative_on_domain(p: &[Q], n0: usize) -> (SymmetricCompanionCheckStatus, String) {
+    let decision = decide_on_domain(p, n0, IndexSignCondition::Nonnegative);
+    let status = match decision {
+        IndexSignDecision::Holds { .. } => SymmetricCompanionCheckStatus::Verified,
+        IndexSignDecision::FailsAt { .. } => SymmetricCompanionCheckStatus::Failed,
+        IndexSignDecision::Undecided { .. } => SymmetricCompanionCheckStatus::Unresolved,
+    };
+    let name = format!("p(n) = {}", poly_text(p, "n"));
+    (status, decision.describe(&name))
+}
+
+/// The sign hypotheses of the preservation theorem: name, statement and the
+/// polynomial in `n` that must be nonnegative on the domain.
+pub(super) fn sign_hypotheses(
+    parameters: &CompanionParameters,
+) -> [(&'static str, &'static str, Vec<Q>); 3] {
+    [
+        (
+            "a_nonnegative",
+            "a_n >= 0 for every n >= n0",
+            parameters.a.clone(),
+        ),
+        (
+            "delta_nonnegative",
+            "delta_n >= 0 for every n >= n0",
+            parameters.delta(),
+        ),
+        (
+            "delta_at_most_c",
+            "delta_n <= c_n (epsilon_n >= 0) for every n >= n0",
+            parameters.epsilon.clone(),
+        ),
+    ]
 }
 
 /// Positive integer multiple of a rational row (same roots, same signs).
@@ -484,8 +504,9 @@ struct Outcome {
 ///    [`ReconstructionCertificate::verify_identity`], its relations are
 ///    `g(n) E` and the source rule, and `(E A)_n = 0` holds exactly at every
 ///    exceptional base;
-/// 2. `coupling_nonvanishing`: `epsilon_n != 0` for every `n >= n0` (exact
-///    integer roots); a vanishing coupling is unsupported;
+/// 2. `coupling_nonvanishing`: `epsilon_n != 0` for every `n >= n0`
+///    ([`crate::decide_index_polynomial_sign`]); a vanishing coupling is
+///    unsupported;
 /// 3. `constant_term_divisibility`: the derivative terms of `E` vanish at
 ///    `x = 0`, the projection factors as `(epsilon_n S - g_n) o (S - a_n)`, and
 ///    `A_(n0+1)(0) = a_(n0) A_(n0)(0)`;
@@ -497,7 +518,9 @@ struct Outcome {
 ///    `self_check_rows` exact rows (a defensive check, not part of the proof).
 ///
 /// The hypotheses of the preservation theorem are then checked exactly:
-/// `a_n >= 0`, `0 <= delta_n <= c_n` on the integer domain, `d_(n0) >= 1`,
+/// `a_n >= 0`, `0 <= delta_n <= c_n` on the integer domain (decided by
+/// [`crate::decide_index_polynomial_sign`], unresolved only over its budget),
+/// `d_(n0) >= 1`,
 /// nonnegative coefficients of `A_(n0)`, `B_(n0)`, and `B_(n0) <= A_(n0)`.
 pub fn verify_symmetric_companion_certificate(
     certificate: &SymmetricCompanionCertificate,
@@ -612,7 +635,7 @@ fn verify_obligations(
 
     // 2. The coupling does not vanish.
     let coupling_statement = "epsilon_n != 0 for every n >= n0";
-    let epsilon_roots = roots_in_domain(&parameters.epsilon, n0, None);
+    let epsilon_text = poly_text(&parameters.epsilon, "n");
     identities.push(if vec_poly::is_zero(&parameters.epsilon) {
         check(
             "coupling_nonvanishing",
@@ -620,27 +643,30 @@ fn verify_obligations(
             Unsupported,
             "epsilon is identically zero: the companion is not determined by A",
         )
-    } else if let Some(root) = epsilon_roots.first() {
-        check(
-            "coupling_nonvanishing",
-            coupling_statement,
-            Unsupported,
-            format!(
-                "epsilon_n = {} vanishes at n = {root}; vanishing couplings are not supported \
-                 (the undivided equations are not cancelled)",
-                poly_text(&parameters.epsilon, "n")
-            ),
-        )
     } else {
-        check(
-            "coupling_nonvanishing",
-            coupling_statement,
-            Verified,
-            format!(
-                "epsilon_n = {} has no integer root n >= {n0} (exact)",
-                poly_text(&parameters.epsilon, "n")
+        match decide_on_domain(&parameters.epsilon, n0, IndexSignCondition::Nonzero) {
+            IndexSignDecision::FailsAt { index, .. } => check(
+                "coupling_nonvanishing",
+                coupling_statement,
+                Unsupported,
+                format!(
+                    "epsilon_n = {epsilon_text} vanishes at n = {index}; vanishing couplings are \
+                     not supported (the undivided equations are not cancelled)"
+                ),
             ),
-        )
+            decision @ IndexSignDecision::Holds { .. } => check(
+                "coupling_nonvanishing",
+                coupling_statement,
+                Verified,
+                decision.describe(&format!("epsilon_n = {epsilon_text}")),
+            ),
+            decision @ IndexSignDecision::Undecided { .. } => check(
+                "coupling_nonvanishing",
+                coupling_statement,
+                Unresolved,
+                decision.describe(&format!("epsilon_n = {epsilon_text}")),
+            ),
+        }
     });
 
     // 3. R_n(0) = 0 for every n >= n0.
@@ -878,23 +904,7 @@ fn theorem_hypotheses(
     use SymmetricCompanionCheckStatus::*;
     let n0 = parameters.first_index;
     let mut hypotheses = Vec::new();
-    for (name, statement, p) in [
-        (
-            "a_nonnegative",
-            "a_n >= 0 for every n >= n0",
-            parameters.a.clone(),
-        ),
-        (
-            "delta_nonnegative",
-            "delta_n >= 0 for every n >= n0",
-            parameters.delta(),
-        ),
-        (
-            "delta_at_most_c",
-            "delta_n <= c_n (epsilon_n >= 0) for every n >= n0",
-            parameters.epsilon.clone(),
-        ),
-    ] {
+    for (name, statement, p) in sign_hypotheses(parameters) {
         let (status, evidence) = nonnegative_on_domain(&p, n0);
         hypotheses.push(check(name, statement, status, evidence));
     }

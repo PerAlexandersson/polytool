@@ -48,10 +48,13 @@
 //! finite and nonzero at `n, ..., n+k`.  Its leader
 //! `g(n+s) prod_(t=1..k) b(n+t)` is still free of `x`.
 
-use super::super::implicit::algebra::{q, roots_in_domain, Biv, DOp};
+use super::super::implicit::algebra::{q, Biv, DOp};
 use super::super::implicit::{biv_from_json, biv_json};
 use super::section_operators::{check_term_budget, transport_to_sections, OperatorMatrix};
 use super::*;
+use crate::integer_range_sign::{
+    decide_index_polynomial_sign, IndexSignCondition, IndexSignDecision, IntegerRange,
+};
 use crate::vec_poly;
 use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
@@ -63,8 +66,8 @@ type Q = BigRational;
 ///
 /// Polynomials in `n` are ascending exact rational strings (integers or
 /// `num/den`).  Every form requires `lambda` finite and nonzero at every
-/// index `n >= n0` (the input's first index); this is checked exactly from
-/// the integer roots of the polynomials.
+/// index `n >= n0` (the input's first index); this is decided exactly by
+/// [`crate::decide_index_polynomial_sign`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum VeroneseSectionGauge {
@@ -119,13 +122,22 @@ fn parse_polynomial(values: &[String], name: &str) -> Result<Vec<Q>, RecurrenceE
     Ok(trimmed)
 }
 
+/// `p(n) != 0` for every integer `n >= from`, decided exactly
+/// ([`crate::decide_index_polynomial_sign`]).
 fn require_no_roots_from(p: &[Q], from: usize, what: &str) -> Result<(), RecurrenceError> {
-    if let Some(root) = roots_in_domain(p, from, None).first() {
-        return Err(RecurrenceError::InvalidInput(format!(
-            "the gauge {what} vanishes at n = {root}; it must be nonzero for every n >= {from}"
-        )));
+    match decide_index_polynomial_sign(
+        p,
+        &IntegerRange::starting_at(from),
+        IndexSignCondition::Nonzero,
+    ) {
+        IndexSignDecision::Holds { .. } => Ok(()),
+        IndexSignDecision::FailsAt { index, .. } => Err(RecurrenceError::InvalidInput(format!(
+            "the gauge {what} vanishes at n = {index}; it must be nonzero for every n >= {from}"
+        ))),
+        IndexSignDecision::Undecided { reason } => Err(RecurrenceError::BudgetExhausted(format!(
+            "the gauge {what} could not be checked to be nonzero for every n >= {from}: {reason}"
+        ))),
     }
-    Ok(())
 }
 
 impl VeroneseSectionGauge {

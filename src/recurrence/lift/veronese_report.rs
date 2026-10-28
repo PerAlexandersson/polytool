@@ -303,7 +303,7 @@ impl Serialize for VeroneseSectionParentRowCheck {
 
 impl Serialize for VeroneseSectionLift {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("VeroneseSectionLift", 13)?;
+        let mut state = serializer.serialize_struct("VeroneseSectionLift", 14)?;
         state.serialize_field("modulus", &self.modulus)?;
         state.serialize_field("residue", &self.residue)?;
         state.serialize_field("status", self.status.label())?;
@@ -332,6 +332,7 @@ impl Serialize for VeroneseSectionLift {
         )?;
         state.serialize_field("parent_recurrence", &self.parent_recurrence_json())?;
         state.serialize_field("parent_row_check", &self.parent_row_check)?;
+        state.serialize_field("lift_summary", &self.lift_summary())?;
         state.end()
     }
 }

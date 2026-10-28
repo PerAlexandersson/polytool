@@ -6,6 +6,7 @@ use super::operators::{h_operator, is_symmetric_at, CompanionParameters};
 use super::search::infer_schedule;
 use super::source::PreparedSource;
 use super::*;
+use crate::integer_range_sign::IndexSignDecision;
 use crate::recurrence::implicit::algebra::Biv;
 use crate::recurrence::*;
 use crate::sequences::literature::one_over_k_eulerian_symmetric_parts_rational;
@@ -569,4 +570,118 @@ fn unsupported_inputs_are_errors() {
         &options
     )
     .is_err());
+}
+
+#[test]
+fn lift_summaries_of_proved_failing_and_unsupported_lifts() {
+    // The 1/k-Eulerian symmetric parts: the preservation theorem applies.
+    let k = qr(3, 2);
+    let report = find(
+        &eliminated_one_over_k_recurrence(&k),
+        &one_over_k_seeds(&k),
+        2,
+    );
+    let lift = report.proving_lift().unwrap();
+    let summary = lift.lift_summary.clone().expect("summary present");
+    assert_eq!(summary, lift.recompute_lift_summary());
+    assert_eq!(summary.verdict, LiftVerdict::Proved);
+    assert!(summary.is_consistent());
+    assert_eq!(
+        summary.identity,
+        LiftIdentityStatus::Certified {
+            method: "coupled_system_elimination".into()
+        }
+    );
+    assert!(matches!(
+        &summary.parent_proof,
+        LiftParentProof::Proved { route, .. } if route == "interlacing_preservation_induction"
+    ));
+    assert!(summary.root_transfer.parent_root_region.is_none());
+    assert_eq!(summary.parent.recurrence, lift.certificate.parent);
+    assert_eq!(summary.hypotheses.len(), lift.verification.hypotheses.len());
+    for name in ["a_nonnegative", "delta_nonnegative", "delta_at_most_c"] {
+        let hypothesis = summary.hypotheses.iter().find(|h| h.name == name).unwrap();
+        assert_eq!(hypothesis.status, LiftHypothesisStatus::Verified, "{name}");
+        let Some(IndexSignDecision::Holds { certificate }) = &hypothesis.sign_decision else {
+            panic!("{name}: no sign certificate");
+        };
+        certificate.verify().unwrap();
+    }
+    let json = serde_json::to_value(&report).unwrap();
+    assert_eq!(json["lifts"][0]["lift_summary"]["verdict"], "proved");
+    let back: SymmetricCompanionLiftReport =
+        serde_json::from_str(&report.to_json_string().unwrap()).unwrap();
+    assert_eq!(&back, &report);
+
+    // x A_n with k = 2: a_n = -1 < 0, so the hypothesis fails at n0 = 2.
+    let parameters = CompanionParameters::new(vec![q(-1)], vec![q(2)], vec![q(1)], 2, 3);
+    let (recurrence, rows) =
+        system_fixture(&parameters, row(&[q(0), q(1), q(1)]), row(&[q(0), q(1)]), 8);
+    let report = find(&recurrence, &rows[..2], 2);
+    let lift = report.certified_lifts().next().unwrap();
+    let summary = lift.recompute_lift_summary();
+    assert_eq!(summary.verdict, LiftVerdict::RouteFailed);
+    assert!(matches!(summary.parent_proof, LiftParentProof::Open { .. }));
+    let a = summary
+        .hypotheses
+        .iter()
+        .find(|h| h.name == "a_nonnegative")
+        .unwrap();
+    assert_eq!(
+        a.status,
+        LiftHypothesisStatus::Failed {
+            witness: Some(BigInt::from(2))
+        }
+    );
+
+    // A vanishing coupling: unsupported identity; epsilon_n = n - 4 < 0 at
+    // n0 = 2 also fails a sign hypothesis, so the route is refuted.
+    let parameters = CompanionParameters::new(vec![q(1)], vec![q(1)], vec![q(-4), q(1)], 2, 1);
+    let (recurrence, rows) = system_fixture(&parameters, row(&[q(1), q(1)]), vec![q(3)], 8);
+    let source = PreparedSource::new(&recurrence, &rows, 2).unwrap();
+    let certificate = build_certificate(&source, &parameters).unwrap();
+    let verification = verify_symmetric_companion_certificate(&certificate, 6).unwrap();
+    let coupling = verification
+        .identities
+        .iter()
+        .find(|c| c.name == "coupling_nonvanishing")
+        .unwrap();
+    assert!(
+        coupling.evidence.contains("vanishes at n = 4"),
+        "{}",
+        coupling.evidence
+    );
+    let summary = super::report::lift_summary(&certificate, &verification);
+    assert!(matches!(
+        summary.identity,
+        LiftIdentityStatus::Unsupported { .. }
+    ));
+    let epsilon = summary
+        .hypotheses
+        .iter()
+        .find(|h| h.name == "delta_at_most_c")
+        .unwrap();
+    assert_eq!(
+        epsilon.status,
+        LiftHypothesisStatus::Failed {
+            witness: Some(BigInt::from(2))
+        }
+    );
+    assert_eq!(summary.verdict, LiftVerdict::RouteFailed);
+}
+
+#[test]
+fn sign_hypotheses_are_decided_beyond_degree_one() {
+    // a_n = n^2 - 5n + 7 > 0 at every integer, although its Taylor shift at
+    // n0 = 2 has a negative coefficient: the hypothesis is now verified.
+    let (status, evidence) = super::certificate::nonnegative_on_domain(&[q(7), q(-5), q(1)], 2);
+    assert_eq!(
+        status,
+        SymmetricCompanionCheckStatus::Verified,
+        "{evidence}"
+    );
+    // a_n = (n - 3)(n - 4) - 1 is negative at n = 3 and 4: failed at 3.
+    let (status, evidence) = super::certificate::nonnegative_on_domain(&[q(11), q(-7), q(1)], 2);
+    assert_eq!(status, SymmetricCompanionCheckStatus::Failed);
+    assert!(evidence.contains("fails at n = 3"), "{evidence}");
 }

@@ -196,7 +196,9 @@ fn index_dependent_factor_and_interval_close_the_induction() {
     assert!(theorem.degree_formula.is_none());
     assert_eq!(theorem.attempts.len(), 1);
     assert!(theorem.attempts[0].success);
-    assert!(theorem.attempts[0].detail.contains("Taylor-shift"));
+    assert!(theorem.attempts[0]
+        .detail
+        .contains("exact integer-range sign"));
     let induction = claims(root, RootEvidence::CompletedRecurrenceInduction);
     assert_eq!(induction[0].interval.as_ref(), Some(&minus_n));
     let family = claims(root, RootEvidence::CertifiedFamilyInvariant);
@@ -306,7 +308,7 @@ fn index_dependent_interval_helpers() {
     assert_eq!(image.to_string(), "(-1 + (-1) n, 1 + (2) n]");
     let shrinking = interval(None, Some(endpoint("0", Some("-1"), true)));
     assert!(!grows_with_index(&shrinking).unwrap());
-    // Taylor-shift sign certificates of index polynomials.
+    // Exact integer-range sign checks of index polynomials.
     assert_eq!(
         index_polynomial_sign_from(&[r(-3, 1), r(1, 1)], 4),
         Some(Ordering::Greater)

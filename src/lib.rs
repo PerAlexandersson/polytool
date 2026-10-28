@@ -89,6 +89,9 @@
 //! - [`sturm`] — Sturm chains for exact root counting and isolation (the slower
 //!   alternative to the default real-rootedness path)
 //! - [`sturm_cf`] — signed Euclidean/Sturm continued-fraction certificates
+//! - [`integer_range_sign`] — exact decisions of `f(n) > 0`, `>= 0`, `!= 0`, ...
+//!   for every integer `n` of a range, `f` a rational function of `n`, with
+//!   replayable certificates (Sturm root counting on integer windows)
 //! - [`recurrence`] — Adaptive recurrence search for polynomial sequences,
 //!   coordinate transformations with recurrence transport and optional
 //!   root-domain certificates, and lazy exact row generation
@@ -148,6 +151,7 @@ pub mod decomposition;
 pub mod factorization;
 pub mod hstar_inequalities;
 pub mod hurwitz;
+pub mod integer_range_sign;
 pub mod interlacing_matrix;
 pub mod left_production;
 pub mod linalg;
@@ -237,6 +241,12 @@ pub use hstar_inequalities::{
     HSTAR_INEQUALITIES_MAX_DIMENSION,
 };
 pub use hurwitz::{hurwitz_leading_minors_bigint, hurwitz_matrix_bigint, is_hurwitz_stable_bigint};
+pub use integer_range_sign::{
+    decide_index_polynomial_sign, decide_index_rational_function_sign,
+    decide_index_rational_function_sign_with_budget, IndexRootCell, IndexSign, IndexSignBudget,
+    IndexSignCertificate, IndexSignCertificateError, IndexSignCondition, IndexSignDecision,
+    IndexSignMethod, IndexSignSample, IntegerRange,
+};
 #[allow(deprecated)]
 pub use interlacing_matrix::{
     check_lace_sequence_total_nonnegative_i64, check_lace_tnn_neville_bigint,

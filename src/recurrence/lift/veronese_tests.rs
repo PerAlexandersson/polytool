@@ -565,3 +565,83 @@ fn parent_recurrence_json_round_trip() {
     // Fibonacci polynomials F_n = F_(n-1) + x F_(n-2).
     assert_eq!(direct[4], row(&[1, 3, 1]));
 }
+
+#[test]
+fn lift_summaries_of_proved_open_and_failing_parents() {
+    let input = prepared(&worked_recurrence(), &[&[1], &[1]]);
+    let evaluation =
+        evaluate_veronese_section_lift_candidate(&input, 2, &candidate(&[&[-1, -1], &[1]]), 12)
+            .unwrap();
+    let proved = find_lift(&evaluation, 0).unwrap().lift_summary();
+    assert_eq!(proved.verdict, LiftVerdict::Proved);
+    assert!(proved.is_consistent());
+    assert_eq!(
+        proved.operation,
+        LiftOperation::VeroneseSection {
+            modulus: 2,
+            residue: 0
+        }
+    );
+    assert_eq!(
+        proved.identity,
+        LiftIdentityStatus::Certified {
+            method: "identifying_rows".into()
+        }
+    );
+    assert!(matches!(
+        &proved.parent_proof,
+        LiftParentProof::Proved { route, .. } if route == "periodic_product"
+    ));
+    assert!(proved.hypotheses.is_empty());
+    assert_eq!(
+        proved
+            .root_transfer
+            .parent_root_region
+            .as_ref()
+            .unwrap()
+            .to_string(),
+        "(-inf, 0]"
+    );
+    assert_eq!(
+        proved.parent.recurrence,
+        find_lift(&evaluation, 0).unwrap().parent_recurrence_json()
+    );
+
+    // The conjugate parent fails at row 1: refuted, with the row index.
+    let conjugate =
+        evaluate_veronese_section_lift_candidate(&input, 2, &candidate(&[&[-1, 1], &[1]]), 12)
+            .unwrap();
+    let failing = find_lift(&conjugate, 0).unwrap().lift_summary();
+    assert_eq!(failing.verdict, LiftVerdict::RouteFailed);
+    assert!(matches!(
+        failing.parent_proof,
+        LiftParentProof::Failed { index: Some(1), .. }
+    ));
+
+    // The Fibonacci parent is open.
+    let rule = recurrence(&[(1, &[2]), (2, &[-1]), (4, &[0, 1])]);
+    let fibonacci = prepared(&rule, &[&[1], &[1], &[1], &[1]]);
+    let evaluation = evaluate_veronese_section_lift_candidate(
+        &fibonacci,
+        2,
+        &candidate(&[&[0, -1], &[-1], &[1]]),
+        12,
+    )
+    .unwrap();
+    let open = find_lift(&evaluation, 0).unwrap();
+    let summary = open.lift_summary();
+    assert_eq!(summary.verdict, LiftVerdict::Open);
+    assert!(matches!(summary.parent_proof, LiftParentProof::Open { .. }));
+
+    // The JSON report carries the summary next to the existing fields.
+    let json = serde_json::to_value(open).unwrap();
+    assert_eq!(json["status"], "parent_real_rootedness_open");
+    assert_eq!(json["lift_summary"]["verdict"], "open");
+    assert_eq!(
+        json["lift_summary"]["operation"]["kind"],
+        "veronese_section"
+    );
+    assert_eq!(json["lift_summary"]["lean_replay"], "not_attempted");
+    let back: LiftSummary = serde_json::from_value(json["lift_summary"].clone()).unwrap();
+    assert_eq!(back, summary);
+}

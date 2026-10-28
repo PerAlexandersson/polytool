@@ -66,7 +66,7 @@
 //!   The factor may also be `g(x) (c(m) + l(m) x)` with an index-dependent
 //!   linear part, and candidate intervals may have endpoints affine in `n`;
 //!   the step `I_(m-1) ⊆ I_m` and the root `-c(m)/l(m)` in `I_m` are then
-//!   checked symbolically (Taylor-shift sign certificates at the first
+//!   checked symbolically (exact integer-range sign checks from the first
 //!   target), and attempts that cannot be certified are reported as failed.
 //!   In gamma coordinates a completed induction for `G_n` is transferred to
 //!   `P_n` only when every interval lies in `(-inf, 1/4]`.
@@ -90,11 +90,15 @@
 //! and everything is replayed by [`verify_recurrence_transform`].
 
 use super::*;
+use crate::integer_range_sign::{
+    decide_index_polynomial_sign, IndexSignCondition, IndexSignDecision, IntegerRange,
+};
 use crate::real_rootedness::{
     interlaces_either_order_bigint_coeffs, isolate_real_roots_rational_coeffs, RealInterval,
     RealRootIsolation,
 };
 use crate::vec_poly;
+use crate::Polynomial;
 use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
 use serde::{Deserialize, Serialize};
@@ -1044,52 +1048,64 @@ pub(super) fn scalar_nonvanishing(scalar: &[Q], first_target: usize) -> bool {
     one_signed && (!constant.is_zero() || first_target >= 1)
 }
 
-/// The sign of a polynomial `p(m)` (ascending in `m`) on every real
-/// `m >= start`, certified when every coefficient of the Taylor shift
-/// `p(start + t)` has that sign and its constant term is nonzero; `None` when
-/// this sufficient criterion fails (which proves nothing).
+/// The sign of a polynomial `p(m)` (ascending in `m`) at every integer
+/// `m >= start`, decided exactly by [`crate::decide_index_polynomial_sign`];
+/// `None` when `p` vanishes or takes both signs at integers `m >= start`, or
+/// when the checker's budget is exceeded (which proves nothing).
 pub(crate) fn index_polynomial_sign_from(p: &[Q], start: usize) -> Option<std::cmp::Ordering> {
-    let shifted = vec_poly::trim(&vec_poly::compose(
-        p,
-        &[Q::from_integer(BigInt::from(start)), Q::one()],
-    ));
-    let constant = shifted.first()?;
-    if constant.is_positive() && shifted.iter().all(|c| !c.is_negative()) {
-        Some(std::cmp::Ordering::Greater)
-    } else if constant.is_negative() && shifted.iter().all(|c| !c.is_positive()) {
-        Some(std::cmp::Ordering::Less)
-    } else {
-        None
+    let range = IntegerRange::starting_at(start);
+    match decide_index_polynomial_sign(p, &range, IndexSignCondition::Positive) {
+        IndexSignDecision::Holds { .. } => Some(std::cmp::Ordering::Greater),
+        // Negative at the first index: the only way p can be negative throughout.
+        IndexSignDecision::FailsAt {
+            index,
+            value: Some(value),
+        } if index == range.first && value.is_negative() => {
+            decide_index_polynomial_sign(p, &range, IndexSignCondition::Negative)
+                .holds()
+                .then_some(std::cmp::Ordering::Less)
+        }
+        _ => None,
     }
 }
 
-/// Whether `p(m) >= 0` (or `> 0` when `strict`) for every real `m >= start`,
-/// by the Taylor-shift criterion of [`index_polynomial_sign_from`] (the zero
-/// polynomial is nonnegative).
+/// Whether `p(m) >= 0` (or `> 0` when `strict`) at every integer `m >= start`,
+/// decided exactly by [`crate::decide_index_polynomial_sign`] (the zero
+/// polynomial is nonnegative; `false` also when the checker's budget is
+/// exceeded).
 pub(super) fn index_polynomial_nonnegative_from(p: &[Q], start: usize, strict: bool) -> bool {
-    let shifted = vec_poly::trim(&vec_poly::compose(
-        p,
-        &[Q::from_integer(BigInt::from(start)), Q::one()],
-    ));
-    if vec_poly::is_zero(&shifted) {
-        return !strict;
-    }
-    shifted.iter().all(|c| !c.is_negative()) && (!strict || shifted[0].is_positive())
+    let condition = if strict {
+        IndexSignCondition::Positive
+    } else {
+        IndexSignCondition::Nonnegative
+    };
+    decide_index_polynomial_sign(p, &IntegerRange::starting_at(start), condition).holds()
 }
 
 /// Whether `f(m, x)` is a nonzero polynomial in `x` at every integer
-/// `m >= start`: some `x`-coefficient has a certified sign
-/// ([`index_polynomial_sign_from`]).
+/// `m >= start`: `f(m, .)` vanishes exactly at the common integer roots of
+/// its `x`-coefficients, that is at the integer roots of their gcd, and the
+/// gcd is decided nonzero on the domain by
+/// [`crate::decide_index_polynomial_sign`] (`false` also over the checker's
+/// budget).
 pub(crate) fn bivariate_leader_nonvanishing(f: &BivarPoly, start: usize) -> bool {
     let rows = bivar_rows(f);
     let width = rows.iter().map(Vec::len).max().unwrap_or(0);
-    (0..width).any(|j| {
+    let mut gcd = Polynomial::<Q>::zero();
+    for j in 0..width {
         let column: Vec<Q> = rows
             .iter()
             .map(|row| row.get(j).cloned().unwrap_or_else(Q::zero))
             .collect();
-        index_polynomial_sign_from(&column, start).is_some()
-    })
+        gcd = gcd.gcd(&Polynomial::new(column));
+    }
+    !gcd.is_zero()
+        && decide_index_polynomial_sign(
+            gcd.coeffs(),
+            &IntegerRange::starting_at(start),
+            IndexSignCondition::Nonzero,
+        )
+        .holds()
 }
 
 pub(super) fn poly_text(p: &[Q], variable: &str) -> String {

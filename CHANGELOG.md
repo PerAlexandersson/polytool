@@ -260,6 +260,47 @@ Performance:
 
 Additions:
 
+- Exact sign decisions for an integer index (`integer_range_sign`,
+  re-exported at the crate root): `decide_index_polynomial_sign`,
+  `decide_index_rational_function_sign` and `..._with_budget` decide
+  `f(n) > 0`, `>= 0`, `< 0`, `<= 0`, `!= 0` or `= 0` for every integer `n` of
+  an `IntegerRange` (`[first, last]` or `[first, +inf)`), `f = p / q` with
+  exact rational coefficients.  The result (`IndexSignDecision`) is `holds`
+  with a replayable `IndexSignCertificate` (Taylor-shift coefficients of one
+  sign, or exact signs at sample indices between Sturm-isolated integer root
+  windows; `verify()` replays it), `fails_at` with the smallest failing index
+  and the exact value (`null` where the denominator vanishes), or `undecided`
+  only over the `IndexSignBudget` (degree 64, 100000 bisection steps by
+  default).  Huge roots are located by bisection, never by enumeration.
+  Serialized with exact integer and rational strings.
+- Common lift summary: `recurrence::LiftSummary` (operation and parameters,
+  parent rule and seeds with gauge and index shift, identity status, root
+  transfer with the parent and input root regions as `RootInterval`s, the
+  transfer hypotheses with their exact sign decisions, parent proof status and
+  route, the verdict of the shared `lift_verdict` (`proved`,
+  `conditional_on_attestation`, `open`, or `route_failed`, which says nothing
+  against the input), and `lean_replay`).  It is
+  an additive field `lift_summary` of each lift in
+  `polytool.recurrence-veronese-lifts.v1` (computed by
+  `VeroneseSectionLift::lift_summary`), of
+  `polytool.recurrence-veronese-certificate.v1`
+  (`VeroneseSectionCertification::lift_summary`, an `Option` so that older
+  records still deserialize; `verify()` checks it against
+  `recompute_lift_summary`) and of each lift in
+  `polytool.recurrence-symmetric-companion.v1`
+  (`SymmetricCompanionLift::lift_summary`, likewise optional).  No existing
+  field is renamed or removed, so the schema tags are unchanged; the new
+  public field makes struct literals of `VeroneseSectionCertification` and
+  `SymmetricCompanionLift` need `lift_summary`.
+- The sign hypotheses of the lifts use the exact checker: the
+  symmetric-companion hypotheses `a_n >= 0`, `0 <= delta_n <= c_n` (formerly
+  unresolved for degree above one unless the Taylor shift had one-signed
+  coefficients) and the coupling `epsilon_n != 0` are decided for every
+  degree, a failure naming the smallest failing index; the Veronese gauge
+  check and the root-domain helpers behind the Rolle and gamma certificates
+  (index-polynomial signs, nonvanishing leaders, now via the gcd of the
+  leader's coefficients) decide signs at every integer index instead of using
+  a sufficient Taylor-shift test.
 - `recurrence::certify_veronese_section_lift` certifies one candidate
   Veronese-section lift `Q_n = lambda(n) V_(r,j)(P_(n+s))` for inputs with
   index-dependent coefficients and derivatives: the parent rule is transported

@@ -188,11 +188,18 @@ pub struct VeroneseSectionCertification {
     pub lean_replay: String,
     /// Further remarks (division remainder, limits).
     pub notes: Vec<String>,
+    /// The uniform [`LiftSummary`] of this certification
+    /// ([`VeroneseSectionCertification::recompute_lift_summary`]); always
+    /// present in reports of this version, optional in JSON for records
+    /// written before the field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lift_summary: Option<LiftSummary>,
 }
 
 impl VeroneseSectionCertification {
-    /// Replay the certificate (when certified) and check that the verdict
-    /// is consistent with the identity and parent statuses.
+    /// Replay the certificate (when certified), check that the verdict is
+    /// consistent with the identity and parent statuses, and that a recorded
+    /// `lift_summary` equals the recomputed one.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
         if self.schema != VERONESE_SECTION_CERTIFICATE_SCHEMA {
             return Err(RecurrenceError::InvalidInput(format!(
@@ -221,6 +228,13 @@ impl VeroneseSectionCertification {
             return Err(RecurrenceError::VerificationFailed(
                 "the verdict is inconsistent with the identity and parent statuses".into(),
             ));
+        }
+        if let Some(summary) = &self.lift_summary {
+            if summary != &self.recompute_lift_summary() || !summary.is_consistent() {
+                return Err(RecurrenceError::VerificationFailed(
+                    "the lift summary does not match the one recomputed from the record".into(),
+                ));
+            }
         }
         Ok(())
     }
@@ -806,7 +820,7 @@ fn finish(
             _ => unreachable!("the verdict follows the identity status"),
         },
     };
-    Ok(VeroneseSectionCertification {
+    let mut certification = VeroneseSectionCertification {
         schema: VERONESE_SECTION_CERTIFICATE_SCHEMA.into(),
         candidate: candidate.clone(),
         input_first_index: n0,
@@ -818,5 +832,8 @@ fn finish(
         statement,
         lean_replay: LEAN_REPLAY_NOT_ATTEMPTED.into(),
         notes,
-    })
+        lift_summary: None,
+    };
+    certification.lift_summary = Some(certification.recompute_lift_summary());
+    Ok(certification)
 }

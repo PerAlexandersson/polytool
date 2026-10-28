@@ -34,13 +34,23 @@
 //! - `section_report`: [`certify_veronese_section_lift`] and its
 //!   `polytool.recurrence-veronese-certificate.v1` report;
 //! - `symmetric_companion`: operators, search, certificate and verifier, and
-//!   the `polytool.recurrence-symmetric-companion.v1` report.
+//!   the `polytool.recurrence-symmetric-companion.v1` report;
+//! - `lift_summary`: [`LiftSummary`], the uniform view of every lift
+//!   (operation, parent, identity status, root transfer, hypotheses with
+//!   exact sign decisions, parent proof, verdict), embedded as the field
+//!   `lift_summary` of the three reports.
 //!
 //! Related: [`RecurrenceJson`] (a lift's parent is exported in that format),
 //! [`crate::is_real_rooted_bigint_coeffs`] (the exact parent-row checks).
 
 use super::*;
 
+mod lift_summary;
+pub use lift_summary::{
+    lift_verdict, LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus, LiftOperation,
+    LiftParent, LiftParentProof, LiftRootTransfer, LiftSummary, LiftVerdict,
+    LIFT_LEAN_REPLAY_NOT_ATTEMPTED,
+};
 mod parent_proof;
 pub use parent_proof::{
     VeroneseParentAttestation, VeroneseParentProof, VeroneseParentProofAttempt,

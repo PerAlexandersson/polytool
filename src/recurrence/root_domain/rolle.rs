@@ -361,7 +361,7 @@ fn certify_linear_root(
         if !index_polynomial_nonnegative_from(&excess, start, !lower.closed) {
             return Err(RecurrenceError::InvalidInput(format!(
                 "the root {root} of the index-dependent factor is not certified to lie above \
-                 the lower end of I_m for every m >= {start} (Taylor-shift criterion)"
+                 the lower end of I_m for every m >= {start} (exact integer-range sign check)"
             )));
         }
     }
@@ -372,13 +372,13 @@ fn certify_linear_root(
         if !index_polynomial_nonnegative_from(&excess, start, !upper.closed) {
             return Err(RecurrenceError::InvalidInput(format!(
                 "the root {root} of the index-dependent factor is not certified to lie below \
-                 the upper end of I_m for every m >= {start} (Taylor-shift criterion)"
+                 the upper end of I_m for every m >= {start} (exact integer-range sign check)"
             )));
         }
     }
     Ok(format!(
         "the root {root} of the index-dependent factor lies in I_m for every m >= {start} \
-         (Taylor-shift certificates)"
+         (exact integer-range sign checks)"
     ))
 }
 
