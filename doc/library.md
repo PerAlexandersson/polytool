@@ -604,7 +604,8 @@ the coordinate change and the root-region certificate are in
 
 Every lift report carries a `lift_summary` (`recurrence::LiftSummary`): the
 operation (`veronese_section` with modulus and residue, `symmetric_companion`
-with `d_(n0)`), the parent record, the identity status (`certified` with its
+with `d_(n0)`, `hadamard_factor` with the factor, `row_factor` with `F` and
+the exponent schedule), the parent record, the identity status (`certified` with its
 method, `supported_by_rows`, `unsupported`, `refuted`), the root transfer
 (theorem, the parent root region and the input root region as
 `RootInterval`s; the Veronese route needs parent roots in `(-inf, 0]`, the
@@ -687,6 +688,66 @@ hypothesis means only that this route fails.  The report serializes as
 `polytool.recurrence-symmetric-companion.v1` (exact rationals as strings).
 The algorithm and the soundness argument are in
 [algorithms.md](algorithms.md#symmetric-companion-lifts).
+
+## Hadamard-factor lifts
+
+`recurrence::find_hadamard_factor_lifts` writes the rows
+`Q_n = sum_k q(n, k) x^k` of a recurrence-defined sequence as
+`Q_n = lambda(n) sum_k u(n, k) p(n, k) x^k` with a known factor `u` and a
+parent `P_n = sum_k p(n, k) x^k` whose rule is smaller than the input's (lower
+order, or the same order with smaller degrees).  The menu
+(`HadamardFactorLiftOptions`) has `binom(n + a, k + b)` with `|a|, |b| <= 2`,
+`k!`, `1/k!`, `(n - k)!`, `1/(n - k)!`, `(alpha)_k` and `1/(alpha)_k` for the
+listed `alpha`, and optionally products of two (`HadamardFactor`,
+`HadamardFactorTerm`).  Undetermined quotient coefficients (where `u = 0`) are
+set to zero or continued by a fitted hypergeometric ratio, and the rows may be
+normalised by their leading coefficients `lambda(n)` (a
+`VeroneseSectionGauge::Ratio`).
+
+```rust
+use polytool::oeis;
+use polytool::recurrence::{find_hadamard_factor_lifts, HadamardFactorLiftOptions};
+
+// Narayana (A001263, rows sum_k N(n+1, k+1) x^k): u = binom(n+1, k+1),
+// P_n = (1 + x)^(n+1) / (n + 1), proved end to end.
+let narayana = oeis::by_id("A001263").unwrap();
+let (rule, rows) = narayana.recurrence_parts().unwrap();
+let report = find_hadamard_factor_lifts(
+    &rule,
+    &rows,
+    narayana.recurrence_first_index,
+    &HadamardFactorLiftOptions::default(),
+)?;
+let lift = report.proved_lifts().next().unwrap();
+assert_eq!(lift.factor_text, "binom(n+1, k+1)");
+report.verify()?;
+```
+
+A lift (`HadamardFactorLift`) records the factor, gauge, parent
+(`polytool.recurrence.v1`), the identity status
+(`HadamardFactorIdentityStatus::{Certified, SupportedByRows, Refuted}`, the
+certificate `HadamardFactorCertificate` replayable by `verify`), the
+multiplier-sequence justification of the factor (`None` when no transfer
+theorem is recorded, as for `k!` or `(alpha)_k`), the parent provers' record
+and the `lift_summary`.  Rejected factors (`HadamardFactorRejection`: invalid
+for the domain, vanishing on the support, no smaller parent, parent budget)
+are listed as near misses.  The report is
+`polytool.recurrence-hadamard-factor-lifts.v1`.  The certificate, its
+boundary conditions and the transfer theorem are in
+[algorithms.md](algorithms.md#hadamard-factor-lifts).
+
+## Row-factor lifts
+
+`recurrence::find_row_factor_lifts` finds a fixed polynomial `F` and a
+schedule `e(n) = alpha n + beta` with `Q_n = F^(e(n)) S_n` (common irreducible
+factors of the first rows, exact multiplicities), derives the cofactor rule
+by substitution, and proves the cofactors with the parent provers.  A lift
+(`RowFactorLift`, report `polytool.recurrence-row-factor-lifts.v1`) records
+`F`, `e`, whether `F` is real-rooted (with roots `<= 0`), the cofactor rule and
+seeds, the identity (`RowFactorCertificate`, replayable), the cofactor proof
+and the `lift_summary`; schedules that fail (a row not divisible by
+`F^(e(n))`, a cofactor rule with an `x`-dependent leader) are listed in
+`rejected`.  See [algorithms.md](algorithms.md#row-factor-lifts).
 
 ## Exact sign decisions for an integer index
 

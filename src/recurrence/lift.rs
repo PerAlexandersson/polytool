@@ -12,6 +12,18 @@
 //!   part `A_n` of `P_n = A_n + x B_n` with a first-order derivative parent
 //!   rule; the interlacing-preservation theorem applies under explicit sign
 //!   conditions (the `symmetric_companion` module docs).
+//! - Hadamard-factor lifts, [`find_hadamard_factor_lifts`]: the input
+//!   coefficients are `lambda(n) u(n,k) p(n,k)` for a known hypergeometric
+//!   factor `u` (binomials, factorials, rising factorials) and a parent
+//!   `P_n = sum_k p(n,k) x^k`; the Pólya--Schur multiplier-sequence theorem
+//!   transfers real-rootedness (the `hadamard_factor` module docs).
+//! - Row-factor lifts, [`find_row_factor_lifts`]: every row is
+//!   `F(x)^(e(n)) S_n` for a fixed real-rooted `F` and an affine exponent
+//!   `e(n)`; the cofactor rule is derived and certified exactly (the
+//!   `row_factor` module docs).
+//!
+//! Every lift carries a uniform [`LiftSummary`] with the shared
+//! [`lift_verdict`].
 //!
 //! For the Veronese lifts, [`find_veronese_section_lifts`]'s documentation
 //! states the transfer theorem, the supported input class, the algorithm and
@@ -50,6 +62,15 @@
 
 use super::*;
 
+mod hadamard_factor;
+pub use hadamard_factor::{
+    find_hadamard_factor_lifts, HadamardDivisionQuotient, HadamardFactor,
+    HadamardFactorCertificate, HadamardFactorIdentityStatus, HadamardFactorLift,
+    HadamardFactorLiftOptions, HadamardFactorLiftReport, HadamardFactorRejection,
+    HadamardFactorRejectionKind, HadamardFactorTerm, HadamardHiddenCoefficients,
+    HADAMARD_FACTOR_LIFTS_SCHEMA, MAX_HADAMARD_BINOMIAL_OFFSET, MAX_HADAMARD_FACTOR_ROWS,
+    MAX_HADAMARD_OPERATOR_TERMS,
+};
 mod lift_summary;
 pub use lift_summary::{
     lift_verdict, LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus, LiftOperation,
@@ -66,6 +87,12 @@ pub use parent_theorems::{
     check_liu_wang_theorem, check_three_term_recurrence_theorem, RealRootednessTheorem,
     RealRootednessTheoremConclusion, RealRootednessTheoremOptions, RealRootednessTheoremReport,
     RealRootednessTheoremStatus, RowInterlacing, REAL_ROOTEDNESS_THEOREM_SCHEMA,
+};
+mod row_factor;
+pub use row_factor::{
+    find_row_factor_lifts, RowFactorCertificate, RowFactorIdentityStatus, RowFactorLift,
+    RowFactorLiftOptions, RowFactorLiftReport, RowFactorRejection, MAX_ROW_FACTOR_ROWS,
+    ROW_FACTOR_LIFTS_SCHEMA,
 };
 mod section_certify;
 pub use section_certify::{

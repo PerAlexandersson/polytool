@@ -38,8 +38,13 @@
 //!   representations (scalar and vector) that composes all of these
 //!   ([`search_representations`]);
 //! - `lift`: parent sequences whose real-rootedness transfers to the given
-//!   sequence: Veronese-section lifts ([`find_veronese_section_lifts`]) and
-//!   symmetric-companion lifts ([`find_symmetric_companion_lifts`]).
+//!   sequence: Veronese-section lifts ([`find_veronese_section_lifts`],
+//!   [`certify_veronese_section_lift`]), symmetric-companion lifts
+//!   ([`find_symmetric_companion_lifts`]), Hadamard-factor lifts
+//!   ([`find_hadamard_factor_lifts`]) and row-factor lifts
+//!   ([`find_row_factor_lifts`]), with real-rootedness theorem checks for
+//!   the parents ([`check_three_term_recurrence_theorem`],
+//!   [`check_liu_wang_theorem`]).
 //!
 //! Report, search and replay functions that can reject their input return
 //! [`RecurrenceError`] (and [`parse_rational_coeff`] a [`ParseRationalError`]);

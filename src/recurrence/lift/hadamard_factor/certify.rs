@@ -1,0 +1,625 @@
+//! The certificate of a Hadamard-factor lift: conjugation of the input
+//! relation by the factor, pseudo-division by the parent relation, the row
+//! annihilator of a product parent, and [`HadamardFactorCertificate`] with
+//! its independent replay.
+
+use super::factor::{atom_ratio, conjugation_conditions, FactorProduct, HadamardFactor, TermShape};
+use super::prepare::{left_multiply, shift_free_from_json, shift_free_json, PreparedRule};
+use crate::recurrence::implicit::algebra::{
+    content_and_primitive, from_theta, roots_in_domain, theta_add, to_theta, Biv, DOp, ThetaOp,
+};
+use crate::recurrence::lift::section_certify::{
+    n_coefficients, n_polynomial, pseudo_divide_row, x_free_leader, ForwardDivision, RatioGauge,
+};
+use crate::recurrence::lift::section_operators::{check_term_budget, OperatorMatrix};
+use crate::recurrence::{
+    decode_poly, encode_poly, ImplicitRelation, ImplicitRelationJson, OperatorTermJson,
+    RecurrenceError, RecurrenceJson, VeroneseSectionGauge,
+};
+use crate::vec_poly;
+use crate::BigRational;
+use num_traits::{One, Zero};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+type Q = BigRational;
+
+/// Largest number of operator terms in a conjugated relation, a division or
+/// a certificate.
+pub const MAX_HADAMARD_OPERATOR_TERMS: usize = 20_000;
+
+/// An operator in Laurent--Euler form `sum x^s m_(i,s)(n, theta) S^i`,
+/// keyed by `(i, s)` with `s` possibly negative.
+pub(super) type LaurentOp = BTreeMap<(usize, i64), Biv>;
+
+/// The Laurent--Euler form of a normal-ordered operator, using
+/// `D^d = x^(-d) theta (theta - 1) ... (theta - d + 1)`.
+pub(super) fn laurent_euler(op: &DOp) -> LaurentOp {
+    let (j, theta) = to_theta(op);
+    theta
+        .into_iter()
+        .map(|((i, s), c)| ((i, s as i64 - j as i64), c))
+        .collect()
+}
+
+/// `M''`: the input relation conjugated by the factor (module documentation
+/// of `hadamard_factor`), multiplied by `x^J''` and normal ordered.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct ConjugatedRelation {
+    pub(super) op: DOp,
+    /// `J''`, the power of `x` that makes every term polynomial.
+    pub(super) x_shift: usize,
+    /// `D(n, k)`, the least common multiple of the ratio denominators.
+    pub(super) denominator: Biv,
+}
+
+/// Conjugate `input` (leader shift `R = input.max_shift()`) by the factor
+/// `lambda(n) u(n, k)`: the term `x^s m(n, theta) S^i` becomes
+/// `x^(s + J'') e(n, theta + s) m(n, theta) S^i` with
+/// `e = D(n, k) u(n + i, k - s) / u(n + R, k)` and `D` the least common
+/// multiple of the denominators of these ratios.
+pub(super) fn conjugate_input(
+    input: &DOp,
+    factor: &HadamardFactor,
+    gauge: &RatioGauge,
+    first_index: usize,
+) -> Result<ConjugatedRelation, RecurrenceError> {
+    factor.validate(first_index)?;
+    let r = input.max_shift();
+    let laurent = laurent_euler(input);
+    let terms: Vec<(usize, i64)> = laurent.keys().copied().collect();
+    let atoms = factor.atoms()?;
+    conjugation_conditions(
+        &atoms,
+        first_index,
+        &TermShape {
+            terms: &terms,
+            leader_shift: r,
+        },
+    )
+    .map_err(RecurrenceError::Unsupported)?;
+    let numerator_gauge = n_polynomial(&gauge.numerator);
+    let denominator_gauge = n_polynomial(&gauge.denominator);
+    let mut ratios = Vec::with_capacity(terms.len());
+    let mut lcm: BTreeMap<Biv, usize> = BTreeMap::new();
+    for &(i, s) in &terms {
+        let (mut numerator, mut denominator) = atom_ratio(&atoms, (i, s), r);
+        // lambda(n + i) / lambda(n + R) = prod_(j = i+1..R) b(n + j) / a(n + j).
+        for j in i + 1..=r {
+            numerator.push(&denominator_gauge.shift_n(j as i64));
+            denominator.push(&numerator_gauge.shift_n(j as i64));
+        }
+        for (factor, multiplicity) in &denominator.factors {
+            if factor.as_constant().is_some() {
+                continue;
+            }
+            let entry = lcm.entry(factor.clone()).or_insert(0);
+            *entry = (*entry).max(*multiplicity);
+        }
+        ratios.push((numerator, denominator));
+    }
+    let shift = terms.iter().map(|(_, s)| -s).max().unwrap_or(0).max(0);
+    let mut theta = ThetaOp::new();
+    for ((&(i, s), (numerator, denominator)), m) in terms.iter().zip(&ratios).zip(laurent.values())
+    {
+        let mut e = FactorProduct {
+            constant: &numerator.constant / &denominator.constant,
+            factors: numerator.factors.clone(),
+        };
+        for (factor, multiplicity) in &lcm {
+            let used = denominator.factors.get(factor).copied().unwrap_or(0);
+            *e.factors.entry(factor.clone()).or_insert(0) += multiplicity - used;
+        }
+        let coefficient = e
+            .expand()
+            .shift(&Q::zero(), &Q::from_integer(s.into()))
+            .mul(m);
+        theta_add(&mut theta, (i, (s + shift) as usize), coefficient);
+    }
+    let denominator = FactorProduct {
+        constant: Q::one(),
+        factors: lcm,
+    }
+    .expand();
+    Ok(ConjugatedRelation {
+        op: from_theta(&theta),
+        x_shift: shift as usize,
+        denominator,
+    })
+}
+
+/// A parent `g(n) P_(n+1) = a(n) c(x) P_n` with one seed `f = P_(p0)`: then
+/// `P_n = Lambda(n) c^(n - p0) f`, and every row is annihilated by
+/// `A(n) = c f D - ((n - p0) c' f + c f')`.
+pub(super) struct ProductParent {
+    c: Vec<Q>,
+    seed: Vec<Q>,
+    first_index: usize,
+}
+
+impl ProductParent {
+    /// Recognise the shape; `None` otherwise.
+    pub(super) fn recognise(parent: &PreparedRule) -> Option<Self> {
+        if parent.leader_shift != 1 || parent.seeds.len() != 1 {
+            return None;
+        }
+        x_free_leader(&parent.relation).ok()?;
+        let column = parent.relation.column(0);
+        if column.0.len() != 1 {
+            return None;
+        }
+        let coefficient = column.0.get(&(0, 0))?;
+        let (_, primitive) = content_and_primitive(coefficient);
+        if !primitive.is_n_free() {
+            return None;
+        }
+        let c = vec_poly::trim(&primitive.rows().first().cloned().unwrap_or_default());
+        let seed = vec_poly::trim(&parent.seeds[0]);
+        if c.iter().all(Zero::is_zero) || seed.iter().all(Zero::is_zero) {
+            return None;
+        }
+        Some(Self {
+            c,
+            seed,
+            first_index: parent.first_index,
+        })
+    }
+
+    /// `A(n)`.
+    pub(super) fn annihilator(&self) -> DOp {
+        let c = &self.c;
+        let f = &self.seed;
+        let leading = vec_poly::mul(c, f);
+        let c_prime_f = vec_poly::mul(&vec_poly::derivative(c), f);
+        let c_f_prime = vec_poly::mul(c, &vec_poly::derivative(f));
+        let index = n_polynomial(&[-Q::from_integer(self.first_index.into()), Q::one()]);
+        let constant = index
+            .mul(&Biv::from_y(&c_prime_f))
+            .add(&Biv::from_y(&c_f_prime))
+            .scale(&-Q::one());
+        let mut op = DOp::single(0, 1, Biv::from_y(&leading));
+        op.add_term((0, 0), constant);
+        op
+    }
+
+    /// Check `A(n + 1) o c = c o A(n)` and `A(p0) P_(p0) = 0` exactly.
+    pub(super) fn annihilator_is_invariant(&self, annihilator: &DOp) -> bool {
+        let mut next = DOp::default();
+        for (key, coefficient) in &annihilator.0 {
+            next.add_term(*key, coefficient.shift_n(1));
+        }
+        let c = DOp::single(0, 0, Biv::from_y(&self.c));
+        next.compose(&c) == c.compose(annihilator)
+            && annihilator
+                .apply_row(&self.seed, self.first_index)
+                .iter()
+                .all(Zero::is_zero)
+    }
+}
+
+/// `mu f = Z o g + rem` in the Weyl algebra (shift-free operators), with
+/// `mu` a power of the leading coefficient of `g` and `ord rem < ord g`.
+pub(super) fn right_pseudo_divide(
+    f: &DOp,
+    g: &DOp,
+    max_terms: usize,
+) -> Result<(Biv, DOp, DOp), RecurrenceError> {
+    let order = g.max_derivative();
+    let lead =
+        g.0.get(&(0, order))
+            .cloned()
+            .ok_or_else(|| RecurrenceError::VerificationFailed("the divisor is zero".into()))?;
+    let mut remainder = f.clone();
+    let mut quotient = DOp::default();
+    let mut multiplier = Biv::one();
+    while !remainder.is_zero() && remainder.max_derivative() >= order {
+        let top = remainder.max_derivative();
+        let coefficient = remainder.0.get(&(0, top)).cloned().ok_or_else(|| {
+            RecurrenceError::VerificationFailed("a shift-free operator was expected".into())
+        })?;
+        let term = DOp::single(0, top - order, coefficient);
+        remainder = left_multiply(&lead, &remainder).sub(&term.compose(g));
+        quotient = left_multiply(&lead, &quotient).add(&term);
+        multiplier = multiplier.mul(&lead);
+        if remainder.0.contains_key(&(0, top)) {
+            return Err(RecurrenceError::VerificationFailed(
+                "right division did not cancel the leading derivative".into(),
+            ));
+        }
+        check_term_budget(remainder.0.len() + quotient.0.len(), max_terms)?;
+    }
+    Ok((multiplier, quotient, remainder))
+}
+
+/// `w(n) M'' = sum_nu H_nu S^nu L + R` for a scalar parent relation `L`.
+pub(super) fn divide_by_parent(
+    op: &DOp,
+    parent: &DOp,
+    max_terms: usize,
+) -> Result<ForwardDivision, RecurrenceError> {
+    let (k, leader) = x_free_leader(parent)?;
+    let system = OperatorMatrix {
+        entries: vec![vec![parent.clone()]],
+    };
+    pseudo_divide_row(std::slice::from_ref(op), &system, k, &leader, max_terms)
+}
+
+/// One quotient `H_nu` of a [`HadamardFactorCertificate`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HadamardDivisionQuotient {
+    /// The shift `nu` of `H_nu o S^nu o L`.
+    pub shift: usize,
+    /// `H_nu = sum_d h_d(n, x) D^d`.
+    pub differentiations: Vec<OperatorTermJson>,
+}
+
+/// The exact operator identity behind a certified Hadamard-factor lift
+/// `Q_n = lambda(n) sum_k u(n, k) p(n, k) x^k`:
+///
+/// ```text
+/// mu(x) w(n) M'' = sum_nu H_nu o S^nu o L + Z o A
+/// ```
+///
+/// with `M''` the input relation `M` conjugated by `lambda(n) u(n, k)`
+/// (recomputed by [`verify`](Self::verify)), `L` the parent relation, `A`
+/// the row annihilator of a product parent (absent, with `Z = 0` and
+/// `mu = 1`, when the division leaves no remainder).  What it proves, with
+/// the index domains recorded here, is stated in the `hadamard_factor`
+/// module documentation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HadamardFactorCertificate {
+    /// The factor `u`.
+    pub factor: HadamardFactor,
+    /// The row normalisation `lambda(n)`.
+    pub gauge: VeroneseSectionGauge,
+    /// `M`: the input rule at base index `n`.
+    pub input_relation: ImplicitRelationJson,
+    /// The largest offset `R` of the input rule.
+    pub input_leader_shift: usize,
+    /// The parent `P`: rule, first index (equal to the input's) and seeds.
+    pub parent: RecurrenceJson,
+    /// `L`: the parent rule at base index `n`; its leader `g(n) S^k` is free
+    /// of `x` and `D`.
+    pub parent_relation: ImplicitRelationJson,
+    /// `k`, the order of the parent rule.
+    pub parent_leader_shift: usize,
+    /// `M''` (multiplied by `x^J''`).
+    pub conjugated_input_relation: ImplicitRelationJson,
+    /// `J''`.
+    pub conjugation_x_shift: usize,
+    /// `w(n)`, ascending exact strings in `n`.
+    pub multiplier: Vec<String>,
+    /// `mu(x)`, ascending exact strings in `x`.
+    pub row_multiplier: Vec<String>,
+    /// The nonzero quotients `H_nu`.
+    pub quotients: Vec<HadamardDivisionQuotient>,
+    /// `A(n)`, when used (recomputed from the parent by the replay).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_annihilator: Option<Vec<OperatorTermJson>>,
+    /// `Z`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub row_annihilator_quotient: Vec<OperatorTermJson>,
+    /// First base index at which `M` holds for the input rows (`n0 + K - R`).
+    pub input_valid_from_base: usize,
+    /// First base index at which `L` holds for the parent rows.
+    pub parent_valid_from_base: usize,
+    /// Bases where the identity gives nothing (integer roots of `w`, bases
+    /// below `parent_valid_from_base`); `M` was evaluated exactly on the
+    /// candidate rows there and vanished.
+    pub exceptional_bases: Vec<usize>,
+    /// The identifying input indices `n0, ..., n0 + K - 1`, where
+    /// `Q_n = lambda(n) u ⊙ P_n` was checked exactly.
+    pub identifying_indices: Vec<usize>,
+    /// What the certificate proves.
+    pub statement: String,
+}
+
+fn relation_op(json: &ImplicitRelationJson) -> Result<DOp, RecurrenceError> {
+    Ok(ImplicitRelation::from_json(json)?.op())
+}
+
+/// The left-hand and right-hand sides of the certificate identity agree.
+pub(super) fn identity_holds(
+    conjugated: &DOp,
+    parent: &DOp,
+    multiplier: &Biv,
+    quotients: &BTreeMap<usize, DOp>,
+    annihilator: Option<(&DOp, &DOp)>,
+) -> bool {
+    let mut difference = left_multiply(multiplier, conjugated);
+    for (nu, h) in quotients {
+        difference = difference.sub(&h.compose(&parent.shifted(*nu)));
+    }
+    if let Some((a, z)) = annihilator {
+        difference = difference.sub(&z.compose(a));
+    }
+    difference.is_zero()
+}
+
+impl HadamardFactorCertificate {
+    /// Replay the certificate: recompute `M''` from the input relation, the
+    /// factor, the gauge and the first index (including the conjugation
+    /// conditions), recompute the parent relation and, when used, the row
+    /// annihilator with its invariance, check the operator identity exactly
+    /// and that every integer root of `w` from the valid bases on is listed
+    /// as exceptional.
+    pub fn verify(&self) -> Result<(), RecurrenceError> {
+        let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
+        let Some(&first_index) = self.identifying_indices.first() else {
+            return failed("the certificate lists no identifying indices");
+        };
+        let input = relation_op(&self.input_relation)?;
+        if input.max_shift() != self.input_leader_shift
+            || input.column(self.input_leader_shift).max_derivative() != 0
+        {
+            return failed("the input relation does not have the recorded leader");
+        }
+        let gauge = self.gauge.ratio_form(first_index)?;
+        let conjugated = conjugate_input(&input, &self.factor, &gauge, first_index)?;
+        if conjugated.op != relation_op(&self.conjugated_input_relation)?
+            || conjugated.x_shift != self.conjugation_x_shift
+        {
+            return failed("the conjugated input relation does not match its recomputation");
+        }
+        let (rule, parent_first, rows) = self.parent.to_recurrence_parts()?;
+        if parent_first != first_index {
+            return failed("the parent does not start at the input's first index");
+        }
+        let parent = super::prepare::prepare_rule(&rule, &rows, parent_first, "parent")?;
+        if parent.relation != relation_op(&self.parent_relation)? {
+            return failed("the parent relation does not match the parent record");
+        }
+        let (k, _) = x_free_leader(&parent.relation)?;
+        if k != self.parent_leader_shift {
+            return failed("the parent leader shift does not match");
+        }
+        let multiplier = n_polynomial(&decode_poly(&self.multiplier)?);
+        let row_multiplier = Biv::from_y(&decode_poly(&self.row_multiplier)?);
+        if multiplier.is_zero() || row_multiplier.is_zero() {
+            return failed("a multiplier is zero");
+        }
+        let mut quotients: BTreeMap<usize, DOp> = BTreeMap::new();
+        for entry in &self.quotients {
+            let h = shift_free_from_json(&entry.differentiations)?;
+            let slot = quotients.entry(entry.shift).or_default();
+            *slot = slot.add(&h);
+        }
+        let annihilator = match &self.row_annihilator {
+            None => {
+                if !self.row_annihilator_quotient.is_empty() {
+                    return failed("a row-annihilator quotient without an annihilator");
+                }
+                None
+            }
+            Some(recorded) => {
+                let Some(product) = ProductParent::recognise(&parent) else {
+                    return failed("the parent is not a product parent");
+                };
+                let a = product.annihilator();
+                if a != shift_free_from_json(recorded)? || !product.annihilator_is_invariant(&a) {
+                    return failed("the row annihilator does not match the parent");
+                }
+                Some((a, shift_free_from_json(&self.row_annihilator_quotient)?))
+            }
+        };
+        if !identity_holds(
+            &conjugated.op,
+            &parent.relation,
+            &row_multiplier.mul(&multiplier),
+            &quotients,
+            annihilator.as_ref().map(|(a, z)| (a, z)),
+        ) {
+            return failed("the identity mu w M'' = sum H_nu S^nu L + Z A fails");
+        }
+        let from = self.input_valid_from_base.max(self.parent_valid_from_base);
+        let roots = roots_in_domain(&n_coefficients(&multiplier), from, None);
+        if roots
+            .iter()
+            .any(|root| !self.exceptional_bases.contains(root))
+        {
+            return failed("a root of w is not listed as an exceptional base");
+        }
+        Ok(())
+    }
+}
+
+/// Assemble the certificate fields from a successful division.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn build_certificate(
+    factor: &HadamardFactor,
+    gauge: &VeroneseSectionGauge,
+    input: &PreparedRule,
+    parent: &PreparedRule,
+    conjugated: &ConjugatedRelation,
+    division: &ForwardDivision,
+    annihilator: Option<(Biv, DOp, DOp)>,
+    bases: (usize, usize, Vec<usize>),
+    statement: String,
+) -> HadamardFactorCertificate {
+    let (row_multiplier, row_annihilator, quotient) = match annihilator {
+        Some((mu, a, z)) => (mu, Some(shift_free_json(&a)), shift_free_json(&z)),
+        None => (Biv::one(), None, Vec::new()),
+    };
+    let quotients = division
+        .quotients
+        .iter()
+        .filter_map(|(nu, row)| {
+            let h = left_multiply(&row_multiplier, &row[0]);
+            (!h.is_zero()).then(|| HadamardDivisionQuotient {
+                shift: *nu,
+                differentiations: shift_free_json(&h),
+            })
+        })
+        .collect();
+    let (k, _) = x_free_leader(&parent.relation).unwrap_or((1, Biv::one()));
+    HadamardFactorCertificate {
+        factor: factor.clone(),
+        gauge: gauge.clone(),
+        input_relation: ImplicitRelation::from_op(&input.relation).to_json(),
+        input_leader_shift: input.leader_shift,
+        parent: RecurrenceJson::from_recurrence_rational(
+            &parent.rule,
+            parent.first_index,
+            &parent.seeds,
+            None,
+        ),
+        parent_relation: ImplicitRelation::from_op(&parent.relation).to_json(),
+        parent_leader_shift: k,
+        conjugated_input_relation: ImplicitRelation::from_op(&conjugated.op).to_json(),
+        conjugation_x_shift: conjugated.x_shift,
+        multiplier: encode_poly(&n_coefficients(&division.multiplier)),
+        row_multiplier: encode_poly(row_multiplier.rows().first().map_or(&[][..], |r| r)),
+        quotients,
+        row_annihilator,
+        row_annihilator_quotient: quotient,
+        input_valid_from_base: bases.0,
+        parent_valid_from_base: bases.1,
+        exceptional_bases: bases.2,
+        identifying_indices: (input.first_index..input.first_index + input.seeds.len()).collect(),
+        statement,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::factor::{HadamardFactorTerm, TermShape};
+    use super::*;
+    use crate::recurrence::implicit::algebra::q;
+
+    fn y(coefficients: &[i64]) -> Biv {
+        Biv::from_y(&coefficients.iter().map(|c| q(*c)).collect::<Vec<_>>())
+    }
+
+    fn pseudo_random_rows(count: usize, seed: u64) -> Vec<Vec<Q>> {
+        let mut state = seed;
+        (0..count)
+            .map(|n| {
+                (0..n + 3)
+                    .map(|_| {
+                        state = state
+                            .wrapping_mul(6364136223846793005)
+                            .wrapping_add(1442695040888963407);
+                        q(((state >> 33) % 7) as i64 - 3)
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// The conjugation lemma, checked on arbitrary rows: wherever
+    /// `U(n + R, k) != 0`, `D(n, k) E(n, k) = U(n + R, k) [x^(k + J'')](M'' P)_n`,
+    /// and elsewhere `E(n, k) = 0`.
+    #[test]
+    fn conjugation_lemma_holds_on_arbitrary_rows() {
+        // M = (n + 3) S^2 - (2n + 1)(1 + x) S - x^2 D S + (n + 1)(1 - x)^2 + (1 + x) D.
+        let mut m = DOp::default();
+        m.add_term((2, 0), Biv::new(vec![vec![q(3)], vec![q(1)]]));
+        m.add_term(
+            (1, 0),
+            Biv::new(vec![vec![q(-1), q(-1)], vec![q(-2), q(-2)]]),
+        );
+        m.add_term((1, 1), y(&[0, 0, -1]));
+        m.add_term(
+            (0, 0),
+            Biv::new(vec![vec![q(1), q(-2), q(1)], vec![q(1), q(-2), q(1)]]),
+        );
+        m.add_term((0, 1), y(&[1, 1]));
+        let gauges = [
+            RatioGauge {
+                numerator: vec![Q::one()],
+                denominator: vec![Q::one()],
+                initial: Q::one(),
+            },
+            RatioGauge {
+                numerator: vec![q(1), q(1)],
+                denominator: vec![q(3), q(1)],
+                initial: q(2),
+            },
+        ];
+        let factors = [
+            HadamardFactorTerm::Binomial {
+                index_offset: 1,
+                coefficient_offset: 1,
+            },
+            HadamardFactorTerm::Binomial {
+                index_offset: 0,
+                coefficient_offset: 0,
+            },
+            HadamardFactorTerm::InverseFactorial,
+            HadamardFactorTerm::InverseComplementFactorial,
+            HadamardFactorTerm::RisingFactorial {
+                parameter: "1/2".into(),
+            },
+        ];
+        let n0 = 1;
+        let r = 2;
+        let rows = pseudo_random_rows(12, 7);
+        let mut checked = 0;
+        for term in factors {
+            let factor = HadamardFactor::single(term);
+            let terms: Vec<(usize, i64)> = laurent_euler(&m).keys().copied().collect();
+            let atoms = factor.atoms().unwrap();
+            let shape = TermShape {
+                terms: &terms,
+                leader_shift: r,
+            };
+            assert!(super::super::factor::conjugation_conditions(&atoms, n0, &shape).is_ok());
+            for gauge in &gauges {
+                let conjugated = conjugate_input(&m, &factor, gauge, n0).unwrap();
+                let lambdas = gauge.values(n0, rows.len());
+                let scaled: Vec<Vec<Q>> = rows
+                    .iter()
+                    .enumerate()
+                    .map(|(offset, row)| {
+                        let n = n0 + offset;
+                        vec_poly::trim(
+                            &row.iter()
+                                .enumerate()
+                                .map(|(k, p)| factor.value(n, k).unwrap() * p * &lambdas[offset])
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect();
+                for base in n0..n0 + rows.len() - r {
+                    let e = m.apply(&scaled, n0, base).unwrap();
+                    let conj = conjugated.op.apply(&rows, n0, base).unwrap();
+                    let at = |p: &[Q], i: usize| p.get(i).cloned().unwrap_or_else(Q::zero);
+                    for k in 0..e.len() + 4 {
+                        let reference =
+                            factor.value(base + r, k).unwrap() * &lambdas[base + r - n0];
+                        if reference.is_zero() {
+                            assert!(at(&e, k).is_zero());
+                            continue;
+                        }
+                        let d = vec_poly::evaluate(
+                            &conjugated.denominator.eval_n(&q(base as i64)),
+                            &q(k as i64),
+                        );
+                        assert!(!d.is_zero());
+                        assert_eq!(
+                            &d * at(&e, k),
+                            reference * at(&conj, k + conjugated.x_shift)
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(checked > 100);
+    }
+
+    #[test]
+    fn right_division_by_a_first_order_operator() {
+        // A = x D - 2; F = (x D - 2)(D + x) = x D^2 + x^2 D - D + 2x... computed by composition.
+        let mut a = DOp::single(0, 1, y(&[0, 1]));
+        a.add_term((0, 0), y(&[-2]));
+        let mut z = DOp::single(0, 1, Biv::one());
+        z.add_term((0, 0), y(&[0, 1]));
+        let f = z.compose(&a);
+        let (mu, quotient, remainder) = right_pseudo_divide(&f, &a, 1000).unwrap();
+        assert!(remainder.is_zero());
+        assert_eq!(left_multiply(&mu, &f), quotient.compose(&a));
+    }
+}

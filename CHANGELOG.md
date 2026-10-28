@@ -260,6 +260,22 @@ Performance:
 
 Additions:
 
+- Hadamard-factor lifts: `recurrence::find_hadamard_factor_lifts` writes the
+  input rows as `Q_n = lambda(n) sum_k u(n, k) p(n, k) x^k` with `u` from a
+  menu (`binom(n + a, k + b)`, `k!`, `1/k!`, `(n - k)!`, `1/(n - k)!`,
+  `(alpha)_k`, `1/(alpha)_k`, optionally products of two) and a parent with a
+  smaller rule, certifies the identity for every index by conjugating the
+  input relation and dividing it by the parent relation
+  (`HadamardFactorCertificate`, replayable), transfers real-rootedness by the
+  Pólya--Schur characterization of multiplier sequences and runs the parent
+  provers; report `polytool.recurrence-hadamard-factor-lifts.v1` with a
+  `lift_summary` per lift (new `LiftOperation::HadamardFactor`).  The Narayana
+  and type-B Narayana triangles are proved end to end.
+- Row-factor lifts: `recurrence::find_row_factor_lifts` detects
+  `Q_n = F(x)^(alpha n + beta) S_n` from exact row factorizations, certifies it
+  by substituting into the input relation (`RowFactorCertificate`, replayable),
+  checks `F` once and proves the cofactors with the parent provers; report
+  `polytool.recurrence-row-factor-lifts.v1` (new `LiftOperation::RowFactor`).
 - Exact sign decisions for an integer index (`integer_range_sign`,
   re-exported at the crate root): `decide_index_polynomial_sign`,
   `decide_index_rational_function_sign` and `..._with_budget` decide

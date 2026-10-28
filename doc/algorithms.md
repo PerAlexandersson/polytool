@@ -518,6 +518,79 @@ solutions; a derivation of `E` from orders other than one (with a constant
 leader) or two is not attempted, which leaves the identity a `candidate`; no
 CLI or MCP adapter and no integration into `search_representations` yet.
 
+## Hadamard-factor lifts
+
+`recurrence::find_hadamard_factor_lifts` looks for
+`Q_n = lambda(n) sum_k u(n, k) p(n, k) x^k` with `u` from a menu of binomials,
+factorials and rising factorials (and products of two), and a parent `P` with
+a smaller rule found by the bounded exact search on the quotient rows.
+
+**Conjugation.**  Write the input relation `M` (leader shift `R`) in
+Laurent--Euler form `sum x^s m_(i,s)(n, theta) S^i`, `theta = x D`, `s` possibly
+negative.  For `U = lambda u` and any rows `P`, the coefficient of `x^k` in
+`(M (U ⊙ P))_n` is `E(n, k) = sum m_(i,s)(n, k - s) U(n + i, k - s)
+p(n + i, k - s)`.  Every factor is a product of Gamma atoms `Gamma(n + c)`,
+`Gamma(k + c)^(+-1)`, `Gamma(n - k + c)^(-1)` (with `1/Gamma = 0` at the
+poles), so `rho = U(n + i, k - s) / U(n + R, k)` is a quotient of products of
+linear factors.  With `D` the least common multiple of the denominators,
+`M''` has the terms `x^(s + J'') (D rho)(n, theta + s) m_(i,s)(n, theta) S^i`.
+The conjugation lemma: for `n >= n0`, `k >= 0`, if `U(n + R, k) != 0` then
+`D(n, k) != 0` and `D E = U(n + R, k) [x^(k + J'')](M'' P)_n`; otherwise
+`E(n, k) = 0`.  It holds under per-atom conditions that rule out the boundary
+problems: `Gamma(n + c)` needs `n0 + c >= 1`; `1/Gamma(k + c)` with integer
+`c <= 0` (zero at small `k`) needs every `s >= 0`; `Gamma(k + c)` with integer
+`c` needs `c >= 1` and every `s <= c - 1`; non-integer `c` needs nothing;
+`1/Gamma(n - k + c)` (zero above the support) needs every `i + s <= R`;
+`Gamma(n - k + c)` is not supported.  When they fail the identity is reported
+as `supported_by_rows`.  The values of `p` where `u = 0` never matter.
+
+**Certificate.**  `M''` is pseudo-divided by the parent relation `L` (leader
+`g(n) S^k` free of `x` and `D`): `w(n) M'' = sum H_nu S^nu L + r`.  A nonzero
+remainder is accepted only for a product parent
+`g(n) P_(n+1) = a(n) c(x) P_n` with seed `f`: its rows are annihilated by
+`A(n) = c f D - ((n - n0) c' f + c f')` (`A(n0) f = 0`, `A(n + 1) c = c A(n)`),
+and `mu(x) r = Z A` by right pseudo-division.  Then `(M'' P)_n = 0` at every
+base where `L` holds, except the integer roots of `w`; at those and at the
+bases between the two rules' domains `M` is evaluated exactly.  So
+`lambda u ⊙ P` satisfies `M` from `n0 + K - R`, agrees with `Q` on the `K`
+identifying rows, and the leader of `M` (nonzero at every target, decided
+exactly) gives `Q_n = lambda(n) u ⊙ P_n` for every `n >= n0`.
+`HadamardFactorCertificate::verify` recomputes `M''`, the parent relation and
+the annihilator and checks `mu w M'' = sum H_nu S^nu L + Z A`.
+
+**Root transfer.**  The Pólya--Schur characterization of multiplier sequences
+(Pólya and Schur 1914; Theorem 40 of Brändén, arXiv:1410.6601):
+`(lambda_k)` is a multiplier sequence iff `sum_k lambda_k x^k / k!` (or its
+reflection) is `C x^m e^(a x) prod (1 + alpha_j x)` with `a, alpha_j >= 0`, iff
+`sum_k binom(m, k) lambda_k x^k` is real-rooted with zeros of one sign for every
+`m`.  For every `n`, `k -> u(n, k)` is a nonnegative multiplier sequence for
+`binom(n + a, k + b)` (`sum u x^k / k!` is a generalized Laguerre polynomial
+`L^(|b|)(-x)`, times `x^(-b)` for `b < 0`, whose zeros are real and positive:
+Szegő, *Orthogonal Polynomials*, Theorem 3.3.1), `1/k!` (Brändén, Example
+41), `1/(alpha)_k` with `alpha > 0` (`sum binom(m, k) x^k / (alpha)_k` is a
+multiple of `L_m^(alpha - 1)(-x)`), `1/(n - k)!` (`(1 + x)^n / n!`),
+`k! binom(n + a, k - c)` with `c >= 0` (`x^c (1 + x)^(n + a)`), and products of
+these.  So every `Q_n` is zero or real-rooted with roots `<= 0` once every
+parent row is (the parent provers' statement).  `k!`, `(n - k)!` and
+`(alpha)_k` are not multiplier sequences; their lifts stay open.
+
+## Row-factor lifts
+
+`recurrence::find_row_factor_lifts` detects `Q_n = F^(e(n)) S_n`,
+`e(n) = alpha n + beta`, from the exact factorizations and multiplicities of
+the first rows.  With `T_d = F^d F^(-w) D^d F^w`
+(`T_0 = 1`, `T_(d+1) = F D T_d + (w - d) F' T_d`) and `w_i = e(n + i)`,
+`(M F^e S)_n = F^(e(n) - J) (M_S S)_n` for
+`M_S = sum c_(i,d) F^(alpha i + J - d) T_d(w_i) S^i` (`J` the largest
+derivative order).  If `F^h`, `h = alpha R + J`, divides every coefficient
+of `M_S` exactly, `M'_S = M_S / F^h` has the leader `g(n) S^R` free of `x`, so
+the cofactor rows generated from the seeds `S_n = Q_n / F^(e(n))` are
+polynomials (the leader is nonzero at every target, decided exactly), and
+`F^(e(n)) S_n` satisfies `M` and agrees with `Q` on the identifying rows:
+`Q_n = F^(e(n)) S_n` for every `n`.  Real-rootedness transfers through the
+union of root sets: `F` is checked once exactly, the cofactors by the parent
+provers; a non-real-rooted `F` fails the route.
+
 ## Exact sign decisions for an integer index
 
 `decide_index_rational_function_sign(p, q, range, condition)` decides

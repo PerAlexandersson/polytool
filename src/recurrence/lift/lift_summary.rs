@@ -59,6 +59,22 @@ pub enum LiftOperation {
         /// `d_(n0)`.
         symmetry_degree_at_first_index: usize,
     },
+    /// The Hadamard product `T(P)_n = lambda(n) sum_k u(n, k) [x^k] P_n x^k`
+    /// with a known factor `u`.
+    HadamardFactor {
+        /// The factor `u(n, k)` as text, for example `binom(n+1, k+1)`.
+        factor: String,
+    },
+    /// The row factorization `T(S)_n = F(x)^(e(n)) S_n` with
+    /// `e(n) = exponent_slope n + exponent_offset`.
+    RowFactor {
+        /// `F`, ascending exact coefficients.
+        factor: Vec<String>,
+        /// The slope of `e(n)`.
+        exponent_slope: usize,
+        /// The offset of `e(n)`.
+        exponent_offset: i64,
+    },
 }
 
 /// The parent of a lift.
@@ -640,6 +656,44 @@ fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
         VeroneseParentProofRoute::ThreeTermRecurrence => "three_term_recurrence",
         VeroneseParentProofRoute::LiuWang => "liu_wang",
         VeroneseParentProofRoute::Attestation => "attestation",
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hadamard-factor and row-factor lifts
+// ---------------------------------------------------------------------------
+
+/// The [`LiftParentProof`] of a parent-prover record: a proved status counts
+/// only with a non-attestation route (as for the Veronese certification).
+pub(super) fn parent_proof_summary(proof: &VeroneseParentProof) -> LiftParentProof {
+    let statement = proof.statement.clone();
+    match proof.status {
+        VeroneseParentProofStatus::Proved => match proof.route {
+            Some(route) if route != VeroneseParentProofRoute::Attestation => {
+                LiftParentProof::Proved {
+                    route: parent_route_label(route).into(),
+                    statement,
+                }
+            }
+            _ => LiftParentProof::Open { statement },
+        },
+        VeroneseParentProofStatus::ConditionalOnAttestation => LiftParentProof::Attested {
+            labels: proof.conditional_on.clone(),
+            statement,
+        },
+        VeroneseParentProofStatus::NotProved => LiftParentProof::Open { statement },
+        VeroneseParentProofStatus::Refuted => LiftParentProof::Failed {
+            index: proof.failing_row_index,
+            statement,
+        },
+    }
+}
+
+/// The whole real line, the root region when nothing more is known.
+pub(super) fn real_line() -> RootInterval {
+    RootInterval {
+        lower: None,
+        upper: None,
     }
 }
 
