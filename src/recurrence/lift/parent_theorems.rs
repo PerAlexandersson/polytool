@@ -1,0 +1,731 @@
+//! Paper theorems that prove a recurrence-defined family real-rooted, with
+//! every hypothesis checked exactly for all indices.
+//!
+//! - [`check_three_term_recurrence_theorem`]: three-term recurrences
+//!   `P_n = (a_n x + b_n) P_(n-1) - c_n P_(n-2)` (orthogonal-polynomial
+//!   recurrences, Favard), also after the coordinate change
+//!   `y = 1 / (x + v_0)` when the last coefficient is `c_n (x + v_0)^2`;
+//!   strict interlacing of consecutive rows and an optional root region
+//!   certified by a positive-ratio induction (a chain-sequence argument);
+//! - [`check_liu_wang_theorem`]: first-order derivative recurrences
+//!   `P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1)` (Liu and Wang, Theorem 2.1 with
+//!   `g = f'`), with every root in `(-inf, 0)`.
+//!
+//! Both return a [`RealRootednessTheoremReport`]: the theorem and its
+//! reference, the matched normal form with its coefficients as exact rational
+//! functions of `n`, the hypotheses as [`LiftHypothesis`] entries (verified,
+//! failed with the smallest failing index, or unresolved), and the
+//! conclusion.  Statements about rational functions of `n` on an infinite
+//! index range are decided by [`crate::decide_index_rational_function_sign`]
+//! (exact, with a replayable certificate); statements about seeds and single
+//! indices are exact computations on rows.  A report replays with
+//! [`RealRootednessTheoremReport::verify`].
+//!
+//! # Conventions
+//!
+//! A rule `f(n) P_n = sum_k c_k(n, x) D^(d_k) P_(n-k)` is applied, as in
+//! [`Recurrence::generate_rows_rational`], from `N = first_index + K` on,
+//! where `K` is the number of supplied seed rows.  The theorems start their
+//! induction at the last seeds (`P_(N-2), P_(N-1)` for the three-term
+//! theorem, `P_(N-1)` for Liu--Wang); earlier seed rows are checked exactly.
+//! `f` must be free of `x`.  Rules with `(-1)^n` factors or an inhomogeneous
+//! term are not matched.
+//!
+//! A status other than [`RealRootednessTheoremStatus::Proved`] never says
+//! that a row is not real-rooted, except where a hypothesis failure names a
+//! row that is checked exactly (a seed, or a root-region failure at a
+//! computed row).
+//!
+//! Related: `parent_proof` uses both provers as parent routes of the
+//! Veronese-section lifts; [`match_recurrence_theorems`] (renewal windows) and
+//! the Rolle routes of [`transform_recurrence`] cover other families.
+
+use super::*;
+use crate::integer_range_sign::{
+    decide_index_rational_function_sign, IndexSignCondition, IndexSignDecision, IntegerRange,
+};
+use crate::real_rootedness::RealInterval;
+use crate::vec_poly;
+use num_bigint::BigInt;
+use num_integer::Integer;
+use num_traits::{One, Signed, Zero};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+mod liu_wang;
+mod three_term;
+pub use liu_wang::check_liu_wang_theorem;
+pub use three_term::check_three_term_recurrence_theorem;
+
+type Q = BigRational;
+
+/// JSON schema tag of [`RealRootednessTheoremReport`].
+pub const REAL_ROOTEDNESS_THEOREM_SCHEMA: &str = "polytool.recurrence-real-rootedness-theorem.v1";
+
+/// Rows generated beyond the seeds for root-region certificates and the
+/// exact row checks that refute a root region.
+const GENERATED_ROWS: usize = 12;
+
+/// The theorem a [`RealRootednessTheoremReport`] applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RealRootednessTheorem {
+    /// [`check_three_term_recurrence_theorem`].
+    ThreeTermRecurrence,
+    /// [`check_liu_wang_theorem`].
+    LiuWang,
+}
+
+/// Outcome of a theorem check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RealRootednessTheoremStatus {
+    /// Every hypothesis is verified: the conclusion holds.
+    Proved,
+    /// A hypothesis fails exactly (the hypothesis names the smallest failing
+    /// index when there is one); the theorem gives no proof.
+    HypothesisFailed,
+    /// No hypothesis fails, but at least one is neither verified nor refuted.
+    Unresolved,
+    /// The recurrence does not have the theorem's form.
+    NotApplicable,
+}
+
+/// How consecutive rows interlace in a [`RealRootednessTheoremConclusion`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RowInterlacing {
+    /// `P_(n-1)` strictly interlaces `P_n`: simple roots, those of `P_(n-1)`
+    /// strictly between consecutive roots of `P_n`.
+    Strict,
+    /// `P_(n-1)` interlaces `P_n` in the weak sense of Liu and Wang: with
+    /// roots listed with multiplicity in decreasing order,
+    /// `... <= s_2 <= r_2 <= s_1 <= r_1` (`r` the roots of `P_n`, `s` those of
+    /// `P_(n-1)`).
+    Weak,
+}
+
+/// Options of the theorem checks.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RealRootednessTheoremOptions {
+    /// A region of the real line that should contain every root of every row
+    /// (open at finite ends; a closed end is certified in the stronger open
+    /// form).  `None` asks for real-rootedness and interlacing only.
+    pub root_region: Option<RealInterval>,
+}
+
+/// What a proved theorem gives.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RealRootednessTheoremConclusion {
+    /// Every row `P_n` with `n >= first_index` (the record's first index) is
+    /// nonzero and real-rooted.
+    pub first_index: usize,
+    /// First index `m` with `P_(m-1)` interlacing `P_m` (in the sense of
+    /// `interlacing`) for every later index; `None` when not claimed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interlacing_from: Option<usize>,
+    /// The interlacing of consecutive rows from `interlacing_from` on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interlacing: Option<RowInterlacing>,
+    /// Whether every row from the induction start on has simple roots.
+    pub simple_roots: bool,
+    /// An open region containing every root of every row `P_n`,
+    /// `n >= first_index`, when certified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_region: Option<RootInterval>,
+    /// The conclusion in words.
+    pub statement: String,
+}
+
+/// The result of [`check_three_term_recurrence_theorem`] or
+/// [`check_liu_wang_theorem`] (schema `polytool.recurrence-real-rootedness-theorem.v1`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RealRootednessTheoremReport {
+    /// [`REAL_ROOTEDNESS_THEOREM_SCHEMA`].
+    pub schema: String,
+    /// The theorem.
+    pub theorem: RealRootednessTheorem,
+    /// The theorem statement as applied, with its reference.
+    pub reference: String,
+    /// The checked family: rule, first index and seed rows.
+    pub recurrence: RecurrenceJson,
+    /// The requested root region, open at its finite ends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_root_region: Option<RootInterval>,
+    /// The outcome.
+    pub status: RealRootednessTheoremStatus,
+    /// The matched normal form with its coefficients, or why the rule does
+    /// not have the theorem's form.
+    pub normal_form: String,
+    /// The hypotheses in the order checked (empty when not applicable).
+    pub hypotheses: Vec<LiftHypothesis>,
+    /// The conclusion, present exactly when the status is `proved`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conclusion: Option<RealRootednessTheoremConclusion>,
+    /// Lean replay status: always `"not_attempted"`.
+    pub lean_replay: String,
+}
+
+impl RealRootednessTheoremReport {
+    fn new(
+        theorem: RealRootednessTheorem,
+        reference: &str,
+        rule: &Recurrence,
+        first_index: usize,
+        seeds: &[Vec<Q>],
+        options: &RealRootednessTheoremOptions,
+    ) -> Self {
+        Self {
+            schema: REAL_ROOTEDNESS_THEOREM_SCHEMA.into(),
+            theorem,
+            reference: reference.into(),
+            recurrence: RecurrenceJson::from_recurrence_rational(rule, first_index, seeds, None),
+            requested_root_region: options.root_region.as_ref().map(open_root_interval),
+            status: RealRootednessTheoremStatus::NotApplicable,
+            normal_form: String::new(),
+            hypotheses: Vec::new(),
+            conclusion: None,
+            lean_replay: LIFT_LEAN_REPLAY_NOT_ATTEMPTED.into(),
+        }
+    }
+
+    fn not_applicable(mut self, reason: impl Into<String>) -> Self {
+        self.status = RealRootednessTheoremStatus::NotApplicable;
+        self.normal_form = reason.into();
+        self
+    }
+
+    /// Set the status from the hypotheses; the conclusion is kept only when
+    /// every hypothesis is verified.
+    fn finish(mut self, conclusion: RealRootednessTheoremConclusion) -> Self {
+        self.status = status_of(&self.hypotheses);
+        if self.status == RealRootednessTheoremStatus::Proved {
+            self.conclusion = Some(conclusion);
+        }
+        self
+    }
+
+    /// Whether the theorem proved its conclusion.
+    pub fn is_proved(&self) -> bool {
+        self.status == RealRootednessTheoremStatus::Proved
+    }
+
+    /// The hypotheses that are not verified, as `name: evidence` lines.
+    pub fn open_hypotheses(&self) -> Vec<String> {
+        self.hypotheses
+            .iter()
+            .filter(|h| h.status != LiftHypothesisStatus::Verified)
+            .map(|h| format!("{}: {}", h.name, h.evidence))
+            .collect()
+    }
+
+    /// Replay the report: recompute it from the recorded family and requested
+    /// region and compare, and replay every sign certificate independently.
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::VerificationFailed`] when the report differs from
+    /// the recomputation or a certificate does not replay; errors of the
+    /// record itself are passed through.
+    pub fn verify(&self) -> Result<(), RecurrenceError> {
+        if self.schema != REAL_ROOTEDNESS_THEOREM_SCHEMA {
+            return Err(RecurrenceError::VerificationFailed(format!(
+                "unsupported schema `{}`",
+                self.schema
+            )));
+        }
+        let (rule, first_index, seeds) = self.recurrence.to_recurrence_parts()?;
+        let root_region = match &self.requested_root_region {
+            None => None,
+            Some(interval) => {
+                if !interval.is_index_independent() {
+                    return Err(RecurrenceError::VerificationFailed(
+                        "the requested root region depends on the index".into(),
+                    ));
+                }
+                Some(interval.at(0)?)
+            }
+        };
+        let options = RealRootednessTheoremOptions { root_region };
+        let recomputed = match self.theorem {
+            RealRootednessTheorem::ThreeTermRecurrence => {
+                check_three_term_recurrence_theorem(&rule, first_index, &seeds, &options)?
+            }
+            RealRootednessTheorem::LiuWang => {
+                check_liu_wang_theorem(&rule, first_index, &seeds, &options)?
+            }
+        };
+        if &recomputed != self {
+            return Err(RecurrenceError::VerificationFailed(
+                "the report differs from its recomputation".into(),
+            ));
+        }
+        for hypothesis in &self.hypotheses {
+            if let Some(IndexSignDecision::Holds { certificate }) = &hypothesis.sign_decision {
+                certificate.verify().map_err(|error| {
+                    RecurrenceError::VerificationFailed(format!(
+                        "hypothesis {}: {error}",
+                        hypothesis.name
+                    ))
+                })?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// `proved` when every hypothesis is verified, `hypothesis_failed` when one
+/// fails, `unresolved` otherwise.
+fn status_of(hypotheses: &[LiftHypothesis]) -> RealRootednessTheoremStatus {
+    if hypotheses
+        .iter()
+        .any(|h| matches!(h.status, LiftHypothesisStatus::Failed { .. }))
+    {
+        RealRootednessTheoremStatus::HypothesisFailed
+    } else if hypotheses
+        .iter()
+        .all(|h| h.status == LiftHypothesisStatus::Verified)
+    {
+        RealRootednessTheoremStatus::Proved
+    } else {
+        RealRootednessTheoremStatus::Unresolved
+    }
+}
+
+/// The interval with the same finite ends, both open.
+fn open_root_interval(interval: &RealInterval) -> RootInterval {
+    RootInterval::from_real(&RealInterval {
+        lower: interval.lower.clone(),
+        lower_closed: false,
+        upper: interval.upper.clone(),
+        upper_closed: false,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Rational functions of the index
+// ---------------------------------------------------------------------------
+
+/// `numerator(n) / denominator(n)`, both ascending in `n`, not reduced (a
+/// vanishing denominator is a failure of every sign condition, as in
+/// [`crate::integer_range_sign`]); the denominator is kept monic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct IndexFunction {
+    numerator: Vec<Q>,
+    denominator: Vec<Q>,
+}
+
+impl IndexFunction {
+    fn new(numerator: Vec<Q>, denominator: Vec<Q>) -> Self {
+        let mut numerator = vec_poly::trim(&numerator);
+        let mut denominator = vec_poly::trim(&denominator);
+        if let Some(leading) = denominator.last().filter(|c| !c.is_zero()).cloned() {
+            numerator = vec_poly::scale(&numerator, &leading.recip());
+            denominator = vec_poly::scale(&denominator, &leading.recip());
+        }
+        Self {
+            numerator,
+            denominator,
+        }
+    }
+
+    fn polynomial(numerator: Vec<Q>) -> Self {
+        Self::new(numerator, vec![Q::one()])
+    }
+
+    fn constant(value: Q) -> Self {
+        Self::polynomial(vec![value])
+    }
+
+    fn add(&self, other: &Self) -> Self {
+        if self.denominator == other.denominator {
+            return Self::new(
+                vec_poly::add(&self.numerator, &other.numerator),
+                self.denominator.clone(),
+            );
+        }
+        Self::new(
+            vec_poly::add(
+                &vec_poly::mul(&self.numerator, &other.denominator),
+                &vec_poly::mul(&other.numerator, &self.denominator),
+            ),
+            vec_poly::mul(&self.denominator, &other.denominator),
+        )
+    }
+
+    fn negated(&self) -> Self {
+        Self::new(vec_poly::neg(&self.numerator), self.denominator.clone())
+    }
+
+    fn sub(&self, other: &Self) -> Self {
+        self.add(&other.negated())
+    }
+
+    fn div(&self, other: &Self) -> Self {
+        Self::new(
+            vec_poly::mul(&self.numerator, &other.denominator),
+            vec_poly::mul(&self.denominator, &other.numerator),
+        )
+    }
+
+    fn scale(&self, factor: &Q) -> Self {
+        Self::new(
+            vec_poly::scale(&self.numerator, factor),
+            self.denominator.clone(),
+        )
+    }
+
+    /// `n -> n + shift`.
+    fn shifted(&self, shift: i64) -> Self {
+        let substitution = [Q::from_integer(BigInt::from(shift)), Q::one()];
+        Self::new(
+            vec_poly::compose(&self.numerator, &substitution),
+            vec_poly::compose(&self.denominator, &substitution),
+        )
+    }
+
+    /// The value at `n`, or `None` where the denominator vanishes.
+    fn at(&self, index: usize) -> Option<Q> {
+        let n = Q::from_integer(BigInt::from(index));
+        let denominator = vec_poly::evaluate(&self.denominator, &n);
+        (!denominator.is_zero()).then(|| vec_poly::evaluate(&self.numerator, &n) / denominator)
+    }
+
+    fn decide(&self, first: usize, condition: IndexSignCondition) -> IndexSignDecision {
+        decide_index_rational_function_sign(
+            &self.numerator,
+            &self.denominator,
+            &IntegerRange::starting_at(first),
+            condition,
+        )
+    }
+
+    fn text(&self) -> String {
+        let numerator = format_index_polynomial(&self.numerator, "n");
+        if self.denominator.len() <= 1 {
+            numerator
+        } else {
+            format!(
+                "({numerator})/({})",
+                format_index_polynomial(&self.denominator, "n")
+            )
+        }
+    }
+}
+
+/// `p` with the highest power first, for example `2 n^2 - n + 1/2`.
+fn format_index_polynomial(p: &[Q], variable: &str) -> String {
+    let mut text = String::new();
+    for (power, coefficient) in p.iter().enumerate().rev() {
+        if coefficient.is_zero() {
+            continue;
+        }
+        let magnitude = coefficient.abs();
+        let monomial = match power {
+            0 => String::new(),
+            1 => variable.to_string(),
+            _ => format!("{variable}^{power}"),
+        };
+        let body = if monomial.is_empty() {
+            format_rational_coeff(&magnitude)
+        } else if magnitude.is_one() {
+            monomial
+        } else {
+            format!("{} {monomial}", format_rational_coeff(&magnitude))
+        };
+        if text.is_empty() {
+            if coefficient.is_negative() {
+                text.push('-');
+            }
+        } else {
+            text.push_str(if coefficient.is_negative() {
+                " - "
+            } else {
+                " + "
+            });
+        }
+        text.push_str(&body);
+    }
+    if text.is_empty() {
+        "0".into()
+    } else {
+        text
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Recurrence shapes and bivariate coefficients
+// ---------------------------------------------------------------------------
+
+/// Coefficient matrix `[i][j]` = coefficient of `n^i x^j`.
+type Bivariate = Vec<Vec<Q>>;
+
+/// The rule as `f(n) P_n = sum c_(k,d)(n, x) D^d P_(n-k)`, terms with the same
+/// `(k, d)` added, zero terms dropped.
+struct RecurrenceShape {
+    terms: BTreeMap<(usize, usize), Bivariate>,
+    /// `f(n)`, free of `x`.
+    denominator: Vec<Q>,
+}
+
+fn recurrence_shape(rule: &Recurrence) -> Result<RecurrenceShape, String> {
+    if rule.inhomogeneous.is_some() {
+        return Err("the rule has an inhomogeneous term".into());
+    }
+    let denominator = match &rule.denominator {
+        None => vec![Q::one()],
+        Some(denominator) => {
+            let coefficients = denominator.normalized_coefficients();
+            if (1..x_width(&coefficients)).any(|j| !x_column(&coefficients, j).is_empty()) {
+                return Err("the left-hand factor f(n, x) depends on x".into());
+            }
+            let f = x_column(&coefficients, 0);
+            if f.is_empty() {
+                return Err("the left-hand factor is zero".into());
+            }
+            f
+        }
+    };
+    let mut terms: BTreeMap<(usize, usize), Bivariate> = BTreeMap::new();
+    for term in &rule.terms {
+        if term.is_alternating() {
+            return Err("the rule has a (-1)^n factor".into());
+        }
+        let entry = terms.entry((term.offset, term.deriv_order)).or_default();
+        *entry = add_bivariate(entry, &term.coeff.normalized_coefficients());
+    }
+    terms.retain(|_, coefficients| x_degree(coefficients).is_some());
+    Ok(RecurrenceShape { terms, denominator })
+}
+
+fn add_bivariate(a: &Bivariate, b: &Bivariate) -> Bivariate {
+    let rows = a.len().max(b.len());
+    let width = x_width(a).max(x_width(b));
+    (0..rows)
+        .map(|i| {
+            (0..width)
+                .map(|j| entry(a, i, j) + entry(b, i, j))
+                .collect()
+        })
+        .collect()
+}
+
+fn entry(b: &Bivariate, i: usize, j: usize) -> Q {
+    b.get(i)
+        .and_then(|row| row.get(j))
+        .cloned()
+        .unwrap_or_else(Q::zero)
+}
+
+fn x_width(b: &Bivariate) -> usize {
+    b.iter().map(Vec::len).max().unwrap_or(0)
+}
+
+/// The coefficient of `x^j` as a polynomial in `n`, without trailing zeros
+/// (empty for zero).
+fn x_column(b: &Bivariate, j: usize) -> Vec<Q> {
+    let mut column: Vec<Q> = (0..b.len()).map(|i| entry(b, i, j)).collect();
+    vec_poly::strip_trailing_zeros(&mut column);
+    column
+}
+
+/// The degree in `x`, `None` for zero.
+fn x_degree(b: &Bivariate) -> Option<usize> {
+    (0..x_width(b)).rev().find(|&j| !x_column(b, j).is_empty())
+}
+
+/// `b(n, x) = gamma(n) w(x)` with `w` the first nonzero row, when separable.
+fn separate(b: &Bivariate) -> Option<(Vec<Q>, Vec<Q>)> {
+    let w = vec_poly::trim(b.iter().find(|row| row.iter().any(|c| !c.is_zero()))?);
+    let pivot = w.iter().position(|c| !c.is_zero())?;
+    let mut gamma = Vec::with_capacity(b.len());
+    for row in b {
+        let factor = row.get(pivot).cloned().unwrap_or_else(Q::zero) / &w[pivot];
+        let expected = vec_poly::scale(&w, &factor);
+        if vec_poly::trim(row) != vec_poly::trim(&expected) {
+            return None;
+        }
+        gamma.push(factor);
+    }
+    vec_poly::strip_trailing_zeros(&mut gamma);
+    Some((gamma, w))
+}
+
+// ---------------------------------------------------------------------------
+// Exact row checks
+// ---------------------------------------------------------------------------
+
+/// The integer polynomial with the same roots (denominators cleared).
+fn integer_coefficients(p: &[Q]) -> Vec<BigInt> {
+    let common = p
+        .iter()
+        .fold(BigInt::one(), |accumulator, c| accumulator.lcm(c.denom()));
+    p.iter()
+        .map(|c| c.numer() * (&common / c.denom()))
+        .collect()
+}
+
+fn is_real_rooted_rational(p: &[Q]) -> bool {
+    crate::is_real_rooted_bigint_coeffs(&integer_coefficients(p))
+}
+
+/// Nonzero, real-rooted and without repeated roots.
+fn has_simple_real_roots(p: &[Q]) -> bool {
+    let integer = integer_coefficients(&vec_poly::trim(p));
+    !vec_poly::is_zero(&integer)
+        && crate::is_real_rooted_bigint_coeffs(&integer)
+        && crate::has_simple_roots_bigint_coeffs(&integer)
+}
+
+/// Whether the nonzero `p` is real-rooted with every root `< point`: then
+/// `p(point + z)` has all its coefficients nonzero and of one sign, and
+/// conversely (Descartes' rule of signs).
+fn has_real_roots_below(p: &[Q], point: &Q) -> bool {
+    let p = vec_poly::trim(p);
+    if vec_poly::is_zero(&p) || !is_real_rooted_rational(&p) {
+        return false;
+    }
+    let shifted = vec_poly::compose(&p, &[point.clone(), Q::one()]);
+    shifted.iter().all(Signed::is_positive) || shifted.iter().all(Signed::is_negative)
+}
+
+/// Whether the nonzero real-rooted `p` has every root in the open
+/// `region`.
+fn has_real_roots_in(p: &[Q], region: &RealInterval) -> bool {
+    let p = vec_poly::trim(p);
+    if vec_poly::is_zero(&p) || !is_real_rooted_rational(&p) {
+        return false;
+    }
+    let upper_ok = region
+        .upper
+        .as_ref()
+        .is_none_or(|upper| has_real_roots_below(&p, upper));
+    let lower_ok = region.lower.as_ref().is_none_or(|lower| {
+        let reflected: Vec<Q> = p
+            .iter()
+            .enumerate()
+            .map(|(k, c)| if k % 2 == 1 { -c } else { c.clone() })
+            .collect();
+        has_real_roots_below(&reflected, &-lower)
+    });
+    upper_ok && lower_ok
+}
+
+/// `p / lead(p)`; the zero polynomial stays `[0]`.
+fn monic(p: &[Q]) -> Vec<Q> {
+    let p = vec_poly::trim(p);
+    match p.last().filter(|leading| !leading.is_zero()) {
+        Some(leading) => vec_poly::scale(&p, &leading.recip()),
+        None => p,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hypothesis constructors
+// ---------------------------------------------------------------------------
+
+fn sign_hypothesis(
+    name: &str,
+    statement: &str,
+    function_name: &str,
+    function: &IndexFunction,
+    first: usize,
+    condition: IndexSignCondition,
+) -> LiftHypothesis {
+    let decision = function.decide(first, condition);
+    LiftHypothesis::from_sign_decision(
+        name,
+        statement,
+        decision,
+        &format!("{function_name} = {}", function.text()),
+    )
+}
+
+/// An exactly checked hypothesis: `Ok(evidence)` or `Err((witness, evidence))`.
+fn exact_hypothesis(
+    name: &str,
+    statement: &str,
+    outcome: Result<String, (Option<usize>, String)>,
+) -> LiftHypothesis {
+    let (status, evidence) = match outcome {
+        Ok(evidence) => (LiftHypothesisStatus::Verified, evidence),
+        Err((witness, evidence)) => (
+            LiftHypothesisStatus::Failed {
+                witness: witness.map(BigInt::from),
+            },
+            evidence,
+        ),
+    };
+    LiftHypothesis {
+        name: name.into(),
+        statement: statement.into(),
+        status,
+        evidence,
+        sign_decision: None,
+    }
+}
+
+fn unresolved_hypothesis(name: &str, statement: &str, evidence: String) -> LiftHypothesis {
+    LiftHypothesis {
+        name: name.into(),
+        statement: statement.into(),
+        status: LiftHypothesisStatus::Unresolved,
+        evidence,
+        sign_decision: None,
+    }
+}
+
+/// `f(n) != 0` for `n >= first`, when `f` is not a nonzero constant.
+fn denominator_hypothesis(denominator: &[Q], first: usize) -> Option<LiftHypothesis> {
+    (denominator.len() > 1).then(|| {
+        sign_hypothesis(
+            "left_factor_nonzero",
+            &format!("the left-hand factor f(n) is nonzero for every n >= {first}"),
+            "f(n)",
+            &IndexFunction::polynomial(denominator.to_vec()),
+            first,
+            IndexSignCondition::Nonzero,
+        )
+    })
+}
+
+/// The seed rows before the induction start, each nonzero and real-rooted
+/// (with every root in `region` when one is given).
+fn earlier_seeds_hypothesis(
+    seeds: &[Vec<Q>],
+    first_index: usize,
+    region: Option<&RealInterval>,
+) -> Option<LiftHypothesis> {
+    if seeds.is_empty() {
+        return None;
+    }
+    let last = first_index + seeds.len() - 1;
+    let where_ = region.map_or(String::new(), |r| {
+        format!(" with every root in {}", open_root_interval(r))
+    });
+    let failing = seeds.iter().position(|seed| match region {
+        Some(region) => !has_real_roots_in(seed, region),
+        None => vec_poly::is_zero(&vec_poly::trim(seed)) || !is_real_rooted_rational(seed),
+    });
+    let outcome = match failing {
+        None => Ok(format!(
+            "checked exactly for P_{first_index}, ..., P_{last}"
+        )),
+        Some(offset) => Err((
+            Some(first_index + offset),
+            format!(
+                "P_{} is zero or not real-rooted{where_} (exact)",
+                first_index + offset
+            ),
+        )),
+    };
+    Some(exact_hypothesis(
+        "earlier_seeds",
+        &format!(
+            "the seed rows P_{first_index}, ..., P_{last} are nonzero and real-rooted{where_}"
+        ),
+        outcome,
+    ))
+}

@@ -4,11 +4,12 @@
 
 use num_bigint::BigInt;
 use polytool::recurrence::{
-    certify_veronese_section_lift, find_veronese_section_lifts, BigRational, BivarPoly, Recurrence,
-    RecurrenceError, RecurrenceJson, RecurrenceTerm, VeroneseParentAttestation,
-    VeroneseParentProofRoute, VeroneseParentProofStatus, VeroneseSectionCandidate,
-    VeroneseSectionCertification, VeroneseSectionCertifyOptions, VeroneseSectionGauge,
-    VeroneseSectionIdentityStatus, VeroneseSectionLiftOptions, VeroneseSectionVerdict,
+    certify_veronese_section_lift, find_veronese_section_lifts, BigRational, BivarPoly,
+    LiftParentProof, LiftVerdict, Recurrence, RecurrenceError, RecurrenceJson, RecurrenceTerm,
+    VeroneseParentAttestation, VeroneseParentProofRoute, VeroneseParentProofStatus,
+    VeroneseSectionCandidate, VeroneseSectionCertification, VeroneseSectionCertifyOptions,
+    VeroneseSectionGauge, VeroneseSectionIdentityStatus, VeroneseSectionLiftOptions,
+    VeroneseSectionVerdict,
 };
 
 fn q(value: i64) -> BigRational {
@@ -392,14 +393,39 @@ fn factorial_binomial_parent() -> RecurrenceJson {
     )
 }
 
+/// `Q_m = 2 m (1 + y) Q_(m-1) - m (m - 1) (1 - y)^2 Q_(m-2)`, `Q_0 = 1`,
+/// `Q_1 = 1 + y`: the even sections of `P_m = m (1 + x)^2 P_(m-1) = m! (1 + x)^(2m)`.
+fn factorial_square_input() -> Recurrence {
+    rule(
+        &[
+            (1, 0, &[&[0, 0], &[2, 2]]),
+            (2, 0, &[&[0, 0, 0], &[1, -2, 1], &[-1, 2, -1]]),
+        ],
+        None,
+    )
+}
+
+/// `P_m = m (1 + x)^2 P_(m-1)`, `P_0 = 1`: the factor has degree two, so
+/// neither the three-term nor the Liu--Wang route applies, and it depends on
+/// the index, so it is not a periodic product.
+fn factorial_square_parent() -> RecurrenceJson {
+    RecurrenceJson::from_recurrence_rational(
+        &rule(&[(1, 0, &[&[0, 0, 0], &[1, 2, 1]])], None),
+        0,
+        &rows(&[&[1]]),
+        None,
+    )
+}
+
 #[test]
 fn index_dependent_parent_and_attestations() {
-    let seeds = rows(&[&[1], &[1]]);
-    let parent = factorial_binomial_parent();
-    let run = |options: &VeroneseSectionCertifyOptions| {
+    let run_with = |input: &Recurrence,
+                    seeds: &[Vec<BigRational>],
+                    parent: &RecurrenceJson,
+                    options: &VeroneseSectionCertifyOptions| {
         let certification = certify_veronese_section_lift(
-            &factorial_binomial_input(),
-            &seeds,
+            input,
+            seeds,
             0,
             &candidate(2, 0, parent.clone()),
             options,
@@ -408,6 +434,10 @@ fn index_dependent_parent_and_attestations() {
         certification.verify().expect("replays");
         certification
     };
+    let input = factorial_square_input();
+    let seeds = rows(&[&[1], &[1, 1]]);
+    let parent = factorial_square_parent();
+    let run = |options: &VeroneseSectionCertifyOptions| run_with(&input, &seeds, &parent, options);
     let attestation = |record: RecurrenceJson, first_index: usize| VeroneseParentAttestation {
         label: "test attestation".into(),
         recurrence: record,
@@ -421,8 +451,9 @@ fn index_dependent_parent_and_attestations() {
         ..VeroneseSectionCertifyOptions::default()
     };
 
-    // The parent factor m (1 + x) depends on the index: not a periodic
-    // product, and no paper theorem matches.
+    // The parent factor m (1 + x)^2 depends on the index and has degree two:
+    // not a periodic product, no paper theorem matches, and neither the
+    // three-term nor the Liu--Wang route applies.
     let open = run(&without_root_domain(Vec::new()));
     assert!(matches!(
         open.identity,
@@ -459,22 +490,45 @@ fn index_dependent_parent_and_attestations() {
     );
     assert_replays(&applied);
 
-    // The root-domain route (identity map, Rolle induction for
-    // Q_m = m (1 + x) Q_(m-1)) proves the parent outright.
-    let proved = run(&VeroneseSectionCertifyOptions::default());
+    // For the first-order parent P_m = m (1 + x) P_(m-1) of the even sections
+    // of m! (1 + x)^m, the root-domain route (identity map, Rolle induction)
+    // proves the parent outright, and without it the Liu--Wang route does.
+    let input = factorial_binomial_input();
+    let seeds = rows(&[&[1], &[1]]);
+    let first_order = factorial_binomial_parent();
+    let proved = run_with(
+        &input,
+        &seeds,
+        &first_order,
+        &VeroneseSectionCertifyOptions::default(),
+    );
     assert_eq!(proved.verdict, VeroneseSectionVerdict::Proved);
     assert_eq!(
         proved.parent_proof.route,
         Some(VeroneseParentProofRoute::RootDomain)
     );
+    let proved = run_with(
+        &input,
+        &seeds,
+        &first_order,
+        &without_root_domain(Vec::new()),
+    );
+    assert_eq!(proved.verdict, VeroneseSectionVerdict::Proved);
+    assert_eq!(
+        proved.parent_proof.route,
+        Some(VeroneseParentProofRoute::LiuWang)
+    );
+    assert_replays(&proved);
 }
 
 /// The even sections `E_m` of the Narayana polynomials (A001263, displayed
 /// rows `N_1 = 1`, `N_2 = 1 + x`, ...) satisfy an order-4 recurrence with
 /// index-dependent coefficients and a leader depending on `y`, found by an
 /// exact ansatz on 40 rows (bidegree 4 in `n`, 3 in `y`; unique there).  The
-/// forward certificate proves `E_m = V_(2,0)(N_m)` for every `m >= 1`; the
-/// order-two Narayana parent is not proved by the built-in routes.
+/// forward certificate proves `E_m = V_(2,0)(N_m)` for every `m >= 1`, and the
+/// order-two Narayana parent is proved by the three-term route (Jacobi-type
+/// recurrence in `y = 1/(x - 1)`, roots in `(-1, 0)`, so every `N_m` has its
+/// roots in `(-inf, 0)`), even with the root-domain route switched off.
 #[test]
 fn narayana_even_sections_have_a_forward_certificate() {
     let input = rule(
@@ -556,8 +610,19 @@ fn narayana_even_sections_have_a_forward_certificate() {
     assert!(certificate.exceptional_bases.is_empty());
     assert_eq!(
         certification.verdict,
-        VeroneseSectionVerdict::IdentityCertifiedParentOpen
+        VeroneseSectionVerdict::Proved,
+        "{certification:#?}"
     );
+    assert_eq!(
+        certification.parent_proof.route,
+        Some(VeroneseParentProofRoute::ThreeTermRecurrence)
+    );
+    let summary = certification.lift_summary.as_ref().expect("summary");
+    assert!(matches!(
+        &summary.parent_proof,
+        LiftParentProof::Proved { route, .. } if route == "three_term_recurrence"
+    ));
+    assert_eq!(summary.verdict, LiftVerdict::Proved);
     assert_replays(&certification);
 
     // The odd sections are a different sequence: refuted at the first row.
@@ -647,7 +712,9 @@ fn eulerian_even_sections_are_proved() {
 /// The even sections of the type-B Eulerian polynomials (A060187) satisfy a
 /// monic order-3 successor recurrence with second derivatives on the earlier
 /// rows (exact ansatz on 36 rows, unique at bidegree 3).  The identity is
-/// certified; the parent stays open.
+/// certified and the parent
+/// `B_n = (1 + (2n - 3) x) B_(n-1) + 2 x (1 - x) B'_(n-1)` is proved by the
+/// Liu--Wang route: every even type-B Eulerian section is real-rooted.
 #[test]
 fn type_b_eulerian_even_sections_are_certified() {
     let input = rule(
@@ -690,11 +757,29 @@ fn type_b_eulerian_even_sections_are_certified() {
         ),
         "{certification:#?}"
     );
-    // None of the built-in parent routes (including the root-domain menu)
-    // proves the type-B Eulerian parent: the verdict stays open.
+    // The root-domain menu does not prove the type-B Eulerian parent; the
+    // Liu--Wang route does.
+    assert_eq!(certification.verdict, VeroneseSectionVerdict::Proved);
     assert_eq!(
-        certification.verdict,
-        VeroneseSectionVerdict::IdentityCertifiedParentOpen
+        certification.parent_proof.route,
+        Some(VeroneseParentProofRoute::LiuWang)
+    );
+    let root_domain_attempts = certification
+        .parent_proof
+        .attempts
+        .iter()
+        .filter(|a| a.route == VeroneseParentProofRoute::RootDomain)
+        .count();
+    assert!(root_domain_attempts > 0);
+    assert!(certification
+        .parent_proof
+        .attempts
+        .iter()
+        .filter(|a| a.route == VeroneseParentProofRoute::RootDomain)
+        .all(|a| !a.success));
+    assert_eq!(
+        certification.lift_summary.as_ref().unwrap().verdict,
+        LiftVerdict::Proved
     );
     assert_replays(&certification);
 }

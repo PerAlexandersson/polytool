@@ -637,6 +637,8 @@ fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
         VeroneseParentProofRoute::PeriodicProduct => "periodic_product",
         VeroneseParentProofRoute::PaperTheorem => "paper_theorem",
         VeroneseParentProofRoute::RootDomain => "root_domain",
+        VeroneseParentProofRoute::ThreeTermRecurrence => "three_term_recurrence",
+        VeroneseParentProofRoute::LiuWang => "liu_wang",
         VeroneseParentProofRoute::Attestation => "attestation",
     }
 }

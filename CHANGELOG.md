@@ -315,6 +315,28 @@ Additions:
   schema `polytool.recurrence-veronese-certificate.v1`; MCP tool
   `certify_veronese_section_lift`.  Example: the even sections of the Eulerian
   polynomials are proved real-rooted this way.
+- Real-rootedness theorems for recurrences with every hypothesis checked
+  exactly (`recurrence::check_three_term_recurrence_theorem`,
+  `recurrence::check_liu_wang_theorem`, report
+  `RealRootednessTheoremReport`, schema
+  `polytool.recurrence-real-rootedness-theorem.v1`, replayed by `verify()`).
+  The three-term theorem covers `P_n = (a_n x + b_n) P_(n-1) - c_n P_(n-2)`
+  (orthogonal-polynomial recurrences: simple real roots and strict
+  interlacing when `a_n != 0` and `c_n / (a_n a_(n-1)) > 0`, with interlacing
+  seeds), also after the coordinate change `y = 1/(x + v_0)` when the last
+  coefficient is `c_n (x + v_0)^2`, and certifies an optional root region by
+  a positive-ratio (chain-sequence) induction.  The Liu--Wang theorem (Adv.
+  Appl. Math. 2007, Theorem 2.1 with `g = f'`) covers
+  `P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1)` with every root kept in
+  `(-inf, 0)`.  Hypotheses on rational functions of `n` go through the index
+  sign checker; a failing hypothesis names the smallest failing index.  Both
+  are new parent routes of `certify_veronese_section_lift`
+  (`VeroneseParentProofRoute::{ThreeTermRecurrence, LiuWang}`, lift-summary
+  routes `three_term_recurrence` and `liu_wang`), run after the root-domain
+  route: the even sections of the Narayana polynomials (A001263, order-two
+  parent, through `y = 1/(x - 1)`) and of the type-B Eulerian polynomials
+  (A060187) are now proved real-rooted, and the Eulerian parent is proved by
+  Liu--Wang when the root-domain route is switched off.
 - Symmetric-companion lifts: `recurrence::find_symmetric_companion_lifts`
   takes a palindromic sequence `A_n` (scalar recurrence, derivatives allowed,
   with seeds and a symmetry schedule `d_n = d_0 + n - n_0`, supplied or

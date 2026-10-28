@@ -322,23 +322,104 @@ with coefficients of one sign) is proved by a periodic product
 boundary, or by a root-domain claim of `transform_recurrence` (maps: identity,
 `f_polynomial` and `reversal` with a degree schedule fitted to the first rows,
 the inverse `f`-map; accepted only for an unconditional all-index claim that
-the source is real-rooted in an interval ending at or below 0).  The Eulerian
-parent A008292 is proved by the `f_polynomial` route.  A caller attestation
-matching the parent record exactly gives a conditional verdict.  A checked
-parent row that fails refutes the parent statement.
+the source is real-rooted in an interval ending at or below 0), and then by
+the three-term and Liu--Wang theorems with the root region `(-inf, 0)` (next
+section).  The Eulerian parent A008292 is proved by the `f_polynomial` route
+(and by Liu--Wang without it), the Narayana parent A001263 by the three-term
+route and the type-B Eulerian parent A060187 by Liu--Wang.  A caller
+attestation matching the parent record exactly gives a conditional verdict.
+A checked parent row that fails refutes the parent statement.
 
 Examples (tests): the even sections of the Eulerian polynomials satisfy a
 monic order-3 successor recurrence with second derivatives on the earlier
 rows; its forward certificate and the `f_polynomial` parent proof give
 `proved`.  The even Narayana sections satisfy an order-4 recurrence with a
 leader depending on `y` (multiplier `w(n) = (n+3)(n+4)(n+5)`); the identity is
-certified and the order-two Narayana parent stays open.  Gauged and shifted
+certified and the order-two Narayana parent is proved by the three-term route,
+so they are proved too, as are the even type-B Eulerian sections.  Gauged and shifted
 binomial sections (`V_(2,0)((1+x)^n)/n!`, `2^n V_(3,1)((1+x)^(n+2))`) are
 proved.
 
 Limitations: inputs whose leading row carries a derivative, the reverse
 (reconstruction) certificate, candidate search and Lean replay are not part
 of this stage.
+
+## Real-rootedness theorems for recurrences
+
+`recurrence::check_three_term_recurrence_theorem` and
+`recurrence::check_liu_wang_theorem` take a rule
+`f(n) P_n = sum c_(k,d)(n, x) D^d P_(n-k)` (`f` free of `x`, no `(-1)^n`
+factors, no inhomogeneous term), a first index and `K` seed rows; the rule
+applies from `N = first_index + K` on, the induction starts at the last
+seeds, and earlier seed rows are checked exactly.  Every hypothesis on a
+rational function of `n` over `[N, inf)` is decided by the index sign checker
+(below), whose failure index is the reported witness; statements about rows
+are exact (`is_real_rooted_bigint_coeffs`, the Bezout interlacing test,
+Taylor shifts and Descartes' rule).
+
+**Three-term recurrences.**  For `Q_n = (a_n y + b_n) Q_(n-1) - c_n Q_(n-2)`
+(`n >= N`) with leading coefficients `L_n` and monic rows `p_n = Q_n / L_n`,
+`p_n = (y - alpha_n) p_(n-1) - beta_n p_(n-2)` with `alpha_n = -b_n / a_n`,
+`beta_N = c_N L_(N-2) / (a_N L_(N-1))` and `beta_n = c_n / (a_n a_(n-1))` for
+`n > N`.  Hypotheses: `a_n != 0`; `beta_N > 0` (exact) and `beta_n > 0`
+(checker); `Q_(N-2)`, `Q_(N-1)` with simple real roots, degrees `e`, `e + 1`,
+strictly interlacing.  Then each `p_n` has simple real roots strictly
+interlaced by those of `p_(n-1)`: at the roots `xi_1 < ... < xi_m` of
+`p_(n-1)`, `p_n(xi_i) = -beta_n p_(n-2)(xi_i)` alternates in sign with
+`p_n(xi_m) < 0` (zero separation for orthogonal polynomials, Szegő,
+*Orthogonal Polynomials*, §3.3; for the seeds `1`, linear this is the setting of
+Favard's theorem).  The rule `f P_n = c_1 P_(n-1) + c_2 P_(n-2)` is matched
+when `deg_x c_1 <= 1` and `c_2 = gamma(n) w(x)`: with `w` constant `Q = P`;
+with `w = kappa (x + v_0)^2`, `Q_n(y) = y^(d_n) P_n(1/y - v_0)`,
+`d_n = deg P_(N-2) + n - N + 2`, satisfies the three-term recurrence with
+`a_n`, `b_n` the coefficients of `c_1 / f` in the basis `1, x + v_0` and
+`c_n = -kappa gamma / f`.  Since `P_n = L_n prod (1 - y_i (x + v_0))` over
+the roots `y_i` of `Q_n`, `P_n` is then real-rooted with simple roots
+(`deg Q_(N-2) = deg P_(N-2)` is checked).  The Narayana rule
+`(n+1) N_n = (2n-1)(1+x) N_(n-1) - (n-2)(1-x)^2 N_(n-2)` becomes a Jacobi-type
+recurrence with `alpha_n = -1/2` and `beta_n = n(n-2)/(4(2n-1)(2n-3))`.
+
+**Root regions.**  An open region `(l, u)` for `P` becomes an open interval
+`(s, t)` for `Q` (identity, or the decreasing map `x -> 1/(x + v_0)` when the
+region avoids the pole; an infinite end maps to `0`, outside the open image,
+so every root `y_i` is nonzero and `deg P_n = d_n`).  "Every root of every
+`p_n` is `< t`" holds when both seeds have every root `< t` (Taylor shift and
+Descartes), the computed rows have `p_n(t) > 0`, and a rational `g(n)`
+satisfies `g(n) > 0` for `n >= N`, `r_N >= g(N)` for
+`r_n = p_n(t) / p_(n-1)(t)`, and `(t - alpha_n) - beta_n / g(n-1) - g(n) >= 0`
+for `n > N`: then `r_n = (t - alpha_n) - beta_n / r_(n-1) >= g(n) > 0`, and a
+monic `p_n` strictly interlaced by `p_(n-1)` (all roots `< t`) has at most one
+root `>= t`, which `p_n(t) > 0` excludes.  Candidates: the exact ratio when
+the computed ratios fit a rational function of degrees at most `(2, 2)`
+(Laguerre, Legendre), and `(t - alpha_n) / 2`,
+which is the classical chain-sequence bound
+`beta_n <= (t - alpha_(n-1))(t - alpha_n) / 4` (Chebyshev, Narayana).  A
+failed candidate is not a disproof; a computed row with `p_n(t) <= 0` is.  The
+lower end uses the reflected rows `(-1)^(deg) p_n(-y)`.
+
+**Liu--Wang.**  L. L. Liu and Y. Wang, Adv. in Appl. Math. 38 (2007),
+Theorem 2.1: if `F = a f + b g`, `deg F` is `deg f` or `deg f + 1`, `f`, `g`
+real-rooted with `g ⪯ f`, `F` and `g` have leading coefficients of one sign
+and `b(r) <= 0` at every zero `r` of `f`, then `F` is real-rooted and
+`f ⪯ F`.  Their Corollary 2.4 takes `g = f'` for sequences with nonnegative
+coefficients.  `check_liu_wang_theorem` replaces nonnegativity by an exact
+induction keeping every root in `(-inf, 0)`: for
+`P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1)` with `deg a_n <= 1`, `deg b_n <= 2`,
+`P_(N-1)` real-rooted with roots `< 0` and degree `d`, it checks
+`lambda_n = [x] a_n + (d + n - N) [x^2] b_n > 0` (degree step, leading
+coefficients of one sign), `b_n(0) = 0`, `b_n(x) <= 0` on `(-inf, 0)` (for
+`b_n = gamma(n) w(x) / f(n)` with `w` of one sign there, a sign of
+`gamma / f`; otherwise the sufficient test `(-1)^k [x^k] b_n <= 0`), and
+`a_n(0) > 0`.  Then interlacing leaves at most the largest root of `P_n` at or
+right of `0`, and `P_n(0) / lead P_n = (a_n(0) / lambda_n) P_(n-1)(0) /
+lead P_(n-1) > 0` excludes it.  Type-B Eulerian:
+`B_n = (1 + (2n-3) x) B_(n-1) + 2x(1-x) B'_(n-1)` (catalog indexing) has
+`lambda_n = 1`, `a_n(0) = 1`, `b_n = 2x(1-x)`.
+
+Not covered yet: Liu--Wang with a further term `c_n(x) P_(n-2)` (their
+Corollary 2.4 in full) or several interlacers, a gauge `P_n -> lambda(n) P_n`
+or affine change of `x` before matching, and interlacing-preserving matrices
+for vector recurrences.
 
 ## Symmetric-companion lifts
 

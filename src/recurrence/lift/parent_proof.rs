@@ -23,10 +23,22 @@
 //!    upper end is `<= 0`, evidence `completed_recurrence_induction` or
 //!    `certified_family_invariant`, no `conditional_on` entries, no last
 //!    index and a first index `<=` the parent's first index is accepted;
-//! 4. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
+//! 4. **three-term recurrence**: [`check_three_term_recurrence_theorem`] with
+//!    the root region `(-inf, 0)` (orthogonal-polynomial recurrences, also
+//!    after the coordinate change `y = 1/(x + v_0)`, as for the Narayana
+//!    polynomials), proved only when every hypothesis is verified;
+//! 5. **Liu--Wang**: [`check_liu_wang_theorem`] (first-order rules
+//!    `P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1)` with every root kept in
+//!    `(-inf, 0)`, as for the type-B Eulerian polynomials), proved only when
+//!    every hypothesis is verified;
+//! 6. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
 //!    conditional on the attestation, never proved.
+//!
+//! Routes 4 and 5 run whether or not the root-domain route is enabled; both
+//! conclude that every parent row from the first index on is real-rooted with
+//! every root in `(-inf, 0)`.
 //!
 //! A few parent rows are also checked exactly (nonzero rows of one sign and
 //! real-rooted).  A failing row refutes the parent statement; no route can
@@ -34,6 +46,7 @@
 
 use super::veronese_algebra::classify_row;
 use super::*;
+use crate::real_rootedness::RealInterval;
 use crate::renewal::{match_recurrence_theorems, CertificateScope, TheoremBoundaryStatus};
 use crate::vec_poly;
 use num_traits::Zero;
@@ -72,7 +85,8 @@ pub struct VeroneseParentAttestation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VeroneseParentProofStatus {
-    /// Proved by a periodic product, a paper theorem or the root-domain route.
+    /// Proved by a periodic product, a paper theorem, the root-domain route,
+    /// the three-term recurrence theorem or the Liu--Wang theorem.
     Proved,
     /// Not proved; a matching caller-supplied attestation asserts it.
     ConditionalOnAttestation,
@@ -93,6 +107,10 @@ pub enum VeroneseParentProofRoute {
     PaperTheorem,
     /// A root-domain claim of `transform_recurrence`.
     RootDomain,
+    /// [`check_three_term_recurrence_theorem`] with roots in `(-inf, 0)`.
+    ThreeTermRecurrence,
+    /// [`check_liu_wang_theorem`].
+    LiuWang,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -382,6 +400,50 @@ fn root_domain_route(
     attempts
 }
 
+/// Routes 4 and 5: a real-rootedness theorem with every root in `(-inf, 0)`.
+fn theorem_attempt(
+    record: &ParentRecord<'_>,
+    route: VeroneseParentProofRoute,
+    variant: &str,
+) -> Result<VeroneseParentProofAttempt, RecurrenceError> {
+    let options = RealRootednessTheoremOptions {
+        root_region: Some(RealInterval {
+            lower: None,
+            lower_closed: false,
+            upper: Some(Q::zero()),
+            upper_closed: false,
+        }),
+    };
+    let report = match route {
+        VeroneseParentProofRoute::ThreeTermRecurrence => check_three_term_recurrence_theorem(
+            record.rule,
+            record.first_index,
+            record.seeds,
+            &options,
+        )?,
+        _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
+    };
+    let detail = match (&report.status, &report.conclusion) {
+        (RealRootednessTheoremStatus::Proved, Some(conclusion)) => {
+            format!("{}: {}", report.normal_form, conclusion.statement)
+        }
+        (RealRootednessTheoremStatus::NotApplicable, _) => {
+            format!("not applicable: {}", report.normal_form)
+        }
+        (status, _) => format!(
+            "{status:?}: {}; open hypotheses: {}",
+            report.normal_form,
+            report.open_hypotheses().join("; ")
+        ),
+    };
+    Ok(VeroneseParentProofAttempt {
+        route,
+        variant: variant.into(),
+        success: report.is_proved(),
+        detail,
+    })
+}
+
 /// Whether two records define the same parent: same first index, the same
 /// relation term by term, the same number of identifying seeds and equal
 /// seeds (the supplied rows of `other` must agree with its rule).
@@ -499,6 +561,25 @@ pub(super) fn prove_parent(
         proof.attempts.extend(attempts);
     }
 
+    // Routes 4 and 5.
+    if proved.is_none() {
+        for (route, variant) in [
+            (
+                VeroneseParentProofRoute::ThreeTermRecurrence,
+                "three_term_recurrence",
+            ),
+            (VeroneseParentProofRoute::LiuWang, "liu_wang"),
+        ] {
+            let attempt = theorem_attempt(record, route, variant)?;
+            let success = attempt.success;
+            proof.attempts.push(attempt);
+            if success {
+                proved = Some(route);
+                break;
+            }
+        }
+    }
+
     if let Some(route) = proved {
         proof.status = VeroneseParentProofStatus::Proved;
         proof.route = Some(route);
@@ -506,7 +587,7 @@ pub(super) fn prove_parent(
         return Ok(proof);
     }
 
-    // Route 4.
+    // Route 6.
     for attestation in attestations {
         let matches = same_record(record, &attestation.recurrence)?;
         let covers = attestation.first_index <= needed_from;

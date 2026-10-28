@@ -140,9 +140,118 @@ fn eulerian_parent_is_proved_by_the_root_domain_route() {
     assert_eq!(proof.route, Some(VeroneseParentProofRoute::RootDomain));
     let success = proof.attempts.iter().find(|a| a.success).unwrap();
     assert_eq!(success.variant, "f_polynomial");
-    // Without the root-domain route it stays open.
-    let open = prove_parent(&record, first_index, &[], false).unwrap();
-    assert_eq!(open.status, VeroneseParentProofStatus::NotProved);
+    // Without the root-domain route the Liu--Wang route proves it.
+    let proof = prove_parent(&record, first_index, &[], false).unwrap();
+    assert_eq!(proof.status, VeroneseParentProofStatus::Proved);
+    assert_eq!(proof.route, Some(VeroneseParentProofRoute::LiuWang));
+}
+
+fn catalog_record(id: &str) -> (Recurrence, Vec<Vec<BigRational>>, usize) {
+    let (rule, seeds, first_row) = crate::oeis::by_id(id)
+        .unwrap()
+        .recurrence_export_parts()
+        .unwrap();
+    (rule, seeds, usize::try_from(first_row).unwrap())
+}
+
+/// The open parents of the Veronese v2 lifts: the Narayana parent (A001263,
+/// order two) by the three-term route, the type-B Eulerian parent (A060187)
+/// by the Liu--Wang route; the root-domain menu proves neither.
+#[test]
+fn narayana_and_type_b_eulerian_parents_are_proved() {
+    for (id, route) in [
+        ("A001263", VeroneseParentProofRoute::ThreeTermRecurrence),
+        ("A060187", VeroneseParentProofRoute::LiuWang),
+    ] {
+        let (rule, seeds, first_index) = catalog_record(id);
+        let record = ParentRecord {
+            rule: &rule,
+            seeds: &seeds,
+            first_index,
+        };
+        let proof = prove_parent(&record, first_index, &[], true).unwrap();
+        assert_eq!(
+            proof.status,
+            VeroneseParentProofStatus::Proved,
+            "{id}: {proof:#?}"
+        );
+        assert_eq!(proof.route, Some(route), "{id}");
+        assert!(proof
+            .attempts
+            .iter()
+            .filter(|a| a.route == VeroneseParentProofRoute::RootDomain)
+            .all(|a| !a.success));
+    }
+}
+
+/// The Laguerre family `L_n(-x)` (roots in `(-inf, 0)`) is proved by the
+/// three-term route; the Hermite family (roots of both signs) is refuted by
+/// the row check before any route runs.
+#[test]
+fn three_term_route_proves_laguerre_and_refutes_hermite() {
+    // Laguerre L_n(-x): n P_n = (2n - 1 + x) P_(n-1) - (n - 1) P_(n-2).
+    let laguerre = Recurrence {
+        terms: vec![
+            RecurrenceTerm::new(
+                1,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(-1), q(1)], vec![q(2)]]),
+            ),
+            RecurrenceTerm::new(
+                2,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(1)], vec![q(-1)]]),
+            ),
+        ],
+        denominator: Some(BivarPoly::from_coefficients_normalized(vec![
+            vec![q(0)],
+            vec![q(1)],
+        ])),
+        inhomogeneous: None,
+    };
+    let seeds = vec![vec![q(1)], vec![q(1), q(1)]];
+    let record = ParentRecord {
+        rule: &laguerre,
+        seeds: &seeds,
+        first_index: 0,
+    };
+    let proof = prove_parent(&record, 0, &[], false).unwrap();
+    assert_eq!(
+        proof.status,
+        VeroneseParentProofStatus::Proved,
+        "{proof:#?}"
+    );
+    assert_eq!(
+        proof.route,
+        Some(VeroneseParentProofRoute::ThreeTermRecurrence)
+    );
+
+    // Hermite: H_n = 2 x H_(n-1) - 2 (n - 1) H_(n-2); H_2 = 4 x^2 - 2.
+    let hermite = Recurrence {
+        terms: vec![
+            RecurrenceTerm::new(
+                1,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(0), q(2)]]),
+            ),
+            RecurrenceTerm::new(
+                2,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(2)], vec![q(-2)]]),
+            ),
+        ],
+        denominator: None,
+        inhomogeneous: None,
+    };
+    let seeds = vec![vec![q(1)], vec![q(0), q(2)]];
+    let record = ParentRecord {
+        rule: &hermite,
+        seeds: &seeds,
+        first_index: 0,
+    };
+    let proof = prove_parent(&record, 0, &[], false).unwrap();
+    assert_eq!(proof.status, VeroneseParentProofStatus::Refuted);
+    assert_eq!(proof.failing_row_index, Some(2));
 }
 
 /// `f(n, t) P_n = sum c_k(n, t) D^d P_(n-k)` from `(k, d, rows)`, `rows[i][j]`

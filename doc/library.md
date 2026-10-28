@@ -491,9 +491,10 @@ denominator is free of `x`, an index shift `|s| <= 4` and a gauge
 (`VeroneseSectionCertification`, `polytool.recurrence-veronese-certificate.v1`)
 records the identity status (`Certified` with a replayable
 `VeroneseForwardDivisionCertificate`, `SupportedByRows`, `Refuted`), the
-parent proof (periodic product, paper theorem, root-domain claim, or a
-caller-supplied `VeroneseParentAttestation`, which only gives a conditional
-verdict) and the verdict.  `verify()` replays the certificate.
+parent proof (periodic product, paper theorem, root-domain claim, the
+three-term or Liu--Wang theorem below, or a caller-supplied
+`VeroneseParentAttestation`, which only gives a conditional verdict) and the
+verdict.  `verify()` replays the certificate.
 
 ```rust
 use polytool::recurrence::*;
@@ -540,6 +541,64 @@ result.verify()?;
 
 The transport conventions, the pseudo-division and the soundness argument are
 in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
+
+### Real-rootedness theorems for recurrences
+
+`recurrence::check_three_term_recurrence_theorem` and
+`recurrence::check_liu_wang_theorem` apply a paper theorem to a family given
+by a rule, a first index and seed rows (the rule applies from
+`first_index + seeds.len()` on), and check every hypothesis exactly for all
+indices.  The result (`RealRootednessTheoremReport`,
+`polytool.recurrence-real-rootedness-theorem.v1`) gives the theorem and its
+reference, the matched normal form with its coefficients as rational
+functions of `n`, the hypotheses as `LiftHypothesis` entries (verified, failed
+with the smallest failing index, or unresolved, with the sign checker's
+replayable decision where one applies), the status (`proved`,
+`hypothesis_failed`, `unresolved`, `not_applicable`) and, when proved, the
+conclusion (first index, interlacing of consecutive rows, simple roots, root
+region).  `verify()` replays it.
+
+- Three-term: `f(n) P_n = c_1(n, x) P_(n-1) + c_2(n, x) P_(n-2)` with
+  `deg_x c_1 <= 1` and `c_2 = gamma(n) w(x)`, `w` constant (Hermite, Laguerre,
+  Chebyshev, Legendre) or `kappa (x + v_0)^2` (then `Q_n(y) =
+  y^(d_n) P_n(1/y - v_0)` is the three-term family; Narayana).  With
+  `RealRootednessTheoremOptions::root_region` it also certifies that every root
+  lies in an open interval.
+- Liu--Wang: `f(n) P_n = c_0(n, x) P_(n-1) + c_1(n, x) P'_(n-1)` with
+  `deg_x c_0 <= 1`, `deg_x c_1 <= 2`; it proves every root `< 0` (Eulerian,
+  type-B Eulerian).
+
+```rust
+use polytool::recurrence::*;
+use polytool::real_rootedness::RealInterval;
+
+let q = |n: i64| BigRational::from_integer(n.into());
+// Legendre: n P_n = (2n - 1) x P_(n-1) - (n - 1) P_(n-2), P_0 = 1, P_1 = x.
+let legendre = Recurrence {
+    terms: vec![
+        RecurrenceTerm::new(1, 0, BivarPoly { coeffs: vec![vec![q(0), q(-1)], vec![q(0), q(2)]] }),
+        RecurrenceTerm::new(2, 0, BivarPoly { coeffs: vec![vec![q(1)], vec![q(-1)]] }),
+    ],
+    denominator: Some(BivarPoly { coeffs: vec![vec![q(0)], vec![q(1)]] }),
+    inhomogeneous: None,
+};
+let options = RealRootednessTheoremOptions {
+    root_region: Some(RealInterval::closed(q(-1), q(1))),
+};
+let report =
+    check_three_term_recurrence_theorem(&legendre, 0, &[vec![q(1)], vec![q(0), q(1)]], &options)?;
+assert!(report.is_proved());
+let conclusion = report.conclusion.as_ref().unwrap();
+assert_eq!(conclusion.interlacing, Some(RowInterlacing::Strict));
+assert_eq!(conclusion.root_region.as_ref().unwrap().to_string(), "(-1, 1)");
+report.verify()?;
+# Ok::<(), RecurrenceError>(())
+```
+
+The parent provers of `certify_veronese_section_lift` try both theorems with
+the region `(-inf, 0)` after the root-domain route.  The theorem statements,
+the coordinate change and the root-region certificate are in
+[algorithms.md](algorithms.md#real-rootedness-theorems-for-recurrences).
 
 ### The common lift summary
 
