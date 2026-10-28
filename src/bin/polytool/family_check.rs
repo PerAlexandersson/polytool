@@ -6,8 +6,8 @@ use crate::input::{read_poly_parse_results_bigint, strip_trailing_zeros_bigint, 
 use crate::interlacing::{interlacing_report, interlacing_report_json, InterlacingReport};
 use crate::json_out::{json_bool_option, json_string};
 use crate::properties::{property_labels, property_report, property_report_json, PropertyReport};
+use num_bigint::BigInt;
 use polytool::recurrence::*;
-use polytool::*;
 
 pub(crate) fn print_family_check_help() {
     println!("Usage:");
@@ -31,8 +31,7 @@ pub(crate) fn print_family_check_help() {
     println!("  --json                        Emit machine-readable JSON");
     println!("  -h, --help                    Print this help text");
     println!();
-    println!("Note: non-recurrence checks accept arbitrary-size integer coefficients;");
-    println!("      family-check --recurrence currently requires coefficients that fit in i64.");
+    println!("All checks, including --recurrence, accept arbitrary-size integer coefficients.");
 }
 
 #[derive(Clone, Debug)]
@@ -156,7 +155,7 @@ fn first_family_failure(
     None
 }
 
-fn find_family_recurrence(polys: &[Vec<i64>]) -> RecurrenceSummary {
+fn find_family_recurrence(polys: &[Vec<BigInt>]) -> RecurrenceSummary {
     if polys.len() < 3 {
         return RecurrenceSummary {
             found: false,
@@ -171,7 +170,11 @@ fn find_family_recurrence(polys: &[Vec<i64>]) -> RecurrenceSummary {
         };
     }
     let search = AdaptiveSearchOptions::default();
-    match find_recurrence_adaptive(polys, &search) {
+    let rational_polys: Vec<Vec<BigRational>> = polys
+        .iter()
+        .map(|row| row.iter().cloned().map(BigRational::from_integer).collect())
+        .collect();
+    match find_recurrence_adaptive_rational(&rational_polys, &search) {
         Some(result) => RecurrenceSummary {
             found: true,
             recurrence: Some(result.recurrence.to_string()),
@@ -284,10 +287,6 @@ pub(crate) fn cmd_family_check(args: &[String]) {
         .iter()
         .map(|(index, coeffs)| property_report(*index, coeffs))
         .collect::<Vec<_>>();
-    let i64_polys = polys
-        .iter()
-        .map(|(_, coeffs)| bigint_coeffs_to_i64(coeffs))
-        .collect::<Vec<_>>();
     let pairs = if parse_errors.is_empty() {
         (0..polys.len().saturating_sub(1))
             .map(|pair_index| {
@@ -311,12 +310,11 @@ pub(crate) fn cmd_family_check(args: &[String]) {
                 "recurrence skipped because one or more polynomials failed to parse",
             );
         }
-        let Some(polys_i64) = i64_polys.iter().cloned().collect::<Option<Vec<_>>>() else {
-            return family_recurrence_unavailable(
-                "recurrence search currently requires coefficients that fit in i64",
-            );
-        };
-        find_family_recurrence(&polys_i64)
+        let rows = polys
+            .iter()
+            .map(|(_, coeffs)| coeffs.clone())
+            .collect::<Vec<_>>();
+        find_family_recurrence(&rows)
     });
     let first_failure = if let Some(error) = parse_errors.first() {
         Some(format!(

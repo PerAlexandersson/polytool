@@ -5,13 +5,6 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
-pub struct NormalizedPolynomial {
-    pub polynomial: String,
-    pub coefficients: Vec<i64>,
-    pub degree: usize,
-}
-
-#[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct BigIntNormalizedPolynomial {
     pub polynomial: String,
     pub coefficients: Vec<String>,
@@ -69,7 +62,7 @@ pub struct ParsePolynomialItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub polynomial: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub coefficients: Option<Vec<i64>>,
+    pub coefficients: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub degree: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -179,7 +172,7 @@ pub struct RealRootsItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub polynomial: Option<NormalizedPolynomial>,
+    pub polynomial: Option<BigIntNormalizedPolynomial>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub real_rooted: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -505,7 +498,7 @@ pub struct CyclicSievingSequenceResponse {
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct DisplayedPolynomial {
     pub polynomial: String,
-    pub coefficients: Vec<i64>,
+    pub coefficients: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
@@ -521,7 +514,7 @@ pub struct MagicBasisReport {
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct DecompositionReport {
     #[serde(flatten)]
-    pub polynomial: NormalizedPolynomial,
+    pub polynomial: BigIntNormalizedPolynomial,
     pub reciprocal: DisplayedPolynomial,
     pub a: DisplayedPolynomial,
     pub b: DisplayedPolynomial,
@@ -564,13 +557,13 @@ pub struct GenerateSequenceResponse {
 pub struct FamilyPolynomialReport {
     pub index: usize,
     #[serde(flatten)]
-    pub polynomial: NormalizedPolynomial,
+    pub polynomial: BigIntNormalizedPolynomial,
     pub real_rooted: bool,
     pub simple_roots: bool,
     pub palindromic: bool,
     pub gamma_positive: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gamma_coefficients: Option<Vec<i64>>,
+    pub gamma_coefficients: Option<Vec<String>>,
     pub unimodal: bool,
     pub log_concave: bool,
     pub ultra_log_concave: bool,
@@ -588,7 +581,7 @@ pub struct LaceCheckResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub matrix: Option<Vec<Vec<i64>>>,
+    pub matrix: Option<Vec<Vec<String>>>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]

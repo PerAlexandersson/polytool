@@ -155,9 +155,9 @@ pub use real_rooted::{
 pub use resultants::{
     discriminant, discriminant_bigint_coeffs, resultant, resultant_bigint_coeffs, sylvester_matrix,
 };
-pub use sturm_fallback::approximate_real_roots;
 #[allow(deprecated)]
 pub use sturm_fallback::real_roots;
+pub use sturm_fallback::{approximate_real_roots, approximate_real_roots_bigint_coeffs};
 pub use sturm_fallback::{
     check_interlacing_sturm, has_simple_roots, has_simple_roots_bigint_coeffs,
     is_real_rooted_sturm, is_real_rooted_sturm_bigint_coeffs,

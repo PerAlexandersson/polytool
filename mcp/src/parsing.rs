@@ -9,11 +9,11 @@ use crate::limits::{
 };
 use crate::requests::{
     BigIntCoefficientInput, BigIntPolynomialBatchInput, BigIntPolynomialInput,
-    FindRecurrenceRequest, PolynomialBatchInput, PolynomialInput, RationalCoefficientInput,
+    FindRecurrenceRequest, RationalCoefficientInput,
 };
-use crate::responses::{BigIntNormalizedPolynomial, NormalizedPolynomial, ParsePolynomialItem};
+use crate::responses::{BigIntNormalizedPolynomial, ParsePolynomialItem};
 use num_bigint::BigInt;
-use polytool::recurrence::{parse_rational_coeff, BigRational};
+use polytool::recurrence::BigRational;
 use polytool::*;
 use rmcp::ErrorData as McpError;
 
@@ -23,13 +23,8 @@ pub(crate) struct NormalizedBigIntPolynomial {
     pub(crate) coefficients: Vec<BigInt>,
 }
 
-pub(crate) type ParsedBatch = Vec<Result<NormalizedPolynomial, String>>;
 pub(crate) type BigIntParsedBatch = Vec<Result<NormalizedBigIntPolynomial, String>>;
 type RationalParsedBatch = Vec<Result<Vec<BigRational>, String>>;
-pub(crate) type FamilySourceParse = (
-    String,
-    Result<Vec<NormalizedPolynomial>, Vec<ParsePolynomialItem>>,
-);
 
 pub(crate) fn invalid_params(message: impl std::fmt::Display) -> McpError {
     McpError::invalid_params(message.to_string(), None)
@@ -62,22 +57,6 @@ fn validate_mcp_batch_size(item_count: usize) -> Result<(), McpError> {
         )));
     }
     Ok(())
-}
-
-pub(crate) fn parse_polynomial_input(input: &PolynomialInput) -> Result<Vec<i64>, String> {
-    match (&input.coefficients, &input.expression) {
-        (Some(coefficients), None) => validate_mcp_polynomial_length(coefficients.clone()),
-        (None, Some(expression)) => {
-            validate_mcp_text(expression, "polynomial expression")?;
-            validate_mcp_polynomial_length(
-                parse_polynomial(expression).map_err(|error| error.to_string())?,
-            )
-        }
-        (Some(_), Some(_)) => {
-            Err("expected exactly one of `coefficients` or `expression`, got both".to_string())
-        }
-        (None, None) => Err("expected exactly one of `coefficients` or `expression`".to_string()),
-    }
 }
 
 pub(crate) fn parse_bigint_coefficient(input: &BigIntCoefficientInput) -> Result<BigInt, String> {
@@ -145,16 +124,6 @@ pub(crate) fn parse_required_bigint_polynomial(
     parse_bigint_polynomial_input(input).map_err(|e| invalid_params(format!("{name}: {e}")))
 }
 
-fn normalize_coefficients(mut coefficients: Vec<i64>) -> Vec<i64> {
-    while coefficients.len() > 1 && coefficients.last() == Some(&0) {
-        coefficients.pop();
-    }
-    if coefficients.is_empty() {
-        coefficients.push(0);
-    }
-    coefficients
-}
-
 fn normalize_rational_coefficients(mut coefficients: Vec<BigRational>) -> Vec<BigRational> {
     let zero = parse_rational("0").expect("0 parses as BigRational");
     while coefficients.len() > 1 && coefficients.last() == Some(&zero) {
@@ -176,10 +145,6 @@ fn normalize_bigint_coefficients(mut coefficients: Vec<BigInt>) -> Vec<BigInt> {
     coefficients
 }
 
-fn degree(coefficients: &[i64]) -> usize {
-    coefficients.iter().rposition(|&c| c != 0).unwrap_or(0)
-}
-
 fn bigint_degree(coefficients: &[BigInt]) -> usize {
     coefficients
         .iter()
@@ -189,15 +154,6 @@ fn bigint_degree(coefficients: &[BigInt]) -> usize {
 
 pub(crate) fn bigint_strings(coefficients: &[BigInt]) -> Vec<String> {
     coefficients.iter().map(ToString::to_string).collect()
-}
-
-pub(crate) fn normalize_polynomial(coefficients: Vec<i64>) -> NormalizedPolynomial {
-    let coefficients = normalize_coefficients(coefficients);
-    NormalizedPolynomial {
-        polynomial: format_poly(&coefficients),
-        degree: degree(&coefficients),
-        coefficients,
-    }
 }
 
 pub(crate) fn normalize_bigint_polynomial(coefficients: Vec<BigInt>) -> NormalizedBigIntPolynomial {
@@ -210,57 +166,6 @@ pub(crate) fn normalize_bigint_polynomial(coefficients: Vec<BigInt>) -> Normaliz
         },
         coefficients,
     }
-}
-
-pub(crate) fn parse_batch(input: &PolynomialBatchInput) -> Result<ParsedBatch, McpError> {
-    let parsed: ParsedBatch = match (&input.polynomials, &input.text) {
-        (Some(polynomials), None) => {
-            validate_mcp_batch_size(polynomials.len())?;
-            polynomials
-                .iter()
-                .map(|p| parse_polynomial_input(p).map(normalize_polynomial))
-                .collect()
-        }
-        (None, Some(text)) => {
-            validate_mcp_text(text, "polynomial batch").map_err(invalid_params)?;
-            validate_mcp_batch_size(
-                text.lines()
-                    .filter(|line| {
-                        let line = line.trim();
-                        !line.is_empty() && !line.starts_with('#')
-                    })
-                    .count(),
-            )?;
-            parse_polynomials(text)
-                .into_iter()
-                .map(|result| {
-                    result
-                        .map_err(|error| error.to_string())
-                        .and_then(validate_mcp_polynomial_length)
-                        .map(normalize_polynomial)
-                })
-                .collect()
-        }
-        (Some(_), Some(_)) => Err(invalid_params(
-            "expected exactly one of `polynomials` or `text`, got both",
-        ))?,
-        (None, None) => Err(invalid_params(
-            "expected exactly one of `polynomials` or `text`",
-        ))?,
-    };
-    let total = parsed
-        .iter()
-        .filter_map(|item| item.as_ref().ok())
-        .try_fold(0usize, |total, polynomial| {
-            total.checked_add(polynomial.coefficients.len())
-        });
-    let total = total.ok_or_else(|| invalid_params("total coefficient count overflow"))?;
-    if total > MCP_MAX_TOTAL_COEFFICIENTS {
-        return Err(invalid_params(format!(
-            "batch has {total} coefficients; the MCP limit is {MCP_MAX_TOTAL_COEFFICIENTS}"
-        )));
-    }
-    Ok(parsed)
 }
 
 pub(crate) fn parse_bigint_batch(
@@ -314,13 +219,6 @@ pub(crate) fn parse_bigint_batch(
         )));
     }
     Ok(parsed)
-}
-
-fn i64_coefficients_to_rational(coefficients: &[i64]) -> Vec<BigRational> {
-    coefficients
-        .iter()
-        .map(|coeff| parse_rational(&coeff.to_string()).expect("i64 parses as BigRational"))
-        .collect()
 }
 
 fn parse_rational_coefficient(input: &RationalCoefficientInput) -> Result<BigRational, String> {
@@ -406,18 +304,11 @@ pub(crate) fn parse_recurrence_batch_rational(
                 polynomials.len()
             )));
         }
-        let batch = parse_batch(&PolynomialBatchInput {
+        let batch = parse_bigint_batch(&BigIntPolynomialBatchInput {
             polynomials: Some(polynomials.clone()),
             text: None,
         })?;
-        return validate_recurrence_batch(
-            batch
-                .into_iter()
-                .map(|item| {
-                    item.map(|polynomial| i64_coefficients_to_rational(&polynomial.coefficients))
-                })
-                .collect(),
-        );
+        return validate_recurrence_batch(integer_batch_to_rational(batch));
     }
 
     if let Some(coefficients) = &input.coefficients {
@@ -454,23 +345,16 @@ pub(crate) fn parse_recurrence_batch_rational(
         let polynomials = expressions
             .iter()
             .cloned()
-            .map(|expression| PolynomialInput {
+            .map(|expression| BigIntPolynomialInput {
                 coefficients: None,
                 expression: Some(expression),
             })
             .collect();
-        let batch = parse_batch(&PolynomialBatchInput {
+        let batch = parse_bigint_batch(&BigIntPolynomialBatchInput {
             polynomials: Some(polynomials),
             text: None,
         })?;
-        return validate_recurrence_batch(
-            batch
-                .into_iter()
-                .map(|item| {
-                    item.map(|polynomial| i64_coefficients_to_rational(&polynomial.coefficients))
-                })
-                .collect(),
-        );
+        return validate_recurrence_batch(integer_batch_to_rational(batch));
     }
 
     if let Some(text) = &input.text {
@@ -488,18 +372,27 @@ pub(crate) fn parse_recurrence_batch_rational(
             )));
         }
     }
-    let batch = parse_batch(&PolynomialBatchInput {
+    let batch = parse_bigint_batch(&BigIntPolynomialBatchInput {
         polynomials: None,
         text: input.text.clone(),
     })?;
-    validate_recurrence_batch(
-        batch
-            .into_iter()
-            .map(|item| {
-                item.map(|polynomial| i64_coefficients_to_rational(&polynomial.coefficients))
+    validate_recurrence_batch(integer_batch_to_rational(batch))
+}
+
+/// Exact integer rows as rational rows (an error stays an error).
+fn integer_batch_to_rational(batch: BigIntParsedBatch) -> RationalParsedBatch {
+    batch
+        .into_iter()
+        .map(|item| {
+            item.map(|polynomial| {
+                polynomial
+                    .coefficients
+                    .into_iter()
+                    .map(BigRational::from_integer)
+                    .collect()
             })
-            .collect(),
-    )
+        })
+        .collect()
 }
 
 pub(crate) fn parse_bigint_matrix(
@@ -522,31 +415,6 @@ pub(crate) fn parse_bigint_matrix(
         .iter()
         .map(|row| parse_bigint_coefficients(row))
         .collect()
-}
-
-pub(crate) fn collect_polynomials_or_errors(
-    batch: ParsedBatch,
-) -> Result<Vec<NormalizedPolynomial>, Vec<ParsePolynomialItem>> {
-    let errors: Vec<ParsePolynomialItem> = batch
-        .iter()
-        .enumerate()
-        .filter_map(|(index, item)| match item {
-            Ok(_) => None,
-            Err(error) => Some(ParsePolynomialItem {
-                index,
-                ok: false,
-                polynomial: None,
-                coefficients: None,
-                degree: None,
-                error: Some(error.clone()),
-            }),
-        })
-        .collect();
-    if errors.is_empty() {
-        Ok(batch.into_iter().map(Result::unwrap).collect())
-    } else {
-        Err(errors)
-    }
 }
 
 pub(crate) fn collect_rational_polynomials_or_errors(
@@ -574,18 +442,24 @@ pub(crate) fn collect_rational_polynomials_or_errors(
     }
 }
 
-pub(crate) fn integer_polys_to_rational(coefficients: &[Vec<i64>]) -> Vec<Vec<BigRational>> {
-    coefficients
+/// A one-line list of the per-row parse failures, naming at most the first few.
+pub(crate) fn parse_error_summary(errors: &[ParsePolynomialItem]) -> String {
+    const SHOWN: usize = 5;
+    let mut parts: Vec<String> = errors
         .iter()
-        .map(|row| {
-            row.iter()
-                .map(|coeff| {
-                    parse_rational_coeff(&coeff.to_string())
-                        .expect("integer coefficients parse as rationals")
-                })
-                .collect()
+        .take(SHOWN)
+        .map(|item| {
+            format!(
+                "polynomial {}: {}",
+                item.index,
+                item.error.as_deref().unwrap_or("parse error")
+            )
         })
-        .collect()
+        .collect();
+    if errors.len() > SHOWN {
+        parts.push(format!("and {} more", errors.len() - SHOWN));
+    }
+    parts.join("; ")
 }
 
 pub(crate) fn parse_rational(input: &str) -> Result<BigRational, String> {

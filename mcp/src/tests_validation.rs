@@ -10,14 +10,15 @@
 
 use super::*;
 use crate::{
+    family::family_source_and_polynomials,
     limits::{
         MCP_MAX_BATCH_POLYNOMIALS, MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL, MCP_MAX_RECURRENCE_DEGREE,
         MCP_MAX_RECURRENCE_INPUT_ROWS, MCP_MAX_RECURRENCE_LENGTH, MCP_MAX_SEQUENCE_N,
         MCP_MAX_TEXT_BYTES, MCP_MAX_TOTAL_COEFFICIENTS,
     },
     parsing::{
-        collect_polynomials_or_errors, parse_batch, parse_bigint_batch, parse_bigint_matrix,
-        parse_polynomial_input, parse_recurrence_batch_rational, parse_required_bigint_polynomial,
+        parse_bigint_batch, parse_bigint_matrix, parse_recurrence_batch_rational,
+        parse_required_bigint_polynomial,
     },
     recurrence_options::{apply_recurrence_options, validate_recurrence_for_generation},
 };
@@ -25,15 +26,30 @@ use polytool::recurrence::{BigRational, BivarPoly, Recurrence, RecurrenceTerm};
 use rmcp::{handler::server::wrapper::Parameters, ErrorData as McpError, Json};
 use serde_json::json;
 
+/// One polynomial input parsed exactly, with the error as text.
+fn parse_one(input: &BigIntPolynomialInput) -> Result<Vec<num_bigint::BigInt>, String> {
+    parse_required_bigint_polynomial(input, "p").map_err(message)
+}
+
 fn message(error: McpError) -> String {
     error.message.to_string()
 }
 
-fn coeffs(values: &[i64]) -> PolynomialInput {
-    PolynomialInput {
-        coefficients: Some(values.to_vec()),
+fn coeffs(values: &[i64]) -> BigIntPolynomialInput {
+    BigIntPolynomialInput {
+        coefficients: Some(
+            values
+                .iter()
+                .copied()
+                .map(BigIntCoefficientInput::from)
+                .collect(),
+        ),
         expression: None,
     }
+}
+
+fn strings(values: &[i64]) -> Vec<String> {
+    values.iter().map(ToString::to_string).collect()
 }
 
 fn bigint_coeffs(values: &[&str]) -> BigIntPolynomialInput {
@@ -110,7 +126,13 @@ fn family_sequence_source_matches_classical_rows() {
     let rows: Vec<Vec<i64>> = response
         .items
         .iter()
-        .map(|item| item.polynomial.coefficients.clone())
+        .map(|item| {
+            item.polynomial
+                .coefficients
+                .iter()
+                .map(|c| c.parse().unwrap())
+                .collect()
+        })
         .collect();
     assert_eq!(
         rows,
@@ -136,7 +158,13 @@ fn family_sequence_source_matches_classical_rows() {
         response
             .items
             .iter()
-            .map(|item| item.polynomial.coefficients.clone())
+            .map(|item| {
+                item.polynomial
+                    .coefficients
+                    .iter()
+                    .map(|c| c.parse().unwrap())
+                    .collect()
+            })
             .collect()
     };
     let add_scaled = |target: &mut Vec<i64>, source: &[i64], shift: usize, factor: i64| {
@@ -208,12 +236,24 @@ fn family_source_validation_errors() {
     let mut stray = family_request(&[&[1, 1]]);
     stray.max_n = Some(3);
     assert!(error(stray).contains("only valid when `sequence` is provided"));
-    // Eulerian A_25 = 25! t^24 + ... exceeds i64 (25! > 2^63), which the tool reports.
-    let mut overflow = family_request(&[]);
-    overflow.polynomials = None;
-    overflow.sequence = Some(SequenceKind::Eulerian);
-    overflow.max_n = Some(30);
-    assert!(error(overflow).contains("exceeds the i64 coefficient range"));
+    // Rows beyond i64 are accepted: the Eulerian polynomial A_30 has coefficients
+    // up to 10^30, and the sequence source keeps them exactly (the per-row
+    // checks of such high degree are too slow for a debug-profile test).
+    let mut large = family_request(&[]);
+    large.polynomials = None;
+    large.sequence = Some(SequenceKind::Eulerian);
+    large.max_n = Some(30);
+    let (source, parsed) = family_source_and_polynomials(&large).unwrap();
+    assert_eq!(source, "sequence:Eulerian, max_n=30");
+    let parsed = parsed.expect("generated rows have no parse errors");
+    assert_eq!(parsed.len(), 30);
+    let widest = parsed[29]
+        .coefficients
+        .iter()
+        .max()
+        .expect("nonempty row")
+        .clone();
+    assert!(widest > num_bigint::BigInt::from(i64::MAX), "{widest}");
 }
 
 #[test]
@@ -380,8 +420,8 @@ fn family_lace_limits_and_shape_errors() {
     assert_eq!(ok.rows, 4);
     assert_eq!(ok.columns, ok.block_cols);
     let matrix = ok.matrix.as_ref().unwrap();
-    assert_eq!(matrix[0], vec![1, 3, 3, 1, 0, 0, 0, 0]);
-    assert_eq!(matrix[1], vec![0, 1, 3, 3, 1, 0, 0, 0]);
+    assert_eq!(matrix[0], strings(&[1, 3, 3, 1, 0, 0, 0, 0]));
+    assert_eq!(matrix[1], strings(&[0, 1, 3, 3, 1, 0, 0, 0]));
     let defaults = lace_response(lace(None, None, None), &pascal);
     assert_eq!((defaults.block_rows, defaults.block_cols), (1, 1 + 3 + 1));
     assert!(defaults.totally_nonnegative);
@@ -438,7 +478,7 @@ fn family_lace_limits_and_shape_errors() {
     // Truncating to one column keeps just the first column of each block row.
     let narrow = lace_response(lace(Some(2), Some(1), Some(1)), &pascal);
     assert!(narrow.totally_nonnegative);
-    assert_eq!(narrow.matrix, Some(vec![vec![1], vec![0]]));
+    assert_eq!(narrow.matrix, Some(vec![strings(&[1]), strings(&[0])]));
     // An empty family has no Lace matrix: reported as an error, not as TNN.
     let empty = lace_response(lace(None, None, None), &[]);
     assert!(!empty.totally_nonnegative);
@@ -734,43 +774,43 @@ fn recurrence_generation_validation_enforces_each_limit() {
 #[test]
 fn polynomial_input_forms_and_limits() {
     // Exactly one of `coefficients` and `expression`.
-    let both = PolynomialInput {
-        coefficients: Some(vec![1]),
+    let both = BigIntPolynomialInput {
+        coefficients: Some(vec![1.into()]),
         expression: Some("1".to_string()),
     };
-    assert!(parse_polynomial_input(&both)
+    assert!(parse_one(&both)
         .err()
         .expect("expected an error")
         .contains("got both"));
-    let neither = PolynomialInput {
+    let neither = BigIntPolynomialInput {
         coefficients: None,
         expression: None,
     };
-    assert!(parse_polynomial_input(&neither)
+    assert!(parse_one(&neither)
         .err()
         .expect("expected an error")
         .contains("expected exactly one"));
     // Length limit (inclusive) for coefficients and for the expression text.
     let at_limit = vec![1; MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL];
-    assert!(parse_polynomial_input(&coeffs(&at_limit)).is_ok());
+    assert!(parse_one(&coeffs(&at_limit)).is_ok());
     let over = vec![1; MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL + 1];
-    assert!(parse_polynomial_input(&coeffs(&over))
+    assert!(parse_one(&coeffs(&over))
         .err()
         .expect("expected an error")
         .contains("the MCP limit is 4096"));
-    let long_text = PolynomialInput {
+    let long_text = BigIntPolynomialInput {
         coefficients: None,
         expression: Some("1".repeat(MCP_MAX_TEXT_BYTES + 1)),
     };
-    assert!(parse_polynomial_input(&long_text)
+    assert!(parse_one(&long_text)
         .err()
         .expect("expected an error")
         .contains("polynomial expression is 1048577 bytes"));
-    let degree_expression = PolynomialInput {
+    let degree_expression = BigIntPolynomialInput {
         coefficients: None,
         expression: Some(format!("t^{}", MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL)),
     };
-    assert!(parse_polynomial_input(&degree_expression)
+    assert!(parse_one(&degree_expression)
         .err()
         .expect("expected an error")
         .contains("4097 coefficients"));
@@ -827,16 +867,16 @@ fn polynomial_input_forms_and_limits() {
 
 #[test]
 fn batch_parsing_enforces_size_limits() {
-    let error = |input: PolynomialBatchInput| {
-        message(parse_batch(&input).err().expect("expected an error"))
+    let error = |input: BigIntPolynomialBatchInput| {
+        message(parse_bigint_batch(&input).err().expect("expected an error"))
     };
     // Exactly one of `polynomials` and `text`.
-    assert!(error(PolynomialBatchInput {
+    assert!(error(BigIntPolynomialBatchInput {
         polynomials: Some(vec![coeffs(&[1])]),
         text: Some("1".to_string()),
     })
     .contains("got both"));
-    assert!(error(PolynomialBatchInput {
+    assert!(error(BigIntPolynomialBatchInput {
         polynomials: None,
         text: None,
     })
@@ -844,7 +884,7 @@ fn batch_parsing_enforces_size_limits() {
     // Number of polynomials (inclusive limit); blank and `#` comment lines do not count.
     let at_limit = vec![coeffs(&[1]); MCP_MAX_BATCH_POLYNOMIALS];
     assert_eq!(
-        parse_batch(&PolynomialBatchInput {
+        parse_bigint_batch(&BigIntPolynomialBatchInput {
             polynomials: Some(at_limit),
             text: None,
         })
@@ -852,7 +892,7 @@ fn batch_parsing_enforces_size_limits() {
         .len(),
         MCP_MAX_BATCH_POLYNOMIALS
     );
-    assert!(error(PolynomialBatchInput {
+    assert!(error(BigIntPolynomialBatchInput {
         polynomials: Some(vec![coeffs(&[1]); MCP_MAX_BATCH_POLYNOMIALS + 1]),
         text: None,
     })
@@ -863,7 +903,7 @@ fn batch_parsing_enforces_size_limits() {
         text
     };
     assert_eq!(
-        parse_batch(&PolynomialBatchInput {
+        parse_bigint_batch(&BigIntPolynomialBatchInput {
             polynomials: None,
             text: Some(text_lines(MCP_MAX_BATCH_POLYNOMIALS)),
         })
@@ -871,18 +911,18 @@ fn batch_parsing_enforces_size_limits() {
         .len(),
         MCP_MAX_BATCH_POLYNOMIALS
     );
-    assert!(error(PolynomialBatchInput {
+    assert!(error(BigIntPolynomialBatchInput {
         polynomials: None,
         text: Some(text_lines(MCP_MAX_BATCH_POLYNOMIALS + 1)),
     })
     .contains("batch has 513 polynomials"));
-    assert!(error(PolynomialBatchInput {
+    assert!(error(BigIntPolynomialBatchInput {
         polynomials: None,
         text: Some(" ".repeat(MCP_MAX_TEXT_BYTES + 1)),
     })
     .contains("polynomial batch is 1048577 bytes"));
     // One over-long polynomial is an item error and does not poison its neighbors.
-    let batch = parse_batch(&PolynomialBatchInput {
+    let batch = parse_bigint_batch(&BigIntPolynomialBatchInput {
         polynomials: Some(vec![
             coeffs(&[1, 1]),
             coeffs(&vec![1; MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL + 1]),
@@ -896,13 +936,14 @@ fn batch_parsing_enforces_size_limits() {
         .err()
         .expect("expected an error")
         .contains("coefficients"));
-    let errors = collect_polynomials_or_errors(batch)
-        .err()
-        .expect("expected an error");
-    assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].index, 1);
+    let failed: Vec<usize> = batch
+        .iter()
+        .enumerate()
+        .filter_map(|(index, item)| item.is_err().then_some(index))
+        .collect();
+    assert_eq!(failed, vec![1]);
     // The total coefficient count is limited across the batch: 17 * 4096 > 65536.
-    assert!(error(PolynomialBatchInput {
+    assert!(error(BigIntPolynomialBatchInput {
         polynomials: Some(vec![
             coeffs(&vec![1; MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL]);
             MCP_MAX_TOTAL_COEFFICIENTS
@@ -2050,13 +2091,13 @@ fn batch_tools_report_malformed_entries_in_place() {
 fn empty_coefficient_lists_normalize_to_the_zero_polynomial() {
     let server = PolynomialToolsServer::new();
     let Json(parsed) = server
-        .parse_polynomials(Parameters(PolynomialBatchInput {
+        .parse_polynomials(Parameters(BigIntPolynomialBatchInput {
             polynomials: Some(vec![coeffs(&[]), coeffs(&[0, 0])]),
             text: None,
         }))
         .unwrap();
     for item in &parsed.items {
-        assert_eq!(item.coefficients, Some(vec![0]));
+        assert_eq!(item.coefficients, Some(strings(&[0])));
         assert_eq!(item.degree, Some(0));
     }
     // Exact integers beyond i64 round-trip through the BigInt normalization, and
@@ -2126,4 +2167,442 @@ fn bigint_coefficient_json_accepts_integers_strings_and_rejects_other_types() {
         "{error}"
     );
     assert!(parse(json!(null)).is_err());
+}
+
+#[test]
+fn polynomial_properties_reports_exact_gamma_coefficients_for_rows_that_fit_in_i64() {
+    // 1 + t^100 has coefficients 0 and 1, so it takes the i64 routes, but its
+    // gamma coefficients (-1)^i 100/(100-i) C(100-i, i) reach 10^20 and exceed i64.
+    // They used to be dropped (null), now they are exact.
+    let server = PolynomialToolsServer::new();
+    let mut row = vec!["0"; 101];
+    row[0] = "1";
+    row[100] = "1";
+    let Json(response) = server
+        .polynomial_properties(Parameters(BigIntPolynomialBatchInput {
+            polynomials: Some(vec![bigint_coeffs(&row), bigint_coeffs(&["1", "4", "1"])]),
+            text: None,
+        }))
+        .unwrap();
+    let item = &response.items[0];
+    assert_eq!(item.palindromic, Some(true));
+    assert_eq!(item.gamma_positive, Some(false));
+    let gamma = item
+        .gamma_coefficients
+        .as_ref()
+        .expect("exact gamma coefficients");
+    assert_eq!(gamma.len(), 51);
+    assert_eq!(&gamma[..3], ["1", "-100", "4850"]);
+    assert_eq!(gamma[50], "2");
+    assert!(gamma
+        .iter()
+        .any(|value| value.trim_start_matches('-').len() >= 20));
+
+    // Small rows are unchanged: 1 + 4t + t^2 = 1 (1+t)^2 + 2 t.
+    let small = &response.items[1];
+    assert_eq!(small.gamma_positive, Some(true));
+    assert_eq!(
+        small.gamma_coefficients,
+        Some(vec!["1".to_string(), "2".to_string()])
+    );
+}
+
+// -- coefficients beyond i64 ----------------------------------------------------
+
+/// Coefficients of `(1 + scale x)^n`, `n = 0..=last`, as decimal strings.
+fn scaled_binomial_strings(scale: u64, last: usize) -> Vec<Vec<String>> {
+    let scale = num_bigint::BigInt::from(scale);
+    (0..=last)
+        .map(|n| {
+            let mut binomial = num_bigint::BigInt::from(1);
+            let mut power = num_bigint::BigInt::from(1);
+            (0..=n)
+                .map(|k| {
+                    let value = (&binomial * &power).to_string();
+                    binomial = &binomial * num_bigint::BigInt::from(n - k)
+                        / num_bigint::BigInt::from(k + 1);
+                    power *= &scale;
+                    value
+                })
+                .collect()
+        })
+        .collect()
+}
+
+const TWO_TO_64: &str = "18446744073709551616";
+const TEN_TO_20: &str = "100000000000000000000";
+
+#[test]
+fn parse_polynomials_reports_exact_coefficients_beyond_i64() {
+    let server = PolynomialToolsServer::new();
+    let Json(response) = server
+        .parse_polynomials(Parameters(BigIntPolynomialBatchInput {
+            polynomials: Some(vec![
+                bigint_coeffs(&[TWO_TO_64, "-3", "0"]),
+                coeffs(&[1, 2, 3]),
+                BigIntPolynomialInput {
+                    coefficients: None,
+                    expression: Some(format!("{TEN_TO_20}t^2 + 1")),
+                },
+            ]),
+            text: None,
+        }))
+        .unwrap();
+    let first = &response.items[0];
+    assert_eq!(
+        first.coefficients,
+        Some(vec![TWO_TO_64.to_string(), "-3".to_string()])
+    );
+    assert_eq!(first.degree, Some(1));
+    assert_eq!(
+        first.polynomial.as_deref(),
+        Some(format!("{TWO_TO_64} - 3t").as_str())
+    );
+    // Small inputs keep their values (now as strings).
+    assert_eq!(response.items[1].coefficients, Some(strings(&[1, 2, 3])));
+    assert_eq!(
+        response.items[2].coefficients,
+        Some(vec![
+            "1".to_string(),
+            "0".to_string(),
+            TEN_TO_20.to_string()
+        ])
+    );
+
+    // Bare JSON integers above i64::MAX are read exactly; text input works too.
+    let input: BigIntPolynomialBatchInput = serde_json::from_value(json!({
+        "polynomials": [{ "coefficients": [u64::MAX, 1] }]
+    }))
+    .unwrap();
+    let Json(response) = server.parse_polynomials(Parameters(input)).unwrap();
+    assert_eq!(
+        response.items[0].coefficients,
+        Some(vec![u64::MAX.to_string(), "1".to_string()])
+    );
+    let Json(response) = server
+        .parse_polynomials(Parameters(BigIntPolynomialBatchInput {
+            polynomials: None,
+            text: Some(format!("1,{TEN_TO_20}\nbad + x")),
+        }))
+        .unwrap();
+    assert_eq!(
+        response.items[0].coefficients,
+        Some(vec!["1".to_string(), TEN_TO_20.to_string()])
+    );
+    assert!(!response.items[1].ok);
+    let value = serde_json::to_value(&response.items[0]).unwrap();
+    assert_eq!(value["coefficients"][1], TEN_TO_20);
+}
+
+#[test]
+fn real_roots_accepts_coefficients_beyond_i64() {
+    let server = PolynomialToolsServer::new();
+    let one_plus_ten20 = format!("-{}1", &TEN_TO_20[..TEN_TO_20.len() - 1]);
+    let Json(response) = server
+        .real_roots(Parameters(BigIntPolynomialBatchInput {
+            polynomials: Some(vec![
+                // (t - 1)(t - 10^20) = 10^20 - (10^20 + 1) t + t^2.
+                bigint_coeffs(&[TEN_TO_20, &one_plus_ten20, "1"]),
+                // 1 + 10^20 t^2 has no real root.
+                bigint_coeffs(&["1", "0", TEN_TO_20]),
+                // 1 + 10^20 t has the exact root -10^-20.
+                bigint_coeffs(&["1", TEN_TO_20]),
+                coeffs(&[2, -3, 1]),
+            ]),
+            text: None,
+        }))
+        .unwrap();
+    let tolerance: BigRational = "1/1000000".parse().unwrap();
+    let close = |text: &str, expected: &str| {
+        let root: BigRational = text.parse().unwrap();
+        let expected: BigRational = expected.parse().unwrap();
+        let difference = &root - &expected;
+        let magnitude = if difference < BigRational::from_integer(0.into()) {
+            -difference
+        } else {
+            difference
+        };
+        magnitude < tolerance
+    };
+    let big = &response.items[0];
+    assert_eq!(big.real_rooted, Some(true));
+    let roots = big.roots.as_ref().unwrap();
+    assert_eq!(roots.len(), 2);
+    assert!(
+        close(&roots[0], "1") && close(&roots[1], TEN_TO_20),
+        "{roots:?}"
+    );
+    assert_eq!(big.polynomial.as_ref().unwrap().coefficients[0], TEN_TO_20);
+    assert_eq!(response.items[1].real_rooted, Some(false));
+    assert_eq!(response.items[1].roots, None);
+    assert_eq!(
+        response.items[2].roots,
+        Some(vec![format!("-1/{TEN_TO_20}")])
+    );
+    // Small inputs: roots 1 and 2.
+    let small = response.items[3].roots.as_ref().unwrap();
+    assert!(close(&small[0], "1") && close(&small[1], "2"));
+}
+
+#[test]
+fn analyze_decomposition_accepts_coefficients_beyond_i64() {
+    let server = PolynomialToolsServer::new();
+    // 10^20 (1 + 4t + 2t^2): every coordinate of the small example scales by 10^20.
+    let scaled = |values: &[i64]| -> Vec<String> {
+        values
+            .iter()
+            .map(|value| format!("{value}{}", &TEN_TO_20[1..]))
+            .collect()
+    };
+    let row = scaled(&[1, 4, 2]);
+    let Json(response) = server
+        .analyze_decomposition(Parameters(BigIntPolynomialBatchInput {
+            polynomials: Some(vec![bigint_coeffs(
+                &row.iter().map(String::as_str).collect::<Vec<_>>(),
+            )]),
+            text: None,
+        }))
+        .unwrap();
+    let item = &response.items[0];
+    assert!(item.ok, "{:?}", item.error);
+    let report = item.report.as_ref().unwrap();
+    assert_eq!(report.polynomial.coefficients, row);
+    assert_eq!(report.polynomial.degree, 2);
+    assert_eq!(report.reciprocal.coefficients, scaled(&[2, 4, 1]));
+    assert_eq!(report.a.coefficients, scaled(&[1, 3, 1]));
+    assert_eq!(report.b.coefficients, scaled(&[1, 1]));
+    assert_eq!(report.f_polynomial.coefficients, scaled(&[1, 6, 7]));
+    assert_eq!(report.r_transform_of_f.coefficients, scaled(&[2, 8, 7]));
+    assert_eq!(report.magic.coordinates, scaled(&[1, 2, -1]));
+    assert_eq!(report.magic.partial_sum_checks, vec![false, false]);
+    assert!(report.a_real_rooted && report.b_real_rooted);
+    assert_eq!(report.b_interlaces_a, Some(true));
+}
+
+#[test]
+fn find_recurrence_accepts_every_input_form_beyond_i64() {
+    let server = PolynomialToolsServer::new();
+    // (1 + 10^10 x)^n for n = 0..=5: coefficients up to 10^50.
+    let rows = scaled_binomial_strings(10_000_000_000, 5);
+    assert!(rows[5][2].len() > 19);
+    let search = |request: FindRecurrenceRequest| {
+        let Json(response) = server.find_recurrence(Parameters(request)).unwrap();
+        assert!(response.found, "{:?}", response.error);
+        response.recurrence.unwrap()
+    };
+    let polynomials = serde_json::from_value::<FindRecurrenceRequest>(json!({
+        "polynomials": rows.iter().map(|row| json!({ "coefficients": row })).collect::<Vec<_>>(),
+        "include_code": false,
+    }))
+    .unwrap();
+    let from_polynomials = search(polynomials);
+    assert!(from_polynomials.contains("P(n-1)"), "{from_polynomials}");
+    let text = rows
+        .iter()
+        .map(|row| row.join(","))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let by_text = search(FindRecurrenceRequest {
+        text: Some(text),
+        include_code: Some(false),
+        ..Default::default()
+    });
+    assert_eq!(by_text, from_polynomials);
+    let by_coefficients = search(
+        serde_json::from_value(json!({ "coefficients": rows, "include_code": false })).unwrap(),
+    );
+    assert_eq!(by_coefficients, from_polynomials);
+    let expressions = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .enumerate()
+                .map(|(power, value)| format!("{value}t^{power}"))
+                .collect::<Vec<_>>()
+                .join(" + ")
+        })
+        .collect();
+    let by_expression = search(FindRecurrenceRequest {
+        expressions: Some(expressions),
+        include_code: Some(false),
+        ..Default::default()
+    });
+    assert_eq!(by_expression, from_polynomials);
+
+    // Bare JSON integers above i64::MAX are read exactly in `coefficients` and `polynomials`.
+    let u64_rows = json!([[u64::MAX], [u64::MAX], [u64::MAX], [u64::MAX]]);
+    let request: FindRecurrenceRequest = serde_json::from_value(json!({
+        "coefficients": u64_rows, "include_code": false
+    }))
+    .unwrap();
+    let rows = parse_recurrence_batch_rational(&request).unwrap();
+    assert_eq!(
+        rows[0].as_ref().unwrap()[0].to_string(),
+        u64::MAX.to_string()
+    );
+    let request: FindRecurrenceRequest = serde_json::from_value(json!({
+        "polynomials": [{ "coefficients": [u64::MAX, 1] }]
+    }))
+    .unwrap();
+    let rows = parse_recurrence_batch_rational(&request).unwrap();
+    assert_eq!(
+        rows[0].as_ref().unwrap()[0].to_string(),
+        u64::MAX.to_string()
+    );
+    // Floating-point JSON numbers are still refused, with the actionable message.
+    let error = serde_json::from_value::<FindRecurrenceRequest>(json!({
+        "coefficients": [[1.5e30]]
+    }))
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("floating-point JSON number"), "{error}");
+}
+
+#[test]
+fn find_recurrence_representations_handles_big_rows_and_reports_row_errors() {
+    let server = PolynomialToolsServer::new();
+    let rows = scaled_binomial_strings(10_000_000_000, 4);
+    let request: FindRecurrenceRequest = serde_json::from_value(json!({
+        "polynomials": rows.iter().map(|row| json!({ "coefficients": row })).collect::<Vec<_>>(),
+        "max_rec_len": 1, "max_diff_deg": 0, "max_idx_deg": 0, "max_var_deg": 1,
+    }))
+    .unwrap();
+    let Json(report) = server
+        .find_recurrence_representations(Parameters(request))
+        .unwrap();
+    assert_eq!(report["schema"], "polytool.recurrence-representations.v1");
+    assert_eq!(report["status"], "complete");
+    assert_eq!(report["representations"][0]["evidence"], "exact_fit");
+    assert_eq!(
+        report["representations"][0]["recurrence_json"]["initial_polynomials"][0][0],
+        "1"
+    );
+
+    // Per-row parse errors are named in the error.
+    let bad: FindRecurrenceRequest = serde_json::from_value(json!({
+        "text": "1,1\nbad + x\n1,2,1\nalso bad\n1"
+    }))
+    .unwrap();
+    let error = message(
+        server
+            .find_recurrence_representations(Parameters(bad))
+            .err()
+            .expect("expected an error"),
+    );
+    assert!(
+        error.starts_with("one or more polynomials failed to parse"),
+        "{error}"
+    );
+    assert!(
+        error.contains("polynomial 1:") && error.contains("polynomial 3:"),
+        "{error}"
+    );
+}
+
+#[test]
+fn check_polynomial_family_accepts_coefficients_beyond_i64() {
+    let server = PolynomialToolsServer::new();
+    // (1 + 10^10 x)^n for n = 1..=6: all rows are real-rooted; the last has coefficients up to 10^60.
+    let rows = scaled_binomial_strings(10_000_000_000, 6);
+    let request = CheckPolynomialFamilyRequest {
+        polynomials: Some(
+            rows[1..]
+                .iter()
+                .map(|row| bigint_coeffs(&row.iter().map(String::as_str).collect::<Vec<_>>()))
+                .collect(),
+        ),
+        text: None,
+        sequence: None,
+        max_n: None,
+        options: Some(FamilyCheckOptions {
+            find_recurrence: Some(true),
+            ..family_options()
+        }),
+        recurrence_options: None,
+        lace: Some(LaceCheckRequest {
+            block_rows: Some(2),
+            block_cols: Some(4),
+            max_minor_size: Some(2),
+            include_matrix: Some(true),
+        }),
+    };
+    let Json(response) = server.check_polynomial_family(Parameters(request)).unwrap();
+    assert_eq!(response.source, "polynomials");
+    assert_eq!(response.item_count, 6);
+    assert!(response.parse_errors.is_empty());
+    assert!(response.items.iter().all(|item| item.real_rooted));
+    let last = response.items.last().unwrap();
+    assert_eq!(last.polynomial.coefficients, rows[6]);
+    assert_eq!(last.polynomial.degree, 6);
+    assert!(!last.palindromic && !last.simple_roots);
+    assert!(last.unimodal && last.log_concave);
+    assert_eq!(response.consecutive_pairs.len(), 5);
+    assert!(response
+        .consecutive_pairs
+        .iter()
+        .all(|pair| pair.ok && pair.result.is_some()));
+    let recurrence = response.recurrence.as_ref().expect("recurrence searched");
+    assert!(recurrence.found, "{:?}", recurrence.error);
+    let lace = response.lace.as_ref().expect("lace checked");
+    assert_eq!((lace.rows, lace.columns), (12, 4));
+    let matrix = lace.matrix.as_ref().expect("matrix requested");
+    assert_eq!(matrix[0], vec!["1", "10000000000", "0", "0"]);
+    assert!(matrix.iter().flatten().any(|value| value.len() > 19));
+    // The wire format: strings, not numbers.
+    let value = serde_json::to_value(&response).unwrap();
+    assert_eq!(value["items"][5]["coefficients"][6], rows[6][6]);
+    assert_eq!(value["lace"]["matrix"][0][1], "10000000000");
+    assert!(
+        response.markdown.contains(&rows[6][6])
+            || response.markdown.contains("Polynomial family check")
+    );
+
+    // A palindromic row whose gamma coefficients exceed i64 reports them exactly.
+    let mut palindrome = vec!["0"; 101];
+    palindrome[0] = "1";
+    palindrome[100] = "1";
+    let Json(response) = server
+        .check_polynomial_family(Parameters(CheckPolynomialFamilyRequest {
+            polynomials: Some(vec![bigint_coeffs(&palindrome)]),
+            options: Some(FamilyCheckOptions {
+                check_consecutive_interlacing: Some(false),
+                ..family_options()
+            }),
+            ..family_request(&[])
+        }))
+        .unwrap();
+    let item = &response.items[0];
+    assert!(item.palindromic && !item.gamma_positive);
+    let gamma = item
+        .gamma_coefficients
+        .as_ref()
+        .expect("exact gamma coefficients");
+    assert_eq!(&gamma[..3], ["1", "-100", "4850"]);
+
+    // Text input accepts big values too, and reports parse errors per item.
+    let Json(response) = server
+        .check_polynomial_family(Parameters(CheckPolynomialFamilyRequest {
+            polynomials: None,
+            text: Some(format!("1,{TWO_TO_64}\n1,{TEN_TO_20},{TEN_TO_20}")),
+            ..family_request(&[])
+        }))
+        .unwrap();
+    assert_eq!(response.source, "text");
+    assert_eq!(response.items[0].polynomial.coefficients[1], TWO_TO_64);
+}
+
+#[test]
+fn rational_coefficient_json_keeps_large_unsigned_integers() {
+    let parsed: Vec<RationalCoefficientInput> =
+        serde_json::from_value(json!([1, -2, u64::MAX, "3/7"])).unwrap();
+    assert!(matches!(parsed[0], RationalCoefficientInput::Integer(1)));
+    assert!(matches!(parsed[1], RationalCoefficientInput::Integer(-2)));
+    assert!(
+        matches!(&parsed[2], RationalCoefficientInput::Text(text) if text == &u64::MAX.to_string())
+    );
+    assert!(matches!(&parsed[3], RationalCoefficientInput::Text(text) if text == "3/7"));
+    let error = serde_json::from_value::<RationalCoefficientInput>(json!(true))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("an integer or an exact rational"), "{error}");
 }

@@ -25,8 +25,15 @@ pub(crate) struct PropertyReport {
 }
 
 fn property_report_i64(index: usize, coeffs: &[i64]) -> PropertyReport {
+    // The `i64` routine also returns `None` when a gamma coefficient of a
+    // palindromic row overflows `i64`; the `BigInt` routine then gives the
+    // exact answer (and `None` again only for a non-palindromic row).
     let gamma_coefficients = gamma_coefficients_ignoring_initial_zeros(coeffs)
-        .map(|gamma| gamma.into_iter().map(BigInt::from).collect::<Vec<_>>());
+        .map(|gamma| gamma.into_iter().map(BigInt::from).collect::<Vec<_>>())
+        .or_else(|| {
+            let big: Vec<BigInt> = coeffs.iter().map(|&c| BigInt::from(c)).collect();
+            gamma_coefficients_ignoring_initial_zeros_bigint_coeffs(&big)
+        });
     let gamma_positive = gamma_coefficients
         .as_ref()
         .is_some_and(|gamma| gamma.iter().all(|g| g >= &BigInt::from(0)));

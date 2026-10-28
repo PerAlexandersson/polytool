@@ -164,7 +164,7 @@ pub mod version;
 pub use linalg::{
     bareiss_determinant_bigint, bareiss_determinant_polynomial_bigint,
     bareiss_leading_principal_minors_bigint, bareiss_leading_principal_minors_polynomial_bigint,
-    check_total_positivity, check_totally_nonnegative_neville,
+    check_total_positivity, check_total_positivity_bigint, check_totally_nonnegative_neville,
     check_totally_nonnegative_neville_bigint, determinant, is_positive_definite,
     is_positive_definite_bareiss, is_positive_definite_modular, is_positive_semidefinite,
     is_sparse_modular_linear_system_consistent, is_totally_nonnegative_by_minors,
@@ -279,6 +279,7 @@ pub use real_rooted_enumeration::{
 };
 pub use real_rootedness::{
     approximate_real_roots,
+    approximate_real_roots_bigint_coeffs,
     // Bézout matrix directly
     bezout_matrix,
     bezout_matrix_bigint_coeffs,

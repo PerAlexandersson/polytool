@@ -97,12 +97,38 @@ pub fn has_simple_roots_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 ///
 /// [`is_real_rooted`]: super::is_real_rooted
 pub fn approximate_real_roots(coeffs: &[i64]) -> Option<Vec<BigRational>> {
-    let Some(start) = coeffs.iter().position(|&c| c != 0) else {
+    let coeffs: Vec<BigInt> = coeffs.iter().map(|&c| BigInt::from(c)).collect();
+    approximate_real_roots_bigint_coeffs(&coeffs)
+}
+
+/// `BigInt`-coefficient version of [`approximate_real_roots`], for polynomials
+/// whose coefficients may not fit in `i64`.
+///
+/// The coefficients are in ascending order.  The result has the same contract
+/// as the `i64` version: the **distinct** roots in increasing order, with a
+/// root `0` for initial zero coefficients, exact roots for inputs that are
+/// linear after removing powers of `t`, and otherwise midpoints of isolating
+/// intervals of width at most `1e-6`.  Returns `None` if the polynomial is not
+/// real-rooted and `Some(vec![])` for constant and zero polynomials.
+///
+/// # Example
+/// ```
+/// use num_bigint::BigInt;
+/// use polytool::real_rootedness::approximate_real_roots_bigint_coeffs;
+///
+/// // (t - 1)(t - 10^20) has coefficients that do not fit in `i64`.
+/// let big = BigInt::from(10).pow(20);
+/// let coeffs = [big.clone(), -(&big + BigInt::from(1)), BigInt::from(1)];
+/// let roots = approximate_real_roots_bigint_coeffs(&coeffs).unwrap();
+/// assert_eq!(roots.len(), 2);
+/// ```
+pub fn approximate_real_roots_bigint_coeffs(coeffs: &[BigInt]) -> Option<Vec<BigRational>> {
+    let Some(start) = coeffs.iter().position(|c| !c.is_zero()) else {
         return Some(vec![]);
     };
     let end = coeffs
         .iter()
-        .rposition(|&c| c != 0)
+        .rposition(|c| !c.is_zero())
         .expect("nonzero polynomial has a final nonzero coefficient");
     let trimmed = &coeffs[start..=end];
     let mut roots = if start > 0 {
@@ -114,14 +140,14 @@ pub fn approximate_real_roots(coeffs: &[i64]) -> Option<Vec<BigRational>> {
         return Some(roots);
     }
     if trimmed.len() == 2 {
-        let a = Q::from_integer(BigInt::from(trimmed[0]));
-        let b = Q::from_integer(BigInt::from(trimmed[1]));
+        let a = Q::from_integer(trimmed[0].clone());
+        let b = Q::from_integer(trimmed[1].clone());
         roots.push(-a / b);
         roots.sort();
         return Some(roots);
     }
 
-    let sc = SturmChain::from_i64_coeffs(trimmed);
+    let sc = SturmChain::from_bigint_coeffs(trimmed);
     let sf_degree = sc.square_free_degree();
     let eps = Q::new(BigInt::from(1), BigInt::from(1_000_000));
     let intervals = sc.isolate_roots(&eps);
@@ -250,6 +276,52 @@ mod tests {
                 Q::from_integer(BigInt::from(0)),
                 Q::new(BigInt::from(2), BigInt::from(3))
             ]
+        );
+    }
+
+    #[test]
+    fn bigint_approximate_roots_agree_with_the_i64_version() {
+        for coeffs in [
+            vec![],
+            vec![0, 0],
+            vec![5],
+            vec![0, 1],
+            vec![0, 0, -2, 3],
+            vec![2, -3, 1],
+            vec![5, -16, 3],
+            vec![1, 0, 1],
+            vec![1, 22, 191, 838, 1982, 2504, 1577, 424, 34],
+        ] {
+            let big: Vec<BigInt> = coeffs.iter().map(|&c| BigInt::from(c)).collect();
+            assert_eq!(
+                approximate_real_roots_bigint_coeffs(&big),
+                approximate_real_roots(&coeffs),
+                "{coeffs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bigint_approximate_roots_handle_coefficients_beyond_i64() {
+        // (t - 1)(t - 10^20) = 10^20 - (10^20 + 1) t + t^2.
+        let big = BigInt::from(10).pow(20);
+        let coeffs = [big.clone(), -(&big + BigInt::from(1)), BigInt::from(1)];
+        let roots = approximate_real_roots_bigint_coeffs(&coeffs).unwrap();
+        let tolerance = Q::new(BigInt::from(1), BigInt::from(1_000_000));
+        assert_eq!(roots.len(), 2);
+        let near = |root: &Q, expected: BigInt| {
+            num_traits::Signed::abs(&(root - Q::from_integer(expected))) < tolerance
+        };
+        assert!(near(&roots[0], BigInt::from(1)));
+        assert!(near(&roots[1], big.clone()));
+
+        // 10^20 t^2 + 1 is not real-rooted; 10^20 t + 1 has an exact root.
+        let not_real_rooted = [BigInt::from(1), BigInt::from(0), big.clone()];
+        assert!(approximate_real_roots_bigint_coeffs(&not_real_rooted).is_none());
+        let linear = [BigInt::from(1), big.clone()];
+        assert_eq!(
+            approximate_real_roots_bigint_coeffs(&linear),
+            Some(vec![Q::new(BigInt::from(-1), big)])
         );
     }
 

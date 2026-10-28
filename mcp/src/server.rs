@@ -2,8 +2,9 @@
 //! `ServerHandler` metadata.
 
 use crate::family::{
-    check_family_lace, family_markdown, family_recurrence_response, family_report,
-    family_source_and_polynomials, first_family_failure, generated_sequence_polynomials_bigint,
+    check_family_lace, family_consecutive_pairs, family_markdown, family_recurrence_response,
+    family_report, family_source_and_polynomials, first_family_failure,
+    generated_sequence_polynomials_bigint,
 };
 use crate::limits::{
     MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL, MCP_MAX_COEFFICIENT_TEXT_BYTES, MCP_MAX_CYCLIC_ORDER,
@@ -11,8 +12,8 @@ use crate::limits::{
 };
 use crate::parsing::{
     bigint_strings, collect_rational_polynomials_or_errors, invalid_params,
-    normalize_bigint_polynomial, parse_batch, parse_bigint_batch, parse_bigint_coefficient,
-    parse_bigint_coefficients, parse_bigint_matrix, parse_rational,
+    normalize_bigint_polynomial, parse_bigint_batch, parse_bigint_coefficient,
+    parse_bigint_coefficients, parse_bigint_matrix, parse_error_summary, parse_rational,
     parse_recurrence_batch_rational, parse_required_bigint_polynomial, validate_mcp_text,
 };
 use crate::planar_network::{
@@ -27,8 +28,8 @@ use crate::report_items::{
     bigint_matrix_strings, coefficient_tests_item, cyclic_sequence_item_response,
     cyclic_sieving_report_item, displayed, format_rational, hstar_inequalities_item,
     interlacing_pair_has_interlacing, interlacing_pair_item, interlacing_result,
-    interlacing_result_i64, oeis_sequence_summary, orbit_decomposition_item,
-    orbit_sizes_check_item, parse_bigint_items, parse_items, polynomial_properties_item_bigint,
+    oeis_sequence_summary, orbit_decomposition_item, orbit_sizes_check_item, parse_bigint_items,
+    parse_items, polynomial_properties_item_bigint,
 };
 use crate::requests::{
     AssessGeneratingDescriptionToolRequest, RecurrenceImplicitToolRequest,
@@ -40,7 +41,7 @@ use crate::requests::{
     CyclicSievingSequenceRequest, EhrhartHstarMode, EhrhartHstarRequest, FindRecurrenceRequest,
     GenerateOeisRowsRequest, GenerateRecurrenceRowsRequest, GenerateSequenceRequest,
     GetOeisSequenceRequest, HStarInequalitiesRequest, ListOeisSequencesRequest,
-    PolynomialBatchInput, RecurrenceSpacesToolRequest, TotallyNonnegativeNetworkRequest,
+    RecurrenceSpacesToolRequest, TotallyNonnegativeNetworkRequest,
     VerifyRecurrenceSpacesToolRequest,
 };
 use crate::requests::{ImplicitRelationSearchToolRequest, VerifyImplicitRelationSearchToolRequest};
@@ -56,7 +57,7 @@ use crate::responses::{
     DecompositionItem, DecompositionReport, DecompositionResponse, DiscriminantItem,
     DiscriminantResponse, EhrhartHstarResponse, FindRecurrenceResponse, GenerateOeisRowsResponse,
     GenerateRecurrenceRowsResponse, GenerateSequenceResponse, GetOeisSequenceResponse,
-    HStarInequalitiesResponse, InterlacingPairItem, InterlacingPairResult, InterlacingProfileItem,
+    HStarInequalitiesResponse, InterlacingPairResult, InterlacingProfileItem,
     InterlacingProfileResponse, InterlacingSequenceResponse, ListOeisSequencesResponse,
     MagicBasisReport, OeisPolynomialRow, ParsePolynomialsResponse, PolynomialPropertiesItem,
     PolynomialPropertiesResponse, RealRootsItem, RealRootsResponse, RecurrenceSearchStatus,
@@ -92,9 +93,9 @@ impl PolynomialToolsServer {
     #[tool(description = "Parse and format one or more dense univariate polynomials.")]
     pub fn parse_polynomials(
         &self,
-        Parameters(input): Parameters<PolynomialBatchInput>,
+        Parameters(input): Parameters<BigIntPolynomialBatchInput>,
     ) -> Result<Json<ParsePolynomialsResponse>, McpError> {
-        let batch = parse_batch(&input)?;
+        let batch = parse_bigint_batch(&input)?;
         Ok(Json(ParsePolynomialsResponse {
             items: parse_items(&batch),
         }))
@@ -159,18 +160,7 @@ impl PolynomialToolsServer {
             .collect();
 
         let consecutive_pairs = if check_consecutive_interlacing {
-            polynomials
-                .windows(2)
-                .enumerate()
-                .map(|(pair_index, pair)| InterlacingPairItem {
-                    pair_index,
-                    left_index: pair_index,
-                    right_index: pair_index + 1,
-                    ok: true,
-                    result: Some(interlacing_result_i64(pair[0].clone(), pair[1].clone())),
-                    error: None,
-                })
-                .collect()
+            family_consecutive_pairs(&polynomials)
         } else {
             Vec::new()
         };
@@ -180,11 +170,9 @@ impl PolynomialToolsServer {
             .as_ref()
             .map(|request| check_family_lace(&polynomials, request));
 
-        let coefficients: Vec<Vec<i64>> =
-            polynomials.iter().map(|p| p.coefficients.clone()).collect();
         let recurrence = recurrence_search
             .as_ref()
-            .map(|(search, budget)| family_recurrence_response(&coefficients, search, *budget));
+            .map(|(search, budget)| family_recurrence_response(&polynomials, search, *budget));
 
         let first_failure = first_family_failure(
             &items,
@@ -407,20 +395,20 @@ impl PolynomialToolsServer {
     )]
     pub fn real_roots(
         &self,
-        Parameters(input): Parameters<PolynomialBatchInput>,
+        Parameters(input): Parameters<BigIntPolynomialBatchInput>,
     ) -> Result<Json<RealRootsResponse>, McpError> {
-        let batch = parse_batch(&input)?;
+        let batch = parse_bigint_batch(&input)?;
         let items = batch
             .into_iter()
             .enumerate()
             .map(|(index, item)| match item {
                 Ok(polynomial) => {
-                    match polytool::approximate_real_roots(&polynomial.coefficients) {
+                    match polytool::approximate_real_roots_bigint_coeffs(&polynomial.coefficients) {
                         Some(roots) => RealRootsItem {
                             index,
                             ok: true,
                             error: None,
-                            polynomial: Some(polynomial),
+                            polynomial: Some(polynomial.display),
                             real_rooted: Some(true),
                             roots: Some(roots.into_iter().map(format_rational).collect()),
                         },
@@ -428,7 +416,7 @@ impl PolynomialToolsServer {
                             index,
                             ok: true,
                             error: None,
-                            polynomial: Some(polynomial),
+                            polynomial: Some(polynomial.display),
                             real_rooted: Some(false),
                             roots: None,
                         },
@@ -543,8 +531,12 @@ impl PolynomialToolsServer {
     ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
         let (search, budget) = apply_recurrence_options(input.effective_options())?;
         let batch = parse_recurrence_batch_rational(&input)?;
-        let polynomials = collect_rational_polynomials_or_errors(batch)
-            .map_err(|_| invalid_params("one or more polynomials failed to parse"))?;
+        let polynomials = collect_rational_polynomials_or_errors(batch).map_err(|errors| {
+            invalid_params(format!(
+                "one or more polynomials failed to parse: {}",
+                parse_error_summary(&errors)
+            ))
+        })?;
         let report = find_recurrence_representations_rational(&polynomials, &search, budget)
             .map_err(invalid_params)?;
         let serde_json::Value::Object(fields) =
@@ -1220,15 +1212,15 @@ impl PolynomialToolsServer {
     )]
     pub fn analyze_decomposition(
         &self,
-        Parameters(input): Parameters<PolynomialBatchInput>,
+        Parameters(input): Parameters<BigIntPolynomialBatchInput>,
     ) -> Result<Json<DecompositionResponse>, McpError> {
-        let batch = parse_batch(&input)?;
+        let batch = parse_bigint_batch(&input)?;
         let items = batch
             .into_iter()
             .enumerate()
             .map(|(index, item)| match item {
                 Ok(polynomial) => {
-                    match analyze_symmetric_decomposition_i64(&polynomial.coefficients) {
+                    match analyze_symmetric_decomposition_bigint(&polynomial.coefficients) {
                         Ok(analysis) => {
                             let partial_sum_checks = analysis
                                 .magic
@@ -1241,7 +1233,7 @@ impl PolynomialToolsServer {
                                 index,
                                 ok: true,
                                 report: Some(DecompositionReport {
-                                    polynomial,
+                                    polynomial: polynomial.display,
                                     reciprocal: displayed(&analysis.reciprocal),
                                     a: displayed(&analysis.a),
                                     b: displayed(&analysis.b),

@@ -48,10 +48,9 @@ The exact property commands `real-rooted`, `interlacing`,
 `interlacing-profile`, `properties`, `gamma-expansion`, and the non-recurrence
 checks inside `family-check` accept arbitrary-size integer coefficients.
 Standard sequence generation, resultants, discriminants, Ehrhart conversion,
-Stapledon decomposition, and the standalone `recurrence` command also use
-arbitrary-size exact integers in the CLI. The main remaining compatibility
-exception is `family-check --recurrence`, which currently requires
-coefficients that fit in `i64`.
+Stapledon decomposition, the standalone `recurrence` command, and
+`family-check --recurrence` also use arbitrary-size exact integers in the
+CLI.
 
 ## Check real-rootedness
 
@@ -215,10 +214,9 @@ polynomials are reported instead.
 `family-check` reports properties, consecutive weak/strict interlacing, and
 optionally an adaptive recurrence search.  Requirement flags make the command
 exit nonzero at the first failed requested condition.
-Property checks and consecutive interlacing accept arbitrary-size integer
-coefficients.  Recurrence search currently requires coefficients that fit in
-`i64`; oversized rows are preserved in the report and recurrence is marked
-unavailable rather than silently dropped.
+Property checks, consecutive interlacing and the recurrence search all accept
+arbitrary-size integer coefficients; the gamma expansion of a palindromic row
+is exact even when its gamma coefficients exceed `i64`.
 
 ```sh
 polytool family-check \

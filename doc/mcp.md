@@ -74,10 +74,23 @@ bounds the work: recurrence order at most 12, `max_modulus` at most 6,
 `parent_rows` default 12 and at most 64, `max_candidates` default 256 and at
 most 4096.
 
-The MCP property, interlacing, resultant, discriminant, Ehrhart conversion,
-sequence-generation, and recurrence tools accept arbitrary-size integer
-coefficients. JSON integers may be provided directly when they fit the client
-stack, and larger exact integers should be sent as strings.
+Every MCP tool that takes polynomial coefficients accepts arbitrary-size exact
+integers: `parse_polynomials`, `check_polynomial_family`,
+`polynomial_properties`, `coefficient_tests`, the interlacing tools,
+`real_roots`, `analyze_decomposition`, `resultant`, `discriminant`,
+`ehrhart_hstar`, `hstar_inequalities`, the cyclic-sieving tools, the network
+tools, `find_recurrence` and `find_recurrence_representations` (including
+`polynomials`, `expressions` and `text` rows), and sequence generation.  A
+coefficient may be a JSON integer (read exactly within the 64-bit range, up to
+`u64::MAX`) or a quoted decimal string, which is the form to use beyond that
+range and beyond the client's safe-integer range; a floating-point JSON number
+such as `1e30` is rejected.  Recurrence
+`coefficients` rows may also be exact rational strings such as `"3/7"`.
+Responses return integers as decimal strings, including the coefficients of
+`parse_polynomials`, `real_roots`, `analyze_decomposition` and
+`check_polynomial_family` (item coefficients, gamma coefficients and the Lace
+matrix).  The remaining integer-typed arguments are indices and sizes, not
+coefficients.
 
 `find_recurrence` exposes all adaptive-search controls as top-level MCP
 arguments. For example, a compact exact search can use:

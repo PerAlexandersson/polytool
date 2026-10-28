@@ -3,11 +3,28 @@
 ## Unreleased
 
 This release is `polytool` 0.6.0 and `exact-real-roots` 0.2.0.  Existing CLI
-commands and flags, MCP tool names and schemas, and the web export names are
-unchanged; new commands and tools are listed under Additions.
+commands and flags, MCP tool names and the web export names are unchanged; new
+commands and tools are listed under Additions.  Some MCP responses now give
+coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
 
+- MCP: no tool limits polynomial input to 64-bit integers any more.  The
+  `polynomials` items of `parse_polynomials`, `real_roots`,
+  `analyze_decomposition`, `check_polynomial_family`, `find_recurrence` and
+  `find_recurrence_representations` take integers or exact decimal strings
+  (the `PolynomialInput` and `PolynomialBatchInput` schemas, and the
+  `polytool-mcp` re-exports `PolynomialInput`, `PolynomialBatchInput` and
+  `NormalizedPolynomial`, are gone); their `expressions` and `text` forms are
+  parsed exactly, and bare JSON integers up to `u64::MAX` in the rational
+  `coefficients` rows are read exactly.  Response coefficients are decimal
+  strings: `items[].coefficients` of `parse_polynomials`,
+  `items[].polynomial.coefficients` of `real_roots`, every coefficient vector of
+  `analyze_decomposition`, and `items[].coefficients`,
+  `items[].gamma_coefficients` and `lace.matrix` of `check_polynomial_family`.
+  `check_polynomial_family` with `sequence` no longer rejects rows beyond
+  64 bits, and `find_recurrence_representations` names the rows that failed to
+  parse.
 - `cyclic_sieving::cyclic_sieving_sequence_reports_bigint` returns
   `Result<Vec<CyclicSievingSequenceItem>, CyclicSievingError>` (it panicked or
   silently skipped candidates); `CyclicSievingError` gains the variants
@@ -150,6 +167,13 @@ the typed errors above.  `exact-real-roots` has no `Result<_, String>` API.
 
 Fixes:
 
+- Gamma coefficients beyond 64 bits: `polynomial_properties`,
+  `check_polynomial_family` and the CLI `properties` / `family-check`
+  reported no gamma coefficients (and `gamma_positive = false`) for a
+  palindromic row whose gamma coefficients do not fit in `i64`; they now use
+  the exact `BigInt` routine.
+- CLI `family-check --recurrence` accepts coefficients of any size (it used the
+  `i64` recurrence search).
 - `hstar_inequality_report_bigint` no longer panics (debug) or wraps
   (release) when the supplied dimension is more than one below the degree of
   `h*`; the report has `codegree: None` and a failing `dimension bound` check.
@@ -236,6 +260,10 @@ Performance:
 
 Additions:
 
+- `approximate_real_roots_bigint_coeffs` (the `i64` `approximate_real_roots`
+  now calls it) and `linalg::check_total_positivity_bigint` (bounded-minor
+  total positivity with `BigInt` entries, sharing one kernel with the `i64`
+  version); both are re-exported at the crate root.
 - `factorization`: exact irreducible factorization over Q.
   `irreducible_factorization_bigint_coeffs` / `_rational_coeffs`
   (`_with_budget`) return a `RationalPolynomialFactorization` (constant and

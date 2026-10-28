@@ -10,23 +10,35 @@ use crate::{
         MCP_MAX_RECURRENCE_ROWS, MCP_MAX_SEQUENCE_N,
     },
     parsing::{
-        normalize_polynomial, parse_batch, parse_polynomial_input, parse_recurrence_batch_rational,
+        normalize_bigint_polynomial, parse_bigint_batch, parse_recurrence_batch_rational,
+        parse_required_bigint_polynomial,
     },
     recurrence_options::apply_recurrence_options,
     report_items::parse_items,
 };
+use num_bigint::BigInt;
 use rmcp::{handler::server::wrapper::Parameters, Json};
 use serde_json::json;
 
-fn coeffs(values: &[i64]) -> PolynomialInput {
-    PolynomialInput {
-        coefficients: Some(values.to_vec()),
+fn coeffs(values: &[i64]) -> BigIntPolynomialInput {
+    BigIntPolynomialInput {
+        coefficients: Some(
+            values
+                .iter()
+                .copied()
+                .map(BigIntCoefficientInput::from)
+                .collect(),
+        ),
         expression: None,
     }
 }
 
-fn expr(value: &str) -> PolynomialInput {
-    PolynomialInput {
+fn strings(values: &[i64]) -> Vec<String> {
+    values.iter().map(ToString::to_string).collect()
+}
+
+fn expr(value: &str) -> BigIntPolynomialInput {
+    BigIntPolynomialInput {
         coefficients: None,
         expression: Some(value.to_string()),
     }
@@ -46,23 +58,23 @@ fn bigint_coeffs(values: &[&str]) -> BigIntPolynomialInput {
 
 #[test]
 fn parses_coefficients_and_expression() {
+    let parse = |input: &BigIntPolynomialInput| {
+        normalize_bigint_polynomial(parse_required_bigint_polynomial(input, "p").unwrap()).display
+    };
     assert_eq!(
-        normalize_polynomial(parse_polynomial_input(&coeffs(&[1, 2, 3, 0])).unwrap()),
-        NormalizedPolynomial {
+        parse(&coeffs(&[1, 2, 3, 0])),
+        BigIntNormalizedPolynomial {
             polynomial: "1 + 2t + 3t^2".to_string(),
-            coefficients: vec![1, 2, 3],
+            coefficients: vec!["1".to_string(), "2".to_string(), "3".to_string()],
             degree: 2,
         }
     );
-    assert_eq!(
-        normalize_polynomial(parse_polynomial_input(&expr("3t^2 + 2t + 1")).unwrap()).coefficients,
-        vec![1, 2, 3]
-    );
+    assert_eq!(parse(&expr("3t^2 + 2t + 1")).coefficients, ["1", "2", "3"]);
 }
 
 #[test]
 fn preserves_batch_parse_errors() {
-    let batch = parse_batch(&PolynomialBatchInput {
+    let batch = parse_bigint_batch(&BigIntPolynomialBatchInput {
         polynomials: None,
         text: Some("1,2,1\nbad + x\n".to_string()),
     })
@@ -1198,19 +1210,22 @@ fn serializes_bigint_and_bigrational_as_strings() {
 
 #[test]
 fn mcp_rejects_oversized_polynomial_and_recurrence_inputs() {
-    let oversized_expression = PolynomialInput {
+    let oversized_expression = BigIntPolynomialInput {
         coefficients: None,
         expression: Some(format!("x^{MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL}")),
     };
-    assert!(parse_polynomial_input(&oversized_expression)
+    assert!(parse_required_bigint_polynomial(&oversized_expression, "p")
         .unwrap_err()
+        .message
         .contains("MCP limit"));
 
-    let oversized_batch = PolynomialBatchInput {
+    let oversized_batch = BigIntPolynomialBatchInput {
         polynomials: Some(vec![coeffs(&[1]); MCP_MAX_BATCH_POLYNOMIALS + 1]),
         text: None,
     };
-    assert!(format!("{:?}", parse_batch(&oversized_batch).unwrap_err()).contains("MCP limit"));
+    assert!(
+        format!("{:?}", parse_bigint_batch(&oversized_batch).unwrap_err()).contains("MCP limit")
+    );
 
     let oversized_recurrence_batch = FindRecurrenceRequest {
         polynomials: None,
@@ -1292,7 +1307,7 @@ fn mcp_bounds_generation_and_reports_exact_conversion_errors() {
     assert!(format!("{:?}", too_many_rows.err().expect("row limit error")).contains("MCP limit"));
 
     let oversized_lace = check_family_lace(
-        &vec![normalize_polynomial(vec![1]); 4],
+        &vec![normalize_bigint_polynomial(vec![BigInt::from(1)]); 4],
         &LaceCheckRequest {
             block_rows: Some(MCP_MAX_LACE_MATRIX_CELLS),
             block_cols: Some(2),
@@ -2209,8 +2224,8 @@ fn vector_representations_and_gamma_systems_through_the_mcp_tools() {
     assert_eq!(report["results"][0]["evidence"], "certified_complete_space");
 }
 
-fn i64_batch(polynomials: &[&[i64]]) -> PolynomialBatchInput {
-    PolynomialBatchInput {
+fn i64_batch(polynomials: &[&[i64]]) -> BigIntPolynomialBatchInput {
+    BigIntPolynomialBatchInput {
         polynomials: Some(polynomials.iter().map(|values| coeffs(values)).collect()),
         text: None,
     }
@@ -2250,27 +2265,36 @@ fn parse_polynomials_normalizes_every_input_form_and_keeps_errors() {
         ])))
         .unwrap();
     assert_eq!(coefficients.items.len(), 3);
-    assert_eq!(coefficients.items[0].coefficients, Some(vec![1, 2, 3]));
+    assert_eq!(
+        coefficients.items[0].coefficients,
+        Some(strings(&[1, 2, 3]))
+    );
     assert_eq!(coefficients.items[0].degree, Some(2));
     assert_eq!(
         coefficients.items[0].polynomial.as_deref(),
         Some("1 + 2t + 3t^2")
     );
-    assert_eq!(coefficients.items[2].coefficients, Some(vec![-4, 0, 1]));
+    assert_eq!(
+        coefficients.items[2].coefficients,
+        Some(strings(&[-4, 0, 1]))
+    );
 
     let Json(expressions) = server
-        .parse_polynomials(Parameters(PolynomialBatchInput {
+        .parse_polynomials(Parameters(BigIntPolynomialBatchInput {
             polynomials: Some(vec![expr("3t^2 + 2t + 1"), expr("t^2 - 4")]),
             text: None,
         }))
         .unwrap();
     assert_eq!(expressions.items[0], coefficients.items[0].clone());
-    assert_eq!(expressions.items[1].coefficients, Some(vec![-4, 0, 1]));
+    assert_eq!(
+        expressions.items[1].coefficients,
+        Some(strings(&[-4, 0, 1]))
+    );
 
     // Plain text: one polynomial per line, a bad line is reported without
     // discarding its neighbors, and indices follow the line order.
     let Json(text) = server
-        .parse_polynomials(Parameters(PolynomialBatchInput {
+        .parse_polynomials(Parameters(BigIntPolynomialBatchInput {
             polynomials: None,
             text: Some("1,2,3\nnot a polynomial\n1,1".to_string()),
         }))
@@ -2281,11 +2305,11 @@ fn parse_polynomials_normalizes_every_input_form_and_keeps_errors() {
     assert!(text.items[1].error.is_some());
     assert!(text.items[1].coefficients.is_none());
     assert_eq!(text.items[1].index, 1);
-    assert_eq!(text.items[2].coefficients, Some(vec![1, 1]));
+    assert_eq!(text.items[2].coefficients, Some(strings(&[1, 1])));
 
     // Exactly one of `polynomials` and `text` must be given.
     assert!(server
-        .parse_polynomials(Parameters(PolynomialBatchInput {
+        .parse_polynomials(Parameters(BigIntPolynomialBatchInput {
             polynomials: None,
             text: None,
         }))
@@ -2416,7 +2440,7 @@ fn real_roots_returns_distinct_roots_within_documented_accuracy() {
 
     // A malformed entry is reported in place.
     let Json(response) = server
-        .real_roots(Parameters(PolynomialBatchInput {
+        .real_roots(Parameters(BigIntPolynomialBatchInput {
             polynomials: None,
             text: Some("-1,1\nbad + x".to_string()),
         }))
@@ -2440,25 +2464,28 @@ fn analyze_decomposition_reports_symmetric_decomposition_of_a_small_example() {
     let item = &response.items[0];
     assert!(item.ok);
     let report = item.report.as_ref().unwrap();
-    assert_eq!(report.polynomial.coefficients, vec![1, 4, 2]);
+    assert_eq!(report.polynomial.coefficients, strings(&[1, 4, 2]));
     assert_eq!(report.polynomial.degree, 2);
-    assert_eq!(report.reciprocal.coefficients, vec![2, 4, 1]);
-    assert_eq!(report.a.coefficients, vec![1, 3, 1]);
-    assert_eq!(report.b.coefficients, vec![1, 1]);
+    assert_eq!(report.reciprocal.coefficients, strings(&[2, 4, 1]));
+    assert_eq!(report.a.coefficients, strings(&[1, 3, 1]));
+    assert_eq!(report.b.coefficients, strings(&[1, 1]));
     // Recomposition p = a + t b.
-    let mut recomposed = report.a.coefficients.clone();
-    for (degree, c) in report.b.coefficients.iter().enumerate() {
+    let parse = |values: &[String]| -> Vec<BigInt> {
+        values.iter().map(|value| value.parse().unwrap()).collect()
+    };
+    let mut recomposed = parse(&report.a.coefficients);
+    for (degree, c) in parse(&report.b.coefficients).into_iter().enumerate() {
         recomposed[degree + 1] += c;
     }
-    assert_eq!(recomposed, report.polynomial.coefficients);
+    assert_eq!(recomposed, parse(&report.polynomial.coefficients));
     assert!(report.a_real_rooted && report.b_real_rooted);
     assert_eq!(report.b_interlaces_a, Some(true));
     assert_eq!(report.reciprocal_interlaces_input, Some(true));
     assert!(report.alternatingly_increasing);
-    assert_eq!(report.f_polynomial.coefficients, vec![1, 6, 7]);
-    assert_eq!(report.r_transform_of_f.coefficients, vec![2, 8, 7]);
-    assert_eq!(report.r_a.coefficients, vec![1, 5, 5]);
-    assert_eq!(report.r_b.coefficients, vec![1, 2]);
+    assert_eq!(report.f_polynomial.coefficients, strings(&[1, 6, 7]));
+    assert_eq!(report.r_transform_of_f.coefficients, strings(&[2, 8, 7]));
+    assert_eq!(report.r_a.coefficients, strings(&[1, 5, 5]));
+    assert_eq!(report.r_b.coefficients, strings(&[1, 2]));
     assert_eq!(report.r_interlaces_f, Some(true));
     assert_eq!(report.magic.coordinates, vec!["1", "2", "-1"]);
     assert_eq!(report.magic.left_partial_sums, vec!["1", "3"]);
@@ -2481,7 +2508,7 @@ fn analyze_decomposition_reports_symmetric_decomposition_of_a_small_example() {
 
     // A malformed entry is reported in place; supplying both input forms is an error.
     let Json(response) = server
-        .analyze_decomposition(Parameters(PolynomialBatchInput {
+        .analyze_decomposition(Parameters(BigIntPolynomialBatchInput {
             polynomials: None,
             text: Some("1,4,2\nbad + x".to_string()),
         }))
@@ -2491,7 +2518,7 @@ fn analyze_decomposition_reports_symmetric_decomposition_of_a_small_example() {
     assert!(response.items[1].report.is_none());
     assert!(response.items[1].error.is_some());
     assert!(server
-        .analyze_decomposition(Parameters(PolynomialBatchInput {
+        .analyze_decomposition(Parameters(BigIntPolynomialBatchInput {
             polynomials: Some(vec![coeffs(&[1, 4, 1])]),
             text: Some("1,1".to_string()),
         }))

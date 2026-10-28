@@ -172,6 +172,46 @@ pub fn check_total_positivity(
     max_minor_size: usize,
     strict: bool,
 ) -> Result<(), TotalPositivityError> {
+    check_total_positivity_entries(mat, max_minor_size, strict)
+}
+
+/// `BigInt` version of [`check_total_positivity`], for matrices whose entries
+/// may not fit in `i64`.
+///
+/// The contract, minor order and reported errors are those of the `i64`
+/// function.
+///
+/// # Example
+/// ```
+/// use num_bigint::BigInt;
+/// use polytool::linalg::check_total_positivity_bigint;
+/// // Rows of (1 + 10^20 x)^n are far beyond i64.
+/// let big = BigInt::from(10).pow(20);
+/// let mat = vec![
+///     vec![BigInt::from(1), BigInt::from(0)],
+///     vec![BigInt::from(1), big.clone()],
+///     vec![BigInt::from(1), big * 2],
+/// ];
+/// assert!(check_total_positivity_bigint(&mat, 2, false).is_ok());
+/// ```
+pub fn check_total_positivity_bigint(
+    mat: &[Vec<BigInt>],
+    max_minor_size: usize,
+    strict: bool,
+) -> Result<(), TotalPositivityError> {
+    check_total_positivity_entries(mat, max_minor_size, strict)
+}
+
+// Shared kernel of the `i64` and `BigInt` entry points; the minors are exact
+// `BigInt` determinants in both cases.
+fn check_total_positivity_entries<T>(
+    mat: &[Vec<T>],
+    max_minor_size: usize,
+    strict: bool,
+) -> Result<(), TotalPositivityError>
+where
+    T: Clone + Into<BigInt>,
+{
     let nrows = mat.len();
     if nrows == 0 {
         return Ok(());
@@ -193,7 +233,7 @@ pub fn check_total_positivity(
     for k in 1..=max_k {
         for rows in CombinationIterator::new(nrows, k) {
             for cols in CombinationIterator::new(ncols, k) {
-                let sub = extract_submatrix_i64(mat, &rows, &cols);
+                let sub = extract_submatrix(mat, &rows, &cols);
                 let det = determinant(&sub);
                 if det < BigInt::zero() {
                     return Err(TotalPositivityError::NegativeMinor {
@@ -205,7 +245,9 @@ pub fn check_total_positivity(
                 }
                 if strict && det.is_zero() {
                     // Check if this is a non-trivial zero
-                    let all_zero = rows.iter().all(|&r| cols.iter().all(|&c| mat[r][c] == 0));
+                    let all_zero = rows
+                        .iter()
+                        .all(|&r| cols.iter().all(|&c| mat[r][c].clone().into().is_zero()));
                     if !all_zero {
                         return Err(TotalPositivityError::ZeroMinor {
                             size: k,
@@ -440,9 +482,13 @@ pub fn check_tnn_neville_bigint(mat: &[Vec<BigInt>]) -> Result<(), TotalPositivi
     check_totally_nonnegative_neville_bigint(mat)
 }
 
-fn extract_submatrix_i64(mat: &[Vec<i64>], rows: &[usize], cols: &[usize]) -> Vec<Vec<BigInt>> {
+fn extract_submatrix<T: Clone + Into<BigInt>>(
+    mat: &[Vec<T>],
+    rows: &[usize],
+    cols: &[usize],
+) -> Vec<Vec<BigInt>> {
     rows.iter()
-        .map(|&r| cols.iter().map(|&c| BigInt::from(mat[r][c])).collect())
+        .map(|&r| cols.iter().map(|&c| mat[r][c].clone().into()).collect())
         .collect()
 }
 
@@ -491,6 +537,64 @@ mod tests {
     // -----------------------------------------------------------------------
     // Total non-negativity
     // -----------------------------------------------------------------------
+
+    #[test]
+    fn bigint_minor_check_agrees_with_the_i64_check() {
+        let matrices: Vec<Vec<Vec<i64>>> = vec![
+            vec![],
+            vec![vec![1, 0, 0], vec![1, 1, 0], vec![1, 2, 1], vec![1, 3, 3]],
+            vec![vec![1, 2], vec![3, 4]],
+            vec![vec![0, 0], vec![0, 1]],
+            vec![vec![1, 1], vec![1]],
+        ];
+        for matrix in matrices {
+            let big: Vec<Vec<BigInt>> = matrix
+                .iter()
+                .map(|row| row.iter().map(|&v| BigInt::from(v)).collect())
+                .collect();
+            for size in 0..4 {
+                for strict in [false, true] {
+                    assert_eq!(
+                        check_total_positivity_bigint(&big, size, strict),
+                        check_total_positivity(&matrix, size, strict),
+                        "{matrix:?} size {size} strict {strict}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bigint_minor_check_handles_entries_beyond_i64() {
+        // Binomial rows of (1 + 10^10 x)^n for n = 0..=3 have entries up to 10^30.
+        let q = BigInt::from(10).pow(10);
+        let rows: Vec<Vec<BigInt>> = (0..4usize)
+            .map(|n| {
+                (0..4usize)
+                    .map(|k| {
+                        if k > n {
+                            return BigInt::from(0);
+                        }
+                        let mut binomial = BigInt::from(1);
+                        for i in 0..k {
+                            binomial = binomial * BigInt::from(n - i) / BigInt::from(i + 1);
+                        }
+                        binomial * q.pow(k as u32)
+                    })
+                    .collect()
+            })
+            .collect();
+        assert!(rows[3][3] > BigInt::from(i64::MAX));
+        assert!(check_total_positivity_bigint(&rows, 3, false).is_ok());
+
+        // Negating one huge entry creates a negative 1 x 1 minor.
+        let mut bad = rows.clone();
+        bad[3][3] = -bad[3][3].clone();
+        assert!(matches!(
+            check_total_positivity_bigint(&bad, 1, false),
+            Err(TotalPositivityError::NegativeMinor { size: 1, .. })
+        ));
+    }
 
     #[test]
     fn test_tnn_pascal() {

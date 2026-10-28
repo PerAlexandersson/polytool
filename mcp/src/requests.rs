@@ -8,35 +8,6 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use std::borrow::Cow;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct PolynomialInput {
-    pub coefficients: Option<Vec<i64>>,
-    pub expression: Option<String>,
-}
-
-impl JsonSchema for PolynomialInput {
-    fn schema_name() -> Cow<'static, str> {
-        "PolynomialInput".into()
-    }
-
-    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
-        Schema::try_from(json!({
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "coefficients": <Vec<i64>>::json_schema(generator),
-                "expression": String::json_schema(generator)
-            },
-            "oneOf": [
-                { "required": ["coefficients"] },
-                { "required": ["expression"] }
-            ]
-        }))
-        .expect("valid PolynomialInput schema")
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum BigIntCoefficientInput {
@@ -159,13 +130,6 @@ pub struct BigIntPolynomialBatchInput {
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct PolynomialBatchInput {
-    pub polynomials: Option<Vec<PolynomialInput>>,
-    pub text: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
 pub struct FamilyCheckOptions {
     pub require_real_rooted: Option<bool>,
     pub require_simple_roots: Option<bool>,
@@ -193,7 +157,7 @@ pub struct LaceCheckRequest {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CheckPolynomialFamilyRequest {
-    pub polynomials: Option<Vec<PolynomialInput>>,
+    pub polynomials: Option<Vec<BigIntPolynomialInput>>,
     pub text: Option<String>,
     pub sequence: Option<SequenceKind>,
     pub max_n: Option<usize>,
@@ -261,11 +225,61 @@ pub struct RecurrenceSearchOptionsInput {
     pub max_candidates: Option<usize>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum RationalCoefficientInput {
     Integer(i64),
     Text(String),
+}
+
+impl<'de> Deserialize<'de> for RationalCoefficientInput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct RationalCoefficientVisitor;
+
+        impl de::Visitor<'_> for RationalCoefficientVisitor {
+            type Value = RationalCoefficientInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("an integer or an exact rational encoded as a string")
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+                Ok(RationalCoefficientInput::Integer(value))
+            }
+
+            // JSON integers above `i64::MAX` are kept exactly, as text.
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E> {
+                Ok(i64::try_from(value).map_or_else(
+                    |_| RationalCoefficientInput::Text(value.to_string()),
+                    RationalCoefficientInput::Integer,
+                ))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Err(E::custom(format!(
+                    "rational coefficient was received as the floating-point JSON number {value}; \
+                     send exact coefficients as quoted strings, especially outside the \
+                     JavaScript safe-integer range [-9007199254740991, 9007199254740991]"
+                )))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> {
+                Ok(RationalCoefficientInput::Text(value.to_string()))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+                Ok(RationalCoefficientInput::Text(value))
+            }
+        }
+
+        deserializer.deserialize_any(RationalCoefficientVisitor)
+    }
 }
 
 impl From<i64> for RationalCoefficientInput {
@@ -296,8 +310,9 @@ impl JsonSchema for RationalCoefficientInput {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FindRecurrenceRequest {
-    /// Polynomial objects; provide exactly one polynomial input form.
-    pub polynomials: Option<Vec<PolynomialInput>>,
+    /// Polynomial objects (integer coefficients, as numbers or exact decimal
+    /// strings, or an expression); provide exactly one polynomial input form.
+    pub polynomials: Option<Vec<BigIntPolynomialInput>>,
     /// Dense exact rational coefficient rows; integers or rational strings.
     pub coefficients: Option<Vec<Vec<RationalCoefficientInput>>>,
     /// Polynomial expressions, one expression per sequence row.

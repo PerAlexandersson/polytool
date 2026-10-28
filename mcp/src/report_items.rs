@@ -3,21 +3,19 @@
 
 use crate::parsing::{
     bigint_strings, normalize_bigint_polynomial, BigIntParsedBatch, NormalizedBigIntPolynomial,
-    ParsedBatch,
 };
 use crate::responses::{
-    BigIntNormalizedPolynomial, BigIntParsePolynomialItem, CoefficientCriterionItem,
-    CoefficientInequalityCheckItem, CoefficientTestsItem, CyclicSievingPowerCheckItem,
-    CyclicSievingReportItem, CyclicSievingSequenceItemResponse, DisplayedPolynomial,
-    HStarInequalitiesItem, HStarInequalityCheckItem, InterlacingPairItem, InterlacingPairResult,
-    NormalizedPolynomial, OeisSequenceSummary, OrbitDecompositionItem, OrbitSizeEntryItem,
-    OrbitSizesCheckItem, ParsePolynomialItem, PolynomialPropertiesItem, ResidueClassItem,
-    RootOfUnityEvaluationItem,
+    BigIntParsePolynomialItem, CoefficientCriterionItem, CoefficientInequalityCheckItem,
+    CoefficientTestsItem, CyclicSievingPowerCheckItem, CyclicSievingReportItem,
+    CyclicSievingSequenceItemResponse, DisplayedPolynomial, HStarInequalitiesItem,
+    HStarInequalityCheckItem, InterlacingPairItem, InterlacingPairResult, OeisSequenceSummary,
+    OrbitDecompositionItem, OrbitSizeEntryItem, OrbitSizesCheckItem, ParsePolynomialItem,
+    PolynomialPropertiesItem, ResidueClassItem, RootOfUnityEvaluationItem,
 };
 use num_bigint::BigInt;
 use polytool::*;
 
-pub(crate) fn parse_items(batch: &ParsedBatch) -> Vec<ParsePolynomialItem> {
+pub(crate) fn parse_items(batch: &BigIntParsedBatch) -> Vec<ParsePolynomialItem> {
     batch
         .iter()
         .enumerate()
@@ -25,9 +23,9 @@ pub(crate) fn parse_items(batch: &ParsedBatch) -> Vec<ParsePolynomialItem> {
             Ok(polynomial) => ParsePolynomialItem {
                 index,
                 ok: true,
-                polynomial: Some(polynomial.polynomial.clone()),
-                coefficients: Some(polynomial.coefficients.clone()),
-                degree: Some(polynomial.degree),
+                polynomial: Some(polynomial.display.polynomial.clone()),
+                coefficients: Some(polynomial.display.coefficients.clone()),
+                degree: Some(polynomial.display.degree),
                 error: None,
             },
             Err(error) => ParsePolynomialItem {
@@ -292,15 +290,6 @@ pub(crate) fn interlacing_result(
     }
 }
 
-pub(crate) fn interlacing_result_i64(
-    p: NormalizedPolynomial,
-    q: NormalizedPolynomial,
-) -> InterlacingPairResult {
-    let p = normalize_bigint_polynomial(p.coefficients.into_iter().map(BigInt::from).collect());
-    let q = normalize_bigint_polynomial(q.coefficients.into_iter().map(BigInt::from).collect());
-    interlacing_result(p, q)
-}
-
 pub(crate) fn interlacing_pair_has_interlacing(item: &InterlacingPairItem) -> bool {
     item.result.as_ref().is_some_and(|result| {
         matches!(
@@ -346,30 +335,51 @@ pub(crate) fn interlacing_pair_item(
     }
 }
 
-fn polynomial_properties_item_i64(
-    index: usize,
-    polynomial: BigIntNormalizedPolynomial,
-    coefficients: &[i64],
-) -> PolynomialPropertiesItem {
-    let gamma = gamma_coefficients_ignoring_initial_zeros(coefficients);
-    let gamma_positive = gamma
+/// The exact property verdicts of one integer polynomial.
+pub(crate) struct PolynomialPropertyValues {
+    pub(crate) real_rooted: bool,
+    pub(crate) simple_roots: bool,
+    pub(crate) palindromic: bool,
+    pub(crate) gamma_positive: bool,
+    pub(crate) gamma_coefficients: Option<Vec<BigInt>>,
+    pub(crate) unimodal: bool,
+    pub(crate) log_concave: bool,
+    pub(crate) ultra_log_concave: bool,
+}
+
+/// Compute the property verdicts for ascending `BigInt` coefficients.
+///
+/// Rows that fit in `i64` use the `i64` routines for the yes/no checks; the
+/// gamma expansion is always computed with `BigInt` arithmetic, so a
+/// palindromic row whose gamma coefficients exceed `i64` still reports them
+/// (and its gamma-positivity) exactly.
+pub(crate) fn polynomial_property_values(coefficients: &[BigInt]) -> PolynomialPropertyValues {
+    let gamma_coefficients = gamma_coefficients_ignoring_initial_zeros_bigint_coeffs(coefficients);
+    let zero = BigInt::from(0);
+    let gamma_positive = gamma_coefficients
         .as_ref()
-        .is_some_and(|gamma| gamma.iter().all(|&value| value >= 0));
-    let gamma_coefficients =
-        gamma.map(|gamma| gamma.into_iter().map(|value| value.to_string()).collect());
-    PolynomialPropertiesItem {
-        index,
-        ok: true,
-        error: None,
-        polynomial: Some(polynomial),
-        real_rooted: Some(is_real_rooted(coefficients)),
-        simple_roots: Some(has_simple_roots(coefficients)),
-        palindromic: Some(is_palindromic_ignoring_initial_zeros(coefficients)),
-        gamma_positive: Some(gamma_positive),
+        .is_some_and(|gamma| gamma.iter().all(|value| value >= &zero));
+    if let Some(small) = bigint_coeffs_to_i64(coefficients) {
+        return PolynomialPropertyValues {
+            real_rooted: is_real_rooted(&small),
+            simple_roots: has_simple_roots(&small),
+            palindromic: is_palindromic_ignoring_initial_zeros(&small),
+            gamma_positive,
+            gamma_coefficients,
+            unimodal: is_unimodal(&small),
+            log_concave: is_log_concave(&small),
+            ultra_log_concave: is_ultra_log_concave(&small),
+        };
+    }
+    PolynomialPropertyValues {
+        real_rooted: is_real_rooted_bigint_coeffs(coefficients),
+        simple_roots: has_simple_roots_bigint_coeffs(coefficients),
+        palindromic: is_palindromic_ignoring_initial_zeros_bigint_coeffs(coefficients),
+        gamma_positive,
         gamma_coefficients,
-        unimodal: Some(is_unimodal(coefficients)),
-        log_concave: Some(is_log_concave(coefficients)),
-        ultra_log_concave: Some(is_ultra_log_concave(coefficients)),
+        unimodal: is_unimodal_bigint_coeffs(coefficients),
+        log_concave: is_log_concave_bigint_coeffs(coefficients),
+        ultra_log_concave: is_ultra_log_concave_bigint_coeffs(coefficients),
     }
 }
 
@@ -377,31 +387,22 @@ pub(crate) fn polynomial_properties_item_bigint(
     index: usize,
     polynomial: NormalizedBigIntPolynomial,
 ) -> PolynomialPropertiesItem {
-    if let Some(coefficients) = bigint_coeffs_to_i64(&polynomial.coefficients) {
-        return polynomial_properties_item_i64(index, polynomial.display, &coefficients);
-    }
-
-    let zero = BigInt::from(0);
-    let gamma_coefficients =
-        gamma_coefficients_ignoring_initial_zeros_bigint_coeffs(&polynomial.coefficients);
-    let gamma_positive = gamma_coefficients
-        .as_ref()
-        .is_some_and(|gamma| gamma.iter().all(|value| value >= &zero));
+    let values = polynomial_property_values(&polynomial.coefficients);
     PolynomialPropertiesItem {
         index,
         ok: true,
         error: None,
         polynomial: Some(polynomial.display),
-        real_rooted: Some(is_real_rooted_bigint_coeffs(&polynomial.coefficients)),
-        simple_roots: Some(has_simple_roots_bigint_coeffs(&polynomial.coefficients)),
-        palindromic: Some(is_palindromic_ignoring_initial_zeros_bigint_coeffs(
-            &polynomial.coefficients,
-        )),
-        gamma_positive: Some(gamma_positive),
-        gamma_coefficients: gamma_coefficients.map(|gamma| bigint_strings(&gamma)),
-        unimodal: Some(is_unimodal_bigint_coeffs(&polynomial.coefficients)),
-        log_concave: Some(is_log_concave_bigint_coeffs(&polynomial.coefficients)),
-        ultra_log_concave: Some(is_ultra_log_concave_bigint_coeffs(&polynomial.coefficients)),
+        real_rooted: Some(values.real_rooted),
+        simple_roots: Some(values.simple_roots),
+        palindromic: Some(values.palindromic),
+        gamma_positive: Some(values.gamma_positive),
+        gamma_coefficients: values
+            .gamma_coefficients
+            .map(|gamma| bigint_strings(&gamma)),
+        unimodal: Some(values.unimodal),
+        log_concave: Some(values.log_concave),
+        ultra_log_concave: Some(values.ultra_log_concave),
     }
 }
 
@@ -421,10 +422,10 @@ pub(crate) fn oeis_sequence_summary(
     }
 }
 
-pub(crate) fn displayed(coefficients: &[i64]) -> DisplayedPolynomial {
+pub(crate) fn displayed(coefficients: &[BigInt]) -> DisplayedPolynomial {
     DisplayedPolynomial {
-        polynomial: format_poly(coefficients),
-        coefficients: coefficients.to_vec(),
+        polynomial: format_poly_bigint_coeffs(coefficients),
+        coefficients: bigint_strings(coefficients),
     }
 }
 

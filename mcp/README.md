@@ -221,7 +221,11 @@ Most tools accept one of these forms:
 { "expression": "1 + 11t + 11t^2 + t^3" }
 ```
 
-`PolynomialInput` requires exactly one of `coefficients` or `expression`.
+A polynomial input requires exactly one of `coefficients` or `expression`.
+Coefficients are exact integers of any size, given as JSON integers or, for
+values outside a client's safe-integer range, as decimal strings (for example
+`{ "coefficients": ["1267650600228229401496703205376", 1] }`).  Floating-point
+JSON numbers are rejected.
 
 Batch tools accept exactly one of:
 
@@ -280,7 +284,8 @@ Example arguments:
 ```
 
 Returns `items`, each with `index`, `ok`, and either normalized polynomial data
-or an `error`.
+(`polynomial`, `coefficients` as decimal strings, `degree`) or an `error`.
+Coefficients of any size are accepted.
 
 ### `check_polynomial_family`
 
@@ -328,6 +333,13 @@ real-rootedness is required, while gamma-positivity, log-concavity,
 palindromicity, and consecutive interlacing are reported but only required
 when their `require_*` flags are set.  A requested `lace` check is required to
 be TNN, and a requested recurrence search is required to find a recurrence.
+
+All inputs (`polynomials`, `text` and the generated `sequence` rows) may have
+coefficients of any size.  The per-polynomial `coefficients`, the
+`gamma_coefficients` and the optional `lace.matrix` are returned as decimal
+strings; the gamma expansion of a palindromic row is exact even when its gamma
+coefficients exceed 64 bits.  The bounded-minors Lace check and the recurrence
+search use exact arithmetic for any size.
 The `lace` truncation is limited to 16384 matrix rows and 16384 block columns
 (each on its own, so `block_cols: 0` does not admit an arbitrary `block_rows`),
 16384 matrix cells and 250000 checked minors; a larger request is reported in
@@ -474,6 +486,9 @@ Example arguments:
 }
 ```
 
+Coefficients of any size are accepted; the returned normalized polynomial has
+its coefficients as decimal strings.
+
 ### `find_recurrence`
 
 Search adaptively for a recurrence in a polynomial sequence.
@@ -482,8 +497,13 @@ Provide exactly one input source:
 
 - `coefficients`: dense coefficient vectors, one polynomial per row;
 - `expressions`: polynomial expressions such as `"1 + 4*x + x^2"`;
-- `polynomials`: explicit `PolynomialInput` objects;
+- `polynomials`: explicit polynomial objects (`coefficients` or `expression`);
 - `text`: newline-separated polynomial data.
+
+Integer coefficients of any size are accepted in every form (as JSON integers or
+decimal strings); `coefficients` rows may also contain exact rational strings.
+`find_recurrence_representations` takes the same inputs and names each row that
+fails to parse in its error.
 
 Flat compact-result example (all search controls are top-level):
 
@@ -745,7 +765,9 @@ Ehrhart polynomial to h*-vector using a common denominator:
 ### `analyze_decomposition`
 
 Analyze symmetric decomposition, R-transform data, interlacing checks, and
-magic-basis coordinates.
+magic-basis coordinates.  Coefficients of any size are accepted, and the
+returned polynomials (`coefficients`, `reciprocal`, `a`, `b`, the f-polynomial
+and R-transform data) list their coefficients as decimal strings.
 
 Example arguments:
 

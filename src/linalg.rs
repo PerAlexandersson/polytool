@@ -58,7 +58,7 @@ pub use total_positivity::{
     check_tnn_neville, check_tnn_neville_bigint, is_tnn, is_totally_nonnegative,
 };
 pub use total_positivity::{
-    check_total_positivity, check_totally_nonnegative_neville,
+    check_total_positivity, check_total_positivity_bigint, check_totally_nonnegative_neville,
     check_totally_nonnegative_neville_bigint, is_totally_nonnegative_by_minors,
     is_totally_nonnegative_neville, TotalPositivityError,
 };
