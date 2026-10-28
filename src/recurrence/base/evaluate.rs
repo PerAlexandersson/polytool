@@ -206,29 +206,20 @@ impl Recurrence {
     }
 
     /// Generate `total_rows` rows, including the supplied initial rows.
+    ///
+    /// Collects the first `total_rows` items of [`Self::generate_rows_rational_iter`];
+    /// a request with `total_rows <= initial_rows.len()` evaluates no
+    /// recurrence step and needs no sufficient seed count.  The first failing
+    /// step aborts with its error.
     pub fn generate_rows_rational(
         &self,
         initial_rows: &[Vec<BigRational>],
         first_index: usize,
         total_rows: usize,
     ) -> Result<Vec<Vec<BigRational>>, RecurrenceEvaluationError> {
-        if total_rows <= initial_rows.len() {
-            return Ok(initial_rows[..total_rows].to_vec());
-        }
-        let required = self.max_offset();
-        if initial_rows.len() < required {
-            return Err(RecurrenceEvaluationError::InsufficientInitialRows {
-                required,
-                provided: initial_rows.len(),
-            });
-        }
-
-        let mut rows = initial_rows.to_vec();
-        while rows.len() < total_rows {
-            let next = self.evaluate_next_rational(&rows, first_index)?;
-            rows.push(next);
-        }
-        Ok(rows)
+        self.generate_rows_rational_iter(initial_rows, first_index)
+            .take(total_rows)
+            .collect()
     }
 }
 

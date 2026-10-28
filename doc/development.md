@@ -48,6 +48,9 @@ The tracked programs in `examples/` are run with
   digraph and checks the chain polynomials of a small TNN matrix.
 - `generate_recurrence_benchmarks OUT_DIR`: regenerates the synthetic
   recurrence benchmark fixtures into a scratch directory.
+- `lazy_rows`: pulls rows lazily from the OEIS catalog, a plain recurrence and a
+  named family (`.by_ref().take(k)`, continuing the same iterator, and the
+  equivalent batch form).
 - `literature_sequence_rows`: exports exact literature families (Delannoy,
   Eulerian-square, Hoggatt) as polytool-compatible coefficient rows.
 - `recognize_renewal`: reads recurrence JSON on stdin and reports whether it is

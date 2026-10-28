@@ -8,7 +8,11 @@
 //! Entry points: [`by_id`] (case-insensitive A-number lookup),
 //! [`catalog`] (all entries, sorted by A-number), and
 //! [`OeisSequenceDefinition::generate_rows`] /
-//! [`OeisSequenceDefinition::generate_rows_from`] to replay rows.
+//! [`OeisSequenceDefinition::generate_rows_from`] to replay rows, and
+//! [`OeisSequenceDefinition::generate_rows_iter`] /
+//! [`OeisSequenceDefinition::generate_rows_from_iter`] ([`OeisRowIterator`]) to pull
+//! them lazily, one at a time, from the shared
+//! [`RecurrenceRowIterator`]; the batch functions collect from it.
 //!
 //! Conventions: rows are `Vec<BigInt>` coefficient vectors in ascending powers
 //! of `t` (entry `k` is the coefficient of `t^k`, the OEIS column index for
@@ -30,13 +34,14 @@
 
 use crate::recurrence::{
     parse_rational_coeff, BigRational, BivarPoly, Recurrence, RecurrenceEvaluationError,
-    RecurrenceSign, RecurrenceTerm,
+    RecurrenceRowIterator, RecurrenceSign, RecurrenceTerm,
 };
 use num_bigint::BigInt;
 use num_traits::One;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
+use std::iter::FusedIterator;
 
 // `OeisSequenceStatus`, `OeisLayout` and the data-file record types.
 include!("oeis_catalog_schema.rs");
@@ -349,75 +354,80 @@ impl OeisSequenceDefinition {
         Ok((recurrence.shift_index(shift), rows, self.first_row))
     }
 
-    /// Generate the first `row_count` complete rows in catalog order.
-    pub fn generate_rows(&self, row_count: usize) -> Result<Vec<Vec<BigInt>>, OeisSequenceError> {
-        let prefix = decode_rows(self.id, self.prefix_rows)?;
-        let needed_recurrence_rows = row_count.saturating_sub(prefix.len());
-        let recurrence_rows = if needed_recurrence_rows == 0 {
-            Vec::new()
-        } else {
-            let (recurrence, initial_rows) = self.recurrence_parts()?;
-            recurrence.generate_rows_rational(
-                &initial_rows,
-                self.recurrence_first_index,
-                needed_recurrence_rows,
-            )?
-        };
-        let prefix_count = prefix.len();
-        prefix
-            .into_iter()
-            .take(row_count)
-            .chain(recurrence_rows)
-            .enumerate()
-            .map(|(index, row)| {
-                let displayed_row = self.first_row + index as i64;
-                let mut integers = row
-                    .into_iter()
-                    .map(|coefficient| {
-                        if coefficient.denom() != &BigInt::one() {
-                            Err(OeisSequenceError::NonIntegralCoefficient {
-                                id: self.id,
-                                row: displayed_row,
-                            })
-                        } else {
-                            Ok(coefficient.numer().clone())
-                        }
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                if self.bfile_prefix_verified
-                    && self.layout == OeisLayout::RegularTriangle
-                    && index >= prefix_count
-                {
-                    let recurrence_index = index - prefix_count;
-                    let expected_width = self
-                        .recurrence_first_width
-                        .checked_add(recurrence_index)
-                        .ok_or_else(|| OeisSequenceError::InvalidDefinition {
-                            id: self.id,
-                            message: "row width overflow".to_string(),
-                        })?;
-                    integers.resize(expected_width, BigInt::from(0));
-                }
-                Ok(integers)
-            })
-            .collect()
+    /// Lazily iterate over the complete rows in catalog order, beginning at
+    /// [`first_row`](Self::first_row).
+    ///
+    /// The stream is the authoritative [`prefix_rows`](Self::prefix_rows)
+    /// followed by the recurrence's initial rows and then the rows computed by
+    /// the shared [`RecurrenceRowIterator`], with the same exact rational
+    /// evaluation, integer conversion and width padding as
+    /// [`Self::generate_rows`].  See [`OeisRowIterator`] for the laziness and
+    /// error contract.
+    ///
+    /// # Errors
+    ///
+    /// Only a corrupt prefix is reported here (construction time:
+    /// [`OeisSequenceError::InvalidDefinition`]).  Everything else, including a
+    /// corrupt recurrence, is reported by the iterator when the row is reached.
+    pub fn generate_rows_iter(&self) -> Result<OeisRowIterator, OeisSequenceError> {
+        Ok(OeisRowIterator {
+            definition: *self,
+            prefix: decode_rows(self.id, self.prefix_rows)?.into(),
+            recurrence_rows: None,
+            rows_consumed: 0,
+            pending_skip: 0,
+            finished: false,
+        })
     }
 
-    /// Generate `row_count` rows beginning at a displayed OEIS row index.
-    pub fn generate_rows_from(
+    /// Like [`Self::generate_rows_iter`], but the first row yielded is the one with
+    /// displayed OEIS row index `first_row`.
+    ///
+    /// The earlier rows are still traversed (nothing is random access), but
+    /// lazily on the first call to `next` and without being retained; an error
+    /// in a skipped row is yielded as the first item.  Construction does no
+    /// evaluation.
+    ///
+    /// # Errors
+    ///
+    /// [`OeisSequenceError::RowBeforeStart`] if `first_row < self.first_row`,
+    /// and the construction-time error of [`Self::generate_rows_iter`].
+    pub fn generate_rows_from_iter(
         &self,
         first_row: i64,
-        row_count: usize,
-    ) -> Result<Vec<Vec<BigInt>>, OeisSequenceError> {
+    ) -> Result<OeisRowIterator, OeisSequenceError> {
         if first_row < self.first_row {
             return Err(OeisSequenceError::RowBeforeStart {
                 requested: first_row,
                 first: self.first_row,
             });
         }
-        let skipped = usize::try_from(first_row - self.first_row).unwrap_or(usize::MAX);
-        let rows = self.generate_rows(skipped.saturating_add(row_count))?;
-        Ok(rows.into_iter().skip(skipped).collect())
+        let mut rows = self.generate_rows_iter()?;
+        rows.pending_skip = usize::try_from(first_row - self.first_row).unwrap_or(usize::MAX);
+        Ok(rows)
+    }
+
+    /// Generate the first `row_count` complete rows in catalog order.
+    ///
+    /// Collects the first `row_count` items of [`Self::generate_rows_iter`].  A request
+    /// that fits in the authoritative prefix, and a request for zero rows,
+    /// evaluate no recurrence step.
+    pub fn generate_rows(&self, row_count: usize) -> Result<Vec<Vec<BigInt>>, OeisSequenceError> {
+        self.generate_rows_iter()?.take(row_count).collect()
+    }
+
+    /// Generate `row_count` rows beginning at a displayed OEIS row index.
+    ///
+    /// The rows before `first_row` are generated and validated but not
+    /// retained; use [`Self::generate_rows_from_iter`] to keep consuming lazily.
+    pub fn generate_rows_from(
+        &self,
+        first_row: i64,
+        row_count: usize,
+    ) -> Result<Vec<Vec<BigInt>>, OeisSequenceError> {
+        let mut rows = self.generate_rows_from_iter(first_row)?;
+        rows.discard_pending_skip()?;
+        rows.take(row_count).collect()
     }
 
     /// Flattened index corresponding to the beginning of `displayed_row`.
@@ -432,12 +442,15 @@ impl OeisSequenceDefinition {
             });
         }
         let skipped = usize::try_from(displayed_row - self.first_row).unwrap_or(usize::MAX);
-        let rows = self.generate_rows(skipped)?;
-        let skipped_terms = rows.iter().try_fold(0i64, |sum, row| {
-            i64::try_from(row.len())
-                .ok()
-                .and_then(|length| sum.checked_add(length))
-        });
+        let mut skipped_terms = Some(0i64);
+        for row in self.generate_rows_iter()?.take(skipped) {
+            let row = row?;
+            skipped_terms = skipped_terms.and_then(|sum| {
+                i64::try_from(row.len())
+                    .ok()
+                    .and_then(|length| sum.checked_add(length))
+            });
+        }
         skipped_terms
             .and_then(|terms| self.flattened_offset.checked_add(terms))
             .ok_or_else(|| OeisSequenceError::InvalidDefinition {
@@ -446,6 +459,192 @@ impl OeisSequenceDefinition {
             })
     }
 }
+
+/// Lazy iterator over the rows of one [`OeisSequenceDefinition`], created by
+/// [`OeisSequenceDefinition::generate_rows_iter`] or
+/// [`OeisSequenceDefinition::generate_rows_from_iter`].
+///
+/// It is an adapter over the shared [`RecurrenceRowIterator`], not a separate
+/// generator: the decoded authoritative prefix rows come first, then the
+/// recurrence initial rows and computed rows at their *internal* recurrence
+/// indices (starting at [`OeisSequenceDefinition::recurrence_first_index`]),
+/// while error messages and [`Self::next_displayed_row`] use the *displayed*
+/// OEIS row indices.  Items are integer coefficient rows in ascending powers of
+/// `t`, padded to the structural width of the triangle exactly as in
+/// [`OeisSequenceDefinition::generate_rows`].
+///
+/// # Contract
+///
+/// * The first item is the first row at or after the requested start; the
+///   iterator keeps its position, so `by_ref().take(k)` followed by more calls
+///   continues without recomputation.
+/// * Nothing is evaluated until a row beyond the prefix is requested, and the
+///   recurrence is decoded and started only then.  Stopping consumption stops
+///   generation.  Only the bounded history window of the recurrence is
+///   retained.
+/// * A step failure ([`OeisSequenceError::Evaluation`]), a nonintegral
+///   coefficient ([`OeisSequenceError::NonIntegralCoefficient`]) or a corrupt
+///   recurrence entry is yielded once, after which the iterator ends
+///   ([`FusedIterator`]).  Unlike the batch evaluation of the whole prefix,
+///   errors are reported in row order, so an earlier nonintegral row wins
+///   over a later step failure.
+#[derive(Debug, Clone)]
+pub struct OeisRowIterator {
+    definition: OeisSequenceDefinition,
+    prefix: VecDeque<Vec<BigRational>>,
+    recurrence_rows: Option<RecurrenceRowIterator>,
+    /// Rows already taken from the underlying stream (yielded or skipped).
+    rows_consumed: usize,
+    /// Rows still to be discarded before the first one is yielded.
+    pending_skip: usize,
+    finished: bool,
+}
+
+impl OeisRowIterator {
+    /// The sequence definition being iterated.
+    pub fn definition(&self) -> &OeisSequenceDefinition {
+        &self.definition
+    }
+
+    /// Displayed OEIS row index of the row the next call to `next` yields, or
+    /// `None` if it does not fit in `i64`.
+    pub fn next_displayed_row(&self) -> Option<i64> {
+        let consumed = i64::try_from(self.rows_consumed.checked_add(self.pending_skip)?).ok()?;
+        self.definition.first_row.checked_add(consumed)
+    }
+
+    /// Number of recurrence steps evaluated so far (zero while only the
+    /// authoritative prefix and the recurrence's initial rows were consumed).
+    pub fn recurrence_steps_evaluated(&self) -> usize {
+        self.recurrence_rows
+            .as_ref()
+            .map_or(0, RecurrenceRowIterator::steps_evaluated)
+    }
+
+    /// Number of rows retained in memory: the not yet consumed prefix rows and
+    /// the recurrence's bounded history (see
+    /// [`RecurrenceRowIterator::retained_row_count`]).
+    pub fn retained_row_count(&self) -> usize {
+        self.prefix.len()
+            + self
+                .recurrence_rows
+                .as_ref()
+                .map_or(0, RecurrenceRowIterator::retained_row_count)
+    }
+
+    fn next_raw_row(&mut self) -> Result<Vec<BigRational>, OeisSequenceError> {
+        if let Some(row) = self.prefix.pop_front() {
+            return Ok(row);
+        }
+        if self.recurrence_rows.is_none() {
+            let (recurrence, initial_rows) = self.definition.recurrence_parts()?;
+            self.recurrence_rows = Some(RecurrenceRowIterator::new(
+                recurrence,
+                initial_rows,
+                self.definition.recurrence_first_index,
+            ));
+        }
+        match self.recurrence_rows.as_mut().and_then(Iterator::next) {
+            Some(row) => Ok(row?),
+            None => Err(OeisSequenceError::InvalidDefinition {
+                id: self.definition.id,
+                message: "recurrence row stream ended".to_string(),
+            }),
+        }
+    }
+
+    fn convert_row(
+        &self,
+        index: usize,
+        row: Vec<BigRational>,
+    ) -> Result<Vec<BigInt>, OeisSequenceError> {
+        let definition = &self.definition;
+        let displayed_row = i64::try_from(index)
+            .ok()
+            .and_then(|offset| definition.first_row.checked_add(offset))
+            .ok_or_else(|| OeisSequenceError::InvalidDefinition {
+                id: definition.id,
+                message: "displayed row index overflows i64".to_string(),
+            })?;
+        let mut integers = row
+            .into_iter()
+            .map(|coefficient| {
+                if coefficient.denom() != &BigInt::one() {
+                    Err(OeisSequenceError::NonIntegralCoefficient {
+                        id: definition.id,
+                        row: displayed_row,
+                    })
+                } else {
+                    Ok(coefficient.numer().clone())
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let prefix_count = definition.prefix_rows.len();
+        if definition.bfile_prefix_verified
+            && definition.layout == OeisLayout::RegularTriangle
+            && index >= prefix_count
+        {
+            let expected_width = definition
+                .recurrence_first_width
+                .checked_add(index - prefix_count)
+                .ok_or_else(|| OeisSequenceError::InvalidDefinition {
+                    id: definition.id,
+                    message: "row width overflow".to_string(),
+                })?;
+            integers.resize(expected_width, BigInt::from(0));
+        }
+        Ok(integers)
+    }
+
+    /// Next converted row of the underlying stream, ignoring `pending_skip`.
+    fn next_converted(&mut self) -> Result<Vec<BigInt>, OeisSequenceError> {
+        let raw = self.next_raw_row()?;
+        let row = self.convert_row(self.rows_consumed, raw)?;
+        self.rows_consumed += 1;
+        Ok(row)
+    }
+
+    /// Consume the rows that precede the requested start row.  An error ends
+    /// the iterator and is returned.
+    fn discard_pending_skip(&mut self) -> Result<(), OeisSequenceError> {
+        while self.pending_skip > 0 && !self.finished {
+            if let Err(error) = self.next_converted() {
+                self.finish();
+                return Err(error);
+            }
+            self.pending_skip -= 1;
+        }
+        Ok(())
+    }
+
+    fn finish(&mut self) {
+        self.finished = true;
+        self.prefix.clear();
+        self.recurrence_rows = None;
+    }
+}
+
+impl Iterator for OeisRowIterator {
+    type Item = Result<Vec<BigInt>, OeisSequenceError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.finished {
+            return None;
+        }
+        if let Err(error) = self.discard_pending_skip() {
+            return Some(Err(error));
+        }
+        match self.next_converted() {
+            Ok(row) => Some(Ok(row)),
+            Err(error) => {
+                self.finish();
+                Some(Err(error))
+            }
+        }
+    }
+}
+
+impl FusedIterator for OeisRowIterator {}
 
 // Generated by `build.rs` from `data/oeis-catalog.jsonl`.
 include!(concat!(env!("OUT_DIR"), "/oeis_catalog_generated.rs"));

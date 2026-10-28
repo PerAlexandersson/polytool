@@ -13,6 +13,8 @@ pub use display::*;
 mod evaluate;
 pub use evaluate::*;
 mod export;
+mod iterate;
+pub use iterate::*;
 mod json;
 pub use json::*;
 mod modular;

@@ -3,6 +3,7 @@
 //! Coefficients are in ascending degree order. No real-rootedness assertion
 //! for a conjectural family is part of these generation APIs.
 
+use super::PolynomialFamilyRowIterator;
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Zero};
@@ -22,6 +23,33 @@ pub fn delannoy_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
         rows.push(row);
     }
     rows
+}
+
+/// Lazily generate the Delannoy polynomials `D_0, D_1, ...`; item `n` equals
+/// `delannoy_polynomials_bigint(max_n)[n]`.  Uses
+/// `D_n = (1 + x) D_{n-1} + x D_{n-2}` with seeds `D_0 = 1`, `D_1 = 1 + x`; see
+/// [`PolynomialFamilyRowIterator`].
+pub fn delannoy_polynomials_iter() -> PolynomialFamilyRowIterator {
+    PolynomialFamilyRowIterator::from_sparse_recurrence(
+        &[(1, 0, &[(0, 0, 1), (0, 1, 1)]), (2, 0, &[(0, 1, 1)])],
+        &[&[1], &[1, 1]],
+    )
+}
+
+/// Lazily generate the rows `G_0, G_1, ...` of
+/// [`delannoy_square_polynomials_bigint`]; item `n` equals its `rows[n]`.
+/// Uses the four-term recurrence of that function with its four seed rows; see
+/// [`PolynomialFamilyRowIterator`].
+pub fn delannoy_square_polynomials_iter() -> PolynomialFamilyRowIterator {
+    PolynomialFamilyRowIterator::from_sparse_recurrence(
+        &[
+            (1, 0, &[(0, 0, 3), (0, 1, 1)]),
+            (2, 0, &[(0, 0, -1), (0, 1, 1)]),
+            (3, 0, &[(0, 0, -1), (0, 1, 1)]),
+            (4, 0, &[(0, 1, 1)]),
+        ],
+        &[&[1], &[2, 1], &[5, 6, 1], &[12, 25, 10, 1]],
+    )
 }
 
 /// Row-generating polynomials of the square of the Delannoy triangle, n=0..max_n.

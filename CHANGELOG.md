@@ -235,6 +235,35 @@ Performance:
 
 Additions:
 
+- Lazy row iterators.  `recurrence::RecurrenceRowIterator` (made with
+  `Recurrence::generate_rows_rational_iter(initial_rows, first_index)`) yields the seed
+  rows and then one exactly evaluated row per `next`, with
+  `Item = Result<Vec<BigRational>, RecurrenceEvaluationError>`.  It evaluates
+  nothing until a row is requested, keeps only the last `max_offset()` rows
+  (plus unyielded seeds), can be paused and continued (`by_ref().take(k)`),
+  yields a step error once and then ends (`FusedIterator`), and exposes
+  `first_index`, `next_index`, `rows_yielded`, `steps_evaluated`,
+  `history_limit` and `retained_row_count`.
+  `Recurrence::generate_rows_rational` now collects a prefix of it (same rows,
+  same errors).
+- `oeis::OeisSequenceDefinition::{generate_rows_iter, generate_rows_from_iter}` and
+  `oeis::OeisRowIterator` (`Item = Result<Vec<BigInt>, OeisSequenceError>`):
+  lazy catalog rows over the shared kernel, with the authoritative prefix,
+  displayed row indices, typed nonintegral errors and triangle padding of
+  `generate_rows`, which now collects from it (`generate_rows_from` and
+  `flattened_offset_for_row` no longer hold the skipped rows).  An error is
+  reported when its row is reached, so with several failures the earliest row
+  wins (the batch form used to report a step failure before an earlier
+  nonintegral row).
+- Lazy named families over the same kernel, yielding member `n` as the `n`-th
+  item: `sequences::{eulerian_polynomials_iter, type_b_eulerian_polynomials_iter,
+  chebyshev_polynomials_t_iter, chebyshev_polynomials_u_iter,
+  hermite_polynomials_iter}` and
+  `sequences::literature::{delannoy_polynomials_iter,
+  delannoy_square_polynomials_iter}` (`sequences::PolynomialFamilyRowIterator`).
+  The batch generators are unchanged.
+- Example `lazy_rows`, and the integration tests in `tests/lazy_rows.rs`.
+
 - `Display` and `std::error::Error` for `linalg::RationalKernelError`.
 - New error types `ParsePolynomialError` and `CyclicSievingError` (see above).
 - New module `pf_network`: height-shift-invariant planar networks

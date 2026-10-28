@@ -21,8 +21,8 @@
 //! are re-exported here:
 //!
 //! - `base`: core types, vector systems, polynomial helpers, exact
-//!   verification, modular prefiltering, evaluation, display/export, JSON and
-//!   parameter counting;
+//!   verification, modular prefiltering, evaluation (including the lazy
+//!   [`RecurrenceRowIterator`]), display/export, JSON and parameter counting;
 //! - `fit`: fixed-shape and vector search, candidate enumeration, adaptive
 //!   search, representation menus, and complete bounded spaces with
 //!   certificates (also after factorial coefficient rescaling);

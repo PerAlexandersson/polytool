@@ -91,15 +91,18 @@
 //! - [`sturm_cf`] — signed Euclidean/Sturm continued-fraction certificates
 //! - [`recurrence`] — Adaptive recurrence search for polynomial sequences,
 //!   coordinate transformations with recurrence transport and optional
-//!   root-domain certificates
+//!   root-domain certificates, and lazy exact row generation
+//!   (`RecurrenceRowIterator`)
 //! - [`renewal`] — Exact recognition of renewal-type recurrences
 //!   `P_n = sum_j r_j t^j P_(n-1-ell*j)` with interlacing consequences,
 //!   symbolic variable-predecessor recurrences `Q_n = Q_(n-1) + w(n) t Q_(p(n))`
 //!   with exact hypotheses certificates, and conditional theorem matches for
 //!   found or supplied recurrences
-//! - [`oeis`] — Bundled recurrence-backed OEIS polynomial families
+//! - [`oeis`] — Bundled recurrence-backed OEIS polynomial families, with lazy
+//!   row iterators
 //! - [`sequences`] — Standard sequences: Eulerian, Narayana, type B Eulerian,
-//!   Chebyshev T/U, Hermite, shifted Legendre
+//!   Chebyshev T/U, Hermite, shifted Legendre, with lazy `iter_*` counterparts
+//!   of the recurrence-defined families
 //! - [`parse`] — Flexible polynomial parsing (comma/space-separated, bracketed,
 //!   expanded polynomial notation)
 //! - [`basis`] — Exact expansion of polynomials in prescribed bases, including

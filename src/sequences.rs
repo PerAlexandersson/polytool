@@ -28,6 +28,15 @@
 //! | [`deco::joint_histograms_bigint`] and the deco layer generators | size `N = 1` | `max_size` |
 //! | [`deco::deco_polynomials_bigint`] | `P_0` | `max_index + 1` |
 //!
+//! Recurrence-defined families also have endless lazy counterparts
+//! ([`eulerian_polynomials_iter`], [`type_b_eulerian_polynomials_iter`],
+//! [`chebyshev_polynomials_t_iter`], [`chebyshev_polynomials_u_iter`],
+//! [`hermite_polynomials_iter`], and in [`literature`] the Delannoy families):
+//! item `n` is member `n`, they are driven by the shared
+//! [`crate::recurrence::RecurrenceRowIterator`], and they keep only the last few
+//! members.  Closed-form generators (Narayana, shifted Legendre, Hoggatt) and
+//! matrix- or array-valued recurrences have no lazy counterpart.
+//!
 //! The Eulerian row `A_0 = 1` equals `A_1 = 1`; callers that need a family
 //! without repeated rows (for example a consecutive-interlacing check) should
 //! use `rows[1..]`.  The OEIS triangles A008292 (Eulerian) and A001263
@@ -44,11 +53,193 @@
 //! | Hermite He_n | no | no | yes | yes |
 //! | Shifted Legendre P~_n | no | no | yes (roots in (0, 1)) | yes |
 
+use crate::recurrence::{
+    BigRational, BivarPoly, Recurrence, RecurrenceRowIterator, RecurrenceTerm,
+};
 use crate::vec_poly;
 use num_bigint::BigInt;
+use std::iter::FusedIterator;
 
 pub mod deco;
 pub mod literature;
+
+/// Lazy, endless iterator over the members of a recurrence-defined polynomial
+/// family, as exact integer coefficient vectors (ascending degree order).
+///
+/// Created by the `iter_*` functions of this module and of [`literature`], for
+/// example [`eulerian_polynomials_iter`].  The `n`-th item (counting from
+/// zero) is member `n` of the family, so
+/// `x_iter().take(max_n + 1).collect::<Vec<_>>()` equals the batch generator's
+/// `rows` for `max_n`, and the iterator can be paused and continued without
+/// recomputing earlier members (`by_ref().take(k)`, then more calls).
+///
+/// It is driven by the shared [`RecurrenceRowIterator`] kernel: a member is
+/// computed only when requested, and only the last few members the recurrence
+/// refers to are retained ([`Self::retained_row_count`]).  The recurrences of
+/// these named families have integral values, so, unlike the OEIS adapter,
+/// no item is fallible.  The iterator is fused and never ends.  The batch
+/// generators keep their dedicated integer implementations, which avoid
+/// rational arithmetic and are the independent check for these iterators.
+#[derive(Debug, Clone)]
+pub struct PolynomialFamilyRowIterator {
+    rows: RecurrenceRowIterator,
+}
+
+impl PolynomialFamilyRowIterator {
+    /// Build from sparse recurrence terms `(offset, derivative_order, c)`,
+    /// where `c` lists the monomials `(n_degree, t_degree, coefficient)`, and
+    /// integer seed rows for the members `0, 1, ...`.
+    pub(crate) fn from_sparse_recurrence(terms: &[SparseTerm<'_>], seeds: &[&[i64]]) -> Self {
+        let recurrence = Recurrence {
+            terms: terms
+                .iter()
+                .map(|&(offset, derivative_order, monomials)| {
+                    RecurrenceTerm::new(offset, derivative_order, bivariate(monomials))
+                })
+                .collect(),
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let seed_rows = seeds
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|&c| BigRational::from_integer(BigInt::from(c)))
+                    .collect()
+            })
+            .collect();
+        Self {
+            rows: RecurrenceRowIterator::new(recurrence, seed_rows, 0),
+        }
+    }
+
+    /// Number of members yielded so far; also the index of the next member.
+    pub fn rows_yielded(&self) -> usize {
+        self.rows.rows_yielded()
+    }
+
+    /// Number of members currently held in memory: the recurrence's bounded
+    /// history plus unyielded seeds, never the whole sequence.
+    pub fn retained_row_count(&self) -> usize {
+        self.rows.retained_row_count()
+    }
+}
+
+impl Iterator for PolynomialFamilyRowIterator {
+    type Item = Vec<BigInt>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let row = self
+            .rows
+            .next()?
+            .expect("the named recurrence families are well defined at every index");
+        Some(
+            row.into_iter()
+                .map(|coefficient| {
+                    assert!(
+                        coefficient.is_integer(),
+                        "the named recurrence families have integral coefficients"
+                    );
+                    coefficient.to_integer()
+                })
+                .collect(),
+        )
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (usize::MAX, None)
+    }
+}
+
+impl FusedIterator for PolynomialFamilyRowIterator {}
+
+/// `(offset, derivative_order, monomials)`, each monomial `(n_degree, t_degree, coefficient)`.
+type SparseTerm<'a> = (usize, usize, &'a [(usize, usize, i64)]);
+
+/// `sum coefficient * n^n_degree * t^t_degree` as a bivariate polynomial.
+fn bivariate(monomials: &[(usize, usize, i64)]) -> BivarPoly {
+    let n_size = monomials.iter().map(|m| m.0 + 1).max().unwrap_or(1);
+    let t_size = monomials.iter().map(|m| m.1 + 1).max().unwrap_or(1);
+    let mut coeffs = vec![vec![BigRational::from_integer(BigInt::from(0)); t_size]; n_size];
+    for &(n_degree, t_degree, coefficient) in monomials {
+        coeffs[n_degree][t_degree] = BigRational::from_integer(BigInt::from(coefficient));
+    }
+    BivarPoly::from_coefficients_normalized(coeffs)
+}
+
+/// Lazily generate the Eulerian polynomials `A_0, A_1, A_2, ...` one at a time.
+///
+/// Item `n` equals `eulerian_polynomials_bigint(max_n)[n]` for every
+/// `max_n >= n` (so item 0 and item 1 are both `[1]`).  The family is driven
+/// by the shared recurrence kernel through
+/// `A_n = (1 + (n-1) t) A_{n-1} + t (1-t) A'_{n-1}` with seed `A_0 = 1`; see
+/// [`PolynomialFamilyRowIterator`].
+///
+/// ```
+/// use polytool::sequences::{eulerian_polynomials_bigint, eulerian_polynomials_iter};
+///
+/// let mut rows = eulerian_polynomials_iter();
+/// let first: Vec<_> = rows.by_ref().take(3).collect();
+/// let next = rows.next().unwrap(); // A_3, not recomputing A_0..A_2
+/// assert_eq!(first, eulerian_polynomials_bigint(2));
+/// assert_eq!(next, eulerian_polynomials_bigint(3)[3]);
+/// ```
+pub fn eulerian_polynomials_iter() -> PolynomialFamilyRowIterator {
+    PolynomialFamilyRowIterator::from_sparse_recurrence(
+        &[
+            (1, 0, &[(0, 0, 1), (1, 1, 1), (0, 1, -1)]),
+            (1, 1, &[(0, 1, 1), (0, 2, -1)]),
+        ],
+        &[&[1]],
+    )
+}
+
+/// Lazily generate the type-B Eulerian polynomials `B_0, B_1, ...`; item `n`
+/// equals `type_b_eulerian_polynomials_bigint(max_n)[n]`.  Uses
+/// `B_n = (1 + (2n-1) t) B_{n-1} + 2 t (1-t) B'_{n-1}`; see
+/// [`PolynomialFamilyRowIterator`].
+pub fn type_b_eulerian_polynomials_iter() -> PolynomialFamilyRowIterator {
+    PolynomialFamilyRowIterator::from_sparse_recurrence(
+        &[
+            (1, 0, &[(0, 0, 1), (1, 1, 2), (0, 1, -1)]),
+            (1, 1, &[(0, 1, 2), (0, 2, -2)]),
+        ],
+        &[&[1]],
+    )
+}
+
+/// Lazily generate the Chebyshev polynomials of the first kind `T_0, T_1, ...`;
+/// item `n` equals `chebyshev_polynomials_t_bigint(max_n)[n]`.  Uses
+/// `T_n = 2t T_{n-1} - T_{n-2}` with seeds `T_0 = 1`, `T_1 = t`; see
+/// [`PolynomialFamilyRowIterator`].
+pub fn chebyshev_polynomials_t_iter() -> PolynomialFamilyRowIterator {
+    PolynomialFamilyRowIterator::from_sparse_recurrence(
+        &[(1, 0, &[(0, 1, 2)]), (2, 0, &[(0, 0, -1)])],
+        &[&[1], &[0, 1]],
+    )
+}
+
+/// Lazily generate the Chebyshev polynomials of the second kind `U_0, U_1, ...`;
+/// item `n` equals `chebyshev_polynomials_u_bigint(max_n)[n]`.  Uses
+/// `U_n = 2t U_{n-1} - U_{n-2}` with seeds `U_0 = 1`, `U_1 = 2t`; see
+/// [`PolynomialFamilyRowIterator`].
+pub fn chebyshev_polynomials_u_iter() -> PolynomialFamilyRowIterator {
+    PolynomialFamilyRowIterator::from_sparse_recurrence(
+        &[(1, 0, &[(0, 1, 2)]), (2, 0, &[(0, 0, -1)])],
+        &[&[1], &[0, 2]],
+    )
+}
+
+/// Lazily generate the probabilist's Hermite polynomials `He_0, He_1, ...`;
+/// item `n` equals `hermite_polynomials_bigint(max_n)[n]`.  Uses
+/// `He_n = t He_{n-1} - (n-1) He_{n-2}` with seeds `He_0 = 1`, `He_1 = t`; see
+/// [`PolynomialFamilyRowIterator`].
+pub fn hermite_polynomials_iter() -> PolynomialFamilyRowIterator {
+    PolynomialFamilyRowIterator::from_sparse_recurrence(
+        &[(1, 0, &[(0, 1, 1)]), (2, 0, &[(1, 0, -1), (0, 0, 1)])],
+        &[&[1], &[0, 1]],
+    )
+}
 
 /// Compute Eulerian polynomials A_0(t), A_1(t), ..., A_{max_n}(t).
 ///

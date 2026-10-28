@@ -305,6 +305,48 @@ fixed-point/descent array `rows[n][j][k]`),
 `P~_n(x) = P_n(2x - 1) = sum_k (-1)^(n+k) C(n,k) C(n+k,k) x^k` on `[0, 1]`
 (`P~_n(1) = 1`, coefficients up to sign in OEIS A063007).
 
+## Lazy rows
+
+Recurrence-based generation can be consumed one polynomial at a time, without
+choosing a final index and without recomputing earlier rows.
+`Recurrence::generate_rows_rational_iter(&initial_rows, first_index)` returns a
+`recurrence::RecurrenceRowIterator`: the seed rows come first (as
+`P_{first_index}, ...`), then one exactly evaluated row per `next()`, each
+item a `Result<Vec<BigRational>, RecurrenceEvaluationError>`.  Nothing is
+evaluated until a row is requested, only the last `max_offset()` rows are kept
+(the polynomials themselves may grow), and a failing step yields its error once
+and ends the iterator (it is fused), so an earlier valid prefix stays
+consumable.  `generate_rows_rational` collects a prefix of this iterator.
+
+The same holds for the OEIS catalog:
+`OeisSequenceDefinition::generate_rows_iter()` and `generate_rows_from_iter(first_row)` yield
+`Result<Vec<BigInt>, OeisSequenceError>` over the authoritative prefix, the
+recurrence's initial rows and the computed rows, with displayed row indices,
+checked integer conversion and triangle padding exactly as in `generate_rows`
+and `generate_rows_from`, which collect from them.  A new iterator still has to
+traverse the rows before its start (there is no random access); continuing an
+iterator you keep does not.  Named recurrence families have endless lazy
+counterparts that yield member `n` as the `n`-th item:
+`sequences::eulerian_polynomials_iter`, `type_b_eulerian_polynomials_iter`,
+`chebyshev_polynomials_t_iter`, `chebyshev_polynomials_u_iter`,
+`hermite_polynomials_iter`, and in `sequences::literature`
+`delannoy_polynomials_iter` and `delannoy_square_polynomials_iter`.  Closed-form
+families (Narayana, shifted Legendre, Hoggatt) and the matrix- or
+array-valued recurrences keep their batch generators.
+
+```rust
+use polytool::oeis::by_id;
+
+let sequence = by_id("A008292").unwrap();
+let mut rows = sequence.generate_rows_iter().unwrap();
+let first_three: Vec<_> = rows.by_ref().take(3).collect::<Result<_, _>>().unwrap();
+let fourth = rows.next().unwrap().unwrap(); // continues; rows 1-3 are not recomputed
+assert_eq!(fourth, [1, 11, 11, 1].map(num_bigint::BigInt::from).to_vec());
+assert_eq!(first_three.len(), 3);
+```
+
+See `examples/lazy_rows.rs`.
+
 ## Characteristic polynomials and closed walks
 
 ```rust
