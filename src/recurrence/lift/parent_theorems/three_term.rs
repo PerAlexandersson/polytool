@@ -216,6 +216,7 @@ impl MonicRecurrence {
 /// let seeds = vec![vec![q(1)], vec![q(0), q(2)]];
 /// let options = RealRootednessTheoremOptions {
 ///     root_region: Some(RealInterval::closed(q(-1), q(1))),
+///     ..Default::default()
 /// };
 /// let report = check_three_term_recurrence_theorem(&rule, 0, &seeds, &options).unwrap();
 /// assert!(report.is_proved());
@@ -227,7 +228,22 @@ pub fn check_three_term_recurrence_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    let seeds = &super::normalized_seed_rows(rule, first_index, seeds)?;
+    super::check_with_first_proving_start(
+        RealRootednessTheorem::ThreeTermRecurrence,
+        rule,
+        first_index,
+        seeds,
+        options,
+    )
+}
+
+/// The check with the induction at the given (normalized) seeds.
+pub(super) fn three_term_report(
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<BigRational>],
+    options: &RealRootednessTheoremOptions,
+) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::ThreeTermRecurrence,
         REFERENCE,

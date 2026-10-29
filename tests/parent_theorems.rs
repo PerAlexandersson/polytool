@@ -47,6 +47,7 @@ fn region(lower: Option<i64>, upper: Option<i64>) -> RealRootednessTheoremOption
             upper: upper.map(q),
             upper_closed: false,
         }),
+        ..RealRootednessTheoremOptions::default()
     }
 }
 
@@ -242,6 +243,7 @@ fn chebyshev_and_legendre_roots_lie_in_the_open_unit_interval() {
             upper: Some(BigRational::new(1.into(), 2.into())),
             upper_closed: false,
         }),
+        ..RealRootednessTheoremOptions::default()
     };
     let report = three_term(&legendre, 0, &[&[1], &[0, 1]], &half);
     assert_eq!(failure(&report, "root_upper_bound"), Some(2.into()));
@@ -455,6 +457,100 @@ fn liu_wang_shapes_that_do_not_apply() {
     assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
 }
 
+/// `A_n = (1 + (n - 1) x) A_(n-1) + x (1 - x) A'_(n-1)` (Eulerian).
+fn eulerian() -> Recurrence {
+    rule(
+        &[(1, 0, &[&[1, -1], &[0, 1]]), (1, 1, &[&[0, 1, -1]])],
+        None,
+    )
+}
+
+fn without_start_delay() -> RealRootednessTheoremOptions {
+    RealRootednessTheoremOptions {
+        maximum_start_delay: 0,
+        ..RealRootednessTheoremOptions::default()
+    }
+}
+
+#[test]
+fn liu_wang_moves_the_induction_start_past_a_degree_plateau() {
+    // From A_0 = 1 the degree does not grow at n = 1 (A_1 = 1).
+    let fixed = liu_wang(&eulerian(), 0, &[&[1]], &without_start_delay());
+    assert_eq!(failure(&fixed, "degree_step_positive"), Some(1.into()));
+    assert_eq!(fixed.start_delay, 0);
+
+    let report = liu_wang(&eulerian(), 0, &[&[1]], &no_region());
+    assert_eq!(
+        report.status,
+        RealRootednessTheoremStatus::Proved,
+        "{report:#?}"
+    );
+    assert_eq!(report.start_delay, 1);
+    // The record keeps the supplied seed; the theorem starts at A_1 and
+    // checks A_0 exactly.
+    assert_eq!(report.recurrence.initial_polynomials.len(), 1);
+    assert!(report.normal_form.contains("for n >= 2"));
+    assert!(report
+        .hypotheses
+        .iter()
+        .any(|h| h.name == "earlier_seeds" && h.status == LiftHypothesisStatus::Verified));
+    let conclusion = report.conclusion.as_ref().unwrap();
+    assert_eq!(conclusion.first_index, 0);
+    // A_0 = 1 and A_1 = 1 interlace (constants), checked exactly.
+    assert_eq!(conclusion.interlacing_from, Some(1));
+    assert!(conclusion.statement.contains("start moved 1 row(s)"));
+    let json = serde_json::to_value(&report).unwrap();
+    assert_eq!(json["start_delay"], 1);
+    // The recorded delay is replayed; a different one is refused.
+    let mut tampered = report.clone();
+    tampered.start_delay = 2;
+    assert!(tampered.verify().is_err());
+    // Reports without a delay do not serialize the field.
+    let json = serde_json::to_value(&fixed).unwrap();
+    assert!(json.get("start_delay").is_none());
+}
+
+#[test]
+fn three_term_moves_the_induction_start_past_equal_degree_seeds() {
+    // P_n = 2 x P_(n-1) - P_(n-2), P_0 = P_1 = 1: P_n = V_(n-1) (Chebyshev
+    // polynomials of the third kind) from n = 1 on.  The seeds have equal
+    // degrees, so the theorem starts at P_1, P_2; P_0 is checked exactly.
+    let chebyshev = rule(&[(1, 0, &[&[0, 2]]), (2, 0, &[&[-1]])], None);
+    let fixed = three_term(&chebyshev, 0, &[&[1], &[1]], &without_start_delay());
+    assert_eq!(failure(&fixed, "seeds_interlace"), Some(1.into()));
+
+    let report = three_term(&chebyshev, 0, &[&[1], &[1]], &region(Some(-1), Some(1)));
+    assert_eq!(
+        report.status,
+        RealRootednessTheoremStatus::Proved,
+        "{report:#?}"
+    );
+    assert_eq!(report.start_delay, 1);
+    let conclusion = report.conclusion.as_ref().unwrap();
+    assert_eq!(conclusion.first_index, 0);
+    // P_0 = 1 does not strictly interlace P_1 = 1 (equal degrees), so the
+    // interlacing claim stays at the moved start.
+    assert_eq!(conclusion.interlacing_from, Some(2));
+    assert_eq!(
+        conclusion.root_region.as_ref().unwrap().to_string(),
+        "(-1, 1)"
+    );
+}
+
+#[test]
+fn a_later_start_does_not_help_when_an_early_row_fails() {
+    // The seed 1 + x + x^2 is not real-rooted; every moved start keeps it as
+    // a checked seed row, so the report at the supplied seed is returned.
+    let report = liu_wang(&eulerian(), 0, &[&[1, 1, 1]], &no_region());
+    assert_eq!(report.start_delay, 0);
+    assert_eq!(failure(&report, "seed_roots_negative"), Some(0.into()));
+
+    // A hypothesis failing for every large n: a_n(0) = 6 - n.
+    let report = liu_wang(&type_b(&[6, -1]), 0, &[&[1]], &no_region());
+    assert_eq!(report.start_delay, 0);
+    assert_eq!(failure(&report, "constant_term_positive"), Some(6.into()));
+}
+
 /// The example of `doc/library.md`.
 #[test]
 fn library_documentation_example() -> Result<(), polytool::recurrence::RecurrenceError> {
@@ -484,6 +580,7 @@ fn library_documentation_example() -> Result<(), polytool::recurrence::Recurrenc
     };
     let options = RealRootednessTheoremOptions {
         root_region: Some(RealInterval::closed(q(-1), q(1))),
+        ..RealRootednessTheoremOptions::default()
     };
     let report = check_three_term_recurrence_theorem(
         &legendre,

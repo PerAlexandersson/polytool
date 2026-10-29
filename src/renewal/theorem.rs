@@ -8,8 +8,13 @@
 //! does not show that the recurrence governs the intended sequence for all
 //! `n`, which stays listed in `remaining_obligations`.
 //!
-//! Theorems (paper proofs, not Lean checked; see
-//! <https://github.com/PerAlexandersson/RealRooted/issues/2037>):
+//! Theorems (paper proofs in
+//! <https://github.com/PerAlexandersson/RealRooted/issues/2037>, since
+//! formalized in the RealRooted Lean library:
+//! `RealRooted/Interlacing/VariableDelay.lean` and
+//! `RealRooted/CombinatorialExamples/WeightedRenewal.lean`; the matches
+//! themselves are not replayed in Lean, so `proof_status` stays
+//! `paper_proof_not_lean_checked`):
 //!
 //! - `weighted_renewal_window`: `P_n = sum_j r_j t^j P_(n-1-ell*j)`, see
 //!   [`super::recognize_weighted_renewal`];

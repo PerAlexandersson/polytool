@@ -24,10 +24,15 @@
 //!   is then a proof for the recurrence family, which agrees with the
 //!   generator on the checked rows.
 //!
-//! Where the induction starts after the first generator row (the Eulerian
-//! row `A_0 = A_1 = 1` does not raise the degree), the skipped rows are still
-//! compared with the recurrence; they are the constant `1` (or `x` for the
-//! refined Eulerian slice), so real-rooted.
+//! Where the induction cannot start at the first generator row (the Eulerian
+//! row `A_0 = A_1 = 1` does not raise the degree), the theorem checks move
+//! their induction start themselves and record it in `start_delay`; the
+//! skipped rows enter as seed rows, checked exactly.  The root-domain tests
+//! still start the transform one row later by hand.
+//!
+//! The Baxter triangle is proved through a Hadamard-factor lift
+//! ([`find_hadamard_factor_lifts`]): the identity with its parent is
+//! certified exactly and the parent is proved by Liu--Wang.
 //!
 //! Families whose only proof is the crate-internal periodic-product parent
 //! route (for example the Hoggatt rows with `m = 1, q = 1`, which are
@@ -36,11 +41,12 @@
 use num_bigint::BigInt;
 use polytool::oeis;
 use polytool::recurrence::{
-    check_liu_wang_theorem, check_three_term_recurrence_theorem, transform_recurrence,
-    verify_recurrence_transform, BigRational, BivarPoly, DegreeSchedule,
+    check_liu_wang_theorem, check_three_term_recurrence_theorem, find_hadamard_factor_lifts,
+    transform_recurrence, verify_recurrence_transform, BigRational, BivarPoly, DegreeSchedule,
+    HadamardFactorIdentityStatus, HadamardFactorLiftOptions, LiftVerdict,
     RealRootednessTheoremOptions, RealRootednessTheoremReport, Recurrence, RecurrenceJson,
     RecurrenceTerm, RecurrenceTransformRequest, RecurrenceTransformation, RootDomainRequest,
-    RootEvidence, RootProperty, RootSubject,
+    RootEvidence, RootProperty, RootSubject, VeroneseParentProofRoute,
 };
 use polytool::sequences::{self, literature};
 
@@ -266,12 +272,27 @@ fn type_b_eulerian_liu_wang() {
 #[test]
 fn one_over_k_eulerian_liu_wang() {
     // A_n = (1 + k (n - 1) x) A_(n-1) + k x (1 - x) A'_(n-1).  A_0 = A_1 = 1,
-    // so the induction starts at A_1 (the degree step fails at n = 1).
+    // so the degree step fails at n = 1 and the check moves the induction
+    // start one row later by itself (A_0 enters as a checked seed row).
     for k in [q(2), q(3), Q::new(1.into(), 2.into())] {
         let rows = literature::one_over_k_eulerian_polynomials_rational(ROWS - 1, &k);
-        Family::new(derivative_rule(k.clone(), q(0)), 0, &rows, 1);
-        Family::new(derivative_rule(k, q(0)), 1, &rows[1..], 1).liu_wang();
+        let report = Family::new(derivative_rule(k, q(0)), 0, &rows, 1).liu_wang();
+        assert_eq!(report.start_delay, 1);
+        assert_eq!(report.conclusion.as_ref().unwrap().first_index, 0);
     }
+}
+
+#[test]
+fn eulerian_liu_wang_from_the_first_row() {
+    // A_n = (1 + (n - 1) x) A_(n-1) + x (1 - x) A'_(n-1) from A_0 = 1: the
+    // induction start moves to A_1, and A_0 = A_1 = 1 also interlace (exact),
+    // so the interlacing claim covers every n >= 1.
+    let rows = rational_rows(sequences::eulerian_polynomials_bigint(ROWS - 1));
+    let report = Family::new(derivative_rule(q(1), q(0)), 0, &rows, 1).liu_wang();
+    assert_eq!(report.start_delay, 1);
+    let conclusion = report.conclusion.as_ref().unwrap();
+    assert_eq!(conclusion.first_index, 0);
+    assert_eq!(conclusion.interlacing_from, Some(1));
 }
 
 #[test]
@@ -392,6 +413,44 @@ fn refined_eulerian_second_letter_fitted() {
     // In the rule index m = n - 1: P_m = (1 + (m - 1) x) P_(m-1) + x (1 - x) P'_(m-1).
     Family::new(derivative_rule(q(1), q(0)), 1, &rows, 1);
     Family::new(derivative_rule(q(1), q(0)), 2, &rows[1..], 1).root_domain_f_polynomial(1);
+}
+
+#[test]
+fn baxter_hadamard_lift_via_catalog() {
+    // A056939 (Baxter triangle): T(n, k) = binom(n+2, k+1) p(n, k), the
+    // quotient rows satisfying a first-order derivative recurrence proved by
+    // Liu--Wang; the identity is certified with an invariant row annihilator.
+    // The Hoggatt rows with m = 3, q = 1 (the MacMahon box product, a closed
+    // form) are catalog row n - 1, compared on ROWS rows.
+    let entry = oeis::by_id("A056939").expect("catalog entry");
+    let (rule, seeds) = entry.recurrence_parts().expect("catalog recurrence");
+    let first_index = entry.recurrence_first_index;
+    let catalog_rows = rule
+        .generate_rows_rational(&seeds, first_index, ROWS)
+        .expect("the catalog recurrence replays");
+    let hoggatt = rational_rows(literature::hoggatt_polynomials_bigint(ROWS, 3, 1));
+    for (offset, row) in catalog_rows.iter().enumerate() {
+        assert_eq!(trimmed(row), trimmed(&hoggatt[offset + 1]), "row {offset}");
+    }
+    let report = find_hadamard_factor_lifts(
+        &rule,
+        &seeds,
+        first_index,
+        &HadamardFactorLiftOptions::default(),
+    )
+    .expect("the search runs");
+    report.verify().expect("the report replays");
+    let lift = report.proved_lifts().next().expect("a proved lift");
+    assert_eq!(lift.factor_text, "binom(n+2, k+1)");
+    assert!(matches!(
+        lift.identity,
+        HadamardFactorIdentityStatus::Certified { .. }
+    ));
+    assert_eq!(
+        lift.parent_proof.route,
+        Some(VeroneseParentProofRoute::LiuWang)
+    );
+    assert_eq!(lift.lift_summary.verdict, LiftVerdict::Proved);
 }
 
 // ---------------------------------------------------------------------------

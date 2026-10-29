@@ -380,6 +380,22 @@ Additions:
   parent, through `y = 1/(x - 1)`) and of the type-B Eulerian polynomials
   (A060187) are now proved real-rooted, and the Eulerian parent is proved by
   Liu--Wang when the root-domain route is switched off.
+- The three-term and Liu--Wang checks move their induction start up to
+  `RealRootednessTheoremOptions::maximum_start_delay` (default 3) rows past
+  the supplied seeds when the theorem fails at the seeds; the skipped rows
+  enter as seed rows checked exactly, the report records the delay in the new
+  field `start_delay` (omitted from the JSON when zero) and `verify()`
+  replays it.  The parent provers' root-domain route moves the parent's first
+  index the same way.  The Eulerian and 1/k-Eulerian rules from `A_0 = 1`
+  (where `A_1 = A_0`) are now proved without shifting the start by hand.
+- Hadamard-factor lifts remove a division remainder with an invariant row
+  annihilator of any first-order parent (an operator `A(n)` with an exact
+  identity `nu A(n + 1) T(n) = B A(n)` under the parent step and exact row
+  checks; new optional certificate fields `row_annihilator_step_multiplier`,
+  `row_annihilator_step_quotient`, `row_annihilator_start_base`,
+  `row_annihilator_restart_bases`), not only of product parents.  The Baxter
+  triangle A056939 (Hoggatt rows with `m = 3`) is now proved end to end:
+  factor `binom(n + 2, k + 1)`, hypergeometric parent proved by Liu--Wang.
 - Symmetric-companion lifts: `recurrence::find_symmetric_companion_lifts`
   takes a palindromic sequence `A_n` (scalar recurrence, derivatives allowed,
   with seeds and a symmetry schedule `d_n = d_0 + n - n_0`, supplied or

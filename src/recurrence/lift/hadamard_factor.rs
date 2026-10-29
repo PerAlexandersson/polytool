@@ -71,16 +71,14 @@
 //!
 //! `M''` is pseudo-divided by the parent relation `L` (leader `g(n) S^k`,
 //! free of `x` and `D`): `w(n) M'' = sum_nu H_nu S^nu L + r`.  When `r != 0`
-//! and the parent is a product parent `g(n) P_(n+1) = a(n) c(x) P_n` with one
-//! seed `f`, every parent row `Lambda(n) c^(n - n0) f` is annihilated by
-//! `A(n) = c f D - ((n - n0) c' f + c f')` (exactly: `A(n0) f = 0` and
-//! `A(n + 1) o c = c o A(n)`), and `r` is right-divided by `A`:
-//! `mu(x) r = Z o A` with `mu` a power of `c f`.  So
+//! it is removed by a row annihilator `A(n)` of the parent (next section):
+//! `mu(n, x) r = Z o A`, with `mu = c(n) p(x)` and `c` folded into `w`.  So
 //!
 //! ```text
-//! mu(x) w(n) M'' = sum_nu mu H_nu S^nu L + Z A.
+//! p(x) w(n) M'' = sum_nu p H_nu S^nu L + Z A      (w now including c),
 //! ```
 //!
+//! and `A(n) P_n = 0` for every base `n` from the first used base on.
 //! Applied to `P` this gives `(M'' P)_n = 0` at every base `n` where `L`
 //! holds for the parent (`n >= n0 + Kp - k`) other than the integer roots of
 //! `w`.  At those roots and at the bases from `n0 + K - R` (where `M` holds
@@ -94,6 +92,45 @@
 //! ([`HadamardFactorIdentityStatus::Certified`]).
 //! [`HadamardFactorCertificate::verify`] replays the algebra from the
 //! recorded input, factor, gauge and parent.
+//!
+//! # Row annihilators
+//!
+//! - **Product parent** `g(n) P_(n+1) = a(n) c(x) P_n` with one seed `f`:
+//!   every parent row `Lambda(n) c^(n - n0) f` is annihilated by
+//!   `A(n) = c f D - ((n - n0) c' f + c f')` (exactly: `A(n0) f = 0` and
+//!   `A(n + 1) o c = c o A(n)`); `mu` is a power of `c f`.
+//! - **First-order parent** `g(n) P_(n+1) = T(n) P_n` (`T` any shift-free
+//!   operator, for example `a_n(x) + b_n(x) D` as in Liu--Wang): an
+//!   *invariant* annihilator is a shift-free `A(n)` with an exact identity
+//!
+//!   ```text
+//!   nu(n, x) A(n + 1) o T(n) = B(n) o A(n)
+//!   ```
+//!
+//!   in the Weyl algebra over `Q[n]`.  If `A(s) P_s = 0` at the start base
+//!   `s` (the first base the identity above is used at, so `s` is at least
+//!   the first base where `L` holds for the parent), then `A(n) P_n = 0` for
+//!   every `n >= s`: from `(A P)_n = 0`,
+//!   `g(n) nu(n, x) (A P)_(n+1) = nu A(n + 1) T(n) P_n = B(n) (A P)_n = 0`,
+//!   and `g(n) != 0` (the parent leader is nonvanishing at every target
+//!   index, decided exactly when the parent is validated), so
+//!   `(A P)_(n+1) = 0` whenever `nu(n, .)` is not the zero polynomial
+//!   (`Q[x]` has no zero divisors).  At the finitely many integer `n >= s`
+//!   with `nu(n, .) = 0` (the integer roots of the gcd of the `x`-columns of
+//!   `nu`) the induction restarts: `(A P)_(n+1) = 0` is checked exactly.
+//!   The candidate `A` is found as a right gcd of `r(n)` and
+//!   `r(n + 1) o T(n)` over `Q(n, x)` (both annihilate every row when the
+//!   identity holds), repeated until the step is a left multiple, with
+//!   common bivariate factors of the coefficients removed; nothing in the
+//!   proof depends on that search.  This is how the Baxter triangle
+//!   (A056939, the Hoggatt rows with `m = 3`) is certified: the quotient
+//!   by `binom(n + 2, k + 1)` is the hypergeometric family
+//!   `sum_k binom(n + 2, k) binom(n + 2, k + 2) x^k / ((n + 2) binom(n + 2, 2))`,
+//!   whose rows satisfy a Liu--Wang recurrence and are killed by the
+//!   hypergeometric operator `x (x - 1) D^2 - (3 + (2n + 1) x) D + n (n + 2)`.
+//!
+//! Parents of order two or more with a nonzero remainder are not handled
+//! (the identity is then only supported by rows).
 //!
 //! # Root transfer
 //!
@@ -133,6 +170,7 @@
 //! [`crate::recurrence::LiftSummary`] mapping) and `prepare` (input
 //! validation shared with the row-factor lifts).
 
+mod annihilator;
 mod certify;
 mod factor;
 pub(super) mod prepare;

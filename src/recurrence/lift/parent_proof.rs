@@ -22,7 +22,13 @@
 //!    with property `real_rooted_in` an index-independent interval whose
 //!    upper end is `<= 0`, evidence `completed_recurrence_induction` or
 //!    `certified_family_invariant`, no `conditional_on` entries, no last
-//!    index and a first index `<=` the parent's first index is accepted;
+//!    index and a first index `<=` the parent's first index is accepted.
+//!    When no map gives such a claim, the menu is repeated with the parent's
+//!    first index moved `1, 2, 3` rows later (the moved seeds are generated
+//!    parent rows); a claim from the moved first index on suffices, because
+//!    the skipped rows are among the rows checked exactly below (each zero or
+//!    real-rooted with coefficients of one sign, which is the parent
+//!    statement for those rows);
 //! 4. **three-term recurrence**: [`check_three_term_recurrence_theorem`] with
 //!    the root region `(-inf, 0)` (orthogonal-polynomial recurrences, also
 //!    after the coordinate change `y = 1/(x + v_0)`, as for the Narayana
@@ -38,7 +44,11 @@
 //!
 //! Routes 4 and 5 run whether or not the root-domain route is enabled; both
 //! conclude that every parent row from the first index on is real-rooted with
-//! every root in `(-inf, 0)`.
+//! every root in `(-inf, 0)`.  Both move their induction start up to three
+//! rows past the parent seeds when the theorem fails at the seeds (the
+//! default [`RealRootednessTheoremOptions::maximum_start_delay`]; the
+//! skipped rows are checked exactly by the theorem), and the attempt names
+//! the delay used.
 //!
 //! A few parent rows are also checked exactly (nonzero rows of one sign and
 //! real-rooted).  A failing row refutes the parent statement; no route can
@@ -60,6 +70,11 @@ const PARENT_ROWS_CHECKED: usize = 10;
 
 /// Rows generated for the root-domain transform of a parent.
 const ROOT_DOMAIN_ROWS: usize = 8;
+
+/// Largest number of rows by which the root-domain route moves the parent's
+/// first index (smaller than [`PARENT_ROWS_CHECKED`], so that every skipped
+/// row is among the rows checked exactly).
+const MAXIMUM_ROOT_DOMAIN_START_DELAY: usize = 3;
 
 /// A caller-supplied statement that every parent row `P_n`, `n >= first_index`,
 /// is zero or real-rooted with coefficients of one sign (for example a
@@ -299,6 +314,34 @@ fn root_domain_route(
     record: &ParentRecord<'_>,
     rows: &[Vec<Q>],
 ) -> Vec<VeroneseParentProofAttempt> {
+    let mut attempts = Vec::new();
+    let seed_count = record.seeds.len();
+    for delay in 0..=MAXIMUM_ROOT_DOMAIN_START_DELAY {
+        // The moved record needs its seeds among the exactly checked rows.
+        let Some(seeds) = rows.get(delay..delay + seed_count) else {
+            break;
+        };
+        let moved = ParentRecord {
+            rule: record.rule,
+            seeds,
+            first_index: record.first_index + delay,
+        };
+        let (moved_attempts, success) = root_domain_menu(&moved, &rows[delay..], delay);
+        attempts.extend(moved_attempts);
+        if success {
+            break;
+        }
+    }
+    attempts
+}
+
+/// The root-domain menu for `record` (moved `delay` rows past the parent's
+/// own seeds; `rows` start at the record's first index).
+fn root_domain_menu(
+    record: &ParentRecord<'_>,
+    rows: &[Vec<Q>],
+    delay: usize,
+) -> (Vec<VeroneseParentProofAttempt>, bool) {
     let source = RecurrenceJson::from_recurrence_rational(
         record.rule,
         record.first_index,
@@ -334,12 +377,28 @@ fn root_domain_route(
     ] {
         menu.push((name.to_string(), schedule.clone().map(make)));
     }
+    let variant = |name: String| {
+        if delay == 0 {
+            name
+        } else {
+            format!("{name}, induction start moved {delay} row(s)")
+        }
+    };
+    let moved_note = if delay == 0 {
+        String::new()
+    } else {
+        format!(
+            " (source moved {delay} row(s) past the parent seeds; the earlier parent rows are \
+             among the rows checked exactly to be zero or real-rooted with coefficients of one \
+             sign)"
+        )
+    };
     let mut attempts = Vec::new();
     for (name, transformation) in menu {
         let Some(transformation) = transformation else {
             attempts.push(VeroneseParentProofAttempt {
                 route: VeroneseParentProofRoute::RootDomain,
-                variant: name,
+                variant: variant(name),
                 success: false,
                 detail: "no affine degree schedule fits the first parent rows".into(),
             });
@@ -354,7 +413,7 @@ fn root_domain_route(
         let attempt = match transform_recurrence(&request) {
             Err(error) => VeroneseParentProofAttempt {
                 route: VeroneseParentProofRoute::RootDomain,
-                variant: name,
+                variant: variant(name),
                 success: false,
                 detail: format!("the transform failed: {error}"),
             },
@@ -367,10 +426,11 @@ fn root_domain_route(
                 match claim {
                     Some(claim) => VeroneseParentProofAttempt {
                         route: VeroneseParentProofRoute::RootDomain,
-                        variant: name,
+                        variant: variant(name),
                         success: true,
                         detail: format!(
-                            "source claim: every P_n, n >= {}, is real-rooted in {} ({:?}): {}",
+                            "source claim: every P_n, n >= {}, is real-rooted in {} ({:?}): \
+                             {}{moved_note}",
                             claim.first_index,
                             claim
                                 .interval
@@ -382,7 +442,7 @@ fn root_domain_route(
                     },
                     None => VeroneseParentProofAttempt {
                         route: VeroneseParentProofRoute::RootDomain,
-                        variant: name,
+                        variant: variant(name),
                         success: false,
                         detail: "no unconditional all-index source claim with roots in \
                                  (-inf, 0]"
@@ -394,10 +454,10 @@ fn root_domain_route(
         let success = attempt.success;
         attempts.push(attempt);
         if success {
-            break;
+            return (attempts, true);
         }
     }
-    attempts
+    (attempts, false)
 }
 
 /// Routes 4 and 5: a real-rootedness theorem with every root in `(-inf, 0)`.
@@ -413,6 +473,7 @@ fn theorem_attempt(
             upper: Some(Q::zero()),
             upper_closed: false,
         }),
+        ..RealRootednessTheoremOptions::default()
     };
     let report = match route {
         VeroneseParentProofRoute::ThreeTermRecurrence => check_three_term_recurrence_theorem(
@@ -424,6 +485,12 @@ fn theorem_attempt(
         _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
     };
     let detail = match (&report.status, &report.conclusion) {
+        (RealRootednessTheoremStatus::Proved, Some(conclusion)) if report.start_delay > 0 => {
+            format!(
+                "induction start moved {} row(s) past the seeds: {}: {}",
+                report.start_delay, report.normal_form, conclusion.statement
+            )
+        }
         (RealRootednessTheoremStatus::Proved, Some(conclusion)) => {
             format!("{}: {}", report.normal_form, conclusion.statement)
         }

@@ -146,6 +146,55 @@ fn eulerian_parent_is_proved_by_the_root_domain_route() {
     assert_eq!(proof.route, Some(VeroneseParentProofRoute::LiuWang));
 }
 
+/// The Eulerian rule `A_n = (1 + (n - 1) x) A_(n-1) + x (1 - x) A'_(n-1)`
+/// from `A_0 = 1`: every route fails at the first index (`A_1 = A_0`), and
+/// moving the start one row later proves the parent.
+#[test]
+fn parent_routes_move_the_induction_start() {
+    let rule = Recurrence {
+        terms: vec![
+            RecurrenceTerm::new(
+                1,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(1), q(-1)], vec![q(0), q(1)]]),
+            ),
+            RecurrenceTerm::new(
+                1,
+                1,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(0), q(1), q(-1)]]),
+            ),
+        ],
+        denominator: None,
+        inhomogeneous: None,
+    };
+    let seeds = vec![vec![q(1)]];
+    let record = ParentRecord {
+        rule: &rule,
+        seeds: &seeds,
+        first_index: 0,
+    };
+    let proof = prove_parent(&record, 0, &[], true).unwrap();
+    assert_eq!(
+        proof.status,
+        VeroneseParentProofStatus::Proved,
+        "{proof:#?}"
+    );
+    assert_eq!(proof.route, Some(VeroneseParentProofRoute::RootDomain));
+    let success = proof.attempts.iter().find(|a| a.success).unwrap();
+    assert_eq!(
+        success.variant,
+        "f_polynomial, induction start moved 1 row(s)"
+    );
+    assert!(success.detail.contains("checked exactly"));
+    assert!(proof.statement.contains("n >= 0"));
+    // Without the root-domain route, Liu--Wang moves its start itself.
+    let proof = prove_parent(&record, 0, &[], false).unwrap();
+    assert_eq!(proof.status, VeroneseParentProofStatus::Proved);
+    assert_eq!(proof.route, Some(VeroneseParentProofRoute::LiuWang));
+    let success = proof.attempts.iter().find(|a| a.success).unwrap();
+    assert!(success.detail.starts_with("induction start moved 1 row(s)"));
+}
+
 fn catalog_record(id: &str) -> (Recurrence, Vec<Vec<BigRational>>, usize) {
     let (rule, seeds, first_row) = crate::oeis::by_id(id)
         .unwrap()

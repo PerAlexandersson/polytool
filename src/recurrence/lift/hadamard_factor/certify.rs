@@ -1,20 +1,23 @@
 //! The certificate of a Hadamard-factor lift: conjugation of the input
 //! relation by the factor, pseudo-division by the parent relation, the row
-//! annihilator of a product parent, and [`HadamardFactorCertificate`] with
-//! its independent replay.
+//! annihilator of a product parent or an invariant row annihilator of a
+//! first-order parent, and [`HadamardFactorCertificate`] with its
+//! independent replay.
 
+use super::annihilator::{invariance_holds, step_operator, vanishing_bases, InvariantAnnihilator};
 use super::factor::{atom_ratio, conjugation_conditions, FactorProduct, HadamardFactor, TermShape};
 use super::prepare::{left_multiply, shift_free_from_json, shift_free_json, PreparedRule};
 use crate::recurrence::implicit::algebra::{
     content_and_primitive, from_theta, roots_in_domain, theta_add, to_theta, Biv, DOp, ThetaOp,
 };
+use crate::recurrence::implicit::{biv_from_json, biv_json};
 use crate::recurrence::lift::section_certify::{
     n_coefficients, n_polynomial, pseudo_divide_row, x_free_leader, ForwardDivision, RatioGauge,
 };
 use crate::recurrence::lift::section_operators::{check_term_budget, OperatorMatrix};
 use crate::recurrence::{
-    decode_poly, encode_poly, ImplicitRelation, ImplicitRelationJson, OperatorTermJson,
-    RecurrenceError, RecurrenceJson, VeroneseSectionGauge,
+    decode_poly, encode_poly, BivarPolyJson, ImplicitRelation, ImplicitRelationJson,
+    OperatorTermJson, RecurrenceError, RecurrenceJson, VeroneseSectionGauge,
 };
 use crate::vec_poly;
 use crate::BigRational;
@@ -254,6 +257,21 @@ pub struct HadamardDivisionQuotient {
     pub differentiations: Vec<OperatorTermJson>,
 }
 
+/// The invariance part of a [`HadamardFactorCertificate`] (module
+/// documentation of `hadamard_factor`, section "Row annihilators"), kept
+/// in the certificate's `row_annihilator_*` fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct RowAnnihilatorInvariance {
+    /// `nu(n, x)`.
+    pub(super) step_multiplier: Biv,
+    /// `B(n)`.
+    pub(super) step_quotient: DOp,
+    /// `s`.
+    pub(super) start_base: usize,
+    /// The bases `m >= s` where `nu(m, .)` is the zero polynomial.
+    pub(super) restart_bases: Vec<usize>,
+}
+
 /// The exact operator identity behind a certified Hadamard-factor lift
 /// `Q_n = lambda(n) sum_k u(n, k) p(n, k) x^k`:
 ///
@@ -263,8 +281,16 @@ pub struct HadamardDivisionQuotient {
 ///
 /// with `M''` the input relation `M` conjugated by `lambda(n) u(n, k)`
 /// (recomputed by [`verify`](Self::verify)), `L` the parent relation, `A`
-/// the row annihilator of a product parent (absent, with `Z = 0` and
-/// `mu = 1`, when the division leaves no remainder).  What it proves, with
+/// a row annihilator: that of a product parent, or an invariant annihilator
+/// of a first-order parent `g(n) P_(n+1) = T(n) P_n` with the invariance
+/// identity
+///
+/// ```text
+/// nu(n, x) A(n + 1) o T(n) = B(n) o A(n)
+/// ```
+///
+/// (absent, with `Z = 0` and `mu = 1`, when the division leaves no
+/// remainder).  What it proves, with
 /// the index domains recorded here, is stated in the `hadamard_factor`
 /// module documentation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -295,9 +321,27 @@ pub struct HadamardFactorCertificate {
     pub row_multiplier: Vec<String>,
     /// The nonzero quotients `H_nu`.
     pub quotients: Vec<HadamardDivisionQuotient>,
-    /// `A(n)`, when used (recomputed from the parent by the replay).
+    /// `A(n)`, when used: recomputed from the parent by the replay for a
+    /// product parent, certified by `row_annihilator_invariance` otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub row_annihilator: Option<Vec<OperatorTermJson>>,
+    /// `nu(n, x)` of the invariance identity (`coeffs[i][j]` multiplies
+    /// `n^i x^j`), present exactly when `A` is an invariant annihilator
+    /// rather than the product-parent annihilator.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_annihilator_step_multiplier: Option<BivarPolyJson>,
+    /// `B(n)` of the invariance identity (empty unless
+    /// `row_annihilator_step_multiplier` is present).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub row_annihilator_step_quotient: Vec<OperatorTermJson>,
+    /// The first base `s` of the annihilator induction, where `A(s) P_s = 0`
+    /// was checked exactly (with `row_annihilator_step_multiplier`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_annihilator_start_base: Option<usize>,
+    /// The bases `m >= s` where `nu(m, .)` is the zero polynomial; there
+    /// `A(m + 1) P_(m+1) = 0` was checked exactly.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub row_annihilator_restart_bases: Vec<usize>,
     /// `Z`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub row_annihilator_quotient: Vec<OperatorTermJson>,
@@ -386,14 +430,34 @@ impl HadamardFactorCertificate {
             let slot = quotients.entry(entry.shift).or_default();
             *slot = slot.add(&h);
         }
-        let annihilator = match &self.row_annihilator {
-            None => {
+        let from = self.input_valid_from_base.max(self.parent_valid_from_base);
+        let invariance = match (
+            &self.row_annihilator_step_multiplier,
+            self.row_annihilator_start_base,
+        ) {
+            (Some(multiplier), Some(start_base)) => Some(RowAnnihilatorInvariance {
+                step_multiplier: biv_from_json(multiplier)?,
+                step_quotient: shift_free_from_json(&self.row_annihilator_step_quotient)?,
+                start_base,
+                restart_bases: self.row_annihilator_restart_bases.clone(),
+            }),
+            (None, None)
+                if self.row_annihilator_step_quotient.is_empty()
+                    && self.row_annihilator_restart_bases.is_empty() =>
+            {
+                None
+            }
+            _ => return failed("incomplete row-annihilator invariance fields"),
+        };
+        let annihilator = match (&self.row_annihilator, &invariance) {
+            (None, None) => {
                 if !self.row_annihilator_quotient.is_empty() {
                     return failed("a row-annihilator quotient without an annihilator");
                 }
                 None
             }
-            Some(recorded) => {
+            (None, Some(_)) => return failed("an invariance certificate without an annihilator"),
+            (Some(recorded), None) => {
                 let Some(product) = ProductParent::recognise(&parent) else {
                     return failed("the parent is not a product parent");
                 };
@@ -401,6 +465,14 @@ impl HadamardFactorCertificate {
                 if a != shift_free_from_json(recorded)? || !product.annihilator_is_invariant(&a) {
                     return failed("the row annihilator does not match the parent");
                 }
+                Some((a, shift_free_from_json(&self.row_annihilator_quotient)?))
+            }
+            (Some(recorded), Some(invariance)) => {
+                if self.parent_valid_from_base != parent.valid_from_base().max(first_index) {
+                    return failed("the parent base does not match the parent record");
+                }
+                let a = shift_free_from_json(recorded)?;
+                verify_invariance(&a, invariance, &parent, from)?;
                 Some((a, shift_free_from_json(&self.row_annihilator_quotient)?))
             }
         };
@@ -413,7 +485,6 @@ impl HadamardFactorCertificate {
         ) {
             return failed("the identity mu w M'' = sum H_nu S^nu L + Z A fails");
         }
-        let from = self.input_valid_from_base.max(self.parent_valid_from_base);
         let roots = roots_in_domain(&n_coefficients(&multiplier), from, None);
         if roots
             .iter()
@@ -425,7 +496,100 @@ impl HadamardFactorCertificate {
     }
 }
 
-/// Assemble the certificate fields from a successful division.
+/// Replay the invariance of the annihilator `a` of the prepared `parent`:
+/// the parent has order one, the identity `nu A(n + 1) o T(n) = B o A(n)`
+/// holds exactly, the start base is `from`, the restart bases are the
+/// integer bases `m >= from` with `nu(m, .) = 0`, and `A` kills the parent
+/// rows at the start base and after every restart base (exact).
+pub(super) fn verify_invariance(
+    a: &DOp,
+    invariance: &RowAnnihilatorInvariance,
+    parent: &super::prepare::PreparedRule,
+    from: usize,
+) -> Result<(), RecurrenceError> {
+    let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
+    let Some(step) = step_operator(&parent.relation) else {
+        return failed("an invariant row annihilator needs a first-order parent");
+    };
+    let invariant = InvariantAnnihilator {
+        annihilator: a.clone(),
+        step_multiplier: invariance.step_multiplier.clone(),
+        step_quotient: invariance.step_quotient.clone(),
+    };
+    if invariant.step_multiplier.is_zero() || !invariance_holds(&invariant, &step) {
+        return failed("the invariance identity nu A(n + 1) T(n) = B A(n) fails");
+    }
+    if invariance.start_base != from {
+        return failed("the annihilator induction does not start at the first used base");
+    }
+    if vanishing_bases(&invariant.step_multiplier, from) != invariance.restart_bases {
+        return failed("the restart bases are not the zeros of nu");
+    }
+    check_annihilated_rows(a, parent, from, &invariance.restart_bases)
+}
+
+/// `A(m) P_m = 0` exactly at `m = from` and at `m = r + 1` for every restart
+/// base `r`.
+pub(super) fn check_annihilated_rows(
+    a: &DOp,
+    parent: &super::prepare::PreparedRule,
+    from: usize,
+    restart_bases: &[usize],
+) -> Result<(), RecurrenceError> {
+    let indices: Vec<usize> = std::iter::once(from)
+        .chain(restart_bases.iter().map(|base| base + 1))
+        .collect();
+    let last = indices.iter().copied().max().unwrap_or(from);
+    let count = last + 1 - parent.first_index.min(last);
+    if count > super::search::MAX_HADAMARD_FACTOR_ROWS + parent.seeds.len() {
+        return Err(RecurrenceError::LimitExceeded(format!(
+            "the annihilator check needs {count} parent rows"
+        )));
+    }
+    let rows = parent.rows(count)?;
+    for index in indices {
+        let row = &rows[index - parent.first_index];
+        if !a.apply_row(row, index).iter().all(Zero::is_zero) {
+            return Err(RecurrenceError::VerificationFailed(format!(
+                "the row annihilator does not kill parent row {index}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// How the division remainder is removed: `mu r = Z o A` with
+/// `mu(n, x) = c(n) p(x)`; `c` is folded into the multiplier `w(n)`.
+pub(super) struct RowAnnihilation {
+    /// `p(x)`.
+    pub(super) row_multiplier: Vec<Q>,
+    /// `c(n)`.
+    pub(super) index_multiplier: Vec<Q>,
+    /// `A(n)`.
+    pub(super) annihilator: DOp,
+    /// `Z(n)`.
+    pub(super) quotient: DOp,
+    /// The invariance certificate, absent for a product parent.
+    pub(super) invariance: Option<RowAnnihilatorInvariance>,
+}
+
+impl RowAnnihilation {
+    /// The invariance certificate of `invariant` starting at `start_base`.
+    pub(super) fn invariance_record(
+        invariant: &InvariantAnnihilator,
+        start_base: usize,
+    ) -> RowAnnihilatorInvariance {
+        RowAnnihilatorInvariance {
+            step_multiplier: invariant.step_multiplier.clone(),
+            step_quotient: invariant.step_quotient.clone(),
+            start_base,
+            restart_bases: vanishing_bases(&invariant.step_multiplier, start_base),
+        }
+    }
+}
+
+/// Assemble the certificate fields from a successful division; `multiplier`
+/// is `w(n)` with the index part of the row multiplier folded in.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_certificate(
     factor: &HadamardFactor,
@@ -434,19 +598,28 @@ pub(super) fn build_certificate(
     parent: &PreparedRule,
     conjugated: &ConjugatedRelation,
     division: &ForwardDivision,
-    annihilator: Option<(Biv, DOp, DOp)>,
+    multiplier: &Biv,
+    annihilation: Option<RowAnnihilation>,
     bases: (usize, usize, Vec<usize>),
     statement: String,
 ) -> HadamardFactorCertificate {
-    let (row_multiplier, row_annihilator, quotient) = match annihilator {
-        Some((mu, a, z)) => (mu, Some(shift_free_json(&a)), shift_free_json(&z)),
-        None => (Biv::one(), None, Vec::new()),
-    };
+    let (row_multiplier, index_multiplier, row_annihilator, quotient, invariance) =
+        match annihilation {
+            Some(annihilation) => (
+                annihilation.row_multiplier,
+                annihilation.index_multiplier,
+                Some(shift_free_json(&annihilation.annihilator)),
+                shift_free_json(&annihilation.quotient),
+                annihilation.invariance,
+            ),
+            None => (vec![Q::one()], vec![Q::one()], None, Vec::new(), None),
+        };
+    let full_row_multiplier = Biv::from_y(&row_multiplier).mul(&n_polynomial(&index_multiplier));
     let quotients = division
         .quotients
         .iter()
         .filter_map(|(nu, row)| {
-            let h = left_multiply(&row_multiplier, &row[0]);
+            let h = left_multiply(&full_row_multiplier, &row[0]);
             (!h.is_zero()).then(|| HadamardDivisionQuotient {
                 shift: *nu,
                 differentiations: shift_free_json(&h),
@@ -469,10 +642,16 @@ pub(super) fn build_certificate(
         parent_leader_shift: k,
         conjugated_input_relation: ImplicitRelation::from_op(&conjugated.op).to_json(),
         conjugation_x_shift: conjugated.x_shift,
-        multiplier: encode_poly(&n_coefficients(&division.multiplier)),
-        row_multiplier: encode_poly(row_multiplier.rows().first().map_or(&[][..], |r| r)),
+        multiplier: encode_poly(&n_coefficients(multiplier)),
+        row_multiplier: encode_poly(&row_multiplier),
         quotients,
         row_annihilator,
+        row_annihilator_step_multiplier: invariance.as_ref().map(|i| biv_json(&i.step_multiplier)),
+        row_annihilator_step_quotient: invariance
+            .as_ref()
+            .map_or_else(Vec::new, |i| shift_free_json(&i.step_quotient)),
+        row_annihilator_start_base: invariance.as_ref().map(|i| i.start_base),
+        row_annihilator_restart_bases: invariance.map_or_else(Vec::new, |i| i.restart_bases),
         row_annihilator_quotient: quotient,
         input_valid_from_base: bases.0,
         parent_valid_from_base: bases.1,

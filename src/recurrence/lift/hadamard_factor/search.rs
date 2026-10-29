@@ -3,15 +3,16 @@
 //! of the row normalisation, the parent search, and the per-candidate
 //! certification.
 
+use super::annihilator::{find_invariant_annihilator, separated_multiplier, step_operator};
 use super::certify::{
-    build_certificate, conjugate_input, divide_by_parent, right_pseudo_divide, ProductParent,
-    MAX_HADAMARD_OPERATOR_TERMS,
+    build_certificate, check_annihilated_rows, conjugate_input, divide_by_parent,
+    right_pseudo_divide, ProductParent, RowAnnihilation, MAX_HADAMARD_OPERATOR_TERMS,
 };
 use super::factor::{HadamardFactor, HadamardFactorTerm};
 use super::prepare::{prepare_rule, PreparedRule, MAX_LIFT_IDENTIFYING_ROWS};
 use super::report::*;
 use crate::linalg::{rational_kernel_with_certificate, RationalKernelLimits};
-use crate::recurrence::implicit::algebra::{q, roots_in_domain};
+use crate::recurrence::implicit::algebra::{q, roots_in_domain, DOp};
 use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
 use crate::recurrence::lift::section_certify::n_coefficients;
 use crate::recurrence::{
@@ -485,6 +486,107 @@ fn candidate_rows(
         .collect()
 }
 
+/// Remove a nonzero division remainder `r` with a row annihilator `A` of the
+/// parent (`mu r = Z o A`): the product-parent annihilator, else an
+/// invariant annihilator of a first-order parent whose rows are checked
+/// from the base `from` on.  The inner `Err` is the reason when neither
+/// applies (the identity is then only supported by rows).
+fn remove_remainder(
+    parent: &PreparedRule,
+    remainder: &DOp,
+    from: usize,
+    options: &HadamardFactorLiftOptions,
+) -> Result<Result<RowAnnihilation, String>, RecurrenceError> {
+    let reason = "the division of the conjugated input relation by the parent relation leaves \
+                  a nonzero remainder";
+    let budget = |error: RecurrenceError| match error {
+        RecurrenceError::BudgetExhausted(detail) | RecurrenceError::LimitExceeded(detail) => {
+            Ok(Err(format!(
+                "{reason}, and the row annihilator ran out of budget: {detail}"
+            )))
+        }
+        error => Err(error),
+    };
+    if let Some(product) = ProductParent::recognise(parent) {
+        let a = product.annihilator();
+        if !product.annihilator_is_invariant(&a) {
+            return Err(RecurrenceError::VerificationFailed(
+                "the product-parent annihilator is not invariant".into(),
+            ));
+        }
+        let (mu, z, rest) = match right_pseudo_divide(remainder, &a, options.max_operator_terms) {
+            Ok(result) => result,
+            Err(error) => return budget(error),
+        };
+        if !rest.is_zero() {
+            return Ok(Err(format!(
+                "{reason} that is not a left multiple of the row annihilator of the product \
+                 parent"
+            )));
+        }
+        return Ok(Ok(RowAnnihilation {
+            row_multiplier: mu.rows().first().cloned().unwrap_or_default(),
+            index_multiplier: vec![Q::one()],
+            annihilator: a,
+            quotient: z,
+            invariance: None,
+        }));
+    }
+    let Some(step) = step_operator(&parent.relation) else {
+        return Ok(Err(format!(
+            "{reason}, and the parent is neither a product parent nor of order one"
+        )));
+    };
+    let invariant = match find_invariant_annihilator(remainder, &step, options.max_operator_terms) {
+        Ok(Some(invariant)) => invariant,
+        Ok(None) => {
+            return Ok(Err(format!(
+                "{reason}, and no invariant row annihilator of the parent divides it"
+            )))
+        }
+        Err(error) => return budget(error),
+    };
+    let (mu, z, rest) = match right_pseudo_divide(
+        remainder,
+        &invariant.annihilator,
+        options.max_operator_terms,
+    ) {
+        Ok(result) => result,
+        Err(error) => return budget(error),
+    };
+    if !rest.is_zero() {
+        return Ok(Err(format!(
+            "{reason} that is not a left multiple of the invariant row annihilator"
+        )));
+    }
+    let Some((index_multiplier, row_multiplier)) = separated_multiplier(&mu) else {
+        return Ok(Err(format!(
+            "{reason}; the right division by the invariant row annihilator needs a multiplier \
+             that is not a product c(n) p(x)"
+        )));
+    };
+    let invariance = RowAnnihilation::invariance_record(&invariant, from);
+    match check_annihilated_rows(
+        &invariant.annihilator,
+        parent,
+        from,
+        &invariance.restart_bases,
+    ) {
+        Ok(()) => {}
+        Err(RecurrenceError::VerificationFailed(detail)) => {
+            return Ok(Err(format!("{reason}; {detail}")))
+        }
+        Err(error) => return budget(error),
+    }
+    Ok(Ok(RowAnnihilation {
+        row_multiplier,
+        index_multiplier,
+        annihilator: invariant.annihilator,
+        quotient: z,
+        invariance: Some(invariance),
+    }))
+}
+
 /// Certify one candidate (module documentation of `hadamard_factor`).
 fn certify_candidate(
     input: &PreparedRule,
@@ -542,52 +644,28 @@ fn certify_candidate(
             ) => return supported(count, format!("the division ran out of budget: {reason}")),
             Err(error) => return Err(error),
         };
-    let mut annihilator = None;
-    if !division.remainder_is_zero() {
-        let reason = "the division of the conjugated input relation by the parent relation \
-                      leaves a nonzero remainder";
-        let Some(product) = ProductParent::recognise(parent) else {
-            return supported(
-                count,
-                format!("{reason}, and the parent is not a product parent"),
-            );
-        };
-        let a = product.annihilator();
-        if !product.annihilator_is_invariant(&a) {
-            return Err(RecurrenceError::VerificationFailed(
-                "the product-parent annihilator is not invariant".into(),
-            ));
-        }
-        let (mu, z, rest) =
-            match right_pseudo_divide(&division.remainder[0], &a, options.max_operator_terms) {
-                Ok(result) => result,
-                Err(RecurrenceError::BudgetExhausted(reason)) => {
-                    return supported(
-                        count,
-                        format!("the right division ran out of budget: {reason}"),
-                    )
-                }
-                Err(error) => return Err(error),
-            };
-        if !rest.is_zero() {
-            return supported(
-                count,
-                format!("{reason} that is not a left multiple of the row annihilator"),
-            );
-        }
-        annihilator = Some((mu, a, z));
-    }
-
-    // Exceptional bases.
     let input_from = input.valid_from_base();
     let parent_from = parent.valid_from_base().max(n0);
-    let multiplier = n_coefficients(&division.multiplier);
+    let from = input_from.max(parent_from);
+    let mut annihilation = None;
+    if !division.remainder_is_zero() {
+        match remove_remainder(parent, &division.remainder[0], from, options)? {
+            Ok(found) => annihilation = Some(found),
+            Err(reason) => return supported(count, reason),
+        }
+    }
+    let multiplier = match &annihilation {
+        Some(found) => division
+            .multiplier
+            .mul(&super::super::section_certify::n_polynomial(
+                &found.index_multiplier,
+            )),
+        None => division.multiplier.clone(),
+    };
+
+    // Exceptional bases.
     let mut exceptional: Vec<usize> = (input_from..parent_from).collect();
-    exceptional.extend(roots_in_domain(
-        &multiplier,
-        input_from.max(parent_from),
-        None,
-    ));
+    exceptional.extend(roots_in_domain(&n_coefficients(&multiplier), from, None));
     exceptional.sort_unstable();
     exceptional.dedup();
     if let Some(last) = exceptional.last() {
@@ -627,7 +705,13 @@ fn certify_candidate(
          {input_from} (the exceptional bases checked exactly), and agreement on the \
          {identifying} identifying rows gives Q_n = lambda(n) sum_k u(n,k) [x^k]P_n x^k for \
          every n >= {n0}",
-        if annihilator.is_some() { " + Z A" } else { "" },
+        match &annihilation {
+            None => "",
+            Some(found) if found.invariance.is_some() => {
+                " + Z A (A an invariant row annihilator of the parent)"
+            }
+            Some(_) => " + Z A (A the row annihilator of the product parent)",
+        },
         factor.text()
     );
     let certificate = build_certificate(
@@ -637,7 +721,8 @@ fn certify_candidate(
         parent,
         &conjugated,
         &division,
-        annihilator,
+        &multiplier,
+        annihilation,
         (input_from, parent_from, exceptional),
         statement,
     );

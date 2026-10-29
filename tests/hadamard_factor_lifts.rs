@@ -309,3 +309,104 @@ fn budgets_are_reported() {
     .unwrap_err();
     assert!(matches!(error, RecurrenceError::LimitExceeded(_)));
 }
+
+#[test]
+fn baxter_is_proved_through_an_invariant_row_annihilator() {
+    // A056939 (the Baxter triangle, Hoggatt rows with m = 3):
+    // T(n, k) = binom(n+2, k+1) p(n, k) with the hypergeometric quotient
+    // p(n, k) = binom(n+2, k) binom(n+2, k+2) / ((n+2) binom(n+2, 2)).
+    let report = catalog_report("A056939", &HadamardFactorLiftOptions::default());
+    report.verify().unwrap();
+    let lift = report.proved_lifts().next().expect("a proved lift");
+    assert_eq!(lift.factor_text, "binom(n+2, k+1)");
+    assert_eq!(lift.gauge, VeroneseSectionGauge::None);
+    // The parent is a first-order derivative rule, proved by Liu--Wang.
+    assert_eq!(
+        lift.parent_proof.route,
+        Some(VeroneseParentProofRoute::LiuWang)
+    );
+    let summary = &lift.lift_summary;
+    assert_eq!(summary.verdict, LiftVerdict::Proved);
+    assert!(summary.is_consistent());
+    // The division by the parent leaves a remainder, removed by the
+    // hypergeometric operator x (x - 1) D^2 - (3 + (2n + 1) x) D + n (n + 2)
+    // (up to a constant), which is invariant under the parent step.
+    let certificate = certificate(lift);
+    let annihilator = certificate
+        .row_annihilator
+        .as_ref()
+        .expect("an annihilator");
+    let orders: Vec<usize> = annihilator.iter().map(|t| t.deriv_order).collect();
+    assert_eq!(orders, vec![0, 1, 2]);
+    let top = &annihilator[2].coeff.coeffs;
+    assert_eq!(
+        top.len(),
+        1,
+        "the leading coefficient is free of n: {top:?}"
+    );
+    assert!(certificate.row_annihilator_step_multiplier.is_some());
+    assert_eq!(certificate.row_annihilator_start_base, Some(0));
+    assert!(certificate.row_annihilator_restart_bases.is_empty());
+    assert!(certificate.statement.contains("invariant row annihilator"));
+    certificate.verify().unwrap();
+
+    // JSON round trip.
+    let json = serde_json::to_value(&report).unwrap();
+    let back: HadamardFactorLiftReport = serde_json::from_value(json).unwrap();
+    assert_eq!(back, report);
+
+    // Tampered invariance records are refused.
+    let mut wrong_start = certificate.clone();
+    wrong_start.row_annihilator_start_base = Some(1);
+    assert!(wrong_start.verify().is_err());
+    let mut wrong_restart = certificate.clone();
+    wrong_restart.row_annihilator_restart_bases = vec![3];
+    assert!(wrong_restart.verify().is_err());
+    let mut wrong_step = certificate.clone();
+    wrong_step
+        .row_annihilator_step_multiplier
+        .as_mut()
+        .unwrap()
+        .coeffs
+        .push(vec!["1".into()]);
+    assert!(wrong_step.verify().is_err());
+    let mut no_step = certificate.clone();
+    no_step.row_annihilator_step_multiplier = None;
+    assert!(no_step.verify().is_err());
+    let mut wrong_annihilator = certificate.clone();
+    wrong_annihilator.row_annihilator.as_mut().unwrap().pop();
+    assert!(wrong_annihilator.verify().is_err());
+}
+
+#[test]
+fn baxter_with_a_second_order_parent_stays_open() {
+    // Without derivative terms the parent search finds the gauged
+    // three-term (Jacobi) parent, which the three-term theorem proves; but
+    // the division leaves a remainder and the parent has order two, so the
+    // identity is only supported by rows and the lift stays open.
+    let report = catalog_report(
+        "A056939",
+        &HadamardFactorLiftOptions {
+            max_parent_derivative_order: 0,
+            ..Default::default()
+        },
+    );
+    report.verify().unwrap();
+    assert_eq!(report.proved_lifts().count(), 0);
+    let lift = report
+        .lifts
+        .iter()
+        .find(|lift| lift.factor_text == "binom(n+2, k+1)")
+        .expect("the binom(n+2, k+1) lift");
+    match &lift.identity {
+        HadamardFactorIdentityStatus::SupportedByRows { reason, .. } => {
+            assert!(reason.contains("nor of order one"), "{reason}");
+        }
+        other => panic!("unexpected identity status {other:?}"),
+    }
+    assert_eq!(
+        lift.parent_proof.route,
+        Some(VeroneseParentProofRoute::ThreeTermRecurrence)
+    );
+    assert_eq!(lift.lift_summary.verdict, LiftVerdict::Open);
+}

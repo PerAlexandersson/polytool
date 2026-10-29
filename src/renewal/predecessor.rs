@@ -6,8 +6,11 @@
 //! `Q_i << Q_n` (oriented weak interlacing) for `p(n) <= i <= n`.  For the
 //! fixed delay `p(n) = max(0, n-L)` this gives the window `Q_A << Q_B` for
 //! `0 <= A <= B`, `B - A <= L`.  The paper proof is in
-//! <https://github.com/PerAlexandersson/RealRooted/issues/2037>; it is not
-//! Lean checked.
+//! <https://github.com/PerAlexandersson/RealRooted/issues/2037>; the window
+//! theorem (and its scaled form) is now formalized in the RealRooted Lean
+//! library (`RealRooted/Interlacing/VariableDelay.lean`).  Individual matches
+//! reported here are not replayed in Lean, which is what
+//! [`PAPER_PROOF_STATUS`] records.
 //!
 //! [`VariablePredecessorRecurrence`] keeps the predecessor rule and the weight
 //! separate from the fixed-offset [`crate::recurrence::RecurrenceTerm`].
