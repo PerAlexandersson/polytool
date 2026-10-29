@@ -621,7 +621,35 @@ remainder is removed by a row annihilator `A(n)` of the parent, with
   step is a left multiple, with common bivariate coefficient factors removed;
   only the exact identities enter the proof.
 
-Parents of order two or more with a nonzero remainder are not handled.  Then
+- a parent of any order `k`, `g(n) P_(n+k) = sum_(i < k) T_i(n) P_(n+i)`
+  (`L = g(n) S^k + sum_(i < k) C_i(n) S^i`, `T_i = -C_i`): an invariant
+  annihilator system on the row windows `(P_n, ..., P_(n+k-1))`.  Its
+  generators are operators `A^(l) = sum_(i < k) A^(l)_i(n) S^i` of shift
+  below `k`; the companion step maps `A` to
+  `N(A) = g(n) S A - A_(k-1)(n + 1) L`, of shift below `k`, with
+  `(N(A) P)_n = g(n) (A P)_(n+1)` wherever `L` holds.  The certificate records
+  exact identities `nu_l(n, x) N(A^(l)) = sum_j B_(l,j)(n) A^(j)` and
+  `(A^(l) P)_s = 0` for every `l` at the first used base `s`.  By induction
+  `g(n) nu_l (A^(l) P)_(n+1) = sum_j B_(l,j) (A^(j) P)_n = 0`, so
+  `(A^(l) P)_(n+1) = 0` unless `nu_l(n, .)` is the zero polynomial; at those
+  finitely many integer `n` every `(A^(j) P)_(n+1) = 0` is checked exactly.
+  The remainder is `mu r = sum_l Z_l A^(l)` with `mu = c(n) mu_2(n, x)`:
+  `c` is folded into `w`, and the integer zeros of `mu_2(n, .)` (none when it
+  is primitive over `Q[n]`, as produced) are exceptional bases.  The
+  generators are guessed from the parent rows: for a growing ansatz
+  (derivative order up to 3, degrees up to 3 in `n` and 6 in `x`) the exact
+  kernel of the conditions `(A P)_n = 0` on the rows, with the unknowns
+  ordered by shift and then derivative order, is computed by modular
+  elimination, Chinese remaindering and rational reconstruction (every vector
+  checked exactly against every row); per shift the vector with the smallest
+  leading term is a pivot of an echelon basis of the annihilator module over
+  `Q(n, x)<D>`.  The step images and the remainder are reduced by right
+  pseudo-division column by column, and the system is kept when every
+  reduction ends in zero.  Only the exact identities and row checks enter the
+  proof.  The search uses this route for parents of order two or more (for a
+  first-order parent it is the invariant annihilator with one generator).
+
+If no annihilator applies, the identity is only supported by rows.  Otherwise
 `(M'' P)_n = 0` at every base where `L` holds, except the integer roots of
 `w`; at those and at the bases between the two rules' domains `M` is evaluated
 exactly.  So
@@ -629,9 +657,9 @@ exactly.  So
 identifying rows, and the leader of `M` (nonzero at every target, decided
 exactly) gives `Q_n = lambda(n) u ⊙ P_n` for every `n >= n0`.
 `HadamardFactorCertificate::verify` recomputes `M''`, the parent relation and
-the product-parent annihilator (or replays the invariance identity, the
+the product-parent annihilator (or replays the invariance identities, the
 restart bases and the exact row checks) and checks
-`mu w M'' = sum H_nu S^nu L + Z A`.
+`mu w M'' = sum H_nu S^nu L + Z A` (or `+ sum_l Z_l A^(l)`).
 
 Example: the Baxter triangle A056939 (the Hoggatt rows with `m = 3`) is
 `binom(n + 2, k + 1) ⊙ P_n` with
@@ -641,9 +669,20 @@ Liu--Wang); the division leaves an order-3 remainder, which is a left multiple
 of the hypergeometric operator `x (x - 1) D^2 - (3 + (2n + 1) x) D + n (n + 2)`,
 invariant under the parent step with `nu = x^2 (1 - x)^2`.  The transfer is
 the multiplier sequence `binom(n + 2, k + 1)` (`sum_k binom(N, k + 1) x^k / k!
-= L_(N-1)^(1)(-x)`).  Still open in the sweep: `av123_peak` and `av321_des`,
-whose quotient parents have order two with derivative terms (no parent route,
-and no annihilator route for order two), and the Hoggatt rows with `m >= 4`,
+= L_(N-1)^(1)(-x)`).  Without derivative terms in the parent search, the
+parent is a gauged three-term (Jacobi) rule of order two, proved by the
+three-term theorem, and the identity is certified by an annihilator system.
+
+Example: the descent polynomials of 321-avoiding permutations (A091156) and
+the peak polynomials of 123-avoiding permutations, both given by third-order
+rules free of derivatives, are `binom(n + 1, k) ⊙ P_n` with second-order
+parents `g(n) P_(n+2) = T_1(n) P_(n+1) + T_0(n) P_n` that contain
+derivatives of `P_n`.  The annihilator system has two generators:
+`c(n) P_(n+1) = E(n) P_n` with a quadratic `c` and a third-order differential
+operator `E(n)`, and a third-order differential equation of `P_n`.  The
+identities are certified; the verdicts wait for a proof of the parents.  The
+`1/k!` lift of the 321-avoiding family stays `supported_by_rows` (no system in
+the ansatz).  Also open: the Hoggatt rows with `m >= 4`,
 where the quotient by one binomial factor is again a product of three
 binomials whose fitted rule is not smaller than the input's (a product of two
 binomial factors, with a Jacobi-type quotient, is the natural candidate).

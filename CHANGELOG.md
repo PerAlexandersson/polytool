@@ -416,6 +416,21 @@ Additions:
   `row_annihilator_restart_bases`), not only of product parents.  The Baxter
   triangle A056939 (Hoggatt rows with `m = 3`) is now proved end to end:
   factor `binom(n + 2, k + 1)`, hypergeometric parent proved by Liu--Wang.
+- Hadamard-factor lifts also remove a division remainder for parents of order
+  two or more, `g(n) P_(n+k) = sum_(i < k) T_i(n) P_(n+i)`, with an invariant
+  row-annihilator system on the windows `(P_n, ..., P_(n+k-1))`: generators
+  `A^(l)` of shift below `k` with exact identities
+  `nu_l N(A^(l)) = sum_j B_(l,j) A^(j)` under the companion step
+  `N(A) = g S A - A_(k-1)(n + 1) L`, exact base and restart row checks, and
+  `mu r = sum_l Z_l A^(l)`.  New optional certificate field
+  `row_annihilator_system` (types `HadamardAnnihilatorSystem`,
+  `HadamardAnnihilatorGenerator`); the schema stays v1 and the first-order
+  path is unchanged.  The generators are guessed from the parent rows by
+  modular kernel computations and checked exactly.  This certifies the
+  `binom(n + 1, k)` identities of the descent polynomials of 321-avoiding
+  permutations and the peak polynomials of 123-avoiding permutations, and the
+  Baxter triangle is now also proved through its second-order (Jacobi)
+  parent.
 - Symmetric-companion lifts: `recurrence::find_symmetric_companion_lifts`
   takes a palindromic sequence `A_n` (scalar recurrence, derivatives allowed,
   with seeds and a symmetry schedule `d_n = d_0 + n - n_0`, supplied or

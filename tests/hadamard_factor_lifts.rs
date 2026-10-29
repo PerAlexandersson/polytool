@@ -379,11 +379,12 @@ fn baxter_is_proved_through_an_invariant_row_annihilator() {
 }
 
 #[test]
-fn baxter_with_a_second_order_parent_stays_open() {
+fn baxter_is_proved_through_a_second_order_parent() {
     // Without derivative terms the parent search finds the gauged
-    // three-term (Jacobi) parent, which the three-term theorem proves; but
-    // the division leaves a remainder and the parent has order two, so the
-    // identity is only supported by rows and the lift stays open.
+    // three-term (Jacobi) parent, which the three-term theorem proves.  The
+    // division leaves a remainder and the parent has order two, so the
+    // remainder is removed by an invariant row-annihilator system acting on
+    // the windows (P_n, P_(n+1)).
     let report = catalog_report(
         "A056939",
         &HadamardFactorLiftOptions {
@@ -392,21 +393,209 @@ fn baxter_with_a_second_order_parent_stays_open() {
         },
     );
     report.verify().unwrap();
-    assert_eq!(report.proved_lifts().count(), 0);
-    let lift = report
-        .lifts
-        .iter()
-        .find(|lift| lift.factor_text == "binom(n+2, k+1)")
-        .expect("the binom(n+2, k+1) lift");
-    match &lift.identity {
-        HadamardFactorIdentityStatus::SupportedByRows { reason, .. } => {
-            assert!(reason.contains("nor of order one"), "{reason}");
-        }
-        other => panic!("unexpected identity status {other:?}"),
-    }
+    let lift = report.proved_lifts().next().expect("a proved lift");
+    assert_eq!(lift.factor_text, "binom(n+2, k+1)");
     assert_eq!(
         lift.parent_proof.route,
         Some(VeroneseParentProofRoute::ThreeTermRecurrence)
     );
-    assert_eq!(lift.lift_summary.verdict, LiftVerdict::Open);
+    let certificate = certificate(lift);
+    assert_eq!(certificate.parent_leader_shift, 2);
+    assert!(certificate.row_annihilator.is_none());
+    let system = certificate
+        .row_annihilator_system
+        .as_ref()
+        .expect("an annihilator system");
+    assert!(!system.generators.is_empty());
+    assert!(certificate.statement.contains("row-annihilator system"));
+    certificate.verify().unwrap();
+    assert!(lift.lift_summary.is_consistent());
+}
+
+/// A rule given by its `polytool.recurrence.v1` JSON record.
+fn rule_from_json(json: &str) -> (Recurrence, usize, Vec<Vec<BigRational>>) {
+    serde_json::from_str::<RecurrenceJson>(json)
+        .expect("a recurrence record")
+        .to_recurrence_parts()
+        .expect("a valid record")
+}
+
+fn integer_rows(rows: &[&[i64]]) -> Vec<Vec<BigRational>> {
+    rows.iter()
+        .map(|row| row.iter().map(|c| q(*c)).collect())
+        .collect()
+}
+
+/// The descent polynomials of 321-avoiding permutations (A091156),
+/// `n >= 1`: a third-order rule free of derivatives, fitted to the
+/// enumerated rows.
+const AV321_DESCENTS: &str = r#"{"schema":"polytool.recurrence.v1","first_index":1,
+  "initial_polynomials":[["1"],["1","1"],["1","4"]],
+  "recurrence":{"terms":[
+    {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","-1"],["5","-1"]]}},
+    {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["10","-10"],["-8","8"]]}},
+    {"offset":3,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-8","16","-8"],["4","-8","4"]]}}],
+  "denominator":{"coeffs":[["1"],["1"]]}}}"#;
+
+/// The peak polynomials of 123-avoiding permutations, `n >= 1`: a
+/// third-order rule free of derivatives, fitted to the enumerated rows.
+const AV123_PEAKS: &str = r#"{"schema":"polytool.recurrence.v1","first_index":1,
+  "initial_polynomials":[["1"],["2"],["3","2"]],
+  "recurrence":{"terms":[
+    {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","-2"],["5","-1"]]}},
+    {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["6","-6"],["-8","8"]]}},
+    {"offset":3,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-4","8","-4"],["4","-8","4"]]}}],
+  "denominator":{"coeffs":[["1"],["1"]]}}}"#;
+
+/// The `binom(n+1, k)` lift of a fitted pattern-avoidance family: its
+/// identity is certified through an invariant row-annihilator system of the
+/// second-order parent.
+fn pattern_avoidance_lift(json: &str, enumerated: &[Vec<BigRational>]) -> HadamardFactorLift {
+    let (rule, first, seeds) = rule_from_json(json);
+    let rows = rule
+        .generate_rows_rational(&seeds, first, enumerated.len())
+        .unwrap();
+    for (generated, expected) in rows.iter().zip(enumerated) {
+        assert_eq!(&polytool::vec_poly::trim(generated), expected);
+    }
+    let report =
+        find_hadamard_factor_lifts(&rule, &seeds, first, &HadamardFactorLiftOptions::default())
+            .unwrap();
+    report.verify().unwrap();
+    let lift = report
+        .lifts
+        .iter()
+        .find(|lift| lift.factor_text == "binom(n+1, k)")
+        .expect("the binom(n+1, k) lift")
+        .clone();
+    let certificate = certificate(&lift);
+    certificate.verify().unwrap();
+    assert_eq!(certificate.parent_leader_shift, 2);
+    let system = certificate
+        .row_annihilator_system
+        .as_ref()
+        .expect("an annihilator system");
+    // One generator expresses (n + 1)(n + 2) P_(n+1) through P_n and its
+    // derivatives, the other is a third-order differential equation of P_n.
+    assert_eq!(system.generators.len(), 2);
+    assert_eq!(system.start_base, 1);
+    assert!(system.restart_bases.is_empty());
+    assert!(lift.lift_summary.is_consistent());
+    assert!(matches!(
+        lift.lift_summary.identity,
+        LiftIdentityStatus::Certified { .. }
+    ));
+    // The verdict waits only for a proof of the parent.
+    assert!(matches!(
+        lift.lift_summary.verdict,
+        LiftVerdict::Proved | LiftVerdict::Open
+    ));
+    if lift.lift_summary.verdict == LiftVerdict::Open {
+        assert!(lift.parent_proof.route.is_none());
+    }
+    let json = serde_json::to_value(&lift).unwrap();
+    let back: HadamardFactorLift = serde_json::from_value(json).unwrap();
+    assert_eq!(back, lift);
+    back.verify().unwrap();
+    lift
+}
+
+#[test]
+fn av321_descents_identity_is_certified_through_an_annihilator_system() {
+    let enumerated = integer_rows(&[
+        &[1],
+        &[1, 1],
+        &[1, 4],
+        &[1, 11, 2],
+        &[1, 26, 15],
+        &[1, 57, 69, 5],
+        &[1, 120, 252, 56],
+        &[1, 247, 804, 364, 14],
+    ]);
+    pattern_avoidance_lift(AV321_DESCENTS, &enumerated);
+}
+
+#[test]
+fn av123_peaks_identity_is_certified_through_an_annihilator_system() {
+    let enumerated = integer_rows(&[
+        &[1],
+        &[2],
+        &[3, 2],
+        &[4, 10],
+        &[5, 32, 5],
+        &[6, 84, 42],
+        &[7, 198, 210, 14],
+        &[8, 438, 816, 168],
+    ]);
+    let lift = pattern_avoidance_lift(AV123_PEAKS, &enumerated);
+    let original = certificate(&lift).clone();
+
+    // Tampered systems are refused.
+    let mut no_system = original.clone();
+    no_system.row_annihilator_system = None;
+    assert!(no_system.verify().is_err());
+    let mut dropped_generator = original.clone();
+    let system = dropped_generator.row_annihilator_system.as_mut().unwrap();
+    system.generators.pop();
+    for generator in &mut system.generators {
+        generator.step_quotients.pop();
+    }
+    assert!(dropped_generator.verify().is_err());
+    let mut wrong_start = original.clone();
+    wrong_start
+        .row_annihilator_system
+        .as_mut()
+        .unwrap()
+        .start_base = 2;
+    assert!(wrong_start.verify().is_err());
+    let mut wrong_restart = original.clone();
+    wrong_restart
+        .row_annihilator_system
+        .as_mut()
+        .unwrap()
+        .restart_bases = vec![4];
+    assert!(wrong_restart.verify().is_err());
+    let mut wrong_step = original.clone();
+    wrong_step
+        .row_annihilator_system
+        .as_mut()
+        .unwrap()
+        .generators[0]
+        .step_multiplier
+        .coeffs
+        .push(vec!["1".into()]);
+    assert!(wrong_step.verify().is_err());
+    let mut wrong_quotient = original.clone();
+    wrong_quotient
+        .row_annihilator_system
+        .as_mut()
+        .unwrap()
+        .generators[1]
+        .quotient
+        .pop();
+    assert!(wrong_quotient.verify().is_err());
+    let mut zero_multiplier = original.clone();
+    zero_multiplier
+        .row_annihilator_system
+        .as_mut()
+        .unwrap()
+        .row_multiplier
+        .coeffs
+        .clear();
+    assert!(zero_multiplier.verify().is_err());
+    let mut both = original.clone();
+    both.row_annihilator = Some(Vec::new());
+    assert!(both.verify().is_err());
+
+    // Near miss: the same parent rule with another seed.  The invariance
+    // identities and the operator identity are algebraic and still hold,
+    // but the generators do not kill the parent rows at the start base.
+    let mut other_seed = original.clone();
+    other_seed.parent.initial_polynomials[1] = vec!["3".into()];
+    match other_seed.verify() {
+        Err(RecurrenceError::VerificationFailed(detail)) => {
+            assert!(detail.contains("does not kill"), "{detail}");
+        }
+        other => panic!("unexpected replay {other:?}"),
+    }
 }

@@ -72,7 +72,9 @@
 //! `M''` is pseudo-divided by the parent relation `L` (leader `g(n) S^k`,
 //! free of `x` and `D`): `w(n) M'' = sum_nu H_nu S^nu L + r`.  When `r != 0`
 //! it is removed by a row annihilator `A(n)` of the parent (next section):
-//! `mu(n, x) r = Z o A`, with `mu = c(n) p(x)` and `c` folded into `w`.  So
+//! `mu(n, x) r = Z o A`, with `mu = c(n) p(x)` and `c` folded into `w` (for
+//! a parent of order two or more, `Z o A` is a sum over an invariant system
+//! and `mu = c(n) mu_2(n, x)`, next section).  So
 //!
 //! ```text
 //! p(x) w(n) M'' = sum_nu p H_nu S^nu L + Z A      (w now including c),
@@ -129,8 +131,60 @@
 //!   whose rows satisfy a Liu--Wang recurrence and are killed by the
 //!   hypergeometric operator `x (x - 1) D^2 - (3 + (2n + 1) x) D + n (n + 2)`.
 //!
-//! Parents of order two or more with a nonzero remainder are not handled
-//! (the identity is then only supported by rows).
+//! - **Parent of any order `k`** `g(n) P_(n+k) = sum_(i < k) T_i(n) P_(n+i)`,
+//!   that is `L = g(n) S^k + sum_(i < k) C_i(n) S^i` with `T_i = -C_i`
+//!   (Weyl-algebra coefficients, leader free of `x` and `D`): the rows are
+//!   handled as windows `(P_n, ..., P_(n+k-1))`, and an annihilator is an
+//!   operator `A(n) = sum_(i < k) A_i(n) S^i` of shift below `k`.  Its
+//!   *step image* is the reduction of `g(n) S o A` modulo `L`,
+//!
+//!   ```text
+//!   N(A) = g(n) S o A - A_(k-1)(n + 1) o L,
+//!   ```
+//!
+//!   again of shift below `k` (the companion form of the parent rule), and
+//!   `(N(A) P)_n = g(n) (A P)_(n+1) - A_(k-1)(n + 1) (L P)_n`.  An
+//!   *invariant system* is a list of such operators `A^(1), ..., A^(m)` with
+//!   exact identities
+//!
+//!   ```text
+//!   nu_l(n, x) N(A^(l)) = sum_j B_(l,j)(n) o A^(j)       (l = 1, ..., m)
+//!   ```
+//!
+//!   in the Weyl algebra over `Q[n]`, `nu_l != 0`, `B_(l,j)` shift-free.  If
+//!   `(A^(l) P)_s = 0` for every `l` at the start base `s` (the first base
+//!   where both `M` and `L` are used, so `L` holds for the parent at every
+//!   base `n >= s` and `g(n) != 0` there, as above), then `(A^(l) P)_n = 0`
+//!   for every `l` and every `n >= s`: from `(A^(j) P)_n = 0` for all `j`,
+//!   `g(n) nu_l(n, x) (A^(l) P)_(n+1) = nu_l (N(A^(l)) P)_n =
+//!   sum_j B_(l,j)(n) (A^(j) P)_n = 0`, so `(A^(l) P)_(n+1) = 0` unless
+//!   `nu_l(n, .)` is the zero polynomial; at those finitely many integer
+//!   bases (the integer roots of the gcd of the `x`-columns of some `nu_l`)
+//!   the induction restarts with `(A^(j) P)_(n+1) = 0` checked exactly for
+//!   every `j`.  The remainder is then removed by
+//!   `mu(n, x) r = sum_l Z_l o A^(l)` with shift-free `Z_l`; the content
+//!   `c(n)` of `mu` is folded into `w` and its primitive part `mu_2(n, x)`
+//!   (nonzero at every integer `n`, else that base is exceptional) is kept
+//!   in the certificate: `mu_2(n, x) w(n) (M'' P)_n =
+//!   sum_nu H_nu (L P)_(n+nu) + sum_l Z_l (A^(l) P)_n = 0`.  The candidates
+//!   are guessed from the parent rows by an exact kernel computation over a
+//!   growing ansatz (derivative order at most 3, degrees at most 3 in `n` and
+//!   6 in `x`), one pivot per shift, so that they form an echelon basis of
+//!   the annihilator module over `Q(n, x)<D>`; the step images and the
+//!   remainder are reduced by right pseudo-division, and the system is kept
+//!   when every reduction ends in zero.  Nothing in the proof depends on
+//!   that search: the replay checks the identities and the rows.  For a
+//!   first-order parent this is the invariant annihilator above with
+//!   `m = 1`; the search uses it only for parents of order two or more.
+//!   This certifies, for example, the `binom(n + 1, k)` lifts of the descent
+//!   polynomials of 321-avoiding permutations and of the peak polynomials of
+//!   123-avoiding permutations, whose quotients satisfy second-order rules
+//!   with `P'_(n-2)` terms: the system is `c(n) P_(n+1) = E(n) P_n` with a
+//!   quadratic `c(n)` and a third-order differential operator `E(n)`,
+//!   together with a third-order differential equation of `P_n`.  The Baxter triangle is
+//!   also certified through its second-order (Jacobi) parent.
+//!
+//! When no annihilator applies, the identity is only supported by rows.
 //!
 //! # Root transfer
 //!
@@ -165,20 +219,26 @@
 //!
 //! The group is split into `factor` (menu, values, Gamma atoms, the lemma's
 //! conditions, ratios, justifications), `certify` (conjugation, divisions,
-//! the certificate), `search` (detection and the entry point), `report`
+//! the certificate), `annihilator` (invariant annihilators of first-order
+//! parents), `annihilator_system` (invariant systems of parents of any
+//! order), `modular_kernel` (the exact kernel vectors behind the system
+//! search), `search` (detection and the entry point), `report`
 //! (the `polytool.recurrence-hadamard-factor-lifts.v1` types and the
 //! [`crate::recurrence::LiftSummary`] mapping) and `prepare` (input
 //! validation shared with the row-factor lifts).
 
 mod annihilator;
+mod annihilator_system;
 mod certify;
 mod factor;
+mod modular_kernel;
 pub(super) mod prepare;
 mod report;
 mod search;
 
 pub use certify::{
-    HadamardDivisionQuotient, HadamardFactorCertificate, MAX_HADAMARD_OPERATOR_TERMS,
+    HadamardAnnihilatorGenerator, HadamardAnnihilatorSystem, HadamardDivisionQuotient,
+    HadamardFactorCertificate, MAX_HADAMARD_OPERATOR_TERMS,
 };
 pub use factor::{HadamardFactor, HadamardFactorTerm};
 pub use report::{

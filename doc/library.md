@@ -781,8 +781,16 @@ that of a product parent, or, for any first-order parent, an operator `A(n)`
 certified by an exact invariance identity under the parent step (fields
 `row_annihilator_step_multiplier`, `row_annihilator_step_quotient`,
 `row_annihilator_start_base`, `row_annihilator_restart_bases` of the
-certificate).  This proves the Baxter triangle A056939 (factor
-`binom(n+2, k+1)`, hypergeometric parent proved by Liu--Wang).  The
+certificate), or, for a parent of order two or more, an invariant annihilator
+system on the row windows `(P_n, ..., P_(n+k-1))` (field
+`row_annihilator_system`: generators `A^(l) = sum_(i < k) A^(l)_i(n) S^i` with
+their invariance identities under the companion step, the quotients `Z_l`, a
+multiplier `mu_2(n, x)`, the start and restart bases).  This proves the Baxter
+triangle A056939 (factor `binom(n+2, k+1)`, hypergeometric parent proved by
+Liu--Wang, or the second-order Jacobi parent proved by the three-term theorem)
+and certifies the `binom(n+1, k)` identities of the descent polynomials of
+321-avoiding permutations and the peak polynomials of 123-avoiding
+permutations, whose parents are second-order rules with derivative terms.  The
 certificate, its boundary conditions and the transfer theorem are in
 [algorithms.md](algorithms.md#hadamard-factor-lifts).
 

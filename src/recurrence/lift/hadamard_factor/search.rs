@@ -4,15 +4,17 @@
 //! certification.
 
 use super::annihilator::{find_invariant_annihilator, separated_multiplier, step_operator};
+use super::annihilator_system::find_invariant_annihilator_system;
 use super::certify::{
-    build_certificate, check_annihilated_rows, conjugate_input, divide_by_parent,
-    right_pseudo_divide, ProductParent, RowAnnihilation, MAX_HADAMARD_OPERATOR_TERMS,
+    build_certificate, check_annihilated_rows, check_system_rows, conjugate_input,
+    divide_by_parent, right_pseudo_divide, ProductParent, RowAnnihilation, RowAnnihilationKind,
+    MAX_HADAMARD_OPERATOR_TERMS,
 };
 use super::factor::{HadamardFactor, HadamardFactorTerm};
 use super::prepare::{prepare_rule, PreparedRule, MAX_LIFT_IDENTIFYING_ROWS};
 use super::report::*;
 use crate::linalg::{rational_kernel_with_certificate, RationalKernelLimits};
-use crate::recurrence::implicit::algebra::{q, roots_in_domain, DOp};
+use crate::recurrence::implicit::algebra::{content_and_primitive, q, roots_in_domain, DOp};
 use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
 use crate::recurrence::lift::section_certify::n_coefficients;
 use crate::recurrence::{
@@ -527,15 +529,15 @@ fn remove_remainder(
         return Ok(Ok(RowAnnihilation {
             row_multiplier: mu.rows().first().cloned().unwrap_or_default(),
             index_multiplier: vec![Q::one()],
-            annihilator: a,
-            quotient: z,
-            invariance: None,
+            kind: RowAnnihilationKind::Single {
+                annihilator: a,
+                quotient: z,
+                invariance: None,
+            },
         }));
     }
     let Some(step) = step_operator(&parent.relation) else {
-        return Ok(Err(format!(
-            "{reason}, and the parent is neither a product parent nor of order one"
-        )));
+        return remove_remainder_by_system(parent, remainder, from, options);
     };
     let invariant = match find_invariant_annihilator(remainder, &step, options.max_operator_terms) {
         Ok(Some(invariant)) => invariant,
@@ -581,9 +583,74 @@ fn remove_remainder(
     Ok(Ok(RowAnnihilation {
         row_multiplier,
         index_multiplier,
-        annihilator: invariant.annihilator,
-        quotient: z,
-        invariance: Some(invariance),
+        kind: RowAnnihilationKind::Single {
+            annihilator: invariant.annihilator,
+            quotient: z,
+            invariance: Some(invariance),
+        },
+    }))
+}
+
+/// Remove a nonzero division remainder `r` of a parent of order `k >= 2`
+/// with an invariant row-annihilator system: `mu r = sum_l Z_l o A^(l)`.
+fn remove_remainder_by_system(
+    parent: &PreparedRule,
+    remainder: &DOp,
+    from: usize,
+    options: &HadamardFactorLiftOptions,
+) -> Result<Result<RowAnnihilation, String>, RecurrenceError> {
+    let reason = "the division of the conjugated input relation by the parent relation leaves \
+                  a nonzero remainder";
+    let decomposition = match find_invariant_annihilator_system(
+        remainder,
+        parent,
+        from,
+        options.max_operator_terms,
+    ) {
+        Ok(Some(decomposition)) => decomposition,
+        Ok(None) => {
+            return Ok(Err(format!(
+                "{reason}, and no invariant row-annihilator system of the parent contains it"
+            )))
+        }
+        Err(RecurrenceError::BudgetExhausted(detail) | RecurrenceError::LimitExceeded(detail)) => {
+            return Ok(Err(format!(
+                "{reason}, and the row-annihilator system ran out of budget: {detail}"
+            )))
+        }
+        Err(error) => return Err(error),
+    };
+    // mu = c(n) mu_2(n, x) with mu_2 primitive over Q[n]: mu_2(m, .) is
+    // nonzero at every integer m, and c is folded into w(n).
+    let (index_multiplier, second) = content_and_primitive(&decomposition.multiplier);
+    let restart_bases = decomposition.system.restart_bases(from);
+    match check_system_rows(
+        &decomposition.system.generators,
+        parent,
+        from,
+        &restart_bases,
+    ) {
+        Ok(()) => {}
+        Err(RecurrenceError::VerificationFailed(detail)) => {
+            return Ok(Err(format!("{reason}; {detail}")))
+        }
+        Err(RecurrenceError::BudgetExhausted(detail) | RecurrenceError::LimitExceeded(detail)) => {
+            return Ok(Err(format!(
+                "{reason}, and the row-annihilator check ran out of budget: {detail}"
+            )))
+        }
+        Err(error) => return Err(error),
+    }
+    Ok(Ok(RowAnnihilation {
+        row_multiplier: vec![Q::one()],
+        index_multiplier,
+        kind: RowAnnihilationKind::System {
+            system: decomposition.system,
+            row_multiplier: second,
+            quotients: decomposition.quotients,
+            start_base: from,
+            restart_bases,
+        },
     }))
 }
 
@@ -707,9 +774,18 @@ fn certify_candidate(
          every n >= {n0}",
         match &annihilation {
             None => "",
-            Some(found) if found.invariance.is_some() => {
-                " + Z A (A an invariant row annihilator of the parent)"
-            }
+            Some(RowAnnihilation {
+                kind: RowAnnihilationKind::System { .. },
+                ..
+            }) => " + sum_l Z_l A_l (an invariant row-annihilator system of the parent)",
+            Some(RowAnnihilation {
+                kind:
+                    RowAnnihilationKind::Single {
+                        invariance: Some(_),
+                        ..
+                    },
+                ..
+            }) => " + Z A (A an invariant row annihilator of the parent)",
             Some(_) => " + Z A (A the row annihilator of the product parent)",
         },
         factor.text()

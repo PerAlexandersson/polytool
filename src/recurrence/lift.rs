@@ -78,12 +78,12 @@ pub use gamma_lift::{
 };
 mod hadamard_factor;
 pub use hadamard_factor::{
-    find_hadamard_factor_lifts, HadamardDivisionQuotient, HadamardFactor,
-    HadamardFactorCertificate, HadamardFactorIdentityStatus, HadamardFactorLift,
-    HadamardFactorLiftOptions, HadamardFactorLiftReport, HadamardFactorRejection,
-    HadamardFactorRejectionKind, HadamardFactorTerm, HadamardHiddenCoefficients,
-    HADAMARD_FACTOR_LIFTS_SCHEMA, MAX_HADAMARD_BINOMIAL_OFFSET, MAX_HADAMARD_FACTOR_ROWS,
-    MAX_HADAMARD_OPERATOR_TERMS,
+    find_hadamard_factor_lifts, HadamardAnnihilatorGenerator, HadamardAnnihilatorSystem,
+    HadamardDivisionQuotient, HadamardFactor, HadamardFactorCertificate,
+    HadamardFactorIdentityStatus, HadamardFactorLift, HadamardFactorLiftOptions,
+    HadamardFactorLiftReport, HadamardFactorRejection, HadamardFactorRejectionKind,
+    HadamardFactorTerm, HadamardHiddenCoefficients, HADAMARD_FACTOR_LIFTS_SCHEMA,
+    MAX_HADAMARD_BINOMIAL_OFFSET, MAX_HADAMARD_FACTOR_ROWS, MAX_HADAMARD_OPERATOR_TERMS,
 };
 mod lift_summary;
 pub use lift_summary::{
