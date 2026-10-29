@@ -47,10 +47,11 @@
 //! - `section_certify`: gauges, pseudo-division by a transported parent
 //!   system and [`VeroneseForwardDivisionCertificate`];
 //! - `parent_proof`: the parent provers (periodic product, paper theorem,
-//!   root domain, three-term recurrence, Liu--Wang, attestation), shared
-//!   with the search;
-//! - `parent_theorems`: [`check_three_term_recurrence_theorem`] and
-//!   [`check_liu_wang_theorem`], general real-rootedness theorems for
+//!   root domain, three-term recurrence, Liu--Wang, Liu--Wang derivative
+//!   lag, attestation), shared with the search;
+//! - `parent_theorems`: [`check_three_term_recurrence_theorem`],
+//!   [`check_liu_wang_theorem`] and
+//!   [`check_liu_wang_derivative_lag_theorem`], general real-rootedness theorems for
 //!   recurrences with exactly checked hypotheses and a replayable
 //!   [`RealRootednessTheoremReport`];
 //! - `section_report`: [`certify_veronese_section_lift`] and its
@@ -97,9 +98,10 @@ pub use parent_proof::{
 };
 mod parent_theorems;
 pub use parent_theorems::{
-    check_liu_wang_theorem, check_three_term_recurrence_theorem, RealRootednessTheorem,
-    RealRootednessTheoremConclusion, RealRootednessTheoremOptions, RealRootednessTheoremReport,
-    RealRootednessTheoremStatus, RowInterlacing, REAL_ROOTEDNESS_THEOREM_SCHEMA,
+    check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem,
+    check_three_term_recurrence_theorem, RealRootednessTheorem, RealRootednessTheoremConclusion,
+    RealRootednessTheoremOptions, RealRootednessTheoremReport, RealRootednessTheoremStatus,
+    RowInterlacing, REAL_ROOTEDNESS_THEOREM_SCHEMA,
 };
 mod row_factor;
 pub use row_factor::{

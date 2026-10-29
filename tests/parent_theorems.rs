@@ -598,3 +598,279 @@ fn library_documentation_example() -> Result<(), polytool::recurrence::Recurrenc
     report.verify()?;
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// The Liu--Wang derivative-lag theorem
+// ---------------------------------------------------------------------------
+
+mod derivative_lag {
+    use super::*;
+    use polytool::oeis;
+    use polytool::recurrence::check_liu_wang_derivative_lag_theorem;
+
+    fn derivative_lag(
+        rule: &Recurrence,
+        first_index: usize,
+        seeds: &[Vec<BigRational>],
+        options: &RealRootednessTheoremOptions,
+    ) -> RealRootednessTheoremReport {
+        let report = check_liu_wang_derivative_lag_theorem(rule, first_index, seeds, options)
+            .expect("the check runs");
+        assert_replays(&report);
+        // A tampered Lean route is refused.
+        let mut tampered = report.clone();
+        tampered.lean_route = Some("cone".into());
+        assert!(tampered.verify().is_err());
+        report
+    }
+
+    /// The catalog record `id`: rule, first index and seeds.
+    fn catalog(id: &str) -> (Recurrence, usize, Vec<Vec<BigRational>>) {
+        let entry = oeis::by_id(id).expect("catalog entry");
+        let (rule, seeds) = entry.recurrence_parts().expect("catalog recurrence");
+        (rule, entry.recurrence_first_index, seeds)
+    }
+
+    fn catalog_report(id: &str) -> RealRootednessTheoremReport {
+        let (rule, first_index, seeds) = catalog(id);
+        derivative_lag(&rule, first_index, &seeds, &no_region())
+    }
+
+    fn assert_proved(report: &RealRootednessTheoremReport, route: &str, region: &str) {
+        assert!(report.is_proved(), "{report:#?}");
+        assert_eq!(report.lean_route.as_deref(), Some(route));
+        assert!(!report.lean_declarations.is_empty());
+        let conclusion = report.conclusion.as_ref().unwrap();
+        assert_eq!(
+            conclusion
+                .root_region
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some(region)
+        );
+    }
+
+    /// `P_n = c_0(n, x) P_(n-1) + c_1(n, x) P'_(n-1) + c_2(n, x) P_(n-2)`
+    /// (coefficients `[n^i][x^j]`).
+    fn lag_rule(c0: &[&[i64]], c1: &[&[i64]], c2: &[&[i64]]) -> Recurrence {
+        rule(&[(1, 0, c0), (1, 1, c1), (2, 0, c2)], None)
+    }
+
+    /// The deco rule `P_n = (1 + n x) P_(n-1) + x (1 - x) P'_(n-1) + x P_(n-2)`
+    /// (A144438) with `c_0` replaced.
+    fn deco_like(c0: &[&[i64]]) -> Recurrence {
+        lag_rule(c0, &[&[0, 1, -1]], &[&[0, 1]])
+    }
+
+    #[test]
+    fn delannoy_is_a_three_term_sign_route() {
+        // P_n = (1 + x) P_(n-1) + x P_(n-2) from P_1 = 1, P_2 = 1 + x (A008288).
+        let report = catalog_report("A008288");
+        assert_proved(&report, "sign", "(-inf, 0)");
+        assert_eq!(report.start_delay, 0);
+        assert!(report.lean_declarations[0].ends_with("threeTerm_interlaces_of_nonnegCoeffs"));
+        let conclusion = report.conclusion.as_ref().unwrap();
+        assert_eq!(conclusion.first_index, 1);
+        assert_eq!(conclusion.interlacing, Some(RowInterlacing::Strict));
+        assert_eq!(conclusion.interlacing_from, Some(2));
+        assert!(conclusion.simple_roots);
+    }
+
+    #[test]
+    fn deco_and_a046739_are_half_growth_routes() {
+        for id in ["A144438", "A046739"] {
+            let report = catalog_report(id);
+            assert_proved(&report, "halfGrowth", "(-inf, 0)");
+            assert_eq!(
+                report.lean_declarations[0],
+                "RealRooted.derivLag_strictInterl_of_nonnegCoeffs"
+            );
+            let conclusion = report.conclusion.as_ref().unwrap();
+            assert_eq!(conclusion.interlacing, Some(RowInterlacing::Strict));
+            // The requested region (-inf, 0) is certified too.
+            let with_region = derivative_lag(
+                &catalog(id).0,
+                catalog(id).1,
+                &catalog(id).2,
+                &region(None, Some(0)),
+            );
+            assert!(with_region.is_proved(), "{with_region:#?}");
+        }
+    }
+
+    #[test]
+    fn derangement_excedances_are_proved_after_dividing_by_x() {
+        // A271697: P_1 = 1, P_2 = 0 and P_n = (n-2) x P_(n-1) + x (1-x) P'_(n-1)
+        // + (n-2) x P_(n-2); x divides P_n from P_3 = x on.  The induction start
+        // moves two rows (P_2 = 0 is a seed of the first two attempts).
+        let report = catalog_report("A271697");
+        assert_proved(&report, "halfGrowth", "(-inf, 0]");
+        assert_eq!(report.start_delay, 2);
+        assert!(report.normal_form.starts_with("P_n = x^1 Q_n for n >= 3"));
+        let conclusion = report.conclusion.as_ref().unwrap();
+        assert_eq!(conclusion.first_index, 3);
+        assert!(conclusion
+            .statement
+            .starts_with("P_2 is zero; every other P_n, n >= 1"));
+        assert_eq!(conclusion.interlacing, Some(RowInterlacing::Weak));
+        assert_eq!(conclusion.interlacing_from, Some(4));
+        assert!(conclusion.simple_roots);
+        // The open region (-inf, 0) excludes the root 0 of P_4 (exact).
+        let (rule, first_index, seeds) = catalog("A271697");
+        let excluded = derivative_lag(&rule, first_index, &seeds, &region(None, Some(0)));
+        assert!(!excluded.is_proved());
+        let included = derivative_lag(&rule, first_index, &seeds, &region(None, Some(1)));
+        assert!(included.is_proved(), "{included:#?}");
+
+        // The quotient rows P_(m+4) / x are the rows of A046739 (m >= 1).
+        let rows = rule
+            .generate_rows_rational(&seeds, first_index, 12)
+            .unwrap();
+        let (other, other_first, other_seeds) = catalog("A046739");
+        let quotients = other
+            .generate_rows_rational(&other_seeds, other_first, 8)
+            .unwrap();
+        for (m, quotient) in quotients.iter().enumerate() {
+            let row = &rows[m + 1 + 4 - first_index];
+            assert!(row[0] == q(0));
+            let trim = |r: &[BigRational]| {
+                let mut r = r.to_vec();
+                while r.last().is_some_and(|c| *c == q(0)) {
+                    r.pop();
+                }
+                r
+            };
+            assert_eq!(trim(&row[1..]), trim(quotient), "m = {}", m + 1);
+        }
+    }
+
+    #[test]
+    fn binomial_eulerian_fails_the_lag_sign() {
+        // A046802: W_n = (1 - n) x is positive left of 0 from n = 2 on.
+        let report = catalog_report("A046802");
+        assert_eq!(report.start_delay, 0);
+        assert_eq!(
+            failure(&report, "lag_coefficient_nonpositive"),
+            Some(2.into())
+        );
+        assert!(report.conclusion.is_none());
+    }
+
+    #[test]
+    fn a_vanishing_derivative_coefficient_uses_the_lag_term() {
+        // V_n = (n - 3)^2 x (1 - x) vanishes at n = 3, where W_n = x < 0 keeps
+        // the sign condition; [x] A_n = 1 + (n - 1)(n - 3)^2 keeps lambda_n = 1.
+        let rule = lag_rule(
+            &[&[1, -8], &[0, 15], &[0, -7], &[0, 1]],
+            &[&[0, 9, -9], &[0, -6, 6], &[0, 1, -1]],
+            &[&[0, 1]],
+        );
+        let report = derivative_lag(&rule, 0, &rows(&[&[1], &[1, 1]]), &no_region());
+        assert_proved(&report, "LiuWang", "(-inf, 0)");
+    }
+
+    #[test]
+    fn near_misses_name_the_failing_index() {
+        let deco_seeds = rows(&[&[1], &[1, 1]]);
+        // W_n = (6 - n) x: W_n <= 0 left of 0 fails at n = 7.
+        let rule = lag_rule(&[&[1, 0], &[0, 1]], &[&[0, 1, -1]], &[&[0, 6], &[0, -1]]);
+        let report = derivative_lag(&rule, 0, &deco_seeds, &no_region());
+        assert_eq!(
+            failure(&report, "lag_coefficient_nonpositive"),
+            Some(7.into())
+        );
+        assert_eq!(first_failure(&report), "lag_coefficient_nonpositive");
+
+        // V_n = (6 - n) x (1 - x) with [x] A_n = 1 - (n - 1)(n - 6), so that
+        // lambda_n = 1: V_n <= 0 left of 0 fails at n = 7.
+        let rule = lag_rule(
+            &[&[1, -5], &[0, 7], &[0, -1]],
+            &[&[0, 6, -6], &[0, -1, 1]],
+            &[&[0, 1]],
+        );
+        let report = derivative_lag(&rule, 0, &deco_seeds, &no_region());
+        assert_eq!(
+            failure(&report, "derivative_coefficient_nonpositive"),
+            Some(7.into())
+        );
+        assert_eq!(first_failure(&report), "derivative_coefficient_nonpositive");
+
+        // A_n = 1 + 6 x: lambda_n = 6 - (n - 1) > 0 fails at n = 7.
+        let report = derivative_lag(&deco_like(&[&[1, 6]]), 0, &deco_seeds, &no_region());
+        assert_eq!(failure(&report, "degree_step_positive"), Some(7.into()));
+
+        // A_n(0) = n - 4 fails at n = 2 (and at every moved start up to 4).
+        let report = derivative_lag(
+            &deco_like(&[&[-4, 0], &[1, 1]]),
+            0,
+            &deco_seeds,
+            &no_region(),
+        );
+        assert_eq!(failure(&report, "constant_term_positive"), Some(2.into()));
+
+        // V_n(0) = 1: x (1 - x) + 1.
+        let rule = lag_rule(&[&[1, 0], &[0, 1]], &[&[1, 1, -1]], &[&[0, 1]]);
+        let report = derivative_lag(&rule, 0, &deco_seeds, &no_region());
+        assert_eq!(
+            failure(&report, "multipliers_vanish_at_zero"),
+            Some(2.into())
+        );
+
+        // Seeds that do not interlace (root -4 outside [-2, -1]) or share the
+        // root -1, at the supplied start.
+        let deco = deco_like(&[&[1, 0], &[0, 1]]);
+        for seeds in [&[&[4, 1][..], &[2, 3, 1]], &[&[1, 1][..], &[2, 3, 1]]] {
+            let report = derivative_lag(&deco, 0, &rows(seeds), &without_start_delay());
+            assert_eq!(failure(&report, "seed_strict_interlacing"), Some(1.into()));
+        }
+        // Equal degrees.
+        let report = derivative_lag(&deco, 0, &rows(&[&[1, 1], &[2, 1]]), &without_start_delay());
+        assert_eq!(failure(&report, "seed_degree_step"), Some(1.into()));
+        // A positive root.
+        let report = derivative_lag(&deco, 0, &rows(&[&[1], &[-1, 1]]), &without_start_delay());
+        assert_eq!(failure(&report, "seed_roots_negative"), Some(1.into()));
+        // An earlier seed row that is not real-rooted.
+        let report = derivative_lag(&deco, 0, &rows(&[&[1, 1, 1], &[1], &[1, 1]]), &no_region());
+        assert_eq!(failure(&report, "earlier_seeds"), Some(0.into()));
+    }
+
+    #[test]
+    fn shapes_that_do_not_apply() {
+        let seeds = rows(&[&[1], &[1, 1]]);
+        // A third-order term.
+        let third_order = rule(&[(1, 0, &[&[1, 1]]), (3, 0, &[&[0, 1]])], None);
+        let report = derivative_lag(
+            &third_order,
+            0,
+            &rows(&[&[1], &[1, 1], &[1, 2, 1]]),
+            &no_region(),
+        );
+        assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
+        // deg_x c_0 = 2.
+        let report = derivative_lag(&deco_like(&[&[1, 1, 1]]), 0, &seeds, &no_region());
+        assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
+        // Neither a derivative nor a lag term.
+        let product = rule(&[(1, 0, &[&[1, 1]])], None);
+        let report = derivative_lag(&product, 0, &seeds, &no_region());
+        assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
+        // One seed row.
+        let report = derivative_lag(
+            &deco_like(&[&[1, 0], &[0, 1]]),
+            0,
+            &seeds[..1],
+            &no_region(),
+        );
+        assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
+        assert!(report.lean_route.is_none());
+    }
+
+    #[test]
+    fn other_checks_record_no_lean_route() {
+        let report = liu_wang(&eulerian(), 0, &[&[1]], &no_region());
+        assert!(report.lean_route.is_none());
+        let json = serde_json::to_value(&report).unwrap();
+        assert!(json.get("lean_route").is_none());
+        assert!(json.get("lean_declarations").is_none());
+    }
+}

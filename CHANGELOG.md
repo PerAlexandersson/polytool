@@ -388,6 +388,26 @@ Additions:
   replays it.  The parent provers' root-domain route moves the parent's first
   index the same way.  The Eulerian and 1/k-Eulerian rules from `A_0 = 1`
   (where `A_1 = A_0`) are now proved without shifting the start by hand.
+- Liu--Wang derivative-lag theorem:
+  `recurrence::check_liu_wang_derivative_lag_theorem` (theorem
+  `liu_wang_derivative_lag`) for second-order rules
+  `f(n) P_n = c_0 P_(n-1) + c_1 P'_(n-1) + c_2 P_(n-2)`: strict interlacing of
+  consecutive rows and every root `< 0` when the derivative and lag
+  multipliers vanish at `0`, are nonpositive left of `0` (one of them
+  negative there), `A_n(0) > 0`, the degree grows by one, and the two seed
+  rows of the induction strictly interlace, each decided exactly for all
+  `n`.  It mirrors the RealRooted row routes `halfGrowth`
+  (`derivLag_strictInterl_of_nonnegCoeffs`) and `sign` (three-term rules),
+  with nonnegative coefficients replaced by the root-location induction.
+  When `x^e` divides the two seed rows it proves the rows divided by `x^e`
+  (roots in `(-inf, 0]`, weak interlacing).  Proved: Delannoy A008288, deco
+  A144438 (and the deco rows with `w = 2`), A046739 and derangement
+  excedances A271697 (start moved two rows, gauge `x`); binomial Eulerian A046802 fails the lag sign at `n = 2`.  New
+  report fields `lean_route` and `lean_declarations` (omitted when empty)
+  record the mirrored RealRooted route; new parent route
+  `VeroneseParentProofRoute::LiuWangDerivativeLag` (lift-summary route
+  `liu_wang_derivative_lag`), run after Liu--Wang.  A theorem conclusion no
+  longer extends the interlacing claim back over a zero seed row.
 - Hadamard-factor lifts remove a division remainder with an invariant row
   annihilator of any first-order parent (an operator `A(n)` with an exact
   identity `nu A(n + 1) T(n) = B A(n)` under the parent step and exact row

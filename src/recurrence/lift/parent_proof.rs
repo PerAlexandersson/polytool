@@ -37,18 +37,27 @@
 //!    `P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1)` with every root kept in
 //!    `(-inf, 0)`, as for the type-B Eulerian polynomials), proved only when
 //!    every hypothesis is verified;
-//! 6. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
+//! 6. **Liu--Wang derivative lag**: [`check_liu_wang_derivative_lag_theorem`]
+//!    (second-order rules `P_n = A_n(x) P_(n-1) + V_n(x) P'_(n-1) +
+//!    W_n(x) P_(n-2)`, the RealRooted routes `halfGrowth` and `sign`, as for
+//!    the Delannoy and deco rows; also after dividing every row by a power
+//!    of `x`, as for the derangement excedance rows), proved only when every
+//!    hypothesis is verified;
+//! 7. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
 //!    conditional on the attestation, never proved.
 //!
-//! Routes 4 and 5 run whether or not the root-domain route is enabled; both
-//! conclude that every parent row from the first index on is real-rooted with
-//! every root in `(-inf, 0)`.  Both move their induction start up to three
-//! rows past the parent seeds when the theorem fails at the seeds (the
-//! default [`RealRootednessTheoremOptions::maximum_start_delay`]; the
-//! skipped rows are checked exactly by the theorem), and the attempt names
-//! the delay used.
+//! Routes 4, 5 and 6 run whether or not the root-domain route is enabled.
+//! Routes 4 and 5 conclude that every parent row from the first index on is
+//! real-rooted with every root in `(-inf, 0)`; route 6 that every parent row
+//! is zero (only seed rows) or real-rooted with every root in `(-inf, 0]`
+//! (`(-inf, 0)` without the power of `x`), so it runs without a requested
+//! root region.  All three move their induction start up to three rows past
+//! the parent seeds when the theorem fails at the seeds (the default
+//! [`RealRootednessTheoremOptions::maximum_start_delay`]; the skipped rows
+//! are checked exactly by the theorem), and the attempt names the delay
+//! used.
 //!
 //! A few parent rows are also checked exactly (nonzero rows of one sign and
 //! real-rooted).  A failing row refutes the parent statement; no route can
@@ -101,7 +110,8 @@ pub struct VeroneseParentAttestation {
 #[serde(rename_all = "snake_case")]
 pub enum VeroneseParentProofStatus {
     /// Proved by a periodic product, a paper theorem, the root-domain route,
-    /// the three-term recurrence theorem or the Liu--Wang theorem.
+    /// the three-term recurrence theorem, the Liu--Wang theorem or the
+    /// Liu--Wang derivative-lag theorem.
     Proved,
     /// Not proved; a matching caller-supplied attestation asserts it.
     ConditionalOnAttestation,
@@ -126,6 +136,8 @@ pub enum VeroneseParentProofRoute {
     ThreeTermRecurrence,
     /// [`check_liu_wang_theorem`].
     LiuWang,
+    /// [`check_liu_wang_derivative_lag_theorem`].
+    LiuWangDerivativeLag,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -460,7 +472,9 @@ fn root_domain_menu(
     (attempts, false)
 }
 
-/// Routes 4 and 5: a real-rootedness theorem with every root in `(-inf, 0)`.
+/// Routes 4, 5 and 6: a real-rootedness theorem with every root in
+/// `(-inf, 0)` (routes 4 and 5) or, for route 6, in `(-inf, 0]` (every
+/// conclusion of that theorem, so it runs without a requested region).
 fn theorem_attempt(
     record: &ParentRecord<'_>,
     route: VeroneseParentProofRoute,
@@ -481,6 +495,12 @@ fn theorem_attempt(
             record.first_index,
             record.seeds,
             &options,
+        )?,
+        VeroneseParentProofRoute::LiuWangDerivativeLag => check_liu_wang_derivative_lag_theorem(
+            record.rule,
+            record.first_index,
+            record.seeds,
+            &RealRootednessTheoremOptions::default(),
         )?,
         _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
     };
@@ -628,7 +648,7 @@ pub(super) fn prove_parent(
         proof.attempts.extend(attempts);
     }
 
-    // Routes 4 and 5.
+    // Routes 4, 5 and 6.
     if proved.is_none() {
         for (route, variant) in [
             (
@@ -636,6 +656,10 @@ pub(super) fn prove_parent(
                 "three_term_recurrence",
             ),
             (VeroneseParentProofRoute::LiuWang, "liu_wang"),
+            (
+                VeroneseParentProofRoute::LiuWangDerivativeLag,
+                "liu_wang_derivative_lag",
+            ),
         ] {
             let attempt = theorem_attempt(record, route, variant)?;
             let success = attempt.success;
@@ -654,7 +678,7 @@ pub(super) fn prove_parent(
         return Ok(proof);
     }
 
-    // Route 6.
+    // Route 7.
     for attestation in attestations {
         let matches = same_record(record, &attestation.recurrence)?;
         let covers = attestation.first_index <= needed_from;

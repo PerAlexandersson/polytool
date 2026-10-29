@@ -9,9 +9,14 @@
 //!   certified by a positive-ratio induction (a chain-sequence argument);
 //! - [`check_liu_wang_theorem`]: first-order derivative recurrences
 //!   `P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1)` (Liu and Wang, Theorem 2.1 with
-//!   `g = f'`), with every root in `(-inf, 0)`.
+//!   `g = f'`), with every root in `(-inf, 0)`;
+//! - [`check_liu_wang_derivative_lag_theorem`]: second-order derivative-lag
+//!   recurrences `P_n = A_n(x) P_(n-1) + V_n(x) P'_(n-1) + W_n(x) P_(n-2)`
+//!   (the RealRooted routes `halfGrowth` and `sign`), with strict interlacing
+//!   of consecutive rows and every root in `(-inf, 0)`, also after dividing
+//!   every row by a power of `x`.
 //!
-//! Both return a [`RealRootednessTheoremReport`]: the theorem and its
+//! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
 //! functions of `n`, the hypotheses as [`LiftHypothesis`] entries (verified,
 //! failed with the smallest failing index, or unresolved), and the
@@ -26,8 +31,9 @@
 //! A rule `f(n) P_n = sum_k c_k(n, x) D^(d_k) P_(n-k)` is applied, as in
 //! [`Recurrence::generate_rows_rational`], from `N = first_index + K` on,
 //! where `K` is the number of supplied seed rows.  The theorems start their
-//! induction at the last seeds (`P_(N-2), P_(N-1)` for the three-term
-//! theorem, `P_(N-1)` for Liu--Wang); earlier seed rows are checked exactly.
+//! induction at the last seeds (`P_(N-2), P_(N-1)` for the three-term and
+//! derivative-lag theorems, `P_(N-1)` for Liu--Wang); earlier seed rows are
+//! checked exactly.
 //! `f` must be free of `x`.  Rules with `(-1)^n` factors or an inhomogeneous
 //! term are not matched.
 //!
@@ -49,8 +55,9 @@
 //! `P_n`, `n >= first_index`.  The interlacing claim starts at the moved
 //! start; it is extended back over the moved rows only as far as the
 //! interlacing of consecutive rows is checked exactly (strict interlacing by
-//! the Bézout test for the three-term theorem, Liu--Wang's weak interlacing
-//! by [`crate::check_weak_interlacing_bigint_coeffs`]).  The first proved
+//! the Bézout test for the three-term and derivative-lag theorems, Liu--Wang's
+//! weak interlacing by [`crate::check_weak_interlacing_bigint_coeffs`]), and
+//! never over a zero row.  The first proved
 //! delay is reported in [`RealRootednessTheoremReport::start_delay`] (and
 //! named in the conclusion); when no delay proves the theorem, the report at
 //! the supplied seeds is returned.  [`RealRootednessTheoremReport::verify`]
@@ -61,7 +68,7 @@
 //! row that is checked exactly (a seed, or a root-region failure at a
 //! computed row).
 //!
-//! Related: `parent_proof` uses both provers as parent routes of the
+//! Related: `parent_proof` uses the three provers as parent routes of the
 //! Veronese-section lifts; [`match_recurrence_theorems`] (renewal windows) and
 //! the Rolle routes of [`transform_recurrence`] cover other families.
 
@@ -77,8 +84,10 @@ use num_traits::{One, Signed, Zero};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+mod derivative_lag;
 mod liu_wang;
 mod three_term;
+pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
 pub use liu_wang::check_liu_wang_theorem;
 pub use three_term::check_three_term_recurrence_theorem;
 
@@ -99,6 +108,8 @@ pub enum RealRootednessTheorem {
     ThreeTermRecurrence,
     /// [`check_liu_wang_theorem`].
     LiuWang,
+    /// [`check_liu_wang_derivative_lag_theorem`].
+    LiuWangDerivativeLag,
 }
 
 /// Outcome of a theorem check.
@@ -160,8 +171,11 @@ const DEFAULT_MAXIMUM_START_DELAY: usize = 3;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RealRootednessTheoremConclusion {
-    /// Every row `P_n` with `n >= first_index` (the record's first index) is
-    /// nonzero and real-rooted.
+    /// Every row `P_n` with `n >= first_index` is nonzero and real-rooted.
+    /// This is the record's first index, except for
+    /// [`check_liu_wang_derivative_lag_theorem`] when seed rows are zero:
+    /// then it is the index after the last zero seed row (the statement
+    /// names the zero rows).
     pub first_index: usize,
     /// First index `m` with `P_(m-1)` interlacing `P_m` (in the sense of
     /// `interlacing`) for every later index; `None` when not claimed.
@@ -172,16 +186,20 @@ pub struct RealRootednessTheoremConclusion {
     pub interlacing: Option<RowInterlacing>,
     /// Whether every row from the induction start on has simple roots.
     pub simple_roots: bool,
-    /// An open region containing every root of every row `P_n`,
-    /// `n >= first_index`, when certified.
+    /// A region containing every root of every row `P_n`,
+    /// `n >= first_index`, when certified: open at its finite ends, except
+    /// the closed end `0` of `(-inf, 0]` certified by
+    /// [`check_liu_wang_derivative_lag_theorem`] after dividing the rows by a
+    /// power of `x`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_region: Option<RootInterval>,
     /// The conclusion in words.
     pub statement: String,
 }
 
-/// The result of [`check_three_term_recurrence_theorem`] or
-/// [`check_liu_wang_theorem`] (schema `polytool.recurrence-real-rootedness-theorem.v1`).
+/// The result of [`check_three_term_recurrence_theorem`],
+/// [`check_liu_wang_theorem`] or [`check_liu_wang_derivative_lag_theorem`]
+/// (schema `polytool.recurrence-real-rootedness-theorem.v1`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RealRootednessTheoremReport {
@@ -216,6 +234,19 @@ pub struct RealRootednessTheoremReport {
     pub conclusion: Option<RealRootednessTheoremConclusion>,
     /// Lean replay status: always `"not_attempted"`.
     pub lean_replay: String,
+    /// The row route of the Lean library RealRooted
+    /// (<https://github.com/PerAlexandersson/RealRooted>,
+    /// `RealRooted/Tactic/ROUTES.md`) whose hypotheses the check mirrors,
+    /// for example `halfGrowth` or `sign`; omitted when none is recorded
+    /// (the three-term and Liu--Wang checks, and rules that do not have the
+    /// theorem's form).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lean_route: Option<String>,
+    /// Fully qualified RealRooted declarations behind `lean_route` (the
+    /// theorem a replay applies first, then its supporting lemmas); empty
+    /// when no route is recorded.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lean_declarations: Vec<String>,
 }
 
 impl RealRootednessTheoremReport {
@@ -239,6 +270,8 @@ impl RealRootednessTheoremReport {
             hypotheses: Vec::new(),
             conclusion: None,
             lean_replay: LIFT_LEAN_REPLAY_NOT_ATTEMPTED.into(),
+            lean_route: None,
+            lean_declarations: Vec::new(),
         }
     }
 
@@ -353,6 +386,9 @@ fn check_at_supplied_seeds(
         RealRootednessTheorem::LiuWang => {
             liu_wang::liu_wang_report(rule, first_index, seeds, options)
         }
+        RealRootednessTheorem::LiuWangDerivativeLag => {
+            derivative_lag::derivative_lag_report(rule, first_index, seeds, options)
+        }
     }
 }
 
@@ -416,7 +452,8 @@ fn check_with_start_delay(
 /// The smallest `m <= from` such that `P_(j-1)` interlaces `P_j` (in the
 /// sense of `kind`, checked exactly on the rows `rows[i] = P_(first_index +
 /// i)`) for every `j` with `m <= j < from`; the downward walk stops at the
-/// first pair that fails.
+/// first pair that fails or contains a zero row (which interlaces nothing
+/// here, although the exact tests accept it by convention).
 fn extend_interlacing_backward(
     rows: &[Vec<Q>],
     first_index: usize,
@@ -427,6 +464,9 @@ fn extend_interlacing_backward(
     while m >= first_index + 2 && m - 1 - first_index < rows.len() {
         let previous = integer_coefficients(&vec_poly::trim(&rows[m - 2 - first_index]));
         let current = integer_coefficients(&vec_poly::trim(&rows[m - 1 - first_index]));
+        if vec_poly::is_zero(&previous) || vec_poly::is_zero(&current) {
+            break;
+        }
         let holds = match kind {
             RowInterlacing::Strict => {
                 crate::check_interlacing_bigint_coeffs(&previous, &current) == Some(true)

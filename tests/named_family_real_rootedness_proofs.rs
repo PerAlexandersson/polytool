@@ -570,3 +570,82 @@ mod gamma_and_library_recurrences {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// The Liu--Wang derivative-lag theorem.
+// ---------------------------------------------------------------------------
+
+mod derivative_lag_proofs {
+    use super::{catalog_family, q, rational_rows, rule, Family, ROWS};
+    use polytool::recurrence::{
+        check_liu_wang_derivative_lag_theorem, RealRootednessTheoremOptions,
+        RealRootednessTheoremReport, RowInterlacing,
+    };
+    use polytool::sequences::{deco, literature};
+
+    /// The derivative-lag check proves `family` through the RealRooted route
+    /// `route`, with strict interlacing and every root in `(-inf, 0)`.
+    fn derivative_lag(family: &Family, route: &str) -> RealRootednessTheoremReport {
+        let report = check_liu_wang_derivative_lag_theorem(
+            &family.rule,
+            family.first_index,
+            &family.seeds,
+            &RealRootednessTheoremOptions::default(),
+        )
+        .expect("the check runs");
+        assert!(report.is_proved(), "{report:#?}");
+        report.verify().expect("the report replays");
+        assert_eq!(report.lean_route.as_deref(), Some(route));
+        let conclusion = report.conclusion.as_ref().unwrap();
+        assert_eq!(conclusion.first_index, family.first_index);
+        assert_eq!(conclusion.interlacing, Some(RowInterlacing::Strict));
+        assert_eq!(
+            conclusion
+                .root_region
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("(-inf, 0)")
+        );
+        report
+    }
+
+    #[test]
+    fn delannoy_derivative_lag_sign_route() {
+        // Defining recurrence: `delannoy_polynomials_bigint` is computed by
+        // D_n = (1 + x) D_(n-1) + x D_(n-2) from D_0 = 1, D_1 = 1 + x.
+        let rows = rational_rows(literature::delannoy_polynomials_bigint(ROWS - 1));
+        let rule = rule(
+            &[
+                (1, 0, &[(0, 0, q(1)), (0, 1, q(1))]),
+                (2, 0, &[(0, 1, q(1))]),
+            ],
+            None,
+        );
+        derivative_lag(&Family::new(rule, 0, &rows, 2), "sign");
+    }
+
+    #[test]
+    fn deco_derivative_lag() {
+        // `deco_polynomials_bigint(_, w)` is the joint-histogram loop
+        // H_N = x(1-x) H'_(N-1) + (1 + (N-1) x) H_(N-1) + (y - 1) x H_(N-2)
+        // specialised at y = 1 + w, with P_m = H_(m+1):
+        // P_n = (1 + n x) P_(n-1) + x (1 - x) P'_(n-1) + w x P_(n-2).
+        for w in [1, 2] {
+            let rows = rational_rows(deco::deco_polynomials_bigint(ROWS - 1, &w.into()));
+            let rule = rule(
+                &[
+                    (1, 0, &[(0, 0, q(1)), (1, 1, q(1))]),
+                    (1, 1, &[(0, 1, q(1)), (0, 2, q(-1))]),
+                    (2, 0, &[(0, 1, q(w))]),
+                ],
+                None,
+            );
+            derivative_lag(&Family::new(rule, 0, &rows, 2), "halfGrowth");
+            if w == 1 {
+                // The same rows as the OEIS A144438 catalog record.
+                derivative_lag(&catalog_family("A144438", 0, &rows), "halfGrowth");
+            }
+        }
+    }
+}

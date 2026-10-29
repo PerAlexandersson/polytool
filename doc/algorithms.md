@@ -323,8 +323,8 @@ boundary, or by a root-domain claim of `transform_recurrence` (maps: identity,
 `f_polynomial` and `reversal` with a degree schedule fitted to the first rows,
 the inverse `f`-map; accepted only for an unconditional all-index claim that
 the source is real-rooted in an interval ending at or below 0), and then by
-the three-term and Liu--Wang theorems with the root region `(-inf, 0)` (next
-section).  The root-domain menu is repeated with the parent's first index
+the three-term and Liu--Wang theorems with the root region `(-inf, 0)`, and
+the Liu--Wang derivative-lag theorem (roots in `(-inf, 0]`) (next section).  The root-domain menu is repeated with the parent's first index
 moved one to three rows later (the skipped rows are among the parent rows
 checked exactly, each zero or real-rooted with one-signed coefficients), and
 both theorems move their own induction start the same way.  The Eulerian
@@ -350,8 +350,9 @@ of this stage.
 
 ## Real-rootedness theorems for recurrences
 
-`recurrence::check_three_term_recurrence_theorem` and
-`recurrence::check_liu_wang_theorem` take a rule
+`recurrence::check_three_term_recurrence_theorem`,
+`recurrence::check_liu_wang_theorem` and
+`recurrence::check_liu_wang_derivative_lag_theorem` take a rule
 `f(n) P_n = sum c_(k,d)(n, x) D^d P_(n-k)` (`f` free of `x`, no `(-1)^n`
 factors, no inhomogeneous term), a first index and `K` seed rows; the rule
 applies from `N = first_index + K` on, the induction starts at the last
@@ -420,7 +421,48 @@ lead P_(n-1) > 0` excludes it.  Type-B Eulerian:
 `B_n = (1 + (2n-3) x) B_(n-1) + 2x(1-x) B'_(n-1)` (catalog indexing) has
 `lambda_n = 1`, `a_n(0) = 1`, `b_n = 2x(1-x)`.
 
-**Moving the induction start.**  Both theorems fail when the first rows do
+**Liu--Wang derivative lag.**  `check_liu_wang_derivative_lag_theorem`
+takes `f(n) P_n = c_0 P_(n-1) + c_1 P'_(n-1) + c_2 P_(n-2)` with
+`deg_x c_0 <= 1`, `deg_x c_1, deg_x c_2 <= 2`; write `A_n = c_0 / f`,
+`V_n = c_1 / f`, `W_n = c_2 / f`, `d = deg P_(N-1)`,
+`lambda_n = [x] A_n + (d + n - N) [x^2] V_n` and `mu_n = [x^2] W_n`.
+Hypotheses for `n >= N`: `P_(N-2)`, `P_(N-1)` real-rooted with roots `< 0`,
+degrees `d - 1`, `d`, leading coefficients of one sign, strictly interlacing
+(Bezout); `lambda_n > 0` (or, when `mu != 0`, `lambda_n, mu_n >= 0` and
+`lambda_n + mu_n > 0`); `V_n(0) = W_n(0) = 0` and `A_n(0) > 0`;
+`V_n, W_n <= 0` on `(-inf, 0)`, and `V_n < 0` there for every `n` or
+`W_n < 0` there for every `n`.  Induction with positive leading
+coefficients: the coefficient of `x^(D+1)` is
+`lambda_n lead P_(n-1) + mu_n lead P_(n-2) > 0`; `P_n(0) =
+A_n(0) P_(n-1)(0) > 0`; at the roots `r_1 > ... > r_D < 0` of `P_(n-1)`,
+`P'_(n-1)(r_i)` and `P_(n-2)(r_i)` have the sign `(-1)^(i-1)` (strict
+interlacing), so `P_n(r_i) = V_n(r_i) P'_(n-1)(r_i) + W_n(r_i) P_(n-2)(r_i)`
+has the sign `(-1)^i`; with `P_n(0) > 0` and the sign at `-inf` this gives
+`D + 1` roots in `(-inf, r_D)`, the gaps and `(r_1, 0)`: `P_n` has simple
+roots `< 0`, strictly interlaced by those of `P_(n-1)`.  For a real-rooted
+row with a positive leading coefficient, roots `< 0` is the same as
+nonnegative coefficients and a positive value at `0`, which the Lean
+statements (`derivLag_strictInterl_of_nonnegCoeffs`, route `halfGrowth`;
+`threeTerm_interlaces_of_nonnegCoeffs`, route `sign`, when `V = 0`) assume
+row by row and the induction proves.  Conditions "for every `x < 0`" are
+decided for separable `c = gamma(n) w(x)` with `w` of one sign on
+`(-inf, 0)` by the sign of `gamma / f`, otherwise by the sufficient test
+`(-1)^k [x^k] c / f <= 0` (one of them `< 0` for the strict form) after
+`x = -t`.  **Gauge by `x^e`:** when `x^e` divides `P_(N-2)` and `P_(N-1)`
+and `V_n(0) = 0`, it divides every later row (`x^(e-1)` divides
+`P'_(n-1)`, `x` divides `V_n`), and `Q_n = P_n / x^e` satisfies
+`Q_n = (A_n + e V_n / x) Q_(n-1) + V_n Q'_(n-1) + W_n Q_(n-2)`; the theorem
+for `Q` gives every root of `P_n` in `(-inf, 0]` and weak interlacing of
+consecutive `P_n` (common root `0`).  Earlier seed rows may be zero (they are
+named in the conclusion, and the interlacing claim is not extended over
+them).  Derangement excedances (A271697): `P_1 = 1`, `P_2 = 0`,
+`P_n = (n-2) x P_(n-1) + x(1-x) P'_(n-1) + (n-2) x P_(n-2)`; the start moves
+two rows to `P_3 = x`, `P_4 = x + x^2`, and the quotients are the A046739
+rows.  Not covered: the half-growth degree law `D0 + (n + e)/2` (plateaus),
+and lag coefficients of the wrong sign, such as binomial Eulerian (A046802,
+`W_n = (1 - n) x`), which need vector lifts.
+
+**Moving the induction start.**  The theorems fail when the first rows do
 not behave like the later ones, for example the Eulerian `A_0 = A_1 = 1`
 (`lambda_1 = 0`) or three-term seeds of equal degree.  When the check at the
 supplied seeds is neither proved nor not applicable, it is repeated with
@@ -432,10 +474,9 @@ in the certified region), so the conclusion covers every
 rows only as far as consecutive rows are checked to interlace exactly.  The
 report records `start_delay` and `verify()` replays that delay.
 
-Not covered yet: Liu--Wang with a further term `c_n(x) P_(n-2)` (their
-Corollary 2.4 in full) or several interlacers, a gauge `P_n -> lambda(n) P_n`
-or affine change of `x` before matching, and interlacing-preserving matrices
-for vector recurrences.
+Not covered yet: Liu--Wang with several interlacers beyond `P'_(n-1)` and
+`P_(n-2)`, a gauge `P_n -> lambda(n) P_n` or affine change of `x` before
+matching, and interlacing-preserving matrices for vector recurrences.
 
 ## Symmetric-companion lifts
 
