@@ -591,6 +591,53 @@ polynomials (the leader is nonzero at every target, decided exactly), and
 union of root sets: `F` is checked once exactly, the cofactors by the parent
 provers; a non-real-rooted `F` fails the route.
 
+## Gamma lifts
+
+`recurrence::certify_gamma_lift` certifies `Q_n = lambda(n) Gamma_(n+s)(c z)`
+for every `n >= n0`, where `Gamma_m` is the gamma polynomial of a parent row
+`P_m` symmetric at `d_m`:
+`P_m = sum_j Gamma_(m,j) x^j (1 + x)^(d_m - 2j)`.
+
+1. **Parent symmetry for every row.**  The reversal transport of the parent
+   rule (`x^(d_m) P_m(1/x)`, an exact consequence of the rule for any rows,
+   as Laurent polynomials) must define the same row map as the rule, both left
+   factors must be nonzero polynomials at every target `m >= p0 + K_p`
+   (decided exactly) and the seeds must be symmetric.  The reversed rows then
+   satisfy the parent rule with the same seeds, so they are the rows.
+2. **Gamma rule.**  `transport_gamma` turns the parent rule into a relation of
+   the gamma rows (the scalar rule, or a part of the transported identity with
+   a nonzero leader); it holds wherever the parent rule holds, by step 1.
+3. **Candidate relation.**  The affine transport `z -> c z`, the index shift
+   and the gauge give a relation `L` (leader `g(n) S^k` free of `x`) of the
+   candidate rows `H_n = lambda(n) Gamma_(n+s)(c z)`, valid from base
+   `max(n0, p0 + K_p - k - s)`.
+4. **Division.**  The input relation `M` is pseudo-divided by `L`; with
+   remainder zero, `w(n) M = sum_nu H_nu S^nu L` shows that `H` satisfies `M`
+   at every valid base where `w != 0`; the finitely many other bases from
+   `n0 + K - R` are checked exactly.  `H` agrees with `Q` on the identifying
+   rows and the leader of `M` is nonzero at every target, so `H = Q`.
+
+Root transfer (RealRooted, `IsGammaExpansion.isRealRooted_and_hasRootsNonpos_iff`):
+with `deg Gamma <= d/2`, `P` is nonzero and real-rooted with roots `<= 0` if
+and only if `Gamma` is.  For the direction used, write
+`P(x) = g (1 + x)^(d - 2e) prod_i (x - zeta_i (1 + x)^2)`; a root `x` of a
+factor satisfies `x/(1 + x)^2 = zeta_i`, which is real and `<= 0` for real
+`x <= 0`, so a root `zeta_i` outside `(-inf, 0]` would give a root of `P`
+outside it.  The criterion gives gamma roots in `(-inf, 0]`, not a narrower
+interval (`1 + 3x + x^2` has the gamma root `-1`).  The input rows are then
+zero or real-rooted with roots in `(-inf, 0]` for `c > 0` (`[0, inf)` for
+`c < 0`) once the parent provers prove every used parent row zero or
+real-rooted with roots `<= 0`.
+
+Example: with the Foata--Schützenberger expansion
+`A_n(t) = sum_j gamma_(n,j) t^j (1 + t)^(n-1-2j)` and the peak count
+`2^(n-1-2j) gamma_(n,j)` (Stembridge; Petersen, *Eulerian Numbers*, Ch. 4),
+the peak polynomials are `W_n(z) = 2^(n-1) Gamma_n(z/4)`: candidate parent
+Eulerian, `c = 1/4`, `lambda(n) = 2^(n-1)`.  `find_gamma_lifts` detects
+`c` from two consecutive nonzero coefficients and `lambda` from the rows
+(constant, or of constant ratio), for each parent of its menu and each index
+shift.
+
 ## Exact sign decisions for an integer index
 
 `decide_index_rational_function_sign(p, q, range, condition)` decides

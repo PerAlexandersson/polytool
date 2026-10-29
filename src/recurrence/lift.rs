@@ -21,6 +21,11 @@
 //!   `F(x)^(e(n)) S_n` for a fixed real-rooted `F` and an affine exponent
 //!   `e(n)`; the cofactor rule is derived and certified exactly (the
 //!   `row_factor` module docs).
+//! - Gamma lifts, [`find_gamma_lifts`] and [`certify_gamma_lift`]: every row
+//!   is `lambda(n) Gamma_(n+s)(c z)` for the gamma polynomials `Gamma_m` of a
+//!   palindromic parent (for example the peak polynomials from the Eulerian
+//!   polynomials); the gamma criterion transfers real-rootedness with
+//!   nonpositive roots (the `gamma_lift` module docs).
 //!
 //! Every lift carries a uniform [`LiftSummary`] with the shared
 //! [`lift_verdict`].
@@ -62,6 +67,14 @@
 
 use super::*;
 
+mod gamma_lift;
+pub use gamma_lift::{
+    certify_gamma_lift, find_gamma_lifts, GammaDivisionQuotient, GammaLiftCandidate,
+    GammaLiftCertificate, GammaLiftCertification, GammaLiftIdentityStatus, GammaLiftOptions,
+    GammaLiftParent, GammaLiftRejection, GammaLiftReport, GammaLiftSearchOptions,
+    GammaParentSymmetryStatus, GAMMA_LIFTS_SCHEMA, GAMMA_LIFT_CERTIFICATION_SCHEMA,
+    MAX_GAMMA_LIFT_CHECKED_ROWS, MAX_GAMMA_LIFT_INDEX_SHIFT, MAX_GAMMA_LIFT_OPERATOR_TERMS,
+};
 mod hadamard_factor;
 pub use hadamard_factor::{
     find_hadamard_factor_lifts, HadamardDivisionQuotient, HadamardFactor,

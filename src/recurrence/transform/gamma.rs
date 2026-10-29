@@ -468,7 +468,7 @@ impl GammaTransport {
 /// Whether two rules define the same row map: their left factors and every
 /// term (and additive part) agree after cross multiplication by the other
 /// rule's left factor.
-pub(super) fn rules_proportional(left: &Recurrence, right: &Recurrence) -> bool {
+pub(in crate::recurrence) fn rules_proportional(left: &Recurrence, right: &Recurrence) -> bool {
     let a = canonical_pieces(left);
     let b = canonical_pieces(right);
     let (Some(lhs_a), Some(lhs_b)) = (a.get(&PieceKey::Lhs), b.get(&PieceKey::Lhs)) else {

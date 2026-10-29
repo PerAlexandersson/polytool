@@ -75,6 +75,14 @@ pub enum LiftOperation {
         /// The offset of `e(n)`.
         exponent_offset: i64,
     },
+    /// The rescaled gamma polynomial `T(P)_n = lambda(n) Gamma_n(c z)`, where
+    /// `P_n = sum_j Gamma_(n,j) x^j (1 + x)^(d_n - 2j)` is symmetric at `d_n`.
+    GammaPolynomial {
+        /// The symmetry indices `d_n` of the parent rows.
+        symmetry_schedule: DegreeSchedule,
+        /// The scale `c != 0`, an exact rational string.
+        scale: String,
+    },
 }
 
 /// The parent of a lift.
@@ -695,6 +703,129 @@ pub(super) fn real_line() -> RootInterval {
         lower: None,
         upper: None,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Gamma lifts
+// ---------------------------------------------------------------------------
+
+/// The parts of a [`GammaLiftCertification`] its summary is computed from.
+pub(super) struct GammaLiftSummaryParts<'a> {
+    pub(super) candidate: &'a GammaLiftCandidate,
+    pub(super) input_first_index: usize,
+    pub(super) parent_symmetry: &'a GammaParentSymmetryStatus,
+    pub(super) identity: &'a GammaLiftIdentityStatus,
+    pub(super) parent_proof: &'a VeroneseParentProof,
+}
+
+/// The gamma criterion as a transfer theorem (`gamma_lift` module
+/// documentation), with the input region `(-inf, 0]` for a positive scale
+/// and `[0, inf)` for a negative one.
+fn gamma_root_transfer(scale: Option<&BigRational>, first_index: usize) -> LiftRootTransfer {
+    let (input_root_region, side) = match scale {
+        Some(c) if c > &BigRational::zero() => (nonpositive_ray(), "(-inf, 0]"),
+        Some(c) if c < &BigRational::zero() => (
+            RootInterval {
+                lower: Some(RootEndpoint {
+                    value: "0".into(),
+                    per_index: None,
+                    closed: true,
+                }),
+                upper: None,
+            },
+            "[0, inf)",
+        ),
+        _ => (real_line(), "(-inf, inf)"),
+    };
+    LiftRootTransfer {
+        theorem:
+            "gamma criterion (RealRooted IsGammaExpansion.isRealRooted_and_hasRootsNonpos_iff): \
+                  if P = sum_j gamma_j x^j (1 + x)^(d - 2j) with deg Gamma <= d/2, then P is \
+                  nonzero and real-rooted with roots in (-inf, 0] if and only if \
+                  Gamma(z) = sum_j gamma_j z^j is; Gamma(c z) with c != 0 has the roots of \
+                  Gamma divided by c"
+                .into(),
+        parent_hypothesis: "every parent row used is zero or real-rooted with all roots in \
+                            (-inf, 0] (coefficients of one sign), and symmetric at its index d_m"
+            .into(),
+        parent_root_region: Some(nonpositive_ray()),
+        input_root_region,
+        input_conclusion: format!(
+            "every Q_n, n >= {first_index}, is zero or real-rooted with roots in {side}"
+        ),
+    }
+}
+
+/// The [`LiftSummary`] of a gamma lift: identity and parent proof map one to
+/// one; the hypotheses are the parent symmetry (decided by the reversal
+/// induction) and `lambda` finite and nonzero (decided exactly).
+pub(super) fn gamma_lift_summary(parts: GammaLiftSummaryParts<'_>) -> LiftSummary {
+    let candidate = parts.candidate;
+    let n0 = parts.input_first_index;
+    let s = candidate.index_shift;
+    let identity = match parts.identity {
+        GammaLiftIdentityStatus::Certified { .. } => LiftIdentityStatus::Certified {
+            method: "forward_division".into(),
+        },
+        GammaLiftIdentityStatus::SupportedByRows { rows, .. } => {
+            LiftIdentityStatus::SupportedByRows { rows: *rows }
+        }
+        GammaLiftIdentityStatus::Refuted { index, reason } => LiftIdentityStatus::Refuted {
+            index: Some(*index),
+            reason: reason.clone(),
+        },
+    };
+    let symmetry_name = "parent_rows_symmetric";
+    let symmetry_statement = "every parent row P_m, m >= p0, is symmetric at d_m";
+    let symmetry = match parts.parent_symmetry {
+        GammaParentSymmetryStatus::Certified { detail } => LiftHypothesis {
+            name: symmetry_name.into(),
+            statement: symmetry_statement.into(),
+            status: LiftHypothesisStatus::Verified,
+            evidence: detail.clone(),
+            sign_decision: None,
+        },
+        GammaParentSymmetryStatus::SupportedByRows { rows, reason } => LiftHypothesis {
+            name: symmetry_name.into(),
+            statement: symmetry_statement.into(),
+            status: LiftHypothesisStatus::Unresolved,
+            evidence: format!("the compared rows (from {rows} input rows) are symmetric; {reason}"),
+            sign_decision: None,
+        },
+        GammaParentSymmetryStatus::Refuted { index } => LiftHypothesis {
+            name: symmetry_name.into(),
+            statement: symmetry_statement.into(),
+            status: LiftHypothesisStatus::Failed {
+                witness: Some(BigInt::from(*index)),
+            },
+            evidence: format!("P_{index} is not symmetric at d_{index}"),
+            sign_decision: None,
+        },
+    };
+    let scale = parse_rational_coeff(&candidate.scale)
+        .ok()
+        .filter(|c| !c.is_zero());
+    LiftSummary::new(
+        LiftOperation::GammaPolynomial {
+            symmetry_schedule: candidate.parent.symmetry_schedule.clone(),
+            scale: candidate.scale.clone(),
+        },
+        n0,
+        LiftParent {
+            recurrence: candidate.parent.recurrence.clone(),
+            relation: format!(
+                "Q_n = lambda(n) Gamma_(n{s:+})(c z) with c = {} and \
+                 P_m = sum_j Gamma_(m,j) x^j (1 + x)^(d_m - 2j), for every n >= {n0}",
+                candidate.scale
+            ),
+            gauge: Some(candidate.gauge.clone()),
+            index_shift: s,
+        },
+        identity,
+        gamma_root_transfer(scale.as_ref(), n0),
+        vec![symmetry, gauge_hypothesis(&candidate.gauge, n0)],
+        parent_proof_summary(parts.parent_proof),
+    )
 }
 
 #[cfg(test)]

@@ -309,6 +309,22 @@ fixed-point/descent array `rows[n][j][k]`),
 (`A_0 = 1`, `A_(n+1) = (1 + k n x) A_n + k x (1 - x) A_n'`, `k = 1` the
 Eulerian rows), and `one_over_k_eulerian_symmetric_parts_rational` their
 symmetric decompositions `(a_n, b_n)` with respect to `d_n = n - 1`.
+`literature::peak_polynomials_bigint` gives the peak polynomials
+`W_n(z) = sum z^(pk(sigma))` over the permutations of `[n]` (OEIS A008303 from
+`n = 1`; by complementation also the valley polynomials), with
+`peak_polynomials_iter`.
+
+Families with a recurrence from the literature expose it next to the
+generator as `(Recurrence, seeds, first_index)` (`literature::RecurrenceWithSeeds`):
+`peak_polynomials_recurrence`
+(`W_n = (2 + (n - 2) z) W_(n-1) + 2z (1 - z) W'_(n-1)` from `W_1 = 1`, the
+generator's own rule), and `one_over_k_eulerian_symmetric_part_a_recurrence(&k)`
+and `one_over_k_eulerian_symmetric_part_b_recurrence(&k)` (second-order rules
+with second derivatives from `n = 1`, eliminated from the coupled step of the
+decomposition; the derivation is in the rustdoc).  The recurrences feed the
+real-rootedness routes directly instead of a fitted rule: the peak polynomials
+are proved by a gamma lift from the Eulerian polynomials, and the symmetric
+parts `a_n` (`k = 2, 3`, from `n = 2`) by the symmetric-companion lift.
 
 ## Lazy rows
 
@@ -605,7 +621,8 @@ the coordinate change and the root-region certificate are in
 Every lift report carries a `lift_summary` (`recurrence::LiftSummary`): the
 operation (`veronese_section` with modulus and residue, `symmetric_companion`
 with `d_(n0)`, `hadamard_factor` with the factor, `row_factor` with `F` and
-the exponent schedule), the parent record, the identity status (`certified` with its
+the exponent schedule, `gamma_polynomial` with the symmetry schedule and the
+scale), the parent record, the identity status (`certified` with its
 method, `supported_by_rows`, `unsupported`, `refuted`), the root transfer
 (theorem, the parent root region and the input root region as
 `RootInterval`s; the Veronese route needs parent roots in `(-inf, 0]`, the
@@ -748,6 +765,40 @@ seeds, the identity (`RowFactorCertificate`, replayable), the cofactor proof
 and the `lift_summary`; schedules that fail (a row not divisible by
 `F^(e(n))`, a cofactor rule with an `x`-dependent leader) are listed in
 `rejected`.  See [algorithms.md](algorithms.md#row-factor-lifts).
+
+## Gamma lifts
+
+`recurrence::find_gamma_lifts` recognises the rows as rescaled gamma
+polynomials of a palindromic parent, `Q_n = lambda(n) Gamma_(n+s)(c z)` with
+`P_m = sum_j Gamma_(m,j) x^j (1 + x)^(d_m - 2j)`.  Parents come from a menu
+(`GammaLiftParent::standard_menu`: Eulerian, type-B Eulerian, Narayana; add
+`GammaLiftParent::one_over_k_eulerian_symmetric_part(&k)` or your own rule
+with its symmetry schedule); detection reads `c` and `lambda` (constant or of
+constant ratio) from the rows, and every match is certified by
+`certify_gamma_lift`, which callers can also run on a candidate of their own.
+
+```rust
+use polytool::recurrence::*;
+use polytool::sequences::literature::peak_polynomials_recurrence;
+
+// Peak polynomials: W_n = 2^(n-1) Gamma(A_n)(z/4).
+let (rule, seeds, first_index) = peak_polynomials_recurrence();
+let report = find_gamma_lifts(&rule, &seeds, first_index, &GammaLiftSearchOptions::default())?;
+let lift = report.proved_lifts().next().unwrap();
+assert_eq!(lift.candidate.parent.name, "eulerian");
+assert_eq!(lift.lift_summary.root_transfer.input_root_region.to_string(), "(-inf, 0]");
+# Ok::<(), RecurrenceError>(())
+```
+
+A certification (`GammaLiftCertification`, schema
+`polytool.recurrence-gamma-lift.v1`; the search report is
+`polytool.recurrence-gamma-lifts.v1`) records the parent symmetry status (the
+reversal induction), the transported gamma rule, the identity
+(`GammaLiftCertificate`, replayable by `verify()`), the parent proof and the
+`lift_summary` (new `LiftOperation::GammaPolynomial`).  The transfer is the
+gamma criterion: a palindromic `P` is real-rooted with roots `<= 0` if and only
+if its gamma polynomial is, so the input roots lie in `(-inf, 0]` for `c > 0`.
+See [algorithms.md](algorithms.md#gamma-lifts).
 
 ## Exact sign decisions for an integer index
 

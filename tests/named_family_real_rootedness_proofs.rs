@@ -393,3 +393,121 @@ fn refined_eulerian_second_letter_fitted() {
     Family::new(derivative_rule(q(1), q(0)), 1, &rows, 1);
     Family::new(derivative_rule(q(1), q(0)), 2, &rows[1..], 1).root_domain_f_polynomial(1);
 }
+
+// ---------------------------------------------------------------------------
+// Gamma lifts and library recurrences of fitted families.
+// ---------------------------------------------------------------------------
+
+mod gamma_and_library_recurrences {
+    use super::{q, rational_rows, Family, Q, ROWS};
+    use polytool::oeis;
+    use polytool::recurrence::{
+        certify_gamma_lift, find_symmetric_companion_lifts, GammaLiftCandidate, GammaLiftOptions,
+        GammaLiftParent, LiftVerdict, SymmetricCompanionLiftOptions, VeroneseSectionGauge,
+    };
+    use polytool::sequences::literature;
+
+    /// `W_n = 2^(n-1) Gamma(A_n)(z/4)` from `n = n0`, with the Eulerian parent
+    /// at index `n + shift`; asserts the proved verdict and the root region.
+    fn peak_gamma_lift(family: &Family, shift: i64) {
+        let candidate = GammaLiftCandidate {
+            parent: GammaLiftParent::eulerian(),
+            index_shift: shift,
+            scale: "1/4".into(),
+            gauge: VeroneseSectionGauge::Ratio {
+                numerator: vec!["2".into()],
+                denominator: vec!["1".into()],
+                initial_value: "1".into(),
+            },
+        };
+        let certification = certify_gamma_lift(
+            &family.rule,
+            &family.seeds,
+            family.first_index,
+            &candidate,
+            &GammaLiftOptions::default(),
+        )
+        .expect("the certification runs");
+        assert!(certification.is_proved(), "{certification:#?}");
+        certification.verify().expect("the certification replays");
+        assert_eq!(
+            certification
+                .lift_summary
+                .root_transfer
+                .input_root_region
+                .to_string(),
+            "(-inf, 0]"
+        );
+    }
+
+    #[test]
+    fn peak_polynomials_gamma_lift_from_eulerian() {
+        // Defining recurrence: `peak_polynomials_bigint` is computed by the
+        // rule of `peak_polynomials_recurrence` from W_1 on (W_0 = 1 is
+        // constant).  The same rows are the valley polynomials.
+        let rows = rational_rows(literature::peak_polynomials_bigint(ROWS - 1));
+        let (rule, seeds, first_index) = literature::peak_polynomials_recurrence();
+        assert_eq!(seeds[..], rows[1..2]);
+        let family = Family::new(rule, first_index, &rows[1..], 1);
+        peak_gamma_lift(&family, 0);
+    }
+
+    #[test]
+    fn peak_polynomials_gamma_lift_via_catalog() {
+        // A008303 row m is W_(m+1); compared with the generator on ROWS rows.
+        let rows = rational_rows(literature::peak_polynomials_bigint(ROWS));
+        let entry = oeis::by_id("A008303").expect("catalog entry");
+        let (rule, seeds) = entry.recurrence_parts().expect("catalog recurrence");
+        let family = Family::new(rule, entry.recurrence_first_index, &rows[1..], seeds.len());
+        assert_eq!(family.seeds, seeds);
+        peak_gamma_lift(&family, 1);
+    }
+
+    #[test]
+    fn one_over_k_eulerian_symmetric_parts_symmetric_companion() {
+        // The library second-order recurrence of the symmetric parts a_n
+        // (proved in its rustdoc; it could define the generator), compared
+        // with the Stapledon decompositions on ROWS rows.  The
+        // symmetric-companion lift proves a_n, n >= 2, real-rooted for
+        // k = 2, 3 (a_1 = 1).  For k = 1/2 the companion is certified but the
+        // sign hypotheses fail (k - 1 < 0), and the parts b_n are open.
+        for (k, proved) in [
+            (q(2), true),
+            (q(3), true),
+            (Q::new(1.into(), 2.into()), false),
+        ] {
+            let parts: Vec<Vec<Q>> =
+                literature::one_over_k_eulerian_symmetric_parts_rational(ROWS, &k)
+                    .into_iter()
+                    .map(|(a, _)| a)
+                    .collect();
+            let (rule, seeds, first_index) =
+                literature::one_over_k_eulerian_symmetric_part_a_recurrence(&k);
+            assert_eq!(seeds[..], parts[1..3]);
+            Family::new(rule.clone(), first_index, &parts[1..], 2);
+            let family = Family::new(rule, 2, &parts[2..], 2);
+            let report = find_symmetric_companion_lifts(
+                &family.rule,
+                &family.seeds,
+                family.first_index,
+                &SymmetricCompanionLiftOptions::default(),
+            )
+            .expect("the search runs");
+            match report.proving_lift() {
+                Some(lift) => {
+                    assert!(proved, "k = {k}");
+                    let summary = lift.lift_summary.as_ref().expect("a summary");
+                    assert_eq!(summary.verdict, LiftVerdict::Proved);
+                    assert_eq!(
+                        summary.root_transfer.input_root_region.to_string(),
+                        "(-inf, 0]"
+                    );
+                }
+                None => {
+                    assert!(!proved, "k = {k}: {report:#?}");
+                    assert!(report.certified_lifts().count() > 0);
+                }
+            }
+        }
+    }
+}

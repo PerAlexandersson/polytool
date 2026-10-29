@@ -277,6 +277,27 @@ Additions:
   provers; report `polytool.recurrence-hadamard-factor-lifts.v1` with a
   `lift_summary` per lift (new `LiftOperation::HadamardFactor`).  The Narayana
   and type-B Narayana triangles are proved end to end.
+- Gamma lifts: `recurrence::find_gamma_lifts` and `certify_gamma_lift`
+  recognise `Q_n = lambda(n) Gamma_(n+s)(c z)` with `Gamma_m` the gamma
+  polynomial of a palindromic parent (menu `GammaLiftParent::standard_menu`:
+  Eulerian, type-B Eulerian, Narayana; also
+  `GammaLiftParent::one_over_k_eulerian_symmetric_part`), certify the parent
+  symmetry for every row by the reversal induction and the identity by
+  pseudo-division of the input relation by the transported gamma rule
+  (`GammaLiftCertificate`, replayable), and transfer real-rootedness with
+  roots `<= 0` by the gamma criterion; reports
+  `polytool.recurrence-gamma-lift.v1` and `polytool.recurrence-gamma-lifts.v1`
+  (new `LiftOperation::GammaPolynomial`).  The peak (and valley) polynomials
+  A008303 are proved from the Eulerian polynomials.
+- `sequences::literature::peak_polynomials_bigint` and
+  `peak_polynomials_iter` (permutations by peaks, A008303), and library
+  recurrences returned as `(Recurrence, seeds, first_index)`
+  (`literature::RecurrenceWithSeeds`): `peak_polynomials_recurrence`,
+  `one_over_k_eulerian_symmetric_part_a_recurrence` and
+  `one_over_k_eulerian_symmetric_part_b_recurrence` (second-order rules of the
+  symmetric decompositions of the `1/k`-Eulerian polynomials, derived in the
+  rustdoc).  With the `a_n` rule the symmetric-companion lift proves the
+  symmetric parts real-rooted for `k = 2, 3`.
 - Row-factor lifts: `recurrence::find_row_factor_lifts` detects
   `Q_n = F(x)^(alpha n + beta) S_n` from exact row factorizations, certifies it
   by substituting into the input relation (`RowFactorCertificate`, replayable),
