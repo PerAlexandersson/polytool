@@ -691,6 +691,18 @@ fn denominator_hypothesis(denominator: &[Q], first: usize) -> Option<LiftHypothe
     })
 }
 
+/// The seed rows in the normal form of their [`RecurrenceJson`] record
+/// (trailing zero coefficients removed), so that a report and its
+/// recomputation by `verify` see the same rows.
+fn normalized_seed_rows(
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<Q>],
+) -> Result<Vec<Vec<Q>>, RecurrenceError> {
+    let record = RecurrenceJson::from_recurrence_rational(rule, first_index, seeds, None);
+    Ok(record.to_recurrence_parts()?.2)
+}
+
 /// The seed rows before the induction start, each nonzero and real-rooted
 /// (with every root in `region` when one is given).
 fn earlier_seeds_hypothesis(

@@ -167,6 +167,12 @@ the typed errors above.  `exact-real-roots` has no `Result<_, String>` API.
 
 Fixes:
 
+- `check_three_term_recurrence_theorem` and `check_liu_wang_theorem` normalize
+  seed rows (trailing zero coefficients removed) before building the report,
+  so reports from padded seeds, such as some catalog records, replay with
+  `verify()`; previously such reports were rejected as differing from their
+  recomputation (the verdicts were unaffected).
+
 - Gamma coefficients beyond 64 bits: `polynomial_properties`,
   `check_polynomial_family` and the CLI `properties` / `family-check`
   reported no gamma coefficients (and `gamma_positive = false`) for a

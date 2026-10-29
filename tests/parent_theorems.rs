@@ -171,6 +171,19 @@ fn hermite_is_real_rooted_with_strict_interlacing() {
     assert_eq!(failure(&report, "root_upper_bound"), Some(3.into()));
 }
 
+/// Seed rows with trailing zero coefficients (as in some catalog records)
+/// give the same verdict as the trimmed rows, and the report replays.
+#[test]
+fn seeds_with_trailing_zeros_replay() {
+    let padded = three_term(&hermite(), 0, &[&[1, 0], &[0, 2, 0]], &no_region());
+    let trimmed = three_term(&hermite(), 0, &[&[1], &[0, 2]], &no_region());
+    assert_eq!(padded.status, RealRootednessTheoremStatus::Proved);
+    assert_eq!(padded, trimmed);
+    let padded = liu_wang(&type_b(&[1]), 0, &[&[1, 0, 0]], &no_region());
+    let trimmed = liu_wang(&type_b(&[1]), 0, &[&[1]], &no_region());
+    assert_eq!(padded, trimmed);
+}
+
 #[test]
 fn laguerre_roots_are_positive_and_the_reflection_negative() {
     let report = three_term(&laguerre(1), 0, &[&[1], &[1, -1]], &region(Some(0), None));

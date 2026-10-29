@@ -129,6 +129,7 @@ pub fn check_liu_wang_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    let seeds = &super::normalized_seed_rows(rule, first_index, seeds)?;
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::LiuWang,
         REFERENCE,
