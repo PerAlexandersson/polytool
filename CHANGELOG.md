@@ -266,6 +266,36 @@ Performance:
 
 Additions:
 
+- OEIS catalog real-rootedness flags: a record may carry
+  `"real_rootedness": {"status": ..., "as_of": "YYYY-MM-DD"}` (schema
+  `oeis::OeisCatalogRealRootedness`, `OeisRealRootednessStatus::{LeanProved,
+  KnownNotRealRooted}`; absent means unknown), read with
+  `OeisSequenceDefinition::real_rootedness()` and listed by
+  `oeis::entries_with_real_rootedness_flag()`; `oeis info` and `oeis list
+  --json` report it.  `lean_proved` records that every row is zero or
+  real-rooted by a machine-checked Lean proof made outside polytool, for a
+  definition whose rows were shown equal to the catalog rows for every index
+  (same recurrence normal form after the aligning index shift, nonvanishing
+  leaders, exact agreement of the initial rows).  The bundled catalog flags 753
+  entries `lean_proved` and A122431 `known_not_real_rooted` (its row
+  `3 + 3x + x^2`).  The flag is never reported as a polytool proof.
+- Parent provers: a Veronese, Hadamard-factor, row-factor or gamma lift parent
+  whose rule, first index and initial rows equal a `lean_proved` catalog entry
+  exactly gets the verdict `conditional_on_attestation` with the label
+  `oeis_catalog:<A-number>:lean_proved` (the caller-attestation mechanism),
+  provided polytool proves that every parent row has coefficients of one sign
+  (nonnegative seeds, positive `x`-free leader, and nonnegative combined
+  coefficient weights under an inductive degree bound, shown exactly in a
+  falling-factorial basis).  Used directly as parents, 138 flagged entries
+  that no polytool route proves become conditional.
+- `polytool oeis add --recurrence-json FILE [--prefix-rows P]` records a
+  supplied `polytool.recurrence.v1` recurrence without a search, after
+  checking every OEIS term exactly through the catalog's row generator; new
+  provenance source `supplied_recurrence` (status `validated`, with
+  `checked_terms`, `terms_source` and the last compared row).  The catalog
+  gains 43 such families (817 entries).  `OeisCatalogError` gains
+  `InvalidSuppliedProvenance` and `InvalidRealRootednessDate`, and
+  `OeisProvenanceSource` gains `SuppliedRecurrence`.
 - Hadamard-factor lifts: `recurrence::find_hadamard_factor_lifts` writes the
   input rows as `Q_n = lambda(n) sum_k u(n, k) p(n, k) x^k` with `u` from a
   menu (`binom(n + a, k + b)`, `k!`, `1/k!`, `(n - k)!`, `1/(n - k)!`,

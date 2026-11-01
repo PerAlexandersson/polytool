@@ -7,6 +7,7 @@ use super::catalog_file::{
 };
 use super::sha256::sha256_hex;
 use super::source::{parse_bfile, read_local_record, OeisSourceRecord, RowWidths};
+use super::supplied::add_supplied_recurrence;
 use crate::input::{next_option_value, parse_usize_option};
 use num_bigint::BigInt;
 use polytool::oeis::{
@@ -33,6 +34,9 @@ pub(crate) fn print_oeis_add_help() {
     println!("  polytool oeis add --ids-file <file> [options]");
     println!(
         "  polytool oeis add <A-number> --bfile <file> --name <title> --layout <layout> [options]"
+    );
+    println!(
+        "  polytool oeis add <A-number> --recurrence-json <file> [--prefix-rows <p>] [options]"
     );
     println!();
     println!("Read OEIS terms, cut them into complete rows, run the adaptive recurrence");
@@ -66,10 +70,23 @@ pub(crate) fn print_oeis_add_help() {
     println!("  --fit-rows <n>          Rows given to the search (default: all but");
     println!("                          max(2, rows/4), which are held out)");
     println!();
+    println!("Supplied recurrence (no search):");
+    println!("  --recurrence-json <file>  A polytool.recurrence.v1 object (rule, first_index and");
+    println!("                          initial polynomials; one A-number only).  Its first");
+    println!("                          initial row is matched with the first OEIS row after");
+    println!("                          the prefix; the rows it generates are compared exactly");
+    println!("                          with every OEIS term.  Provenance `supplied_recurrence`,");
+    println!("                          status `validated`.  A table layout may omit");
+    println!("                          --row-widths: the generated rows give the widths.");
+    println!("  --prefix-rows <p>       Store the first p complete OEIS rows as authoritative");
+    println!("                          prefix rows before the supplied rows (default 0)");
+    println!();
     println!("Catalog:");
     println!("  --catalog <file>        Data file (default: ./{DEFAULT_CATALOG_PATH} if present)");
     println!("  --dry-run               Do not write; print each new entry as a JSONL line");
-    println!("  --replace               Search again and update entries already present");
+    println!("  --replace               Search again (or take the supplied recurrence) and update");
+    println!("                          entries already present; a replaced entry loses its");
+    println!("                          real_rootedness flag");
     println!("  --json                  Emit a polytool.oeis-add.v1 report");
     println!();
     println!("Search options (as in `polytool recurrence`): --skip-prefix, --min/max-rec-len,");
@@ -171,21 +188,24 @@ pub(crate) fn read_ids_file(path: &str) -> Result<Vec<String>, String> {
 }
 
 #[derive(Default)]
-struct AddOptions {
-    ids: Vec<String>,
-    oeis_data: Option<PathBuf>,
-    bfile: Option<String>,
-    name: Option<String>,
-    offset: Option<i64>,
-    layout: Option<OeisLayout>,
-    row_widths: Option<RowWidths>,
+pub(crate) struct AddOptions {
+    pub(crate) ids: Vec<String>,
+    pub(crate) recurrence_json: Option<String>,
+    pub(crate) prefix_rows: Option<usize>,
+    pub(crate) oeis_data: Option<PathBuf>,
+    pub(crate) bfile: Option<String>,
+    pub(crate) name: Option<String>,
+    pub(crate) offset: Option<i64>,
+    pub(crate) layout: Option<OeisLayout>,
+    pub(crate) row_widths: Option<RowWidths>,
     fit_rows: Option<usize>,
     catalog: Option<String>,
     dry_run: bool,
-    replace: bool,
+    pub(crate) replace: bool,
     json: bool,
-    search: AdaptiveSearchOptions,
+    pub(crate) search: AdaptiveSearchOptions,
     budget: AdaptiveSearchBudget,
+    search_option_given: bool,
 }
 
 fn parse_add_options(args: &[String]) -> Result<AddOptions, String> {
@@ -193,6 +213,7 @@ fn parse_add_options(args: &[String]) -> Result<AddOptions, String> {
     let mut index = 0;
     while index < args.len() {
         if parse_search_option(args, &mut index, &mut options.search, &mut options.budget)? {
+            options.search_option_given = true;
             index += 1;
             continue;
         }
@@ -231,6 +252,13 @@ fn parse_add_options(args: &[String]) -> Result<AddOptions, String> {
             "--fit-rows" => {
                 options.fit_rows = Some(parse_usize_option(args, &mut index, "--fit-rows")?)
             }
+            "--recurrence-json" => {
+                options.recurrence_json =
+                    Some(next_option_value(args, &mut index, "--recurrence-json")?.to_string())
+            }
+            "--prefix-rows" => {
+                options.prefix_rows = Some(parse_usize_option(args, &mut index, "--prefix-rows")?)
+            }
             "--catalog" => {
                 options.catalog =
                     Some(next_option_value(args, &mut index, "--catalog")?.to_string())
@@ -254,6 +282,19 @@ fn parse_add_options(args: &[String]) -> Result<AddOptions, String> {
     }
     let mut seen = std::collections::BTreeSet::new();
     options.ids.retain(|id| seen.insert(id.clone()));
+    if options.recurrence_json.is_some() {
+        if options.ids.len() != 1 {
+            return Err("--recurrence-json applies to exactly one A-number".to_string());
+        }
+        if options.search_option_given || options.fit_rows.is_some() {
+            return Err(
+                "--recurrence-json runs no search: search options and --fit-rows do not apply"
+                    .to_string(),
+            );
+        }
+    } else if options.prefix_rows.is_some() {
+        return Err("--prefix-rows is only used with --recurrence-json".to_string());
+    }
     if options.bfile.is_some() {
         if options.ids.len() != 1 {
             return Err("--bfile applies to exactly one A-number".to_string());
@@ -274,7 +315,10 @@ fn parse_add_options(args: &[String]) -> Result<AddOptions, String> {
             ));
         }
     }
-    if options.layout == Some(OeisLayout::Table) && options.row_widths.is_none() {
+    if options.layout == Some(OeisLayout::Table)
+        && options.row_widths.is_none()
+        && options.recurrence_json.is_none()
+    {
         return Err("--layout table needs --row-widths W+S[/R]".to_string());
     }
     if options.layout == Some(OeisLayout::RegularTriangle)
@@ -288,15 +332,15 @@ fn parse_add_options(args: &[String]) -> Result<AddOptions, String> {
 }
 
 /// Result of processing one A-number.
-struct AddResult {
-    id: String,
-    outcome: &'static str,
-    detail: String,
-    record: Option<OeisCatalogRecord>,
+pub(crate) struct AddResult {
+    pub(crate) id: String,
+    pub(crate) outcome: &'static str,
+    pub(crate) detail: String,
+    pub(crate) record: Option<OeisCatalogRecord>,
 }
 
 impl AddResult {
-    fn new(id: &str, outcome: &'static str, detail: impl Into<String>) -> Self {
+    pub(crate) fn new(id: &str, outcome: &'static str, detail: impl Into<String>) -> Self {
         Self {
             id: id.to_string(),
             outcome,
@@ -310,7 +354,7 @@ impl AddResult {
     }
 }
 
-fn source_record(options: &AddOptions, id: &str) -> Result<OeisSourceRecord, String> {
+pub(crate) fn source_record(options: &AddOptions, id: &str) -> Result<OeisSourceRecord, String> {
     if let Some(path) = &options.bfile {
         let text = std::fs::read_to_string(path)
             .map_err(|error| format!("failed to read {path}: {error}"))?;
@@ -353,7 +397,7 @@ fn search_options_json(search: &AdaptiveSearchOptions, budget: AdaptiveSearchBud
     Value::Object(entries.into_iter().collect())
 }
 
-fn string_rows(rows: &[&[BigInt]]) -> Vec<Vec<String>> {
+pub(crate) fn string_rows(rows: &[&[BigInt]]) -> Vec<Vec<String>> {
     rows.iter()
         .map(|row| row.iter().map(ToString::to_string).collect())
         .collect()
@@ -495,6 +539,7 @@ fn add_one(options: &AddOptions, id: &str, present: bool) -> AddResult {
             search_options: Some(search_options_json(&options.search, options.budget)),
             polytool_version: Some(env!("CARGO_PKG_VERSION").to_string()),
         },
+        real_rootedness: None,
     };
     if let Err(error) = record.validate() {
         return AddResult::new(id, "mismatch", format!("invalid catalog record: {error}"));
@@ -585,7 +630,10 @@ pub(crate) fn cmd_oeis_add(args: &[String]) {
 
     let mut results = Vec::new();
     for id in &options.ids {
-        let result = add_one(&options, id, is_present(id));
+        let result = match &options.recurrence_json {
+            Some(path) => add_supplied_recurrence(&options, id, path, is_present(id)),
+            None => add_one(&options, id, is_present(id)),
+        };
         if !options.json {
             println!("{}\t{}\t{}", result.id, result.outcome, result.detail);
             if options.dry_run {

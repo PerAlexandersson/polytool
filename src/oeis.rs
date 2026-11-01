@@ -31,6 +31,15 @@
 //! by hand, and re-validate them against local OEIS data with
 //! `polytool oeis check`.  For recurrence evaluation and search see
 //! `crate::recurrence`.
+//!
+//! Real-rootedness flags: a record may carry an
+//! [`OeisCatalogRealRootedness`] flag, read with
+//! [`OeisSequenceDefinition::real_rootedness`] and listed by
+//! [`entries_with_real_rootedness_flag`].  [`OeisRealRootednessStatus::LeanProved`]
+//! records that every row is zero or real-rooted by a machine-checked Lean
+//! proof made outside polytool; polytool never reports such a family as proved
+//! by itself, and the Veronese parent provers treat a parent that equals a
+//! flagged entry as conditional on the flag.
 
 use crate::recurrence::{
     parse_rational_coeff, BigRational, BivarPoly, Recurrence, RecurrenceEvaluationError,
@@ -145,6 +154,16 @@ pub struct OeisSequenceDefinition {
     /// SHA-256 fingerprint of the source row data at generation time;
     /// provenance only, not recomputed at run time.
     pub rows_sha256: &'static str,
+}
+
+/// The real-rootedness flag of a bundled catalog entry (see
+/// [`OeisCatalogRealRootedness`], its data-file form).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OeisRealRootedness {
+    /// What is known about the rows.
+    pub status: OeisRealRootednessStatus,
+    /// Date (`YYYY-MM-DD`) of the proof snapshot or check, when recorded.
+    pub as_of: Option<&'static str>,
 }
 
 /// Failure while decoding or evaluating a bundled sequence.
@@ -271,6 +290,21 @@ fn decode_rows(
 }
 
 impl OeisSequenceDefinition {
+    /// The real-rootedness flag recorded for the bundled catalog entry with
+    /// this definition's id (`None`: unknown).
+    ///
+    /// The flag belongs to the bundled data file; a definition built from
+    /// another catalog file still reads the bundled flag of its id.
+    pub fn real_rootedness(&self) -> Option<OeisRealRootedness> {
+        OEIS_REAL_ROOTEDNESS
+            .binary_search_by_key(&self.id, |(id, _, _)| id)
+            .ok()
+            .map(|index| {
+                let (_, status, as_of) = OEIS_REAL_ROOTEDNESS[index];
+                OeisRealRootedness { status, as_of }
+            })
+    }
+
     /// Decode the sparse static description into the recurrence evaluator.
     pub fn recurrence_parts(
         &self,
@@ -654,6 +688,25 @@ pub fn catalog() -> &'static [OeisSequenceDefinition] {
     OEIS_CATALOG
 }
 
+/// Every bundled entry that carries a real-rootedness flag, in catalog order,
+/// with its flag.
+pub fn entries_with_real_rootedness_flag(
+) -> impl Iterator<Item = (&'static OeisSequenceDefinition, OeisRealRootedness)> {
+    OEIS_REAL_ROOTEDNESS
+        .iter()
+        .filter_map(|(id, status, as_of)| {
+            by_id(id).map(|entry| {
+                (
+                    entry,
+                    OeisRealRootedness {
+                        status: *status,
+                        as_of: *as_of,
+                    },
+                )
+            })
+        })
+}
+
 /// Look up an A-number case-insensitively.
 pub fn by_id(id: &str) -> Option<&'static OeisSequenceDefinition> {
     let normalized = id.to_ascii_uppercase();
@@ -670,7 +723,7 @@ mod tests {
 
     #[test]
     fn catalog_is_sorted_unique_and_decodable() {
-        assert_eq!(catalog().len(), 774);
+        assert_eq!(catalog().len(), 817);
         assert_eq!(
             catalog()
                 .iter()
@@ -683,7 +736,7 @@ mod tests {
                 .iter()
                 .filter(|entry| entry.status == OeisSequenceStatus::Validated)
                 .count(),
-            649
+            692
         );
         assert_eq!(
             catalog()
@@ -747,10 +800,11 @@ mod tests {
         assert_eq!(count(OeisProvenanceSource::BenchmarkFixture), 73);
         assert_eq!(count(OeisProvenanceSource::LeanDefinition), 630);
         assert_eq!(count(OeisProvenanceSource::CuratedQueue), 71);
+        assert_eq!(count(OeisProvenanceSource::SuppliedRecurrence), 43);
         for record in &records {
             let provenance = &record.provenance;
             match provenance.source {
-                OeisProvenanceSource::LeanDefinition => {
+                OeisProvenanceSource::LeanDefinition | OeisProvenanceSource::SuppliedRecurrence => {
                     assert!(provenance.validation_row.is_some(), "{}", record.id)
                 }
                 OeisProvenanceSource::BenchmarkFixture | OeisProvenanceSource::CuratedQueue => {
@@ -802,6 +856,135 @@ mod tests {
         assert!(error
             .to_string()
             .starts_with("records are not strictly sorted by A-number: "));
+    }
+
+    #[test]
+    fn real_rootedness_flags_parse_validate_and_round_trip() {
+        let text = catalog_data_text();
+        let line = text
+            .lines()
+            .find(|line| line.starts_with("{\"id\":\"A001263\""))
+            .unwrap();
+        let record: OeisCatalogRecord = serde_json::from_str(line).unwrap();
+        let flag = record.real_rootedness.clone().unwrap();
+        assert_eq!(flag.status, OeisRealRootednessStatus::LeanProved);
+        assert_eq!(flag.status.as_str(), "lean_proved");
+        assert_eq!(record.to_jsonl_line(), line);
+        assert!(line.ends_with(
+            ",\"real_rootedness\":{\"status\":\"lean_proved\",\"as_of\":\"2026-10-03\"}}"
+        ));
+
+        // Absent, without a date, and the second status all round-trip.
+        let mut unknown = record.clone();
+        unknown.real_rootedness = None;
+        let unknown_line = unknown.to_jsonl_line();
+        assert!(!unknown_line.contains("real_rootedness"));
+        assert_eq!(
+            serde_json::from_str::<OeisCatalogRecord>(&unknown_line).unwrap(),
+            unknown
+        );
+        let mut refuted = record.clone();
+        refuted.real_rootedness = Some(OeisCatalogRealRootedness {
+            status: OeisRealRootednessStatus::KnownNotRealRooted,
+            as_of: None,
+        });
+        let refuted_line = refuted.to_jsonl_line();
+        assert!(
+            refuted_line.ends_with("\"real_rootedness\":{\"status\":\"known_not_real_rooted\"}}")
+        );
+        assert_eq!(
+            serde_json::from_str::<OeisCatalogRecord>(&refuted_line).unwrap(),
+            refuted
+        );
+        refuted.validate().unwrap();
+
+        // Malformed dates, statuses and fields are rejected.
+        for date in ["2026-10-3", "2026/10/03", "20261003", "2026-13-01"] {
+            let mut bad = record.clone();
+            bad.real_rootedness.as_mut().unwrap().as_of = Some(date.to_string());
+            assert_eq!(
+                bad.validate().unwrap_err(),
+                OeisCatalogError::InvalidRealRootednessDate {
+                    id: record.id.clone()
+                },
+                "{date}"
+            );
+        }
+        let wrong_status = line.replace("\"lean_proved\"", "\"proved\"");
+        assert!(OeisCatalogRecord::parse_jsonl(&wrong_status).is_err());
+        let extra_field = line.replace("\"as_of\"", "\"by\":\"x\",\"as_of\"");
+        assert!(OeisCatalogRecord::parse_jsonl(&extra_field).is_err());
+    }
+
+    #[test]
+    fn supplied_recurrence_provenance_is_checked() {
+        let records = OeisCatalogRecord::parse_jsonl(&catalog_data_text()).unwrap();
+        let record = records
+            .iter()
+            .find(|record| record.provenance.source == OeisProvenanceSource::SuppliedRecurrence)
+            .unwrap()
+            .clone();
+        record.validate().unwrap();
+        assert_eq!(record.provenance.status, OeisSequenceStatus::Validated);
+        assert_eq!(
+            OeisProvenanceSource::SuppliedRecurrence.as_str(),
+            "supplied_recurrence"
+        );
+        let mut without_terms = record.clone();
+        without_terms.provenance.checked_terms = None;
+        assert_eq!(
+            without_terms.validate().unwrap_err(),
+            OeisCatalogError::InvalidSuppliedProvenance {
+                id: record.id.clone()
+            }
+        );
+        let mut with_search = record.clone();
+        with_search.provenance.fit_rows = Some(3);
+        assert!(with_search.validate().is_err());
+    }
+
+    #[test]
+    fn bundled_real_rootedness_flags_are_exposed() {
+        let flag = A001263().real_rootedness().unwrap();
+        assert_eq!(flag.status, OeisRealRootednessStatus::LeanProved);
+        assert_eq!(flag.as_of, Some("2026-10-03"));
+        // Row 2 of A122431 is 3 + 3x + x^2.
+        assert_eq!(
+            A122431().real_rootedness().unwrap().status,
+            OeisRealRootednessStatus::KnownNotRealRooted
+        );
+        assert_eq!(
+            A122431().generate_rows(3).unwrap()[2],
+            [3, 3, 1].map(BigInt::from)
+        );
+        // The Lean proof of A157153 is open, so it carries no flag.
+        assert_eq!(A157153().real_rootedness(), None);
+        let flagged = entries_with_real_rootedness_flag().collect::<Vec<_>>();
+        let count = |status| {
+            flagged
+                .iter()
+                .filter(|(_, flag)| flag.status == status)
+                .count()
+        };
+        assert_eq!(count(OeisRealRootednessStatus::LeanProved), 753);
+        assert_eq!(count(OeisRealRootednessStatus::KnownNotRealRooted), 1);
+        for (entry, flag) in &flagged {
+            assert_eq!(entry.real_rootedness(), Some(*flag));
+        }
+        let records = OeisCatalogRecord::parse_jsonl(&catalog_data_text()).unwrap();
+        for (record, entry) in records.iter().zip(catalog()) {
+            assert_eq!(
+                record
+                    .real_rootedness
+                    .as_ref()
+                    .map(|flag| (flag.status, flag.as_of.as_deref())),
+                entry
+                    .real_rootedness()
+                    .map(|flag| (flag.status, flag.as_of)),
+                "{}",
+                record.id
+            );
+        }
     }
 
     #[test]
@@ -1009,7 +1192,7 @@ mod tests {
             assert_eq!(catalog_fingerprint(entry), line, "{id}");
             checked += 1;
         }
-        assert!(checked >= 774);
+        assert!(checked >= 817);
     }
 
     #[test]

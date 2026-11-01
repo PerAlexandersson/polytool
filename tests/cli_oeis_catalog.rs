@@ -246,3 +246,153 @@ fn oeis_check_validates_bundled_entries_against_local_records() {
     assert!(text.contains("A001263\tunchecked\t"), "{text}");
     assert!(text.ends_with("summary: 2 ok, 0 mismatched, 1 unchecked (3 entries)\n"));
 }
+
+/// The Eulerian rule `P_n = (1 - t + n t) P_(n-1) + (t - t^2) P'_(n-1)`,
+/// `P_1 = 1`, as a `polytool.recurrence.v1` object; `last` is the coefficient
+/// of `n t` in the first term.
+fn eulerian_recurrence_json(last: &str) -> String {
+    format!(
+        r#"{{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"]],
+        "recurrence":{{"terms":[
+          {{"offset":1,"deriv_order":0,"sign":"none","coeff":{{"coeffs":[["1","-1"],["0","{last}"]]}}}},
+          {{"offset":1,"deriv_order":1,"sign":"none","coeff":{{"coeffs":[["0","1","-1"]]}}}}]}}}}"#
+    )
+}
+
+#[test]
+fn oeis_add_validates_a_supplied_recurrence_and_rejects_a_wrong_one() {
+    let catalog = scratch_catalog("oeis-add-supplied");
+    let catalog_arg = catalog.to_str().unwrap();
+    let data = fixture_data();
+    let data_arg = data.to_str().unwrap();
+    let directory = catalog.parent().unwrap();
+
+    // A wrong coefficient: the second row would be 1 + 3t.
+    let wrong = directory.join("wrong.json");
+    std::fs::write(&wrong, eulerian_recurrence_json("2")).unwrap();
+    let before = std::fs::read_to_string(&catalog).unwrap();
+    let output = run_polytool(&[
+        "oeis",
+        "add",
+        "A008292",
+        "--oeis-data",
+        data_arg,
+        "--catalog",
+        catalog_arg,
+        "--recurrence-json",
+        wrong.to_str().unwrap(),
+    ]);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(
+        stdout(&output).starts_with("A008292\tmismatch\tOEIS term a(3) = 1 but"),
+        "{}",
+        stdout(&output)
+    );
+    assert_eq!(std::fs::read_to_string(&catalog).unwrap(), before);
+
+    // Search options do not apply to a supplied recurrence.
+    let right = directory.join("right.json");
+    std::fs::write(&right, eulerian_recurrence_json("1")).unwrap();
+    let refused = run_polytool(&[
+        "oeis",
+        "add",
+        "A008292",
+        "--recurrence-json",
+        right.to_str().unwrap(),
+        "--max-rec-len",
+        "2",
+        "--oeis-data",
+        data_arg,
+        "--dry-run",
+    ]);
+    assert_eq!(refused.status.code(), Some(2));
+
+    let output = run_polytool(&[
+        "oeis",
+        "add",
+        "A008292",
+        "--oeis-data",
+        data_arg,
+        "--catalog",
+        catalog_arg,
+        "--recurrence-json",
+        right.to_str().unwrap(),
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    assert!(stdout(&output)
+        .starts_with("A008292\tadded\tP(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1) [supplied;"));
+    let text = std::fs::read_to_string(&catalog).unwrap();
+    let lines = text.lines().collect::<Vec<_>>();
+    assert_eq!(lines.len(), 2);
+    let record: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
+    assert_eq!(record["id"], "A008292");
+    assert_eq!(record["recurrence_first_index"], 1);
+    assert_eq!(record["initial_rows"], serde_json::json!([["1"]]));
+    let provenance = &record["provenance"];
+    assert_eq!(provenance["source"], "supplied_recurrence");
+    assert_eq!(provenance["status"], "validated");
+    assert_eq!(provenance["verification_rows"], 0);
+    assert_eq!(provenance["source_rows"], 10);
+    assert_eq!(provenance["checked_terms"], 55);
+    assert!(provenance.get("fit_rows").is_none());
+    assert!(provenance.get("search_options").is_none());
+    assert!(record.get("real_rootedness").is_none());
+
+    let check = run_polytool(&[
+        "oeis",
+        "check",
+        "A008292",
+        "--catalog",
+        catalog_arg,
+        "--oeis-data",
+        data_arg,
+    ]);
+    assert!(check.status.success(), "{check:?}");
+    assert!(stdout(&check).contains("summary: 1 ok, 0 mismatched"));
+
+    // The first row as an authoritative prefix row, the recurrence from row 2.
+    let shifted = directory.join("shifted.json");
+    std::fs::write(
+        &shifted,
+        eulerian_recurrence_json("1")
+            .replace("\"first_index\":1", "\"first_index\":2")
+            .replace("[[\"1\"]]", "[[\"1\",\"1\"]]"),
+    )
+    .unwrap();
+    let fresh = scratch_catalog("oeis-add-supplied-prefix");
+    let output = run_polytool(&[
+        "oeis",
+        "add",
+        "A008292",
+        "--oeis-data",
+        data_arg,
+        "--catalog",
+        fresh.to_str().unwrap(),
+        "--recurrence-json",
+        shifted.to_str().unwrap(),
+        "--prefix-rows",
+        "1",
+        "--dry-run",
+        "--json",
+    ]);
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let result = &report["results"][0];
+    assert_eq!(result["outcome"], "added", "{report:#}");
+    assert_eq!(result["record"]["prefix_rows"], serde_json::json!([["1"]]));
+    assert_eq!(result["record"]["recurrence_first_width"], 2);
+}
+
+#[test]
+fn oeis_info_reports_the_real_rootedness_flag() {
+    let output = run_polytool(&["oeis", "info", "A001263", "--json"]);
+    assert!(output.status.success());
+    let info: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(info["real_rootedness"]["status"], "lean_proved");
+    assert_eq!(info["real_rootedness"]["as_of"], "2026-10-03");
+    let output = run_polytool(&["oeis", "info", "A157153"]);
+    assert!(stdout(&output).contains("real-rootedness: unknown"));
+    let output = run_polytool(&["oeis", "info", "A001263"]);
+    assert!(stdout(&output).contains(
+        "real-rootedness: lean_proved as of 2026-10-03 (recorded flag, not proved by polytool)"
+    ));
+}

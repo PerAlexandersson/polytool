@@ -66,6 +66,10 @@ pub enum OeisProvenanceSource {
     /// on a prefix of the OEIS rows, then an exact check of every remaining
     /// available term.
     PolytoolRecurrenceSearch,
+    /// Recurrence and initial rows supplied to `polytool oeis add
+    /// --recurrence-json`, then validated exactly against every available OEIS
+    /// term (no fitting, so no rows are held out).
+    SuppliedRecurrence,
 }
 
 impl OeisProvenanceSource {
@@ -76,8 +80,53 @@ impl OeisProvenanceSource {
             Self::LeanDefinition => "lean_definition",
             Self::CuratedQueue => "curated_queue",
             Self::PolytoolRecurrenceSearch => "polytool_recurrence_search",
+            Self::SuppliedRecurrence => "supplied_recurrence",
         }
     }
+}
+
+/// Known real-rootedness of every row of a catalog family.
+///
+/// The flag is about the polynomial rows the catalog record generates (prefix
+/// rows included), not about the provenance of the recurrence.  It is never a
+/// proof made by polytool: a consumer that relies on it states its result as
+/// conditional on the flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OeisRealRootednessStatus {
+    /// Every row is zero or real-rooted, by a machine-checked Lean proof
+    /// (axioms limited to `propext`, `Classical.choice` and `Quot.sound`) for
+    /// a definition whose rows equal the catalog rows at every index.  The
+    /// equality was established by an exact all-index argument: the two
+    /// recurrences have the same normal form after the index shift that
+    /// aligns the rows, the catalog leader never vanishes on the computed
+    /// rows, and the rows before both rules apply agree exactly.  Finitely
+    /// many leading catalog rows that precede the Lean definition's first row
+    /// were checked exactly instead.  The proof is not part of polytool.
+    LeanProved,
+    /// Some row has a non-real root (an exact counterexample row exists).
+    KnownNotRealRooted,
+}
+
+impl OeisRealRootednessStatus {
+    /// Stable lowercase name used in the data file and structured output.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::LeanProved => "lean_proved",
+            Self::KnownNotRealRooted => "known_not_real_rooted",
+        }
+    }
+}
+
+/// Real-rootedness flag of one catalog record (absent: unknown).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OeisCatalogRealRootedness {
+    /// What is known.
+    pub status: OeisRealRootednessStatus,
+    /// Date (`YYYY-MM-DD`) of the proof snapshot or check the flag records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub as_of: Option<String>,
 }
 
 /// One complete OEIS row recorded as validation evidence.
@@ -198,6 +247,9 @@ pub struct OeisCatalogRecord {
     pub recurrence: OeisCatalogRecurrence,
     /// Where the recurrence came from and how it was checked.
     pub provenance: OeisCatalogProvenance,
+    /// Known real-rootedness of every row; absent when unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub real_rootedness: Option<OeisCatalogRealRootedness>,
 }
 
 /// Why a catalog data file or one catalog record was rejected.
@@ -294,6 +346,17 @@ pub enum OeisCatalogError {
         /// The record id.
         id: String,
     },
+    /// A `supplied_recurrence` record lacks `checked_terms`, or records
+    /// search fields (`fit_rows`, `search_options`).
+    InvalidSuppliedProvenance {
+        /// The record id.
+        id: String,
+    },
+    /// The real-rootedness `as_of` date is not `YYYY-MM-DD`.
+    InvalidRealRootednessDate {
+        /// The record id.
+        id: String,
+    },
     /// Two consecutive records are not in strictly increasing A-number order.
     UnsortedRecords {
         /// The earlier record's id.
@@ -343,6 +406,13 @@ impl std::fmt::Display for OeisCatalogError {
                 f,
                 "{id}: polytool_recurrence_search needs fit_rows, checked_terms and search_options"
             ),
+            Self::InvalidSuppliedProvenance { id } => write!(
+                f,
+                "{id}: supplied_recurrence needs checked_terms and no fit_rows or search_options"
+            ),
+            Self::InvalidRealRootednessDate { id } => {
+                write!(f, "{id}: real_rootedness as_of is not a YYYY-MM-DD date")
+            }
             Self::UnsortedRecords { first, second } => write!(
                 f,
                 "records are not strictly sorted by A-number: {first} before {second}"
@@ -478,6 +548,34 @@ impl OeisCatalogRecord {
                 || provenance.search_options.is_none())
         {
             return Err(OeisCatalogError::MissingSearchProvenance { id: error_id() });
+        }
+        if provenance.source == OeisProvenanceSource::SuppliedRecurrence
+            && (provenance.checked_terms.is_none()
+                || provenance.fit_rows.is_some()
+                || provenance.search_options.is_some())
+        {
+            return Err(OeisCatalogError::InvalidSuppliedProvenance { id: error_id() });
+        }
+        if let Some(as_of) = self
+            .real_rootedness
+            .as_ref()
+            .and_then(|flag| flag.as_of.as_deref())
+        {
+            let number = |range: std::ops::Range<usize>| {
+                as_of
+                    .get(range)
+                    .filter(|part| part.bytes().all(|byte| byte.is_ascii_digit()))
+                    .and_then(|part| part.parse::<u32>().ok())
+            };
+            let valid = as_of.len() == 10
+                && as_of.as_bytes()[4] == b'-'
+                && as_of.as_bytes()[7] == b'-'
+                && number(0..4).is_some()
+                && number(5..7).is_some_and(|month| (1..=12).contains(&month))
+                && number(8..10).is_some_and(|day| (1..=31).contains(&day));
+            if !valid {
+                return Err(OeisCatalogError::InvalidRealRootednessDate { id: error_id() });
+            }
         }
         Ok(())
     }

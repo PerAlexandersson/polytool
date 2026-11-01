@@ -331,7 +331,18 @@ both theorems move their own induction start the same way.  The Eulerian
 parent A008292 is proved by the `f_polynomial` route
 (and by Liu--Wang without it), the Narayana parent A001263 by the three-term
 route and the type-B Eulerian parent A060187 by Liu--Wang.  A caller
-attestation matching the parent record exactly gives a conditional verdict.
+attestation matching the parent record exactly gives a conditional verdict,
+and so does a bundled OEIS catalog entry flagged `lean_proved` whose rule,
+first index and initial rows equal the parent exactly (label
+`oeis_catalog:<A-number>:lean_proved`).  The flag gives real-rootedness only,
+so this route also proves that every row has coefficients of one sign: the
+seeds are nonnegative, the leader is free of `x` and positive, no term has a
+factor `(-1)^n`, and for every offset `r` and shift `e` the combined weight
+`W_(r,e)(n, s)` that carries the coefficient of `x^s` of `P_(n-r)` to the
+coefficient of `x^(s+e)` is nonnegative for every `n` from the first computed
+index and every `s` up to an inductive degree bound `alpha + beta (n - r)`;
+nonnegativity is shown by nonnegative coefficients in a falling-factorial
+basis.
 A checked parent row that fails refutes the parent statement.
 
 Examples (tests): the even sections of the Eulerian polynomials satisfy a

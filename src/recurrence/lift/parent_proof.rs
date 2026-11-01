@@ -46,7 +46,16 @@
 //! 7. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
-//!    conditional on the attestation, never proved.
+//!    conditional on the attestation, never proved;
+//! 8. **catalog flag**: a bundled OEIS catalog entry flagged
+//!    [`OeisRealRootednessStatus::LeanProved`] (every row zero or
+//!    real-rooted by a Lean proof made outside polytool) whose rule, first
+//!    index and initial rows equal the parent exactly, matched as in route 7
+//!    with the attestation label `oeis_catalog:<A-number>:lean_proved`.  The
+//!    flag gives real-rootedness only, so the route also needs
+//!    coefficients of one sign for every row, which polytool proves here
+//!    (see "One-signed rows" below); the verdict is conditional on the flag,
+//!    never proved.
 //!
 //! Routes 4, 5 and 6 run whether or not the root-domain route is enabled.
 //! Routes 4 and 5 conclude that every parent row from the first index on is
@@ -62,13 +71,45 @@
 //! A few parent rows are also checked exactly (nonzero rows of one sign and
 //! real-rooted).  A failing row refutes the parent statement; no route can
 //! then succeed and an attestation is not applied.
+//!
+//! # One-signed rows (route 8)
+//!
+//! Write the rule as `f(n) P_n = sum_terms c(n,x) D^d P_(n-r) + g(n,x)` for
+//! `n >= N1` (the first computed index, after the `K` seeds).  Every row has
+//! nonnegative coefficients (after one global sign change of a homogeneous
+//! rule) when:
+//!
+//! - every seed has nonnegative coefficients;
+//! - `f` does not depend on `x` and `f(n) > 0` for every integer `n >= N1`,
+//!   no term carries the factor `(-1)^n`, and every coefficient of `g` (a
+//!   polynomial in `n`) is `>= 0` for `n >= N1` (exact sign checker);
+//! - for every offset `r` and shift `e`, the combined weight
+//!   `W_(r,e)(n,s) = sum over the terms at offset r and the monomials c_j(n) x^j
+//!   with j - d = e of c_j(n) s (s-1) ... (s-d+1)`, which multiplies the
+//!   coefficient of `x^s` in `P_(n-r)` in the coefficient of `x^(s+e)` in
+//!   `f(n) P_n`, is `>= 0` for every integer `n >= N1` and every
+//!   `0 <= s <= deg P_(n-r)`.
+//!
+//! Then `f(n) P_n` is a sum of nonnegative multiples of nonnegative
+//! coefficients, and induction on `n` gives the claim.  The weight condition
+//! is shown by one of two sufficient tests: the polynomial
+//! `W(N1 + v, s)` or `W(N1 + v, D(N1 + v - r) - u)` has nonnegative
+//! coefficients in the basis `v(v-1)...(v-i+1) w(w-1)...(w-j+1)` (`w = s` or
+//! `u`), which is nonnegative at all integers `v, w >= 0`.  Here
+//! `D(m) = alpha + beta m` is an upper bound for `deg P_m`, `m >= ` the first
+//! index: `beta >= max(0, (deg_x c - d) / r)` over the terms and `alpha`
+//! covers the seeds and `g`, so that `deg P_n <= max(deg_x c - d + D(n - r))
+//! <= D(n)` by induction.  Every test is exact; a failure only means the
+//! route does not apply.
 
 use super::veronese_algebra::classify_row;
 use super::*;
+use crate::integer_range_sign::{decide_index_polynomial_sign, IndexSignCondition, IntegerRange};
+use crate::oeis::{entries_with_real_rootedness_flag, OeisRealRootednessStatus};
 use crate::real_rootedness::RealInterval;
 use crate::renewal::{match_recurrence_theorems, CertificateScope, TheoremBoundaryStatus};
 use crate::vec_poly;
-use num_traits::Zero;
+use num_traits::{One, Signed, Zero};
 use serde::{Deserialize, Serialize};
 
 type Q = BigRational;
@@ -560,6 +601,365 @@ fn same_record(record: &ParentRecord<'_>, other: &RecurrenceJson) -> Result<bool
             .all(|(a, b)| equal(a, b)))
 }
 
+/// A bivariate polynomial `sum a[i][j] v^i w^j` (dense, exact).
+type Bivariate = Vec<Vec<Q>>;
+
+fn bivariate_add(left: &Bivariate, right: &Bivariate) -> Bivariate {
+    let rows = left.len().max(right.len());
+    (0..rows)
+        .map(|i| {
+            let a = left.get(i).map_or(&[][..], Vec::as_slice);
+            let b = right.get(i).map_or(&[][..], Vec::as_slice);
+            (0..a.len().max(b.len()))
+                .map(|j| {
+                    a.get(j).cloned().unwrap_or_default() + b.get(j).cloned().unwrap_or_default()
+                })
+                .collect()
+        })
+        .collect()
+}
+
+fn bivariate_mul(left: &Bivariate, right: &Bivariate) -> Bivariate {
+    let mut out: Bivariate = Vec::new();
+    for (i, row) in left.iter().enumerate() {
+        for (j, a) in row.iter().enumerate() {
+            if a.is_zero() {
+                continue;
+            }
+            for (k, other) in right.iter().enumerate() {
+                for (l, b) in other.iter().enumerate() {
+                    if b.is_zero() {
+                        continue;
+                    }
+                    if out.len() <= i + k {
+                        out.resize(i + k + 1, Vec::new());
+                    }
+                    if out[i + k].len() <= j + l {
+                        out[i + k].resize(j + l + 1, Q::zero());
+                    }
+                    out[i + k][j + l] += a * b;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `p(a + b v + c w)` for a univariate `p`, as a bivariate polynomial in `(v, w)`.
+fn bivariate_affine_powers(a: &Q, b: &Q, c: &Q, degree: usize) -> Vec<Bivariate> {
+    let affine: Bivariate = vec![vec![a.clone(), c.clone()], vec![b.clone()]];
+    let mut powers = vec![vec![vec![Q::one()]]];
+    for _ in 0..degree {
+        let next = bivariate_mul(powers.last().expect("nonempty"), &affine);
+        powers.push(next);
+    }
+    powers
+}
+
+/// Stirling numbers of the second kind `S(m, i)`, `m, i <= max`.
+fn stirling_second_kind_table(max: usize) -> Vec<Vec<Q>> {
+    let mut table = vec![vec![Q::zero(); max + 1]; max + 1];
+    table[0][0] = Q::one();
+    for m in 1..=max {
+        for i in 1..=m {
+            table[m][i] = &table[m - 1][i - 1] + Q::from_integer(i.into()) * &table[m - 1][i];
+        }
+    }
+    table
+}
+
+/// Whether every coefficient of `p` in the basis `v^(falling i) w^(falling j)`
+/// is `>= 0`; then `p(v, w) >= 0` at all integers `v, w >= 0`
+/// (`x^m = sum_i S(m, i) x^(falling i)`).
+fn has_nonnegative_falling_factorial_coefficients(p: &Bivariate) -> bool {
+    let max = p
+        .len()
+        .max(p.iter().map(Vec::len).max().unwrap_or(0))
+        .max(1);
+    let stirling = stirling_second_kind_table(max);
+    let mut falling = vec![vec![Q::zero(); max]; max];
+    for (m, row) in p.iter().enumerate() {
+        for (l, a) in row.iter().enumerate() {
+            if a.is_zero() {
+                continue;
+            }
+            for i in 0..=m {
+                for j in 0..=l {
+                    let weight = &stirling[m][i] * &stirling[l][j];
+                    if !weight.is_zero() {
+                        falling[i][j] += a * weight;
+                    }
+                }
+            }
+        }
+    }
+    falling.iter().flatten().all(|value| !value.is_negative())
+}
+
+/// `x (x - 1) ... (x - d + 1)` in ascending powers.
+fn falling_factorial_polynomial(d: usize) -> Vec<Q> {
+    (0..d).fold(vec![Q::one()], |acc, k| {
+        vec_poly::mul(&acc, &[-Q::from_integer(k.into()), Q::one()])
+    })
+}
+
+/// Degree in `x` of `c(n, x)` (`None` for the zero polynomial).
+fn x_degree(poly: &BivarPoly) -> Option<usize> {
+    poly.coeffs
+        .iter()
+        .filter_map(|row| row.iter().rposition(|value| !value.is_zero()))
+        .max()
+}
+
+/// The coefficient of `x^j` of `c(n, x)` as a polynomial in `n`.
+fn x_coefficient(poly: &BivarPoly, j: usize) -> Vec<Q> {
+    poly.coeffs
+        .iter()
+        .map(|row| row.get(j).cloned().unwrap_or_default())
+        .collect()
+}
+
+fn integer_q(value: i64) -> Q {
+    Q::from_integer(value.into())
+}
+
+/// Route 8: an exact proof that every row from `first_index` on has
+/// coefficients of one sign (module documentation, "One-signed rows").
+/// Returns what was shown, or why the sufficient test does not apply.
+fn one_signed_rows_for_all_indices(
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<Q>],
+) -> Result<String, String> {
+    let start = first_index + seeds.len();
+    let sign = seeds
+        .iter()
+        .flat_map(|seed| seed.iter())
+        .find(|value| !value.is_zero())
+        .map_or(Q::one(), |value| {
+            if value.is_negative() {
+                -Q::one()
+            } else {
+                Q::one()
+            }
+        });
+    let inhomogeneous = rule
+        .inhomogeneous
+        .as_ref()
+        .filter(|g| g.coeffs.iter().flatten().any(|value| !value.is_zero()));
+    if sign.is_negative() && inhomogeneous.is_some() {
+        return Err("the seeds are nonpositive but the rule is inhomogeneous".into());
+    }
+    if let Some(position) = seeds
+        .iter()
+        .position(|seed| seed.iter().any(|value| (value * &sign).is_negative()))
+    {
+        return Err(format!("seed {position} has coefficients of both signs"));
+    }
+    let positive_from_start = |polynomial: &[Q], condition: IndexSignCondition| {
+        decide_index_polynomial_sign(
+            polynomial,
+            &IntegerRange::starting_at(BigInt::from(start)),
+            condition,
+        )
+        .holds()
+    };
+    if let Some(leader) = &rule.denominator {
+        if x_degree(leader).is_some_and(|degree| degree > 0) {
+            return Err("the leader depends on x".into());
+        }
+        if !positive_from_start(&x_coefficient(leader, 0), IndexSignCondition::Positive) {
+            return Err(format!("the leader is not positive for every n >= {start}"));
+        }
+    }
+    if rule
+        .terms
+        .iter()
+        .any(|term| term.sign == RecurrenceSign::AlternatingN)
+    {
+        return Err("a term carries the factor (-1)^n".into());
+    }
+    if let Some(g) = inhomogeneous {
+        for j in 0..=x_degree(g).unwrap_or(0) {
+            if !positive_from_start(&x_coefficient(g, j), IndexSignCondition::Nonnegative) {
+                return Err(format!(
+                    "the coefficient of x^{j} of the inhomogeneous term is not >= 0 for every \
+                     n >= {start}"
+                ));
+            }
+        }
+    }
+
+    // Degree bound D(m) = alpha + beta m for every row m >= first_index.
+    let mut beta = 0i64;
+    for term in &rule.terms {
+        let Some(degree) = x_degree(&term.coeff) else {
+            continue;
+        };
+        let excess = i64::try_from(degree).unwrap_or(i64::MAX)
+            - i64::try_from(term.deriv_order).unwrap_or(i64::MAX);
+        let offset = i64::try_from(term.offset).unwrap_or(i64::MAX).max(1);
+        if excess > 0 {
+            beta = beta.max((excess + offset - 1) / offset);
+        }
+    }
+    let as_i64 = |value: usize| i64::try_from(value).unwrap_or(i64::MAX);
+    let mut alpha: Option<i64> = None;
+    for (position, seed) in seeds.iter().enumerate() {
+        if let Some(degree) = vec_poly::degree(seed) {
+            let needed = as_i64(degree) - beta * as_i64(first_index + position);
+            alpha = Some(alpha.map_or(needed, |alpha| alpha.max(needed)));
+        }
+    }
+    if let Some(degree) = inhomogeneous.and_then(x_degree) {
+        let needed = as_i64(degree) - beta * as_i64(start);
+        alpha = Some(alpha.map_or(needed, |alpha| alpha.max(needed)));
+    }
+    let Some(alpha) = alpha else {
+        return Ok("every seed is zero and the rule is homogeneous, so every row is zero".into());
+    };
+
+    // Combined weights W_(r,e)(n, s).
+    let mut weights: std::collections::BTreeMap<(usize, i64), Bivariate> =
+        std::collections::BTreeMap::new();
+    for term in &rule.terms {
+        let falling = falling_factorial_polynomial(term.deriv_order);
+        for j in 0..=x_degree(&term.coeff).unwrap_or(0) {
+            let c = x_coefficient(&term.coeff, j);
+            if c.iter().all(Zero::is_zero) {
+                continue;
+            }
+            let shift = as_i64(j) - as_i64(term.deriv_order);
+            let product: Bivariate = c
+                .iter()
+                .map(|cn| falling.iter().map(|value| cn * value).collect())
+                .collect();
+            let entry = weights.entry((term.offset, shift)).or_default();
+            *entry = bivariate_add(entry, &product);
+        }
+    }
+    let start_q = integer_q(as_i64(start));
+    for ((offset, shift), weight) in &weights {
+        if weight.iter().flatten().all(Zero::is_zero) {
+            continue;
+        }
+        let n_degree = weight.len().saturating_sub(1);
+        let s_degree = weight
+            .iter()
+            .map(Vec::len)
+            .max()
+            .unwrap_or(1)
+            .saturating_sub(1);
+        let n_powers = bivariate_affine_powers(&start_q, &Q::one(), &Q::zero(), n_degree);
+        let substitute = |s_powers: &[Bivariate]| {
+            let mut total: Bivariate = Vec::new();
+            for (a, row) in weight.iter().enumerate() {
+                for (b, value) in row.iter().enumerate() {
+                    if value.is_zero() {
+                        continue;
+                    }
+                    let monomial = bivariate_mul(&n_powers[a], &s_powers[b]);
+                    let scaled: Bivariate = monomial
+                        .iter()
+                        .map(|row| row.iter().map(|x| x * value).collect())
+                        .collect();
+                    total = bivariate_add(&total, &scaled);
+                }
+            }
+            total
+        };
+        // (a) s >= 0 free.
+        let free = bivariate_affine_powers(&Q::zero(), &Q::zero(), &Q::one(), s_degree);
+        if has_nonnegative_falling_factorial_coefficients(&substitute(&free)) {
+            continue;
+        }
+        // (b) s = D(n - r) - u with n = start + v.
+        let base = alpha + beta * (as_i64(start) - as_i64(*offset));
+        let bounded =
+            bivariate_affine_powers(&integer_q(base), &integer_q(beta), &-Q::one(), s_degree);
+        if has_nonnegative_falling_factorial_coefficients(&substitute(&bounded)) {
+            continue;
+        }
+        return Err(format!(
+            "the weight of the coefficient of x^s of P_(n-{offset}) in the coefficient of \
+             x^(s{shift:+}) is not shown to be >= 0 for n >= {start}"
+        ));
+    }
+    Ok(format!(
+        "every row has coefficients of one sign: the seeds do, the leader is positive and every \
+         combined weight is >= 0 for n >= {start}, with deg P_m <= {alpha} + {beta} m"
+    ))
+}
+
+/// Attestations from bundled catalog entries flagged `lean_proved` whose
+/// first index and leading initial rows equal the parent's (a cheap filter;
+/// [`same_record`] decides the exact match).
+fn catalog_flag_attestations(record: &ParentRecord<'_>) -> Vec<VeroneseParentAttestation> {
+    let wanted: Vec<Vec<String>> = record
+        .seeds
+        .iter()
+        .map(|seed| {
+            vec_poly::trim(seed)
+                .iter()
+                .map(format_rational_coeff)
+                .collect()
+        })
+        .collect();
+    let trimmed = |row: &[&str]| -> Vec<String> {
+        let end = row
+            .iter()
+            .rposition(|value| *value != "0")
+            .map_or(0, |i| i + 1);
+        row[..end]
+            .iter()
+            .map(|value| (*value).to_string())
+            .collect()
+    };
+    let zero_row = vec!["0".to_string()];
+    let mut attestations = Vec::new();
+    for (entry, flag) in entries_with_real_rootedness_flag() {
+        if flag.status != OeisRealRootednessStatus::LeanProved
+            || entry.recurrence_first_index != record.first_index
+            || entry.initial_rows.len() < wanted.len()
+        {
+            continue;
+        }
+        let seeds_agree = entry.initial_rows.iter().zip(&wanted).all(|(row, seed)| {
+            let row = trimmed(row);
+            row == *seed || (row.is_empty() && *seed == zero_row)
+        });
+        if !seeds_agree {
+            continue;
+        }
+        let Ok((rule, initial_rows)) = entry.recurrence_parts() else {
+            continue;
+        };
+        let as_of = flag
+            .as_of
+            .map_or_else(String::new, |date| format!(", as of {date}"));
+        attestations.push(VeroneseParentAttestation {
+            label: format!("oeis_catalog:{}:lean_proved", entry.id),
+            recurrence: RecurrenceJson::from_recurrence_rational(
+                &rule,
+                entry.recurrence_first_index,
+                &initial_rows,
+                None,
+            ),
+            first_index: entry.recurrence_first_index,
+            statement: format!(
+                "every row of the bundled OEIS catalog entry {} is zero or real-rooted (flag \
+                 lean_proved{as_of}: a machine-checked Lean proof made outside polytool)",
+                entry.id
+            ),
+            source: format!(
+                "polytool OEIS catalog, real_rootedness flag of {}",
+                entry.id
+            ),
+        });
+    }
+    attestations
+}
+
 /// First checked row that is nonzero and not real-rooted of one sign.
 fn first_failing_row(rows: &[Vec<Q>], first_index: usize) -> Option<usize> {
     rows.iter()
@@ -707,10 +1107,277 @@ pub(super) fn prove_parent(
             return Ok(proof);
         }
     }
+    // Route 8.
+    let candidates = catalog_flag_attestations(record);
+    let mut differing = Vec::new();
+    for attestation in candidates {
+        if !same_record(record, &attestation.recurrence)? {
+            differing.push(attestation.label);
+            continue;
+        }
+        let covers = attestation.first_index <= needed_from;
+        let one_signed = covers.then(|| {
+            one_signed_rows_for_all_indices(record.rule, record.first_index, record.seeds)
+        });
+        let success = matches!(one_signed, Some(Ok(_)));
+        proof.attempts.push(VeroneseParentProofAttempt {
+            route: VeroneseParentProofRoute::Attestation,
+            variant: attestation.label.clone(),
+            success,
+            detail: match &one_signed {
+                Some(Ok(signs)) => format!("{}; {signs}", attestation.statement),
+                Some(Err(reason)) => format!(
+                    "the parent equals the flagged entry, but the flag gives real-rootedness \
+                     only and one-signed coefficients are not shown: {reason}"
+                ),
+                None => format!(
+                    "the flagged entry starts at index {}, after the first used parent index \
+                     {needed_from}",
+                    attestation.first_index
+                ),
+            },
+        });
+        if success {
+            proof.status = VeroneseParentProofStatus::ConditionalOnAttestation;
+            proof.route = Some(VeroneseParentProofRoute::Attestation);
+            proof.statement = format!(
+                "{conclusion} (real-rootedness from the catalog flag, not proved here; \
+                 one-signed coefficients proved here)"
+            );
+            proof.conditional_on = vec![attestation.label.clone()];
+            return Ok(proof);
+        }
+    }
+    if !differing.is_empty() {
+        proof.attempts.push(VeroneseParentProofAttempt {
+            route: VeroneseParentProofRoute::Attestation,
+            variant: "oeis_catalog".into(),
+            success: false,
+            detail: format!(
+                "no lean_proved catalog entry equals the parent; {} with the same first index \
+                 and seeds differ in the rule or in later initial rows ({})",
+                differing.len(),
+                differing.join(", ")
+            ),
+        });
+    }
     proof.statement = format!(
         "open: no route proved that {conclusion}; the first {} parent rows pass the exact \
          check (evidence only)",
         proof.rows_checked
     );
     Ok(proof)
+}
+
+#[cfg(test)]
+mod catalog_flag_tests {
+    use super::*;
+
+    fn q(value: i64) -> Q {
+        Q::from_integer(value.into())
+    }
+
+    /// The catalog rule, identifying seeds and first index of a bundled entry.
+    fn catalog_parent(id: &str) -> (Recurrence, Vec<Vec<Q>>, usize) {
+        let entry = crate::oeis::by_id(id).unwrap();
+        let (rule, rows) = entry.recurrence_parts().unwrap();
+        let count = rule.generation_initial_count(entry.recurrence_first_index, rows.len());
+        (rule, rows[..count].to_vec(), entry.recurrence_first_index)
+    }
+
+    fn prove(rule: &Recurrence, seeds: &[Vec<Q>], first_index: usize) -> VeroneseParentProof {
+        let record = ParentRecord {
+            rule,
+            seeds,
+            first_index,
+        };
+        prove_parent(&record, first_index, &[], false).unwrap()
+    }
+
+    fn catalog_attempts(proof: &VeroneseParentProof) -> Vec<&VeroneseParentProofAttempt> {
+        proof
+            .attempts
+            .iter()
+            .filter(|attempt| attempt.variant.starts_with("oeis_catalog:"))
+            .collect()
+    }
+
+    /// The Lucas polynomials A034807 (`P_n = P_(n-1) + x P_(n-2)`, `P_0 = 2`,
+    /// `P_1 = 1`) are flagged `lean_proved`; no polytool route proves them,
+    /// so the verdict is conditional on the flag, with one-signed rows proved.
+    #[test]
+    fn a_flagged_catalog_parent_is_conditional_on_the_flag() {
+        let (rule, seeds, first_index) = catalog_parent("A034807");
+        assert_eq!(seeds, vec![vec![q(2)], vec![q(1)]]);
+        let proof = prove(&rule, &seeds, first_index);
+        assert_eq!(
+            proof.status,
+            VeroneseParentProofStatus::ConditionalOnAttestation,
+            "{proof:#?}"
+        );
+        assert_eq!(proof.route, Some(VeroneseParentProofRoute::Attestation));
+        assert_eq!(proof.conditional_on, ["oeis_catalog:A034807:lean_proved"]);
+        assert!(proof.statement.contains("not proved here"));
+        let attempt = proof.attempts.last().unwrap();
+        assert!(attempt.success);
+        assert!(attempt.detail.contains("lean_proved, as of 2026-10-03"));
+        assert!(attempt.detail.contains("coefficients of one sign"));
+        // A caller attestation of the same record is applied first.
+        let attestation = VeroneseParentAttestation {
+            label: "caller".into(),
+            recurrence: RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None),
+            first_index,
+            statement: "attested".into(),
+            source: "test".into(),
+        };
+        let record = ParentRecord {
+            rule: &rule,
+            seeds: &seeds,
+            first_index,
+        };
+        let proof = prove_parent(&record, first_index, &[attestation], false).unwrap();
+        assert_eq!(proof.conditional_on, ["caller"]);
+    }
+
+    /// A157153 is not flagged (its Lean proof is open), so no catalog
+    /// attestation applies.
+    #[test]
+    fn an_unflagged_catalog_parent_gets_no_catalog_attestation() {
+        assert!(crate::oeis::by_id("A157153")
+            .unwrap()
+            .real_rootedness()
+            .is_none());
+        let (rule, seeds, first_index) = catalog_parent("A157153");
+        let proof = prove(&rule, &seeds, first_index);
+        assert_ne!(
+            proof.status,
+            VeroneseParentProofStatus::ConditionalOnAttestation,
+            "{proof:#?}"
+        );
+        // Flagged entries with the same seeds differ in the rule.
+        assert!(catalog_attempts(&proof).is_empty(), "{proof:#?}");
+        assert!(proof
+            .attempts
+            .iter()
+            .filter(|attempt| attempt.route == VeroneseParentProofRoute::Attestation)
+            .all(|attempt| !attempt.success && !attempt.detail.contains("A157153")));
+    }
+
+    /// Matching is exact: one changed rule coefficient or seed and the flag no
+    /// longer applies.
+    #[test]
+    fn a_parent_differing_in_one_coefficient_or_seed_does_not_match() {
+        let (rule, seeds, first_index) = catalog_parent("A034807");
+        let mut changed_rule = rule.clone();
+        changed_rule.terms[1].coeff.coeffs[0][1] = q(2);
+        let proof = prove(&changed_rule, &seeds, first_index);
+        assert_ne!(
+            proof.status,
+            VeroneseParentProofStatus::ConditionalOnAttestation
+        );
+        let attempts = catalog_attempts(&proof);
+        assert!(attempts.is_empty(), "{proof:#?}");
+        let summary = proof.attempts.last().unwrap();
+        assert_eq!(summary.variant, "oeis_catalog");
+        assert!(!summary.success);
+        assert!(summary.detail.contains("oeis_catalog:A034807:lean_proved"));
+
+        let mut changed_seeds = seeds.clone();
+        changed_seeds[1] = vec![q(2)];
+        let proof = prove(&rule, &changed_seeds, first_index);
+        assert_ne!(
+            proof.status,
+            VeroneseParentProofStatus::ConditionalOnAttestation
+        );
+        assert!(catalog_attempts(&proof).is_empty());
+
+        // The same rule and seeds at another first index do not match either.
+        let proof = prove(&rule, &seeds, first_index + 1);
+        assert!(catalog_attempts(&proof).is_empty());
+    }
+
+    /// The flag gives real-rootedness only: a flagged parent whose rule
+    /// cancels (A003506, `P_n = (2 + 2x) P_(n-1) - (1 + x)^2 P_(n-2)`) is not
+    /// shown one-signed, so the catalog route fails.
+    #[test]
+    fn a_flagged_parent_without_a_one_sign_proof_stays_open() {
+        let (rule, seeds, first_index) = catalog_parent("A003506");
+        assert!(crate::oeis::by_id("A003506")
+            .unwrap()
+            .real_rootedness()
+            .is_some());
+        let proof = prove(&rule, &seeds, first_index);
+        assert_eq!(proof.status, VeroneseParentProofStatus::NotProved);
+        let attempts = catalog_attempts(&proof);
+        assert_eq!(attempts.len(), 1);
+        assert!(attempts[0]
+            .detail
+            .contains("one-signed coefficients are not shown: the weight"));
+    }
+
+    fn term(offset: usize, derivative: usize, coefficients: Vec<Vec<Q>>) -> RecurrenceTerm {
+        RecurrenceTerm::new(
+            offset,
+            derivative,
+            BivarPoly::from_coefficients_normalized(coefficients),
+        )
+    }
+
+    #[test]
+    fn one_signed_rows_need_nonnegative_combined_weights() {
+        // Eulerian: P_n = (1 - x + n x) P_(n-1) + (x - x^2) P'_(n-1), P_1 = 1.
+        // The weight n - 1 - s of x^s into x^(s+1) needs the degree bound
+        // deg P_m <= m - 1.
+        let eulerian = Recurrence {
+            terms: vec![
+                term(1, 0, vec![vec![q(1), q(-1)], vec![q(0), q(1)]]),
+                term(1, 1, vec![vec![q(0), q(1), q(-1)]]),
+            ],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let shown = one_signed_rows_for_all_indices(&eulerian, 1, &[vec![q(1)]]).unwrap();
+        assert!(shown.ends_with("deg P_m <= -1 + 1 m"), "{shown}");
+        // Nonpositive seeds of a homogeneous rule: the rows are nonpositive.
+        assert!(one_signed_rows_for_all_indices(&eulerian, 1, &[vec![q(-1)]]).is_ok());
+        assert!(
+            one_signed_rows_for_all_indices(&eulerian, 1, &[vec![q(1), q(-1)]])
+                .unwrap_err()
+                .contains("both signs")
+        );
+        // A coefficient x - 2 x^2 makes the weight n - 2 - 2 s, negative at
+        // s = n - 2 (the top coefficient of P_(n-1)).
+        let mut too_negative = eulerian.clone();
+        too_negative.terms[1] = term(1, 1, vec![vec![q(0), q(1), q(-2)]]);
+        assert!(
+            one_signed_rows_for_all_indices(&too_negative, 1, &[vec![q(1)]])
+                .unwrap_err()
+                .contains("not shown to be >= 0")
+        );
+        // A leader 3 - n vanishes at n = 3.
+        let mut leader = eulerian.clone();
+        leader.denominator = Some(BivarPoly::from_coefficients_normalized(vec![
+            vec![q(3)],
+            vec![q(-1)],
+        ]));
+        assert!(one_signed_rows_for_all_indices(&leader, 1, &[vec![q(1)]])
+            .unwrap_err()
+            .contains("leader is not positive"));
+        // (-1)^n factors and negative inhomogeneous parts are refused.
+        let mut alternating = eulerian.clone();
+        alternating.terms[0].sign = RecurrenceSign::AlternatingN;
+        assert!(one_signed_rows_for_all_indices(&alternating, 1, &[vec![q(1)]]).is_err());
+        let mut inhomogeneous = eulerian.clone();
+        inhomogeneous.inhomogeneous = Some(BivarPoly::from_coefficients_normalized(vec![
+            vec![q(5)],
+            vec![q(-1)],
+        ]));
+        assert!(
+            one_signed_rows_for_all_indices(&inhomogeneous, 1, &[vec![q(1)]])
+                .unwrap_err()
+                .contains("inhomogeneous")
+        );
+        // Zero seeds of a homogeneous rule give zero rows.
+        assert!(one_signed_rows_for_all_indices(&eulerian, 1, &[vec![]]).is_ok());
+    }
 }

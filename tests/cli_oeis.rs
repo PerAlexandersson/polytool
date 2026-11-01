@@ -15,12 +15,10 @@ fn oeis_list_contains_verified_catalog() {
     assert!(output.status.success());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["schema"], "polytool.oeis-catalog.v1");
-    assert_eq!(value["count"], 774);
-    assert!(value["sequences"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|entry| entry["id"] == "A008292"));
+    assert_eq!(value["count"], 817);
+    assert!(value["sequences"].as_array().unwrap().iter().any(
+        |entry| entry["id"] == "A008292" && entry["real_rootedness"]["status"] == "lean_proved"
+    ));
     assert!(value["sequences"]
         .as_array()
         .unwrap()
@@ -30,7 +28,7 @@ fn oeis_list_contains_verified_catalog() {
     let all = run_polytool(&["oeis", "list", "--json", "--include-experimental"]);
     assert!(all.status.success());
     let all_value: serde_json::Value = serde_json::from_slice(&all.stdout).unwrap();
-    assert_eq!(all_value["count"], 774);
+    assert_eq!(all_value["count"], 817);
 }
 
 #[test]

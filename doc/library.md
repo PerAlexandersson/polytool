@@ -368,6 +368,35 @@ assert_eq!(first_three.len(), 3);
 
 See `examples/lazy_rows.rs`.
 
+### OEIS real-rootedness flags
+
+A catalog record may carry a real-rootedness flag (`OeisCatalogRealRootedness`
+in the data file, documented with the CLI in `doc/cli-oeis.md`).
+`OeisSequenceDefinition::real_rootedness()` returns it as an
+`OeisRealRootedness { status, as_of }` (`None`: unknown), and
+`oeis::entries_with_real_rootedness_flag()` lists every flagged entry.
+`OeisRealRootednessStatus::LeanProved` means that every row is zero or
+real-rooted by a machine-checked Lean proof made outside polytool, for a
+definition whose rows were shown equal to the catalog rows for every index;
+`KnownNotRealRooted` means that an exact check found a row with a non-real
+root.  The flag is never reported as a polytool proof.
+
+```rust
+use polytool::oeis::{self, OeisRealRootednessStatus};
+
+let flag = oeis::by_id("A001263").unwrap().real_rootedness().unwrap();
+assert_eq!(flag.status, OeisRealRootednessStatus::LeanProved);
+assert!(oeis::by_id("A157153").unwrap().real_rootedness().is_none());
+```
+
+The Veronese parent provers (next sections) use a `LeanProved` entry as an
+attestation: a parent whose rule, first index and initial rows equal the
+catalog entry's `recurrence_parts()` at `recurrence_first_index` exactly gets
+the verdict `ConditionalOnAttestation` with the label
+`oeis_catalog:<A-number>:lean_proved`, provided polytool also proves that every
+row has coefficients of one sign (the flag gives real-rootedness only); a
+parent that differs in one coefficient or seed does not match.
+
 ## Characteristic polynomials and closed walks
 
 ```rust
@@ -508,9 +537,9 @@ denominator is free of `x`, an index shift `|s| <= 4` and a gauge
 records the identity status (`Certified` with a replayable
 `VeroneseForwardDivisionCertificate`, `SupportedByRows`, `Refuted`), the
 parent proof (periodic product, paper theorem, root-domain claim, the
-three-term, Liu--Wang or Liu--Wang derivative-lag theorem below, or a caller-supplied
-`VeroneseParentAttestation`, which only gives a conditional verdict) and the
-verdict.  `verify()` replays the certificate.
+three-term, Liu--Wang or Liu--Wang derivative-lag theorem below, a caller-supplied
+`VeroneseParentAttestation`, or a `lean_proved` OEIS catalog flag, both of which
+only give a conditional verdict) and the verdict.  `verify()` replays the certificate.
 
 ```rust
 use polytool::recurrence::*;

@@ -58,6 +58,7 @@ The `source` field records where the recurrence came from:
 | `lean_definition` | 630 | Fitted by an earlier version of the polytool recurrence search and transcribed into generated Lean definitions; validated against the OEIS data prefix (16 rows); records the last compared row as `validation_row` |
 | `curated_queue` | 71 | Fitted by recurrence search on database-cached rows; `verified` when checked on held-out rows |
 | `polytool_recurrence_search` | new | `polytool oeis add` (below); records `fit_rows`, `checked_terms`, `search_options` and the polytool version |
+| `supplied_recurrence` | 43 | `polytool oeis add --recurrence-json` (below): a supplied recurrence, validated against every OEIS term of the snapshot; records `checked_terms`, `terms_source`, the last compared row and the polytool version |
 
 The first three tiers were produced by an earlier offline generator, which
 combined the benchmark fixtures, a curated recurrence queue, and generated
@@ -92,6 +93,60 @@ Rebuild polytool to bundle new entries.  `oeis check` regenerates entries
 (bundled, or from `--catalog FILE`) and compares them term by term with the
 local OEIS data, listing entries it could not check.  A finite match is
 evidence, not a proof that the recurrence holds for every row.
+
+### Supplied recurrences
+
+`oeis add <A-number> --recurrence-json FILE` records a known recurrence instead
+of searching for one.  `FILE` is a `polytool.recurrence.v1` object (the
+`recurrence_data` member of `oeis info --json` has this form): the rule, the
+recurrence index `first_index` of its first initial row, and the initial rows.
+The first initial row is matched with the first OEIS row after the
+`--prefix-rows P` complete OEIS rows (default 0), which are stored as
+authoritative prefix rows.  `tabl` sequences are regular triangles; another
+sequence needs `--layout triangle` or `--layout table` (with a supplied
+recurrence a table needs no `--row-widths`: the generated rows are the table
+rows, and `--row-widths` is needed only to cut prefix rows).  The candidate
+entry is replayed through the catalog's row generator and compared term by term
+with every OEIS term (the same comparison as `oeis check`); it is written only
+when every term matches, at least five complete rows and two rows computed by
+the recurrence are covered, and the status is `validated` (no rows are held out
+because nothing was fitted).  A wrong recurrence gives the outcome `mismatch`
+with the first differing term.  Search options and `--fit-rows` do not apply.
+
+```sh
+polytool oeis info A008292 --json | jq .recurrence_data > a008292.json
+polytool oeis add A008292 --recurrence-json a008292.json --replace --dry-run
+polytool oeis add A051142 --recurrence-json a051142.json --prefix-rows 2
+```
+
+As with the search, a finite match is evidence that the supplied rule produces
+the OEIS rows, not a proof for every row.
+
+### Real-rootedness flags
+
+A record may carry the optional key `real_rootedness`, the last key of its
+line:
+
+```json
+"real_rootedness":{"status":"lean_proved","as_of":"2026-10-03"}
+```
+
+| `status` | Meaning |
+| --- | --- |
+| `lean_proved` | Every row of the entry is zero or real-rooted, by a machine-checked Lean proof (only the axioms `propext`, `Classical.choice` and `Quot.sound`) of a definition whose rows equal the catalog rows for every index.  The equality is shown exactly for all `n`: after the index shift that aligns the rows, both recurrences have the same normal form (every coefficient divided by the common polynomial gcd, leader normalized), the catalog leader does not vanish on the computed rows, the Lean rule divides by no expression that vanishes, and the rows agree exactly up to the index from which both rules apply.  Leading catalog rows before the Lean definition's first row (at most three) were checked exactly instead. |
+| `known_not_real_rooted` | Some row has a non-real root (an exact check of a generated row). |
+| absent | Unknown. |
+
+`as_of` (optional, `YYYY-MM-DD`) dates the proof-status snapshot or the check.
+The flag is not a polytool proof: `oeis info` prints it as a recorded flag, the
+JSON of `oeis info` and `oeis list --json` reports it as `real_rootedness`
+(`null` when unknown), and the Veronese parent provers use a `lean_proved`
+entry only as an attestation (verdict `conditional_on_attestation`, label
+`oeis_catalog:<A-number>:lean_proved`), see the library documentation.  The
+bundled catalog flags 753 entries `lean_proved` and one (A122431, whose row
+`3 + 3x + x^2` is not real-rooted) `known_not_real_rooted`.  A replaced entry
+(`oeis add --replace`) loses its flag, because the flag certifies the rows of
+the recurrence it was established for.
 
 Release packages omit repository-only agent notes, handoffs, CI configuration,
 and benchmark output; they include the catalog data file, from which the build

@@ -21,7 +21,7 @@ mod oeis_catalog {
     include!("src/oeis_catalog_schema.rs");
 }
 
-use oeis_catalog::{OeisCatalogRecord, OeisLayout, OeisSequenceStatus};
+use oeis_catalog::{OeisCatalogRecord, OeisLayout, OeisRealRootednessStatus, OeisSequenceStatus};
 
 const OEIS_CATALOG_DATA: &str = "data/oeis-catalog.jsonl";
 const OEIS_CATALOG_SCHEMA: &str = "src/oeis_catalog_schema.rs";
@@ -159,6 +159,13 @@ fn status_variant(status: OeisSequenceStatus) -> &'static str {
     }
 }
 
+fn real_rootedness_variant(status: OeisRealRootednessStatus) -> &'static str {
+    match status {
+        OeisRealRootednessStatus::LeanProved => "LeanProved",
+        OeisRealRootednessStatus::KnownNotRealRooted => "KnownNotRealRooted",
+    }
+}
+
 /// Render one `OeisSequenceDefinition` literal.
 fn render_definition(out: &mut String, record: &OeisCatalogRecord) {
     let provenance = &record.provenance;
@@ -285,6 +292,26 @@ fn render_oeis_catalog(records: &[OeisCatalogRecord]) -> String {
                 "    ({}, {}, &[{values}]),",
                 rust_string(&record.id),
                 row.index
+            );
+        }
+    }
+    out.push_str("];\n\n");
+    out.push_str(
+        "/// `(id, status, as_of)` of every entry with a real-rootedness flag, sorted by id.\n",
+    );
+    out.push_str("pub(crate) static OEIS_REAL_ROOTEDNESS: ");
+    out.push_str("&[(&str, OeisRealRootednessStatus, Option<&str>)] = &[\n");
+    for record in records {
+        if let Some(flag) = &record.real_rootedness {
+            let as_of = match &flag.as_of {
+                Some(date) => format!("Some({})", rust_string(date)),
+                None => "None".to_string(),
+            };
+            let _ = writeln!(
+                out,
+                "    ({}, OeisRealRootednessStatus::{}, {as_of}),",
+                rust_string(&record.id),
+                real_rootedness_variant(flag.status)
             );
         }
     }

@@ -6,6 +6,7 @@ mod catalog_file;
 mod check;
 mod sha256;
 mod source;
+mod supplied;
 
 use crate::input::parse_usize_option;
 use num_bigint::BigInt;
@@ -81,6 +82,10 @@ fn oeis_entry_json(entry: &polytool::oeis::OeisSequenceDefinition) -> Value {
         "source_rows": entry.source_rows,
         "verification_rows": entry.verification_rows,
         "rows_sha256": entry.rows_sha256,
+        "real_rootedness": entry.real_rootedness().map(|flag| json!({
+            "status": flag.status.as_str(),
+            "as_of": flag.as_of,
+        })),
     })
 }
 
@@ -208,6 +213,15 @@ fn cmd_oeis_info(args: &[String]) {
             }
         );
         println!("held-out verification rows: {}", entry.verification_rows);
+        match entry.real_rootedness() {
+            Some(flag) => println!(
+                "real-rootedness: {}{} (recorded flag, not proved by polytool)",
+                flag.status.as_str(),
+                flag.as_of
+                    .map_or_else(String::new, |date| format!(" as of {date}"))
+            ),
+            None => println!("real-rootedness: unknown"),
+        }
         println!("recurrence: {recurrence}");
     }
 }
