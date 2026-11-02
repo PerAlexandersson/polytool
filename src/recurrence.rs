@@ -42,8 +42,11 @@
 //!   [`certify_veronese_section_lift`]), symmetric-companion lifts
 //!   ([`find_symmetric_companion_lifts`]), Hadamard-factor lifts
 //!   ([`find_hadamard_factor_lifts`]), row-factor lifts
-//!   ([`find_row_factor_lifts`]) and gamma lifts ([`find_gamma_lifts`]), with real-rootedness theorem checks for
-//!   the parents ([`check_three_term_recurrence_theorem`],
+//!   ([`find_row_factor_lifts`]), gamma lifts ([`find_gamma_lifts`]) and
+//!   images of proved families under real-rootedness preservers
+//!   ([`find_preserver_image_lifts`], [`certify_preserver_image_lift`]),
+//!   with real-rootedness theorem checks for the parents
+//!   ([`check_three_term_recurrence_theorem`],
 //!   [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`]).
 //!
 //! Report, search and replay functions that can reject their input return

@@ -246,7 +246,8 @@ impl HadamardFactorTerm {
 }
 
 /// The transfer theorem of every factor with one.
-pub(super) const POLYA_SCHUR_THEOREM: &str = "Polya--Schur characterization of multiplier \
+pub(in crate::recurrence::lift) const POLYA_SCHUR_THEOREM: &str =
+    "Polya--Schur characterization of multiplier \
      sequences (G. Polya and I. Schur, J. Reine Angew. Math. 144 (1914) 89--113; stated as \
      Theorem 40 of P. Branden, Unimodality, log-concavity, real-rootedness and beyond, \
      arXiv:1410.6601): a real sequence (lambda_k) is a multiplier sequence (x^k -> lambda_k x^k \
@@ -304,7 +305,7 @@ impl HadamardFactor {
 
     /// The justification that `k -> u(n, k)` is a nonnegative multiplier
     /// sequence for every `n` of the domain, or `None` (no transfer theorem).
-    pub(super) fn multiplier_justification(&self) -> Option<String> {
+    pub(in crate::recurrence::lift) fn multiplier_justification(&self) -> Option<String> {
         if let [first, second] = self.terms.as_slice() {
             // k! binom(n + a, k - c) with c >= 0: sum_k u x^k / k! = x^c (1 + x)^(n + a).
             for (a, b) in [(first, second), (second, first)] {

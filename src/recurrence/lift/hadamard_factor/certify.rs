@@ -135,7 +135,7 @@ pub(super) fn conjugate_input(
 /// A parent `g(n) P_(n+1) = a(n) c(x) P_n` with one seed `f = P_(p0)`: then
 /// `P_n = Lambda(n) c^(n - p0) f`, and every row is annihilated by
 /// `A(n) = c f D - ((n - p0) c' f + c f')`.
-pub(super) struct ProductParent {
+pub(in crate::recurrence::lift) struct ProductParent {
     c: Vec<Q>,
     seed: Vec<Q>,
     first_index: usize,
@@ -143,7 +143,7 @@ pub(super) struct ProductParent {
 
 impl ProductParent {
     /// Recognise the shape; `None` otherwise.
-    pub(super) fn recognise(parent: &PreparedRule) -> Option<Self> {
+    pub(in crate::recurrence::lift) fn recognise(parent: &PreparedRule) -> Option<Self> {
         if parent.leader_shift != 1 || parent.seeds.len() != 1 {
             return None;
         }
@@ -170,7 +170,7 @@ impl ProductParent {
     }
 
     /// `A(n)`.
-    pub(super) fn annihilator(&self) -> DOp {
+    pub(in crate::recurrence::lift) fn annihilator(&self) -> DOp {
         let c = &self.c;
         let f = &self.seed;
         let leading = vec_poly::mul(c, f);
@@ -187,7 +187,7 @@ impl ProductParent {
     }
 
     /// Check `A(n + 1) o c = c o A(n)` and `A(p0) P_(p0) = 0` exactly.
-    pub(super) fn annihilator_is_invariant(&self, annihilator: &DOp) -> bool {
+    pub(in crate::recurrence::lift) fn annihilator_is_invariant(&self, annihilator: &DOp) -> bool {
         let mut next = DOp::default();
         for (key, coefficient) in &annihilator.0 {
             next.add_term(*key, coefficient.shift_n(1));
@@ -262,15 +262,15 @@ pub struct HadamardDivisionQuotient {
 /// documentation of `hadamard_factor`, section "Row annihilators"), kept
 /// in the certificate's `row_annihilator_*` fields.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct RowAnnihilatorInvariance {
+pub(in crate::recurrence::lift) struct RowAnnihilatorInvariance {
     /// `nu(n, x)`.
-    pub(super) step_multiplier: Biv,
+    pub(in crate::recurrence::lift) step_multiplier: Biv,
     /// `B(n)`.
-    pub(super) step_quotient: DOp,
+    pub(in crate::recurrence::lift) step_quotient: DOp,
     /// `s`.
-    pub(super) start_base: usize,
+    pub(in crate::recurrence::lift) start_base: usize,
     /// The bases `m >= s` where `nu(m, .)` is the zero polynomial.
-    pub(super) restart_bases: Vec<usize>,
+    pub(in crate::recurrence::lift) restart_bases: Vec<usize>,
 }
 
 /// One generator `A^(l)` of a `HadamardAnnihilatorSystem`, with its
@@ -423,7 +423,7 @@ fn relation_op(json: &ImplicitRelationJson) -> Result<DOp, RecurrenceError> {
 
 /// The left-hand and right-hand sides of the certificate identity agree;
 /// `annihilators` lists the pairs `(A, Z)` of the terms `Z o A`.
-pub(super) fn identity_holds(
+pub(in crate::recurrence::lift) fn identity_holds(
     conjugated: &DOp,
     parent: &DOp,
     multiplier: &Biv,
@@ -591,7 +591,7 @@ impl HadamardFactorCertificate {
 /// holds exactly, the start base is `from`, the restart bases are the
 /// integer bases `m >= from` with `nu(m, .) = 0`, and `A` kills the parent
 /// rows at the start base and after every restart base (exact).
-pub(super) fn verify_invariance(
+pub(in crate::recurrence::lift) fn verify_invariance(
     a: &DOp,
     invariance: &RowAnnihilatorInvariance,
     parent: &super::prepare::PreparedRule,
@@ -649,7 +649,7 @@ pub(super) fn check_annihilated_rows(
 }
 
 /// The system of its JSON form, with the terms `(A^(l), Z_l)`.
-fn system_from_json(
+pub(in crate::recurrence::lift) fn system_from_json(
     system: &HadamardAnnihilatorSystem,
 ) -> Result<(InvariantAnnihilatorSystem, Vec<(DOp, DOp)>), RecurrenceError> {
     let mut decoded = InvariantAnnihilatorSystem {
@@ -681,7 +681,7 @@ fn system_from_json(
 /// restart bases are the integer bases `m >= from` where some `nu_l(m, .)`
 /// vanishes, and every generator kills the parent rows at the start base
 /// and after every restart base (exact).
-pub(super) fn verify_system(
+pub(in crate::recurrence::lift) fn verify_system(
     system: &InvariantAnnihilatorSystem,
     start_base: usize,
     restart_bases: &[usize],
@@ -739,17 +739,17 @@ pub(super) fn check_system_rows(
 /// How the division remainder is removed: `mu r = Z o A` (or
 /// `sum_l Z_l o A^(l)`) with `mu(n, x) = c(n) p(x)`; `c` is folded into the
 /// multiplier `w(n)`.
-pub(super) struct RowAnnihilation {
+pub(in crate::recurrence::lift) struct RowAnnihilation {
     /// `p(x)`.
-    pub(super) row_multiplier: Vec<Q>,
+    pub(in crate::recurrence::lift) row_multiplier: Vec<Q>,
     /// `c(n)`.
-    pub(super) index_multiplier: Vec<Q>,
+    pub(in crate::recurrence::lift) index_multiplier: Vec<Q>,
     /// The annihilators.
-    pub(super) kind: RowAnnihilationKind,
+    pub(in crate::recurrence::lift) kind: RowAnnihilationKind,
 }
 
 /// One annihilator, or an invariant system.
-pub(super) enum RowAnnihilationKind {
+pub(in crate::recurrence::lift) enum RowAnnihilationKind {
     /// `Z o A`.
     Single {
         /// `A(n)`.
@@ -790,7 +790,7 @@ impl RowAnnihilation {
 }
 
 /// The JSON form of an invariant system with its quotients `Z_l`.
-fn system_json(
+pub(in crate::recurrence::lift) fn system_json(
     system: &InvariantAnnihilatorSystem,
     quotients: &[DOp],
     start_base: usize,

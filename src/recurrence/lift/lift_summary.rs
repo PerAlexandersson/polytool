@@ -83,6 +83,15 @@ pub enum LiftOperation {
         /// The scale `c != 0`, an exact rational string.
         scale: String,
     },
+    /// The image `T(P)_n = lambda(n) T_n(P_(n+s))` of the parent under a
+    /// real-rootedness preserver of the menu of
+    /// [`certify_preserver_image_lift`].
+    PreserverImage {
+        /// The operator `T_n`.
+        operator: PreserverOperator,
+        /// The operator as text.
+        description: String,
+    },
 }
 
 /// The parent of a lift.
@@ -506,7 +515,7 @@ impl VeroneseSectionLift {
 
 /// The hypothesis `lambda(n)` finite and nonzero for every `n >= n0`, with
 /// the exact sign decision of the gauge polynomials.
-fn gauge_hypothesis(gauge: &VeroneseSectionGauge, n0: usize) -> LiftHypothesis {
+pub(super) fn gauge_hypothesis(gauge: &VeroneseSectionGauge, n0: usize) -> LiftHypothesis {
     let name = "gauge_finite_nonzero";
     let statement = "lambda(n) is finite and nonzero for every n >= n0";
     let parse = |values: &[String]| -> Option<Vec<BigRational>> {

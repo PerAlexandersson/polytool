@@ -1,0 +1,895 @@
+//! Preserver-image lifts: images of proved families under real-rootedness
+//! preservers (multiplier sequences, Laguerre--Pólya differential operators,
+//! Euler-operator polynomials, Rolle-type operators, coordinate maps and
+//! hypergeometric multipliers), certified and proved; near misses, replay
+//! and tampering, and the detection.
+//!
+//! The input rules below were fitted to the image rows by the exact
+//! fixed-shape recurrence search, independently of the lift machinery; the
+//! tests supply 30 exact image rows, which every rule must reproduce.
+
+use num_bigint::BigInt;
+use polytool::is_real_rooted_bigint_coeffs;
+use polytool::recurrence::{
+    certify_preserver_image_lift, find_preserver_image_lifts, BigRational, BivarPoly,
+    DegreeSchedule, HadamardFactor, HadamardFactorTerm, IndexRationalFunction,
+    LiftHypothesisStatus, LiftIdentityStatus, LiftOperation, LiftVerdict, PreserverImageCandidate,
+    PreserverImageCertificate, PreserverImageCertification, PreserverImageIdentityStatus,
+    PreserverImageOptions, PreserverImageReport, PreserverImageSearchOptions,
+    PreserverInterlacingClaim, PreserverOperator, PreserverParentLibrary, PreserverParentRegion,
+    Recurrence, RecurrenceJson, RecurrenceTerm, RowInterlacing, VeroneseSectionGauge,
+};
+use polytool::sequences;
+use polytool::vec_poly;
+use std::sync::{Arc, OnceLock};
+
+type Q = BigRational;
+
+const EULERIAN_PLUS_DERIVATIVE: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"],["2",
+"1"]],"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["7/2","-5","1/2","0","0"],["0","2","0","0","0"],["0","0","0","0",
+"0"]]}},{"offset":1,"deriv_order":1,"sign":"none","coeff":{"coeffs":[["1/2","1","-3/2",
+"0","0"],["0","0","0","0","0"],["0","0","0","0","0"]]}},{"offset":2,"deriv_order":0,
+"sign":"none","coeff":{"coeffs":[["1/2","7","-17/2","1","0"],["-1","-5/2","6","-1/2",
+"0"],["0","0","-1","0","0"]]}},{"offset":2,"deriv_order":1,"sign":"none",
+"coeff":{"coeffs":[["-3/2","3/2","5","-11/2","1/2"],["0","-1/2","-1","3/2","0"],["0",
+"0","0","0","0"]]}},{"offset":2,"deriv_order":2,"sign":"none","coeff":{"coeffs":[["0",
+"-1/2","1/2","1/2","-1/2"],["0","0","0","0","0"],["0","0","0","0","0"]]}}]}}
+"#;
+
+const NARAYANA_THETA_THETA_PLUS_ONE: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["0"],["0",
+"2"]],"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["1","2","0"],["-1/2","-3/2","0"]]}},{"offset":1,"deriv_order":1,
+"sign":"none","coeff":{"coeffs":[["0","-1","1"],["0","0","0"]]}}],
+"denominator":{"coeffs":[["1"],["-1/2"]]}}}
+"#;
+
+const EULERIAN_DERIVATIVE_OF_X: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"],["1",
+"2"]],"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["1","-2","0","0"],["0","2","0","0"],["0","0","0","0"]]}},
+{"offset":1,"deriv_order":1,"sign":"none","coeff":{"coeffs":[["0","1","-1","0"],["0",
+"0","0","0"],["0","0","0","0"]]}},{"offset":2,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["0","0","0","0"],["0","0","2","0"],["0","0","-1","0"]]}},
+{"offset":2,"deriv_order":1,"sign":"none","coeff":{"coeffs":[["0","0","0","0"],["0","0",
+"-1","1"],["0","0","0","0"]]}}]}}
+"#;
+
+const EULERIAN_AFFINE: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"]],
+"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["0","-2","0"],["1","2","0"]]}},{"offset":1,"deriv_order":1,
+"sign":"none","coeff":{"coeffs":[["0","-1","-2"],["0","0","0"]]}}]}}
+"#;
+
+const NARAYANA_THETA_PLUS_N: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"]],
+"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["0","-3","-20","0","0"],["-2","-1","30","0","0"],["-1/2","-1","-10",
+"0","0"]]}},{"offset":1,"deriv_order":1,"sign":"none","coeff":{"coeffs":[["-1","-5/2",
+"21","-40","0"],["0","-3","-2","20","0"],["0","0","0","0","0"]]}},{"offset":1,
+"deriv_order":2,"sign":"none","coeff":{"coeffs":[["0","-1/2","-3/2","12","-10"],["0",
+"0","0","0","0"],["0","0","0","0","0"]]}}],"denominator":{"coeffs":[["1"],["0"],
+["-1"]]}}}
+"#;
+
+const HERMITE_PLUS_DERIVATIVE: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":0,"initial_polynomials":[["1"]],
+"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["2","1"],["-1","0"]]}},{"offset":1,"deriv_order":1,"sign":"none",
+"coeff":{"coeffs":[["-1","1"],["0","0"]]}},{"offset":1,"deriv_order":2,"sign":"none",
+"coeff":{"coeffs":[["-1","0"],["0","0"]]}}]}}
+"#;
+
+const NARAYANA_THETA_MINUS_TWO: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["-2"]],
+"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["1","-6/7","-5/21","0","0"],["11/14","6/7","5/14","0","0"],["-3/14",
+"0","-5/42","0","0"]]}},{"offset":1,"deriv_order":1,"sign":"none",
+"coeff":{"coeffs":[["0","5/7","4/3","-10/21","0"],["0","-3/7","-6/7","5/21","0"],["0",
+"0","0","0","0"]]}},{"offset":1,"deriv_order":2,"sign":"none","coeff":{"coeffs":[["0",
+"0","-9/14","16/21","-5/42"],["0","0","0","0","0"],["0","0","0","0","0"]]}}],
+"denominator":{"coeffs":[["1"],["11/14"],["-3/14"]]}}}
+"#;
+
+const BINOMIAL_INVERSE_FACTORIAL: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":0,"initial_polynomials":[["1"],["1",
+"1"]],"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["0","-1"],["-1","0"]]}},{"offset":1,"deriv_order":1,"sign":"none",
+"coeff":{"coeffs":[["0","-1"],["0","0"]]}}],"denominator":{"coeffs":[["0"],["-1"]]}}}
+"#;
+
+const HERMITE_PLUS_SECOND_DERIVATIVE: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":0,"initial_polynomials":[["1"],["0",
+"1"],["1","0","1"],["0","3","0","1"],["-9","0","6","0","1"]],
+"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["0","1","0"],["0","-1/2","0"]]}},{"offset":1,"deriv_order":1,
+"sign":"none","coeff":{"coeffs":[["-1/4","0","1/4"],["1/4","0","0"]]}},{"offset":1,
+"deriv_order":2,"sign":"none","coeff":{"coeffs":[["0","-1/4","0"],["0","0","0"]]}}],
+"denominator":{"coeffs":[["3/4"],["-1/4"]]}}}
+"#;
+
+const EULERIAN_F_POLYNOMIAL: &str = r#"
+{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"]],
+"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+"coeff":{"coeffs":[["1","2","0"]]}},{"offset":1,"deriv_order":1,"sign":"none",
+"coeff":{"coeffs":[["0","1","1"]]}}]}}
+"#;
+
+fn q(value: i64) -> Q {
+    Q::from_integer(BigInt::from(value))
+}
+
+fn rational_rows(rows: &[Vec<BigInt>]) -> Vec<Vec<Q>> {
+    rows.iter()
+        .map(|row| vec_poly::trim(&row.iter().cloned().map(Q::from_integer).collect::<Vec<_>>()))
+        .collect()
+}
+
+fn library() -> Arc<PreserverParentLibrary> {
+    static LIBRARY: OnceLock<Arc<PreserverParentLibrary>> = OnceLock::new();
+    LIBRARY
+        .get_or_init(|| Arc::new(PreserverParentLibrary::named_families().unwrap()))
+        .clone()
+}
+
+fn parent(name: &str) -> RecurrenceJson {
+    library()
+        .parents
+        .iter()
+        .find(|p| p.name == name)
+        .unwrap_or_else(|| panic!("{name} is a library parent"))
+        .recurrence
+        .clone()
+}
+
+/// The rule of a fixture.
+fn rule(fixture: &str) -> (Recurrence, usize) {
+    let json: RecurrenceJson = serde_json::from_str(fixture).expect("fixture JSON");
+    let (rule, first_index, _) = json.to_recurrence_parts().expect("fixture rule");
+    (rule, first_index)
+}
+
+const ROWS: usize = 30;
+
+fn eulerian() -> Vec<Vec<Q>> {
+    rational_rows(&sequences::eulerian_polynomials_bigint(ROWS)[1..])
+}
+
+fn narayana() -> Vec<Vec<Q>> {
+    rational_rows(&sequences::narayana_polynomials_bigint(ROWS)[1..])
+}
+
+fn hermite() -> Vec<Vec<Q>> {
+    rational_rows(&sequences::hermite_polynomials_bigint(ROWS - 1))
+}
+
+fn binomial_rows() -> Vec<Vec<Q>> {
+    (0..ROWS)
+        .map(|m| {
+            let mut row = vec![q(1)];
+            for k in 1..=m {
+                let next = &row[k - 1] * q((m + 1 - k) as i64) / q(k as i64);
+                row.push(next);
+            }
+            row
+        })
+        .collect()
+}
+
+fn theta(row: &[Q], f: impl Fn(usize) -> Q) -> Vec<Q> {
+    vec_poly::trim(
+        &row.iter()
+            .enumerate()
+            .map(|(k, c)| c * f(k))
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn plus_derivative(row: &[Q], order: usize) -> Vec<Q> {
+    let mut d = row.to_vec();
+    for _ in 0..order {
+        d = vec_poly::derivative(&d);
+    }
+    vec_poly::trim(&vec_poly::add(row, &d))
+}
+
+fn candidate(parent_name: &str, operator: PreserverOperator) -> PreserverImageCandidate {
+    PreserverImageCandidate {
+        parent_name: parent_name.into(),
+        parent: parent(parent_name),
+        index_shift: 0,
+        gauge: VeroneseSectionGauge::None,
+        operator,
+    }
+}
+
+fn certify(
+    rule: &Recurrence,
+    rows: &[Vec<Q>],
+    first_index: usize,
+    candidate: &PreserverImageCandidate,
+) -> PreserverImageCertification {
+    let certification = certify_preserver_image_lift(
+        rule,
+        rows,
+        first_index,
+        candidate,
+        &PreserverImageOptions::default(),
+    )
+    .expect("the certification runs");
+    certification.verify().expect("the certification replays");
+    let json = serde_json::to_string(&certification).unwrap();
+    let back: PreserverImageCertification = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, certification);
+    certification
+}
+
+fn certify_fixture(
+    fixture: &str,
+    rows: &[Vec<Q>],
+    candidate: &PreserverImageCandidate,
+) -> PreserverImageCertification {
+    let (rule, first_index) = rule(fixture);
+    certify(&rule, rows, first_index, candidate)
+}
+
+fn assert_proved(certification: &PreserverImageCertification, region: &str) {
+    assert!(certification.is_proved(), "{certification:#?}");
+    let summary = &certification.lift_summary;
+    assert_eq!(summary.verdict, LiftVerdict::Proved);
+    assert_eq!(summary.root_transfer.input_root_region.to_string(), region);
+    assert!(matches!(
+        summary.identity,
+        LiftIdentityStatus::Certified { .. }
+    ));
+    assert!(matches!(
+        summary.operation,
+        LiftOperation::PreserverImage { .. }
+    ));
+    assert!(summary
+        .hypotheses
+        .iter()
+        .all(|h| h.status == LiftHypothesisStatus::Verified));
+}
+
+fn division_certificate(
+    certification: &PreserverImageCertification,
+) -> &polytool::recurrence::PreserverDivisionCertificate {
+    match &certification.identity {
+        PreserverImageIdentityStatus::Certified { certificate } => match certificate.as_ref() {
+            PreserverImageCertificate::OperatorDivision(certificate) => certificate,
+            other => panic!("not a division certificate: {other:?}"),
+        },
+        other => panic!("not certified: {other:?}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The menu, one shape at a time
+// ---------------------------------------------------------------------------
+
+/// `A_n + A_n'`: the Laguerre operator `1 + D` on the Eulerian polynomials.
+#[test]
+fn eulerian_plus_derivative_is_proved() {
+    let rows: Vec<_> = eulerian().iter().map(|p| plus_derivative(p, 1)).collect();
+    let certification = certify_fixture(
+        EULERIAN_PLUS_DERIVATIVE,
+        &rows,
+        &candidate(
+            "eulerian",
+            PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
+        ),
+    );
+    assert_proved(&certification, "(-inf, 0]");
+    assert!(certification
+        .lean_declarations
+        .contains(&"RealRooted.splits_add_C_mul_derivative_all".to_string()));
+}
+
+/// `theta (theta + 1) N_n`: an Euler-operator polynomial with roots `0, -1`
+/// on the Narayana polynomials.
+#[test]
+fn euler_operator_polynomial_on_narayana_is_proved() {
+    let rows: Vec<_> = narayana()
+        .iter()
+        .map(|p| theta(p, |k| q((k * (k + 1)) as i64)))
+        .collect();
+    let certification = certify_fixture(
+        NARAYANA_THETA_THETA_PLUS_ONE,
+        &rows,
+        &candidate(
+            "narayana",
+            PreserverOperator::euler_polynomial(&[q(0), q(1), q(1)]),
+        ),
+    );
+    assert_proved(&certification, "(-inf, 0]");
+}
+
+/// `(theta + n) N_n`: an index-dependent multiplier `k + n`, decided by the
+/// sign checker.
+#[test]
+fn index_dependent_euler_operator_is_proved() {
+    let rows: Vec<_> = narayana()
+        .iter()
+        .enumerate()
+        .map(|(offset, p)| theta(p, |k| q((k + offset + 1) as i64)))
+        .collect();
+    let operator = PreserverOperator::EulerPolynomial {
+        coefficients: vec![
+            IndexRationalFunction::from_polynomials(&[q(0), q(1)], &[q(1)]),
+            IndexRationalFunction::constant(&q(1)),
+        ],
+    };
+    let certification = certify_fixture(
+        NARAYANA_THETA_PLUS_N,
+        &rows,
+        &candidate("narayana", operator),
+    );
+    assert_proved(&certification, "(-inf, 0]");
+    assert!(certification
+        .lift_summary
+        .hypotheses
+        .iter()
+        .any(|h| h.name == "euler_polynomial_coefficients_01_same_sign"
+            && h.sign_decision.as_ref().is_some_and(|d| d.holds())));
+}
+
+/// `D(x A_n)` (Rolle) and `A_n(2x + 1)` (affine, roots in `(-inf, -1/2]`).
+#[test]
+fn rolle_and_affine_images_of_eulerian_are_proved() {
+    let rows: Vec<_> = eulerian()
+        .iter()
+        .map(|p| {
+            let mut shifted = vec![q(0)];
+            shifted.extend_from_slice(p);
+            vec_poly::trim(&vec_poly::derivative(&shifted))
+        })
+        .collect();
+    let certification = certify_fixture(
+        EULERIAN_DERIVATIVE_OF_X,
+        &rows,
+        &candidate(
+            "eulerian",
+            PreserverOperator::DerivativeOfPowerMultiple {
+                power: 1,
+                derivative_order: 1,
+            },
+        ),
+    );
+    assert_proved(&certification, "(-inf, 0]");
+    assert_eq!(certification.lean_route.as_deref(), Some("derivativeXMul"));
+
+    let rows: Vec<_> = eulerian()
+        .iter()
+        .map(|p| vec_poly::trim(&vec_poly::compose(p, &[q(1), q(2)])))
+        .collect();
+    let certification = certify_fixture(
+        EULERIAN_AFFINE,
+        &rows,
+        &candidate(
+            "eulerian",
+            PreserverOperator::Affine {
+                slope: "2".into(),
+                intercept: "1".into(),
+            },
+        ),
+    );
+    assert_proved(&certification, "(-inf, -1/2]");
+}
+
+/// The `f`-polynomials of the Eulerian polynomials,
+/// `(1 + x)^(n-1) A_n(x/(1 + x))` (the Fubini triangle), roots in `[-1, 0]`.
+#[test]
+fn f_polynomial_of_eulerian_is_proved() {
+    let rows: Vec<_> = eulerian()
+        .iter()
+        .enumerate()
+        .map(|(d, p)| {
+            let mut out = vec![q(0)];
+            for (k, a) in p.iter().enumerate() {
+                let mut term = vec![a.clone()];
+                for _ in 0..k {
+                    term = vec_poly::mul(&term, &[q(0), q(1)]);
+                }
+                for _ in k..d {
+                    term = vec_poly::mul(&term, &[q(1), q(1)]);
+                }
+                out = vec_poly::add(&out, &term);
+            }
+            vec_poly::trim(&out)
+        })
+        .collect();
+    let certification = certify_fixture(
+        EULERIAN_F_POLYNOMIAL,
+        &rows,
+        &candidate(
+            "eulerian",
+            PreserverOperator::f_polynomial(DegreeSchedule::new(1, 0, 1)),
+        ),
+    );
+    assert_proved(&certification, "[-1, 0]");
+    assert_eq!(certification.lean_route.as_deref(), Some("fTransform"));
+}
+
+/// `sum_k binom(n, k) x^k / k!` (Laguerre polynomials `L_n(-x)`): the
+/// multiplier `1/k!` through the Hadamard conjugation.
+#[test]
+fn inverse_factorial_multiplier_of_the_binomial_rows_is_proved() {
+    let mut factorial = vec![q(1)];
+    for k in 1..=ROWS {
+        let next = &factorial[k - 1] * q(k as i64);
+        factorial.push(next);
+    }
+    let rows: Vec<_> = binomial_rows()
+        .iter()
+        .map(|p| theta(p, |k| factorial[k].recip()))
+        .collect();
+    let certification = certify_fixture(
+        BINOMIAL_INVERSE_FACTORIAL,
+        &rows,
+        &candidate(
+            "binomial",
+            PreserverOperator::HadamardMultiplier {
+                factor: HadamardFactor::single(HadamardFactorTerm::InverseFactorial),
+            },
+        ),
+    );
+    assert_proved(&certification, "(-inf, 0]");
+    let PreserverImageIdentityStatus::Certified { certificate } = &certification.identity else {
+        unreachable!()
+    };
+    assert!(matches!(
+        **certificate,
+        PreserverImageCertificate::HadamardConjugation(_)
+    ));
+    assert!(certification
+        .lean_declarations
+        .contains(&"RealRooted.isMultiplierSequence_inv_factorial".to_string()));
+}
+
+/// `He_n + He_n'`: a parent real-rooted on the whole line (three-term
+/// theorem), and a division remainder removed by the Hermite differential
+/// equation (an invariant row annihilator).
+#[test]
+fn hermite_plus_derivative_is_proved_on_the_whole_line() {
+    let rows: Vec<_> = hermite().iter().map(|p| plus_derivative(p, 1)).collect();
+    let certification = certify_fixture(
+        HERMITE_PLUS_DERIVATIVE,
+        &rows,
+        &candidate(
+            "hermite_he",
+            PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
+        ),
+    );
+    assert_proved(&certification, "(-inf, +inf)");
+    assert!(certification.whole_line_parent_proof.is_some());
+    assert!(division_certificate(&certification)
+        .row_annihilation
+        .is_some());
+}
+
+/// The reversal of the Chebyshev polynomials, `x^n T_n(1/x)`, with the
+/// rule `R_n = 2 R_(n-1) - x^2 R_(n-2)` written by hand.
+#[test]
+fn reversal_of_chebyshev_is_proved() {
+    let rows: Vec<_> = rational_rows(&sequences::chebyshev_polynomials_t_bigint(ROWS - 1))
+        .iter()
+        .enumerate()
+        .map(|(n, p)| vec_poly::trim(&vec_poly::reverse(p, n).unwrap()))
+        .collect();
+    let rule = Recurrence {
+        terms: vec![
+            RecurrenceTerm::new(
+                1,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(2)]]),
+            ),
+            RecurrenceTerm::new(
+                2,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(0), q(0), q(-1)]]),
+            ),
+        ],
+        denominator: None,
+        inhomogeneous: None,
+    };
+    let certification = certify(
+        &rule,
+        &rows,
+        0,
+        &candidate(
+            "chebyshev_t",
+            PreserverOperator::Reversal {
+                schedule: DegreeSchedule::new(0, 0, 1),
+            },
+        ),
+    );
+    assert_proved(&certification, "(-inf, +inf)");
+    assert_eq!(certification.lean_route.as_deref(), Some("reversed"));
+}
+
+/// A gauge `lambda(n) = 2^n` and an index shift: `2^n (A_(n+1) + A_(n+1)')`
+/// for `n >= 0`, whose rule is the fixture's with `n -> n + 1` and each
+/// term at lag `i` multiplied by `2^i`.
+#[test]
+fn gauge_and_index_shift_are_certified() {
+    let (fixture, _) = rule(EULERIAN_PLUS_DERIVATIVE);
+    let shifted = fixture.shift_index(1);
+    let scaled = Recurrence {
+        terms: shifted
+            .terms
+            .iter()
+            .map(|term| {
+                let factor = q(1i64 << term.offset);
+                let coeffs = term
+                    .coeff
+                    .coeffs
+                    .iter()
+                    .map(|row| row.iter().map(|c| c * &factor).collect())
+                    .collect();
+                RecurrenceTerm::new(
+                    term.offset,
+                    term.deriv_order,
+                    BivarPoly::from_coefficients_normalized(coeffs),
+                )
+            })
+            .collect(),
+        denominator: shifted.denominator.clone(),
+        inhomogeneous: None,
+    };
+    let rows: Vec<_> = eulerian()
+        .iter()
+        .enumerate()
+        .map(|(n, p)| vec_poly::scale(&plus_derivative(p, 1), &q(1i64 << n)))
+        .collect();
+    let mut gauged = candidate(
+        "eulerian",
+        PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
+    );
+    gauged.index_shift = 1;
+    gauged.gauge = VeroneseSectionGauge::Ratio {
+        numerator: vec!["2".into()],
+        denominator: vec!["1".into()],
+        initial_value: "1".into(),
+    };
+    let certification = certify(&scaled, &rows, 0, &gauged);
+    assert_proved(&certification, "(-inf, 0]");
+}
+
+// ---------------------------------------------------------------------------
+// Near misses
+// ---------------------------------------------------------------------------
+
+fn integer_row(row: &[Q]) -> Vec<BigInt> {
+    row.iter().map(|c| c.to_integer()).collect()
+}
+
+/// `(theta - 2) N_n`: a non-preserver whose rows are real-rooted on every
+/// row checked.  The identity is certified, but the multiplier `k - 2` has
+/// the positive root 2 (`k -> k - 2` is not a multiplier sequence), so the
+/// lift fails; it is never proved.
+#[test]
+fn a_multiplier_with_a_positive_root_is_not_proved() {
+    let rows: Vec<_> = narayana()
+        .iter()
+        .map(|p| theta(p, |k| q(k as i64 - 2)))
+        .collect();
+    assert!(rows
+        .iter()
+        .all(|row| is_real_rooted_bigint_coeffs(&integer_row(row))));
+    let certification = certify_fixture(
+        NARAYANA_THETA_MINUS_TWO,
+        &rows,
+        &candidate(
+            "narayana",
+            PreserverOperator::euler_polynomial(&[q(-2), q(1)]),
+        ),
+    );
+    assert!(!certification.is_proved());
+    assert_eq!(certification.lift_summary.verdict, LiftVerdict::RouteFailed);
+    assert!(matches!(
+        certification.lift_summary.identity,
+        LiftIdentityStatus::Certified { .. }
+    ));
+    assert!(certification.lift_summary.hypotheses.iter().any(|h| {
+        h.name == "euler_polynomial_roots_nonpositive"
+            && matches!(h.status, LiftHypothesisStatus::Failed { .. })
+    }));
+}
+
+/// `He_n + He_n''`: `1 + D^2` is not a Laguerre--Pólya operator (and the
+/// rows from `n = 2` on are not real-rooted); the identity is certified, the
+/// side condition fails and the lift is not proved.
+#[test]
+fn a_non_preserver_is_not_proved() {
+    let rows: Vec<_> = hermite().iter().map(|p| plus_derivative(p, 2)).collect();
+    assert!(!is_real_rooted_bigint_coeffs(&integer_row(&rows[2])));
+    let certification = certify_fixture(
+        HERMITE_PLUS_SECOND_DERIVATIVE,
+        &rows,
+        &candidate(
+            "hermite_he",
+            PreserverOperator::derivative_polynomial(&[q(1), q(0), q(1)]),
+        ),
+    );
+    assert!(!certification.is_proved());
+    assert_eq!(certification.lift_summary.verdict, LiftVerdict::RouteFailed);
+    // The same operator as a general Weyl operator has no theorem: open.
+    let general = PreserverOperator::WeylOperator {
+        terms: serde_json::from_str(
+            r#"[{"deriv_order":0,"coeff":{"coeffs":[["1"]]}},
+                {"deriv_order":2,"coeff":{"coeffs":[["1"]]}}]"#,
+        )
+        .unwrap(),
+        denominator: vec!["1".into()],
+    };
+    let certification = certify_fixture(
+        HERMITE_PLUS_SECOND_DERIVATIVE,
+        &rows,
+        &candidate("hermite_he", general),
+    );
+    assert!(matches!(
+        certification.lift_summary.identity,
+        LiftIdentityStatus::Certified { .. }
+    ));
+    assert_eq!(certification.lift_summary.verdict, LiftVerdict::Open);
+}
+
+/// Wrong parameters are refuted at an index: `A_n(3x + 1)` against the rows
+/// of `A_n(2x + 1)` differs at `n = 2` (`A_1 = 1` agrees).
+#[test]
+fn wrong_parameters_are_refuted_at_an_index() {
+    let rows: Vec<_> = eulerian()
+        .iter()
+        .map(|p| vec_poly::trim(&vec_poly::compose(p, &[q(1), q(2)])))
+        .collect();
+    let certification = certify_fixture(
+        EULERIAN_AFFINE,
+        &rows,
+        &candidate(
+            "eulerian",
+            PreserverOperator::Affine {
+                slope: "3".into(),
+                intercept: "1".into(),
+            },
+        ),
+    );
+    assert!(matches!(
+        certification.identity,
+        PreserverImageIdentityStatus::Refuted { index: 2, .. }
+    ));
+    assert_eq!(certification.lift_summary.verdict, LiftVerdict::RouteFailed);
+}
+
+/// An operator coefficient `c(n) = (n - 2)/(n - 2)` is undefined at
+/// `n = 2`: the candidate row is undefined there (refuted) and the
+/// hypothesis `operator_coefficients_defined` fails with witness 2.
+#[test]
+fn a_vanishing_coefficient_denominator_is_refuted() {
+    let rows: Vec<_> = eulerian().iter().map(|p| plus_derivative(p, 1)).collect();
+    let operator = PreserverOperator::DerivativePolynomial {
+        coefficients: vec![
+            IndexRationalFunction::constant(&q(1)),
+            IndexRationalFunction::from_polynomials(&[q(-2), q(1)], &[q(-2), q(1)]),
+        ],
+    };
+    let certification = certify_fixture(
+        EULERIAN_PLUS_DERIVATIVE,
+        &rows,
+        &candidate("eulerian", operator),
+    );
+    assert!(matches!(
+        certification.identity,
+        PreserverImageIdentityStatus::Refuted { index: 2, .. }
+    ));
+    let hypothesis = certification
+        .lift_summary
+        .hypotheses
+        .iter()
+        .find(|h| h.name == "operator_coefficients_defined")
+        .unwrap();
+    assert_eq!(
+        hypothesis.status,
+        LiftHypothesisStatus::Failed {
+            witness: Some(BigInt::from(2))
+        }
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Replay and tampering
+// ---------------------------------------------------------------------------
+
+#[test]
+fn tampered_certificates_and_records_are_rejected() {
+    let rows: Vec<_> = eulerian().iter().map(|p| plus_derivative(p, 1)).collect();
+    let certification = certify_fixture(
+        EULERIAN_PLUS_DERIVATIVE,
+        &rows,
+        &candidate(
+            "eulerian",
+            PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
+        ),
+    );
+    let certificate = division_certificate(&certification).clone();
+    certificate.verify().unwrap();
+    let mut tampered = certificate.clone();
+    tampered.multiplier = vec!["2".into()];
+    assert!(tampered.verify().is_err());
+    let mut tampered = certificate.clone();
+    tampered.operator = PreserverOperator::derivative_polynomial(&[q(1), q(2)]);
+    assert!(tampered.verify().is_err());
+    let mut tampered = certificate.clone();
+    tampered.exceptional_bases.clear();
+    tampered.quotients.pop();
+    assert!(tampered.verify().is_err());
+    // Tampered rows in the records: an identifying input row, a parent seed.
+    let mut tampered = certificate.clone();
+    tampered.input.initial_polynomials[1][0] = "3".into();
+    assert!(tampered.verify().is_err());
+    let mut tampered = certificate.clone();
+    tampered.parent.initial_polynomials[0][0] = "2".into();
+    assert!(tampered.verify().is_err());
+    // A tampered summary or candidate.
+    let mut tampered = certification.clone();
+    tampered.lift_summary.verdict = LiftVerdict::Open;
+    assert!(tampered.verify().is_err());
+    let mut tampered = certification.clone();
+    tampered.candidate.index_shift = 1;
+    assert!(tampered.verify().is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Detection
+// ---------------------------------------------------------------------------
+
+fn search(fixture: &str, rows: &[Vec<Q>]) -> PreserverImageReport {
+    let (rule, first_index) = rule(fixture);
+    let report = find_preserver_image_lifts(
+        &rule,
+        rows,
+        first_index,
+        &PreserverImageSearchOptions {
+            library: Some(library()),
+            ..PreserverImageSearchOptions::default()
+        },
+    )
+    .expect("the search runs");
+    report.verify().expect("the report replays");
+    let json = serde_json::to_string(&report).unwrap();
+    let back: PreserverImageReport = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, report);
+    report
+}
+
+#[test]
+fn the_detection_finds_the_operator_and_the_parent() {
+    let rows: Vec<_> = narayana()
+        .iter()
+        .enumerate()
+        .map(|(offset, p)| theta(p, |k| q((k + offset + 1) as i64)))
+        .collect();
+    let report = search(NARAYANA_THETA_PLUS_N, &rows);
+    let lift = report.proved_lifts().next().expect("a proved lift");
+    assert_eq!(lift.candidate.parent_name, "narayana");
+    assert_eq!(
+        lift.candidate.operator.text(),
+        "f(n, theta) = n + (1) theta"
+    );
+
+    let rows: Vec<_> = eulerian()
+        .iter()
+        .map(|p| vec_poly::trim(&vec_poly::compose(p, &[q(1), q(2)])))
+        .collect();
+    let report = search(EULERIAN_AFFINE, &rows);
+    let lift = report.proved_lifts().next().expect("a proved lift");
+    assert_eq!(lift.candidate.parent_name, "eulerian");
+    assert_eq!(
+        lift.candidate.operator,
+        PreserverOperator::Affine {
+            slope: "2".into(),
+            intercept: "1".into()
+        }
+    );
+}
+
+#[test]
+fn the_detection_proves_nothing_for_a_non_preserver() {
+    let rows: Vec<_> = hermite().iter().map(|p| plus_derivative(p, 2)).collect();
+    let report = search(HERMITE_PLUS_SECOND_DERIVATIVE, &rows);
+    assert_eq!(report.proved_lifts().count(), 0, "{report:#?}");
+}
+
+#[test]
+fn the_named_library_is_proved() {
+    let library = library();
+    for parent in &library.parents {
+        assert_ne!(
+            parent.region,
+            PreserverParentRegion::Unproved,
+            "{}",
+            parent.name
+        );
+    }
+    assert!(library.parents.len() >= 9);
+    // The peak polynomials are proved by a gamma lift, not by the parent
+    // provers, so they are not a library parent.
+    assert!(library.skipped.iter().any(|(name, _)| name == "peak"));
+}
+
+// ---------------------------------------------------------------------------
+// Interlacing claims
+// ---------------------------------------------------------------------------
+
+/// `He_n + He_n'` and `A_n + A_n'`: a fixed Laguerre operator transfers the
+/// parent's proved interlacing (Hermite--Kakeya--Obreschkoff), weakly and
+/// without an orientation.
+#[test]
+fn a_fixed_preserver_transfers_the_parent_interlacing() {
+    let rows: Vec<_> = hermite().iter().map(|p| plus_derivative(p, 1)).collect();
+    let certification = certify_fixture(
+        HERMITE_PLUS_DERIVATIVE,
+        &rows,
+        &candidate(
+            "hermite_he",
+            PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
+        ),
+    );
+    let PreserverInterlacingClaim::Claimed {
+        kind,
+        orientation,
+        from_index,
+        ..
+    } = &certification.interlacing
+    else {
+        panic!("{:?}", certification.interlacing)
+    };
+    assert_eq!(*kind, RowInterlacing::Weak);
+    assert_eq!(orientation, "unordered");
+    assert_eq!(*from_index, 1);
+    // A tampered claim is rejected.
+    let mut tampered = certification.clone();
+    tampered.interlacing = PreserverInterlacingClaim::None { reason: "x".into() };
+    assert!(tampered.verify().is_err());
+
+    let rows: Vec<_> = eulerian().iter().map(|p| plus_derivative(p, 1)).collect();
+    let certification = certify_fixture(
+        EULERIAN_PLUS_DERIVATIVE,
+        &rows,
+        &candidate(
+            "eulerian",
+            PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
+        ),
+    );
+    assert!(
+        certification.interlacing.is_claimed(),
+        "{:?}",
+        certification.interlacing
+    );
+}
+
+/// An index-dependent operator or schedule gets no interlacing claim.
+#[test]
+fn index_dependent_operators_claim_no_interlacing() {
+    let rows: Vec<_> = narayana()
+        .iter()
+        .enumerate()
+        .map(|(offset, p)| theta(p, |k| q((k + offset + 1) as i64)))
+        .collect();
+    let operator = PreserverOperator::EulerPolynomial {
+        coefficients: vec![
+            IndexRationalFunction::from_polynomials(&[q(0), q(1)], &[q(1)]),
+            IndexRationalFunction::constant(&q(1)),
+        ],
+    };
+    let certification = certify_fixture(
+        NARAYANA_THETA_PLUS_N,
+        &rows,
+        &candidate("narayana", operator),
+    );
+    assert!(certification.is_proved());
+    assert!(!certification.interlacing.is_claimed());
+}

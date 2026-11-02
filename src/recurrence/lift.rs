@@ -26,6 +26,15 @@
 //!   palindromic parent (for example the peak polynomials from the Eulerian
 //!   polynomials); the gamma criterion transfers real-rootedness with
 //!   nonpositive roots (the `gamma_lift` module docs).
+//! - Preserver-image lifts, [`find_preserver_image_lifts`] and
+//!   [`certify_preserver_image_lift`]: every row is
+//!   `lambda(n) T_n(P_(n+s))` for a proved parent `P` (a
+//!   [`PreserverParentLibrary`] of named families and OEIS catalog entries)
+//!   and a real-rootedness preserver `T_n` of a fixed menu (multiplier
+//!   sequences `f(n, theta)` and hypergeometric multipliers,
+//!   Laguerre--Pólya operators `phi(n, D)`, `D^j o x^m`, `x^m D^j`, affine
+//!   substitutions, reversals and Möbius maps), with every side condition
+//!   decided exactly for all `n` (the `preserver_image` module docs).
 //!
 //! Every lift carries a uniform [`LiftSummary`] with the shared
 //! [`lift_verdict`].
@@ -58,6 +67,10 @@
 //!   `polytool.recurrence-veronese-certificate.v1` report;
 //! - `symmetric_companion`: operators, search, certificate and verifier, and
 //!   the `polytool.recurrence-symmetric-companion.v1` report;
+//! - `preserver_image`: operators, transfer theorems, certificates, the
+//!   parent library and the detection of the preserver-image lifts, with the
+//!   `polytool.recurrence-preserver-image.v1` and
+//!   `polytool.recurrence-preserver-image-lifts.v1` reports;
 //! - `lift_summary`: [`LiftSummary`], the uniform view of every lift
 //!   (operation, parent, identity status, root transfer, hypotheses with
 //!   exact sign decisions, parent proof, verdict), embedded as the field
@@ -85,6 +98,8 @@ pub use hadamard_factor::{
     HadamardFactorTerm, HadamardHiddenCoefficients, HADAMARD_FACTOR_LIFTS_SCHEMA,
     MAX_HADAMARD_BINOMIAL_OFFSET, MAX_HADAMARD_FACTOR_ROWS, MAX_HADAMARD_OPERATOR_TERMS,
 };
+mod preserver_image;
+pub use preserver_image::*;
 mod lift_summary;
 pub use lift_summary::{
     lift_verdict, LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus, LiftOperation,

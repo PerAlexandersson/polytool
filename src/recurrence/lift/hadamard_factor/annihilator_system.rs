@@ -82,7 +82,7 @@ pub(super) fn step_image(a: &DOp, parent: &DOp) -> Result<DOp, RecurrenceError> 
 /// An invariant system: generators `A^(l)` with
 /// `nu_l(n, x) N(A^(l)) = sum_j B_(l,j)(n) o A^(j)` exactly.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct InvariantAnnihilatorSystem {
+pub(in crate::recurrence::lift) struct InvariantAnnihilatorSystem {
     /// `A^(l)`, shifts below the parent order.
     pub(super) generators: Vec<DOp>,
     /// `nu_l(n, x)`, nonzero.

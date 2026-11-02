@@ -64,7 +64,7 @@ pub(super) fn invariance_holds(invariant: &InvariantAnnihilator, step: &DOp) -> 
 
 /// The integer bases `n >= from` where `p(n, .)` vanishes identically (the
 /// integer roots of the gcd of its `x`-columns); empty for `p` free of `n`.
-pub(super) fn vanishing_bases(p: &Biv, from: usize) -> Vec<usize> {
+pub(in crate::recurrence::lift) fn vanishing_bases(p: &Biv, from: usize) -> Vec<usize> {
     let (content, _) = content_and_primitive(p);
     if vec_poly::degree(&content).unwrap_or(0) == 0 {
         return Vec::new();

@@ -649,3 +649,106 @@ mod derivative_lag_proofs {
         }
     }
 }
+
+/// Catalog families proved as images of named families under
+/// real-rootedness preservers ([`find_preserver_image_lifts`] with the named
+/// parent library): the identity with the named parent is certified for
+/// every row, the parent is proved by the parent provers, and the operator's
+/// side conditions are decided exactly.  The proof covers the catalog
+/// recurrence; its rows are additionally checked here to be real-rooted in
+/// the claimed region.
+mod preserver_images {
+    use super::*;
+    use polytool::recurrence::{
+        find_preserver_image_lifts, PreserverImageSearchOptions, PreserverParentLibrary,
+    };
+    use polytool::vec_poly;
+    use std::sync::Arc;
+
+    fn integer_row(row: &[Q]) -> Vec<BigInt> {
+        let denominator = row.iter().fold(BigInt::from(1), |acc, c| {
+            num_integer::Integer::lcm(&acc, c.denom())
+        });
+        row.iter()
+            .map(|c| (c * Q::from_integer(denominator.clone())).to_integer())
+            .collect()
+    }
+
+    fn one_sign(row: &[Q]) -> bool {
+        let positive = row.iter().any(|c| *c > q(0));
+        let negative = row.iter().any(|c| *c < q(0));
+        !(positive && negative)
+    }
+
+    /// Find the proved lift of a catalog entry and check 40 catalog rows
+    /// exactly: real-rooted, and with roots `<= 0` when that is the region.
+    fn assert_preserver_image(id: &str, parent: &str, operator_text: &str, region: &str) {
+        let entry = oeis::by_id(id).expect("catalog entry");
+        let (rule, seeds) = entry.recurrence_parts().expect("catalog recurrence");
+        let first_index = entry.recurrence_first_index;
+        let options = PreserverImageSearchOptions {
+            library: Some(Arc::new(PreserverParentLibrary::named_families().unwrap())),
+            ..PreserverImageSearchOptions::default()
+        };
+        let report = find_preserver_image_lifts(&rule, &seeds, first_index, &options).unwrap();
+        report.verify().unwrap();
+        let lift = report.proved_lifts().next().expect("a proved lift");
+        assert_eq!(lift.candidate.parent_name, parent);
+        assert_eq!(lift.candidate.operator.text(), operator_text);
+        assert_eq!(
+            lift.lift_summary
+                .root_transfer
+                .input_root_region
+                .to_string(),
+            region
+        );
+        let rows = rule
+            .generate_rows_rational(&seeds, first_index, 40)
+            .unwrap();
+        for row in &rows {
+            let row = vec_poly::trim(row);
+            if row.iter().all(|c| *c == q(0)) {
+                continue;
+            }
+            assert!(polytool::is_real_rooted_bigint_coeffs(&integer_row(&row)));
+            if region == "(-inf, 0]" {
+                assert!(one_sign(&row));
+            }
+        }
+    }
+
+    #[test]
+    fn eulerian_times_k_is_an_euler_operator_image() {
+        // T(n, k) = k E(n, k): the multiplier (theta + 1) on shifted rows.
+        assert_preserver_image(
+            "A065826",
+            "eulerian",
+            "f(n, theta) = 1 + (1) theta",
+            "(-inf, 0]",
+        );
+    }
+
+    #[test]
+    fn squared_index_binomials_are_an_euler_operator_image() {
+        // T(n, k) = (k + 1)^2 binom(n, k): the multiplier (theta + 1)^2.
+        assert_preserver_image(
+            "A125092",
+            "binomial",
+            "f(n, theta) = 1 + (2) theta + (1) theta^2",
+            "(-inf, 0]",
+        );
+    }
+
+    #[test]
+    fn a_degree_two_laguerre_operator_with_index_dependent_coefficients() {
+        // T(n, k) = (n - k + 1)(k + 1) binom(n, k) =
+        // ((n + 1) + (n - 1) D - D^2)(1 + x)^n: the discriminant
+        // (n - 1)^2 + 4(n + 1) is positive for every n (sign checker).
+        assert_preserver_image(
+            "A141611",
+            "binomial",
+            "phi(n, D) = 1 + n + (-1 + n) D + (-1) D^2",
+            "(-inf, +inf)",
+        );
+    }
+}

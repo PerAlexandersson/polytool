@@ -870,6 +870,58 @@ gamma criterion: a palindromic `P` is real-rooted with roots `<= 0` if and only
 if its gamma polynomial is, so the input roots lie in `(-inf, 0]` for `c > 0`.
 See [algorithms.md](algorithms.md#gamma-lifts).
 
+## Preserver-image lifts
+
+`recurrence::find_preserver_image_lifts` recognises the rows as images
+`Q_n = lambda(n) T_n(P_(n+s))` of a proved parent `P` under a
+real-rootedness preserver `T_n` from a fixed menu (`PreserverOperator`):
+Euler-operator polynomials `f(n, theta)` (multiplier sequences `k -> f(n, k)`),
+Laguerre--Pólya operators `phi(n, D)` such as `P + c(n) P'`, `D^j o x^m` and
+`x^m D^j`, affine substitutions `P(a x + b)`, reversals `x^(d_n) P(1/x)`, Möbius
+maps such as the `f`-polynomial, and hypergeometric multipliers (`1/k!`,
+`1/(alpha)_k`, `binom(n + a, k + b)`, ...).  Parents come from a
+`PreserverParentLibrary` (the named families of `sequences` with their
+defining recurrences, optionally the OEIS catalog entries the parent provers
+prove; the proofs are computed once per library, so share one library across
+calls).  Detection fits the operator parameters exactly from a few rows (row
+by row linear algebra, then rational functions of `n`); every match is
+certified by `certify_preserver_image_lift`, which callers can also run on a
+candidate of their own.
+
+```rust
+use polytool::recurrence::*;
+use std::sync::Arc;
+
+let library = Arc::new(PreserverParentLibrary::named_families()?);
+let options = PreserverImageSearchOptions { library: Some(library), ..Default::default() };
+// `rule`, `rows` (rows[0] is Q_(first_index)) and `first_index`: the input.
+let report = find_preserver_image_lifts(&rule, &rows, first_index, &options)?;
+for lift in report.proved_lifts() {
+    println!("{} from {}", lift.candidate.operator.text(), lift.candidate.parent_name);
+}
+# Ok::<(), RecurrenceError>(())
+```
+
+A certification (`PreserverImageCertification`, schema
+`polytool.recurrence-preserver-image.v1`; the search report is
+`polytool.recurrence-preserver-image-lifts.v1`) records the identity (a
+`PreserverImageCertificate`: pseudo-division of the gauged input relation
+composed with, or conjugated through, the operator by the shifted parent
+relation, with row annihilators for a remainder, or the Hadamard conjugation
+for a hypergeometric multiplier; `verify()` regenerates the input and parent
+rows from the recorded rules and seeds and re-checks the identifying rows and
+exceptional bases), the parent proof (roots `<= 0`, or real-rootedness on the
+whole line by the three-term theorem), the Lean route and RealRooted
+declarations of the operator's theorem, and the `lift_summary` (new
+`LiftOperation::PreserverImage`) whose hypotheses are the side conditions of
+the theorem, decided exactly for every `n` (fixed polynomials exactly,
+index-dependent coefficients of degree `<= 2` by the sign checker; anything
+else stays open).  It also records a `PreserverInterlacingClaim`: consecutive
+input rows interlace (weakly, orientation not determined) only for an operator
+independent of `n` that preserves every real-rooted polynomial, from the
+parent's interlacing proved by a replayed theorem report
+(Hermite--Kakeya--Obreschkoff); otherwise `none`.  See [algorithms.md](algorithms.md#preserver-image-lifts).
+
 ## Exact sign decisions for an integer index
 
 `decide_index_rational_function_sign(p, q, &range, condition)` decides

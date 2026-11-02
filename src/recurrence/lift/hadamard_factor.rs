@@ -227,14 +227,14 @@
 //! [`crate::recurrence::LiftSummary`] mapping) and `prepare` (input
 //! validation shared with the row-factor lifts).
 
-mod annihilator;
-mod annihilator_system;
-mod certify;
-mod factor;
+pub(super) mod annihilator;
+pub(super) mod annihilator_system;
+pub(super) mod certify;
+pub(super) mod factor;
 mod modular_kernel;
 pub(super) mod prepare;
 mod report;
-mod search;
+pub(super) mod search;
 
 pub use certify::{
     HadamardAnnihilatorGenerator, HadamardAnnihilatorSystem, HadamardDivisionQuotient,

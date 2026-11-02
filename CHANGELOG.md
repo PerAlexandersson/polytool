@@ -319,6 +319,23 @@ Additions:
   `polytool.recurrence-gamma-lift.v1` and `polytool.recurrence-gamma-lifts.v1`
   (new `LiftOperation::GammaPolynomial`).  The peak (and valley) polynomials
   A008303 are proved from the Eulerian polynomials.
+- Preserver-image lifts: `recurrence::find_preserver_image_lifts` and
+  `certify_preserver_image_lift` recognise `Q_n = lambda(n) T_n(P_(n+s))` for
+  a proved parent `P` (`PreserverParentLibrary`: named families, optionally
+  OEIS catalog entries) and an operator `T_n` of a menu (`PreserverOperator`:
+  `f(n, theta)`, `phi(n, D)`, `D^j o x^m`, `x^m D^j`, affine, reversal,
+  Möbius, hypergeometric multipliers, general Weyl operators without a
+  theorem); the identity is certified by pseudo-division of the gauged input
+  relation composed with (or conjugated through) the operator by the shifted
+  parent relation, with row annihilators for a remainder, or by the Hadamard
+  conjugation (`PreserverImageCertificate`, replayed from the recorded rules
+  and seeds); side conditions are decided exactly for every `n`; reports
+  `polytool.recurrence-preserver-image.v1` and
+  `polytool.recurrence-preserver-image-lifts.v1` (new
+  `LiftOperation::PreserverImage`), with the Lean route and RealRooted
+  declarations of each theorem and an interlacing claim
+  (`PreserverInterlacingClaim`, Hermite--Kakeya--Obreschkoff transfer of the
+  parent's proved interlacing for operators independent of `n`).
 - `sequences::literature::peak_polynomials_bigint` and
   `peak_polynomials_iter` (permutations by peaks, A008303), and library
   recurrences returned as `(Recurrence, seeds, first_index)`

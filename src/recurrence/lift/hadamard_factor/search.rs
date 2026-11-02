@@ -493,7 +493,7 @@ fn candidate_rows(
 /// invariant annihilator of a first-order parent whose rows are checked
 /// from the base `from` on.  The inner `Err` is the reason when neither
 /// applies (the identity is then only supported by rows).
-fn remove_remainder(
+pub(in crate::recurrence::lift) fn remove_remainder(
     parent: &PreparedRule,
     remainder: &DOp,
     from: usize,
@@ -655,7 +655,7 @@ fn remove_remainder_by_system(
 }
 
 /// Certify one candidate (module documentation of `hadamard_factor`).
-fn certify_candidate(
+pub(in crate::recurrence::lift) fn certify_candidate(
     input: &PreparedRule,
     parent: &PreparedRule,
     factor: &HadamardFactor,

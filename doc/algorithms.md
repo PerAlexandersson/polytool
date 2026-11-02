@@ -778,6 +778,74 @@ Eulerian, `c = 1/4`, `lambda(n) = 2^(n-1)`.  `find_gamma_lifts` detects
 (constant, or of constant ratio), for each parent of its menu and each index
 shift.
 
+## Preserver-image lifts
+
+`recurrence::certify_preserver_image_lift` certifies
+`Q_n = lambda(n) T_n(P_(n+s))` for every `n >= n0`, where `P` is a parent
+rule with a leader `g(n) S^k` free of `x` and of derivatives and `T_n` an
+operator of the menu.  With `P'_n = P_(n+s)` (rule `L'`, the substitution
+`n -> n + s`):
+
+1. **Gauge.**  A Weyl operator is written `T_n = T'_n / delta(n)` with `T'`
+   polynomial in `(n, x, D)`; `delta(n) != 0` for every `n >= n0` is decided
+   exactly, and `mu = lambda / delta` has the ratio
+   `alpha(n)/beta(n) = a(n) delta(n - 1) / (b(n) delta(n))`.  For the input
+   relation `M` (leader shift `R`),
+   `(M H)_n prod_(t=1..R) beta(n + t) = mu(n) (M_mu T' P')_n` with
+   `M_mu = sum m_(i,d)(n, x) prod_(t <= i) alpha(n + t) prod_(i < t <= R) beta(n + t) D^d S^i`.
+2. **Dividend.**  `E = M_mu o T'` in the Ore algebra (`S^i o T'(n) =
+   T'(n + i) S^i`).  For coordinate maps `M_mu` is conjugated through each
+   step instead: `y -> (y - b)/a` with `D^d -> a^d D^d` for
+   `F(a x + b)`; for `x^(d_n) F(1/x)` the identities
+   `D_x C_n = C_n (d_n y - y^2 D_y)`, `c(x) C_n(F) = C_n(c(1/y) F)` and
+   `C_(n+i)(F) = C_n(y^(-h i) F)`, then a power `y^N`; a Möbius map is
+   affine, reversal, affine.  In each case `(M H)_n = 0` exactly when
+   `(E P')_n = 0`.
+3. **Division.**  `w(n) E = sum_nu H_nu S^nu L'` by right pseudo-division
+   (remainder zero), or with the remainder removed by row annihilators of
+   `P'` (as for the Hadamard-factor lifts).  So `H` satisfies `M` at every
+   base where `L'` holds and `w != 0`; the finitely many other bases from
+   `n0 + K - R` on are evaluated exactly.
+4. **Induction.**  `H = Q` on the identifying rows and the leader of `M` is
+   nonzero at every target, so `H_n = Q_n` for every `n >= n0` (for a
+   reversal or Möbius map the argument runs over Laurent polynomials or
+   rational functions, and the polynomial rows force `deg P'_n <= d_n`).
+
+Hypergeometric multipliers are certified by the Hadamard conjugation against
+`P'`.  The transfer theorems and side conditions (each decided for every
+`n`):
+
+| Operator | Theorem | Side condition | Region from `(-inf, 0]` |
+|---|---|---|---|
+| `f(n, theta)` | Laguerre: `f` with real roots `<= 0` gives a multiplier sequence | `f(n, .)` real-rooted, roots `<= 0` (exact if fixed; discriminant and coefficient signs for degree `<= 2`) | `(-inf, 0]` |
+| `phi(n, D)` | Laguerre: `phi` real-rooted gives a preserver (`p + c p'`, Rolle on `e^(x/c) p`) | `phi(n, .)` real-rooted (exact if fixed; discriminant for degree 2) | `(-inf, 0]` if the coefficients have one sign, else the line |
+| `D^j o x^m`, `x^m D^j` | Rolle | none | `(-inf, 0]` |
+| `P(a x + b)` | substitution | `a != 0` | `(-inf, -b/a]` or `[-b/a, inf)` |
+| `x^(d_n) P(1/x)` | substitution | none | `(-inf, 0]` |
+| Möbius, `c != 0` | substitution | `a e - b c != 0` | between `-e/c` and `-b/a` if `a/c > 0` |
+| `u(n, k)` hypergeometric | Pólya--Schur | `u(n, .)` a multiplier sequence | `(-inf, 0]` |
+
+The parent statement is that of the parent provers (rows zero or real-rooted
+with roots `<= 0`); when it is not proved and the theorem needs only
+real-rootedness, the three-term theorem is tried on the whole line (Hermite,
+Chebyshev, shifted Legendre), and the input region is then the line.
+`find_preserver_image_lifts` tries each parent of a `PreserverParentLibrary`,
+each index shift `0, 1, -1, ...` and each shape: the polynomial shapes are
+fitted by solving `Q_n = sum_j y_j(n) B_j(P'_n)` exactly on each detection row
+and fitting `y_j` (or `y_j / y_pivot` with a gauge) as rational functions of
+`n`; the affine map comes from the root moments (`V(Q) = V(P)/a^2`), the
+schedules from the degrees and valuations, the gauge from exact row ratios
+(constant, rational, or of rational ratio).
+
+Interlacing: for an operator `T` independent of `n` that maps every
+real-rooted polynomial to a real-rooted polynomial or zero, and a parent whose
+consecutive rows are proved to interlace (a replayed three-term or Liu--Wang
+report), every `alpha P_(m-1) + beta P_m` is real-rooted or zero
+(Hermite--Kakeya--Obreschkoff), hence so is
+`alpha T(P_(m-1)) + beta T(P_m)`, and by the converse `T(P_(m-1))` and
+`T(P_m)` interlace weakly; the claim records no orientation.  Index-dependent
+operators get no claim.
+
 ## Exact sign decisions for an integer index
 
 `decide_index_rational_function_sign(p, q, range, condition)` decides
