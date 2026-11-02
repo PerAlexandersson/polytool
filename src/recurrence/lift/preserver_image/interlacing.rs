@@ -122,6 +122,11 @@ fn independent_preserver(operator: &PreserverOperator, n0: usize) -> Option<Stri
                 )
             })
             .then(|| "the factor depends on n".to_string()),
+        PreserverOperator::EulerStep { .. } => Some(
+            "the Euler step preserves only polynomials with nonnegative coefficients and real \
+             roots, not every real-rooted polynomial"
+                .to_string(),
+        ),
         PreserverOperator::WeylOperator { .. } => {
             Some("a general Weyl operator has no preservation theorem".to_string())
         }

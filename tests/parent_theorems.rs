@@ -1,5 +1,6 @@
-//! Tests of `recurrence::check_three_term_recurrence_theorem` and
-//! `recurrence::check_liu_wang_theorem`: classical orthogonal families,
+//! Tests of `recurrence::check_three_term_recurrence_theorem`,
+//! `recurrence::check_liu_wang_theorem` and
+//! `recurrence::check_ma_wang_interval_theorem`: classical orthogonal families,
 //! derivative families, near misses with the failing index as witness,
 //! wrong seeds, and replay.
 
@@ -872,5 +873,236 @@ mod derivative_lag {
         let json = serde_json::to_value(&report).unwrap();
         assert!(json.get("lean_route").is_none());
         assert!(json.get("lean_declarations").is_none());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The Ma--Wang interval step
+// ---------------------------------------------------------------------------
+
+mod ma_wang_interval {
+    use super::*;
+    use num_traits::{Signed, Zero};
+    use polytool::oeis;
+    use polytool::recurrence::check_ma_wang_interval_theorem;
+
+    fn ma_wang(
+        rule: &Recurrence,
+        first_index: usize,
+        seeds: &[&[i64]],
+        options: &RealRootednessTheoremOptions,
+    ) -> RealRootednessTheoremReport {
+        let report = check_ma_wang_interval_theorem(rule, first_index, &rows(seeds), options)
+            .expect("the check runs");
+        assert_replays(&report);
+        report
+    }
+
+    fn region_text(report: &RealRootednessTheoremReport) -> String {
+        report
+            .conclusion
+            .as_ref()
+            .and_then(|c| c.root_region.as_ref())
+            .expect("a certified region")
+            .to_string()
+    }
+
+    /// Ordered Bell (Fubini) polynomials `F_n = x F_(n-1) + x (1 + x) F'_(n-1)`.
+    fn fubini() -> Recurrence {
+        rule(&[(1, 0, &[&[0, 1]]), (1, 1, &[&[0, 1, 1]])], None)
+    }
+
+    /// The order of vanishing of `p` at `0`.
+    fn order_at_zero(p: &[BigRational]) -> usize {
+        p.iter().position(|c| !c.is_zero()).unwrap_or(p.len())
+    }
+
+    fn one_signed(p: &[BigRational]) -> bool {
+        !(p.iter().any(Signed::is_positive) && p.iter().any(Signed::is_negative))
+    }
+
+    #[test]
+    fn fubini_rows_stay_in_the_unit_interval_with_a_root_at_zero() {
+        let report = ma_wang(&fubini(), 0, &[&[1]], &no_region());
+        assert!(report.is_proved(), "{report:#?}");
+        // E_U(1) = 0 at the first step (the root 0 appears), then 1 > 0;
+        // E_L = 1 > 0, so -1 is never a root.
+        assert_eq!(region_text(&report), "(-1, 0]");
+        let conclusion = report.conclusion.as_ref().unwrap();
+        assert_eq!(conclusion.interlacing, Some(RowInterlacing::Weak));
+        assert_eq!(conclusion.interlacing_from, Some(1));
+        assert!(report.lean_route.is_none());
+        assert_eq!(
+            report.lean_declarations.first().map(String::as_str),
+            Some("RealRooted.affineEndpointStep_closed")
+        );
+        assert_eq!(
+            serde_json::to_value(&report).unwrap()["theorem"],
+            "ma_wang_interval"
+        );
+    }
+
+    #[test]
+    fn a_general_interval_is_read_off_the_rule() {
+        // A225476 (k! 2^k S_2(n, k)): P_n = (1 + x) P_(n-1) + x (x + 2) P'_(n-1).
+        let entry = oeis::by_id("A225476").expect("catalog entry");
+        let (rule, seeds) = entry.recurrence_parts().expect("catalog recurrence");
+        let report = check_ma_wang_interval_theorem(
+            &rule,
+            entry.recurrence_first_index,
+            &seeds,
+            &no_region(),
+        )
+        .unwrap();
+        assert_replays(&report);
+        assert!(report.is_proved(), "{report:#?}");
+        assert_eq!(region_text(&report), "(-2, 0)");
+        assert!(report.normal_form.contains("L = -2, U = 0"));
+        // The reflection G_n(x) = F_n(-x) of the Fubini rows lies in [0, 1):
+        // G_n = -x G_(n-1) + x (1 - x) G'_(n-1), with kappa_n = -1.
+        let reflected = rule_reflected_fubini();
+        let report = ma_wang(&reflected, 0, &[&[1]], &no_region());
+        assert!(report.is_proved(), "{report:#?}");
+        assert_eq!(region_text(&report), "[0, 1)");
+    }
+
+    fn rule_reflected_fubini() -> Recurrence {
+        rule(&[(1, 0, &[&[0, -1]]), (1, 1, &[&[0, 1, -1]])], None)
+    }
+
+    /// `2 n P_n = (2 x + 2 - n) P_(n-1) + 2 x (1 + x) P'_(n-1)`, `P_0 = 1`:
+    /// the affine-parameter family with `a = 1`, `b = d = 1/2`.  The
+    /// threshold at `0` is `1 - n/2 + m(n)`: it vanishes every second step,
+    /// and the lattice argument proves it for every `n`.
+    #[test]
+    fn the_lattice_case_tracks_a_growing_endpoint_multiplicity() {
+        let lattice = rule(
+            &[(1, 0, &[&[2, 2], &[-1]]), (1, 1, &[&[0, 2, 2]])],
+            Some(&[&[0], &[2]]),
+        );
+        let report = ma_wang(&lattice, 0, &[&[1]], &no_region());
+        assert!(report.is_proved(), "{report:#?}");
+        assert_eq!(region_text(&report), "(-1, 0]");
+        let upper = report
+            .hypotheses
+            .iter()
+            .find(|h| h.name == "upper_endpoint_threshold")
+            .unwrap();
+        assert!(upper.evidence.contains("lattice argument"), "{upper:#?}");
+        // The multiplicity of 0 in P_n is ceil((n - 1)/2), as the counter says.
+        let generated = lattice
+            .generate_rows_rational(&rows(&[&[1]]), 0, 16)
+            .unwrap();
+        for (n, row) in generated.iter().enumerate().skip(1) {
+            assert_eq!(order_at_zero(row), n / 2, "row {n}");
+            assert!(one_signed(row), "row {n}");
+        }
+    }
+
+    /// The same family with `b = d = 2/5`: `1/d` is not an integer, so the
+    /// threshold at `0` vanishes at `n = 2` and becomes negative at `n = 5`;
+    /// the row `P_5` has a positive root (exact).
+    #[test]
+    fn a_misaligned_lattice_fails_at_the_exact_index() {
+        let near_miss = rule(
+            &[(1, 0, &[&[4, 5], &[-2]]), (1, 1, &[&[0, 5, 5]])],
+            Some(&[&[0], &[5]]),
+        );
+        let report = ma_wang(&near_miss, 0, &[&[1]], &without_start_delay());
+        assert_eq!(
+            failure(&report, "upper_endpoint_threshold"),
+            Some(BigInt::from(5))
+        );
+        let generated = near_miss
+            .generate_rows_rational(&rows(&[&[1]]), 0, 6)
+            .unwrap();
+        for (n, row) in generated.iter().enumerate().take(5) {
+            assert!(one_signed(row), "row {n} has all roots <= 0");
+        }
+        // Real-rooted (the step) but with a root > 0.
+        let row = &generated[5];
+        assert!(!one_signed(row));
+        let common = row.iter().fold(BigInt::from(1), |accumulator, c| {
+            num_integer::Integer::lcm(&accumulator, c.denom())
+        });
+        let integer: Vec<BigInt> = row
+            .iter()
+            .map(|c| (c * BigRational::from_integer(common.clone())).to_integer())
+            .collect();
+        assert!(polytool::is_real_rooted_bigint_coeffs(&integer));
+    }
+
+    #[test]
+    fn near_misses_and_shapes_that_do_not_apply() {
+        // kappa < 0 on [0, 1] (the Eulerian-type x (1 - x)): a_n = -1.
+        let eulerian_type = rule(&[(1, 0, &[&[1, 1]]), (1, 1, &[&[0, 1, -1]])], None);
+        let report = ma_wang(&eulerian_type, 0, &[&[1]], &without_start_delay());
+        assert_eq!(failure(&report, "slope_positive"), Some(BigInt::from(1)));
+        // The seed has a root outside [-1, 0].
+        let report = ma_wang(&fubini(), 0, &[&[2, 1]], &without_start_delay());
+        assert_eq!(
+            failure(&report, "seed_roots_in_interval"),
+            Some(BigInt::from(0))
+        );
+        // An earlier seed outside the interval.
+        let report = ma_wang(&fubini(), 0, &[&[-1, 1], &[0, 1]], &no_region());
+        assert_eq!(failure(&report, "earlier_seeds"), Some(BigInt::from(0)));
+        // P_n = (x + 2) P_(n-1) + x (1 + x) P'_(n-1): E_U = 2 > 0 but
+        // E_L = -(-1 + 2) = -1 < 0 at the first step.
+        let leaving = rule(&[(1, 0, &[&[2, 1]]), (1, 1, &[&[0, 1, 1]])], None);
+        let report = ma_wang(&leaving, 0, &[&[1]], &without_start_delay());
+        assert_eq!(
+            failure(&report, "lower_endpoint_threshold"),
+            Some(BigInt::from(1))
+        );
+        // Shapes outside the theorem.
+        for c1 in [&[1, 0, 1][..], &[0, 0, 1], &[-2, 0, 1], &[0, 1]] {
+            let shape = rule(&[(1, 0, &[&[0, 1]]), (1, 1, &[c1])], None);
+            let report = ma_wang(&shape, 0, &[&[1]], &no_region());
+            assert_eq!(
+                report.status,
+                RealRootednessTheoremStatus::NotApplicable,
+                "{c1:?}"
+            );
+        }
+        let lag = rule(
+            &[(1, 0, &[&[0, 1]]), (1, 1, &[&[0, 1, 1]]), (2, 0, &[&[1]])],
+            None,
+        );
+        let report = ma_wang(&lag, 0, &[&[1], &[0, 1]], &no_region());
+        assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
+    }
+
+    #[test]
+    fn a_requested_region_must_contain_the_certified_one() {
+        let report = ma_wang(&fubini(), 0, &[&[1]], &region(Some(-2), Some(1)));
+        assert!(report.is_proved(), "{report:#?}");
+        // The open request (-1, 0) misses the attained root 0.
+        let report = ma_wang(&fubini(), 0, &[&[1]], &region(Some(-1), Some(0)));
+        assert_eq!(report.status, RealRootednessTheoremStatus::Unresolved);
+        // The open request (-1, 1) is fine: -1 is never a root.
+        let report = ma_wang(&fubini(), 0, &[&[1]], &region(Some(-1), Some(1)));
+        assert!(report.is_proved(), "{report:#?}");
+    }
+
+    #[test]
+    fn tampered_reports_are_rejected() {
+        let report = ma_wang(&fubini(), 0, &[&[1]], &no_region());
+        let mut tampered = report.clone();
+        tampered
+            .conclusion
+            .as_mut()
+            .unwrap()
+            .root_region
+            .as_mut()
+            .unwrap()
+            .lower
+            .as_mut()
+            .unwrap()
+            .value = "-1/2".into();
+        assert!(tampered.verify().is_err());
+        let mut tampered = report.clone();
+        tampered.recurrence.initial_polynomials[0] = vec!["2".into(), "1".into()];
+        assert!(tampered.verify().is_err());
     }
 }

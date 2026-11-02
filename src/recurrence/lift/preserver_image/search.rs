@@ -47,6 +47,9 @@ pub enum PreserverOperatorShape {
     /// A hypergeometric multiplier (`1/k!`, `1/(1/2)_k`, `1/(n - k)!`,
     /// `binom(n + a, k + b)` with `0 <= a <= 2`, `0 <= b <= 1`).
     HadamardMultiplier,
+    /// The Euler step `kappa (theta + a)(theta + b) + x (u + v theta)`,
+    /// fitted coefficient by coefficient (with a raising term).
+    EulerStep,
 }
 
 impl PreserverOperatorShape {
@@ -61,6 +64,7 @@ impl PreserverOperatorShape {
             Self::Reversal,
             Self::FPolynomial,
             Self::HadamardMultiplier,
+            Self::EulerStep,
         ]
     }
 }
@@ -299,6 +303,18 @@ fn theta_image(row: &[Q], power: usize) -> Vec<Q> {
             c * weight
         })
         .collect()
+}
+
+/// The basis `P, theta P, theta^2 P, x P, x theta P` of the Euler step.
+fn euler_step_image(row: &[Q], index: usize) -> Vec<Q> {
+    match index {
+        0..=2 => theta_image(row, index),
+        _ => {
+            let mut shifted = vec![Q::zero()];
+            shifted.extend(theta_image(row, index - 3));
+            shifted
+        }
+    }
 }
 
 fn derivative_image(row: &[Q], order: usize) -> Vec<Q> {
@@ -596,6 +612,23 @@ fn shape_candidates(
                 .filter_map(|schedule| with_images(PreserverOperator::f_polynomial(schedule)))
                 .collect()
         }
+        PreserverOperatorShape::EulerStep => {
+            fit_linear_shape(inputs, parents, n0, 4, euler_step_image, total)
+                .into_iter()
+                .filter(|(coefficients, _)| coefficients.len() >= 4)
+                .map(|(mut coefficients, gauge)| {
+                    coefficients.resize(5, IndexRationalFunction::constant(&Q::zero()));
+                    let raising = coefficients.split_off(3);
+                    (
+                        PreserverOperator::EulerStep {
+                            diagonal: coefficients,
+                            raising,
+                        },
+                        gauge,
+                    )
+                })
+                .collect()
+        }
         PreserverOperatorShape::HadamardMultiplier => hadamard_menu()
             .into_iter()
             .filter(|factor| factor.validate(n0).is_ok())
@@ -781,5 +814,60 @@ mod tests {
         let target = vec_poly::scale(&vec_poly::compose(&p, &[q(1), q(2)]), &q(3));
         let candidates = affine_candidates(&[target], &[p]);
         assert!(candidates.contains(&(q(2), q(1))));
+    }
+
+    #[test]
+    fn the_euler_step_is_fitted_from_independent_images() {
+        // T = (theta + 1)(theta + 2) + x (1 + theta) on the Eulerian rows
+        // A_1, ..., A_10 (whose five basis images are independent from A_4
+        // on; the binomial rows are not, since x P = (theta P + x theta P)/n).
+        let parents: Vec<Vec<Q>> = crate::sequences::eulerian_polynomials_bigint(10)[1..]
+            .iter()
+            .map(|row| {
+                vec_poly::trim(&row.iter().cloned().map(Q::from_integer).collect::<Vec<_>>())
+            })
+            .collect();
+        let inputs: Vec<Vec<Q>> = parents
+            .iter()
+            .map(|p| {
+                let diagonal = [q(2), q(3), q(1)]
+                    .iter()
+                    .enumerate()
+                    .fold(vec![q(0)], |acc, (j, c)| {
+                        vec_poly::add(&acc, &vec_poly::scale(&euler_step_image(p, j), c))
+                    });
+                let raising = vec_poly::add(&euler_step_image(p, 3), &euler_step_image(p, 4));
+                vec_poly::trim(&vec_poly::add(&diagonal, &raising))
+            })
+            .collect();
+        let options = PreserverImageSearchOptions::default();
+        let candidates = shape_candidates(
+            PreserverOperatorShape::EulerStep,
+            &inputs,
+            &parents,
+            1,
+            &options,
+        );
+        let constant = |v: i64| IndexRationalFunction::constant(&q(v));
+        let expected = PreserverOperator::EulerStep {
+            diagonal: vec![constant(2), constant(3), constant(1)],
+            raising: vec![constant(1), constant(1)],
+        };
+        assert!(
+            candidates
+                .iter()
+                .any(|(operator, gauge)| *operator == expected
+                    && *gauge == VeroneseSectionGauge::None),
+            "{candidates:?}"
+        );
+        // The operator reproduces the rows.
+        let form = expected.form().unwrap();
+        for (offset, (input, parent)) in inputs.iter().zip(&parents).enumerate() {
+            assert_eq!(
+                form.apply_row(parent, 1 + offset)
+                    .map(|r| vec_poly::trim(&r)),
+                Some(input.clone())
+            );
+        }
     }
 }

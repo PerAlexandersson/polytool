@@ -86,7 +86,19 @@
 //! that is not proved and the operator's theorem needs only
 //! real-rootedness, the three-term theorem is tried without a root region
 //! (for example for the Hermite or Chebyshev parents); the input region is
-//! then the whole line.  Each side condition is decided exactly for every
+//! then the whole line.
+//!
+//! **Interval parents.**  A parent may also be proved real-rooted with every
+//! root in a bounded interval `[L, U]` (rational ends): by the Ma--Wang
+//! interval check, or by the three-term theorem with a root-region
+//! certificate (the `interval` module documentation).  For the substitution
+//! maps and the Rolle operators the input region is then the exact image of
+//! `[L, U]` (an affine image, a reciprocal image, a Möbius image, or the
+//! hull with `0`), used when the ray statement is not proved or the image is
+//! strictly smaller than the ray region; multipliers and `phi(D)` use their
+//! ray theorems only, when `[L, U]` lies in `(-inf, 0]`, and otherwise (the
+//! operator preserving real-rootedness on the line) the line.  The interval
+//! report is recorded in the certification and replayed by `verify()`.  Each side condition is decided exactly for every
 //! `n >= n0`; a side condition that cannot be decided leaves the lift open.
 //!
 //! - `f(n, theta)`, `theta = x D` (the multiplier `k -> f(n, k)`): Laguerre's
@@ -113,6 +125,14 @@
 //! - `x^k -> u(n, k) x^k` with `u` hypergeometric: Pólya--Schur (the
 //!   `hadamard_factor` module); side condition: `u(n, .)` a nonnegative
 //!   multiplier sequence (justified per factor); `(-inf, 0]`.
+//! - the Euler step `kappa (theta + a)(theta + b) + x (u + v theta)`:
+//!   RealRooted `IsPFPolynomial.generalStep_of_natDegree_le` (polynomials
+//!   with nonnegative coefficients and real roots are preserved); side
+//!   conditions `kappa, kappa (a + b), kappa a b > 0` with a nonnegative
+//!   discriminant (so `a, b > 0`), `u > 0`, `v >= 0`, and a negative
+//!   comparison defect on `s <= 0` (`B = u - (a + b + 1) v/2 >= 0`, or
+//!   `B^2 < v^2 ((a + b + 1)^2/4 - a b)`), each by the sign checker; region
+//!   `(-inf, 0]`, and nothing from parents rooted elsewhere;
 //! - a general Weyl operator: no theorem, the lift stays open.
 //!
 //! Every certification records the Lean route (`reversed`, `fTransform`,
@@ -125,8 +145,8 @@
 //! [`PreserverParentLibrary`] holds candidate parents with their rows and
 //! parent proofs (computed once per library): the named families of
 //! [`crate::sequences`] with their defining recurrences, and optionally the
-//! OEIS catalog entries, each kept when the parent provers (or the
-//! three-term theorem on the whole line) prove it.
+//! OEIS catalog entries, each kept when the parent provers, an interval
+//! prover or the three-term theorem on the whole line prove it.
 //! [`find_preserver_image_lifts`] tries every parent, index shift and
 //! operator shape in a fixed order, fits the operator parameters exactly
 //! from a few rows (linear algebra over the rationals; the index dependence
@@ -144,12 +164,14 @@
 //!
 //! The group is split into `operator` (the menu, its normal forms and the
 //! conjugation), `transfer` (theorems, side conditions, regions, Lean
-//! names), `interlacing` (the interlacing claim), `certify` (candidate,
+//! names), `interval` (interval parents and interval images),
+//! `interlacing` (the interlacing claim), `certify` (candidate,
 //! certificates, certification), `summary` (the [`LiftSummary`] mapping),
 //! `library` (the parents) and `search` (detection).
 
 mod certify;
 mod interlacing;
+mod interval;
 mod library;
 mod operator;
 mod search;

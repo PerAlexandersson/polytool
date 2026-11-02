@@ -323,8 +323,9 @@ boundary, or by a root-domain claim of `transform_recurrence` (maps: identity,
 `f_polynomial` and `reversal` with a degree schedule fitted to the first rows,
 the inverse `f`-map; accepted only for an unconditional all-index claim that
 the source is real-rooted in an interval ending at or below 0), and then by
-the three-term and Liu--Wang theorems with the root region `(-inf, 0)`, and
-the Liu--Wang derivative-lag theorem (roots in `(-inf, 0]`) (next section).  The root-domain menu is repeated with the parent's first index
+the three-term and Liu--Wang theorems with the root region `(-inf, 0)`, the
+Liu--Wang derivative-lag theorem (roots in `(-inf, 0]`) and the Ma--Wang
+interval theorem when its interval `[L, U]` has `U <= 0` (next section).  The root-domain menu is repeated with the parent's first index
 moved one to three rows later (the skipped rows are among the parent rows
 checked exactly, each zero or real-rooted with one-signed coefficients), and
 both theorems move their own induction start the same way.  The Eulerian
@@ -362,8 +363,9 @@ of this stage.
 ## Real-rootedness theorems for recurrences
 
 `recurrence::check_three_term_recurrence_theorem`,
-`recurrence::check_liu_wang_theorem` and
-`recurrence::check_liu_wang_derivative_lag_theorem` take a rule
+`recurrence::check_liu_wang_theorem`,
+`recurrence::check_liu_wang_derivative_lag_theorem` and
+`recurrence::check_ma_wang_interval_theorem` take a rule
 `f(n) P_n = sum c_(k,d)(n, x) D^d P_(n-k)` (`f` free of `x`, no `(-1)^n`
 factors, no inhomogeneous term), a first index and `K` seed rows; the rule
 applies from `N = first_index + K` on, the induction starts at the last
@@ -472,6 +474,38 @@ two rows to `P_3 = x`, `P_4 = x + x^2`, and the quotients are the A046739
 rows.  Not covered: the half-growth degree law `D0 + (n + e)/2` (plateaus),
 and lag coefficients of the wrong sign, such as binomial Eulerian (A046802,
 `W_n = (1 - n) x`), which need vector lifts.
+
+**Ma--Wang interval step.**  S.-M. Ma and Y. Wang, Electron. J. Combin. 15
+(2008) R17, Theorem 2 and Corollary 3, in the closed two-endpoint form of
+RealRooted (`affineEndpointStep_closed`, with
+`affineEndpointStep_roots_mem_Icc_iff` and the multiplicity updates
+`affineEndpointStep_rootMultiplicity_zero`, `_neg_one`): for `p` real-rooted
+with every root in `[-1, 0]` and `a > 0`, `F = (a y + c) p + y (y + 1) p'` has
+degree `deg p + 1`, is real-rooted, `p` interlaces `F`, every root of `F` lies
+in `[-1, 0]` iff `c + m_0 >= 0` and `a + m_(-1) - c >= 0` (the endpoint
+multiplicities of `p`), and each multiplicity grows by one exactly when its
+expression vanishes.  For `f(n) P_n = c_0(n, x) P_(n-1) + gamma(n) (x - L)
+(x - U) P'_(n-1)` (`L < U` rational, `h = U - L`), the substitution
+`x = U + h y` turns the right side into `(gamma / f) h [(a_n y + c_n) g +
+y (y + 1) g']` with `g(y) = P_(n-1)(U + h y)`, `a_n = [x^1] c_0 / gamma` and
+`c_n = c_0(n, U) / (h gamma)` (a nonzero factor moves no root; a negative
+leading coefficient is handled by linearity).  The hypotheses are
+`a_n > 0` (sign checker) and the thresholds
+`E_U(n) = c_0(n, U) / (h gamma) + m_U(n) >= 0`,
+`E_L(n) = -c_0(n, L) / (h gamma) + m_L(n) >= 0` with `m(N)` read off the last
+seed and `m(n + 1) = m(n) + [E(n) = 0]`.  Since `m` never decreases, the
+sign checker proving `e(n) + m >= 0` from some index on settles the rest;
+otherwise its smallest failing index `i` is either reached without a zero of
+`e + m` in between (an exact failure: by the equivalence, `P_i` has a root
+outside `[L, U]`) or the first zero `j` is a hit, after which the test
+restarts at `(j + 1, m + 1)`.  For `e(n) = e_0 - d n` affine with `1/d` a
+positive integer and `E` a nonnegative multiple of `d`, `E` stays in
+`d Z_(>= 0)` forever (it drops by `d` per step and a hit raises `0` to
+`1 - d`), which proves the infinite hit sequence of the affine-parameter
+family `(n + 1) P_(n+1) = (a x + b - d n) P_n + x (x + 1) P_n'` with `b = s d`
+(the ceiling-division multiplicity of `MaWang.affineEndpointSequence`); a
+misaligned lattice (for example `b = d = 2/5`) fails at an exact index.  An
+end of the certified interval is closed unless no row can have a root there.
 
 **Moving the induction start.**  The theorems fail when the first rows do
 not behave like the later ones, for example the Eulerian `A_0 = A_1 = 1`
@@ -824,11 +858,33 @@ Hypergeometric multipliers are certified by the Hadamard conjugation against
 | `x^(d_n) P(1/x)` | substitution | none | `(-inf, 0]` |
 | Möbius, `c != 0` | substitution | `a e - b c != 0` | between `-e/c` and `-b/a` if `a/c > 0` |
 | `u(n, k)` hypergeometric | Pólya--Schur | `u(n, .)` a multiplier sequence | `(-inf, 0]` |
+| `kappa (theta + a)(theta + b) + x (u + v theta)` | Euler step, RealRooted `IsPFPolynomial.generalStep_of_natDegree_le` (nonnegative coefficients and real roots preserved) | `kappa, kappa (a + b), kappa a b, u > 0`, `v >= 0`, discriminant `>= 0`, and `B = u - (a + b + 1) v/2 >= 0` or `B^2 < v^2 ((a + b + 1)^2/4 - a b)` | `(-inf, 0]` (no real-line statement) |
 
 The parent statement is that of the parent provers (rows zero or real-rooted
 with roots `<= 0`); when it is not proved and the theorem needs only
 real-rootedness, the three-term theorem is tried on the whole line (Hermite,
 Chebyshev, shifted Legendre), and the input region is then the line.
+
+**Interval parents.**  A parent may also be proved real-rooted with every
+root in a bounded interval `[L, U]` (rational ends, each open or closed): by
+the Ma--Wang interval theorem, or by the three-term theorem with the open
+region `(l, u)`, `l < u` the integers in `[-64, 64]` closest to the roots of
+the first twelve rows (the choice only selects the request; the theorem
+certifies it).  The image regions are exact: `P(a x + b)` gives
+`[(L - b)/a, (U - b)/a]` (ends exchanged for `a < 0`); `D^j o x^m` and
+`x^m D^j` give the hull of `[L, U]` and `0` (Rolle: every derivative of a
+real-rooted polynomial has its roots between the extreme roots), or
+`[L, U]` for `m = 0`; the reversal gives `[0, 1/L]` for `L > 0`,
+`[1/U, 0]` for `U < 0`, a ray when an end is `0`, else the line; a Möbius map
+with its pole `a/c` outside `[L, U]` gives the hull of
+`phi(L), phi(U)` (`phi(r) = (e r - b)/(a - c r)`, monotone there) and the
+point `-e/c` of the degree defect, else the line.  Multipliers, `phi(D)` and
+the Euler step use their ray theorems only (when `U <= 0`).  The interval
+route is used when the ray statement is not proved or its image is strictly
+smaller than the ray image; when no image theorem applies and the operator
+preserves real-rootedness on the line, the interval report proves the parent
+rows real-rooted and the input region is the line.  The interval report is
+part of the certification and is replayed by `verify()`.
 `find_preserver_image_lifts` tries each parent of a `PreserverParentLibrary`,
 each index shift `0, 1, -1, ...` and each shape: the polynomial shapes are
 fitted by solving `Q_n = sum_j y_j(n) B_j(P'_n)` exactly on each detection row
@@ -839,8 +895,8 @@ schedules from the degrees and valuations, the gauge from exact row ratios
 
 Interlacing: for an operator `T` independent of `n` that maps every
 real-rooted polynomial to a real-rooted polynomial or zero, and a parent whose
-consecutive rows are proved to interlace (a replayed three-term or Liu--Wang
-report), every `alpha P_(m-1) + beta P_m` is real-rooted or zero
+consecutive rows are proved to interlace (a replayed three-term, Liu--Wang,
+derivative-lag or Ma--Wang interval report), every `alpha P_(m-1) + beta P_m` is real-rooted or zero
 (Hermite--Kakeya--Obreschkoff), hence so is
 `alpha T(P_(m-1)) + beta T(P_m)`, and by the converse `T(P_(m-1))` and
 `T(P_m)` interlace weakly; the claim records no orientation.  Index-dependent

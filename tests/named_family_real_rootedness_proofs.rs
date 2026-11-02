@@ -9,7 +9,9 @@
 //!   recurrences, also in reciprocal coordinates as for the Narayana rows);
 //! - [`check_liu_wang_theorem`] (first-order derivative recurrences);
 //! - [`transform_recurrence`] with a root-domain request (a completed Rolle
-//!   induction transported back through the `f`-polynomial map).
+//!   induction transported back through the `f`-polynomial map);
+//! - `check_ma_wang_interval_theorem` (the Ma--Wang interval step, for the
+//!   ordered set partitions `k! S(n, k)`).
 //!
 //! What a passing test establishes depends on where the recurrence comes
 //! from, which each test states:
@@ -749,6 +751,90 @@ mod preserver_images {
             "binomial",
             "phi(n, D) = 1 + n + (-1 + n) D + (-1) D^2",
             "(-inf, +inf)",
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The Ma--Wang interval step: ordered set partitions.
+// ---------------------------------------------------------------------------
+
+mod ma_wang_interval {
+    use super::{q, rational_rows, trimmed, Q, ROWS};
+    use polytool::oeis;
+    use polytool::recurrence::{check_ma_wang_interval_theorem, RealRootednessTheoremOptions};
+    use polytool::sequences;
+    use polytool::vec_poly;
+
+    /// The `f`-polynomial `(1 + x)^(n-1) A_n(x / (1 + x))` of the Eulerian
+    /// polynomial `A_n` (degree `n - 1`), `n >= 1`.
+    fn eulerian_f_polynomial(eulerian: &[Q], n: usize) -> Vec<Q> {
+        let mut total = vec![q(0)];
+        for (k, c) in eulerian.iter().enumerate() {
+            let mut term = vec![c.clone()];
+            for _ in 0..k {
+                term = vec_poly::mul(&term, &[q(0), q(1)]);
+            }
+            for _ in k..n - 1 {
+                term = vec_poly::mul(&term, &[q(1), q(1)]);
+            }
+            total = vec_poly::add(&total, &term);
+        }
+        trimmed(&total)
+    }
+
+    /// OEIS catalog record A019538 (`k! S(n, k)`, the `f`-polynomials of
+    /// the Eulerian polynomials, i.e. of the permutohedra), `P_n = (1 + 2x)
+    /// P_(n-1) + x (1 + x) P'_(n-1)`: every row lies in `(-1, 0)` by the
+    /// Ma--Wang interval check.  The identity with the Eulerian generator is
+    /// checked on `ROWS` rows (the catalog recurrence is a proof for the
+    /// recurrence family).
+    #[test]
+    fn ordered_set_partitions_via_catalog() {
+        let entry = oeis::by_id("A019538").expect("catalog entry");
+        let (rule, seeds) = entry.recurrence_parts().expect("catalog recurrence");
+        let first_index = entry.recurrence_first_index;
+        let catalog_rows = rule
+            .generate_rows_rational(&seeds, first_index, ROWS)
+            .expect("the catalog recurrence replays");
+        let eulerian = rational_rows(sequences::eulerian_polynomials_bigint(ROWS + 1));
+        for (offset, row) in catalog_rows.iter().enumerate() {
+            let n = first_index + offset;
+            assert_eq!(
+                trimmed(row),
+                eulerian_f_polynomial(&eulerian[n], n),
+                "row {n}"
+            );
+        }
+        let report = check_ma_wang_interval_theorem(
+            &rule,
+            first_index,
+            &seeds,
+            &RealRootednessTheoremOptions::default(),
+        )
+        .expect("the check runs");
+        assert!(report.is_proved(), "{report:#?}");
+        report.verify().expect("the report replays");
+        let conclusion = report.conclusion.as_ref().unwrap();
+        assert_eq!(
+            conclusion.root_region.as_ref().unwrap().to_string(),
+            "(-1, 0)"
+        );
+        // A131689 (the same numbers with the column k = 0): the root 0
+        // appears at the first step and stays, so the region is (-1, 0].
+        let entry = oeis::by_id("A131689").expect("catalog entry");
+        let (rule, seeds) = entry.recurrence_parts().expect("catalog recurrence");
+        let report = check_ma_wang_interval_theorem(
+            &rule,
+            entry.recurrence_first_index,
+            &seeds,
+            &RealRootednessTheoremOptions::default(),
+        )
+        .expect("the check runs");
+        assert!(report.is_proved(), "{report:#?}");
+        assert_eq!(
+            report.conclusion.unwrap().root_region.unwrap().to_string(),
+            "(-1, 0]"
         );
     }
 }

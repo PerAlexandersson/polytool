@@ -14,7 +14,13 @@
 //!   recurrences `P_n = A_n(x) P_(n-1) + V_n(x) P'_(n-1) + W_n(x) P_(n-2)`
 //!   (the RealRooted routes `halfGrowth` and `sign`), with strict interlacing
 //!   of consecutive rows and every root in `(-inf, 0)`, also after dividing
-//!   every row by a power of `x`.
+//!   every row by a power of `x`;
+//! - [`check_ma_wang_interval_theorem`]: the Ma--Wang interval step
+//!   `P_n = (alpha_n x + beta_n) P_(n-1) + kappa_n (x - L)(x - U) P'_(n-1)`
+//!   with fixed rational `L < U`, with every root in the closed interval
+//!   `[L, U]` and weak interlacing of consecutive rows, by the exact
+//!   two-endpoint criterion with the endpoint multiplicities tracked through
+//!   the induction.
 //!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
@@ -32,7 +38,7 @@
 //! [`Recurrence::generate_rows_rational`], from `N = first_index + K` on,
 //! where `K` is the number of supplied seed rows.  The theorems start their
 //! induction at the last seeds (`P_(N-2), P_(N-1)` for the three-term and
-//! derivative-lag theorems, `P_(N-1)` for Liu--Wang); earlier seed rows are
+//! derivative-lag theorems, `P_(N-1)` for Liu--Wang and Ma--Wang); earlier seed rows are
 //! checked exactly.
 //! `f` must be free of `x`.  Rules with `(-1)^n` factors or an inhomogeneous
 //! term are not matched.
@@ -68,7 +74,7 @@
 //! row that is checked exactly (a seed, or a root-region failure at a
 //! computed row).
 //!
-//! Related: `parent_proof` uses the three provers as parent routes of the
+//! Related: `parent_proof` uses the four provers as parent routes of the
 //! Veronese-section lifts; [`match_recurrence_theorems`] (renewal windows) and
 //! the Rolle routes of [`transform_recurrence`] cover other families.
 
@@ -86,9 +92,11 @@ use std::collections::BTreeMap;
 
 mod derivative_lag;
 mod liu_wang;
+mod ma_wang;
 mod three_term;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
 pub use liu_wang::check_liu_wang_theorem;
+pub use ma_wang::check_ma_wang_interval_theorem;
 pub use three_term::check_three_term_recurrence_theorem;
 
 type Q = BigRational;
@@ -110,6 +118,8 @@ pub enum RealRootednessTheorem {
     LiuWang,
     /// [`check_liu_wang_derivative_lag_theorem`].
     LiuWangDerivativeLag,
+    /// [`check_ma_wang_interval_theorem`].
+    MaWangInterval,
 }
 
 /// Outcome of a theorem check.
@@ -190,7 +200,9 @@ pub struct RealRootednessTheoremConclusion {
     /// `n >= first_index`, when certified: open at its finite ends, except
     /// the closed end `0` of `(-inf, 0]` certified by
     /// [`check_liu_wang_derivative_lag_theorem`] after dividing the rows by a
-    /// power of `x`.
+    /// power of `x`, and the interval `[L, U]` of
+    /// [`check_ma_wang_interval_theorem`], whose ends are closed unless no
+    /// row has a root there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_region: Option<RootInterval>,
     /// The conclusion in words.
@@ -198,7 +210,8 @@ pub struct RealRootednessTheoremConclusion {
 }
 
 /// The result of [`check_three_term_recurrence_theorem`],
-/// [`check_liu_wang_theorem`] or [`check_liu_wang_derivative_lag_theorem`]
+/// [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`] or
+/// [`check_ma_wang_interval_theorem`]
 /// (schema `polytool.recurrence-real-rootedness-theorem.v1`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -238,13 +251,14 @@ pub struct RealRootednessTheoremReport {
     /// (<https://github.com/PerAlexandersson/RealRooted>,
     /// `RealRooted/Tactic/ROUTES.md`) whose hypotheses the check mirrors,
     /// for example `halfGrowth` or `sign`; omitted when none is recorded
-    /// (the three-term and Liu--Wang checks, and rules that do not have the
-    /// theorem's form).
+    /// (the three-term, Liu--Wang and Ma--Wang checks, and rules that do not
+    /// have the theorem's form).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lean_route: Option<String>,
     /// Fully qualified RealRooted declarations behind `lean_route` (the
-    /// theorem a replay applies first, then its supporting lemmas); empty
-    /// when no route is recorded.
+    /// theorem a replay applies first, then its supporting lemmas); for the
+    /// Ma--Wang check, which has no row route, the step theorems it applies.
+    /// Empty when nothing is recorded.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lean_declarations: Vec<String>,
 }
@@ -388,6 +402,9 @@ fn check_at_supplied_seeds(
         }
         RealRootednessTheorem::LiuWangDerivativeLag => {
             derivative_lag::derivative_lag_report(rule, first_index, seeds, options)
+        }
+        RealRootednessTheorem::MaWangInterval => {
+            ma_wang::ma_wang_interval_report(rule, first_index, seeds, options)
         }
     }
 }

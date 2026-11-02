@@ -336,6 +336,34 @@ Additions:
   declarations of each theorem and an interlacing claim
   (`PreserverInterlacingClaim`, Hermite--Kakeya--Obreschkoff transfer of the
   parent's proved interlacing for operators independent of `n`).
+- Ma--Wang interval theorem: `recurrence::check_ma_wang_interval_theorem`
+  (theorem `ma_wang_interval`, report
+  `polytool.recurrence-real-rootedness-theorem.v1`) for first-order rules
+  `f(n) P_n = c_0(n, x) P_(n-1) + gamma(n) (x - L)(x - U) P'_(n-1)`,
+  `deg_x c_0 <= 1`, `L < U` rational: every row real-rooted with every root in
+  `[L, U]` and weak interlacing of consecutive rows, by the exact two-endpoint
+  criterion of Ma and Wang (EJC 15 (2008) R17) in the closed form of RealRooted
+  (`affineEndpointStep_closed`), with the endpoint multiplicities tracked
+  exactly through the induction (sign checker between endpoint hits, and the
+  lattice argument for affine thresholds with an infinite hit sequence); a
+  failing threshold names the row that leaves the interval.  It is a new parent
+  route (`VeroneseParentProofRoute::MaWangInterval`, lift-summary route
+  `ma_wang_interval`) when `U <= 0`, run after the derivative-lag theorem.
+- Preserver-image lifts with interval parents: `PreserverParentRegion::Interval`
+  and `PreserverParent::interval_proof` (the Ma--Wang interval theorem, or the
+  three-term theorem with a root region), and the certification field
+  `PreserverImageCertification::interval_parent_proof` (replayed by
+  `verify()`).  Affine, reversal and Möbius maps and the Rolle operators give
+  the exact image of the parent interval (lift-summary routes
+  `ma_wang_interval` and `three_term_interval`); multipliers and `phi(D)` use
+  their ray theorems only.  The named Chebyshev and shifted Legendre parents
+  are now interval parents.
+- Preserver-image operator `PreserverOperator::EulerStep` and shape
+  `PreserverOperatorShape::EulerStep`: the Euler step
+  `kappa (theta + a)(theta + b) + x (u + v theta)` with the side conditions of
+  RealRooted `IsPFPolynomial.generalStep_of_natDegree_le` (`kappa, a, b > 0`,
+  `u > 0`, `v >= 0`, negative comparison defect), decided exactly for every
+  `n`; region `(-inf, 0]`, no interlacing claim.
 - `sequences::literature::peak_polynomials_bigint` and
   `peak_polynomials_iter` (permutations by peaks, A008303), and library
   recurrences returned as `(Recurrence, seeds, first_index)`

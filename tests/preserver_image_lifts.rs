@@ -893,3 +893,314 @@ fn index_dependent_operators_claim_no_interlacing() {
     assert!(certification.is_proved());
     assert!(!certification.interlacing.is_claimed());
 }
+
+// ---------------------------------------------------------------------------
+// Interval parents
+// ---------------------------------------------------------------------------
+
+mod interval_parents {
+    use super::*;
+    use polytool::recurrence::{LiftParentProof, VeroneseParentProofStatus};
+
+    fn integer_rule(terms: &[(usize, usize, Vec<Vec<i64>>)]) -> Recurrence {
+        Recurrence {
+            terms: terms
+                .iter()
+                .map(|(offset, order, coefficients)| {
+                    RecurrenceTerm::new(
+                        *offset,
+                        *order,
+                        BivarPoly::from_coefficients_normalized(
+                            coefficients
+                                .iter()
+                                .map(|row| row.iter().map(|&v| q(v)).collect())
+                                .collect(),
+                        ),
+                    )
+                })
+                .collect(),
+            denominator: None,
+            inhomogeneous: None,
+        }
+    }
+
+    /// The rows `P_1, ..., P_ROWS` of a first-order rule from `P_1 = 1`.
+    fn rows_from_one(rule: &Recurrence) -> Vec<Vec<Q>> {
+        rule.generate_rows_rational(&[vec![q(1)]], 1, ROWS)
+            .expect("rows")
+            .iter()
+            .map(|row| vec_poly::trim(row))
+            .collect()
+    }
+
+    fn interval_candidate(
+        parent_rule: &Recurrence,
+        operator: PreserverOperator,
+    ) -> PreserverImageCandidate {
+        PreserverImageCandidate {
+            parent_name: "interval_parent".into(),
+            parent: RecurrenceJson::from_recurrence_rational(parent_rule, 1, &[vec![q(1)]], None),
+            index_shift: 0,
+            gauge: VeroneseSectionGauge::None,
+            operator,
+        }
+    }
+
+    fn parent_route(certification: &PreserverImageCertification) -> String {
+        match &certification.lift_summary.parent_proof {
+            LiftParentProof::Proved { route, .. } => route.clone(),
+            other => panic!("the parent is not proved: {other:?}"),
+        }
+    }
+
+    /// The `f`-polynomials of the Eulerian polynomials (A019538, the rows
+    /// `k! S(n, k)`), `P_n = (1 + 2x) P_(n-1) + x (1 + x) P'_(n-1)`, lie in
+    /// `(-1, 0)` by the Ma--Wang interval check, so `P_n(2x + 1)` lies in
+    /// `(-1, -1/2)`, strictly inside the ray image `(-inf, -1/2]`.
+    #[test]
+    fn a_ma_wang_parent_bounds_an_affine_image() {
+        let parent_rule = integer_rule(&[(1, 0, vec![vec![1, 2]]), (1, 1, vec![vec![0, 1, 1]])]);
+        // Q_n = (3 + 4x) Q_(n-1) + (1 + 3x + 2x^2) Q'_(n-1).
+        let input = integer_rule(&[(1, 0, vec![vec![3, 4]]), (1, 1, vec![vec![1, 3, 2]])]);
+        let rows = rows_from_one(&input);
+        for (parent_row, row) in rows_from_one(&parent_rule).iter().zip(&rows) {
+            assert_eq!(
+                &vec_poly::trim(&vec_poly::compose(parent_row, &[q(1), q(2)])),
+                row
+            );
+        }
+        let certification = certify(
+            &input,
+            &rows,
+            1,
+            &interval_candidate(
+                &parent_rule,
+                PreserverOperator::Affine {
+                    slope: "2".into(),
+                    intercept: "1".into(),
+                },
+            ),
+        );
+        assert_proved(&certification, "(-1, -1/2)");
+        assert_eq!(parent_route(&certification), "ma_wang_interval");
+        assert_eq!(
+            certification
+                .lift_summary
+                .root_transfer
+                .parent_root_region
+                .as_ref()
+                .map(|r| r.to_string())
+                .as_deref(),
+            Some("(-1, 0)")
+        );
+    }
+
+    /// The reflection `G_n(x) = P_n(-x)` lies in `(0, 1)`: its rows have
+    /// coefficients of both signs, so the ray statement of the parent
+    /// provers is refuted, and only the interval route proves the image
+    /// `G_n(x - 1) = P_n(1 - x)`, rooted in `(1, 2)`.
+    #[test]
+    fn only_the_interval_route_proves_an_image_of_a_positive_interval() {
+        let parent_rule = integer_rule(&[(1, 0, vec![vec![1, -2]]), (1, 1, vec![vec![0, 1, -1]])]);
+        // Q_n = (3 - 2x) Q_(n-1) + (-2 + 3x - x^2) Q'_(n-1).
+        let input = integer_rule(&[(1, 0, vec![vec![3, -2]]), (1, 1, vec![vec![-2, 3, -1]])]);
+        let rows = rows_from_one(&input);
+        for (parent_row, row) in rows_from_one(&parent_rule).iter().zip(&rows) {
+            assert_eq!(
+                &vec_poly::trim(&vec_poly::compose(parent_row, &[q(-1), q(1)])),
+                row
+            );
+        }
+        let candidate = interval_candidate(
+            &parent_rule,
+            PreserverOperator::Affine {
+                slope: "1".into(),
+                intercept: "-1".into(),
+            },
+        );
+        let certification = certify(&input, &rows, 1, &candidate);
+        assert_eq!(
+            certification.parent_proof.status,
+            VeroneseParentProofStatus::Refuted
+        );
+        assert_proved(&certification, "(1, 2)");
+        assert_eq!(parent_route(&certification), "ma_wang_interval");
+        // The parent's weak interlacing (Ma--Wang) transfers through the
+        // fixed affine map.
+        assert!(certification.interlacing.is_claimed());
+        // Removing or replacing the interval report is detected.
+        let mut tampered = certification.clone();
+        tampered.interval_parent_proof = None;
+        assert!(tampered.verify().is_err());
+        let mut tampered = certification.clone();
+        let mut report = tampered.interval_parent_proof.clone().unwrap();
+        report.recurrence =
+            RecurrenceJson::from_recurrence_rational(&input, 1, &[vec![q(1)]], None);
+        tampered.interval_parent_proof = Some(report);
+        assert!(tampered.verify().is_err());
+        // Without the interval report the lift is not proved.
+        let summary = {
+            let mut stripped = certification.clone();
+            stripped.interval_parent_proof = None;
+            stripped.recompute_lift_summary()
+        };
+        assert_ne!(summary.verdict, LiftVerdict::Proved);
+        // Rows check: every row of the input is real-rooted in (1, 2).
+        for row in &rows[1..] {
+            assert!(is_real_rooted_bigint_coeffs(&integer_row(row)));
+            // Every root r > 1 (Q(1 - z) has the negative roots 1 - r) and
+            // r < 2 (Q(2 + z) has the negative roots r - 2).
+            let shifted_left = vec_poly::compose(row, &[q(1), q(-1)]);
+            let shifted_right = vec_poly::compose(row, &[q(2), q(1)]);
+            for shifted in [shifted_left, shifted_right] {
+                assert!(
+                    shifted.iter().all(|c| c > &q(0)) || shifted.iter().all(|c| c < &q(0)),
+                    "{row:?}"
+                );
+            }
+        }
+    }
+
+    /// The shifted Chebyshev polynomials `T_n(2x - 1)` from the three-term
+    /// interval `(-1, 1)` of the Chebyshev parent: the region `(0, 1)`
+    /// instead of the line.
+    #[test]
+    fn a_three_term_interval_bounds_the_shifted_chebyshev_rows() {
+        let rows: Vec<_> = rational_rows(&sequences::chebyshev_polynomials_t_bigint(ROWS - 1))
+            .iter()
+            .map(|p| vec_poly::trim(&vec_poly::compose(p, &[q(-1), q(2)])))
+            .collect();
+        // Q_n = (4x - 2) Q_(n-1) - Q_(n-2).
+        let input = integer_rule(&[(1, 0, vec![vec![-2, 4]]), (2, 0, vec![vec![-1]])]);
+        let certification = certify(
+            &input,
+            &rows,
+            0,
+            &candidate(
+                "chebyshev_t",
+                PreserverOperator::Affine {
+                    slope: "2".into(),
+                    intercept: "-1".into(),
+                },
+            ),
+        );
+        assert_proved(&certification, "(0, 1)");
+        assert_eq!(parent_route(&certification), "three_term_interval");
+        // The detection finds a lift with a bounded region.
+        let report = find_preserver_image_lifts(
+            &input,
+            &rows,
+            0,
+            &PreserverImageSearchOptions {
+                library: Some(library()),
+                ..PreserverImageSearchOptions::default()
+            },
+        )
+        .expect("the search runs");
+        report.verify().expect("the report replays");
+        let lift = report.proved_lifts().next().expect("a proved lift");
+        assert_eq!(lift.candidate.parent_name, "chebyshev_t");
+        assert_eq!(
+            lift.lift_summary
+                .root_transfer
+                .input_root_region
+                .to_string(),
+            "(0, 1)"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The Euler step kappa (theta + a)(theta + b) + x (u + v theta)
+// ---------------------------------------------------------------------------
+
+mod euler_step {
+    use super::*;
+
+    /// `Q_n = T((1 + x)^n)` for `T = (theta + 1)^2 + x (1 + v theta)`; the
+    /// rows satisfy `Q_n = 3 (1 + x) Q_(n-1) - 3 (1 + x)^2 Q_(n-2) + (1 + x)^3
+    /// Q_(n-3)` (fitted by the exact recurrence search).
+    fn binomial_image(v: i64) -> (Recurrence, Vec<Vec<Q>>) {
+        let rows: Vec<Vec<Q>> = binomial_rows()
+            .iter()
+            .map(|row| {
+                let diagonal = vec_poly::add(
+                    &vec_poly::add(row, &vec_poly::scale(&theta(row, |k| q(k as i64)), &q(2))),
+                    &theta(row, |k| q((k * k) as i64)),
+                );
+                let raising = vec_poly::add(row, &theta(row, |k| q(v * k as i64)));
+                let mut shifted = vec![q(0)];
+                shifted.extend(raising);
+                vec_poly::trim(&vec_poly::add(&diagonal, &shifted))
+            })
+            .collect();
+        let bivariate = |coefficients: &[i64]| {
+            BivarPoly::from_coefficients_normalized(vec![coefficients
+                .iter()
+                .map(|&c| q(c))
+                .collect()])
+        };
+        let rule = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(1, 0, bivariate(&[3, 3])),
+                RecurrenceTerm::new(2, 0, bivariate(&[-3, -6, -3])),
+                RecurrenceTerm::new(3, 0, bivariate(&[1, 3, 3, 1])),
+            ],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let generated = rule.generate_rows_rational(&rows[..3], 0, ROWS).unwrap();
+        for (row, expected) in generated.iter().zip(&rows) {
+            assert_eq!(&vec_poly::trim(row), expected);
+        }
+        (rule, rows)
+    }
+
+    fn step(v: i64) -> PreserverOperator {
+        let constant = |value: i64| IndexRationalFunction::constant(&q(value));
+        PreserverOperator::EulerStep {
+            diagonal: vec![constant(1), constant(2), constant(1)],
+            raising: vec![constant(1), constant(v)],
+        }
+    }
+
+    /// `kappa = a = b = 1`, `u = v = 1`: `B = 1 - 3/2 < 0` and
+    /// `B^2 = 1/4 < v^2 ((a + b + 1)^2/4 - a b) = 5/4`.
+    #[test]
+    fn an_euler_step_image_of_the_binomial_rows_is_proved() {
+        let (rule, rows) = binomial_image(1);
+        let certification = certify(&rule, &rows, 0, &candidate("binomial", step(1)));
+        assert_proved(&certification, "(-inf, 0]");
+        assert_eq!(
+            certification.lean_declarations.first().map(String::as_str),
+            Some("RealRooted.IsPFPolynomial.generalStep_of_natDegree_le")
+        );
+        // Not a preserver of every real-rooted polynomial: no interlacing.
+        assert!(!certification.interlacing.is_claimed());
+        for row in &rows {
+            assert!(is_real_rooted_bigint_coeffs(&integer_row(row)));
+        }
+    }
+
+    /// `v = 4`: `B = 1 - 6 = -5` and `B^2 = 25 >= 16 * 5/4 = 20`: the
+    /// comparison defect is positive somewhere on `s <= 0`, so the theorem
+    /// gives nothing (exact witness `n = 0`).
+    #[test]
+    fn a_positive_comparison_defect_is_an_exact_failure() {
+        let (rule, rows) = binomial_image(4);
+        let certification = certify(&rule, &rows, 0, &candidate("binomial", step(4)));
+        assert!(!certification.is_proved());
+        let defect = certification
+            .lift_summary
+            .hypotheses
+            .iter()
+            .find(|h| h.name == "euler_step_comparison_defect_negative")
+            .expect("the defect hypothesis");
+        assert_eq!(
+            defect.status,
+            LiftHypothesisStatus::Failed {
+                witness: Some(BigInt::from(0))
+            }
+        );
+    }
+}

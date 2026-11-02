@@ -537,7 +537,8 @@ denominator is free of `x`, an index shift `|s| <= 4` and a gauge
 records the identity status (`Certified` with a replayable
 `VeroneseForwardDivisionCertificate`, `SupportedByRows`, `Refuted`), the
 parent proof (periodic product, paper theorem, root-domain claim, the
-three-term, Liu--Wang or Liu--Wang derivative-lag theorem below, a caller-supplied
+three-term, Liu--Wang, Liu--Wang derivative-lag or Ma--Wang interval theorem
+below, a caller-supplied
 `VeroneseParentAttestation`, or a `lean_proved` OEIS catalog flag, both of which
 only give a conditional verdict) and the verdict.  `verify()` replays the certificate.
 
@@ -590,8 +591,9 @@ in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 ### Real-rootedness theorems for recurrences
 
 `recurrence::check_three_term_recurrence_theorem`,
-`recurrence::check_liu_wang_theorem` and
-`recurrence::check_liu_wang_derivative_lag_theorem` apply a paper theorem to a
+`recurrence::check_liu_wang_theorem`,
+`recurrence::check_liu_wang_derivative_lag_theorem` and
+`recurrence::check_ma_wang_interval_theorem` apply a paper theorem to a
 family given by a rule, a first index and seed rows (the rule applies from
 `first_index + seeds.len()` on), and check every hypothesis exactly for all
 indices.  The result (`RealRootednessTheoremReport`,
@@ -628,6 +630,21 @@ region).  `verify()` replays it.
   its declarations in `lean_declarations` (both omitted from the JSON for the
   other checks).  The binomial Eulerian rule (OEIS A046802) is refused: its
   lag coefficient `(1 - n) x` is positive left of `0` (witness `n = 2`).
+- Ma--Wang interval: `f(n) P_n = c_0(n, x) P_(n-1) + gamma(n) (x - L)(x - U)
+  P'_(n-1)` with `deg_x c_0 <= 1` and rational `L < U` read off the rule; it
+  proves every root in the closed interval `[L, U]` (an end open when no row
+  has a root there) and weak interlacing of consecutive rows, by the exact
+  two-endpoint criterion of Ma and Wang (EJC 15 (2008) R17, Theorem 2 and
+  Corollary 3; RealRooted `affineEndpointStep_closed`): with
+  `a_n = [x^1] c_0 / gamma > 0`, the thresholds
+  `c_0(n, U) / ((U - L) gamma) + m_U(n) >= 0` and
+  `-c_0(n, L) / ((U - L) gamma) + m_L(n) >= 0`, where the endpoint
+  multiplicities `m` of the previous row are tracked exactly (each grows by
+  one after an index where its threshold vanishes).  Ordered set partitions
+  `k! S(n, k)` (OEIS A019538, A131689), the Ward numbers (A134991, A269939)
+  and the Stirling--Frobenius rows (A225472, A225473, A225476) are proved
+  this way; a failing threshold names the row that leaves the interval.
+  `lean_declarations` lists the RealRooted step theorems (no row route).
 
 When a theorem fails at the supplied seeds, the checks retry with the
 induction start moved up to `RealRootednessTheoremOptions::maximum_start_delay`
@@ -883,7 +900,19 @@ maps such as the `f`-polynomial, and hypergeometric multipliers (`1/k!`,
 `PreserverParentLibrary` (the named families of `sequences` with their
 defining recurrences, optionally the OEIS catalog entries the parent provers
 prove; the proofs are computed once per library, so share one library across
-calls).  Detection fits the operator parameters exactly from a few rows (row
+calls).  The menu also has the Euler step
+`kappa (theta + a)(theta + b) + x (u + v theta)` (RealRooted
+`IsPFPolynomial.generalStep_of_natDegree_le`; it maps polynomials with
+nonnegative coefficients and real roots to such polynomials when
+`kappa, a, b, u > 0`, `v >= 0` and the comparison defect is negative on
+`s <= 0`), fitted from five linear coefficients.  A parent may also be proved
+real-rooted in a bounded interval `[L, U]` (`PreserverParentRegion::Interval`,
+`PreserverParent::interval_proof`): by the Ma--Wang interval check, or by the
+three-term theorem with a root region.  Affine, reversal and Möbius maps and
+the Rolle operators then give the exact image of `[L, U]` as the input region
+(for example `T_n(2x - 1)` for the Chebyshev polynomials `T_n` is rooted in
+`(0, 1)`), and the interval report is recorded in the certification
+(`interval_parent_proof`) and replayed by `verify()`.  Detection fits the operator parameters exactly from a few rows (row
 by row linear algebra, then rational functions of `n`); every match is
 certified by `certify_preserver_image_lift`, which callers can also run on a
 candidate of their own.
@@ -910,8 +939,8 @@ composed with, or conjugated through, the operator by the shifted parent
 relation, with row annihilators for a remainder, or the Hadamard conjugation
 for a hypergeometric multiplier; `verify()` regenerates the input and parent
 rows from the recorded rules and seeds and re-checks the identifying rows and
-exceptional bases), the parent proof (roots `<= 0`, or real-rootedness on the
-whole line by the three-term theorem), the Lean route and RealRooted
+exceptional bases), the parent proof (roots `<= 0`, a bounded interval, or
+real-rootedness on the whole line by the three-term theorem), the Lean route and RealRooted
 declarations of the operator's theorem, and the `lift_summary` (new
 `LiftOperation::PreserverImage`) whose hypotheses are the side conditions of
 the theorem, decided exactly for every `n` (fixed polynomials exactly,

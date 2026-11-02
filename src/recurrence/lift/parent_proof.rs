@@ -43,26 +43,33 @@
 //!    the Delannoy and deco rows; also after dividing every row by a power
 //!    of `x`, as for the derangement excedance rows), proved only when every
 //!    hypothesis is verified;
-//! 7. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
+//! 7. **Ma--Wang interval**: [`check_ma_wang_interval_theorem`] (first-order
+//!    rules `P_n = (alpha_n x + beta_n) P_(n-1) + kappa_n (x - L)(x - U)
+//!    P'_(n-1)` with every root kept in `[L, U]` by the exact two-endpoint
+//!    criterion, as for the rows `k! S(n, k)` of the ordered set partitions),
+//!    proved when every hypothesis is verified and the certified interval
+//!    lies in `(-inf, 0]` (`U <= 0`);
+//! 8. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
 //!    conditional on the attestation, never proved;
-//! 8. **catalog flag**: a bundled OEIS catalog entry flagged
+//! 9. **catalog flag**: a bundled OEIS catalog entry flagged
 //!    [`OeisRealRootednessStatus::LeanProved`] (every row zero or
 //!    real-rooted by a Lean proof made outside polytool) whose rule, first
-//!    index and initial rows equal the parent exactly, matched as in route 7
+//!    index and initial rows equal the parent exactly, matched as in route 8
 //!    with the attestation label `oeis_catalog:<A-number>:lean_proved`.  The
 //!    flag gives real-rootedness only, so the route also needs
 //!    coefficients of one sign for every row, which polytool proves here
 //!    (see "One-signed rows" below); the verdict is conditional on the flag,
 //!    never proved.
 //!
-//! Routes 4, 5 and 6 run whether or not the root-domain route is enabled.
+//! Routes 4 to 7 run whether or not the root-domain route is enabled.
 //! Routes 4 and 5 conclude that every parent row from the first index on is
 //! real-rooted with every root in `(-inf, 0)`; route 6 that every parent row
 //! is zero (only seed rows) or real-rooted with every root in `(-inf, 0]`
 //! (`(-inf, 0)` without the power of `x`), so it runs without a requested
-//! root region.  All three move their induction start up to three rows past
+//! root region; route 7 that every parent row is real-rooted with every root
+//! in `[L, U]`, `U <= 0`.  All four move their induction start up to three rows past
 //! the parent seeds when the theorem fails at the seeds (the default
 //! [`RealRootednessTheoremOptions::maximum_start_delay`]; the skipped rows
 //! are checked exactly by the theorem), and the attempt names the delay
@@ -72,7 +79,7 @@
 //! real-rooted).  A failing row refutes the parent statement; no route can
 //! then succeed and an attestation is not applied.
 //!
-//! # One-signed rows (route 8)
+//! # One-signed rows (route 9)
 //!
 //! Write the rule as `f(n) P_n = sum_terms c(n,x) D^d P_(n-r) + g(n,x)` for
 //! `n >= N1` (the first computed index, after the `K` seeds).  Every row has
@@ -151,8 +158,8 @@ pub struct VeroneseParentAttestation {
 #[serde(rename_all = "snake_case")]
 pub enum VeroneseParentProofStatus {
     /// Proved by a periodic product, a paper theorem, the root-domain route,
-    /// the three-term recurrence theorem, the Liu--Wang theorem or the
-    /// Liu--Wang derivative-lag theorem.
+    /// the three-term recurrence theorem, the Liu--Wang theorem, the
+    /// Liu--Wang derivative-lag theorem or the Ma--Wang interval theorem.
     Proved,
     /// Not proved; a matching caller-supplied attestation asserts it.
     ConditionalOnAttestation,
@@ -179,6 +186,9 @@ pub enum VeroneseParentProofRoute {
     LiuWang,
     /// [`check_liu_wang_derivative_lag_theorem`].
     LiuWangDerivativeLag,
+    /// [`check_ma_wang_interval_theorem`] with an interval `[L, U]`,
+    /// `U <= 0`.
+    MaWangInterval,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -513,9 +523,11 @@ fn root_domain_menu(
     (attempts, false)
 }
 
-/// Routes 4, 5 and 6: a real-rootedness theorem with every root in
+/// Routes 4 to 7: a real-rootedness theorem with every root in
 /// `(-inf, 0)` (routes 4 and 5) or, for route 6, in `(-inf, 0]` (every
-/// conclusion of that theorem, so it runs without a requested region).
+/// conclusion of that theorem, so it runs without a requested region); route
+/// 7 (Ma--Wang) runs without a requested region and succeeds when its
+/// interval `[L, U]` has `U <= 0`.
 fn theorem_attempt(
     record: &ParentRecord<'_>,
     route: VeroneseParentProofRoute,
@@ -543,9 +555,31 @@ fn theorem_attempt(
             record.seeds,
             &RealRootednessTheoremOptions::default(),
         )?,
+        VeroneseParentProofRoute::MaWangInterval => check_ma_wang_interval_theorem(
+            record.rule,
+            record.first_index,
+            record.seeds,
+            &RealRootednessTheoremOptions::default(),
+        )?,
         _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
     };
+    // The Ma--Wang interval settles the parent statement only when it lies
+    // in (-inf, 0].
+    let outside_ray = route == VeroneseParentProofRoute::MaWangInterval
+        && report.is_proved()
+        && !report
+            .conclusion
+            .as_ref()
+            .and_then(|c| c.root_region.as_ref())
+            .and_then(|region| region.at(0).ok())
+            .and_then(|region| region.upper)
+            .is_some_and(|upper| !upper.is_positive());
     let detail = match (&report.status, &report.conclusion) {
+        (RealRootednessTheoremStatus::Proved, Some(conclusion)) if outside_ray => format!(
+            "{}: {}; the interval is not contained in (-inf, 0], so the rows are real-rooted \
+             but this route does not give coefficients of one sign",
+            report.normal_form, conclusion.statement
+        ),
         (RealRootednessTheoremStatus::Proved, Some(conclusion)) if report.start_delay > 0 => {
             format!(
                 "induction start moved {} row(s) past the seeds: {}: {}",
@@ -567,7 +601,7 @@ fn theorem_attempt(
     Ok(VeroneseParentProofAttempt {
         route,
         variant: variant.into(),
-        success: report.is_proved(),
+        success: report.is_proved() && !outside_ray,
         detail,
     })
 }
@@ -723,7 +757,7 @@ fn integer_q(value: i64) -> Q {
     Q::from_integer(value.into())
 }
 
-/// Route 8: an exact proof that every row from `first_index` on has
+/// Route 9: an exact proof that every row from `first_index` on has
 /// coefficients of one sign (module documentation, "One-signed rows").
 /// Returns what was shown, or why the sufficient test does not apply.
 fn one_signed_rows_for_all_indices(
@@ -1048,7 +1082,7 @@ pub(super) fn prove_parent(
         proof.attempts.extend(attempts);
     }
 
-    // Routes 4, 5 and 6.
+    // Routes 4 to 7.
     if proved.is_none() {
         for (route, variant) in [
             (
@@ -1060,6 +1094,7 @@ pub(super) fn prove_parent(
                 VeroneseParentProofRoute::LiuWangDerivativeLag,
                 "liu_wang_derivative_lag",
             ),
+            (VeroneseParentProofRoute::MaWangInterval, "ma_wang_interval"),
         ] {
             let attempt = theorem_attempt(record, route, variant)?;
             let success = attempt.success;
@@ -1078,7 +1113,7 @@ pub(super) fn prove_parent(
         return Ok(proof);
     }
 
-    // Route 7.
+    // Route 8.
     for attestation in attestations {
         let matches = same_record(record, &attestation.recurrence)?;
         let covers = attestation.first_index <= needed_from;
@@ -1107,7 +1142,7 @@ pub(super) fn prove_parent(
             return Ok(proof);
         }
     }
-    // Route 8.
+    // Route 9.
     let candidates = catalog_flag_attestations(record);
     let mut differing = Vec::new();
     for attestation in candidates {

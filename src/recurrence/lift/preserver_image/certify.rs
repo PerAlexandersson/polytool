@@ -3,6 +3,7 @@
 //! documentation of `preserver_image`).
 
 use super::interlacing::{interlacing_claim, PreserverInterlacingClaim};
+use super::interval::{interval_parent_report, wants_interval_parent};
 use super::operator::{dividend, gauged_input, OperatorForm, PreserverOperator};
 use super::summary::{preserver_image_summary, PreserverImageSummaryParts};
 use super::transfer::operator_transfer;
@@ -317,6 +318,13 @@ pub struct PreserverImageCertification {
     /// (real-rootedness on the whole line).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub whole_line_parent_proof: Option<RealRootednessTheoremReport>,
+    /// A theorem report proving every parent row real-rooted with every root
+    /// in a bounded interval (the Ma--Wang interval check, or the three-term
+    /// theorem with a root region), computed when the operator's theorem
+    /// gives a region from an interval or the parent statement above is not
+    /// proved, and present when proved; replayed by `verify()`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interval_parent_proof: Option<RealRootednessTheoremReport>,
     /// The parent theorem report (replayed by `verify()`) whose conclusion
     /// carries the parent's interlacing: the whole-line three-term report,
     /// or the three-term / Liu--Wang check behind a proved parent statement.
@@ -849,6 +857,7 @@ impl PreserverImageCertification {
             identity: &self.identity,
             parent_proof: &self.parent_proof,
             whole_line_parent_proof: self.whole_line_parent_proof.as_ref(),
+            interval_parent_proof: self.interval_parent_proof.as_ref(),
         })
     }
 
@@ -881,6 +890,18 @@ impl PreserverImageCertification {
             let candidate_parent = record(&prepare_record(&self.candidate.parent, "parent")?);
             if report.recurrence != candidate_parent || report.requested_root_region.is_some() {
                 return failed("the whole-line parent report does not belong to the parent");
+            }
+        }
+        if let Some(report) = &self.interval_parent_proof {
+            report.verify()?;
+            let candidate_parent = record(&prepare_record(&self.candidate.parent, "parent")?);
+            let bounded = report
+                .conclusion
+                .as_ref()
+                .and_then(|c| c.root_region.as_ref())
+                .is_some_and(|r| r.lower.is_some() && r.upper.is_some());
+            if report.recurrence != candidate_parent || !report.is_proved() || !bounded {
+                return failed("the interval parent report does not belong to the parent");
             }
         }
         if let Some(report) = &self.parent_interlacing_report {
@@ -1276,17 +1297,27 @@ fn prove_parents(
 /// whole-line report, else (for a parent proved by the parent provers) the
 /// first of the three-term and Liu--Wang checks (roots in `(-inf, 0)`) and
 /// the derivative-lag check that proves the parent with an interlacing
-/// conclusion.
+/// conclusion, else the interval report.
 fn parent_interlacing_report(
     parent: &PreparedRule,
     proof: &VeroneseParentProof,
     whole_line: Option<&RealRootednessTheoremReport>,
+    interval: Option<&RealRootednessTheoremReport>,
 ) -> Result<Option<RealRootednessTheoremReport>, RecurrenceError> {
     if let Some(report) = whole_line {
         return Ok(Some(report.clone()));
     }
+    let interval = interval
+        .filter(|report| {
+            report.is_proved()
+                && report
+                    .conclusion
+                    .as_ref()
+                    .is_some_and(|c| c.interlacing.is_some())
+        })
+        .cloned();
     if proof.status != VeroneseParentProofStatus::Proved {
-        return Ok(None);
+        return Ok(interval);
     }
     let negative = RealRootednessTheoremOptions {
         root_region: Some(crate::real_rootedness::RealInterval {
@@ -1299,7 +1330,7 @@ fn parent_interlacing_report(
     };
     let (rule, p0, seeds) = (&parent.rule, parent.first_index, &parent.seeds);
     if proof.route == Some(VeroneseParentProofRoute::Attestation) {
-        return Ok(None);
+        return Ok(interval);
     }
     let reports = [
         check_three_term_recurrence_theorem(rule, p0, seeds, &negative)?,
@@ -1311,13 +1342,16 @@ fn parent_interlacing_report(
             &RealRootednessTheoremOptions::default(),
         )?,
     ];
-    Ok(reports.into_iter().find(|report| {
-        report.is_proved()
-            && report
-                .conclusion
-                .as_ref()
-                .is_some_and(|c| c.interlacing.is_some())
-    }))
+    Ok(reports
+        .into_iter()
+        .find(|report| {
+            report.is_proved()
+                && report
+                    .conclusion
+                    .as_ref()
+                    .is_some_and(|c| c.interlacing.is_some())
+        })
+        .or(interval))
 }
 
 /// Certify one candidate preserver-image lift `Q_n = lambda(n) T_n(P_(n+s))`
@@ -1410,8 +1444,20 @@ pub fn certify_preserver_image_lift(
     let needed_from = parent_start(n0, candidate.index_shift, parent.first_index)?;
     let (parent_proof, whole_line_parent_proof) =
         prove_parents(&parent, needed_from, options, transfer.from_real_line)?;
-    let parent_interlacing_report =
-        parent_interlacing_report(&parent, &parent_proof, whole_line_parent_proof.as_ref())?;
+    let interval_parent_proof = if wants_interval_parent(
+        &candidate.operator,
+        parent_proof.status == VeroneseParentProofStatus::Proved,
+    ) {
+        interval_parent_report(&parent.rule, parent.first_index, &parent.seeds)?
+    } else {
+        None
+    };
+    let parent_interlacing_report = parent_interlacing_report(
+        &parent,
+        &parent_proof,
+        whole_line_parent_proof.as_ref(),
+        interval_parent_proof.as_ref(),
+    )?;
     let interlacing = interlacing_claim(
         candidate,
         n0,
@@ -1424,6 +1470,7 @@ pub fn certify_preserver_image_lift(
         identity: &outcome.identity,
         parent_proof: &parent_proof,
         whole_line_parent_proof: whole_line_parent_proof.as_ref(),
+        interval_parent_proof: interval_parent_proof.as_ref(),
     });
     let s = candidate.index_shift;
     let lift = format!(
@@ -1461,6 +1508,7 @@ pub fn certify_preserver_image_lift(
         identity: outcome.identity,
         parent_proof,
         whole_line_parent_proof,
+        interval_parent_proof,
         parent_interlacing_report,
         interlacing,
         lean_route: transfer.lean_route,

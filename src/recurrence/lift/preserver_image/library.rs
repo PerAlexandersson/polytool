@@ -4,6 +4,7 @@
 //! statement the provers settle; the parent proofs are computed once per
 //! library.
 
+use super::interval::interval_parent_report;
 use crate::oeis;
 use crate::recurrence::lift::hadamard_factor::prepare::{prepare_rule, PreparedRule};
 use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
@@ -28,6 +29,11 @@ pub enum PreserverParentRegion {
     /// Every row from the first index on is zero or real-rooted with every
     /// root in `(-inf, 0]` (the shared parent provers).
     Nonpositive,
+    /// Every row from the first index on is real-rooted with every root in
+    /// the bounded interval of [`PreserverParent::interval_proof`] (the
+    /// Ma--Wang interval check or the three-term theorem with a root
+    /// region), and the statement above is not proved.
+    Interval,
     /// Every row from the first index on is real-rooted (the three-term
     /// theorem without a root region).
     RealLine,
@@ -47,6 +53,10 @@ pub struct PreserverParent {
     /// The three-term theorem on the whole line, when it proves the rows
     /// real-rooted and the statement above is not proved.
     pub whole_line_proof: Option<RealRootednessTheoremReport>,
+    /// A theorem report proving every row real-rooted with every root in a
+    /// bounded interval (the `preserver_image` interval provers), whether or
+    /// not the statement above is proved.
+    pub interval_proof: Option<RealRootednessTheoremReport>,
     /// The proved region.
     pub region: PreserverParentRegion,
     /// The rows `P_(p0), P_(p0 + 1), ...` (the first rows of the family).
@@ -274,8 +284,8 @@ impl PreserverParentLibrary {
     /// Build the library: the named families and/or the catalog entries,
     /// each validated (homogeneous, positive offsets, a leader free of `x`
     /// and of derivatives, nonvanishing at every target), proved (the shared
-    /// parent provers with the parent's first index, then the three-term
-    /// theorem on the whole line) and kept when proved (or always, with
+    /// parent provers with the parent's first index, the interval provers,
+    /// then the three-term theorem on the whole line) and kept when proved (or always, with
     /// [`PreserverParentLibraryOptions::keep_unproved`]).  Records that fail
     /// validation are listed in [`Self::skipped`].  Deterministic.
     ///
@@ -370,8 +380,12 @@ impl PreserverParentLibrary {
                 whole_line_proof = Some(report);
             }
         }
+        let interval_proof =
+            interval_parent_report(&prepared.rule, prepared.first_index, &prepared.seeds)?;
         let region = if proved {
             PreserverParentRegion::Nonpositive
+        } else if interval_proof.is_some() {
+            PreserverParentRegion::Interval
         } else if whole_line_proof.is_some() {
             PreserverParentRegion::RealLine
         } else {
@@ -393,6 +407,7 @@ impl PreserverParentLibrary {
             recurrence: canonical,
             proof,
             whole_line_proof,
+            interval_proof,
             region,
             rows,
         });
@@ -467,6 +482,23 @@ mod tests {
         assert_eq!(region("narayana"), Some(PreserverParentRegion::Nonpositive));
         assert_eq!(region("binomial"), Some(PreserverParentRegion::Nonpositive));
         assert_eq!(region("hermite_he"), Some(PreserverParentRegion::RealLine));
-        assert_eq!(region("chebyshev_t"), Some(PreserverParentRegion::RealLine));
+        assert_eq!(region("chebyshev_t"), Some(PreserverParentRegion::Interval));
+        assert_eq!(
+            region("shifted_legendre"),
+            Some(PreserverParentRegion::Interval)
+        );
+        let interval = |name: &str| {
+            library
+                .parents
+                .iter()
+                .find(|p| p.name == name)
+                .and_then(|p| p.interval_proof.as_ref())
+                .and_then(|report| report.conclusion.as_ref())
+                .and_then(|c| c.root_region.as_ref())
+                .map(|r| r.to_string())
+        };
+        assert_eq!(interval("chebyshev_t").as_deref(), Some("(-1, 1)"));
+        assert_eq!(interval("shifted_legendre").as_deref(), Some("(0, 1)"));
+        assert_eq!(interval("hermite_he"), None);
     }
 }

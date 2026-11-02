@@ -193,6 +193,20 @@ pub enum PreserverOperator {
         /// The factor `u`.
         factor: HadamardFactor,
     },
+    /// The Euler step `kappa (theta + a)(theta + b) + x (u + v theta)` with
+    /// index-dependent parameters, given by its expanded coefficients:
+    /// `diagonal = [c_0, c_1, c_2]` is the polynomial
+    /// `c_0 + c_1 t + c_2 t^2 = kappa (t + a)(t + b)` in `t = theta`, and
+    /// `raising = [u, v]`.  It maps polynomials with nonnegative coefficients
+    /// and only real roots to such polynomials under the side conditions of
+    /// RealRooted `IsPFPolynomial.generalStep_of_natDegree_le` (`kappa, a,
+    /// b > 0`, `u + v k > 0`, a negative comparison defect).
+    EulerStep {
+        /// `[kappa a b, kappa (a + b), kappa]`.
+        diagonal: Vec<IndexRationalFunction>,
+        /// `[u, v]`.
+        raising: Vec<IndexRationalFunction>,
+    },
     /// A general element `(1/denominator(n)) sum_d c_d(n, x) D^d` of the
     /// Weyl algebra.  No transfer theorem applies: the identity can be
     /// certified, the lift stays open.
@@ -369,6 +383,12 @@ impl PreserverOperator {
                 schedule.first_degree, schedule.step, schedule.first_index
             ),
             Self::HadamardMultiplier { factor } => format!("x^k -> {} x^k", factor.text()),
+            Self::EulerStep { diagonal, raising } => format!(
+                "kappa (theta + a)(theta + b) + x (u + v theta) with kappa (t + a)(t + b) = {} \
+                 and u + v theta = {}",
+                polynomial(diagonal, "t"),
+                polynomial(raising, "theta")
+            ),
             Self::WeylOperator { terms, .. } => {
                 format!("a Weyl-algebra operator with {} terms", terms.len())
             }
@@ -497,6 +517,36 @@ impl PreserverOperator {
                 }
                 Ok(OperatorForm::Hadamard {
                     factor: factor.clone(),
+                })
+            }
+            Self::EulerStep { diagonal, raising } => {
+                if diagonal.len() != 3 || raising.len() != 2 {
+                    return Err(RecurrenceError::InvalidInput(
+                        "an Euler step has three diagonal and two raising coefficients".into(),
+                    ));
+                }
+                let all: Vec<IndexRationalFunction> =
+                    diagonal.iter().chain(raising).cloned().collect();
+                let (numerators, delta) = common_denominator(&all)?;
+                let polynomial_in_theta = |coefficients: &[Vec<Q>]| {
+                    let mut biv = Biv::zero();
+                    for (j, p) in coefficients.iter().enumerate() {
+                        biv = biv.add(&n_polynomial(p).mul(&Biv::monomial(0, j, Q::one())));
+                    }
+                    biv
+                };
+                let mut theta = ThetaOp::new();
+                let diagonal_part = polynomial_in_theta(&numerators[..3]);
+                if !diagonal_part.is_zero() {
+                    theta.insert((0, 0), diagonal_part);
+                }
+                let raising_part = polynomial_in_theta(&numerators[3..]);
+                if !raising_part.is_zero() {
+                    theta.insert((0, 1), raising_part);
+                }
+                Ok(OperatorForm::Weyl {
+                    numerator: from_theta(&theta),
+                    denominator: delta,
                 })
             }
             Self::WeylOperator { terms, denominator } => {

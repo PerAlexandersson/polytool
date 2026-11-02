@@ -369,11 +369,203 @@ const ROLLE: &str = "Rolle's theorem: x^m p is real-rooted when p is, and every 
      a real-rooted polynomial is real-rooted or zero, with its roots in the convex hull of the \
      roots; coefficients of one sign stay of one sign";
 
+const EULER_STEP: &str = "The Euler step T = kappa (theta + a)(theta + b) + x (u + v theta), \
+     theta = x D, with kappa, a, b > 0, u + v k > 0 for every k <= d and a negative comparison \
+     defect kappa (a b - (a + b + 1)^2/4) + (u - (a + b + 1) v/2) s - v^2 s^2/(4 kappa) < 0 for \
+     every s <= 0, maps every polynomial of degree <= d with nonnegative coefficients and only \
+     real roots to such a polynomial (RealRooted IsPFPolynomial.generalStep_of_natDegree_le, \
+     the degree-local strict-to-weak closure of P. Branden, Linear transformations preserving \
+     the Polya frequency property, Trans. Amer. Math. Soc. 358 (2006), Corollary 3.5); here \
+     u > 0 and v >= 0 give u + v k > 0 for every degree; by linearity a row with \
+     nonpositive coefficients is handled through its negative; applied to the parameters at \
+     each n";
+
 const SUBSTITUTION: &str = "a real affine substitution x -> a x + b (a != 0), the reversal \
      x^d p(1/x) (d >= deg p) and a real Mobius map (c x + e)^d p((a x + b)/(c x + e)) \
      (a e - b c != 0, d >= deg p) map real roots to real roots: a root r of p gives the root \
      (r - b)/a, 1/r (and 0) or (e r - b)/(a - c r) (and -e/c); for an input row that is a \
      polynomial the degree condition holds automatically";
+
+/// A rational function of `n` as `(numerator, denominator)`, ascending.
+type IndexFraction = (Vec<Q>, Vec<Q>);
+
+fn fraction_mul(a: &IndexFraction, b: &IndexFraction) -> IndexFraction {
+    (vec_poly::mul(&a.0, &b.0), vec_poly::mul(&a.1, &b.1))
+}
+
+fn fraction_add(a: &IndexFraction, b: &IndexFraction) -> IndexFraction {
+    (
+        vec_poly::add(&vec_poly::mul(&a.0, &b.1), &vec_poly::mul(&b.0, &a.1)),
+        vec_poly::mul(&a.1, &b.1),
+    )
+}
+
+fn fraction_scale(a: &IndexFraction, factor: &Q) -> IndexFraction {
+    (vec_poly::scale(&a.0, factor), a.1.clone())
+}
+
+fn fraction_divide(a: &IndexFraction, b: &IndexFraction) -> IndexFraction {
+    (vec_poly::mul(&a.0, &b.1), vec_poly::mul(&a.1, &b.0))
+}
+
+/// The value of `fraction` at `n`, when defined.
+fn fraction_at(fraction: &IndexFraction, n: &BigInt) -> Option<Q> {
+    let n = Q::from_integer(n.clone());
+    let denominator = vec_poly::evaluate(&fraction.1, &n);
+    (!denominator.is_zero()).then(|| vec_poly::evaluate(&fraction.0, &n) / denominator)
+}
+
+/// The side conditions of the Euler step (the operator's documentation and
+/// [`EULER_STEP`]), each for every `n >= n0`.
+fn euler_step_hypotheses(
+    diagonal: &[IndexRationalFunction],
+    raising: &[IndexRationalFunction],
+    n0: usize,
+) -> Vec<LiftHypothesis> {
+    let parsed: Option<Vec<IndexFraction>> = diagonal
+        .iter()
+        .chain(raising)
+        .map(|c| c.parse().ok())
+        .collect();
+    let Some(parsed) = parsed.filter(|p| p.len() == 5) else {
+        return vec![unresolved(
+            "euler_step_parameters",
+            "the Euler step has three diagonal and two raising coefficients",
+            "the coefficients do not parse".into(),
+        )];
+    };
+    let (c0, c1, c2, u, v) = (&parsed[0], &parsed[1], &parsed[2], &parsed[3], &parsed[4]);
+    let decide = |name: &str, statement: &str, f: &IndexFraction, condition, text: &str| {
+        sign_hypothesis(
+            name,
+            statement,
+            &vec_poly::trim(&f.0),
+            &vec_poly::trim(&f.1),
+            n0,
+            condition,
+            text,
+        )
+    };
+    let four = Q::from_integer(BigInt::from(4));
+    let discriminant = fraction_add(
+        &fraction_mul(c1, c1),
+        &fraction_scale(&fraction_mul(c2, c0), &-&four),
+    );
+    let mut hypotheses = vec![
+        decide(
+            "euler_step_kappa_positive",
+            "kappa(n) = c_2(n) > 0 for every n >= n0",
+            c2,
+            IndexSignCondition::Positive,
+            "c_2(n)",
+        ),
+        decide(
+            "euler_step_diagonal_sum_positive",
+            "kappa (a + b) = c_1(n) > 0 for every n >= n0 (with kappa > 0: a + b > 0)",
+            c1,
+            IndexSignCondition::Positive,
+            "c_1(n)",
+        ),
+        decide(
+            "euler_step_diagonal_product_positive",
+            "kappa a b = c_0(n) > 0 for every n >= n0 (with kappa > 0: a b > 0)",
+            c0,
+            IndexSignCondition::Positive,
+            "c_0(n)",
+        ),
+        decide(
+            "euler_step_diagonal_real",
+            "c_1(n)^2 - 4 c_2(n) c_0(n) >= 0 for every n >= n0 (a and b real, hence both > 0)",
+            &discriminant,
+            IndexSignCondition::Nonnegative,
+            "c_1(n)^2 - 4 c_2(n) c_0(n)",
+        ),
+        decide(
+            "euler_step_raising_constant_positive",
+            "u(n) > 0 for every n >= n0",
+            u,
+            IndexSignCondition::Positive,
+            "u(n)",
+        ),
+        decide(
+            "euler_step_raising_slope_nonnegative",
+            "v(n) >= 0 for every n >= n0 (with u > 0: u + v k > 0 for every k >= 0)",
+            v,
+            IndexSignCondition::Nonnegative,
+            "v(n)",
+        ),
+    ];
+    // B = u - (a + b + 1) v / 2 with a + b + 1 = (c_1 + c_2)/c_2, and
+    // H = (a + b + 1)^2/4 - a b.
+    let one_plus_sum = fraction_divide(&fraction_add(c1, c2), c2);
+    let half = Q::from_integer(BigInt::from(2)).recip();
+    let b = fraction_add(u, &fraction_scale(&fraction_mul(&one_plus_sum, v), &-&half));
+    let h = fraction_add(
+        &fraction_scale(&fraction_mul(&one_plus_sum, &one_plus_sum), &four.recip()),
+        &fraction_scale(&fraction_divide(c0, c2), &-Q::one()),
+    );
+    let margin = fraction_add(
+        &fraction_mul(&fraction_mul(v, v), &h),
+        &fraction_scale(&fraction_mul(&b, &b), &-Q::one()),
+    );
+    let name = "euler_step_comparison_defect_negative";
+    let statement = "the comparison defect kappa (a b - (a + b + 1)^2/4) + B s - v^2 s^2/(4 kappa),                      B = u - (a + b + 1) v/2, is < 0 for every s <= 0 and every n >= n0: its                      value at 0 is < 0, so this holds when B >= 0, and otherwise exactly when                      B^2 < v^2 ((a + b + 1)^2/4 - a b)";
+    let range = IntegerRange::starting_at(n0);
+    let linear = decide_index_rational_function_sign(
+        &vec_poly::trim(&b.0),
+        &vec_poly::trim(&b.1),
+        &range,
+        IndexSignCondition::Nonnegative,
+    );
+    let quadratic = decide_index_rational_function_sign(
+        &vec_poly::trim(&margin.0),
+        &vec_poly::trim(&margin.1),
+        &range,
+        IndexSignCondition::Positive,
+    );
+    hypotheses.push(if linear.holds() {
+        LiftHypothesis::from_sign_decision(name, statement, linear, "B(n)")
+    } else if quadratic.holds() {
+        LiftHypothesis::from_sign_decision(
+            name,
+            statement,
+            quadratic,
+            "v(n)^2 ((a + b + 1)^2/4 - a b) - B(n)^2",
+        )
+    } else {
+        // Failing at an index where both tests fail (B < 0 and the margin
+        // <= 0 there) is exact; otherwise undecided.
+        let both_fail = [linear.failing_index(), quadratic.failing_index()]
+            .into_iter()
+            .flatten()
+            .find(|index| {
+                fraction_at(&b, index).is_some_and(|value| value.is_negative())
+                    && fraction_at(&margin, index).is_none_or(|value| !value.is_positive())
+            });
+        match both_fail {
+            Some(index) => LiftHypothesis {
+                name: name.into(),
+                statement: statement.into(),
+                status: LiftHypothesisStatus::Failed {
+                    witness: Some(index.clone()),
+                },
+                evidence: format!(
+                    "at n = {index}: B < 0 and B^2 >= v^2 ((a + b + 1)^2/4 - a b) (exact), so \
+                     the defect is >= 0 at some s <= 0"
+                ),
+                sign_decision: None,
+            },
+            None => unresolved(
+                name,
+                statement,
+                "neither B >= 0 nor B^2 < v^2 ((a + b + 1)^2/4 - a b) is proved for every n, and \
+                 no index fails both"
+                    .into(),
+            ),
+        }
+    });
+    hypotheses
+}
 
 /// The transfer theorem, side conditions, regions and Lean names of
 /// `operator` on the index domain `n >= n0`.
@@ -554,6 +746,18 @@ pub(super) fn operator_transfer(operator: &PreserverOperator, n0: usize) -> Oper
                 lean_declarations: declarations,
             }
         }
+        PreserverOperator::EulerStep { diagonal, raising } => OperatorTransfer {
+            theorem: EULER_STEP.into(),
+            hypotheses: euler_step_hypotheses(diagonal, raising, n0),
+            from_nonpositive: Some(nonpositive_ray()),
+            from_real_line: false,
+            lean_route: None,
+            lean_declarations: strings(&[
+                "RealRooted.IsPFPolynomial.generalStep_of_natDegree_le",
+                "RealRooted.EulerBidiagonal.generalStep",
+                "RealRooted.EulerBidiagonal.comparisonDefect",
+            ]),
+        },
         PreserverOperator::WeylOperator { .. } => OperatorTransfer {
             theorem: "none: a general Weyl-algebra operator need not preserve real-rootedness"
                 .into(),
