@@ -83,7 +83,7 @@ impl OperatorMatrix {
                 .entries
                 .iter()
                 .zip(&other.entries)
-                .map(|(left, right)| left.iter().zip(right).map(|(a, b)| a.sub(b)).collect())
+                .map(|(left, right)| left.iter().zip(right).map(|(a, b)| a.subtract(b)).collect())
                 .collect(),
         }
     }
@@ -200,11 +200,11 @@ pub(super) fn derivative_matrix(modulus: usize) -> OperatorMatrix {
 /// `c_e(n) y^((a+e-b)/r)` over `e = b - a (mod r)`.
 fn transport_coefficient(coefficient: &Biv, modulus: usize) -> OperatorMatrix {
     let mut matrix = OperatorMatrix::zero(modulus);
-    let Some(degree) = coefficient.y_degree() else {
+    let Some(degree) = coefficient.variable_degree() else {
         return matrix;
     };
     for e in 0..=degree {
-        let column = coefficient.y_coefficient(e);
+        let column = coefficient.variable_coefficient(e);
         if column.is_empty() {
             continue;
         }

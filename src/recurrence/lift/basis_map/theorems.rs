@@ -1119,7 +1119,7 @@ fn scalar_index(
             _ => return not_applicable("an index-dependent rule with higher derivatives"),
         }
     }
-    if !v.is_n_free() {
+    if !v.is_index_free() {
         return not_applicable("an index-dependent derivative coefficient");
     }
     // Only the t^0 coefficient of the multiplier may depend on n.

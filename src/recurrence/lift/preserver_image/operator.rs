@@ -3,15 +3,16 @@
 //! input relation through it (module documentation of `preserver_image`).
 
 use crate::recurrence::implicit::algebra::{from_theta, Biv, DOp, ThetaOp};
-use crate::recurrence::lift::hadamard_factor::prepare::{left_multiply, shift_free_from_json};
+use crate::recurrence::lift::hadamard_factor::prepare::{shift_free_from_json, shift_free_json};
 use crate::recurrence::lift::section_certify::n_polynomial;
 use crate::recurrence::{
-    format_rational_coeff, parse_rational_coeff, DegreeSchedule, HadamardFactor, OperatorTermJson,
-    RecurrenceError,
+    format_rational_coeff, parse_rational_coeff, DegreeSchedule, HadamardFactor,
+    HadamardFactorTerm, ImageRowMap, OperatorTermJson, RecurrenceError,
 };
 use crate::vec_poly;
 use crate::BigRational;
 use num_traits::{One, Zero};
+use ore_algebra::{pull_back, PullbackBounds, RowMapStep};
 use serde::{Deserialize, Serialize};
 
 type Q = BigRational;
@@ -403,7 +404,7 @@ impl PreserverOperator {
                 // f'(n, theta) = sum_j numerators[j](n) theta^j as one Biv in (n, theta).
                 let mut biv = Biv::zero();
                 for (j, p) in numerators.iter().enumerate() {
-                    biv = biv.add(&n_polynomial(p).mul(&Biv::monomial(0, j, Q::one())));
+                    biv = biv.add(&n_polynomial(p).multiply(&Biv::monomial(0, j, Q::one())));
                 }
                 let mut theta = ThetaOp::new();
                 theta.insert((0, 0), biv);
@@ -531,7 +532,7 @@ impl PreserverOperator {
                 let polynomial_in_theta = |coefficients: &[Vec<Q>]| {
                     let mut biv = Biv::zero();
                     for (j, p) in coefficients.iter().enumerate() {
-                        biv = biv.add(&n_polynomial(p).mul(&Biv::monomial(0, j, Q::one())));
+                        biv = biv.add(&n_polynomial(p).multiply(&Biv::monomial(0, j, Q::one())));
                     }
                     biv
                 };
@@ -588,6 +589,122 @@ impl PreserverOperator {
             Self::Reversal { schedule } | Self::Mobius { schedule, .. } => Some(schedule),
             _ => None,
         }
+    }
+}
+
+/// The ratio `u(k + 1)/u(k) = A(k)/B(k)` of a factor `u(k)` that does not
+/// depend on `n`, with `u(0) = 1`: `k!`, `1/k!`, `(alpha)_k`, `1/(alpha)_k`
+/// and their products.  `None` for a factor that depends on `n`.
+fn index_free_factor_ratio(factor: &HadamardFactor) -> Option<(Vec<Q>, Vec<Q>)> {
+    let mut numerator = vec![Q::one()];
+    let mut denominator = vec![Q::one()];
+    for term in &factor.terms {
+        let (a, b) = match term {
+            HadamardFactorTerm::Factorial => (vec![Q::one(), Q::one()], vec![Q::one()]),
+            HadamardFactorTerm::InverseFactorial => (vec![Q::one()], vec![Q::one(), Q::one()]),
+            HadamardFactorTerm::RisingFactorial { parameter } => (
+                vec![parse_rational_coeff(parameter).ok()?, Q::one()],
+                vec![Q::one()],
+            ),
+            HadamardFactorTerm::InverseRisingFactorial { parameter } => (
+                vec![Q::one()],
+                vec![parse_rational_coeff(parameter).ok()?, Q::one()],
+            ),
+            HadamardFactorTerm::Binomial { .. }
+            | HadamardFactorTerm::ComplementFactorial
+            | HadamardFactorTerm::InverseComplementFactorial => return None,
+        };
+        numerator = vec_poly::mul(&numerator, &a);
+        denominator = vec_poly::mul(&denominator, &b);
+    }
+    Some((numerator, denominator))
+}
+
+fn coefficient_strings(p: &[Q]) -> Vec<String> {
+    vec_poly::trim(p)
+        .iter()
+        .map(format_rational_coeff)
+        .collect()
+}
+
+/// The row map of [`crate::recurrence::image_recurrence_of_operator`] with
+/// the same action on the parent rows: every Weyl form (`f(n, theta)`,
+/// `phi(n, D)`, the Rolle operators, the Euler step, a general Weyl
+/// operator) as [`ImageRowMap::WeylOperator`] with the same numerator and
+/// denominator, the coordinate maps as themselves, and a hypergeometric
+/// multiplier that does not depend on `n` (`k!`, `1/k!`, `(alpha)_k`,
+/// `1/(alpha)_k` and their products) as
+/// [`ImageRowMap::CoefficientMultiplier`].
+///
+/// # Errors
+///
+/// [`RecurrenceError::Unsupported`] for a multiplier that depends on `n`
+/// (`binom(n + a, k + b)`, `(n - k)!`, `1/(n - k)!`), and the validation
+/// errors of the operator's parameters.
+impl TryFrom<&PreserverOperator> for ImageRowMap {
+    type Error = RecurrenceError;
+
+    fn try_from(operator: &PreserverOperator) -> Result<Self, Self::Error> {
+        Ok(match operator {
+            PreserverOperator::Affine { slope, intercept } => {
+                operator.form()?;
+                ImageRowMap::Affine {
+                    slope: slope.clone(),
+                    intercept: intercept.clone(),
+                }
+            }
+            PreserverOperator::Reversal { schedule } => {
+                operator.form()?;
+                ImageRowMap::Reversal {
+                    schedule: schedule.clone(),
+                }
+            }
+            PreserverOperator::Mobius {
+                a,
+                b,
+                c,
+                e,
+                schedule,
+            } => {
+                operator.form()?;
+                ImageRowMap::Mobius {
+                    a: a.clone(),
+                    b: b.clone(),
+                    c: c.clone(),
+                    e: e.clone(),
+                    schedule: schedule.clone(),
+                }
+            }
+            PreserverOperator::HadamardMultiplier { factor } => {
+                operator.form()?;
+                let (numerator, denominator) =
+                    index_free_factor_ratio(factor).ok_or_else(|| {
+                        RecurrenceError::Unsupported(format!(
+                            "the multiplier {} depends on n; image rules support multipliers \
+                             u(k) only",
+                            factor.text()
+                        ))
+                    })?;
+                ImageRowMap::CoefficientMultiplier {
+                    numerator: coefficient_strings(&numerator),
+                    denominator: coefficient_strings(&denominator),
+                }
+            }
+            _ => match operator.form()? {
+                OperatorForm::Weyl {
+                    numerator,
+                    denominator,
+                } => ImageRowMap::WeylOperator {
+                    terms: shift_free_json(&numerator),
+                    denominator: coefficient_strings(&denominator),
+                },
+                _ => {
+                    return Err(RecurrenceError::Unsupported(
+                        "the operator has no image row map".into(),
+                    ))
+                }
+            },
+        })
     }
 }
 
@@ -655,122 +772,62 @@ impl OperatorForm {
 // Conjugation of the input relation
 // ---------------------------------------------------------------------------
 
-/// `M_mu = sum m_(i,d)(n, x) A_i(n) D^d S^i` with
-/// `A_i(n) = prod_(t=1..i) alpha(n + t) prod_(t=i+1..R) beta(n + t)` for the
-/// ratio `mu(n)/mu(n-1) = alpha(n)/beta(n)` and the leader shift `R`
-/// (module documentation, step 1).
-pub(super) fn gauged_input(input: &DOp, leader_shift: usize, alpha: &[Q], beta: &[Q]) -> DOp {
-    let alpha = n_polynomial(alpha);
-    let beta = n_polynomial(beta);
-    let factors: Vec<Biv> = (0..=leader_shift)
-        .map(|i| {
-            let mut factor = Biv::one();
-            for t in 1..=i {
-                factor = factor.mul(&alpha.shift_n(t as i64));
-            }
-            for t in i + 1..=leader_shift {
-                factor = factor.mul(&beta.shift_n(t as i64));
-            }
-            factor
-        })
-        .collect();
-    let mut out = DOp::default();
-    for ((i, d), c) in &input.0 {
-        let factor = factors.get(*i).cloned().unwrap_or_else(Biv::one);
-        out.add_term((*i, *d), c.mul(&factor));
-    }
-    out
-}
-
-/// Substitute `y -> (y - b)/a` in every coefficient and multiply the
-/// `D^d` term by `a^d`: an operator acting on `G_n(x) = F_n(a x + b)`
-/// becomes one acting on `F_n` (module documentation, affine step).
-fn conjugate_affine(op: &DOp, a: &Q, b: &Q) -> DOp {
-    let inverse = [-(b / a), a.recip()];
-    let mut out = DOp::default();
-    for ((i, d), c) in &op.0 {
-        let rows: Vec<Vec<Q>> = c
-            .rows()
-            .iter()
-            .map(|row| vec_poly::trim(&vec_poly::compose(row, &inverse)))
-            .collect();
-        let mut power = Q::one();
-        for _ in 0..*d {
-            power *= a;
+impl OperatorForm {
+    /// The map `P' -> T'(P')` as steps of the `ore-algebra` crate (applied
+    /// first to last): the Weyl numerator `T'`, or the coordinate steps.
+    /// `None` for a Hadamard form (certified by the Hadamard conjugation).
+    pub(super) fn row_map_steps(&self) -> Option<Vec<RowMapStep>> {
+        match self {
+            Self::Weyl { numerator, .. } => Some(vec![RowMapStep::WeylOperator(numerator.clone())]),
+            Self::Coordinate { steps } => Some(
+                steps
+                    .iter()
+                    .map(|step| match step {
+                        CoordinateStep::Affine { a, b } => RowMapStep::Affine {
+                            slope: a.clone(),
+                            intercept: b.clone(),
+                        },
+                        CoordinateStep::Reversal { degree, .. } => RowMapStep::Reversal {
+                            degree: degree.clone(),
+                        },
+                    })
+                    .collect(),
+            ),
+            Self::Hadamard { .. } => None,
         }
-        out.add_term((*i, *d), Biv::new(rows).scale(&power));
     }
-    out
 }
 
-/// `rho(n) = d_n y - y^2 D`, so that `D_x o C_n = C_n o rho(n)` for
-/// `C_n(F)(x) = x^(d_n) F(1/x)`.
-fn reversal_derivative(degree: &[Q]) -> DOp {
-    let mut rho = DOp::single(0, 1, Biv::monomial(0, 2, -Q::one()));
-    rho.add_term(
-        (0, 0),
-        n_polynomial(degree).mul(&Biv::monomial(0, 1, Q::one())),
-    );
-    rho
-}
-
-/// An operator acting on `G_n = x^(d_n) F_n(1/x)` as one acting on `F_n`,
-/// multiplied by `y^N` to clear negative powers (module documentation,
-/// reversal step).
-fn conjugate_reversal(op: &DOp, degree: &[Q], step: i64) -> DOp {
-    let step = usize::try_from(step).unwrap_or(0);
-    let top =
-        op.0.iter()
-            .map(|((i, _), c)| c.y_degree().unwrap_or(0) + step * i)
-            .max()
-            .unwrap_or(0);
-    let rho = reversal_derivative(degree);
-    let mut powers = vec![DOp::single(0, 0, Biv::one())];
-    let mut out = DOp::default();
-    for ((i, d), c) in &op.0 {
-        while powers.len() <= *d {
-            let next = rho.compose(powers.last().expect("nonempty"));
-            powers.push(next);
-        }
-        // y^(N - h i) c(n, 1/y).
-        let shift = top - step * i;
-        let rows: Vec<Vec<Q>> = c
-            .rows()
-            .iter()
-            .map(|row| {
-                let mut out = vec![Q::zero(); shift + 1];
-                for (j, value) in row.iter().enumerate() {
-                    out[shift - j] = value.clone();
-                }
-                vec_poly::trim(&out)
-            })
-            .collect();
-        let term = left_multiply(&Biv::new(rows), &powers[*d].shifted(*i));
-        out = out.add(&term);
-    }
-    out
-}
-
-/// The dividend `E` of the certificate: `M_mu o T'` for a Weyl form, the
-/// conjugation of `M_mu` through the coordinate steps (last step first)
-/// for a coordinate map.  `None` for a Hadamard form.
-pub(super) fn dividend(gauged: &DOp, form: &OperatorForm) -> Option<DOp> {
-    match form {
-        OperatorForm::Weyl { numerator, .. } => Some(gauged.compose(numerator)),
-        OperatorForm::Coordinate { steps } => {
-            let mut current = gauged.clone();
-            for step in steps.iter().rev() {
-                current = match step {
-                    CoordinateStep::Affine { a, b } => conjugate_affine(&current, a, b),
-                    CoordinateStep::Reversal { degree, step } => {
-                        conjugate_reversal(&current, degree, *step)
-                    }
-                };
-            }
-            Some(current)
-        }
-        OperatorForm::Hadamard { .. } => None,
-    }
+/// The dividend `E` of the certificate (module documentation of
+/// `preserver_image`, steps 1 and 2): the pullback
+/// (`ore_algebra::pull_back`) of the input relation `M` (leader shift `R`)
+/// through `T'` followed by the gauge `mu(n)/mu(n-1) = alpha(n)/beta(n)`,
+/// with the bounds of `M` and top shift `R`, divided by the largest power
+/// of `x` dividing every coefficient.  So `E = M_mu o T'` for a Weyl form
+/// and the conjugation of `M_mu` through the coordinate steps (last step
+/// first, with `y^N`, `N = b + h R`, for a reversal) otherwise; the gauge
+/// factor of the pullback is `prod_(t=1..R) beta(n + t)`.  Dividing by
+/// `x^v` keeps `(E P')_n = 0` equivalent to the undivided identity, since
+/// `Q[x]` (and the Laurent polynomials) have no zero divisors.  `None` for
+/// a Hadamard form or an invalid step.
+pub(super) fn dividend(
+    input: &DOp,
+    leader_shift: usize,
+    alpha: &[Q],
+    beta: &[Q],
+    form: &OperatorForm,
+) -> Option<DOp> {
+    let mut steps = form.row_map_steps()?;
+    steps.push(RowMapStep::Gauge {
+        numerator: alpha.to_vec(),
+        denominator: beta.to_vec(),
+    });
+    let bounds = PullbackBounds {
+        top_shift: leader_shift.max(input.max_shift()),
+        ..PullbackBounds::of(input)
+    };
+    let (e, _) = pull_back(input, &steps, bounds).ok()?;
+    Some(e.divide_by_variable_power(e.variable_valuation()))
 }
 
 #[cfg(test)]
@@ -802,7 +859,7 @@ mod tests {
         // M = (n + 2) S^2 - (1 + x) D S + x^2 (n + 1).
         let mut m = DOp::default();
         m.add_term((2, 0), Biv::new(vec![vec![q(2)], vec![q(1)]]));
-        m.add_term((1, 1), Biv::from_y(&[q(-1), q(-1)]));
+        m.add_term((1, 1), Biv::from_variable_polynomial(&[q(-1), q(-1)]));
         m.add_term(
             (0, 0),
             Biv::new(vec![vec![q(0), q(0), q(1)], vec![q(0), q(0), q(1)]]),
@@ -845,7 +902,6 @@ mod tests {
         ];
         let alpha = [q(1), q(2)];
         let beta = [q(3)];
-        let gauged = gauged_input(&m, 2, &alpha, &beta);
         let product_beta = |n: usize| {
             (1..=2).fold(Q::one(), |acc, t| {
                 acc * vec_poly::evaluate(&beta, &q((n + t) as i64))
@@ -853,7 +909,7 @@ mod tests {
         };
         for operator in operators {
             let form = operator.form().unwrap();
-            let e = dividend(&gauged, &form).unwrap();
+            let e = dividend(&m, 2, &alpha, &beta, &form).unwrap();
             // T' (the Weyl numerator, or the coordinate map) on the rows.
             let apply = |row: &[Q], n: usize| match &form {
                 OperatorForm::Weyl { numerator, .. } => numerator.apply_row(row, n),

@@ -13,7 +13,8 @@ the commutation rules `S n = (n + 1) S` and `D x = x D + 1`.
   by modular elimination, Chinese remaindering, rational reconstruction and
   an exact final check;
 - `right_pseudo_division`: right pseudo-division by an operator whose leader
-  is free of `x` and of derivatives;
+  is free of `x` and of derivatives, and `right_pseudo_division_of_row` of a
+  row of operators by a square system with leader `g(n) S^k I`;
 - `RowMapStep`, `pull_back`, `push_forward`: maps between sequences (Weyl
   operators, gauges, affine maps, reversals, coefficient multipliers) and the
   transport of annihilators through them;
@@ -47,6 +48,9 @@ the commutation rules `S n = (n + 1) S` and `D x = x D + 1`.
   affine maps, reversals (degree slopes of either sign), weighted Möbius
   maps, the `f`-polynomial map and power gauges, with exact row maps,
   inverses, pullbacks and forward rules.
+- `find_component_annihilator`: a runnable scalar annihilator of one
+  component of a vector sequence annihilated by a square system, with a
+  certificate `w(n) (M e_c) = sum_b H_b o Phi_b`.
 
 Everything is exact (`num_rational::BigRational`); coefficient vectors are
 in ascending degree order.

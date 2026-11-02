@@ -113,7 +113,7 @@ pub(super) fn scalar(p: &[Q]) -> DOp {
 
 /// Multiplication by `x`.
 pub(super) fn x_operator() -> DOp {
-    DOp::single(0, 0, Biv::from_y(&[Q::zero(), Q::one()]))
+    DOp::single(0, 0, Biv::from_variable_polynomial(&[Q::zero(), Q::one()]))
 }
 
 /// The shift `S`.
@@ -172,7 +172,7 @@ impl SystemOperators {
         let v = h_operator(&d_minus_one, &vec_poly::add(&a, &delta), &c);
         // c (1 - x) as a multiplication operator.
         let c_one_minus_x = multiplication(&c, &vec_poly::neg(&c));
-        let v_tilde = v.sub(&c_one_minus_x);
+        let v_tilde = v.subtract(&c_one_minus_x);
         let epsilon_next = shift_index_polynomial(&epsilon);
         let s = shift_operator();
         let x = x_operator();
@@ -182,10 +182,10 @@ impl SystemOperators {
         let product = vec_poly::mul(&vec_poly::mul(&epsilon, &epsilon_next), &delta);
         let eliminated = eps
             .compose(&s.compose(&s))
-            .sub(&eps.compose(&u.shifted(1)))
-            .sub(&eps_next.compose(&v_tilde.compose(&s)))
+            .subtract(&eps.compose(&u.shifted(1)))
+            .subtract(&eps_next.compose(&v_tilde.compose(&s)))
             .add(&eps_next.compose(&v_tilde.compose(&u)))
-            .sub(&scalar(&product).compose(&x));
+            .subtract(&scalar(&product).compose(&x));
         let parent = multiplication(&a, &b).add(&derivation(&c));
         Self {
             u,
@@ -216,14 +216,14 @@ impl SystemOperators {
         let eps_next = scalar(&self.epsilon_next);
         let eps_eps_next = scalar(&vec_poly::mul(&self.epsilon, &self.epsilon_next));
         // Residual operators on the A and B components.
-        let first_on_a = s.sub(&self.u);
+        let first_on_a = s.subtract(&self.u);
         let first_on_b = scalar(&vec_poly::neg(&self.epsilon)).compose(&x);
         let second_on_a = scalar(&vec_poly::neg(&self.delta));
-        let second_on_b = s.sub(&self.v);
+        let second_on_b = s.subtract(&self.v);
         let combine = |first: &DOp, second: &DOp| {
             eps.compose(&s.compose(first))
                 .add(&eps_eps_next.compose(&x.compose(second)))
-                .sub(&eps_next.compose(&self.v_tilde.compose(first)))
+                .subtract(&eps_next.compose(&self.v_tilde.compose(first)))
         };
         combine(&first_on_a, &second_on_a) == self.eliminated
             && combine(&first_on_b, &second_on_b).is_zero()
@@ -246,7 +246,7 @@ impl SystemOperators {
         let zero = Q::zero();
         let mut projection = DOp::default();
         for ((shift, derivative), coefficient) in &self.eliminated.0 {
-            let at_zero = coefficient.eval_y(&zero);
+            let at_zero = coefficient.evaluate_variable(&zero);
             if *derivative > 0 {
                 if !vec_poly::is_zero(&at_zero) {
                     return None;
@@ -264,8 +264,8 @@ impl SystemOperators {
     pub(super) fn constant_term_factorization_holds(&self, projection: &DOp) -> bool {
         let s = shift_operator();
         let g = vec_poly::mul(&self.epsilon_next, &vec_poly::sub(&self.a, &self.epsilon));
-        let left = scalar(&self.epsilon).compose(&s).sub(&scalar(&g));
-        let right = s.sub(&scalar(&self.a));
+        let left = scalar(&self.epsilon).compose(&s).subtract(&scalar(&g));
+        let right = s.subtract(&scalar(&self.a));
         left.compose(&right) == *projection
     }
 }

@@ -416,7 +416,7 @@ fn certify_schedule(
         );
     };
     let leader = cofactor_relation.column(r);
-    if leader.0.len() != 1 || !leader.0.get(&(0, 0)).is_some_and(|c| c.is_y_free()) {
+    if leader.0.len() != 1 || !leader.0.get(&(0, 0)).is_some_and(|c| c.is_variable_free()) {
         return reject(None, "the cofactor leader depends on x or D".into());
     }
     let Some((cofactor_rule, _)) =

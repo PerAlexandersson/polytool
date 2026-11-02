@@ -16,7 +16,9 @@
 //! - [`exact_kernel_vectors_by_group`]: exact kernel vectors of integer
 //!   matrices by modular elimination with an exact final check;
 //! - [`right_pseudo_division`]: right pseudo-division by an operator whose
-//!   leader is free of `x` and of derivatives;
+//!   leader is free of `x` and of derivatives, and
+//!   [`right_pseudo_division_of_row`] of a row of operators by a square
+//!   system with leader `g(n) S^k I`;
 //! - [`RowMapStep`], [`pull_back`], [`push_forward`]: maps between
 //!   sequences (Weyl operators, gauges, affine maps, reversals, coefficient
 //!   multipliers) and the transport of annihilators through them;
@@ -26,7 +28,10 @@
 //! - [`find_image_annihilator`]: a runnable annihilator of an image
 //!   sequence, pushed forward or found as a common left multiple, with an
 //!   [`ImageAnnihilatorCertificate`] that replays the identity
-//!   `w(n) E = H o L` on its own.
+//!   `w(n) E = H o L` on its own;
+//! - [`find_component_annihilator`]: a runnable scalar annihilator of one
+//!   component of a vector sequence annihilated by a square system, with a
+//!   [`ComponentAnnihilatorCertificate`] (`w(n) (M e_c) = sum_b H_b o Phi_b`).
 //!
 //! Everything is exact (`num_rational::BigRational`); nothing uses floating
 //! point.  Coefficient vectors are ascending: entry `i` is the coefficient
@@ -45,6 +50,7 @@
 //! ```
 
 mod bivariate;
+mod component_annihilator;
 mod difference_division;
 mod difference_image_annihilator;
 mod difference_row_map;
@@ -58,11 +64,14 @@ mod laurent;
 mod operator;
 mod row_annihilator;
 mod row_map;
-mod short_names;
 mod substitution;
 mod univariate;
 
 pub use bivariate::BivariatePolynomial;
+pub use component_annihilator::{
+    certify_component_annihilator, find_component_annihilator, ComponentAnnihilatorCertificate,
+    ComponentAnnihilatorError, ComponentAnnihilatorSearch,
+};
 pub use difference_division::{
     difference_index_only_leader, difference_right_pseudo_division, variable_shift_pseudo_division,
     DifferentialDifferenceDivision,
@@ -79,7 +88,10 @@ pub use difference_row_map::{
     DifferenceRowMapStep,
 };
 pub use differential_difference::{DifferentialDifferenceKey, DifferentialDifferenceOperator};
-pub use division::{index_only_leader, right_pseudo_division, RightPseudoDivision};
+pub use division::{
+    index_only_leader, right_pseudo_division, right_pseudo_division_of_row,
+    system_index_only_leader, RightPseudoDivision, RowPseudoDivision,
+};
 pub use euler::{add_euler_term, falling_factorial, from_euler_form, to_euler_form, EulerOperator};
 pub use falling_factorial::{
     conjugate_to_falling_factorial_basis, conjugate_to_power_basis,

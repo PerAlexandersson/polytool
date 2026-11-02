@@ -21,8 +21,7 @@
 
 use super::annihilator::{shift_coefficients, vanishing_bases};
 use super::certify::right_pseudo_divide;
-use super::modular_kernel::kernel_vectors_by_group;
-use super::prepare::{left_multiply, PreparedRule};
+use super::prepare::PreparedRule;
 use crate::recurrence::implicit::algebra::{Biv, DOp};
 use crate::recurrence::lift::section_certify::x_free_leader;
 use crate::recurrence::lift::section_operators::check_term_budget;
@@ -32,6 +31,7 @@ use crate::BigRational;
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Zero};
+use ore_algebra::exact_kernel_vectors_by_group;
 
 type Q = BigRational;
 
@@ -70,7 +70,10 @@ pub(super) fn step_image(a: &DOp, parent: &DOp) -> Result<DOp, RecurrenceError> 
         ));
     }
     let top = shift_coefficients(&a.column(k - 1), 1);
-    let image = left_multiply(&leader, &a.shifted(1)).sub(&top.compose(parent));
+    let image = a
+        .shifted(1)
+        .left_multiply(&leader)
+        .subtract(&top.compose(parent));
     if !image.is_zero() && image.max_shift() >= k {
         return Err(RecurrenceError::VerificationFailed(
             "the step image did not cancel the parent leader".into(),
@@ -138,9 +141,9 @@ pub(super) fn system_invariance_holds(
         {
             return Ok(false);
         }
-        let mut difference = left_multiply(nu, &step_image(generator, parent)?);
+        let mut difference = step_image(generator, parent)?.left_multiply(nu);
         for (b, a) in quotients.iter().zip(&system.generators) {
-            difference = difference.sub(&b.compose(a));
+            difference = difference.subtract(&b.compose(a));
         }
         if !difference.is_zero() {
             return Ok(false);
@@ -181,12 +184,12 @@ impl EchelonBasis {
                 break;
             };
             let (m, z, _) = right_pseudo_divide(&column, &pivot.column(c), self.max_terms)?;
-            remainder = left_multiply(&m, &remainder).sub(&z.compose(pivot));
+            remainder = remainder.left_multiply(&m).subtract(&z.compose(pivot));
             for quotient in &mut quotients {
-                *quotient = left_multiply(&m, quotient);
+                *quotient = quotient.left_multiply(&m);
             }
             quotients[c] = quotients[c].add(&z);
-            multiplier = multiplier.mul(&m);
+            multiplier = multiplier.multiply(&m);
             check_term_budget(
                 remainder.0.len() + quotients.iter().map(|q| q.0.len()).sum::<usize>(),
                 self.max_terms,
@@ -307,7 +310,7 @@ fn guess_pivots(
     // the smallest free column of a shift has the smallest leading term
     // among the kernel vectors led by that shift.
     let shifts: Vec<usize> = unknowns.iter().map(|&(i, ..)| i).collect();
-    let vectors = kernel_vectors_by_group(&integral, &shifts, k);
+    let vectors = exact_kernel_vectors_by_group(&integral, &shifts, k);
     Ok(Some(
         vectors
             .into_iter()
@@ -477,7 +480,7 @@ mod tests {
         {
             sum = sum.add(&z.compose(a));
         }
-        assert_eq!(left_multiply(&decomposition.multiplier, &remainder), sum);
+        assert_eq!(remainder.left_multiply(&decomposition.multiplier), sum);
         // Restart bases: nu = n - 3 vanishes identically at n = 3.
         let mut restarted = system;
         restarted.step_multipliers[0] = biv(&[&[-3], &[1]]);

@@ -4,21 +4,24 @@
 //! hypergeometric multipliers), certified and proved; near misses, replay
 //! and tampering, and the detection.
 //!
-//! The input rules below were fitted to the image rows by the exact
-//! fixed-shape recurrence search, independently of the lift machinery; the
-//! tests supply 30 exact image rows, which every rule must reproduce.
+//! The input rules are computed from the parent rule by
+//! `image_recurrence_of_operator` (through
+//! `PreserverImageCandidate::image_recurrence`) and checked against 30 exact
+//! image rows computed directly.  One rule, `EULERIAN_PLUS_DERIVATIVE`, was
+//! fitted to the image rows by the exact fixed-shape recurrence search,
+//! independently of the lift machinery, and is kept as a cross-check.
 
 use num_bigint::BigInt;
 use polytool::is_real_rooted_bigint_coeffs;
 use polytool::recurrence::{
     certify_preserver_image_lift, find_preserver_image_lifts, BigRational, BivarPoly,
-    DegreeSchedule, HadamardFactor, HadamardFactorTerm, IndexRationalFunction,
-    InterlacingOrientation, LiftHypothesisStatus, LiftIdentityStatus, LiftOperation, LiftVerdict,
-    PreserverImageCandidate, PreserverImageCertificate, PreserverImageCertification,
-    PreserverImageIdentityStatus, PreserverImageOptions, PreserverImageReport,
-    PreserverImageSearchOptions, PreserverInterlacingClaim, PreserverOperator,
-    PreserverParentLibrary, PreserverParentRegion, Recurrence, RecurrenceJson, RecurrenceTerm,
-    RowInterlacing, VeroneseSectionGauge,
+    DegreeSchedule, HadamardFactor, HadamardFactorTerm, ImageRecurrenceOptions, ImageRowMap,
+    IndexRationalFunction, InterlacingOrientation, LiftHypothesisStatus, LiftIdentityStatus,
+    LiftOperation, LiftVerdict, PreserverImageCandidate, PreserverImageCertificate,
+    PreserverImageCertification, PreserverImageIdentityStatus, PreserverImageOptions,
+    PreserverImageReport, PreserverImageSearchOptions, PreserverInterlacingClaim,
+    PreserverOperator, PreserverParentLibrary, PreserverParentRegion, Recurrence, RecurrenceError,
+    RecurrenceJson, RecurrenceTerm, RowInterlacing, VeroneseSectionGauge,
 };
 use polytool::sequences;
 use polytool::vec_poly;
@@ -37,86 +40,6 @@ const EULERIAN_PLUS_DERIVATIVE: &str = r#"
 "coeff":{"coeffs":[["-3/2","3/2","5","-11/2","1/2"],["0","-1/2","-1","3/2","0"],["0",
 "0","0","0","0"]]}},{"offset":2,"deriv_order":2,"sign":"none","coeff":{"coeffs":[["0",
 "-1/2","1/2","1/2","-1/2"],["0","0","0","0","0"],["0","0","0","0","0"]]}}]}}
-"#;
-
-const NARAYANA_THETA_THETA_PLUS_ONE: &str = r#"
-{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["0"],["0",
-"2"]],"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["1","2","0"],["-1/2","-3/2","0"]]}},{"offset":1,"deriv_order":1,
-"sign":"none","coeff":{"coeffs":[["0","-1","1"],["0","0","0"]]}}],
-"denominator":{"coeffs":[["1"],["-1/2"]]}}}
-"#;
-
-const EULERIAN_DERIVATIVE_OF_X: &str = r#"
-{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"],["1",
-"2"]],"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["1","-2","0","0"],["0","2","0","0"],["0","0","0","0"]]}},
-{"offset":1,"deriv_order":1,"sign":"none","coeff":{"coeffs":[["0","1","-1","0"],["0",
-"0","0","0"],["0","0","0","0"]]}},{"offset":2,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["0","0","0","0"],["0","0","2","0"],["0","0","-1","0"]]}},
-{"offset":2,"deriv_order":1,"sign":"none","coeff":{"coeffs":[["0","0","0","0"],["0","0",
-"-1","1"],["0","0","0","0"]]}}]}}
-"#;
-
-const EULERIAN_AFFINE: &str = r#"
-{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"]],
-"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["0","-2","0"],["1","2","0"]]}},{"offset":1,"deriv_order":1,
-"sign":"none","coeff":{"coeffs":[["0","-1","-2"],["0","0","0"]]}}]}}
-"#;
-
-const NARAYANA_THETA_PLUS_N: &str = r#"
-{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"]],
-"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["0","-3","-20","0","0"],["-2","-1","30","0","0"],["-1/2","-1","-10",
-"0","0"]]}},{"offset":1,"deriv_order":1,"sign":"none","coeff":{"coeffs":[["-1","-5/2",
-"21","-40","0"],["0","-3","-2","20","0"],["0","0","0","0","0"]]}},{"offset":1,
-"deriv_order":2,"sign":"none","coeff":{"coeffs":[["0","-1/2","-3/2","12","-10"],["0",
-"0","0","0","0"],["0","0","0","0","0"]]}}],"denominator":{"coeffs":[["1"],["0"],
-["-1"]]}}}
-"#;
-
-const HERMITE_PLUS_DERIVATIVE: &str = r#"
-{"schema":"polytool.recurrence.v1","first_index":0,"initial_polynomials":[["1"]],
-"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["2","1"],["-1","0"]]}},{"offset":1,"deriv_order":1,"sign":"none",
-"coeff":{"coeffs":[["-1","1"],["0","0"]]}},{"offset":1,"deriv_order":2,"sign":"none",
-"coeff":{"coeffs":[["-1","0"],["0","0"]]}}]}}
-"#;
-
-const NARAYANA_THETA_MINUS_TWO: &str = r#"
-{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["-2"]],
-"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["1","-6/7","-5/21","0","0"],["11/14","6/7","5/14","0","0"],["-3/14",
-"0","-5/42","0","0"]]}},{"offset":1,"deriv_order":1,"sign":"none",
-"coeff":{"coeffs":[["0","5/7","4/3","-10/21","0"],["0","-3/7","-6/7","5/21","0"],["0",
-"0","0","0","0"]]}},{"offset":1,"deriv_order":2,"sign":"none","coeff":{"coeffs":[["0",
-"0","-9/14","16/21","-5/42"],["0","0","0","0","0"],["0","0","0","0","0"]]}}],
-"denominator":{"coeffs":[["1"],["11/14"],["-3/14"]]}}}
-"#;
-
-const BINOMIAL_INVERSE_FACTORIAL: &str = r#"
-{"schema":"polytool.recurrence.v1","first_index":0,"initial_polynomials":[["1"],["1",
-"1"]],"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["0","-1"],["-1","0"]]}},{"offset":1,"deriv_order":1,"sign":"none",
-"coeff":{"coeffs":[["0","-1"],["0","0"]]}}],"denominator":{"coeffs":[["0"],["-1"]]}}}
-"#;
-
-const HERMITE_PLUS_SECOND_DERIVATIVE: &str = r#"
-{"schema":"polytool.recurrence.v1","first_index":0,"initial_polynomials":[["1"],["0",
-"1"],["1","0","1"],["0","3","0","1"],["-9","0","6","0","1"]],
-"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["0","1","0"],["0","-1/2","0"]]}},{"offset":1,"deriv_order":1,
-"sign":"none","coeff":{"coeffs":[["-1/4","0","1/4"],["1/4","0","0"]]}},{"offset":1,
-"deriv_order":2,"sign":"none","coeff":{"coeffs":[["0","-1/4","0"],["0","0","0"]]}}],
-"denominator":{"coeffs":[["3/4"],["-1/4"]]}}}
-"#;
-
-const EULERIAN_F_POLYNOMIAL: &str = r#"
-{"schema":"polytool.recurrence.v1","first_index":1,"initial_polynomials":[["1"]],
-"recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
-"coeff":{"coeffs":[["1","2","0"]]}},{"offset":1,"deriv_order":1,"sign":"none",
-"coeff":{"coeffs":[["0","1","1"]]}}]}}
 "#;
 
 fn q(value: i64) -> Q {
@@ -213,14 +136,24 @@ fn certify(
     first_index: usize,
     candidate: &PreserverImageCandidate,
 ) -> PreserverImageCertification {
-    let certification = certify_preserver_image_lift(
+    certify_with_options(
         rule,
         rows,
         first_index,
         candidate,
         &PreserverImageOptions::default(),
     )
-    .expect("the certification runs");
+}
+
+fn certify_with_options(
+    rule: &Recurrence,
+    rows: &[Vec<Q>],
+    first_index: usize,
+    candidate: &PreserverImageCandidate,
+    options: &PreserverImageOptions,
+) -> PreserverImageCertification {
+    let certification = certify_preserver_image_lift(rule, rows, first_index, candidate, options)
+        .expect("the certification runs");
     certification.verify().expect("the certification replays");
     let json = serde_json::to_string(&certification).unwrap();
     let back: PreserverImageCertification = serde_json::from_str(&json).unwrap();
@@ -235,6 +168,53 @@ fn certify_fixture(
 ) -> PreserverImageCertification {
     let (rule, first_index) = rule(fixture);
     certify(&rule, rows, first_index, candidate)
+}
+
+/// The rule of the image of `candidate` from `first_index` on, computed
+/// from the parent rule (not fitted), replayed against the exact rows.
+fn computed_rule(
+    candidate: &PreserverImageCandidate,
+    first_index: usize,
+    rows: &[Vec<Q>],
+) -> Recurrence {
+    let image = candidate
+        .image_recurrence(first_index, &ImageRecurrenceOptions::default())
+        .expect("the image rule is computed");
+    image.verify().expect("the image rule replays");
+    let generated = image.rows(rows.len()).expect("the image rule runs");
+    for (offset, (row, expected)) in generated.iter().zip(rows).enumerate() {
+        assert_eq!(&vec_poly::trim(row), expected, "row offset {offset}");
+    }
+    let (rule, first, _) = image.rule.to_recurrence_parts().unwrap();
+    assert_eq!(first, first_index);
+    rule
+}
+
+/// Certify the computed rule of the image, also asking for the image rule
+/// on the certification.
+fn certify_computed(
+    rows: &[Vec<Q>],
+    first_index: usize,
+    candidate: &PreserverImageCandidate,
+) -> PreserverImageCertification {
+    let rule = computed_rule(candidate, first_index, rows);
+    let options = PreserverImageOptions {
+        image_rule: Some(ImageRecurrenceOptions::default()),
+        ..PreserverImageOptions::default()
+    };
+    let certification = certify_with_options(&rule, rows, first_index, candidate, &options);
+    if matches!(
+        certification.identity,
+        PreserverImageIdentityStatus::Certified { .. }
+    ) {
+        let image = certification.image_rule.as_ref().expect("an image rule");
+        let mut tampered = certification.clone();
+        let mut wrong = image.clone();
+        wrong.certificate.first_index += 1;
+        tampered.image_rule = Some(wrong);
+        assert!(tampered.verify().is_err());
+    }
+    certification
 }
 
 fn assert_proved(certification: &PreserverImageCertification, region: &str) {
@@ -276,18 +256,22 @@ fn division_certificate(
 #[test]
 fn eulerian_plus_derivative_is_proved() {
     let rows: Vec<_> = eulerian().iter().map(|p| plus_derivative(p, 1)).collect();
-    let certification = certify_fixture(
-        EULERIAN_PLUS_DERIVATIVE,
-        &rows,
-        &candidate(
-            "eulerian",
-            PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
-        ),
+    let lift = candidate(
+        "eulerian",
+        PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
     );
+    // The fitted rule and the computed one are both certified.
+    let certification = certify_fixture(EULERIAN_PLUS_DERIVATIVE, &rows, &lift);
     assert_proved(&certification, "(-inf, 0]");
     assert!(certification
         .lean_declarations
         .contains(&"RealRooted.splits_add_C_mul_derivative_all".to_string()));
+    let computed = certify_computed(&rows, 1, &lift);
+    assert_proved(&computed, "(-inf, 0]");
+    assert_eq!(
+        computed.image_rule.as_ref().map(|image| image.order),
+        Some(2)
+    );
 }
 
 /// `theta (theta + 1) N_n`: an Euler-operator polynomial with roots `0, -1`
@@ -298,9 +282,9 @@ fn euler_operator_polynomial_on_narayana_is_proved() {
         .iter()
         .map(|p| theta(p, |k| q((k * (k + 1)) as i64)))
         .collect();
-    let certification = certify_fixture(
-        NARAYANA_THETA_THETA_PLUS_ONE,
+    let certification = certify_computed(
         &rows,
+        1,
         &candidate(
             "narayana",
             PreserverOperator::euler_polynomial(&[q(0), q(1), q(1)]),
@@ -324,11 +308,7 @@ fn index_dependent_euler_operator_is_proved() {
             IndexRationalFunction::constant(&q(1)),
         ],
     };
-    let certification = certify_fixture(
-        NARAYANA_THETA_PLUS_N,
-        &rows,
-        &candidate("narayana", operator),
-    );
+    let certification = certify_computed(&rows, 1, &candidate("narayana", operator));
     assert_proved(&certification, "(-inf, 0]");
     assert!(certification
         .lift_summary
@@ -349,9 +329,9 @@ fn rolle_and_affine_images_of_eulerian_are_proved() {
             vec_poly::trim(&vec_poly::derivative(&shifted))
         })
         .collect();
-    let certification = certify_fixture(
-        EULERIAN_DERIVATIVE_OF_X,
+    let certification = certify_computed(
         &rows,
+        1,
         &candidate(
             "eulerian",
             PreserverOperator::DerivativeOfPowerMultiple {
@@ -367,9 +347,9 @@ fn rolle_and_affine_images_of_eulerian_are_proved() {
         .iter()
         .map(|p| vec_poly::trim(&vec_poly::compose(p, &[q(1), q(2)])))
         .collect();
-    let certification = certify_fixture(
-        EULERIAN_AFFINE,
+    let certification = certify_computed(
         &rows,
+        1,
         &candidate(
             "eulerian",
             PreserverOperator::Affine {
@@ -403,9 +383,9 @@ fn f_polynomial_of_eulerian_is_proved() {
             vec_poly::trim(&out)
         })
         .collect();
-    let certification = certify_fixture(
-        EULERIAN_F_POLYNOMIAL,
+    let certification = certify_computed(
         &rows,
+        1,
         &candidate(
             "eulerian",
             PreserverOperator::f_polynomial(DegreeSchedule::new(1, 0, 1)),
@@ -428,9 +408,9 @@ fn inverse_factorial_multiplier_of_the_binomial_rows_is_proved() {
         .iter()
         .map(|p| theta(p, |k| factorial[k].recip()))
         .collect();
-    let certification = certify_fixture(
-        BINOMIAL_INVERSE_FACTORIAL,
+    let certification = certify_computed(
         &rows,
+        0,
         &candidate(
             "binomial",
             PreserverOperator::HadamardMultiplier {
@@ -457,9 +437,9 @@ fn inverse_factorial_multiplier_of_the_binomial_rows_is_proved() {
 #[test]
 fn hermite_plus_derivative_is_proved_on_the_whole_line() {
     let rows: Vec<_> = hermite().iter().map(|p| plus_derivative(p, 1)).collect();
-    let certification = certify_fixture(
-        HERMITE_PLUS_DERIVATIVE,
+    let certification = certify_computed(
         &rows,
+        0,
         &candidate(
             "hermite_he",
             PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
@@ -560,6 +540,46 @@ fn gauge_and_index_shift_are_certified() {
     assert_proved(&certification, "(-inf, 0]");
 }
 
+/// The operators convert to image row maps with the same action; a
+/// multiplier that depends on `n` does not.
+#[test]
+fn operators_convert_to_image_row_maps() {
+    let inverse_factorial = PreserverOperator::HadamardMultiplier {
+        factor: HadamardFactor::single(HadamardFactorTerm::InverseFactorial),
+    };
+    assert_eq!(
+        ImageRowMap::try_from(&inverse_factorial).unwrap(),
+        ImageRowMap::CoefficientMultiplier {
+            numerator: vec!["1".into()],
+            denominator: vec!["1".into(), "1".into()],
+        }
+    );
+    let binomial = PreserverOperator::HadamardMultiplier {
+        factor: HadamardFactor::single(HadamardFactorTerm::Binomial {
+            index_offset: 0,
+            coefficient_offset: 0,
+        }),
+    };
+    assert!(matches!(
+        ImageRowMap::try_from(&binomial),
+        Err(RecurrenceError::Unsupported(_))
+    ));
+    // phi(D) = 1 + D/2 as a Weyl operator.
+    let ImageRowMap::WeylOperator { terms, denominator } =
+        ImageRowMap::try_from(&PreserverOperator::derivative_polynomial(&[q(2), q(1)])).unwrap()
+    else {
+        panic!("a Weyl operator")
+    };
+    assert_eq!(terms.len(), 2);
+    assert_eq!(denominator, vec!["1".to_string()]);
+    // A candidate with a multiplier that depends on n gets no image rule.
+    let mut lift = candidate("binomial", binomial);
+    assert!(lift.image_operator_specification().is_err());
+    lift.operator = inverse_factorial;
+    let specification = lift.image_operator_specification().unwrap();
+    assert_eq!(specification.index_shift, 0);
+}
+
 // ---------------------------------------------------------------------------
 // Near misses
 // ---------------------------------------------------------------------------
@@ -581,9 +601,9 @@ fn a_multiplier_with_a_positive_root_is_not_proved() {
     assert!(rows
         .iter()
         .all(|row| is_real_rooted_bigint_coeffs(&integer_row(row))));
-    let certification = certify_fixture(
-        NARAYANA_THETA_MINUS_TWO,
+    let certification = certify_computed(
         &rows,
+        1,
         &candidate(
             "narayana",
             PreserverOperator::euler_polynomial(&[q(-2), q(1)]),
@@ -608,9 +628,9 @@ fn a_multiplier_with_a_positive_root_is_not_proved() {
 fn a_non_preserver_is_not_proved() {
     let rows: Vec<_> = hermite().iter().map(|p| plus_derivative(p, 2)).collect();
     assert!(!is_real_rooted_bigint_coeffs(&integer_row(&rows[2])));
-    let certification = certify_fixture(
-        HERMITE_PLUS_SECOND_DERIVATIVE,
+    let certification = certify_computed(
         &rows,
+        0,
         &candidate(
             "hermite_he",
             PreserverOperator::derivative_polynomial(&[q(1), q(0), q(1)]),
@@ -627,11 +647,7 @@ fn a_non_preserver_is_not_proved() {
         .unwrap(),
         denominator: vec!["1".into()],
     };
-    let certification = certify_fixture(
-        HERMITE_PLUS_SECOND_DERIVATIVE,
-        &rows,
-        &candidate("hermite_he", general),
-    );
+    let certification = certify_computed(&rows, 0, &candidate("hermite_he", general));
     assert!(matches!(
         certification.lift_summary.identity,
         LiftIdentityStatus::Certified { .. }
@@ -647,17 +663,17 @@ fn wrong_parameters_are_refuted_at_an_index() {
         .iter()
         .map(|p| vec_poly::trim(&vec_poly::compose(p, &[q(1), q(2)])))
         .collect();
-    let certification = certify_fixture(
-        EULERIAN_AFFINE,
-        &rows,
-        &candidate(
+    let affine = |slope: &str| {
+        candidate(
             "eulerian",
             PreserverOperator::Affine {
-                slope: "3".into(),
+                slope: slope.into(),
                 intercept: "1".into(),
             },
-        ),
-    );
+        )
+    };
+    let rule = computed_rule(&affine("2"), 1, &rows);
+    let certification = certify(&rule, &rows, 1, &affine("3"));
     assert!(matches!(
         certification.identity,
         PreserverImageIdentityStatus::Refuted { index: 2, .. }
@@ -747,10 +763,9 @@ fn tampered_certificates_and_records_are_rejected() {
 // Detection
 // ---------------------------------------------------------------------------
 
-fn search(fixture: &str, rows: &[Vec<Q>]) -> PreserverImageReport {
-    let (rule, first_index) = rule(fixture);
+fn search(rule: &Recurrence, first_index: usize, rows: &[Vec<Q>]) -> PreserverImageReport {
     let report = find_preserver_image_lifts(
-        &rule,
+        rule,
         rows,
         first_index,
         &PreserverImageSearchOptions {
@@ -773,7 +788,14 @@ fn the_detection_finds_the_operator_and_the_parent() {
         .enumerate()
         .map(|(offset, p)| theta(p, |k| q((k + offset + 1) as i64)))
         .collect();
-    let report = search(NARAYANA_THETA_PLUS_N, &rows);
+    let operator = PreserverOperator::EulerPolynomial {
+        coefficients: vec![
+            IndexRationalFunction::from_polynomials(&[q(0), q(1)], &[q(1)]),
+            IndexRationalFunction::constant(&q(1)),
+        ],
+    };
+    let rule = computed_rule(&candidate("narayana", operator), 1, &rows);
+    let report = search(&rule, 1, &rows);
     let lift = report.proved_lifts().next().expect("a proved lift");
     assert_eq!(lift.candidate.parent_name, "narayana");
     assert_eq!(
@@ -785,7 +807,12 @@ fn the_detection_finds_the_operator_and_the_parent() {
         .iter()
         .map(|p| vec_poly::trim(&vec_poly::compose(p, &[q(1), q(2)])))
         .collect();
-    let report = search(EULERIAN_AFFINE, &rows);
+    let affine = PreserverOperator::Affine {
+        slope: "2".into(),
+        intercept: "1".into(),
+    };
+    let rule = computed_rule(&candidate("eulerian", affine), 1, &rows);
+    let report = search(&rule, 1, &rows);
     let lift = report.proved_lifts().next().expect("a proved lift");
     assert_eq!(lift.candidate.parent_name, "eulerian");
     assert_eq!(
@@ -800,7 +827,9 @@ fn the_detection_finds_the_operator_and_the_parent() {
 #[test]
 fn the_detection_proves_nothing_for_a_non_preserver() {
     let rows: Vec<_> = hermite().iter().map(|p| plus_derivative(p, 2)).collect();
-    let report = search(HERMITE_PLUS_SECOND_DERIVATIVE, &rows);
+    let operator = PreserverOperator::derivative_polynomial(&[q(1), q(0), q(1)]);
+    let rule = computed_rule(&candidate("hermite_he", operator), 0, &rows);
+    let report = search(&rule, 0, &rows);
     assert_eq!(report.proved_lifts().count(), 0, "{report:#?}");
 }
 
@@ -831,9 +860,9 @@ fn the_named_library_is_proved() {
 #[test]
 fn a_fixed_preserver_transfers_the_parent_interlacing() {
     let rows: Vec<_> = hermite().iter().map(|p| plus_derivative(p, 1)).collect();
-    let certification = certify_fixture(
-        HERMITE_PLUS_DERIVATIVE,
+    let certification = certify_computed(
         &rows,
+        0,
         &candidate(
             "hermite_he",
             PreserverOperator::derivative_polynomial(&[q(1), q(1)]),
@@ -895,11 +924,7 @@ fn index_dependent_operators_claim_no_interlacing() {
             IndexRationalFunction::constant(&q(1)),
         ],
     };
-    let certification = certify_fixture(
-        NARAYANA_THETA_PLUS_N,
-        &rows,
-        &candidate("narayana", operator),
-    );
+    let certification = certify_computed(&rows, 1, &candidate("narayana", operator));
     assert!(certification.is_proved());
     assert!(!certification.interlacing.is_claimed());
     assert!(!certification.lift_summary.input_interlacing.is_proved());
@@ -1128,9 +1153,8 @@ mod interval_parents {
 mod euler_step {
     use super::*;
 
-    /// `Q_n = T((1 + x)^n)` for `T = (theta + 1)^2 + x (1 + v theta)`; the
-    /// rows satisfy `Q_n = 3 (1 + x) Q_(n-1) - 3 (1 + x)^2 Q_(n-2) + (1 + x)^3
-    /// Q_(n-3)` (fitted by the exact recurrence search).
+    /// `Q_n = T((1 + x)^n)` for `T = (theta + 1)^2 + x (1 + v theta)`, with
+    /// the rule computed from the binomial rule.
     fn binomial_image(v: i64) -> (Recurrence, Vec<Vec<Q>>) {
         let rows: Vec<Vec<Q>> = binomial_rows()
             .iter()
@@ -1145,26 +1169,10 @@ mod euler_step {
                 vec_poly::trim(&vec_poly::add(&diagonal, &shifted))
             })
             .collect();
-        let bivariate = |coefficients: &[i64]| {
-            BivarPoly::from_coefficients_normalized(vec![coefficients
-                .iter()
-                .map(|&c| q(c))
-                .collect()])
-        };
-        let rule = Recurrence {
-            terms: vec![
-                RecurrenceTerm::new(1, 0, bivariate(&[3, 3])),
-                RecurrenceTerm::new(2, 0, bivariate(&[-3, -6, -3])),
-                RecurrenceTerm::new(3, 0, bivariate(&[1, 3, 3, 1])),
-            ],
-            denominator: None,
-            inhomogeneous: None,
-        };
-        let generated = rule.generate_rows_rational(&rows[..3], 0, ROWS).unwrap();
-        for (row, expected) in generated.iter().zip(&rows) {
-            assert_eq!(&vec_poly::trim(row), expected);
-        }
-        (rule, rows)
+        (
+            computed_rule(&candidate("binomial", step(v)), 0, &rows),
+            rows,
+        )
     }
 
     fn step(v: i64) -> PreserverOperator {

@@ -1,7 +1,7 @@
 //! The substitution `Q_n = F^(e(n)) S_n` into the input relation and the
 //! replayable [`RowFactorCertificate`].
 
-use super::super::hadamard_factor::prepare::{left_multiply, prepare_rule};
+use super::super::hadamard_factor::prepare::prepare_rule;
 use crate::polynomial::Polynomial;
 use crate::recurrence::implicit::algebra::{q, Biv, DOp};
 use crate::recurrence::lift::section_certify::n_polynomial;
@@ -22,16 +22,16 @@ pub(super) fn exponent_polynomial(slope: usize, offset: i64) -> Biv {
 /// `T_d = F^d (D + w F'/F)^d = F^d F^(-w) D^d F^w` for `d = 0..=max`, by
 /// `T_(d+1) = F D T_d + (w - d) F' T_d`; `w` is a polynomial in `n`.
 fn conjugated_derivatives(f: &[Q], w: &Biv, max: usize) -> Vec<DOp> {
-    let multiply_f = DOp::single(0, 0, Biv::from_y(f));
+    let multiply_f = DOp::single(0, 0, Biv::from_variable_polynomial(f));
     let derivative = DOp::single(0, 1, Biv::one());
-    let f_prime = Biv::from_y(&vec_poly::derivative(f));
+    let f_prime = Biv::from_variable_polynomial(&vec_poly::derivative(f));
     let mut powers = vec![DOp::single(0, 0, Biv::one())];
     for d in 0..max {
         let previous = &powers[d];
-        let weight = w.add(&Biv::constant(-q(d as i64))).mul(&f_prime);
+        let weight = w.add(&Biv::constant(-q(d as i64))).multiply(&f_prime);
         let next = multiply_f
             .compose(&derivative.compose(previous))
-            .add(&left_multiply(&weight, previous));
+            .add(&previous.left_multiply(&weight));
         powers.push(next);
     }
     powers
@@ -47,8 +47,8 @@ pub(super) fn substitute(input: &DOp, f: &[Q], slope: usize, offset: i64) -> DOp
     for ((i, d), c) in &input.0 {
         let w = e.add(&Biv::constant(q((slope * i) as i64)));
         let powers = conjugated_derivatives(f, &w, *d);
-        let power = Biv::from_y(&vec_poly::pow(f, slope * i + j - d));
-        let term = left_multiply(&c.mul(&power), &powers[*d]);
+        let power = Biv::from_variable_polynomial(&vec_poly::pow(f, slope * i + j - d));
+        let term = powers[*d].left_multiply(&c.multiply(&power));
         for ((_, order), coefficient) in &term.0 {
             out.add_term((*i, *order), coefficient.clone());
         }
@@ -162,12 +162,12 @@ impl RowFactorCertificate {
         }
         let substituted = substitute(&input, &f, self.exponent_slope, self.exponent_offset);
         let cofactor = ImplicitRelation::from_json(&self.cofactor_relation)?.op();
-        let power = Biv::from_y(&vec_poly::pow(&f, self.removed_factor_power));
-        if left_multiply(&power, &cofactor) != substituted {
+        let power = Biv::from_variable_polynomial(&vec_poly::pow(&f, self.removed_factor_power));
+        if cofactor.left_multiply(&power) != substituted {
             return failed("M_S is not F^h times the cofactor relation");
         }
         let leader = cofactor.column(r);
-        if leader.0.len() != 1 || !leader.0.get(&(0, 0)).is_some_and(Biv::is_y_free) {
+        if leader.0.len() != 1 || !leader.0.get(&(0, 0)).is_some_and(Biv::is_variable_free) {
             return failed("the cofactor leader is not free of x and D");
         }
         let (rule, cofactor_first, rows) = self.cofactor.to_recurrence_parts()?;

@@ -221,8 +221,9 @@
 //! conditions, ratios, justifications), `certify` (conjugation, divisions,
 //! the certificate), `annihilator` (invariant annihilators of first-order
 //! parents), `annihilator_system` (invariant systems of parents of any
-//! order), `modular_kernel` (the exact kernel vectors behind the system
-//! search), `search` (detection and the entry point), `report`
+//! order; the exact kernel vectors behind the system search are
+//! `ore_algebra::exact_kernel_vectors_by_group`), `search` (detection and
+//! the entry point), `report`
 //! (the `polytool.recurrence-hadamard-factor-lifts.v1` types and the
 //! [`crate::recurrence::LiftSummary`] mapping) and `prepare` (input
 //! validation shared with the row-factor lifts).
@@ -231,7 +232,6 @@ pub(super) mod annihilator;
 pub(super) mod annihilator_system;
 pub(super) mod certify;
 pub(super) mod factor;
-mod modular_kernel;
 pub(super) mod prepare;
 mod report;
 pub(super) mod search;

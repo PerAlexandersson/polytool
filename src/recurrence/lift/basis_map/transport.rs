@@ -45,7 +45,7 @@ pub(super) fn transported_system(
     let max_power = relation
         .0
         .values()
-        .filter_map(Biv::y_degree)
+        .filter_map(Biv::variable_degree)
         .max()
         .unwrap_or(0);
     let mut powers = vec![OperatorMatrix::identity(size)];
@@ -64,7 +64,7 @@ pub(super) fn transported_system(
             for b in 0..size {
                 for a in 0..size {
                     for ((_, d), c) in &power.entries[b][a].0 {
-                        system.entries[b][a].add_term((*shift, *d), coefficient.mul(c));
+                        system.entries[b][a].add_term((*shift, *d), coefficient.multiply(c));
                     }
                 }
             }

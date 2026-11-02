@@ -142,7 +142,7 @@ fn order_check(value: usize, name: &str) -> Result<(), TransformError> {
 
 impl DiagonalWeight {
     pub(super) fn form(&self) -> Result<WeightForm, TransformError> {
-        let linear = |t: usize| Biv::from_y(&[q_usize(t), Q::one()]);
+        let linear = |t: usize| Biv::from_variable_polynomial(&[q_usize(t), Q::one()]);
         Ok(match self {
             Self::FactorialPower { power } => {
                 order_check(*power, "power")?;
@@ -323,7 +323,7 @@ impl DiagonalWeight {
             .factors
             .iter()
             .fold(Biv::constant(form.scale.recip()), |acc, (f, e)| {
-                acc.mul(&f.pow(e.unsigned_abs() as usize))
+                acc.multiply(&f.power(e.unsigned_abs() as usize))
             });
         let mut theta = ThetaOp::new();
         theta_add(&mut theta, (0, 0), polynomial);
@@ -350,7 +350,7 @@ impl WeightForm {
         let n_value = q_usize(n);
         let k_value = q_usize(k);
         for (f, e) in &self.factors {
-            let v = vec_poly::evaluate(&f.eval_n(&n_value), &k_value);
+            let v = vec_poly::evaluate(&f.evaluate_index(&n_value), &k_value);
             if v.is_zero() {
                 return Err(undefined());
             }
@@ -395,7 +395,7 @@ fn multiset_list(set: &Multiset) -> Vec<Biv> {
 
 fn multiset_product(set: &Multiset) -> Biv {
     set.iter()
-        .fold(Biv::one(), |acc, (f, c)| acc.mul(&f.pow(*c)))
+        .fold(Biv::one(), |acc, (f, c)| acc.multiply(&f.power(*c)))
 }
 
 /// `lambda(n,theta+s)/lambda(n+i,theta) = scalar * prod num / prod den`
@@ -412,7 +412,7 @@ fn weight_ratio(form: &WeightForm, i: usize, s: usize) -> WeightRatio {
     let mut denominator = Multiset::new();
     let p = form.factorial.unsigned_abs() as usize;
     for t in 1..=s {
-        let factor = Biv::from_y(&[q_usize(t), Q::one()]);
+        let factor = Biv::from_variable_polynomial(&[q_usize(t), Q::one()]);
         if form.factorial > 0 {
             multiset_push(&mut numerator, &factor, p, &mut scalar, true);
         } else if form.factorial < 0 {
@@ -625,7 +625,7 @@ pub fn derivative_antecedent_row(g: &[BigRational], row: &[BigRational]) -> Vec<
 fn antecedent_operator(g: &[Q]) -> DOp {
     let m = vec_poly::degree(g).unwrap_or(0);
     DOp::single(0, m, Biv::one())
-        .compose(&DOp::single(0, 0, Biv::from_y(g)))
+        .compose(&DOp::single(0, 0, Biv::from_variable_polynomial(g)))
         .scale(&factorial(m).recip())
 }
 
@@ -738,8 +738,8 @@ fn transport_diagonal(
         }
         let coefficient = a
             .scale(&ratio.scalar)
-            .mul(&multiset_product(&ratio.numerator))
-            .mul(&multiset_product(&quotient));
+            .multiply(&multiset_product(&ratio.numerator))
+            .multiply(&multiset_product(&quotient));
         theta_add(&mut cleared, (i, s), coefficient);
         ratios.push(EulerRatioJson {
             shift: i,
@@ -764,7 +764,7 @@ fn transport_diagonal(
     let mut indices = BTreeSet::new();
     let mut analyses = Vec::new();
     for f in h.keys() {
-        if f.is_y_free() {
+        if f.is_variable_free() {
             analyses.push(format!(
                 "{}: free of theta, nonzero by the weight hypothesis",
                 biv_text(f, "theta")
@@ -881,7 +881,7 @@ fn exceptional_condition(form: &WeightForm, theta: &ThetaOp, k: usize) -> Coeffi
         }
         let index = k - s;
         let k_value = q_usize(index);
-        let a_n = a.eval_y(&k_value);
+        let a_n = a.evaluate_variable(&k_value);
         if vec_poly::is_zero(&a_n) {
             continue;
         }
@@ -898,7 +898,7 @@ fn exceptional_condition(form: &WeightForm, theta: &ThetaOp, k: usize) -> Coeffi
         let mut numerator = vec_poly::scale(&a_n, &constant);
         let mut denominator = vec![Q::one()];
         for (f, e) in &form.factors {
-            let value = f.shift(&q_usize(i), &Q::zero()).eval_y(&k_value);
+            let value = f.shift(&q_usize(i), &Q::zero()).evaluate_variable(&k_value);
             let power = vec_poly::pow(&value, e.unsigned_abs() as usize);
             if *e > 0 {
                 denominator = vec_poly::mul(&denominator, &power);
@@ -1021,11 +1021,11 @@ pub(in crate::recurrence) fn diagonal_products_equal(
                 .checked_add(form.factorial)
                 .ok_or_else(|| TransformError::Limit("factorial exponent overflow".into()))?;
             for (f, e) in &form.factors {
-                let power = f.pow(e.unsigned_abs() as usize);
+                let power = f.power(e.unsigned_abs() as usize);
                 if *e > 0 {
-                    numerator = numerator.mul(&power);
+                    numerator = numerator.multiply(&power);
                 } else {
-                    denominator = denominator.mul(&power);
+                    denominator = denominator.multiply(&power);
                 }
             }
         }
@@ -1034,7 +1034,8 @@ pub(in crate::recurrence) fn diagonal_products_equal(
     let (left_factorial, left_numerator, left_denominator) = combine(left)?;
     let (right_factorial, right_numerator, right_denominator) = combine(right)?;
     Ok(left_factorial == right_factorial
-        && left_numerator.mul(&right_denominator) == right_numerator.mul(&left_denominator))
+        && left_numerator.multiply(&right_denominator)
+            == right_numerator.multiply(&left_denominator))
 }
 
 /// Zeros `[n, k]` of the theta-dependent factors of a clearing multiplier
@@ -1048,14 +1049,14 @@ pub(super) fn observed_multiplier_zeros(
         .multiplier
         .iter()
         .filter_map(|f| biv_from_json(f).ok())
-        .filter(|f| !f.is_y_free())
+        .filter(|f| !f.is_variable_free())
         .collect::<Vec<_>>();
     let mut zeros = Vec::new();
     for n in bases {
         for k in 0..=max_k {
             if factors
                 .iter()
-                .any(|f| vec_poly::evaluate(&f.eval_n(&q_usize(n)), &q_usize(k)).is_zero())
+                .any(|f| vec_poly::evaluate(&f.evaluate_index(&q_usize(n)), &q_usize(k)).is_zero())
             {
                 zeros.push([n, k]);
             }

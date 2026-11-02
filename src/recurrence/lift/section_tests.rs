@@ -21,7 +21,7 @@ fn strings(values: &[&str]) -> Vec<String> {
 /// `P_(n+1) = (1 + x) P_n` at base `n`: `S - (1 + x)`.
 fn binomial_relation() -> DOp {
     let mut op = DOp::single(1, 0, Biv::one());
-    op.add_term((0, 0), Biv::from_y(&[q(-1), q(-1)]));
+    op.add_term((0, 0), Biv::from_variable_polynomial(&[q(-1), q(-1)]));
     op
 }
 
@@ -30,7 +30,7 @@ fn pseudo_division_of_the_worked_example() {
     // M = S^2 - 2 S - (y - 1) annihilates the even sections of (1 + x)^n.
     let mut input = DOp::single(2, 0, Biv::one());
     input.add_term((1, 0), Biv::constant(q(-2)));
-    input.add_term((0, 0), Biv::from_y(&[q(1), q(-1)]));
+    input.add_term((0, 0), Biv::from_variable_polynomial(&[q(1), q(-1)]));
     let parent = binomial_relation();
     let (k, leader) = x_free_leader(&parent).unwrap();
     let system = transport_to_sections(&parent, 2, 10_000).unwrap();
@@ -43,7 +43,7 @@ fn pseudo_division_of_the_worked_example() {
     // S^2 - 2 S - y does not annihilate them: a nonzero remainder.
     let mut wrong = DOp::single(2, 0, Biv::one());
     wrong.add_term((1, 0), Biv::constant(q(-2)));
-    wrong.add_term((0, 0), Biv::from_y(&[q(0), q(-1)]));
+    wrong.add_term((0, 0), Biv::from_variable_polynomial(&[q(0), q(-1)]));
     let row = residue_row(&wrong, 2, 0);
     let division = pseudo_divide_row(&row, &system, k, &leader, 10_000).unwrap();
     assert!(!division.remainder_is_zero());

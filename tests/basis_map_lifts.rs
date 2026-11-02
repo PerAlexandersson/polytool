@@ -281,7 +281,7 @@ fn the_forward_move_certifies_images() {
             &BasisMapImageOptions::default(),
         )
         .unwrap();
-        assert_eq!(image.construction, BasisMapImageConstruction::Fitted);
+        assert_eq!(image.construction, BasisMapImageConstruction::Eliminated);
         assert!(image.is_proved(), "c = {c}");
         let (rule, n0, seeds) = image.image.to_recurrence_parts().unwrap();
         let rows = rule.generate_rows_rational(&seeds, n0, 8).unwrap();

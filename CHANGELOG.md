@@ -257,6 +257,17 @@ Maintenance:
   drop the root `title`/`description`; arguments that fail to deserialize are
   reported in-band (`isError: true`) instead of as JSON-RPC errors.
 
+- The lift modules use the spelled-out `ore-algebra` API; the crate's hidden
+  short method names (`mul`, `sub`, `eval_n`, `dy`, `x_valuation`, ...) are
+  removed.  The lifts' own copies of the modular kernel, the operator
+  pseudo-division and the gauge, affine and reversal conjugations are
+  replaced by `exact_kernel_vectors_by_group`, `right_pseudo_division`
+  (`right_pseudo_division_of_row` for systems), `pull_back` and
+  `push_forward`.  Certificates change accordingly: pseudo-division
+  multipliers carry the shifted parent leader of every level (possibly more
+  exceptional bases, checked exactly), and a preserver dividend is divided
+  by its common power of `x` (for a reversal `y^N` uses `N = b + h R`).
+
 Performance:
 
 - The default exact real-rootedness test no longer switches large
@@ -387,6 +398,12 @@ Additions:
   conjugations), and substitutions as first-class operations
   (`Substitution`: affine, reversal, weighted Möbius, `f`-polynomial, power
   gauge, with row maps, inverses, pullbacks and forward rules).
+  certificate that replays on its own; right pseudo-division of a row of
+  operators by a square system with leader `g(n) S^k I`
+  (`right_pseudo_division_of_row`, `system_index_only_leader`) and runnable
+  scalar annihilators of one component of such a system
+  (`find_component_annihilator`, `ComponentAnnihilatorCertificate`, the
+  identity `w(n) (M e_c) = sum_b H_b o Phi_b`).
 - Image recurrences: `recurrence::image_recurrence_of_operator` computes a
   runnable rule (top shift free of derivatives, leader decided nonzero after
   the seeds) for `Q_n = lambda(n) T_n(P_(n+s))` from a runnable parent rule,
@@ -400,7 +417,13 @@ Additions:
   budget the result is `RecurrenceError::BudgetExhausted`.  For example
   `A_n + A_n'` (Eulerian) gets an order-2 rule, `theta (theta + 1) N_n`
   (Narayana) and the `1/k!` image of the binomial rows (Laguerre) order-1
-  rules.
+  rules.  Preserver-image candidates convert to image specifications
+  (`ImageRowMap::try_from(&PreserverOperator)`, every operator except the
+  multipliers that depend on `n`;
+  `PreserverImageCandidate::image_operator_specification` and
+  `image_recurrence`), and with `PreserverImageOptions::image_rule` a
+  certified preserver image carries its computed rule
+  (`PreserverImageCertification::image_rule`, replayed by `verify()`).
 - Basis maps and basis-map lifts: `recurrence::BasisMap` (the map
   `T_P(u^k) = P_(i0 + k)` of a recurrence-defined family as a serializable
   value, with `apply`, the exact triangular inverse `expand`, `tail` and the
@@ -422,7 +445,10 @@ Additions:
   `find_basis_map_lifts` searches a `BasisMapLibrary` (by default the admitted
   maps of the OEIS catalog; `polytool.recurrence-basis-map-lifts.v1`), and
   `apply_basis_map_to_family` builds and certifies the rule of an image
-  `T_P(R)` (`polytool.recurrence-basis-map-image.v1`).
+  `T_P(R)` (`polytool.recurrence-basis-map-image.v1`): transported for a map
+  of order one, computed from the transported system for higher order
+  (`BasisMapImageConstruction::Eliminated`), fitted only when that finds
+  nothing within its budget.
 - `sequences::literature::peak_polynomials_bigint` and
   `peak_polynomials_iter` (permutations by peaks, A008303), and library
   recurrences returned as `(Recurrence, seeds, first_index)`

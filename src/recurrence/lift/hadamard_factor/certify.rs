@@ -7,15 +7,15 @@
 use super::annihilator::{invariance_holds, step_operator, vanishing_bases, InvariantAnnihilator};
 use super::annihilator_system::{system_invariance_holds, InvariantAnnihilatorSystem};
 use super::factor::{atom_ratio, conjugation_conditions, FactorProduct, HadamardFactor, TermShape};
-use super::prepare::{left_multiply, shift_free_from_json, shift_free_json, PreparedRule};
+use super::prepare::{shift_free_from_json, shift_free_json, PreparedRule};
 use crate::recurrence::implicit::algebra::{
     content_and_primitive, from_theta, roots_in_domain, theta_add, to_theta, Biv, DOp, ThetaOp,
 };
 use crate::recurrence::implicit::{biv_from_json, biv_json};
 use crate::recurrence::lift::section_certify::{
-    n_coefficients, n_polynomial, pseudo_divide_row, x_free_leader, ForwardDivision, RatioGauge,
+    n_coefficients, n_polynomial, pseudo_divide_scalar, x_free_leader, ForwardDivision, RatioGauge,
 };
-use crate::recurrence::lift::section_operators::{check_term_budget, OperatorMatrix};
+use crate::recurrence::lift::section_operators::check_term_budget;
 use crate::recurrence::{
     decode_poly, encode_poly, BivarPolyJson, ImplicitRelation, ImplicitRelationJson,
     OperatorTermJson, RecurrenceError, RecurrenceJson, VeroneseSectionGauge,
@@ -90,8 +90,8 @@ pub(super) fn conjugate_input(
         let (mut numerator, mut denominator) = atom_ratio(&atoms, (i, s), r);
         // lambda(n + i) / lambda(n + R) = prod_(j = i+1..R) b(n + j) / a(n + j).
         for j in i + 1..=r {
-            numerator.push(&denominator_gauge.shift_n(j as i64));
-            denominator.push(&numerator_gauge.shift_n(j as i64));
+            numerator.push(&denominator_gauge.shift_index(j as i64));
+            denominator.push(&numerator_gauge.shift_index(j as i64));
         }
         for (factor, multiplicity) in &denominator.factors {
             if factor.as_constant().is_some() {
@@ -117,7 +117,7 @@ pub(super) fn conjugate_input(
         let coefficient = e
             .expand()
             .shift(&Q::zero(), &Q::from_integer(s.into()))
-            .mul(m);
+            .multiply(m);
         theta_add(&mut theta, (i, (s + shift) as usize), coefficient);
     }
     let denominator = FactorProduct {
@@ -154,7 +154,7 @@ impl ProductParent {
         }
         let coefficient = column.0.get(&(0, 0))?;
         let (_, primitive) = content_and_primitive(coefficient);
-        if !primitive.is_n_free() {
+        if !primitive.is_index_free() {
             return None;
         }
         let c = vec_poly::trim(&primitive.rows().first().cloned().unwrap_or_default());
@@ -178,10 +178,10 @@ impl ProductParent {
         let c_f_prime = vec_poly::mul(c, &vec_poly::derivative(f));
         let index = n_polynomial(&[-Q::from_integer(self.first_index.into()), Q::one()]);
         let constant = index
-            .mul(&Biv::from_y(&c_prime_f))
-            .add(&Biv::from_y(&c_f_prime))
+            .multiply(&Biv::from_variable_polynomial(&c_prime_f))
+            .add(&Biv::from_variable_polynomial(&c_f_prime))
             .scale(&-Q::one());
-        let mut op = DOp::single(0, 1, Biv::from_y(&leading));
+        let mut op = DOp::single(0, 1, Biv::from_variable_polynomial(&leading));
         op.add_term((0, 0), constant);
         op
     }
@@ -190,9 +190,9 @@ impl ProductParent {
     pub(in crate::recurrence::lift) fn annihilator_is_invariant(&self, annihilator: &DOp) -> bool {
         let mut next = DOp::default();
         for (key, coefficient) in &annihilator.0 {
-            next.add_term(*key, coefficient.shift_n(1));
+            next.add_term(*key, coefficient.shift_index(1));
         }
-        let c = DOp::single(0, 0, Biv::from_y(&self.c));
+        let c = DOp::single(0, 0, Biv::from_variable_polynomial(&self.c));
         next.compose(&c) == c.compose(annihilator)
             && annihilator
                 .apply_row(&self.seed, self.first_index)
@@ -222,9 +222,9 @@ pub(super) fn right_pseudo_divide(
             RecurrenceError::VerificationFailed("a shift-free operator was expected".into())
         })?;
         let term = DOp::single(0, top - order, coefficient);
-        remainder = left_multiply(&lead, &remainder).sub(&term.compose(g));
-        quotient = left_multiply(&lead, &quotient).add(&term);
-        multiplier = multiplier.mul(&lead);
+        remainder = remainder.left_multiply(&lead).subtract(&term.compose(g));
+        quotient = quotient.left_multiply(&lead).add(&term);
+        multiplier = multiplier.multiply(&lead);
         if remainder.0.contains_key(&(0, top)) {
             return Err(RecurrenceError::VerificationFailed(
                 "right division did not cancel the leading derivative".into(),
@@ -241,11 +241,8 @@ pub(super) fn divide_by_parent(
     parent: &DOp,
     max_terms: usize,
 ) -> Result<ForwardDivision, RecurrenceError> {
-    let (k, leader) = x_free_leader(parent)?;
-    let system = OperatorMatrix {
-        entries: vec![vec![parent.clone()]],
-    };
-    pseudo_divide_row(std::slice::from_ref(op), &system, k, &leader, max_terms)
+    x_free_leader(parent)?;
+    pseudo_divide_scalar(op, parent, max_terms)
 }
 
 /// One quotient `H_nu` of a [`HadamardFactorCertificate`].
@@ -430,12 +427,12 @@ pub(in crate::recurrence::lift) fn identity_holds(
     quotients: &BTreeMap<usize, DOp>,
     annihilators: &[(DOp, DOp)],
 ) -> bool {
-    let mut difference = left_multiply(multiplier, conjugated);
+    let mut difference = conjugated.left_multiply(multiplier);
     for (nu, h) in quotients {
-        difference = difference.sub(&h.compose(&parent.shifted(*nu)));
+        difference = difference.subtract(&h.compose(&parent.shifted(*nu)));
     }
     for (a, z) in annihilators {
-        difference = difference.sub(&z.compose(a));
+        difference = difference.subtract(&z.compose(a));
     }
     difference.is_zero()
 }
@@ -478,7 +475,7 @@ impl HadamardFactorCertificate {
             return failed("the parent leader shift does not match");
         }
         let multiplier = n_polynomial(&decode_poly(&self.multiplier)?);
-        let row_multiplier = Biv::from_y(&decode_poly(&self.row_multiplier)?);
+        let row_multiplier = Biv::from_variable_polynomial(&decode_poly(&self.row_multiplier)?);
         if multiplier.is_zero() || row_multiplier.is_zero() {
             return failed("a multiplier is zero");
         }
@@ -538,7 +535,7 @@ impl HadamardFactorCertificate {
             }
         };
         let mut annihilators: Vec<(DOp, DOp)> = annihilator.into_iter().collect();
-        let mut identity_multiplier = row_multiplier.mul(&multiplier);
+        let mut identity_multiplier = row_multiplier.multiply(&multiplier);
         if let Some(system) = &self.row_annihilator_system {
             if self.parent_valid_from_base != parent.valid_from_base().max(first_index) {
                 return failed("the parent base does not match the parent record");
@@ -564,7 +561,7 @@ impl HadamardFactorCertificate {
                     "a zero of the row-annihilator system multiplier is not an exceptional base",
                 );
             }
-            identity_multiplier = identity_multiplier.mul(&second);
+            identity_multiplier = identity_multiplier.multiply(&second);
         }
         if !identity_holds(
             &conjugated.op,
@@ -840,7 +837,7 @@ pub(super) fn build_certificate(
         None => (vec![Q::one()], vec![Q::one()], None),
     };
     let mut full_row_multiplier =
-        Biv::from_y(&row_multiplier).mul(&n_polynomial(&index_multiplier));
+        Biv::from_variable_polynomial(&row_multiplier).multiply(&n_polynomial(&index_multiplier));
     let (row_annihilator, quotient, invariance, system) = match kind {
         None => (None, Vec::new(), None, None),
         Some(RowAnnihilationKind::Single {
@@ -860,7 +857,7 @@ pub(super) fn build_certificate(
             start_base,
             restart_bases,
         }) => {
-            full_row_multiplier = full_row_multiplier.mul(&second);
+            full_row_multiplier = full_row_multiplier.multiply(&second);
             let mut json = system_json(&system, &quotients, start_base, restart_bases);
             json.row_multiplier = biv_json(&second);
             (None, Vec::new(), None, Some(json))
@@ -870,7 +867,7 @@ pub(super) fn build_certificate(
         .quotients
         .iter()
         .filter_map(|(nu, row)| {
-            let h = left_multiply(&full_row_multiplier, &row[0]);
+            let h = row[0].left_multiply(&full_row_multiplier);
             (!h.is_zero()).then(|| HadamardDivisionQuotient {
                 shift: *nu,
                 differentiations: shift_free_json(&h),
@@ -920,7 +917,7 @@ mod tests {
     use crate::recurrence::implicit::algebra::q;
 
     fn y(coefficients: &[i64]) -> Biv {
-        Biv::from_y(&coefficients.iter().map(|c| q(*c)).collect::<Vec<_>>())
+        Biv::from_variable_polynomial(&coefficients.iter().map(|c| q(*c)).collect::<Vec<_>>())
     }
 
     fn pseudo_random_rows(count: usize, seed: u64) -> Vec<Vec<Q>> {
@@ -1025,7 +1022,7 @@ mod tests {
                             continue;
                         }
                         let d = vec_poly::evaluate(
-                            &conjugated.denominator.eval_n(&q(base as i64)),
+                            &conjugated.denominator.evaluate_index(&q(base as i64)),
                             &q(k as i64),
                         );
                         assert!(!d.is_zero());
@@ -1051,6 +1048,6 @@ mod tests {
         let f = z.compose(&a);
         let (mu, quotient, remainder) = right_pseudo_divide(&f, &a, 1000).unwrap();
         assert!(remainder.is_zero());
-        assert_eq!(left_multiply(&mu, &f), quotient.compose(&a));
+        assert_eq!(f.left_multiply(&mu), quotient.compose(&a));
     }
 }

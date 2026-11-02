@@ -1016,6 +1016,15 @@ independent of `n` that preserves every real-rooted polynomial, from the
 parent's interlacing proved by a replayed theorem report
 (Hermite--Kakeya--Obreschkoff); otherwise `none`.  See [algorithms.md](algorithms.md#preserver-image-lifts).
 
+A candidate is also an image specification of `image_recurrence_of_operator`
+(`PreserverImageCandidate::image_operator_specification`; operators convert
+with `ImageRowMap::try_from`, every operator except the multipliers that
+depend on `n`), and `PreserverImageCandidate::image_recurrence` computes the
+runnable rule of its image from the parent rule.  With
+`PreserverImageOptions::image_rule` set, a certified identity also carries
+that rule (`PreserverImageCertification::image_rule`), which `verify()`
+replays and compares with the input rows.
+
 ## Basis maps and basis-map lifts
 
 A `BasisMap` is the linear map `T_P(sum p_k u^k) = sum p_k P_(i0 + k)(t)` of a
@@ -1056,7 +1065,10 @@ conclusion used, the root proof of `R` (`BasisMapCoefficientRootProof`: the
 parent provers on `R_n(v + U')` and `R_n(L' - v)`) and the `lift_summary`
 (`LiftOperation::BasisMap`).  `apply_basis_map_to_family(&map, &family,
 &options)` is the forward move: the rule of `T_P(R)` (transported for maps of
-order one, fitted otherwise) with the same certification.  See
+order one; for higher order computed from the transported system by
+`ore_algebra::find_component_annihilator`, `BasisMapImageConstruction::Eliminated`,
+and fitted only when that finds nothing within its budget) with the same
+certification.  See
 [algorithms.md](algorithms.md#basis-map-lifts).
 
 ## Exact sign decisions for an integer index

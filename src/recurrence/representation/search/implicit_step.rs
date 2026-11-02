@@ -38,7 +38,7 @@ fn inverse_weight(weight: &DiagonalWeight, shift: usize, k: usize) -> Option<(Ve
                 let f = biv_from_json(&factor.coeffs).ok()?;
                 let at = f
                     .shift(&Q::from_integer(BigInt::from(shift)), &Q::zero())
-                    .eval_y(&k_value);
+                    .evaluate_variable(&k_value);
                 let power = vec_poly::pow(&at, factor.exponent.unsigned_abs() as usize);
                 if factor.exponent > 0 {
                     denominator = vec_poly::mul(&denominator, &power);

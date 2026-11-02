@@ -266,12 +266,12 @@ impl ImplicitRelation {
             .as_ref()
             .map(Biv::from_bivar)
             .unwrap_or_else(Biv::one);
-        op.add_term((r, 0), leader.shift_n(shift));
+        op.add_term((r, 0), leader.shift_index(shift));
         for term in &rule.terms {
             op.add_term(
                 (r - term.offset, term.deriv_order),
                 Biv::from_bivar(&term.coeff)
-                    .shift_n(shift)
+                    .shift_index(shift)
                     .scale(&-Q::one()),
             );
         }
@@ -292,7 +292,7 @@ impl ImplicitRelation {
         let mut leader = None;
         let mut terms = Vec::new();
         for ((i, d), c) in &op.0 {
-            let coeff = c.shift_n(shift);
+            let coeff = c.shift_index(shift);
             if *i == r {
                 leader = Some(coeff.to_bivar());
             } else {
@@ -1272,8 +1272,10 @@ impl ReconstructionCertificate {
                     for _ in 0..*d {
                         derived = vec_poly::derivative(&derived);
                     }
-                    right =
-                        vec_poly::add(&right, &vec_poly::mul(&coefficient.eval_n(&n), &derived));
+                    right = vec_poly::add(
+                        &right,
+                        &vec_poly::mul(&coefficient.evaluate_index(&n), &derived),
+                    );
                 }
             }
             if !available {
@@ -1333,7 +1335,7 @@ pub fn find_reconstruction_certificate(
             let r = remainder.max_shift();
             let nu = r - rm;
             let h = remainder.column(r).scale(&kappa.recip());
-            remainder = remainder.sub(&h.compose(&m.shifted(nu)));
+            remainder = remainder.subtract(&h.compose(&m.shifted(nu)));
             let entry = by_shift.entry(nu).or_default();
             *entry = entry.add(&h);
         }

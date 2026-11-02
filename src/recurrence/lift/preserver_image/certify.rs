@@ -4,7 +4,7 @@
 
 use super::interlacing::{interlacing_claim, PreserverInterlacingClaim};
 use super::interval::{interval_parent_report, wants_interval_parent};
-use super::operator::{dividend, gauged_input, OperatorForm, PreserverOperator};
+use super::operator::{dividend, OperatorForm, PreserverOperator};
 use super::summary::{preserver_image_summary, PreserverImageSummaryParts};
 use super::transfer::operator_transfer;
 use crate::integer_range_sign::{
@@ -23,17 +23,17 @@ use crate::recurrence::lift::hadamard_factor::prepare::{
 use crate::recurrence::lift::hadamard_factor::search::{certify_candidate, remove_remainder};
 use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
 use crate::recurrence::lift::section_certify::{
-    n_coefficients, n_polynomial, pseudo_divide_row, x_free_leader, RatioGauge,
+    n_coefficients, n_polynomial, pseudo_divide_scalar, x_free_leader, RatioGauge,
 };
-use crate::recurrence::lift::section_operators::OperatorMatrix;
 use crate::recurrence::{
     check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem,
-    check_three_term_recurrence_theorem, decode_poly, encode_poly, BivarPolyJson,
-    HadamardAnnihilatorSystem, HadamardFactor, HadamardFactorCertificate,
-    HadamardFactorIdentityStatus, HadamardFactorLiftOptions, ImplicitRelation,
-    ImplicitRelationJson, LiftSummary, OperatorTermJson, RealRootednessTheoremOptions,
-    RealRootednessTheoremReport, Recurrence, RecurrenceError, RecurrenceJson,
-    VeroneseParentAttestation, VeroneseParentProof, VeroneseParentProofRoute,
+    check_three_term_recurrence_theorem, decode_poly, encode_poly, image_recurrence_of_operator,
+    BivarPolyJson, HadamardAnnihilatorSystem, HadamardFactor, HadamardFactorCertificate,
+    HadamardFactorIdentityStatus, HadamardFactorLiftOptions, ImageGauge,
+    ImageOperatorSpecification, ImageRecurrence, ImageRecurrenceOptions, ImageRowMap,
+    ImplicitRelation, ImplicitRelationJson, LiftSummary, OperatorTermJson,
+    RealRootednessTheoremOptions, RealRootednessTheoremReport, Recurrence, RecurrenceError,
+    RecurrenceJson, VeroneseParentAttestation, VeroneseParentProof, VeroneseParentProofRoute,
     VeroneseParentProofStatus, VeroneseSectionGauge,
 };
 use crate::vec_poly;
@@ -72,7 +72,7 @@ fn remainder_is_small(remainder: &DOp) -> bool {
     remainder.0.len() <= max_terms
         && remainder.max_derivative() <= max_order
         && remainder.0.values().all(|c| {
-            c.y_degree().unwrap_or(0) <= max_degree
+            c.variable_degree().unwrap_or(0) <= max_degree
                 && c.rows()
                     .iter()
                     .flatten()
@@ -110,6 +110,70 @@ fn default_gauge() -> VeroneseSectionGauge {
     VeroneseSectionGauge::None
 }
 
+impl PreserverImageCandidate {
+    /// The candidate as the image `Q_n = lambda(n) T_n(P_(n+s))` of
+    /// [`crate::recurrence::image_recurrence_of_operator`]: the same index
+    /// shift and gauge, and the operator's row map
+    /// (`ImageRowMap::try_from`).
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::Unsupported`] for a multiplier that depends on `n`,
+    /// and the validation errors of the operator.
+    pub fn image_operator_specification(
+        &self,
+    ) -> Result<ImageOperatorSpecification, RecurrenceError> {
+        let gauge = match &self.gauge {
+            VeroneseSectionGauge::None => ImageGauge::None,
+            VeroneseSectionGauge::Ratio {
+                numerator,
+                denominator,
+                initial_value,
+            } => ImageGauge::Ratio {
+                numerator: numerator.clone(),
+                denominator: denominator.clone(),
+                initial_value: initial_value.clone(),
+            },
+            VeroneseSectionGauge::Closed {
+                numerator,
+                denominator,
+            } => ImageGauge::Closed {
+                numerator: numerator.clone(),
+                denominator: denominator.clone(),
+            },
+        };
+        Ok(ImageOperatorSpecification {
+            index_shift: self.index_shift,
+            gauge,
+            map: ImageRowMap::try_from(&self.operator)?,
+        })
+    }
+
+    /// A runnable rule, with seeds and a certificate, for the candidate's
+    /// image `lambda(n) T_n(P_(n+s))`, `n >= first_index`, computed from the
+    /// parent rule ([`crate::recurrence::image_recurrence_of_operator`]),
+    /// not fitted.
+    ///
+    /// # Errors
+    ///
+    /// Those of [`PreserverImageCandidate::image_operator_specification`]
+    /// and of `image_recurrence_of_operator`
+    /// ([`RecurrenceError::BudgetExhausted`] when no runnable rule is found
+    /// within the budget).
+    pub fn image_recurrence(
+        &self,
+        first_index: usize,
+        options: &ImageRecurrenceOptions,
+    ) -> Result<ImageRecurrence, RecurrenceError> {
+        image_recurrence_of_operator(
+            &self.parent,
+            first_index,
+            &self.image_operator_specification()?,
+            options,
+        )
+    }
+}
+
 /// Options of [`certify_preserver_image_lift`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreserverImageOptions {
@@ -124,6 +188,10 @@ pub struct PreserverImageOptions {
     pub attestations: Vec<VeroneseParentAttestation>,
     /// Try the root-domain parent route.  Default true.
     pub try_root_domain: bool,
+    /// When set, a certified identity also gets the computed runnable rule
+    /// of the image ([`PreserverImageCertification::image_rule`]) with these
+    /// options.  Default `None`.
+    pub image_rule: Option<ImageRecurrenceOptions>,
 }
 
 impl Default for PreserverImageOptions {
@@ -133,6 +201,7 @@ impl Default for PreserverImageOptions {
             max_operator_terms: MAX_PRESERVER_IMAGE_OPERATOR_TERMS,
             attestations: Vec::new(),
             try_root_domain: true,
+            image_rule: None,
         }
     }
 }
@@ -348,6 +417,15 @@ pub struct PreserverImageCertification {
     pub statement: String,
     /// Further remarks (division remainder, limits).
     pub notes: Vec<String>,
+    /// The runnable rule of the image `lambda(n) T_n(P_(n+s))` computed from
+    /// the parent rule ([`PreserverImageCandidate::image_recurrence`]), with
+    /// its own certificate; present when requested
+    /// ([`PreserverImageOptions::image_rule`]), the identity is certified
+    /// and a rule was found.  Since the identity is certified, the rule
+    /// generates the input rows `Q_n`; `verify()` replays it and compares
+    /// its first rows with the input's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_rule: Option<ImageRecurrence>,
 }
 
 // ---------------------------------------------------------------------------
@@ -555,7 +633,7 @@ fn replay_annihilation(
             start_base,
             restart_bases,
         } => {
-            let p = Biv::from_y(&decode_poly(row_multiplier)?);
+            let p = Biv::from_variable_polynomial(&decode_poly(row_multiplier)?);
             if p.is_zero() {
                 return failed("the row multiplier is zero");
             }
@@ -607,7 +685,7 @@ fn replay_annihilation(
 fn annihilation_record(
     annihilation: RowAnnihilation,
 ) -> Result<(PreserverRowAnnihilation, Biv, AnnihilatorTerms), RecurrenceError> {
-    let p = Biv::from_y(&annihilation.row_multiplier);
+    let p = Biv::from_variable_polynomial(&annihilation.row_multiplier);
     match annihilation.kind {
         RowAnnihilationKind::Single {
             annihilator,
@@ -639,7 +717,7 @@ fn annihilation_record(
             let (_, terms) = system_from_json(&json)?;
             Ok((
                 PreserverRowAnnihilation::System { system: json },
-                p.mul(&row_multiplier),
+                p.multiply(&row_multiplier),
                 terms,
             ))
         }
@@ -688,8 +766,7 @@ impl PreserverDivisionCertificate {
             delta
         };
         let (alpha, beta) = effective_ratio(&gauge, &delta);
-        let gauged = gauged_input(&input.relation, input.leader_shift, &alpha, &beta);
-        let Some(e) = dividend(&gauged, &form) else {
+        let Some(e) = dividend(&input.relation, input.leader_shift, &alpha, &beta, &form) else {
             return failed("the operator has no dividend");
         };
         if ImplicitRelation::from_op(&e).to_json() != self.dividend_relation {
@@ -719,7 +796,7 @@ impl PreserverDivisionCertificate {
         if !identity_holds(
             &e,
             &shifted.relation,
-            &row_multiplier.mul(&multiplier),
+            &row_multiplier.multiply(&multiplier),
             &quotients,
             &annihilators,
         ) {
@@ -912,6 +989,7 @@ impl PreserverImageCertification {
                 return failed("the parent interlacing report does not belong to the parent");
             }
         }
+        self.verify_image_rule()?;
         let claim = interlacing_claim(
             &self.candidate,
             self.input_first_index,
@@ -924,6 +1002,35 @@ impl PreserverImageCertification {
         let summary = self.recompute_lift_summary();
         if summary != self.lift_summary || !summary.is_consistent() {
             return failed("the lift summary does not match the one recomputed from the record");
+        }
+        Ok(())
+    }
+}
+
+impl PreserverImageCertification {
+    /// Replay the computed image rule (when present): its certificate, that
+    /// it belongs to the candidate and the input's first index, that the
+    /// identity is certified, and that its first rows are the input rows.
+    fn verify_image_rule(&self) -> Result<(), RecurrenceError> {
+        let Some(image) = &self.image_rule else {
+            return Ok(());
+        };
+        let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
+        let PreserverImageIdentityStatus::Certified { certificate } = &self.identity else {
+            return failed("an image rule is recorded without a certified identity");
+        };
+        image.verify()?;
+        if image.certificate.parent != self.candidate.parent
+            || image.certificate.first_index != self.input_first_index
+            || image.certificate.specification != self.candidate.image_operator_specification()?
+        {
+            return failed("the image rule does not belong to the candidate");
+        }
+        let (input, ..) = certificate.parts();
+        let input = prepare_record(input, "input")?;
+        let count = input.seeds.len() + image.order + 1;
+        if !image_rows_match(image, &input, count)? {
+            return failed("the image rule disagrees with the input rows");
         }
         Ok(())
     }
@@ -1062,7 +1169,7 @@ fn certify_identity(
     }
 
     // Weyl operators and coordinate maps: pseudo-division of the dividend.
-    let (k, leader) = match x_free_leader(&shifted.relation) {
+    let (k, _) = match x_free_leader(&shifted.relation) {
         Ok(found) => found,
         Err(error) => {
             return Ok(IdentityOutcome {
@@ -1077,20 +1184,11 @@ fn certify_identity(
         .map(<[Q]>::to_vec)
         .unwrap_or_else(|| vec![Q::one()]);
     let (alpha, beta) = effective_ratio(gauge, &delta);
-    let gauged = gauged_input(&input.relation, input.leader_shift, &alpha, &beta);
-    let e = dividend(&gauged, form).ok_or_else(|| {
-        RecurrenceError::VerificationFailed("the operator form has no dividend".into())
-    })?;
-    let system = OperatorMatrix {
-        entries: vec![vec![shifted.relation.clone()]],
-    };
-    let division = match pseudo_divide_row(
-        std::slice::from_ref(&e),
-        &system,
-        k,
-        &leader,
-        options.max_operator_terms,
-    ) {
+    let e =
+        dividend(&input.relation, input.leader_shift, &alpha, &beta, form).ok_or_else(|| {
+            RecurrenceError::VerificationFailed("the operator form has no dividend".into())
+        })?;
+    let division = match pseudo_divide_scalar(&e, &shifted.relation, options.max_operator_terms) {
         Ok(division) => division,
         Err(RecurrenceError::BudgetExhausted(reason) | RecurrenceError::LimitExceeded(reason)) => {
             return Ok(IdentityOutcome {
@@ -1143,7 +1241,7 @@ fn certify_identity(
                     });
                 }
             };
-        multiplier = multiplier.mul(&n_polynomial(&annihilation.index_multiplier));
+        multiplier = multiplier.multiply(&n_polynomial(&annihilation.index_multiplier));
         let (record, full, pairs) = annihilation_record(annihilation)?;
         if let PreserverRowAnnihilation::System { system } = &record {
             extra_exceptional = vanishing_bases(&biv_from_json(&system.row_multiplier)?, from);
@@ -1161,7 +1259,7 @@ fn certify_identity(
         .map(|(nu, row)| {
             let mut h = DOp::default();
             for (key, c) in &row[0].0 {
-                h.add_term(*key, row_multiplier.mul(c));
+                h.add_term(*key, row_multiplier.multiply(c));
             }
             (*nu, h)
         })
@@ -1170,7 +1268,7 @@ fn certify_identity(
     if !identity_holds(
         &e,
         &shifted.relation,
-        &row_multiplier.mul(&multiplier),
+        &row_multiplier.multiply(&multiplier),
         &quotients,
         &annihilators,
     ) {
@@ -1474,6 +1572,9 @@ pub fn certify_preserver_image_lift(
         interval_parent_proof: interval_parent_proof.as_ref(),
         interlacing: &interlacing,
     });
+    let mut notes = outcome.notes;
+    let image_rule =
+        certified_image_rule(candidate, &input, &outcome.identity, options, &mut notes)?;
     let s = candidate.index_shift;
     let lift = format!(
         "lambda(n) T_n(P_(n{s:+})) with T = {}",
@@ -1517,6 +1618,54 @@ pub fn certify_preserver_image_lift(
         lean_declarations: transfer.lean_declarations,
         lift_summary,
         statement,
-        notes: outcome.notes,
+        notes,
+        image_rule,
     })
+}
+
+/// Whether the first `count` rows of the image rule are those of `input`.
+fn image_rows_match(
+    image: &ImageRecurrence,
+    input: &PreparedRule,
+    count: usize,
+) -> Result<bool, RecurrenceError> {
+    let generated: Vec<Vec<Q>> = image
+        .rows(count)?
+        .iter()
+        .map(|row| vec_poly::trim(row))
+        .collect();
+    Ok(generated == input.rows(count)?)
+}
+
+/// The computed image rule of a certified identity (when requested), with
+/// its rows checked against the input's; a rule that cannot be computed is
+/// a note.
+fn certified_image_rule(
+    candidate: &PreserverImageCandidate,
+    input: &PreparedRule,
+    identity: &PreserverImageIdentityStatus,
+    options: &PreserverImageOptions,
+    notes: &mut Vec<String>,
+) -> Result<Option<ImageRecurrence>, RecurrenceError> {
+    let Some(rule_options) = &options.image_rule else {
+        return Ok(None);
+    };
+    if !matches!(identity, PreserverImageIdentityStatus::Certified { .. }) {
+        return Ok(None);
+    }
+    match candidate.image_recurrence(input.first_index, rule_options) {
+        Ok(image) => {
+            let count = input.seeds.len() + image.order + 1;
+            if !image_rows_match(&image, input, count)? {
+                return Err(RecurrenceError::VerificationFailed(
+                    "the computed image rule disagrees with the certified input rows".into(),
+                ));
+            }
+            Ok(Some(image))
+        }
+        Err(error) => {
+            notes.push(format!("no image rule was computed: {error}"));
+            Ok(None)
+        }
+    }
 }

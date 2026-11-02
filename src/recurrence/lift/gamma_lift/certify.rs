@@ -3,7 +3,7 @@
 
 use crate::recurrence::implicit::algebra::{roots_in_domain, Biv, DOp};
 use crate::recurrence::lift::hadamard_factor::prepare::{
-    left_multiply, prepare_rule, shift_free_from_json, shift_free_json, PreparedRule,
+    prepare_rule, shift_free_from_json, shift_free_json, PreparedRule,
 };
 use crate::recurrence::lift::lift_summary::{gamma_lift_summary, GammaLiftSummaryParts};
 use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
@@ -459,9 +459,9 @@ fn division_identity_holds(
     multiplier: &Biv,
     quotients: &BTreeMap<usize, DOp>,
 ) -> bool {
-    let mut difference = left_multiply(multiplier, input);
+    let mut difference = input.left_multiply(multiplier);
     for (nu, h) in quotients {
-        difference = difference.sub(&h.compose(&candidate.shifted(*nu)));
+        difference = difference.subtract(&h.compose(&candidate.shifted(*nu)));
     }
     difference.is_zero()
 }

@@ -290,7 +290,7 @@ fn pascal_description(leader_root: Option<i64>, seeds: &[&[&str]]) -> Generating
     let factor = leader_root.map_or(vec![vec![q(1)]], |root| vec![vec![q(-root)], vec![q(1)]]);
     let leader = BivarPoly::from_coefficients_normalized(factor);
     let lower = Biv::from_bivar(&leader)
-        .mul(&Biv::from_y(&[q(1), q(1)]))
+        .multiply(&Biv::from_variable_polynomial(&[q(1), q(1)]))
         .scale(&q(-1))
         .to_bivar();
     let relation = ImplicitRelation {

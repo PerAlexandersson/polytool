@@ -323,7 +323,7 @@ fn parent_recurrence(parameters: &CompanionParameters) -> Recurrence {
         terms.push(RecurrenceTerm::new(
             1,
             *derivative,
-            coefficient.shift_n(-1).to_bivar(),
+            coefficient.shift_index(-1).to_bivar(),
         ));
     }
     Recurrence {

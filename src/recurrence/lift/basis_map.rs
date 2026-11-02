@@ -233,9 +233,15 @@
 //! whose expanded rows have a root outside every source (a near miss),
 //! fits a derivative-free rule to the expanded rows and certifies the
 //! candidate.  [`apply_basis_map_to_family`] builds the rule of `T_P(R)`
-//! (the transported rule for a map of order one, a fitted rule otherwise)
 //! and certifies it the same way, so that an image can enter a proof
-//! database with its certificate.
+//! database with its certificate.  For a map of order one the rule is the
+//! transported rule.  For a map of order `r >= 2` it is computed from the
+//! transported system `Phi` (order `k`): a runnable scalar operator `M` with
+//! `w(n) (M e_0) = sum_b H_b o Phi_b`, searched as a common left multiple of
+//! order at most `r k` (`ore_algebra::find_component_annihilator`), which
+//! is exactly the identity the certificate checks; only when nothing is
+//! found within the budget is a rule fitted to the image rows (and then
+//! certified in the same way).
 //!
 //! # Limitations
 //!

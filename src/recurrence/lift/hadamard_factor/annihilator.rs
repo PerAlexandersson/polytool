@@ -11,7 +11,6 @@
 //! depends on how the candidate was found: the replay checks the identities
 //! and the rows only.
 
-use super::prepare::left_multiply;
 use crate::polynomial::Polynomial;
 use crate::recurrence::implicit::algebra::{content_and_primitive, roots_in_domain, Biv, DOp};
 use crate::recurrence::lift::section_certify::x_free_leader;
@@ -47,18 +46,17 @@ pub(super) fn step_operator(parent: &DOp) -> Option<DOp> {
 pub(super) fn shift_coefficients(op: &DOp, by: i64) -> DOp {
     let mut out = DOp::default();
     for (key, coefficient) in &op.0 {
-        out.add_term(*key, coefficient.shift_n(by));
+        out.add_term(*key, coefficient.shift_index(by));
     }
     out
 }
 
 /// `nu A(n + 1) o T(n) - B o A(n)` vanishes.
 pub(super) fn invariance_holds(invariant: &InvariantAnnihilator, step: &DOp) -> bool {
-    let left = left_multiply(
-        &invariant.step_multiplier,
-        &shift_coefficients(&invariant.annihilator, 1).compose(step),
-    );
-    left.sub(&invariant.step_quotient.compose(&invariant.annihilator))
+    let left = shift_coefficients(&invariant.annihilator, 1)
+        .compose(step)
+        .left_multiply(&invariant.step_multiplier);
+    left.subtract(&invariant.step_quotient.compose(&invariant.annihilator))
         .is_zero()
 }
 
@@ -110,15 +108,15 @@ fn n_pseudo_remainder(a: &Biv, b: &Biv) -> Biv {
     let Some(b_degree) = n_degree(b) else {
         return a.clone();
     };
-    let b_lead = Biv::from_y(&b.rows()[b_degree]);
+    let b_lead = Biv::from_variable_polynomial(&b.rows()[b_degree]);
     let mut remainder = a.clone();
     while let Some(degree) = n_degree(&remainder).filter(|d| *d >= b_degree) {
         let lead = Biv::new(vec![remainder.rows()[degree].clone()]);
         let mut shifted_lead = vec![Vec::new(); degree - b_degree];
         shifted_lead.push(lead.rows().first().cloned().unwrap_or_default());
         remainder = b_lead
-            .mul(&remainder)
-            .add(&Biv::new(shifted_lead).mul(b).scale(&-Q::one()));
+            .multiply(&remainder)
+            .add(&Biv::new(shifted_lead).multiply(b).scale(&-Q::one()));
     }
     remainder
 }
@@ -134,7 +132,7 @@ fn bivariate_gcd(a: &Biv, b: &Biv) -> Biv {
     }
     let (a_content, b_content) = (x_content(a), x_content(b));
     let content = Polynomial::new(a_content.clone()).gcd(&Polynomial::new(b_content.clone()));
-    let content = Biv::from_y(content.coeffs());
+    let content = Biv::from_variable_polynomial(content.coeffs());
     let (mut left, mut right) = (divide_rows(a, &a_content), divide_rows(b, &b_content));
     if n_degree(&left) < n_degree(&right) {
         std::mem::swap(&mut left, &mut right);
@@ -145,7 +143,7 @@ fn bivariate_gcd(a: &Biv, b: &Biv) -> Biv {
         }
         let remainder = n_pseudo_remainder(&left, &right);
         if remainder.is_zero() {
-            return content.mul(&right);
+            return content.multiply(&right);
         }
         left = right;
         right = divide_rows(&remainder, &x_content(&remainder));
@@ -172,7 +170,7 @@ fn bivariate_exact_quotient(p: &Biv, divisor: &Biv) -> Option<Biv> {
             x_degree - divisor_x_degree,
             &row[x_degree] / divisor_lead,
         );
-        remainder = remainder.add(&term.mul(divisor).scale(&-Q::one()));
+        remainder = remainder.add(&term.multiply(divisor).scale(&-Q::one()));
         quotient = quotient.add(&term);
     }
     Some(quotient)
@@ -254,7 +252,7 @@ pub(super) fn find_invariant_annihilator(
 /// of `n`: `(c, p)`.
 pub(super) fn separated_multiplier(mu: &Biv) -> Option<(Vec<Q>, Vec<Q>)> {
     let (content, primitive) = content_and_primitive(mu);
-    if mu.is_zero() || !primitive.is_n_free() {
+    if mu.is_zero() || !primitive.is_index_free() {
         return None;
     }
     Some((
@@ -280,8 +278,8 @@ mod tests {
     fn bivariate_gcd_and_exact_quotient() {
         // (n + x) (1 - x) and (n + x) (2 + n): gcd n + x up to a constant.
         let common = biv(&[&[0, 1], &[1]]);
-        let a = common.mul(&biv(&[&[1, -1]]));
-        let b = common.mul(&biv(&[&[2], &[1]]));
+        let a = common.multiply(&biv(&[&[1, -1]]));
+        let b = common.multiply(&biv(&[&[2], &[1]]));
         let gcd = bivariate_gcd(&a, &b);
         let quotient = bivariate_exact_quotient(&gcd, &common).expect("a constant multiple");
         assert!(quotient.as_constant().is_some_and(|c| !c.is_zero()));
@@ -299,8 +297,8 @@ mod tests {
     fn primitive_operator_removes_a_common_bivariate_factor() {
         // (n + x) (x D - n) -> x D - n.
         let common = biv(&[&[0, 1], &[1]]);
-        let mut op = DOp::single(0, 1, common.mul(&biv(&[&[0, 1]])));
-        op.add_term((0, 0), common.mul(&biv(&[&[], &[-1]])));
+        let mut op = DOp::single(0, 1, common.multiply(&biv(&[&[0, 1]])));
+        op.add_term((0, 0), common.multiply(&biv(&[&[], &[-1]])));
         let mut expected = DOp::single(0, 1, biv(&[&[0, 1]]));
         expected.add_term((0, 0), biv(&[&[], &[-1]]));
         let primitive = primitive_operator(&op);

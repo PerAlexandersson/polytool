@@ -298,11 +298,13 @@ every `n > n0`, and `lambda(n0) != 0`), the parent relation
 for `P~_n = lambda(n) P_(n+s)`; its leader stays free of `x`.
 
 **Pseudo-division.**  `e_j^T M` (`M` the input rule as a relation at base `n`)
-is divided by `Phi = phi(L~)`, whose shift-`k` part is `g~(n) S^k I`: while
-the remainder has a shift `m >= k`, multiply it (and the recorded quotients)
-by `g~(n + m - k)` and subtract `c o S^(m-k) o Phi` for its top coefficient
-row `c`.  The result is `w(n) e_j^T M = sum_nu H_nu S^nu Phi + R`, `R` of
-shift `< k`, rechecked with exact operator arithmetic.
+is divided by `Phi = phi(L~)`, whose shift-`k` part is `g~(n) S^k I`: at
+every level `m` from the top shift of the row down to `k`, multiply the
+remainder (and the recorded quotients) by `g~(n + m - k)` and subtract
+`c o S^(m-k) o Phi` for its coefficient row `c` of `S^m`
+(`ore_algebra::right_pseudo_division_of_row`).  The result is
+`w(n) e_j^T M = sum_nu H_nu S^nu Phi + R`, `R` of shift `< k`, rechecked with
+exact operator arithmetic.
 
 **Soundness.**  The first rows (at least the `K` identifying rows) are
 compared exactly; a difference refutes the candidate at that index.  With
@@ -832,9 +834,11 @@ operator of the menu.  With `P'_n = P_(n+s)` (rule `L'`, the substitution
    step instead: `y -> (y - b)/a` with `D^d -> a^d D^d` for
    `F(a x + b)`; for `x^(d_n) F(1/x)` the identities
    `D_x C_n = C_n (d_n y - y^2 D_y)`, `c(x) C_n(F) = C_n(c(1/y) F)` and
-   `C_(n+i)(F) = C_n(y^(-h i) F)`, then a power `y^N`; a Möbius map is
-   affine, reversal, affine.  In each case `(M H)_n = 0` exactly when
-   `(E P')_n = 0`.
+   `C_(n+i)(F) = C_n(y^(-h i) F)`, then a power `y^N` (`N = b + h R`, `b`
+   the degree in `x` of `M`); a Möbius map is affine, reversal, affine.
+   These are the pullbacks `ore_algebra::pull_back` through `T'` and the
+   gauge; the largest power of `x` dividing `E` is removed.  In each case
+   `(M H)_n = 0` exactly when `(E P')_n = 0`.
 3. **Division.**  `w(n) E = sum_nu H_nu S^nu L'` by right pseudo-division
    (remainder zero), or with the remainder removed by row annihilators of
    `P'` (as for the Hadamard-factor lifts).  So `H` satisfies `M` at every
@@ -944,6 +948,18 @@ gives `w(n) (M H)_n = 0` from the first base of `R`'s rule on, the other
 bases (finitely many) are evaluated exactly, the identifying rows agree, and
 the leader of `M` never vanishes, so `H = Q`.  For maps of order one the
 reverse division `w Phi = sum H_nu S^nu M` is also tried.
+
+**Forward rules.**  `apply_basis_map_to_family` needs a rule `M` for
+`H_n = T(R_n)`.  For a map of order one it is the transported scalar rule.
+For a map of order `r >= 2` it is computed from `Phi` (order `k`): an ansatz
+`M = m_R S^R + sum_(i < R, d <= J) m_(i,d) D^d S^i` with coefficients of
+bounded degree in `n` and `x`, `k <= R <= r k`; for a fixed top level the
+remainder of the row division of `e_0^T M` by `Phi` is linear in the
+unknowns, so a zero remainder is a homogeneous linear system, solved exactly
+(`ore_algebra::find_component_annihilator`).  The found `M` satisfies the
+division identity above by construction and is certified like any input
+rule; only when no `M` is found within the budget is a rule fitted to the
+image rows (and then certified).
 
 **Root location.**  The coefficient rows must lie in a source interval `S`
 (checked exactly on the compared rows, else the route fails).  Rational

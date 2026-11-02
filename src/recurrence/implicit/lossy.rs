@@ -230,7 +230,7 @@ pub(super) fn transport_derivative(
     }
     let r =
         l.0.iter()
-            .map(|((_, d), c)| c.y_degree().unwrap_or(0) as i64 - *d as i64)
+            .map(|((_, d), c)| c.variable_degree().unwrap_or(0) as i64 - *d as i64)
             .max()
             .unwrap_or(0)
             .max(0) as usize;
@@ -358,9 +358,9 @@ pub fn relation_coefficient_condition(
 ) -> CoefficientCondition {
     let mut terms = Vec::new();
     for ((i, d), c) in &relation.op().0 {
-        let width = c.y_degree().map_or(0, |deg| deg + 1);
+        let width = c.variable_degree().map_or(0, |deg| deg + 1);
         for j in 0..width.min(k + 1) {
-            let coefficient = c.y_coefficient(j);
+            let coefficient = c.variable_coefficient(j);
             if vec_poly::is_zero(&coefficient) {
                 continue;
             }
@@ -579,7 +579,7 @@ mod tests {
         // P_(n+1) = (1 + x) P_n, Q = D P: Q'_(n+1) - (1 + x) Q'_n - 2 Q_n = 0.
         let mut op = DOp::default();
         op.add_term((1, 0), Biv::one());
-        op.add_term((0, 0), Biv::from_y(&[q(-1), q(-1)]));
+        op.add_term((0, 0), Biv::from_variable_polynomial(&[q(-1), q(-1)]));
         let l = ImplicitRelation::from_op(&op);
         let transport = transport_derivative(&l, 1).unwrap();
         assert_eq!(

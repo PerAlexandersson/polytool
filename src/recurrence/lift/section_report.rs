@@ -298,10 +298,12 @@ fn leader_vanishing_targets(denominator: Option<&BivarPoly>, from: usize) -> Vec
         return Vec::new();
     };
     let leader = Biv::from_bivar(denominator);
-    let Some(degree) = leader.y_degree() else {
+    let Some(degree) = leader.variable_degree() else {
         return vec![from];
     };
-    let columns: Vec<Vec<Q>> = (0..=degree).map(|j| leader.y_coefficient(j)).collect();
+    let columns: Vec<Vec<Q>> = (0..=degree)
+        .map(|j| leader.variable_coefficient(j))
+        .collect();
     let Some(first) = columns.iter().find(|c| !c.is_empty()) else {
         return vec![from];
     };

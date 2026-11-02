@@ -159,8 +159,10 @@ fn gcd_all(polys: &[Vec<Q>]) -> Vec<Q> {
 
 /// The content `c(n) = gcd_j [k^j] p` and primitive part `p / c(n)`.
 pub(in crate::recurrence) fn content_and_primitive(p: &Biv) -> (Vec<Q>, Biv) {
-    let width = p.y_degree().map_or(0, |d| d + 1);
-    let columns = (0..width).map(|j| p.y_coefficient(j)).collect::<Vec<_>>();
+    let width = p.variable_degree().map_or(0, |d| d + 1);
+    let columns = (0..width)
+        .map(|j| p.variable_coefficient(j))
+        .collect::<Vec<_>>();
     let content = gcd_all(&columns);
     if vec_poly::degree(&content).unwrap_or(0) == 0 {
         return (vec![Q::one()], p.clone());
@@ -227,7 +229,7 @@ pub(in crate::recurrence) fn poly_text(p: &[Q], variable: &str) -> String {
 /// Text of a polynomial in `(n, y)`.
 pub(in crate::recurrence) fn biv_text(p: &Biv, variable: &str) -> String {
     let mut parts = Vec::new();
-    let width = p.y_degree().map_or(0, |d| d + 1);
+    let width = p.variable_degree().map_or(0, |d| d + 1);
     for j in 0..width {
         for (i, row) in p.rows().iter().enumerate() {
             let Some(c) = row.get(j) else { continue };
@@ -306,7 +308,7 @@ pub(in crate::recurrence) fn analyze_zeros(
             singular_indices
         )
     };
-    if primitive.is_n_free() {
+    if primitive.is_index_free() {
         let psi = primitive.rows().first().cloned().unwrap_or_default();
         let uniform = nonnegative_integer_roots(&psi)
             .into_iter()
@@ -368,33 +370,37 @@ mod tests {
     fn theta_round_trip_and_composition() {
         // L = x D^2 + (1 + x) D - n.
         let mut op = DOp::default();
-        op.add_term((0, 2), Biv::from_y(&[q(0), q(1)]));
-        op.add_term((0, 1), Biv::from_y(&[q(1), q(1)]));
-        op.add_term((0, 0), Biv::from_n(&[q(0), q(-1)]));
+        op.add_term((0, 2), Biv::from_variable_polynomial(&[q(0), q(1)]));
+        op.add_term((0, 1), Biv::from_variable_polynomial(&[q(1), q(1)]));
+        op.add_term((0, 0), Biv::from_index_polynomial(&[q(0), q(-1)]));
         let (j, theta) = to_theta(&op);
         assert_eq!(j, 2);
-        assert_eq!(from_theta(&theta), op.mul_x_power(2));
+        assert_eq!(from_theta(&theta), op.multiply_by_variable_power(2));
         // D o x = x D + 1.
         let d = DOp::single(0, 1, Biv::one());
-        let x = DOp::single(0, 0, Biv::from_y(&[q(0), q(1)]));
-        let mut expected = DOp::single(0, 1, Biv::from_y(&[q(0), q(1)]));
+        let x = DOp::single(0, 0, Biv::from_variable_polynomial(&[q(0), q(1)]));
+        let mut expected = DOp::single(0, 1, Biv::from_variable_polynomial(&[q(0), q(1)]));
         expected.add_term((0, 0), Biv::one());
         assert_eq!(d.compose(&x), expected);
         // S o n = (n + 1) S.
         let s = DOp::single(1, 0, Biv::one());
-        let n = DOp::single(0, 0, Biv::from_n(&[q(0), q(1)]));
-        assert_eq!(s.compose(&n), DOp::single(1, 0, Biv::from_n(&[q(1), q(1)])));
+        let n = DOp::single(0, 0, Biv::from_index_polynomial(&[q(0), q(1)]));
+        assert_eq!(
+            s.compose(&n),
+            DOp::single(1, 0, Biv::from_index_polynomial(&[q(1), q(1)]))
+        );
     }
 
     #[test]
     fn zero_sets() {
         // k (k - 3): uniform zeros {0, 3}.
-        let p = Biv::from_y(&[q(0), q(-3), q(1)]);
+        let p = Biv::from_variable_polynomial(&[q(0), q(-3), q(1)]);
         let a = analyze_zeros(&p, 0, None);
         assert!(a.certified);
         assert_eq!(a.uniform_indices, vec![0, 3]);
         // (n - 2)(k + 1): singular at n = 2, no uniform zeros.
-        let p = Biv::from_n(&[q(-2), q(1)]).mul(&Biv::from_y(&[q(1), q(1)]));
+        let p = Biv::from_index_polynomial(&[q(-2), q(1)])
+            .multiply(&Biv::from_variable_polynomial(&[q(1), q(1)]));
         let a = analyze_zeros(&p, 0, None);
         assert_eq!(a.singular_indices, vec![2]);
         assert!(a.uniform_indices.is_empty() && a.certified);

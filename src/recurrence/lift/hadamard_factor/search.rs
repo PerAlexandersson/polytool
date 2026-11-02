@@ -724,7 +724,7 @@ pub(in crate::recurrence::lift) fn certify_candidate(
     let multiplier = match &annihilation {
         Some(found) => division
             .multiplier
-            .mul(&super::super::section_certify::n_polynomial(
+            .multiply(&super::super::section_certify::n_polynomial(
                 &found.index_multiplier,
             )),
         None => division.multiplier.clone(),

@@ -70,14 +70,14 @@ impl PreparedSource {
             None => vec![Q::one()],
             Some(denominator) => {
                 let leader = Biv::from_bivar(denominator);
-                if !leader.is_y_free() {
+                if !leader.is_variable_free() {
                     return Err(RecurrenceError::Unsupported(
                         "the recurrence's left factor depends on x; symmetric-companion lifts \
                          support only a left factor f(n) free of x"
                             .into(),
                     ));
                 }
-                let leader = leader.eval_y(&Q::zero());
+                let leader = leader.evaluate_variable(&Q::zero());
                 if vec_poly::is_zero(&leader) {
                     return Err(RecurrenceError::InvalidInput(
                         "the recurrence's left factor is zero".into(),
@@ -151,7 +151,7 @@ impl PreparedSource {
         column
             .0
             .get(&(0, 0))
-            .map(|c| c.eval_y(&Q::zero()))
+            .map(|c| c.evaluate_variable(&Q::zero()))
             .unwrap_or_else(|| vec![Q::zero()])
     }
 

@@ -3,6 +3,7 @@
 //! `basis_map`, "The forward move").
 
 use super::super::hadamard_factor::prepare::{prepare_rule, PreparedRule};
+use super::super::section_operators::OperatorMatrix;
 use super::certify::{
     certify_prepared, BasisMapLiftCandidate, BasisMapLiftCertification, BasisMapLiftOptions,
 };
@@ -10,12 +11,20 @@ use super::map::{apply_with_rows, BasisMap};
 use super::transport::{transported_scalar_rule, transported_system};
 use crate::recurrence::{
     find_recurrence_adaptive_rational_with_budget, AdaptiveSearchBudget, AdaptiveSearchOptions,
-    AdaptiveSearchOutcome, RecurrenceError, RecurrenceJson,
+    AdaptiveSearchOutcome, ImplicitRelation, Recurrence, RecurrenceError, RecurrenceJson,
+    MAX_IMAGE_RECURRENCE_SHAPES, MAX_IMAGE_RECURRENCE_UNKNOWNS,
 };
 use crate::BigRational;
+use ore_algebra::{find_component_annihilator, ComponentAnnihilatorSearch, ImageAnnihilatorBudget};
 use serde::{Deserialize, Serialize};
 
 type Q = BigRational;
+
+/// Largest number of ansatz shapes of the elimination.
+const MAX_ELIMINATION_SHAPES: usize = MAX_IMAGE_RECURRENCE_SHAPES;
+
+/// Largest number of unknowns of one ansatz of the elimination.
+const MAX_ELIMINATION_UNKNOWNS: usize = MAX_IMAGE_RECURRENCE_UNKNOWNS;
 
 /// JSON schema tag of [`BasisMapImage`].
 pub const BASIS_MAP_IMAGE_SCHEMA: &str = "polytool.recurrence-basis-map-image.v1";
@@ -23,8 +32,14 @@ pub const BASIS_MAP_IMAGE_SCHEMA: &str = "polytool.recurrence-basis-map-image.v1
 /// Options of [`apply_basis_map_to_family`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BasisMapImageOptions {
-    /// Rows of the image used to fit its rule when the map has order two or
-    /// more.  Default 20.
+    /// Largest number of ansatz shapes solved when the rule of the first
+    /// component of the transported system is computed (a map of order two
+    /// or more).  Default 60.
+    pub elimination_shapes: usize,
+    /// Largest number of unknowns of one such ansatz.  Default 400.
+    pub elimination_unknowns: usize,
+    /// Rows of the image used to fit its rule when the computation finds
+    /// nothing within its budget.  Default 20.
     pub fit_rows: usize,
     /// Candidate budget of that fit.  Default 600.
     pub fit_candidates: usize,
@@ -35,6 +50,8 @@ pub struct BasisMapImageOptions {
 impl Default for BasisMapImageOptions {
     fn default() -> Self {
         Self {
+            elimination_shapes: 60,
+            elimination_unknowns: 400,
             fit_rows: 20,
             fit_candidates: 600,
             certification: BasisMapLiftOptions::default(),
@@ -49,8 +66,14 @@ pub enum BasisMapImageConstruction {
     /// The transported rule `sum_i e_i(n, A) H_(n+i) = 0` (a map of order
     /// one, `T o u = A o T`): exact by construction.
     Transported,
-    /// Fitted to the image rows (a map of order two or more), then
-    /// certified by the division of the module documentation.
+    /// A map of order two or more: a runnable scalar rule of the first
+    /// component `H_n = T(R_n)` of the transported system, computed as a
+    /// common left multiple (`ore_algebra::find_component_annihilator`),
+    /// then certified by the division of the module documentation.
+    Eliminated,
+    /// Fitted to the image rows (a map of order two or more, when the
+    /// computation finds nothing within its budget), then certified by the
+    /// division of the module documentation.
     Fitted,
 }
 
@@ -75,6 +98,32 @@ impl BasisMapImage {
     pub fn is_proved(&self) -> bool {
         self.certification.is_proved()
     }
+}
+
+/// The rule of the first component of the transported system `Phi`
+/// (order `k`, size `r`): a runnable scalar annihilator `M` with
+/// `w(n) (M e_0) = sum_b H_b o Phi_b`, searched up to order `r k`, as the
+/// successor rule at target index `m` (base `m - R`).  `None` when nothing
+/// is found within the budget or `M` has no derivative-free leader.
+fn eliminated_rule(
+    system: &OperatorMatrix,
+    order: usize,
+    options: &BasisMapImageOptions,
+) -> Result<Option<Recurrence>, RecurrenceError> {
+    let budget = ImageAnnihilatorBudget {
+        max_order_increase: (system.size() - 1) * order,
+        max_shapes: options.elimination_shapes.min(MAX_ELIMINATION_SHAPES),
+        max_unknowns: options.elimination_unknowns.min(MAX_ELIMINATION_UNKNOWNS),
+        ..ImageAnnihilatorBudget::default()
+    };
+    let search = find_component_annihilator(&system.entries, 0, &budget)
+        .map_err(|error| RecurrenceError::Unsupported(error.to_string()))?;
+    let ComponentAnnihilatorSearch::Found { certificate, .. } = search else {
+        return Ok(None);
+    };
+    Ok(ImplicitRelation::from_op(&certificate.annihilator)
+        .to_successor_rule()
+        .map(|(rule, _)| rule))
 }
 
 /// Apply the basis map to a coefficient family `R` (rule in `u` without
@@ -119,6 +168,13 @@ pub fn apply_basis_map_to_family(
         (
             prepare_rule(&image_rule, &rows, n0, "image")?,
             BasisMapImageConstruction::Transported,
+        )
+    } else if let Some(image_rule) = eliminated_rule(&system, coefficient.leader_shift, options)? {
+        let rows =
+            image_rows(coefficient.seeds.len() + 2 * system.size() * coefficient.leader_shift)?;
+        (
+            prepare_rule(&image_rule, &rows, n0, "image")?,
+            BasisMapImageConstruction::Eliminated,
         )
     } else {
         let rows = image_rows(options.fit_rows.max(8))?;

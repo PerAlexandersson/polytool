@@ -471,7 +471,7 @@ impl Parent {
                 "the parent recurrence denominator is zero".into(),
             ));
         }
-        if !Biv::from_bivar(&leader).is_y_free() {
+        if !Biv::from_bivar(&leader).is_variable_free() {
             return Err(RecurrenceError::Unsupported(
                 "the parent leader f(n, x) must be free of x".into(),
             ));

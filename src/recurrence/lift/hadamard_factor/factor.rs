@@ -426,7 +426,7 @@ impl FactorProduct {
     pub(super) fn expand(&self) -> Biv {
         let mut product = Biv::constant(self.constant.clone());
         for (factor, multiplicity) in &self.factors {
-            product = product.mul(&factor.pow(*multiplicity));
+            product = product.multiply(&factor.power(*multiplicity));
         }
         product
     }
@@ -554,7 +554,7 @@ mod tests {
                         let reference = factor.value(n + r, k).unwrap();
                         let shifted = factor.value(n + i, (k as i64 - s) as usize).unwrap();
                         let at = |p: &Biv| {
-                            let column = p.eval_n(&q(n as i64));
+                            let column = p.evaluate_index(&q(n as i64));
                             crate::vec_poly::evaluate(&column, &q(k as i64))
                         };
                         if reference.is_zero() {

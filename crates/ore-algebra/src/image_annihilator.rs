@@ -101,7 +101,7 @@ impl AnsatzShape {
         monomials * (self.order * (self.derivative_order + 1) + 1)
     }
 
-    fn dominated_by(&self, other: &Self) -> bool {
+    pub(crate) fn dominated_by(&self, other: &Self) -> bool {
         self.order <= other.order
             && self.derivative_order <= other.derivative_order
             && self.index_degree <= other.index_degree
@@ -451,7 +451,7 @@ fn certify_normalized(
 /// increasing sum (then order), and for each the coefficient degrees
 /// `0, 1, 2, 4, ...` up to the maximum (equal in `n` and `x`, capped by the
 /// separate maxima).
-fn shapes(order: usize, budget: &ImageAnnihilatorBudget) -> Vec<AnsatzShape> {
+pub(crate) fn shapes(order: usize, budget: &ImageAnnihilatorBudget) -> Vec<AnsatzShape> {
     let max_degree = budget.max_index_degree.max(budget.max_variable_degree);
     let mut degrees = vec![0, 1];
     while *degrees.last().expect("nonempty") < max_degree {
@@ -484,30 +484,27 @@ fn shapes(order: usize, budget: &ImageAnnihilatorBudget) -> Vec<AnsatzShape> {
 
 /// One unknown: the monomial `n^a x^b D^d S^i`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct Unknown {
-    shift: usize,
-    derivative: usize,
-    index_power: usize,
-    variable_power: usize,
+pub(crate) struct Unknown {
+    pub(crate) shift: usize,
+    pub(crate) derivative: usize,
+    pub(crate) index_power: usize,
+    pub(crate) variable_power: usize,
 }
 
 impl Unknown {
-    fn operator(&self) -> OreOperator {
+    /// The monomial without its power of `n`.
+    pub(crate) fn index_free_operator(&self) -> OreOperator {
         OreOperator::single(
             self.shift,
             self.derivative,
-            BivariatePolynomial::monomial(self.index_power, self.variable_power, Rational::one()),
+            BivariatePolynomial::monomial(0, self.variable_power, Rational::one()),
         )
     }
 }
 
-/// Solve one ansatz: a runnable `M` with zero remainder, or `None`.
-fn solve_shape(
-    shape: &AnsatzShape,
-    parent: &OreOperator,
-    row_annihilator: Option<&OreOperator>,
-    steps: &[RowMapStep],
-) -> Result<Option<OreOperator>, ImageAnnihilatorError> {
+/// The unknowns of an ansatz, the top-shift ones last (group 1, the others
+/// group 0).
+pub(crate) fn ansatz_unknowns(shape: &AnsatzShape) -> (Vec<Unknown>, Vec<usize>) {
     let mut unknowns = Vec::new();
     let mut groups = Vec::new();
     for i in 0..shape.order {
@@ -536,54 +533,37 @@ fn solve_shape(
             groups.push(1);
         }
     }
-    let bounds = shape.bounds();
-    let (order, _) =
-        index_only_leader(parent).ok_or(ImageAnnihilatorError::ParentLeaderNotIndexOnly)?;
-    // Remainders of the index-free monomials x^b D^d S^i; that of n^a times
-    // a monomial is n^a times it (left multiplication by n^a commutes with
-    // every pullback and reduction step).
-    let mut remainders: HashMap<(usize, usize, usize), OreOperator> = HashMap::new();
-    for unknown in &unknowns {
-        let key = (unknown.shift, unknown.derivative, unknown.variable_power);
-        if remainders.contains_key(&key) {
-            continue;
-        }
-        let base = Unknown {
-            index_power: 0,
-            ..*unknown
-        };
-        let (pulled, _) = pull_back(&base.operator(), steps, bounds)?;
-        let division = right_pseudo_division(&pulled, parent, shape.order)
-            .ok_or(ImageAnnihilatorError::ParentLeaderNotIndexOnly)?;
-        remainders.insert(key, division.remainder);
-    }
-    if let Some(a) = row_annihilator {
-        // One fixed derivative top for every monomial keeps it linear.
-        let top = remainders
-            .values()
-            .map(OreOperator::max_derivative)
-            .max()
-            .unwrap_or(0);
-        for remainder in remainders.values_mut() {
-            let reduction = reduce_by_row_annihilator(remainder, a, order, top)
-                .ok_or(ImageAnnihilatorError::InvalidRowAnnihilator)?;
-            *remainder = reduction.remainder;
-        }
-    }
-    // Equations: (remainder key, n power, x power) -> column -> value.
-    let mut equations: BTreeMap<(usize, usize, usize, usize), BTreeMap<usize, Rational>> =
-        BTreeMap::new();
+    (unknowns, groups)
+}
+
+/// The monomial of a remainder row an equation collects: entry, shift,
+/// derivative order, power of `n`, power of `x`.
+type EquationKey = (usize, usize, usize, usize, usize);
+
+/// A kernel vector, with a nonzero top-shift entry, of the linear map
+/// sending the coefficients of `M = sum_u c_u u` to the remainder row
+/// `sum_u c_u n^(a_u) R(u)`, where `remainder_of(u)` is the remainder row
+/// of the monomial `u` without its power of `n` (the reductions commute
+/// with left multiplication by `n^a`); `None` when there is none.
+pub(crate) fn kernel_candidate(
+    unknowns: &[Unknown],
+    groups: &[usize],
+    remainder_of: impl Fn(&Unknown) -> Vec<OreOperator>,
+) -> Option<OreOperator> {
+    // Equations: (entry, shift, derivative, n power, x power) -> column -> value.
+    let mut equations: BTreeMap<EquationKey, BTreeMap<usize, Rational>> = BTreeMap::new();
     for (column, unknown) in unknowns.iter().enumerate() {
-        let remainder = &remainders[&(unknown.shift, unknown.derivative, unknown.variable_power)];
         let factor = BivariatePolynomial::monomial(unknown.index_power, 0, Rational::one());
-        for ((i, d), c) in &remainder.left_multiply(&factor).0 {
-            for (p, row) in c.rows().iter().enumerate() {
-                for (q, value) in row.iter().enumerate() {
-                    if !value.is_zero() {
-                        equations
-                            .entry((*i, *d, p, q))
-                            .or_default()
-                            .insert(column, value.clone());
+        for (entry, remainder) in remainder_of(unknown).iter().enumerate() {
+            for ((i, d), c) in &remainder.left_multiply(&factor).0 {
+                for (p, row) in c.rows().iter().enumerate() {
+                    for (q, value) in row.iter().enumerate() {
+                        if !value.is_zero() {
+                            equations
+                                .entry((entry, *i, *d, p, q))
+                                .or_default()
+                                .insert(column, value.clone());
+                        }
                     }
                 }
             }
@@ -602,10 +582,8 @@ fn solve_shape(
             row
         })
         .collect();
-    let vectors = exact_kernel_vectors_by_group(&rows, &groups, 2);
-    let Some(vector) = vectors[1].as_ref() else {
-        return Ok(None);
-    };
+    let vectors = exact_kernel_vectors_by_group(&rows, groups, 2);
+    let vector = vectors[1].as_ref()?;
     let mut candidate = OreOperator::default();
     for (unknown, value) in unknowns.iter().zip(vector) {
         if !value.is_zero() {
@@ -619,7 +597,50 @@ fn solve_shape(
             );
         }
     }
-    Ok(Some(candidate))
+    Some(candidate)
+}
+
+/// Solve one ansatz: a runnable `M` with zero remainder, or `None`.
+fn solve_shape(
+    shape: &AnsatzShape,
+    parent: &OreOperator,
+    row_annihilator: Option<&OreOperator>,
+    steps: &[RowMapStep],
+) -> Result<Option<OreOperator>, ImageAnnihilatorError> {
+    let (unknowns, groups) = ansatz_unknowns(shape);
+    let bounds = shape.bounds();
+    let (order, _) =
+        index_only_leader(parent).ok_or(ImageAnnihilatorError::ParentLeaderNotIndexOnly)?;
+    // Remainders of the index-free monomials x^b D^d S^i; that of n^a times
+    // a monomial is n^a times it (left multiplication by n^a commutes with
+    // every pullback and reduction step).
+    let mut remainders: HashMap<(usize, usize, usize), OreOperator> = HashMap::new();
+    for unknown in &unknowns {
+        let key = (unknown.shift, unknown.derivative, unknown.variable_power);
+        if remainders.contains_key(&key) {
+            continue;
+        }
+        let (pulled, _) = pull_back(&unknown.index_free_operator(), steps, bounds)?;
+        let division = right_pseudo_division(&pulled, parent, shape.order)
+            .ok_or(ImageAnnihilatorError::ParentLeaderNotIndexOnly)?;
+        remainders.insert(key, division.remainder);
+    }
+    if let Some(a) = row_annihilator {
+        // One fixed derivative top for every monomial keeps it linear.
+        let top = remainders
+            .values()
+            .map(OreOperator::max_derivative)
+            .max()
+            .unwrap_or(0);
+        for remainder in remainders.values_mut() {
+            let reduction = reduce_by_row_annihilator(remainder, a, order, top)
+                .ok_or(ImageAnnihilatorError::InvalidRowAnnihilator)?;
+            *remainder = reduction.remainder;
+        }
+    }
+    Ok(kernel_candidate(&unknowns, &groups, |unknown| {
+        vec![remainders[&(unknown.shift, unknown.derivative, unknown.variable_power)].clone()]
+    }))
 }
 
 /// A runnable annihilator of the image of a sequence annihilated by

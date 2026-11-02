@@ -8,19 +8,20 @@
 //! matrix, `section_operators`) of a parent relation `L` whose leader is
 //! `g(n) S^k` with `g` free of `x` and of derivatives, so that the shift-`k`
 //! part of `Phi` is `g(n) S^k I`.  A row `rho` of `r` operators is divided as
-//! follows: while the largest shift `m` of the remainder is at least `k`,
-//! take the coefficient row `c` of `S^m` (shift-free operators), multiply the
-//! remainder and all recorded quotients on the left by `g(n + m - k)`,
-//! subtract `c o S^(m-k) o Phi` and record `c` as the quotient of
-//! `S^(m-k)`.  The shift-`m` terms cancel because `c` commutes with
-//! `g(n + m - k)` (both are free of `S`, and `g` is free of `y` and `D_y`).
-//! The result is the identity
+//! follows (`ore_algebra::right_pseudo_division_of_row`, and
+//! `ore_algebra::right_pseudo_division` for `r = 1`): for every level `m`
+//! from the largest shift of `rho` down to `k`, take the coefficient row `c`
+//! of `S^m` (shift-free operators), multiply the remainder and all recorded
+//! quotients on the left by `g(n + m - k)`, subtract `c o S^(m-k) o Phi` and
+//! record `c` as the quotient of `S^(m-k)`.  The shift-`m` terms cancel
+//! because `c` commutes with `g(n + m - k)` (both are free of `S`, and `g`
+//! is free of `y` and `D_y`).  The result is the identity
 //!
 //! ```text
 //! w(n) rho = sum_nu H_nu o S^nu o Phi + R
 //! ```
 //!
-//! with `w` the product of the multipliers (a polynomial in `n` only), shift
+//! with `w = prod_(m=k..top) g(n + m - k)` (a polynomial in `n` only), shift
 //! -free rows `H_nu` and a remainder `R` of shift `< k`.
 //!
 //! # The forward certificate
@@ -57,6 +58,7 @@ use crate::integer_range_sign::{
 };
 use crate::vec_poly;
 use num_traits::{One, Zero};
+use ore_algebra::{push_forward, right_pseudo_division, right_pseudo_division_of_row, RowMapStep};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -239,38 +241,30 @@ pub(super) fn x_free_leader(relation: &DOp) -> Result<(usize, Biv), RecurrenceEr
     }
     let column = relation.column(k);
     match column.0.get(&(0, 0)) {
-        Some(leader) if column.0.len() == 1 && leader.is_y_free() => Ok((k, leader.clone())),
+        Some(leader) if column.0.len() == 1 && leader.is_variable_free() => Ok((k, leader.clone())),
         _ => Err(RecurrenceError::Unsupported(
             "the parent leader must be a derivative-free coefficient g(n) free of x".into(),
         )),
     }
 }
 
-/// The gauged and shifted parent relation of the module documentation.
+/// The gauged and shifted parent relation of the module documentation: the
+/// pushforward (`ore_algebra::push_forward`) of the shifted relation
+/// through the gauge `a(n)/b(n)`, whose term factors
+/// `prod_(t=i+1..k) a(n+t) prod_(t=1..i) b(n+t)` are those displayed above.
 pub(super) fn gauge_parent_relation(
     parent: &DOp,
     index_shift: i64,
     gauge: &RatioGauge,
 ) -> Result<DOp, RecurrenceError> {
-    let (k, _) = x_free_leader(parent)?;
-    let numerator = n_polynomial(&gauge.numerator);
-    let denominator = n_polynomial(&gauge.denominator);
-    let mut factors = Vec::with_capacity(k + 1);
-    for i in 0..=k {
-        let mut factor = Biv::one();
-        for t in i + 1..=k {
-            factor = factor.mul(&numerator.shift_n(t as i64));
-        }
-        for t in 1..=i {
-            factor = factor.mul(&denominator.shift_n(t as i64));
-        }
-        factors.push(factor);
-    }
-    let mut out = DOp::default();
-    for ((i, d), c) in &parent.0 {
-        out.add_term((*i, *d), c.shift_n(index_shift).mul(&factors[*i]));
-    }
-    Ok(out)
+    x_free_leader(parent)?;
+    let step = RowMapStep::Gauge {
+        numerator: gauge.numerator.clone(),
+        denominator: gauge.denominator.clone(),
+    };
+    push_forward(&parent.shift_index(index_shift), &step).ok_or_else(|| {
+        RecurrenceError::InvalidInput("the gauge ratio has a zero polynomial".into())
+    })
 }
 
 /// `w rho = sum_nu H_nu o S^nu o Phi + R`.
@@ -288,14 +282,6 @@ impl ForwardDivision {
     pub(super) fn remainder_is_zero(&self) -> bool {
         self.remainder.iter().all(DOp::is_zero)
     }
-}
-
-fn left_multiply(factor: &Biv, op: &DOp) -> DOp {
-    let mut out = DOp::default();
-    for (key, c) in &op.0 {
-        out.add_term(*key, factor.mul(c));
-    }
-    out
 }
 
 /// `sum_b row[b] o S^nu o system[b][a]` for every column `a`.
@@ -343,7 +329,10 @@ fn check_system_leader(
     Ok(())
 }
 
-/// Pseudo-divide `row` by `system` (module documentation).
+/// Pseudo-divide `row` by `system` (module documentation) with
+/// `ore_algebra::right_pseudo_division_of_row`, every level from the
+/// largest shift of `row` down to `k` (so `w = prod_(m=k..top) g(n + m -
+/// k)`); a `1 x 1` system is a scalar relation ([`pseudo_divide_scalar`]).
 pub(super) fn pseudo_divide_row(
     row: &[DOp],
     system: &OperatorMatrix,
@@ -352,52 +341,67 @@ pub(super) fn pseudo_divide_row(
     max_terms: usize,
 ) -> Result<ForwardDivision, RecurrenceError> {
     check_system_leader(system, k, leader)?;
-    let mut remainder = row.to_vec();
-    let mut multiplier = Biv::one();
-    let mut quotients: BTreeMap<usize, Vec<DOp>> = BTreeMap::new();
-    loop {
-        if remainder.iter().all(DOp::is_zero) {
-            break;
+    if let ([op], [entries]) = (row, system.entries.as_slice()) {
+        if let [relation] = entries.as_slice() {
+            return pseudo_divide_scalar(op, relation, max_terms);
         }
-        let top = remainder.iter().map(DOp::max_shift).max().unwrap_or(0);
-        if top < k {
-            break;
-        }
-        let nu = top - k;
-        let factor = leader.shift_n(nu as i64);
-        let coefficient_row: Vec<DOp> = remainder.iter().map(|op| op.column(top)).collect();
-        let subtracted = row_times_shifted_system(&coefficient_row, nu, system);
-        remainder = remainder
-            .iter()
-            .zip(&subtracted)
-            .map(|(r, s)| left_multiply(&factor, r).sub(s))
-            .collect();
-        for quotient in quotients.values_mut() {
-            *quotient = quotient.iter().map(|h| left_multiply(&factor, h)).collect();
-        }
-        let entry = quotients
-            .entry(nu)
-            .or_insert_with(|| vec![DOp::default(); row.len()]);
-        for (h, c) in entry.iter_mut().zip(&coefficient_row) {
-            *h = h.add(c);
-        }
-        multiplier = multiplier.mul(&factor);
-        if remainder
-            .iter()
-            .any(|op| op.max_shift() >= top && !op.column(top).is_zero())
-        {
-            return Err(RecurrenceError::VerificationFailed(
-                "pseudo-division did not cancel the leading shift".into(),
-            ));
-        }
-        let terms = row_term_count(&remainder)
-            + quotients.values().map(|q| row_term_count(q)).sum::<usize>();
-        check_term_budget(terms, max_terms)?;
     }
+    let top = row.iter().map(DOp::max_shift).max().unwrap_or(0);
+    let division = right_pseudo_division_of_row(row, &system.entries, top).ok_or_else(|| {
+        RecurrenceError::VerificationFailed(
+            "the transported parent system does not have the leader g(n) S^k I".into(),
+        )
+    })?;
+    let mut quotients: BTreeMap<usize, Vec<DOp>> = BTreeMap::new();
+    let largest = division
+        .quotients
+        .iter()
+        .map(DOp::max_shift)
+        .max()
+        .unwrap_or(0);
+    for nu in 0..=largest {
+        let columns: Vec<DOp> = division.quotients.iter().map(|h| h.column(nu)).collect();
+        if columns.iter().any(|c| !c.is_zero()) {
+            quotients.insert(nu, columns);
+        }
+    }
+    let terms = row_term_count(&division.remainder)
+        + quotients.values().map(|q| row_term_count(q)).sum::<usize>();
+    check_term_budget(terms, max_terms)?;
     Ok(ForwardDivision {
-        multiplier,
+        multiplier: division.multiplier,
         quotients,
-        remainder,
+        remainder: division.remainder,
+    })
+}
+
+/// `w(n) op = sum_nu H_nu o S^nu o L + R` for a scalar relation `L` whose
+/// leader `g(n) S^k` is free of `x` and of derivatives, by
+/// `ore_algebra::right_pseudo_division` with every level from the largest
+/// shift of `op` down to `k` (so `w = prod_(m=k..top) g(n + m - k)`).
+pub(super) fn pseudo_divide_scalar(
+    op: &DOp,
+    relation: &DOp,
+    max_terms: usize,
+) -> Result<ForwardDivision, RecurrenceError> {
+    let division = right_pseudo_division(op, relation, op.max_shift()).ok_or_else(|| {
+        RecurrenceError::Unsupported(
+            "the parent leader must be a derivative-free coefficient g(n) free of x".into(),
+        )
+    })?;
+    let mut quotients = BTreeMap::new();
+    for nu in 0..=division.quotient.max_shift() {
+        let column = division.quotient.column(nu);
+        if !column.is_zero() {
+            quotients.insert(nu, vec![column]);
+        }
+    }
+    let terms = division.remainder.term_count() + division.quotient.term_count();
+    check_term_budget(terms, max_terms)?;
+    Ok(ForwardDivision {
+        multiplier: division.multiplier,
+        quotients,
+        remainder: vec![division.remainder],
     })
 }
 
@@ -410,14 +414,14 @@ pub(super) fn division_identity_holds(
     let mut difference: Vec<DOp> = row
         .iter()
         .zip(&division.remainder)
-        .map(|(r, remainder)| left_multiply(&division.multiplier, r).sub(remainder))
+        .map(|(r, remainder)| r.left_multiply(&division.multiplier).subtract(remainder))
         .collect();
     for (nu, quotient) in &division.quotients {
         let product = row_times_shifted_system(quotient, *nu, system);
         difference = difference
             .iter()
             .zip(&product)
-            .map(|(d, p)| d.sub(p))
+            .map(|(d, p)| d.subtract(p))
             .collect();
     }
     difference.iter().all(DOp::is_zero)

@@ -278,7 +278,7 @@ pub(super) fn periodic_product_parent(rule: &Recurrence, seeds: &[Vec<Q>]) -> Re
         if *shift == k {
             continue;
         }
-        if *shift != 0 || *order != 0 || !coefficient.is_n_free() {
+        if *shift != 0 || *order != 0 || !coefficient.is_index_free() {
             return Err("the rule is not P_(n+k) = c(x) P_n with c free of n".into());
         }
         factor = coefficient.rows().first().cloned();

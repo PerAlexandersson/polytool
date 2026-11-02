@@ -182,15 +182,3 @@ pub(in crate::recurrence::lift) fn shift_free_from_json(
     }
     Ok(op)
 }
-
-/// `factor o op` for a coefficient `factor` free of `S` and `D`.
-pub(in crate::recurrence::lift) fn left_multiply(
-    factor: &crate::recurrence::implicit::algebra::Biv,
-    op: &DOp,
-) -> DOp {
-    let mut out = DOp::default();
-    for (key, c) in &op.0 {
-        out.add_term(*key, factor.mul(c));
-    }
-    out
-}

@@ -34,15 +34,22 @@
 //!    `c(n, x) D^d G_(n+i) = [c(n, (y - b)/a) a^d D^d F_(n+i)](a x + b)`;
 //!    for `G_n(x) = x^(d_n) F_n(1/x)` (`d_n` affine with step `h >= 0`),
 //!    `D_x o C_n = C_n o (d_n y - y^2 D_y)`, `c(n, x) C_n(F) = C_n(c(n, 1/y) F)`
-//!    and `C_(n+i)(F) = C_n(y^(-h i) F)`, so after multiplying by `y^N`
-//!    (clearing negative powers) the term becomes
+//!    and `C_(n+i)(F) = C_n(y^(-h i) F)`, so after multiplying by `y^N`,
+//!    `N = b + h R` with `b` the degree in `x` of the coefficients of `M`
+//!    (clearing negative powers), the term becomes
 //!    `y^(N - h i) c(n, 1/y) (d_(n+i) y - y^2 D)^d S^i`.  A Möbius map with
 //!    `c != 0` is the composition `F(y) -> F(a/c + kappa y)`, the reversal,
 //!    and `K(u) -> K(c x + e)` with `kappa = (b c - a e)/c`.  Each
 //!    substitution is injective (on Laurent polynomials for the reversal), so
-//!    in every case `(M H)_n = 0` exactly when `(E P')_n = 0`.
-//! 3. **Division.**  `E` is pseudo-divided by `L'` (the right pseudo-division
-//!    of `section_certify`, whose leader is free of `x`):
+//!    in every case `(M H)_n = 0` exactly when `(E P')_n = 0`.  These are
+//!    the pullbacks of the `ore-algebra` crate (`ore_algebra::pull_back`
+//!    through `T'` and the gauge, with the bounds of `M` and top shift
+//!    `R`); `E` is then divided by the largest power of `x` dividing all its
+//!    coefficients, which changes nothing above since `Q[x]` (and the
+//!    Laurent polynomials) have no zero divisors.
+//! 3. **Division.**  `E` is pseudo-divided by `L'`, whose leader is free of
+//!    `x` (`ore_algebra::right_pseudo_division`, every level from the top
+//!    shift of `E` down to `k`):
 //!    `w(n) E = sum_nu H_nu S^nu L'` with remainder zero (exact Ore-algebra
 //!    arithmetic).  So `(E P')_n = 0` at every base `n >= b_L` with
 //!    `w(n) != 0`.  At the bases from `b_M` on that are below `b_L` or integer
@@ -161,6 +168,20 @@
 //! polynomial, and a replayed parent theorem report proves the parent rows
 //! interlacing; the Hermite--Kakeya--Obreschkoff argument transfers it (the
 //! `interlacing` module documentation).  Otherwise the claim is `none`.
+//!
+//! # Image rules
+//!
+//! A candidate is also an image specification of
+//! [`crate::recurrence::image_recurrence_of_operator`]
+//! ([`PreserverImageCandidate::image_operator_specification`]; the operator
+//! by `ImageRowMap::try_from`, every operator except the multipliers that
+//! depend on `n`), so the runnable rule of its image can be computed from
+//! the parent rule ([`PreserverImageCandidate::image_recurrence`]), with
+//! its own certificate.  On request ([`PreserverImageOptions::image_rule`])
+//! a certified identity carries that rule
+//! ([`PreserverImageCertification::image_rule`]); `verify()` replays it and
+//! compares its first rows with the input's.  This is how a forward move
+//! gives a new family its own rule.
 //!
 //! The group is split into `operator` (the menu, its normal forms and the
 //! conjugation), `transfer` (theorems, side conditions, regions, Lean

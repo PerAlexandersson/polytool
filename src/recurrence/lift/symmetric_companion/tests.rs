@@ -37,35 +37,42 @@ fn row(values: &[Q]) -> Vec<Q> {
 /// ```
 fn eliminated_one_over_k_recurrence(k: &Q) -> Recurrence {
     let m = Biv::new(vec![vec![], vec![q(1)]]);
-    let x = Biv::from_y(&[q(0), q(1)]);
-    let one_minus_x = Biv::from_y(&[q(1), q(-1)]);
-    let x_one_minus_x = x.mul(&one_minus_x);
+    let x = Biv::from_variable_polynomial(&[q(0), q(1)]);
+    let one_minus_x = Biv::from_variable_polynomial(&[q(1), q(-1)]);
+    let x_one_minus_x = x.multiply(&one_minus_x);
     let kk = Biv::constant(k.clone());
     let constant = |c: i64| Biv::constant(q(c));
     let n_big = m.add(&constant(-2));
     let alpha = Biv::one();
-    let beta = Biv::one().add(&kk.mul(&m.add(&constant(-3))));
+    let beta = Biv::one().add(&kk.multiply(&m.add(&constant(-3))));
     // (U_(m-1) + Vt_(m-2)): 1 + (1 + 2k(m - 2)) x and 2k x (1 - x) D.
     let first_multiplication =
-        Biv::one().add(&x.mul(&Biv::one().add(&kk.scale(&q(2)).mul(&n_big))));
-    let first_derivative = kk.scale(&q(2)).mul(&x_one_minus_x);
+        Biv::one().add(&x.multiply(&Biv::one().add(&kk.scale(&q(2)).multiply(&n_big))));
+    let first_derivative = kk.scale(&q(2)).multiply(&x_one_minus_x);
     // Vt o U - (k - 1) x.
-    let alpha_beta_x = alpha.add(&beta.mul(&x));
+    let alpha_beta_x = alpha.add(&beta.multiply(&x));
     let second_multiplication = kk
-        .mul(&n_big)
-        .mul(&x)
-        .mul(&alpha_beta_x)
-        .add(&kk.mul(&beta).mul(&x_one_minus_x))
-        .add(&x.mul(&kk.add(&constant(-1))).scale(&q(-1)));
-    let one_minus_two_x = Biv::from_y(&[q(1), q(-2)]);
+        .multiply(&n_big)
+        .multiply(&x)
+        .multiply(&alpha_beta_x)
+        .add(&kk.multiply(&beta).multiply(&x_one_minus_x))
+        .add(&x.multiply(&kk.add(&constant(-1))).scale(&q(-1)));
+    let one_minus_two_x = Biv::from_variable_polynomial(&[q(1), q(-2)]);
     let second_derivative = kk
-        .mul(&kk)
-        .mul(&n_big)
-        .mul(&x)
-        .mul(&x_one_minus_x)
-        .add(&kk.mul(&x_one_minus_x).mul(&alpha_beta_x))
-        .add(&kk.mul(&kk).mul(&x_one_minus_x).mul(&one_minus_two_x));
-    let second_second = kk.mul(&kk).mul(&x_one_minus_x).mul(&x_one_minus_x);
+        .multiply(&kk)
+        .multiply(&n_big)
+        .multiply(&x)
+        .multiply(&x_one_minus_x)
+        .add(&kk.multiply(&x_one_minus_x).multiply(&alpha_beta_x))
+        .add(
+            &kk.multiply(&kk)
+                .multiply(&x_one_minus_x)
+                .multiply(&one_minus_two_x),
+        );
+    let second_second = kk
+        .multiply(&kk)
+        .multiply(&x_one_minus_x)
+        .multiply(&x_one_minus_x);
     let minus = |b: &Biv| b.scale(&q(-1)).to_bivar();
     Recurrence {
         terms: vec![
@@ -256,7 +263,7 @@ fn nonconstant_leader_uses_the_proportional_derivation() {
     let mut recurrence = eliminated_one_over_k_recurrence(&k);
     let factor = Biv::new(vec![vec![q(1)], vec![q(1)]]);
     for term in &mut recurrence.terms {
-        term.coeff = Biv::from_bivar(&term.coeff).mul(&factor).to_bivar();
+        term.coeff = Biv::from_bivar(&term.coeff).multiply(&factor).to_bivar();
     }
     recurrence.denominator = Some(factor.to_bivar());
     let report = find(&recurrence, &one_over_k_seeds(&k), 2);
