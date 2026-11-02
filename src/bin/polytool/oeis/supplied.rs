@@ -154,6 +154,7 @@ pub(crate) fn add_supplied_recurrence(
             polytool_version: Some(env!("CARGO_PKG_VERSION").to_string()),
         },
         real_rootedness: None,
+        evidence: None,
     };
     if let Err(error) = record.validate() {
         return AddResult::new(id, "mismatch", format!("invalid catalog record: {error}"));

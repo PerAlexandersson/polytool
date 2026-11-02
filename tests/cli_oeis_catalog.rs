@@ -396,3 +396,171 @@ fn oeis_info_reports_the_real_rootedness_flag() {
         "real-rootedness: lean_proved as of 2026-10-03 (recorded flag, not proved by polytool)"
     ));
 }
+
+/// A scratch catalog of three bundled records (which carry no evidence key).
+fn scratch_catalog_of_three(name: &str) -> (PathBuf, Vec<String>) {
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
+    std::fs::create_dir_all(&directory).unwrap();
+    let data = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("data/oeis-catalog.jsonl"),
+    )
+    .unwrap();
+    let mut lines = Vec::new();
+    for id in ["A001263", "A008292", "A122431"] {
+        let prefix = format!("{{\"id\":\"{id}\"");
+        let line = data.lines().find(|line| line.starts_with(&prefix)).unwrap();
+        assert!(
+            !line.contains("\"evidence\""),
+            "unexpected evidence in {id}"
+        );
+        lines.push(line.to_string());
+    }
+    let path = directory.join("oeis-catalog.jsonl");
+    std::fs::write(&path, format!("{}\n", lines.join("\n"))).unwrap();
+    (path, lines)
+}
+
+#[test]
+fn oeis_evidence_write_changes_only_the_evidence_key() {
+    let (catalog, lines) = scratch_catalog_of_three("oeis-evidence-write");
+    let catalog_arg = catalog.to_str().unwrap();
+
+    // Without --write nothing changes.
+    let output = run_polytool(&[
+        "oeis",
+        "evidence",
+        "A008292",
+        "A122431",
+        "--rows",
+        "12",
+        "--catalog",
+        catalog_arg,
+        "--as-of",
+        "2026-11-02",
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let text = stdout(&output);
+    assert!(text.contains("A008292\treal_rooted\trows=12\t-"), "{text}");
+    assert!(
+        text.contains("A122431\tlog_concave\trows=12\treal_rooted@2,ultra_log_concave@2"),
+        "{text}"
+    );
+    assert!(text.contains("lean_proved with evidence weaker than real_rooted: none"));
+    assert_eq!(
+        std::fs::read_to_string(&catalog).unwrap(),
+        format!("{}\n", lines.join("\n"))
+    );
+
+    // --write adds the key after real_rootedness to the computed entries only.
+    let output = run_polytool(&[
+        "oeis",
+        "evidence",
+        "A008292",
+        "A122431",
+        "--rows",
+        "12",
+        "--catalog",
+        catalog_arg,
+        "--as-of",
+        "2026-11-02",
+        "--write",
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let written = std::fs::read_to_string(&catalog).unwrap();
+    let new_lines = written.lines().collect::<Vec<_>>();
+    assert_eq!(new_lines.len(), 3);
+    assert_eq!(new_lines[0], lines[0], "A001263 was not selected");
+    let a008292 = format!(
+        "{},\"evidence\":{{\"strongest\":\"real_rooted\",\"rows_checked\":12,\
+         \"first_failure\":{{}},\"as_of\":\"2026-11-02\"}}}}",
+        lines[1].strip_suffix('}').unwrap()
+    );
+    assert_eq!(new_lines[1], a008292);
+    let a122431 = format!(
+        "{},\"evidence\":{{\"strongest\":\"log_concave\",\"rows_checked\":12,\
+         \"first_failure\":{{\"real_rooted\":2,\"ultra_log_concave\":2}},\
+         \"as_of\":\"2026-11-02\"}}}}",
+        lines[2].strip_suffix('}').unwrap()
+    );
+    assert_eq!(new_lines[2], a122431);
+    assert!(new_lines[2].contains("\"real_rootedness\":{\"status\":\"known_not_real_rooted\""));
+
+    // A second run with other rows replaces the key, again touching nothing else.
+    let output = run_polytool(&[
+        "oeis",
+        "evidence",
+        "A122431",
+        "--rows",
+        "5",
+        "--catalog",
+        catalog_arg,
+        "--as-of",
+        "2026-11-03",
+        "--write",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["schema"], "polytool.oeis-evidence.v1");
+    assert_eq!(report["written"], true);
+    assert_eq!(report["distribution"]["log_concave"], 1);
+    assert_eq!(
+        report["entries"][0]["evidence"]["first_failure"],
+        serde_json::json!({"real_rooted": 2, "ultra_log_concave": 2})
+    );
+    let rewritten = std::fs::read_to_string(&catalog).unwrap();
+    let again = rewritten.lines().collect::<Vec<_>>();
+    assert_eq!(again[0], lines[0]);
+    assert_eq!(again[1], new_lines[1]);
+    assert!(again[2].starts_with(lines[2].strip_suffix('}').unwrap()));
+    assert!(again[2].ends_with(
+        "\"evidence\":{\"strongest\":\"log_concave\",\"rows_checked\":5,\
+         \"first_failure\":{\"real_rooted\":2,\"ultra_log_concave\":2},\
+         \"as_of\":\"2026-11-03\"}}"
+    ));
+}
+
+#[test]
+fn oeis_evidence_rejects_bad_requests_and_noncanonical_files() {
+    let (catalog, _) = scratch_catalog_of_three("oeis-evidence-errors");
+    let catalog_arg = catalog.to_str().unwrap();
+    for args in [
+        vec!["oeis", "evidence", "A008292"],
+        vec!["oeis", "evidence", "--rows", "5"],
+        vec!["oeis", "evidence", "A008292", "--all", "--rows", "5"],
+        vec!["oeis", "evidence", "A008292", "--rows", "0"],
+        vec!["oeis", "evidence", "A999999", "--rows", "5"],
+    ] {
+        let mut full = args.clone();
+        full.extend(["--catalog", catalog_arg]);
+        let output = run_polytool(&full);
+        assert_eq!(output.status.code(), Some(2), "{full:?}");
+    }
+    // A file that is not in canonical form (here: a space) is never rewritten.
+    let text = std::fs::read_to_string(&catalog).unwrap();
+    let spaced = text.replacen("\"id\":", "\"id\": ", 1);
+    std::fs::write(&catalog, &spaced).unwrap();
+    let output = run_polytool(&[
+        "oeis",
+        "evidence",
+        "A008292",
+        "--rows",
+        "5",
+        "--catalog",
+        catalog_arg,
+        "--write",
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("not in canonical form"));
+    assert_eq!(std::fs::read_to_string(&catalog).unwrap(), spaced);
+}
+
+#[test]
+fn oeis_info_reports_missing_evidence() {
+    let output = run_polytool(&["oeis", "info", "A122431", "--json"]);
+    assert!(output.status.success());
+    let info: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(info["evidence"].is_null());
+    let output = run_polytool(&["oeis", "info", "A122431"]);
+    assert!(stdout(&output).contains("evidence: none recorded"));
+}

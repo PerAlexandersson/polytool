@@ -129,6 +129,145 @@ pub struct OeisCatalogRealRootedness {
     pub as_of: Option<String>,
 }
 
+/// A coefficient property recorded by a catalog [`OeisCatalogEvidence`] record,
+/// strongest first.
+///
+/// For a row with coefficient vector `a_0, ..., a_d` (ascending powers, trailing
+/// zeros removed; the zero row satisfies every property) the properties are
+/// defined with polytool's own checks:
+///
+/// - `RealRooted`: [`crate::is_real_rooted_bigint_coeffs`] (exact, any signs).
+/// - `UltraLogConcave`, `LogConcave`, `Unimodal`: the row has only nonnegative
+///   coefficients, its nonzero coefficients are contiguous (no zero between two
+///   nonzero coefficients; leading and trailing zeros are allowed), and
+///   [`crate::is_ultra_log_concave_bigint_coeffs`] (nominal degree `d`),
+///   [`crate::is_log_concave_bigint_coeffs`] or
+///   [`crate::is_unimodal_bigint_coeffs`] holds.  A row with a negative
+///   coefficient or an internal zero fails all three, so for such a row only
+///   `RealRooted` can hold.  On the remaining rows the three properties are
+///   nested: ultra-log-concave implies log-concave implies unimodal.
+///
+/// `NoProperty` is the value of `strongest` when no property holds on every
+/// checked row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OeisEvidenceProperty {
+    /// Every checked row is real-rooted.
+    RealRooted,
+    /// Every checked row is ultra-log-concave (and nonnegative without
+    /// internal zeros).
+    UltraLogConcave,
+    /// Every checked row is log-concave (and nonnegative without internal
+    /// zeros).
+    LogConcave,
+    /// Every checked row is unimodal (and nonnegative without internal zeros).
+    Unimodal,
+    /// No property holds on every checked row.
+    #[serde(rename = "none")]
+    NoProperty,
+}
+
+impl OeisEvidenceProperty {
+    /// The properties in order, strongest first (excluding `NoProperty`).
+    pub const ALL: [Self; 4] = [
+        Self::RealRooted,
+        Self::UltraLogConcave,
+        Self::LogConcave,
+        Self::Unimodal,
+    ];
+
+    /// Stable lowercase name used in the data file and structured output.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::RealRooted => "real_rooted",
+            Self::UltraLogConcave => "ultra_log_concave",
+            Self::LogConcave => "log_concave",
+            Self::Unimodal => "unimodal",
+            Self::NoProperty => "none",
+        }
+    }
+
+    /// Position in the strongest-first order (`NoProperty` is 4).
+    pub const fn rank(self) -> usize {
+        match self {
+            Self::RealRooted => 0,
+            Self::UltraLogConcave => 1,
+            Self::LogConcave => 2,
+            Self::Unimodal => 3,
+            Self::NoProperty => 4,
+        }
+    }
+}
+
+/// The first failing row of each property that fails somewhere, as displayed
+/// OEIS row indices (the indexing of [`OeisSequenceDefinition::first_row`]).
+///
+/// A field is `None` when the property holds on every checked row; a record's
+/// fields are `Some` exactly for the properties stronger than its `strongest`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OeisEvidenceFirstFailures {
+    /// First row that is not real-rooted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub real_rooted: Option<i64>,
+    /// First row that is not ultra-log-concave.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ultra_log_concave: Option<i64>,
+    /// First row that is not log-concave.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log_concave: Option<i64>,
+    /// First row that is not unimodal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unimodal: Option<i64>,
+}
+
+impl OeisEvidenceFirstFailures {
+    /// The first failing row of `property` (`None` for `NoProperty` and for a
+    /// property that holds on every checked row).
+    pub const fn get(&self, property: OeisEvidenceProperty) -> Option<i64> {
+        match property {
+            OeisEvidenceProperty::RealRooted => self.real_rooted,
+            OeisEvidenceProperty::UltraLogConcave => self.ultra_log_concave,
+            OeisEvidenceProperty::LogConcave => self.log_concave,
+            OeisEvidenceProperty::Unimodal => self.unimodal,
+            OeisEvidenceProperty::NoProperty => None,
+        }
+    }
+
+    /// Set the first failing row of `property` (ignored for `NoProperty`).
+    pub fn set(&mut self, property: OeisEvidenceProperty, row: Option<i64>) {
+        match property {
+            OeisEvidenceProperty::RealRooted => self.real_rooted = row,
+            OeisEvidenceProperty::UltraLogConcave => self.ultra_log_concave = row,
+            OeisEvidenceProperty::LogConcave => self.log_concave = row,
+            OeisEvidenceProperty::Unimodal => self.unimodal = row,
+            OeisEvidenceProperty::NoProperty => {}
+        }
+    }
+}
+
+/// Finite evidence recorded for one catalog record: the strongest coefficient
+/// property that held on every row of a finite initial segment of the rows.
+///
+/// This is evidence, not a proof: it says nothing about rows beyond
+/// `rows_checked`, and it is separate from the
+/// [`OeisCatalogRealRootedness`] flag (which certifies all rows).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OeisCatalogEvidence {
+    /// The strongest property holding on every checked row (see
+    /// [`OeisEvidenceProperty`]).
+    pub strongest: OeisEvidenceProperty,
+    /// Number of consecutive rows checked, starting at the entry's first row
+    /// (none skipped, all exact).
+    pub rows_checked: usize,
+    /// For each property stronger than `strongest`, the first checked row
+    /// where it fails (displayed OEIS row index).
+    pub first_failure: OeisEvidenceFirstFailures,
+    /// Date (`YYYY-MM-DD`) of the check.
+    pub as_of: String,
+}
+
 /// One complete OEIS row recorded as validation evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -250,6 +389,11 @@ pub struct OeisCatalogRecord {
     /// Known real-rootedness of every row; absent when unknown.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub real_rootedness: Option<OeisCatalogRealRootedness>,
+    /// Finite evidence about the rows (strongest property on the first rows
+    /// checked); absent when none was computed.  Written after
+    /// `real_rootedness`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<OeisCatalogEvidence>,
 }
 
 /// Why a catalog data file or one catalog record was rejected.
@@ -357,6 +501,19 @@ pub enum OeisCatalogError {
         /// The record id.
         id: String,
     },
+    /// The evidence `as_of` date is not `YYYY-MM-DD`.
+    InvalidEvidenceDate {
+        /// The record id.
+        id: String,
+    },
+    /// The evidence record is inconsistent: zero `rows_checked`, a
+    /// `first_failure` entry that is missing for a property stronger than
+    /// `strongest` or present for another property, or a failing row outside
+    /// the checked rows.
+    InconsistentEvidence {
+        /// The record id.
+        id: String,
+    },
     /// Two consecutive records are not in strictly increasing A-number order.
     UnsortedRecords {
         /// The earlier record's id.
@@ -413,6 +570,13 @@ impl std::fmt::Display for OeisCatalogError {
             Self::InvalidRealRootednessDate { id } => {
                 write!(f, "{id}: real_rootedness as_of is not a YYYY-MM-DD date")
             }
+            Self::InvalidEvidenceDate { id } => {
+                write!(f, "{id}: evidence as_of is not a YYYY-MM-DD date")
+            }
+            Self::InconsistentEvidence { id } => write!(
+                f,
+                "{id}: evidence is inconsistent (rows_checked, strongest and first_failure disagree)"
+            ),
             Self::UnsortedRecords { first, second } => write!(
                 f,
                 "records are not strictly sorted by A-number: {first} before {second}"
@@ -422,6 +586,22 @@ impl std::fmt::Display for OeisCatalogError {
 }
 
 impl std::error::Error for OeisCatalogError {}
+
+/// Whether `text` has the shape `YYYY-MM-DD` with a month in `1..=12` and a day
+/// in `1..=31`.
+fn is_iso_date(text: &str) -> bool {
+    let number = |range: std::ops::Range<usize>| {
+        text.get(range)
+            .filter(|part| part.bytes().all(|byte| byte.is_ascii_digit()))
+            .and_then(|part| part.parse::<u32>().ok())
+    };
+    text.len() == 10
+        && text.as_bytes()[4] == b'-'
+        && text.as_bytes()[7] == b'-'
+        && number(0..4).is_some()
+        && number(5..7).is_some_and(|month| (1..=12).contains(&month))
+        && number(8..10).is_some_and(|day| (1..=31).contains(&day))
+}
 
 impl OeisCatalogRecord {
     /// Serialize as one canonical data-file line (no trailing newline).
@@ -556,25 +736,29 @@ impl OeisCatalogRecord {
         {
             return Err(OeisCatalogError::InvalidSuppliedProvenance { id: error_id() });
         }
-        if let Some(as_of) = self
+        if self
             .real_rootedness
             .as_ref()
             .and_then(|flag| flag.as_of.as_deref())
+            .is_some_and(|as_of| !is_iso_date(as_of))
         {
-            let number = |range: std::ops::Range<usize>| {
-                as_of
-                    .get(range)
-                    .filter(|part| part.bytes().all(|byte| byte.is_ascii_digit()))
-                    .and_then(|part| part.parse::<u32>().ok())
-            };
-            let valid = as_of.len() == 10
-                && as_of.as_bytes()[4] == b'-'
-                && as_of.as_bytes()[7] == b'-'
-                && number(0..4).is_some()
-                && number(5..7).is_some_and(|month| (1..=12).contains(&month))
-                && number(8..10).is_some_and(|day| (1..=31).contains(&day));
-            if !valid {
-                return Err(OeisCatalogError::InvalidRealRootednessDate { id: error_id() });
+            return Err(OeisCatalogError::InvalidRealRootednessDate { id: error_id() });
+        }
+        if let Some(evidence) = &self.evidence {
+            if !is_iso_date(&evidence.as_of) {
+                return Err(OeisCatalogError::InvalidEvidenceDate { id: error_id() });
+            }
+            let rows_checked = i64::try_from(evidence.rows_checked).unwrap_or(i64::MAX);
+            let checked = self.first_row..self.first_row.saturating_add(rows_checked);
+            let consistent = evidence.rows_checked > 0
+                && OeisEvidenceProperty::ALL.iter().all(|&property| {
+                    match evidence.first_failure.get(property) {
+                        Some(row) => property.rank() < evidence.strongest.rank() && checked.contains(&row),
+                        None => property.rank() >= evidence.strongest.rank(),
+                    }
+                });
+            if !consistent {
+                return Err(OeisCatalogError::InconsistentEvidence { id: error_id() });
             }
         }
         Ok(())

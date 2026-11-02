@@ -4,6 +4,7 @@
 mod add;
 mod catalog_file;
 mod check;
+mod evidence;
 mod sha256;
 mod source;
 mod supplied;
@@ -21,6 +22,8 @@ pub(crate) fn print_oeis_help() {
     println!("  polytool oeis generate <A-number> --rows <n> [options]");
     println!("  polytool oeis add <A-number>... [options]   (see `oeis add --help`)");
     println!("  polytool oeis check [A-number...] [options] (see `oeis check --help`)");
+    println!("  polytool oeis evidence [A-number...|--all] --rows <n> [options]");
+    println!("                                              (see `oeis evidence --help`)");
     println!("  polytool oeis --help");
     println!();
     println!("Generate OEIS polynomial rows from bundled exact recurrences.");
@@ -37,6 +40,8 @@ pub(crate) fn print_oeis_help() {
     println!("  oeis add     Search a recurrence for OEIS rows, check it on held-out terms,");
     println!("               and record it with provenance in data/oeis-catalog.jsonl");
     println!("  oeis check   Re-validate catalog entries against a local OEIS copy");
+    println!("  oeis evidence  Compute the strongest coefficient property (real-rooted, ultra-");
+    println!("               log-concave, log-concave, unimodal) on the first rows of entries");
     println!();
     println!("Examples:");
     println!("  polytool oeis generate A008292 --rows 6 --format triangle");
@@ -86,6 +91,12 @@ fn oeis_entry_json(entry: &polytool::oeis::OeisSequenceDefinition) -> Value {
             "status": flag.status.as_str(),
             "as_of": flag.as_of,
         })),
+        "evidence": entry.evidence().map(|evidence| evidence::evidence_json(
+            evidence.strongest,
+            evidence.rows_checked,
+            &evidence.first_failure,
+            evidence.as_of,
+        )),
     })
 }
 
@@ -221,6 +232,18 @@ fn cmd_oeis_info(args: &[String]) {
                     .map_or_else(String::new, |date| format!(" as of {date}"))
             ),
             None => println!("real-rootedness: unknown"),
+        }
+        match entry.evidence() {
+            Some(evidence) => println!(
+                "{}",
+                evidence::describe_evidence(
+                    evidence.strongest,
+                    evidence.rows_checked,
+                    &evidence.first_failure,
+                    evidence.as_of,
+                )
+            ),
+            None => println!("evidence: none recorded"),
         }
         println!("recurrence: {recurrence}");
     }
@@ -432,6 +455,7 @@ pub(crate) fn cmd_oeis(args: &[String]) {
         "generate" => cmd_oeis_generate(rest),
         "add" => add::cmd_oeis_add(rest),
         "check" => check::cmd_oeis_check(rest),
+        "evidence" => evidence::cmd_oeis_evidence(rest),
         "--help" | "-h" | "help" => print_oeis_help(),
         other => {
             eprintln!("unknown oeis subcommand: {other}");

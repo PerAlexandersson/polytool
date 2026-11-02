@@ -86,7 +86,7 @@ pub(crate) fn print_oeis_add_help() {
     println!("  --dry-run               Do not write; print each new entry as a JSONL line");
     println!("  --replace               Search again (or take the supplied recurrence) and update");
     println!("                          entries already present; a replaced entry loses its");
-    println!("                          real_rootedness flag");
+    println!("                          real_rootedness flag and evidence record");
     println!("  --json                  Emit a polytool.oeis-add.v1 report");
     println!();
     println!("Search options (as in `polytool recurrence`): --skip-prefix, --min/max-rec-len,");
@@ -540,6 +540,7 @@ fn add_one(options: &AddOptions, id: &str, present: bool) -> AddResult {
             polytool_version: Some(env!("CARGO_PKG_VERSION").to_string()),
         },
         real_rootedness: None,
+        evidence: None,
     };
     if let Err(error) = record.validate() {
         return AddResult::new(id, "mismatch", format!("invalid catalog record: {error}"));

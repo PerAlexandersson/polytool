@@ -21,7 +21,10 @@ mod oeis_catalog {
     include!("src/oeis_catalog_schema.rs");
 }
 
-use oeis_catalog::{OeisCatalogRecord, OeisLayout, OeisRealRootednessStatus, OeisSequenceStatus};
+use oeis_catalog::{
+    OeisCatalogRecord, OeisEvidenceProperty, OeisLayout, OeisRealRootednessStatus,
+    OeisSequenceStatus,
+};
 
 const OEIS_CATALOG_DATA: &str = "data/oeis-catalog.jsonl";
 const OEIS_CATALOG_SCHEMA: &str = "src/oeis_catalog_schema.rs";
@@ -163,6 +166,23 @@ fn real_rootedness_variant(status: OeisRealRootednessStatus) -> &'static str {
     match status {
         OeisRealRootednessStatus::LeanProved => "LeanProved",
         OeisRealRootednessStatus::KnownNotRealRooted => "KnownNotRealRooted",
+    }
+}
+
+fn evidence_variant(property: OeisEvidenceProperty) -> &'static str {
+    match property {
+        OeisEvidenceProperty::RealRooted => "RealRooted",
+        OeisEvidenceProperty::UltraLogConcave => "UltraLogConcave",
+        OeisEvidenceProperty::LogConcave => "LogConcave",
+        OeisEvidenceProperty::Unimodal => "Unimodal",
+        OeisEvidenceProperty::NoProperty => "NoProperty",
+    }
+}
+
+fn optional_row(row: Option<i64>) -> String {
+    match row {
+        Some(row) => format!("Some({row})"),
+        None => "None".to_string(),
     }
 }
 
@@ -312,6 +332,29 @@ fn render_oeis_catalog(records: &[OeisCatalogRecord]) -> String {
                 "    ({}, OeisRealRootednessStatus::{}, {as_of}),",
                 rust_string(&record.id),
                 real_rootedness_variant(flag.status)
+            );
+        }
+    }
+    out.push_str("];\n\n");
+    out.push_str("/// `(id, evidence)` of every entry with an evidence record, sorted by id.\n");
+    out.push_str("pub(crate) static OEIS_EVIDENCE: &[(&str, OeisEvidence)] = &[\n");
+    for record in records {
+        if let Some(evidence) = &record.evidence {
+            let failures = &evidence.first_failure;
+            let _ = writeln!(
+                out,
+                "    ({}, OeisEvidence {{ strongest: OeisEvidenceProperty::{}, \
+                 rows_checked: {}, first_failure: OeisEvidenceFirstFailures {{ \
+                 real_rooted: {}, ultra_log_concave: {}, log_concave: {}, unimodal: {} }}, \
+                 as_of: {} }}),",
+                rust_string(&record.id),
+                evidence_variant(evidence.strongest),
+                evidence.rows_checked,
+                optional_row(failures.real_rooted),
+                optional_row(failures.ultra_log_concave),
+                optional_row(failures.log_concave),
+                optional_row(failures.unimodal),
+                rust_string(&evidence.as_of)
             );
         }
     }

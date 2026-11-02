@@ -148,6 +148,72 @@ bundled catalog flags 753 entries `lean_proved` and one (A122431, whose row
 (`oeis add --replace`) loses its flag, because the flag certifies the rows of
 the recurrence it was established for.
 
+### Evidence records
+
+A record may carry the optional key `evidence`, written after `real_rootedness`
+(and so last):
+
+```json
+"evidence":{"strongest":"log_concave","rows_checked":50,"first_failure":{"real_rooted":2,"ultra_log_concave":2},"as_of":"2026-11-02"}
+```
+
+It states which coefficient property held on **every** one of the first
+`rows_checked` rows of the entry (consecutive rows from `first_row`, none
+skipped, all checked exactly by polytool), and where stronger properties fail.
+It is **evidence, not a proof**: it says nothing about later rows and is
+separate from the `real_rootedness` flag, which certifies all rows.
+
+Properties, strongest first, for a row with coefficients `a_0, ..., a_d`
+(ascending powers, trailing zeros removed; the zero row satisfies all of them):
+
+| Property | Meaning for a row |
+| --- | --- |
+| `real_rooted` | `is_real_rooted_bigint_coeffs`: all roots real (exact, any coefficient signs) |
+| `ultra_log_concave` | admissible shape and `is_ultra_log_concave_bigint_coeffs` (Newton's inequalities at the nominal degree `d`) |
+| `log_concave` | admissible shape and `is_log_concave_bigint_coeffs` (`a_k^2 >= a_{k-1} a_{k+1}`) |
+| `unimodal` | admissible shape and `is_unimodal_bigint_coeffs` |
+| `none` | (value of `strongest` only) no property holds on every checked row |
+
+The three coefficient properties require an *admissible shape*: all
+coefficients nonnegative and no zero between two nonzero coefficients (leading
+and trailing zeros are allowed).  A row with a negative coefficient or an
+internal zero therefore fails them, and for such a row only `real_rooted` can
+hold; this keeps "log-concave" from holding by accident, for example for
+`1 + t^3`, which satisfies `a_k^2 >= a_{k-1} a_{k+1}` pointwise.  On admissible
+rows ultra-log-concave implies log-concave implies unimodal.
+
+`strongest` is the first property in this order that holds on every checked
+row, or `none`.  `first_failure` has one entry, the first failing row, for each
+property stronger than `strongest`; the row is the *displayed OEIS row index*
+(the indexing of `first_row` in `oeis info`, so row 2 of A122431 is
+`3 + 3x + x^2`), and lies among the checked rows.  A real-rooted family with
+mixed-sign rows has `strongest = real_rooted` and no failures recorded for the
+weaker properties.  `rows_checked` is smaller than the requested count only
+when the entry cannot generate more rows.
+
+```sh
+polytool oeis evidence A008292 A122431 --rows 50            # print only
+polytool oeis evidence --all --rows 50 --write              # record every entry in the data file
+polytool oeis evidence A001263 --rows 30 --json
+polytool oeis info A122431                                  # shows the record, labelled evidence
+                                                            # ("none recorded" until one is written)
+```
+
+`oeis evidence` regenerates the rows from the catalog's own recurrence
+(`--catalog FILE`, default `data/oeis-catalog.jsonl` in the current directory
+when present, else the bundled catalog) and reports one line per entry
+(`A-number`, `strongest`, `rows=N`, failing rows as `property@row`), the
+distribution of `strongest`, and every `lean_proved` entry whose evidence is
+weaker than `real_rooted`, which would contradict the flag.  `--write` replaces
+the `evidence` key of each computed entry in the data file and nothing else:
+it refuses to rewrite a file that is not in canonical form, and it checks that
+every line with its evidence removed is unchanged and that records it did not
+touch keep their bytes.  `--per-entry-timeout-seconds S` (default 60, 0 for no
+limit) is checked before each row; an entry over it gets no new record (an
+existing one is kept) and is listed as `timeout`.  `--as-of DATE` overrides the
+recorded date (default: today, UTC).  `oeis add --replace` drops the entry's
+flag and evidence, because both describe the replaced recurrence's rows.
+
 Release packages omit repository-only agent notes, handoffs, CI configuration,
 and benchmark output; they include the catalog data file, from which the build
 script generates the catalog. The recurrence fixtures stay

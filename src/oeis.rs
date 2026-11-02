@@ -40,6 +40,15 @@
 //! proof made outside polytool; polytool never reports such a family as proved
 //! by itself, and the Veronese parent provers treat a parent that equals a
 //! flagged entry as conditional on the flag.
+//!
+//! Finite evidence: a record may also carry an [`OeisCatalogEvidence`], read
+//! with [`OeisSequenceDefinition::evidence`]: the strongest of real-rooted,
+//! ultra-log-concave, log-concave and unimodal ([`OeisEvidenceProperty`]) that
+//! holds on every one of the first `rows_checked` rows, with the first failing
+//! row of each stronger property.  It is computed by
+//! [`OeisSequenceDefinition::compute_evidence`] (or incrementally with
+//! [`OeisEvidenceAccumulator`]) and is evidence about a finite segment only,
+//! never a proof, and independent of the real-rootedness flag.
 
 use crate::recurrence::{
     parse_rational_coeff, BigRational, BivarPoly, Recurrence, RecurrenceEvaluationError,
@@ -164,6 +173,127 @@ pub struct OeisRealRootedness {
     pub status: OeisRealRootednessStatus,
     /// Date (`YYYY-MM-DD`) of the proof snapshot or check, when recorded.
     pub as_of: Option<&'static str>,
+}
+
+/// The evidence record of a bundled catalog entry (see
+/// [`OeisCatalogEvidence`], its data-file form): the strongest coefficient
+/// property that held on every one of the first `rows_checked` rows.
+///
+/// This is evidence about a finite segment of rows, not a proof for every row,
+/// and it is separate from the [`OeisRealRootedness`] flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OeisEvidence {
+    /// The strongest property holding on every checked row.
+    pub strongest: OeisEvidenceProperty,
+    /// Number of consecutive rows checked, starting at the entry's first row.
+    pub rows_checked: usize,
+    /// For each property stronger than `strongest`, the first checked row
+    /// where it fails (displayed OEIS row index).
+    pub first_failure: OeisEvidenceFirstFailures,
+    /// Date (`YYYY-MM-DD`) of the check.
+    pub as_of: &'static str,
+}
+
+/// Whether one row has an [`OeisEvidenceProperty`], with the exact definitions
+/// of that enum.
+///
+/// `NoProperty` is never held.  `RealRooted` is the exact
+/// [`crate::is_real_rooted_bigint_coeffs`]; the other three need a row with
+/// nonnegative coefficients and no zero between two nonzero coefficients and
+/// then use the corresponding `*_bigint_coeffs` check.
+pub fn row_has_evidence_property(row: &[BigInt], property: OeisEvidenceProperty) -> bool {
+    use num_traits::Signed;
+    use num_traits::Zero;
+    let shape_is_admissible = || {
+        let first = row.iter().position(|value| !value.is_zero());
+        let last = row.iter().rposition(|value| !value.is_zero());
+        match (first, last) {
+            (Some(first), Some(last)) => row[first..=last].iter().all(|value| value.is_positive()),
+            _ => true,
+        }
+    };
+    match property {
+        OeisEvidenceProperty::RealRooted => crate::is_real_rooted_bigint_coeffs(row),
+        OeisEvidenceProperty::UltraLogConcave => {
+            shape_is_admissible() && crate::is_ultra_log_concave_bigint_coeffs(row)
+        }
+        OeisEvidenceProperty::LogConcave => {
+            shape_is_admissible() && crate::is_log_concave_bigint_coeffs(row)
+        }
+        OeisEvidenceProperty::Unimodal => {
+            shape_is_admissible() && crate::is_unimodal_bigint_coeffs(row)
+        }
+        OeisEvidenceProperty::NoProperty => false,
+    }
+}
+
+/// Incremental builder of an [`OeisCatalogEvidence`] record: feed consecutive
+/// rows, starting at the entry's first row, then [`Self::finish`].
+///
+/// Properties that already failed are not re-checked on later rows, and
+/// nothing is checked on rows never pushed, so the caller controls the time
+/// spent (for example by stopping at a deadline: the record then covers the
+/// rows pushed so far).
+#[derive(Debug, Clone)]
+pub struct OeisEvidenceAccumulator {
+    first_row: i64,
+    rows_checked: usize,
+    first_failure: OeisEvidenceFirstFailures,
+}
+
+impl OeisEvidenceAccumulator {
+    /// Start accumulating at the displayed row index `first_row`.
+    pub fn new(first_row: i64) -> Self {
+        Self {
+            first_row,
+            rows_checked: 0,
+            first_failure: OeisEvidenceFirstFailures::default(),
+        }
+    }
+
+    /// Number of rows pushed so far.
+    pub fn rows_checked(&self) -> usize {
+        self.rows_checked
+    }
+
+    /// Check the next row (the one after the rows pushed so far).
+    pub fn push_row(&mut self, row: &[BigInt]) {
+        let index = self.first_row.saturating_add(self.rows_checked as i64);
+        for property in OeisEvidenceProperty::ALL {
+            if self.first_failure.get(property).is_none()
+                && !row_has_evidence_property(row, property)
+            {
+                self.first_failure.set(property, Some(index));
+            }
+        }
+        self.rows_checked += 1;
+    }
+
+    /// The record for the rows pushed so far dated `as_of`, or `None` when no
+    /// row was pushed.  `strongest` is the first property (in the order of
+    /// [`OeisEvidenceProperty::ALL`]) that never failed, else `NoProperty`;
+    /// `first_failure` keeps only the properties stronger than it.
+    pub fn finish(&self, as_of: &str) -> Option<OeisCatalogEvidence> {
+        if self.rows_checked == 0 {
+            return None;
+        }
+        let strongest = OeisEvidenceProperty::ALL
+            .into_iter()
+            .find(|&property| self.first_failure.get(property).is_none())
+            .unwrap_or(OeisEvidenceProperty::NoProperty);
+        let mut first_failure = self.first_failure;
+        for property in OeisEvidenceProperty::ALL {
+            if property.rank() >= strongest.rank() {
+                first_failure.set(property, None);
+            }
+        }
+        Some(OeisCatalogEvidence {
+            strongest,
+            rows_checked: self.rows_checked,
+            first_failure,
+            as_of: as_of.to_string(),
+        })
+    }
 }
 
 /// Failure while decoding or evaluating a bundled sequence.
@@ -303,6 +433,44 @@ impl OeisSequenceDefinition {
                 let (_, status, as_of) = OEIS_REAL_ROOTEDNESS[index];
                 OeisRealRootedness { status, as_of }
             })
+    }
+
+    /// The evidence record stored for the bundled catalog entry with this
+    /// definition's id (`None`: none recorded).
+    ///
+    /// Like [`Self::real_rootedness`], it belongs to the bundled data file.
+    /// It is evidence about the first `rows_checked` rows only, not a proof.
+    pub fn evidence(&self) -> Option<OeisEvidence> {
+        OEIS_EVIDENCE
+            .binary_search_by_key(&self.id, |(id, _)| id)
+            .ok()
+            .map(|index| OEIS_EVIDENCE[index].1)
+    }
+
+    /// Compute the evidence record of the first `rows` rows exactly, dated
+    /// `as_of` (see [`OeisEvidenceProperty`] for the definitions).
+    ///
+    /// If the recurrence cannot generate that many rows, the rows generated
+    /// before the failure are checked and `rows_checked` says how many.
+    /// Returns `Ok(None)` when `rows == 0`.
+    ///
+    /// # Errors
+    ///
+    /// The generation error when not even the first row can be generated.
+    pub fn compute_evidence(
+        &self,
+        rows: usize,
+        as_of: &str,
+    ) -> Result<Option<OeisCatalogEvidence>, OeisSequenceError> {
+        let mut accumulator = OeisEvidenceAccumulator::new(self.first_row);
+        for row in self.generate_rows_iter()?.take(rows) {
+            match row {
+                Ok(row) => accumulator.push_row(&row),
+                Err(error) if accumulator.rows_checked() == 0 => return Err(error),
+                Err(_) => break,
+            }
+        }
+        Ok(accumulator.finish(as_of))
     }
 
     /// Decode the sparse static description into the recurrence evaluator.
@@ -983,6 +1151,223 @@ mod tests {
                     .map(|flag| (flag.status, flag.as_of)),
                 "{}",
                 record.id
+            );
+        }
+    }
+
+    fn row(coefficients: &[i64]) -> Vec<BigInt> {
+        coefficients.iter().copied().map(BigInt::from).collect()
+    }
+
+    #[test]
+    fn evidence_row_properties_follow_the_documented_definitions() {
+        use OeisEvidenceProperty::*;
+        let holds = |coefficients: &[i64]| {
+            OeisEvidenceProperty::ALL.map(|p| row_has_evidence_property(&row(coefficients), p))
+        };
+        // (1 + t)^3: real-rooted, so ultra-log-concave, log-concave and unimodal.
+        assert_eq!(holds(&[1, 3, 3, 1]), [true; 4]);
+        // The zero row and constants satisfy everything.
+        assert_eq!(holds(&[]), [true; 4]);
+        assert_eq!(holds(&[0, 0]), [true; 4]);
+        assert_eq!(holds(&[5]), [true; 4]);
+        // 3 + 3t + t^2: not real-rooted (discriminant 9 - 12 < 0) but log-concave.
+        assert_eq!(holds(&[3, 3, 1]), [false, false, true, true]);
+        // Mixed signs: t^2 - 1 is real-rooted; the coefficient properties fail.
+        assert_eq!(holds(&[-1, 0, 1]), [true, false, false, false]);
+        // An internal zero: 1 + t^3 has a non-real root and fails every property
+        // although a_1^2 >= a_0 a_2 holds pointwise.
+        assert!(crate::is_log_concave_bigint_coeffs(&row(&[1, 0, 0, 1])));
+        assert_eq!(holds(&[1, 0, 0, 1]), [false; 4]);
+        // Leading and trailing zeros are allowed: t^2 (1 + t)^2 and (1 + t) t^0.
+        assert_eq!(holds(&[0, 0, 1, 2, 1, 0]), [true; 4]);
+        // 1 + 3t + 3t^2 is not ultra-log-concave at its degree 2.
+        assert_eq!(holds(&[1, 3, 3]), [false, false, true, true]);
+        assert!(!row_has_evidence_property(&row(&[1]), NoProperty));
+    }
+
+    #[test]
+    fn evidence_accumulator_reports_strongest_and_first_failures() {
+        let mut accumulator = OeisEvidenceAccumulator::new(7);
+        assert!(accumulator.finish("2026-11-02").is_none());
+        accumulator.push_row(&row(&[1]));
+        accumulator.push_row(&row(&[1, 1]));
+        let evidence = accumulator.finish("2026-11-02").unwrap();
+        assert_eq!(evidence.strongest, OeisEvidenceProperty::RealRooted);
+        assert_eq!(evidence.rows_checked, 2);
+        assert_eq!(evidence.first_failure, OeisEvidenceFirstFailures::default());
+        // Row 9 is 3 + 3t + t^2: real-rooted and ultra-log-concave fail there,
+        // log-concavity and unimodality hold.
+        accumulator.push_row(&row(&[3, 3, 1]));
+        let evidence = accumulator.finish("2026-11-02").unwrap();
+        assert_eq!(evidence.strongest, OeisEvidenceProperty::LogConcave);
+        assert_eq!(evidence.rows_checked, 3);
+        assert_eq!(evidence.first_failure.real_rooted, Some(9));
+        assert_eq!(evidence.first_failure.ultra_log_concave, Some(9));
+        assert_eq!(evidence.first_failure.log_concave, None);
+        // Row 10 has mixed signs, so log-concavity and unimodality fail there
+        // and no property holds on every row.
+        accumulator.push_row(&row(&[-1, 0, 1]));
+        let evidence = accumulator.finish("2026-11-02").unwrap();
+        assert_eq!(evidence.strongest, OeisEvidenceProperty::NoProperty);
+        assert_eq!(evidence.first_failure.real_rooted, Some(9));
+        assert_eq!(evidence.first_failure.log_concave, Some(10));
+        assert_eq!(evidence.first_failure.unimodal, Some(10));
+        // Real-rooted rows with mixed signs keep `real_rooted` as strongest and
+        // report no weaker failures.
+        let mut signed = OeisEvidenceAccumulator::new(0);
+        signed.push_row(&row(&[-1, 0, 1]));
+        let evidence = signed.finish("2026-11-02").unwrap();
+        assert_eq!(evidence.strongest, OeisEvidenceProperty::RealRooted);
+        assert_eq!(evidence.first_failure, OeisEvidenceFirstFailures::default());
+    }
+
+    #[test]
+    fn evidence_records_parse_validate_and_round_trip() {
+        let text = catalog_data_text();
+        let line = text
+            .lines()
+            .find(|line| line.starts_with("{\"id\":\"A122431\""))
+            .unwrap();
+        let record: OeisCatalogRecord = serde_json::from_str(line).unwrap();
+        assert!(record.evidence.is_none());
+        assert_eq!(record.to_jsonl_line(), line);
+
+        // Computed evidence is written after `real_rootedness`, at the end of the
+        // line, and parses back to the same record.
+        let computed = A122431()
+            .compute_evidence(12, "2026-11-02")
+            .unwrap()
+            .unwrap();
+        let mut with_computed = record.clone();
+        with_computed.evidence = Some(computed.clone());
+        with_computed.validate().unwrap();
+        let computed_line = with_computed.to_jsonl_line();
+        assert!(computed_line.starts_with(line.strip_suffix('}').unwrap()));
+        assert!(computed_line.ends_with(&format!(
+            ",\"evidence\":{}}}",
+            serde_json::to_string(&computed).unwrap()
+        )));
+        assert!(
+            computed_line.find("\"real_rootedness\"").unwrap()
+                < computed_line.find("\"evidence\"").unwrap()
+        );
+        assert_eq!(
+            serde_json::from_str::<OeisCatalogRecord>(&computed_line).unwrap(),
+            with_computed
+        );
+        let without = record.clone();
+        assert!(!without.to_jsonl_line().contains("evidence"));
+
+        // A synthetic record covers every field and key order.
+        let synthetic = OeisCatalogEvidence {
+            strongest: OeisEvidenceProperty::NoProperty,
+            rows_checked: 12,
+            first_failure: OeisEvidenceFirstFailures {
+                real_rooted: Some(3),
+                ultra_log_concave: Some(4),
+                log_concave: Some(4),
+                unimodal: Some(5),
+            },
+            as_of: "2026-11-02".to_string(),
+        };
+        assert_eq!(
+            serde_json::to_string(&synthetic).unwrap(),
+            "{\"strongest\":\"none\",\"rows_checked\":12,\"first_failure\":\
+             {\"real_rooted\":3,\"ultra_log_concave\":4,\"log_concave\":4,\"unimodal\":5},\
+             \"as_of\":\"2026-11-02\"}"
+        );
+        let mut with = record.clone();
+        with.evidence = Some(synthetic.clone());
+        let with_line = with.to_jsonl_line();
+        assert_eq!(
+            serde_json::from_str::<OeisCatalogRecord>(&with_line).unwrap(),
+            with
+        );
+        // Rows 3..=14 are covered when the first row is 3.
+        with.first_row = 3;
+        with.validate().unwrap();
+
+        // Inconsistent or malformed records are rejected.
+        let inconsistent = |edit: &dyn Fn(&mut OeisCatalogEvidence)| {
+            let mut bad = with.clone();
+            edit(bad.evidence.as_mut().unwrap());
+            bad.validate().unwrap_err()
+        };
+        let error = OeisCatalogError::InconsistentEvidence {
+            id: record.id.clone(),
+        };
+        assert_eq!(inconsistent(&|e| e.rows_checked = 0), error);
+        assert_eq!(inconsistent(&|e| e.first_failure.unimodal = None), error);
+        assert_eq!(
+            inconsistent(&|e| e.first_failure.real_rooted = Some(15)),
+            error
+        );
+        assert_eq!(
+            inconsistent(&|e| e.first_failure.real_rooted = Some(2)),
+            error
+        );
+        assert_eq!(
+            inconsistent(&|e| {
+                e.strongest = OeisEvidenceProperty::LogConcave;
+            }),
+            error
+        );
+        assert_eq!(
+            inconsistent(&|e| e.as_of = "2026-1-02".to_string()),
+            OeisCatalogError::InvalidEvidenceDate {
+                id: record.id.clone()
+            }
+        );
+        let unknown_property = computed_line.replace("\"log_concave\"", "\"strong\"");
+        assert!(OeisCatalogRecord::parse_jsonl(&unknown_property).is_err());
+        let extra_field =
+            computed_line.replace("\"rows_checked\"", "\"by\":\"x\",\"rows_checked\"");
+        assert!(OeisCatalogRecord::parse_jsonl(&extra_field).is_err());
+    }
+
+    #[test]
+    fn computed_evidence_of_known_entries_and_flag_consistency() {
+        // No bundled entry carries a record unless the data file says so.
+        for entry in catalog() {
+            if let Some(evidence) = entry.evidence() {
+                assert!(evidence.rows_checked > 0, "{}", entry.id);
+            }
+        }
+        let a008292 = A008292()
+            .compute_evidence(30, "2026-11-02")
+            .unwrap()
+            .unwrap();
+        assert_eq!(a008292.strongest, OeisEvidenceProperty::RealRooted);
+        assert_eq!(a008292.rows_checked, 30);
+        assert_eq!(a008292.first_failure, OeisEvidenceFirstFailures::default());
+        // Row 2 of A122431 is 3 + 3t + t^2: it fails real-rootedness and
+        // ultra-log-concavity, but every checked row is log-concave.
+        let a122431 = A122431()
+            .compute_evidence(30, "2026-11-02")
+            .unwrap()
+            .unwrap();
+        assert_eq!(a122431.strongest, OeisEvidenceProperty::LogConcave);
+        assert_eq!(a122431.first_failure.real_rooted, Some(2));
+        assert_eq!(a122431.first_failure.ultra_log_concave, Some(2));
+        assert_eq!(a122431.first_failure.log_concave, None);
+        assert_eq!(A122431().first_row, 0);
+        assert!(A122431()
+            .compute_evidence(0, "2026-11-02")
+            .unwrap()
+            .is_none());
+
+        // A sample of Lean-proved entries is real-rooted on the checked rows.
+        let sample = entries_with_real_rootedness_flag()
+            .filter(|(_, flag)| flag.status == OeisRealRootednessStatus::LeanProved)
+            .step_by(101);
+        for (entry, _) in sample {
+            let evidence = entry.compute_evidence(20, "2026-11-02").unwrap().unwrap();
+            assert_eq!(
+                evidence.strongest,
+                OeisEvidenceProperty::RealRooted,
+                "{}",
+                entry.id
             );
         }
     }

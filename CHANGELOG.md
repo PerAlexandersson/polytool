@@ -319,6 +319,22 @@ Additions:
   leaders, exact agreement of the initial rows).  The bundled catalog flags 753
   entries `lean_proved` and A122431 `known_not_real_rooted` (its row
   `3 + 3x + x^2`).  The flag is never reported as a polytool proof.
+- OEIS catalog evidence records: a record may carry, after `real_rootedness`,
+  `"evidence": {"strongest": ..., "rows_checked": N, "first_failure": {...},
+  "as_of": "YYYY-MM-DD"}` (schema `oeis::OeisCatalogEvidence`,
+  `OeisEvidenceProperty::{RealRooted, UltraLogConcave, LogConcave, Unimodal,
+  NoProperty}`, `OeisEvidenceFirstFailures`): the strongest property that holds
+  on every one of the first `rows_checked` rows (exact, none skipped) and the
+  first failing row of each stronger property.  Read with
+  `OeisSequenceDefinition::evidence()` (`oeis::OeisEvidence`), computed with
+  `OeisSequenceDefinition::compute_evidence`, `oeis::OeisEvidenceAccumulator`
+  and `oeis::row_has_evidence_property`; `oeis info` and `oeis list --json`
+  report it.  New CLI `polytool oeis evidence [A-number...|--all] --rows N
+  [--write] [--per-entry-timeout-seconds S]` computes and records it.  It is
+  evidence about finitely many rows, not a proof, and separate from the
+  `real_rootedness` flag.  `OeisCatalogRecord` has the new field `evidence` and
+  `OeisCatalogError` the variants `InvalidEvidenceDate` and
+  `InconsistentEvidence`.  The bundled data file holds no evidence records yet.
 - Parent provers: a Veronese, Hadamard-factor, row-factor or gamma lift parent
   whose rule, first index and initial rows equal a `lean_proved` catalog entry
   exactly gets the verdict `conditional_on_attestation` with the label

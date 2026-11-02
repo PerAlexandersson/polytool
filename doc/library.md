@@ -438,6 +438,36 @@ the verdict `ConditionalOnAttestation` with the label
 row has coefficients of one sign (the flag gives real-rootedness only); a
 parent that differs in one coefficient or seed does not match.
 
+### OEIS evidence records
+
+A catalog record may also carry finite evidence about its rows
+(`OeisCatalogEvidence` in the data file; the definitions and the CLI are in
+`doc/cli-oeis.md`).  `OeisSequenceDefinition::evidence()` returns it as an
+`OeisEvidence { strongest, rows_checked, first_failure, as_of }`: the strongest
+`OeisEvidenceProperty` (real-rooted, ultra-log-concave, log-concave, unimodal,
+or `NoProperty`) that holds on every one of the first `rows_checked` rows, and
+the first failing displayed row of each stronger property.  This is evidence
+about a finite segment, not a proof, and it is independent of the
+real-rootedness flag.  `compute_evidence(rows, as_of)` recomputes the record
+exactly from the entry's own rows; `OeisEvidenceAccumulator` builds it row by
+row, and `row_has_evidence_property` evaluates one row.
+
+```rust
+use polytool::oeis::{self, OeisEvidenceProperty};
+
+// The Eulerian triangle: every checked row is real-rooted.
+let eulerian = oeis::by_id("A008292").unwrap();
+let evidence = eulerian.compute_evidence(30, "2026-11-02").unwrap().unwrap();
+assert_eq!(evidence.strongest, OeisEvidenceProperty::RealRooted);
+
+// Row 2 of A122431 is 3 + 3t + t^2: not real-rooted, still log-concave.
+let other = oeis::by_id("A122431").unwrap();
+let evidence = other.compute_evidence(30, "2026-11-02").unwrap().unwrap();
+assert_eq!(evidence.strongest, OeisEvidenceProperty::LogConcave);
+assert_eq!(evidence.first_failure.real_rooted, Some(2));
+// `other.evidence()` returns the record stored in the data file, if any.
+```
+
 ## Characteristic polynomials and closed walks
 
 ```rust
