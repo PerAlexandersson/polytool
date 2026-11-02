@@ -511,6 +511,23 @@ if let Some(rec) = find_polynomial_recurrence(&polys, &opts) {
 }
 ```
 
+**Left-hand side variation.**  With `AdaptiveSearchOptions::try_laurent`
+(builder `with_laurent`; off by default in the library so that internal
+callers such as the lift searches keep their outcomes, on by default in
+`polytool recurrence` and the MCP recurrence tools) the adaptive search adds a
+third stage after its two
+historical passes: the same shapes with a left-hand monomial `x^e`
+(`e <= max_laurent_x_power`, default 2; `RecurrenceOptions::leader_x_power`,
+so the rule reads `x^e f(n, t) P(n) = ...`) and with the left-hand factor
+normalized on a coefficient other than its constant term (`x^j` or `n^i`
+fixed to 1).  This reaches factors whose constant term is zero, for example
+`n P(n) = (2n - 1)(2t - 1) P(n-1) - (n - 1) P(n-2)` for the shifted Legendre
+polynomials.  Results the historical passes find are unchanged; the stage
+runs only when they find nothing.  The rule keeps the whole left-hand factor
+as its `denominator`, rows are exact quotients (a non-divisible row is
+`RecurrenceEvaluationError::NonPolynomialQuotient`), and the JSON record of
+the rule carries `x^e` in its denominator.
+
 ## Veronese-section lifts
 
 `recurrence::find_veronese_section_lifts` looks for parents `P_n(x)` whose

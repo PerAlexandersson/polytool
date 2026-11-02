@@ -208,6 +208,11 @@ pub struct RecurrenceSearchOptionsInput {
     pub try_denominator: Option<bool>,
     /// Search recurrence terms multiplied by `(-1)^n`.
     pub try_alternating_sign: Option<bool>,
+    /// Vary the left-hand side after the historical passes: a leading power
+    /// `x^e`, `n`-dependent factors and normalization charts (default true).
+    pub try_laurent: Option<bool>,
+    /// Largest power `e` of the left-hand monomial `x^e` (default 2).
+    pub max_laurent_x_power: Option<usize>,
     /// Maximum polynomial-variable degree of the denominator.
     pub max_denom_var_deg: Option<usize>,
     /// Maximum recurrence-index degree of the denominator.
@@ -356,6 +361,11 @@ pub struct FindRecurrenceRequest {
     pub try_denominator: Option<bool>,
     /// Search recurrence terms multiplied by `(-1)^n`.
     pub try_alternating_sign: Option<bool>,
+    /// Vary the left-hand side after the historical passes: a leading power
+    /// `x^e`, `n`-dependent factors and normalization charts (default true).
+    pub try_laurent: Option<bool>,
+    /// Largest power `e` of the left-hand monomial `x^e` (default 2).
+    pub max_laurent_x_power: Option<usize>,
     /// Maximum polynomial-variable degree of the denominator.
     pub max_denom_var_deg: Option<usize>,
     /// Maximum recurrence-index degree of the denominator.
@@ -400,6 +410,8 @@ impl FindRecurrenceRequest {
         prefer_top_level!(max_inhomo_idx_deg);
         prefer_top_level!(try_denominator);
         prefer_top_level!(try_alternating_sign);
+        prefer_top_level!(try_laurent);
+        prefer_top_level!(max_laurent_x_power);
         prefer_top_level!(max_denom_var_deg);
         prefer_top_level!(max_denom_idx_deg);
         prefer_top_level!(min_margin);

@@ -764,7 +764,8 @@ pub(in crate::recurrence) fn modular_prefilter_rejects(
     derivs: &[Vec<Vec<BigRational>>],
     opts: &RecurrenceOptions,
 ) -> bool {
-    if !opts.modular_prefilter {
+    // The modular systems model the left-hand factor f(n, t) only.
+    if !opts.modular_prefilter || opts.leader_x_power > 0 {
         return false;
     }
 
@@ -796,7 +797,7 @@ pub(in crate::recurrence) fn modular_prefilter_with_cache(
     opts: &RecurrenceOptions,
     cache: &ModularPrefilterCache,
 ) -> ModularPrefilterResult {
-    if !opts.modular_prefilter {
+    if !opts.modular_prefilter || opts.leader_x_power > 0 {
         return ModularPrefilterResult::default();
     }
 

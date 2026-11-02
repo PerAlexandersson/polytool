@@ -570,6 +570,8 @@ fn find_recurrence_schema_is_flat_and_documents_every_control() {
         "max_inhomo_idx_deg",
         "try_denominator",
         "try_alternating_sign",
+        "try_laurent",
+        "max_laurent_x_power",
         "max_denom_var_deg",
         "max_denom_idx_deg",
         "min_margin",
@@ -1067,7 +1069,9 @@ fn recurrence_candidate_budget_has_distinct_mcp_outcomes() {
             "max_rec_len": 1,
             "max_var_deg": 0,
             "max_idx_deg": 0,
-            "max_diff_deg": 0
+            "max_diff_deg": 0,
+            // A one-candidate space: no left-hand variants.
+            "try_laurent": false
         }))
         .expect("valid recurrence options"),
     );

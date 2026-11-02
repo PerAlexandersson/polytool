@@ -1,5 +1,45 @@
 //! Adaptive recurrence search: options, budgets, diagnostics and the search
 //! loop over candidate shapes.
+//!
+//! # Left-hand side variation
+//!
+//! A rule `f(n, t) P(n) = sum c(n, t) D^d P(n-r)` is found by solving for the
+//! coefficients with one coefficient of the left-hand factor fixed; the
+//! historical search fixes the constant term `f(0, 0) = 1` (with `n` the
+//! 1-based search index).  That misses every left-hand factor whose constant
+//! term is zero, such as `n` for the shifted Legendre polynomials
+//! (`n P(n) = (2n - 1)(2t - 1) P(n-1) - (n - 1) P(n-2)` from `n = 1`), and
+//! factors `x^e g(n)` whose division puts negative powers of `x` into the
+//! coefficients.  A homogeneous relation can always be cleared of such
+//! powers by multiplying with `x^e`; the point is a left-hand factor that is
+//! allowed to carry them, so the rule stays runnable (each row is the exact
+//! quotient by the factor).
+//!
+//! With [`AdaptiveSearchOptions::try_laurent`] (off by default in the
+//! library, on by default in the `polytool recurrence` command and the MCP
+//! recurrence tools) the search
+//! runs the historical passes unchanged (the given options, then the
+//! denominator escalation) and, when they find nothing, a third stage in its
+//! own complexity order ([`candidate_complexity`]): the same shapes with
+//!
+//! - a left-hand monomial `x^e`, `1 <= e <= max_laurent_x_power`
+//!   ([`RecurrenceOptions::leader_x_power`]; for a factor `p(n)` this is the
+//!   product form `p(n) x^e` with `deg p` unknowns), and
+//! - a normalization chart other than the constant term: the coefficient of
+//!   `x^j` or of `n^i` in `f` fixed to 1 instead of `f(0, 0)`, inside the
+//!   shape of `f`.
+//!
+//! The left-hand factors are those of the historical passes (the
+//! `try_denominator` shapes, or the escalation shapes from six rows on).
+//! Because the stage runs only after the historical passes, every result the
+//! historical search finds is returned unchanged, with the same candidate
+//! count; a budget-limited search that ran out before the third stage is
+//! unchanged too.  Row generation divides exactly by the whole left-hand
+//! factor (a non-divisible row is
+//! [`RecurrenceEvaluationError::NonPolynomialQuotient`]), and the rule is an
+//! ordinary [`Recurrence`] with that factor as its denominator, so its JSON
+//! form is unchanged.  The modular prefilter and the degree prechecks model
+//! the historical normalization and are skipped in the third stage.
 
 use super::*;
 use serde::{Deserialize, Serialize};
@@ -56,6 +96,27 @@ pub struct AdaptiveSearchOptions {
     pub modular_prefilter: bool,
     /// Print each candidate tried to stderr.
     pub verbose: bool,
+    /// Vary the left-hand side after the historical passes, in a third
+    /// complexity-ordered stage (module documentation, "Left-hand side
+    /// variation"): a left-hand monomial `x^e` with
+    /// `e <= max_laurent_x_power` ([`RecurrenceOptions::leader_x_power`]) and
+    /// normalization charts of the left-hand factor other than its constant
+    /// term (factors `f(n, t)` from `try_denominator`, or from the
+    /// escalation shapes from six rows on).  Results of the historical
+    /// passes are unchanged; off skips the third stage.  Default false in
+    /// the library, so that the callers inside polytool (the lift searches,
+    /// for example) keep their outcomes; the `polytool recurrence` command
+    /// and the MCP recurrence tools turn it on by default.
+    #[serde(default)]
+    pub try_laurent: bool,
+    /// Largest power `e` of the left-hand monomial `x^e` when `try_laurent`
+    /// is on.  Default 2.
+    #[serde(default = "default_max_laurent_x_power")]
+    pub max_laurent_x_power: usize,
+}
+
+fn default_max_laurent_x_power() -> usize {
+    2
 }
 
 impl Default for AdaptiveSearchOptions {
@@ -84,6 +145,8 @@ impl Default for AdaptiveSearchOptions {
             fit_extra_rows: 1,
             modular_prefilter: true,
             verbose: false,
+            try_laurent: false,
+            max_laurent_x_power: 2,
         }
     }
 }
@@ -93,6 +156,13 @@ impl AdaptiveSearchOptions {
     /// disabled.
     pub fn with_alternating_sign(mut self, try_alternating_sign: bool) -> Self {
         self.try_alternating_sign = try_alternating_sign;
+        self
+    }
+
+    /// Return these search options with the left-hand side variation
+    /// ([`Self::try_laurent`]) enabled or disabled.
+    pub fn with_laurent(mut self, try_laurent: bool) -> Self {
+        self.try_laurent = try_laurent;
         self
     }
 }
@@ -441,6 +511,7 @@ pub(super) struct AdaptiveCandidateContext<'a> {
 fn adaptive_pass_suffix(pass_label: Option<&str>) -> &'static str {
     match pass_label {
         Some("rational") => " (rational)",
+        Some("left-hand") => " (left-hand variant)",
         _ => "",
     }
 }
@@ -451,6 +522,21 @@ pub(super) fn evaluate_adaptive_candidate(
     diagnostics: &mut AdaptiveSearchDiagnostics,
     tried: &mut usize,
 ) -> Option<FoundAdaptiveCandidate> {
+    evaluate_adaptive_candidate_in_chart(ctx, opts, LeaderChart::CONSTANT, diagnostics, tried)
+}
+
+/// [`evaluate_adaptive_candidate`] in a left-hand chart.  The prechecks and
+/// the modular prefilter model the historical left-hand factor (constant
+/// chart, no monomial `x^e`), so they run only for it; the other candidates
+/// go straight to the exact solve and the held-out verification.
+pub(super) fn evaluate_adaptive_candidate_in_chart(
+    ctx: &AdaptiveCandidateContext<'_>,
+    opts: &RecurrenceOptions,
+    chart: LeaderChart,
+    diagnostics: &mut AdaptiveSearchDiagnostics,
+    tried: &mut usize,
+) -> Option<FoundAdaptiveCandidate> {
+    let historical = chart.is_constant() && opts.leader_x_power == 0;
     diagnostics.considered_candidates += 1;
     let m = ctx.polys.len();
     let complexity = candidate_complexity(opts);
@@ -479,22 +565,29 @@ pub(super) fn evaluate_adaptive_candidate(
         return None;
     }
 
-    let timer = timer_now();
-    let degree_bound_rejects =
-        homogeneous_degree_bound_rejects(ctx.polys, ctx.derivs, opts, fit_len);
-    diagnostics.degree_bound_ms += elapsed_ms(timer);
-    if degree_bound_rejects {
-        diagnostics.degree_bound_rejections += 1;
-        return None;
-    }
+    if historical {
+        let timer = timer_now();
+        let degree_bound_rejects =
+            homogeneous_degree_bound_rejects(ctx.polys, ctx.derivs, opts, fit_len);
+        diagnostics.degree_bound_ms += elapsed_ms(timer);
+        if degree_bound_rejects {
+            diagnostics.degree_bound_rejections += 1;
+            return None;
+        }
 
-    let timer = timer_now();
-    let structural_zero_rejects =
-        structural_zero_row_rejects(ctx.polys, ctx.derivs, opts, fit_len, ctx.prefix_max_degrees);
-    diagnostics.structural_zero_ms += elapsed_ms(timer);
-    if structural_zero_rejects {
-        diagnostics.structural_zero_rejections += 1;
-        return None;
+        let timer = timer_now();
+        let structural_zero_rejects = structural_zero_row_rejects(
+            ctx.polys,
+            ctx.derivs,
+            opts,
+            fit_len,
+            ctx.prefix_max_degrees,
+        );
+        diagnostics.structural_zero_ms += elapsed_ms(timer);
+        if structural_zero_rejects {
+            diagnostics.structural_zero_rejections += 1;
+            return None;
+        }
     }
 
     *tried += 1;
@@ -526,7 +619,7 @@ pub(super) fn evaluate_adaptive_candidate(
     let fit_derivs = &ctx.derivs[..fit_len];
     let mut exact_row_indices = None;
     let mut modular_candidate = None;
-    let cached_solve_opts = if let Some(cache) = ctx.modular_cache {
+    let cached_solve_opts = if let Some(cache) = ctx.modular_cache.filter(|_| historical) {
         let timer = timer_now();
         let prefilter = modular_prefilter_with_cache(ctx.polys, fit_len, opts, cache);
         diagnostics.modular_prefilter_ms += elapsed_ms(timer);
@@ -586,11 +679,12 @@ pub(super) fn evaluate_adaptive_candidate(
 
     diagnostics.exact_solve_attempts += 1;
     let timer = timer_now();
-    let rec = find_polynomial_recurrence_rational_with_derivs_and_rows(
+    let rec = find_polynomial_recurrence_in_leader_chart(
         fit_polys,
         fit_derivs,
         solve_opts,
         exact_row_indices.as_deref(),
+        chart,
     );
     diagnostics.exact_solve_ms += elapsed_ms(timer);
     if let Some(rec) = rec {
@@ -736,6 +830,85 @@ pub fn find_recurrence_adaptive_rational_with_budget(
         }
     }
 
+    // Third stage: the left-hand variants, in their own complexity order.
+    if search.try_laurent {
+        return left_hand_variation_search(
+            polys,
+            search,
+            budget,
+            diagnostics,
+            tried,
+            &derivs,
+            &prefix_max_degrees,
+        );
+    }
+
+    AdaptiveSearchOutcome::NoRecurrence(AdaptiveSearchSummary {
+        candidates_tried: tried,
+        diagnostics,
+    })
+}
+
+/// The complexity-ordered enumeration of the left-hand variants
+/// (module documentation, "Left-hand side variation").
+#[allow(clippy::too_many_arguments)]
+fn left_hand_variation_search(
+    polys: &[Vec<BigRational>],
+    search: &AdaptiveSearchOptions,
+    budget: AdaptiveSearchBudget,
+    mut diagnostics: AdaptiveSearchDiagnostics,
+    mut tried: usize,
+    derivs: &[Vec<Vec<BigRational>>],
+    prefix_max_degrees: &[usize],
+) -> AdaptiveSearchOutcome {
+    let m = polys.len();
+    // The left-hand factors of the variants are those of the historical
+    // passes: `try_denominator`'s shapes, or the escalation shapes from six
+    // rows on (the historical guard against spurious fits).
+    let mut effective = search.clone();
+    if !search.try_denominator && m >= 6 {
+        effective.try_denominator = true;
+        if effective.max_denom_idx_deg == 0 {
+            effective.max_denom_idx_deg = 1;
+        }
+    }
+    let timer = timer_now();
+    let mut candidates = CandidateIterator::with_charts(m, &effective);
+    diagnostics.candidate_generation_ms += elapsed_ms(timer);
+    diagnostics.generated_candidates = diagnostics
+        .generated_candidates
+        .saturating_add(candidates.variant_candidates());
+    let context = AdaptiveCandidateContext {
+        polys,
+        derivs,
+        prefix_max_degrees,
+        modular_cache: None,
+        search,
+        fit_search: &effective,
+        pass_label: Some("left-hand"),
+    };
+    while let Some((opts, chart)) = candidates.next_candidate() {
+        // The historical candidates (constant chart, no monomial x^e) were
+        // tried in the first two passes.
+        if chart.is_constant() && opts.leader_x_power == 0 {
+            continue;
+        }
+        if !budget.allows_candidate(diagnostics.considered_candidates) {
+            return AdaptiveSearchOutcome::BudgetExhausted(AdaptiveSearchSummary {
+                candidates_tried: tried,
+                diagnostics,
+            });
+        }
+        if let Some(found) = evaluate_adaptive_candidate_in_chart(
+            &context,
+            &opts,
+            chart,
+            &mut diagnostics,
+            &mut tried,
+        ) {
+            return AdaptiveSearchOutcome::Found(found.into_result(diagnostics));
+        }
+    }
     AdaptiveSearchOutcome::NoRecurrence(AdaptiveSearchSummary {
         candidates_tried: tried,
         diagnostics,
@@ -1193,6 +1366,8 @@ mod tests {
             try_denominator: false,
             try_inhomogeneous: false,
             try_alternating_sign: false,
+            // A fixed space of `max_rec_len` candidates: no left-hand variants.
+            try_laurent: false,
             ..Default::default()
         }
     }

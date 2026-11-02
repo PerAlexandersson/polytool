@@ -10,6 +10,13 @@ coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
 
+- `recurrence::RecurrenceOptions` has the new public field `leader_x_power`
+  (default 0) and `recurrence::AdaptiveSearchOptions` the new fields
+  `try_laurent` (default false in the library, true in `polytool recurrence`
+  and the MCP recurrence tools) and `max_laurent_x_power` (default 2); struct
+  literals without `..Default::default()` must add them.  Serialized
+  `AdaptiveSearchOptions` without the new fields still load; a found rule
+  keeps `x^e` in its denominator, so `polytool.recurrence.v1` is unchanged.
 - MCP: no tool limits polynomial input to 64-bit integers any more.  The
   `polynomials` items of `parse_polynomials`, `real_roots`,
   `analyze_decomposition`, `check_polynomial_family`, `find_recurrence` and
@@ -331,6 +338,15 @@ Additions:
   `polytool.recurrence-gamma-lift.v1` and `polytool.recurrence-gamma-lifts.v1`
   (new `LiftOperation::GammaPolynomial`).  The peak (and valley) polynomials
   A008303 are proved from the Eulerian polynomials.
+- Adaptive recurrence search: left-hand side variation.  After the two
+  historical passes (whose results and candidate counts are unchanged), a
+  third complexity-ordered stage tries left-hand factors `x^e f(n, t)`
+  (`RecurrenceOptions::leader_x_power`, `e <= max_laurent_x_power`) and
+  normalizations of `f` on a coefficient other than its constant term, so
+  factors such as `n` (shifted Legendre) are reached without
+  `try_denominator`.  `AdaptiveSearchOptions::with_laurent` toggles it; the
+  CLI has `--no-laurent` and `--max-laurent-x-power`, the MCP recurrence
+  tools `try_laurent` and `max_laurent_x_power`.
 - Preserver-image lifts: `recurrence::find_preserver_image_lifts` and
   `certify_preserver_image_lift` recognise `Q_n = lambda(n) T_n(P_(n+s))` for
   a proved parent `P` (`PreserverParentLibrary`: named families, optionally

@@ -94,6 +94,8 @@ fn exact_budget_boundary_reports_complete_search_space_failure() {
             "0",
             "--max-diff-deg",
             "0",
+            // A one-candidate space: no left-hand variants.
+            "--no-laurent",
             "--format",
             "json",
         ],

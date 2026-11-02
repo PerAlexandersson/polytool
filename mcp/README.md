@@ -548,6 +548,10 @@ top-level property:
 - `min_inhomo_idx_deg`, `max_inhomo_idx_deg`: its index-degree bounds;
 - `try_denominator`: search for a nonconstant left-hand denominator;
 - `try_alternating_sign`: search terms multiplied by `(-1)^n`;
+- `try_laurent`: after the historical passes, also try left-hand factors
+  with a power `x^e` and other normalization charts (default true in the
+  MCP tools; the library default is false);
+- `max_laurent_x_power`: largest such power `e` (default 2);
 - `max_denom_var_deg`, `max_denom_idx_deg`: denominator degree bounds;
 - `min_margin`: minimum excess of equations over unknowns;
 - `fit_extra_rows`: add rows to the fit before holdout verification;

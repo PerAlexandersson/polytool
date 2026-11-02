@@ -37,6 +37,14 @@ pub struct RecurrenceOptions {
     /// Modular rejection is used only with a full-column-rank certificate;
     /// rank-deficient images fall back to exact rational solving.
     pub modular_prefilter: bool,
+    /// Power `e` of a monomial `x^e` multiplying the left-hand factor: the
+    /// rule is `x^e f(n, t) P(n) = ...`, so after division its coefficients
+    /// carry the negative powers `x^(-e)` while `f` keeps its constant term
+    /// 1 (0, the default, is the historical form).  Row generation divides
+    /// exactly by `x^e f(n, t)`; a row that is not divisible is the typed
+    /// error [`RecurrenceEvaluationError::NonPolynomialQuotient`].  The
+    /// modular prefilter is skipped when `e > 0`.
+    pub leader_x_power: usize,
 }
 
 impl Default for RecurrenceOptions {
@@ -53,6 +61,7 @@ impl Default for RecurrenceOptions {
             denom_idx_deg: 0,
             alternating_sign: false,
             modular_prefilter: true,
+            leader_x_power: 0,
         }
     }
 }

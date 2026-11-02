@@ -43,6 +43,10 @@ Options:
 --max-inhomo-idx-deg Maximum degree in n for the inhomogeneous term
 --denominator        Allow a nontrivial LHS factor f(n,t)
 --alternating-sign   Also allow right-hand-side terms multiplied by (-1)^n
+--no-laurent         Skip the left-hand side variation stage (x^e factors and
+                      normalization charts; on by default in this command)
+--max-laurent-x-power <e>
+                      Largest left-hand power x^e (default: 2)
 --max-denom-var-deg  Max degree in t for f(n,t) (default: 2, implies --denominator)
 --max-denom-idx-deg  Max degree in n for f(n,t) (default: 2, implies --denominator)
 --min-margin <k>     Require equations >= unknowns + k (default: 1)

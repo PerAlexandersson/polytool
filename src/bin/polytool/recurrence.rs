@@ -46,6 +46,10 @@ pub(crate) fn print_recurrence_help() {
     println!("  --max-denom-var-deg <d>    Maximum t-degree for denominators");
     println!("  --max-denom-idx-deg <d>    Maximum n-degree for denominators");
     println!("  --alternating-sign         Also try alternating-sign terms");
+    println!(
+        "  --no-laurent               Do not vary the left-hand side (x^e, n-factors, charts)"
+    );
+    println!("  --max-laurent-x-power <e>  Largest left-hand power x^e (default 2)");
     println!("  --min-margin <n>           Require equations >= unknowns + n");
     println!("  --fit-extra-rows <n>       Extra rows beyond the first solvable prefix");
     println!("  --no-verify                Use all input rows for fitting");
@@ -120,7 +124,8 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
         return;
     }
 
-    let mut search = AdaptiveSearchOptions::default();
+    // The command varies the left-hand side by default (`--no-laurent`).
+    let mut search = AdaptiveSearchOptions::default().with_laurent(true);
     let mut budget = AdaptiveSearchBudget::unbounded();
     let mut format = RecurrenceOutputFormat::Text;
     let mut representations = false;
@@ -287,6 +292,19 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             }
             "--alternating-sign" => {
                 search.try_alternating_sign = true;
+            }
+            "--no-laurent" => {
+                search.try_laurent = false;
+            }
+            "--max-laurent-x-power" => {
+                search.max_laurent_x_power =
+                    match parse_usize_option(args, &mut i, "--max-laurent-x-power") {
+                        Ok(value) => value,
+                        Err(error) => {
+                            eprintln!("{error}");
+                            return;
+                        }
+                    };
             }
             "--max-denom-var-deg" => {
                 search.try_denominator = true;

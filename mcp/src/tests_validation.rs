@@ -512,6 +512,8 @@ fn recurrence_options_map_every_field_and_imply_their_switches() {
         max_inhomo_idx_deg: Some(1),
         try_denominator: Some(false),
         try_alternating_sign: Some(true),
+        try_laurent: Some(false),
+        max_laurent_x_power: Some(1),
         max_denom_var_deg: Some(1),
         max_denom_idx_deg: Some(1),
         min_margin: Some(2),
@@ -522,6 +524,8 @@ fn recurrence_options_map_every_field_and_imply_their_switches() {
     };
     let (options, budget) = apply_recurrence_options(Some(input)).unwrap();
     assert_eq!(budget.max_candidates, Some(1_000));
+    assert!(!options.try_laurent);
+    assert_eq!(options.max_laurent_x_power, 1);
     assert_eq!(options.skip_prefix, 1);
     assert_eq!((options.min_rec_len, options.max_rec_len), (2, 3));
     assert_eq!((options.min_var_deg, options.max_var_deg), (0, 2));

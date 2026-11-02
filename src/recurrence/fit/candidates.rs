@@ -17,8 +17,12 @@ type CandidateSortKey = (
     usize,
     usize,
     usize,
-    u128,
+    (LeaderChart, usize, u128),
 );
+
+/// Extra weight of a left-hand chart per degree of its fixed monomial
+/// (`candidate_complexity` documents the weights).
+const LEADER_CHART_WEIGHT: usize = 1;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 enum CandidateKind {
@@ -38,10 +42,21 @@ struct CandidateNode {
     alternating_sign: bool,
     extra_idx_deg: usize,
     extra_var_deg: usize,
+    /// The normalization chart of the left-hand factor (always the constant
+    /// chart outside the denominator kinds, and without charts).
+    chart: LeaderChart,
+    /// The power `e` of the left-hand monomial `x^e` (0 without
+    /// `try_laurent`).
+    laurent: usize,
 }
 
 pub(super) struct CandidateIterator<'a> {
     search: &'a AdaptiveSearchOptions,
+    /// The number of rows the enumeration was built for.
+    rows: usize,
+    /// Also enumerate the left-hand variants: monomials `x^e`
+    /// (`e <= max_laurent_x_power`) and the non-constant charts.
+    with_charts: bool,
     min_rec_len: usize,
     max_rec_len: usize,
     heap: BinaryHeap<Reverse<(CandidateSortKey, CandidateNode)>>,
@@ -80,12 +95,61 @@ impl CandidateNode {
             denom_idx_deg,
             alternating_sign: self.alternating_sign,
             modular_prefilter,
+            leader_x_power: self.laurent,
         }
     }
 }
 
+/// Number of left-hand charts of all denominator shapes `(a, v) != (0, 0)`
+/// with `a <= max_idx`, `v <= max_var`: the constant chart plus the charts
+/// `x^e` (`1 <= e <= v`) and `n^i` (`1 <= i <= a`) of each shape.
+fn chart_count(max_idx: usize, max_var: usize) -> usize {
+    let mut count = 0usize;
+    for a in 0..=max_idx {
+        for v in 0..=max_var {
+            if a == 0 && v == 0 {
+                continue;
+            }
+            count = count.saturating_add(1 + a + v);
+        }
+    }
+    count
+}
+
 impl<'a> CandidateIterator<'a> {
     pub(super) fn new(m: usize, search: &'a AdaptiveSearchOptions) -> Self {
+        Self::build(m, search, false)
+    }
+
+    /// The enumeration including the non-constant left-hand charts of every
+    /// denominator shape (module documentation of `adaptive`).
+    pub(super) fn with_charts(m: usize, search: &'a AdaptiveSearchOptions) -> Self {
+        Self::build(m, search, true)
+    }
+
+    /// The number of left-hand monomials `x^e` tried per shape.
+    fn laurent_count(&self) -> usize {
+        if self.with_charts {
+            self.search.max_laurent_x_power.saturating_add(1)
+        } else {
+            1
+        }
+    }
+
+    fn denominator_shape_count(&self) -> usize {
+        if self.with_charts {
+            chart_count(self.search.max_denom_idx_deg, self.search.max_denom_var_deg)
+                .saturating_mul(self.laurent_count())
+        } else {
+            self.search
+                .max_denom_idx_deg
+                .saturating_add(1)
+                .saturating_mul(self.search.max_denom_var_deg.saturating_add(1))
+                .saturating_sub(1)
+        }
+    }
+
+    fn build(m: usize, search: &'a AdaptiveSearchOptions, with_charts: bool) -> Self {
         let min_rec_len = search.min_rec_len.max(1).min(m.saturating_sub(1));
         let max_rec_len = search.max_rec_len.min(m.saturating_sub(1));
         let base_count = inclusive_count(min_rec_len, max_rec_len)
@@ -100,22 +164,34 @@ impl<'a> CandidateIterator<'a> {
         } else {
             0
         };
+        let laurent_count = if with_charts {
+            search.max_laurent_x_power.saturating_add(1)
+        } else {
+            1
+        };
         let denominator_count = if search.try_denominator {
-            search
-                .max_denom_idx_deg
-                .saturating_add(1)
-                .saturating_mul(search.max_denom_var_deg.saturating_add(1))
-                .saturating_sub(1)
+            if with_charts {
+                chart_count(search.max_denom_idx_deg, search.max_denom_var_deg)
+                    .saturating_mul(laurent_count)
+            } else {
+                search
+                    .max_denom_idx_deg
+                    .saturating_add(1)
+                    .saturating_mul(search.max_denom_var_deg.saturating_add(1))
+                    .saturating_sub(1)
+            }
         } else {
             0
         };
         let total_candidates = base_count.saturating_mul(
-            1usize
+            laurent_count
                 .saturating_add(inhomogeneous_count)
                 .saturating_add(denominator_count),
         );
         let mut iterator = Self {
             search,
+            rows: m,
+            with_charts,
             min_rec_len,
             max_rec_len,
             heap: BinaryHeap::new(),
@@ -135,6 +211,8 @@ impl<'a> CandidateIterator<'a> {
             alternating_sign: false,
             extra_idx_deg: 0,
             extra_var_deg: 0,
+            chart: LeaderChart::CONSTANT,
+            laurent: 0,
         });
         if inhomogeneous_count > 0 {
             iterator.push(CandidateNode {
@@ -146,6 +224,8 @@ impl<'a> CandidateIterator<'a> {
                 alternating_sign: false,
                 extra_idx_deg: search.min_inhomo_idx_deg,
                 extra_var_deg: search.min_inhomo_var_deg,
+                chart: LeaderChart::CONSTANT,
+                laurent: 0,
             });
         }
         if denominator_count > 0 && search.max_denom_idx_deg > 0 {
@@ -158,6 +238,8 @@ impl<'a> CandidateIterator<'a> {
                 alternating_sign: false,
                 extra_idx_deg: 1,
                 extra_var_deg: 0,
+                chart: LeaderChart::CONSTANT,
+                laurent: 0,
             });
         }
         if denominator_count > 0 && search.max_denom_var_deg > 0 {
@@ -170,6 +252,8 @@ impl<'a> CandidateIterator<'a> {
                 alternating_sign: false,
                 extra_idx_deg: 0,
                 extra_var_deg: 1,
+                chart: LeaderChart::CONSTANT,
+                laurent: 0,
             });
         }
         iterator
@@ -177,6 +261,13 @@ impl<'a> CandidateIterator<'a> {
 
     pub(super) fn total_candidates(&self) -> usize {
         self.total_candidates
+    }
+
+    /// The number of left-hand variants (candidates other than the
+    /// historical constant-chart, `e = 0` ones) of this enumeration.
+    pub(super) fn variant_candidates(&self) -> usize {
+        let historical = Self::build(self.rows, self.search, false).total_candidates;
+        self.total_candidates.saturating_sub(historical)
     }
 
     pub(super) fn denominator_candidates(&self) -> usize {
@@ -201,13 +292,7 @@ impl<'a> CandidateIterator<'a> {
             } else {
                 1
             });
-        let denominator_count = self
-            .search
-            .max_denom_idx_deg
-            .saturating_add(1)
-            .saturating_mul(self.search.max_denom_var_deg.saturating_add(1))
-            .saturating_sub(1);
-        base_count.saturating_mul(denominator_count)
+        base_count.saturating_mul(self.denominator_shape_count())
     }
 
     fn raw_ordinal(&self, node: CandidateNode) -> u128 {
@@ -291,8 +376,10 @@ impl<'a> CandidateIterator<'a> {
         let opts = node.to_options(self.search.modular_prefilter);
         let complexity = candidate_complexity(&opts);
         let has_denominator = opts.denom_var_deg > 0 || opts.denom_idx_deg > 0;
+        let chart_weight = LEADER_CHART_WEIGHT
+            .saturating_mul(node.chart.index_power.saturating_add(node.chart.x_power));
         (
-            complexity.weighted_unknowns,
+            complexity.weighted_unknowns.saturating_add(chart_weight),
             complexity.raw_unknowns,
             opts.alternating_sign,
             has_denominator,
@@ -303,7 +390,7 @@ impl<'a> CandidateIterator<'a> {
             opts.var_deg,
             opts.denom_idx_deg.saturating_add(opts.denom_var_deg),
             opts.inhomo_idx_deg.saturating_add(opts.inhomo_var_deg),
-            self.raw_ordinal(node),
+            (node.chart, node.laurent, self.raw_ordinal(node)),
         )
     }
 
@@ -341,7 +428,7 @@ impl<'a> CandidateIterator<'a> {
         }
         neighbor = node;
         match node.kind {
-            CandidateKind::Ordinary => {}
+            CandidateKind::Ordinary => self.push_laurent_neighbor(node),
             CandidateKind::Inhomogeneous => {
                 if node.extra_idx_deg < self.search.max_inhomo_idx_deg {
                     neighbor.extra_idx_deg += 1;
@@ -358,6 +445,7 @@ impl<'a> CandidateIterator<'a> {
                     neighbor.extra_idx_deg += 1;
                     self.push(neighbor);
                 }
+                self.push_chart_neighbors(node);
             }
             CandidateKind::DenominatorPositiveVariableDegree => {
                 if node.extra_idx_deg < self.search.max_denom_idx_deg {
@@ -369,8 +457,45 @@ impl<'a> CandidateIterator<'a> {
                     neighbor.extra_var_deg += 1;
                     self.push(neighbor);
                 }
+                self.push_chart_neighbors(node);
             }
         }
+    }
+
+    /// The next chart along the `x` axis (`x^e -> x^(e+1)`, from the
+    /// constant chart) or the `n` axis, inside the node's denominator shape.
+    /// The next left-hand monomial `x^e -> x^(e+1)`.
+    fn push_laurent_neighbor(&mut self, node: CandidateNode) {
+        if self.with_charts && node.laurent < self.search.max_laurent_x_power {
+            let mut neighbor = node;
+            neighbor.laurent += 1;
+            self.push(neighbor);
+        }
+    }
+
+    fn push_chart_neighbors(&mut self, node: CandidateNode) {
+        if !self.with_charts {
+            return;
+        }
+        self.push_laurent_neighbor(node);
+        let chart = node.chart;
+        if chart.index_power == 0 && chart.x_power < node.extra_var_deg {
+            let mut neighbor = node;
+            neighbor.chart.x_power += 1;
+            self.push(neighbor);
+        }
+        if chart.x_power == 0 && chart.index_power < node.extra_idx_deg {
+            let mut neighbor = node;
+            neighbor.chart.index_power += 1;
+            self.push(neighbor);
+        }
+    }
+
+    /// The next candidate with its left-hand chart.
+    pub(super) fn next_candidate(&mut self) -> Option<(RecurrenceOptions, LeaderChart)> {
+        let Reverse((_key, node)) = self.heap.pop()?;
+        self.push_neighbors(node);
+        Some((node.to_options(self.search.modular_prefilter), node.chart))
     }
 }
 
@@ -378,9 +503,7 @@ impl Iterator for CandidateIterator<'_> {
     type Item = RecurrenceOptions;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let Reverse((_key, node)) = self.heap.pop()?;
-        self.push_neighbors(node);
-        Some(node.to_options(self.search.modular_prefilter))
+        self.next_candidate().map(|(opts, _)| opts)
     }
 }
 
@@ -417,6 +540,7 @@ mod tests {
                                     denom_idx_deg: 0,
                                     alternating_sign,
                                     modular_prefilter: search.modular_prefilter,
+                                    leader_x_power: 0,
                                 });
                                 if search.try_inhomogeneous {
                                     for inhomo_idx_deg in
@@ -437,6 +561,7 @@ mod tests {
                                                 denom_idx_deg: 0,
                                                 alternating_sign,
                                                 modular_prefilter: search.modular_prefilter,
+                                                leader_x_power: 0,
                                             });
                                         }
                                     }
@@ -459,6 +584,7 @@ mod tests {
                                                 denom_idx_deg,
                                                 alternating_sign,
                                                 modular_prefilter: search.modular_prefilter,
+                                                leader_x_power: 0,
                                             });
                                         }
                                     }
@@ -531,5 +657,46 @@ mod tests {
         let lazy = CandidateIterator::new(8, &search);
         assert_eq!(lazy.total_candidates(), eager(8, &search).len());
         assert_eq!(signatures(lazy), signatures(eager(8, &search)));
+    }
+
+    #[test]
+    fn charted_enumeration_extends_the_historical_order() {
+        let search = AdaptiveSearchOptions {
+            min_rec_len: 1,
+            max_rec_len: 2,
+            max_var_deg: 2,
+            max_idx_deg: 1,
+            max_diff_deg: 1,
+            try_denominator: true,
+            max_denom_var_deg: 2,
+            max_denom_idx_deg: 2,
+            try_alternating_sign: true,
+            ..Default::default()
+        };
+        let mut charted = CandidateIterator::with_charts(8, &search);
+        let total = charted.total_candidates();
+        let mut all = Vec::new();
+        while let Some(candidate) = charted.next_candidate() {
+            all.push(candidate);
+        }
+        assert_eq!(all.len(), total);
+        for (opts, chart) in &all {
+            assert!(chart.index_power <= opts.denom_idx_deg);
+            assert!(chart.x_power <= opts.denom_var_deg);
+            assert!(chart.index_power == 0 || chart.x_power == 0);
+            assert!(opts.leader_x_power <= search.max_laurent_x_power);
+        }
+        // The historical candidates keep their relative order.
+        let historical: Vec<String> = all
+            .iter()
+            .filter(|(opts, chart)| chart.is_constant() && opts.leader_x_power == 0)
+            .map(|(opts, _)| format!("{opts:?}"))
+            .collect();
+        let expected: Vec<String> = CandidateIterator::new(8, &search)
+            .map(|opts| format!("{opts:?}"))
+            .collect();
+        assert_eq!(historical, expected);
+        let variants = CandidateIterator::with_charts(8, &search).variant_candidates();
+        assert_eq!(variants, total - expected.len());
     }
 }

@@ -29,6 +29,18 @@ pub struct CandidateComplexity {
 /// count is only a heuristic search score: derivative parameters count double,
 /// denominator parameters count double, alternating parameters are delayed, and
 /// inhomogeneous parameters are delayed further.
+///
+/// The left-hand side is scored the same way.  A left-hand factor `f(n, t)`
+/// of degrees `(a, v)` has `(a + 1)(v + 1) - 1` unknowns (one coefficient
+/// is fixed by the normalization), each weighted 2; the product form
+/// `p(n) x^e` is the case `v = 0` with
+/// [`RecurrenceOptions::leader_x_power`] `= e`, so it has `deg p` unknowns.
+/// The left-hand monomial `x^e` adds no unknown but a weight of `e`, and the
+/// adaptive search adds a weight of `i + j` for a normalization chart other
+/// than the constant term (the coefficient of `n^i t^j` fixed to 1).  The
+/// variants run in a stage of their own after the historical passes, so
+/// these weights only order the variants among themselves (smaller left-hand
+/// factors and lower powers first).
 pub fn candidate_complexity(opts: &RecurrenceOptions) -> CandidateComplexity {
     let denominator_unknowns = opts
         .denom_idx_deg
@@ -74,7 +86,8 @@ pub fn candidate_complexity(opts: &RecurrenceOptions) -> CandidateComplexity {
         .saturating_add(alternating_unknowns.saturating_mul(3))
         .saturating_add(alternating_derivative_unknowns.saturating_mul(4))
         .saturating_add(denominator_unknowns.saturating_mul(2))
-        .saturating_add(inhomogeneous_unknowns.saturating_mul(4));
+        .saturating_add(inhomogeneous_unknowns.saturating_mul(4))
+        .saturating_add(opts.leader_x_power);
     CandidateComplexity {
         raw_unknowns,
         weighted_unknowns,
@@ -137,7 +150,7 @@ fn count_equations_from_max_degree(
     }
     let max_j = opts
         .var_deg
-        .max(opts.denom_var_deg)
+        .max(opts.denom_var_deg.saturating_add(opts.leader_x_power))
         .max(if opts.homogeneous {
             0
         } else {
@@ -180,6 +193,7 @@ mod tests {
             denom_idx_deg: 0,
             alternating_sign: false,
             modular_prefilter: false,
+            leader_x_power: 0,
         };
         // vars_per_coeff = 2*2 = 4, num_coeff_vars = 2*1*4 = 8, denom = 0
         assert_eq!(count_unknowns(&opts), 8);
@@ -208,6 +222,7 @@ mod tests {
             denom_idx_deg: 0,
             alternating_sign: false,
             modular_prefilter: false,
+            leader_x_power: 0,
         };
         // m=7, rec_len=2, num_nn=5, max_poly_deg=0, max_j=0, eqs_per_nn=1
         assert_eq!(count_equations(&polys, &opts), 5);

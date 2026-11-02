@@ -50,26 +50,104 @@ pub(super) fn find_polynomial_recurrence_rational_with_derivs_and_rows(
     opts: &RecurrenceOptions,
     exact_row_indices: Option<&[usize]>,
 ) -> Option<Recurrence> {
+    find_polynomial_recurrence_in_leader_chart(
+        polys,
+        derivs,
+        opts,
+        exact_row_indices,
+        LeaderChart::CONSTANT,
+    )
+}
+
+/// The normalization chart of the left-hand factor
+/// `f(n, t) = sum_(i,j) f_(i,j) n^i t^j` of a candidate: the coefficient
+/// `f_(index_power, x_power)` is fixed to 1 and every other coefficient of
+/// the shape is unknown (`n` is the 1-based search index).  The constant
+/// chart `(0, 0)` is the historical normalization; the others reach the
+/// left-hand factors whose constant term is zero, such as `x g(n)` or
+/// `n g(n, x)` (module documentation of `adaptive`, "Left-hand charts").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(super) struct LeaderChart {
+    /// The power of the search index `n` of the fixed monomial.
+    pub(super) index_power: usize,
+    /// The power of `x` of the fixed monomial.
+    pub(super) x_power: usize,
+}
+
+impl LeaderChart {
+    /// The historical chart: the constant term of `f` is 1.
+    pub(super) const CONSTANT: Self = Self {
+        index_power: 0,
+        x_power: 0,
+    };
+
+    pub(super) fn is_constant(self) -> bool {
+        self == Self::CONSTANT
+    }
+
+    /// The flat index `i (var_deg + 1) + j` of the fixed monomial.
+    fn flat(self, denom_w: usize) -> usize {
+        self.index_power * denom_w + self.x_power
+    }
+}
+
+/// The fixed-shape search in a left-hand chart: as
+/// [`find_polynomial_recurrence_rational`], with the coefficient of
+/// `n^a x^e` of `f(n, t)` fixed to 1 instead of the constant term, for the
+/// chart `(a, e)` inside the shape of `f` (`a <= denom_idx_deg`,
+/// `e <= denom_var_deg`).  The constant chart is the historical search,
+/// including its modular prefilter.
+pub(super) fn find_polynomial_recurrence_in_leader_chart(
+    polys: &[Vec<BigRational>],
+    derivs: &[Vec<Vec<BigRational>>],
+    opts: &RecurrenceOptions,
+    exact_row_indices: Option<&[usize]>,
+    chart: LeaderChart,
+) -> Option<Recurrence> {
     let m = polys.len();
     if m <= opts.rec_len {
         return None;
     }
-
-    if modular_prefilter_rejects(polys, derivs, opts) {
+    if chart.index_power > opts.denom_idx_deg || chart.x_power > opts.denom_var_deg {
         return None;
     }
 
+    // The modular prefilter models the constant chart only (and returns
+    // without a verdict when `leader_x_power > 0`).
+    if chart.is_constant() && modular_prefilter_rejects(polys, derivs, opts) {
+        return None;
+    }
+    // The current row enters as `x^e P_n` for the left-hand monomial `x^e`.
+    let leader_x_power = opts.leader_x_power;
+    let shifted_rows: Vec<Vec<BigRational>>;
+    let current_rows: &[Vec<BigRational>] = if leader_x_power == 0 {
+        polys
+    } else {
+        shifted_rows = polys
+            .iter()
+            .map(|p| {
+                let mut shifted = vec![BigRational::zero(); leader_x_power];
+                shifted.extend(p.iter().cloned());
+                shifted
+            })
+            .collect();
+        &shifted_rows
+    };
+
     // --- Assign column indices to unknowns ---
 
-    // 1) Denominator unknowns d[i][j], skipping (0,0) which is the fixed constant 1.
+    // 1) Denominator unknowns d[i][j], skipping the chart monomial (the
+    //    constant term (0,0) for the historical chart), which is fixed to 1.
     let denom_start: usize = 0;
     let denom_w = opts.denom_var_deg + 1; // width in j
-                                          // Total slots minus 1 for the fixed constant-1 at (0,0).
+                                          // Total slots minus 1 for the fixed chart monomial.
     let num_denom_vars = (opts.denom_idx_deg + 1) * denom_w - 1;
+    let pinned = chart.flat(denom_w);
 
     let denom_col = |i: usize, j: usize| -> usize {
-        let flat = i * denom_w + j; // (0,0) has flat=0
-        denom_start + flat - 1 // skip (0,0)
+        let flat = i * denom_w + j;
+        // Skip the pinned slot.
+        denom_start + if flat < pinned { flat } else { flat - 1 }
     };
 
     // 2) Recurrence coefficient unknowns c[r][d][sign][i][j].
@@ -109,7 +187,7 @@ pub(super) fn find_polynomial_recurrence_rational_with_derivs_and_rows(
         .unwrap_or(0);
     let max_j = opts
         .var_deg
-        .max(opts.denom_var_deg)
+        .max(opts.denom_var_deg + leader_x_power)
         .max(if opts.homogeneous {
             0
         } else {
@@ -155,18 +233,22 @@ pub(super) fn find_polynomial_recurrence_rational_with_derivs_and_rows(
         let l = equation_row % eqs_per_nn;
         let nn = opts.rec_len + 1 + eq_idx;
         // nn is 1-based; polys[nn-1] is P_nn(t).
-        let current = &polys[nn - 1];
+        let current = &current_rows[nn - 1];
         let n_powers = &n_power_table[eq_idx];
 
-        // RHS = coefficient of t^l in P_nn(t)  (moved to RHS with negation).
-        let cur_l = poly_coeff_rational(current, l);
-        rhs[row] = -cur_l;
+        // RHS = the fixed chart monomial times P_nn: the coefficient of
+        // t^l in n^a t^e P_nn(t) (moved to RHS with negation).
+        rhs[row] = if l >= chart.x_power {
+            -(poly_coeff_rational(current, l - chart.x_power) * &n_powers[chart.index_power])
+        } else {
+            BigRational::zero()
+        };
 
         // Denominator unknowns: d[i][j] * nn^i * (coeff of t^{l-j} in P_nn).
         if num_denom_vars > 0 {
             for i in 0..=opts.denom_idx_deg {
                 for j in 0..=opts.denom_var_deg {
-                    if i == 0 && j == 0 {
+                    if i == chart.index_power && j == chart.x_power {
                         continue;
                     }
                     if l < j {
@@ -233,7 +315,13 @@ pub(super) fn find_polynomial_recurrence_rational_with_derivs_and_rows(
     // determined — not up to scaling.  Dividing by GCD would lose actual
     // coefficient values (e.g. turning P(n) = 2 P(n-1) into P(n) = P(n-1)).
 
-    let recurrence = recurrence_from_solution_vector(&solution, opts)?;
+    let mut recurrence = recurrence_from_solution_vector_in_chart(&solution, opts, chart)?;
+    if leader_x_power > 0 {
+        recurrence.denominator = Some(multiply_by_x_power(
+            recurrence.denominator.as_ref(),
+            leader_x_power,
+        ));
+    }
 
     if exact_row_indices.is_some()
         && !recurrence_holds_rational_with_derivs(polys, derivs, &recurrence, opts.rec_len)
@@ -260,12 +348,23 @@ pub(in crate::recurrence) fn recurrence_from_solution_vector(
     solution: &[BigRational],
     opts: &RecurrenceOptions,
 ) -> Option<Recurrence> {
+    recurrence_from_solution_vector_in_chart(solution, opts, LeaderChart::CONSTANT)
+}
+
+/// Decode a solution vector of the system in the left-hand chart `chart`
+/// (the chart monomial of the denominator is 1, the others are unknowns).
+fn recurrence_from_solution_vector_in_chart(
+    solution: &[BigRational],
+    opts: &RecurrenceOptions,
+    chart: LeaderChart,
+) -> Option<Recurrence> {
     let denom_start: usize = 0;
     let denom_w = opts.denom_var_deg + 1;
     let num_denom_vars = (opts.denom_idx_deg + 1) * denom_w - 1;
+    let pinned = chart.flat(denom_w);
     let denom_col = |i: usize, j: usize| -> usize {
         let flat = i * denom_w + j;
-        denom_start + flat - 1
+        denom_start + if flat < pinned { flat } else { flat - 1 }
     };
 
     let coeff_start = denom_start + num_denom_vars;
@@ -324,7 +423,7 @@ pub(in crate::recurrence) fn recurrence_from_solution_vector(
         let mut bv = extract_bivar(
             solution,
             |i, j| {
-                if i == 0 && j == 0 {
+                if i == chart.index_power && j == chart.x_power {
                     0
                 } else {
                     denom_col(i, j)
@@ -333,7 +432,7 @@ pub(in crate::recurrence) fn recurrence_from_solution_vector(
             opts.denom_idx_deg,
             opts.denom_var_deg,
         );
-        bv.coeffs[0][0] = BigRational::one();
+        bv.coeffs[chart.index_power][chart.x_power] = BigRational::one();
         if bv.is_one() {
             None
         } else {
@@ -369,6 +468,23 @@ pub(in crate::recurrence) fn recurrence_from_solution_vector(
 // ---------------------------------------------------------------------------
 // Helpers for building the result
 // ---------------------------------------------------------------------------
+
+/// `x^power f(n, t)` for `f` (the constant 1 when absent).
+fn multiply_by_x_power(factor: Option<&BivarPoly>, power: usize) -> BivarPoly {
+    let rows = match factor {
+        Some(f) => f.coeffs.clone(),
+        None => vec![vec![BigRational::one()]],
+    };
+    let shifted = rows
+        .into_iter()
+        .map(|row| {
+            let mut out = vec![BigRational::zero(); power];
+            out.extend(row);
+            out
+        })
+        .collect();
+    BivarPoly::from_coefficients_normalized(shifted)
+}
 
 /// Extract a BivarPoly from a solution vector using a column-index mapping.
 fn extract_bivar(

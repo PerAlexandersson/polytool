@@ -52,8 +52,9 @@ find_recurrence arguments:
   min_var_deg; max_var_deg; min_idx_deg; max_idx_deg; min_diff_deg;
   max_diff_deg; try_inhomogeneous; min_inhomo_var_deg; max_inhomo_var_deg;
   min_inhomo_idx_deg; max_inhomo_idx_deg; try_denominator;
-  try_alternating_sign; max_denom_var_deg; max_denom_idx_deg; min_margin;
-  no_verify; fit_extra_rows; modular_prefilter; and max_candidates.
+  try_alternating_sign; try_laurent; max_laurent_x_power; max_denom_var_deg;
+  max_denom_idx_deg; min_margin; no_verify; fit_extra_rows; modular_prefilter;
+  and max_candidates.
   Legacy nested options remain accepted; top-level values take precedence.
   Set include_code=false to omit Mathematica, Python, Sage, and recurrence JSON.
   Omitting include_code preserves the full response.

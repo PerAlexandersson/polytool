@@ -137,6 +137,7 @@ fn validate_recurrence_options(
         ("inhomogeneous index", options.max_inhomo_idx_deg),
         ("denominator variable", options.max_denom_var_deg),
         ("denominator index", options.max_denom_idx_deg),
+        ("left-hand x power", options.max_laurent_x_power),
     ];
     for (name, degree) in degree_bounds {
         if degree > MCP_MAX_RECURRENCE_DEGREE {
@@ -220,6 +221,7 @@ fn validate_recurrence_options(
         denom_idx_deg: 0,
         alternating_sign: options.try_alternating_sign,
         modular_prefilter: options.modular_prefilter,
+        leader_x_power: 0,
     };
     let mut maximum_unknowns = candidate_complexity(&base_options).raw_unknowns;
     if options.try_inhomogeneous {
@@ -330,7 +332,8 @@ pub(crate) fn validate_recurrence_for_generation(
 pub(crate) fn apply_recurrence_options(
     input: Option<RecurrenceSearchOptionsInput>,
 ) -> Result<(AdaptiveSearchOptions, AdaptiveSearchBudget), McpError> {
-    let mut options = AdaptiveSearchOptions::default();
+    // The MCP recurrence tools vary the left-hand side by default.
+    let mut options = AdaptiveSearchOptions::default().with_laurent(true);
     let Some(input) = input else {
         options.verbose = false;
         let budget = AdaptiveSearchBudget::unbounded();
@@ -392,6 +395,12 @@ pub(crate) fn apply_recurrence_options(
     }
     if let Some(value) = input.try_alternating_sign {
         options.try_alternating_sign = value;
+    }
+    if let Some(value) = input.try_laurent {
+        options.try_laurent = value;
+    }
+    if let Some(value) = input.max_laurent_x_power {
+        options.max_laurent_x_power = value;
     }
     if let Some(value) = input.max_denom_var_deg {
         options.try_denominator = true;
