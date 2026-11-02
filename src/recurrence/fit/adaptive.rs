@@ -190,6 +190,24 @@ pub struct AdaptiveSearchResult {
     pub diagnostics: AdaptiveSearchDiagnostics,
 }
 
+impl AdaptiveSearchResult {
+    /// Number of leading rows (after `skip_prefix`, out of
+    /// `searched_rows`) that an exported rule must keep as initial rows.
+    ///
+    /// The fit checks the rule only from row `opts.rec_len` on (the search
+    /// window), which can be later than the rule's own lag
+    /// (`Recurrence::max_offset`) when the top window coefficients vanish;
+    /// rows before the window were never checked and must stay seeds.
+    /// Rows where a left-hand factor vanishes are kept as well
+    /// ([`Recurrence::generation_initial_count`]).
+    pub fn export_initial_count(&self, searched_rows: usize) -> usize {
+        self.recurrence
+            .generation_initial_count(1, searched_rows)
+            .max(self.opts.rec_len)
+            .min(searched_rows)
+    }
+}
+
 /// Deterministic limit for an adaptive recurrence search.
 ///
 /// A candidate is counted when its parameter configuration is taken from the

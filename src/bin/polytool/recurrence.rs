@@ -430,9 +430,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
     match find_recurrence_adaptive_rational_with_budget(&polys, &search, budget) {
         AdaptiveSearchOutcome::Found(res) => {
             let searched_polys = polys.get(search.skip_prefix..).unwrap_or(&[]);
-            let initial_count = res
-                .recurrence
-                .generation_initial_count(1, searched_polys.len());
+            let initial_count = res.export_initial_count(searched_polys.len());
             let initial_polys = &searched_polys[..initial_count];
             let theorem_report = search_theorem_report(&res, &polys, &search);
             match format {

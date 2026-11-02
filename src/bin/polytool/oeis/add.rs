@@ -494,7 +494,7 @@ fn add_one(options: &AddOptions, id: &str, present: bool) -> AddResult {
         }
     };
     let searched = &rows[skip..fit_rows];
-    let initial_count = found.recurrence.generation_initial_count(1, searched.len());
+    let initial_count = found.export_initial_count(searched.len());
     let verification_rows = rows.len() - fit_rows;
     let status = if verification_rows > 0 {
         OeisSequenceStatus::Verified

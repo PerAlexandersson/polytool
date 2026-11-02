@@ -58,9 +58,7 @@ pub(crate) fn search_theorem_report(
     search: &AdaptiveSearchOptions,
 ) -> RecurrenceTheoremReport {
     let searched = polys.get(search.skip_prefix..).unwrap_or(&[]);
-    let initial_count = result
-        .recurrence
-        .generation_initial_count(1, searched.len());
+    let initial_count = result.export_initial_count(searched.len());
     let recurrence_json = RecurrenceJson::from_recurrence_rational(
         &result.recurrence,
         1,

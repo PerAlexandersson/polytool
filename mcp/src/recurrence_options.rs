@@ -23,9 +23,7 @@ pub(crate) fn recurrence_json_string(
     source_rows: usize,
 ) -> String {
     let searched_polys = polynomials.get(search.skip_prefix..).unwrap_or(&[]);
-    let initial_count = result
-        .recurrence
-        .generation_initial_count(1, searched_polys.len());
+    let initial_count = result.export_initial_count(searched_polys.len());
     let initial_polys = &searched_polys[..initial_count];
     let recurrence_json = RecurrenceJson::from_recurrence_rational(
         &result.recurrence,

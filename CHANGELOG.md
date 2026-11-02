@@ -175,6 +175,13 @@ the typed errors above.  `exact-real-roots` has no `Result<_, String>` API.
 
 Fixes:
 
+- Exported adaptive-search rules (`polytool recurrence --json`,
+  `recurrence-theorems`, `oeis add`, MCP `find_recurrence`) keep every row
+  before the search window as an initial row.  A rule found with a window
+  longer than its own lag (vanishing top coefficients) was exported with
+  only `max_offset()` initial rows, so `recurrence-generate` produced wrong
+  early rows.  New `AdaptiveSearchResult::export_initial_count`.
+
 - `find_preserver_image_lifts` no longer aborts when one candidate's
   certificate fails its self-check (for example A061896 and A199478 stopped
   with "the pseudo-division identity does not hold"): such a candidate is
