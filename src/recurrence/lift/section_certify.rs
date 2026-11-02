@@ -231,7 +231,10 @@ pub(super) fn n_coefficients(p: &Biv) -> Vec<Q> {
 }
 
 /// The leader `g(n)` of a relation with leader shift `k`, required to be a
-/// single derivative-free term free of `x`.
+/// single derivative-free term free of `x`.  A rule with a left-hand factor
+/// `x^e g(n)` reaches this check already normalized to `g(n)` by the lift
+/// preparation when `x^e` divides its right-hand side
+/// ([`crate::recurrence::LeftHandFactorNormalization`]).
 pub(super) fn x_free_leader(relation: &DOp) -> Result<(usize, Biv), RecurrenceError> {
     let k = relation.max_shift();
     if k == 0 {
@@ -243,7 +246,9 @@ pub(super) fn x_free_leader(relation: &DOp) -> Result<(usize, Biv), RecurrenceEr
     match column.0.get(&(0, 0)) {
         Some(leader) if column.0.len() == 1 && leader.is_variable_free() => Ok((k, leader.clone())),
         _ => Err(RecurrenceError::Unsupported(
-            "the parent leader must be a derivative-free coefficient g(n) free of x".into(),
+            "the parent leader must be a derivative-free coefficient g(n) free of x (a \
+             left-hand factor x^e g(n) only when x^e divides the right-hand side)"
+                .into(),
         )),
     }
 }

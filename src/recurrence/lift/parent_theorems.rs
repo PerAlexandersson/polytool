@@ -40,8 +40,27 @@
 //! induction at the last seeds (`P_(N-2), P_(N-1)` for the three-term and
 //! derivative-lag theorems, `P_(N-1)` for Liu--Wang and Ma--Wang); earlier seed rows are
 //! checked exactly.
-//! `f` must be free of `x`.  Rules with `(-1)^n` factors or an inhomogeneous
-//! term are not matched.
+//! `f` must be free of `x`, after the normalization of a left-hand factor
+//! `x^e f(n)` below.  Rules with `(-1)^n` factors or an inhomogeneous term
+//! are not matched.
+//!
+//! # Left-hand factors `x^e f(n)`
+//!
+//! The adaptive search may store a rule with a left-hand factor `x^e f(n)`,
+//! `e >= 1`, `f` free of `x` ([`Recurrence::denominator`]).  When `x^e`
+//! divides every right-hand coefficient in `Q[n, x]`, every check runs on
+//! the exactly equivalent rule `f(n) P_n = sum (c / x^e) D^d P_(n-r)`: both
+//! rules give the same rows, since `x^e` cancels in `Q[x]` at every index
+//! where `f(n) != 0` and both keep a row with `f(n) = 0` as a seed.  The
+//! report keeps the supplied rule in
+//! [`RealRootednessTheoremReport::recurrence`] and records the original and
+//! the normalized rule in
+//! [`RealRootednessTheoremReport::left_hand_factor_normalization`]; the
+//! normal form, the hypotheses and the conclusion refer to the normalized
+//! rule, and [`RealRootednessTheoremReport::verify`] re-derives the
+//! normalization.  When `x^e` does not divide some right-hand coefficient,
+//! the division by `x^e` happens only on the rows and is not an identity of
+//! the rule: the check reports `not_applicable` with that reason.
 //!
 //! # Moving the induction start
 //!
@@ -91,10 +110,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 mod derivative_lag;
+mod left_hand_factor;
 mod liu_wang;
 mod ma_wang;
 mod three_term;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
+pub(in crate::recurrence) use left_hand_factor::rule_with_x_free_left_hand_factor;
+pub use left_hand_factor::LeftHandFactorNormalization;
 pub use liu_wang::check_liu_wang_theorem;
 pub use ma_wang::check_ma_wang_interval_theorem;
 pub use three_term::check_three_term_recurrence_theorem;
@@ -261,6 +283,12 @@ pub struct RealRootednessTheoremReport {
     /// Empty when nothing is recorded.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lean_declarations: Vec<String>,
+    /// The exact normalization of a left-hand factor `x^e f(n)` (module
+    /// documentation, "Left-hand factors `x^e f(n)`"): the supplied rule
+    /// and the equivalent rule with left-hand factor `f(n)` that the check
+    /// ran on.  Omitted when the supplied rule was used as it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub left_hand_factor_normalization: Option<LeftHandFactorNormalization>,
 }
 
 impl RealRootednessTheoremReport {
@@ -286,12 +314,24 @@ impl RealRootednessTheoremReport {
             lean_replay: LIFT_LEAN_REPLAY_NOT_ATTEMPTED.into(),
             lean_route: None,
             lean_declarations: Vec::new(),
+            left_hand_factor_normalization: None,
         }
     }
 
     fn not_applicable(mut self, reason: impl Into<String>) -> Self {
         self.status = RealRootednessTheoremStatus::NotApplicable;
         self.normal_form = reason.into();
+        self
+    }
+
+    /// The report without hypotheses, conclusion or Lean route (a rule
+    /// rejected before the theorem's form is matched).
+    fn without_hypotheses(mut self) -> Self {
+        self.hypotheses.clear();
+        self.conclusion = None;
+        self.start_delay = 0;
+        self.lean_route = None;
+        self.lean_declarations.clear();
         self
     }
 
@@ -320,7 +360,10 @@ impl RealRootednessTheoremReport {
     }
 
     /// Replay the report: recompute it from the recorded family and requested
-    /// region and compare, and replay every sign certificate independently.
+    /// region and compare (this re-derives a left-hand factor normalization
+    /// from the supplied rule), replay a recorded normalization
+    /// independently ([`LeftHandFactorNormalization::verify`]), and replay
+    /// every sign certificate independently.
     ///
     /// # Errors
     ///
@@ -362,6 +405,14 @@ impl RealRootednessTheoremReport {
             return Err(RecurrenceError::VerificationFailed(
                 "the report differs from its recomputation".into(),
             ));
+        }
+        if let Some(normalization) = &self.left_hand_factor_normalization {
+            normalization.verify()?;
+            if normalization.original_rule != self.recurrence.recurrence {
+                return Err(RecurrenceError::VerificationFailed(
+                    "the normalized rule does not come from the recorded rule".into(),
+                ));
+            }
         }
         for hypothesis in &self.hypotheses {
             if let Some(IndexSignDecision::Holds { certificate }) = &hypothesis.sign_decision {
@@ -424,7 +475,46 @@ fn check_with_start_delay(
     options: &RealRootednessTheoremOptions,
     delay: usize,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    let seeds = normalized_seed_rows(rule, first_index, seeds)?;
+    let supplied = rule;
+    let seeds = normalized_seed_rows(supplied, first_index, seeds)?;
+    let (rule, normalization) = match rule_with_x_free_left_hand_factor(supplied) {
+        Ok(normalized) => normalized,
+        Err(error) => {
+            let reason = match error {
+                RecurrenceError::Unsupported(reason) => reason,
+                other => other.to_string(),
+            };
+            let report = check_at_supplied_seeds(theorem, supplied, first_index, &seeds, options)?;
+            return Ok(report.not_applicable(reason).without_hypotheses());
+        }
+    };
+    let mut report =
+        check_with_start_delay_on_rule(theorem, &rule, first_index, &seeds, options, delay)?;
+    if let Some(normalization) = normalization {
+        report.recurrence =
+            RecurrenceJson::from_recurrence_rational(supplied, first_index, &seeds, None);
+        if let Some(conclusion) = report.conclusion.as_mut() {
+            conclusion.statement.push_str(&format!(
+                "; applied to the normalized rule ({})",
+                normalization.statement
+            ));
+        }
+        report.left_hand_factor_normalization = Some(normalization);
+    }
+    Ok(report)
+}
+
+/// [`check_with_start_delay`] for a rule used as it is (`seeds` already in
+/// their record normal form).
+fn check_with_start_delay_on_rule(
+    theorem: RealRootednessTheorem,
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<Q>],
+    options: &RealRootednessTheoremOptions,
+    delay: usize,
+) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    let seeds = seeds.to_vec();
     if delay == 0 {
         return check_at_supplied_seeds(theorem, rule, first_index, &seeds, options);
     }
@@ -728,7 +818,11 @@ fn recurrence_shape(rule: &Recurrence) -> Result<RecurrenceShape, String> {
         Some(denominator) => {
             let coefficients = denominator.normalized_coefficients();
             if (1..x_width(&coefficients)).any(|j| !x_column(&coefficients, j).is_empty()) {
-                return Err("the left-hand factor f(n, x) depends on x".into());
+                return Err(
+                    "the left-hand factor f(n, x) depends on x (and is not x^e f(n) \
+                            with x^e dividing the right-hand side)"
+                        .into(),
+                );
             }
             let f = x_column(&coefficients, 0);
             if f.is_empty() {

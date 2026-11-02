@@ -713,6 +713,21 @@ from the JSON when zero) and `verify()` replays it.  The Eulerian rule from
 `A_0 = 1` (where `A_1 = A_0` does not raise the degree) is proved this way
 with `start_delay = 1`.
 
+A rule with a left-hand factor `x^e f(n)` (`e >= 1`, `f` free of `x`), as the
+adaptive search returns it with `try_laurent`, is checked through the exactly
+equivalent rule `f(n) P_n = sum (c / x^e) D^d P_(n-r)` when `x^e` divides every
+right-hand coefficient (terms with the same lag, derivative order and sign are
+added first): both rules give the same rows, because `x^e` cancels in `Q[x]` at
+every index with `f(n) != 0` and both keep a row with `f(n) = 0` as a seed.  The
+report keeps the supplied rule in `recurrence` and records the original and the
+normalized rule in `left_hand_factor_normalization`
+(`LeftHandFactorNormalization`); the normal form, hypotheses and conclusion are
+those of the normalized rule, and `verify()` re-derives the normalization.
+When `x^e` does not divide the right-hand side, the division by `x^e` is exact
+on the rows only and not an identity of the rule, and the check reports
+`not_applicable` with that reason.  The parent provers of the lifts, the lift
+rule preparation and the Rolle root-domain matcher normalize the same way.
+
 ```rust
 use polytool::recurrence::*;
 use polytool::real_rootedness::RealInterval;

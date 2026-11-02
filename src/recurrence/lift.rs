@@ -127,9 +127,9 @@ pub use parent_proof::{
 mod parent_theorems;
 pub use parent_theorems::{
     check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem, check_ma_wang_interval_theorem,
-    check_three_term_recurrence_theorem, RealRootednessTheorem, RealRootednessTheoremConclusion,
-    RealRootednessTheoremOptions, RealRootednessTheoremReport, RealRootednessTheoremStatus,
-    RowInterlacing, REAL_ROOTEDNESS_THEOREM_SCHEMA,
+    check_three_term_recurrence_theorem, LeftHandFactorNormalization, RealRootednessTheorem,
+    RealRootednessTheoremConclusion, RealRootednessTheoremOptions, RealRootednessTheoremReport,
+    RealRootednessTheoremStatus, RowInterlacing, REAL_ROOTEDNESS_THEOREM_SCHEMA,
 };
 mod row_factor;
 pub use row_factor::{

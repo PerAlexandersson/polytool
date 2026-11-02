@@ -2,10 +2,21 @@
 //! validation of a scalar rule with its identifying rows, exact replay, the
 //! leader nonvanishing check that makes the rows unique, and the JSON form of
 //! shift-free operators.
+//!
+//! A rule with a left-hand factor `x^e f(n)` (`e >= 1`, `f` free of `x`)
+//! whose `x^e` divides every right-hand coefficient is first replaced by the
+//! exactly equivalent rule `f(n) P_n = sum (c / x^e) D^d P_(n-r)` (same rows;
+//! [`crate::recurrence::LeftHandFactorNormalization`]), so the prepared rule
+//! and its relation have a leader free of `x`; the Veronese lift's
+//! preparation does the same.  A factor `x^e f(n)` that does not divide out
+//! is rejected with the reason.  A replay re-runs the preparation on the
+//! recorded rule and so re-derives the normalization.
 
 use crate::recurrence::implicit::algebra::DOp;
 use crate::recurrence::implicit::{biv_from_json, biv_json};
+use crate::recurrence::lift::parent_theorems::rule_with_x_free_left_hand_factor;
 use crate::recurrence::root_domain::bivariate_leader_nonvanishing;
+use crate::recurrence::LeftHandFactorNormalization;
 use crate::recurrence::{
     BivarPoly, ImplicitRelation, OperatorTermJson, Recurrence, RecurrenceError, RecurrenceTerm,
 };
@@ -59,7 +70,30 @@ impl PreparedRule {
     }
 }
 
-/// Validate `rule` with `rows` (`rows[0]` is row `first_index`): positive
+/// `rule` with a left-hand factor `x^e f(n)` normalized to `f(n)` when `x^e`
+/// divides every right-hand coefficient (module documentation), with the
+/// normalization record; `rule` itself otherwise.
+///
+/// # Errors
+///
+/// [`RecurrenceError::Unsupported`] naming the `name` recurrence when the
+/// left-hand factor is `x^e f(n)` but `x^e` does not divide the right-hand
+/// side.
+pub(in crate::recurrence::lift) fn x_free_left_hand_factor_rule(
+    rule: &Recurrence,
+    name: &str,
+) -> Result<(Recurrence, Option<LeftHandFactorNormalization>), RecurrenceError> {
+    rule_with_x_free_left_hand_factor(rule).map_err(|error| match error {
+        RecurrenceError::Unsupported(reason) => {
+            RecurrenceError::Unsupported(format!("the {name} recurrence: {reason}"))
+        }
+        other => other,
+    })
+}
+
+/// Validate `rule` with `rows` (`rows[0]` is row `first_index`), after
+/// normalizing a left-hand factor `x^e f(n)` ([`x_free_left_hand_factor_rule`];
+/// the prepared rule is the normalized one): positive
 /// offsets, no `(-1)^n` factor, homogeneous, derivative order at most
 /// [`MAX_LIFT_DERIVATIVE_ORDER`], supplied rows reproduced by the rule, and
 /// the leader `f(m, .)` a nonzero polynomial at every target
@@ -71,6 +105,8 @@ pub(in crate::recurrence::lift) fn prepare_rule(
     first_index: usize,
     name: &str,
 ) -> Result<PreparedRule, RecurrenceError> {
+    let (rule, _) = x_free_left_hand_factor_rule(rule, name)?;
+    let rule = &rule;
     if rule.terms.is_empty() {
         return Err(RecurrenceError::Unsupported(format!(
             "the {name} recurrence has no terms"

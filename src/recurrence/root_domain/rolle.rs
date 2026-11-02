@@ -22,7 +22,14 @@
 //! 4. every seed `Q_k` is real-rooted in `I_k`, checked exactly.
 //!
 //! Then `G(m, x) Q_(m-1)` is zero or real-rooted with every root in `I_m`, and
-//! by Rolle's theorem so is `D^j (G(m, x) Q_(m-1))`.  Steps that cannot be
+//! by Rolle's theorem so is `D^j (G(m, x) Q_(m-1))`.
+//!
+//! The rule must have a constant left-hand factor.  A left-hand factor
+//! `x^e c` (`c` a nonzero constant) is accepted when `x^e` divides every
+//! right-hand coefficient: the rule is then replaced by the exactly
+//! equivalent rule with the right-hand side divided by `x^e`
+//! ([`crate::recurrence::LeftHandFactorNormalization`], same rows), and the
+//! matched form names the normalization.  Steps that cannot be
 //! checked symbolically are reported as failed attempts, never as proofs.
 
 use super::*;
@@ -56,6 +63,8 @@ pub(super) struct RolleForm {
     pub(super) order: usize,
     pub(super) scalar: Vec<Q>,
     pub(super) linear: Option<LinearIndexFactor>,
+    /// The normalization of a left-hand factor `x^e c`, when one was applied.
+    pub(super) normalization: Option<LeftHandFactorNormalization>,
 }
 
 fn trim_rows(mut rows: Vec<Vec<Q>>) -> Vec<Vec<Q>> {
@@ -69,7 +78,11 @@ fn trim_rows(mut rows: Vec<Vec<Q>>) -> Vec<Vec<Q>> {
 }
 
 pub(super) fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, RecurrenceError> {
-    let rule = canonical_recurrence(rule);
+    let normalization = LeftHandFactorNormalization::from_recurrence(rule)?;
+    let rule = match &normalization {
+        Some(normalization) => canonical_recurrence(&normalization.normalized_recurrence()?),
+        None => canonical_recurrence(rule),
+    };
     if rule.denominator.is_some() {
         return Err(RecurrenceError::InvalidInput(
             "the left factor f(n,x) is not a nonzero constant".into(),
@@ -152,6 +165,7 @@ pub(super) fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, Recurrenc
             order,
             scalar,
             linear: None,
+            normalization,
         });
     }
     // G = g(x) (c(m) + l(m) x) with g the x-content of the rows.
@@ -184,6 +198,7 @@ pub(super) fn match_rolle_form(rule: &Recurrence) -> Result<RolleForm, Recurrenc
         order,
         scalar: vec![Q::one()],
         linear: Some(LinearIndexFactor { constant, slope }),
+        normalization,
     })
 }
 
@@ -521,6 +536,12 @@ pub(super) fn rolle_core(setup: &RolleSetup<'_>, notes: &mut Vec<String>) -> Rol
             poly_text(&linear.slope, "m")
         ),
     });
+    if let (Some(text), Some(normalization)) = (report.form.as_mut(), &form.normalization) {
+        text.push_str(&format!(
+            " (after normalizing the rule: {})",
+            normalization.statement
+        ));
+    }
     report.factor = Some(encode(&form.factor));
     report.derivative_order = Some(form.order);
     report.index_scalar = Some(encode(&form.scalar));

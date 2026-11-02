@@ -8,6 +8,7 @@
 //! `parent_proof` (the parent provers).
 
 use super::super::implicit::algebra::{roots_in_domain, Biv, DOp};
+use super::hadamard_factor::prepare::x_free_left_hand_factor_rule;
 use super::parent_proof::{prove_parent, ParentRecord};
 use super::section_certify::{
     gauge_parent_relation, n_coefficients, pseudo_divide_row, residue_row, x_free_leader,
@@ -324,6 +325,8 @@ fn prepare_rule(
     first_index: usize,
     name: &str,
 ) -> Result<PreparedRule, RecurrenceError> {
+    let (rule, _) = x_free_left_hand_factor_rule(rule, name)?;
+    let rule = &rule;
     if rule.terms.is_empty() {
         return Err(RecurrenceError::Unsupported(format!(
             "the {name} recurrence has no terms"

@@ -97,6 +97,20 @@
 //! - routes 1 and 3 conclude no interlacing, and an attested parent records
 //!   none.
 //!
+//! # Left-hand factors `x^e f(n)`
+//!
+//! A parent rule with a left-hand factor `x^e f(n)` (`e >= 1`, `f` free of
+//! `x`, as the adaptive search may return it) whose `x^e` divides every
+//! right-hand coefficient is replaced, for routes 1 to 7 and the one-signed
+//! test of route 9, by the exactly equivalent rule
+//! `f(n) P_n = sum (c / x^e) D^d P_(n-r)` (same rows; see
+//! [`LeftHandFactorNormalization`]), recorded in
+//! [`VeroneseParentProof::left_hand_factor_normalization`].  An attestation
+//! (routes 8 and 9) applies when its record equals the parent rule as
+//! supplied or the normalized rule (both define the same rows).  When
+//! `x^e` does not divide the right-hand side, the rule is used as it is and
+//! the theorem routes report it as not applicable with that reason.
+//!
 //! # One-signed rows (route 9)
 //!
 //! Write the rule as `f(n) P_n = sum_terms c(n,x) D^d P_(n-r) + g(n,x)` for
@@ -127,6 +141,7 @@
 //! <= D(n)` by induction.  Every test is exact; a failure only means the
 //! route does not apply.
 
+use super::parent_theorems::rule_with_x_free_left_hand_factor;
 use super::veronese_algebra::classify_row;
 use super::*;
 use crate::integer_range_sign::{decide_index_polynomial_sign, IndexSignCondition, IntegerRange};
@@ -253,6 +268,12 @@ pub struct VeroneseParentProof {
     /// is not proved or the route concludes no interlacing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interlacing: Option<LiftInterlacing>,
+    /// The exact normalization of a parent left-hand factor `x^e f(n)`
+    /// (module documentation, "Left-hand factors `x^e f(n)`"): routes 1 to
+    /// 7 and the one-signed test of route 9 ran on the normalized rule.
+    /// Omitted when the parent rule was used as it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub left_hand_factor_normalization: Option<LeftHandFactorNormalization>,
 }
 
 /// A parent rule with its identifying seeds and first index.
@@ -1132,6 +1153,16 @@ pub(super) fn prove_parent(
                 "the parent recurrence cannot be replayed: {error}"
             ))
         })?;
+    // Routes 1 to 7 and the one-signed test of route 9 run on the rule with
+    // a left-hand factor free of x when the normalization applies; a rule
+    // that does not normalize is kept, and the theorem routes name the reason.
+    let (normalized_rule, normalization) = rule_with_x_free_left_hand_factor(record.rule)
+        .unwrap_or_else(|_| (record.rule.clone(), None));
+    let normalized = ParentRecord {
+        rule: &normalized_rule,
+        seeds: record.seeds,
+        first_index: record.first_index,
+    };
     let mut proof = VeroneseParentProof {
         status: VeroneseParentProofStatus::NotProved,
         route: None,
@@ -1141,6 +1172,7 @@ pub(super) fn prove_parent(
         failing_row_index: first_failing_row(&rows, record.first_index),
         rows_checked: rows.len(),
         interlacing: None,
+        left_hand_factor_normalization: normalization,
     };
     let conclusion = format!(
         "every parent row P_n, n >= {}, is zero or real-rooted with coefficients of one sign",
@@ -1156,7 +1188,7 @@ pub(super) fn prove_parent(
     }
 
     // Route 1.
-    let periodic = periodic_product_parent(record.rule, record.seeds);
+    let periodic = periodic_product_parent(normalized.rule, normalized.seeds);
     proof.attempts.push(VeroneseParentProofAttempt {
         route: VeroneseParentProofRoute::PeriodicProduct,
         variant: "P_(n+k) = c(x) P_n".into(),
@@ -1175,7 +1207,7 @@ pub(super) fn prove_parent(
 
     // Route 2.
     if proved.is_none() {
-        let (attempts, window_interlacing) = theorem_route(record, &rows);
+        let (attempts, window_interlacing) = theorem_route(&normalized, &rows);
         if attempts.iter().any(|a| a.success) {
             proved = Some(VeroneseParentProofRoute::PaperTheorem);
             interlacing = window_interlacing;
@@ -1185,7 +1217,7 @@ pub(super) fn prove_parent(
 
     // Route 3.
     if proved.is_none() && try_root_domain {
-        let attempts = root_domain_route(record, &rows);
+        let attempts = root_domain_route(&normalized, &rows);
         if attempts.iter().any(|a| a.success) {
             proved = Some(VeroneseParentProofRoute::RootDomain);
         }
@@ -1206,7 +1238,7 @@ pub(super) fn prove_parent(
             ),
             (VeroneseParentProofRoute::MaWangInterval, "ma_wang_interval"),
         ] {
-            let (attempt, theorem_interlacing) = theorem_attempt(record, route, variant)?;
+            let (attempt, theorem_interlacing) = theorem_attempt(&normalized, route, variant)?;
             let success = attempt.success;
             proof.attempts.push(attempt);
             if success {
@@ -1227,7 +1259,9 @@ pub(super) fn prove_parent(
 
     // Route 8.
     for attestation in attestations {
-        let matches = same_record(record, &attestation.recurrence)?;
+        let matches = same_record(record, &attestation.recurrence)?
+            || (proof.left_hand_factor_normalization.is_some()
+                && same_record(&normalized, &attestation.recurrence)?);
         let covers = attestation.first_index <= needed_from;
         let success = matches && covers;
         proof.attempts.push(VeroneseParentProofAttempt {
@@ -1258,13 +1292,16 @@ pub(super) fn prove_parent(
     let candidates = catalog_flag_attestations(record);
     let mut differing = Vec::new();
     for attestation in candidates {
-        if !same_record(record, &attestation.recurrence)? {
+        let matches = same_record(record, &attestation.recurrence)?
+            || (proof.left_hand_factor_normalization.is_some()
+                && same_record(&normalized, &attestation.recurrence)?);
+        if !matches {
             differing.push(attestation.label);
             continue;
         }
         let covers = attestation.first_index <= needed_from;
         let one_signed = covers.then(|| {
-            one_signed_rows_for_all_indices(record.rule, record.first_index, record.seeds)
+            one_signed_rows_for_all_indices(normalized.rule, record.first_index, record.seeds)
         });
         let success = matches!(one_signed, Some(Ok(_)));
         proof.attempts.push(VeroneseParentProofAttempt {
@@ -1636,5 +1673,147 @@ mod interlacing_tests {
             .unwrap()
             .get("interlacing")
             .is_none());
+    }
+}
+
+#[cfg(test)]
+mod left_hand_factor_tests {
+    use super::*;
+
+    fn q(value: i64) -> Q {
+        Q::from_integer(value.into())
+    }
+
+    /// Both sides of `rule` multiplied by `x`.
+    fn times_x(rule: &Recurrence) -> Recurrence {
+        let shift = |p: &BivarPoly| {
+            BivarPoly::from_coefficients_normalized(
+                p.coeffs
+                    .iter()
+                    .map(|row| std::iter::once(q(0)).chain(row.iter().cloned()).collect())
+                    .collect(),
+            )
+        };
+        let one = BivarPoly::from_coefficients_normalized(vec![vec![q(1)]]);
+        Recurrence {
+            terms: rule
+                .terms
+                .iter()
+                .map(|term| RecurrenceTerm {
+                    coeff: shift(&term.coeff),
+                    ..term.clone()
+                })
+                .collect(),
+            denominator: Some(shift(rule.denominator.as_ref().unwrap_or(&one))),
+            inhomogeneous: rule.inhomogeneous.as_ref().map(shift),
+        }
+    }
+
+    fn prove(rule: &Recurrence, seeds: &[Vec<Q>], first_index: usize) -> VeroneseParentProof {
+        let record = ParentRecord {
+            rule,
+            seeds,
+            first_index,
+        };
+        prove_parent(&record, first_index, &[], false).unwrap()
+    }
+
+    /// The type-B Eulerian rule times `x` is proved by the same route, with
+    /// the normalization recorded.
+    #[test]
+    fn an_x_power_left_factor_is_normalized_for_the_theorem_routes() {
+        let rule = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(
+                    1,
+                    0,
+                    BivarPoly::from_coefficients_normalized(vec![
+                        vec![q(1), q(-1)],
+                        vec![q(0), q(2)],
+                    ]),
+                ),
+                RecurrenceTerm::new(
+                    1,
+                    1,
+                    BivarPoly::from_coefficients_normalized(vec![vec![q(0), q(2), q(-2)]]),
+                ),
+            ],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let seeds = vec![vec![q(1)]];
+        let plain = prove(&rule, &seeds, 0);
+        assert_eq!(plain.status, VeroneseParentProofStatus::Proved);
+        assert!(plain.left_hand_factor_normalization.is_none());
+        let lifted = prove(&times_x(&rule), &seeds, 0);
+        assert_eq!(
+            lifted.status,
+            VeroneseParentProofStatus::Proved,
+            "{lifted:#?}"
+        );
+        assert_eq!(lifted.route, plain.route);
+        assert_eq!(lifted.interlacing.is_some(), plain.interlacing.is_some());
+        let normalization = lifted.left_hand_factor_normalization.as_ref().unwrap();
+        assert_eq!(normalization.x_power, 1);
+        normalization.verify().unwrap();
+    }
+
+    /// The Lucas polynomials times `x` still match their `lean_proved`
+    /// catalog flag through the normalized rule.
+    #[test]
+    fn a_catalog_flag_matches_the_normalized_rule() {
+        let entry = crate::oeis::by_id("A034807").unwrap();
+        let (rule, rows) = entry.recurrence_parts().unwrap();
+        let first_index = entry.recurrence_first_index;
+        let count = rule.generation_initial_count(first_index, rows.len());
+        let proof = prove(&times_x(&rule), &rows[..count], first_index);
+        assert_eq!(
+            proof.status,
+            VeroneseParentProofStatus::ConditionalOnAttestation,
+            "{proof:#?}"
+        );
+        assert_eq!(proof.conditional_on, ["oeis_catalog:A034807:lean_proved"]);
+        assert!(proof.left_hand_factor_normalization.is_some());
+    }
+
+    /// A rule whose division by `x` happens only on the rows is kept as it
+    /// is; the theorem routes name the reason.
+    #[test]
+    fn a_row_only_division_is_reported_by_the_theorem_routes() {
+        // x P_n = (x^2 + n - 1) P_(n-1) - x P'_(n-1), rows x^n.
+        let rule = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(
+                    1,
+                    0,
+                    BivarPoly::from_coefficients_normalized(vec![
+                        vec![q(-1), q(0), q(1)],
+                        vec![q(1)],
+                    ]),
+                ),
+                RecurrenceTerm::new(
+                    1,
+                    1,
+                    BivarPoly::from_coefficients_normalized(vec![vec![q(0), q(-1)]]),
+                ),
+            ],
+            denominator: Some(BivarPoly::from_coefficients_normalized(vec![vec![
+                q(0),
+                q(1),
+            ]])),
+            inhomogeneous: None,
+        };
+        let proof = prove(&rule, &[vec![q(1)]], 0);
+        assert!(proof.left_hand_factor_normalization.is_none());
+        let liu_wang = proof
+            .attempts
+            .iter()
+            .find(|attempt| attempt.route == VeroneseParentProofRoute::LiuWang)
+            .unwrap();
+        assert!(
+            liu_wang.detail.contains("happens only on the rows"),
+            "{}",
+            liu_wang.detail
+        );
     }
 }

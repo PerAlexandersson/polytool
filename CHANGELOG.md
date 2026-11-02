@@ -347,6 +347,23 @@ Additions:
   `try_denominator`.  `AdaptiveSearchOptions::with_laurent` toggles it; the
   CLI has `--no-laurent` and `--max-laurent-x-power`, the MCP recurrence
   tools `try_laurent` and `max_laurent_x_power`.
+- Left-hand factors `x^e f(n)` in the theorem checks and lifts: a rule whose
+  left-hand factor is `x^e f(n)` (`e >= 1`, `f` free of `x`, as the adaptive
+  search stores it) and whose `x^e` divides every right-hand coefficient is
+  normalized exactly to `f(n) P_n = sum (c / x^e) D^d P_(n-r)` (the same rows)
+  before the three-term, Liu--Wang, derivative-lag and Ma--Wang checks, the
+  parent provers of the lifts, the shared lift rule preparation (Hadamard,
+  row-factor, basis-map, gamma and preserver-image lifts), the Veronese-section
+  preparation and the Rolle root-domain matcher.  The new record
+  `recurrence::LeftHandFactorNormalization` (`x_power`, `original_rule`,
+  `normalized_rule`, `statement`; `from_recurrence`, `normalized_recurrence`,
+  `verify`) appears in the new optional fields
+  `RealRootednessTheoremReport::left_hand_factor_normalization` and
+  `VeroneseParentProof::left_hand_factor_normalization` (omitted from the JSON
+  when no normalization was applied, so existing reports are unchanged);
+  `verify()` re-derives it.  When `x^e` does not divide the right-hand side
+  the division happens only on the rows, and the checks report
+  `not_applicable` (the lifts `Unsupported`) with that reason.
 - Preserver-image lifts: `recurrence::find_preserver_image_lifts` and
   `certify_preserver_image_lift` recognise `Q_n = lambda(n) T_n(P_(n+s))` for
   a proved parent `P` (`PreserverParentLibrary`: named families, optionally
