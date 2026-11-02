@@ -301,31 +301,55 @@ impl PreserverParentLibrary {
         }
         if options.include_oeis_catalog {
             for entry in oeis::catalog().iter().take(options.max_catalog_entries) {
-                library.catalog_entries_examined += 1;
-                let (rule, rows) = match entry.recurrence_parts() {
-                    Ok(parts) => parts,
-                    Err(error) => {
-                        library.skipped.push((entry.id.into(), error.to_string()));
-                        continue;
-                    }
-                };
-                if rule.max_offset() > options.max_catalog_order {
-                    library.skipped.push((
-                        entry.id.into(),
-                        format!("order {} is above the bound", rule.max_offset()),
-                    ));
-                    continue;
-                }
-                let record = RecurrenceJson::from_recurrence_rational(
-                    &rule,
-                    entry.recurrence_first_index,
-                    &rows,
-                    None,
-                );
-                library.add(entry.id.into(), &record, options)?;
+                library.add_catalog_entry(entry, options)?;
             }
         }
         Ok(library)
+    }
+
+    /// A library of the listed catalog entries only (in the given order),
+    /// built as by [`Self::build`] (for focused tests).
+    #[cfg(test)]
+    pub(super) fn from_catalog_entries(
+        ids: &[&str],
+        options: &PreserverParentLibraryOptions,
+    ) -> Result<Self, RecurrenceError> {
+        let mut library = Self::default();
+        for id in ids {
+            let entry = oeis::by_id(id).expect("a catalog entry");
+            library.add_catalog_entry(entry, options)?;
+        }
+        Ok(library)
+    }
+
+    /// Validate, prove and (when proved or requested) add one catalog entry.
+    fn add_catalog_entry(
+        &mut self,
+        entry: &oeis::OeisSequenceDefinition,
+        options: &PreserverParentLibraryOptions,
+    ) -> Result<(), RecurrenceError> {
+        self.catalog_entries_examined += 1;
+        let (rule, rows) = match entry.recurrence_parts() {
+            Ok(parts) => parts,
+            Err(error) => {
+                self.skipped.push((entry.id.into(), error.to_string()));
+                return Ok(());
+            }
+        };
+        if rule.max_offset() > options.max_catalog_order {
+            self.skipped.push((
+                entry.id.into(),
+                format!("order {} is above the bound", rule.max_offset()),
+            ));
+            return Ok(());
+        }
+        let record = RecurrenceJson::from_recurrence_rational(
+            &rule,
+            entry.recurrence_first_index,
+            &rows,
+            None,
+        );
+        self.add(entry.id.into(), &record, options)
     }
 
     /// Validate, prove and (when proved or requested) add one record.

@@ -12,7 +12,9 @@ use crate::recurrence::{
 use crate::vec_poly;
 use crate::BigRational;
 use num_traits::{One, Zero};
-use ore_algebra::{pull_back, PullbackBounds, RowMapStep};
+use ore_algebra::{
+    pull_back, pull_back_substitution, MobiusMap, PullbackBounds, RowMapStep, Substitution,
+};
 use serde::{Deserialize, Serialize};
 
 type Q = BigRational;
@@ -220,24 +222,16 @@ pub enum PreserverOperator {
     },
 }
 
-/// One step `F -> G` of a coordinate map.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum CoordinateStep {
-    /// `G(y) = F(a y + b)`.
-    Affine { a: Q, b: Q },
-    /// `G_n(y) = y^(d_n) F_n(1/y)` with `d_n = degree(n)` (affine in `n`)
-    /// and increment `step >= 0`.
-    Reversal { degree: Vec<Q>, step: i64 },
-}
-
 /// The internal normal form of an operator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum OperatorForm {
     /// `T_n = numerator / denominator(n)`, `numerator` a shift-free
     /// operator with coefficients in `(n, x)`.
     Weyl { numerator: DOp, denominator: Vec<Q> },
-    /// `T_n = step_last o ... o step_first` (applied first to last).
-    Coordinate { steps: Vec<CoordinateStep> },
+    /// A coordinate map: the affine map, the reversal or the Möbius map
+    /// (scale `1`) as an `ore-algebra` substitution, whose row action and
+    /// pullback are those of the crate.
+    Substitution(Substitution),
     /// `x^k -> u(n, k) x^k`.
     Hadamard { factor: HadamardFactor },
 }
@@ -460,16 +454,14 @@ impl PreserverOperator {
                         "the affine slope a must be nonzero".into(),
                     ));
                 }
-                Ok(OperatorForm::Coordinate {
-                    steps: vec![CoordinateStep::Affine { a, b }],
-                })
+                Ok(OperatorForm::Substitution(Substitution::Affine {
+                    slope: a,
+                    intercept: b,
+                }))
             }
-            Self::Reversal { schedule } => Ok(OperatorForm::Coordinate {
-                steps: vec![CoordinateStep::Reversal {
-                    degree: validate_schedule(schedule)?,
-                    step: schedule.step,
-                }],
-            }),
+            Self::Reversal { schedule } => Ok(OperatorForm::Substitution(Substitution::Reversal {
+                degree: validate_schedule(schedule)?,
+            })),
             Self::Mobius {
                 a,
                 b,
@@ -492,23 +484,16 @@ impl PreserverOperator {
                         "a Mobius map needs a e - b c != 0".into(),
                     ));
                 }
-                // (c x + e)^d P((a x + b)/(c x + e)) = A2(R(A1(P))) with
-                // A1: F(y) -> F(a/c + kappa y), kappa = (b c - a e)/c,
-                // R: G(u) -> u^d G(1/u), A2: K(u) -> K(c x + e).
-                let kappa = -determinant / &c;
-                Ok(OperatorForm::Coordinate {
-                    steps: vec![
-                        CoordinateStep::Affine {
-                            a: kappa,
-                            b: a / &c,
-                        },
-                        CoordinateStep::Reversal {
-                            degree: validate_schedule(schedule)?,
-                            step: schedule.step,
-                        },
-                        CoordinateStep::Affine { a: c, b: e },
-                    ],
-                })
+                Ok(OperatorForm::Substitution(Substitution::Mobius(Box::new(
+                    MobiusMap {
+                        a,
+                        b,
+                        c,
+                        e,
+                        scale: Q::one(),
+                        degree: validate_schedule(schedule)?,
+                    },
+                ))))
             }
             Self::HadamardMultiplier { factor } => {
                 if factor.terms.is_empty() || factor.terms.len() > 2 {
@@ -734,25 +719,9 @@ impl OperatorForm {
                 let image = numerator.apply_row(row, n);
                 Some(vec_poly::trim(&vec_poly::scale(&image, &delta.recip())))
             }
-            Self::Coordinate { steps } => {
-                let mut current = vec_poly::trim(row);
-                for step in steps {
-                    current = match step {
-                        CoordinateStep::Affine { a, b } => {
-                            vec_poly::trim(&vec_poly::compose(&current, &[b.clone(), a.clone()]))
-                        }
-                        CoordinateStep::Reversal { degree, .. } => {
-                            let d = vec_poly::evaluate(degree, &index);
-                            if !d.is_integer() || d < Q::zero() {
-                                return None;
-                            }
-                            let d = usize::try_from(d.to_integer()).ok()?;
-                            vec_poly::trim(&vec_poly::reverse(&current, d)?)
-                        }
-                    };
-                }
-                Some(current)
-            }
+            Self::Substitution(substitution) => substitution
+                .apply_row(row, n)
+                .map(|image| vec_poly::trim(&image)),
             Self::Hadamard { factor } => {
                 let mut out = Vec::with_capacity(row.len());
                 for (k, p) in row.iter().enumerate() {
@@ -772,44 +741,23 @@ impl OperatorForm {
 // Conjugation of the input relation
 // ---------------------------------------------------------------------------
 
-impl OperatorForm {
-    /// The map `P' -> T'(P')` as steps of the `ore-algebra` crate (applied
-    /// first to last): the Weyl numerator `T'`, or the coordinate steps.
-    /// `None` for a Hadamard form (certified by the Hadamard conjugation).
-    pub(super) fn row_map_steps(&self) -> Option<Vec<RowMapStep>> {
-        match self {
-            Self::Weyl { numerator, .. } => Some(vec![RowMapStep::WeylOperator(numerator.clone())]),
-            Self::Coordinate { steps } => Some(
-                steps
-                    .iter()
-                    .map(|step| match step {
-                        CoordinateStep::Affine { a, b } => RowMapStep::Affine {
-                            slope: a.clone(),
-                            intercept: b.clone(),
-                        },
-                        CoordinateStep::Reversal { degree, .. } => RowMapStep::Reversal {
-                            degree: degree.clone(),
-                        },
-                    })
-                    .collect(),
-            ),
-            Self::Hadamard { .. } => None,
-        }
-    }
-}
-
 /// The dividend `E` of the certificate (module documentation of
-/// `preserver_image`, steps 1 and 2): the pullback
-/// (`ore_algebra::pull_back`) of the input relation `M` (leader shift `R`)
-/// through `T'` followed by the gauge `mu(n)/mu(n-1) = alpha(n)/beta(n)`,
-/// with the bounds of `M` and top shift `R`, divided by the largest power
-/// of `x` dividing every coefficient.  So `E = M_mu o T'` for a Weyl form
-/// and the conjugation of `M_mu` through the coordinate steps (last step
-/// first, with `y^N`, `N = b + h R`, for a reversal) otherwise; the gauge
-/// factor of the pullback is `prod_(t=1..R) beta(n + t)`.  Dividing by
-/// `x^v` keeps `(E P')_n = 0` equivalent to the undivided identity, since
-/// `Q[x]` (and the Laurent polynomials) have no zero divisors.  `None` for
-/// a Hadamard form or an invalid step.
+/// `preserver_image`, steps 1 and 2): the pullback of the input relation
+/// `M` (leader shift `R`) through `T'` followed by the gauge
+/// `mu(n)/mu(n-1) = alpha(n)/beta(n)`, with the bounds of `M` and top shift
+/// `R`, divided by the largest power of `x` dividing every coefficient.
+///
+/// The gauge is pulled back first (`ore_algebra::pull_back`, which keeps
+/// the bounds; its factor is `prod_(t=1..R) beta(n + t)`), then `T'`: for
+/// a Weyl form `E = M_mu o T'` (the same pullback), for a coordinate map
+/// the conjugation of `M_mu` through the substitution
+/// (`ore_algebra::pull_back_substitution` with the same bounds, so the
+/// reversal is cleared with `y^N`, `N = b + h R`; a Möbius map is the
+/// affine map, the reversal and the affine map of the module
+/// documentation, and its left factor is a power of a linear form).  Then
+/// `(M H)_n = 0` exactly when `(E P')_n = 0`.  Dividing by `x^v` keeps
+/// that equivalence, since `Q[x]` (and the Laurent polynomials) have no
+/// zero divisors.  `None` for a Hadamard form or an invalid step.
 pub(super) fn dividend(
     input: &DOp,
     leader_shift: usize,
@@ -817,16 +765,26 @@ pub(super) fn dividend(
     beta: &[Q],
     form: &OperatorForm,
 ) -> Option<DOp> {
-    let mut steps = form.row_map_steps()?;
-    steps.push(RowMapStep::Gauge {
-        numerator: alpha.to_vec(),
-        denominator: beta.to_vec(),
-    });
     let bounds = PullbackBounds {
         top_shift: leader_shift.max(input.max_shift()),
         ..PullbackBounds::of(input)
     };
-    let (e, _) = pull_back(input, &steps, bounds).ok()?;
+    let gauge = RowMapStep::Gauge {
+        numerator: alpha.to_vec(),
+        denominator: beta.to_vec(),
+    };
+    let e = match form {
+        OperatorForm::Weyl { numerator, .. } => {
+            let steps = [RowMapStep::WeylOperator(numerator.clone()), gauge];
+            pull_back(input, &steps, bounds).ok()?.0
+        }
+        OperatorForm::Substitution(substitution) => {
+            // A gauge step keeps the bounds, so `bounds` also bounds `M_mu`.
+            let (gauged, _) = pull_back(input, &[gauge], bounds).ok()?;
+            pull_back_substitution(&gauged, substitution, bounds).ok()?
+        }
+        OperatorForm::Hadamard { .. } => return None,
+    };
     Some(e.divide_by_variable_power(e.variable_valuation()))
 }
 
@@ -945,14 +903,104 @@ mod tests {
                         "{operator:?} at base {base}"
                     ),
                     // ... = mu(n) (E F)_n (a x + b) for an affine map.
-                    OperatorForm::Coordinate { steps } if steps.len() == 1 => {
-                        if let CoordinateStep::Affine { a, b } = &steps[0] {
-                            let image = vec_poly::compose(&conjugated, &[b.clone(), a.clone()]);
-                            assert_eq!(lhs, vec_poly::scale(&image, &mus[base - n0]));
-                        }
+                    OperatorForm::Substitution(Substitution::Affine { slope, intercept }) => {
+                        let image =
+                            vec_poly::compose(&conjugated, &[intercept.clone(), slope.clone()]);
+                        assert_eq!(lhs, vec_poly::scale(&image, &mus[base - n0]));
                     }
                     _ => {}
                 }
+            }
+        }
+    }
+
+    /// The dividend of a coordinate map is the step-by-step pullback of the
+    /// former hand-written conjugation (an affine map, a reversal, and for
+    /// a Möbius map `F(y) -> F(a/c + kappa y)`, the reversal and
+    /// `K(u) -> K(c x + e)`, `kappa = (b c - a e)/c`), exactly.
+    #[test]
+    fn substitution_dividends_equal_the_step_by_step_conjugation() {
+        let mut m = DOp::default();
+        m.add_term((2, 0), Biv::new(vec![vec![q(2), q(0), q(1)], vec![q(1)]]));
+        m.add_term((1, 1), Biv::from_variable_polynomial(&[q(-1), q(-1)]));
+        m.add_term((1, 2), Biv::from_variable_polynomial(&[q(0), q(3), q(1)]));
+        m.add_term(
+            (0, 0),
+            Biv::new(vec![vec![q(0), q(0), q(1)], vec![q(0), q(0), q(1)]]),
+        );
+        let degree = |schedule: &DegreeSchedule| validate_schedule(schedule).unwrap();
+        let cases = [
+            PreserverOperator::Affine {
+                slope: "-2/3".into(),
+                intercept: "5".into(),
+            },
+            PreserverOperator::Reversal {
+                schedule: DegreeSchedule::new(0, 3, 1),
+            },
+            PreserverOperator::Reversal {
+                schedule: DegreeSchedule::new(2, 4, 0),
+            },
+            PreserverOperator::f_polynomial(DegreeSchedule::new(0, 2, 1)),
+            PreserverOperator::Mobius {
+                a: "2".into(),
+                b: "-1".into(),
+                c: "3".into(),
+                e: "1/2".into(),
+                schedule: DegreeSchedule::new(1, 3, 2),
+            },
+        ];
+        for (alpha, beta) in [
+            (vec![q(1)], vec![q(1)]),
+            (vec![q(1), q(2)], vec![q(3), q(1)]),
+        ] {
+            for operator in &cases {
+                let steps = match operator {
+                    PreserverOperator::Affine { slope, intercept } => vec![RowMapStep::Affine {
+                        slope: parse_rational_coeff(slope).unwrap(),
+                        intercept: parse_rational_coeff(intercept).unwrap(),
+                    }],
+                    PreserverOperator::Reversal { schedule } => vec![RowMapStep::Reversal {
+                        degree: degree(schedule),
+                    }],
+                    PreserverOperator::Mobius {
+                        a,
+                        b,
+                        c,
+                        e,
+                        schedule,
+                    } => {
+                        let [a, b, c, e] = [a, b, c, e].map(|v| parse_rational_coeff(v).unwrap());
+                        let kappa = -(&a * &e - &b * &c) / &c;
+                        vec![
+                            RowMapStep::Affine {
+                                slope: kappa,
+                                intercept: a / &c,
+                            },
+                            RowMapStep::Reversal {
+                                degree: degree(schedule),
+                            },
+                            RowMapStep::Affine {
+                                slope: c,
+                                intercept: e,
+                            },
+                        ]
+                    }
+                    _ => unreachable!(),
+                };
+                let mut steps = steps;
+                steps.push(RowMapStep::Gauge {
+                    numerator: alpha.clone(),
+                    denominator: beta.clone(),
+                });
+                let bounds = PullbackBounds {
+                    top_shift: 2,
+                    ..PullbackBounds::of(&m)
+                };
+                let (old, _) = pull_back(&m, &steps, bounds).unwrap();
+                let old = old.divide_by_variable_power(old.variable_valuation());
+                let form = operator.form().unwrap();
+                let new = dividend(&m, 2, &alpha, &beta, &form).unwrap();
+                assert_eq!(new, old, "{operator:?}");
             }
         }
     }

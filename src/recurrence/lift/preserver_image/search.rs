@@ -660,8 +660,11 @@ fn shifts(bound: usize) -> Vec<i64> {
 /// map from the root moments; the schedules from the degrees; the gauge
 /// from exact row ratios.  Every match is certified with
 /// [`certify_preserver_image_lift`].  Bounded and deterministic; budgets
-/// are reported, never a panic.  A missing lift says nothing against
-/// real-rootedness of the input.
+/// are reported, never a panic.  A candidate whose certification fails
+/// (invalid parameters, a budget, a failed internal self-check) is
+/// rejected with a note in [`PreserverImageReport::notes`] and the search
+/// goes on; it never aborts the search.  A missing lift says nothing
+/// against real-rootedness of the input.
 ///
 /// # Errors
 ///
@@ -736,20 +739,18 @@ pub fn find_preserver_image_lifts(
                         &options.certification,
                     ) {
                         Ok(certification) => certification,
-                        Err(
-                            error @ (RecurrenceError::InvalidInput(_)
-                            | RecurrenceError::Unsupported(_)
-                            | RecurrenceError::LimitExceeded(_)
-                            | RecurrenceError::BudgetExhausted(_)),
-                        ) => {
+                        // Every failure of one candidate (invalid parameters,
+                        // a budget, or a self-check of its certificate that
+                        // fails) rejects that candidate only: it is recorded
+                        // as a note and proves nothing.
+                        Err(error) => {
                             report.notes.push(format!(
-                                "{} (shift {shift}, {}): {error}",
+                                "{} (shift {shift}, {}): rejected: {error}",
                                 parent.name,
                                 candidate.operator.text()
                             ));
                             continue;
                         }
-                        Err(error) => return Err(error),
                     };
                     let proved = certification.is_proved();
                     report.lifts.push(certification);
@@ -781,6 +782,7 @@ fn shifted_rows(
 mod tests {
     use super::*;
     use crate::recurrence::implicit::algebra::q;
+    use crate::recurrence::PreserverImageIdentityStatus;
 
     #[test]
     fn rational_functions_are_fitted_exactly() {
@@ -869,5 +871,134 @@ mod tests {
                 Some(input.clone())
             );
         }
+    }
+
+    /// Whether the nonzero `row` is real-rooted with every root in `region`
+    /// (exact: Sturm counts on the integer row, signs of the coefficients
+    /// of the row shifted to each endpoint, the endpoint itself excluded
+    /// for an open end).
+    fn row_in_region(row: &[Q], region: &crate::real_rootedness::RealInterval) -> bool {
+        let one_sign = |p: &[Q]| {
+            let p = vec_poly::trim(p);
+            !(p.iter().any(Signed::is_positive) && p.iter().any(Signed::is_negative))
+        };
+        let common = row.iter().fold(BigInt::one(), |acc, c| {
+            num_integer::Integer::lcm(&acc, c.denom())
+        });
+        let integers: Vec<BigInt> = row
+            .iter()
+            .map(|c| (c * Q::from_integer(common.clone())).to_integer())
+            .collect();
+        if !crate::is_real_rooted_bigint_coeffs(&integers) {
+            return false;
+        }
+        let lower_ok = region.lower.as_ref().is_none_or(|l| {
+            one_sign(&vec_poly::compose(row, &[l.clone(), -Q::one()]))
+                && (region.lower_closed || !vec_poly::evaluate(row, l).is_zero())
+        });
+        let upper_ok = region.upper.as_ref().is_none_or(|u| {
+            one_sign(&vec_poly::compose(row, &[u.clone(), Q::one()]))
+                && (region.upper_closed || !vec_poly::evaluate(row, u).is_zero())
+        });
+        lower_ok && upper_ok
+    }
+
+    /// The search on a catalog entry with a library of the given catalog
+    /// parents completes, rejects no candidate by a failed self-check, and
+    /// every proved lift replays and has its first 40 rows real-rooted in
+    /// its claimed region.
+    fn assert_search_completes(id: &str, parents: &[&str]) -> PreserverImageReport {
+        let library = PreserverParentLibrary::from_catalog_entries(
+            parents,
+            &super::super::PreserverParentLibraryOptions {
+                include_oeis_catalog: true,
+                max_catalog_order: 3,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            library.parents.len(),
+            parents.len(),
+            "{:?}",
+            library.skipped
+        );
+        let entry = crate::oeis::by_id(id).unwrap();
+        let (rule, rows) = entry.recurrence_parts().unwrap();
+        let n0 = entry.recurrence_first_index;
+        let options = PreserverImageSearchOptions {
+            library: Some(Arc::new(library)),
+            stop_at_first_proof: false,
+            ..Default::default()
+        };
+        let report =
+            find_preserver_image_lifts(&rule, &rows, n0, &options).expect("the search completes");
+        report.verify().unwrap();
+        assert!(
+            !report
+                .notes
+                .iter()
+                .any(|note| note.contains("rejected: the")),
+            "{:#?}",
+            report.notes
+        );
+        let count = rule.generation_initial_count(n0, rows.len());
+        let generated = rule.generate_rows_rational(&rows[..count], n0, 40).unwrap();
+        for lift in report.proved_lifts() {
+            let region = &lift.lift_summary.root_transfer.input_root_region;
+            for (offset, row) in generated.iter().enumerate() {
+                let row = vec_poly::trim(row);
+                if vec_poly::is_zero(&row) {
+                    continue;
+                }
+                assert!(
+                    row_in_region(&row, &region.at(n0 + offset).unwrap()),
+                    "{id}: row {} is not real-rooted in {region}",
+                    n0 + offset
+                );
+            }
+        }
+        report
+    }
+
+    /// Regression: the Euler-step candidates from A011973 and A052553 used
+    /// to abort the search on the Lucas triangle A061896 with "the
+    /// pseudo-division identity does not hold" (the quotients missed the
+    /// index content of the row-annihilator multiplier).
+    #[test]
+    fn the_search_on_a061896_completes() {
+        let report = assert_search_completes("A061896", &["A011973", "A052553"]);
+        // Both Euler-step identities are now certified (their side
+        // conditions fail, so nothing is proved).
+        for parent in ["A011973", "A052553"] {
+            assert!(
+                report
+                    .lifts
+                    .iter()
+                    .any(|lift| lift.candidate.parent_name == parent
+                        && matches!(lift.candidate.operator, PreserverOperator::EulerStep { .. })
+                        && matches!(
+                            lift.identity,
+                            PreserverImageIdentityStatus::Certified { .. }
+                        )),
+                "{parent}"
+            );
+        }
+    }
+
+    /// Regression: the same for A199478 and the Euler-step candidate from
+    /// A128099 at shift 0.
+    #[test]
+    fn the_search_on_a199478_completes() {
+        let report = assert_search_completes("A199478", &["A128099"]);
+        assert!(report
+            .lifts
+            .iter()
+            .any(|lift| lift.candidate.index_shift == 0
+                && matches!(lift.candidate.operator, PreserverOperator::EulerStep { .. })
+                && matches!(
+                    lift.identity,
+                    PreserverImageIdentityStatus::Certified { .. }
+                )));
     }
 }

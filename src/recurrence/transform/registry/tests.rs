@@ -757,3 +757,283 @@ fn contains_index_follows_the_schedule_domain() {
         assert!([0, 1, 7, 1 << 20].iter().all(|&i| map.contains_index(i)));
     }
 }
+
+// ---------------------------------------------------------------------------
+// Comparison with the former chain-rule transport
+// ---------------------------------------------------------------------------
+
+/// The former transport of the coordinate maps by the chain rule
+/// `P^(k)(phi) = kappa^k lambda^(alpha_k) T_k[Q]` (kept as the reference
+/// of the comparison test below).
+fn reference_transport_scalar(
+    rule: &Recurrence,
+    gauge: &Gauge,
+) -> Result<Recurrence, TransformError> {
+    let mut pieces: Vec<(PieceKey, Bp, i64)> = Vec::new();
+    let tau = gauge.tau;
+    let degree_exponent = |degree: usize| -> Result<i64, TransformError> {
+        checked(i64::try_from(degree).ok().and_then(|d| d.checked_mul(tau)))
+    };
+
+    let lhs = rule
+        .denominator
+        .as_ref()
+        .map(bp_from)
+        .unwrap_or_else(|| bp_constant(Q::one()));
+    let (lhs_hom, lhs_degree) = bp_homogenize(&lhs, &gauge.numerator, &gauge.denominator);
+    pieces.push((PieceKey::Lhs, lhs_hom, -degree_exponent(lhs_degree)?));
+
+    let lambda_derivative = gauge.lambda[1].clone();
+    let lambda_poly = vec_poly::trim(&gauge.lambda);
+    for term in &rule.terms {
+        let coefficient = bp_from(&term.coeff);
+        if bp_is_zero(&coefficient) {
+            continue;
+        }
+        let (hom, degree) = bp_homogenize(&coefficient, &gauge.numerator, &gauge.denominator);
+        let offset =
+            i64::try_from(term.offset).map_err(|_| TransformError::Limit("offset".into()))?;
+        let derivative =
+            i64::try_from(term.deriv_order).map_err(|_| TransformError::Limit("order".into()))?;
+        // alpha_0(m) = -(w + h (m - r)) = (h r - w) - h m.
+        let alpha_constant = checked(
+            gauge
+                .step
+                .checked_mul(offset)
+                .and_then(|value| value.checked_sub(gauge.weight_constant)),
+        )?;
+        let mut alpha = bp_affine_index(q(alpha_constant), q(-gauge.step));
+        let mut operator: Vec<Bp> = vec![bp_constant(Q::one())];
+        for _ in 0..term.deriv_order {
+            let mut next: Vec<Bp> = vec![Vec::new(); operator.len() + 1];
+            for (i, t) in operator.iter().enumerate() {
+                let from_derivative = bp_mul_x(&bp_dx(t), &lambda_poly);
+                let from_order = bp_mul_x(t, &lambda_poly);
+                let from_weight = bp_scale(&bp_mul(&alpha, t), &lambda_derivative);
+                next[i] = bp_add(&bp_add(&next[i], &from_derivative), &from_weight);
+                next[i + 1] = bp_add(&next[i + 1], &from_order);
+            }
+            operator = next;
+            alpha = bp_add(&alpha, &bp_constant(q(gauge.sigma)));
+        }
+        let scale = rational_power(&gauge.kappa, derivative);
+        // ell^(w(m) - w(m - r)) times the chain-rule exponent sigma k.
+        let exponent = checked(
+            gauge
+                .step
+                .checked_mul(offset)
+                .and_then(|value| value.checked_add(gauge.sigma * derivative))
+                .and_then(|value| value.checked_sub(degree_exponent(degree).ok()?)),
+        )?;
+        for (order, t) in operator.into_iter().enumerate() {
+            let poly = bp_scale(&bp_mul(&hom, &t), &scale);
+            if bp_is_zero(&poly) {
+                continue;
+            }
+            pieces.push((
+                PieceKey::Term {
+                    offset: term.offset,
+                    derivative: order,
+                    alternating: term.sign == RecurrenceSign::AlternatingN,
+                },
+                poly,
+                exponent,
+            ));
+        }
+    }
+
+    if let Some(inhomogeneous) = &rule.inhomogeneous {
+        let g = bp_from(inhomogeneous);
+        if !bp_is_zero(&g) {
+            let index_independent = gauge.step == 0
+                || (gauge.lambda_is_constant()
+                    && rational_power(&gauge.lambda[0], gauge.step).is_one());
+            if !index_independent {
+                return Err(TransformError::InhomogeneousNotTransportable);
+            }
+            let (hom, degree) = bp_homogenize(&g, &gauge.numerator, &gauge.denominator);
+            let exponent = checked(gauge.weight_constant.checked_sub(degree_exponent(degree)?))?;
+            pieces.push((PieceKey::Inhomogeneous, hom, exponent));
+        }
+    }
+
+    // Combine: constant lambda gives scalar factors; otherwise clear denominators.
+    let mut combined: BTreeMap<PieceKey, Bp> = BTreeMap::new();
+    if gauge.lambda_is_constant() {
+        for (key, poly, exponent) in pieces {
+            let scaled = bp_scale(&poly, &rational_power(&gauge.lambda[0], exponent));
+            let entry = combined.entry(key).or_default();
+            *entry = bp_add(entry, &scaled);
+        }
+    } else {
+        let shift = pieces.iter().map(|(_, _, e)| -e).max().unwrap_or(0);
+        for (key, poly, exponent) in pieces {
+            let power = usize::try_from(shift + exponent).expect("nonnegative by choice of shift");
+            let scaled = bp_mul_x(&poly, &vec_poly::pow(&lambda_poly, power));
+            let entry = combined.entry(key).or_default();
+            *entry = bp_add(entry, &scaled);
+        }
+        // Divide out the largest common power of lambda (exact polynomial division).
+        loop {
+            let divided = combined
+                .iter()
+                .map(|(key, poly)| bp_div_linear(poly, &gauge.lambda).map(|p| (key.clone(), p)))
+                .collect::<Option<BTreeMap<_, _>>>();
+            match divided {
+                Some(next) if next.get(&PieceKey::Lhs).is_some_and(|p| !bp_is_zero(p)) => {
+                    combined = next;
+                }
+                _ => break,
+            }
+        }
+    }
+    Ok(assemble_rule(combined))
+}
+
+/// The maps of the comparison, for rules whose rows start at `origin`.
+fn comparison_maps(origin: usize) -> Vec<RecurrenceTransformation> {
+    let growing = DegreeSchedule::new(origin, 3, 1);
+    let decreasing = DegreeSchedule::new(origin, 40, -2).with_last_index(origin + 12);
+    vec![
+        RecurrenceTransformation::MultiplyPower { power: 2 },
+        RecurrenceTransformation::DividePower { power: 1 },
+        RecurrenceTransformation::Affine {
+            a: "-2/3".into(),
+            b: "5".into(),
+        },
+        RecurrenceTransformation::Reversal {
+            schedule: growing.clone(),
+        },
+        RecurrenceTransformation::Reversal {
+            schedule: DegreeSchedule::new(origin, 7, 0),
+        },
+        RecurrenceTransformation::Reversal {
+            schedule: decreasing.clone(),
+        },
+        RecurrenceTransformation::FPolynomial {
+            schedule: DegreeSchedule::new(origin, 2, 2),
+        },
+        RecurrenceTransformation::Mobius {
+            a: "1".into(),
+            b: "2".into(),
+            c: "-1/2".into(),
+            e: "3".into(),
+            schedule: growing,
+        },
+        RecurrenceTransformation::Mobius {
+            a: "3".into(),
+            b: "1".into(),
+            c: "2".into(),
+            e: "-1".into(),
+            schedule: DegreeSchedule::new(origin, 10, 0),
+        },
+        RecurrenceTransformation::Mobius {
+            a: "1".into(),
+            b: "2".into(),
+            c: "0".into(),
+            e: "3".into(),
+            schedule: DegreeSchedule::new(origin, 2, 1),
+        },
+        RecurrenceTransformation::Mobius {
+            a: "2".into(),
+            b: "-1".into(),
+            c: "0".into(),
+            e: "-1".into(),
+            schedule: DegreeSchedule::new(origin, 4, 2),
+        },
+        RecurrenceTransformation::Mobius {
+            a: "1".into(),
+            b: "0".into(),
+            c: "-1".into(),
+            e: "1".into(),
+            schedule: decreasing,
+        },
+    ]
+}
+
+/// Transport one rule both ways and require the same outcome: identical
+/// rules (the same canonical form and the same text) or the same error.
+fn assert_same_transport(rule: &Recurrence, transformation: &RecurrenceTransformation) -> bool {
+    let new = transformation.transport(rule).map(scalar);
+    let old = transformation
+        .gauge()
+        .and_then(|gauge| reference_transport_scalar(rule, &gauge));
+    match (new, old) {
+        (Ok(new), Ok(old)) => {
+            assert!(
+                same_canonical_recurrence(&new, &old),
+                "{transformation:?} on {rule}: {new} vs {old}"
+            );
+            assert_eq!(new.to_string(), old.to_string(), "{transformation:?}");
+            true
+        }
+        (Err(new), Err(old)) => {
+            assert_eq!(new, old, "{transformation:?} on {rule}");
+            false
+        }
+        (new, old) => panic!("{transformation:?} on {rule}: {new:?} vs {old:?}"),
+    }
+}
+
+/// The forward rules of the `ore-algebra` substitutions agree exactly with
+/// the former chain-rule transport on the registry's examples and on every
+/// rule of the bundled OEIS catalog, for every coordinate map (increasing,
+/// constant and decreasing schedules; Möbius maps with and without a pole).
+#[test]
+fn substitution_transport_equals_the_chain_rule_transport() {
+    let mut rules = vec![
+        (eulerian_rule(), 1),
+        (
+            Recurrence {
+                terms: vec![
+                    term(1, 0, bivar(&[&[1], &[0, 1]])),
+                    term(1, 1, bivar(&[&[2, 0, -1]])),
+                    term(2, 2, bivar(&[&[0], &[0, 0, -1]])),
+                ],
+                denominator: None,
+                inhomogeneous: None,
+            },
+            2,
+        ),
+        (
+            Recurrence {
+                terms: vec![
+                    term(1, 1, bivar(&[&[0, 1]])).with_sign(RecurrenceSign::AlternatingN),
+                    term(1, 0, bivar(&[&[0, 0, 1], &[1]])),
+                ],
+                denominator: Some(bivar(&[&[1], &[1]])),
+                inhomogeneous: Some(bivar(&[&[1], &[0, 1]])),
+            },
+            0,
+        ),
+        (
+            Recurrence {
+                terms: vec![
+                    term(1, 1, bivar(&[&[0, 1]])),
+                    term(1, 0, bivar(&[&[0], &[1]])),
+                ],
+                denominator: Some(bivar(&[&[0, 1, 2], &[1, 0, 1]])),
+                inhomogeneous: Some(bivar(&[&[0, 0, 0, 1]])),
+            },
+            1,
+        ),
+    ];
+    for entry in crate::oeis::catalog() {
+        if let Ok((rule, _)) = entry.recurrence_parts() {
+            rules.push((rule, entry.recurrence_first_index));
+        }
+    }
+    assert!(rules.len() > 100);
+    let mut transported = 0;
+    let mut total = 0;
+    for (rule, origin) in &rules {
+        for transformation in comparison_maps(*origin) {
+            total += 1;
+            if assert_same_transport(rule, &transformation) {
+                transported += 1;
+            }
+        }
+    }
+    // Only additive terms under index-dependent factors are rejected.
+    assert!(transported * 10 > total * 9, "{transported} of {total}");
+}

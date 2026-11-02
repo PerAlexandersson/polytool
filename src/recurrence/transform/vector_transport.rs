@@ -23,8 +23,9 @@
 //! degree offset. The chain rule gives
 //! `F^(k)_(n,j)(phi) = kappa^k lambda^(alpha_k) T_k[G_(n,j)]` with
 //! `alpha_0 = -(w_j + h n)`, `alpha_(k+1) = alpha_k + sigma` and
-//! `T_(k+1) = lambda T_k' + alpha_k lambda' T_k` (the scalar recursion of
-//! module `transform::registry`). Substituting `x -> phi` in row `i` of
+//! `T_(k+1) = lambda T_k' + alpha_k lambda' T_k` (a chain rule per
+//! component; scalar rules go through the `ore-algebra` substitutions
+//! instead). Substituting `x -> phi` in row `i` of
 //! `q(n,x) F_(n+1,i) = sum_(j,k) M_(i,j,k)(n,x) D^k F_(n,j) + g_i(n,x)`
 //! and multiplying by `lambda^(w_i + h (n+1))` gives
 //!
@@ -175,7 +176,7 @@ impl RecurrenceTransformation {
     }
 
     /// The gauge of a Möbius-class map.
-    fn gauge(&self) -> Result<Gauge, TransformError> {
+    pub(super) fn gauge(&self) -> Result<Gauge, TransformError> {
         self.validate()?;
         match self {
             Self::MultiplyPower { power } | Self::DividePower { power } => {

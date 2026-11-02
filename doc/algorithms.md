@@ -836,12 +836,18 @@ operator of the menu.  With `P'_n = P_(n+s)` (rule `L'`, the substitution
    `D_x C_n = C_n (d_n y - y^2 D_y)`, `c(x) C_n(F) = C_n(c(1/y) F)` and
    `C_(n+i)(F) = C_n(y^(-h i) F)`, then a power `y^N` (`N = b + h R`, `b`
    the degree in `x` of `M`); a Möbius map is affine, reversal, affine.
-   These are the pullbacks `ore_algebra::pull_back` through `T'` and the
-   gauge; the largest power of `x` dividing `E` is removed.  In each case
-   `(M H)_n = 0` exactly when `(E P')_n = 0`.
+   These are the pullbacks of the `ore-algebra` crate: `ore_algebra::pull_back`
+   through the gauge (and `T'`), then, for a coordinate map,
+   `ore_algebra::pull_back_substitution` through the map as an
+   `ore_algebra::Substitution` with the same bounds; the largest power of `x`
+   dividing `E` is removed.  In each case `(M H)_n = 0` exactly when
+   `(E P')_n = 0`.
 3. **Division.**  `w(n) E = sum_nu H_nu S^nu L'` by right pseudo-division
    (remainder zero), or with the remainder removed by row annihilators of
-   `P'` (as for the Hadamard-factor lifts).  So `H` satisfies `M` at every
+   `P'` (as for the Hadamard-factor lifts): `mu r = sum Z A` with
+   `mu = c(n) p(x) mu_2(n, x)`, so `p mu_2 (c w) E = sum (mu H_nu) S^nu L' +
+   sum Z A`; the index content `c(n)` enters both the multiplier and the
+   quotients.  So `H` satisfies `M` at every
    base where `L'` holds and `w != 0`; the finitely many other bases from
    `n0 + K - R` on are evaluated exactly.
 4. **Induction.**  `H = Q` on the identifying rows and the leader of `M` is

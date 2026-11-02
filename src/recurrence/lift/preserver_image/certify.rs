@@ -1204,6 +1204,7 @@ fn certify_identity(
     let from = input_from.max(parent_from);
     let mut multiplier = division.multiplier.clone();
     let mut row_multiplier = Biv::one();
+    let mut quotient_multiplier = Biv::one();
     let mut annihilators: Vec<(DOp, DOp)> = Vec::new();
     let mut annihilation_json = None;
     let mut extra_exceptional = Vec::new();
@@ -1241,11 +1242,19 @@ fn certify_identity(
                     });
                 }
             };
-        multiplier = multiplier.multiply(&n_polynomial(&annihilation.index_multiplier));
+        // The annihilation is `mu r = sum Z A` with `mu = c(n) p(x) mu_2(n, x)`.
+        // From `w E = sum H S^nu L' + r`, multiplying by `mu` gives
+        // `p mu_2 (c w) E = sum (mu H) S^nu L' + sum Z A`: the index content
+        // `c(n)` goes into the multiplier `w` *and* into the quotients
+        // (it was missing from the quotients, so the recorded identity
+        // failed whenever `c != 1`).
+        let index_content = n_polynomial(&annihilation.index_multiplier);
+        multiplier = multiplier.multiply(&index_content);
         let (record, full, pairs) = annihilation_record(annihilation)?;
         if let PreserverRowAnnihilation::System { system } = &record {
             extra_exceptional = vanishing_bases(&biv_from_json(&system.row_multiplier)?, from);
         }
+        quotient_multiplier = full.multiply(&index_content);
         row_multiplier = full;
         annihilators = pairs;
         annihilation_json = Some(record);
@@ -1259,7 +1268,7 @@ fn certify_identity(
         .map(|(nu, row)| {
             let mut h = DOp::default();
             for (key, c) in &row[0].0 {
-                h.add_term(*key, row_multiplier.multiply(c));
+                h.add_term(*key, quotient_multiplier.multiply(c));
             }
             (*nu, h)
         })
@@ -1272,9 +1281,17 @@ fn certify_identity(
         &quotients,
         &annihilators,
     ) {
-        return Err(RecurrenceError::VerificationFailed(
-            "the pseudo-division identity does not hold".into(),
-        ));
+        // A failed self-check rejects this candidate only (fail-safe: the
+        // identity is then not certified).
+        notes.push("the assembled division identity failed its exact re-check".into());
+        return Ok(IdentityOutcome {
+            identity: supported(
+                count,
+                "the pseudo-division identity does not hold exactly".into(),
+            ),
+            rows_compared: count,
+            notes,
+        });
     }
     let mut exceptional = exceptional_bases(&multiplier, input_from, parent_from);
     exceptional.extend(extra_exceptional);
@@ -1345,7 +1362,18 @@ fn certify_identity(
             candidate.operator.text()
         ),
     };
-    certificate.verify()?;
+    match certificate.verify() {
+        Ok(()) => {}
+        Err(RecurrenceError::VerificationFailed(reason)) => {
+            notes.push("the assembled certificate failed its replay".into());
+            return Ok(IdentityOutcome {
+                identity: supported(count, format!("the certificate does not replay: {reason}")),
+                rows_compared: count,
+                notes,
+            });
+        }
+        Err(error) => return Err(error),
+    }
     Ok(IdentityOutcome {
         identity: PreserverImageIdentityStatus::Certified {
             certificate: Box::new(PreserverImageCertificate::OperatorDivision(Box::new(

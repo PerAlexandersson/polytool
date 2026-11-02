@@ -32,22 +32,40 @@
 //! f(m,x) P_m = sum s(m) c(m,x) D^k P_(m-r) + g(m,x)
 //! ```
 //!
-//! is transported by [`RecurrenceTransformation::transport`].  For a Möbius
-//! map put `phi = (a x + b)/ell`, `ell = c x + e` and `Delta = a e - b c`.
-//! Then `P_j^(k)(phi) = Delta^(-k) ell^(k - d_j) T_k[Q_j]` with `T_0 = Q` and
-//! `T_(k+1) = ell T_k' + (k - d_j) c T_k`; for `x^r` multiplication the same
-//! recursion holds with `ell = x`, `Delta = 1` and exponents `-r - k`.
-//! Substituting, multiplying by `ell^(d_m)` and by the smallest power of
-//! `ell` that clears every denominator gives a polynomial identity; a common
-//! power of `ell` is then divided out exactly.  Nothing is evaluated at the
-//! pole of `phi`.  For the first-order rule
-//! `R(n) P_(n+1) = A P_n + B P_n'` this is the formula
+//! is transported by [`RecurrenceTransformation::transport`].  The
+//! coordinate maps (`multiply_power`, `divide_power`, `affine`, `reversal`,
+//! `f_polynomial`, `mobius`) are substitutions `Q_n = C_n(P_n)` of the
+//! `ore-algebra` crate (`ore_algebra::Substitution`: power gauges `x^(+-r)`,
+//! the affine map, the reversal, the `f`-polynomial and the Möbius map with
+//! scale `1`, with the schedule `d_0 + h (n - n_0)` as the exponent
+//! `[d_0 - h n_0, h]` in the original index).  Write the rule as the
+//! relation `L = f(n + R) S^R - sum s c(n + R) D^k S^(R - r)` at base
+//! `n = m - R` (`R` the largest offset), so `(L P)_n = g(n + R)`.  Its
+//! forward rule (`ore_algebra::push_forward_substitution`, the pullback
+//! through the inverse substitution) is `q C L C^(-1)` with a left factor
+//! `q` that is a nonzero constant times a power of the linear form
+//! `ell` of the map (`ell = c x + e` for a Möbius map, `x` for a power
+//! gauge, `1` for an affine map).  For fixed bounds the pullback is linear
+//! and acts coefficient by coefficient without shifting the index of a
+//! coefficient, so it commutes with a factor `(-1)^m` of a term: each piece
+//! of the rule (the left factor and every term, with its sign) is pushed
+//! forward separately with the bounds of the whole rule, which keeps the
+//! left factor `q` common.  The additive term becomes
+//! `q C_n(g(n + R)) = q ell^(d_n - deg g) hom(g)` with
+//! `hom(g) = ell^(deg g) g(phi)`, `phi = (a x + b)/ell` (for a power gauge
+//! `q x^(+-r) g`).  A power of `ell` that clears every denominator is
+//! multiplied in, the largest common power of `ell` is divided out exactly,
+//! and the result is scaled so that its left factor is `ell^e hom(f)` (the
+//! forward rule fixes it only up to a constant).  Nothing is evaluated at
+//! the pole of `phi`.  For the first-order rule
+//! `R(n) P_(n+1) = A P_n + B P_n'` and a Möbius map with
+//! `Delta = a e - b c` this is the formula
 //! `R Q_(n+1) = ell^h (A(phi) - d_n c ell B(phi)/Delta) Q_n
 //!  + ell^(h+2) B(phi)/Delta Q_n'`.
 //!
 //! The transported rule is an exact algebraic consequence of the source rule,
 //! valid wherever the source rule holds; it is not refitted.  An additive
-//! term `g` picks up the factor `ell^(d_m)`, so it is transported only when
+//! term `g` picks up the factor `ell^(d_n)`, so it is transported only when
 //! that factor is index independent (`h = 0`, or a constant `ell` with
 //! `ell^h = 1`).  The symmetric decomposition transports a first-order rule
 //! without alternating signs to the complete two-component
@@ -103,9 +121,13 @@ use super::*;
 use crate::decomposition::f_polynomial;
 use crate::polynomial::Polynomial;
 use crate::real_rootedness::gamma_coefficients_bigint_coeffs;
+use crate::recurrence::implicit::algebra::{Biv, DOp};
 use crate::vec_poly;
 use num_integer::Integer;
 use num_traits::{One, Zero};
+use ore_algebra::{
+    pull_back_substitution, MobiusMap, PullbackBounds, Substitution, SubstitutionError,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -344,6 +366,19 @@ impl fmt::Display for TransformError {
 }
 
 impl std::error::Error for TransformError {}
+
+/// The errors of an `ore-algebra` substitution as registry errors: a zero
+/// affine slope (or Möbius scale) and a singular Möbius map are
+/// [`TransformError::SingularMobius`], an exponent that is not
+/// `d_0 + h n` with integers is [`TransformError::InvalidSchedule`].
+pub(super) fn substitution_error(error: SubstitutionError) -> TransformError {
+    match error {
+        SubstitutionError::ZeroParameter | SubstitutionError::SingularMobius => {
+            TransformError::SingularMobius
+        }
+        SubstitutionError::InvalidExponent => TransformError::InvalidSchedule(error.to_string()),
+    }
+}
 
 // ---------------------------------------------------------------------------
 // The transformation registry
@@ -593,21 +628,68 @@ impl RecurrenceTransformation {
         }
     }
 
+    /// The coordinate map as an `ore-algebra` [`Substitution`] (validated),
+    /// with the exponent `d_n = (d_0 - h n_0) + h n` of the schedule in the
+    /// original index: `x^r` multiplication and removal as power gauges
+    /// `x^(+-r)`, the affine map, the reversal, the `f`-polynomial and the
+    /// Möbius map (scale `1`).  `None` for the other maps (gamma, symmetric
+    /// decomposition, diagonal, derivative antecedent, derivative), which
+    /// are not substitutions.
+    ///
+    /// # Errors
+    ///
+    /// [`TransformError::SingularMobius`] for a zero affine slope or
+    /// `a e - b c = 0`, and the schedule and parameter errors.
+    pub(in crate::recurrence) fn substitution(
+        &self,
+    ) -> Result<Option<Substitution>, TransformError> {
+        let power = |power: usize, sign: i64| -> Result<Vec<Q>, TransformError> {
+            let power = i64::try_from(power).map_err(|_| TransformError::Limit("power".into()))?;
+            Ok(vec![q(sign * power)])
+        };
+        let degree = |schedule: &DegreeSchedule| -> Result<Vec<Q>, TransformError> {
+            Ok(vec![q(schedule.weight_constant()?), q(schedule.step)])
+        };
+        let substitution = match self {
+            Self::MultiplyPower { power: r } => Substitution::PowerGauge {
+                power: power(*r, 1)?,
+            },
+            Self::DividePower { power: r } => Substitution::PowerGauge {
+                power: power(*r, -1)?,
+            },
+            Self::Affine { .. } => {
+                let (slope, intercept) = self.affine_parameters()?.expect("affine");
+                Substitution::Affine { slope, intercept }
+            }
+            Self::Reversal { schedule } => Substitution::Reversal {
+                degree: degree(schedule)?,
+            },
+            Self::FPolynomial { schedule } => Substitution::FPolynomial {
+                degree: degree(schedule)?,
+            },
+            Self::Mobius { .. } => {
+                let m = self.mobius_parameters()?.expect("mobius");
+                Substitution::Mobius(Box::new(MobiusMap {
+                    degree: degree(m.schedule)?,
+                    a: m.a,
+                    b: m.b,
+                    c: m.c,
+                    e: m.e,
+                    scale: Q::one(),
+                }))
+            }
+            _ => return Ok(None),
+        };
+        substitution.validate().map_err(substitution_error)?;
+        Ok(Some(substitution))
+    }
+
     /// Check parameters and schedule; singular maps and invalid schedules are rejected.
     pub fn validate(&self) -> Result<(), TransformError> {
         if let Some(schedule) = self.schedule() {
             schedule.validate()?;
         }
-        if let Some((a, _)) = self.affine_parameters()? {
-            if a.is_zero() {
-                return Err(TransformError::SingularMobius);
-            }
-        }
-        if let Some(mobius) = self.mobius_parameters()? {
-            if mobius.delta().is_zero() {
-                return Err(TransformError::SingularMobius);
-            }
-        }
+        self.substitution()?;
         match self {
             Self::Diagonal { weight } => weight.validate()?,
             Self::DerivativeAntecedent { g } => {
@@ -796,32 +878,15 @@ impl RecurrenceTransformation {
     pub fn transport(&self, rule: &Recurrence) -> Result<TransportedRecurrence, TransformError> {
         self.validate()?;
         match self {
-            Self::MultiplyPower { power } => {
-                let power =
-                    i64::try_from(*power).map_err(|_| TransformError::Limit("power".into()))?;
-                transport_scalar(rule, &Gauge::monomial(power)).map(TransportedRecurrence::Scalar)
-            }
-            Self::DividePower { power } => {
-                let power =
-                    i64::try_from(*power).map_err(|_| TransformError::Limit("power".into()))?;
-                transport_scalar(rule, &Gauge::monomial(-power)).map(TransportedRecurrence::Scalar)
-            }
-            Self::Affine { .. } => {
-                let (a, b) = self.affine_parameters()?.expect("affine");
-                let gauge = Gauge::mobius(a, b, q(0), q(1), 0, 0);
-                transport_scalar(rule, &gauge).map(TransportedRecurrence::Scalar)
-            }
-            Self::Reversal { .. } | Self::FPolynomial { .. } | Self::Mobius { .. } => {
-                let m = self.mobius_parameters()?.expect("mobius");
-                let gauge = Gauge::mobius(
-                    m.a,
-                    m.b,
-                    m.c,
-                    m.e,
-                    m.schedule.weight_constant()?,
-                    m.schedule.step,
-                );
-                transport_scalar(rule, &gauge).map(TransportedRecurrence::Scalar)
+            Self::MultiplyPower { .. }
+            | Self::DividePower { .. }
+            | Self::Affine { .. }
+            | Self::Reversal { .. }
+            | Self::FPolynomial { .. }
+            | Self::Mobius { .. } => {
+                let substitution = self.substitution()?.expect("a coordinate map");
+                transport_scalar(rule, &substitution, &self.gauge()?)
+                    .map(TransportedRecurrence::Scalar)
             }
             Self::Gamma { schedule } => {
                 let gamma = transport_gamma(rule, schedule)?;
@@ -1263,9 +1328,13 @@ pub(super) fn bp_homogenize(p: &Bp, numerator: &[Q], denominator: &[Q]) -> (Bp, 
 // ---------------------------------------------------------------------------
 
 /// A scalar gauge `Q_n(x) = lambda(x)^(w + h n) P_n(phi(x))` with
-/// `phi = num/den` and `P^(k)(phi) = kappa^k lambda^(alpha_k) T_k[Q]`,
+/// `phi = num/den`: the linear form `lambda`, the homogenization and the
+/// exponents used by the scalar transport (additive terms, clearing and
+/// normalization), and the chain rule
+/// `P^(k)(phi) = kappa^k lambda^(alpha_k) T_k[Q]`,
 /// `alpha_0 = -(w + h n)`, `alpha_(k+1) = alpha_k + sigma`,
-/// `T_(k+1) = lambda T_k' + alpha_k lambda' T_k`.
+/// `T_(k+1) = lambda T_k' + alpha_k lambda' T_k` of the componentwise
+/// vector transport (module `transform::vector_transport`).
 pub(super) struct Gauge {
     pub(super) numerator: Vec<Q>,
     pub(super) denominator: Vec<Q>,
@@ -1326,82 +1395,89 @@ pub(super) fn checked(value: Option<i64>) -> Result<i64, TransformError> {
     value.ok_or_else(|| TransformError::Limit("exponent overflow".into()))
 }
 
-fn transport_scalar(rule: &Recurrence, gauge: &Gauge) -> Result<Recurrence, TransformError> {
-    let mut pieces: Vec<(PieceKey, Bp, i64)> = Vec::new();
-    let tau = gauge.tau;
-    let degree_exponent = |degree: usize| -> Result<i64, TransformError> {
-        checked(i64::try_from(degree).ok().and_then(|d| d.checked_mul(tau)))
-    };
-
+/// Transport a scalar rule through a coordinate map by the forward rule of
+/// its substitution (module documentation, "Transport"): every piece of
+/// the rule is pushed forward with the common bounds of the whole rule,
+/// the additive term is mapped by the substitution and the left factor
+/// `q`, powers of `lambda` are cleared and divided out, and the scale is
+/// that of `lambda^e hom(f)`.
+fn transport_scalar(
+    rule: &Recurrence,
+    substitution: &Substitution,
+    gauge: &Gauge,
+) -> Result<Recurrence, TransformError> {
+    let top = rule.max_offset();
+    let index_shift = i64::try_from(top).map_err(|_| TransformError::Limit("offset".into()))?;
+    let to_base = |p: &BivarPoly| Biv::from_bivar(p).shift_index(index_shift);
+    // The pieces f(n + R) S^R and c(n + R) D^k S^(R - r) of the relation at
+    // base n = m - R (the sign of a (-1)^m term is kept in its key).
     let lhs = rule
         .denominator
         .as_ref()
-        .map(bp_from)
-        .unwrap_or_else(|| bp_constant(Q::one()));
-    let (lhs_hom, lhs_degree) = bp_homogenize(&lhs, &gauge.numerator, &gauge.denominator);
-    pieces.push((PieceKey::Lhs, lhs_hom, -degree_exponent(lhs_degree)?));
-
-    let lambda_derivative = gauge.lambda[1].clone();
-    let lambda_poly = vec_poly::trim(&gauge.lambda);
+        .map(to_base)
+        .unwrap_or_else(Biv::one);
+    let mut pieces = vec![(PieceKey::Lhs, DOp::single(top, 0, lhs))];
     for term in &rule.terms {
-        let coefficient = bp_from(&term.coeff);
-        if bp_is_zero(&coefficient) {
+        let coefficient = to_base(&term.coeff);
+        if coefficient.is_zero() {
             continue;
         }
-        let (hom, degree) = bp_homogenize(&coefficient, &gauge.numerator, &gauge.denominator);
-        let offset =
-            i64::try_from(term.offset).map_err(|_| TransformError::Limit("offset".into()))?;
-        let derivative =
-            i64::try_from(term.deriv_order).map_err(|_| TransformError::Limit("order".into()))?;
-        // alpha_0(m) = -(w + h (m - r)) = (h r - w) - h m.
-        let alpha_constant = checked(
-            gauge
-                .step
-                .checked_mul(offset)
-                .and_then(|value| value.checked_sub(gauge.weight_constant)),
-        )?;
-        let mut alpha = bp_affine_index(q(alpha_constant), q(-gauge.step));
-        let mut operator: Vec<Bp> = vec![bp_constant(Q::one())];
-        for _ in 0..term.deriv_order {
-            let mut next: Vec<Bp> = vec![Vec::new(); operator.len() + 1];
-            for (i, t) in operator.iter().enumerate() {
-                let from_derivative = bp_mul_x(&bp_dx(t), &lambda_poly);
-                let from_order = bp_mul_x(t, &lambda_poly);
-                let from_weight = bp_scale(&bp_mul(&alpha, t), &lambda_derivative);
-                next[i] = bp_add(&bp_add(&next[i], &from_derivative), &from_weight);
-                next[i + 1] = bp_add(&next[i + 1], &from_order);
+        let key = PieceKey::Term {
+            offset: term.offset,
+            derivative: term.deriv_order,
+            alternating: term.sign == RecurrenceSign::AlternatingN,
+        };
+        pieces.push((
+            key,
+            DOp::single(top - term.offset, term.deriv_order, coefficient),
+        ));
+    }
+    let bounds = pieces
+        .iter()
+        .map(|(_, piece)| PullbackBounds::of(piece))
+        .fold(PullbackBounds::of(&DOp::identity()), |a, b| {
+            PullbackBounds {
+                top_shift: a.top_shift.max(b.top_shift),
+                derivative_order: a.derivative_order.max(b.derivative_order),
+                variable_degree: a.variable_degree.max(b.variable_degree),
             }
-            operator = next;
-            alpha = bp_add(&alpha, &bp_constant(q(gauge.sigma)));
-        }
-        let scale = rational_power(&gauge.kappa, derivative);
-        // ell^(w(m) - w(m - r)) times the chain-rule exponent sigma k.
-        let exponent = checked(
-            gauge
-                .step
-                .checked_mul(offset)
-                .and_then(|value| value.checked_add(gauge.sigma * derivative))
-                .and_then(|value| value.checked_sub(degree_exponent(degree).ok()?)),
-        )?;
-        for (order, t) in operator.into_iter().enumerate() {
-            let poly = bp_scale(&bp_mul(&hom, &t), &scale);
-            if bp_is_zero(&poly) {
-                continue;
-            }
-            pieces.push((
+        });
+    // push_forward_substitution with the bounds of the whole rule, so that
+    // the left factor q is common to every piece.
+    let inverse = substitution.inverse();
+    let push = |op: &DOp| pull_back_substitution(op, &inverse, bounds).map_err(substitution_error);
+    let from_base = |c: &Biv| bp_trim(c.shift_index(-index_shift).rows().to_vec());
+    let mut combined: BTreeMap<PieceKey, Bp> = BTreeMap::new();
+    for (key, piece) in &pieces {
+        for ((shift, derivative), c) in &push(piece)?.0 {
+            let image_key = match key {
+                PieceKey::Lhs if (*shift, *derivative) == (top, 0) => PieceKey::Lhs,
                 PieceKey::Term {
-                    offset: term.offset,
-                    derivative: order,
-                    alternating: term.sign == RecurrenceSign::AlternatingN,
+                    offset,
+                    alternating,
+                    ..
+                } if *shift == top - offset => PieceKey::Term {
+                    offset: *offset,
+                    derivative: *derivative,
+                    alternating: *alternating,
                 },
-                poly,
-                exponent,
-            ));
+                _ => {
+                    return Err(TransformError::TransportUnsupported(
+                        "the forward rule moved a term to another shift".into(),
+                    ))
+                }
+            };
+            let entry = combined.entry(image_key).or_default();
+            *entry = bp_add(entry, &from_base(c));
         }
     }
+    combined.retain(|key, poly| *key == PieceKey::Lhs || !bp_is_zero(poly));
 
-    if let Some(inhomogeneous) = &rule.inhomogeneous {
-        let g = bp_from(inhomogeneous);
+    // The additive term: (P Q)_n = q C_n(g(n + R)), with
+    // C_n(g) = lambda^(w + h n - tau deg g) hom(g) (index free by the check).
+    let mut inhomogeneous: Option<(Bp, i64)> = None;
+    if let Some(g) = &rule.inhomogeneous {
+        let g = bp_from(g);
         if !bp_is_zero(&g) {
             let index_independent = gauge.step == 0
                 || (gauge.lambda_is_constant()
@@ -1409,29 +1485,44 @@ fn transport_scalar(rule: &Recurrence, gauge: &Gauge) -> Result<Recurrence, Tran
             if !index_independent {
                 return Err(TransformError::InhomogeneousNotTransportable);
             }
+            let left_factor = push(&DOp::identity())?;
+            let q_factor = left_factor
+                .0
+                .get(&(0, 0))
+                .map(|c| bp_trim(c.rows().to_vec()))
+                .unwrap_or_default();
             let (hom, degree) = bp_homogenize(&g, &gauge.numerator, &gauge.denominator);
-            let exponent = checked(gauge.weight_constant.checked_sub(degree_exponent(degree)?))?;
-            pieces.push((PieceKey::Inhomogeneous, hom, exponent));
+            let degree = i64::try_from(degree)
+                .ok()
+                .and_then(|d| d.checked_mul(gauge.tau));
+            let exponent = checked(degree.and_then(|d| gauge.weight_constant.checked_sub(d)))?;
+            inhomogeneous = Some((bp_mul(&hom, &q_factor), exponent));
         }
     }
-
-    // Combine: constant lambda gives scalar factors; otherwise clear denominators.
-    let mut combined: BTreeMap<PieceKey, Bp> = BTreeMap::new();
+    let lambda_poly = vec_poly::trim(&gauge.lambda);
     if gauge.lambda_is_constant() {
-        for (key, poly, exponent) in pieces {
-            let scaled = bp_scale(&poly, &rational_power(&gauge.lambda[0], exponent));
-            let entry = combined.entry(key).or_default();
-            *entry = bp_add(entry, &scaled);
+        if let Some((g, exponent)) = inhomogeneous {
+            let g = bp_scale(&g, &rational_power(&gauge.lambda[0], exponent));
+            combined.insert(PieceKey::Inhomogeneous, g);
         }
     } else {
-        let shift = pieces.iter().map(|(_, _, e)| -e).max().unwrap_or(0);
-        for (key, poly, exponent) in pieces {
-            let power = usize::try_from(shift + exponent).expect("nonnegative by choice of shift");
-            let scaled = bp_mul_x(&poly, &vec_poly::pow(&lambda_poly, power));
-            let entry = combined.entry(key).or_default();
-            *entry = bp_add(entry, &scaled);
+        if let Some((g, exponent)) = inhomogeneous {
+            let deficit = usize::try_from((-exponent).max(0))
+                .map_err(|_| TransformError::Limit("exponent".into()))?;
+            if deficit > 0 {
+                let factor = vec_poly::pow(&lambda_poly, deficit);
+                for poly in combined.values_mut() {
+                    *poly = bp_mul_x(poly, &factor);
+                }
+            }
+            let surplus = usize::try_from(exponent.max(0))
+                .map_err(|_| TransformError::Limit("exponent".into()))?;
+            combined.insert(
+                PieceKey::Inhomogeneous,
+                bp_mul_x(&g, &vec_poly::pow(&lambda_poly, surplus)),
+            );
         }
-        // Divide out the largest common power of lambda (exact polynomial division).
+        // Divide out the largest common power of lambda (exact division).
         loop {
             let divided = combined
                 .iter()
@@ -1445,7 +1536,64 @@ fn transport_scalar(rule: &Recurrence, gauge: &Gauge) -> Result<Recurrence, Tran
             }
         }
     }
+    normalize_left_factor(&mut combined, rule, gauge);
     Ok(assemble_rule(combined))
+}
+
+/// Scale the transported pieces so that the left factor is
+/// `lambda^e hom(f)` (`hom(f) = den^(deg f) f(num/den)`, `e` an integer;
+/// `hom(f) lambda^(-tau deg f)` for a constant `lambda`), the scale of the
+/// chain-rule transport: the forward rule of a substitution fixes the left
+/// factor only up to a nonzero constant.  Unchanged when the left factor is
+/// not of that form (it always is).
+fn normalize_left_factor(combined: &mut BTreeMap<PieceKey, Bp>, rule: &Recurrence, gauge: &Gauge) {
+    let f = rule
+        .denominator
+        .as_ref()
+        .map(bp_from)
+        .unwrap_or_else(|| bp_constant(Q::one()));
+    let (hom, degree) = bp_homogenize(&f, &gauge.numerator, &gauge.denominator);
+    let Some(lhs) = combined.get(&PieceKey::Lhs).cloned() else {
+        return;
+    };
+    let (expected, candidate) = if gauge.lambda_is_constant() {
+        let exponent = -(degree as i64) * gauge.tau;
+        (
+            bp_scale(&hom, &rational_power(&gauge.lambda[0], exponent)),
+            lhs,
+        )
+    } else {
+        let lambda_poly = vec_poly::trim(&gauge.lambda);
+        let difference =
+            bp_x_degree(&lhs).unwrap_or(0) as i64 - bp_x_degree(&hom).unwrap_or(0) as i64;
+        let power = |e: i64| vec_poly::pow(&lambda_poly, e.unsigned_abs() as usize);
+        (
+            bp_mul_x(&hom, &power(difference.max(0))),
+            bp_mul_x(&lhs, &power(difference.min(0))),
+        )
+    };
+    let position = expected
+        .iter()
+        .enumerate()
+        .find_map(|(i, row)| row.iter().position(|c| !c.is_zero()).map(|j| (i, j)));
+    let Some((i, j)) = position else {
+        return;
+    };
+    let Some(scale) = candidate
+        .get(i)
+        .and_then(|row| row.get(j))
+        .filter(|c| !c.is_zero())
+        .map(|c| c / &expected[i][j])
+    else {
+        return;
+    };
+    if bp_scale(&expected, &scale) != candidate {
+        return;
+    }
+    let inverse = scale.recip();
+    for poly in combined.values_mut() {
+        *poly = bp_scale(poly, &inverse);
+    }
 }
 
 pub(super) fn assemble_rule(mut combined: BTreeMap<PieceKey, Bp>) -> Recurrence {

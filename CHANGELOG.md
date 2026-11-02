@@ -175,6 +175,18 @@ the typed errors above.  `exact-real-roots` has no `Result<_, String>` API.
 
 Fixes:
 
+- `find_preserver_image_lifts` no longer aborts when one candidate's
+  certificate fails its self-check (for example A061896 and A199478 stopped
+  with "the pseudo-division identity does not hold"): such a candidate is
+  rejected with a note in `PreserverImageReport::notes`, and an assembled
+  identity or certificate that does not replay leaves the identity
+  supported by rows only.  The cause was a missing factor: after a division
+  remainder was removed by row annihilators, the index content `c(n)` of
+  the annihilation multiplier entered the recorded multiplier `w(n)` but
+  not the recorded quotients.  The Euler-step candidates of these entries
+  are now certified identities (their side conditions fail, so nothing new
+  is proved).
+
 - `check_three_term_recurrence_theorem` and `check_liu_wang_theorem` normalize
   seed rows (trailing zero coefficients removed) before building the report,
   so reports from padded seeds, such as some catalog records, replay with
@@ -243,6 +255,15 @@ Fixes:
   `# Panics` section.
 
 Maintenance:
+
+- The coordinate maps of the transform registry (`multiply_power`,
+  `divide_power`, `affine`, `reversal`, `f_polynomial`, `mobius`) transport
+  scalar rules through the forward rules of `ore_algebra::Substitution`
+  instead of a separate chain-rule implementation; the transported rules are
+  identical (checked against the former implementation on every rule of the
+  bundled catalog).  The preserver-image coordinate maps (affine, reversal,
+  Möbius) use the same substitutions for their row action and their
+  dividend (`ore_algebra::pull_back_substitution`).
 
 - The recurrence implementation is grouped into private submodules by
   concern; all `polytool::recurrence` paths are unchanged.

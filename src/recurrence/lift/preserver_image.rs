@@ -42,11 +42,15 @@
 //!    and `K(u) -> K(c x + e)` with `kappa = (b c - a e)/c`.  Each
 //!    substitution is injective (on Laurent polynomials for the reversal), so
 //!    in every case `(M H)_n = 0` exactly when `(E P')_n = 0`.  These are
-//!    the pullbacks of the `ore-algebra` crate (`ore_algebra::pull_back`
-//!    through `T'` and the gauge, with the bounds of `M` and top shift
-//!    `R`); `E` is then divided by the largest power of `x` dividing all its
-//!    coefficients, which changes nothing above since `Q[x]` (and the
-//!    Laurent polynomials) have no zero divisors.
+//!    the pullbacks of the `ore-algebra` crate with the bounds of `M` and
+//!    top shift `R`: `ore_algebra::pull_back` through the gauge (and `T'`
+//!    for a Weyl form), and for a coordinate map
+//!    `ore_algebra::pull_back_substitution` through the map as an
+//!    `ore_algebra::Substitution` (affine, reversal, Möbius with scale
+//!    `1`), which is also the map's row action; `E` is then divided by the
+//!    largest power of `x` dividing all its coefficients, which changes
+//!    nothing above since `Q[x]` (and the Laurent polynomials) have no zero
+//!    divisors.
 //! 3. **Division.**  `E` is pseudo-divided by `L'`, whose leader is free of
 //!    `x` (`ore_algebra::right_pseudo_division`, every level from the top
 //!    shift of `E` down to `k`):
@@ -69,10 +73,17 @@
 //! annihilator of a first-order parent, or an invariant annihilator system
 //! of a parent of any order, each replayed with its invariance identity and
 //! the exact row checks at the start and restart bases):
-//! `p(x) mu_2(n, x) w(n) E = sum_nu H_nu S^nu L' + sum_l Z_l A^(l)` with
+//! the annihilation `mu r = sum_l Z_l A^(l)` with `mu = c(n) p(x) mu_2(n, x)`
+//! turns `w E = sum_nu H_nu S^nu L' + r` into
+//! `p(x) mu_2(n, x) (c w)(n) E = sum_nu (mu H_nu) S^nu L' + sum_l Z_l A^(l)`
+//! (the index content `c` is folded into the recorded multiplier `w` and
+//! into the recorded quotients) with
 //! `A^(l) P' = 0` from the first used base on, so again `(E P')_n = 0` where
 //! `w(n) != 0` and `mu_2(n, .) != 0` (`Q[x]` has no zero divisors); the
-//! zeros of `mu_2` are exceptional bases.  This is what certifies, for
+//! zeros of `mu_2` are exceptional bases.  An assembled identity or
+//! certificate that fails its exact re-check leaves that candidate's
+//! identity supported by rows only (and the search rejects any candidate
+//! whose certification fails, with a note).  This is what certifies, for
 //! example, `He_n + He_n'`, whose input rule uses the Hermite differential
 //! equation.  Otherwise the identity is only supported by rows.
 //! Hypergeometric multipliers ([`PreserverOperator::HadamardMultiplier`])
