@@ -431,7 +431,7 @@ fn lists_and_generates_oeis_catalog_rows() {
     let Json(list) = server
         .list_oeis_sequences(Parameters(ListOeisSequencesRequest::default()))
         .unwrap();
-    assert_eq!(list.count, 817);
+    assert_eq!(list.count, 860);
     assert!(list.sequences.iter().any(|entry| entry.id == "A008292"));
     assert!(list
         .sequences

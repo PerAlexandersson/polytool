@@ -891,7 +891,7 @@ mod tests {
 
     #[test]
     fn catalog_is_sorted_unique_and_decodable() {
-        assert_eq!(catalog().len(), 817);
+        assert_eq!(catalog().len(), 860);
         assert_eq!(
             catalog()
                 .iter()
@@ -968,7 +968,7 @@ mod tests {
         assert_eq!(count(OeisProvenanceSource::BenchmarkFixture), 73);
         assert_eq!(count(OeisProvenanceSource::LeanDefinition), 630);
         assert_eq!(count(OeisProvenanceSource::CuratedQueue), 71);
-        assert_eq!(count(OeisProvenanceSource::SuppliedRecurrence), 43);
+        assert_eq!(count(OeisProvenanceSource::SuppliedRecurrence), 86);
         for record in &records {
             let provenance = &record.provenance;
             match provenance.source {

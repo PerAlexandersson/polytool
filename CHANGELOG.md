@@ -313,6 +313,13 @@ Performance:
 
 Additions:
 
+- OEIS catalog: 43 more entries (860 in all), each a supplied recurrence
+  validated term by term against the OEIS data. Among them are 10 entries
+  whose recurrences the adaptive search now finds only through its
+  left-hand-side variation, with a left-hand factor in `n` alone (`n`,
+  `n ± 2n^2`) and zero constant term: A085880, A088617, A101919, A102537,
+  A120986, A243662, A280580, A281000, A390725, A391045.
+
 - OEIS catalog real-rootedness flags: a record may carry
   `"real_rootedness": {"status": ..., "as_of": "YYYY-MM-DD"}` (schema
   `oeis::OeisCatalogRealRootedness`, `OeisRealRootednessStatus::{LeanProved,
