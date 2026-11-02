@@ -858,6 +858,7 @@ impl PreserverImageCertification {
             parent_proof: &self.parent_proof,
             whole_line_parent_proof: self.whole_line_parent_proof.as_ref(),
             interval_parent_proof: self.interval_parent_proof.as_ref(),
+            interlacing: &self.interlacing,
         })
     }
 
@@ -1471,6 +1472,7 @@ pub fn certify_preserver_image_lift(
         parent_proof: &parent_proof,
         whole_line_parent_proof: whole_line_parent_proof.as_ref(),
         interval_parent_proof: interval_parent_proof.as_ref(),
+        interlacing: &interlacing,
     });
     let s = candidate.index_shift;
     let lift = format!(

@@ -2,15 +2,17 @@
 //! `polytool.recurrence-hadamard-factor-lifts.v1` JSON form, with the
 //! mapping to [`LiftSummary`].
 
-use super::super::lift_summary::{nonpositive_ray, parent_proof_summary};
+use super::super::lift_summary::{
+    fixed_preserver_interlacing, nonpositive_ray, parent_proof_summary, proved_parent_interlacing,
+};
 use super::certify::HadamardFactorCertificate;
-use super::factor::{HadamardFactor, POLYA_SCHUR_THEOREM};
+use super::factor::{HadamardFactor, HadamardFactorTerm, POLYA_SCHUR_THEOREM};
 #[cfg(doc)]
 use crate::recurrence::find_hadamard_factor_lifts;
 use crate::recurrence::{
-    LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus, LiftOperation, LiftParent,
-    LiftRootTransfer, LiftSummary, RecurrenceError, RecurrenceJson, VeroneseParentProof,
-    VeroneseSectionGauge,
+    LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus, LiftInterlacingClaim, LiftOperation,
+    LiftParent, LiftRootTransfer, LiftSummary, RecurrenceError, RecurrenceJson,
+    VeroneseParentProof, VeroneseSectionGauge,
 };
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
@@ -144,7 +146,7 @@ impl HadamardFactorLift {
     /// The [`LiftSummary`] of this lift, computed from the record.
     pub fn recompute_lift_summary(&self) -> LiftSummary {
         hadamard_lift_summary(
-            &self.factor_text,
+            &self.factor,
             &self.gauge,
             &self.parent,
             &self.identity,
@@ -199,15 +201,17 @@ impl HadamardFactorLiftReport {
     }
 }
 
-/// The [`LiftSummary`] of a Hadamard-factor lift from its parts.
+/// The [`LiftSummary`] of a Hadamard-factor lift from its parts, with the
+/// input interlacing of [`hadamard_interlacing`].
 pub(super) fn hadamard_lift_summary(
-    u: &str,
+    factor: &HadamardFactor,
     gauge: &VeroneseSectionGauge,
     parent: &RecurrenceJson,
     identity: &HadamardFactorIdentityStatus,
     multiplier_sequence: Option<&str>,
     parent_proof: &VeroneseParentProof,
 ) -> LiftSummary {
+    let u = &factor.text();
     let n0 = parent.first_index;
     let identity = match identity {
         HadamardFactorIdentityStatus::Certified { .. } => LiftIdentityStatus::Certified {
@@ -271,7 +275,7 @@ pub(super) fn hadamard_lift_summary(
     } else {
         format!("no transfer theorem is recorded for the factor {u}")
     };
-    LiftSummary::new(
+    let summary = LiftSummary::new(
         LiftOperation::HadamardFactor {
             factor: u.to_string(),
         },
@@ -298,5 +302,179 @@ pub(super) fn hadamard_lift_summary(
         },
         hypotheses,
         parent_proof_summary(parent_proof),
+    );
+    let interlacing = hadamard_interlacing(&summary, factor, multiplier_sequence, parent_proof);
+    summary.with_input_interlacing(interlacing)
+}
+
+/// The interlacing rule of the Hadamard-factor lifts: the fixed-preserver
+/// (Hermite--Kakeya--Obreschkoff) rule for a factor `k -> u(k)` that does
+/// not depend on `n` and is a multiplier sequence, which maps every
+/// real-rooted polynomial (roots anywhere on the line) to a real-rooted
+/// polynomial or zero (Polya--Schur); an `n`-dependent factor gets no claim.
+fn hadamard_interlacing(
+    summary: &LiftSummary,
+    factor: &HadamardFactor,
+    multiplier_sequence: Option<&str>,
+    parent_proof: &VeroneseParentProof,
+) -> LiftInterlacingClaim {
+    let independent_of_n = factor.terms.iter().all(|term| {
+        matches!(
+            term,
+            HadamardFactorTerm::Factorial
+                | HadamardFactorTerm::InverseFactorial
+                | HadamardFactorTerm::RisingFactorial { .. }
+                | HadamardFactorTerm::InverseRisingFactorial { .. }
+        )
+    });
+    if !independent_of_n {
+        return LiftInterlacingClaim::not_proved(format!(
+            "the factor {} depends on n, so consecutive rows are mapped by different operators",
+            factor.text()
+        ));
+    }
+    let Some(justification) = multiplier_sequence else {
+        return LiftInterlacingClaim::not_proved(format!(
+            "the factor {} is not shown to be a multiplier sequence",
+            factor.text()
+        ));
+    };
+    fixed_preserver_interlacing(
+        summary,
+        proved_parent_interlacing(parent_proof),
+        format!(
+            "x^k -> {} x^k does not depend on n and is a multiplier sequence ({justification}), \
+             so it maps every real-rooted polynomial to a real-rooted polynomial or zero \
+             ({POLYA_SCHUR_THEOREM})",
+            factor.text()
+        ),
     )
+}
+
+#[cfg(test)]
+mod interlacing_tests {
+    use super::*;
+    use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
+    use crate::recurrence::{InterlacingOrientation, LiftParentProof, Recurrence, RowInterlacing};
+    use crate::BigRational;
+
+    fn eulerian_parent() -> (Recurrence, Vec<Vec<BigRational>>) {
+        let entry = crate::oeis::by_id("A008292").unwrap();
+        let (rule, rows) = entry.recurrence_parts().unwrap();
+        let count = rule.generation_initial_count(entry.recurrence_first_index, rows.len());
+        (rule, rows[..count].to_vec())
+    }
+
+    /// The summary of a certified lift `u ⊙ P` with the Eulerian parent
+    /// (proved by Liu--Wang, root-domain route off), or with the periodic
+    /// product `(1 + x)^n`.
+    fn summary(factor: &HadamardFactor, periodic_parent: bool) -> LiftSummary {
+        let (rule, seeds) = if periodic_parent {
+            let rule = Recurrence {
+                terms: vec![crate::recurrence::RecurrenceTerm::new(
+                    1,
+                    0,
+                    crate::recurrence::BivarPoly::from_coefficients_normalized(vec![vec![
+                        BigRational::from_integer(1.into()),
+                        BigRational::from_integer(1.into()),
+                    ]]),
+                )],
+                denominator: None,
+                inhomogeneous: None,
+            };
+            (rule, vec![vec![BigRational::from_integer(1.into())]])
+        } else {
+            eulerian_parent()
+        };
+        let parent_proof = prove_parent(
+            &ParentRecord {
+                rule: &rule,
+                seeds: &seeds,
+                first_index: 1,
+            },
+            1,
+            &[],
+            false,
+        )
+        .unwrap();
+        let parent = RecurrenceJson::from_recurrence_rational(&rule, 1, &seeds, None);
+        let multiplier = factor.multiplier_justification();
+        let base = hadamard_lift_summary(
+            factor,
+            &VeroneseSectionGauge::None,
+            &parent,
+            &HadamardFactorIdentityStatus::SupportedByRows {
+                rows: 8,
+                reason: "test".into(),
+            },
+            multiplier.as_deref(),
+            &parent_proof,
+        );
+        // Not certified: no claim.
+        assert!(!base.input_interlacing.is_proved());
+        // The rule on the certified identity.
+        let certified = LiftSummary::new(
+            base.operation.clone(),
+            base.input_first_index,
+            base.parent.clone(),
+            LiftIdentityStatus::Certified {
+                method: "conjugation_division".into(),
+            },
+            base.root_transfer.clone(),
+            base.hypotheses.clone(),
+            base.parent_proof.clone(),
+        );
+        let claim = hadamard_interlacing(&certified, factor, multiplier.as_deref(), &parent_proof);
+        certified.with_input_interlacing(claim)
+    }
+
+    #[test]
+    fn index_free_multiplier_sequences_transfer_interlacing() {
+        let factor = HadamardFactor {
+            terms: vec![
+                HadamardFactorTerm::InverseFactorial,
+                HadamardFactorTerm::InverseRisingFactorial {
+                    parameter: "3/2".into(),
+                },
+            ],
+        };
+        let summary = summary(&factor, false);
+        assert!(matches!(
+            summary.parent_proof,
+            LiftParentProof::Proved { .. }
+        ));
+        let claim = summary.input_interlacing.proved().expect("a claim");
+        assert_eq!(claim.kind, RowInterlacing::Weak);
+        assert_eq!(claim.orientation, InterlacingOrientation::Unordered);
+        assert_eq!(claim.from_index, 2);
+        assert!(claim
+            .justification
+            .theorem
+            .starts_with("Hermite--Kakeya--Obreschkoff"));
+        assert!(claim
+            .justification
+            .premises
+            .iter()
+            .any(|p| p.contains("liu_wang")));
+    }
+
+    #[test]
+    fn near_misses_get_no_claim() {
+        let reason = |summary: &LiftSummary| match &summary.input_interlacing {
+            LiftInterlacingClaim::NotProved { reason } => reason.clone(),
+            other => panic!("{other:?}"),
+        };
+        // An n-dependent factor.
+        let binomial = HadamardFactor::single(HadamardFactorTerm::Binomial {
+            index_offset: 0,
+            coefficient_offset: 0,
+        });
+        assert!(reason(&summary(&binomial, false)).contains("depends on n"));
+        // A factor free of n that is not a multiplier sequence.
+        let factorial = HadamardFactor::single(HadamardFactorTerm::Factorial);
+        assert!(reason(&summary(&factorial, false)).contains("multiplier sequence"));
+        // A parent route without interlacing.
+        let inverse = HadamardFactor::single(HadamardFactorTerm::InverseFactorial);
+        assert!(reason(&summary(&inverse, true)).contains("periodic_product"));
+    }
 }

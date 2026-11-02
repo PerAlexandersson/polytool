@@ -79,6 +79,24 @@
 //! real-rooted).  A failing row refutes the parent statement; no route can
 //! then succeed and an attestation is not applied.
 //!
+//! # Interlacing
+//!
+//! A proved parent records the interlacing of consecutive rows its route
+//! concludes ([`VeroneseParentProof::interlacing`]), always oriented
+//! `P_(m-1) << P_m` (`P_m` carries the largest zero, as in
+//! [`RowInterlacing`]):
+//!
+//! - route 2: both window theorems state `P_n << P_(n+s)` for every
+//!   canonical index `n >= 0` and `0 <= s <= max_step` (`max_step >= 1`, or
+//!   every step for the constant family); the parent rows are the canonical
+//!   rows (relabelled), so `P_(m-1) << P_m` weakly for every
+//!   `m >= first_index + 1`;
+//! - routes 4 to 7: the theorem report's own conclusion
+//!   ([`RealRootednessTheoremConclusion::interlacing`] from
+//!   `interlacing_from` on, strict or weak as the theorem states);
+//! - routes 1 and 3 conclude no interlacing, and an attested parent records
+//!   none.
+//!
 //! # One-signed rows (route 9)
 //!
 //! Write the rule as `f(n) P_n = sum_terms c(n,x) D^d P_(n-r) + g(n,x)` for
@@ -114,7 +132,9 @@ use super::*;
 use crate::integer_range_sign::{decide_index_polynomial_sign, IndexSignCondition, IntegerRange};
 use crate::oeis::{entries_with_real_rootedness_flag, OeisRealRootednessStatus};
 use crate::real_rootedness::RealInterval;
-use crate::renewal::{match_recurrence_theorems, CertificateScope, TheoremBoundaryStatus};
+use crate::renewal::{
+    match_recurrence_theorems, CertificateScope, RecurrenceTheoremMatch, TheoremBoundaryStatus,
+};
 use crate::vec_poly;
 use num_traits::{One, Signed, Zero};
 use serde::{Deserialize, Serialize};
@@ -228,6 +248,11 @@ pub struct VeroneseParentProof {
     pub failing_row_index: Option<usize>,
     /// Number of parent rows checked exactly (evidence only).
     pub rows_checked: usize,
+    /// The interlacing of consecutive parent rows concluded by the proving
+    /// route (module documentation, "Interlacing"); `None` when the status
+    /// is not proved or the route concludes no interlacing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interlacing: Option<LiftInterlacing>,
 }
 
 /// A parent rule with its identifying seeds and first index.
@@ -283,9 +308,15 @@ pub(super) fn periodic_product_parent(rule: &Recurrence, seeds: &[Vec<Q>]) -> Re
     Ok(())
 }
 
-fn theorem_route(record: &ParentRecord<'_>, rows: &[Vec<Q>]) -> Vec<VeroneseParentProofAttempt> {
+/// Route 2, with the interlacing of the first successful match (module
+/// documentation, "Interlacing").
+fn theorem_route(
+    record: &ParentRecord<'_>,
+    rows: &[Vec<Q>],
+) -> (Vec<VeroneseParentProofAttempt>, Option<LiftInterlacing>) {
     let matches = match_recurrence_theorems(record.rule, record.first_index, rows);
     let mut attempts = Vec::new();
+    let mut interlacing = None;
     for theorem_match in matches.theorem_matches {
         let boundary_ok = matches!(
             theorem_match.boundary.status,
@@ -296,6 +327,9 @@ fn theorem_route(record: &ParentRecord<'_>, rows: &[Vec<Q>]) -> Vec<VeronesePare
             .as_ref()
             .is_none_or(|certificate| certificate.scope == CertificateScope::AllIndices);
         let success = boundary_ok && scope_ok;
+        if success && interlacing.is_none() {
+            interlacing = paper_theorem_interlacing(&theorem_match, record.first_index);
+        }
         let detail = if success {
             format!(
                 "{} ({}): {}; the identifying seeds equal the canonical rows ({:?}), so every \
@@ -333,7 +367,48 @@ fn theorem_route(record: &ParentRecord<'_>, rows: &[Vec<Q>]) -> Vec<VeronesePare
             detail: format!("no theorem matched ({})", reasons.join("; ")),
         });
     }
-    attempts
+    (attempts, interlacing)
+}
+
+/// The interlacing `P_(m-1) << P_m`, `m >= first_index + 1`, of a matched
+/// window theorem whose window contains the step `1` (every canonical row
+/// `P_n` interlaces `P_(n+s)` from the left for `0 <= s <= max_step`).
+fn paper_theorem_interlacing(
+    theorem_match: &RecurrenceTheoremMatch,
+    first_index: usize,
+) -> Option<LiftInterlacing> {
+    if theorem_match.window.max_step.is_some_and(|step| step == 0) {
+        return None;
+    }
+    let mut premises: Vec<String> = theorem_match
+        .hypotheses
+        .iter()
+        .map(|h| format!("{} ({})", h.statement, h.check))
+        .collect();
+    premises.push(format!(
+        "window: {} ({})",
+        theorem_match.window.statement, theorem_match.window.inequality
+    ));
+    premises.push(format!(
+        "the identifying parent seeds equal the canonical rows ({:?}), so every parent row is a \
+         canonical row and consecutive parent rows are consecutive canonical rows",
+        theorem_match.boundary.status
+    ));
+    Some(LiftInterlacing {
+        kind: RowInterlacing::Weak,
+        orientation: InterlacingOrientation::PreviousInterlacesNext,
+        from_index: first_index.checked_add(1)?,
+        justification: LiftInterlacingJustification {
+            theorem: format!(
+                "{} ({}; {}): {}",
+                theorem_match.theorem,
+                theorem_match.proof_status,
+                theorem_match.reference,
+                theorem_match.conclusion
+            ),
+            premises,
+        },
+    })
 }
 
 /// `d_n = d_(n0) + step (n - n0)` fitted to the degrees of the first rows,
@@ -532,7 +607,7 @@ fn theorem_attempt(
     record: &ParentRecord<'_>,
     route: VeroneseParentProofRoute,
     variant: &str,
-) -> Result<VeroneseParentProofAttempt, RecurrenceError> {
+) -> Result<(VeroneseParentProofAttempt, Option<LiftInterlacing>), RecurrenceError> {
     let options = RealRootednessTheoremOptions {
         root_region: Some(RealInterval {
             lower: None,
@@ -598,11 +673,43 @@ fn theorem_attempt(
             report.open_hypotheses().join("; ")
         ),
     };
-    Ok(VeroneseParentProofAttempt {
-        route,
-        variant: variant.into(),
-        success: report.is_proved() && !outside_ray,
-        detail,
+    let success = report.is_proved() && !outside_ray;
+    let interlacing = success
+        .then(|| theorem_report_interlacing(&report, variant))
+        .flatten();
+    Ok((
+        VeroneseParentProofAttempt {
+            route,
+            variant: variant.into(),
+            success,
+            detail,
+        },
+        interlacing,
+    ))
+}
+
+/// The interlacing conclusion of a proved theorem report: `P_(m-1)`
+/// interlaces `P_m` from the left (`P_m` carries the largest zero, the
+/// orientation of [`RowInterlacing`]) for every `m >= interlacing_from`.
+pub(super) fn theorem_report_interlacing(
+    report: &RealRootednessTheoremReport,
+    variant: &str,
+) -> Option<LiftInterlacing> {
+    let conclusion = report.conclusion.as_ref().filter(|_| report.is_proved())?;
+    let (kind, from_index) = (conclusion.interlacing?, conclusion.interlacing_from?);
+    let mut premises = vec![format!(
+        "every hypothesis of the theorem is verified exactly for every index: {}",
+        report.normal_form
+    )];
+    premises.push(conclusion.statement.clone());
+    Some(LiftInterlacing {
+        kind,
+        orientation: InterlacingOrientation::PreviousInterlacesNext,
+        from_index,
+        justification: LiftInterlacingJustification {
+            theorem: format!("{variant}: {}", report.reference),
+            premises,
+        },
     })
 }
 
@@ -1033,6 +1140,7 @@ pub(super) fn prove_parent(
         attempts: Vec::new(),
         failing_row_index: first_failing_row(&rows, record.first_index),
         rows_checked: rows.len(),
+        interlacing: None,
     };
     let conclusion = format!(
         "every parent row P_n, n >= {}, is zero or real-rooted with coefficients of one sign",
@@ -1063,12 +1171,14 @@ pub(super) fn prove_parent(
     let mut proved = periodic
         .is_ok()
         .then_some(VeroneseParentProofRoute::PeriodicProduct);
+    let mut interlacing = None;
 
     // Route 2.
     if proved.is_none() {
-        let attempts = theorem_route(record, &rows);
+        let (attempts, window_interlacing) = theorem_route(record, &rows);
         if attempts.iter().any(|a| a.success) {
             proved = Some(VeroneseParentProofRoute::PaperTheorem);
+            interlacing = window_interlacing;
         }
         proof.attempts.extend(attempts);
     }
@@ -1096,11 +1206,12 @@ pub(super) fn prove_parent(
             ),
             (VeroneseParentProofRoute::MaWangInterval, "ma_wang_interval"),
         ] {
-            let attempt = theorem_attempt(record, route, variant)?;
+            let (attempt, theorem_interlacing) = theorem_attempt(record, route, variant)?;
             let success = attempt.success;
             proof.attempts.push(attempt);
             if success {
                 proved = Some(route);
+                interlacing = theorem_interlacing;
                 break;
             }
         }
@@ -1110,6 +1221,7 @@ pub(super) fn prove_parent(
         proof.status = VeroneseParentProofStatus::Proved;
         proof.route = Some(route);
         proof.statement = conclusion;
+        proof.interlacing = interlacing;
         return Ok(proof);
     }
 
@@ -1414,5 +1526,115 @@ mod catalog_flag_tests {
         );
         // Zero seeds of a homogeneous rule give zero rows.
         assert!(one_signed_rows_for_all_indices(&eulerian, 1, &[vec![]]).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod interlacing_tests {
+    use super::*;
+
+    fn q(value: i64) -> Q {
+        Q::from_integer(value.into())
+    }
+
+    fn prove(rule: &Recurrence, seeds: &[Vec<Q>], first_index: usize) -> VeroneseParentProof {
+        let record = ParentRecord {
+            rule,
+            seeds,
+            first_index,
+        };
+        prove_parent(&record, first_index, &[], false).unwrap()
+    }
+
+    /// `P_n = P_(n-1) + x P_(n-2)` with the canonical rows `P_0 = 1`,
+    /// `P_1 = 1 + x` of the fixed-delay window theorem: route 2 proves the
+    /// parent and records `P_(m-1) << P_m` from `m = 1`.
+    #[test]
+    fn the_window_theorem_route_records_directed_interlacing() {
+        let rule = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(
+                    1,
+                    0,
+                    BivarPoly::from_coefficients_normalized(vec![vec![q(1)]]),
+                ),
+                RecurrenceTerm::new(
+                    2,
+                    0,
+                    BivarPoly::from_coefficients_normalized(vec![vec![q(0), q(1)]]),
+                ),
+            ],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let proof = prove(&rule, &[vec![q(1)], vec![q(1), q(1)]], 0);
+        assert_eq!(proof.route, Some(VeroneseParentProofRoute::PaperTheorem));
+        let interlacing = proof.interlacing.as_ref().expect("window interlacing");
+        assert_eq!(interlacing.kind, RowInterlacing::Weak);
+        assert_eq!(
+            interlacing.orientation,
+            InterlacingOrientation::PreviousInterlacesNext
+        );
+        assert_eq!(interlacing.from_index, 1);
+        assert!(interlacing
+            .justification
+            .theorem
+            .starts_with("fixed_delay_predecessor_window"));
+        // Exact evidence on the first rows.
+        let rows = rule
+            .generate_rows_rational(&[vec![q(1)], vec![q(1), q(1)]], 0, 10)
+            .unwrap();
+        for pair in rows.windows(2) {
+            let integer = |row: &[Q]| row.iter().map(|c| c.to_integer()).collect::<Vec<_>>();
+            assert_eq!(
+                crate::check_weak_interlacing_bigint_coeffs(&integer(&pair[0]), &integer(&pair[1])),
+                Some(true)
+            );
+        }
+    }
+
+    /// The Eulerian rule `P_n = (1 + (n - 1) x) P_(n-1) + x (1 - x) P'_(n-1)`
+    /// is proved by Liu--Wang (route 5) without the root-domain route; the
+    /// theorem's weak interlacing is recorded.  A periodic product records
+    /// none.
+    #[test]
+    fn theorem_routes_record_their_conclusion_and_products_record_none() {
+        let entry = crate::oeis::by_id("A008292").unwrap();
+        let (rule, rows) = entry.recurrence_parts().unwrap();
+        let count = rule.generation_initial_count(entry.recurrence_first_index, rows.len());
+        let proof = prove(&rule, &rows[..count], entry.recurrence_first_index);
+        assert_eq!(proof.route, Some(VeroneseParentProofRoute::LiuWang));
+        let interlacing = proof.interlacing.as_ref().expect("Liu--Wang interlacing");
+        assert_eq!(interlacing.kind, RowInterlacing::Weak);
+        assert_eq!(
+            interlacing.orientation,
+            InterlacingOrientation::PreviousInterlacesNext
+        );
+        assert!(interlacing.justification.theorem.starts_with("liu_wang: "));
+        let json = serde_json::to_value(&proof).unwrap();
+        assert_eq!(
+            json["interlacing"]["orientation"],
+            "previous_interlaces_next"
+        );
+        let back: VeroneseParentProof = serde_json::from_value(json).unwrap();
+        assert_eq!(back, proof);
+
+        // (1 + x)^n: a periodic product, no interlacing recorded.
+        let product = Recurrence {
+            terms: vec![RecurrenceTerm::new(
+                1,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(1), q(1)]]),
+            )],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let proof = prove(&product, &[vec![q(1)]], 0);
+        assert_eq!(proof.route, Some(VeroneseParentProofRoute::PeriodicProduct));
+        assert!(proof.interlacing.is_none());
+        assert!(serde_json::to_value(&proof)
+            .unwrap()
+            .get("interlacing")
+            .is_none());
     }
 }

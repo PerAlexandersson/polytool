@@ -115,9 +115,9 @@ mod preserver_image;
 pub use preserver_image::*;
 mod lift_summary;
 pub use lift_summary::{
-    lift_verdict, LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus, LiftOperation,
-    LiftParent, LiftParentProof, LiftRootTransfer, LiftSummary, LiftVerdict,
-    LIFT_LEAN_REPLAY_NOT_ATTEMPTED,
+    lift_verdict, InterlacingOrientation, LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus,
+    LiftInterlacing, LiftInterlacingClaim, LiftInterlacingJustification, LiftOperation, LiftParent,
+    LiftParentProof, LiftRootTransfer, LiftSummary, LiftVerdict, LIFT_LEAN_REPLAY_NOT_ATTEMPTED,
 };
 mod parent_proof;
 pub use parent_proof::{

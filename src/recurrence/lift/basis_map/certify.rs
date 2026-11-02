@@ -6,6 +6,7 @@
 use super::super::hadamard_factor::prepare::{
     prepare_rule, shift_free_from_json, shift_free_json, PreparedRule,
 };
+use super::super::lift_summary::{fixed_preserver_interlacing, proved_parent_interlacing};
 use super::super::parent_proof::{prove_parent, ParentRecord};
 use super::super::section_certify::{
     division_identity_holds, n_coefficients, pseudo_divide_row, x_free_leader, ForwardDivision,
@@ -20,9 +21,10 @@ use super::transport::transported_system;
 use crate::real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval};
 use crate::recurrence::implicit::algebra::{roots_in_domain, Biv, DOp};
 use crate::recurrence::{
-    format_rational_coeff, parse_rational_coeff, LiftHypothesis, LiftIdentityStatus, LiftOperation,
-    LiftParent, LiftParentProof, LiftRootTransfer, LiftSummary, OperatorTermJson, Recurrence,
-    RecurrenceError, RecurrenceJson, RecurrenceTransformation, RootInterval, TransportedRecurrence,
+    format_rational_coeff, parse_rational_coeff, LiftHypothesis, LiftHypothesisStatus,
+    LiftIdentityStatus, LiftInterlacing, LiftInterlacingClaim, LiftOperation, LiftParent,
+    LiftParentProof, LiftRootTransfer, LiftSummary, OperatorTermJson, Recurrence, RecurrenceError,
+    RecurrenceJson, RecurrenceTransformation, RootInterval, TransportedRecurrence,
     VeroneseParentAttestation, VeroneseParentProof, VeroneseParentProofStatus,
 };
 use crate::vec_poly;
@@ -997,9 +999,7 @@ pub(super) fn certify_prepared(
         &identity,
         &map_theorem,
         chosen.as_ref(),
-        coefficient_roots
-            .as_ref()
-            .map(|p| p.target_interval.clone()),
+        coefficient_roots.as_ref(),
         parent_proof,
     );
     Ok(BasisMapLiftCertification {
@@ -1022,9 +1022,10 @@ fn summary(
     identity: &BasisMapIdentityStatus,
     report: &BasisMapTheoremReport,
     conclusion: Option<&BasisMapConclusion>,
-    parent_region: Option<RootInterval>,
+    coefficient_roots: Option<&BasisMapCoefficientRootProof>,
     parent_proof: LiftParentProof,
 ) -> LiftSummary {
+    let parent_region = coefficient_roots.map(|p| p.target_interval.clone());
     let operation = LiftOperation::BasisMap {
         basis: map.name().to_string(),
         basis_family: map.recurrence_json(),
@@ -1108,7 +1109,7 @@ fn summary(
             None => "no conclusion".into(),
         },
     };
-    LiftSummary::new(
+    let summary = LiftSummary::new(
         operation,
         input.first_index,
         parent,
@@ -1116,5 +1117,67 @@ fn summary(
         root_transfer,
         hypotheses,
         parent_proof,
+    );
+    let interlacing = basis_map_interlacing(&summary, map, report, coefficient_roots);
+    summary.with_input_interlacing(interlacing)
+}
+
+/// The interlacing rule of the basis-map lifts: the fixed-preserver
+/// (Hermite--Kakeya--Obreschkoff) rule, which applies because `T_P` does
+/// not depend on `n`, when the map theorem proves that `T_P` maps every
+/// real-rooted polynomial (roots anywhere on the line) to a real-rooted
+/// polynomial or zero.  The coefficient rows' interlacing comes from the
+/// parent provers on the translates `R_n(v + U')`, which have the zeros of
+/// `R_n` moved by `-U'` (same kind and orientation).  A map proved only on a
+/// smaller source interval gets no claim: a combination
+/// `alpha R_(n-1) + beta R_n` may have zeros outside it.
+fn basis_map_interlacing(
+    summary: &LiftSummary,
+    map: &BasisMap,
+    report: &BasisMapTheoremReport,
+    coefficient_roots: Option<&BasisMapCoefficientRootProof>,
+) -> LiftInterlacingClaim {
+    let whole_line = report.is_proved()
+        && report.conclusions.iter().any(|c| {
+            c.input_interval == AlgebraicInterval::whole_line()
+                && c.hypotheses.iter().all(|name| {
+                    report
+                        .hypotheses
+                        .iter()
+                        .any(|h| &h.name == name && h.status == LiftHypothesisStatus::Verified)
+                })
+        });
+    if !whole_line {
+        return LiftInterlacingClaim::not_proved(
+            "the map theorem does not prove that T_P preserves real-rootedness on the whole \
+             line",
+        );
+    }
+    let Some(roots) = coefficient_roots else {
+        return LiftInterlacingClaim::not_proved("the coefficient rows are not located");
+    };
+    let translated = proved_parent_interlacing(&roots.upper_bound).map(|shifted| {
+        let mut interlacing: LiftInterlacing = shifted.clone();
+        interlacing.justification.premises.push(format!(
+            "the rows R_n(v + U'), U' = {}, have the zeros of R_n moved by -U', so R_(m-1), R_m \
+             interlace with the same kind and orientation",
+            roots
+                .target_interval
+                .upper
+                .as_ref()
+                .map_or_else(|| "?".to_string(), |end| end.value.clone())
+        ));
+        interlacing
+    });
+    fixed_preserver_interlacing(
+        summary,
+        translated.as_ref().map_err(Clone::clone),
+        format!(
+            "T_P (T_P(u^k) = P_({} + k), P = {}) does not depend on n and maps every real-rooted \
+             polynomial to a real-rooted polynomial or zero (map theorem: {})",
+            map.first_index(),
+            map.name(),
+            report.theorem
+        ),
     )
 }

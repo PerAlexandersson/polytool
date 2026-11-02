@@ -13,11 +13,12 @@ use polytool::is_real_rooted_bigint_coeffs;
 use polytool::recurrence::{
     certify_preserver_image_lift, find_preserver_image_lifts, BigRational, BivarPoly,
     DegreeSchedule, HadamardFactor, HadamardFactorTerm, IndexRationalFunction,
-    LiftHypothesisStatus, LiftIdentityStatus, LiftOperation, LiftVerdict, PreserverImageCandidate,
-    PreserverImageCertificate, PreserverImageCertification, PreserverImageIdentityStatus,
-    PreserverImageOptions, PreserverImageReport, PreserverImageSearchOptions,
-    PreserverInterlacingClaim, PreserverOperator, PreserverParentLibrary, PreserverParentRegion,
-    Recurrence, RecurrenceJson, RecurrenceTerm, RowInterlacing, VeroneseSectionGauge,
+    InterlacingOrientation, LiftHypothesisStatus, LiftIdentityStatus, LiftOperation, LiftVerdict,
+    PreserverImageCandidate, PreserverImageCertificate, PreserverImageCertification,
+    PreserverImageIdentityStatus, PreserverImageOptions, PreserverImageReport,
+    PreserverImageSearchOptions, PreserverInterlacingClaim, PreserverOperator,
+    PreserverParentLibrary, PreserverParentRegion, Recurrence, RecurrenceJson, RecurrenceTerm,
+    RowInterlacing, VeroneseSectionGauge,
 };
 use polytool::sequences;
 use polytool::vec_poly;
@@ -850,6 +851,15 @@ fn a_fixed_preserver_transfers_the_parent_interlacing() {
     assert_eq!(*kind, RowInterlacing::Weak);
     assert_eq!(orientation, "unordered");
     assert_eq!(*from_index, 1);
+    // The summary carries the same claim.
+    let summary_claim = certification
+        .lift_summary
+        .input_interlacing
+        .proved()
+        .expect("the summary claim");
+    assert_eq!(summary_claim.kind, RowInterlacing::Weak);
+    assert_eq!(summary_claim.orientation, InterlacingOrientation::Unordered);
+    assert_eq!(summary_claim.from_index, 1);
     // A tampered claim is rejected.
     let mut tampered = certification.clone();
     tampered.interlacing = PreserverInterlacingClaim::None { reason: "x".into() };
@@ -892,6 +902,7 @@ fn index_dependent_operators_claim_no_interlacing() {
     );
     assert!(certification.is_proved());
     assert!(!certification.interlacing.is_claimed());
+    assert!(!certification.lift_summary.input_interlacing.is_proved());
 }
 
 // ---------------------------------------------------------------------------

@@ -3,15 +3,19 @@
 //! [`find_row_factor_lifts`].
 
 use super::super::hadamard_factor::prepare::{prepare_rule, PreparedRule};
-use super::super::lift_summary::{nonpositive_ray, parent_proof_summary, real_line};
+use super::super::lift_summary::{
+    nonpositive_ray, parent_proof_summary, proved_parent_interlacing, real_line,
+    COMMON_FACTOR_INTERLACING_THEOREM,
+};
 use super::super::veronese_algebra::classify_row;
 use super::certify::{divide_operator, substitute, RowFactorCertificate};
 use crate::factorization::irreducible_factorization_rational_coeffs_with_budget;
 use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
 use crate::recurrence::{
     encode_poly, ImplicitRelation, LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus,
-    LiftOperation, LiftParent, LiftRootTransfer, LiftSummary, Recurrence, RecurrenceError,
-    RecurrenceJson, VeroneseParentAttestation, VeroneseParentProof,
+    LiftInterlacing, LiftInterlacingClaim, LiftInterlacingJustification, LiftOperation, LiftParent,
+    LiftRootTransfer, LiftSummary, Recurrence, RecurrenceError, RecurrenceJson, RowInterlacing,
+    VeroneseParentAttestation, VeroneseParentProof,
 };
 use crate::vec_poly;
 use crate::BigRational;
@@ -648,7 +652,7 @@ fn row_factor_summary(parts: RowFactorParts<'_>) -> LiftSummary {
             format!("every Q_n, n >= {n0}, is zero or real-rooted (roots of F and of S_n)"),
         )
     };
-    LiftSummary::new(
+    let summary = LiftSummary::new(
         LiftOperation::RowFactor {
             factor: parts.factor.to_vec(),
             exponent_slope: alpha,
@@ -675,5 +679,85 @@ fn row_factor_summary(parts: RowFactorParts<'_>) -> LiftSummary {
         },
         vec![hypothesis],
         parent_proof_summary(parts.parent_proof),
-    )
+    );
+    let interlacing = row_factor_interlacing(&summary, &parts);
+    summary.with_input_interlacing(interlacing)
+}
+
+/// The interlacing rule of the row-factor lifts: for a constant exponent
+/// `e(n) = beta` (slope `0`), `Q_n = F^beta S_n` with `F` nonzero and
+/// real-rooted, and the cofactor's proved interlacing `S_(m-1) << S_m`
+/// (in the cofactor's orientation) gives `Q_(n-1) << Q_n` by the
+/// common-factor theorem ([`COMMON_FACTOR_INTERLACING_THEOREM`]); the kind
+/// stays strict only for `beta = 0`.  An `n`-dependent exponent gets no
+/// claim: `Q_(n-1)` and `Q_n` then carry different powers of `F`, and no
+/// cited theorem covers that.
+fn row_factor_interlacing(
+    summary: &LiftSummary,
+    parts: &RowFactorParts<'_>,
+) -> LiftInterlacingClaim {
+    if !matches!(summary.identity, LiftIdentityStatus::Certified { .. }) {
+        return LiftInterlacingClaim::not_proved(
+            "the identity Q_n = F^(e(n)) S_n is not certified for every n",
+        );
+    }
+    if parts.slope != 0 {
+        return LiftInterlacingClaim::not_proved(format!(
+            "the exponent e(n) = {} n {:+} depends on n, so Q_(n-1) and Q_n carry different \
+             powers of F",
+            parts.slope, parts.offset
+        ));
+    }
+    let Ok(exponent) = usize::try_from(parts.offset) else {
+        return LiftInterlacingClaim::not_proved("the exponent is negative");
+    };
+    if !parts.real_rooted {
+        return LiftInterlacingClaim::not_proved("F is not real-rooted");
+    }
+    let parent = match proved_parent_interlacing(parts.parent_proof) {
+        Ok(parent) => parent,
+        Err(reason) => return LiftInterlacingClaim::not_proved(reason),
+    };
+    let n0 = summary.input_first_index;
+    let from_index = parent.from_index.max(n0 + 1);
+    let kind = if exponent == 0 {
+        parent.kind
+    } else {
+        RowInterlacing::Weak
+    };
+    let f = factor_text(parts.factor);
+    LiftInterlacingClaim::Proved {
+        interlacing: LiftInterlacing {
+            kind,
+            orientation: parent.orientation,
+            from_index,
+            justification: LiftInterlacingJustification {
+                theorem: COMMON_FACTOR_INTERLACING_THEOREM.into(),
+                premises: vec![
+                    format!("{} (identity certified)", summary.parent.relation),
+                    format!(
+                        "the exponent e(n) = {exponent} does not depend on n, and F = {f} is \
+                         nonzero and real-rooted (exact real-root count), so F^{exponent} is"
+                    ),
+                    format!(
+                        "the cofactor route proves consecutive cofactor rows S_(m-1), S_m \
+                         interlace ({:?}, {:?}) for every m >= {}: {}",
+                        parent.kind,
+                        parent.orientation,
+                        parent.from_index,
+                        parent.justification.theorem
+                    ),
+                    format!(
+                        "hence Q_(n-1) = F^{exponent} S_(n-1) and Q_n = F^{exponent} S_n \
+                         interlace in the same orientation for every n >= {from_index}{}",
+                        if exponent == 0 {
+                            ""
+                        } else {
+                            " (weakly: F may add multiple and shared zeros)"
+                        }
+                    ),
+                ],
+            },
+        },
+    }
 }

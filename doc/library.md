@@ -750,6 +750,30 @@ hypothesis fails (which says nothing against the input).
 `SymmetricCompanionLift::recompute_lift_summary` compute it from the detailed
 report, which stays authoritative.
 
+The summary also records `input_interlacing` (`LiftInterlacingClaim`):
+`proved` with a `LiftInterlacing` (kind `strict` or `weak`, orientation
+`previous_interlaces_next` for `Q_(n-1) << Q_n`, `next_interlaces_previous`
+or `unordered`, the first index `from_index`, and the theorem with its
+premises), or `not_proved` with the reason.  It is an extra proved property:
+the verdict does not depend on it.  The claim is transferred from the
+interlacing that the parent's proving route concludes, which the parent
+provers now record in `VeroneseParentProof::interlacing` (the window theorems
+of route 2 and the three-term, Liu--Wang, derivative-lag and Ma--Wang
+checks, all `P_(m-1) << P_m`), by one cited theorem per operation, and only
+when the identity is certified and every transfer hypothesis is verified:
+
+- operations independent of `n` that preserve real-rootedness on the whole
+  line (the preserver-image claim, Hadamard multiplier sequences such as
+  `1/k!` and `1/(alpha)_k`, basis maps whose theorem covers the whole line):
+  the Hermite--Kakeya--Obreschkoff theorem, weak and `unordered`;
+- Veronese sections (`VeroneseSectionCertification`): Athanasiadis and
+  Wagner, arXiv:2404.12989, Corollary 5.6(b), weak, in the parent's
+  orientation;
+- row factors with a constant exponent: a common real-rooted factor keeps
+  the cofactor's interlacing and orientation;
+- `n`-dependent operators (`binom(n, k)`, `F^(n)`), gamma lifts and
+  symmetric companions: `not_proved`.
+
 ## Symmetric-companion lifts
 
 `recurrence::find_symmetric_companion_lifts` recognizes a palindromic sequence

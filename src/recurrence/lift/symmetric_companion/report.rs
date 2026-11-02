@@ -418,4 +418,8 @@ pub(super) fn lift_summary(
         hypotheses,
         parent_proof,
     )
+    .with_input_interlacing(LiftInterlacingClaim::not_proved(
+        "the preservation induction keeps B_n << A_n within each row; no cited theorem gives \
+         interlacing of consecutive symmetric parts A_(n-1), A_n",
+    ))
 }

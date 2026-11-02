@@ -20,7 +20,49 @@
 //! - [`LiftVerdict`], derived by [`lift_verdict`] alone: proved exactly when
 //!   the identity is certified, the parent is proved and every hypothesis is
 //!   verified;
-//! - `lean_replay`: always `"not_attempted"`.
+//! - `lean_replay`: always `"not_attempted"`;
+//! - [`LiftInterlacingClaim`] (`input_interlacing`): whether consecutive
+//!   input rows `Q_(n-1)`, `Q_n` are proved to interlace, an extra proved
+//!   property that [`lift_verdict`] does not use (see "Interlacing").
+//!
+//! # Interlacing
+//!
+//! The input interlacing is transferred from the interlacing of consecutive
+//! parent rows that the parent's proving route concludes
+//! ([`VeroneseParentProof::interlacing`]: the window theorems and the
+//! three-term, Liu--Wang, derivative-lag and Ma--Wang theorem checks, all
+//! oriented `P_(m-1) << P_m`), by one cited theorem per operation.  Every
+//! rule needs the identity certified for every `n` and every transfer
+//! hypothesis verified, and never uses finitely many rows.  From the parent's
+//! first interlacing index `m0` the claim starts at
+//! `max(m0 - s, n0 + 1)` (index shift `s`).
+//!
+//! - **Fixed preserver** (Hermite--Kakeya--Obreschkoff): when the operation
+//!   is one linear `T`, independent of `n`, that maps every real-rooted
+//!   polynomial (roots anywhere on the line) to a real-rooted polynomial or
+//!   zero, then for interlacing `P_(m-1)`, `P_m` every
+//!   `alpha P_(m-1) + beta P_m` is real-rooted or zero, so is its image, and
+//!   the converse direction makes `T(P_(m-1))`, `T(P_m)` weakly
+//!   interlacing; the orientation is not determined (`unordered`).  Used by
+//!   the preserver-image lifts (their `PreserverInterlacingClaim`), the
+//!   Hadamard-factor lifts with a multiplier sequence free of `n` (`1/k!`,
+//!   `1/(alpha)_k` and their products; Polya--Schur) and the basis-map lifts
+//!   whose map theorem covers the whole line.  An `n`-dependent operator
+//!   (`binom(n, k)`, an `n`-dependent schedule) gets no claim.
+//! - **Veronese sections** (Athanasiadis--Wagner, arXiv:2404.12989,
+//!   Corollary 5.6(b)): if `P << Q` are real-rooted with nonnegative
+//!   coefficients, every section `V_(r,j)(P) << V_(r,j)(Q)`.  The parent rows
+//!   have coefficients of one sign (the parent statement); a sign change
+//!   moves no zero and commutes with the section, so `P_(m-1) << P_m` gives
+//!   `Q_(n-1) << Q_n` (weak, same orientation) for the certified Veronese
+//!   lifts (`recompute_lift_summary`) with a verified gauge.  The v1 lifts
+//!   have periodic-product parents, which conclude no interlacing.
+//! - **Row factors** `Q_n = F^(e(n)) S_n`: for a constant exponent `e`, a
+//!   common nonzero real-rooted factor keeps the cofactor's interlacing and
+//!   orientation (RealRooted `StrictInterl.mul_common_factor`); weak unless
+//!   `e = 0`.  An `n`-dependent exponent gets no claim.
+//! - **Gamma lifts, symmetric companions**: no claim (no published theorem
+//!   with hypotheses polytool checks is implemented).
 //!
 //! The summary is computed from each operation's detailed report, which
 //! stays authoritative; a verdict that is not `proved` never says anything
@@ -293,6 +335,102 @@ impl LiftParentProof {
     }
 }
 
+/// The direction in which consecutive rows `R_(m-1)`, `R_m` of a family
+/// interlace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InterlacingOrientation {
+    /// `R_(m-1) << R_m`: the zeros alternate and `R_m` carries the largest
+    /// zero (`deg R_m` is `deg R_(m-1)` or `deg R_(m-1) + 1`); this is
+    /// `check_weak_interlacing(R_(m-1), R_m)` and the relation `StrictInterl`
+    /// of the Lean library RealRooted.
+    PreviousInterlacesNext,
+    /// `R_m << R_(m-1)`.
+    NextInterlacesPrevious,
+    /// The zeros alternate weakly (the degrees differ by at most one), but
+    /// which row carries the largest zero is not determined.
+    Unordered,
+}
+
+/// The theorem behind a [`LiftInterlacing`] and the premises it was applied
+/// to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LiftInterlacingJustification {
+    /// The theorem, with its reference.
+    pub theorem: String,
+    /// The premises as checked, in words (each established for every index
+    /// it is used at).
+    pub premises: Vec<String>,
+}
+
+/// A proved interlacing of consecutive rows of a family: for every index
+/// `m >= from_index`, the rows `R_(m-1)` and `R_m` interlace with the given
+/// kind and orientation.  A zero row interlaces every real-rooted polynomial
+/// by convention.
+///
+/// In [`LiftSummary::input_interlacing`] the family is the input `Q` (input
+/// indices); in [`VeroneseParentProof::interlacing`] it is the parent
+/// (parent indices).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LiftInterlacing {
+    /// The kind: [`RowInterlacing::Strict`] (simple zeros, strictly
+    /// separated) or [`RowInterlacing::Weak`] (multiple and shared zeros
+    /// allowed).
+    pub kind: RowInterlacing,
+    /// The orientation.
+    pub orientation: InterlacingOrientation,
+    /// The first index `m` with `R_(m-1)`, `R_m` interlacing; it holds for
+    /// every later index.
+    pub from_index: usize,
+    /// The theorem and its premises.
+    pub justification: LiftInterlacingJustification,
+}
+
+/// Whether consecutive input rows of a lift are proved to interlace.  This
+/// is an extra proved property: [`lift_verdict`] does not depend on it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum LiftInterlacingClaim {
+    /// Proved for every index from `interlacing.from_index` on.
+    Proved {
+        /// The interlacing.
+        interlacing: LiftInterlacing,
+    },
+    /// Not proved (nothing is claimed either way).
+    NotProved {
+        /// Why no transfer rule applies.
+        reason: String,
+    },
+}
+
+impl LiftInterlacingClaim {
+    /// No claim, with the reason.
+    pub fn not_proved(reason: impl Into<String>) -> Self {
+        Self::NotProved {
+            reason: reason.into(),
+        }
+    }
+
+    /// The proved interlacing, if any.
+    pub fn proved(&self) -> Option<&LiftInterlacing> {
+        match self {
+            Self::Proved { interlacing } => Some(interlacing),
+            Self::NotProved { .. } => None,
+        }
+    }
+
+    /// Whether interlacing is proved.
+    pub fn is_proved(&self) -> bool {
+        self.proved().is_some()
+    }
+}
+
+/// The reason [`LiftSummary::new`] records until the operation's transfer
+/// rule sets the claim.
+const NO_INTERLACING_RULE: &str = "no interlacing transfer rule for this operation";
+
 /// The verdict of a lift, derived by [`lift_verdict`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -335,6 +473,10 @@ pub struct LiftSummary {
     pub parent_proof: LiftParentProof,
     /// [`lift_verdict`] of the fields above.
     pub verdict: LiftVerdict,
+    /// Whether consecutive input rows `Q_(n-1)`, `Q_n` are proved to
+    /// interlace (module documentation, "Interlacing"); not part of the
+    /// verdict.
+    pub input_interlacing: LiftInterlacingClaim,
     /// Always [`LIFT_LEAN_REPLAY_NOT_ATTEMPTED`] in this version.
     pub lean_replay: String,
 }
@@ -373,7 +515,9 @@ pub fn lift_verdict(
 }
 
 impl LiftSummary {
-    /// Assemble a summary; the verdict is [`lift_verdict`] of the parts.
+    /// Assemble a summary; the verdict is [`lift_verdict`] of the parts.  The
+    /// input interlacing is not proved until
+    /// [`LiftSummary::with_input_interlacing`] sets it.
     pub fn new(
         operation: LiftOperation,
         input_first_index: usize,
@@ -393,8 +537,16 @@ impl LiftSummary {
             hypotheses,
             parent_proof,
             verdict,
+            input_interlacing: LiftInterlacingClaim::not_proved(NO_INTERLACING_RULE),
             lean_replay: LIFT_LEAN_REPLAY_NOT_ATTEMPTED.into(),
         }
+    }
+
+    /// The summary with the given input interlacing claim (the verdict is
+    /// unchanged).
+    pub fn with_input_interlacing(mut self, claim: LiftInterlacingClaim) -> Self {
+        self.input_interlacing = claim;
+        self
     }
 
     /// Whether the summary proves that every input row is zero or
@@ -468,6 +620,237 @@ pub(super) fn symmetric_companion_root_transfer(first_index: usize) -> LiftRootT
 }
 
 // ---------------------------------------------------------------------------
+// Interlacing transfer rules
+// ---------------------------------------------------------------------------
+
+/// The Hermite--Kakeya--Obreschkoff theorem as the fixed-preserver rule
+/// applies it (module documentation, "Interlacing").
+pub(super) const HERMITE_KAKEYA_OBRESCHKOFF_THEOREM: &str =
+    "Hermite--Kakeya--Obreschkoff theorem (N. Obreschkoff, Verteilung und Berechnung der \
+     Nullstellen reeller Polynome, 1963; see S. Fisk, Polynomials, Roots, and Interlacing, \
+     arXiv:math/0612833): real polynomials f, g have weakly interlacing zeros iff \
+     alpha f + beta g is real-rooted or zero for all real alpha, beta; a linear T independent of \
+     n that maps every real-rooted polynomial to a real-rooted polynomial or zero therefore maps \
+     interlacing pairs to pairs with weakly interlacing zeros (orientation not determined)";
+
+/// Athanasiadis--Wagner, Corollary 5.6(b), as the Veronese-section rule
+/// applies it.
+pub(super) const VERONESE_SECTION_INTERLACING_THEOREM: &str =
+    "C. A. Athanasiadis and D. G. Wagner, Veronese sections and interlacing matrices of formal \
+     power series (arXiv:2404.12989), Corollary 5.6(b): if P and Q are real-rooted with \
+     nonnegative coefficients and the zeros of P interlace those of Q from the left (P << Q, Q \
+     carries the largest zero; the zero polynomial interlaces every such polynomial), then the \
+     k-th r-section of P interlaces that of Q in the same sense, for all 0 <= k < r";
+
+/// The common-factor rule of the row-factor lifts.
+pub(super) const COMMON_FACTOR_INTERLACING_THEOREM: &str =
+    "multiplication by a common nonzero real-rooted factor preserves interlacing: if f << g and \
+     d is nonzero and real-rooted, then d f << d g, since the zeros of d join both zero lists \
+     (RealRooted StrictInterl.mul_common_factor, \
+     https://github.com/PerAlexandersson/RealRooted)";
+
+/// The parent's proved interlacing of consecutive rows, or why there is
+/// none: the parent statement must be proved by a route other than an
+/// attestation, and the route must conclude interlacing.
+pub(super) fn proved_parent_interlacing(
+    proof: &VeroneseParentProof,
+) -> Result<&LiftInterlacing, String> {
+    match (proof.status, proof.route) {
+        (VeroneseParentProofStatus::Proved, Some(route))
+            if route != VeroneseParentProofRoute::Attestation =>
+        {
+            proof.interlacing.as_ref().ok_or_else(|| {
+                format!(
+                    "the parent route {} proves no interlacing of consecutive parent rows",
+                    parent_route_label(route)
+                )
+            })
+        }
+        _ => Err("the parent statement is not proved (open, refuted or attested)".into()),
+    }
+}
+
+/// Why the identity or a transfer hypothesis does not support an
+/// interlacing claim, or `None` when the identity is certified and every
+/// hypothesis is verified.
+fn interlacing_obstruction(summary: &LiftSummary) -> Option<String> {
+    if !matches!(summary.identity, LiftIdentityStatus::Certified { .. }) {
+        return Some("the identity Q_n = T(P_n) is not certified for every n".into());
+    }
+    summary
+        .hypotheses
+        .iter()
+        .find(|h| h.status != LiftHypothesisStatus::Verified)
+        .map(|h| format!("the transfer hypothesis {} is not verified", h.name))
+}
+
+/// The first input index `n` such that `Q_(n-1)` and `Q_n` come from parent
+/// rows `P_(n-1+s)`, `P_(n+s)` that interlace (`n + s >= parent_from`) and
+/// `n - 1 >= n0`.
+fn input_from_index(parent_from: usize, index_shift: i64, n0: usize) -> Option<usize> {
+    let parent_from = i64::try_from(parent_from).ok()?;
+    let n0 = i64::try_from(n0).ok()?;
+    usize::try_from(
+        parent_from
+            .checked_sub(index_shift)?
+            .max(n0.checked_add(1)?),
+    )
+    .ok()
+}
+
+fn kind_text(kind: RowInterlacing) -> &'static str {
+    match kind {
+        RowInterlacing::Strict => "strictly",
+        RowInterlacing::Weak => "weakly",
+    }
+}
+
+fn orientation_text(orientation: InterlacingOrientation, previous: &str, next: &str) -> String {
+    match orientation {
+        InterlacingOrientation::PreviousInterlacesNext => format!("{previous} << {next}"),
+        InterlacingOrientation::NextInterlacesPrevious => format!("{next} << {previous}"),
+        InterlacingOrientation::Unordered => {
+            format!("{previous} and {next} interlace (orientation not determined)")
+        }
+    }
+}
+
+/// The premise recording the parent's interlacing.
+fn parent_interlacing_premise(parent: &LiftInterlacing) -> String {
+    format!(
+        "the parent route proves {} ({}) for every m >= {}: {}",
+        orientation_text(parent.orientation, "P_(m-1)", "P_m"),
+        kind_text(parent.kind),
+        parent.from_index,
+        parent.justification.theorem
+    )
+}
+
+/// The claim with the shared premises (identity, hypotheses, parent proof
+/// and interlacing) followed by `extra` premises.
+fn proved_claim(
+    summary: &LiftSummary,
+    parent: &LiftInterlacing,
+    kind: RowInterlacing,
+    orientation: InterlacingOrientation,
+    theorem: &str,
+    extra: Vec<String>,
+) -> LiftInterlacingClaim {
+    let n0 = summary.input_first_index;
+    let Some(from_index) = input_from_index(parent.from_index, summary.parent.index_shift, n0)
+    else {
+        return LiftInterlacingClaim::not_proved("index overflow");
+    };
+    let mut premises = vec![
+        format!("{} (identity certified)", summary.parent.relation),
+        format!(
+            "{} ({})",
+            summary.parent_proof.statement(),
+            match &summary.parent_proof {
+                LiftParentProof::Proved { route, .. } => format!("proved, route {route}"),
+                _ => "parent proof".into(),
+            }
+        ),
+        parent_interlacing_premise(parent),
+    ];
+    premises.extend(
+        summary
+            .hypotheses
+            .iter()
+            .map(|h| format!("{} (verified: {})", h.statement, h.evidence)),
+    );
+    premises.extend(extra);
+    premises.push(format!(
+        "hence {} ({}) for every n >= {from_index}",
+        orientation_text(orientation, "Q_(n-1)", "Q_n"),
+        kind_text(kind)
+    ));
+    LiftInterlacingClaim::Proved {
+        interlacing: LiftInterlacing {
+            kind,
+            orientation,
+            from_index,
+            justification: LiftInterlacingJustification {
+                theorem: theorem.into(),
+                premises,
+            },
+        },
+    }
+}
+
+/// The Veronese-section rule (module documentation, "Interlacing").
+fn veronese_section_interlacing(
+    summary: &LiftSummary,
+    parent_proof: &VeroneseParentProof,
+) -> LiftInterlacingClaim {
+    if let Some(reason) = interlacing_obstruction(summary) {
+        return LiftInterlacingClaim::not_proved(reason);
+    }
+    if !matches!(summary.parent_proof, LiftParentProof::Proved { .. }) {
+        return LiftInterlacingClaim::not_proved("the parent statement is not proved");
+    }
+    let parent = match proved_parent_interlacing(parent_proof) {
+        Ok(parent) => parent,
+        Err(reason) => return LiftInterlacingClaim::not_proved(reason),
+    };
+    if parent.orientation == InterlacingOrientation::Unordered {
+        return LiftInterlacingClaim::not_proved(
+            "the parent interlacing has no orientation; Corollary 5.6(b) needs P << Q",
+        );
+    }
+    proved_claim(
+        summary,
+        parent,
+        RowInterlacing::Weak,
+        parent.orientation,
+        VERONESE_SECTION_INTERLACING_THEOREM,
+        vec![
+            "each parent row is zero or real-rooted with coefficients of one sign; its negative, \
+             where needed, has nonnegative coefficients and the same zeros, and the section \
+             commutes with the sign change, so Corollary 5.6(b) applies to consecutive parent \
+             rows"
+                .into(),
+            "the degrees of consecutive parent rows differ by at most one, hence so do those of \
+             their nonzero sections (a real-rooted polynomial with nonnegative coefficients has \
+             no internal zero coefficient, so deg V_(r,j)(P) = floor((deg P - j) / r))"
+                .into(),
+            "a nonzero gauge lambda(n) moves no zero".into(),
+        ],
+    )
+}
+
+/// The fixed-preserver rule (module documentation, "Interlacing"):
+/// `preserver` says why the operation is independent of `n` and maps every
+/// real-rooted polynomial to a real-rooted polynomial or zero.
+pub(super) fn fixed_preserver_interlacing(
+    summary: &LiftSummary,
+    parent: Result<&LiftInterlacing, String>,
+    preserver: String,
+) -> LiftInterlacingClaim {
+    if let Some(reason) = interlacing_obstruction(summary) {
+        return LiftInterlacingClaim::not_proved(reason);
+    }
+    let parent = match parent {
+        Ok(parent) => parent,
+        Err(reason) => return LiftInterlacingClaim::not_proved(reason),
+    };
+    proved_claim(
+        summary,
+        parent,
+        RowInterlacing::Weak,
+        InterlacingOrientation::Unordered,
+        HERMITE_KAKEYA_OBRESCHKOFF_THEOREM,
+        vec![
+            preserver,
+            "every alpha P_(m-1) + beta P_m is real-rooted or zero (forward direction), so is \
+             its image, and the converse direction gives weakly interlacing zeros of the images; \
+             a nonzero gauge moves no zero"
+                .into(),
+        ],
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Veronese v1
 // ---------------------------------------------------------------------------
 
@@ -521,6 +904,9 @@ impl VeroneseSectionLift {
             Vec::new(),
             parent_proof,
         )
+        .with_input_interlacing(LiftInterlacingClaim::not_proved(
+            "the periodic-product parent route proves no interlacing of consecutive parent rows",
+        ))
     }
 }
 
@@ -656,7 +1042,7 @@ impl VeroneseSectionCertification {
                 statement,
             },
         };
-        LiftSummary::new(
+        let summary = LiftSummary::new(
             LiftOperation::VeroneseSection {
                 modulus: r,
                 residue: j,
@@ -675,7 +1061,9 @@ impl VeroneseSectionCertification {
             )),
             vec![gauge_hypothesis(&candidate.gauge, n0)],
             parent_proof,
-        )
+        );
+        let interlacing = veronese_section_interlacing(&summary, &self.parent_proof);
+        summary.with_input_interlacing(interlacing)
     }
 }
 
@@ -852,6 +1240,10 @@ pub(super) fn gamma_lift_summary(parts: GammaLiftSummaryParts<'_>) -> LiftSummar
         vec![symmetry, gauge_hypothesis(&candidate.gauge, n0)],
         parent_proof_summary(parts.parent_proof),
     )
+    .with_input_interlacing(LiftInterlacingClaim::not_proved(
+        "no published theorem transfers interlacing of consecutive parent rows to their gamma \
+         polynomials under hypotheses polytool checks",
+    ))
 }
 
 #[cfg(test)]
@@ -910,6 +1302,22 @@ mod tests {
             lift_verdict(&certified, &failing, &verified),
             LiftVerdict::RouteFailed
         );
+    }
+
+    #[test]
+    fn the_input_from_index_respects_shift_and_first_index() {
+        // Parent interlacing from m0 = 5: with s = 0 from n = 5, with s = 2
+        // from n = 3, never before n0 + 1.
+        assert_eq!(input_from_index(5, 0, 1), Some(5));
+        assert_eq!(input_from_index(5, 2, 1), Some(3));
+        assert_eq!(input_from_index(5, 4, 1), Some(2));
+        assert_eq!(input_from_index(1, -3, 0), Some(4));
+        let claim = LiftInterlacingClaim::not_proved("r");
+        let json = serde_json::to_value(&claim).unwrap();
+        assert_eq!(json["status"], "not_proved");
+        assert_eq!(json["reason"], "r");
+        let back: LiftInterlacingClaim = serde_json::from_value(json).unwrap();
+        assert_eq!(back, claim);
     }
 
     #[test]

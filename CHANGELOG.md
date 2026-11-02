@@ -469,6 +469,25 @@ Additions:
   field is renamed or removed, so the schema tags are unchanged; the new
   public field makes struct literals of `VeroneseSectionCertification` and
   `SymmetricCompanionLift` need `lift_summary`.
+- Interlacing as a proved lift property: `LiftSummary::input_interlacing`
+  (`LiftInterlacingClaim`: `proved` with a `LiftInterlacing` of kind, an
+  `InterlacingOrientation`, `from_index` and a
+  `LiftInterlacingJustification` with the theorem and its premises, or
+  `not_proved` with the reason), set with
+  `LiftSummary::with_input_interlacing`; the verdict does not depend on it.
+  The parent provers record the interlacing their route concludes in the new
+  field `VeroneseParentProof::interlacing` (window theorems, three-term,
+  Liu--Wang, derivative-lag and Ma--Wang checks, all `P_(m-1) << P_m`).
+  Transfer rules: the Hermite--Kakeya--Obreschkoff rule for operations free
+  of `n` that preserve real-rootedness on the whole line (preserver images,
+  Hadamard multiplier sequences such as `1/k!`, basis maps with a whole-line
+  map theorem; weak, `unordered`); Athanasiadis--Wagner (arXiv:2404.12989,
+  Corollary 5.6(b)) for the Veronese certifications (weak, directed); a
+  common real-rooted factor for row factors with a constant exponent.
+  `n`-dependent operators, gamma lifts and symmetric companions claim
+  nothing.  The `lift_summary` JSON gains the required field
+  `input_interlacing`, so summaries serialized before this change no longer
+  deserialize (`lift_summary` itself is new in this release).
 - The sign hypotheses of the lifts use the exact checker: the
   symmetric-companion hypotheses `a_n >= 0`, `0 <= delta_n <= c_n` (formerly
   unresolved for degree above one unless the Taylor shift had one-signed

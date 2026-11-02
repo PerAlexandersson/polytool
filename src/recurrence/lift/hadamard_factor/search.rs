@@ -1003,7 +1003,7 @@ fn build_lift(
     );
     let multiplier_sequence = factor.multiplier_justification();
     let lift_summary = hadamard_lift_summary(
-        &factor.text(),
+        factor,
         gauge,
         &parent_json,
         &identity,

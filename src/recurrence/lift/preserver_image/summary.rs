@@ -3,16 +3,19 @@
 use super::certify::{
     PreserverImageCandidate, PreserverImageCertificate, PreserverImageIdentityStatus,
 };
+use super::interlacing::PreserverInterlacingClaim;
 use super::interval::{interval_image, interval_route_label, region_contains};
 use super::operator::OperatorForm;
 use super::transfer::{denominator_hypothesis, operator_transfer};
 use crate::recurrence::lift::lift_summary::{
     gauge_hypothesis, nonpositive_ray, parent_proof_summary, real_line,
+    HERMITE_KAKEYA_OBRESCHKOFF_THEOREM,
 };
 use crate::recurrence::lift::veronese_algebra::classify_row;
 use crate::recurrence::{
-    LiftIdentityStatus, LiftOperation, LiftParent, LiftParentProof, LiftRootTransfer, LiftSummary,
-    RealRootednessTheoremReport, RootInterval, VeroneseParentProof,
+    InterlacingOrientation, LiftIdentityStatus, LiftInterlacing, LiftInterlacingClaim,
+    LiftInterlacingJustification, LiftOperation, LiftParent, LiftParentProof, LiftRootTransfer,
+    LiftSummary, RealRootednessTheoremReport, RootInterval, VeroneseParentProof,
 };
 
 /// The parts of a certification its summary is computed from.
@@ -23,6 +26,40 @@ pub(super) struct PreserverImageSummaryParts<'a> {
     pub(super) parent_proof: &'a VeroneseParentProof,
     pub(super) whole_line_parent_proof: Option<&'a RealRootednessTheoremReport>,
     pub(super) interval_parent_proof: Option<&'a RealRootednessTheoremReport>,
+    /// The certification's interlacing claim (the `interlacing` module).
+    pub(super) interlacing: &'a PreserverInterlacingClaim,
+}
+
+/// The input interlacing of a preserver-image lift: its
+/// [`PreserverInterlacingClaim`] (the Hermite--Kakeya--Obreschkoff rule of
+/// the `interlacing` module), weak and unordered.
+fn preserver_input_interlacing(claim: &PreserverInterlacingClaim) -> LiftInterlacingClaim {
+    match claim {
+        PreserverInterlacingClaim::None { reason } => LiftInterlacingClaim::not_proved(reason),
+        PreserverInterlacingClaim::Claimed {
+            kind,
+            orientation,
+            from_index,
+            justification,
+        } => {
+            if orientation != "unordered" {
+                return LiftInterlacingClaim::not_proved(format!(
+                    "unknown orientation `{orientation}` of the preserver interlacing claim"
+                ));
+            }
+            LiftInterlacingClaim::Proved {
+                interlacing: LiftInterlacing {
+                    kind: *kind,
+                    orientation: InterlacingOrientation::Unordered,
+                    from_index: *from_index,
+                    justification: LiftInterlacingJustification {
+                        theorem: HERMITE_KAKEYA_OBRESCHKOFF_THEOREM.into(),
+                        premises: vec![justification.clone()],
+                    },
+                },
+            }
+        }
+    }
 }
 
 /// Whether the parent row at `index` is real-rooted (so a failure of the
@@ -227,4 +264,5 @@ pub(super) fn preserver_image_summary(parts: PreserverImageSummaryParts<'_>) -> 
         hypotheses,
         parent_proof,
     )
+    .with_input_interlacing(preserver_input_interlacing(parts.interlacing))
 }
