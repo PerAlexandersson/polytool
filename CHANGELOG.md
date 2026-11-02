@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-This release is `polytool` 0.6.0 and `exact-real-roots` 0.2.0.  Existing CLI
+This release is `polytool` 0.6.0, `exact-real-roots` 0.2.0 and the new
+`ore-algebra` 0.1.0.  Existing CLI
 commands and flags, MCP tool names and the web export names are unchanged; new
 commands and tools are listed under Additions.  Some MCP responses now give
 coefficients as decimal strings (see Breaking changes).
@@ -364,6 +365,32 @@ Additions:
   RealRooted `IsPFPolynomial.generalStep_of_natDegree_le` (`kappa, a, b > 0`,
   `u > 0`, `v >= 0`, negative comparison defect), decided exactly for every
   `n`; region `(-inf, 0]`, no interlacing claim.
+- New standalone crate `ore-algebra` (`crates/ore-algebra`, dependencies
+  `num-*` only): the exact Ore algebra of shifts and derivatives
+  (`BivariatePolynomial`, `OreOperator`, the Euler form), moved out of
+  `recurrence::implicit` with unchanged behaviour, plus right
+  pseudo-division, maps between sequences with the transport of annihilators
+  (`RowMapStep`, `pull_back`, `push_forward`: Weyl operators, gauges, affine
+  maps, reversals, coefficient multipliers), jointly invariant systems of
+  additional annihilators of recurrence-defined rows
+  (`find_annihilator_system`), and runnable image annihilators found by
+  push-forward or as common left multiples from an increasing ansatz with an
+  exact modular kernel (`find_image_annihilator`), each with an identity
+  certificate that replays on its own.
+- Image recurrences: `recurrence::image_recurrence_of_operator` computes a
+  runnable rule (top shift free of derivatives, leader decided nonzero after
+  the seeds) for `Q_n = lambda(n) T_n(P_(n+s))` from a runnable parent rule,
+  for a Weyl operator, an affine, reversal or Möbius map, or a coefficient
+  multiplier `x^k -> u(k) x^k` (`ImageOperatorSpecification`, `ImageRowMap`,
+  `ImageGauge`), with seeds computed as `T_n(P_n)` and an
+  `ImageRecurrenceCertificate` (the identity `w E = H o L + Z o A`, the
+  invariance of auxiliary annihilators, exceptional bases checked on rows,
+  replay) that `verify()` recomputes; schema
+  `polytool.image_recurrence.v1`.  When no runnable rule is found within the
+  budget the result is `RecurrenceError::BudgetExhausted`.  For example
+  `A_n + A_n'` (Eulerian) gets an order-2 rule, `theta (theta + 1) N_n`
+  (Narayana) and the `1/k!` image of the binomial rows (Laguerre) order-1
+  rules.
 - `sequences::literature::peak_polynomials_bigint` and
   `peak_polynomials_iter` (permutations by peaks, A008303), and library
   recurrences returned as `(Recurrence, seeds, first_index)`

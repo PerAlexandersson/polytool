@@ -25,7 +25,11 @@
     `real_rooted_enumeration` enumerates real-rooted integer polynomials with
     a prescribed leading prefix (exact antiderivative-shift kernel);
   - linear algebra, total non-negativity, determinants: `linalg`;
-  - recurrence search and renewal recognition: `recurrence`, `renewal`; bundled
+  - recurrence search and renewal recognition: `recurrence`, `renewal`; the
+    exact Ore algebra of shifts and derivatives (operators, pseudo-division,
+    common left multiples, image annihilators) is the separate `ore-algebra`
+    crate (`crates/ore-algebra`), adapted for the recurrence module in
+    `recurrence/implicit/algebra.rs`; bundled
     OEIS families: `oeis` (data in `data/oeis-catalog.jsonl`, generated into
     `$OUT_DIR` by `build.rs`; record schema in `src/oeis_catalog_schema.rs`);
   - structured diagnostics: `coefficient_tests`, `hstar_inequalities`,
@@ -140,10 +144,10 @@
 
 - Run focused library and CLI tests before broader checks.
 - Before finishing a change run `cargo fmt --all -- --check`,
-  `cargo clippy --locked -p polytool -p exact-real-roots --all-targets -- -D warnings`,
-  `cargo test --locked -p polytool -p exact-real-roots --doc`,
-  `RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p polytool -p exact-real-roots`
-  and `cargo +1.82 check --locked -p polytool -p exact-real-roots`.
+  `cargo clippy --locked -p polytool -p exact-real-roots -p ore-algebra --all-targets -- -D warnings`,
+  `cargo test --locked -p polytool -p exact-real-roots -p ore-algebra --doc`,
+  `RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p polytool -p exact-real-roots -p ore-algebra`
+  and `cargo +1.82 check --locked -p polytool -p exact-real-roots -p ore-algebra`.
 - `cargo test --lib oeis::tests` checks the catalog data file (canonical lines,
   provenance tiers, recorded fingerprints) without external data.  With a
   local OEIS copy, `polytool oeis check --oeis-data DIR` re-validates every

@@ -139,6 +139,11 @@ input format and the full command reference.
 - `crates/exact-real-roots` is the standalone exact root-counting crate that
   polytool depends on; see
   [crates/exact-real-roots/README.md](crates/exact-real-roots/README.md).
+- `crates/ore-algebra` is the standalone exact Ore-algebra crate (shift and
+  derivative operators, pseudo-division, common left multiples, image
+  annihilators with identity certificates) behind polytool's recurrence
+  transport and image recurrences; see
+  [crates/ore-algebra/README.md](crates/ore-algebra/README.md).
 
 ## Documentation
 

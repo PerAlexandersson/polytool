@@ -30,8 +30,12 @@
 //!   recurrences, gamma coordinates, vector transport and reports;
 //! - `implicit`: implicit differential relations, diagonal transport,
 //!   derivative antecedents, reconstruction certificates, the direct search
-//!   [`search_implicit_relations`] and the lossy derivative map
-//!   ([`lossy_reconstruction`]);
+//!   [`search_implicit_relations`], the lossy derivative map
+//!   ([`lossy_reconstruction`]) and exact image recurrences
+//!   ([`image_recurrence_of_operator`]: a runnable rule for
+//!   `Q_n = lambda(n) T_n(P_(n+s))` with seeds and an
+//!   [`ImageRecurrenceCertificate`]); its Ore-algebra arithmetic is the
+//!   `ore-algebra` crate;
 //! - `root_domain`: optional root-domain information (theorem adapters, exact
 //!   root enclosures) for transformed results;
 //! - `representation`: the bounded queue search over equivalent
@@ -68,6 +72,9 @@ mod fit;
 pub use fit::*;
 mod implicit;
 pub use implicit::*;
+// The `BivarPoly` conversions of the Ore-algebra adapter, for every submodule.
+#[allow(unused_imports)]
+pub(in crate::recurrence) use implicit::algebra::BivarConversion;
 mod lift;
 pub use lift::*;
 mod representation;

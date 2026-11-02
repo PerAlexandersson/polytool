@@ -27,6 +27,47 @@ exact-real-roots = { path = "path/to/polytool/crates/exact-real-roots" }
 Both crates use ascending-degree coefficient order and arbitrary-precision
 integer arithmetic. Repeated roots are handled through the square-free part.
 
+## Ore algebra and image recurrences
+
+The exact Ore algebra of shifts `S` and derivatives `D` acting on sequences of
+polynomials (`S n = (n + 1) S`, `D x = x D + 1`) is the independent
+`ore-algebra` crate under `crates/ore-algebra` (dependencies `num-*` only).
+Besides the arithmetic it computes runnable annihilators of image sequences
+with identity certificates.  Polytool wraps it in
+`recurrence::image_recurrence_of_operator`, which turns a runnable rule of
+`P` into a runnable rule, with seeds and a replayable certificate, for
+`Q_n = lambda(n) T_n(P_(n+s))`:
+
+```rust
+use polytool::recurrence::{
+    image_recurrence_of_operator, BivarPolyJson, ImageOperatorSpecification,
+    ImageRecurrenceOptions, ImageRowMap, OperatorTermJson, PreserverParentLibrary,
+};
+
+let (_, eulerian) = PreserverParentLibrary::named_family_records()
+    .into_iter()
+    .find(|(name, _)| name == "eulerian")
+    .unwrap();
+let term = |deriv_order: usize| OperatorTermJson {
+    deriv_order,
+    coeff: BivarPolyJson { coeffs: vec![vec!["1".into()]] },
+};
+// T = 1 + D: A_n + A_n'.
+let specification = ImageOperatorSpecification::new(ImageRowMap::WeylOperator {
+    terms: vec![term(0), term(1)],
+    denominator: vec!["1".into()],
+});
+let image = image_recurrence_of_operator(
+    &eulerian,
+    eulerian.first_index,
+    &specification,
+    &ImageRecurrenceOptions::default(),
+)
+.unwrap();
+assert_eq!(image.order, 2);
+image.verify().unwrap();
+```
+
 ## Real-rootedness and interlacing
 
 ```rust

@@ -43,13 +43,18 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets
 
-      # A full `cargo package` of polytool resolves `exact-real-roots` from
-      # crates.io, where it is not published yet; until it is, check the
-      # polytool file list and package the path dependency on its own.
+      # A full `cargo package` of polytool resolves `exact-real-roots` and
+      # `ore-algebra` from crates.io, where they are not published yet; until
+      # they are, check the polytool file list and package the path
+      # dependencies on their own.
       - name: Verify package
         run: |
           cargo package --list | grep -x 'data/oeis-catalog.jsonl' > /dev/null
           cargo package --manifest-path crates/exact-real-roots/Cargo.toml
+          cargo package --manifest-path crates/ore-algebra/Cargo.toml
+
+      - name: Test the ore-algebra crate
+        run: cargo test --manifest-path crates/ore-algebra/Cargo.toml --all-targets
 
   companions:
     name: Companion packages

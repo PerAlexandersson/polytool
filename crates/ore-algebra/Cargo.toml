@@ -1,0 +1,23 @@
+[package]
+name = "ore-algebra"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+authors = ["Per Alexandersson <per.w.alexandersson@gmail.com>"]
+description = "Exact Ore-algebra arithmetic for polynomial sequences: shift and derivative operators, pseudo-division and common left multiples"
+readme = "README.md"
+repository = "https://github.com/PerAlexandersson/polytool"
+keywords = ["ore-algebra", "recurrences", "holonomic", "combinatorics"]
+categories = ["mathematics", "science"]
+
+[lints.rust]
+missing_docs = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unsafe_code = "forbid"
+
+[dependencies]
+num-bigint = "0.4"
+num-integer = "0.1"
+num-rational = "0.4"
+num-traits = "0.2"

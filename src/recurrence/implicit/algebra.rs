@@ -1,15 +1,20 @@
-//! Internal exact algebra behind implicit differential relations.
+//! Internal exact algebra behind implicit differential relations: an
+//! adapter over the `ore-algebra` crate.
 //!
-//! - [`Biv`]: bivariate polynomials `sum c_(i,j) n^i y^j` over the rationals,
-//!   where `y` is `x`, the Euler operator `theta = x D` or a coefficient
-//!   index `k` depending on context;
-//! - [`DOp`]: normal-ordered operators `sum c_(i,d)(n,x) D^d S^i` with
-//!   composition in the Ore algebra (`S n = (n + 1) S`, `D x = x D + 1`);
+//! - [`Biv`] (`ore_algebra::BivariatePolynomial`): bivariate polynomials
+//!   `sum c_(i,j) n^i y^j` over the rationals, where `y` is `x`, the Euler
+//!   operator `theta = x D` or a coefficient index `k` depending on context;
+//! - [`DOp`] (`ore_algebra::OreOperator`): normal-ordered operators
+//!   `sum c_(i,d)(n,x) D^d S^i` with composition in the Ore algebra
+//!   (`S n = (n + 1) S`, `D x = x D + 1`);
 //! - the Euler form `sum x^s a_(i,s)(n,theta) S^i` and the conversions
 //!   `x^J L <-> Euler form`;
-//! - exact zero sets of index polynomials `p(n,k)` on `n >= n_0`, `k >= 0`.
+//! - exact zero sets of index polynomials `p(n,k)` on `n >= n_0`, `k >= 0`
+//!   (these use the Sturm chains of this crate and stay here).
 //!
-//! Everything is exact; nothing here is public outside the recurrence module.
+//! The conversions to and from [`BivarPoly`] are the [`BivarConversion`]
+//! extension trait (in scope in every recurrence submodule through the
+//! facade).  Nothing here is public outside the recurrence module.
 
 use super::{BigRational as Q, BivarPoly};
 use crate::polynomial::Polynomial;
@@ -18,7 +23,13 @@ use crate::vec_poly;
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+
+pub(in crate::recurrence) use ore_algebra::{
+    add_euler_term as theta_add, falling_factorial, from_euler_form as from_theta,
+    to_euler_form as to_theta, BivariatePolynomial as Biv, EulerOperator as ThetaOp,
+    OreOperator as DOp,
+};
 
 pub(in crate::recurrence) fn q(value: i64) -> Q {
     Q::from_integer(BigInt::from(value))
@@ -50,528 +61,23 @@ pub(in crate::recurrence) fn factorial(t: usize) -> Q {
     Q::from_integer(value)
 }
 
-// ---------------------------------------------------------------------------
-// Bivariate polynomials
-// ---------------------------------------------------------------------------
+/// The conversions of [`Biv`] to and from the public coefficient type
+/// [`BivarPoly`] (an extension trait, since `Biv` is defined in the
+/// `ore-algebra` crate).
+pub(in crate::recurrence) trait BivarConversion: Sized {
+    /// From the public coefficient type.
+    fn from_bivar(p: &BivarPoly) -> Self;
+    /// To the public coefficient type.
+    fn to_bivar(&self) -> BivarPoly;
+}
 
-/// A bivariate polynomial `rows[i][j]` = coefficient of `n^i y^j`, kept
-/// trimmed (no trailing zeros, zero is the empty vector) so that equality is
-/// structural.
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub(in crate::recurrence) struct Biv(Vec<Vec<Q>>);
-
-impl Biv {
-    pub(in crate::recurrence) fn new(mut rows: Vec<Vec<Q>>) -> Self {
-        for row in &mut rows {
-            vec_poly::strip_trailing_zeros(row);
-        }
-        while rows.last().is_some_and(Vec::is_empty) {
-            rows.pop();
-        }
-        Self(rows)
-    }
-
-    pub(in crate::recurrence) fn rows(&self) -> &[Vec<Q>] {
-        &self.0
-    }
-
-    pub(in crate::recurrence) fn zero() -> Self {
-        Self(Vec::new())
-    }
-
-    pub(in crate::recurrence) fn constant(c: Q) -> Self {
-        Self::new(vec![vec![c]])
-    }
-
-    pub(in crate::recurrence) fn one() -> Self {
-        Self::constant(Q::one())
-    }
-
-    /// `c n^n_power y^y_power`.
-    pub(in crate::recurrence) fn monomial(n_power: usize, y_power: usize, c: Q) -> Self {
-        let mut rows = vec![Vec::new(); n_power + 1];
-        let mut row = vec![Q::zero(); y_power + 1];
-        row[y_power] = c;
-        rows[n_power] = row;
-        Self::new(rows)
-    }
-
-    /// A polynomial in `y` only.
-    pub(in crate::recurrence) fn from_y(p: &[Q]) -> Self {
-        Self::new(vec![p.to_vec()])
-    }
-
-    /// A polynomial in `n` only.
-    #[cfg(test)]
-    pub(in crate::recurrence) fn from_n(p: &[Q]) -> Self {
-        Self::new(p.iter().map(|c| vec![c.clone()]).collect())
-    }
-
-    pub(in crate::recurrence) fn from_bivar(p: &BivarPoly) -> Self {
+impl BivarConversion for Biv {
+    fn from_bivar(p: &BivarPoly) -> Self {
         Self::new(p.coeffs.clone())
     }
-
-    pub(in crate::recurrence) fn to_bivar(&self) -> BivarPoly {
-        BivarPoly::from_coefficients_normalized(self.0.clone())
+    fn to_bivar(&self) -> BivarPoly {
+        BivarPoly::from_coefficients_normalized(self.rows().to_vec())
     }
-
-    pub(in crate::recurrence) fn is_zero(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// The constant value, when the polynomial is a constant (zero included).
-    pub(in crate::recurrence) fn as_constant(&self) -> Option<Q> {
-        match self.0.as_slice() {
-            [] => Some(Q::zero()),
-            [row] if row.len() == 1 => Some(row[0].clone()),
-            _ => None,
-        }
-    }
-
-    pub(in crate::recurrence) fn is_n_free(&self) -> bool {
-        self.0.len() <= 1
-    }
-
-    pub(in crate::recurrence) fn is_y_free(&self) -> bool {
-        self.0.iter().all(|row| row.len() <= 1)
-    }
-
-    pub(in crate::recurrence) fn add(&self, other: &Self) -> Self {
-        let len = self.0.len().max(other.0.len());
-        Self::new(
-            (0..len)
-                .map(|i| {
-                    let a = self.0.get(i).map_or(&[][..], Vec::as_slice);
-                    let b = other.0.get(i).map_or(&[][..], Vec::as_slice);
-                    vec_poly::add(a, b)
-                })
-                .collect(),
-        )
-    }
-
-    pub(in crate::recurrence) fn scale(&self, c: &Q) -> Self {
-        if c.is_zero() {
-            return Self::zero();
-        }
-        Self::new(
-            self.0
-                .iter()
-                .map(|row| row.iter().map(|x| x * c).collect())
-                .collect(),
-        )
-    }
-
-    pub(in crate::recurrence) fn mul(&self, other: &Self) -> Self {
-        if self.is_zero() || other.is_zero() {
-            return Self::zero();
-        }
-        let mut rows = vec![Vec::new(); self.0.len() + other.0.len() - 1];
-        for (i, left) in self.0.iter().enumerate() {
-            if left.is_empty() {
-                continue;
-            }
-            for (j, right) in other.0.iter().enumerate() {
-                if right.is_empty() {
-                    continue;
-                }
-                rows[i + j] = vec_poly::add(&rows[i + j], &vec_poly::mul(left, right));
-            }
-        }
-        Self::new(rows)
-    }
-
-    pub(in crate::recurrence) fn pow(&self, exponent: usize) -> Self {
-        (0..exponent).fold(Self::one(), |acc, _| acc.mul(self))
-    }
-
-    /// `p(n + dn, y + dy)`.
-    pub(in crate::recurrence) fn shift(&self, dn: &Q, dy: &Q) -> Self {
-        let n_linear = [dn.clone(), Q::one()];
-        let mut n_power = vec![Q::one()];
-        let mut result = Self::zero();
-        for (i, row) in self.0.iter().enumerate() {
-            if i > 0 {
-                n_power = vec_poly::mul(&n_power, &n_linear);
-            }
-            if row.is_empty() {
-                continue;
-            }
-            let shifted = if dy.is_zero() {
-                row.clone()
-            } else {
-                vec_poly::compose(row, &[dy.clone(), Q::one()])
-            };
-            let term = Self::new(
-                n_power
-                    .iter()
-                    .map(|c| vec_poly::scale(&shifted, c))
-                    .collect(),
-            );
-            result = result.add(&term);
-        }
-        result
-    }
-
-    pub(in crate::recurrence) fn shift_n(&self, dn: i64) -> Self {
-        self.shift(&q(dn), &Q::zero())
-    }
-
-    /// `d/dy`.
-    pub(in crate::recurrence) fn dy(&self) -> Self {
-        Self::new(self.0.iter().map(|row| vec_poly::derivative(row)).collect())
-    }
-
-    /// The polynomial in `y` obtained at `n = value`.
-    pub(in crate::recurrence) fn eval_n(&self, value: &Q) -> Vec<Q> {
-        let mut result = vec![Q::zero()];
-        for row in self.0.iter().rev() {
-            result = vec_poly::scale(&result, value);
-            result = vec_poly::add(&result, row);
-        }
-        vec_poly::trim(&result)
-    }
-
-    /// The polynomial in `n` obtained at `y = value`.
-    pub(in crate::recurrence) fn eval_y(&self, value: &Q) -> Vec<Q> {
-        vec_poly::trim(
-            &self
-                .0
-                .iter()
-                .map(|row| vec_poly::evaluate(row, value))
-                .collect::<Vec<_>>(),
-        )
-    }
-
-    /// Coefficient of `y^j` as a polynomial in `n`.
-    pub(in crate::recurrence) fn y_coefficient(&self, j: usize) -> Vec<Q> {
-        vec_poly::trim(
-            &self
-                .0
-                .iter()
-                .map(|row| row.get(j).cloned().unwrap_or_else(Q::zero))
-                .collect::<Vec<_>>(),
-        )
-    }
-
-    pub(in crate::recurrence) fn y_degree(&self) -> Option<usize> {
-        self.0.iter().filter_map(|row| vec_poly::degree(row)).max()
-    }
-
-    /// Smallest power of `y` with a nonzero coefficient.
-    pub(in crate::recurrence) fn y_valuation(&self) -> Option<usize> {
-        self.0
-            .iter()
-            .filter_map(|row| row.iter().position(|c| !c.is_zero()))
-            .min()
-    }
-
-    /// Divide by `y^e` (the caller guarantees divisibility).
-    pub(in crate::recurrence) fn div_y_power(&self, e: usize) -> Self {
-        Self::new(
-            self.0
-                .iter()
-                .map(|row| row.get(e..).map(<[Q]>::to_vec).unwrap_or_default())
-                .collect(),
-        )
-    }
-
-    /// Multiply by `y^e`.
-    #[cfg(test)]
-    pub(in crate::recurrence) fn mul_y_power(&self, e: usize) -> Self {
-        Self::new(
-            self.0
-                .iter()
-                .map(|row| {
-                    if row.is_empty() {
-                        Vec::new()
-                    } else {
-                        vec_poly::shift_by(row, e)
-                    }
-                })
-                .collect(),
-        )
-    }
-
-    /// Lexicographically leading coefficient: highest power of `n`, then of `y`.
-    pub(in crate::recurrence) fn leading(&self) -> Option<&Q> {
-        self.0.last().and_then(|row| row.last())
-    }
-
-    /// `(lead, p / lead)`; the zero polynomial is returned unchanged with lead 1.
-    pub(in crate::recurrence) fn monic(&self) -> (Q, Self) {
-        match self.leading() {
-            Some(lead) => {
-                let lead = lead.clone();
-                (lead.clone(), self.scale(&lead.recip()))
-            }
-            None => (Q::one(), Self::zero()),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Normal-ordered operators
-// ---------------------------------------------------------------------------
-
-/// `sum c_(i,d)(n,x) D^d S^i`, keyed by `(shift i, derivative order d)`;
-/// zero coefficients are never stored.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(in crate::recurrence) struct DOp(pub(in crate::recurrence) BTreeMap<(usize, usize), Biv>);
-
-impl DOp {
-    pub(in crate::recurrence) fn add_term(&mut self, key: (usize, usize), coefficient: Biv) {
-        if coefficient.is_zero() {
-            return;
-        }
-        let entry = self.0.entry(key).or_default();
-        *entry = entry.add(&coefficient);
-        if entry.is_zero() {
-            self.0.remove(&key);
-        }
-    }
-
-    pub(in crate::recurrence) fn single(shift: usize, derivative: usize, coefficient: Biv) -> Self {
-        let mut op = Self::default();
-        op.add_term((shift, derivative), coefficient);
-        op
-    }
-
-    pub(in crate::recurrence) fn is_zero(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub(in crate::recurrence) fn add(&self, other: &Self) -> Self {
-        let mut sum = self.clone();
-        for (key, c) in &other.0 {
-            sum.add_term(*key, c.clone());
-        }
-        sum
-    }
-
-    pub(in crate::recurrence) fn scale(&self, c: &Q) -> Self {
-        let mut out = Self::default();
-        for (key, coefficient) in &self.0 {
-            out.add_term(*key, coefficient.scale(c));
-        }
-        out
-    }
-
-    pub(in crate::recurrence) fn sub(&self, other: &Self) -> Self {
-        self.add(&other.scale(&q(-1)))
-    }
-
-    pub(in crate::recurrence) fn max_shift(&self) -> usize {
-        self.0.keys().map(|(i, _)| *i).max().unwrap_or(0)
-    }
-
-    pub(in crate::recurrence) fn max_derivative(&self) -> usize {
-        self.0.keys().map(|(_, d)| *d).max().unwrap_or(0)
-    }
-
-    /// The terms at shift `i`, as a shift-zero operator.
-    pub(in crate::recurrence) fn column(&self, shift: usize) -> Self {
-        let mut out = Self::default();
-        for ((i, d), c) in &self.0 {
-            if *i == shift {
-                out.add_term((0, *d), c.clone());
-            }
-        }
-        out
-    }
-
-    /// The composition `self o other`.
-    pub(in crate::recurrence) fn compose(&self, other: &Self) -> Self {
-        let mut out = Self::default();
-        for ((i, a), c) in &self.0 {
-            let dn = q_usize(*i);
-            for ((j, b), e) in &other.0 {
-                let mut derivative = e.shift(&dn, &Q::zero());
-                for t in 0..=*a {
-                    if derivative.is_zero() {
-                        break;
-                    }
-                    let coefficient = c.mul(&derivative).scale(&binomial(*a, t));
-                    out.add_term((i + j, a - t + b), coefficient);
-                    derivative = derivative.dy();
-                }
-            }
-        }
-        out
-    }
-
-    /// `S^nu o self`.
-    pub(in crate::recurrence) fn shifted(&self, nu: usize) -> Self {
-        let mut out = Self::default();
-        let dn = q_usize(nu);
-        for ((i, d), c) in &self.0 {
-            out.add_term((i + nu, *d), c.shift(&dn, &Q::zero()));
-        }
-        out
-    }
-
-    /// Smallest power of `x` dividing every coefficient.
-    pub(in crate::recurrence) fn x_valuation(&self) -> usize {
-        self.0
-            .values()
-            .filter_map(Biv::y_valuation)
-            .min()
-            .unwrap_or(0)
-    }
-
-    pub(in crate::recurrence) fn div_x_power(&self, e: usize) -> Self {
-        let mut out = Self::default();
-        for (key, c) in &self.0 {
-            out.add_term(*key, c.div_y_power(e));
-        }
-        out
-    }
-
-    #[cfg(test)]
-    pub(in crate::recurrence) fn mul_x_power(&self, e: usize) -> Self {
-        let mut out = Self::default();
-        for (key, c) in &self.0 {
-            out.add_term(*key, c.mul_y_power(e));
-        }
-        out
-    }
-
-    /// Leading coefficient: largest `(shift, derivative)` key, then the
-    /// lexicographically leading coefficient of its polynomial.
-    pub(in crate::recurrence) fn leading(&self) -> Option<Q> {
-        self.0
-            .values()
-            .next_back()
-            .and_then(|c| c.leading().cloned())
-    }
-
-    /// `(lead, e, N)` with `self = lead x^e N`, `N` having no common power of
-    /// `x` and leading coefficient one.
-    pub(in crate::recurrence) fn normalize(&self) -> (Q, usize, Self) {
-        let e = self.x_valuation();
-        let stripped = self.div_x_power(e);
-        let lead = stripped.leading().unwrap_or_else(Q::one);
-        let normalized = stripped.scale(&lead.recip());
-        (lead, e, normalized)
-    }
-
-    /// `(self Q)_n` when rows `Q_(origin)..` cover every referenced index.
-    pub(in crate::recurrence) fn apply(
-        &self,
-        rows: &[Vec<Q>],
-        origin: usize,
-        n: usize,
-    ) -> Option<Vec<Q>> {
-        let value = q_usize(n);
-        let mut sum = vec![Q::zero()];
-        for ((i, d), c) in &self.0 {
-            let index = n.checked_add(*i)?.checked_sub(origin)?;
-            let row = rows.get(index)?;
-            let mut derivative = row.clone();
-            for _ in 0..*d {
-                derivative = vec_poly::derivative(&derivative);
-            }
-            sum = vec_poly::add(&sum, &vec_poly::mul(&c.eval_n(&value), &derivative));
-        }
-        Some(vec_poly::trim(&sum))
-    }
-
-    /// Apply a shift-free operator to one row at index `n`.
-    pub(in crate::recurrence) fn apply_row(&self, row: &[Q], n: usize) -> Vec<Q> {
-        let value = q_usize(n);
-        let mut sum = vec![Q::zero()];
-        for ((_, d), c) in &self.0 {
-            let mut derivative = row.to_vec();
-            for _ in 0..*d {
-                derivative = vec_poly::derivative(&derivative);
-            }
-            sum = vec_poly::add(&sum, &vec_poly::mul(&c.eval_n(&value), &derivative));
-        }
-        vec_poly::trim(&sum)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Euler form
-// ---------------------------------------------------------------------------
-
-/// `sum x^s a_(i,s)(n,theta) S^i`, keyed by `(shift i, x power s)`, with
-/// coefficients in `(n, theta)`.
-pub(in crate::recurrence) type ThetaOp = BTreeMap<(usize, usize), Biv>;
-
-pub(in crate::recurrence) fn theta_add(op: &mut ThetaOp, key: (usize, usize), c: Biv) {
-    if c.is_zero() {
-        return;
-    }
-    let entry = op.entry(key).or_default();
-    *entry = entry.add(&c);
-    if entry.is_zero() {
-        op.remove(&key);
-    }
-}
-
-/// `theta (theta - 1) ... (theta - d + 1)`.
-pub(in crate::recurrence) fn falling_factorial(d: usize) -> Vec<Q> {
-    (0..d).fold(vec![Q::one()], |acc, t| {
-        vec_poly::mul(&acc, &[-q_usize(t), Q::one()])
-    })
-}
-
-/// Stirling numbers of the second kind `S(m, d)` for `m <= max`.
-fn stirling2(max: usize) -> Vec<Vec<Q>> {
-    let mut table = vec![vec![Q::zero(); max + 1]; max + 1];
-    table[0][0] = Q::one();
-    for m in 1..=max {
-        for d in 1..=m {
-            table[m][d] = &table[m - 1][d - 1] + q_usize(d) * &table[m - 1][d];
-        }
-    }
-    table
-}
-
-/// `(J, x^J L)` in Euler form with `J` the largest derivative order, using
-/// `x^d D^d = theta (theta - 1) ... (theta - d + 1)`.
-pub(in crate::recurrence) fn to_theta(op: &DOp) -> (usize, ThetaOp) {
-    let j_max = op.max_derivative();
-    let mut out = ThetaOp::new();
-    for ((i, d), c) in &op.0 {
-        let falling = falling_factorial(*d);
-        for (r, row) in c.rows().iter().enumerate() {
-            for (j, cj) in row.iter().enumerate() {
-                if cj.is_zero() {
-                    continue;
-                }
-                let s = j + j_max - d;
-                let mut rows = vec![Vec::new(); r + 1];
-                rows[r] = vec_poly::scale(&falling, cj);
-                theta_add(&mut out, (*i, s), Biv::new(rows));
-            }
-        }
-    }
-    (j_max, out)
-}
-
-/// The normal-ordered form of an Euler-form operator, using
-/// `theta^m = sum_d S(m, d) x^d D^d`.
-pub(in crate::recurrence) fn from_theta(op: &ThetaOp) -> DOp {
-    let max_m = op.values().filter_map(Biv::y_degree).max().unwrap_or(0);
-    let table = stirling2(max_m);
-    let mut out = DOp::default();
-    for ((i, s), a) in op {
-        for (r, row) in a.rows().iter().enumerate() {
-            for (m, alpha) in row.iter().enumerate() {
-                if alpha.is_zero() {
-                    continue;
-                }
-                for (d, stirling) in table[m].iter().enumerate().take(m + 1) {
-                    if stirling.is_zero() {
-                        continue;
-                    }
-                    out.add_term((*i, d), Biv::monomial(r, s + d, alpha * stirling));
-                }
-            }
-        }
-    }
-    out
 }
 
 // ---------------------------------------------------------------------------
