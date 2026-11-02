@@ -902,6 +902,55 @@ derivative-lag or Ma--Wang interval report), every `alpha P_(m-1) + beta P_m` is
 `T(P_m)` interlace weakly; the claim records no orientation.  Index-dependent
 operators get no claim.
 
+## Basis-map lifts
+
+For a family `P` (rule, first index `i0`, seeds) the basis map is
+`T_P(sum p_k u^k) = sum p_k P_(i0 + k)`.
+
+**Intertwining.**  The rule `f(n, t) P_n = sum_j c_j(n, t) D^(d_j) P_(n-r_j)`
+applied at `n = i0 + k` to the monomials of `u^R p` gives
+`sum_i f_i(theta + i0) ...`: with `theta = u d/du`, `n` acts as `theta + i0`
+on the target monomial and as `theta + i0 + r_j` on `u^(k - r_j)`.  For a rule
+free of `n` with a constant leader and no exceptional prefix this is the
+companion form: the state `V(p) = (T(p), ..., T(u^(R-1) p))` satisfies
+`V(u p) = C V(p)`, hence `V(e(u) p) = e(C) V(p)`.
+
+**Theorems** (`check_basis_map_preserves_pf`; hypotheses decided exactly):
+
+| Shape | Statement | Reference |
+|---|---|---|
+| `P_k = g (a + d t)^k` | `T(p) = g p(a + d t)`; `(-inf, a] -> (-inf, 0]` for `d > 0`, `g` with roots `<= 0` | elementary |
+| eventually geometric, prefix discrepancy | no source interval of positive length; a failing `T((u + 1)^N)` is reported | RealRooted `exists_not_splits_linearMap_shiftedPower_of_eventually_geometric` |
+| `P_(k+2) = a P_(k+1) + (b t + c) P_k`, `P_1 = s` | PF inputs give real-rooted images with roots `<= -c/b`; PF images iff `a^2 + 4c >= 0` and (`2s >= a` or `c >= s^2 - a s`) | RealRooted `orderTwoBasis_pf_equivalences`, `basisTransform_orderTwoBasis_preserves_bounded_pf_iff`; Brändén arXiv:1410.6601 Thm 8.5 |
+| `P_(k+2) = (a + d t) P_(k+1) + (b t + c) P_k`, `P_1 = l + m t` | `E = [-beta - sqrt(K), -beta + sqrt(K)] -> R`; target `I` under `|s - e beta| <= e sqrt(K)`; PF on `[-beta - sqrt(K), 0]` | common-interlacer proof (module docs); Iserles--Saff 1989 Thm 1 (Chebyshev case); RealRooted `orderTwoConstants_nonneg_iff` |
+| `(a + b t) f + kappa (t - h) f'` | `(-inf, a + b h + kappa m] -> (-inf, h]`, iff | RealRooted `rayBasisMap_maps_realRootedIn_iff`; Ma--Wang 2008 Thm 2 |
+| `(a + b t) f + kappa (t - l)(t - h) f'` | `[a + b l - kappa (h-l) m_l, a + b h + kappa (h-l) m_h] -> [l, h]`, iff | RealRooted `intervalBasisMap_maps_realRootedIn_iff` |
+| `(a + b t) f - kappa f'` | real-rooted inputs to real-rooted images | Ma--Wang Thm 2 |
+| `(L + k s) P_k`, `s >= 0` | `T = U_g o R_s`; `(-inf, 0] -> (-inf, h]` | RealRooted `basisMap_factorization_of_scalarIndex_recurrence`; Su--Yang--Zhang 2013 Thm 4; Brenti 1989 Thm 2.4.3 |
+
+Here `beta = b/d`, `K = beta^2 + a beta - c > 0`, `eta = m/d >= 0`,
+`s = l - eta a`, `e = 2 eta - 1`.  The affine-current proof (common interlacer
+`V_p = (p(lambda_+) - p(lambda_-))/(lambda_+ - lambda_-)`, sign alternation
+along `y = 2 sqrt(K) cos theta - 2 beta`, endpoint values, and the scalar
+constant-term criterion for PF images) is written out in the `basis_map`
+module documentation.
+
+**Transport and certificate.**  A coefficient rule `sum_i e_i(n, u) R_(n+i) =
+0` without `u`-derivatives and with a leader `g(n) S^k` free of `u` gives
+`Phi W = 0` for `W_n = V(R_n)`, `Phi = sum_i e_i(n, C) S^i` (leader
+`g(n) S^k I`), and `H_n = T(R_n)` is the first component.  The row
+`e_0^T M` of the input relation is pseudo-divided by `Phi`; a zero remainder
+gives `w(n) (M H)_n = 0` from the first base of `R`'s rule on, the other
+bases (finitely many) are evaluated exactly, the identifying rows agree, and
+the leader of `M` never vanishes, so `H = Q`.  For maps of order one the
+reverse division `w Phi = sum H_nu S^nu M` is also tried.
+
+**Root location.**  The coefficient rows must lie in a source interval `S`
+(checked exactly on the compared rows, else the route fails).  Rational
+bounds `L' >= inf S`, `U' <= sup S` are proved by the parent provers on the
+transported families `R_n(v + U')` and `R_n(L' - v)` (rows zero or
+real-rooted with coefficients of one sign, so roots `<= 0`).
+
 ## Exact sign decisions for an integer index
 
 `decide_index_rational_function_sign(p, q, range, condition)` decides

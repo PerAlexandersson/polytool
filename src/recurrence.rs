@@ -49,6 +49,9 @@
 //!   ([`find_row_factor_lifts`]), gamma lifts ([`find_gamma_lifts`]) and
 //!   images of proved families under real-rootedness preservers
 //!   ([`find_preserver_image_lifts`], [`certify_preserver_image_lift`]),
+//!   basis-map lifts `Q_n = T_P(R_n)` with the basis-map theorems
+//!   ([`find_basis_map_lifts`], [`check_basis_map_preserves_pf`],
+//!   [`apply_basis_map_to_family`]),
 //!   with real-rootedness theorem checks for the parents
 //!   ([`check_three_term_recurrence_theorem`],
 //!   [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`]).

@@ -992,6 +992,49 @@ independent of `n` that preserves every real-rooted polynomial, from the
 parent's interlacing proved by a replayed theorem report
 (Hermite--Kakeya--Obreschkoff); otherwise `none`.  See [algorithms.md](algorithms.md#preserver-image-lifts).
 
+## Basis maps and basis-map lifts
+
+A `BasisMap` is the linear map `T_P(sum p_k u^k) = sum p_k P_(i0 + k)(t)` of a
+family given by a rule, its first index `i0` and seed rows (serialized as
+`{ "name", "family": polytool.recurrence.v1 }`).  `apply` evaluates it,
+`expand` inverts it exactly on triangular rows (strictly increasing degrees),
+`tail(s)` shifts the first index, and `intertwining_relation()` gives the
+identity `sum t^i D^d T(phi(theta) u^m p) = 0` derived from the rule (for a
+rule free of `n`, `T(u^R p) = sum_j A_j T(u^j p)`).
+
+`check_basis_map_preserves_pf` recognises the family's shape and decides the
+hypotheses of the matching theorem exactly; each proved `BasisMapConclusion`
+says that every nonzero polynomial with all roots in `input_interval` is sent
+to zero or to a real-rooted polynomial with all roots in `output_interval`,
+in every degree.  Interval ends are exact `QuadraticNumber`s `a + b sqrt(d)`.
+
+```rust
+use polytool::recurrence::*;
+
+let map = BasisMap::from_oeis("A035607")?;
+let report = check_basis_map_preserves_pf(&map, &BasisMapTheoremOptions::default())?;
+let pf = report.pf_conclusion().unwrap();
+assert_eq!(pf.input_interval.to_string(), "[-1 - sqrt(2), 0]");
+// T((u + 4)^3) = 125 + 150 t + 32 t^2 + 2 t^3 is not real-rooted: -4 is outside.
+# Ok::<(), RecurrenceError>(())
+```
+
+`find_basis_map_lifts(rule, rows, first_index, &options)` writes the input as
+`Q_n = T_P(R_n)` for a map of a `BasisMapLibrary` (default: the admitted OEIS
+catalog maps; build one with `BasisMapLibrary::oeis_catalog()` or
+`BasisMapLibrary::build` and share it): it expands the rows, rejects maps whose
+coefficient rows have a root outside every source interval (exactly), fits a
+derivative-free rule for `R` and certifies the candidate with
+`certify_basis_map_lift`.  The certification (`BasisMapLiftCertification`,
+schema `polytool.recurrence-basis-map-lift.v1`) records the identity (a
+`BasisMapDivisionCertificate`, replayed by `verify()`), the map theorem, the
+conclusion used, the root proof of `R` (`BasisMapCoefficientRootProof`: the
+parent provers on `R_n(v + U')` and `R_n(L' - v)`) and the `lift_summary`
+(`LiftOperation::BasisMap`).  `apply_basis_map_to_family(&map, &family,
+&options)` is the forward move: the rule of `T_P(R)` (transported for maps of
+order one, fitted otherwise) with the same certification.  See
+[algorithms.md](algorithms.md#basis-map-lifts).
+
 ## Exact sign decisions for an integer index
 
 `decide_index_rational_function_sign(p, q, &range, condition)` decides

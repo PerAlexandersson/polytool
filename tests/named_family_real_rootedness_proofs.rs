@@ -838,3 +838,57 @@ mod ma_wang_interval {
         );
     }
 }
+
+/// Basis-map lifts ([`polytool::recurrence::find_basis_map_lifts`]): the rows
+/// are `T_P(R_n)` for the binomial basis map `u^k -> (1 + t)^k` (A007318,
+/// whose theorem sends roots `<= 1` to roots `<= 0`), the identity is
+/// certified by transporting the fitted coefficient rule, and the
+/// coefficient rows are proved to have their roots in the source.
+mod basis_map_images {
+    use super::*;
+    use polytool::recurrence::{
+        find_basis_map_lifts, BasisMap, BasisMapLibrary, BasisMapLibraryOptions,
+        BasisMapLiftSearchOptions,
+    };
+    use std::sync::Arc;
+
+    #[test]
+    fn delannoy_rows_are_binomial_basis_images() {
+        // Defining recurrence of the generator: D_n = (1 + t) D_(n-1) + t D_(n-2).
+        let rule = Recurrence {
+            terms: vec![
+                RecurrenceTerm::new(1, 0, bivariate(&[(0, 0, q(1)), (0, 1, q(1))])),
+                RecurrenceTerm::new(2, 0, bivariate(&[(0, 1, q(1))])),
+            ],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let seeds = vec![vec![q(1)], vec![q(1), q(1)]];
+        let rows = rule.generate_rows_rational(&seeds, 0, 16).unwrap();
+        let generator = literature::delannoy_polynomials_bigint(15);
+        for (row, expected) in rows.iter().zip(&generator) {
+            let expected: Vec<Q> = expected.iter().cloned().map(Q::from_integer).collect();
+            assert_eq!(row, &expected);
+        }
+        let library = BasisMapLibrary::build(&BasisMapLibraryOptions {
+            maps: vec![BasisMap::from_oeis("A007318").unwrap()],
+            ..BasisMapLibraryOptions::default()
+        })
+        .unwrap();
+        let options = BasisMapLiftSearchOptions {
+            library: Some(Arc::new(library)),
+            ..BasisMapLiftSearchOptions::default()
+        };
+        let report = find_basis_map_lifts(&rule, &rows, 0, &options).unwrap();
+        report.verify().unwrap();
+        let lift = report.proved().expect("a proved lift");
+        assert_eq!(lift.lift_summary.verdict, LiftVerdict::Proved);
+        assert_eq!(
+            lift.lift_summary
+                .root_transfer
+                .input_root_region
+                .to_string(),
+            "(-inf, 0]"
+        );
+    }
+}

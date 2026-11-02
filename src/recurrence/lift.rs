@@ -35,6 +35,17 @@
 //!   Laguerre--Pólya operators `phi(n, D)`, `D^j o x^m`, `x^m D^j`, affine
 //!   substitutions, reversals and Möbius maps), with every side condition
 //!   decided exactly for all `n` (the `preserver_image` module docs).
+//! - Basis-map lifts, [`find_basis_map_lifts`], [`certify_basis_map_lift`]
+//!   and [`apply_basis_map_to_family`]: every row is `Q_n = T_P(R_n)` for a
+//!   basis map `T_P(u^k) = P_k(t)` ([`BasisMap`]) of a family `P` whose map
+//!   is proved to send polynomials with roots in a source interval to
+//!   polynomials with roots in a target interval
+//!   ([`check_basis_map_preserves_pf`]: geometric, constant- and
+//!   affine-current order-two, ray and interval differential, Hermite-type
+//!   and index-dependent scalar families), and `R_n` is proved to have its
+//!   roots in the source; the identity is certified by transporting `R`'s
+//!   rule through the intertwining relation of `T_P` with multiplication
+//!   by `u` (the `basis_map` module docs).
 //!
 //! Every lift carries a uniform [`LiftSummary`] with the shared
 //! [`lift_verdict`].
@@ -81,6 +92,8 @@
 
 use super::*;
 
+mod basis_map;
+pub use basis_map::*;
 mod gamma_lift;
 pub use gamma_lift::{
     certify_gamma_lift, find_gamma_lifts, GammaDivisionQuotient, GammaLiftCandidate,

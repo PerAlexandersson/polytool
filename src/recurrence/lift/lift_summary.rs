@@ -92,6 +92,21 @@ pub enum LiftOperation {
         /// The operator as text.
         description: String,
     },
+    // Basis-map lifts (`basis_map` module).
+    /// The basis map `T(R)_n = T_P(R_n)` with `T_P(u^k) = P_(i0 + k)` of a
+    /// basis family `P` ([`certify_basis_map_lift`]).
+    BasisMap {
+        /// The basis family's name.
+        basis: String,
+        /// The basis family: rule, first index `i0` and seeds
+        /// (`polytool.recurrence.v1`).
+        basis_family: RecurrenceJson,
+        /// The source interval of the map theorem used, as text (empty
+        /// when no theorem conclusion applies).
+        source_interval: String,
+        /// The target interval of the map theorem used, as text.
+        target_interval: String,
+    },
 }
 
 /// The parent of a lift.

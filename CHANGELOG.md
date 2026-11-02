@@ -391,6 +391,28 @@ Additions:
   `A_n + A_n'` (Eulerian) gets an order-2 rule, `theta (theta + 1) N_n`
   (Narayana) and the `1/k!` image of the binomial rows (Laguerre) order-1
   rules.
+- Basis maps and basis-map lifts: `recurrence::BasisMap` (the map
+  `T_P(u^k) = P_(i0 + k)` of a recurrence-defined family as a serializable
+  value, with `apply`, the exact triangular inverse `expand`, `tail` and the
+  intertwining relation with multiplication by `u`,
+  `BasisMapIntertwining`); `check_basis_map_preserves_pf` decides exactly the
+  hypotheses of the basis-map theorems (geometric, eventually geometric,
+  constant- and affine-current order-two, ray and interval differential,
+  Hermite-type and index-dependent scalar families) and reports source and
+  target intervals with exact quadratic endpoints (`QuadraticNumber`,
+  `AlgebraicInterval`; for example `[-1 - sqrt(2), 0]` for A035607), exact
+  counterexamples for maps that do not preserve, and RealRooted declarations
+  (schema `polytool.recurrence-basis-map-theorem.v1`);
+  `certify_basis_map_lift` certifies `Q_n = T_P(R_n)` for all `n` by
+  transporting the coefficient rule through the companion form of `T_P` and
+  pseudo-dividing the input rule (`BasisMapDivisionCertificate`, replayed by
+  `verify()`), and proves the coefficient roots in the source with the
+  parent provers on affinely transported families
+  (`polytool.recurrence-basis-map-lift.v1`, new `LiftOperation::BasisMap`);
+  `find_basis_map_lifts` searches a `BasisMapLibrary` (by default the admitted
+  maps of the OEIS catalog; `polytool.recurrence-basis-map-lifts.v1`), and
+  `apply_basis_map_to_family` builds and certifies the rule of an image
+  `T_P(R)` (`polytool.recurrence-basis-map-image.v1`).
 - `sequences::literature::peak_polynomials_bigint` and
   `peak_polynomials_iter` (permutations by peaks, A008303), and library
   recurrences returned as `(Recurrence, seeds, first_index)`
