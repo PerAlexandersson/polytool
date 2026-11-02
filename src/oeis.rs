@@ -904,7 +904,7 @@ mod tests {
                 .iter()
                 .filter(|entry| entry.status == OeisSequenceStatus::Validated)
                 .count(),
-            692
+            735
         );
         assert_eq!(
             catalog()
