@@ -45,25 +45,55 @@
 //! ```
 
 mod bivariate;
+mod difference_division;
+mod difference_image_annihilator;
+mod difference_row_map;
+mod differential_difference;
 mod division;
 mod euler;
+mod falling_factorial;
 mod image_annihilator;
 mod kernel;
+mod laurent;
 mod operator;
 mod row_annihilator;
 mod row_map;
 mod short_names;
+mod substitution;
 mod univariate;
 
 pub use bivariate::BivariatePolynomial;
+pub use difference_division::{
+    difference_index_only_leader, difference_right_pseudo_division, variable_shift_pseudo_division,
+    DifferentialDifferenceDivision,
+};
+pub use difference_image_annihilator::{
+    certify_difference_image_annihilator, find_difference_image_annihilator,
+    is_difference_runnable, normalize_difference_annihilator, DifferenceAnsatzShape,
+    DifferenceImageAnnihilatorBudget, DifferenceImageAnnihilatorCertificate,
+    DifferenceImageAnnihilatorError, DifferenceImageAnnihilatorMethod,
+    DifferenceImageAnnihilatorSearch,
+};
+pub use difference_row_map::{
+    pull_back_difference, push_forward_difference, DifferencePullbackBounds, DifferenceRowMapError,
+    DifferenceRowMapStep,
+};
+pub use differential_difference::{DifferentialDifferenceKey, DifferentialDifferenceOperator};
 pub use division::{index_only_leader, right_pseudo_division, RightPseudoDivision};
 pub use euler::{add_euler_term, falling_factorial, from_euler_form, to_euler_form, EulerOperator};
+pub use falling_factorial::{
+    conjugate_to_falling_factorial_basis, conjugate_to_power_basis,
+    falling_factorial_euler_operator, falling_factorial_raising_operator,
+    falling_factorial_to_power_basis, from_falling_factorial_euler_form,
+    power_to_falling_factorial_basis, to_falling_factorial_euler_form,
+};
 pub use image_annihilator::{
     certify_image_annihilator, find_image_annihilator, is_runnable, normalize_annihilator,
     AnsatzShape, ImageAnnihilatorBudget, ImageAnnihilatorCertificate, ImageAnnihilatorError,
     ImageAnnihilatorMethod, ImageAnnihilatorSearch,
 };
 pub use kernel::exact_kernel_vectors_by_group;
+pub use laurent::{LaurentBivariatePolynomial, LaurentError, LaurentOreOperator};
 pub use operator::OreOperator;
 pub use row_annihilator::{
     certify_annihilator_system, find_annihilator_system, reduce_by_row_annihilator,
@@ -71,6 +101,9 @@ pub use row_annihilator::{
     AnnihilatorSystemError, RowAnnihilatorReduction,
 };
 pub use row_map::{pull_back, push_forward, PullbackBounds, RowMapError, RowMapStep};
+pub use substitution::{
+    pull_back_substitution, push_forward_substitution, MobiusMap, Substitution, SubstitutionError,
+};
 
 /// The exact rational type used for every coefficient.
 pub type Rational = num_rational::BigRational;

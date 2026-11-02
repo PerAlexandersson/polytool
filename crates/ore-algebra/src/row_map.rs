@@ -171,7 +171,7 @@ impl PullbackBounds {
 
     /// Bounds on the pullback through `step` (valid upper bounds, used to
     /// chain several steps).
-    fn after(&self, step: &RowMapStep) -> Self {
+    pub(crate) fn after(&self, step: &RowMapStep) -> Self {
         match step {
             RowMapStep::WeylOperator(t) => {
                 let bounds = Self::of(t);

@@ -377,6 +377,16 @@ Additions:
   push-forward or as common left multiples from an increasing ansatz with an
   exact modular kernel (`find_image_annihilator`), each with an identity
   certificate that replays on its own.
+- `ore-algebra`: the variable shift `E f(x) = f(x + 1)`
+  (`DifferentialDifferenceOperator`, pseudo-division by a recurrence and in
+  `E`), the falling-factorial basis change with its conjugation
+  `x -> x (1 + D)`, `E -> 1 + D` and Euler form, maps with `E` and certified
+  image annihilators (`DifferenceRowMapStep`, `pull_back_difference`,
+  `find_difference_image_annihilator`), Laurent coefficients in `x`
+  (`LaurentOreOperator`: clearing, reversal, power gauge and dilation as
+  conjugations), and substitutions as first-class operations
+  (`Substitution`: affine, reversal, weighted Möbius, `f`-polynomial, power
+  gauge, with row maps, inverses, pullbacks and forward rules).
 - Image recurrences: `recurrence::image_recurrence_of_operator` computes a
   runnable rule (top shift free of derivatives, leader decided nonzero after
   the seeds) for `Q_n = lambda(n) T_n(P_(n+s))` from a runnable parent rule,

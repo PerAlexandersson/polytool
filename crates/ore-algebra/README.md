@@ -23,7 +23,30 @@ the commutation rules `S n = (n + 1) S` and `D x = x D + 1`.
 - `find_image_annihilator`: a runnable annihilator of an image sequence,
   pushed forward or found as a common left multiple from an increasing
   ansatz, with a certificate `w(n, x) E = H o L + Z o A` that replays on its
-  own (or the report that none was found within the budget).
+  own (or the report that none was found within the budget);
+- `DifferentialDifferenceOperator`: operators `sum c(n, x) D^d E^e S^i` with
+  the variable shift `E f(x) = f(x + 1)` (`E x = (x + 1) E`, integer powers
+  of `E`), with composition, action on rows, pseudo-division by a recurrence
+  (`difference_right_pseudo_division`) and in `E`
+  (`variable_shift_pseudo_division`);
+- the falling-factorial basis: the basis change `(x)_k <-> x^k`
+  (`falling_factorial_to_power_basis`, `power_to_falling_factorial_basis`),
+  its conjugation `x -> x (1 + D)`, `E -> 1 + D` between difference and
+  differential operators (`conjugate_to_power_basis`,
+  `conjugate_to_falling_factorial_basis`) and the falling-factorial Euler
+  form with `X = x E^(-1)` and `Theta = x (1 - E^(-1))`;
+- `DifferenceRowMapStep`, `pull_back_difference`, `push_forward_difference`,
+  `find_difference_image_annihilator`: maps with `E` (`f(x) -> f(x + c)`,
+  `Delta^j`, basis changes, the existing steps, substitutions) and certified
+  runnable image annihilators found by push-forward or as common left
+  multiples;
+- `LaurentOreOperator`: coefficients in `Q[n, x, x^(-1)]`, clearing to
+  polynomial operators, and the reversal, power gauge `x^(w_n)` and dilation
+  as conjugations;
+- `Substitution`, `pull_back_substitution`, `push_forward_substitution`:
+  affine maps, reversals (degree slopes of either sign), weighted Möbius
+  maps, the `f`-polynomial map and power gauges, with exact row maps,
+  inverses, pullbacks and forward rules.
 
 Everything is exact (`num_rational::BigRational`); coefficient vectors are
 in ascending degree order.
