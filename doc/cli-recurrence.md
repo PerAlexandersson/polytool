@@ -519,9 +519,45 @@ polytool recurrence-generate --recurrence recurrence.json --format bfile \
   `--reversed` is applied.  The default keeps every coefficient, as
   `oeis generate --format bfile` does.
 
+- `--first-row K` starts at the row with absolute index `K` of the record
+  (default its first index); `--regular-triangle` reads the rows as a regular
+  triangle (see below).
+
 For a catalog entry, `polytool oeis generate A008292 --rows 12 --format bfile
 --max-terms N` writes the same lines with the catalog's own offset; both
 commands use the library function `oeis::flatten_rows_to_bfile`.
+
+### OEIS text from a recurrence
+
+The formats `oeis-example`, `oeis-formula`, `mathematica`, `pari` and
+`oeis-json` write fields for an OEIS submission from the rows of the record:
+
+- `oeis-example`: the `%e` block `Triangle begins:`, one line per row with the
+  row number on the left and right-aligned columns;
+- `oeis-formula`: the `%F` sentence, the recurrence in plain ASCII with its
+  initial rows, e.g. `The row polynomials satisfy P(n,x) = (2+x)*P(n-1,x) +
+  (1+x)*P(n-2,x) for n >= 2, with P(0,x) = 1, P(1,x) = 1 + x.` (derivatives as
+  `d/dx P(n-1,x)`, a left-hand factor as `(n+1)*P(n,x) = ...`);
+- `mathematica`: a `%t` program, a memoized `P[n_, x_] := P[n, x] =
+  Expand[...]` (a left-hand factor is divided out with `Together`) and
+  `Table[CoefficientList[P[n, x], x], {n, o, N}] // Flatten`;
+- `pari`: a `%o` PARI/GP program listing the same rows with `T(N)`;
+- `oeis-json`: all four (schema `polytool.oeis-text.v1`).
+
+The rows from `--first-row` on are read as OEIS rows: `--offset` is the OEIS
+row number of the first row (default: the first row keeps its own index),
+`--reversed` lists each row in descending powers, `--trim-zeros` drops zeros
+at the ends of each ascending row, and `--regular-triangle` gives row `i`
+(counted from the first) exactly `L0 + i` entries, padding a shorter row with
+zeros at its high end and stopping before a row that is longer.  The index
+`n` of the formula and programs is the OEIS row number (the recurrence is
+shifted to it); `--rows N` sets the number of rows shown (default 10).
+
+```sh
+# A156919: the reversed rows from n = 1 on, offset 0.
+polytool recurrence-generate --recurrence rec.json --format oeis-formula \
+  --first-row 1 --offset 0 --reversed --regular-triangle
+```
 
 The web interface exports this compact JSON record and links back to these
 generation instructions instead of emitting a large standalone Python program.

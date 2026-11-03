@@ -54,6 +54,15 @@
 //! only catalog rows) into OEIS b-file text, with an offset, row orientation, a
 //! zero-trimming policy and a term cap that never splits a row
 //! ([`BFileOptions`]).
+//!
+//! OEIS text: [`OeisRecurrencePresentation`] re-indexes any recurrence to the
+//! rows of an OEIS triangle (offset, orientation and zero trimming as in
+//! [`OeisTriangleReading`]) and formats the `%e` "Triangle begins:" block, the
+//! `%F` recurrence sentence and `%t` (Mathematica) and `%o` (PARI/GP) programs
+//! that reproduce the rows ([`OeisText`]).  Conventions: the row polynomials
+//! are `P(n,x)` with ascending coefficients; the recurrence index `n` in the
+//! text is the OEIS row number; the text is plain ASCII (`*`, `^`,
+//! `d/dx P(n-1,x)`, exact rationals `a/b`); see [`OeisRecurrencePresentation`].
 
 use crate::recurrence::{
     parse_rational_coeff, BigRational, BivarPoly, Recurrence, RecurrenceEvaluationError,
@@ -70,6 +79,11 @@ mod bfile;
 pub use bfile::{
     bfile_row_terms, flatten_rows_to_bfile, BFileError, BFileOptions, BFileRowOrientation,
     BFileStoppingRule, BFileText, BFileZeroPolicy,
+};
+mod text;
+pub use text::{
+    format_triangle_example, OeisRecurrencePresentation, OeisText, OeisTextError,
+    OeisTriangleReading, OEIS_TEXT_SCHEMA,
 };
 
 // `OeisSequenceStatus`, `OeisLayout` and the data-file record types.

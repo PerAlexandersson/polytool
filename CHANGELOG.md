@@ -359,6 +359,24 @@ Performance:
 
 Additions:
 
+- OEIS-ready text from any recurrence: `oeis::OeisRecurrencePresentation`
+  re-indexes a recurrence (or a `polytool.recurrence.v1` record) to the row
+  numbers of an OEIS triangle, read as `oeis::OeisTriangleReading` says (first
+  row number, ascending or descending powers, zero trimming, regular-triangle
+  padding), and formats the `%e` "Triangle begins:" block
+  (`oeis::format_triangle_example`), the `%F` recurrence sentence in plain
+  ASCII, and `%t` Mathematica and `%o` PARI/GP programs that list the same
+  rows (`OeisText`, schema `polytool.oeis-text.v1`; errors `OeisTextError`).
+  Golden tests cover four recurrence shapes; an opt-in test
+  (`POLYTOOL_TEST_WOLFRAMSCRIPT=1`) evaluates the Mathematica programs with
+  `wolframscript`.  The PARI/GP programs are covered by golden tests only.
+  `polytool recurrence-generate` gains `--format
+  oeis-example|oeis-formula|mathematica|pari|oeis-json`, and `--first-row` and
+  `--regular-triangle` (for these formats and `--format bfile`).  The web
+  interface exports `oeis_text_for_recurrence(request)` and
+  `generate_oeis_rows(request)` (OEIS-aligned rows and their b-file text,
+  `polytool.oeis-rows.v1`, at most 1000 rows or 200000 terms).
+
 - B-files from any recurrence: `oeis::flatten_rows_to_bfile` (with
   `oeis::BFileOptions`, `BFileRowOrientation`, `BFileZeroPolicy`,
   `BFileStoppingRule`, `BFileText`, `BFileError` and `oeis::bfile_row_terms`)

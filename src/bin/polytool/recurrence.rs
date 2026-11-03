@@ -102,8 +102,21 @@ pub(crate) fn print_recurrence_generate_help() {
     println!("  --rows <n>                 Output n total rows, including initial rows");
     println!("  --additional <n>           Output initial rows plus n generated rows");
     println!("  --json                     Emit generated rows as JSON");
-    println!("  --format <text|json|bfile> Output format (default text; --json is --format json)");
+    println!("  --format <format>          text (default), json (--json), bfile, or an OEIS");
+    println!("                             text format: oeis-example, oeis-formula,");
+    println!("                             mathematica, pari, oeis-json");
     println!("  -h, --help                 Print this help text");
+    println!();
+    println!("OEIS text formats: the rows from --first-row on, read as an OEIS triangle");
+    println!("(--offset, --reversed, --trim-zeros, --regular-triangle), with the recurrence");
+    println!("index n shifted to the OEIS row number.  --rows <n> rows are shown (default 10).");
+    println!("  oeis-example               %e block \"Triangle begins:\" with aligned columns");
+    println!("  oeis-formula               %F sentence: the recurrence in plain ASCII with its");
+    println!("                             initial rows, e.g. P(n,x) = (2+x)*P(n-1,x) + ...");
+    println!("  mathematica                %t program: memoized P[n_, x_] and the flattened rows");
+    println!("  pari                       %o PARI/GP program listing the same rows");
+    println!("  oeis-json                  all four as JSON (schema polytool.oeis-text.v1)");
+    println!("Without --offset the first row keeps its own index as its OEIS row number.");
     println!();
     println!("B-file output (--format bfile): the rows are flattened into OEIS b-file");
     println!("lines `index value`, coefficients in ascending powers within each row, and");
@@ -120,11 +133,18 @@ pub(crate) fn print_recurrence_generate_help() {
     println!("                             Drop zeros at the low (constant) end, the high");
     println!("                             (leading) end or both ends of each row, before");
     println!("                             --reversed is applied (default none)");
+    println!("  --first-row <k>            Start at the row with absolute index k (default");
+    println!("                             the record's first index); also for OEIS text");
+    println!("  --regular-triangle         Row i (from the first) has exactly L0 + i entries:");
+    println!("                             pad shorter rows with high zeros, stop before a");
+    println!("                             longer row; also for OEIS text");
     println!();
     println!("Examples:");
     println!("  polytool recurrence-generate --recurrence recurrence.json --rows 50");
     println!("  polytool recurrence-generate --recurrence eulerian.json --format bfile \\");
     println!("      --offset 1 --max-terms 1000 > b008292.txt");
+    println!("  polytool recurrence-generate --recurrence rec.json --format mathematica \\");
+    println!("      --first-row 1 --offset 0 --reversed --rows 11");
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -651,6 +671,11 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
         options: polytool::oeis::BFileOptions::default(),
         given: false,
     };
+    // Row reading shared by the b-file and the OEIS text formats.
+    let mut reading_given = false;
+    let mut offset_given = false;
+    let mut first_row: Option<usize> = None;
+    let mut regular_triangle = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -675,8 +700,14 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
                     "text" => "text",
                     "json" => "json",
                     "bfile" | "b-file" => "bfile",
+                    "oeis-example" => "oeis-example",
+                    "oeis-formula" => "oeis-formula",
+                    "mathematica" => "mathematica",
+                    "pari" => "pari",
+                    "oeis-json" => "oeis-json",
                     other => usage_error(&format!(
-                        "unknown recurrence-generate format '{other}' (expected text, json or bfile)"
+                        "unknown recurrence-generate format '{other}' (expected text, json, bfile, \
+                         oeis-example, oeis-formula, mathematica, pari or oeis-json)"
                     )),
                 };
             }
@@ -686,7 +717,19 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
                 bfile.options.first_index = value.parse().unwrap_or_else(|_| {
                     usage_error(&format!("--offset expects an integer, got '{value}'"))
                 });
-                bfile.given = true;
+                reading_given = true;
+                offset_given = true;
+            }
+            "--first-row" => {
+                first_row = Some(
+                    parse_usize_option(args, &mut i, "--first-row")
+                        .unwrap_or_else(|e| usage_error(&e)),
+                );
+                reading_given = true;
+            }
+            "--regular-triangle" => {
+                regular_triangle = true;
+                reading_given = true;
             }
             "--max-terms" => {
                 bfile.options.max_terms = Some(
@@ -697,7 +740,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
             }
             "--reversed" => {
                 bfile.options.orientation = polytool::oeis::BFileRowOrientation::Reversed;
-                bfile.given = true;
+                reading_given = true;
             }
             "--nearest-row" => {
                 bfile.options.stopping_rule = polytool::oeis::BFileStoppingRule::NearestWholeRow;
@@ -715,7 +758,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
                         "--trim-zeros expects none, low, high or both, got '{other}'"
                     )),
                 };
-                bfile.given = true;
+                reading_given = true;
             }
             other => {
                 eprintln!("unknown recurrence-generate option: {other}");
@@ -733,9 +776,17 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
         eprintln!("use only one of --rows or --additional");
         return;
     }
+    let oeis_text_format = matches!(
+        format,
+        "oeis-example" | "oeis-formula" | "mathematica" | "pari" | "oeis-json"
+    );
     if format != "bfile" && bfile.given {
+        usage_error("--max-terms and --nearest-row need --format bfile");
+    }
+    if format != "bfile" && !oeis_text_format && reading_given {
         usage_error(
-            "--offset, --max-terms, --reversed, --nearest-row and --trim-zeros need --format bfile",
+            "--offset, --first-row, --reversed, --trim-zeros and --regular-triangle need \
+             --format bfile or an OEIS text format",
         );
     }
 
@@ -767,6 +818,60 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     } else {
         None
     };
+
+    let reading = polytool::oeis::OeisTriangleReading {
+        first_row_index: if offset_given {
+            bfile.options.first_index
+        } else if oeis_text_format {
+            i64::try_from(first_row.unwrap_or(first_index))
+                .unwrap_or_else(|_| usage_error("--first-row does not fit in i64"))
+        } else {
+            0
+        },
+        orientation: bfile.options.orientation,
+        zero_policy: bfile.options.zero_policy,
+        regular_triangle,
+    };
+
+    if oeis_text_format {
+        let presentation = polytool::oeis::OeisRecurrencePresentation::from_recurrence_json(
+            &recurrence_json,
+            first_row,
+            reading,
+        )
+        .unwrap_or_else(|error| usage_error(&error.to_string()));
+        let text = presentation
+            .oeis_text(total_rows.unwrap_or(10))
+            .unwrap_or_else(|error| usage_error(&error.to_string()));
+        match format {
+            "oeis-example" => print!("{}", text.triangle_example),
+            "oeis-formula" => println!("{}", text.recurrence_sentence),
+            "mathematica" => println!("{}", text.mathematica),
+            "pari" => println!("{}", text.pari),
+            _ => println!("{}", serde_json::to_string_pretty(&text).unwrap()),
+        }
+        return;
+    }
+
+    if format == "bfile" && (first_row.is_some() || regular_triangle) {
+        // Read the rows from `--first-row` on as OEIS rows, then flatten them.
+        let presentation = polytool::oeis::OeisRecurrencePresentation::from_recurrence_json(
+            &recurrence_json,
+            first_row,
+            reading,
+        )
+        .unwrap_or_else(|error| usage_error(&error.to_string()));
+        let mut iterator = presentation.rows_iter();
+        let rows = collect_bfile_rows(&mut iterator, total_rows, &bfile.options);
+        let read = presentation.reading().read_rows(&rows);
+        let options = polytool::oeis::BFileOptions {
+            orientation: polytool::oeis::BFileRowOrientation::AsStored,
+            zero_policy: polytool::oeis::BFileZeroPolicy::KeepAll,
+            ..bfile.options
+        };
+        print_bfile(&read, &options);
+        return;
+    }
 
     if format == "bfile" {
         let Some(max_terms) = bfile.options.max_terms.filter(|_| total_rows.is_none()) else {
@@ -847,6 +952,50 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
             println!("{}", format_rational_row(row));
         }
     }
+}
+
+/// Integer rows for a b-file from `iterator`: `total_rows` rows, or without it
+/// rows until the term cap of `options` is reached.  Exits with status 2 on
+/// failure.
+fn collect_bfile_rows(
+    iterator: &mut RecurrenceRowIterator,
+    total_rows: Option<usize>,
+    options: &polytool::oeis::BFileOptions,
+) -> Vec<Vec<BigInt>> {
+    let mut generated: Vec<Vec<BigInt>> = Vec::new();
+    let max_terms = match (total_rows, options.max_terms) {
+        (Some(_), _) => usize::MAX,
+        (None, Some(max_terms)) => max_terms,
+        (None, None) => {
+            eprintln!(
+                "recurrence-generate --format bfile needs --rows <n>, --additional <n> or --max-terms <n>"
+            );
+            std::process::exit(2);
+        }
+    };
+    let mut terms = 0usize;
+    let mut barren_rows = 0usize;
+    while terms < max_terms && total_rows.is_none_or(|total| generated.len() < total) {
+        let Some(row) = iterator.next() else { break };
+        let row = row.unwrap_or_else(|error| {
+            eprintln!("{error}");
+            std::process::exit(2);
+        });
+        let row = integer_row(&row).unwrap_or_else(|| non_integral_error(generated.len()));
+        let kept = polytool::oeis::bfile_row_terms(&row, options.zero_policy).len();
+        if kept == 0 {
+            barren_rows += 1;
+            if barren_rows > 10_000 {
+                eprintln!("10000 consecutive rows without b-file terms; use --rows");
+                std::process::exit(2);
+            }
+        } else {
+            barren_rows = 0;
+        }
+        terms += kept;
+        generated.push(row);
+    }
+    generated
 }
 
 fn non_integral_error(index: usize) -> ! {

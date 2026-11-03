@@ -7,6 +7,7 @@ use polytool::*;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
+mod oeis_text;
 mod transforms;
 
 /// The `Display` text of an error, for the exports' `Result<_, String>` plumbing.

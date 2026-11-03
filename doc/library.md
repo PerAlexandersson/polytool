@@ -487,6 +487,39 @@ assert_eq!(file.text, "1 1\n2 1\n3 1\n4 1\n5 4\n6 1\n");
 assert_eq!(file.rows_included, 3);
 ```
 
+### OEIS text from any recurrence
+
+`oeis::OeisRecurrencePresentation` re-indexes a recurrence to the rows of an
+OEIS triangle (`OeisTriangleReading`: the OEIS row number of the first row,
+ascending or descending powers, zero trimming, regular-triangle padding) and
+formats the `%e` block, the `%F` sentence and Mathematica and PARI/GP programs
+that list the same rows; the recurrence index `n` in the text is the OEIS row
+number.
+
+```rust
+use polytool::oeis::{BFileRowOrientation, OeisRecurrencePresentation, OeisTriangleReading};
+use polytool::recurrence::RecurrenceJson;
+
+let record: RecurrenceJson = serde_json::from_str(r#"{
+  "schema": "polytool.recurrence.v1", "first_index": 0, "initial_polynomials": [["1"]],
+  "recurrence": {"terms": [
+    {"offset": 1, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["1", "-2"], ["0", "2"]]}},
+    {"offset": 1, "deriv_order": 1, "sign": "none", "coeff": {"coeffs": [["0", "2", "-2"]]}}]}
+}"#).unwrap();
+let reading = OeisTriangleReading {
+    first_row_index: 0,
+    orientation: BFileRowOrientation::Reversed,
+    regular_triangle: true,
+    ..OeisTriangleReading::default()
+};
+// A156919 is this triangle reversed from the row n = 1 on.
+let presentation =
+    OeisRecurrencePresentation::from_recurrence_json(&record, Some(1), reading).unwrap();
+let text = presentation.oeis_text(3).unwrap();
+assert_eq!(text.triangle_example, "Triangle begins:\n  0: 1;\n  1: 2,  1;\n  2: 4, 10, 1;\n");
+assert!(text.recurrence_sentence.contains("P(n,x) = (1+2*n*x)*P(n-1,x)"));
+```
+
 ## Characteristic polynomials and closed walks
 
 ```rust

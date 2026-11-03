@@ -98,6 +98,13 @@ WASM exports (JSON text in, JSON text out, `{"error": ...}` on failure):
 `recurrence_theorems(recurrence_json)` and `verify_recurrence_theorems(report)`
 (supplied-recurrence reports only); `verify_report(report)`, which dispatches
 on `schema`; `recurrence_latex(recurrence_json)`; and `oeis_catalog_index()`.
+`oeis_text_for_recurrence(request)` and `generate_oeis_rows(request)` take
+`{"recurrence": <polytool.recurrence.v1>, "first_row", "offset", "reversed",
+"trim_zeros", "regular_triangle", "rows", "max_terms", "nearest_row"}` and
+return the OEIS text fields (`polytool.oeis-text.v1`, at most 100 rows) or the
+OEIS-aligned rows with their b-file text (`polytool.oeis-rows.v1`, at most 1000
+rows or 200000 terms), as `polytool recurrence-generate --format oeis-json` and
+`--format bfile` with the same reading options.
 The reports are the library schemas unchanged, so browser reports replay with
 `polytool recurrence-transform --verify` and the MCP verifiers, and CLI
 reports replay in the browser. Requests are limited to 1 MiB. Transformation
