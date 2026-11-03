@@ -317,10 +317,20 @@ pub(super) fn affine_interval_image(
             .map(|e| {
                 let (value, slope) = endpoint_parts(e)?;
                 let slope = alpha * slope;
+                // An exact endpoint maps exactly: alpha (a + b sqrt(d)) + beta.
+                // The rational outer bound maps to the outer side of the
+                // image end (a negative alpha swaps the ends below).
+                let exact = match &e.exact {
+                    Some(exact) => ExactQuadraticEndpoint::from_quadratic_number(
+                        &exact.to_quadratic_number()?.scale(alpha).add_rational(beta),
+                    ),
+                    None => None,
+                };
                 Ok(RootEndpoint {
                     value: format_rational_coeff(&(alpha * value + beta)),
                     per_index: (!slope.is_zero()).then(|| format_rational_coeff(&slope)),
                     closed: e.closed,
+                    exact,
                 })
             })
             .transpose()

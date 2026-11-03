@@ -187,7 +187,13 @@ polytool recurrence-transform --verify < report.json
 with endpoints `{"value": "-1", "per_index": "0", "closed": true}`; an omitted
 end is infinite (a ray) and `value + per_index * n` depends on the index (for
 `P_n = x + n` the roots `-n` escape while the `f`-polynomial roots stay in
-`(-1, 0]`). An assumption is `{"subject": "source" | "transformed",
+`(-1, 0]`). Request intervals take rational endpoints only. Reports and
+certificates may add an exact quadratic form to an index-independent
+endpoint, `"exact": {"rational_part": "-3", "sqrt_coefficient": "-2",
+"radicand": "2"}` for `-3 - 2 sqrt(2)` (from the basis-map lifts); `value` is
+then a rational bound strictly outside the exact endpoint, and `closed` refers
+to the exact endpoint, so a reader of `value` alone gets a correct, slightly
+larger interval. An assumption is `{"subject": "source" | "transformed",
 "component": 0, "property": "real_rooted" | "real_rooted_in" | "real_roots_in",
 "interval": ..., "first_index": ..., "last_index": ..., "note": ...}`; it is
 checked exactly on the observed rows (`assumption_checks`), transferred through

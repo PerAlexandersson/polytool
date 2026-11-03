@@ -313,11 +313,7 @@ pub(super) fn denominator_hypothesis(delta: &[Q], n0: usize) -> LiftHypothesis {
 }
 
 fn endpoint(value: &Q) -> RootEndpoint {
-    RootEndpoint {
-        value: format_rational_coeff(value),
-        per_index: None,
-        closed: true,
-    }
+    RootEndpoint::rational(value, true)
 }
 
 fn parse(text: &str) -> Option<Q> {

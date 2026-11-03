@@ -114,6 +114,9 @@ pub fn root_enclosures(
             "max_width must be positive".into(),
         ));
     }
+    if let Some(interval) = &request.interval {
+        interval.check_request_interval()?;
+    }
     let mut items = Vec::with_capacity(request.polynomials.len());
     for (position, text) in request.polynomials.iter().enumerate() {
         let index = request

@@ -33,6 +33,7 @@ fn endpoint(value: &str, per_index: Option<&str>, closed: bool) -> RootEndpoint 
         value: value.into(),
         per_index: per_index.map(String::from),
         closed,
+        exact: None,
     }
 }
 
@@ -306,6 +307,24 @@ fn index_dependent_interval_helpers() {
     assert!(!contains_point_throughout(&i, &r(-1, 1), 0, None).unwrap());
     let image = affine_interval_image(&i, &r(-2, 1), &r(1, 1)).unwrap();
     assert_eq!(image.to_string(), "(-1 + (-1) n, 1 + (2) n]");
+    // An exact endpoint maps exactly: y -> -2 y + 1 sends
+    // [-1 - sqrt(2), 0] (outer value -5/2) to [1, 3 + 2 sqrt(2)] (outer 6).
+    let exact = interval(
+        Some(RootEndpoint {
+            exact: Some(ExactQuadraticEndpoint {
+                rational_part: "-1".into(),
+                sqrt_coefficient: "-1".into(),
+                radicand: "2".into(),
+            }),
+            ..endpoint("-5/2", None, true)
+        }),
+        Some(endpoint("0", None, true)),
+    );
+    exact.check_exact_endpoints().unwrap();
+    let image = affine_interval_image(&exact, &r(-2, 1), &r(1, 1)).unwrap();
+    image.check_exact_endpoints().unwrap();
+    assert_eq!(image.to_string(), "[1, 6]");
+    assert_eq!(format_root_interval_exact(&image), "[1, 3+2*sqrt(2)]");
     let shrinking = interval(None, Some(endpoint("0", Some("-1"), true)));
     assert!(!grows_with_index(&shrinking).unwrap());
     // Exact integer-range sign checks of index polynomials.

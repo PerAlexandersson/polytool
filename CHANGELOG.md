@@ -10,6 +10,17 @@ coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
 
+- `recurrence::RootEndpoint` has the new public field `exact`
+  (`Option<ExactQuadraticEndpoint>`); struct literals must add it (or use the
+  new `RootEndpoint::rational`).  Serialized endpoints without the field still
+  load, and an endpoint without an exact form serializes byte-identically.
+  Request intervals (`RootDomainRequest` candidate intervals and assumptions,
+  `RootEnclosureRequest::interval`) reject exact forms.
+- The basis-map lift summaries (`root_transfer.input_root_region`, from
+  `AlgebraicInterval::to_root_interval`) record an irrational endpoint's
+  exact value next to its rational outer bound, and an open irrational end
+  stays open (it was closed before; the outer bound lies strictly outside it,
+  so both are correct).
 - The real-rooted atlas engine (the `polytool::atlas` module and the
   `polytool atlas` command, added during this development cycle and never
   released) is removed again: polytool provides the transforms, lifts,
@@ -359,6 +370,21 @@ Performance:
 
 Additions:
 
+- Exact quadratic endpoints of root regions: `recurrence::ExactQuadraticEndpoint`
+  (`a + b sqrt(d)` as rational strings, with `to_quadratic_number`,
+  `from_quadratic_number` and the plain-ASCII `to_plain_text`, e.g.
+  `-3-2*sqrt(2)`), the optional `RootEndpoint::exact` field (its rational
+  `value` is a strict outer bound, `closed` refers to the exact end), checked
+  by `RootInterval::check_exact_endpoints`, with `has_exact_endpoints`,
+  `without_exact_endpoints`, `agrees_with_recomputed` (a record without exact
+  forms agrees with an exact recomputation), `RootEndpoint::to_exact_text` and
+  `format_root_interval_exact` (`[-3-2*sqrt(2), -3+2*sqrt(2)]`; the `Display`
+  of `RootInterval` keeps the rational form).  The A008288 (Delannoy) basis-map
+  lifts now record `[-3 - 2 sqrt(2), -3 + 2 sqrt(2)]` exactly, and
+  `BasisMapLiftCertification::verify` accepts certificates written with or
+  without the exact form and rejects a wrong one.  Exact affine images of
+  index-dependent intervals keep the exact form; other interval transports
+  work on the rational outer interval and drop it.
 - OEIS-ready text from any recurrence: `oeis::OeisRecurrencePresentation`
   re-indexes a recurrence (or a `polytool.recurrence.v1` record) to the row
   numbers of an OEIS triangle, read as `oeis::OeisTriangleReading` says (first

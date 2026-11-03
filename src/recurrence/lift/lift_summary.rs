@@ -575,6 +575,7 @@ pub(super) fn nonpositive_ray() -> RootInterval {
             value: "0".into(),
             per_index: None,
             closed: true,
+            exact: None,
         }),
     }
 }
@@ -1144,6 +1145,7 @@ fn gamma_root_transfer(scale: Option<&BigRational>, first_index: usize) -> LiftR
                     value: "0".into(),
                     per_index: None,
                     closed: true,
+                    exact: None,
                 }),
                 upper: None,
             },

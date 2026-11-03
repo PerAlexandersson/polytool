@@ -230,7 +230,11 @@ impl BasisMapLiftCertification {
     /// ([`BasisMapTheoremReport::verify`]), and a full recomputation with
     /// [`certify_basis_map_lift`] and default options from the recorded
     /// input (rows regenerated from its seeds) and candidate, whose identity
-    /// status and summary must equal the recorded ones.
+    /// status and summary must equal the recorded ones.  The summary's input
+    /// root region may be a record without exact endpoints
+    /// ([`RootInterval::agrees_with_recomputed`]); a recorded exact endpoint
+    /// must be valid ([`RootInterval::check_exact_endpoints`]) and equal the
+    /// recomputed one.
     ///
     /// # Errors
     ///
@@ -269,7 +273,19 @@ impl BasisMapLiftCertification {
             &self.candidate,
             &BasisMapLiftOptions::default(),
         )?;
-        if recomputed.identity != self.identity || recomputed.lift_summary != self.lift_summary {
+        // A record written before exact endpoints were recorded carries the
+        // rational outer region only: compare it in that form (a recorded
+        // exact form must equal the recomputed one).
+        let recorded_region = &self.lift_summary.root_transfer.input_root_region;
+        recorded_region
+            .check_exact_endpoints()
+            .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
+        let mut recomputed_summary = recomputed.lift_summary;
+        let fresh_region = &mut recomputed_summary.root_transfer.input_root_region;
+        if recorded_region.agrees_with_recomputed(fresh_region) {
+            *fresh_region = recorded_region.clone();
+        }
+        if recomputed.identity != self.identity || recomputed_summary != self.lift_summary {
             return fail("the recomputed certification differs from the recorded one");
         }
         Ok(())

@@ -56,11 +56,13 @@ fn closed(lower: &str, upper: &str) -> RootInterval {
             value: lower.into(),
             per_index: None,
             closed: true,
+            exact: None,
         }),
         upper: Some(RootEndpoint {
             value: upper.into(),
             per_index: None,
             closed: true,
+            exact: None,
         }),
     }
 }
@@ -254,6 +256,7 @@ fn escaping_roots_index_dependent_interval_and_rays() {
         value: "0".into(),
         per_index: Some("-1".into()),
         closed: true,
+        exact: None,
     };
     let at_minus_n = RootInterval {
         lower: Some(minus_n.clone()),
@@ -265,6 +268,7 @@ fn escaping_roots_index_dependent_interval_and_rays() {
             value: "0".into(),
             per_index: None,
             closed: true,
+            exact: None,
         }),
     };
     let mut request = RecurrenceTransformRequest::from_source(f_schedule(0, 1, 0), source, 12);
@@ -356,6 +360,7 @@ fn gamma_quarter_bound_and_insufficient_real_rootedness() {
             value: "1/4".into(),
             per_index: None,
             closed: true,
+            exact: None,
         }),
     };
     let assume = |property, interval| RootAssumption {

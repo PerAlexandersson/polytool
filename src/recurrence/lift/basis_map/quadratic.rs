@@ -11,7 +11,7 @@
 use crate::polynomial::Polynomial;
 use crate::real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval};
 use crate::recurrence::{format_rational_coeff, parse_rational_coeff, RecurrenceError};
-use crate::recurrence::{RootEndpoint, RootInterval};
+use crate::recurrence::{ExactQuadraticEndpoint, RootEndpoint, RootInterval};
 use crate::vec_poly;
 use crate::BigRational;
 use num_bigint::BigInt;
@@ -578,28 +578,28 @@ impl AlgebraicInterval {
         }
     }
 
-    /// The [`RootInterval`] of a rational outer approximation
-    /// ([`AlgebraicInterval::rational_outer`] with 32 bits).
+    /// The [`RootInterval`] of `self`: the rational outer approximation
+    /// ([`AlgebraicInterval::rational_outer`] with 32 bits) as the endpoint
+    /// values, and the exact value of each irrational end as its
+    /// [`RootEndpoint::exact`] form (closedness then refers to the exact
+    /// end; the outer bound lies strictly outside it).  A rational end is
+    /// recorded exactly as its value.
     pub fn to_root_interval(&self) -> RootInterval {
         let outer = self.rational_outer(ENCLOSURE_BITS);
-        let end = |value: &Option<Q>, closed: bool| {
-            value.as_ref().map(|v| RootEndpoint {
-                value: format_rational_coeff(v),
-                per_index: None,
-                closed,
+        let end = |value: &Option<Q>, exact: &Option<AlgebraicEndpoint>| {
+            value.as_ref().map(|v| {
+                let exact = exact.as_ref().expect("a finite end has an endpoint");
+                RootEndpoint {
+                    value: format_rational_coeff(v),
+                    per_index: None,
+                    closed: exact.closed,
+                    exact: ExactQuadraticEndpoint::from_quadratic_number(&exact.value),
+                }
             })
         };
-        let lower_closed = self
-            .lower
-            .as_ref()
-            .is_none_or(|e| e.closed || !e.value.is_rational());
-        let upper_closed = self
-            .upper
-            .as_ref()
-            .is_none_or(|e| e.closed || !e.value.is_rational());
         RootInterval {
-            lower: end(&outer.lower, lower_closed),
-            upper: end(&outer.upper, upper_closed),
+            lower: end(&outer.lower, &self.lower),
+            upper: end(&outer.upper, &self.upper),
         }
     }
 

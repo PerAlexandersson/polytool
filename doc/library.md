@@ -1202,7 +1202,13 @@ parent provers on `R_n(v + U')` and `R_n(L' - v)`) and the `lift_summary`
 order one; for higher order computed from the transported system by
 `ore_algebra::find_component_annihilator`, `BasisMapImageConstruction::Eliminated`,
 and fitted only when that finds nothing within its budget) with the same
-certification.  See
+certification.  The summary's `root_transfer.input_root_region` is the map
+theorem's output interval as a `RootInterval`: each irrational end records its
+exact value (`RootEndpoint::exact`, an `ExactQuadraticEndpoint`) next to a
+rational bound strictly outside it, so `format_root_interval_exact` prints
+`[-3-2*sqrt(2), -3+2*sqrt(2)]` for the A008288 (Delannoy) map while readers of
+the rational values see a slightly larger correct interval; `verify()` also
+accepts records written without the exact form.  See
 [algorithms.md](algorithms.md#basis-map-lifts).
 
 ## Exact sign decisions for an integer index

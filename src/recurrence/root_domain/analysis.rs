@@ -195,21 +195,174 @@ pub enum HypothesisStatus {
 }
 
 /// One endpoint `value + per_index * n` of a [`RootInterval`].
+///
+/// # Exact quadratic endpoints
+///
+/// An index-independent endpoint may also carry its exact value
+/// `a + b sqrt(d)` ([`RootEndpoint::exact`], an irrational
+/// [`ExactQuadraticEndpoint`]; omitted for a rational endpoint, whose exact
+/// value is `value` itself).  The rational `value` is then an **outer bound**
+/// of the exact one, strictly on the outer side: below it for a lower
+/// endpoint, above it for an upper endpoint.  `closed` refers to the exact
+/// endpoint.  Since the rational bound lies strictly outside, the rational
+/// interval with the same closedness contains the exact interval, so a
+/// consumer that reads only `value` (and `per_index`, `closed`) still works
+/// with a correct, slightly larger interval.  The invariant is checked by
+/// [`RootInterval::check_exact_endpoints`].  Exact forms are produced by
+/// the library (the basis-map lifts, whose target intervals have endpoints
+/// in a real quadratic field) and are not accepted in request intervals,
+/// whose checks decide the rational interval only.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RootEndpoint {
-    /// Rational constant term (integer or `num/den` string).
+    /// Rational constant term (integer or `num/den` string); with an exact
+    /// form, a rational outer bound of it.
     pub value: String,
     /// Rational coefficient of the original index `n`; omitted means `0`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub per_index: Option<String>,
-    /// Whether the endpoint belongs to the interval (default `true`).
+    /// Whether the endpoint belongs to the interval (default `true`); with an
+    /// exact form, whether the exact endpoint does.
     #[serde(default = "default_true")]
     pub closed: bool,
+    /// The exact irrational value `a + b sqrt(d)` of an index-independent
+    /// endpoint, when known; omitted for a rational endpoint (and in records
+    /// written before the field existed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exact: Option<ExactQuadraticEndpoint>,
 }
 
 fn default_true() -> bool {
     true
+}
+
+impl RootEndpoint {
+    /// The rational endpoint `value` (index-independent, no exact form).
+    pub fn rational(value: &Q, closed: bool) -> Self {
+        Self {
+            value: format_rational_coeff(value),
+            per_index: None,
+            closed,
+            exact: None,
+        }
+    }
+
+    /// The endpoint as plain ASCII text: the exact value when it is
+    /// recorded (`-3-2*sqrt(2)`, see [`ExactQuadraticEndpoint::to_plain_text`]),
+    /// else `value`, followed by ` + (per_index) n` for an index-dependent
+    /// endpoint.
+    pub fn to_exact_text(&self) -> String {
+        let constant = match &self.exact {
+            Some(exact) => exact.to_plain_text(),
+            None => self.value.clone(),
+        };
+        match self.per_index.as_deref() {
+            None | Some("0") => constant,
+            Some(p) => format!("{constant} + ({p}) n"),
+        }
+    }
+}
+
+/// The exact value `a + b sqrt(d)` of an irrational endpoint of a
+/// [`RootInterval`] (see [`RootEndpoint`], "Exact quadratic endpoints").
+///
+/// The three parts are rational strings (integer or `num/den`), `d > 0` is
+/// not the square of a rational and `b != 0`.  The JSON form is
+/// `{"rational_part": "-3", "sqrt_coefficient": "-2", "radicand": "2"}`
+/// for `-3 - 2 sqrt(2)`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ExactQuadraticEndpoint {
+    /// The rational part `a`.
+    pub rational_part: String,
+    /// The coefficient `b` of `sqrt(d)`.
+    pub sqrt_coefficient: String,
+    /// The radicand `d`.
+    pub radicand: String,
+}
+
+impl ExactQuadraticEndpoint {
+    /// The exact form of `value`, or `None` when `value` is rational.
+    pub fn from_quadratic_number(value: &QuadraticNumber) -> Option<Self> {
+        (!value.is_rational()).then(|| Self {
+            rational_part: format_rational_coeff(value.rational_part()),
+            sqrt_coefficient: format_rational_coeff(value.sqrt_coefficient()),
+            radicand: format_rational_coeff(value.radicand()),
+        })
+    }
+
+    /// The exact number.
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::InvalidInput`] when a part is not a rational, the
+    /// radicand is negative, or the number is rational (a rational endpoint
+    /// carries no exact form).
+    pub fn to_quadratic_number(&self) -> Result<QuadraticNumber, RecurrenceError> {
+        let number = QuadraticNumber::new(
+            parse_rational_coeff(&self.rational_part)?,
+            parse_rational_coeff(&self.sqrt_coefficient)?,
+            parse_rational_coeff(&self.radicand)?,
+        )?;
+        if number.is_rational() {
+            return Err(RecurrenceError::InvalidInput(format!(
+                "the exact endpoint {} is rational (record it as the value)",
+                number
+            )));
+        }
+        Ok(number)
+    }
+
+    /// Plain ASCII text without spaces: `-3-2*sqrt(2)`, `1+sqrt(2)`,
+    /// `-sqrt(2)`, `1/2+3/2*sqrt(5)`.  The parts are printed as recorded.
+    pub fn to_plain_text(&self) -> String {
+        let a = self.rational_part.trim();
+        let b = self.sqrt_coefficient.trim();
+        let root = format!("sqrt({})", self.radicand.trim());
+        let (negative, magnitude) = match b.strip_prefix('-') {
+            Some(rest) => (true, rest),
+            None => (false, b.strip_prefix('+').unwrap_or(b)),
+        };
+        let term = if magnitude == "1" {
+            root
+        } else {
+            format!("{magnitude}*{root}")
+        };
+        let sign = if negative { "-" } else { "+" };
+        if a == "0" {
+            if negative {
+                format!("-{term}")
+            } else {
+                term
+            }
+        } else {
+            format!("{a}{sign}{term}")
+        }
+    }
+}
+
+/// The interval as plain ASCII text with exact endpoints where they are
+/// recorded (`[-3-2*sqrt(2), -3+2*sqrt(2)]`) and the rational values
+/// elsewhere; the [`fmt::Display`] of [`RootInterval`] prints the rational
+/// values only (the canonical key of the interval).
+pub fn format_root_interval_exact(interval: &RootInterval) -> String {
+    let mut text = String::new();
+    match &interval.lower {
+        None => text.push_str("(-inf"),
+        Some(e) => {
+            text.push(if e.closed { '[' } else { '(' });
+            text.push_str(&e.to_exact_text());
+        }
+    }
+    text.push_str(", ");
+    match &interval.upper {
+        None => text.push_str("+inf)"),
+        Some(e) => {
+            text.push_str(&e.to_exact_text());
+            text.push(if e.closed { ']' } else { ')' });
+        }
+    }
+    text
 }
 
 /// An interval of the real line with rational, index-dependent or infinite
@@ -229,11 +382,7 @@ impl RootInterval {
     /// The index-independent interval with the endpoints of `interval`.
     pub fn from_real(interval: &RealInterval) -> Self {
         let end = |value: &Option<Q>, closed: bool| {
-            value.as_ref().map(|v| RootEndpoint {
-                value: format_rational_coeff(v),
-                per_index: None,
-                closed,
-            })
+            value.as_ref().map(|v| RootEndpoint::rational(v, closed))
         };
         Self {
             lower: end(&interval.lower, interval.lower_closed),
@@ -272,7 +421,105 @@ impl RootInterval {
     }
 
     fn validate(&self) -> Result<(), RecurrenceError> {
-        self.at(0).map(|_| ())
+        self.at(0)?;
+        self.check_request_interval()
+    }
+
+    /// Requests (candidate intervals, assumptions, enclosure intervals) take
+    /// rational endpoints only: their checks decide the rational interval,
+    /// so an exact form there would be claimed without proof.
+    pub(super) fn check_request_interval(&self) -> Result<(), RecurrenceError> {
+        if self.has_exact_endpoints() {
+            return Err(RecurrenceError::InvalidInput(
+                "request intervals take rational endpoints only (no exact form)".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Check the exact forms of the endpoints (see [`RootEndpoint`], "Exact
+    /// quadratic endpoints"): each is a valid irrational quadratic number on
+    /// an index-independent endpoint, and the rational `value` lies strictly
+    /// below it at the lower end and strictly above it at the upper end.
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::InvalidInput`] naming the violated condition.
+    pub fn check_exact_endpoints(&self) -> Result<(), RecurrenceError> {
+        for (end, is_lower) in [(&self.lower, true), (&self.upper, false)] {
+            let Some(end) = end else { continue };
+            let Some(exact) = &end.exact else { continue };
+            let side = if is_lower { "lower" } else { "upper" };
+            let slope = match &end.per_index {
+                Some(p) => parse_rational_coeff(p)?,
+                None => Q::zero(),
+            };
+            if !slope.is_zero() {
+                return Err(RecurrenceError::InvalidInput(format!(
+                    "the {side} endpoint has an exact form and depends on the index"
+                )));
+            }
+            let number = exact.to_quadratic_number()?;
+            let bound = parse_rational_coeff(&end.value)?;
+            let outer = match number.cmp_rational(&bound) {
+                std::cmp::Ordering::Greater => is_lower,
+                std::cmp::Ordering::Less => !is_lower,
+                std::cmp::Ordering::Equal => false,
+            };
+            if !outer {
+                return Err(RecurrenceError::InvalidInput(format!(
+                    "the rational value {} of the {side} endpoint is not a strict outer bound \
+                     of its exact value {number}",
+                    end.value
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether some endpoint records an exact form.
+    pub fn has_exact_endpoints(&self) -> bool {
+        [&self.lower, &self.upper]
+            .into_iter()
+            .any(|end| end.as_ref().is_some_and(|e| e.exact.is_some()))
+    }
+
+    /// The interval without exact forms (the rational outer interval every
+    /// consumer of `value` uses).
+    pub fn without_exact_endpoints(&self) -> Self {
+        let strip =
+            |end: &Option<RootEndpoint>| end.clone().map(|e| RootEndpoint { exact: None, ..e });
+        Self {
+            lower: strip(&self.lower),
+            upper: strip(&self.upper),
+        }
+    }
+
+    /// Whether a recorded interval `self` agrees with its recomputation
+    /// `recomputed`, allowing a record written before exact endpoints were
+    /// recorded: equal, or equal after dropping each exact form that
+    /// `self` lacks, where such a legacy endpoint may also be closed when
+    /// the recomputed exact endpoint is open (the rational outer bound lies
+    /// strictly outside, so the closed legacy endpoint is a correct, weaker
+    /// statement).  A recorded exact form must equal the recomputed one.
+    pub fn agrees_with_recomputed(&self, recomputed: &Self) -> bool {
+        let end_agrees =
+            |recorded: &Option<RootEndpoint>, fresh: &Option<RootEndpoint>| match (recorded, fresh)
+            {
+                (None, None) => true,
+                (Some(r), Some(f)) => {
+                    r.value == f.value
+                        && r.per_index == f.per_index
+                        && match (&r.exact, &f.exact) {
+                            (None, Some(_)) => r.closed || !f.closed,
+                            (recorded_exact, fresh_exact) => {
+                                recorded_exact == fresh_exact && r.closed == f.closed
+                            }
+                        }
+                }
+                _ => false,
+            };
+        end_agrees(&self.lower, &recomputed.lower) && end_agrees(&self.upper, &recomputed.upper)
     }
 }
 

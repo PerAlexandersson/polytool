@@ -58,9 +58,9 @@ use super::operator::PreserverOperator;
 use crate::real_rootedness::RealInterval;
 use crate::recurrence::lift::lift_summary::real_line;
 use crate::recurrence::{
-    check_ma_wang_interval_theorem, check_three_term_recurrence_theorem, format_rational_coeff,
-    parse_rational_coeff, RealRootednessTheoremOptions, RealRootednessTheoremReport, Recurrence,
-    RecurrenceError, RootEndpoint, RootInterval,
+    check_ma_wang_interval_theorem, check_three_term_recurrence_theorem, parse_rational_coeff,
+    RealRootednessTheoremOptions, RealRootednessTheoremReport, Recurrence, RecurrenceError,
+    RootEndpoint, RootInterval,
 };
 use crate::vec_poly;
 use crate::BigRational;
@@ -213,11 +213,7 @@ pub(super) fn interval_route_label(report: &RealRootednessTheoremReport) -> &'st
 }
 
 fn endpoint(value: &Q, closed: bool) -> RootEndpoint {
-    RootEndpoint {
-        value: format_rational_coeff(value),
-        per_index: None,
-        closed,
-    }
+    RootEndpoint::rational(value, closed)
 }
 
 /// The interval with the given ends (`None`: infinite).
