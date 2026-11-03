@@ -210,6 +210,8 @@ mod operator;
 mod search;
 mod summary;
 mod transfer;
+pub(in crate::recurrence) use interval::region_contains;
+pub(in crate::recurrence) use transfer::{operator_transfer, polynomial_hypotheses};
 
 pub use certify::{
     certify_preserver_image_lift, PreserverDivisionCertificate, PreserverDivisionQuotient,

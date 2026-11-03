@@ -20,7 +20,14 @@
 //!   with fixed rational `L < U`, with every root in the closed interval
 //!   `[L, U]` and weak interlacing of consecutive rows, by the exact
 //!   two-endpoint criterion with the endpoint multiplicities tracked through
-//!   the induction.
+//!   the induction;
+//! - [`check_iterated_preserver_theorem`]: first-order rules
+//!   `P_n = T_n(P_(n-1))` whose step is a real-rooted multiplier `a_n(x)`
+//!   after the identity or an operator of the preserver menu (Laguerre,
+//!   Pólya--Schur, Rolle, the Euler step), with every root in `(-inf, 0]`,
+//!   `[0, inf)` or on the line, applied from the last seed row on (the
+//!   earlier seed rows, for example rows that do not follow the rule, are
+//!   checked exactly).
 //!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
@@ -110,11 +117,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 mod derivative_lag;
+mod iterated_preserver;
 mod left_hand_factor;
 mod liu_wang;
 mod ma_wang;
 mod three_term;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
+pub use iterated_preserver::{check_iterated_preserver_theorem, IteratedPreserverCertificate};
 pub(in crate::recurrence) use left_hand_factor::rule_with_x_free_left_hand_factor;
 pub use left_hand_factor::LeftHandFactorNormalization;
 pub use liu_wang::check_liu_wang_theorem;
@@ -142,6 +151,8 @@ pub enum RealRootednessTheorem {
     LiuWangDerivativeLag,
     /// [`check_ma_wang_interval_theorem`].
     MaWangInterval,
+    /// [`check_iterated_preserver_theorem`].
+    IteratedPreserver,
 }
 
 /// Outcome of a theorem check.
@@ -205,9 +216,10 @@ const DEFAULT_MAXIMUM_START_DELAY: usize = 3;
 pub struct RealRootednessTheoremConclusion {
     /// Every row `P_n` with `n >= first_index` is nonzero and real-rooted.
     /// This is the record's first index, except for
-    /// [`check_liu_wang_derivative_lag_theorem`] when seed rows are zero:
-    /// then it is the index after the last zero seed row (the statement
-    /// names the zero rows).
+    /// [`check_liu_wang_derivative_lag_theorem`] and
+    /// [`check_iterated_preserver_theorem`] when seed rows are zero: then it
+    /// is the index after the last zero seed row (the statement names the
+    /// zero rows).
     pub first_index: usize,
     /// First index `m` with `P_(m-1)` interlacing `P_m` (in the sense of
     /// `interlacing`) for every later index; `None` when not claimed.
@@ -232,8 +244,8 @@ pub struct RealRootednessTheoremConclusion {
 }
 
 /// The result of [`check_three_term_recurrence_theorem`],
-/// [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`] or
-/// [`check_ma_wang_interval_theorem`]
+/// [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`],
+/// [`check_ma_wang_interval_theorem`] or [`check_iterated_preserver_theorem`]
 /// (schema `polytool.recurrence-real-rootedness-theorem.v1`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -289,6 +301,12 @@ pub struct RealRootednessTheoremReport {
     /// ran on.  Omitted when the supplied rule was used as it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub left_hand_factor_normalization: Option<LeftHandFactorNormalization>,
+    /// For [`check_iterated_preserver_theorem`]: the recognized step
+    /// `T_n = a_n(x) S_n`, the induction start, the degree step and the
+    /// region, replayed by [`RealRootednessTheoremReport::verify`].  Omitted
+    /// for the other theorems and when the step is not recognized.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub iterated_preserver: Option<IteratedPreserverCertificate>,
 }
 
 impl RealRootednessTheoremReport {
@@ -315,6 +333,7 @@ impl RealRootednessTheoremReport {
             lean_route: None,
             lean_declarations: Vec::new(),
             left_hand_factor_normalization: None,
+            iterated_preserver: None,
         }
     }
 
@@ -332,6 +351,7 @@ impl RealRootednessTheoremReport {
         self.start_delay = 0;
         self.lean_route = None;
         self.lean_declarations.clear();
+        self.iterated_preserver = None;
         self
     }
 
@@ -362,8 +382,11 @@ impl RealRootednessTheoremReport {
     /// Replay the report: recompute it from the recorded family and requested
     /// region and compare (this re-derives a left-hand factor normalization
     /// from the supplied rule), replay a recorded normalization
-    /// independently ([`LeftHandFactorNormalization::verify`]), and replay
-    /// every sign certificate independently.
+    /// independently ([`LeftHandFactorNormalization::verify`]), replay the
+    /// operator identity of an iterated-preserver certificate
+    /// ([`IteratedPreserverCertificate::verify_operator_identity`], required
+    /// for a proved iterated-preserver report), and replay every sign
+    /// certificate independently.
     ///
     /// # Errors
     ///
@@ -414,6 +437,26 @@ impl RealRootednessTheoremReport {
                 ));
             }
         }
+        match (&self.iterated_preserver, self.theorem) {
+            (Some(certificate), RealRootednessTheorem::IteratedPreserver) => {
+                let checked_rule = match &self.left_hand_factor_normalization {
+                    Some(normalization) => normalization.normalized_recurrence()?,
+                    None => rule.clone(),
+                };
+                certificate.verify_operator_identity(&checked_rule)?;
+            }
+            (None, RealRootednessTheorem::IteratedPreserver) if self.is_proved() => {
+                return Err(RecurrenceError::VerificationFailed(
+                    "a proved iterated-preserver report needs its certificate".into(),
+                ));
+            }
+            (Some(_), _) => {
+                return Err(RecurrenceError::VerificationFailed(
+                    "an iterated-preserver certificate on a report of another theorem".into(),
+                ));
+            }
+            (None, _) => {}
+        }
         for hypothesis in &self.hypotheses {
             if let Some(IndexSignDecision::Holds { certificate }) = &hypothesis.sign_decision {
                 certificate.verify().map_err(|error| {
@@ -456,6 +499,9 @@ fn check_at_supplied_seeds(
         }
         RealRootednessTheorem::MaWangInterval => {
             ma_wang::ma_wang_interval_report(rule, first_index, seeds, options)
+        }
+        RealRootednessTheorem::IteratedPreserver => {
+            iterated_preserver::iterated_preserver_report(rule, first_index, seeds, options)
         }
     }
 }

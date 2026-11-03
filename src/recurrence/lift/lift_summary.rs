@@ -561,6 +561,44 @@ impl LiftSummary {
         self.verdict == lift_verdict(&self.identity, &self.parent_proof, &self.hypotheses)
             && self.lean_replay == LIFT_LEAN_REPLAY_NOT_ATTEMPTED
     }
+
+    /// Whether this (recorded) summary claims nothing beyond `recomputed`,
+    /// the summary of a current recomputation of the same lift: equal, or
+    /// equal except for a weaker parent statement (`open` where the
+    /// recomputation is `proved` or `attested`, `attested` where it is
+    /// `proved` or attested with the same labels), with its own verdict
+    /// consistent ([`LiftSummary::is_consistent`]) and no interlacing claim
+    /// beyond the recomputation's.  A parent that grew stronger in a later
+    /// version of the parent provers keeps the old record valid; a record
+    /// claiming more is not supported.
+    pub fn is_supported_by(&self, recomputed: &LiftSummary) -> bool {
+        if self == recomputed {
+            return true;
+        }
+        let same_rest = self.operation == recomputed.operation
+            && self.input_first_index == recomputed.input_first_index
+            && self.parent == recomputed.parent
+            && self.identity == recomputed.identity
+            && self.root_transfer == recomputed.root_transfer
+            && self.hypotheses == recomputed.hypotheses
+            && self.lean_replay == recomputed.lean_replay;
+        let weaker_parent = match (&self.parent_proof, &recomputed.parent_proof) {
+            (LiftParentProof::Open { .. }, now) => !matches!(now, LiftParentProof::Failed { .. }),
+            (
+                LiftParentProof::Attested { labels, .. },
+                LiftParentProof::Attested { labels: now, .. },
+            ) => labels == now,
+            (LiftParentProof::Attested { .. }, LiftParentProof::Proved { .. }) => true,
+            (recorded, now) => recorded == now,
+        };
+        let interlacing_supported = match &self.input_interlacing {
+            LiftInterlacingClaim::Proved { .. } => {
+                self.input_interlacing == recomputed.input_interlacing
+            }
+            LiftInterlacingClaim::NotProved { .. } => true,
+        };
+        same_rest && weaker_parent && interlacing_supported && self.is_consistent()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1078,6 +1116,7 @@ fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
         VeroneseParentProofRoute::LiuWang => "liu_wang",
         VeroneseParentProofRoute::LiuWangDerivativeLag => "liu_wang_derivative_lag",
         VeroneseParentProofRoute::MaWangInterval => "ma_wang_interval",
+        VeroneseParentProofRoute::IteratedPreserver => "iterated_preserver",
         VeroneseParentProofRoute::Attestation => "attestation",
     }
 }

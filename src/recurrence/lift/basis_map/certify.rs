@@ -285,7 +285,11 @@ impl BasisMapLiftCertification {
         if recorded_region.agrees_with_recomputed(fresh_region) {
             *fresh_region = recorded_region.clone();
         }
-        if recomputed.identity != self.identity || recomputed_summary != self.lift_summary {
+        // The recorded summary may carry a weaker parent statement than the
+        // current parent provers give (LiftSummary::is_supported_by).
+        if recomputed.identity != self.identity
+            || !self.lift_summary.is_supported_by(&recomputed_summary)
+        {
             return fail("the recomputed certification differs from the recorded one");
         }
         Ok(())

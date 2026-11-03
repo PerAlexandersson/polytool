@@ -245,6 +245,60 @@ impl VeroneseSectionCertification {
     }
 }
 
+impl VeroneseSectionCertification {
+    /// Check this (recorded) certification against `recomputed`, a current
+    /// certification of the same input and candidate with the options the
+    /// record was made with: equal, or equal except for a recorded parent
+    /// proof that claims nothing beyond the recomputed one
+    /// ([`VeroneseParentProof::is_supported_by`]: a parent that was open or
+    /// attested and is now proved outright), with the recorded verdict,
+    /// statement and lift summary those of the recorded parent proof
+    /// ([`VeroneseSectionCertification::verify`]).  So a record made before
+    /// the parent provers grew stronger keeps replaying, with its weaker
+    /// verdict; a record claiming more than the recomputation fails.
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::VerificationFailed`] when the record is not
+    /// supported, and the errors of [`VeroneseSectionCertification::verify`].
+    pub fn check_against_recomputation(
+        &self,
+        recomputed: &VeroneseSectionCertification,
+    ) -> Result<(), RecurrenceError> {
+        self.verify()?;
+        if self == recomputed {
+            return Ok(());
+        }
+        let same_rest = self.schema == recomputed.schema
+            && self.candidate == recomputed.candidate
+            && self.input_first_index == recomputed.input_first_index
+            && self.identifying_rows == recomputed.identifying_rows
+            && self.rows_compared == recomputed.rows_compared
+            && self.identity == recomputed.identity
+            && self.lean_replay == recomputed.lean_replay
+            && self.notes == recomputed.notes;
+        let statement = certification_statement(
+            &self.candidate,
+            self.input_first_index,
+            self.rows_compared,
+            &self.identity,
+            self.verdict,
+            &self.parent_proof,
+        );
+        if same_rest
+            && self.parent_proof.is_supported_by(&recomputed.parent_proof)
+            && self.statement == statement
+            && self.lift_summary.is_some()
+        {
+            Ok(())
+        } else {
+            Err(RecurrenceError::VerificationFailed(
+                "the recorded certification claims more than its recomputation supports".into(),
+            ))
+        }
+    }
+}
+
 fn verdict(
     identity: &VeroneseSectionIdentityStatus,
     parent: &VeroneseParentProof,
@@ -1024,9 +1078,44 @@ fn finish(
         options.try_root_domain,
     )?;
     let verdict = verdict(&identity, &parent_proof);
+    let statement = certification_statement(
+        candidate,
+        n0,
+        rows_compared,
+        &identity,
+        verdict,
+        &parent_proof,
+    );
+    let mut certification = VeroneseSectionCertification {
+        schema: VERONESE_SECTION_CERTIFICATE_SCHEMA.into(),
+        candidate: candidate.clone(),
+        input_first_index: n0,
+        identifying_rows: identifying,
+        rows_compared,
+        identity,
+        parent_proof,
+        verdict,
+        statement,
+        lean_replay: LEAN_REPLAY_NOT_ATTEMPTED.into(),
+        notes,
+        lift_summary: None,
+    };
+    certification.lift_summary = Some(certification.recompute_lift_summary());
+    Ok(certification)
+}
+
+/// The statement of a certification from its verdict and parent proof.
+fn certification_statement(
+    candidate: &VeroneseSectionCandidate,
+    n0: usize,
+    rows_compared: usize,
+    identity: &VeroneseSectionIdentityStatus,
+    verdict: VeroneseSectionVerdict,
+    parent_proof: &VeroneseParentProof,
+) -> String {
     let (r, j, s) = (candidate.modulus, candidate.residue, candidate.index_shift);
     let section = format!("lambda(n) V_({r},{j})(P_(n{s:+}))");
-    let statement = match verdict {
+    match verdict {
         VeroneseSectionVerdict::Proved => format!(
             "proved: Q_n = {section} for every n >= {n0} and {}; so every Q_n, n >= {n0}, is \
              zero or real-rooted with nonpositive roots",
@@ -1047,27 +1136,11 @@ fn finish(
         VeroneseSectionVerdict::IdentitySupportedByRows => {
             format!("Q_n = {section} holds on the {rows_compared} compared rows only (not proved)")
         }
-        VeroneseSectionVerdict::IdentityRefuted => match &identity {
+        VeroneseSectionVerdict::IdentityRefuted => match identity {
             VeroneseSectionIdentityStatus::Refuted { index } => {
                 format!("refuted: Q_{index} differs from the candidate {section} at n = {index}")
             }
-            _ => unreachable!("the verdict follows the identity status"),
+            _ => "refuted".into(),
         },
-    };
-    let mut certification = VeroneseSectionCertification {
-        schema: VERONESE_SECTION_CERTIFICATE_SCHEMA.into(),
-        candidate: candidate.clone(),
-        input_first_index: n0,
-        identifying_rows: identifying,
-        rows_compared,
-        identity,
-        parent_proof,
-        verdict,
-        statement,
-        lean_replay: LEAN_REPLAY_NOT_ATTEMPTED.into(),
-        notes,
-        lift_summary: None,
-    };
-    certification.lift_summary = Some(certification.recompute_lift_summary());
-    Ok(certification)
+    }
 }

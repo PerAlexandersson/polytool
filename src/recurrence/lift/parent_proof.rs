@@ -49,27 +49,37 @@
 //!    criterion, as for the rows `k! S(n, k)` of the ordered set partitions),
 //!    proved when every hypothesis is verified and the certified interval
 //!    lies in `(-inf, 0]` (`U <= 0`);
-//! 8. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
+//! 8. **iterated preserver**: [`check_iterated_preserver_theorem`]
+//!    (first-order rules `P_n = a_n(x) S_n(P_(n-1))` with a real-rooted
+//!    multiplier after the identity or an operator of the preserver menu,
+//!    applied from the last seed row on, every earlier seed row checked
+//!    exactly, as for the 3-Pascal rows `P_n = (1 + x) P_(n-1)` after
+//!    `P_2 = 1 + 3x + x^2`), proved when every hypothesis is verified and the
+//!    certified region is `(-inf, 0]`; the attempt is recorded only when
+//!    the rule has the theorem's form (not `not_applicable`);
+//! 9. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
 //!    conditional on the attestation, never proved;
-//! 9. **catalog flag**: a bundled OEIS catalog entry flagged
-//!    [`OeisRealRootednessStatus::LeanProved`] (every row zero or
-//!    real-rooted by a Lean proof made outside polytool) whose rule, first
-//!    index and initial rows equal the parent exactly, matched as in route 8
-//!    with the attestation label `oeis_catalog:<A-number>:lean_proved`.  The
-//!    flag gives real-rootedness only, so the route also needs
-//!    coefficients of one sign for every row, which polytool proves here
-//!    (see "One-signed rows" below); the verdict is conditional on the flag,
-//!    never proved.
+//! 10. **catalog flag**: a bundled OEIS catalog entry flagged
+//!     [`OeisRealRootednessStatus::LeanProved`] (every row zero or
+//!     real-rooted by a Lean proof made outside polytool) whose rule, first
+//!     index and initial rows equal the parent exactly, matched as in route 9
+//!     with the attestation label `oeis_catalog:<A-number>:lean_proved`.  The
+//!     flag gives real-rootedness only, so the route also needs
+//!     coefficients of one sign for every row, which polytool proves here
+//!     (see "One-signed rows" below); the verdict is conditional on the flag,
+//!     never proved.
 //!
-//! Routes 4 to 7 run whether or not the root-domain route is enabled.
+//! Routes 4 to 8 run whether or not the root-domain route is enabled.
 //! Routes 4 and 5 conclude that every parent row from the first index on is
 //! real-rooted with every root in `(-inf, 0)`; route 6 that every parent row
 //! is zero (only seed rows) or real-rooted with every root in `(-inf, 0]`
 //! (`(-inf, 0)` without the power of `x`), so it runs without a requested
 //! root region; route 7 that every parent row is real-rooted with every root
-//! in `[L, U]`, `U <= 0`.  All four move their induction start up to three rows past
+//! in `[L, U]`, `U <= 0`; route 8 that every parent row is zero (only seed
+//! rows) or real-rooted with every root in `(-inf, 0]`.  All five move their
+//! induction start up to three rows past
 //! the parent seeds when the theorem fails at the seeds (the default
 //! [`RealRootednessTheoremOptions::maximum_start_delay`]; the skipped rows
 //! are checked exactly by the theorem), and the attempt names the delay
@@ -91,18 +101,28 @@
 //!   every step for the constant family); the parent rows are the canonical
 //!   rows (relabelled), so `P_(m-1) << P_m` weakly for every
 //!   `m >= first_index + 1`;
-//! - routes 4 to 7: the theorem report's own conclusion
+//! - routes 4 to 8: the theorem report's own conclusion
 //!   ([`RealRootednessTheoremConclusion::interlacing`] from
 //!   `interlacing_from` on, strict or weak as the theorem states);
 //! - routes 1 and 3 conclude no interlacing, and an attested parent records
 //!   none.
 //!
+//! # Replaying recorded proofs
+//!
+//! The provers grow stronger over time (a new route can prove a parent that
+//! was open or only attested before).  A recorded proof is therefore
+//! replayed by [`check_recorded_parent_proof`]: it must claim nothing beyond
+//! the current result ([`VeroneseParentProof::is_supported_by`]), not equal
+//! it.  A weaker record (`not_proved`, or conditional on an attestation
+//! where the statement is now proved outright) stays valid; a record that
+//! claims more than the current provers give is rejected.
+//!
 //! # Left-hand factors `x^e f(n)`
 //!
 //! A parent rule with a left-hand factor `x^e f(n)` (`e >= 1`, `f` free of
 //! `x`, as the adaptive search may return it) whose `x^e` divides every
-//! right-hand coefficient is replaced, for routes 1 to 7 and the one-signed
-//! test of route 9, by the exactly equivalent rule
+//! right-hand coefficient is replaced, for routes 1 to 8 and the one-signed
+//! test of route 10, by the exactly equivalent rule
 //! `f(n) P_n = sum (c / x^e) D^d P_(n-r)` (same rows; see
 //! [`LeftHandFactorNormalization`]), recorded in
 //! [`VeroneseParentProof::left_hand_factor_normalization`].  An attestation
@@ -111,7 +131,7 @@
 //! `x^e` does not divide the right-hand side, the rule is used as it is and
 //! the theorem routes report it as not applicable with that reason.
 //!
-//! # One-signed rows (route 9)
+//! # One-signed rows (route 10)
 //!
 //! Write the rule as `f(n) P_n = sum_terms c(n,x) D^d P_(n-r) + g(n,x)` for
 //! `n >= N1` (the first computed index, after the `K` seeds).  Every row has
@@ -194,7 +214,8 @@ pub struct VeroneseParentAttestation {
 pub enum VeroneseParentProofStatus {
     /// Proved by a periodic product, a paper theorem, the root-domain route,
     /// the three-term recurrence theorem, the Liu--Wang theorem, the
-    /// Liu--Wang derivative-lag theorem or the Ma--Wang interval theorem.
+    /// Liu--Wang derivative-lag theorem, the Ma--Wang interval theorem or the
+    /// iterated-preserver theorem.
     Proved,
     /// Not proved; a matching caller-supplied attestation asserts it.
     ConditionalOnAttestation,
@@ -224,6 +245,8 @@ pub enum VeroneseParentProofRoute {
     /// [`check_ma_wang_interval_theorem`] with an interval `[L, U]`,
     /// `U <= 0`.
     MaWangInterval,
+    /// [`check_iterated_preserver_theorem`] with the region `(-inf, 0]`.
+    IteratedPreserver,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -270,10 +293,106 @@ pub struct VeroneseParentProof {
     pub interlacing: Option<LiftInterlacing>,
     /// The exact normalization of a parent left-hand factor `x^e f(n)`
     /// (module documentation, "Left-hand factors `x^e f(n)`"): routes 1 to
-    /// 7 and the one-signed test of route 9 ran on the normalized rule.
+    /// 8 and the one-signed test of route 10 ran on the normalized rule.
     /// Omitted when the parent rule was used as it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub left_hand_factor_normalization: Option<LeftHandFactorNormalization>,
+}
+
+impl VeroneseParentProof {
+    /// Whether this (recorded) parent proof claims nothing beyond
+    /// `recomputed`, the parent provers' current result for the same parent
+    /// (module documentation, "Replaying recorded proofs").
+    ///
+    /// The row facts (`failing_row_index`, `rows_checked`) and the
+    /// left-hand factor normalization must agree.  Then a record that equals
+    /// the recomputation is supported, and otherwise:
+    ///
+    /// - `not_proved` (no route, no labels, no interlacing) is supported
+    ///   unless the recomputation is `refuted`;
+    /// - `conditional_on_attestation` (route `attestation`, no interlacing)
+    ///   is supported when the recomputation proves the statement outright
+    ///   (the conditional statement is then implied) or is conditional on
+    ///   the same labels;
+    /// - `proved` is supported when the recomputation is proved by the same
+    ///   route with the same statement and interlacing (attempts that failed
+    ///   before it may differ);
+    /// - `refuted` is supported when the recomputation is refuted with the
+    ///   same statement.
+    ///
+    /// A record claiming more than the recomputation (proved where it is
+    /// open, an interlacing it does not give, other labels) is not
+    /// supported.
+    pub fn is_supported_by(&self, recomputed: &VeroneseParentProof) -> bool {
+        if self == recomputed {
+            return true;
+        }
+        if self.failing_row_index != recomputed.failing_row_index
+            || self.rows_checked != recomputed.rows_checked
+            || self.left_hand_factor_normalization != recomputed.left_hand_factor_normalization
+        {
+            return false;
+        }
+        let proved_outright = recomputed.status == VeroneseParentProofStatus::Proved
+            && recomputed
+                .route
+                .is_some_and(|route| route != VeroneseParentProofRoute::Attestation);
+        match self.status {
+            VeroneseParentProofStatus::NotProved => {
+                self.route.is_none()
+                    && self.conditional_on.is_empty()
+                    && self.interlacing.is_none()
+                    && recomputed.status != VeroneseParentProofStatus::Refuted
+            }
+            VeroneseParentProofStatus::ConditionalOnAttestation => {
+                self.route == Some(VeroneseParentProofRoute::Attestation)
+                    && !self.conditional_on.is_empty()
+                    && self.interlacing.is_none()
+                    && (proved_outright
+                        || (recomputed.status
+                            == VeroneseParentProofStatus::ConditionalOnAttestation
+                            && recomputed.conditional_on == self.conditional_on))
+            }
+            VeroneseParentProofStatus::Proved => {
+                proved_outright
+                    && self.route == recomputed.route
+                    && self.statement == recomputed.statement
+                    && self.interlacing == recomputed.interlacing
+                    && self.conditional_on.is_empty()
+            }
+            VeroneseParentProofStatus::Refuted => {
+                recomputed.status == VeroneseParentProofStatus::Refuted
+                    && self.statement == recomputed.statement
+            }
+        }
+    }
+}
+
+/// Replay a recorded parent proof: run the parent provers on `record` with
+/// the recorded options and check that the record claims nothing beyond the
+/// result ([`VeroneseParentProof::is_supported_by`]).  A record made with
+/// an earlier, weaker version of the provers keeps replaying.
+///
+/// # Errors
+///
+/// [`RecurrenceError::VerificationFailed`] when the recorded proof is not
+/// supported, and the errors of [`prove_parent_real_rootedness`].
+pub fn check_recorded_parent_proof(
+    record: &ParentRecurrenceRecord<'_>,
+    needed_from: usize,
+    attestations: &[VeroneseParentAttestation],
+    try_root_domain: bool,
+    recorded: &VeroneseParentProof,
+) -> Result<(), RecurrenceError> {
+    let recomputed =
+        prove_parent_real_rootedness(record, needed_from, attestations, try_root_domain)?;
+    if recorded.is_supported_by(&recomputed) {
+        Ok(())
+    } else {
+        Err(RecurrenceError::VerificationFailed(
+            "the recorded parent proof claims more than the parent provers give".into(),
+        ))
+    }
 }
 
 /// A parent rule with its identifying seeds and first index: the input of
@@ -623,16 +742,19 @@ fn root_domain_menu(
     (attempts, false)
 }
 
-/// Routes 4 to 7: a real-rootedness theorem with every root in
+/// Routes 4 to 8: a real-rootedness theorem with every root in
 /// `(-inf, 0)` (routes 4 and 5) or, for route 6, in `(-inf, 0]` (every
 /// conclusion of that theorem, so it runs without a requested region); route
 /// 7 (Ma--Wang) runs without a requested region and succeeds when its
-/// interval `[L, U]` has `U <= 0`.
+/// interval `[L, U]` has `U <= 0`; route 8 (iterated preserver) runs without
+/// a requested region and succeeds when its region is `(-inf, 0]`.  The
+/// last value is whether the theorem applies (status other than
+/// `not_applicable`); a route-8 attempt that does not apply is not recorded.
 fn theorem_attempt(
     record: &ParentRecurrenceRecord<'_>,
     route: VeroneseParentProofRoute,
     variant: &str,
-) -> Result<(VeroneseParentProofAttempt, Option<LiftInterlacing>), RecurrenceError> {
+) -> Result<(VeroneseParentProofAttempt, Option<LiftInterlacing>, bool), RecurrenceError> {
     let options = RealRootednessTheoremOptions {
         root_region: Some(RealInterval {
             lower: None,
@@ -661,12 +783,20 @@ fn theorem_attempt(
             record.seeds,
             &RealRootednessTheoremOptions::default(),
         )?,
+        VeroneseParentProofRoute::IteratedPreserver => check_iterated_preserver_theorem(
+            record.rule,
+            record.first_index,
+            record.seeds,
+            &RealRootednessTheoremOptions::default(),
+        )?,
         _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
     };
-    // The Ma--Wang interval settles the parent statement only when it lies
-    // in (-inf, 0].
-    let outside_ray = route == VeroneseParentProofRoute::MaWangInterval
-        && report.is_proved()
+    // The Ma--Wang interval and the iterated-preserver region settle the
+    // parent statement only when they lie in (-inf, 0].
+    let outside_ray = matches!(
+        route,
+        VeroneseParentProofRoute::MaWangInterval | VeroneseParentProofRoute::IteratedPreserver
+    ) && report.is_proved()
         && !report
             .conclusion
             .as_ref()
@@ -676,8 +806,8 @@ fn theorem_attempt(
             .is_some_and(|upper| !upper.is_positive());
     let detail = match (&report.status, &report.conclusion) {
         (RealRootednessTheoremStatus::Proved, Some(conclusion)) if outside_ray => format!(
-            "{}: {}; the interval is not contained in (-inf, 0], so the rows are real-rooted \
-             but this route does not give coefficients of one sign",
+            "{}: {}; the certified region is not contained in (-inf, 0], so the rows are \
+             real-rooted but this route does not give coefficients of one sign",
             report.normal_form, conclusion.statement
         ),
         (RealRootednessTheoremStatus::Proved, Some(conclusion)) if report.start_delay > 0 => {
@@ -702,6 +832,7 @@ fn theorem_attempt(
     let interlacing = success
         .then(|| theorem_report_interlacing(&report, variant))
         .flatten();
+    let applicable = report.status != RealRootednessTheoremStatus::NotApplicable;
     Ok((
         VeroneseParentProofAttempt {
             route,
@@ -710,6 +841,7 @@ fn theorem_attempt(
             detail,
         },
         interlacing,
+        applicable,
     ))
 }
 
@@ -892,7 +1024,7 @@ fn integer_q(value: i64) -> Q {
     Q::from_integer(value.into())
 }
 
-/// Route 9: an exact proof that every row from `first_index` on has
+/// Route 10: an exact proof that every row from `first_index` on has
 /// coefficients of one sign (module documentation, "One-signed rows").
 /// Returns what was shown, or why the sufficient test does not apply.
 fn one_signed_rows_for_all_indices(
@@ -1147,7 +1279,7 @@ fn first_failing_row(rows: &[Vec<Q>], first_index: usize) -> Option<usize> {
 ///
 /// `needed_from` is the first parent index the caller uses (at least
 /// `first_index`); `attestations` are the caller-supplied statements of
-/// route 8 (a verdict resting on one is conditional, never proved);
+/// route 9 (a verdict resting on one is conditional, never proved);
 /// `try_root_domain` enables route 3.  A refuted or unproved statement is
 /// an `Ok` proof record with that status.
 ///
@@ -1174,7 +1306,7 @@ pub fn prove_parent_real_rootedness(
                 "the parent recurrence cannot be replayed: {error}"
             ))
         })?;
-    // Routes 1 to 7 and the one-signed test of route 9 run on the rule with
+    // Routes 1 to 8 and the one-signed test of route 10 run on the rule with
     // a left-hand factor free of x when the normalization applies; a rule
     // that does not normalize is kept, and the theorem routes name the reason.
     let (normalized_rule, normalization) = rule_with_x_free_left_hand_factor(record.rule)
@@ -1245,7 +1377,7 @@ pub fn prove_parent_real_rootedness(
         proof.attempts.extend(attempts);
     }
 
-    // Routes 4 to 7.
+    // Routes 4 to 8.
     if proved.is_none() {
         for (route, variant) in [
             (
@@ -1258,8 +1390,20 @@ pub fn prove_parent_real_rootedness(
                 "liu_wang_derivative_lag",
             ),
             (VeroneseParentProofRoute::MaWangInterval, "ma_wang_interval"),
+            (
+                VeroneseParentProofRoute::IteratedPreserver,
+                "iterated_preserver",
+            ),
         ] {
-            let (attempt, theorem_interlacing) = theorem_attempt(&normalized, route, variant)?;
+            let (attempt, theorem_interlacing, applicable) =
+                theorem_attempt(&normalized, route, variant)?;
+            // Route 8 is recorded only where the rule has its form (a
+            // first-order step recognized as a multiplier after a menu
+            // operator), so that the records of other parents are those of
+            // the routes before it.
+            if route == VeroneseParentProofRoute::IteratedPreserver && !applicable {
+                continue;
+            }
             let success = attempt.success;
             proof.attempts.push(attempt);
             if success {
@@ -1278,7 +1422,7 @@ pub fn prove_parent_real_rootedness(
         return Ok(proof);
     }
 
-    // Route 8.
+    // Route 9.
     for attestation in attestations {
         let matches = same_record(record, &attestation.recurrence)?
             || (proof.left_hand_factor_normalization.is_some()
@@ -1309,7 +1453,7 @@ pub fn prove_parent_real_rootedness(
             return Ok(proof);
         }
     }
-    // Route 9.
+    // Route 10.
     let candidates = catalog_flag_attestations(record);
     let mut differing = Vec::new();
     for attestation in candidates {

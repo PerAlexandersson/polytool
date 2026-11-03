@@ -68,10 +68,12 @@
 //!   system and [`VeroneseForwardDivisionCertificate`];
 //! - `parent_proof`: the parent provers (periodic product, paper theorem,
 //!   root domain, three-term recurrence, Liu--Wang, Liu--Wang derivative
-//!   lag, attestation), shared with the search;
+//!   lag, Ma--Wang interval, iterated preserver, attestation), shared with
+//!   the search;
 //! - `parent_theorems`: [`check_three_term_recurrence_theorem`],
-//!   [`check_liu_wang_theorem`] and
-//!   [`check_liu_wang_derivative_lag_theorem`], general real-rootedness theorems for
+//!   [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`],
+//!   [`check_ma_wang_interval_theorem`] and
+//!   [`check_iterated_preserver_theorem`], general real-rootedness theorems for
 //!   recurrences with exactly checked hypotheses and a replayable
 //!   [`RealRootednessTheoremReport`];
 //! - `section_report`: [`certify_veronese_section_lift`] and its
@@ -121,15 +123,18 @@ pub use lift_summary::{
     LiftParentProof, LiftRootTransfer, LiftSummary, LiftVerdict, LIFT_LEAN_REPLAY_NOT_ATTEMPTED,
 };
 mod parent_proof;
-pub use parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
+pub use parent_proof::{
+    check_recorded_parent_proof, prove_parent_real_rootedness, ParentRecurrenceRecord,
+};
 pub use parent_proof::{
     VeroneseParentAttestation, VeroneseParentProof, VeroneseParentProofAttempt,
     VeroneseParentProofRoute, VeroneseParentProofStatus,
 };
 mod parent_theorems;
 pub use parent_theorems::{
-    check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem, check_ma_wang_interval_theorem,
-    check_three_term_recurrence_theorem, LeftHandFactorNormalization, RealRootednessTheorem,
+    check_iterated_preserver_theorem, check_liu_wang_derivative_lag_theorem,
+    check_liu_wang_theorem, check_ma_wang_interval_theorem, check_three_term_recurrence_theorem,
+    IteratedPreserverCertificate, LeftHandFactorNormalization, RealRootednessTheorem,
     RealRootednessTheoremConclusion, RealRootednessTheoremOptions, RealRootednessTheoremReport,
     RealRootednessTheoremStatus, RowInterlacing, REAL_ROOTEDNESS_THEOREM_SCHEMA,
 };

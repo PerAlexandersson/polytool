@@ -332,7 +332,7 @@ fn concrete(region: &RootInterval) -> Option<RealInterval> {
 
 /// Whether `inner` is contained in `outer` (both index-independent; `false`
 /// otherwise).
-pub(super) fn region_contains(outer: &RootInterval, inner: &RootInterval) -> bool {
+pub(in crate::recurrence) fn region_contains(outer: &RootInterval, inner: &RootInterval) -> bool {
     let (Some(outer), Some(inner)) = (concrete(outer), concrete(inner)) else {
         return false;
     };

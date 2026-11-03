@@ -1,0 +1,384 @@
+{
+ "input": {
+  "schema": "polytool.recurrence.v1",
+  "first_index": 1,
+  "initial_polynomials": [
+   [
+    "1"
+   ],
+   [
+    "0"
+   ]
+  ],
+  "recurrence": {
+   "terms": [
+    {
+     "offset": 2,
+     "deriv_order": 0,
+     "sign": "none",
+     "coeff": {
+      "coeffs": [
+       [
+        "0",
+        "2"
+       ],
+       [
+        "0",
+        "-3"
+       ],
+       [
+        "0",
+        "1"
+       ]
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "certification": {
+  "schema": "polytool.recurrence-veronese-certificate.v1",
+  "candidate": {
+   "modulus": 2,
+   "residue": 0,
+   "parent": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 1,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "0",
+          "1"
+         ],
+         [
+          "0",
+          "-1"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "index_shift": 0,
+   "gauge": {
+    "kind": "none"
+   }
+  },
+  "input_first_index": 1,
+  "identifying_rows": 2,
+  "rows_compared": 16,
+  "identity": {
+   "status": "certified",
+   "kind": "forward_division",
+   "certificate": {
+    "modulus": 2,
+    "residue": 0,
+    "input_relation": {
+     "terms": [
+      {
+       "shift": 0,
+       "deriv_order": 0,
+       "coeff": {
+        "coeffs": [
+         [
+          "0",
+          "0"
+         ],
+         [
+          "0",
+          "-1"
+         ],
+         [
+          "0",
+          "-1"
+         ]
+        ]
+       }
+      },
+      {
+       "shift": 2,
+       "deriv_order": 0,
+       "coeff": {
+        "coeffs": [
+         [
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    },
+    "input_leader_shift": 2,
+    "parent_relation": {
+     "terms": [
+      {
+       "shift": 0,
+       "deriv_order": 0,
+       "coeff": {
+        "coeffs": [
+         [
+          "0",
+          "0"
+         ],
+         [
+          "0",
+          "1"
+         ]
+        ]
+       }
+      },
+      {
+       "shift": 1,
+       "deriv_order": 0,
+       "coeff": {
+        "coeffs": [
+         [
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    },
+    "index_shift": 0,
+    "gauge": {
+     "kind": "none"
+    },
+    "gauged_parent_relation": {
+     "terms": [
+      {
+       "shift": 0,
+       "deriv_order": 0,
+       "coeff": {
+        "coeffs": [
+         [
+          "0",
+          "0"
+         ],
+         [
+          "0",
+          "1"
+         ]
+        ]
+       }
+      },
+      {
+       "shift": 1,
+       "deriv_order": 0,
+       "coeff": {
+        "coeffs": [
+         [
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    },
+    "parent_leader_shift": 1,
+    "multiplier": [
+     "1"
+    ],
+    "quotients": [
+     {
+      "shift": 0,
+      "component": 1,
+      "differentiations": [
+       {
+        "deriv_order": 0,
+        "coeff": {
+         "coeffs": [
+          [
+           "0",
+           "-1"
+          ],
+          [
+           "0",
+           "-1"
+          ]
+         ]
+        }
+       }
+      ]
+     },
+     {
+      "shift": 1,
+      "component": 0,
+      "differentiations": [
+       {
+        "deriv_order": 0,
+        "coeff": {
+         "coeffs": [
+          [
+           "1"
+          ]
+         ]
+        }
+       }
+      ]
+     }
+    ],
+    "input_valid_from_base": 1,
+    "parent_valid_from_base": 1,
+    "exceptional_bases": [],
+    "identifying_indices": [
+     1,
+     2
+    ],
+    "statement": "w(n) e_0^T M = sum_nu H_nu S^nu phi(L~) with remainder zero, so w(n) (M V_(2,0)(P~))_n = 0 for every base n >= 1; with the exceptional bases checked exactly, V_(2,0)(P~) satisfies the input rule at every base n >= 1, and agreement on the 2 identifying rows gives Q_n = lambda(n) V_(2,0)(P_(n+0)) for every n >= 1"
+   }
+  },
+  "parent_proof": {
+   "status": "not_proved",
+   "statement": "open: no route proved that every parent row P_n, n >= 1, is zero or real-rooted with coefficients of one sign; the first 10 parent rows pass the exact check (evidence only)",
+   "conditional_on": [],
+   "attempts": [
+    {
+     "route": "periodic_product",
+     "variant": "P_(n+k) = c(x) P_n",
+     "success": false,
+     "detail": "the rule is not P_(n+k) = c(x) P_n with c free of n"
+    },
+    {
+     "route": "paper_theorem",
+     "variant": "match_recurrence_theorems",
+     "success": false,
+     "detail": "no theorem matched (weighted_renewal_window: coefficients must be index-independent; fixed_delay_predecessor_window: coefficient of P_(n-1) must be 1 (+ w(n) t) after normalization)"
+    },
+    {
+     "route": "three_term_recurrence",
+     "variant": "three_term_recurrence",
+     "success": false,
+     "detail": "not applicable: the theorem needs at least two seed rows"
+    },
+    {
+     "route": "liu_wang",
+     "variant": "liu_wang",
+     "success": false,
+     "detail": "HypothesisFailed: P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1) for n >= 2, with a_n(x) = (0) + (-n + 1) x and b_n(x) = (0) + (0) x + (0) x^2; open hypotheses: degree_step_positive: fails at n = 2: lambda_n = -n + 1 = -1 there (exact); constant_term_positive: fails at n = 2: a_n(0) = 0 = 0 there (exact)"
+    },
+    {
+     "route": "liu_wang_derivative_lag",
+     "variant": "liu_wang_derivative_lag",
+     "success": false,
+     "detail": "not applicable: the theorem needs two seed rows"
+    },
+    {
+     "route": "ma_wang_interval",
+     "variant": "ma_wang_interval",
+     "success": false,
+     "detail": "not applicable: the rule is not f(n) P_n = c_0(n, x) P_(n-1) + gamma(n) (x - L)(x - U) P'_(n-1)"
+    },
+    {
+     "route": "attestation",
+     "variant": "oeis_catalog",
+     "success": false,
+     "detail": "no lean_proved catalog entry equals the parent; 68 with the same first index and seeds differ in the rule or in later initial rows (oeis_catalog:A003506:lean_proved, oeis_catalog:A008277:lean_proved, oeis_catalog:A008278:lean_proved, oeis_catalog:A008288:lean_proved, oeis_catalog:A008292:lean_proved, oeis_catalog:A019538:lean_proved, oeis_catalog:A026729:lean_proved, oeis_catalog:A035607:lean_proved, oeis_catalog:A039755:lean_proved, oeis_catalog:A046716:lean_proved, oeis_catalog:A048854:lean_proved, oeis_catalog:A052553:lean_proved, oeis_catalog:A056242:lean_proved, oeis_catalog:A059110:lean_proved, oeis_catalog:A060187:lean_proved, oeis_catalog:A062145:lean_proved, oeis_catalog:A063007:lean_proved, oeis_catalog:A063967:lean_proved, oeis_catalog:A071951:lean_proved, oeis_catalog:A078812:lean_proved, oeis_catalog:A085478:lean_proved, oeis_catalog:A086645:lean_proved, oeis_catalog:A089627:lean_proved, oeis_catalog:A091042:lean_proved, oeis_catalog:A098158:lean_proved, oeis_catalog:A098172:lean_proved, oeis_catalog:A099097:lean_proved, oeis_catalog:A104684:lean_proved, oeis_catalog:A105278:lean_proved, oeis_catalog:A106800:lean_proved, oeis_catalog:A111125:lean_proved, oeis_catalog:A114656:lean_proved, oeis_catalog:A122542:lean_proved, oeis_catalog:A123160:lean_proved, oeis_catalog:A127648:lean_proved, oeis_catalog:A131689:lean_proved, oeis_catalog:A134991:lean_proved, oeis_catalog:A142075:lean_proved, oeis_catalog:A142459:lean_proved, oeis_catalog:A143395:lean_proved, oeis_catalog:A154602:lean_proved, oeis_catalog:A156289:lean_proved, oeis_catalog:A158909:lean_proved, oeis_catalog:A166973:lean_proved, oeis_catalog:A173018:lean_proved, oeis_catalog:A201637:lean_proved, oeis_catalog:A201730:lean_proved, oeis_catalog:A219836:lean_proved, oeis_catalog:A225117:lean_proved, oeis_catalog:A225466:lean_proved, oeis_catalog:A225467:lean_proved, oeis_catalog:A225468:lean_proved, oeis_catalog:A225469:lean_proved, oeis_catalog:A225472:lean_proved, oeis_catalog:A225473:lean_proved, oeis_catalog:A235706:lean_proved, oeis_catalog:A253283:lean_proved, oeis_catalog:A259454:lean_proved, oeis_catalog:A269939:lean_proved, oeis_catalog:A269945:lean_proved, oeis_catalog:A271697:lean_proved, oeis_catalog:A271703:lean_proved, oeis_catalog:A271705:lean_proved, oeis_catalog:A286724:lean_proved, oeis_catalog:A292219:lean_proved, oeis_catalog:A321331:lean_proved, oeis_catalog:A334218:lean_proved, oeis_catalog:A390433:lean_proved)"
+    }
+   ],
+   "rows_checked": 10
+  },
+  "verdict": "identity_certified_parent_open",
+  "statement": "Q_n = lambda(n) V_(2,0)(P_(n+0)) for every n >= 1 is certified; the parent statement is open",
+  "lean_replay": "not_attempted",
+  "notes": [],
+  "lift_summary": {
+   "operation": {
+    "kind": "veronese_section",
+    "modulus": 2,
+    "residue": 0
+   },
+   "input_first_index": 1,
+   "parent": {
+    "recurrence": {
+     "schema": "polytool.recurrence.v1",
+     "first_index": 1,
+     "initial_polynomials": [
+      [
+       "1"
+      ]
+     ],
+     "recurrence": {
+      "terms": [
+       {
+        "offset": 1,
+        "deriv_order": 0,
+        "sign": "none",
+        "coeff": {
+         "coeffs": [
+          [
+           "0",
+           "1"
+          ],
+          [
+           "0",
+           "-1"
+          ]
+         ]
+        }
+       }
+      ]
+     }
+    },
+    "relation": "Q_n = lambda(n) V_(2,0)(P_(n+0)) for every n >= 1",
+    "gauge": {
+     "kind": "none"
+    },
+    "index_shift": 0
+   },
+   "identity": {
+    "status": "certified",
+    "method": "forward_division"
+   },
+   "root_transfer": {
+    "theorem": "Veronese sections of Polya frequency sequences (Aissen--Schoenberg--Whitney--Edrei): if P is real-rooted with coefficients of one sign, equivalently nonzero with all roots in (-inf, 0], every section V_(r,j)(P) is zero or real-rooted with roots in (-inf, 0]",
+    "parent_hypothesis": "every parent row used is zero or real-rooted with all roots in (-inf, 0] (coefficients of one sign)",
+    "parent_root_region": {
+     "upper": {
+      "value": "0",
+      "closed": true
+     }
+    },
+    "input_root_region": {
+     "upper": {
+      "value": "0",
+      "closed": true
+     }
+    },
+    "input_conclusion": "every Q_n = lambda(n) V_(2,0)(P_(n+0)), n >= 1, is zero or real-rooted with roots in (-inf, 0]"
+   },
+   "hypotheses": [
+    {
+     "name": "gauge_finite_nonzero",
+     "statement": "lambda(n) is finite and nonzero for every n >= n0",
+     "status": {
+      "kind": "verified"
+     },
+     "evidence": "lambda(n) = 1"
+    }
+   ],
+   "parent_proof": {
+    "status": "open",
+    "statement": "open: no route proved that every parent row P_n, n >= 1, is zero or real-rooted with coefficients of one sign; the first 10 parent rows pass the exact check (evidence only)"
+   },
+   "verdict": "open",
+   "input_interlacing": {
+    "status": "not_proved",
+    "reason": "the parent statement is not proved"
+   },
+   "lean_replay": "not_attempted"
+  }
+ }
+}

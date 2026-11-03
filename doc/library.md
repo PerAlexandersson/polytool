@@ -732,8 +732,9 @@ in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 
 `recurrence::check_three_term_recurrence_theorem`,
 `recurrence::check_liu_wang_theorem`,
-`recurrence::check_liu_wang_derivative_lag_theorem` and
-`recurrence::check_ma_wang_interval_theorem` apply a paper theorem to a
+`recurrence::check_liu_wang_derivative_lag_theorem`,
+`recurrence::check_ma_wang_interval_theorem` and
+`recurrence::check_iterated_preserver_theorem` apply a paper theorem to a
 family given by a rule, a first index and seed rows (the rule applies from
 `first_index + seeds.len()` on), and check every hypothesis exactly for all
 indices.  The result (`RealRootednessTheoremReport`,
@@ -785,6 +786,25 @@ region).  `verify()` replays it.
   and the Stirling--Frobenius rows (A225472, A225473, A225476) are proved
   this way; a failing threshold names the row that leaves the interval.
   `lean_declarations` lists the RealRooted step theorems (no row route).
+- Iterated preserver: a first-order rule `f(n) P_n = sum_d c_d(n, x) D^d
+  P_(n-1)` whose step is recognized exactly (an identity of Ore operators,
+  replayed by `IteratedPreserverCertificate::verify_operator_identity`) as
+  `T_n = a_n(x) S_n`, with `S_n` the identity or an operator of the
+  preserver menu (`phi(n, D)`, `f(n, theta)`, the Euler step, `x^m D^j`,
+  `D^j x^m`, with the menu's theorems and side conditions) and `a_n =
+  g(x) h(n, x)` (the gcd `g` free of `n` checked exactly, `h` of degree
+  `<= 2` by the sign checker).  For a closed region `R` among `(-inf, 0]`,
+  `[0, inf)` (through `x -> -x`) and the line it proves every row nonzero
+  and real-rooted with every root in `R`, from the last seed row on, with an
+  exact degree step `Lambda(n, deg P_(n-1)) != 0`; earlier seed rows, which
+  need not follow the rule (OEIS A028262, A029635, A024462), are checked
+  exactly, and zero seed rows are allowed (the conclusion starts after the
+  last one).  For an Euler step the raising condition is degree-local:
+  `u(n) > 0` and `u(n) + v(n) deg P_(n-1) > 0` (so `u + v k > 0` for every
+  `k <= deg P_(n-1)`, RealRooted `IsPFPolynomial.generalStep_of_natDegree_le`
+  with `d = deg P_(n-1)`) replace the menu's `v >= 0` (OEIS A166960,
+  A166961, A166962, A166972).  A linear multiplier gives weak interlacing of
+  consecutive rows; otherwise none is claimed.
 
 When a theorem fails at the supplied seeds, the checks retry with the
 induction start moved up to `RealRootednessTheoremOptions::maximum_start_delay`
@@ -1101,7 +1121,9 @@ defining recurrences, optionally the OEIS catalog entries the parent provers
 prove; the proofs are computed once per library, so share one library across
 calls).  The menu also has the Euler step
 `kappa (theta + a)(theta + b) + x (u + v theta)` (RealRooted
-`IsPFPolynomial.generalStep_of_natDegree_le`; it maps polynomials with
+`IsPFPolynomial.generalStep_of_natDegree_le`, a half-line theorem: Brändén's
+Corollary 3.5 of 2006 does not apply, since its hypothesis (i), real
+symbols for every real argument, fails for these steps; it maps polynomials with
 nonnegative coefficients and real roots to such polynomials when
 `kappa, a, b, u > 0`, `v >= 0` and the comparison defect is negative on
 `s <= 0`), fitted from five linear coefficients.  A parent may also be proved

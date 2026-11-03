@@ -326,8 +326,9 @@ boundary, or by a root-domain claim of `transform_recurrence` (maps: identity,
 the inverse `f`-map; accepted only for an unconditional all-index claim that
 the source is real-rooted in an interval ending at or below 0), and then by
 the three-term and Liu--Wang theorems with the root region `(-inf, 0)`, the
-Liu--Wang derivative-lag theorem (roots in `(-inf, 0]`) and the Ma--Wang
-interval theorem when its interval `[L, U]` has `U <= 0` (next section).  The root-domain menu is repeated with the parent's first index
+Liu--Wang derivative-lag theorem (roots in `(-inf, 0]`), the Ma--Wang
+interval theorem when its interval `[L, U]` has `U <= 0` (next section) and
+the iterated-preserver theorem when its region is `(-inf, 0]`.  The root-domain menu is repeated with the parent's first index
 moved one to three rows later (the skipped rows are among the parent rows
 checked exactly, each zero or real-rooted with one-signed coefficients), and
 both theorems move their own induction start the same way.  The Eulerian
@@ -508,6 +509,27 @@ family `(n + 1) P_(n+1) = (a x + b - d n) P_n + x (x + 1) P_n'` with `b = s d`
 (the ceiling-division multiplicity of `MaWang.affineEndpointSequence`); a
 misaligned lattice (for example `b = d = 2/5`) fails at an exact index.  An
 end of the certified interval is closed unless no row can have a root there.
+
+**Iterated preservers.**  For a first-order rule `P_n = T_n(P_(n-1))`,
+`T_n = (1/f(n)) sum_d c_d(n, x) D^d`, let `g(x)` be the monic gcd of all
+`n^i`-coefficients of all `c_d`.  For each split `g = x^k g_k` the operator
+`x^k (1/g) sum c_d D^d` is matched against the preserver menu (no
+derivatives: the identity; coefficients free of `x`: `phi(n, D)`; the Euler
+form `x^J L = sum_s x^s a_s(theta)` with one level: `f(n, theta)`, with two
+levels of `theta`-degrees 2 and `<= 1`: the Euler step; one monomial
+`kappa(n) x^m D^j`; `kappa(n) D^j x^m`), and the remaining index factors form
+`h(n, x)`; a candidate is kept only when `q delta_S sum c_d D^d = f (g_k H)
+o S_num` holds in the Ore algebra.  If `S_n` maps rows with roots in a
+closed region `R` to zero or such rows (the menu theorem, its side
+conditions for every `n >= N`, and the region transfer: the menu image of
+`(-inf, 0]` inside `(-inf, 0]`; for `[0, inf)` also commutation up to sign
+with `x -> -x`, true for `f(theta)`, `x^m D^j`, `D^j x^m`; for the line the
+menu theorem on the line), `a_n = g_k h` has every root in `R` and
+`Lambda(n, e) = sum_(deg c_d - d = delta) lead_x c_d(n) e^(d falling)`
+does not vanish at `e = deg P_m + delta (n - 1 - m)`, then induction from the
+last seed row `P_m` keeps every row nonzero and real-rooted in `R` (the roots
+of a product are those of its factors).  For `S_n = id` and `delta = 1` the
+new root of `a_n` gives the weak interlacing `P_(n-1) ⪯ P_n`.
 
 **Moving the induction start.**  The theorems fail when the first rows do
 not behave like the later ones, for example the Eulerian `A_0 = A_1 = 1`

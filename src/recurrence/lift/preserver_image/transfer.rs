@@ -23,21 +23,21 @@ type Q = BigRational;
 
 /// What the menu theorem of one operator gives.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct OperatorTransfer {
+pub(in crate::recurrence) struct OperatorTransfer {
     /// The theorem with its reference.
-    pub(super) theorem: String,
+    pub(in crate::recurrence) theorem: String,
     /// The side conditions of the theorem for every `n >= n0`.
-    pub(super) hypotheses: Vec<LiftHypothesis>,
+    pub(in crate::recurrence) hypotheses: Vec<LiftHypothesis>,
     /// The input region when every used parent row is zero or real-rooted
     /// with every root in `(-inf, 0]`; `None` when no theorem applies.
-    pub(super) from_nonpositive: Option<RootInterval>,
+    pub(in crate::recurrence) from_nonpositive: Option<RootInterval>,
     /// Whether the theorem also gives real-rootedness of the input rows
     /// from parent rows that are real-rooted anywhere on the line.
-    pub(super) from_real_line: bool,
+    pub(in crate::recurrence) from_real_line: bool,
     /// The row route of the Lean library RealRooted, when one matches.
-    pub(super) lean_route: Option<String>,
+    pub(in crate::recurrence) lean_route: Option<String>,
     /// RealRooted (or Mathlib) declarations behind the theorem.
-    pub(super) lean_declarations: Vec<String>,
+    pub(in crate::recurrence) lean_declarations: Vec<String>,
 }
 
 fn strings(values: &[&str]) -> Vec<String> {
@@ -201,7 +201,7 @@ fn discriminant_hypothesis(
 /// The side conditions of `f(n, theta)` (`require_nonpositive`: real roots,
 /// all `<= 0`) or `phi(n, D)` (real roots); returns the hypotheses and
 /// whether the coefficients are proved to have one sign for every `n`.
-fn polynomial_hypotheses(
+pub(in crate::recurrence) fn polynomial_hypotheses(
     prefix: &str,
     variable: &str,
     coefficients: &[IndexRationalFunction],
@@ -369,10 +369,13 @@ const EULER_STEP: &str = "The Euler step T = kappa (theta + a)(theta + b) + x (u
      theta = x D, with kappa, a, b > 0, u + v k > 0 for every k <= d and a negative comparison \
      defect kappa (a b - (a + b + 1)^2/4) + (u - (a + b + 1) v/2) s - v^2 s^2/(4 kappa) < 0 for \
      every s <= 0, maps every polynomial of degree <= d with nonnegative coefficients and only \
-     real roots to such a polynomial (RealRooted IsPFPolynomial.generalStep_of_natDegree_le, \
-     the degree-local strict-to-weak closure of P. Branden, Linear transformations preserving \
-     the Polya frequency property, Trans. Amer. Math. Soc. 358 (2006), Corollary 3.5); here \
-     u > 0 and v >= 0 give u + v k > 0 for every degree; by linearity a row with \
+     real roots to such a polynomial (RealRooted IsPFPolynomial.generalStep_of_natDegree_le, a \
+     half-line theorem: the symbol of T has discriminant -4 kappa s^2 times the comparison \
+     defect at s, so its real-rootedness is needed for s <= 0 only; the hypothesis (i) of P. \
+     Branden, Linear transformations preserving the Polya frequency property, Trans. Amer. \
+     Math. Soc. 358 (2006), Corollary 3.5, real-rootedness for every real s, fails for these \
+     steps, so that corollary is not what is applied); here u > 0 and v >= 0 give u + v k > 0 \
+     for every degree; by linearity a row with \
      nonpositive coefficients is handled through its negative; applied to the parameters at \
      each n";
 
@@ -565,7 +568,10 @@ fn euler_step_hypotheses(
 
 /// The transfer theorem, side conditions, regions and Lean names of
 /// `operator` on the index domain `n >= n0`.
-pub(super) fn operator_transfer(operator: &PreserverOperator, n0: usize) -> OperatorTransfer {
+pub(in crate::recurrence) fn operator_transfer(
+    operator: &PreserverOperator,
+    n0: usize,
+) -> OperatorTransfer {
     match operator {
         PreserverOperator::EulerPolynomial { coefficients } => {
             let (hypotheses, _) =

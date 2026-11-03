@@ -10,6 +10,18 @@ coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
 
+- `recurrence::RealRootednessTheorem` has the new variant
+  `IteratedPreserver`, `recurrence::VeroneseParentProofRoute` the new variant
+  `IteratedPreserver`, and `recurrence::RealRootednessTheoremReport` the new
+  public field `iterated_preserver` (`Option<IteratedPreserverCertificate>`,
+  omitted from the JSON when absent, so existing reports load and serialize
+  unchanged); exhaustive matches and struct literals must add them.  The
+  parent provers run the new theorem as route 8 (after Ma--Wang) and record
+  its attempt only for rules of its form, so the recorded parent proofs of
+  other rules are unchanged; the attestation and catalog-flag routes are now
+  numbered 9 and 10.  A first-order parent that only an attestation or a
+  catalog flag settled before (without the root-domain route) is now proved,
+  so such recorded certifications differ from their recomputation.
 - `recurrence::RootEndpoint` has the new public field `exact`
   (`Option<ExactQuadraticEndpoint>`); struct literals must add it (or use the
   new `RootEndpoint::rational`).  Serialized endpoints without the field still
@@ -191,6 +203,11 @@ the typed errors above.  `exact-real-roots` has no `Result<_, String>` API.
 
 Fixes:
 
+- The Euler step of the preserver menu no longer attributes its theorem to
+  Brändén's Corollary 3.5 (Trans. Amer. Math. Soc. 358 (2006)), whose
+  hypothesis (i) fails for these steps; the theorem text now names the
+  half-line RealRooted theorem `IsPFPolynomial.generalStep_of_natDegree_le`
+  as what is applied.
 - Exported adaptive-search rules (`polytool recurrence --json`,
   `recurrence-theorems`, `oeis add`, MCP `find_recurrence`) keep every row
   before the search window as an initial row.  A rule found with a window
@@ -370,6 +387,25 @@ Performance:
 
 Additions:
 
+- Iterated real-rootedness preservers: `recurrence::check_iterated_preserver_theorem`
+  (theorem `iterated_preserver`, with `recurrence::IteratedPreserverCertificate`
+  in the report) proves a first-order rule `P_n = T_n(P_(n-1))` real-rooted
+  from the last seed row on when its step is recognized exactly, as an
+  identity of Ore operators, as `T_n = a_n(x) S_n` with `S_n` the identity or
+  an operator of the preserver menu (`phi(n, D)`, `f(n, theta)`, the Euler
+  step, `x^m D^j`, `D^j x^m`) and the multiplier `a_n` real-rooted (fixed
+  factors exactly, index-dependent factors of degree `<= 2` by the sign
+  checker), with every root in `(-inf, 0]`, `[0, inf)` or on the line, an
+  exact degree step, and every earlier seed row checked exactly (zero seed
+  rows allowed; the conclusion starts after the last one).  Rows that do not
+  follow the rule, as in the 3-Pascal triangle `P_n = (1 + x) P_(n-1)` after
+  `P_2 = 1 + 3x + x^2` (OEIS A028262), are covered this way, without a
+  special product rule.  A linear multiplier also gives weak interlacing of
+  consecutive rows.  An Euler step is applied in its degree-local form
+  (`u(n) + v(n) k > 0` for `k <= deg P_(n-1)` instead of `v >= 0`).
+  `verify()` replays the operator identity; the parent
+  provers use the theorem as route 8 (region `(-inf, 0]`).  Of the 389
+  first-order catalog rules, 202 are proved by it.
 - Exact quadratic endpoints of root regions: `recurrence::ExactQuadraticEndpoint`
   (`a + b sqrt(d)` as rational strings, with `to_quadratic_number`,
   `from_quadratic_number` and the plain-ASCII `to_plain_text`, e.g.

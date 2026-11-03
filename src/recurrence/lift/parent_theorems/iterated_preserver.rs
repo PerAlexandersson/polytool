@@ -1,0 +1,1289 @@
+//! Iterated real-rootedness preservers: first-order rules
+//! `P_n = T_n(P_(n-1))` whose step `T_n` is a multiplier `a_n(x)` after an
+//! operator `S_n` of the preserver menu (or after the identity).
+//!
+//! # The theorem
+//!
+//! Let `R` be a closed region of the real line (here `(-inf, 0]`,
+//! `[0, inf)` or the whole line), `m` the induction start (the last seed row)
+//! and suppose, for every `n > m`:
+//!
+//! 1. `T_n = a_n(x) S_n` as operators, where `S_n` maps every polynomial that
+//!    is zero or real-rooted with every root in `R` to zero or to a
+//!    real-rooted polynomial with every root in `R`;
+//! 2. `a_n(x)` is real-rooted with every root in `R`;
+//! 3. `T_n` raises the degree of `P_(n-1)` by exactly `delta >= 0`.
+//!
+//! If `P_m` is nonzero and real-rooted with every root in `R`, then by
+//! induction every `P_n`, `n >= m`, is: `S_n(P_(n-1))` is zero or real-rooted
+//! with its roots in `R` by 1, the roots of the product `a_n S_n(P_(n-1))`
+//! are those of its factors (2), and by 3 the product is not zero.  The seed
+//! rows before `m` are checked exactly one by one.  This is the elementary
+//! product fact for `S_n = id`, Laguerre's theorems for multiplier sequences
+//! `f(theta)` and differential operators `phi(D)`, Rolle's theorem for
+//! `x^m D^j` and `D^j x^m`, and Brändén's Euler step (the preserver menu of
+//! the preserver-image lifts, with the same theorems, side conditions and
+//! regions; see [`find_preserver_image_lifts`]).
+//!
+//! # What is checked, exactly
+//!
+//! The rule must be `f(n) P_n = sum_d c_d(n, x) D^d P_(n-1)` with `f` free of
+//! `x` (after the normalization of a left-hand factor `x^e f(n)`), without
+//! `(-1)^n` factors or an inhomogeneous term.  Write
+//! `T_n = (1/f(n)) sum_d c_d(n, x) D^d` and `N = m + 1`.
+//!
+//! - **Recognition.** `g(x)` is the monic gcd over `Q[x]` of every
+//!   coefficient of `n^i` in every `c_d` (the multiplier part free of `n`).
+//!   For every split `g = x^k g_k` the operator `x^k (1/g) sum c_d D^d` is
+//!   matched against the menu: the identity (no derivatives; the multiplier
+//!   is then `a_n = c_0 / f`), `phi(n, D)` (coefficients free of `x`),
+//!   `f(n, theta)` (Euler form with one power of `x`), the Euler step
+//!   `kappa (theta + a)(theta + b) + x (u + v theta)`, `kappa(n) x^m D^j` and
+//!   `kappa(n) D^j x^m`; the index factors of a match go into the
+//!   multiplier `a_n = g_k(x) h(n, x)`.  Every match is accepted only when
+//!   `f(n) q(n) delta_S(n) T_n = f(n) (g_k H) o S_num` holds exactly as an
+//!   identity of operators in the Ore algebra (`ore-algebra` composition;
+//!   `q` the common denominator of `h = H / q`, `S_n = S_num / delta_S`).
+//!   [`IteratedPreserverCertificate::verify_operator_identity`] replays it.
+//! - **Hypothesis 1.** The side conditions of the menu theorem for every
+//!   `n >= N` (decided exactly by the sign checker, as for the lifts), the
+//!   nonvanishing of the operator's coefficient denominator, and the region
+//!   transfer: for `(-inf, 0]` the menu image of `(-inf, 0]` lies in
+//!   `(-inf, 0]`; for the whole line the menu theorem holds on the line;
+//!   for `[0, inf)` the operator is `f(theta)`, `x^m D^j` or `D^j x^m`,
+//!   which commute up to sign with `x -> -x`, and the menu image of
+//!   `(-inf, 0]` lies in `(-inf, 0]`.
+//! - **Hypothesis 2.** The factor `g_k` free of `n` is checked exactly; the
+//!   index factor `h(n, x)` by the menu's polynomial test (fixed
+//!   polynomials exactly, index-dependent ones of degree `<= 2` by the
+//!   discriminant and the pairwise coefficient signs with the sign checker;
+//!   for `[0, inf)` applied to `h(n, -x)`; higher degrees stay open).
+//! - **Hypothesis 3.** With `delta = max_d (deg_x c_d - d)` and
+//!   `Lambda(n, e) = sum_(deg_x c_d - d = delta) lead_x c_d(n) e (e - 1) ...
+//!   (e - d + 1)` (the coefficient of `x^(e + delta)` in
+//!   `f(n) T_n(x^e)`), `Lambda(n, deg P_m + delta (n - 1 - m)) != 0` for every
+//!   `n >= N` by the sign checker; then `deg P_n = deg P_(n-1) + delta` and no
+//!   row vanishes.
+//! - The rows `P_first, ..., P_m` are nonzero and real-rooted with every root
+//!   in `R` (exact).
+//!
+//! The regions are tried in the order `(-inf, 0]`, `[0, inf)`, line; the
+//! first proved one is reported.  A requested root region is read open at
+//! its finite ends (as the report records it) and is met only when it
+//! contains the certified closed region.
+//!
+//! # Interlacing
+//!
+//! Only for a pure multiplier of degree exactly one (`S_n = id`,
+//! `delta = 1`): `P_n = a_n P_(n-1)` with `a_n` linear adds one real root,
+//! and inserting one root into a list of roots gives the weak interlacing
+//! `P_(n-1) ⪯ P_n` of Liu and Wang (`... <= s_2 <= r_2 <= s_1 <= r_1`) for
+//! every `n >= N`; it is extended over the seed rows only as far as it is
+//! checked exactly.  No interlacing is claimed otherwise.
+
+use super::*;
+use crate::polynomial::Polynomial;
+use crate::recurrence::implicit::algebra::{to_theta, Biv, DOp};
+use crate::recurrence::lift::lift_summary::{nonpositive_ray, real_line};
+use crate::recurrence::lift::preserver_image::{
+    operator_transfer, polynomial_hypotheses, region_contains,
+};
+use crate::recurrence::lift::veronese_algebra::classify_row;
+use crate::recurrence::{IndexRationalFunction, PreserverOperator};
+
+const REFERENCE: &str = "Iterated real-rootedness preservers (induction on n): if P_m is \
+     nonzero and real-rooted with every root in a closed region R and, for every n > m, \
+     P_n = a_n(x) S_n(P_(n-1)) where S_n maps every polynomial that is zero or real-rooted with \
+     every root in R to zero or a real-rooted polynomial with every root in R and a_n is \
+     real-rooted with every root in R, then every P_n is real-rooted with every root in R (the \
+     roots of a product are the roots of its factors); an exact degree step keeps every row \
+     nonzero";
+
+/// The coefficients `c_d(n, x)` of `D^d P_(n-1)`, by derivative order.
+type StepCoefficients = BTreeMap<usize, Bivariate>;
+
+/// A rational function `numerator(n) / denominator(n)`.
+type IndexFraction = (Vec<Q>, Vec<Q>);
+
+/// The record of the recognized step `T_n = a_n(x) S_n` of a proved (or
+/// attempted) iterated-preserver check (module documentation of
+/// [`check_iterated_preserver_theorem`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IteratedPreserverCertificate {
+    /// The induction start `m`: the last seed row (after a moved start, the
+    /// last moved seed row); the rule applies from `m + 1` on.
+    pub induction_start: usize,
+    /// `deg P_m`.
+    pub start_degree: usize,
+    /// `delta`: `deg P_n = deg P_(n-1) + delta` for every `n > m`.
+    pub degree_step: usize,
+    /// The multiplier factor `g(x)` free of `n` (ascending exact rational
+    /// strings; `["1"]` when there is none).
+    pub multiplier_fixed_factor: Vec<String>,
+    /// The multiplier factor `h(n, x) = sum_j h_j(n) x^j` (coefficient `j`
+    /// at position `j`); the multiplier is `a_n(x) = g(x) h(n, x)`.
+    pub multiplier_index_factor: Vec<IndexRationalFunction>,
+    /// The menu operator `S_n`; omitted for the identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preserver: Option<PreserverOperator>,
+    /// The closed region `R` containing every root of every row (`lower`
+    /// and `upper` omitted for the whole line).
+    pub region: RootInterval,
+    /// The operator identity in words.
+    pub operator_identity: String,
+}
+
+impl IteratedPreserverCertificate {
+    /// Replay the recognition: the step operator of `rule` (the rule the
+    /// check ran on, after a left-hand factor normalization) equals
+    /// `a_n(x) S_n` exactly in the Ore algebra, the degree step is the one of
+    /// the rule, and the region is one of the certified closed regions.
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::VerificationFailed`] when the rule is not a
+    /// first-order rule of the theorem's form, the identity does not hold,
+    /// the degree step differs or the region is not supported;
+    /// [`RecurrenceError::InvalidInput`] when a recorded value does not parse.
+    pub fn verify_operator_identity(&self, rule: &Recurrence) -> Result<(), RecurrenceError> {
+        let (terms, f) = step_operator(rule).map_err(RecurrenceError::VerificationFailed)?;
+        let decomposition = Decomposition::from_certificate(self)?;
+        if !decomposition.identity_holds(&terms, &f) {
+            return Err(RecurrenceError::VerificationFailed(
+                "the step operator of the rule differs from a_n(x) S_n".into(),
+            ));
+        }
+        if degree_step(&terms) != Some(self.degree_step as i64) {
+            return Err(RecurrenceError::VerificationFailed(
+                "the recorded degree step differs from the rule's".into(),
+            ));
+        }
+        if ClosedRegion::of_root_interval(&self.region).is_none() {
+            return Err(RecurrenceError::VerificationFailed(
+                "the recorded region is not (-inf, 0], [0, inf) or the real line".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Check the iterated-preserver theorem (module documentation, summarized
+/// here) for the family given by `rule`, `first_index` and the seed rows
+/// `seeds` (the rule applies from `N = first_index + seeds.len()` on; the
+/// induction starts at the last seed row `P_(N-1)`).
+///
+/// The rule must be first order, `f(n) P_n = sum_d c_d(n, x) D^d P_(n-1)`
+/// with `f` free of `x`.  Its step operator is recognized exactly as
+/// `T_n = a_n(x) S_n` with `S_n` the identity or an operator of the
+/// preserver menu ([`PreserverOperator`]: `phi(n, D)`, `f(n, theta)`, the
+/// Euler step, `x^m D^j`, `D^j x^m`); then, for a closed region `R` among
+/// `(-inf, 0]`, `[0, inf)` and the line, the hypotheses are: the side
+/// conditions and the region transfer of `S_n` for every `n >= N`; `a_n`
+/// real-rooted with every root in `R` for every `n >= N` (fixed factors
+/// exactly, index-dependent factors of degree `<= 2` by the sign checker);
+/// an exact degree step (sign checker); and the seed rows nonzero and
+/// real-rooted with every root in `R` (exact).  When all hold, every
+/// `P_n`, `n >= first_index`, is nonzero and real-rooted with every root in
+/// `R`.  The induction start is moved past the seeds as for the other
+/// theorem checks ([`RealRootednessTheoremOptions::maximum_start_delay`]).
+///
+/// The report carries the recognized step in
+/// [`RealRootednessTheoremReport::iterated_preserver`];
+/// [`RealRootednessTheoremReport::verify`] recomputes the report and replays
+/// the operator identity and every sign certificate.
+///
+/// # Errors
+///
+/// Errors of the record itself (seed rows that cannot be normalized, a rule
+/// that cannot generate moved seed rows).
+///
+/// # Example
+///
+/// ```
+/// use num_bigint::BigInt;
+/// use polytool::recurrence::{
+///     check_iterated_preserver_theorem, BigRational, BivarPoly, Recurrence, RecurrenceTerm,
+///     RealRootednessTheoremOptions,
+/// };
+///
+/// let q = |v: i64| BigRational::from_integer(BigInt::from(v));
+/// // The 3-Pascal triangle: P_n = (1 + x) P_(n-1) from n = 3 on, P_2 = 1 + 3x + x^2.
+/// let rule = Recurrence {
+///     terms: vec![RecurrenceTerm::new(
+///         1,
+///         0,
+///         BivarPoly::from_coefficients_normalized(vec![vec![q(1), q(1)]]),
+///     )],
+///     denominator: None,
+///     inhomogeneous: None,
+/// };
+/// let seeds = vec![vec![q(1)], vec![q(1), q(1)], vec![q(1), q(3), q(1)]];
+/// let report = check_iterated_preserver_theorem(
+///     &rule,
+///     0,
+///     &seeds,
+///     &RealRootednessTheoremOptions::default(),
+/// )
+/// .unwrap();
+/// assert!(report.is_proved());
+/// report.verify().unwrap();
+/// ```
+pub fn check_iterated_preserver_theorem(
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<BigRational>],
+    options: &RealRootednessTheoremOptions,
+) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    super::check_with_first_proving_start(
+        RealRootednessTheorem::IteratedPreserver,
+        rule,
+        first_index,
+        seeds,
+        options,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Regions
+// ---------------------------------------------------------------------------
+
+/// The closed regions the check certifies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClosedRegion {
+    NonpositiveRay,
+    NonnegativeRay,
+    RealLine,
+}
+
+impl ClosedRegion {
+    const ALL: [Self; 3] = [Self::NonpositiveRay, Self::NonnegativeRay, Self::RealLine];
+
+    fn root_interval(self) -> RootInterval {
+        match self {
+            Self::NonpositiveRay => nonpositive_ray(),
+            Self::NonnegativeRay => RootInterval {
+                lower: Some(RootEndpoint::rational(&Q::zero(), true)),
+                upper: None,
+            },
+            Self::RealLine => real_line(),
+        }
+    }
+
+    fn of_root_interval(region: &RootInterval) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|candidate| &candidate.root_interval() == region)
+    }
+
+    fn text(self) -> &'static str {
+        match self {
+            Self::NonpositiveRay => "(-inf, 0]",
+            Self::NonnegativeRay => "[0, inf)",
+            Self::RealLine => "the real line",
+        }
+    }
+
+    /// Whether the nonzero `p` is real-rooted with every root in the region
+    /// (exact).
+    fn contains_roots_of(self, p: &[Q]) -> bool {
+        let p = vec_poly::trim(p);
+        if vec_poly::is_zero(&p) {
+            return false;
+        }
+        match self {
+            Self::NonpositiveRay => classify_row(&p).has_nonpositive_real_roots(),
+            Self::NonnegativeRay => classify_row(&reflected(&p)).has_nonpositive_real_roots(),
+            Self::RealLine => p.len() <= 1 || is_real_rooted_rational(&p),
+        }
+    }
+
+    /// Whether the region lies in `requested`.
+    fn lies_in(self, requested: &RealInterval) -> bool {
+        let upper_ok = |upper: &Option<Q>, closed: bool| match upper {
+            None => true,
+            Some(u) => u.is_positive() || (u.is_zero() && closed),
+        };
+        match self {
+            Self::NonpositiveRay => {
+                requested.lower.is_none() && upper_ok(&requested.upper, requested.upper_closed)
+            }
+            Self::NonnegativeRay => {
+                requested.upper.is_none()
+                    && upper_ok(
+                        &requested.lower.as_ref().map(|l| -l),
+                        requested.lower_closed,
+                    )
+            }
+            Self::RealLine => requested.lower.is_none() && requested.upper.is_none(),
+        }
+    }
+}
+
+fn is_zero_row(p: &[Q]) -> bool {
+    vec_poly::is_zero(&vec_poly::trim(p))
+}
+
+/// The first index of the conclusion: after the last zero seed row before
+/// the induction start (the start row itself must be nonzero).
+fn claim_first_index(first_index: usize, seeds: &[Vec<Q>]) -> usize {
+    seeds[..seeds.len() - 1]
+        .iter()
+        .rposition(|row| is_zero_row(row))
+        .map_or(first_index, |offset| first_index + offset + 1)
+}
+
+/// `p(-x)`.
+fn reflected(p: &[Q]) -> Vec<Q> {
+    p.iter()
+        .enumerate()
+        .map(|(k, c)| if k % 2 == 1 { -c } else { c.clone() })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// The step operator and its decompositions
+// ---------------------------------------------------------------------------
+
+/// The step `f(n) T_n = sum_d c_d(n, x) D^d` of a first-order rule, or why
+/// the rule does not have that form.
+fn step_operator(rule: &Recurrence) -> Result<(StepCoefficients, Vec<Q>), String> {
+    let shape = recurrence_shape(rule)?;
+    if shape.terms.is_empty() {
+        return Err("the rule has no nonzero term".into());
+    }
+    if shape.terms.keys().any(|(offset, _)| *offset != 1) {
+        return Err("the rule is not first order: P_n = T_n(P_(n-1))".into());
+    }
+    let terms = shape
+        .terms
+        .into_iter()
+        .map(|((_, order), coefficients)| (order, coefficients))
+        .collect();
+    Ok((terms, shape.denominator))
+}
+
+/// `delta = max_d (deg_x c_d - d)`.
+fn degree_step(terms: &StepCoefficients) -> Option<i64> {
+    terms
+        .iter()
+        .filter_map(|(d, c)| x_degree(c).map(|degree| degree as i64 - *d as i64))
+        .max()
+}
+
+/// `sum_d c_d D^d` as an Ore operator.
+fn ore_operator(terms: &StepCoefficients) -> DOp {
+    let mut op = DOp::default();
+    for (d, c) in terms {
+        op.add_term((0, *d), Biv::new(c.clone()));
+    }
+    op
+}
+
+/// A recognized step `T_n = g(x) h(n, x) S_n`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Decomposition {
+    /// `g`, nonzero, free of `n`.
+    fixed_factor: Vec<Q>,
+    /// `h_j(n)`, ascending in `x`.
+    index_factor: Vec<IndexFraction>,
+    /// `S_n`; `None` for the identity.
+    preserver: Option<PreserverOperator>,
+}
+
+impl Decomposition {
+    fn from_certificate(
+        certificate: &IteratedPreserverCertificate,
+    ) -> Result<Self, RecurrenceError> {
+        let fixed_factor = certificate
+            .multiplier_fixed_factor
+            .iter()
+            .map(|value| {
+                parse_rational_coeff(value)
+                    .map_err(|error| RecurrenceError::from(error).with_context("multiplier"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let index_factor = certificate
+            .multiplier_index_factor
+            .iter()
+            .map(IndexRationalFunction::parse)
+            .collect::<Result<Vec<_>, _>>()?;
+        if vec_poly::is_zero(&fixed_factor) || index_factor.is_empty() {
+            return Err(RecurrenceError::InvalidInput(
+                "the recorded multiplier is empty or zero".into(),
+            ));
+        }
+        Ok(Self {
+            fixed_factor,
+            index_factor,
+            preserver: certificate.preserver.clone(),
+        })
+    }
+
+    /// `S_n = numerator / denominator(n)`.
+    fn preserver_parts(&self) -> Option<(DOp, Vec<Q>)> {
+        match &self.preserver {
+            None => Some((DOp::identity(), vec![Q::one()])),
+            Some(operator) => operator.weyl_parts(),
+        }
+    }
+
+    /// `h = H / q` with a common denominator `q`.
+    fn index_factor_over_common_denominator(&self) -> (Biv, Vec<Q>) {
+        let common = self
+            .index_factor
+            .iter()
+            .fold(vec![Q::one()], |acc, (_, q)| vec_poly::mul(&acc, q));
+        let mut numerator = Biv::zero();
+        for (j, (p, _)) in self.index_factor.iter().enumerate() {
+            let others = self
+                .index_factor
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != j)
+                .fold(p.clone(), |acc, (_, (_, q))| vec_poly::mul(&acc, q));
+            numerator = numerator
+                .add(&Biv::from_index_polynomial(&others).multiply(&Biv::monomial(0, j, Q::one())));
+        }
+        (numerator, common)
+    }
+
+    /// `q(n) delta_S(n) sum_d c_d D^d = f(n) (g H) o S_num` in the Ore
+    /// algebra (the step `T_n = (1/f) sum c_d D^d` equals `g h S_n`).
+    fn identity_holds(&self, terms: &StepCoefficients, f: &[Q]) -> bool {
+        let Some((numerator, denominator)) = self.preserver_parts() else {
+            return false;
+        };
+        let (h, common) = self.index_factor_over_common_denominator();
+        let multiplier = Biv::from_variable_polynomial(&self.fixed_factor).multiply(&h);
+        if multiplier.is_zero() || vec_poly::is_zero(&common) || vec_poly::is_zero(&denominator) {
+            return false;
+        }
+        let left = ore_operator(terms).left_multiply(&Biv::from_index_polynomial(&vec_poly::mul(
+            &common,
+            &denominator,
+        )));
+        let right = numerator
+            .left_multiply(&multiplier)
+            .left_multiply(&Biv::from_index_polynomial(f));
+        left.subtract(&right).is_zero()
+    }
+
+    fn index_factor_functions(&self, reflect: bool) -> Vec<IndexRationalFunction> {
+        self.index_factor
+            .iter()
+            .enumerate()
+            .map(|(j, (p, q))| {
+                let p = if reflect && j % 2 == 1 {
+                    vec_poly::neg(p)
+                } else {
+                    p.clone()
+                };
+                IndexRationalFunction::from_polynomials(&p, q)
+            })
+            .collect()
+    }
+
+    fn multiplier_text(&self) -> String {
+        let index_part: Vec<String> = self
+            .index_factor_functions(false)
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.text() != "0")
+            .map(|(j, c)| match j {
+                0 => format!("({})", c.text()),
+                1 => format!("({}) x", c.text()),
+                _ => format!("({}) x^{j}", c.text()),
+            })
+            .collect();
+        format!(
+            "({}) ({})",
+            format_index_polynomial(&self.fixed_factor, "x"),
+            index_part.join(" + ")
+        )
+    }
+}
+
+/// The monic gcd over `Q[x]` of every coefficient of `n^i` in every `c_d`.
+fn fixed_content(terms: &StepCoefficients) -> Vec<Q> {
+    let mut content: Option<Polynomial<Q>> = None;
+    for c in terms.values() {
+        for row in c {
+            let row = vec_poly::trim(row);
+            if vec_poly::is_zero(&row) {
+                continue;
+            }
+            let row = Polynomial::new(row);
+            content = Some(match content {
+                None => row.gcd(&row),
+                Some(g) => g.gcd(&row),
+            });
+        }
+    }
+    content.map_or_else(|| vec![Q::one()], |g| g.coeffs().to_vec())
+}
+
+/// `c / g` row by row (exact: `g` divides every row).
+fn divide_rows(c: &Bivariate, g: &[Q]) -> Bivariate {
+    let divisor = Polynomial::new(g.to_vec());
+    c.iter()
+        .map(|row| {
+            let row = vec_poly::trim(row);
+            if vec_poly::is_zero(&row) {
+                return Vec::new();
+            }
+            Polynomial::new(row).div_rem(&divisor).0.coeffs().to_vec()
+        })
+        .collect()
+}
+
+/// `x^k c`.
+fn times_x_power(c: &Bivariate, k: usize) -> Bivariate {
+    c.iter()
+        .map(|row| {
+            let row = vec_poly::trim(row);
+            if vec_poly::is_zero(&row) {
+                Vec::new()
+            } else {
+                vec_poly::shift_by(&row, k)
+            }
+        })
+        .collect()
+}
+
+/// The coefficient of `y^j` of a [`Biv`] as a polynomial in `n`.
+fn biv_column(b: &Biv, j: usize) -> Vec<Q> {
+    let mut column: Vec<Q> = b
+        .rows()
+        .iter()
+        .map(|row| row.get(j).cloned().unwrap_or_else(Q::zero))
+        .collect();
+    vec_poly::strip_trailing_zeros(&mut column);
+    if column.is_empty() {
+        vec![Q::zero()]
+    } else {
+        column
+    }
+}
+
+fn over(p: Vec<Q>, f: &[Q]) -> IndexRationalFunction {
+    let p = if p.is_empty() { vec![Q::zero()] } else { p };
+    IndexRationalFunction::from_polynomials(&p, f)
+}
+
+/// The single power `m` of `x` in `c`, with its coefficient in `n`.
+fn single_power(c: &Bivariate) -> Option<(usize, Vec<Q>)> {
+    let powers: Vec<usize> = (0..x_width(c))
+        .filter(|&j| !x_column(c, j).is_empty())
+        .collect();
+    match powers.as_slice() {
+        [m] => Some((*m, x_column(c, *m))),
+        _ => None,
+    }
+}
+
+/// The menu shapes of `s = sum_d s_d D^d` over `f(n)`: pairs of the index
+/// factor `h` and the operator (module documentation, "Recognition").
+fn menu_shapes(s: &StepCoefficients, f: &[Q]) -> Vec<(Vec<IndexFraction>, PreserverOperator)> {
+    let unit = || vec![(vec![Q::one()], vec![Q::one()])];
+    let mut out = Vec::new();
+    let max_order = s.keys().copied().max().unwrap_or(0);
+    if max_order == 0 {
+        return out;
+    }
+    // phi(n, D).
+    if s.values().all(|c| x_degree(c) == Some(0)) {
+        let coefficients = (0..=max_order)
+            .map(|d| over(s.get(&d).map(|c| x_column(c, 0)).unwrap_or_default(), f))
+            .collect();
+        out.push((
+            unit(),
+            PreserverOperator::DerivativePolynomial { coefficients },
+        ));
+    }
+    // f(n, theta) and the Euler step, from the Euler form x^J s.
+    let (j, euler) = to_theta(&ore_operator(s));
+    let levels: Vec<usize> = euler.keys().map(|(_, level)| *level).collect();
+    let theta_coefficients = |level: usize, count: usize| -> Vec<IndexRationalFunction> {
+        let b = euler.get(&(0, level)).cloned().unwrap_or_else(Biv::zero);
+        (0..count).map(|t| over(biv_column(&b, t), f)).collect()
+    };
+    let theta_degree = |level: usize| {
+        euler
+            .get(&(0, level))
+            .and_then(Biv::variable_degree)
+            .unwrap_or(0)
+    };
+    if euler.keys().all(|(shift, _)| *shift == 0) {
+        if levels.iter().all(|&level| level == j) {
+            let count = theta_degree(j) + 1;
+            out.push((
+                unit(),
+                PreserverOperator::EulerPolynomial {
+                    coefficients: theta_coefficients(j, count),
+                },
+            ));
+        } else if levels.iter().all(|&level| level == j || level == j + 1)
+            && levels.contains(&(j + 1))
+            && theta_degree(j) == 2
+            && theta_degree(j + 1) <= 1
+        {
+            out.push((
+                unit(),
+                PreserverOperator::EulerStep {
+                    diagonal: theta_coefficients(j, 3),
+                    raising: theta_coefficients(j + 1, 2),
+                },
+            ));
+        }
+    }
+    // kappa(n) x^m D^j and kappa(n) D^j x^m.
+    if let Some((power, kappa)) = s.get(&max_order).and_then(single_power) {
+        let factor = vec![(kappa, f.to_vec())];
+        if s.len() == 1 {
+            out.push((
+                factor.clone(),
+                PreserverOperator::PowerTimesDerivative {
+                    power,
+                    derivative_order: max_order,
+                },
+            ));
+        }
+        if power >= 1 && s.len() > 1 {
+            out.push((
+                factor,
+                PreserverOperator::DerivativeOfPowerMultiple {
+                    power,
+                    derivative_order: max_order,
+                },
+            ));
+        }
+    }
+    out
+}
+
+/// Every decomposition `T_n = g_k(x) h(n, x) S_n` whose operator identity
+/// holds exactly, in a fixed order.
+fn decompositions(terms: &StepCoefficients, f: &[Q]) -> Vec<Decomposition> {
+    let g = fixed_content(terms);
+    let quotient: StepCoefficients = terms
+        .iter()
+        .map(|(d, c)| (*d, divide_rows(c, &g)))
+        .collect();
+    let mut candidates = Vec::new();
+    if terms.keys().all(|&d| d == 0) {
+        let c0 = quotient.get(&0).cloned().unwrap_or_default();
+        let index_factor = (0..=x_degree(&c0).unwrap_or(0))
+            .map(|j| {
+                let column = x_column(&c0, j);
+                (
+                    if column.is_empty() {
+                        vec![Q::zero()]
+                    } else {
+                        column
+                    },
+                    f.to_vec(),
+                )
+            })
+            .collect();
+        candidates.push(Decomposition {
+            fixed_factor: g.clone(),
+            index_factor,
+            preserver: None,
+        });
+    } else {
+        let valuation = g.iter().take_while(|c| c.is_zero()).count();
+        for k in 0..=valuation {
+            let fixed_factor = g[k..].to_vec();
+            let shifted: StepCoefficients = quotient
+                .iter()
+                .map(|(d, c)| (*d, times_x_power(c, k)))
+                .collect();
+            for (index_factor, preserver) in menu_shapes(&shifted, f) {
+                candidates.push(Decomposition {
+                    fixed_factor: fixed_factor.clone(),
+                    index_factor,
+                    preserver: Some(preserver),
+                });
+            }
+        }
+    }
+    let mut out: Vec<Decomposition> = Vec::new();
+    for candidate in candidates {
+        if candidate.identity_holds(terms, f) && !out.contains(&candidate) {
+            out.push(candidate);
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// The check
+// ---------------------------------------------------------------------------
+
+/// The parts of the family the attempts share.
+struct Family<'a> {
+    terms: &'a StepCoefficients,
+    f: &'a [Q],
+    first_index: usize,
+    seeds: &'a [Vec<Q>],
+    n_first: usize,
+    start: usize,
+    start_degree: usize,
+    delta: Option<i64>,
+    /// `deg P_(n-1)` as a polynomial in `n` (for `delta >= 0`).
+    previous_degree: Option<Vec<Q>>,
+    degree_hypothesis: LiftHypothesis,
+    requested: Option<&'a RealInterval>,
+}
+
+/// One decomposition with one region.
+struct Attempt {
+    region: ClosedRegion,
+    decomposition: Decomposition,
+    hypotheses: Vec<LiftHypothesis>,
+    normal_form: String,
+    reference: String,
+    lean_declarations: Vec<String>,
+}
+
+impl Attempt {
+    fn open_count(&self) -> usize {
+        self.hypotheses
+            .iter()
+            .filter(|h| h.status != LiftHypothesisStatus::Verified)
+            .count()
+    }
+}
+
+/// `Lambda(n, deg P_(n-1)) != 0` for every `n >= N` (module documentation,
+/// hypothesis 3).
+fn degree_step_hypothesis(
+    terms: &StepCoefficients,
+    n_first: usize,
+    start: usize,
+    start_degree: usize,
+) -> LiftHypothesis {
+    let name = "degree_step";
+    let statement = format!(
+        "deg P_n = deg P_(n-1) + delta for every n >= {n_first}: the coefficient Lambda(n, e) of \
+         x^(e + delta) in f(n) T_n(x^e) is nonzero at e = deg P_(n-1)"
+    );
+    let Some(delta) = degree_step(terms) else {
+        return unresolved_hypothesis(name, &statement, "the step operator is zero".into());
+    };
+    if delta < 0 {
+        return unresolved_hypothesis(
+            name,
+            &statement,
+            format!("the step lowers the degree (delta = {delta}), so rows eventually vanish"),
+        );
+    }
+    // e(n) = deg P_(n-1) = start_degree + delta (n - 1 - start).
+    let previous_degree = previous_degree_polynomial(start, start_degree, delta);
+    let mut lambda = vec![Q::zero()];
+    for (d, c) in terms {
+        let Some(degree) = x_degree(c) else {
+            continue;
+        };
+        if degree as i64 - *d as i64 != delta {
+            continue;
+        }
+        let mut product = x_column(c, degree);
+        for t in 0..*d {
+            let factor = vec_poly::sub(&previous_degree, &[Q::from_integer(BigInt::from(t))]);
+            product = vec_poly::mul(&product, &factor);
+        }
+        lambda = vec_poly::add(&lambda, &product);
+    }
+    let mut hypothesis = sign_hypothesis(
+        name,
+        &statement,
+        "Lambda(n, deg P_(n-1))",
+        &IndexFunction::polynomial(lambda),
+        n_first,
+        IndexSignCondition::Nonzero,
+    );
+    hypothesis.evidence = format!(
+        "delta = {delta}, deg P_(n-1) = {}: {}",
+        format_index_polynomial(&previous_degree, "n"),
+        hypothesis.evidence
+    );
+    hypothesis
+}
+
+/// `e(n) = deg P_(n-1) = start_degree + delta (n - 1 - start)`.
+fn previous_degree_polynomial(start: usize, start_degree: usize, delta: i64) -> Vec<Q> {
+    let delta_q = Q::from_integer(BigInt::from(delta));
+    vec_poly::trim(&[
+        Q::from_integer(BigInt::from(start_degree))
+            - &delta_q * Q::from_integer(BigInt::from(start + 1)),
+        delta_q,
+    ])
+}
+
+/// The row hypotheses: `P_m` and the earlier seeds in the region.
+fn row_hypotheses(family: &Family<'_>, region: ClosedRegion) -> Vec<LiftHypothesis> {
+    let mut out = Vec::new();
+    let start = family.start;
+    let seed = &family.seeds[family.seeds.len() - 1];
+    out.push(exact_hypothesis(
+        "start_row_in_region",
+        &format!(
+            "P_{start} is nonzero and real-rooted with every root in {}",
+            region.text()
+        ),
+        if region.contains_roots_of(seed) {
+            Ok(format!(
+                "P_{start} has degree {}; checked exactly",
+                family.start_degree
+            ))
+        } else {
+            Err((
+                Some(start),
+                format!(
+                    "P_{start} is zero, not real-rooted, or has a root outside {} (exact)",
+                    region.text()
+                ),
+            ))
+        },
+    ));
+    let earlier = &family.seeds[..family.seeds.len() - 1];
+    if !earlier.is_empty() {
+        let first = family.first_index;
+        let last = first + earlier.len() - 1;
+        let failing = earlier
+            .iter()
+            .position(|row| !is_zero_row(row) && !region.contains_roots_of(row));
+        let zero_rows: Vec<String> = earlier
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| is_zero_row(row))
+            .map(|(offset, _)| format!("P_{}", first + offset))
+            .collect();
+        let zero_note = if zero_rows.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "; {} zero (the conclusion starts after the last zero seed row)",
+                zero_rows.join(", ")
+            )
+        };
+        out.push(exact_hypothesis(
+            "earlier_seeds_in_region",
+            &format!(
+                "every nonzero seed row among P_{first}, ..., P_{last} is real-rooted with every \
+                 root in {}",
+                region.text()
+            ),
+            match failing {
+                None => Ok(format!(
+                    "checked exactly for P_{first}, ..., P_{last}{zero_note}"
+                )),
+                Some(offset) => Err((
+                    Some(first + offset),
+                    format!(
+                        "P_{} is not real-rooted, or has a root outside {} (exact)",
+                        first + offset,
+                        region.text()
+                    ),
+                )),
+            },
+        ));
+    }
+    out
+}
+
+/// The multiplier hypotheses: `a_n = g h` real-rooted with every root in
+/// the region for every `n >= N`.
+fn multiplier_hypotheses(
+    decomposition: &Decomposition,
+    region: ClosedRegion,
+    n_first: usize,
+) -> Vec<LiftHypothesis> {
+    let mut out = Vec::new();
+    let g = &decomposition.fixed_factor;
+    if vec_poly::degree(g).is_some_and(|d| d >= 1) {
+        let text = format_index_polynomial(g, "x");
+        out.push(exact_hypothesis(
+            "multiplier_fixed_factor_in_region",
+            &format!(
+                "the multiplier factor g(x) = {text} is real-rooted with every root in {}",
+                region.text()
+            ),
+            if region.contains_roots_of(g) {
+                Ok("exact check of the fixed polynomial".into())
+            } else {
+                Err((
+                    None,
+                    format!(
+                        "g(x) = {text} is not real-rooted with every root in {} (exact)",
+                        region.text()
+                    ),
+                ))
+            },
+        ));
+    }
+    if decomposition.index_factor.len() >= 2 {
+        let (prefix, reflect, nonpositive) = match region {
+            ClosedRegion::NonpositiveRay => ("multiplier_index_factor", false, true),
+            ClosedRegion::NonnegativeRay => ("multiplier_index_factor_reflected", true, true),
+            ClosedRegion::RealLine => ("multiplier_index_factor", false, false),
+        };
+        let coefficients = decomposition.index_factor_functions(reflect);
+        let (hypotheses, _) =
+            polynomial_hypotheses(prefix, "x", &coefficients, n_first, nonpositive);
+        out.extend(hypotheses);
+    }
+    out
+}
+
+/// The hypotheses of `S_n` for the region, with the theorem text and the
+/// Lean declarations.
+fn preserver_hypotheses(
+    operator: &PreserverOperator,
+    region: ClosedRegion,
+    n_first: usize,
+    previous_degree: Option<&[Q]>,
+) -> (Vec<LiftHypothesis>, String, Vec<String>) {
+    let transfer = operator_transfer(operator, n_first);
+    let mut out = transfer.hypotheses.clone();
+    let mut theorem = transfer.theorem.clone();
+    let mut lean_declarations = transfer.lean_declarations.clone();
+    if let (PreserverOperator::EulerStep { raising, .. }, Some(previous_degree)) =
+        (operator, previous_degree)
+    {
+        // The degree-local form: the step acts on P_(n-1) of degree
+        // e(n) = deg P_(n-1), so u + v k > 0 is needed for k <= e(n) only
+        // (linear in k: at k = 0, which is u > 0, and at k = e(n)); the
+        // menu's v >= 0 is dropped.
+        if let Some(hypothesis) = degree_local_raising_hypothesis(raising, previous_degree, n_first)
+        {
+            out.retain(|h| h.name != "euler_step_raising_slope_nonnegative");
+            out.push(hypothesis);
+            theorem = EULER_STEP_DEGREE_LOCAL.into();
+            lean_declarations.push("RealRooted.EulerBidiagonal.generalRowsDep_spec".into());
+        }
+    }
+    if let Some((_, denominator)) = operator.weyl_parts() {
+        if vec_poly::degree(&denominator).is_some_and(|d| d >= 1) {
+            out.push(sign_hypothesis(
+                "preserver_coefficients_defined",
+                &format!(
+                    "the coefficients of S_n are finite at every n >= {n_first} (their common \
+                     denominator does not vanish)"
+                ),
+                "delta_S(n)",
+                &IndexFunction::polynomial(denominator),
+                n_first,
+                IndexSignCondition::Nonzero,
+            ));
+        }
+    }
+    let ray_image_in_ray = transfer
+        .from_nonpositive
+        .as_ref()
+        .is_some_and(|image| region_contains(&nonpositive_ray(), image));
+    let reflection_invariant = matches!(
+        operator,
+        PreserverOperator::EulerPolynomial { .. }
+            | PreserverOperator::PowerTimesDerivative { .. }
+            | PreserverOperator::DerivativeOfPowerMultiple { .. }
+    );
+    let (holds, how) = match region {
+        ClosedRegion::NonpositiveRay => (
+            ray_image_in_ray,
+            "the menu image of (-inf, 0] lies in (-inf, 0]".to_string(),
+        ),
+        ClosedRegion::NonnegativeRay => (
+            ray_image_in_ray && reflection_invariant,
+            "S_n commutes up to sign with x -> -x (a polynomial in theta, x^m D^j or D^j x^m) \
+             and the menu image of (-inf, 0] lies in (-inf, 0], so [0, inf) maps to [0, inf)"
+                .to_string(),
+        ),
+        ClosedRegion::RealLine => (
+            transfer.from_real_line,
+            "the menu theorem holds for real-rooted polynomials anywhere on the line".to_string(),
+        ),
+    };
+    out.push(exact_hypothesis(
+        "preserver_keeps_region",
+        &format!(
+            "S_n maps every polynomial that is zero or real-rooted with every root in {} to zero or \
+             such a polynomial, for every n >= {n_first}",
+            region.text()
+        ),
+        if holds {
+            Ok(how)
+        } else {
+            Err((None, format!("not given by the menu theorem: {how} fails")))
+        },
+    ));
+    (out, theorem, lean_declarations)
+}
+
+const EULER_STEP_DEGREE_LOCAL: &str = "The degree-local Euler step: T = kappa (theta + a)(theta + \
+     b) + x (u + v theta), theta = x D, with kappa, a, b > 0, u + v k > 0 for every k <= d and a \
+     negative comparison defect kappa (a b - (a + b + 1)^2/4) + (u - (a + b + 1) v/2) s - v^2 \
+     s^2/(4 kappa) < 0 for every s <= 0, maps every polynomial of degree <= d with nonnegative \
+     coefficients and only real roots to such a polynomial (RealRooted \
+     IsPFPolynomial.generalStep_of_natDegree_le, a half-line theorem: the symbol of T has \
+     discriminant -4 kappa s^2 times the comparison defect at s, so its real-rootedness is \
+     required for s <= 0 only, and the hypothesis (i) of P. Branden, Linear transformations \
+     preserving the Polya frequency property, Trans. Amer. Math. Soc. 358 (2006), Corollary \
+     3.5, for every real s, is not needed); here d = deg P_(n-1), so u(n) + v(n) k > 0 is \
+     required for 0 <= k <= deg P_(n-1) only (both ends, the condition being linear in k); \
+     by linearity a row with nonpositive coefficients is handled through its negative";
+
+/// `u(n) + v(n) e(n) > 0` for every `n >= n_first`, with `e(n) = deg
+/// P_(n-1)` (with `u > 0` from the menu, `u + v k > 0` for `0 <= k <= e(n)`).
+fn degree_local_raising_hypothesis(
+    raising: &[IndexRationalFunction],
+    previous_degree: &[Q],
+    n_first: usize,
+) -> Option<LiftHypothesis> {
+    let [u, v] = raising else {
+        return None;
+    };
+    let ((pu, qu), (pv, qv)) = (u.parse().ok()?, v.parse().ok()?);
+    let numerator = vec_poly::add(
+        &vec_poly::mul(&pu, &qv),
+        &vec_poly::mul(&vec_poly::mul(&pv, previous_degree), &qu),
+    );
+    let function = IndexFunction::new(numerator, vec_poly::mul(&qu, &qv));
+    Some(sign_hypothesis(
+        "euler_step_raising_positive_up_to_degree",
+        &format!(
+            "u(n) + v(n) deg P_(n-1) > 0 for every n >= {n_first} (with u(n) > 0: u + v k > 0 \
+             for 0 <= k <= deg P_(n-1), the degree-local hypothesis)"
+        ),
+        "u(n) + v(n) deg P_(n-1)",
+        &function,
+        n_first,
+        IndexSignCondition::Positive,
+    ))
+}
+
+fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedRegion) -> Attempt {
+    let mut hypotheses = Vec::new();
+    hypotheses.extend(denominator_hypothesis(family.f, family.n_first));
+    let operator_text = decomposition
+        .preserver
+        .as_ref()
+        .map_or_else(|| "the identity".to_string(), PreserverOperator::text);
+    hypotheses.push(exact_hypothesis(
+        "operator_identity",
+        "the step operator T_n of the rule equals a_n(x) S_n",
+        Ok(format!(
+            "q(n) delta_S(n) sum_d c_d(n, x) D^d = f(n) (g H)(n, x) o S_num holds exactly in the \
+             Ore algebra (S_n = {operator_text})"
+        )),
+    ));
+    hypotheses.extend(row_hypotheses(family, region));
+    hypotheses.push(family.degree_hypothesis.clone());
+    hypotheses.extend(multiplier_hypotheses(decomposition, region, family.n_first));
+    let mut reference = REFERENCE.to_string();
+    let mut lean_declarations = Vec::new();
+    match &decomposition.preserver {
+        None => reference.push_str("; here S_n is the identity"),
+        Some(operator) => {
+            let (side_conditions, theorem, declarations) = preserver_hypotheses(
+                operator,
+                region,
+                family.n_first,
+                family.previous_degree.as_deref(),
+            );
+            hypotheses.extend(side_conditions);
+            reference.push_str(&format!("; S_n = {operator_text}: {theorem}"));
+            lean_declarations = declarations;
+        }
+    }
+    if region == ClosedRegion::NonnegativeRay {
+        reference.push_str(
+            "; for R = [0, inf) the reflection x -> -x maps the rows to rows with every root in \
+             (-inf, 0]",
+        );
+    }
+    if let Some(requested) = family.requested {
+        let statement = format!(
+            "the requested region {} contains the certified region {}",
+            open_root_interval(requested),
+            region.text()
+        );
+        hypotheses.push(if region.lies_in(requested) {
+            exact_hypothesis("requested_root_region", &statement, Ok("exact".into()))
+        } else {
+            unresolved_hypothesis(
+                "requested_root_region",
+                &statement,
+                "this check certifies the closed regions (-inf, 0], [0, inf) and the line only"
+                    .into(),
+            )
+        });
+    }
+    let normal_form = format!(
+        "P_n = a_n(x) S_n(P_(n-1)) for n >= {}, with a_n(x) = {} and S_n = {operator_text}",
+        family.n_first,
+        decomposition.multiplier_text()
+    );
+    Attempt {
+        region,
+        decomposition: decomposition.clone(),
+        hypotheses,
+        normal_form,
+        reference,
+        lean_declarations,
+    }
+}
+
+/// The check with the induction at the given (normalized) seeds.
+pub(super) fn iterated_preserver_report(
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<BigRational>],
+    options: &RealRootednessTheoremOptions,
+) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    let report = RealRootednessTheoremReport::new(
+        RealRootednessTheorem::IteratedPreserver,
+        REFERENCE,
+        rule,
+        first_index,
+        seeds,
+        options,
+    );
+    if seeds.is_empty() {
+        return Ok(report.not_applicable("the theorem needs a seed row"));
+    }
+    let (terms, f) = match step_operator(rule) {
+        Ok(step) => step,
+        Err(reason) => return Ok(report.not_applicable(reason)),
+    };
+    let candidates = decompositions(&terms, &f);
+    if candidates.is_empty() {
+        return Ok(report.not_applicable(
+            "the step T_n is not a multiplier a_n(x) after the identity or an operator of the \
+             preserver menu (phi(n, D), f(n, theta), the Euler step, x^m D^j, D^j x^m)",
+        ));
+    }
+    let n_first = first_index + seeds.len();
+    let start = n_first - 1;
+    let start_degree = vec_poly::degree(&seeds[seeds.len() - 1]).unwrap_or(0);
+    // The requested region as the report records it: open at its finite ends
+    // (so that a replay sees the same request).
+    let requested = options.root_region.as_ref().map(|region| RealInterval {
+        lower: region.lower.clone(),
+        lower_closed: false,
+        upper: region.upper.clone(),
+        upper_closed: false,
+    });
+    let family = Family {
+        terms: &terms,
+        f: &f,
+        first_index,
+        seeds,
+        n_first,
+        start,
+        start_degree,
+        delta: degree_step(&terms),
+        previous_degree: degree_step(&terms)
+            .filter(|&delta| delta >= 0)
+            .map(|delta| previous_degree_polynomial(start, start_degree, delta)),
+        degree_hypothesis: degree_step_hypothesis(&terms, n_first, start, start_degree),
+        requested: requested.as_ref(),
+    };
+    let mut best: Option<Attempt> = None;
+    'regions: for region in ClosedRegion::ALL {
+        for decomposition in &candidates {
+            let attempt = attempt(&family, decomposition, region);
+            let proved = status_of(&attempt.hypotheses) == RealRootednessTheoremStatus::Proved;
+            if proved
+                || best
+                    .as_ref()
+                    .is_none_or(|b| attempt.open_count() < b.open_count())
+            {
+                best = Some(attempt);
+            }
+            if proved {
+                break 'regions;
+            }
+        }
+    }
+    let attempt = best.expect("at least one decomposition and region");
+    Ok(finish_report(report, &family, attempt))
+}
+
+fn finish_report(
+    mut report: RealRootednessTheoremReport,
+    family: &Family<'_>,
+    attempt: Attempt,
+) -> RealRootednessTheoremReport {
+    let region = attempt.region;
+    let delta = family.delta.unwrap_or(0).max(0) as usize;
+    let pure_linear = attempt.decomposition.preserver.is_none()
+        && delta == 1
+        && family.terms.keys().all(|&d| d == 0);
+    let interlacing_from = pure_linear.then(|| {
+        extend_interlacing_backward(
+            family.seeds,
+            family.first_index,
+            family.n_first,
+            RowInterlacing::Weak,
+        )
+    });
+    report.reference = attempt.reference;
+    report.normal_form = attempt.normal_form;
+    report.hypotheses = attempt.hypotheses;
+    report.lean_declarations = attempt.lean_declarations;
+    let decomposition = &attempt.decomposition;
+    // A step that lowers the degree has no certificate (its degree step is
+    // not a valid record, and the check is not proved).
+    let lowers_degree = family.delta.is_none_or(|d| d < 0);
+    report.iterated_preserver = (!lowers_degree).then(|| IteratedPreserverCertificate {
+        induction_start: family.start,
+        start_degree: family.start_degree,
+        degree_step: delta,
+        multiplier_fixed_factor: decomposition
+            .fixed_factor
+            .iter()
+            .map(format_rational_coeff)
+            .collect(),
+        multiplier_index_factor: decomposition.index_factor_functions(false),
+        preserver: decomposition.preserver.clone(),
+        region: region.root_interval(),
+        operator_identity: format!(
+            "f(n) T_n = sum_d c_d(n, x) D^d equals f(n) a_n(x) S_n with a_n(x) = {}",
+            decomposition.multiplier_text()
+        ),
+    });
+    let root_region = (region != ClosedRegion::RealLine).then(|| region.root_interval());
+    let claim_first = claim_first_index(family.first_index, family.seeds);
+    let mut statement = format!(
+        "every P_n, n >= {claim_first}, is nonzero and real-rooted with every root in {}; deg \
+         P_n = deg P_(n-1) + {delta} for n >= {}",
+        region.text(),
+        family.n_first
+    );
+    if claim_first > family.first_index {
+        statement.push_str(&format!(
+            "; P_{}, ..., P_{} are zero or real-rooted with every root in {} (seed rows, \
+             checked exactly)",
+            family.first_index,
+            claim_first - 1,
+            region.text()
+        ));
+    }
+    if let Some(from) = interlacing_from {
+        statement.push_str(&format!(
+            "; P_(n-1) interlaces P_n (weakly: P_n = a_n P_(n-1) with a_n linear adds one real \
+             root) for n >= {from}"
+        ));
+    }
+    report.finish(RealRootednessTheoremConclusion {
+        first_index: claim_first,
+        interlacing_from,
+        interlacing: interlacing_from.map(|_| RowInterlacing::Weak),
+        simple_roots: false,
+        root_region,
+        statement,
+    })
+}

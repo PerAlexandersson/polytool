@@ -568,6 +568,20 @@ impl PreserverOperator {
         }
     }
 
+    /// `T_n = numerator / denominator(n)` with a shift-free Ore-algebra
+    /// numerator, for the operators of the Weyl algebra (every shape except
+    /// the substitutions and the Hadamard multipliers); `None` for those or
+    /// for invalid parameters.
+    pub(in crate::recurrence) fn weyl_parts(&self) -> Option<(DOp, Vec<Q>)> {
+        match self.form().ok()? {
+            OperatorForm::Weyl {
+                numerator,
+                denominator,
+            } => Some((numerator, denominator)),
+            _ => None,
+        }
+    }
+
     /// The schedule of a reversal or Möbius operator.
     pub(super) fn schedule(&self) -> Option<&DegreeSchedule> {
         match self {

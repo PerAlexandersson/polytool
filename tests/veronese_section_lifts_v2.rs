@@ -393,24 +393,15 @@ fn factorial_binomial_parent() -> RecurrenceJson {
     )
 }
 
-/// `Q_m = 2 m (1 + y) Q_(m-1) - m (m - 1) (1 - y)^2 Q_(m-2)`, `Q_0 = 1`,
-/// `Q_1 = 1 + y`: the even sections of `P_m = m (1 + x)^2 P_(m-1) = m! (1 + x)^(2m)`.
-fn factorial_square_input() -> Recurrence {
-    rule(
-        &[
-            (1, 0, &[&[0, 0], &[2, 2]]),
-            (2, 0, &[&[0, 0, 0], &[1, -2, 1], &[-1, 2, -1]]),
-        ],
-        None,
-    )
-}
-
-/// `P_m = m (1 + x)^2 P_(m-1)`, `P_0 = 1`: the factor has degree two, so
-/// neither the three-term nor the Liu--Wang route applies, and it depends on
-/// the index, so it is not a periodic product.
-fn factorial_square_parent() -> RecurrenceJson {
+/// `P_m = (x + m)^3 P_(m-1)`, `P_0 = 1`: the factor depends on the index,
+/// so it is not a periodic product; it has degree three, so neither the
+/// three-term nor the Liu--Wang route applies; and its index-dependent cubic
+/// factor is beyond the multiplier test of the iterated-preserver route
+/// (fixed factors and index-dependent factors of degree `<= 2`).  (The
+/// earlier example `m (1 + x)^2` is now proved by that route.)
+fn cube_product_parent() -> RecurrenceJson {
     RecurrenceJson::from_recurrence_rational(
-        &rule(&[(1, 0, &[&[0, 0, 0], &[1, 2, 1]])], None),
+        &rule(&[(1, 0, &[&[0, 0, 0, 1], &[0, 0, 3], &[0, 3], &[1]])], None),
         0,
         &rows(&[&[1]]),
         None,
@@ -434,9 +425,13 @@ fn index_dependent_parent_and_attestations() {
         certification.verify().expect("replays");
         certification
     };
-    let input = factorial_square_input();
-    let seeds = rows(&[&[1], &[1, 1]]);
-    let parent = factorial_square_parent();
+    // The input is the computed rule of the even sections of the parent.
+    let parent = cube_product_parent();
+    let section = candidate(2, 0, parent.clone())
+        .section_recurrence(0, &VeroneseSectionRecurrenceOptions::default())
+        .expect("the section rule is computed");
+    let (input, first_index, seeds) = section.to_recurrence_parts().unwrap();
+    assert_eq!(first_index, 0);
     let run = |options: &VeroneseSectionCertifyOptions| run_with(&input, &seeds, &parent, options);
     let attestation = |record: RecurrenceJson, first_index: usize| VeroneseParentAttestation {
         label: "test attestation".into(),
@@ -451,9 +446,9 @@ fn index_dependent_parent_and_attestations() {
         ..VeroneseSectionCertifyOptions::default()
     };
 
-    // The parent factor m (1 + x)^2 depends on the index and has degree two:
-    // not a periodic product, no paper theorem matches, and neither the
-    // three-term nor the Liu--Wang route applies.
+    // The parent factor (x + m)^3 depends on the index and has degree three:
+    // not a periodic product, no paper theorem matches, and no theorem route
+    // applies.
     let open = run(&without_root_domain(Vec::new()));
     assert!(matches!(
         open.identity,
