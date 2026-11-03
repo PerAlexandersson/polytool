@@ -2,7 +2,7 @@
 //! the report types (`polytool.recurrence-row-factor-lifts.v1`) and
 //! [`find_row_factor_lifts`].
 
-use super::super::hadamard_factor::prepare::{prepare_rule, PreparedRule};
+use super::super::hadamard_factor::prepare::{prepare_lift_rule, PreparedLiftRule};
 use super::super::lift_summary::{
     nonpositive_ray, parent_proof_summary, proved_parent_interlacing, real_line,
     COMMON_FACTOR_INTERLACING_THEOREM,
@@ -10,7 +10,7 @@ use super::super::lift_summary::{
 use super::super::veronese_algebra::classify_row;
 use super::certify::{divide_operator, substitute, RowFactorCertificate};
 use crate::factorization::irreducible_factorization_rational_coeffs_with_budget;
-use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
+use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
 use crate::recurrence::{
     encode_poly, ImplicitRelation, LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus,
     LiftInterlacing, LiftInterlacingClaim, LiftInterlacingJustification, LiftOperation, LiftParent,
@@ -323,7 +323,7 @@ pub fn find_row_factor_lifts(
     options: &RowFactorLiftOptions,
 ) -> Result<RowFactorLiftReport, RecurrenceError> {
     validate_options(options)?;
-    let input = prepare_rule(recurrence, rows, first_index, "input")?;
+    let input = prepare_lift_rule(recurrence, rows, first_index, "input")?;
     let n0 = first_index;
     let detection_rows = input.rows(options.detection_rows)?;
     let mut report = RowFactorLiftReport {
@@ -384,7 +384,7 @@ pub fn find_row_factor_lifts(
 }
 
 fn certify_schedule(
-    input: &PreparedRule,
+    input: &PreparedLiftRule,
     f: &[Q],
     slope: usize,
     offset: i64,
@@ -441,7 +441,7 @@ fn certify_schedule(
         cofactor_rows.push(vec_poly::trim(quotient.coeffs()));
     }
     let count_s = cofactor_rule.generation_initial_count(n0, count);
-    let cofactor = match prepare_rule(
+    let cofactor = match prepare_lift_rule(
         &cofactor_rule,
         &cofactor_rows[..count_s.max(r)],
         n0,
@@ -521,8 +521,8 @@ fn certify_schedule(
             exceptional,
         )?
     };
-    let parent_proof = prove_parent(
-        &ParentRecord {
+    let parent_proof = prove_parent_real_rootedness(
+        &ParentRecurrenceRecord {
             rule: &cofactor.rule,
             seeds: &cofactor.seeds,
             first_index: n0,
@@ -559,8 +559,8 @@ fn certify_schedule(
 }
 
 fn certified(
-    input: &PreparedRule,
-    cofactor: &PreparedRule,
+    input: &PreparedLiftRule,
+    cofactor: &PreparedLiftRule,
     factor: &[String],
     (slope, offset): (usize, i64),
     cofactor_relation: &crate::recurrence::implicit::algebra::DOp,

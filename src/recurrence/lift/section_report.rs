@@ -13,7 +13,7 @@
 use super::super::implicit::algebra::{roots_in_domain, Biv, DOp};
 use super::super::implicit::runnable_record_from_annihilator;
 use super::hadamard_factor::prepare::x_free_left_hand_factor_rule;
-use super::parent_proof::{prove_parent, ParentRecord};
+use super::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
 use super::section_certify::{
     gauge_parent_relation, n_coefficients, pseudo_divide_row, residue_row, x_free_leader,
 };
@@ -1013,8 +1013,8 @@ fn finish(
     notes: Vec<String>,
 ) -> Result<VeroneseSectionCertification, RecurrenceError> {
     let needed_from = (n0 as i64 + candidate.index_shift) as usize;
-    let parent_proof = prove_parent(
-        &ParentRecord {
+    let parent_proof = prove_parent_real_rootedness(
+        &ParentRecurrenceRecord {
             rule: &parent.rule,
             seeds: &parent.seeds,
             first_index: parent.first_index,

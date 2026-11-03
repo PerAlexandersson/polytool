@@ -2,7 +2,9 @@
 //! provers (the transport map has its own tests in `section_operators`).
 
 use super::super::implicit::algebra::{Biv, DOp};
-use super::parent_proof::{periodic_product_parent, prove_parent, ParentRecord};
+use super::parent_proof::{
+    periodic_product_parent, prove_parent_real_rootedness, ParentRecurrenceRecord,
+};
 use super::section_certify::{
     division_identity_holds, gauge_parent_relation, pseudo_divide_row, residue_row, x_free_leader,
 };
@@ -126,12 +128,12 @@ fn eulerian_parent_is_proved_by_the_root_domain_route() {
         .recurrence_export_parts()
         .unwrap();
     let first_index = usize::try_from(first_row).unwrap();
-    let record = ParentRecord {
+    let record = ParentRecurrenceRecord {
         rule: &rule,
         seeds: &seeds,
         first_index,
     };
-    let proof = prove_parent(&record, first_index, &[], true).unwrap();
+    let proof = prove_parent_real_rootedness(&record, first_index, &[], true).unwrap();
     assert_eq!(
         proof.status,
         VeroneseParentProofStatus::Proved,
@@ -141,7 +143,7 @@ fn eulerian_parent_is_proved_by_the_root_domain_route() {
     let success = proof.attempts.iter().find(|a| a.success).unwrap();
     assert_eq!(success.variant, "f_polynomial");
     // Without the root-domain route the Liu--Wang route proves it.
-    let proof = prove_parent(&record, first_index, &[], false).unwrap();
+    let proof = prove_parent_real_rootedness(&record, first_index, &[], false).unwrap();
     assert_eq!(proof.status, VeroneseParentProofStatus::Proved);
     assert_eq!(proof.route, Some(VeroneseParentProofRoute::LiuWang));
 }
@@ -168,12 +170,12 @@ fn parent_routes_move_the_induction_start() {
         inhomogeneous: None,
     };
     let seeds = vec![vec![q(1)]];
-    let record = ParentRecord {
+    let record = ParentRecurrenceRecord {
         rule: &rule,
         seeds: &seeds,
         first_index: 0,
     };
-    let proof = prove_parent(&record, 0, &[], true).unwrap();
+    let proof = prove_parent_real_rootedness(&record, 0, &[], true).unwrap();
     assert_eq!(
         proof.status,
         VeroneseParentProofStatus::Proved,
@@ -188,7 +190,7 @@ fn parent_routes_move_the_induction_start() {
     assert!(success.detail.contains("checked exactly"));
     assert!(proof.statement.contains("n >= 0"));
     // Without the root-domain route, Liu--Wang moves its start itself.
-    let proof = prove_parent(&record, 0, &[], false).unwrap();
+    let proof = prove_parent_real_rootedness(&record, 0, &[], false).unwrap();
     assert_eq!(proof.status, VeroneseParentProofStatus::Proved);
     assert_eq!(proof.route, Some(VeroneseParentProofRoute::LiuWang));
     let success = proof.attempts.iter().find(|a| a.success).unwrap();
@@ -213,12 +215,12 @@ fn narayana_and_type_b_eulerian_parents_are_proved() {
         ("A060187", VeroneseParentProofRoute::LiuWang),
     ] {
         let (rule, seeds, first_index) = catalog_record(id);
-        let record = ParentRecord {
+        let record = ParentRecurrenceRecord {
             rule: &rule,
             seeds: &seeds,
             first_index,
         };
-        let proof = prove_parent(&record, first_index, &[], true).unwrap();
+        let proof = prove_parent_real_rootedness(&record, first_index, &[], true).unwrap();
         assert_eq!(
             proof.status,
             VeroneseParentProofStatus::Proved,
@@ -259,12 +261,12 @@ fn three_term_route_proves_laguerre_and_refutes_hermite() {
         inhomogeneous: None,
     };
     let seeds = vec![vec![q(1)], vec![q(1), q(1)]];
-    let record = ParentRecord {
+    let record = ParentRecurrenceRecord {
         rule: &laguerre,
         seeds: &seeds,
         first_index: 0,
     };
-    let proof = prove_parent(&record, 0, &[], false).unwrap();
+    let proof = prove_parent_real_rootedness(&record, 0, &[], false).unwrap();
     assert_eq!(
         proof.status,
         VeroneseParentProofStatus::Proved,
@@ -293,12 +295,12 @@ fn three_term_route_proves_laguerre_and_refutes_hermite() {
         inhomogeneous: None,
     };
     let seeds = vec![vec![q(1)], vec![q(0), q(2)]];
-    let record = ParentRecord {
+    let record = ParentRecurrenceRecord {
         rule: &hermite,
         seeds: &seeds,
         first_index: 0,
     };
-    let proof = prove_parent(&record, 0, &[], false).unwrap();
+    let proof = prove_parent_real_rootedness(&record, 0, &[], false).unwrap();
     assert_eq!(proof.status, VeroneseParentProofStatus::Refuted);
     assert_eq!(proof.failing_row_index, Some(2));
 }

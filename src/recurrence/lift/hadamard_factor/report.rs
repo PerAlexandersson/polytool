@@ -354,7 +354,9 @@ fn hadamard_interlacing(
 #[cfg(test)]
 mod interlacing_tests {
     use super::*;
-    use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
+    use crate::recurrence::lift::parent_proof::{
+        prove_parent_real_rootedness, ParentRecurrenceRecord,
+    };
     use crate::recurrence::{InterlacingOrientation, LiftParentProof, Recurrence, RowInterlacing};
     use crate::BigRational;
 
@@ -386,8 +388,8 @@ mod interlacing_tests {
         } else {
             eulerian_parent()
         };
-        let parent_proof = prove_parent(
-            &ParentRecord {
+        let parent_proof = prove_parent_real_rootedness(
+            &ParentRecurrenceRecord {
                 rule: &rule,
                 seeds: &seeds,
                 first_index: 1,

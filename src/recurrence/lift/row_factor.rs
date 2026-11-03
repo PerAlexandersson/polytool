@@ -43,7 +43,7 @@
 //! A product of polynomials is real-rooted iff every factor is, and its roots
 //! are the union of theirs: when `F` is real-rooted (checked exactly, once)
 //! and every `S_n` is zero or real-rooted with coefficients of one sign
-//! (`prove_parent` on the cofactor rule), every `Q_n` is zero or
+//! (`prove_parent_real_rootedness` on the cofactor rule), every `Q_n` is zero or
 //! real-rooted, with roots in `(-inf, 0]` when `F` has them there.  A
 //! non-real-rooted `F` fails the route (and every `Q_n` with `e(n) >= 1` has a
 //! non-real root).

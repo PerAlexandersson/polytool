@@ -10,6 +10,11 @@ coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
 
+- The real-rooted atlas engine (the `polytool::atlas` module and the
+  `polytool atlas` command, added during this development cycle and never
+  released) is removed again: polytool provides the transforms, lifts,
+  certificates and the OEIS catalog, and the atlas is a separate application
+  built on the public API (see Additions for the pieces made public).
 - `recurrence::RecurrenceOptions` has the new public field `leader_x_power`
   (default 0) and `recurrence::AdaptiveSearchOptions` the new fields
   `try_laurent` (default false in the library, true in `polytool recurrence`
@@ -354,28 +359,15 @@ Performance:
 
 Additions:
 
-- The real-rooted atlas (`polytool::atlas`, `polytool atlas`; see
-  `doc/atlas.md`): a proof DAG of integer polynomial sequences stored as
-  append-only JSONL (`polytool.atlas-node.v1`, `polytool.atlas-edge.v1`,
-  `polytool.atlas-link.v1`).  Nodes are sequences with their first 15 rows,
-  canonical definitions (merged only with an all-index equality
-  certificate), proved properties with the edges behind them and
-  observations on the stored rows; edges carry replayable certificates
-  (theorem reports, parent provers, preserver-image, basis-map, gamma and
-  Veronese certifications, Obreschkoff combinations `P_n + P_(n+1)`,
-  basis-map theorems, definition equalities); links record candidate
-  identities, fingerprint relations and OEIS matches.  `atlas::analyze_certificate`
-  replays a certificate and reads off its claims and premises (a lift's
-  parent must be a node with a proved region inside the transfer theorem's
-  parent region); `atlas::audit_atlas` replays every edge from the roots and
-  checks every property and every stored row exactly.  Commands: `seed`
-  (named families and catalog entries through the root provers and the
-  lifts, one child process per source with a time limit), `grow` (one
-  budgeted forward round), `oeis-index` and `match-oeis` (triangle, reversed
-  triangle and row-sum matching against a local OEIS copy), `audit`,
-  `report`.  Visibility only: `prove_parent`, `ParentRecord`,
-  `prepare_rule`, `interval_parent_report` and
-  `PreserverParentLibrary::add` are now crate-visible for the engine.
+- Public building blocks of the lifts, for applications that chain lifts
+  over their own parent records (previously crate-internal):
+  `recurrence::prepare_lift_rule` with `recurrence::PreparedLiftRule`
+  (a validated rule with its identifying seeds),
+  `recurrence::prove_parent_real_rootedness` with
+  `recurrence::ParentRecurrenceRecord` (the parent provers),
+  `recurrence::find_bounded_root_region_report` (a replayable theorem report
+  for a bounded root interval) and
+  `PreserverParentLibrary::add_parent_record` (one named parent record).
 
 - Computed gamma and Veronese image rules:
   `recurrence::GammaLiftParent::gamma_polynomial_recurrence` gives a runnable
@@ -389,10 +381,9 @@ Additions:
   rules: rows at bases where the relation is not proved (below the parent's
   identifying rows, roots of the division multiplier or of the content) are
   checked exactly and kept as seeds where the relation fails there.
-  `atlas grow` uses them in place of fitted rules (fitting remains only as
-  the fallback of an exhausted Veronese budget).  On the gamma and Veronese
-  edges of an existing atlas the computed rules give the same rows and the
-  same claims, and most Veronese tasks that timed out with fitted rules now
+  Callers that previously fitted rules to the lifted rows can use them
+  instead; on known gamma and Veronese lifts the computed rules give the
+  same rows, and most Veronese sections that timed out with fitted rules now
   finish in well under a second.
 
 - OEIS catalog: 43 more entries (860 in all), each a supplied recurrence

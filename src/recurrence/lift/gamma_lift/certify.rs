@@ -4,10 +4,10 @@
 use crate::recurrence::implicit::algebra::{roots_in_domain, Biv, DOp};
 use crate::recurrence::implicit::runnable_record_from_annihilator;
 use crate::recurrence::lift::hadamard_factor::prepare::{
-    prepare_rule, shift_free_from_json, shift_free_json, PreparedRule,
+    prepare_lift_rule, shift_free_from_json, shift_free_json, PreparedLiftRule,
 };
 use crate::recurrence::lift::lift_summary::{gamma_lift_summary, GammaLiftSummaryParts};
-use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
+use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
 use crate::recurrence::lift::section_certify::{
     gauge_parent_relation, n_coefficients, n_polynomial, pseudo_divide_row, x_free_leader,
     RatioGauge,
@@ -319,7 +319,7 @@ fn parse_scale(text: &str) -> Result<Q, RecurrenceError> {
 /// The parent record reduced to its identifying seeds.
 fn canonical_parent_record(record: &RecurrenceJson) -> Result<RecurrenceJson, RecurrenceError> {
     let (rule, first_index, rows) = record.to_recurrence_parts()?;
-    let parent = prepare_rule(&rule, &rows, first_index, "parent")?;
+    let parent = prepare_lift_rule(&rule, &rows, first_index, "parent")?;
     Ok(RecurrenceJson::from_recurrence_rational(
         &parent.rule,
         parent.first_index,
@@ -334,7 +334,10 @@ fn canonical_parent_record(record: &RecurrenceJson) -> Result<RecurrenceJson, Re
 
 /// The parent symmetry induction (module documentation, step 1) from the
 /// rule and the seeds alone; `Err` gives the reason it does not apply.
-fn symmetry_induction(parent: &PreparedRule, schedule: &DegreeSchedule) -> Result<String, String> {
+fn symmetry_induction(
+    parent: &PreparedLiftRule,
+    schedule: &DegreeSchedule,
+) -> Result<String, String> {
     let p0 = parent.first_index;
     let valid_from = p0 + parent.seeds.len();
     let reversal = RecurrenceTransformation::Reversal {
@@ -453,7 +456,7 @@ impl GammaLiftParent {
     /// ```
     pub fn gamma_polynomial_recurrence(&self) -> Result<RecurrenceJson, RecurrenceError> {
         let (parent_rule, p0, parent_rows) = self.recurrence.to_recurrence_parts()?;
-        let parent = prepare_rule(&parent_rule, &parent_rows, p0, "parent")?;
+        let parent = prepare_lift_rule(&parent_rule, &parent_rows, p0, "parent")?;
         let schedule = &self.symmetry_schedule;
         validate_schedule(schedule, p0)?;
         let rule = gamma_rule(&parent.rule, schedule)?;
@@ -538,7 +541,7 @@ fn division_identity_holds(
 /// The candidate rows `H_n = lambda(n) G_(n+s)(c z)`, `n = n0, ..., n0 + count - 1`;
 /// `Err(m)` when the parent row `P_m` is not symmetric at `d_m`.
 struct CandidateRows<'a> {
-    parent: &'a PreparedRule,
+    parent: &'a PreparedLiftRule,
     schedule: &'a DegreeSchedule,
     scale: &'a Q,
     gauge: &'a RatioGauge,
@@ -598,9 +601,9 @@ impl GammaLiftCertificate {
     pub fn verify(&self) -> Result<(), RecurrenceError> {
         let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
         let (input_rule, n0, input_rows) = self.input.to_recurrence_parts()?;
-        let input = prepare_rule(&input_rule, &input_rows, n0, "input")?;
+        let input = prepare_lift_rule(&input_rule, &input_rows, n0, "input")?;
         let (parent_rule, p0, parent_rows) = self.parent.to_recurrence_parts()?;
-        let parent = prepare_rule(&parent_rule, &parent_rows, p0, "parent")?;
+        let parent = prepare_lift_rule(&parent_rule, &parent_rows, p0, "parent")?;
         validate_schedule(&self.symmetry_schedule, p0)?;
         if let Err(reason) = symmetry_induction(&parent, &self.symmetry_schedule) {
             return Err(RecurrenceError::VerificationFailed(format!(
@@ -755,7 +758,7 @@ fn parent_start(n0: usize, shift: i64, p0: usize) -> Result<usize, RecurrenceErr
 
 /// `max(n0, p0 + K_p - k - s)`: from there on `L` holds for the candidate
 /// rows (module documentation, step 3).
-fn candidate_valid_from(n0: usize, parent: &PreparedRule, k: usize, shift: i64) -> usize {
+fn candidate_valid_from(n0: usize, parent: &PreparedLiftRule, k: usize, shift: i64) -> usize {
     let base = (parent.first_index + parent.seeds.len()) as i64 - k as i64 - shift;
     usize::try_from(base.max(0)).unwrap_or(0).max(n0)
 }
@@ -835,10 +838,10 @@ pub fn certify_gamma_lift(
         )));
     }
     let n0 = first_index;
-    let input = prepare_rule(input, input_rows, n0, "input")?;
+    let input = prepare_lift_rule(input, input_rows, n0, "input")?;
     let identifying = input.seeds.len();
     let (parent_rule, p0, parent_rows) = candidate.parent.recurrence.to_recurrence_parts()?;
-    let parent = prepare_rule(&parent_rule, &parent_rows, p0, "parent")?;
+    let parent = prepare_lift_rule(&parent_rule, &parent_rows, p0, "parent")?;
     let schedule = &candidate.parent.symmetry_schedule;
     validate_schedule(schedule, p0)?;
     let scale = parse_scale(&candidate.scale)?;
@@ -1122,7 +1125,7 @@ fn first_mismatch(input: &[Vec<Q>], candidate: &[Vec<Q>]) -> Option<usize> {
 struct FinishContext<'a> {
     candidate: &'a GammaLiftCandidate,
     options: &'a GammaLiftOptions,
-    parent: &'a PreparedRule,
+    parent: &'a PreparedLiftRule,
     n0: usize,
     identifying: usize,
 }
@@ -1138,8 +1141,8 @@ fn finish(
     let candidate = context.candidate;
     let n0 = context.n0;
     let needed_from = (n0 as i64 + candidate.index_shift) as usize;
-    let parent_proof = prove_parent(
-        &ParentRecord {
+    let parent_proof = prove_parent_real_rootedness(
+        &ParentRecurrenceRecord {
             rule: &context.parent.rule,
             seeds: &context.parent.seeds,
             first_index: context.parent.first_index,

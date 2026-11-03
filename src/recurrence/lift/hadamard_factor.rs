@@ -212,7 +212,7 @@
 //! real-rooted with coefficients of one sign to one of the same kind, and
 //! `lambda(n) != 0` changes nothing, so every `Q_n` is zero or real-rooted
 //! with roots in `(-inf, 0]` once every parent row is (the statement of the
-//! parent provers, called through `prove_parent`).  `k!`, `(n - k)!` and
+//! parent provers, called through `prove_parent_real_rootedness`).  `k!`, `(n - k)!` and
 //! `(alpha)_k` alone are not multiplier sequences (`sum x^k = 1/(1 - x)` is
 //! not entire); such lifts are reported with an unresolved
 //! `factor_multiplier_sequence` hypothesis (open).

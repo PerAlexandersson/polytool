@@ -21,7 +21,7 @@
 
 use super::annihilator::{shift_coefficients, vanishing_bases};
 use super::certify::right_pseudo_divide;
-use super::prepare::PreparedRule;
+use super::prepare::PreparedLiftRule;
 use crate::recurrence::implicit::algebra::{Biv, DOp};
 use crate::recurrence::lift::section_certify::x_free_leader;
 use crate::recurrence::lift::section_operators::check_term_budget;
@@ -230,7 +230,7 @@ pub(super) struct RemainderDecomposition {
 /// that shift; `None` when the ansatz has too many unknowns or the rows do
 /// not give enough equations.
 fn guess_pivots(
-    parent: &PreparedRule,
+    parent: &PreparedLiftRule,
     k: usize,
     from: usize,
     (order, n_degree, x_degree): (usize, usize, usize),
@@ -342,7 +342,7 @@ fn guess_pivots(
 /// on: `None` when no ansatz size gives one.
 pub(super) fn find_invariant_annihilator_system(
     remainder: &DOp,
-    parent: &PreparedRule,
+    parent: &PreparedLiftRule,
     from: usize,
     max_terms: usize,
 ) -> Result<Option<RemainderDecomposition>, RecurrenceError> {

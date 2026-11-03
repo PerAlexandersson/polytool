@@ -3,7 +3,7 @@
 //! documentation of `preserver_image`).
 
 use super::interlacing::{interlacing_claim, PreserverInterlacingClaim};
-use super::interval::{interval_parent_report, wants_interval_parent};
+use super::interval::{find_bounded_root_region_report, wants_interval_parent};
 use super::operator::{dividend, OperatorForm, PreserverOperator};
 use super::summary::{preserver_image_summary, PreserverImageSummaryParts};
 use super::transfer::operator_transfer;
@@ -18,10 +18,10 @@ use crate::recurrence::lift::hadamard_factor::certify::{
     RowAnnihilation, RowAnnihilationKind, RowAnnihilatorInvariance,
 };
 use crate::recurrence::lift::hadamard_factor::prepare::{
-    prepare_rule, shift_free_from_json, shift_free_json, PreparedRule,
+    prepare_lift_rule, shift_free_from_json, shift_free_json, PreparedLiftRule,
 };
 use crate::recurrence::lift::hadamard_factor::search::{certify_candidate, remove_remainder};
-use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
+use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
 use crate::recurrence::lift::section_certify::{
     n_coefficients, n_polynomial, pseudo_divide_scalar, x_free_leader, RatioGauge,
 };
@@ -465,10 +465,10 @@ fn parent_start(n0: usize, shift: i64, p0: usize) -> Result<usize, RecurrenceErr
 /// seeds (enough of them that the shifted leader is nonzero at every later
 /// target).
 pub(super) fn shifted_parent(
-    parent: &PreparedRule,
+    parent: &PreparedLiftRule,
     n0: usize,
     shift: i64,
-) -> Result<PreparedRule, RecurrenceError> {
+) -> Result<PreparedLiftRule, RecurrenceError> {
     let start = parent_start(n0, shift, parent.first_index)?;
     let order = parent.leader_shift;
     let parent_end = parent.first_index + parent.seeds.len();
@@ -476,18 +476,18 @@ pub(super) fn shifted_parent(
     let offset = start - parent.first_index;
     let rows = parent.rows(offset + needed)?;
     let rule = parent.rule.shift_index(shift);
-    prepare_rule(&rule, &rows[offset..], n0, "shifted parent")
+    prepare_lift_rule(&rule, &rows[offset..], n0, "shifted parent")
 }
 
 /// The canonical record of a prepared rule (rule, first index, identifying
 /// seeds).
-fn record(rule: &PreparedRule) -> RecurrenceJson {
+fn record(rule: &PreparedLiftRule) -> RecurrenceJson {
     RecurrenceJson::from_recurrence_rational(&rule.rule, rule.first_index, &rule.seeds, None)
 }
 
-fn prepare_record(json: &RecurrenceJson, name: &str) -> Result<PreparedRule, RecurrenceError> {
+fn prepare_record(json: &RecurrenceJson, name: &str) -> Result<PreparedLiftRule, RecurrenceError> {
     let (rule, first_index, rows) = json.to_recurrence_parts()?;
-    prepare_rule(&rule, &rows, first_index, name)
+    prepare_lift_rule(&rule, &rows, first_index, name)
 }
 
 /// The ratio form `(alpha, beta)` of `mu = lambda / delta`:
@@ -515,7 +515,7 @@ fn denominator_decision(form: &OperatorForm, n0: usize) -> Option<IndexSignDecis
 /// The candidate rows `H_n = lambda(n) T_n(P'_n)`, `n = n0, ..., n0 +
 /// count - 1`; `None` where the operator is undefined.
 fn candidate_rows(
-    shifted: &PreparedRule,
+    shifted: &PreparedLiftRule,
     form: &OperatorForm,
     gauge: &RatioGauge,
     n0: usize,
@@ -559,7 +559,7 @@ fn rows_needed(bases: &[usize], leader_shift: usize, n0: usize, identifying: usi
 /// The identifying rows agree and `M` vanishes on the candidate rows at
 /// every exceptional base (exact).
 fn check_rows(
-    input: &PreparedRule,
+    input: &PreparedLiftRule,
     rows: &[Option<Vec<Q>>],
     exceptional: &[usize],
 ) -> Result<(), RecurrenceError> {
@@ -619,7 +619,7 @@ fn check_schedule_domain(operator: &PreserverOperator, n0: usize) -> Result<(), 
 /// bases where `mu_2` vanishes (exceptional).
 fn replay_annihilation(
     annihilation: &PreserverRowAnnihilation,
-    shifted: &PreparedRule,
+    shifted: &PreparedLiftRule,
     from: usize,
 ) -> Result<(Biv, AnnihilatorTerms, Vec<usize>), RecurrenceError> {
     let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
@@ -1079,9 +1079,9 @@ fn refuted(n0: usize, offset: usize, undefined: bool) -> PreserverImageIdentityS
 
 #[allow(clippy::too_many_arguments)]
 fn certify_identity(
-    input: &PreparedRule,
-    parent: &PreparedRule,
-    shifted: &PreparedRule,
+    input: &PreparedLiftRule,
+    parent: &PreparedLiftRule,
+    shifted: &PreparedLiftRule,
     candidate: &PreserverImageCandidate,
     form: &OperatorForm,
     gauge: &RatioGauge,
@@ -1385,18 +1385,18 @@ fn certify_identity(
     })
 }
 
-/// The parent provers: `prove_parent` (rows zero or real-rooted with
+/// The parent provers: `prove_parent_real_rootedness` (rows zero or real-rooted with
 /// coefficients of one sign) and, when that is not proved and the
 /// operator's theorem needs only real-rootedness, the three-term theorem
 /// without a root region.
 fn prove_parents(
-    parent: &PreparedRule,
+    parent: &PreparedLiftRule,
     needed_from: usize,
     options: &PreserverImageOptions,
     whole_line_suffices: bool,
 ) -> Result<(VeroneseParentProof, Option<RealRootednessTheoremReport>), RecurrenceError> {
-    let proof = prove_parent(
-        &ParentRecord {
+    let proof = prove_parent_real_rootedness(
+        &ParentRecurrenceRecord {
             rule: &parent.rule,
             seeds: &parent.seeds,
             first_index: parent.first_index,
@@ -1426,7 +1426,7 @@ fn prove_parents(
 /// the derivative-lag check that proves the parent with an interlacing
 /// conclusion, else the interval report.
 fn parent_interlacing_report(
-    parent: &PreparedRule,
+    parent: &PreparedLiftRule,
     proof: &VeroneseParentProof,
     whole_line: Option<&RealRootednessTheoremReport>,
     interval: Option<&RealRootednessTheoremReport>,
@@ -1560,7 +1560,7 @@ pub fn certify_preserver_image_lift(
         )));
     }
     let n0 = first_index;
-    let input = prepare_rule(input, input_rows, n0, "input")?;
+    let input = prepare_lift_rule(input, input_rows, n0, "input")?;
     let parent = prepare_record(&candidate.parent, "parent")?;
     let shifted = shifted_parent(&parent, n0, candidate.index_shift)?;
     check_schedule_domain(&candidate.operator, n0)?;
@@ -1575,7 +1575,7 @@ pub fn certify_preserver_image_lift(
         &candidate.operator,
         parent_proof.status == VeroneseParentProofStatus::Proved,
     ) {
-        interval_parent_report(&parent.rule, parent.first_index, &parent.seeds)?
+        find_bounded_root_region_report(&parent.rule, parent.first_index, &parent.seeds)?
     } else {
         None
     };
@@ -1654,7 +1654,7 @@ pub fn certify_preserver_image_lift(
 /// Whether the first `count` rows of the image rule are those of `input`.
 fn image_rows_match(
     image: &ImageRecurrence,
-    input: &PreparedRule,
+    input: &PreparedLiftRule,
     count: usize,
 ) -> Result<bool, RecurrenceError> {
     let generated: Vec<Vec<Q>> = image
@@ -1670,7 +1670,7 @@ fn image_rows_match(
 /// a note.
 fn certified_image_rule(
     candidate: &PreserverImageCandidate,
-    input: &PreparedRule,
+    input: &PreparedLiftRule,
     identity: &PreserverImageIdentityStatus,
     options: &PreserverImageOptions,
     notes: &mut Vec<String>,

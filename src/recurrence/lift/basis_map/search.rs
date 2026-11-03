@@ -1,7 +1,7 @@
 //! [`find_basis_map_lifts`]: the backward lift through a library of basis
 //! maps (module documentation of `basis_map`, "The backward lift").
 
-use super::super::hadamard_factor::prepare::{prepare_rule, PreparedRule};
+use super::super::hadamard_factor::prepare::{prepare_lift_rule, PreparedLiftRule};
 use super::certify::{
     certify_prepared, BasisMapLiftCandidate, BasisMapLiftCertification, BasisMapLiftOptions,
     MAX_BASIS_MAP_LIFT_CHECKED_ROWS,
@@ -154,7 +154,7 @@ fn fit_coefficient_rule(
     rows: &[Vec<Q>],
     n0: usize,
     options: &BasisMapLiftSearchOptions,
-) -> Result<Result<PreparedRule, (bool, String)>, RecurrenceError> {
+) -> Result<Result<PreparedLiftRule, (bool, String)>, RecurrenceError> {
     let search = AdaptiveSearchOptions {
         max_rec_len: options.max_coefficient_order,
         max_var_deg: options.max_coefficient_degree,
@@ -183,7 +183,7 @@ fn fit_coefficient_rule(
     };
     // The search indexes the first row as 1.
     let rule: Recurrence = found.recurrence.shift_index(1 - n0 as i64);
-    match prepare_rule(&rule, rows, n0, "coefficient family") {
+    match prepare_lift_rule(&rule, rows, n0, "coefficient family") {
         Ok(prepared) => Ok(Ok(prepared)),
         Err(error) => Ok(Err((true, error.to_string()))),
     }
@@ -219,7 +219,7 @@ pub fn find_basis_map_lifts(
             "detection_rows must be between 6 and {MAX_BASIS_MAP_LIFT_CHECKED_ROWS}"
         )));
     }
-    let input = prepare_rule(recurrence, rows, first_index, "input")?;
+    let input = prepare_lift_rule(recurrence, rows, first_index, "input")?;
     let library = match &options.library {
         Some(library) => library.clone(),
         None => Arc::new(BasisMapLibrary::oeis_catalog()?),

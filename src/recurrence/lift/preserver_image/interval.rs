@@ -5,7 +5,7 @@
 //!
 //! # Interval parents
 //!
-//! [`interval_parent_report`] tries, in order:
+//! [`find_bounded_root_region_report`] tries, in order:
 //!
 //! 1. the Ma--Wang interval check
 //!    ([`crate::recurrence::check_ma_wang_interval_theorem`]) without a
@@ -129,14 +129,17 @@ fn bounded_region(report: &RealRootednessTheoremReport) -> bool {
             .is_some_and(|r| r.lower.is_some() && r.upper.is_some() && r.is_index_independent())
 }
 
-/// A replayable theorem report proving every row of the family real-rooted
-/// with every root in a bounded interval (module documentation, "Interval
-/// parents"), or `None`.
+/// A replayable theorem report proving every row `P_n`, `n >= first_index`,
+/// of the family `rule` with identifying `seeds` real-rooted with every root
+/// in a bounded interval `[L, U]` with rational ends (module documentation,
+/// "Interval parents"), or `None` when neither the Ma--Wang interval check
+/// nor the three-term theorem with a chosen bounded region proves one.  The
+/// report replays with [`RealRootednessTheoremReport::verify`].
 ///
 /// # Errors
 ///
 /// Errors of the theorem checks (malformed records).
-pub(crate) fn interval_parent_report(
+pub fn find_bounded_root_region_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],

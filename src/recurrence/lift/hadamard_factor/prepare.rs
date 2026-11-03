@@ -31,22 +31,37 @@ pub(in crate::recurrence::lift) const MAX_LIFT_DERIVATIVE_ORDER: usize = 6;
 /// Largest number of identifying rows of a rule.
 pub(in crate::recurrence::lift) const MAX_LIFT_IDENTIFYING_ROWS: usize = 64;
 
-/// A validated scalar rule with its identifying seeds and relation.
+/// A scalar rule validated for the lifts ([`prepare_lift_rule`]), with its
+/// identifying seeds: the rows `first_index, ..., first_index + K - 1` that
+/// determine every later row, because the leader of the rule is nonzero at
+/// every later target index (decided exactly).
+///
+/// `rule` is the normalized rule (a left-hand factor `x^e f(n)` divided out
+/// when `x^e` divides the right-hand side); it has the same rows as the rule
+/// that was prepared.
 #[derive(Clone, Debug)]
-pub(crate) struct PreparedRule {
-    pub(crate) rule: Recurrence,
-    pub(crate) first_index: usize,
-    /// The `K` identifying seeds (`Recurrence::generation_initial_count`).
-    pub(crate) seeds: Vec<Vec<Q>>,
+pub struct PreparedLiftRule {
+    /// The validated, normalized rule.
+    pub rule: Recurrence,
+    /// The index of the first identifying seed.
+    pub first_index: usize,
+    /// The `K` identifying seeds (`Recurrence::generation_initial_count`),
+    /// trimmed; `seeds[0]` is row `first_index`.
+    pub seeds: Vec<Vec<Q>>,
     /// The rule at base index `n` (`ImplicitRelation::from_recurrence`).
     pub(crate) relation: DOp,
-    /// The leader shift `R` (the order).
-    pub(crate) leader_shift: usize,
+    /// The leader shift `R` (the order of the rule).
+    pub leader_shift: usize,
 }
 
-impl PreparedRule {
+impl PreparedLiftRule {
     /// Rows `first_index, ..., first_index + count - 1`, trimmed.
-    pub(crate) fn rows(&self, count: usize) -> Result<Vec<Vec<Q>>, RecurrenceError> {
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::InvalidInput`] when the rule cannot be replayed
+    /// from its seeds.
+    pub fn rows(&self, count: usize) -> Result<Vec<Vec<Q>>, RecurrenceError> {
         self.rule
             .generate_rows_rational(&self.seeds, self.first_index, count.max(self.seeds.len()))
             .map(|rows| {
@@ -89,19 +104,29 @@ pub(in crate::recurrence::lift) fn x_free_left_hand_factor_rule(
 }
 
 /// Validate `rule` with `rows` (`rows[0]` is row `first_index`), after
-/// normalizing a left-hand factor `x^e f(n)` ([`x_free_left_hand_factor_rule`];
-/// the prepared rule is the normalized one): positive
-/// offsets, no `(-1)^n` factor, homogeneous, derivative order at most
-/// [`MAX_LIFT_DERIVATIVE_ORDER`], supplied rows reproduced by the rule, and
+/// normalizing a left-hand factor `x^e f(n)` whose `x^e` divides every
+/// right-hand coefficient to `f(n)` (the prepared rule is the normalized
+/// one; [`crate::recurrence::LeftHandFactorNormalization`]): positive
+/// offsets, no `(-1)^n` factor, homogeneous, derivative order at most 6, at
+/// most 64 identifying rows, supplied rows reproduced by the rule, and
 /// the leader `f(m, .)` a nonzero polynomial at every target
 /// `m >= first_index + K` (decided exactly), so that the identifying rows
 /// determine every row.
-pub(crate) fn prepare_rule(
+///
+/// `rows` must contain at least the identifying rows; `name` names the rule
+/// in error messages (for example `"parent"`).
+///
+/// # Errors
+///
+/// [`RecurrenceError::Unsupported`], [`RecurrenceError::InvalidInput`] or
+/// [`RecurrenceError::LimitExceeded`] naming the first condition above that
+/// fails.
+pub fn prepare_lift_rule(
     rule: &Recurrence,
     rows: &[Vec<Q>],
     first_index: usize,
     name: &str,
-) -> Result<PreparedRule, RecurrenceError> {
+) -> Result<PreparedLiftRule, RecurrenceError> {
     let (rule, _) = x_free_left_hand_factor_rule(rule, name)?;
     let rule = &rule;
     if rule.terms.is_empty() {
@@ -181,7 +206,7 @@ pub(crate) fn prepare_rule(
         )));
     }
     let (relation, leader_shift) = ImplicitRelation::from_recurrence(rule)?;
-    Ok(PreparedRule {
+    Ok(PreparedLiftRule {
         rule: rule.clone(),
         first_index,
         seeds,

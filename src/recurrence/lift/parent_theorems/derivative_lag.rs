@@ -971,10 +971,10 @@ fn requested_region_hypothesis(
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::parent_proof::{prove_parent, ParentRecord};
+    use super::super::super::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
     use super::*;
 
-    /// `prove_parent` settles the catalog derivative-lag parents with the new
+    /// `prove_parent_real_rootedness` settles the catalog derivative-lag parents with the new
     /// route (the earlier routes do not apply to a rule with a derivative and
     /// a lag term).
     #[test]
@@ -982,13 +982,14 @@ mod tests {
         for id in ["A144438", "A046739", "A271697"] {
             let entry = crate::oeis::by_id(id).expect("catalog entry");
             let (rule, seeds) = entry.recurrence_parts().expect("catalog recurrence");
-            let record = ParentRecord {
+            let record = ParentRecurrenceRecord {
                 rule: &rule,
                 seeds: &seeds,
                 first_index: entry.recurrence_first_index,
             };
-            let proof = prove_parent(&record, entry.recurrence_first_index, &[], false)
-                .expect("the provers run");
+            let proof =
+                prove_parent_real_rootedness(&record, entry.recurrence_first_index, &[], false)
+                    .expect("the provers run");
             assert_eq!(
                 proof.route,
                 Some(VeroneseParentProofRoute::LiuWangDerivativeLag),

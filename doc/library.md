@@ -836,6 +836,26 @@ when the identity is certified and every transfer hypothesis is verified:
 - `n`-dependent operators (`binom(n, k)`, `F^(n)`), gamma lifts and
   symmetric companions: `not_proved`.
 
+### Parent provers and prepared rules
+
+The building blocks the lifts share are public for applications that chain
+lifts over their own parent records:
+
+- `recurrence::prepare_lift_rule` validates a scalar rule with its supplied
+  rows (positive offsets, homogeneous, rows reproduced, leader decided
+  nonzero at every later index) and returns a `PreparedLiftRule` with the
+  normalized rule, the first index and the identifying seeds;
+- `recurrence::prove_parent_real_rootedness` runs the parent provers on a
+  `ParentRecurrenceRecord` (rule, seeds, first index) and returns the
+  `VeroneseParentProof`: every row zero or real-rooted with coefficients of
+  one sign, for every `n`, with the route, or `not_proved` / `refuted`;
+- `recurrence::find_bounded_root_region_report` returns a replayable
+  `RealRootednessTheoremReport` proving every row real-rooted in a bounded
+  interval (the Ma--Wang interval check, then the three-term theorem with a
+  chosen bounded region), or `None`;
+- `PreserverParentLibrary::add_parent_record` adds one named parent record
+  to a preserver-image parent library, with its proved root region.
+
 ## Symmetric-companion lifts
 
 `recurrence::find_symmetric_companion_lifts` recognizes a palindromic sequence
@@ -1372,39 +1392,3 @@ integral version reports any non-exact division).  The search statistics are
 deterministic counters; no wall-clock times are recorded.  The MCP tool
 `enumerate_real_rooted` exposes the operation with conservative ceilings (see
 [the MCP notes](mcp.md)).
-
-## The real-rooted atlas
-
-`polytool::atlas` keeps a proof DAG of integer polynomial sequences: nodes
-(sequences with their first rows, definitions, proved properties and
-observations), edges (proof steps with replayable certificates) and links
-(evidence that is not a proof), stored as append-only JSONL.  The roots of the
-DAG are polytool's theorem checks and parent provers; lifts and forward
-operations (preserver images, basis maps, gamma polynomials, Veronese
-sections, Obreschkoff combinations) derive the rest, each premise met by an
-existing node.
-
-```rust,no_run
-use polytool::atlas::seed::{certify_definition_equality, named_family_sources, root_derivations};
-use polytool::atlas::{audit_atlas, integrate_derivations, AtlasStore, IntegrationOptions};
-
-let mut store = AtlasStore::open("atlas-data")?;
-let eulerian = named_family_sources()
-    .into_iter()
-    .find(|s| s.name == "eulerian")
-    .expect("a named family");
-let derivations: Vec<_> = root_derivations(&eulerian)?
-    .into_iter()
-    .map(|(derivation, analysis)| (derivation, Some(analysis)))
-    .collect();
-let mut equality = |old: &_, new: &_| certify_definition_equality(old, new).ok();
-integrate_derivations(&mut store, &derivations, &IntegrationOptions::default(), &mut equality)?;
-store.commit()?;
-assert!(audit_atlas(&AtlasStore::open("atlas-data")?).passed());
-# Ok::<(), polytool::atlas::AtlasError>(())
-```
-
-The data model, the soundness argument of every edge kind, the CLI
-(`polytool atlas seed | grow | oeis-index | match-oeis | audit | report`) and
-the limitations are in [atlas.md](atlas.md).
-

@@ -103,7 +103,7 @@ pub use gamma_lift::{
     MAX_GAMMA_LIFT_CHECKED_ROWS, MAX_GAMMA_LIFT_INDEX_SHIFT, MAX_GAMMA_LIFT_OPERATOR_TERMS,
 };
 mod hadamard_factor;
-pub(crate) use hadamard_factor::prepare::prepare_rule;
+pub use hadamard_factor::prepare::{prepare_lift_rule, PreparedLiftRule};
 pub use hadamard_factor::{
     find_hadamard_factor_lifts, HadamardAnnihilatorGenerator, HadamardAnnihilatorSystem,
     HadamardDivisionQuotient, HadamardFactor, HadamardFactorCertificate,
@@ -121,7 +121,7 @@ pub use lift_summary::{
     LiftParentProof, LiftRootTransfer, LiftSummary, LiftVerdict, LIFT_LEAN_REPLAY_NOT_ATTEMPTED,
 };
 mod parent_proof;
-pub(crate) use parent_proof::{prove_parent, ParentRecord};
+pub use parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
 pub use parent_proof::{
     VeroneseParentAttestation, VeroneseParentProof, VeroneseParentProofAttempt,
     VeroneseParentProofRoute, VeroneseParentProofStatus,

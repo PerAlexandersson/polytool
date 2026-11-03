@@ -9,7 +9,7 @@ use super::certify::{
 use super::library::{PreserverParent, PreserverParentLibrary};
 use super::operator::{IndexRationalFunction, PreserverOperator};
 use crate::linalg::solve_linear_system_with_rank;
-use crate::recurrence::lift::hadamard_factor::prepare::prepare_rule;
+use crate::recurrence::lift::hadamard_factor::prepare::prepare_lift_rule;
 use crate::recurrence::{
     format_rational_coeff, DegreeSchedule, HadamardFactor, HadamardFactorTerm, Recurrence,
     RecurrenceError, VeroneseSectionGauge,
@@ -688,7 +688,7 @@ pub fn find_preserver_image_lifts(
         )));
     }
     let n0 = first_index;
-    let input = prepare_rule(recurrence, rows, n0, "input")?;
+    let input = prepare_lift_rule(recurrence, rows, n0, "input")?;
     let detection = options.detection_rows;
     let inputs = input.rows(detection)?;
     let library = match &options.library {

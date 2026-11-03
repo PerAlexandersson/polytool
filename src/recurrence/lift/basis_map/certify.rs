@@ -4,10 +4,10 @@
 //! "The lift certificate").
 
 use super::super::hadamard_factor::prepare::{
-    prepare_rule, shift_free_from_json, shift_free_json, PreparedRule,
+    prepare_lift_rule, shift_free_from_json, shift_free_json, PreparedLiftRule,
 };
 use super::super::lift_summary::{fixed_preserver_interlacing, proved_parent_interlacing};
-use super::super::parent_proof::{prove_parent, ParentRecord};
+use super::super::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
 use super::super::section_certify::{
     division_identity_holds, n_coefficients, pseudo_divide_row, x_free_leader, ForwardDivision,
 };
@@ -303,7 +303,7 @@ fn exceptional_bases(multiplier: &Biv, from: usize, divisor_from: usize) -> Vec<
 /// Candidate rows `H_n = T(R_n)` for `n0 <= n < n0 + count`.
 fn candidate_rows(
     map: &BasisMap,
-    coefficient: &PreparedRule,
+    coefficient: &PreparedLiftRule,
     count: usize,
 ) -> Result<Vec<Vec<Q>>, RecurrenceError> {
     let r_rows = coefficient.rows(count)?;
@@ -319,9 +319,9 @@ struct IdentityOutcome {
 
 /// Certify `Q = T(R)` (module documentation).
 fn certify_identity(
-    input: &PreparedRule,
+    input: &PreparedLiftRule,
     map: &BasisMap,
-    coefficient: &PreparedRule,
+    coefficient: &PreparedLiftRule,
     options: &BasisMapLiftOptions,
 ) -> Result<IdentityOutcome, RecurrenceError> {
     let n0 = input.first_index;
@@ -446,9 +446,9 @@ fn certify_identity(
 }
 
 fn build_certificate(
-    input: &PreparedRule,
+    input: &PreparedLiftRule,
     map: &BasisMap,
-    coefficient: &PreparedRule,
+    coefficient: &PreparedLiftRule,
     direction: BasisMapDivisionDirection,
     division: &ForwardDivision,
     from: usize,
@@ -489,9 +489,9 @@ fn build_certificate(
 /// of `certificate`, checked against the prepared rules.
 fn check_certificate(
     certificate: &BasisMapDivisionCertificate,
-    input: &PreparedRule,
+    input: &PreparedLiftRule,
     map: &BasisMap,
-    coefficient: &PreparedRule,
+    coefficient: &PreparedLiftRule,
     system: &OperatorMatrix,
 ) -> Result<(), RecurrenceError> {
     let fail = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
@@ -621,7 +621,10 @@ impl BasisMapDivisionCertificate {
 }
 
 /// Prepare a recorded rule from its seeds (rows regenerated).
-fn prepare_recorded(record: &RecurrenceJson, name: &str) -> Result<PreparedRule, RecurrenceError> {
+fn prepare_recorded(
+    record: &RecurrenceJson,
+    name: &str,
+) -> Result<PreparedLiftRule, RecurrenceError> {
     let (rule, first_index, seeds) = record.to_recurrence_parts()?;
     let count = seeds.len() + 2;
     let rows = rule
@@ -629,7 +632,7 @@ fn prepare_recorded(record: &RecurrenceJson, name: &str) -> Result<PreparedRule,
         .map_err(|error| {
             RecurrenceError::VerificationFailed(format!("the {name} cannot be replayed: {error}"))
         })?;
-    prepare_rule(&rule, &rows, first_index, name)
+    prepare_lift_rule(&rule, &rows, first_index, name)
 }
 
 // ---------------------------------------------------------------------------
@@ -665,7 +668,7 @@ fn affine_family(
 }
 
 fn prove_shifted(
-    coefficient: &PreparedRule,
+    coefficient: &PreparedLiftRule,
     a: &Q,
     b: &Q,
     options: &BasisMapLiftOptions,
@@ -677,12 +680,12 @@ fn prove_shifted(
         a,
         b,
     )?;
-    let record = ParentRecord {
+    let record = ParentRecurrenceRecord {
         rule: &rule,
         seeds: &seeds,
         first_index: coefficient.first_index,
     };
-    prove_parent(
+    prove_parent_real_rootedness(
         &record,
         coefficient.first_index,
         &options.attestations,
@@ -693,7 +696,7 @@ fn prove_shifted(
 /// Prove that every `R_n` is zero or real-rooted in a rational interval
 /// inside `source` (module documentation, "Root location").
 fn prove_coefficient_roots(
-    coefficient: &PreparedRule,
+    coefficient: &PreparedLiftRule,
     r_rows: &[Vec<Q>],
     source: &AlgebraicInterval,
     options: &BasisMapLiftOptions,
@@ -921,7 +924,7 @@ pub fn certify_basis_map_lift(
              max_operator_terms at most {MAX_BASIS_MAP_OPERATOR_TERMS}"
         )));
     }
-    let input = prepare_rule(recurrence, rows, n0, "input")?;
+    let input = prepare_lift_rule(recurrence, rows, n0, "input")?;
     let (r_rule, r_first, r_seeds) = candidate.coefficient_family.to_recurrence_parts()?;
     if r_first != n0 {
         return Err(RecurrenceError::InvalidInput(format!(
@@ -935,13 +938,13 @@ pub fn certify_basis_map_lift(
                 "the coefficient family cannot be replayed: {error}"
             ))
         })?;
-    let coefficient = prepare_rule(&r_rule, &r_rows, n0, "coefficient family")?;
+    let coefficient = prepare_lift_rule(&r_rule, &r_rows, n0, "coefficient family")?;
     certify_prepared(&input, &coefficient, candidate, options)
 }
 
 pub(super) fn certify_prepared(
-    input: &PreparedRule,
-    coefficient: &PreparedRule,
+    input: &PreparedLiftRule,
+    coefficient: &PreparedLiftRule,
     candidate: &BasisMapLiftCandidate,
     options: &BasisMapLiftOptions,
 ) -> Result<BasisMapLiftCertification, RecurrenceError> {
@@ -1016,8 +1019,8 @@ pub(super) fn certify_prepared(
 
 #[allow(clippy::too_many_arguments)]
 fn summary(
-    input: &PreparedRule,
-    coefficient: &PreparedRule,
+    input: &PreparedLiftRule,
+    coefficient: &PreparedLiftRule,
     map: &BasisMap,
     identity: &BasisMapIdentityStatus,
     report: &BasisMapTheoremReport,

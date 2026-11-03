@@ -1,7 +1,7 @@
 //! The substitution `Q_n = F^(e(n)) S_n` into the input relation and the
 //! replayable [`RowFactorCertificate`].
 
-use super::super::hadamard_factor::prepare::prepare_rule;
+use super::super::hadamard_factor::prepare::prepare_lift_rule;
 use crate::polynomial::Polynomial;
 use crate::recurrence::implicit::algebra::{q, Biv, DOp};
 use crate::recurrence::lift::section_certify::n_polynomial;
@@ -174,7 +174,7 @@ impl RowFactorCertificate {
         if cofactor_first != first_index {
             return failed("the cofactor does not start at the input's first index");
         }
-        let prepared = prepare_rule(&rule, &rows, cofactor_first, "cofactor")?;
+        let prepared = prepare_lift_rule(&rule, &rows, cofactor_first, "cofactor")?;
         if prepared.relation != cofactor {
             return failed("the cofactor record's rule is not the cofactor relation");
         }

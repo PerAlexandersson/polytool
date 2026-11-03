@@ -204,7 +204,7 @@
 mod certify;
 mod interlacing;
 mod interval;
-pub(crate) use interval::interval_parent_report;
+pub use interval::find_bounded_root_region_report;
 mod library;
 mod operator;
 mod search;

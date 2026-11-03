@@ -4,7 +4,7 @@ use super::certify::{
     certify_gamma_lift, GammaLiftCandidate, GammaLiftCertification, GammaLiftOptions,
     GammaLiftParent, MAX_GAMMA_LIFT_CHECKED_ROWS, MAX_GAMMA_LIFT_INDEX_SHIFT,
 };
-use crate::recurrence::lift::hadamard_factor::prepare::prepare_rule;
+use crate::recurrence::lift::hadamard_factor::prepare::prepare_lift_rule;
 use crate::recurrence::{
     format_rational_coeff, BivarPoly, DegreeSchedule, Recurrence, RecurrenceError, RecurrenceJson,
     RecurrenceTerm, RecurrenceTransformation, VeroneseSectionGauge,
@@ -330,7 +330,7 @@ pub fn find_gamma_lifts(
         )));
     }
     let n0 = first_index;
-    let prepared = prepare_rule(input, input_rows, n0, "input")?;
+    let prepared = prepare_lift_rule(input, input_rows, n0, "input")?;
     let count = options.detection_rows.max(prepared.seeds.len());
     let rows = prepared.rows(count)?;
     let mut report = GammaLiftReport {
@@ -343,7 +343,7 @@ pub fn find_gamma_lifts(
     let max_shift = options.max_index_shift as i64;
     for parent in &options.parents {
         let (rule, p0, seeds) = parent.recurrence.to_recurrence_parts()?;
-        let prepared_parent = prepare_rule(&rule, &seeds, p0, "parent")?;
+        let prepared_parent = prepare_lift_rule(&rule, &seeds, p0, "parent")?;
         let gamma = RecurrenceTransformation::Gamma {
             schedule: parent.symmetry_schedule.clone(),
         };

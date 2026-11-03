@@ -2,7 +2,7 @@
 //! rule for the image and its certificate (module documentation of
 //! `basis_map`, "The forward move").
 
-use super::super::hadamard_factor::prepare::{prepare_rule, PreparedRule};
+use super::super::hadamard_factor::prepare::{prepare_lift_rule, PreparedLiftRule};
 use super::super::section_operators::OperatorMatrix;
 use super::certify::{
     certify_prepared, BasisMapLiftCandidate, BasisMapLiftCertification, BasisMapLiftOptions,
@@ -150,7 +150,7 @@ pub fn apply_basis_map_to_family(
         .map_err(|error| {
             RecurrenceError::InvalidInput(format!("the family cannot be replayed: {error}"))
         })?;
-    let coefficient = prepare_rule(&rule, &rows, n0, "coefficient family")?;
+    let coefficient = prepare_lift_rule(&rule, &rows, n0, "coefficient family")?;
     let system = transported_system(
         &coefficient.relation,
         map,
@@ -162,18 +162,19 @@ pub fn apply_basis_map_to_family(
         let basis = map.basis_rows(width)?;
         Ok(r_rows.iter().map(|r| apply_with_rows(r, &basis)).collect())
     };
-    let (image, construction): (PreparedRule, BasisMapImageConstruction) = if system.size() == 1 {
+    let (image, construction): (PreparedLiftRule, BasisMapImageConstruction) = if system.size() == 1
+    {
         let (image_rule, _) = transported_scalar_rule(&system)?;
         let rows = image_rows(coefficient.seeds.len() + 2)?;
         (
-            prepare_rule(&image_rule, &rows, n0, "image")?,
+            prepare_lift_rule(&image_rule, &rows, n0, "image")?,
             BasisMapImageConstruction::Transported,
         )
     } else if let Some(image_rule) = eliminated_rule(&system, coefficient.leader_shift, options)? {
         let rows =
             image_rows(coefficient.seeds.len() + 2 * system.size() * coefficient.leader_shift)?;
         (
-            prepare_rule(&image_rule, &rows, n0, "image")?,
+            prepare_lift_rule(&image_rule, &rows, n0, "image")?,
             BasisMapImageConstruction::Eliminated,
         )
     } else {
@@ -201,7 +202,7 @@ pub fn apply_basis_map_to_family(
         };
         let image_rule = found.recurrence.shift_index(1 - n0 as i64);
         (
-            prepare_rule(&image_rule, &rows, n0, "image")?,
+            prepare_lift_rule(&image_rule, &rows, n0, "image")?,
             BasisMapImageConstruction::Fitted,
         )
     };

@@ -7,8 +7,6 @@
 //! `input`, `json_out` and `help` hold the shared input parsing, JSON
 //! fragments and help text.
 
-mod atlas;
-mod atlas_jobs;
 mod bench;
 mod bench_real_rootedness;
 mod bicyclic_sieving;
@@ -42,7 +40,6 @@ mod sequence;
 mod stapledon;
 mod tnn_network;
 
-use crate::atlas::cmd_atlas;
 use crate::bench::cmd_bench;
 use crate::bicyclic_sieving::cmd_bicyclic_sieving;
 use crate::bkw_scout::cmd_bkw_scout;
@@ -140,7 +137,6 @@ fn main() {
         "family-check" => cmd_family_check(rest),
         "sequence" => cmd_sequence(rest),
         "oeis" => cmd_oeis(rest),
-        "atlas" => cmd_atlas(rest),
         "pf-pencil" | "pf-bidiagonal-pencil" => cmd_pf_pencil(rest),
         "recurrence" => cmd_recurrence(rest),
         "recurrence-generate" => cmd_recurrence_generate(rest),

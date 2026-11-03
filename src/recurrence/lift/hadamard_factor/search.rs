@@ -11,11 +11,11 @@ use super::certify::{
     MAX_HADAMARD_OPERATOR_TERMS,
 };
 use super::factor::{HadamardFactor, HadamardFactorTerm};
-use super::prepare::{prepare_rule, PreparedRule, MAX_LIFT_IDENTIFYING_ROWS};
+use super::prepare::{prepare_lift_rule, PreparedLiftRule, MAX_LIFT_IDENTIFYING_ROWS};
 use super::report::*;
 use crate::linalg::{rational_kernel_with_certificate, RationalKernelLimits};
 use crate::recurrence::implicit::algebra::{content_and_primitive, q, roots_in_domain, DOp};
-use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
+use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
 use crate::recurrence::lift::section_certify::n_coefficients;
 use crate::recurrence::{
     find_recurrence_adaptive_rational_with_budget, format_rational_coeff, AdaptiveSearchBudget,
@@ -413,7 +413,7 @@ fn leading_gauge(rows: &[Vec<Q>], n0: usize) -> Option<(VeroneseSectionGauge, Ve
 }
 
 enum ParentSearch {
-    Found(PreparedRule),
+    Found(PreparedLiftRule),
     NotSmaller(String),
     NotFound,
     BudgetExhausted,
@@ -453,7 +453,7 @@ fn search_parent(
              input's {input_size:?}"
         )));
     }
-    match prepare_rule(&rule, rows, n0, "parent") {
+    match prepare_lift_rule(&rule, rows, n0, "parent") {
         Ok(parent) => Ok(ParentSearch::Found(parent)),
         Err(error) => Ok(ParentSearch::NotSmaller(format!(
             "the quotient rule is not usable: {error}"
@@ -494,7 +494,7 @@ fn candidate_rows(
 /// from the base `from` on.  The inner `Err` is the reason when neither
 /// applies (the identity is then only supported by rows).
 pub(in crate::recurrence::lift) fn remove_remainder(
-    parent: &PreparedRule,
+    parent: &PreparedLiftRule,
     remainder: &DOp,
     from: usize,
     options: &HadamardFactorLiftOptions,
@@ -594,7 +594,7 @@ pub(in crate::recurrence::lift) fn remove_remainder(
 /// Remove a nonzero division remainder `r` of a parent of order `k >= 2`
 /// with an invariant row-annihilator system: `mu r = sum_l Z_l o A^(l)`.
 fn remove_remainder_by_system(
-    parent: &PreparedRule,
+    parent: &PreparedLiftRule,
     remainder: &DOp,
     from: usize,
     options: &HadamardFactorLiftOptions,
@@ -656,8 +656,8 @@ fn remove_remainder_by_system(
 
 /// Certify one candidate (module documentation of `hadamard_factor`).
 pub(in crate::recurrence::lift) fn certify_candidate(
-    input: &PreparedRule,
-    parent: &PreparedRule,
+    input: &PreparedLiftRule,
+    parent: &PreparedLiftRule,
     factor: &HadamardFactor,
     gauge: &VeroneseSectionGauge,
     options: &HadamardFactorLiftOptions,
@@ -860,7 +860,7 @@ pub fn find_hadamard_factor_lifts(
     options: &HadamardFactorLiftOptions,
 ) -> Result<HadamardFactorLiftReport, RecurrenceError> {
     validate_options(options)?;
-    let input = prepare_rule(recurrence, rows, first_index, "input")?;
+    let input = prepare_lift_rule(recurrence, rows, first_index, "input")?;
     let n0 = first_index;
     let detection = options.detection_rows.max(input.seeds.len());
     if detection > MAX_LIFT_IDENTIFYING_ROWS {
@@ -977,16 +977,16 @@ pub fn find_hadamard_factor_lifts(
 }
 
 fn build_lift(
-    input: &PreparedRule,
-    parent: &PreparedRule,
+    input: &PreparedLiftRule,
+    parent: &PreparedLiftRule,
     factor: &HadamardFactor,
     gauge: &VeroneseSectionGauge,
     fill: HadamardHiddenCoefficients,
     options: &HadamardFactorLiftOptions,
 ) -> Result<HadamardFactorLift, RecurrenceError> {
     let (identity, rows_compared) = certify_candidate(input, parent, factor, gauge, options)?;
-    let parent_proof = prove_parent(
-        &ParentRecord {
+    let parent_proof = prove_parent_real_rootedness(
+        &ParentRecurrenceRecord {
             rule: &parent.rule,
             seeds: &parent.seeds,
             first_index: parent.first_index,

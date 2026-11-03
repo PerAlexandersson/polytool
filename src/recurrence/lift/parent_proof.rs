@@ -4,7 +4,7 @@
 //! `<= 0`.  By the transfer theorem (see [`find_veronese_section_lifts`])
 //! every section of such a row is zero or real-rooted with nonpositive roots.
 //!
-//! [`prove_parent`] tries, in order:
+//! [`prove_parent_real_rootedness`] tries, in order:
 //!
 //! 1. **periodic product**: the rule is `P_(n+k) = c(x) P_n` with `c` free of
 //!    `n` (a nonzero constant denominator is allowed), and `c` and the `k`
@@ -276,12 +276,16 @@ pub struct VeroneseParentProof {
     pub left_hand_factor_normalization: Option<LeftHandFactorNormalization>,
 }
 
-/// A parent rule with its identifying seeds and first index.
-pub(crate) struct ParentRecord<'a> {
-    pub(crate) rule: &'a Recurrence,
-    /// The `K` identifying seeds (`generation_initial_count`).
-    pub(crate) seeds: &'a [Vec<Q>],
-    pub(crate) first_index: usize,
+/// A parent rule with its identifying seeds and first index: the input of
+/// [`prove_parent_real_rootedness`].
+pub struct ParentRecurrenceRecord<'a> {
+    /// The parent rule.
+    pub rule: &'a Recurrence,
+    /// The `K` identifying seeds (`Recurrence::generation_initial_count`);
+    /// `seeds[0]` is row `first_index`.
+    pub seeds: &'a [Vec<Q>],
+    /// The index of the first seed.
+    pub first_index: usize,
 }
 
 /// Route 1: `P_(n+k) = c(x) P_n` with `c` and the `k` seeds nonzero,
@@ -332,7 +336,7 @@ pub(super) fn periodic_product_parent(rule: &Recurrence, seeds: &[Vec<Q>]) -> Re
 /// Route 2, with the interlacing of the first successful match (module
 /// documentation, "Interlacing").
 fn theorem_route(
-    record: &ParentRecord<'_>,
+    record: &ParentRecurrenceRecord<'_>,
     rows: &[Vec<Q>],
 ) -> (Vec<VeroneseParentProofAttempt>, Option<LiftInterlacing>) {
     let matches = match_recurrence_theorems(record.rule, record.first_index, rows);
@@ -470,7 +474,7 @@ fn accepted_source_claim(claim: &RootDomainClaim, first_index: usize) -> bool {
 }
 
 fn root_domain_route(
-    record: &ParentRecord<'_>,
+    record: &ParentRecurrenceRecord<'_>,
     rows: &[Vec<Q>],
 ) -> Vec<VeroneseParentProofAttempt> {
     let mut attempts = Vec::new();
@@ -480,7 +484,7 @@ fn root_domain_route(
         let Some(seeds) = rows.get(delay..delay + seed_count) else {
             break;
         };
-        let moved = ParentRecord {
+        let moved = ParentRecurrenceRecord {
             rule: record.rule,
             seeds,
             first_index: record.first_index + delay,
@@ -497,7 +501,7 @@ fn root_domain_route(
 /// The root-domain menu for `record` (moved `delay` rows past the parent's
 /// own seeds; `rows` start at the record's first index).
 fn root_domain_menu(
-    record: &ParentRecord<'_>,
+    record: &ParentRecurrenceRecord<'_>,
     rows: &[Vec<Q>],
     delay: usize,
 ) -> (Vec<VeroneseParentProofAttempt>, bool) {
@@ -625,7 +629,7 @@ fn root_domain_menu(
 /// 7 (Ma--Wang) runs without a requested region and succeeds when its
 /// interval `[L, U]` has `U <= 0`.
 fn theorem_attempt(
-    record: &ParentRecord<'_>,
+    record: &ParentRecurrenceRecord<'_>,
     route: VeroneseParentProofRoute,
     variant: &str,
 ) -> Result<(VeroneseParentProofAttempt, Option<LiftInterlacing>), RecurrenceError> {
@@ -737,7 +741,10 @@ pub(super) fn theorem_report_interlacing(
 /// Whether two records define the same parent: same first index, the same
 /// relation term by term, the same number of identifying seeds and equal
 /// seeds (the supplied rows of `other` must agree with its rule).
-fn same_record(record: &ParentRecord<'_>, other: &RecurrenceJson) -> Result<bool, RecurrenceError> {
+fn same_record(
+    record: &ParentRecurrenceRecord<'_>,
+    other: &RecurrenceJson,
+) -> Result<bool, RecurrenceError> {
     let (rule, first_index, rows) = other.to_recurrence_parts()?;
     if first_index != record.first_index || rows.len() < rule.max_offset() {
         return Ok(false);
@@ -1056,7 +1063,9 @@ fn one_signed_rows_for_all_indices(
 /// Attestations from bundled catalog entries flagged `lean_proved` whose
 /// first index and leading initial rows equal the parent's (a cheap filter;
 /// [`same_record`] decides the exact match).
-fn catalog_flag_attestations(record: &ParentRecord<'_>) -> Vec<VeroneseParentAttestation> {
+fn catalog_flag_attestations(
+    record: &ParentRecurrenceRecord<'_>,
+) -> Vec<VeroneseParentAttestation> {
     let wanted: Vec<Vec<String>> = record
         .seeds
         .iter()
@@ -1132,11 +1141,23 @@ fn first_failing_row(rows: &[Vec<Q>], first_index: usize) -> Option<usize> {
         .map(|offset| first_index + offset)
 }
 
-/// Run the parent provers (module documentation).  `needed_from` is the
-/// first parent index the lift uses (at least `first_index`);
-/// `try_root_domain` enables route 3.
-pub(crate) fn prove_parent(
-    record: &ParentRecord<'_>,
+/// Run the parent provers (module documentation): try to prove that every
+/// row `P_n`, `n >= record.first_index`, of the parent is zero or
+/// real-rooted with coefficients of one sign, for every `n`.
+///
+/// `needed_from` is the first parent index the caller uses (at least
+/// `first_index`); `attestations` are the caller-supplied statements of
+/// route 8 (a verdict resting on one is conditional, never proved);
+/// `try_root_domain` enables route 3.  A refuted or unproved statement is
+/// an `Ok` proof record with that status.
+///
+/// # Errors
+///
+/// [`RecurrenceError::InvalidInput`] when the parent rule cannot be
+/// replayed from its seeds, and errors of the theorem checks on malformed
+/// records.
+pub fn prove_parent_real_rootedness(
+    record: &ParentRecurrenceRecord<'_>,
     needed_from: usize,
     attestations: &[VeroneseParentAttestation],
     try_root_domain: bool,
@@ -1158,7 +1179,7 @@ pub(crate) fn prove_parent(
     // that does not normalize is kept, and the theorem routes name the reason.
     let (normalized_rule, normalization) = rule_with_x_free_left_hand_factor(record.rule)
         .unwrap_or_else(|_| (record.rule.clone(), None));
-    let normalized = ParentRecord {
+    let normalized = ParentRecurrenceRecord {
         rule: &normalized_rule,
         seeds: record.seeds,
         first_index: record.first_index,
@@ -1370,12 +1391,12 @@ mod catalog_flag_tests {
     }
 
     fn prove(rule: &Recurrence, seeds: &[Vec<Q>], first_index: usize) -> VeroneseParentProof {
-        let record = ParentRecord {
+        let record = ParentRecurrenceRecord {
             rule,
             seeds,
             first_index,
         };
-        prove_parent(&record, first_index, &[], false).unwrap()
+        prove_parent_real_rootedness(&record, first_index, &[], false).unwrap()
     }
 
     fn catalog_attempts(proof: &VeroneseParentProof) -> Vec<&VeroneseParentProofAttempt> {
@@ -1414,12 +1435,13 @@ mod catalog_flag_tests {
             statement: "attested".into(),
             source: "test".into(),
         };
-        let record = ParentRecord {
+        let record = ParentRecurrenceRecord {
             rule: &rule,
             seeds: &seeds,
             first_index,
         };
-        let proof = prove_parent(&record, first_index, &[attestation], false).unwrap();
+        let proof =
+            prove_parent_real_rootedness(&record, first_index, &[attestation], false).unwrap();
         assert_eq!(proof.conditional_on, ["caller"]);
     }
 
@@ -1575,12 +1597,12 @@ mod interlacing_tests {
     }
 
     fn prove(rule: &Recurrence, seeds: &[Vec<Q>], first_index: usize) -> VeroneseParentProof {
-        let record = ParentRecord {
+        let record = ParentRecurrenceRecord {
             rule,
             seeds,
             first_index,
         };
-        prove_parent(&record, first_index, &[], false).unwrap()
+        prove_parent_real_rootedness(&record, first_index, &[], false).unwrap()
     }
 
     /// `P_n = P_(n-1) + x P_(n-2)` with the canonical rows `P_0 = 1`,
@@ -1710,12 +1732,12 @@ mod left_hand_factor_tests {
     }
 
     fn prove(rule: &Recurrence, seeds: &[Vec<Q>], first_index: usize) -> VeroneseParentProof {
-        let record = ParentRecord {
+        let record = ParentRecurrenceRecord {
             rule,
             seeds,
             first_index,
         };
-        prove_parent(&record, first_index, &[], false).unwrap()
+        prove_parent_real_rootedness(&record, first_index, &[], false).unwrap()
     }
 
     /// The type-B Eulerian rule times `x` is proved by the same route, with

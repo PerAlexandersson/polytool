@@ -7,7 +7,7 @@
 use super::annihilator::{invariance_holds, step_operator, vanishing_bases, InvariantAnnihilator};
 use super::annihilator_system::{system_invariance_holds, InvariantAnnihilatorSystem};
 use super::factor::{atom_ratio, conjugation_conditions, FactorProduct, HadamardFactor, TermShape};
-use super::prepare::{shift_free_from_json, shift_free_json, PreparedRule};
+use super::prepare::{shift_free_from_json, shift_free_json, PreparedLiftRule};
 use crate::recurrence::implicit::algebra::{
     content_and_primitive, from_theta, roots_in_domain, theta_add, to_theta, Biv, DOp, ThetaOp,
 };
@@ -143,7 +143,7 @@ pub(in crate::recurrence::lift) struct ProductParent {
 
 impl ProductParent {
     /// Recognise the shape; `None` otherwise.
-    pub(in crate::recurrence::lift) fn recognise(parent: &PreparedRule) -> Option<Self> {
+    pub(in crate::recurrence::lift) fn recognise(parent: &PreparedLiftRule) -> Option<Self> {
         if parent.leader_shift != 1 || parent.seeds.len() != 1 {
             return None;
         }
@@ -466,7 +466,7 @@ impl HadamardFactorCertificate {
         if parent_first != first_index {
             return failed("the parent does not start at the input's first index");
         }
-        let parent = super::prepare::prepare_rule(&rule, &rows, parent_first, "parent")?;
+        let parent = super::prepare::prepare_lift_rule(&rule, &rows, parent_first, "parent")?;
         if parent.relation != relation_op(&self.parent_relation)? {
             return failed("the parent relation does not match the parent record");
         }
@@ -591,7 +591,7 @@ impl HadamardFactorCertificate {
 pub(in crate::recurrence::lift) fn verify_invariance(
     a: &DOp,
     invariance: &RowAnnihilatorInvariance,
-    parent: &super::prepare::PreparedRule,
+    parent: &super::prepare::PreparedLiftRule,
     from: usize,
 ) -> Result<(), RecurrenceError> {
     let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
@@ -619,7 +619,7 @@ pub(in crate::recurrence::lift) fn verify_invariance(
 /// base `r`.
 pub(super) fn check_annihilated_rows(
     a: &DOp,
-    parent: &super::prepare::PreparedRule,
+    parent: &super::prepare::PreparedLiftRule,
     from: usize,
     restart_bases: &[usize],
 ) -> Result<(), RecurrenceError> {
@@ -682,7 +682,7 @@ pub(in crate::recurrence::lift) fn verify_system(
     system: &InvariantAnnihilatorSystem,
     start_base: usize,
     restart_bases: &[usize],
-    parent: &super::prepare::PreparedRule,
+    parent: &super::prepare::PreparedLiftRule,
     from: usize,
 ) -> Result<(), RecurrenceError> {
     let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
@@ -702,7 +702,7 @@ pub(in crate::recurrence::lift) fn verify_system(
 /// `m = r + 1` for every restart base `r`.
 pub(super) fn check_system_rows(
     generators: &[DOp],
-    parent: &super::prepare::PreparedRule,
+    parent: &super::prepare::PreparedLiftRule,
     from: usize,
     restart_bases: &[usize],
 ) -> Result<(), RecurrenceError> {
@@ -819,8 +819,8 @@ pub(in crate::recurrence::lift) fn system_json(
 pub(super) fn build_certificate(
     factor: &HadamardFactor,
     gauge: &VeroneseSectionGauge,
-    input: &PreparedRule,
-    parent: &PreparedRule,
+    input: &PreparedLiftRule,
+    parent: &PreparedLiftRule,
     conjugated: &ConjugatedRelation,
     division: &ForwardDivision,
     multiplier: &Biv,

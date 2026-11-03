@@ -4,10 +4,10 @@
 //! statement the provers settle; the parent proofs are computed once per
 //! library.
 
-use super::interval::interval_parent_report;
+use super::interval::find_bounded_root_region_report;
 use crate::oeis;
-use crate::recurrence::lift::hadamard_factor::prepare::{prepare_rule, PreparedRule};
-use crate::recurrence::lift::parent_proof::{prove_parent, ParentRecord};
+use crate::recurrence::lift::hadamard_factor::prepare::{prepare_lift_rule, PreparedLiftRule};
+use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
 use crate::recurrence::lift::section_certify::x_free_leader;
 use crate::recurrence::{
     check_three_term_recurrence_theorem, BivarPoly, GammaLiftParent, RealRootednessTheoremOptions,
@@ -296,7 +296,7 @@ impl PreserverParentLibrary {
         let mut library = Self::default();
         if options.include_named_families {
             for (name, record) in Self::named_family_records() {
-                library.add(name, &record, options)?;
+                library.add_parent_record(name, &record, options)?;
             }
         }
         if options.include_oeis_catalog {
@@ -349,11 +349,20 @@ impl PreserverParentLibrary {
             &rows,
             None,
         );
-        self.add(entry.id.into(), &record, options)
+        self.add_parent_record(entry.id.into(), &record, options)
     }
 
-    /// Validate, prove and (when proved or requested) add one record.
-    pub(crate) fn add(
+    /// Validate, prove and add one parent record under `name`: the record is
+    /// prepared ([`crate::recurrence::prepare_lift_rule`]), its root region
+    /// proved (nonpositive ray, bounded interval or real line), and it is
+    /// added when proved or when `options.keep_unproved` is set.  A record
+    /// that does not prepare, duplicates a parent already in the library or
+    /// stays unproved is recorded in the skipped list with the reason.
+    ///
+    /// # Errors
+    ///
+    /// Errors of the parent provers and theorem checks on malformed records.
+    pub fn add_parent_record(
         &mut self,
         name: String,
         record: &RecurrenceJson,
@@ -377,8 +386,8 @@ impl PreserverParentLibrary {
                 .push((name, "the same record is already in the library".into()));
             return Ok(());
         }
-        let proof = prove_parent(
-            &ParentRecord {
+        let proof = prove_parent_real_rootedness(
+            &ParentRecurrenceRecord {
                 rule: &prepared.rule,
                 seeds: &prepared.seeds,
                 first_index: prepared.first_index,
@@ -405,7 +414,7 @@ impl PreserverParentLibrary {
             }
         }
         let interval_proof =
-            interval_parent_report(&prepared.rule, prepared.first_index, &prepared.seeds)?;
+            find_bounded_root_region_report(&prepared.rule, prepared.first_index, &prepared.seeds)?;
         let region = if proved {
             PreserverParentRegion::Nonpositive
         } else if interval_proof.is_some() {
@@ -440,9 +449,10 @@ impl PreserverParentLibrary {
 }
 
 /// Validate a record for use as a parent; `Err` gives the reason.
-fn prepare(record: &RecurrenceJson) -> Result<PreparedRule, String> {
+fn prepare(record: &RecurrenceJson) -> Result<PreparedLiftRule, String> {
     let (rule, first_index, rows) = record.to_recurrence_parts().map_err(|e| e.to_string())?;
-    let prepared = prepare_rule(&rule, &rows, first_index, "parent").map_err(|e| e.to_string())?;
+    let prepared =
+        prepare_lift_rule(&rule, &rows, first_index, "parent").map_err(|e| e.to_string())?;
     x_free_leader(&prepared.relation).map_err(|e| e.to_string())?;
     Ok(prepared)
 }
