@@ -53,12 +53,11 @@
 
 use crate::bivariate::BivariatePolynomial;
 use crate::division::right_pseudo_division;
-use crate::kernel::exact_kernel_vectors_by_group;
+use crate::kernel::{exact_kernel_vectors_by_group, integer_equation_row};
 use crate::operator::OreOperator;
 use crate::Rational;
 use num_bigint::BigInt;
-use num_integer::Integer;
-use num_traits::{One, Zero};
+use num_traits::Zero;
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -99,8 +98,8 @@ fn derivative_pseudo_division(
             continue;
         };
         let step = OreOperator::single(0, level - order, top);
-        remainder = remainder.subtract(&step.compose(divisor));
-        quotient = quotient.add(&step);
+        remainder.subtract_assign(&step.compose(divisor));
+        quotient.add_assign(&step);
     }
     (multiplier, quotient, remainder)
 }
@@ -272,7 +271,7 @@ impl AnnihilatorSystemCertificate {
             let left = member.shifted(self.step).left_multiply(&entry.multiplier);
             let mut right = entry.recurrence_quotient.compose(&self.recurrence);
             for (z, c) in entry.member_quotients.iter().zip(&self.members) {
-                right = right.add(&z.compose(c));
+                right.add_assign(&z.compose(c));
             }
             if left != right {
                 return Err(AnnihilatorSystemError::IdentityFails);
@@ -329,7 +328,7 @@ fn reduce_modulo_system(
         &mut recurrence_quotient,
         &mut quotients,
     );
-    recurrence_quotient = recurrence_quotient.add(&division.quotient);
+    recurrence_quotient.add_assign(&division.quotient);
     remainder = division.remainder;
     for (l, member) in members.iter().enumerate() {
         if member.max_shift() == 0 || remainder.is_zero() {
@@ -342,7 +341,7 @@ fn reduce_modulo_system(
             &mut recurrence_quotient,
             &mut quotients,
         );
-        quotients[l] = quotients[l].add(&division.quotient);
+        quotients[l].add_assign(&division.quotient);
         remainder = division.remainder;
     }
     for (l, member) in members.iter().enumerate() {
@@ -358,7 +357,7 @@ fn reduce_modulo_system(
             &mut recurrence_quotient,
             &mut quotients,
         );
-        quotients[l] = quotients[l].add(&reduction.quotient);
+        quotients[l].add_assign(&reduction.quotient);
         remainder = reduction.remainder;
     }
     Some((multiplier, recurrence_quotient, quotients, remainder))
@@ -464,9 +463,13 @@ fn fit_annihilator(
     }
     let mut equations: BTreeMap<(usize, usize), BTreeMap<usize, Rational>> = BTreeMap::new();
     for base in 0..bases {
-        let n = Rational::from_integer((first_index + base).into());
+        // The powers n^a, a = 0..=degree, of the integer base n.
+        let n = BigInt::from(first_index + base);
+        let weights: Vec<Rational> = (0..=degree)
+            .map(|a| Rational::from_integer(num_traits::pow(n.clone(), a)))
+            .collect();
         for (column, (i, d, a, b)) in unknowns.iter().enumerate() {
-            let weight = num_traits::pow(n.clone(), *a);
+            let weight = &weights[*a];
             if weight.is_zero() {
                 continue;
             }
@@ -474,26 +477,18 @@ fn fit_annihilator(
                 if value.is_zero() {
                     continue;
                 }
-                *equations
+                let slot = equations
                     .entry((base, k + b))
                     .or_default()
                     .entry(column)
-                    .or_insert_with(Rational::zero) += value * &weight;
+                    .or_insert_with(Rational::zero);
+                crate::univariate::add_product_into(slot, value, weight);
             }
         }
     }
     let matrix: Vec<Vec<BigInt>> = equations
         .values()
-        .map(|entries| {
-            let denominator = entries
-                .values()
-                .fold(BigInt::one(), |acc, value| acc.lcm(value.denom()));
-            let mut row = vec![BigInt::zero(); unknowns.len()];
-            for (column, value) in entries {
-                row[*column] = value.numer() * (&denominator / value.denom());
-            }
-            row
-        })
+        .map(|entries| integer_equation_row(entries, unknowns.len()))
         .collect();
     let vector = exact_kernel_vectors_by_group(&matrix, &groups, 2)[1].clone()?;
     let mut candidate = OreOperator::default();

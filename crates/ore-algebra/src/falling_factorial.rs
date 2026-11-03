@@ -211,7 +211,7 @@ pub fn conjugate_to_power_basis(
         let term = coefficient
             .compose(&e_powers[e])
             .compose(&OreOperator::single(*i, 0, BivariatePolynomial::one()));
-        out = out.add(&term);
+        out.add_assign(&term);
     }
     Ok(out)
 }
@@ -242,7 +242,7 @@ pub fn conjugate_to_falling_factorial_basis(op: &OreOperator) -> DifferentialDif
         let term = coefficient
             .compose(&d_powers[*d])
             .compose(&DifferentialDifferenceOperator::index_shift(*i));
-        out = out.add(&term);
+        out.add_assign(&term);
     }
     out
 }

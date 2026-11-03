@@ -20,10 +20,16 @@ pub fn add_euler_term(op: &mut EulerOperator, key: (usize, usize), c: BivariateP
     if c.is_zero() {
         return;
     }
-    let entry = op.entry(key).or_default();
-    *entry = entry.add(&c);
-    if entry.is_zero() {
-        op.remove(&key);
+    match op.entry(key) {
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            entry.insert(c);
+        }
+        std::collections::btree_map::Entry::Occupied(mut entry) => {
+            entry.get_mut().add_assign(&c);
+            if entry.get().is_zero() {
+                entry.remove();
+            }
+        }
     }
 }
 

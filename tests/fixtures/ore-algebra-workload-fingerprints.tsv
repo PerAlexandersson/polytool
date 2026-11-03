@@ -1,0 +1,32 @@
+# Fingerprints (FNV-1a 64 of the Debug output, and its length) of
+# tests/ore_algebra_workloads.rs; re-bless only for intentional changes.
+annihilator-system/av123	669b18c6d2d9c95b:4
+annihilator-system/av321	669b18c6d2d9c95b:4
+annihilator-system/binomial	b39669584adaf298:1029
+annihilator-system/delannoy	34a3c4c04564bb83:16166
+annihilator-system/narayana	ff6046467b4e015a:4958
+basis-map/A035607/(u+1)^n	ff9aa0758ef6a03a:18404
+basis-map/A035607/(u+2)^n	67dd18856abc55ed:18422
+basis-map/A035607/(u+4)^n	421cdc85a89a9460:13117
+difference/eulerian/Delta	2785f142005668f4:185
+difference/touchard/Delta	c60da3e10fb90abe:2171
+difference/touchard/Delta^2	2785f142005668f4:185
+division/av123/shift 12	77f8944753d0a3b3:324303
+division/eulerian/shift 12	28aadf1671cf254b:730655
+hadamard-lift/av123	a9abded10d0d9f23:78969
+hadamard-lift/av321	5b78a6f789eb4d0e:100665
+image/binomial/1+D	f6221c2e7b40db0f:3034
+image/binomial/1/(1/2)_k	488377be57dd01f2:3259
+image/binomial/1/k!	5aae3a5b464b0b86:3249
+image/delannoy/theta(theta+1)	26edeae2fd48ff2f:10840
+image/eulerian/1+D	007d5179738c0102:3788
+image/eulerian/D o x	7271c3cf9a94b758:3058
+image/eulerian/D^2	00c3a3fcdb05675d:5423
+image/eulerian/affine 2x+1	991b95ad057f25ef:1992
+image/eulerian/theta(theta+1)	e947445f15d33427:4724
+image/eulerian/x D	06f986e3752529fa:3279
+image/narayana/1+D	d2fd6bb31f580abd:5876
+image/narayana/f-polynomial	2dc758505ed75273:4990
+image/narayana/reversal	a6f533580d3afb81:4862
+image/narayana/theta(theta+1)	be25b681840c2ab4:5548
+substitution/eulerian/five maps	42744ca051106fff:10239

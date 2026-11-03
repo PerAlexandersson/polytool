@@ -203,7 +203,7 @@ fn solve_shape(
         remainders.insert(key, division.remainder);
     }
     Ok(kernel_candidate(&unknowns, &groups, |unknown| {
-        remainders[&(unknown.shift, unknown.derivative, unknown.variable_power)].clone()
+        remainders[&(unknown.shift, unknown.derivative, unknown.variable_power)].as_slice()
     }))
 }
 

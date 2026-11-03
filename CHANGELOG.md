@@ -305,6 +305,23 @@ Maintenance:
 
 Performance:
 
+- `ore-algebra`: integer operands skip the gcd reductions of the rational
+  type (sums and products of integers are formed directly), polynomial
+  translates use the binomial expansion, compositions translate each
+  coefficient once per shift, operators are updated in place, the fits of
+  `find_annihilator_system` and the ansatz equations are built without
+  rational products, and the modular kernel caches its primes, reduces
+  residues from the machine digits and eliminates only over the support of
+  each pivot row.  Every result is unchanged (the new
+  `tests/ore_algebra_workloads.rs` compares fingerprints of the complete
+  outputs of a fixed workload set with recorded ones).  Release timings on
+  that set (fastest of five runs): image recurrences of the preserver menu
+  shapes 16 to 29 times faster on Eulerian, Narayana and Delannoy rows
+  (Eulerian `1 + D` 1.21 s to 0.049 s, Narayana `theta (theta + 1)` 0.38 s
+  to 0.020 s) and 4 to 7 times on binomial rows (`1/k!` 27 ms to 3.7 ms),
+  annihilator systems 4 to 23 times, difference image annihilators
+  (Touchard `Delta`) 5 to 8 times, right pseudo-division of large dividends
+  26 to 33 times; the whole set 16.6 s to 2.7 s.
 - The default exact real-rootedness test no longer switches large
   one-signed palindromic inputs to the Uspensky path and counts real roots
   directly (signs at infinity only); degree-79 Eulerian, type-B Eulerian and

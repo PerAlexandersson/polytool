@@ -9,29 +9,81 @@
 use crate::Rational;
 use num_bigint::BigInt;
 use num_integer::Integer;
-use num_traits::{One, Signed, ToPrimitive, Zero};
+use num_traits::{One, Signed, Zero};
+use std::collections::BTreeMap;
+use std::sync::OnceLock;
 
 type Q = Rational;
 
 /// Largest number of primes combined before giving up.
 const MAX_PRIMES: usize = 16;
 
-/// The primes below `2^31` in descending order, found by trial division.
+/// The [`MAX_PRIMES`] largest primes below `2^31` in descending order,
+/// found once by trial division.
 fn primes() -> impl Iterator<Item = u64> {
-    (1u64 << 30..1u64 << 31).rev().filter(|&candidate| {
-        candidate % 2 == 1
-            && (3..)
-                .step_by(2)
-                .take_while(|d| d * d <= candidate)
-                .all(|d| candidate % d != 0)
-    })
+    static PRIMES: OnceLock<Vec<u64>> = OnceLock::new();
+    PRIMES
+        .get_or_init(|| {
+            (1u64 << 30..1u64 << 31)
+                .rev()
+                .filter(|&candidate| {
+                    candidate % 2 == 1
+                        && (3..)
+                            .step_by(2)
+                            .take_while(|d| d * d <= candidate)
+                            .all(|d| candidate % d != 0)
+                })
+                .take(MAX_PRIMES)
+                .collect()
+        })
+        .iter()
+        .copied()
 }
 
+/// `value mod prime` in `[0, prime)` (the floor residue), from the 64-bit
+/// digits of the magnitude.
 fn residue(value: &BigInt, prime: u64) -> u64 {
-    value
-        .mod_floor(&BigInt::from(prime))
-        .to_u64()
-        .unwrap_or_default()
+    if value.is_zero() {
+        return 0;
+    }
+    let modulus = u128::from(prime);
+    let magnitude = value
+        .magnitude()
+        .iter_u64_digits()
+        .rev()
+        .fold(0u128, |acc, digit| {
+            ((acc << 64) | u128::from(digit)) % modulus
+        }) as u64;
+    if value.is_negative() && magnitude != 0 {
+        prime - magnitude
+    } else {
+        magnitude
+    }
+}
+
+/// The integer row `L v` of a sparse rational equation `v` (`L` the least
+/// common multiple of the denominators), dense over `columns` columns.
+pub(crate) fn integer_equation_row(entries: &BTreeMap<usize, Q>, columns: usize) -> Vec<BigInt> {
+    let denominator = entries.values().fold(BigInt::one(), |acc, value| {
+        if value.denom().is_one() {
+            acc
+        } else {
+            acc.lcm(value.denom())
+        }
+    });
+    let mut row = vec![BigInt::zero(); columns];
+    for (column, value) in entries {
+        row[*column] = if value.denom().is_one() {
+            if denominator.is_one() {
+                value.numer().clone()
+            } else {
+                value.numer() * &denominator
+            }
+        } else {
+            value.numer() * (&denominator / value.denom())
+        };
+    }
+    row
 }
 
 fn inverse(value: u64, prime: u64) -> u64 {
@@ -69,13 +121,17 @@ fn reduced_echelon(
             *value = *value * scale % prime;
         }
         let pivot_row = matrix[rank].clone();
+        // Only the nonzero entries of the pivot row change other rows.
+        let support: Vec<usize> = (column..pivot_row.len())
+            .filter(|&c| pivot_row[c] != 0)
+            .collect();
         for (r, row) in matrix.iter_mut().enumerate() {
             if r == rank || row[column] == 0 {
                 continue;
             }
-            let factor = row[column];
-            for (value, pivot) in row[column..].iter_mut().zip(&pivot_row[column..]) {
-                *value = (*value + (prime - factor) * pivot) % prime;
+            let factor = prime - row[column];
+            for &c in &support {
+                row[c] = (row[c] + factor * pivot_row[c]) % prime;
             }
         }
         pivots.push(column);
@@ -197,6 +253,53 @@ mod tests {
         rows.iter()
             .map(|row| row.iter().map(|v| BigInt::from(*v)).collect())
             .collect()
+    }
+
+    #[test]
+    fn residues_are_floor_residues() {
+        let prime = primes().next().unwrap();
+        let big = BigInt::from(10).pow(40u32) + BigInt::from(17);
+        for value in [
+            BigInt::zero(),
+            BigInt::from(5),
+            BigInt::from(-5),
+            BigInt::from(prime),
+            -BigInt::from(prime),
+            big.clone(),
+            -big,
+        ] {
+            let expected = value.mod_floor(&BigInt::from(prime));
+            assert_eq!(BigInt::from(residue(&value, prime)), expected, "{value}");
+        }
+        assert_eq!(primes().count(), MAX_PRIMES);
+        assert!(primes().zip(primes().skip(1)).all(|(a, b)| a > b));
+    }
+
+    #[test]
+    fn integer_equation_rows_clear_denominators() {
+        let entries: BTreeMap<usize, Q> = [
+            (0, Q::new(BigInt::from(1), BigInt::from(6))),
+            (2, Q::from_integer(BigInt::from(-3))),
+            (3, Q::new(BigInt::from(-5), BigInt::from(4))),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            integer_equation_row(&entries, 4),
+            vec![
+                BigInt::from(2),
+                BigInt::zero(),
+                BigInt::from(-36),
+                BigInt::from(-15)
+            ]
+        );
+        let integral: BTreeMap<usize, Q> = [(1, Q::from_integer(BigInt::from(7)))]
+            .into_iter()
+            .collect();
+        assert_eq!(
+            integer_equation_row(&integral, 2),
+            vec![BigInt::zero(), BigInt::from(7)]
+        );
     }
 
     #[test]

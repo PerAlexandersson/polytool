@@ -4,6 +4,7 @@ use crate::bivariate::BivariatePolynomial;
 use crate::univariate as poly;
 use crate::Rational;
 use num_traits::{One, Zero};
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 
 /// `binom(a, t)` as an exact rational.
@@ -43,10 +44,66 @@ impl OreOperator {
         if coefficient.is_zero() {
             return;
         }
-        let entry = self.0.entry(key).or_default();
-        *entry = entry.add(&coefficient);
-        if entry.is_zero() {
-            self.0.remove(&key);
+        match self.0.entry(key) {
+            Entry::Vacant(entry) => {
+                entry.insert(coefficient);
+            }
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().add_assign(&coefficient);
+                if entry.get().is_zero() {
+                    entry.remove();
+                }
+            }
+        }
+    }
+
+    /// Add `coefficient D^d S^i` for `key = (i, d)`, borrowing it.
+    pub(crate) fn add_term_ref(&mut self, key: (usize, usize), coefficient: &BivariatePolynomial) {
+        if coefficient.is_zero() {
+            return;
+        }
+        match self.0.entry(key) {
+            Entry::Vacant(entry) => {
+                entry.insert(coefficient.clone());
+            }
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().add_assign(coefficient);
+                if entry.get().is_zero() {
+                    entry.remove();
+                }
+            }
+        }
+    }
+
+    /// Subtract `coefficient D^d S^i` for `key = (i, d)`.
+    pub(crate) fn subtract_term(&mut self, key: (usize, usize), coefficient: &BivariatePolynomial) {
+        if coefficient.is_zero() {
+            return;
+        }
+        match self.0.entry(key) {
+            Entry::Vacant(entry) => {
+                entry.insert(coefficient.scale(&-Rational::one()));
+            }
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().subtract_assign(coefficient);
+                if entry.get().is_zero() {
+                    entry.remove();
+                }
+            }
+        }
+    }
+
+    /// `self += other`, in place.
+    pub(crate) fn add_assign(&mut self, other: &Self) {
+        for (key, c) in &other.0 {
+            self.add_term_ref(*key, c);
+        }
+    }
+
+    /// `self -= other`, in place.
+    pub(crate) fn subtract_assign(&mut self, other: &Self) {
+        for (key, c) in &other.0 {
+            self.subtract_term(*key, c);
         }
     }
 
@@ -75,14 +132,15 @@ impl OreOperator {
     /// The sum `self + other`.
     pub fn add(&self, other: &Self) -> Self {
         let mut sum = self.clone();
-        for (key, c) in &other.0 {
-            sum.add_term(*key, c.clone());
-        }
+        sum.add_assign(other);
         sum
     }
 
     /// The scalar multiple `c self`.
     pub fn scale(&self, c: &Rational) -> Self {
+        if c.is_one() {
+            return self.clone();
+        }
         let mut out = Self::default();
         for (key, coefficient) in &self.0 {
             out.add_term(*key, coefficient.scale(c));
@@ -92,12 +150,17 @@ impl OreOperator {
 
     /// The difference `self - other`.
     pub fn subtract(&self, other: &Self) -> Self {
-        self.add(&other.scale(&-Rational::one()))
+        let mut difference = self.clone();
+        difference.subtract_assign(other);
+        difference
     }
 
     /// `factor o self` for a coefficient `factor(n, x)` (multiplication on
     /// the left, which is coefficientwise).
     pub fn left_multiply(&self, factor: &BivariatePolynomial) -> Self {
+        if factor.as_constant().is_some_and(|c| c.is_one()) {
+            return self.clone();
+        }
         let mut out = Self::default();
         for (key, c) in &self.0 {
             out.add_term(*key, factor.multiply(c));
@@ -129,17 +192,33 @@ impl OreOperator {
     /// The composition `self o other`.
     pub fn compose(&self, other: &Self) -> Self {
         let mut out = Self::default();
+        // For the current shift i of `self`: every coefficient e of `other`
+        // translated to e(n + i, x), with its x-derivatives (computed once
+        // per shift and extended on demand).
+        let mut cached_shift = None;
+        let mut translated: Vec<Vec<BivariatePolynomial>> = Vec::new();
         for ((i, a), c) in &self.0 {
-            let dn = rational(*i);
-            for ((j, b), e) in &other.0 {
-                let mut derivative = e.shift(&dn, &Rational::zero());
+            if cached_shift != Some(*i) {
+                let dn = rational(*i);
+                translated = other
+                    .0
+                    .values()
+                    .map(|e| vec![e.shift(&dn, &Rational::zero())])
+                    .collect();
+                cached_shift = Some(*i);
+            }
+            for (((j, b), _), derivatives) in other.0.iter().zip(translated.iter_mut()) {
                 for t in 0..=*a {
+                    if derivatives.len() <= t {
+                        let next = derivatives.last().expect("nonempty").variable_derivative();
+                        derivatives.push(next);
+                    }
+                    let derivative = &derivatives[t];
                     if derivative.is_zero() {
                         break;
                     }
-                    let coefficient = c.multiply(&derivative).scale(&binomial(*a, t));
+                    let coefficient = c.multiply(derivative).scale(&binomial(*a, t));
                     out.add_term((i + j, a - t + b), coefficient);
-                    derivative = derivative.variable_derivative();
                 }
             }
         }

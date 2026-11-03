@@ -115,8 +115,8 @@ pub fn right_pseudo_division(
         for ((_, d), c) in &column.0 {
             step.add_term((offset, *d), c.clone());
         }
-        remainder = remainder.subtract(&step.compose(divisor));
-        quotient = quotient.add(&step);
+        remainder.subtract_assign(&step.compose(divisor));
+        quotient.add_assign(&step);
     }
     Some(RightPseudoDivision {
         multiplier,
@@ -231,10 +231,10 @@ pub fn right_pseudo_division_of_row(
             }
             for (entry, divisor) in remainder.iter_mut().zip(&system[b]) {
                 if !divisor.is_zero() {
-                    *entry = entry.subtract(&step.compose(divisor));
+                    entry.subtract_assign(&step.compose(divisor));
                 }
             }
-            quotients[b] = quotients[b].add(&step);
+            quotients[b].add_assign(&step);
         }
     }
     Some(RowPseudoDivision {
@@ -257,7 +257,7 @@ pub(crate) fn combine_rows(
         }
         for (entry, divisor) in out.iter_mut().zip(row) {
             if !divisor.is_zero() {
-                *entry = entry.add(&quotient.compose(divisor));
+                entry.add_assign(&quotient.compose(divisor));
             }
         }
     }

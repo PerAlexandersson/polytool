@@ -65,7 +65,7 @@ use crate::difference_row_map::{
     DifferenceRowMapStep,
 };
 use crate::differential_difference::DifferentialDifferenceOperator;
-use crate::kernel::exact_kernel_vectors_by_group;
+use crate::kernel::{exact_kernel_vectors_by_group, integer_equation_row};
 use crate::univariate as poly;
 use crate::Rational;
 use num_bigint::BigInt;
@@ -544,13 +544,13 @@ fn solve_shape(
             unknown.variable_shift,
             unknown.variable_power,
         )];
-        let factor = BivariatePolynomial::monomial(unknown.index_power, 0, Rational::one());
-        for ((i, d, e), c) in &remainder.left_multiply(&factor).0 {
+        // The remainder of n^a u is n^a times that of u.
+        for ((i, d, e), c) in &remainder.0 {
             for (p, row) in c.rows().iter().enumerate() {
                 for (q, value) in row.iter().enumerate() {
                     if !value.is_zero() {
                         equations
-                            .entry((*i, *d, *e, p, q))
+                            .entry((*i, *d, *e, p + unknown.index_power, q))
                             .or_default()
                             .insert(column, value.clone());
                     }
@@ -560,16 +560,7 @@ fn solve_shape(
     }
     let rows: Vec<Vec<BigInt>> = equations
         .values()
-        .map(|entries| {
-            let denominator = entries
-                .values()
-                .fold(BigInt::one(), |acc, value| acc.lcm(value.denom()));
-            let mut row = vec![BigInt::zero(); unknowns.len()];
-            for (column, value) in entries {
-                row[*column] = value.numer() * (&denominator / value.denom());
-            }
-            row
-        })
+        .map(|entries| integer_equation_row(entries, unknowns.len()))
         .collect();
     let vectors = exact_kernel_vectors_by_group(&rows, &groups, 2);
     let Some(vector) = vectors[1].as_ref() else {

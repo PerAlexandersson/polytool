@@ -123,8 +123,8 @@ pub fn difference_right_pseudo_division(
         for ((_, d, e), c) in &column.0 {
             step.add_term((offset, *d, *e), c.clone());
         }
-        remainder = remainder.subtract(&step.compose(divisor));
-        quotient = quotient.add(&step);
+        remainder.subtract_assign(&step.compose(divisor));
+        quotient.add_assign(&step);
     }
     Some(DifferentialDifferenceDivision {
         multiplier,
@@ -183,8 +183,8 @@ pub fn variable_shift_pseudo_division(
                 continue;
             };
             let step = DifferentialDifferenceOperator::single(0, d, offset, top);
-            remainder = remainder.subtract(&step.compose(divisor));
-            quotient = quotient.add(&step);
+            remainder.subtract_assign(&step.compose(divisor));
+            quotient.add_assign(&step);
         }
     }
     Some(DifferentialDifferenceDivision {

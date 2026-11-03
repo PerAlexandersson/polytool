@@ -29,6 +29,25 @@ well, `recurrence-transforms.test.cjs` checks that the CLI and the browser
 produce identical transform and implicit reports and that each replays the
 other's reports.
 
+## Ore-algebra workloads
+
+`tests/ore_algebra_workloads.rs` runs a fixed set of real workloads of the
+`ore-algebra` crate (image recurrences of the preserver menu shapes,
+basis-map elimination, annihilator systems, difference and substitution
+image annihilators, right pseudo-division of large dividends) and compares
+a fingerprint of each complete output with
+`tests/fixtures/ore-algebra-workload-fingerprints.tsv`.  The Hadamard-factor
+workloads are compared only by the ignored full test.  Timings (median and
+minimum of `ORE_WORKLOAD_REPEAT` runs, filtered by `ORE_WORKLOAD_ONLY`):
+
+```text
+cargo test --release --test ore_algebra_workloads -- --ignored --nocapture time_
+```
+
+Re-bless the fingerprints only for an intentional change of results:
+`POLYTOOL_BLESS_ORE_WORKLOADS=1 cargo test --release --test
+ore_algebra_workloads -- --ignored every_`.
+
 ## Examples
 
 The tracked programs in `examples/` are run with

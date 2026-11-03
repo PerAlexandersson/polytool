@@ -2,6 +2,7 @@
 
 use crate::univariate as poly;
 use crate::Rational;
+use num_bigint::BigInt;
 use num_traits::{One, Zero};
 
 /// A bivariate polynomial `sum c_(i,j) n^i y^j` over the rationals:
@@ -92,21 +93,47 @@ impl BivariatePolynomial {
 
     /// The sum `self + other`.
     pub fn add(&self, other: &Self) -> Self {
-        let len = self.0.len().max(other.0.len());
-        Self::new(
-            (0..len)
-                .map(|i| {
-                    let a = self.0.get(i).map_or(&[][..], Vec::as_slice);
-                    let b = other.0.get(i).map_or(&[][..], Vec::as_slice);
-                    poly::add(a, b)
-                })
-                .collect(),
-        )
+        let mut sum = self.clone();
+        sum.add_assign(other);
+        sum
+    }
+
+    /// `self += other`, in place (keeps the trimmed representation).
+    pub(crate) fn add_assign(&mut self, other: &Self) {
+        self.combine_assign(other, poly::add_rational_into);
+    }
+
+    /// `self -= other`, in place (keeps the trimmed representation).
+    pub(crate) fn subtract_assign(&mut self, other: &Self) {
+        self.combine_assign(other, poly::subtract_rational_from);
+    }
+
+    fn combine_assign(&mut self, other: &Self, combine: fn(&mut Rational, &Rational)) {
+        if self.0.len() < other.0.len() {
+            self.0.resize(other.0.len(), Vec::new());
+        }
+        for (row, addend) in self.0.iter_mut().zip(&other.0) {
+            if addend.is_empty() {
+                continue;
+            }
+            if row.len() < addend.len() {
+                row.resize(addend.len(), Rational::zero());
+            }
+            for (x, y) in row.iter_mut().zip(addend) {
+                combine(x, y);
+            }
+            poly::strip_trailing_zeros(row);
+        }
+        while self.0.last().is_some_and(Vec::is_empty) {
+            self.0.pop();
+        }
     }
 
     /// The difference `self - other`.
     pub fn subtract(&self, other: &Self) -> Self {
-        self.add(&other.scale(&-Rational::one()))
+        let mut difference = self.clone();
+        difference.subtract_assign(other);
+        difference
     }
 
     /// The scalar multiple `c self`.
@@ -114,10 +141,13 @@ impl BivariatePolynomial {
         if c.is_zero() {
             return Self::zero();
         }
+        if c.is_one() {
+            return self.clone();
+        }
         Self::new(
             self.0
                 .iter()
-                .map(|row| row.iter().map(|x| x * c).collect())
+                .map(|row| row.iter().map(|x| poly::rational_product(x, c)).collect())
                 .collect(),
         )
     }
@@ -126,6 +156,12 @@ impl BivariatePolynomial {
     pub fn multiply(&self, other: &Self) -> Self {
         if self.is_zero() || other.is_zero() {
             return Self::zero();
+        }
+        if let Some(c) = other.as_constant() {
+            return self.scale(&c);
+        }
+        if let Some(c) = self.as_constant() {
+            return other.scale(&c);
         }
         let mut rows = vec![Vec::new(); self.0.len() + other.0.len() - 1];
         for (i, left) in self.0.iter().enumerate() {
@@ -136,7 +172,21 @@ impl BivariatePolynomial {
                 if right.is_empty() {
                     continue;
                 }
-                rows[i + j] = poly::add(&rows[i + j], &poly::mul(left, right));
+                let target: &mut Vec<Rational> = &mut rows[i + j];
+                let width = left.len() + right.len() - 1;
+                if target.len() < width {
+                    target.resize(width, Rational::zero());
+                }
+                for (a, x) in left.iter().enumerate() {
+                    if x.is_zero() {
+                        continue;
+                    }
+                    for (b, y) in right.iter().enumerate() {
+                        if !y.is_zero() {
+                            poly::add_product_into(&mut target[a + b], x, y);
+                        }
+                    }
+                }
             }
         }
         Self::new(rows)
@@ -149,12 +199,26 @@ impl BivariatePolynomial {
 
     /// The translate `p(n + index_shift, y + variable_shift)`.
     pub fn shift(&self, index_shift: &Rational, variable_shift: &Rational) -> Self {
-        let n_linear = [index_shift.clone(), Rational::one()];
-        let mut n_power = vec![Rational::one()];
-        let mut result = Self::zero();
+        if index_shift.is_zero() && variable_shift.is_zero() {
+            return self.clone();
+        }
+        // p(n + h, y + v) = sum_k n^k sum_(i >= k) binom(i, k) h^(i - k) p_i(y + v).
+        let len = self.0.len();
+        let mut powers = Vec::with_capacity(len);
+        if len > 0 {
+            powers.push(Rational::one());
+        }
+        for i in 1..len {
+            powers.push(poly::rational_product(&powers[i - 1], index_shift));
+        }
+        let mut binomials: Vec<BigInt> = Vec::with_capacity(len);
+        let mut rows: Vec<Vec<Rational>> = vec![Vec::new(); len];
         for (i, row) in self.0.iter().enumerate() {
-            if i > 0 {
-                n_power = poly::mul(&n_power, &n_linear);
+            // binomials[k] = binom(i, k).
+            binomials.push(BigInt::one());
+            for k in (1..i).rev() {
+                let previous = binomials[k - 1].clone();
+                binomials[k] += previous;
             }
             if row.is_empty() {
                 continue;
@@ -162,12 +226,27 @@ impl BivariatePolynomial {
             let shifted = if variable_shift.is_zero() {
                 row.clone()
             } else {
-                poly::compose(row, &[variable_shift.clone(), Rational::one()])
+                poly::translate(row, variable_shift)
             };
-            let term = Self::new(n_power.iter().map(|c| poly::scale(&shifted, c)).collect());
-            result = result.add(&term);
+            for (k, binomial) in binomials.iter().enumerate() {
+                let power = &powers[i - k];
+                if power.is_zero() {
+                    continue;
+                }
+                let factor =
+                    poly::rational_product(&Rational::from_integer(binomial.clone()), power);
+                let target = &mut rows[k];
+                if target.len() < shifted.len() {
+                    target.resize(shifted.len(), Rational::zero());
+                }
+                for (value, c) in target.iter_mut().zip(&shifted) {
+                    if !c.is_zero() {
+                        poly::add_product_into(value, c, &factor);
+                    }
+                }
+            }
         }
-        result
+        Self::new(rows)
     }
 
     /// The index translate `p(n + index_shift, y)`.
@@ -185,10 +264,17 @@ impl BivariatePolynomial {
 
     /// The polynomial in `y` at `n = value` (canonical: zero is `[0]`).
     pub fn evaluate_index(&self, value: &Rational) -> Vec<Rational> {
-        let mut result = vec![Rational::zero()];
+        let width = self.0.iter().map(Vec::len).max().unwrap_or(0);
+        let mut result = vec![Rational::zero(); width.max(1)];
         for row in self.0.iter().rev() {
-            result = poly::scale(&result, value);
-            result = poly::add(&result, row);
+            for x in result.iter_mut() {
+                if !x.is_zero() {
+                    *x = poly::rational_product(x, value);
+                }
+            }
+            for (x, c) in result.iter_mut().zip(row) {
+                poly::add_rational_into(x, c);
+            }
         }
         poly::trim(&result)
     }
@@ -275,6 +361,106 @@ impl BivariatePolynomial {
                 (lead.clone(), self.scale(&lead.recip()))
             }
             None => (Rational::one(), Self::zero()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn q(numerator: i64, denominator: i64) -> Rational {
+        Rational::new(numerator.into(), denominator.into())
+    }
+
+    fn sample(seed: u64, height: usize, width: usize) -> BivariatePolynomial {
+        let mut state = seed;
+        let rows = (0..height)
+            .map(|_| {
+                (0..width)
+                    .map(|_| {
+                        state = state
+                            .wrapping_mul(6_364_136_223_846_793_005)
+                            .wrapping_add(1_442_695_040_888_963_407);
+                        let value = ((state >> 33) % 9) as i64 - 4;
+                        // Some entries non-integral, some zero.
+                        if state % 5 == 0 {
+                            q(value, 3)
+                        } else {
+                            q(value, 1)
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        BivariatePolynomial::new(rows)
+    }
+
+    /// The translate by the expanded binomial formula equals the sum of the
+    /// products `(n + h)^i p_i(y + v)`.
+    #[test]
+    fn shift_agrees_with_the_naive_expansion() {
+        for seed in 0..12 {
+            let p = sample(seed, 5, 4);
+            for (h, v) in [
+                (q(0, 1), q(0, 1)),
+                (q(1, 1), q(0, 1)),
+                (q(-3, 1), q(0, 1)),
+                (q(2, 7), q(0, 1)),
+                (q(0, 1), q(1, 1)),
+                (q(-1, 2), q(5, 3)),
+            ] {
+                let linear = BivariatePolynomial::new(vec![vec![h.clone()], vec![q(1, 1)]]);
+                let mut expected = BivariatePolynomial::zero();
+                for (i, row) in p.rows().iter().enumerate() {
+                    let shifted = poly::compose(row, &[v.clone(), q(1, 1)]);
+                    let term = linear
+                        .power(i)
+                        .multiply(&BivariatePolynomial::from_variable_polynomial(&shifted));
+                    expected = expected.add(&term);
+                }
+                assert_eq!(p.shift(&h, &v), expected, "seed {seed}, h {h}, v {v}");
+            }
+        }
+    }
+
+    /// Products, sums and evaluations against coefficientwise references.
+    #[test]
+    fn arithmetic_agrees_with_coefficientwise_references() {
+        for seed in 0..12 {
+            let a = sample(seed, 4, 3);
+            let b = sample(seed + 100, 3, 4);
+            let mut product = vec![vec![q(0, 1); 6]; 6];
+            for (i, left) in a.rows().iter().enumerate() {
+                for (j, right) in b.rows().iter().enumerate() {
+                    for (k, x) in left.iter().enumerate() {
+                        for (l, y) in right.iter().enumerate() {
+                            product[i + j][k + l] += x * y;
+                        }
+                    }
+                }
+            }
+            assert_eq!(a.multiply(&b), BivariatePolynomial::new(product));
+            let mut sum = vec![vec![q(0, 1); 4]; 4];
+            for (i, row) in a.rows().iter().enumerate() {
+                for (k, x) in row.iter().enumerate() {
+                    sum[i][k] += x;
+                }
+            }
+            for (i, row) in b.rows().iter().enumerate() {
+                for (k, x) in row.iter().enumerate() {
+                    sum[i][k] -= x;
+                }
+            }
+            assert_eq!(a.subtract(&b), BivariatePolynomial::new(sum));
+            assert!(a.subtract(&a).is_zero() && a.subtract(&a).rows().is_empty());
+            for value in [q(0, 1), q(3, 1), q(-2, 5)] {
+                let mut expected = vec![q(0, 1)];
+                for row in a.rows().iter().rev() {
+                    expected = poly::add(&poly::scale(&expected, &value), row);
+                }
+                assert_eq!(a.evaluate_index(&value), poly::trim(&expected));
+            }
         }
     }
 }

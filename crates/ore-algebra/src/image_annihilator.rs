@@ -69,7 +69,7 @@
 
 use crate::bivariate::BivariatePolynomial;
 use crate::division::{index_only_leader, right_pseudo_division};
-use crate::kernel::exact_kernel_vectors_by_group;
+use crate::kernel::{exact_kernel_vectors_by_group, integer_equation_row};
 use crate::operator::OreOperator;
 use crate::row_annihilator::reduce_by_row_annihilator;
 use crate::row_map::{pull_back, push_forward, PullbackBounds, RowMapError, RowMapStep};
@@ -545,22 +545,23 @@ type EquationKey = (usize, usize, usize, usize, usize);
 /// `sum_u c_u n^(a_u) R(u)`, where `remainder_of(u)` is the remainder row
 /// of the monomial `u` without its power of `n` (the reductions commute
 /// with left multiplication by `n^a`); `None` when there is none.
-pub(crate) fn kernel_candidate(
+pub(crate) fn kernel_candidate<'a>(
     unknowns: &[Unknown],
     groups: &[usize],
-    remainder_of: impl Fn(&Unknown) -> Vec<OreOperator>,
+    remainder_of: impl Fn(&Unknown) -> &'a [OreOperator],
 ) -> Option<OreOperator> {
     // Equations: (entry, shift, derivative, n power, x power) -> column -> value.
+    // The remainder of n^a u is n^a times that of u: its coefficient of
+    // n^(p + a) x^q is the coefficient of n^p x^q of the remainder of u.
     let mut equations: BTreeMap<EquationKey, BTreeMap<usize, Rational>> = BTreeMap::new();
     for (column, unknown) in unknowns.iter().enumerate() {
-        let factor = BivariatePolynomial::monomial(unknown.index_power, 0, Rational::one());
         for (entry, remainder) in remainder_of(unknown).iter().enumerate() {
-            for ((i, d), c) in &remainder.left_multiply(&factor).0 {
+            for ((i, d), c) in &remainder.0 {
                 for (p, row) in c.rows().iter().enumerate() {
                     for (q, value) in row.iter().enumerate() {
                         if !value.is_zero() {
                             equations
-                                .entry((entry, *i, *d, p, q))
+                                .entry((entry, *i, *d, p + unknown.index_power, q))
                                 .or_default()
                                 .insert(column, value.clone());
                         }
@@ -571,16 +572,7 @@ pub(crate) fn kernel_candidate(
     }
     let rows: Vec<Vec<BigInt>> = equations
         .values()
-        .map(|entries| {
-            let denominator = entries
-                .values()
-                .fold(BigInt::one(), |acc, value| acc.lcm(value.denom()));
-            let mut row = vec![BigInt::zero(); unknowns.len()];
-            for (column, value) in entries {
-                row[*column] = value.numer() * (&denominator / value.denom());
-            }
-            row
-        })
+        .map(|entries| integer_equation_row(entries, unknowns.len()))
         .collect();
     let vectors = exact_kernel_vectors_by_group(&rows, groups, 2);
     let vector = vectors[1].as_ref()?;
@@ -614,7 +606,7 @@ fn solve_shape(
     // Remainders of the index-free monomials x^b D^d S^i; that of n^a times
     // a monomial is n^a times it (left multiplication by n^a commutes with
     // every pullback and reduction step).
-    let mut remainders: HashMap<(usize, usize, usize), OreOperator> = HashMap::new();
+    let mut remainders: HashMap<(usize, usize, usize), Vec<OreOperator>> = HashMap::new();
     for unknown in &unknowns {
         let key = (unknown.shift, unknown.derivative, unknown.variable_power);
         if remainders.contains_key(&key) {
@@ -623,23 +615,24 @@ fn solve_shape(
         let (pulled, _) = pull_back(&unknown.index_free_operator(), steps, bounds)?;
         let division = right_pseudo_division(&pulled, parent, shape.order)
             .ok_or(ImageAnnihilatorError::ParentLeaderNotIndexOnly)?;
-        remainders.insert(key, division.remainder);
+        remainders.insert(key, vec![division.remainder]);
     }
     if let Some(a) = row_annihilator {
         // One fixed derivative top for every monomial keeps it linear.
         let top = remainders
             .values()
+            .flatten()
             .map(OreOperator::max_derivative)
             .max()
             .unwrap_or(0);
-        for remainder in remainders.values_mut() {
+        for remainder in remainders.values_mut().flatten() {
             let reduction = reduce_by_row_annihilator(remainder, a, order, top)
                 .ok_or(ImageAnnihilatorError::InvalidRowAnnihilator)?;
             *remainder = reduction.remainder;
         }
     }
     Ok(kernel_candidate(&unknowns, &groups, |unknown| {
-        vec![remainders[&(unknown.shift, unknown.derivative, unknown.variable_power)].clone()]
+        remainders[&(unknown.shift, unknown.derivative, unknown.variable_power)].as_slice()
     }))
 }
 

@@ -421,7 +421,7 @@ fn reversal_pullback(
         let term = powers[*d]
             .shifted(*i)
             .left_multiply(&BivariatePolynomial::new(rows));
-        out = out.add(&term);
+        out.add_assign(&term);
     }
     out
 }
