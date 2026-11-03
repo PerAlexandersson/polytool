@@ -1,13 +1,17 @@
 //! [`certify_veronese_section_lift`]: certify one candidate Veronese-section
 //! lift `Q_n = lambda(n) V_(r, j)(P_(n+s))` of a recurrence-defined sequence
 //! with index-dependent and differential terms, prove its parent, and report
-//! the result as `polytool.recurrence-veronese-certificate.v1`.
+//! the result as `polytool.recurrence-veronese-certificate.v1`; and
+//! [`VeroneseSectionCandidate::section_recurrence`]: compute a runnable rule
+//! for the candidate rows from the parent rule (a common left multiple for
+//! one component of the transported section system), for the forward move.
 //!
 //! The kernel is in `section_operators` (the transport `phi`),
 //! `section_certify` (gauge, pseudo-division, the forward certificate) and
 //! `parent_proof` (the parent provers).
 
 use super::super::implicit::algebra::{roots_in_domain, Biv, DOp};
+use super::super::implicit::runnable_record_from_annihilator;
 use super::hadamard_factor::prepare::x_free_left_hand_factor_rule;
 use super::parent_proof::{prove_parent, ParentRecord};
 use super::section_certify::{
@@ -461,6 +465,231 @@ impl ComparedRows {
             .iter()
             .zip(&self.candidate)
             .position(|(a, b)| a != b)
+    }
+}
+
+/// Options of [`VeroneseSectionCandidate::section_recurrence`]: the budget
+/// of the common-left-multiple search (`ore_algebra::find_component_annihilator`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VeroneseSectionRecurrenceOptions {
+    /// Largest order above the parent order `k`.  `None` (the default) is
+    /// `(r - 1) k` for a derivative-free parent, so orders up to `r k` (the
+    /// order of the companion elimination) are tried, and `(2r - 1) k` for
+    /// a parent with derivatives, whose eliminations need higher orders
+    /// (the sections of the Touchard rows `T_n = x T_(n-1) + x T'_(n-1)`
+    /// have rules of order 2 at `r = 2`, those of the reversed Stirling rows
+    /// of order 3).
+    pub max_order_increase: Option<usize>,
+    /// Largest derivative order of the ansatz below the top shift.  `None`
+    /// (the default) is zero for a derivative-free parent, whose sections
+    /// have derivative-free rules, and `r J + 1` (at most
+    /// [`MAX_VERONESE_CERTIFY_DERIVATIVE_ORDER`]) for a parent of largest
+    /// derivative order `J >= 1`, since eliminating the other components
+    /// differentiates them again (the sections of the Touchard rows need
+    /// second derivatives at `r = 2`).
+    pub max_derivative_order: Option<usize>,
+    /// Largest coefficient degree in `n` and in `y`.  Default 8 (the
+    /// modulus-3 sections of the Narayana rows need degree 8).
+    pub max_coefficient_degree: usize,
+    /// Largest number of unknowns of one ansatz (at most
+    /// [`MAX_IMAGE_RECURRENCE_UNKNOWNS`]).  Default 1000.
+    pub max_unknowns: usize,
+    /// Largest number of ansatz shapes solved (at most
+    /// [`MAX_IMAGE_RECURRENCE_SHAPES`]).  Default 120.
+    pub max_shapes: usize,
+    /// Operator-term budget of the transported system, at most
+    /// [`MAX_VERONESE_OPERATOR_TERMS`].  Default [`MAX_VERONESE_OPERATOR_TERMS`].
+    pub max_operator_terms: usize,
+}
+
+impl Default for VeroneseSectionRecurrenceOptions {
+    fn default() -> Self {
+        Self {
+            max_order_increase: None,
+            max_derivative_order: None,
+            max_coefficient_degree: 8,
+            max_unknowns: 1000,
+            max_shapes: 120,
+            max_operator_terms: MAX_VERONESE_OPERATOR_TERMS,
+        }
+    }
+}
+
+impl VeroneseSectionCandidate {
+    /// A runnable rule with seeds for the candidate rows
+    /// `Q_n = lambda(n) V_(r, j)(P_(n+s))`, `n >= first_index`, computed from
+    /// the parent's rule, not fitted.
+    ///
+    /// # Method
+    ///
+    /// The gauged and shifted parent relation `L~` (leader `g~(n) S^k`, free
+    /// of `x`) holds for `P~_n = lambda(n) P_(n+s)` at every base
+    /// `n >= b = max(n0, p0 + Kp - k - s)` (notation of
+    /// [`certify_veronese_section_lift`]).  Its transport `Phi = phi(L~)`
+    /// (module `section_operators`) is an `r x r` system with shift-`k`
+    /// part `g~(n) S^k I` that annihilates the section vector `F~` at the
+    /// same bases, since the sections of `L~ P~` are `Phi F~` and sections
+    /// are unique.  A runnable scalar operator `M` for the component `j` is
+    /// computed with `ore_algebra::find_component_annihilator`: an
+    /// increasing ansatz whose row `M e_j` is right pseudo-divided by `Phi`
+    /// with remainder zero, `w(n) M e_j = sum_b H_b o Phi_b` (verified
+    /// exactly).  Applied to `F~` at a base `n >= b`, every term combines
+    /// rows `(Phi F~)_(n+nu)`, `nu >= 0`, which vanish, so
+    /// `(M V_j(P~))_n = 0` wherever `w(n) != 0`.  The finitely many integer
+    /// roots of `w` and the bases below `b` are left to the image-rule
+    /// normalisation, which checks them exactly on the section rows and keeps
+    /// rows as seeds where needed (see `runnable_record_from_annihilator`).
+    /// So the returned record generates exactly the rows `Q_n` for every
+    /// `n >= n0`; [`certify_veronese_section_lift`] recomputes the identity
+    /// independently.
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::BudgetExhausted`] when no runnable rule is found
+    /// within the budget (nothing is guessed); otherwise as
+    /// [`certify_veronese_section_lift`] for an invalid candidate or parent,
+    /// and [`RecurrenceError::LimitExceeded`] for options over their bounds.
+    ///
+    /// ```
+    /// use polytool::recurrence::*;
+    ///
+    /// let q = |n: i64| BigRational::from_integer(n.into());
+    /// // The parent P_n = (1 + x) P_(n-1), P_0 = 1, and its even sections.
+    /// let parent_rule = Recurrence {
+    ///     terms: vec![RecurrenceTerm::new(1, 0, BivarPoly { coeffs: vec![vec![q(1), q(1)]] })],
+    ///     denominator: None,
+    ///     inhomogeneous: None,
+    /// };
+    /// let candidate = VeroneseSectionCandidate {
+    ///     modulus: 2,
+    ///     residue: 0,
+    ///     parent: RecurrenceJson::from_recurrence_rational(&parent_rule, 0, &[vec![q(1)]], None),
+    ///     index_shift: 0,
+    ///     gauge: VeroneseSectionGauge::None,
+    /// };
+    /// let record =
+    ///     candidate.section_recurrence(0, &VeroneseSectionRecurrenceOptions::default())?;
+    /// let (rule, first_index, seeds) = record.to_recurrence_parts()?;
+    /// let rows = rule.generate_rows_rational(&seeds, first_index, 5)?;
+    /// // V_(2,0)((1 + x)^4) = 1 + 6y + y^2.
+    /// assert_eq!(rows[4], vec![q(1), q(6), q(1)]);
+    /// let certification = certify_veronese_section_lift(
+    ///     &rule,
+    ///     &seeds,
+    ///     first_index,
+    ///     &candidate,
+    ///     &VeroneseSectionCertifyOptions::default(),
+    /// )?;
+    /// assert_eq!(certification.verdict, VeroneseSectionVerdict::Proved);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn section_recurrence(
+        &self,
+        first_index: usize,
+        options: &VeroneseSectionRecurrenceOptions,
+    ) -> Result<RecurrenceJson, RecurrenceError> {
+        if options.max_unknowns > MAX_IMAGE_RECURRENCE_UNKNOWNS
+            || options.max_shapes > MAX_IMAGE_RECURRENCE_SHAPES
+        {
+            return Err(RecurrenceError::LimitExceeded(format!(
+                "max_unknowns <= {MAX_IMAGE_RECURRENCE_UNKNOWNS} and max_shapes <= \
+                 {MAX_IMAGE_RECURRENCE_SHAPES} are required"
+            )));
+        }
+        validate(
+            self,
+            &VeroneseSectionCertifyOptions {
+                max_operator_terms: options.max_operator_terms,
+                ..VeroneseSectionCertifyOptions::default()
+            },
+        )?;
+        let (modulus, residue, shift) = (self.modulus, self.residue, self.index_shift);
+        let n0 = first_index;
+        let (parent_rule, parent_first, parent_rows) = self.parent.to_recurrence_parts()?;
+        let parent = prepare_rule(&parent_rule, &parent_rows, parent_first, "parent")?;
+        let (parent_k, _) = x_free_leader(&parent.relation)?;
+        let parent_start = i64::try_from(n0)
+            .ok()
+            .and_then(|n0| n0.checked_add(shift))
+            .and_then(|start| usize::try_from(start).ok())
+            .filter(|start| *start >= parent_first)
+            .ok_or_else(|| {
+                RecurrenceError::InvalidInput(format!(
+                    "the candidate uses parent row n0 + s = {n0} + {shift}, before the parent's \
+                     first index {parent_first}"
+                ))
+            })?;
+        if parent_start - parent_first > MAX_VERONESE_PARENT_OFFSET {
+            return Err(RecurrenceError::LimitExceeded(format!(
+                "the first used parent row {parent_start} is more than \
+                 {MAX_VERONESE_PARENT_OFFSET} rows after the parent's first index {parent_first}"
+            )));
+        }
+        let gauge = self.gauge.ratio_form(n0)?;
+        let gauged = gauge_parent_relation(&parent.relation, shift, &gauge)?;
+        let system = transport_to_sections(&gauged, modulus, options.max_operator_terms)?;
+        let parent_derivative = parent.relation.max_derivative();
+        let budget = ore_algebra::ImageAnnihilatorBudget {
+            max_order_increase: options
+                .max_order_increase
+                .unwrap_or(if parent_derivative == 0 {
+                    (modulus - 1) * parent_k
+                } else {
+                    (2 * modulus - 1) * parent_k
+                }),
+            max_derivative_order: options.max_derivative_order.unwrap_or(
+                if parent_derivative == 0 {
+                    0
+                } else {
+                    (modulus * parent_derivative + 1).min(MAX_VERONESE_CERTIFY_DERIVATIVE_ORDER)
+                },
+            ),
+            max_index_degree: options.max_coefficient_degree,
+            max_variable_degree: options.max_coefficient_degree,
+            max_unknowns: options.max_unknowns,
+            max_shapes: options.max_shapes,
+        };
+        let search = ore_algebra::find_component_annihilator(&system.entries, residue, &budget)
+            .map_err(|error| RecurrenceError::Unsupported(error.to_string()))?;
+        let certificate = match search {
+            ore_algebra::ComponentAnnihilatorSearch::Found { certificate, .. } => certificate,
+            ore_algebra::ComponentAnnihilatorSearch::NotFoundWithinBudget {
+                shapes_tried,
+                largest_shape,
+            } => {
+                return Err(RecurrenceError::BudgetExhausted(format!(
+                    "no runnable rule for the section V_({modulus},{residue}) within the budget \
+                     ({shapes_tried} ansatz shapes solved, the largest {largest_shape:?})"
+                )))
+            }
+        };
+        // phi(L~) F~ = 0 at every base n >= b (step 3 of the certificate).
+        let proved_from = {
+            let base = (parent.first_index + parent.seeds.len()) as i64 - parent_k as i64 - shift;
+            usize::try_from(base.max(0)).unwrap_or(0).max(n0)
+        };
+        let unproved = roots_in_domain(&n_coefficients(&certificate.multiplier), n0, None);
+        let section_rows = |count: usize| -> Result<Vec<Vec<Q>>, RecurrenceError> {
+            let rows = parent.rows(parent_start + count - parent_first, "parent")?;
+            let lambdas = gauge.values(n0, count);
+            Ok((0..count)
+                .map(|offset| {
+                    let section = section_row(
+                        &rows[parent_start - parent_first + offset],
+                        modulus,
+                        residue,
+                    );
+                    vec_poly::trim(&vec_poly::scale(&section, &lambdas[offset]))
+                })
+                .collect())
+        };
+        runnable_record_from_annihilator(
+            &certificate.annihilator,
+            n0,
+            proved_from,
+            &unproved,
+            section_rows,
+        )
     }
 }
 

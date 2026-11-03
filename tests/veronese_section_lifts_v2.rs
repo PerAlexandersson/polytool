@@ -9,7 +9,7 @@ use polytool::recurrence::{
     VeroneseParentAttestation, VeroneseParentProofRoute, VeroneseParentProofStatus,
     VeroneseSectionCandidate, VeroneseSectionCertification, VeroneseSectionCertifyOptions,
     VeroneseSectionGauge, VeroneseSectionIdentityStatus, VeroneseSectionLiftOptions,
-    VeroneseSectionVerdict,
+    VeroneseSectionRecurrenceOptions, VeroneseSectionVerdict,
 };
 
 fn q(value: i64) -> BigRational {
@@ -782,4 +782,208 @@ fn type_b_eulerian_even_sections_are_certified() {
         LiftVerdict::Proved
     );
     assert_replays(&certification);
+}
+
+/// The section rows `lambda(n) V_(r, j)(P_(n+s))`, `n = n0, ..., n0 + count - 1`,
+/// with `lambda(n) = 2^(n - n0)` when `doubling`.
+fn section_rows(
+    parent: &RecurrenceJson,
+    modulus: usize,
+    residue: usize,
+    first_index: usize,
+    shift: usize,
+    doubling: bool,
+    count: usize,
+) -> Vec<Vec<BigRational>> {
+    let (rule, p0, seeds) = parent.to_recurrence_parts().unwrap();
+    let start = first_index + shift - p0;
+    let rows = rule
+        .generate_rows_rational(&seeds, p0, start + count)
+        .unwrap();
+    let mut factor = q(1);
+    rows[start..]
+        .iter()
+        .map(|row| {
+            let mut section: Vec<BigRational> = row
+                .iter()
+                .skip(residue)
+                .step_by(modulus)
+                .map(|c| c * &factor)
+                .collect();
+            while section.last().is_some_and(|c| *c == q(0)) {
+                section.pop();
+            }
+            if doubling {
+                factor *= q(2);
+            }
+            section
+        })
+        .collect()
+}
+
+fn trimmed(rows: Vec<Vec<BigRational>>) -> Vec<Vec<BigRational>> {
+    rows.into_iter()
+        .map(|mut row| {
+            while row.last().is_some_and(|c| *c == q(0)) {
+                row.pop();
+            }
+            row
+        })
+        .collect()
+}
+
+/// `T_n = x T_(n-1) + x T'_(n-1)`, `T_0 = 1` (Touchard rows).
+fn touchard() -> RecurrenceJson {
+    RecurrenceJson::from_recurrence_rational(
+        &rule(&[(1, 0, &[&[0, 1]]), (1, 1, &[&[0, 1]])], None),
+        0,
+        &rows(&[&[1]]),
+        None,
+    )
+}
+
+/// Section rules computed from the parent rule (not fitted) generate the
+/// sections and are certified for every index: a derivative-free parent of
+/// order two with an index-dependent leader (Narayana) and first-order
+/// parents with derivatives (Touchard, Eulerian).  The modulus-3 sections
+/// of the Eulerian rows need a rule of order 5 with derivatives up to order
+/// 6, beyond the default budget, so a larger one is passed there.
+#[test]
+fn computed_section_rules_generate_the_sections_and_are_certified() {
+    let large = VeroneseSectionRecurrenceOptions {
+        max_order_increase: Some(4),
+        max_derivative_order: Some(6),
+        max_unknowns: 2000,
+        max_shapes: 500,
+        ..VeroneseSectionRecurrenceOptions::default()
+    };
+    let default = VeroneseSectionRecurrenceOptions::default();
+    let eulerian = polytool::recurrence::GammaLiftParent::eulerian().recurrence;
+    let cases = [
+        (
+            "narayana",
+            polytool::recurrence::GammaLiftParent::narayana().recurrence,
+            2,
+            &default,
+        ),
+        (
+            "narayana",
+            polytool::recurrence::GammaLiftParent::narayana().recurrence,
+            3,
+            &default,
+        ),
+        ("touchard", touchard(), 2, &default),
+        ("touchard", touchard(), 3, &default),
+        ("eulerian", eulerian.clone(), 2, &default),
+        ("eulerian", eulerian, 3, &large),
+    ];
+    for (name, parent, modulus, options) in cases {
+        let residues = if modulus == 3 && name == "eulerian" {
+            0..1
+        } else {
+            0..modulus
+        };
+        for residue in residues {
+            let candidate = VeroneseSectionCandidate {
+                modulus,
+                residue,
+                parent: parent.clone(),
+                index_shift: 0,
+                gauge: VeroneseSectionGauge::None,
+            };
+            let p0 = parent.first_index;
+            let record = candidate
+                .section_recurrence(p0, options)
+                .unwrap_or_else(|error| panic!("{name} r={modulus} j={residue}: {error}"));
+            let (input, first_index, seeds) = record.to_recurrence_parts().unwrap();
+            assert_eq!(first_index, p0);
+            let generated = input.generate_rows_rational(&seeds, p0, 30).unwrap();
+            assert_eq!(
+                trimmed(generated),
+                section_rows(&parent, modulus, residue, p0, 0, false, 30),
+                "{name} r={modulus} j={residue}"
+            );
+            let certification = certify_veronese_section_lift(
+                &input,
+                &seeds,
+                first_index,
+                &candidate,
+                &VeroneseSectionCertifyOptions::default(),
+            )
+            .unwrap();
+            certification.verify().unwrap();
+            assert!(
+                matches!(
+                    certification.identity,
+                    VeroneseSectionIdentityStatus::Certified { .. }
+                ),
+                "{name} r={modulus} j={residue}: {certification:#?}"
+            );
+        }
+    }
+}
+
+/// A shifted and gauged candidate `Q_n = 2^n V_(2, 1)(N_(n+1))`.
+#[test]
+fn computed_section_rule_of_a_shifted_gauged_candidate_is_certified() {
+    let parent = polytool::recurrence::GammaLiftParent::narayana().recurrence;
+    let gauge = VeroneseSectionGauge::Ratio {
+        numerator: vec!["2".into()],
+        denominator: vec!["1".into()],
+        initial_value: "1".into(),
+    };
+    let candidate = VeroneseSectionCandidate {
+        modulus: 2,
+        residue: 1,
+        parent: parent.clone(),
+        index_shift: 1,
+        gauge,
+    };
+    let record = candidate
+        .section_recurrence(1, &VeroneseSectionRecurrenceOptions::default())
+        .unwrap();
+    let (input, first_index, seeds) = record.to_recurrence_parts().unwrap();
+    let generated = input
+        .generate_rows_rational(&seeds, first_index, 25)
+        .unwrap();
+    assert_eq!(
+        trimmed(generated),
+        section_rows(&parent, 2, 1, 1, 1, true, 25)
+    );
+    let certification = certify_veronese_section_lift(
+        &input,
+        &seeds,
+        first_index,
+        &candidate,
+        &VeroneseSectionCertifyOptions::default(),
+    )
+    .unwrap();
+    assert!(
+        matches!(
+            certification.identity,
+            VeroneseSectionIdentityStatus::Certified { .. }
+        ),
+        "{certification:#?}"
+    );
+}
+
+/// With a budget too small for the elimination the search says so.
+#[test]
+fn computed_section_rule_reports_an_exhausted_budget() {
+    let candidate = VeroneseSectionCandidate {
+        modulus: 3,
+        residue: 0,
+        parent: polytool::recurrence::GammaLiftParent::narayana().recurrence,
+        index_shift: 0,
+        gauge: VeroneseSectionGauge::None,
+    };
+    let options = VeroneseSectionRecurrenceOptions {
+        max_order_increase: Some(0),
+        max_coefficient_degree: 1,
+        ..VeroneseSectionRecurrenceOptions::default()
+    };
+    assert!(matches!(
+        candidate.section_recurrence(1, &options),
+        Err(RecurrenceError::BudgetExhausted(_))
+    ));
 }

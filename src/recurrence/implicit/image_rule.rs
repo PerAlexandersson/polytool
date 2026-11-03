@@ -88,7 +88,7 @@ use crate::integer_range_sign::{
     decide_index_polynomial_sign, IndexSignCondition, IndexSignDecision, IntegerRange,
 };
 use crate::recurrence::implicit::algebra::{
-    content_and_primitive, roots_in_domain, Biv, BivarConversion, DOp,
+    content_and_primitive, q_usize, roots_in_domain, Biv, BivarConversion, DOp,
 };
 use crate::recurrence::root_domain::bivariate_leader_nonvanishing;
 use crate::recurrence::{
@@ -1071,6 +1071,135 @@ fn seed_count(m: &DOp, n0: usize) -> usize {
         .max()
         .unwrap_or(0)
         .max(order)
+}
+
+/// The content in `n` of an operator: the gcd of the contents of all its
+/// coefficients (zero for the zero operator).
+fn operator_index_content(op: &DOp) -> Vec<Q> {
+    let mut gcd = crate::polynomial::Polynomial::<Q>::zero();
+    for c in op.0.values() {
+        let (content, _) = content_and_primitive(c);
+        gcd = gcd.gcd(&crate::polynomial::Polynomial::new(content));
+    }
+    vec_poly::trim(gcd.coeffs())
+}
+
+/// A runnable rule with seeds for rows `Q_n`, `n >= first_index`, from an
+/// operator `M` (base form, `sum m_(i,d)(n, x) D^d S^i`, top shift `R`) that
+/// is **proved** to annihilate the rows, `(M Q)_n = 0`, at every base
+/// `n >= proved_from_base` except the bases listed in `unproved_bases`.
+/// `rows(count)` returns `Q_(first_index), ..., Q_(first_index + count - 1)`
+/// computed independently (from the definition of `Q`).
+///
+/// The normalisation:
+///
+/// 1. `M = c(n) x^e M_0` with `M_0` = `ore_algebra::normalize_annihilator(M)`
+///    (content `c(n)` and power `x^e` removed); `(M_0 Q)_n = 0` wherever
+///    `(M Q)_n = 0` and `c(n) != 0` (`Q[x]` has no zero divisors), so the
+///    integer roots of `c` join the unproved bases.
+/// 2. At every unproved base `b >= first_index` (and every base below
+///    `proved_from_base`) whose leader `m_R(b, .)` is not the zero
+///    polynomial, `(M_0 Q)_b` is evaluated exactly on the rows; where it is
+///    not zero, `M_0` is multiplied on the left by `(n - b)`, so the leader
+///    vanishes at `b` and the target `b + R` becomes a seed.  Call the result
+///    `M_1`; it vanishes on `Q` at every base `n >= first_index` at which
+///    its leader is not the zero polynomial.
+/// 3. The seeds are `Q_(first_index), ..., Q_(first_index + K - 1)` with `K`
+///    at least `R` and past every target where the leader of `M_1`
+///    vanishes identically (the integer roots of its content in `n`, found
+///    exactly).  At every later target `t` the leader `m_R(t - R, .)` is a
+///    nonzero polynomial and `(M_1 Q)_(t-R) = 0`, so `Q_t` is the unique
+///    row the rule generates from the previous ones; by induction the rule
+///    with these seeds generates exactly `Q`.
+///
+/// A replay of the rule against `rows` on eight further rows is a
+/// self-check (evidence only; the argument above is the proof).
+///
+/// # Errors
+///
+/// [`RecurrenceError::Unsupported`] when `M` is not runnable (its top shift
+/// column is not a single term without derivatives),
+/// [`RecurrenceError::LimitExceeded`] when more than
+/// [`MAX_IMAGE_RECURRENCE_ROWS`] rows are needed, errors of `rows`, and
+/// [`RecurrenceError::VerificationFailed`] when the self-check fails.
+pub(in crate::recurrence) fn runnable_record_from_annihilator(
+    annihilator: &DOp,
+    first_index: usize,
+    proved_from_base: usize,
+    unproved_bases: &[usize],
+    rows: impl Fn(usize) -> Result<Vec<Vec<Q>>, RecurrenceError>,
+) -> Result<RecurrenceJson, RecurrenceError> {
+    let n0 = first_index;
+    if !ore_algebra::is_runnable(annihilator) {
+        return Err(RecurrenceError::Unsupported(
+            "the annihilator is not runnable (its top shift column is not a single term \
+             without derivatives)"
+                .into(),
+        ));
+    }
+    let content = operator_index_content(annihilator);
+    let normalized = ore_algebra::normalize_annihilator(annihilator);
+    let order = normalized.max_shift();
+    let leader = |op: &DOp| op.0.get(&(op.max_shift(), 0)).cloned().unwrap_or_default();
+    let leader_zero_bases = zero_bases(&leader(&normalized), n0);
+    let mut checks: Vec<usize> = (n0..proved_from_base.max(n0)).collect();
+    checks.extend(unproved_bases.iter().copied().filter(|b| *b >= n0));
+    checks.extend(roots_in_domain(&content, n0, None));
+    checks.sort_unstable();
+    checks.dedup();
+    checks.retain(|b| !leader_zero_bases.contains(b));
+    let last_base = checks
+        .iter()
+        .chain(&leader_zero_bases)
+        .max()
+        .copied()
+        .unwrap_or(n0);
+    let needed = last_base + order + 1 - n0 + 8;
+    require_row_budget(needed)?;
+    let computed = rows(needed)?;
+    if computed.len() < needed {
+        return Err(RecurrenceError::VerificationFailed(format!(
+            "{} rows were computed, {needed} are needed",
+            computed.len()
+        )));
+    }
+    let mut factor = vec![Q::one()];
+    for base in &checks {
+        let value = normalized.apply(&computed, n0, *base).ok_or_else(|| {
+            RecurrenceError::VerificationFailed(format!("rows missing at base {base}"))
+        })?;
+        if !vec_poly::is_zero(&value) {
+            factor = vec_poly::mul(&factor, &[-q_usize(*base), Q::one()]);
+        }
+    }
+    let adjusted = if factor.len() > 1 {
+        normalized.left_multiply(&Biv::new(factor.iter().map(|c| vec![c.clone()]).collect()))
+    } else {
+        normalized
+    };
+    let seeds = zero_bases(&leader(&adjusted), n0)
+        .into_iter()
+        .map(|base| base + order + 1 - n0)
+        .max()
+        .unwrap_or(0)
+        .max(order);
+    let (rule, _) = successor_rule(&adjusted)?;
+    let record = RecurrenceJson::from_recurrence_rational(&rule, n0, &computed[..seeds], None);
+    let replay = rule
+        .generate_rows_rational(&computed[..seeds], n0, needed)
+        .map_err(|error| {
+            RecurrenceError::VerificationFailed(format!("the rule cannot be replayed: {error}"))
+        })?;
+    if replay
+        .iter()
+        .zip(&computed)
+        .any(|(generated, expected)| vec_poly::trim(generated) != vec_poly::trim(expected))
+    {
+        return Err(RecurrenceError::VerificationFailed(
+            "the normalized rule does not replay the rows".into(),
+        ));
+    }
+    Ok(record)
 }
 
 /// The exceptional bases of the identity (module documentation, step 3).

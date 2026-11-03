@@ -17,13 +17,23 @@
 //!   nodes with derivative-free rules.
 //! - **Gamma maps**: the gamma polynomials `Gamma_n` of a node whose stored
 //!   rows are palindromic at `d_n = deg P_n` (affine) with nonzero constant
-//!   terms; the image rule is fitted to the gamma rows and then certified by
-//!   [`crate::recurrence::certify_gamma_lift`] (a fitted rule is only a
-//!   candidate: the certificate proves it for every index).
-//! - **Veronese sections** `V_(r,j)(P_n)`, `r = 2, 3`: fitted section rule,
+//!   terms.  The image rule is computed from the parent rule by the gamma
+//!   transport ([`crate::recurrence::GammaLiftParent::gamma_polynomial_recurrence`],
+//!   built on [`crate::recurrence::transport_gamma`]), not fitted, and
+//!   certified by [`crate::recurrence::certify_gamma_lift`], which proves
+//!   the parent's symmetry and the identity for every index.  The
+//!   certificate divides by the same transported relation, so a parent
+//!   whose transport fails has no gamma edge, and no fitted fallback is
+//!   tried.
+//! - **Veronese sections** `V_(r,j)(P_n)`, `r = 2, 3`: the section rule is
+//!   computed from the parent rule (the transport `phi` to the section
+//!   system and a common left multiple for one component,
+//!   [`crate::recurrence::VeroneseSectionCandidate::section_recurrence`]),
 //!   certified by [`crate::recurrence::certify_veronese_section_lift`]; the
 //!   edge records the section rule, and the audit recomputes the whole
-//!   certification from it.
+//!   certification from it.  A rule is fitted to the section rows only when
+//!   the computation reports nothing within its budget (a documented
+//!   fallback; the certificate proves a fitted rule just the same).
 //! - **Obreschkoff combinations** `P_n + P_(n+1)` of nodes with interlacing
 //!   consecutive rows and a first-order rule ([`super::obreschkoff`]).
 //!
@@ -52,10 +62,11 @@ use crate::recurrence::{
     AdaptiveSearchBudget, AdaptiveSearchOptions, AdaptiveSearchOutcome, BasisMap,
     BasisMapImageOptions, BasisMapLibrary, DegreeSchedule, GammaLiftCandidate, GammaLiftOptions,
     GammaLiftParent, ImageRecurrenceOptions, IndexRationalFunction, PreserverImageCandidate,
-    PreserverImageOptions, PreserverOperator, Recurrence, RecurrenceJson, VeroneseSectionCandidate,
-    VeroneseSectionCertifyOptions, VeroneseSectionGauge,
+    PreserverImageOptions, PreserverOperator, Recurrence, RecurrenceError, RecurrenceJson,
+    VeroneseSectionCandidate, VeroneseSectionCertifyOptions, VeroneseSectionGauge,
+    VeroneseSectionRecurrenceOptions,
 };
-use crate::{gamma_coefficients_bigint_coeffs, BigRational};
+use crate::BigRational;
 use num_bigint::BigInt;
 use num_traits::{Signed, Zero};
 use serde::{Deserialize, Serialize};
@@ -487,8 +498,56 @@ fn require_integer_rows(definition: &RecurrenceJson) -> Result<(), AtlasError> {
     }
 }
 
-/// Fit a runnable rule to `rows` (indexed from `first_index`), without
-/// derivatives, up to order `max_order`.
+/// The rule of the Veronese section `V_(r,j)(P_n)`, `n >= p0`.
+///
+/// It is computed from the parent's rule
+/// ([`VeroneseSectionCandidate::section_recurrence`]: a common left multiple
+/// for one component of the transported section system, normalised to a
+/// runnable record).  Only when that search reports nothing within its
+/// budget ([`RecurrenceError::BudgetExhausted`]) is a rule fitted to the
+/// section rows, as a documented fallback; either way the rule is only an
+/// input of [`crate::recurrence::certify_veronese_section_lift`], which
+/// proves the identity for every index.
+fn veronese_section_rule(
+    parent: &RecurrenceJson,
+    modulus: usize,
+    residue: usize,
+) -> Result<RecurrenceJson, AtlasError> {
+    let n0 = parent.first_index;
+    let parent_rows = definition_integer_rows_long(parent, 24)?;
+    let section_rows: Vec<Vec<BigRational>> = parent_rows
+        .iter()
+        .map(|row| {
+            let section: Vec<BigInt> = row.iter().skip(residue).step_by(modulus).cloned().collect();
+            trimmed_rational(&section)
+        })
+        .collect();
+    if section_rows.iter().all(|r| r.is_empty()) {
+        return Err(AtlasError::Unsupported("every section row is zero".into()));
+    }
+    let candidate = VeroneseSectionCandidate {
+        modulus,
+        residue,
+        parent: parent.clone(),
+        index_shift: 0,
+        gauge: VeroneseSectionGauge::None,
+    };
+    match candidate.section_recurrence(n0, &VeroneseSectionRecurrenceOptions::default()) {
+        Ok(record) => Ok(record),
+        Err(RecurrenceError::BudgetExhausted(reason)) => {
+            let rule = fit_rule(&section_rows, n0, 2 * modulus).ok_or_else(|| {
+                AtlasError::Unsupported(format!(
+                    "no section rule was computed ({reason}) and none fits the section rows"
+                ))
+            })?;
+            record_from_rule(&rule, n0, &section_rows)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Fit a runnable rule to `rows` (indexed from `first_index`), up to order
+/// `max_order` (the fallback of [`veronese_section_rule`]).
 fn fit_rule(rows: &[Vec<BigRational>], first_index: usize, max_order: usize) -> Option<Recurrence> {
     let search = AdaptiveSearchOptions {
         max_rec_len: max_order,
@@ -622,27 +681,17 @@ pub fn forward_derivations(task: &ForwardTask) -> Result<Vec<AnalyzedDerivation>
         ForwardTask::GammaPolynomial {
             parent, schedule, ..
         } => {
-            let n0 = parent.definition.first_index;
-            let parent_rows = definition_integer_rows_long(&parent.definition, 24)?;
-            let mut gamma_rows = Vec::new();
-            for row in &parent_rows {
-                let gamma = gamma_coefficients_bigint_coeffs(row).ok_or_else(|| {
-                    AtlasError::Unsupported("a parent row is not palindromic".into())
-                })?;
-                gamma_rows.push(trimmed_rational(&gamma));
-            }
-            let rule = fit_rule(&gamma_rows, n0, 3)
-                .ok_or_else(|| AtlasError::Unsupported("no rule fits the gamma rows".into()))?;
-            let definition = record_from_rule(&rule, n0, &gamma_rows)?;
+            let gamma_parent = GammaLiftParent {
+                name: parent.name.clone(),
+                recurrence: parent.definition.clone(),
+                symmetry_schedule: schedule.clone(),
+            };
+            let definition = canonical_definition(&gamma_parent.gamma_polynomial_recurrence()?)?;
             require_integer_rows(&definition)?;
             let (rule, first_index, _) = definition.to_recurrence_parts()?;
             let rows = definition_rows(&definition, 16)?;
             let candidate = GammaLiftCandidate {
-                parent: GammaLiftParent {
-                    name: parent.name.clone(),
-                    recurrence: parent.definition.clone(),
-                    symmetry_schedule: schedule.clone(),
-                },
+                parent: gamma_parent,
                 index_shift: 0,
                 scale: "1".into(),
                 gauge: VeroneseSectionGauge::None,
@@ -671,26 +720,11 @@ pub fn forward_derivations(task: &ForwardTask) -> Result<Vec<AnalyzedDerivation>
             residue,
             ..
         } => {
-            let n0 = parent.definition.first_index;
-            let parent_rows = definition_integer_rows_long(&parent.definition, 24)?;
-            let section_rows: Vec<Vec<BigRational>> = parent_rows
-                .iter()
-                .map(|row| {
-                    let section: Vec<BigInt> = row
-                        .iter()
-                        .skip(*residue)
-                        .step_by(*modulus)
-                        .cloned()
-                        .collect();
-                    trimmed_rational(&section)
-                })
-                .collect();
-            if section_rows.iter().all(|r| r.is_empty()) {
-                return Err(AtlasError::Unsupported("every section row is zero".into()));
-            }
-            let rule = fit_rule(&section_rows, n0, 2 * modulus)
-                .ok_or_else(|| AtlasError::Unsupported("no rule fits the section rows".into()))?;
-            let definition = record_from_rule(&rule, n0, &section_rows)?;
+            let definition = canonical_definition(&veronese_section_rule(
+                &parent.definition,
+                *modulus,
+                *residue,
+            )?)?;
             require_integer_rows(&definition)?;
             let certification =
                 veronese_certification(&definition, &parent.definition, *modulus, *residue)?;

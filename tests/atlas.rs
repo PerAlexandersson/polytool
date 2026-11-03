@@ -304,3 +304,45 @@ fn catalog_entries_with_prefix_rows_are_tails() {
     );
     let _ = std::fs::remove_dir_all(&directory);
 }
+
+/// Forward Veronese sections of the Eulerian node: the section rules are
+/// computed from the parent rule, certified, integrated and audited.
+#[test]
+fn forward_veronese_sections_from_eulerian() {
+    let directory = scratch("forward-veronese");
+    let mut store = AtlasStore::open(&directory).unwrap();
+    integrate(&mut store, root_derivations(&named("eulerian")).unwrap());
+    let eulerian = node_of(&store, "eulerian");
+    let spec = AtlasSequenceSpec {
+        definition: eulerian.definitions[0].recurrence.clone(),
+        source: eulerian.definitions[0].source.clone(),
+        name: "eulerian".into(),
+        polytool_family: None,
+        oeis_id: None,
+        oeis_prefix_rows: 0,
+    };
+    for residue in 0..2 {
+        let sections = forward_derivations(&ForwardTask::VeroneseSection {
+            node: eulerian.id.clone(),
+            parent: spec.clone(),
+            modulus: 2,
+            residue,
+        })
+        .unwrap();
+        let summary = integrate(&mut store, sections);
+        assert_eq!(summary.nodes_added, 1, "{summary:?}");
+    }
+    store.commit().unwrap();
+    let reopened = AtlasStore::open(&directory).unwrap();
+    let even = reopened
+        .nodes()
+        .iter()
+        .find(|n| n.description.name.starts_with("veronese_section_2_0"))
+        .unwrap();
+    // V_(2,0)(A_4) = V_(2,0)(1 + 11x + 11x^2 + x^3) = 1 + 11y.
+    assert_eq!(even.rows[3], vec!["1", "11"]);
+    let audit = audit_atlas(&reopened);
+    assert!(audit.passed(), "{:?}", audit.problems);
+    assert_eq!(audit.edges_by_operation.get("veronese_section"), Some(&2));
+    let _ = std::fs::remove_dir_all(&directory);
+}

@@ -353,3 +353,156 @@ fn symmetry_without_an_invariant_rule_is_only_supported_by_rows() {
     ));
     assert_eq!(certification.lift_summary.verdict, LiftVerdict::Open);
 }
+
+/// The gamma rows `G_m` of the parent, `m = p0, ..., p0 + count - 1`.
+fn parent_gamma_rows(parent: &GammaLiftParent, count: usize) -> Vec<Vec<Q>> {
+    let (rule, first_index, seeds) = parent.recurrence.to_recurrence_parts().unwrap();
+    let rows = rule
+        .generate_rows_rational(&seeds, first_index, count)
+        .unwrap();
+    let map = RecurrenceTransformation::Gamma {
+        schedule: parent.symmetry_schedule.clone(),
+    };
+    rows.iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let mut gamma = map.map_row(first_index + i, row).unwrap().swap_remove(0);
+            while gamma.len() > 1 && gamma.last().is_some_and(|c| *c == q(0)) {
+                gamma.pop();
+            }
+            gamma
+        })
+        .collect()
+}
+
+fn trimmed(rows: Vec<Vec<Q>>) -> Vec<Vec<Q>> {
+    rows.into_iter()
+        .map(|mut row| {
+            while row.len() > 1 && row.last().is_some_and(|c| *c == q(0)) {
+                row.pop();
+            }
+            row
+        })
+        .collect()
+}
+
+/// The gamma rule computed from the parent rule (not fitted) generates the
+/// gamma rows and is certified for every index with scale 1.
+#[test]
+fn computed_gamma_rules_generate_the_gamma_rows_and_are_proved() {
+    for parent in [
+        GammaLiftParent::eulerian(),
+        GammaLiftParent::type_b_eulerian(),
+        GammaLiftParent::narayana(),
+        GammaLiftParent::one_over_k_eulerian_symmetric_part(&q(2)),
+    ] {
+        let record = parent.gamma_polynomial_recurrence().unwrap();
+        let (rule, first_index, seeds) = record.to_recurrence_parts().unwrap();
+        assert_eq!(
+            first_index, parent.recurrence.first_index,
+            "{}",
+            parent.name
+        );
+        let rows = rule
+            .generate_rows_rational(&seeds, first_index, 30)
+            .unwrap();
+        assert_eq!(
+            trimmed(rows),
+            parent_gamma_rows(&parent, 30),
+            "{}",
+            parent.name
+        );
+        let candidate = GammaLiftCandidate {
+            parent: parent.clone(),
+            index_shift: 0,
+            scale: "1".into(),
+            gauge: VeroneseSectionGauge::None,
+        };
+        let certification = certify_gamma_lift(
+            &rule,
+            &seeds,
+            first_index,
+            &candidate,
+            &GammaLiftOptions::default(),
+        )
+        .unwrap();
+        certification.verify().unwrap();
+        assert!(
+            matches!(
+                certification.identity,
+                GammaLiftIdentityStatus::Certified { .. }
+            ),
+            "{}: {certification:#?}",
+            parent.name
+        );
+        if parent.name != GammaLiftParent::one_over_k_eulerian_symmetric_part(&q(2)).name {
+            assert_proved_nonpositive(&certification);
+        }
+    }
+}
+
+/// A parent whose rule holds only from a later target: `P_0 = 1` and
+/// `(n - 1) P_n = (n - 1)(1 + x) P_(n-1)` with the seed `P_1 = 2 + 2x`, so
+/// `P_n = 2 (1 + x)^n` for `n >= 1` and the gamma rows are `1, 2, 2, ...`.
+/// The transported relation fails at the target `1` (`G_1 != G_0`); the
+/// normalisation keeps `G_1` as a seed instead of generating it.
+#[test]
+fn computed_gamma_rule_keeps_an_exceptional_row_as_a_seed() {
+    let rule = Recurrence {
+        terms: vec![polytool::recurrence::RecurrenceTerm::new(
+            1,
+            0,
+            bivariate(&[&[-1, -1], &[1, 1]]),
+        )],
+        denominator: Some(bivariate(&[&[-1], &[1]])),
+        inhomogeneous: None,
+    };
+    let parent = GammaLiftParent {
+        name: "two_binomial".into(),
+        recurrence: RecurrenceJson::from_recurrence_rational(
+            &rule,
+            0,
+            &[vec![q(1)], vec![q(2), q(2)]],
+            None,
+        ),
+        symmetry_schedule: DegreeSchedule::new(0, 0, 1),
+    };
+    let record = parent.gamma_polynomial_recurrence().unwrap();
+    let (gamma_rule, first_index, seeds) = record.to_recurrence_parts().unwrap();
+    assert_eq!(seeds, vec![vec![q(1)], vec![q(2)]]);
+    let rows = gamma_rule
+        .generate_rows_rational(&seeds, first_index, 12)
+        .unwrap();
+    assert_eq!(trimmed(rows), parent_gamma_rows(&parent, 12));
+    let certification = certify_gamma_lift(
+        &gamma_rule,
+        &seeds,
+        first_index,
+        &GammaLiftCandidate {
+            parent,
+            index_shift: 0,
+            scale: "1".into(),
+            gauge: VeroneseSectionGauge::None,
+        },
+        &GammaLiftOptions::default(),
+    )
+    .unwrap();
+    certification.verify().unwrap();
+    assert!(
+        matches!(
+            certification.identity,
+            GammaLiftIdentityStatus::Certified { .. }
+        ),
+        "{certification:#?}"
+    );
+}
+
+/// `coeffs[i][j]` = coefficient of `n^i x^j`.
+fn bivariate(coeffs: &[&[i64]]) -> polytool::recurrence::BivarPoly {
+    polytool::recurrence::BivarPoly::from_coefficients_normalized(
+        coeffs
+            .iter()
+            .map(|row| row.iter().map(|&c| q(c)).collect())
+            .collect(),
+    )
+}

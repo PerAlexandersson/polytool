@@ -2,6 +2,7 @@
 //! `Q_n = lambda(n) Gamma_(n+s)(c z)` (module documentation of `gamma_lift`).
 
 use crate::recurrence::implicit::algebra::{roots_in_domain, Biv, DOp};
+use crate::recurrence::implicit::runnable_record_from_annihilator;
 use crate::recurrence::lift::hadamard_factor::prepare::{
     prepare_rule, shift_free_from_json, shift_free_json, PreparedRule,
 };
@@ -409,6 +410,74 @@ fn gamma_rule(
     Err(RecurrenceError::Unsupported(
         "no part of the gamma-transported identity has a nonzero leader".into(),
     ))
+}
+
+impl GammaLiftParent {
+    /// A runnable rule with seeds for the gamma polynomials `G_m` of the
+    /// parent, `P_m = (1 + x)^(d_m) G_m(x/(1 + x)^2)`, `m >= p0` (the
+    /// parent's first index), computed from the parent's rule, not fitted.
+    ///
+    /// The rule is the gamma relation `T` of the certificate (module
+    /// documentation, step 2): the scalar rule of [`transport_gamma`], else a
+    /// part of the transported identity with a nonzero leader.  `T` holds at
+    /// every target `m >= p0 + K_p` (`K_p` identifying parent seeds) at which
+    /// the rows `P_(m-r), ..., P_m` are symmetric at their indices.  It is
+    /// normalised to a runnable record by the image-rule normalisation: the
+    /// targets below `p0 + K_p`, the roots of its content in `n` and the
+    /// targets where its leader vanishes are checked exactly on the gamma
+    /// rows of the parent rows and kept as seeds where needed, so that the
+    /// record generates exactly the gamma rows of every symmetric prefix.
+    /// Symmetry of every parent row (hence the statement for every `m`) is
+    /// what [`certify_gamma_lift`] proves (step 1); pass this record to it
+    /// with scale `1`, shift `0` and no gauge for the all-`n` identity.
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError`] when the parent record is invalid, the schedule
+    /// does not cover it, the transport fails (no part with a nonzero
+    /// leader, `(-1)^n` factors, an additive term), a computed parent row is
+    /// not symmetric at its index, or the normalisation needs more rows than
+    /// its bound.
+    ///
+    /// ```
+    /// use polytool::recurrence::*;
+    ///
+    /// let record = GammaLiftParent::eulerian().gamma_polynomial_recurrence()?;
+    /// let (rule, first_index, seeds) = record.to_recurrence_parts()?;
+    /// assert_eq!(first_index, 1);
+    /// let rows = rule.generate_rows_rational(&seeds, first_index, 5)?;
+    /// // A_4 = 1 + 11x + 11x^2 + x^3 = (1 + x)^3 + 8x(1 + x).
+    /// let q = |n: i64| BigRational::from_integer(n.into());
+    /// assert_eq!(rows[3], vec![q(1), q(8)]);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn gamma_polynomial_recurrence(&self) -> Result<RecurrenceJson, RecurrenceError> {
+        let (parent_rule, p0, parent_rows) = self.recurrence.to_recurrence_parts()?;
+        let parent = prepare_rule(&parent_rule, &parent_rows, p0, "parent")?;
+        let schedule = &self.symmetry_schedule;
+        validate_schedule(schedule, p0)?;
+        let rule = gamma_rule(&parent.rule, schedule)?;
+        let (relation, shift) = ImplicitRelation::from_recurrence(&rule)?;
+        let proved_from = (p0 + parent.seeds.len()).saturating_sub(shift).max(p0);
+        let scale = Q::one();
+        let gauge = VeroneseSectionGauge::None.ratio_form(p0)?;
+        let rows = CandidateRows {
+            parent: &parent,
+            schedule,
+            scale: &scale,
+            gauge: &gauge,
+            first_index: p0,
+            parent_start: p0,
+        };
+        runnable_record_from_annihilator(&relation.op(), p0, proved_from, &[], |count| {
+            rows.rows(count).map_err(|error| match error {
+                RowsError::Asymmetric(m) => RecurrenceError::InvalidInput(format!(
+                    "the parent row {m} is not symmetric at its index"
+                )),
+                RowsError::Failed(error) => error,
+            })
+        })
+    }
 }
 
 /// `T`, then `L` (the scaled, shifted and gauged relation of the candidate

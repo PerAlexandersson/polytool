@@ -117,9 +117,19 @@ polytool atlas report DIR [--json]
   maps on derivative-free nodes, gamma polynomials of palindromic nodes,
   Veronese sections `r = 2, 3`, and Obreschkoff combinations of nodes with
   interlacing rows and a first-order rule.  Nodes are taken smallest first.
-  Image rules are computed exactly (`image_recurrence_of_operator`,
-  `apply_basis_map_to_family`) or fitted and then certified (gamma, Veronese);
-  an image whose stored rows are not integers is dropped.  `--operations`,
+  Image rules are computed from the parent rule, not fitted:
+  `image_recurrence_of_operator` (preserver images),
+  `apply_basis_map_to_family` (basis maps),
+  `GammaLiftParent::gamma_polynomial_recurrence` (gamma polynomials: the
+  gamma transport of the parent rule) and
+  `VeroneseSectionCandidate::section_recurrence` (Veronese sections: a
+  common left multiple for one component of the transported section system,
+  `ore_algebra::find_component_annihilator`).  Each is normalized to a
+  runnable record whose exceptional rows (where the computed relation is not
+  proved, or fails) are seeds, and is then certified.  A Veronese rule is
+  fitted to the section rows only when the computation reports nothing
+  within its budget (a fallback; the certificate proves a fitted rule just
+  the same).  An image whose stored rows are not integers is dropped.  `--operations`,
   `--per-operation` and `--parents FILE` (node ids, one per line) restrict
   the plan, so that one round can be run in parts over the same parents;
   timed-out tasks are listed and not rerun.

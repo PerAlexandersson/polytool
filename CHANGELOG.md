@@ -377,6 +377,24 @@ Additions:
   `prepare_rule`, `interval_parent_report` and
   `PreserverParentLibrary::add` are now crate-visible for the engine.
 
+- Computed gamma and Veronese image rules:
+  `recurrence::GammaLiftParent::gamma_polynomial_recurrence` gives a runnable
+  rule with seeds for the gamma polynomials of a palindromic parent, from the
+  gamma transport of its rule (`transport_gamma`), and
+  `recurrence::VeroneseSectionCandidate::section_recurrence` (options
+  `VeroneseSectionRecurrenceOptions`) one for `lambda(n) V_(r,j)(P_(n+s))`,
+  from the transported section system and
+  `ore_algebra::find_component_annihilator`, or
+  `RecurrenceError::BudgetExhausted`.  Both are normalized like the image
+  rules: rows at bases where the relation is not proved (below the parent's
+  identifying rows, roots of the division multiplier or of the content) are
+  checked exactly and kept as seeds where the relation fails there.
+  `atlas grow` uses them in place of fitted rules (fitting remains only as
+  the fallback of an exhausted Veronese budget).  On the gamma and Veronese
+  edges of an existing atlas the computed rules give the same rows and the
+  same claims, and most Veronese tasks that timed out with fitted rules now
+  finish in well under a second.
+
 - OEIS catalog: 43 more entries (860 in all), each a supplied recurrence
   validated term by term against the OEIS data. Among them are 10 entries
   whose recurrences the adaptive search now finds only through its
