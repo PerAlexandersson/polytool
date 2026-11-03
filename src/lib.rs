@@ -103,7 +103,7 @@
 //!   with exact hypotheses certificates, and conditional theorem matches for
 //!   found or supplied recurrences
 //! - [`oeis`] — Bundled recurrence-backed OEIS polynomial families, with lazy
-//!   row iterators
+//!   row iterators, and b-file text from any coefficient rows
 //! - [`sequences`] — Standard sequences: Eulerian, Narayana, type B Eulerian,
 //!   Chebyshev T/U, Hermite, shifted Legendre, with lazy `iter_*` counterparts
 //!   of the recurrence-defined families

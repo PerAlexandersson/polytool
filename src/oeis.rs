@@ -49,6 +49,11 @@
 //! [`OeisSequenceDefinition::compute_evidence`] (or incrementally with
 //! [`OeisEvidenceAccumulator`]) and is evidence about a finite segment only,
 //! never a proof, and independent of the real-rootedness flag.
+//!
+//! B-files: [`flatten_rows_to_bfile`] turns any list of coefficient rows (not
+//! only catalog rows) into OEIS b-file text, with an offset, row orientation, a
+//! zero-trimming policy and a term cap that never splits a row
+//! ([`BFileOptions`]).
 
 use crate::recurrence::{
     parse_rational_coeff, BigRational, BivarPoly, Recurrence, RecurrenceEvaluationError,
@@ -60,6 +65,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
 use std::iter::FusedIterator;
+
+mod bfile;
+pub use bfile::{
+    bfile_row_terms, flatten_rows_to_bfile, BFileError, BFileOptions, BFileRowOrientation,
+    BFileStoppingRule, BFileText, BFileZeroPolicy,
+};
 
 // `OeisSequenceStatus`, `OeisLayout` and the data-file record types.
 include!("oeis_catalog_schema.rs");

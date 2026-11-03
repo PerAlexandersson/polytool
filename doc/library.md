@@ -468,6 +468,25 @@ assert_eq!(evidence.first_failure.real_rooted, Some(2));
 // `other.evidence()` returns the record stored in the data file, if any.
 ```
 
+### B-files from any rows
+
+`oeis::flatten_rows_to_bfile` turns coefficient rows (from a catalog entry or any
+recurrence) into OEIS b-file text.  `BFileOptions` sets the first index (the
+OEIS offset), the row orientation, a policy for zeros at the ends of each row
+and a term cap that never splits a row; `BFileStoppingRule` chooses between the
+longest prefix with at most the cap many terms (the default) and the whole row
+nearest to the cap.
+
+```rust
+use polytool::oeis::{self, BFileOptions};
+
+let rows = oeis::by_id("A008292").unwrap().generate_rows(4).unwrap();
+let options = BFileOptions { first_index: 1, max_terms: Some(8), ..Default::default() };
+let file = oeis::flatten_rows_to_bfile(&rows, &options).unwrap();
+assert_eq!(file.text, "1 1\n2 1\n3 1\n4 1\n5 4\n6 1\n");
+assert_eq!(file.rows_included, 3);
+```
+
 ## Characteristic polynomials and closed walks
 
 ```rust

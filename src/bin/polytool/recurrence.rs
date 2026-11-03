@@ -5,11 +5,12 @@ use crate::help::print_rational_coefficient_input_help;
 use crate::input::error_text;
 use crate::input::{
     is_help_arg, next_option_value, parse_usize_option, read_limited_text, read_polys_rational,
-    read_stdin_or_exit, OutputFormat,
+    read_stdin_or_exit,
 };
 use crate::recurrence_theorems::{
     note_theorem_matches, print_theorem_report_text, search_theorem_report,
 };
+use num_bigint::BigInt;
 use polytool::recurrence::BigRational as RecurrenceBigRational;
 use polytool::recurrence::*;
 use serde_json::{json, Value};
@@ -90,6 +91,7 @@ pub(crate) fn print_recurrence_generate_help() {
     println!("Usage:");
     println!("  polytool recurrence-generate --recurrence <file|-> --rows <n>");
     println!("  polytool recurrence-generate --recurrence <file|-> --additional <n>");
+    println!("  polytool recurrence-generate --recurrence <file|-> --format bfile --max-terms <n>");
     println!("  polytool recurrence-generate --help");
     println!();
     println!("Generate coefficient rows from recurrence JSON emitted by");
@@ -100,10 +102,29 @@ pub(crate) fn print_recurrence_generate_help() {
     println!("  --rows <n>                 Output n total rows, including initial rows");
     println!("  --additional <n>           Output initial rows plus n generated rows");
     println!("  --json                     Emit generated rows as JSON");
+    println!("  --format <text|json|bfile> Output format (default text; --json is --format json)");
     println!("  -h, --help                 Print this help text");
     println!();
-    println!("Example:");
+    println!("B-file output (--format bfile): the rows are flattened into OEIS b-file");
+    println!("lines `index value`, coefficients in ascending powers within each row, and");
+    println!("every coefficient must be an integer.  A term cap never splits a row.");
+    println!("  --offset <k>               Index of the first term (the OEIS offset; default 0)");
+    println!("  --max-terms <n>            Write at most n terms, whole rows only.  Without");
+    println!("                             --rows/--additional, rows are generated until the");
+    println!("                             cap is reached");
+    println!("  --nearest-row              With --max-terms, stop at the whole row nearest");
+    println!("                             to n terms (it may exceed n; ties go to fewer)");
+    println!("                             instead of the longest prefix with at most n");
+    println!("  --reversed                 Write each row from its highest coefficient down");
+    println!("  --trim-zeros <none|low|high|both>");
+    println!("                             Drop zeros at the low (constant) end, the high");
+    println!("                             (leading) end or both ends of each row, before");
+    println!("                             --reversed is applied (default none)");
+    println!();
+    println!("Examples:");
     println!("  polytool recurrence-generate --recurrence recurrence.json --rows 50");
+    println!("  polytool recurrence-generate --recurrence eulerian.json --format bfile \\");
+    println!("      --offset 1 --max-terms 1000 > b008292.txt");
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -597,16 +618,39 @@ fn read_recurrence_json(path: &str) -> Result<RecurrenceJson, String> {
     serde_json::from_str(&input).map_err(|e| format!("failed to parse recurrence JSON: {e}"))
 }
 
+/// A rational coefficient row as integers, or `None` if some coefficient is
+/// not an integer.
+fn integer_row(row: &[RecurrenceBigRational]) -> Option<Vec<BigInt>> {
+    row.iter()
+        .map(|value| value.is_integer().then(|| value.to_integer()))
+        .collect()
+}
+
+/// Options of `recurrence-generate --format bfile`.
+struct BFileRequest {
+    options: polytool::oeis::BFileOptions,
+    given: bool,
+}
+
 pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     if args.iter().any(|arg| is_help_arg(arg)) {
         print_recurrence_generate_help();
         return;
     }
 
+    fn usage_error(message: &str) -> ! {
+        eprintln!("{message}");
+        std::process::exit(2);
+    }
+
     let mut recurrence_path: Option<String> = None;
     let mut rows: Option<usize> = None;
     let mut additional: Option<usize> = None;
-    let mut format = OutputFormat::Text;
+    let mut format = "text";
+    let mut bfile = BFileRequest {
+        options: polytool::oeis::BFileOptions::default(),
+        given: false,
+    };
 
     let mut i = 0;
     while i < args.len() {
@@ -623,8 +667,55 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
                 i += 1;
                 additional = args.get(i).and_then(|s| s.parse().ok());
             }
-            "--json" => {
-                format = OutputFormat::Json;
+            "--json" => format = "json",
+            "--format" => {
+                let value =
+                    next_option_value(args, &mut i, "--format").unwrap_or_else(|e| usage_error(&e));
+                format = match value {
+                    "text" => "text",
+                    "json" => "json",
+                    "bfile" | "b-file" => "bfile",
+                    other => usage_error(&format!(
+                        "unknown recurrence-generate format '{other}' (expected text, json or bfile)"
+                    )),
+                };
+            }
+            "--offset" => {
+                let value =
+                    next_option_value(args, &mut i, "--offset").unwrap_or_else(|e| usage_error(&e));
+                bfile.options.first_index = value.parse().unwrap_or_else(|_| {
+                    usage_error(&format!("--offset expects an integer, got '{value}'"))
+                });
+                bfile.given = true;
+            }
+            "--max-terms" => {
+                bfile.options.max_terms = Some(
+                    parse_usize_option(args, &mut i, "--max-terms")
+                        .unwrap_or_else(|e| usage_error(&e)),
+                );
+                bfile.given = true;
+            }
+            "--reversed" => {
+                bfile.options.orientation = polytool::oeis::BFileRowOrientation::Reversed;
+                bfile.given = true;
+            }
+            "--nearest-row" => {
+                bfile.options.stopping_rule = polytool::oeis::BFileStoppingRule::NearestWholeRow;
+                bfile.given = true;
+            }
+            "--trim-zeros" => {
+                let value = next_option_value(args, &mut i, "--trim-zeros")
+                    .unwrap_or_else(|e| usage_error(&e));
+                bfile.options.zero_policy = match value {
+                    "none" => polytool::oeis::BFileZeroPolicy::KeepAll,
+                    "low" => polytool::oeis::BFileZeroPolicy::TrimLowOrder,
+                    "high" => polytool::oeis::BFileZeroPolicy::TrimHighOrder,
+                    "both" => polytool::oeis::BFileZeroPolicy::TrimBothEnds,
+                    other => usage_error(&format!(
+                        "--trim-zeros expects none, low, high or both, got '{other}'"
+                    )),
+                };
+                bfile.given = true;
             }
             other => {
                 eprintln!("unknown recurrence-generate option: {other}");
@@ -641,6 +732,11 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     if rows.is_some() && additional.is_some() {
         eprintln!("use only one of --rows or --additional");
         return;
+    }
+    if format != "bfile" && bfile.given {
+        usage_error(
+            "--offset, --max-terms, --reversed, --nearest-row and --trim-zeros need --format bfile",
+        );
     }
 
     let recurrence_json = match read_recurrence_json(&path) {
@@ -659,20 +755,71 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     };
 
     let total_rows = if let Some(rows) = rows {
-        rows
+        Some(rows)
     } else if let Some(additional) = additional {
         match initial_polys.len().checked_add(additional) {
-            Some(total) => total,
+            Some(total) => Some(total),
             None => {
                 eprintln!("recurrence row count overflow");
                 return;
             }
         }
     } else {
+        None
+    };
+
+    if format == "bfile" {
+        let Some(max_terms) = bfile.options.max_terms.filter(|_| total_rows.is_none()) else {
+            let Some(total_rows) = total_rows else {
+                usage_error(
+                    "recurrence-generate --format bfile needs --rows <n>, --additional <n> or --max-terms <n>",
+                );
+            };
+            let generated =
+                match recurrence.generate_rows_rational(&initial_polys, first_index, total_rows) {
+                    Ok(rows) => rows,
+                    Err(error) => usage_error(&error.to_string()),
+                };
+            let rows = generated
+                .iter()
+                .enumerate()
+                .map(|(index, row)| integer_row(row).unwrap_or_else(|| non_integral_error(index)))
+                .collect::<Vec<_>>();
+            print_bfile(&rows, &bfile.options);
+            return;
+        };
+        // Only a term cap: pull rows until the cap is reached.
+        let mut generated: Vec<Vec<BigInt>> = Vec::new();
+        let mut terms = 0usize;
+        let mut barren_rows = 0usize;
+        let mut iterator = recurrence.generate_rows_rational_iter(&initial_polys, first_index);
+        while terms < max_terms {
+            let Some(row) = iterator.next() else { break };
+            let row = match row {
+                Ok(row) => row,
+                Err(error) => usage_error(&error.to_string()),
+            };
+            let row = integer_row(&row).unwrap_or_else(|| non_integral_error(generated.len()));
+            let kept = polytool::oeis::bfile_row_terms(&row, bfile.options.zero_policy).len();
+            if kept == 0 {
+                barren_rows += 1;
+                if barren_rows > 10_000 {
+                    usage_error("10000 consecutive rows without b-file terms; use --rows");
+                }
+            } else {
+                barren_rows = 0;
+            }
+            terms += kept;
+            generated.push(row);
+        }
+        print_bfile(&generated, &bfile.options);
+        return;
+    }
+
+    let Some(total_rows) = total_rows else {
         eprintln!("recurrence-generate needs --rows <n> or --additional <n>");
         return;
     };
-
     let generated = match recurrence.generate_rows_rational(&initial_polys, first_index, total_rows)
     {
         Ok(rows) => rows,
@@ -682,7 +829,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
         }
     };
 
-    if format == OutputFormat::Json {
+    if format == "json" {
         let rows_json: Vec<Vec<String>> = generated
             .iter()
             .map(|row| row.iter().map(format_rational_coeff).collect())
@@ -700,4 +847,25 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
             println!("{}", format_rational_row(row));
         }
     }
+}
+
+fn non_integral_error(index: usize) -> ! {
+    eprintln!("row {index} has a non-integral coefficient; a b-file needs integers");
+    std::process::exit(2);
+}
+
+/// Write the b-file of `rows`; exits with status 2 on failure.
+fn print_bfile(rows: &[Vec<BigInt>], options: &polytool::oeis::BFileOptions) {
+    let file = polytool::oeis::flatten_rows_to_bfile(rows, options).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    });
+    if options.max_terms.is_some()
+        && file.rows_included == 0
+        && rows.iter().any(|row| !row.is_empty())
+    {
+        eprintln!("--max-terms is smaller than the first complete row (try --nearest-row)");
+        std::process::exit(2);
+    }
+    print!("{}", file.text);
 }

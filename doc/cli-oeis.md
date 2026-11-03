@@ -21,7 +21,8 @@ Generation formats are `rows`, `triangle`, `polynomial`, `json`, `jsonl`,
 `csv`, and `bfile`.  `--start-row` selects a later displayed OEIS row.  Strict
 b-file output is enabled only when the bundled complete-row prefix has been
 matched against OEIS data; `--max-terms` stops before a row that would cross
-the cap.  The JSON returned by `oeis info` keeps the human-readable
+the cap.  The same formatter writes b-files for any recurrence with
+`polytool recurrence-generate --format bfile` (see `doc/cli-recurrence.md`).  The JSON returned by `oeis info` keeps the human-readable
 `recurrence` string and also includes `recurrence_data`, a directly consumable
 `polytool.recurrence.v1` object with exact rational coefficients and initial
 polynomials.  Catalog entries do not fabricate recurrence-search diagnostics,

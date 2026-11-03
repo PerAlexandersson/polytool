@@ -422,20 +422,18 @@ fn cmd_oeis_generate(args: &[String]) {
                 );
                 std::process::exit(2);
             }
-            let mut included_terms = 0usize;
-            let mut flattened_index = entry.flattened_offset;
-            let mut included_rows = 0usize;
-            for row in &rows {
-                if max_terms.is_some_and(|limit| included_terms + row.len() > limit) {
-                    break;
-                }
-                for value in row {
-                    println!("{flattened_index} {value}");
-                    flattened_index += 1;
-                }
-                included_terms += row.len();
-                included_rows += 1;
-            }
+            let options = polytool::oeis::BFileOptions {
+                first_index: entry.flattened_offset,
+                max_terms,
+                ..polytool::oeis::BFileOptions::default()
+            };
+            let file =
+                polytool::oeis::flatten_rows_to_bfile(&rows, &options).unwrap_or_else(|error| {
+                    eprintln!("{error}");
+                    std::process::exit(2);
+                });
+            let included_rows = file.rows_included;
+            print!("{}", file.text);
             if row_count > 0 && included_rows == 0 {
                 eprintln!("--max-terms is smaller than the first complete row");
                 std::process::exit(2);

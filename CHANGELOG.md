@@ -359,6 +359,18 @@ Performance:
 
 Additions:
 
+- B-files from any recurrence: `oeis::flatten_rows_to_bfile` (with
+  `oeis::BFileOptions`, `BFileRowOrientation`, `BFileZeroPolicy`,
+  `BFileStoppingRule`, `BFileText`, `BFileError` and `oeis::bfile_row_terms`)
+  flattens integer coefficient rows into b-file text with an offset, an optional
+  reversed row orientation, a zero-trimming policy and a term cap that never
+  splits a row (at most the cap, or the whole row nearest to it).
+  `polytool recurrence-generate` gains `--format text|json|bfile` with
+  `--offset`, `--max-terms` (rows are generated until the cap is reached when
+  neither `--rows` nor `--additional` is given), `--nearest-row`, `--reversed`
+  and `--trim-zeros`.  `polytool oeis generate --format bfile` now uses the same
+  library function; its output is unchanged.
+
 - Public building blocks of the lifts, for applications that chain lifts
   over their own parent records (previously crate-internal):
   `recurrence::prepare_lift_rule` with `recurrence::PreparedLiftRule`

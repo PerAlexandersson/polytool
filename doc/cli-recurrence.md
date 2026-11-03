@@ -494,6 +494,35 @@ polytool recurrence-generate --recurrence recurrence.json --rows 100 > rows-100.
 Use `--additional n` instead of `--rows n` to keep all initial rows and append
 `n` newly generated rows.
 
+### B-files from a recurrence
+
+`recurrence-generate --format bfile` writes the generated rows as an OEIS b-file
+(`index value` lines, coefficients in ascending powers within each row, so a
+triangle is read by rows).  Every coefficient must be an integer.
+
+```sh
+polytool recurrence-generate --recurrence recurrence.json --format bfile \
+  --offset 1 --max-terms 1000 > b008292.txt
+```
+
+- `--offset K` is the index of the first term (the OEIS offset; default 0).
+- `--max-terms N` caps the number of terms and never splits a row: by default
+  the output is the longest prefix of whole rows with at most `N` terms, and the
+  command fails if even the first row is longer.  `--nearest-row` instead picks
+  the whole row nearest to `N` terms, which may exceed it (a tie goes to the
+  shorter prefix).  Without `--rows` or `--additional`, rows are generated until
+  the cap is reached.
+- `--reversed` writes each row from its highest coefficient down to its
+  constant term.
+- `--trim-zeros none|low|high|both` drops zero coefficients at the constant
+  (low) end, the leading (high) end or both ends of each stored row, before
+  `--reversed` is applied.  The default keeps every coefficient, as
+  `oeis generate --format bfile` does.
+
+For a catalog entry, `polytool oeis generate A008292 --rows 12 --format bfile
+--max-terms N` writes the same lines with the catalog's own offset; both
+commands use the library function `oeis::flatten_rows_to_bfile`.
+
 The web interface exports this compact JSON record and links back to these
 generation instructions instead of emitting a large standalone Python program.
 
