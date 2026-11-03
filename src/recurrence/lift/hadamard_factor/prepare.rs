@@ -33,23 +33,20 @@ pub(in crate::recurrence::lift) const MAX_LIFT_IDENTIFYING_ROWS: usize = 64;
 
 /// A validated scalar rule with its identifying seeds and relation.
 #[derive(Clone, Debug)]
-pub(in crate::recurrence::lift) struct PreparedRule {
-    pub(in crate::recurrence::lift) rule: Recurrence,
-    pub(in crate::recurrence::lift) first_index: usize,
+pub(crate) struct PreparedRule {
+    pub(crate) rule: Recurrence,
+    pub(crate) first_index: usize,
     /// The `K` identifying seeds (`Recurrence::generation_initial_count`).
-    pub(in crate::recurrence::lift) seeds: Vec<Vec<Q>>,
+    pub(crate) seeds: Vec<Vec<Q>>,
     /// The rule at base index `n` (`ImplicitRelation::from_recurrence`).
-    pub(in crate::recurrence::lift) relation: DOp,
+    pub(crate) relation: DOp,
     /// The leader shift `R` (the order).
-    pub(in crate::recurrence::lift) leader_shift: usize,
+    pub(crate) leader_shift: usize,
 }
 
 impl PreparedRule {
     /// Rows `first_index, ..., first_index + count - 1`, trimmed.
-    pub(in crate::recurrence::lift) fn rows(
-        &self,
-        count: usize,
-    ) -> Result<Vec<Vec<Q>>, RecurrenceError> {
+    pub(crate) fn rows(&self, count: usize) -> Result<Vec<Vec<Q>>, RecurrenceError> {
         self.rule
             .generate_rows_rational(&self.seeds, self.first_index, count.max(self.seeds.len()))
             .map(|rows| {
@@ -99,7 +96,7 @@ pub(in crate::recurrence::lift) fn x_free_left_hand_factor_rule(
 /// the leader `f(m, .)` a nonzero polynomial at every target
 /// `m >= first_index + K` (decided exactly), so that the identifying rows
 /// determine every row.
-pub(in crate::recurrence::lift) fn prepare_rule(
+pub(crate) fn prepare_rule(
     rule: &Recurrence,
     rows: &[Vec<Q>],
     first_index: usize,

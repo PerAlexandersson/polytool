@@ -136,7 +136,7 @@ fn bounded_region(report: &RealRootednessTheoremReport) -> bool {
 /// # Errors
 ///
 /// Errors of the theorem checks (malformed records).
-pub(super) fn interval_parent_report(
+pub(crate) fn interval_parent_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],

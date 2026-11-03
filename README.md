@@ -163,6 +163,8 @@ input format and the full command reference.
   - [doc/cli-ehrhart-sieving.md](doc/cli-ehrhart-sieving.md): Ehrhart and
     h\*-vectors, cyclic and bicyclic sieving, Stapledon decomposition.
 - [doc/library.md](doc/library.md): Rust library usage.
+- [doc/atlas.md](doc/atlas.md): the real-rooted atlas (a proof DAG of
+  integer polynomial sequences with replayable certificates).
 - [doc/mcp.md](doc/mcp.md) and [mcp/README.md](mcp/README.md): MCP server.
 - [doc/web.md](doc/web.md): web wrapper contract and build.
 - [doc/development.md](doc/development.md): tests and checked examples.

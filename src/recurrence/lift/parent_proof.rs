@@ -277,11 +277,11 @@ pub struct VeroneseParentProof {
 }
 
 /// A parent rule with its identifying seeds and first index.
-pub(super) struct ParentRecord<'a> {
-    pub(super) rule: &'a Recurrence,
+pub(crate) struct ParentRecord<'a> {
+    pub(crate) rule: &'a Recurrence,
     /// The `K` identifying seeds (`generation_initial_count`).
-    pub(super) seeds: &'a [Vec<Q>],
-    pub(super) first_index: usize,
+    pub(crate) seeds: &'a [Vec<Q>],
+    pub(crate) first_index: usize,
 }
 
 /// Route 1: `P_(n+k) = c(x) P_n` with `c` and the `k` seeds nonzero,
@@ -1135,7 +1135,7 @@ fn first_failing_row(rows: &[Vec<Q>], first_index: usize) -> Option<usize> {
 /// Run the parent provers (module documentation).  `needed_from` is the
 /// first parent index the lift uses (at least `first_index`);
 /// `try_root_domain` enables route 3.
-pub(super) fn prove_parent(
+pub(crate) fn prove_parent(
     record: &ParentRecord<'_>,
     needed_from: usize,
     attestations: &[VeroneseParentAttestation],

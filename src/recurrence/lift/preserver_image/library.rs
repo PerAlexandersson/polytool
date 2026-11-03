@@ -353,7 +353,7 @@ impl PreserverParentLibrary {
     }
 
     /// Validate, prove and (when proved or requested) add one record.
-    fn add(
+    pub(crate) fn add(
         &mut self,
         name: String,
         record: &RecurrenceJson,

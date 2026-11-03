@@ -1,6 +1,7 @@
 //! Top-level help, shared input descriptions and the `help <command>`
 //! dispatcher.  Command-specific help lives with each command.
 
+use crate::atlas::print_atlas_help;
 use crate::bench::print_bench_help;
 use crate::bicyclic_sieving::print_bicyclic_sieving_help;
 use crate::bkw_scout::bkw_scout_usage;
@@ -67,6 +68,7 @@ pub(crate) fn print_top_level_help() {
     println!("  family-check      Check properties and consecutive interlacing together");
     println!("  sequence          Generate standard polynomial sequences");
     println!("  oeis              List and generate recurrence-backed OEIS families");
+    println!("  atlas             Real-rooted atlas: seed, grow, match, audit a proof DAG");
     println!("  pf-pencil         Check built-in PF/Jensen endpoint pencils");
     println!("  recurrence        Search for a polynomial recurrence");
     println!("  recurrence-generate");
@@ -225,6 +227,7 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "family-check" => print_family_check_help(),
         "sequence" => print_sequence_help(),
         "oeis" => print_oeis_help(),
+        "atlas" => print_atlas_help(),
         "pf-pencil" | "pf-bidiagonal-pencil" => print_pf_pencil_help(),
         "recurrence" => print_recurrence_help(),
         "recurrence-generate" => print_recurrence_generate_help(),

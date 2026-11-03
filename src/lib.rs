@@ -62,6 +62,9 @@
 //!
 //! # Modules
 //!
+//! - [`atlas`] — the real-rooted atlas engine: a proof DAG of integer
+//!   polynomial sequences (nodes, edges with replayable certificates,
+//!   links), JSONL storage, audit, seeding, forward growth and OEIS matching
 //! - [`polynomial`] — `Polynomial<C>` with `CoeffRing`/`FieldRing` traits, arithmetic,
 //!   derivative, evaluate, shift, reverse, dilate, GCD, division, Lagrange interpolation
 //! - [`vec_poly`] — Arithmetic on plain coefficient vectors `&[C]`, generic
@@ -142,6 +145,7 @@
 //!   sequences, structured TNN diagnostics, and Brändén--Saud Maia Leite chain
 //!   polynomials
 
+pub mod atlas;
 pub mod basis;
 pub mod bkw;
 pub mod brenti_recognition;

@@ -330,6 +330,29 @@ Performance:
 
 Additions:
 
+- The real-rooted atlas (`polytool::atlas`, `polytool atlas`; see
+  `doc/atlas.md`): a proof DAG of integer polynomial sequences stored as
+  append-only JSONL (`polytool.atlas-node.v1`, `polytool.atlas-edge.v1`,
+  `polytool.atlas-link.v1`).  Nodes are sequences with their first 15 rows,
+  canonical definitions (merged only with an all-index equality
+  certificate), proved properties with the edges behind them and
+  observations on the stored rows; edges carry replayable certificates
+  (theorem reports, parent provers, preserver-image, basis-map, gamma and
+  Veronese certifications, Obreschkoff combinations `P_n + P_(n+1)`,
+  basis-map theorems, definition equalities); links record candidate
+  identities, fingerprint relations and OEIS matches.  `atlas::analyze_certificate`
+  replays a certificate and reads off its claims and premises (a lift's
+  parent must be a node with a proved region inside the transfer theorem's
+  parent region); `atlas::audit_atlas` replays every edge from the roots and
+  checks every property and every stored row exactly.  Commands: `seed`
+  (named families and catalog entries through the root provers and the
+  lifts, one child process per source with a time limit), `grow` (one
+  budgeted forward round), `oeis-index` and `match-oeis` (triangle, reversed
+  triangle and row-sum matching against a local OEIS copy), `audit`,
+  `report`.  Visibility only: `prove_parent`, `ParentRecord`,
+  `prepare_rule`, `interval_parent_report` and
+  `PreserverParentLibrary::add` are now crate-visible for the engine.
+
 - OEIS catalog: 43 more entries (860 in all), each a supplied recurrence
   validated term by term against the OEIS data. Among them are 10 entries
   whose recurrences the adaptive search now finds only through its
