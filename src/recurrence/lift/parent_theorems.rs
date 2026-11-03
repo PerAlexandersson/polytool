@@ -15,6 +15,13 @@
 //!   (the RealRooted routes `halfGrowth` and `sign`), with strict interlacing
 //!   of consecutive rows and every root in `(-inf, 0)`, also after dividing
 //!   every row by a power of `x`;
+//! - [`check_liu_wang_three_term_theorem`]: three-term recurrences
+//!   `P_n = A_n(x) P_(n-1) + B_n(x) P_(n-2)` with `x`-dependent coefficients,
+//!   optionally with a term `V_n(x) P'_(n-1)` (Liu and Wang, Theorems 2.1,
+//!   2.3 and Corollary 2.4), degree steps `0` or `1`, with weak interlacing of
+//!   consecutive rows when `B_n` (and `V_n`) is `<= 0` on the real line, on
+//!   `(-inf, 0]` with every root kept there by an exact root-location
+//!   induction, or on a root window that every row stays in;
 //! - [`check_ma_wang_interval_theorem`]: the Ma--Wang interval step
 //!   `P_n = (alpha_n x + beta_n) P_(n-1) + kappa_n (x - L)(x - U) P'_(n-1)`
 //!   with fixed rational `L < U`, with every root in the closed interval
@@ -112,12 +119,14 @@ use std::collections::BTreeMap;
 mod derivative_lag;
 mod left_hand_factor;
 mod liu_wang;
+mod liu_wang_three_term;
 mod ma_wang;
 mod three_term;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
 pub(in crate::recurrence) use left_hand_factor::rule_with_x_free_left_hand_factor;
 pub use left_hand_factor::LeftHandFactorNormalization;
 pub use liu_wang::check_liu_wang_theorem;
+pub use liu_wang_three_term::check_liu_wang_three_term_theorem;
 pub use ma_wang::check_ma_wang_interval_theorem;
 pub use three_term::check_three_term_recurrence_theorem;
 
@@ -142,6 +151,8 @@ pub enum RealRootednessTheorem {
     LiuWangDerivativeLag,
     /// [`check_ma_wang_interval_theorem`].
     MaWangInterval,
+    /// [`check_liu_wang_three_term_theorem`].
+    LiuWangThreeTerm,
 }
 
 /// Outcome of a theorem check.
@@ -224,7 +235,10 @@ pub struct RealRootednessTheoremConclusion {
     /// [`check_liu_wang_derivative_lag_theorem`] after dividing the rows by a
     /// power of `x`, and the interval `[L, U]` of
     /// [`check_ma_wang_interval_theorem`], whose ends are closed unless no
-    /// row has a root there.
+    /// row has a root there, and the regions of
+    /// [`check_liu_wang_three_term_theorem`] (closed at `0` after dividing by
+    /// a power of `x`, from nonnegative coefficients or after the reversal;
+    /// closed root windows).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_region: Option<RootInterval>,
     /// The conclusion in words.
@@ -232,8 +246,8 @@ pub struct RealRootednessTheoremConclusion {
 }
 
 /// The result of [`check_three_term_recurrence_theorem`],
-/// [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`] or
-/// [`check_ma_wang_interval_theorem`]
+/// [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`],
+/// [`check_liu_wang_three_term_theorem`] or [`check_ma_wang_interval_theorem`]
 /// (schema `polytool.recurrence-real-rootedness-theorem.v1`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -457,6 +471,9 @@ fn check_at_supplied_seeds(
         RealRootednessTheorem::MaWangInterval => {
             ma_wang::ma_wang_interval_report(rule, first_index, seeds, options)
         }
+        RealRootednessTheorem::LiuWangThreeTerm => {
+            liu_wang_three_term::liu_wang_three_term_report(rule, first_index, seeds, options)
+        }
     }
 }
 
@@ -593,7 +610,10 @@ fn extend_interlacing_backward(
 /// Run the theorem at the supplied seeds and, unless it is proved or does
 /// not apply, with the induction start moved `1, ...,
 /// options.maximum_start_delay` rows later; the first proved report, else
-/// the report at the supplied seeds.
+/// the report at the supplied seeds.  For
+/// [`check_liu_wang_three_term_theorem`], whose conclusion may come without
+/// a root region, a proved report without a region is replaced by the first
+/// later start that proves the theorem with one.
 fn check_with_first_proving_start(
     theorem: RealRootednessTheorem,
     rule: &Recurrence,
@@ -601,18 +621,31 @@ fn check_with_first_proving_start(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    let without_region = |report: &RealRootednessTheoremReport| {
+        theorem == RealRootednessTheorem::LiuWangThreeTerm
+            && report
+                .conclusion
+                .as_ref()
+                .is_some_and(|c| c.root_region.is_none())
+    };
     let report = check_with_start_delay(theorem, rule, first_index, seeds, options, 0)?;
-    if report.is_proved() || report.status == RealRootednessTheoremStatus::NotApplicable {
+    if (report.is_proved() && !without_region(&report))
+        || report.status == RealRootednessTheoremStatus::NotApplicable
+    {
         return Ok(report);
     }
+    let mut proved_without_region = report.is_proved().then(|| report.clone());
     for delay in 1..=options.maximum_start_delay {
         match check_with_start_delay(theorem, rule, first_index, seeds, options, delay) {
-            Ok(moved) if moved.is_proved() => return Ok(moved),
+            Ok(moved) if moved.is_proved() && !without_region(&moved) => return Ok(moved),
+            Ok(moved) if moved.is_proved() => {
+                proved_without_region.get_or_insert(moved);
+            }
             Ok(_) => {}
             Err(_) => break,
         }
     }
-    Ok(report)
+    Ok(proved_without_region.unwrap_or(report))
 }
 
 /// `proved` when every hypothesis is verified, `hypothesis_failed` when one

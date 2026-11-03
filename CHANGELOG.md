@@ -10,6 +10,9 @@ coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
 
+- `recurrence::RealRootednessTheorem` and
+  `recurrence::VeroneseParentProofRoute` have the new variant
+  `LiuWangThreeTerm`; exhaustive matches must add it.
 - `recurrence::RootEndpoint` has the new public field `exact`
   (`Option<ExactQuadraticEndpoint>`); struct literals must add it (or use the
   new `RootEndpoint::rational`).  Serialized endpoints without the field still
@@ -370,6 +373,19 @@ Performance:
 
 Additions:
 
+- `recurrence::check_liu_wang_three_term_theorem`: Liu and Wang's Theorem 2.1
+  and Corollary 2.4 (Adv. Appl. Math. 38 (2007) 542-560) for lag rules
+  `P_n = A_n(x) P_(n-1) [+ V_n(x) P'_(n-1)] + B_n(x) P_(n-2)` with
+  `x`-dependent coefficients, every hypothesis decided for all indices:
+  degree steps `0` or `1` (half growth), `B_n <= 0` on the real line, on
+  `(-inf, 0]` with an exact root-location induction, or on a root window,
+  in the identity, divided-by-`x^m`, reversed and gauged coordinates; weak
+  interlacing and the certified root region in a
+  `RealRootednessTheoremReport` (`theorem: "liu_wang_three_term"`) with
+  `verify()`.  It is route 7b of `prove_parent_real_rootedness`
+  (`VeroneseParentProofRoute::LiuWangThreeTerm`, lift-summary route
+  `liu_wang_three_term`), which settles the parent when the region lies in
+  `(-inf, 0]`.
 - Exact quadratic endpoints of root regions: `recurrence::ExactQuadraticEndpoint`
   (`a + b sqrt(d)` as rational strings, with `to_quadratic_number`,
   `from_quadratic_number` and the plain-ASCII `to_plain_text`, e.g.

@@ -777,7 +777,7 @@ fn check_ratio_bound(
 /// The rational function `p(n) / q(n)` of least degrees (at most two over two,
 /// `q` monic) through every point, when there is one; it must be determined
 /// by the points with at least two to spare.
-fn fit_index_rational_function(points: &[(usize, Q)]) -> Option<IndexFunction> {
+pub(super) fn fit_index_rational_function(points: &[(usize, Q)]) -> Option<IndexFunction> {
     const DEGREES: [(usize, usize); 8] = [
         (0, 0),
         (1, 0),

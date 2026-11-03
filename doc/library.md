@@ -732,7 +732,8 @@ in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 
 `recurrence::check_three_term_recurrence_theorem`,
 `recurrence::check_liu_wang_theorem`,
-`recurrence::check_liu_wang_derivative_lag_theorem` and
+`recurrence::check_liu_wang_derivative_lag_theorem`,
+`recurrence::check_liu_wang_three_term_theorem` and
 `recurrence::check_ma_wang_interval_theorem` apply a paper theorem to a
 family given by a rule, a first index and seed rows (the rule applies from
 `first_index + seeds.len()` on), and check every hypothesis exactly for all
@@ -770,6 +771,22 @@ region).  `verify()` replays it.
   its declarations in `lean_declarations` (both omitted from the JSON for the
   other checks).  The binomial Eulerian rule (OEIS A046802) is refused: its
   lag coefficient `(1 - n) x` is positive left of `0` (witness `n = 2`).
+- Liu--Wang three-term (L. L. Liu and Y. Wang, Adv. Appl. Math. 38 (2007)
+  542-560, Theorem 2.1 and Corollary 2.4): `f(n) P_n = c_1(n, x) P_(n-1) +
+  c_2(n, x) P_(n-2)`, optionally with a derivative term `c_d(n, x)
+  P'_(n-1)` (Theorem 2.3), `deg_x c_1 <= 1`, `deg_x c_d, deg_x c_2 <= 2`.
+  The degree may grow by `0` or `1` at each step (half growth such as the
+  Lucas rows OEIS A034807 is allowed); it proves real-rootedness and weak
+  interlacing of consecutive rows when `B_n = c_2 / f` (and `V_n = c_d / f`)
+  is `<= 0` on the real line, or on `(-inf, 0]` with every root of every
+  row kept there (a root-sign induction with `P_n(0) > 0`, or nonnegative
+  coefficients), or on a root window `[L, U]`, `(-inf, U]` or `[L, +inf)`
+  with the containment conditions of RealRooted's
+  `threeTerm_interlaces_of_roots_mem_Icc`.  It also runs on `P_n / x^m`,
+  on the reversal `x^(d_n) P_n(1/x)` and on a gauge `P_n / (x + v)^n`
+  (real-rootedness, no interlacing of the original rows), and moves the
+  induction start to certify a root region.  A039692 (`B_n` positive at
+  the common root `-1`) is not claimed.
 - Ma--Wang interval: `f(n) P_n = c_0(n, x) P_(n-1) + gamma(n) (x - L)(x - U)
   P'_(n-1)` with `deg_x c_0 <= 1` and rational `L < U` read off the rule; it
   proves every root in the closed interval `[L, U]` (an end open when no row

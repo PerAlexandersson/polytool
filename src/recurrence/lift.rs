@@ -70,8 +70,8 @@
 //!   root domain, three-term recurrence, Liu--Wang, Liu--Wang derivative
 //!   lag, attestation), shared with the search;
 //! - `parent_theorems`: [`check_three_term_recurrence_theorem`],
-//!   [`check_liu_wang_theorem`] and
-//!   [`check_liu_wang_derivative_lag_theorem`], general real-rootedness theorems for
+//!   [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`] and
+//!   [`check_liu_wang_three_term_theorem`], general real-rootedness theorems for
 //!   recurrences with exactly checked hypotheses and a replayable
 //!   [`RealRootednessTheoremReport`];
 //! - `section_report`: [`certify_veronese_section_lift`] and its
@@ -128,7 +128,8 @@ pub use parent_proof::{
 };
 mod parent_theorems;
 pub use parent_theorems::{
-    check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem, check_ma_wang_interval_theorem,
+    check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem,
+    check_liu_wang_three_term_theorem, check_ma_wang_interval_theorem,
     check_three_term_recurrence_theorem, LeftHandFactorNormalization, RealRootednessTheorem,
     RealRootednessTheoremConclusion, RealRootednessTheoremOptions, RealRootednessTheoremReport,
     RealRootednessTheoremStatus, RowInterlacing, REAL_ROOTEDNESS_THEOREM_SCHEMA,

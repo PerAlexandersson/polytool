@@ -1078,6 +1078,7 @@ fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
         VeroneseParentProofRoute::LiuWang => "liu_wang",
         VeroneseParentProofRoute::LiuWangDerivativeLag => "liu_wang_derivative_lag",
         VeroneseParentProofRoute::MaWangInterval => "ma_wang_interval",
+        VeroneseParentProofRoute::LiuWangThreeTerm => "liu_wang_three_term",
         VeroneseParentProofRoute::Attestation => "attestation",
     }
 }

@@ -54,7 +54,8 @@
 //!   [`apply_basis_map_to_family`]),
 //!   with real-rootedness theorem checks for the parents
 //!   ([`check_three_term_recurrence_theorem`],
-//!   [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`]).
+//!   [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`],
+//!   [`check_liu_wang_three_term_theorem`]).
 //!
 //! Report, search and replay functions that can reject their input return
 //! [`RecurrenceError`] (and [`parse_rational_coeff`] a [`ParseRationalError`]);
