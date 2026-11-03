@@ -48,6 +48,40 @@ Re-bless the fingerprints only for an intentional change of results:
 `POLYTOOL_BLESS_ORE_WORKLOADS=1 cargo test --release --test
 ore_algebra_workloads -- --ignored every_`.
 
+## Linear-algebra workloads
+
+`tests/linalg_workloads.rs` runs a fixed set of real workloads of the exact
+linear algebra (`linalg`) and of the recurrence fit built on it: adaptive
+searches on catalog families (Eulerian, Narayana, type-B Eulerian, shifted
+Legendre with `try_laurent`, Hermite with denominators, a sequence without a
+recurrence), the Hadamard-factor lifts of the 321- and 123-avoiding
+permutation families, `solve_linear_system_with_rank` and
+`rational_kernel_with_certificate` on integer, sparse and rational matrices
+and on Hankel-type matrices of Eulerian rows.  The kernel workloads also
+record the smallest `max_operations` and `max_coefficient_bits` at which the
+kernel still succeeds, so the budget accounting is pinned as well as the
+result.  The test compares a fingerprint of each complete output (every rule,
+counter and certificate, no timings) with
+`tests/fixtures/linalg-workload-fingerprints.tsv`; the slower items (the
+default-option searches and the lifts) are compared only by the ignored full
+test.  Timings (median and minimum of `LINALG_WORKLOAD_REPEAT` runs, filtered
+by `LINALG_WORKLOAD_ONLY`):
+
+```text
+cargo test --release --test linalg_workloads -- --ignored --nocapture time_
+```
+
+Re-bless the fingerprints only for an intentional change of results:
+`POLYTOOL_BLESS_LINALG_WORKLOADS=1 cargo test --release --test linalg_workloads
+-- --ignored every_`.
+
+To profile, `valgrind --tool=callgrind` on the test binary (with
+`LINALG_WORKLOAD_ONLY` set to one workload) works where `perf` does not.  The
+elimination used to spend about 80% of these workloads in the gcd reductions of
+`num_rational`; `src/linalg/integer_elimination.rs` now does it on integer rows
+(see its module documentation), and the remaining cost is `num_bigint`
+multiplication and exact division.
+
 ## Examples
 
 The tracked programs in `examples/` are run with

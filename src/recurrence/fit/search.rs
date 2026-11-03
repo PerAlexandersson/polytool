@@ -6,6 +6,25 @@ use crate::linalg;
 use num_traits::One;
 use num_traits::Zero;
 
+/// `a * b`, without the gcd reduction of `Ratio` multiplication when both factors
+/// are integers (the value is already in lowest terms).
+fn product(a: &BigRational, b: &BigRational) -> BigRational {
+    if a.denom().is_one() && b.denom().is_one() {
+        BigRational::new_raw(a.numer() * b.numer(), BigInt::one())
+    } else {
+        a * b
+    }
+}
+
+/// `-(a * b)`, with the integer fast path of [`product`].
+fn negated_product(a: &BigRational, b: &BigRational) -> BigRational {
+    if a.denom().is_one() && b.denom().is_one() {
+        BigRational::new_raw(-(a.numer() * b.numer()), BigInt::one())
+    } else {
+        -(a * b)
+    }
+}
+
 pub(in crate::recurrence) fn rational_derivatives_up_to(
     polys: &[Vec<BigRational>],
     max_diff_deg: usize,
@@ -239,7 +258,10 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
         // RHS = the fixed chart monomial times P_nn: the coefficient of
         // t^l in n^a t^e P_nn(t) (moved to RHS with negation).
         rhs[row] = if l >= chart.x_power {
-            -(poly_coeff_rational(current, l - chart.x_power) * &n_powers[chart.index_power])
+            negated_product(
+                current.get(l - chart.x_power).unwrap_or(&zero),
+                &n_powers[chart.index_power],
+            )
         } else {
             BigRational::zero()
         };
@@ -254,12 +276,10 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
                     if l < j {
                         continue;
                     }
-                    let pc = poly_coeff_rational(current, l - j);
-                    if pc.is_zero() {
+                    let Some(pc) = current.get(l - j).filter(|pc| !pc.is_zero()) else {
                         continue;
-                    }
-                    let val = pc * n_powers[i].clone();
-                    matrix[row][denom_col(i, j)] = val;
+                    };
+                    matrix[row][denom_col(i, j)] = product(pc, &n_powers[i]);
                 }
             }
         }
@@ -272,20 +292,20 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
                 let ref_poly = &derivs[nn - 1 - r][d];
                 for sign_idx in 0..sign_family_count {
                     for i in 0..=opts.idx_deg {
-                        let mut ni = n_powers[i].clone();
-                        if sign_idx == 1 && nn % 2 == 1 {
-                            ni = -ni;
-                        }
+                        let flip = sign_idx == 1 && nn % 2 == 1;
                         for j in 0..=opts.var_deg {
                             if l < j {
                                 continue;
                             }
-                            let rc = poly_coeff_rational(ref_poly, l - j);
-                            if rc.is_zero() {
+                            let Some(rc) = ref_poly.get(l - j).filter(|rc| !rc.is_zero()) else {
                                 continue;
-                            }
-                            let val = -rc * ni.clone();
-                            matrix[row][coeff_col(r, d, sign_idx, i, j)] = val;
+                            };
+                            // -(rc * ni), with ni = (-1)^flip n^i.
+                            matrix[row][coeff_col(r, d, sign_idx, i, j)] = if flip {
+                                product(rc, &n_powers[i])
+                            } else {
+                                negated_product(rc, &n_powers[i])
+                            };
                         }
                     }
                 }

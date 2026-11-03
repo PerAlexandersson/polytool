@@ -3,9 +3,13 @@
 //! Solving, rank/nullity reports and complete kernels with a rank certificate;
 //! no modular or floating-point rank decisions are used.
 
+use super::integer_elimination::{
+    back_substitute, integer_row, integer_rref, Elimination, EliminationBudget, IntegerRref,
+};
 use super::Q;
 use crate::BigRational;
 use num_bigint::BigInt;
+use num_integer::Integer;
 use num_traits::{One, Zero};
 
 /// A particular solution of a consistent exact linear system, together with
@@ -78,26 +82,42 @@ pub struct RationalKernel {
     pub inverse_minor: Vec<Vec<BigRational>>,
 }
 
-struct EliminationBudget {
-    remaining: usize,
-    bits: u64,
-}
-
-impl EliminationBudget {
-    fn check(&mut self, value: &Q) -> Result<(), RationalKernelError> {
-        self.remaining = self
-            .remaining
-            .checked_sub(1)
-            .ok_or(RationalKernelError::BudgetExceeded("arithmetic operations"))?;
-        if value.numer().bits().max(value.denom().bits()) > self.bits {
-            return Err(RationalKernelError::BudgetExceeded("coefficient bits"));
-        }
-        Ok(())
+/// Gauss-Jordan elimination of `aug` (columns after `columns` are carried through the
+/// row operations, never pivoted on), on integer rows (see `integer_elimination`).
+///
+/// Every returned row is a nonzero rational multiple of the corresponding row of the
+/// unnormalised reduced row-echelon form, so ratios of entries of one row are those
+/// of the rational elimination; the pivot columns and rows and the budget accounting
+/// are the same as those of [`rational_rref`], which is the fallback should an exact
+/// division of the integer elimination ever fail.
+fn gauss_jordan(
+    aug: &[Vec<Q>],
+    columns: usize,
+    mut budget: Option<&mut EliminationBudget>,
+) -> Result<IntegerRref, RationalKernelError> {
+    let remaining = budget.as_deref().map(|b| b.remaining);
+    if let Some(reduced) = integer_rref(
+        aug,
+        columns,
+        Elimination::GaussJordan,
+        budget.as_deref_mut(),
+    )? {
+        return Ok(reduced);
     }
+    if let (Some(b), Some(remaining)) = (budget.as_deref_mut(), remaining) {
+        b.remaining = remaining;
+    }
+    let mut rows = aug.to_vec();
+    let (pivots, origins) = rational_rref(&mut rows, columns, budget)?;
+    Ok(IntegerRref {
+        rows: rows.iter().map(|row| integer_row(row).0).collect(),
+        pivots,
+        origins,
+    })
 }
 
-// Shared elimination for the legacy solver and complete-kernel API. Columns
-// after `columns` are carried through the row operations, never pivoted on.
+// The elimination on rational entries, with a gcd reduction after every operation.
+// It is the reference of `gauss_jordan` and its fallback.
 fn rational_rref(
     aug: &mut [Vec<Q>],
     columns: usize,
@@ -166,8 +186,12 @@ pub fn rational_kernel_with_certificate(
         remaining: limits.max_operations,
         bits: limits.max_coefficient_bits,
     };
-    let mut reduced = a.to_vec();
-    let (pivots, rows) = rational_rref(&mut reduced, columns, Some(&mut budget))?;
+    let reduced = gauss_jordan(a, columns, Some(&mut budget))?;
+    let IntegerRref {
+        rows: reduced,
+        pivots,
+        origins: rows,
+    } = reduced;
     let rank = pivots.len();
     let free: Vec<_> = (0..columns).filter(|c| !pivots.contains(c)).collect();
     let mut basis = Vec::new();
@@ -175,12 +199,12 @@ pub fn rational_kernel_with_certificate(
         let mut v = vec![Q::zero(); columns];
         v[f] = Q::one();
         for (i, &p) in pivots.iter().enumerate() {
-            v[p] = -&reduced[i][f] / &reduced[i][p];
+            v[p] = Q::new(-&reduced[i][f], reduced[i][p].clone());
             budget.check(&v[p])?;
         }
         basis.push(v);
     }
-    let mut minor: Vec<Vec<Q>> = rows
+    let minor: Vec<Vec<Q>> = rows
         .iter()
         .enumerate()
         .map(|(i, &r)| {
@@ -189,15 +213,15 @@ pub fn rational_kernel_with_certificate(
             row
         })
         .collect();
-    let (minor_pivots, _) = rational_rref(&mut minor, rank, Some(&mut budget))?;
-    if minor_pivots.len() != rank {
+    let minor = gauss_jordan(&minor, rank, Some(&mut budget))?;
+    if minor.pivots.len() != rank {
         return Err(InvalidDimensions);
     }
     let mut inverse = Vec::new();
-    for (i, row) in minor.iter().enumerate() {
+    for (i, row) in minor.rows.iter().enumerate() {
         let mut out = Vec::new();
         for x in &row[rank..] {
-            let v = x / &row[i];
+            let v = Q::new(x.clone(), row[i].clone());
             budget.check(&v)?;
             out.push(v);
         }
@@ -238,7 +262,7 @@ pub fn solve_linear_system_with_rank(
     }
 
     // Build augmented matrix [A | b].
-    let mut aug: Vec<Vec<Q>> = a
+    let aug: Vec<Vec<Q>> = a
         .iter()
         .zip(b.iter())
         .map(|(row, bi)| {
@@ -248,12 +272,35 @@ pub fn solve_linear_system_with_rank(
         })
         .collect();
 
-    let (pivot_columns, _) = rational_rref(&mut aug, num_cols, None).ok()?;
+    // The solution, the rank and the consistency do not depend on the pivot rows, so
+    // the integer forward elimination with back substitution decides them.
+    if let Ok(Some(echelon)) = integer_rref(&aug, num_cols, Elimination::ForwardSmallestRow, None) {
+        let rank = echelon.pivots.len();
+        if echelon.rows[rank..]
+            .iter()
+            .any(|row| !row[num_cols].is_zero())
+        {
+            return None;
+        }
+        if let Some(particular) = back_substitute(&echelon, num_cols) {
+            return Some(LinearSystemSolution {
+                particular,
+                rank,
+                nullity: num_cols - rank,
+            });
+        }
+    }
+
+    let IntegerRref {
+        rows: reduced,
+        pivots: pivot_columns,
+        ..
+    } = gauss_jordan(&aug, num_cols, None).ok()?;
     let pivot_row = pivot_columns.len();
 
     // Consistency check: any row [0 ... 0 | nonzero] means no solution.
-    for aug_row in &aug[pivot_row..num_rows] {
-        if !aug_row[num_cols].is_zero() {
+    for reduced_row in &reduced[pivot_row..num_rows] {
+        if !reduced_row[num_cols].is_zero() {
             return None;
         }
     }
@@ -261,7 +308,7 @@ pub fn solve_linear_system_with_rank(
     // Extract solution (free variables = 0).
     let mut x = vec![Q::zero(); num_cols];
     for (pr, &pc) in pivot_columns.iter().enumerate() {
-        x[pc] = aug[pr][num_cols].clone() / aug[pr][pc].clone();
+        x[pc] = Q::new(reduced[pr][num_cols].clone(), reduced[pr][pc].clone());
     }
     let rank = pivot_columns.len();
     Some(LinearSystemSolution {
@@ -400,10 +447,15 @@ fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option
                 } else {
                     &*cell * &pivot - &row_pivot * tail
                 };
-                if &numerator % &denom != BigInt::zero() {
-                    return None;
+                if denom.is_one() {
+                    *cell = numerator;
+                } else {
+                    let (quotient, remainder) = numerator.div_rem(&denom);
+                    if !remainder.is_zero() {
+                        return None;
+                    }
+                    *cell = quotient;
                 }
-                *cell = numerator / &denom;
             }
         }
         denom = pivot;
@@ -563,6 +615,339 @@ mod tests {
             &[Q::one(), Q::one()]
         )
         .is_none());
+    }
+
+    /// A deterministic pseudo-random matrix with small entries (some zero), some
+    /// rows repeated or combined so that the rank is deficient, and optional
+    /// denominators.
+    fn pseudo_random_matrix(
+        seed: u64,
+        rows: usize,
+        columns: usize,
+        fractions: bool,
+    ) -> Vec<Vec<Q>> {
+        let mut state = seed;
+        let mut next = move |modulus: u64| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (state >> 33) % modulus
+        };
+        let mut matrix: Vec<Vec<Q>> = Vec::new();
+        for r in 0..rows {
+            let row = if r >= 2 && next(4) == 0 {
+                // A combination of two earlier rows.
+                let (a, b) = (next(r as u64) as usize, next(r as u64) as usize);
+                let (x, y) = (next(5) as i64 - 2, next(5) as i64 - 2);
+                (0..columns)
+                    .map(|c| {
+                        &matrix[a][c] * Q::from_integer(bi(x))
+                            + &matrix[b][c] * Q::from_integer(bi(y))
+                    })
+                    .collect()
+            } else {
+                (0..columns)
+                    .map(|_| {
+                        if next(3) == 0 {
+                            Q::zero()
+                        } else if fractions && next(3) == 0 {
+                            Q::new(bi(next(9) as i64 - 4), bi(1 + next(4) as i64))
+                        } else {
+                            Q::from_integer(bi(next(11) as i64 - 5))
+                        }
+                    })
+                    .collect()
+            };
+            matrix.push(row);
+        }
+        matrix
+    }
+
+    /// Rows, pivot columns and pivot-row origins of the rational reference elimination.
+    type ReferenceReduction = (Vec<Vec<Q>>, Vec<usize>, Vec<usize>);
+
+    /// The same value as the integer elimination, from the rational reference.
+    fn reference_reduction(
+        matrix: &[Vec<Q>],
+        columns: usize,
+        budget: Option<&mut EliminationBudget>,
+    ) -> Result<ReferenceReduction, RationalKernelError> {
+        let mut rows = matrix.to_vec();
+        let (pivots, origins) = rational_rref(&mut rows, columns, budget)?;
+        Ok((rows, pivots, origins))
+    }
+
+    #[test]
+    fn integer_elimination_matches_the_rational_reduction() {
+        let mut fallbacks = 0;
+        for seed in 0..300u64 {
+            let rows = 1 + (seed % 9) as usize;
+            let columns = 1 + (seed / 3 % 8) as usize;
+            let matrix = pseudo_random_matrix(seed, rows, columns + 1, seed % 2 == 0);
+            let (reference, pivots, origins) = reference_reduction(&matrix, columns, None).unwrap();
+            let Some(fast) =
+                integer_rref(&matrix, columns, Elimination::GaussJordan, None).unwrap()
+            else {
+                fallbacks += 1;
+                continue;
+            };
+            assert_eq!(fast.pivots, pivots, "seed {seed}");
+            assert_eq!(fast.origins, origins, "seed {seed}");
+            // Each integer row is a nonzero multiple of the reference row.
+            for (integer, exact) in fast.rows.iter().zip(&reference) {
+                let ratio = integer.iter().zip(exact).find(|(_, e)| !e.is_zero());
+                match ratio {
+                    None => assert!(integer.iter().all(Zero::is_zero), "seed {seed}"),
+                    Some((i, e)) => {
+                        let scale = Q::from_integer(i.clone()) / e;
+                        assert!(!scale.is_zero(), "seed {seed}");
+                        for (i, e) in integer.iter().zip(exact) {
+                            assert_eq!(Q::from_integer(i.clone()), e * &scale, "seed {seed}");
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(fallbacks, 0, "the exact divisions never fail");
+    }
+
+    #[test]
+    fn integer_elimination_charges_the_same_budget_as_the_rational_reduction() {
+        for seed in 0..60u64 {
+            let rows = 2 + (seed % 6) as usize;
+            let columns = 2 + (seed / 2 % 5) as usize;
+            let matrix = pseudo_random_matrix(1000 + seed, rows, columns, seed % 3 != 0);
+            let unlimited = |bits| EliminationBudget {
+                remaining: usize::MAX,
+                bits,
+            };
+            // Smallest sufficient operation count and bit limit, for both.
+            let minimal = |reference: bool, by_operations: bool| {
+                let succeeds = |value: u64| {
+                    let mut budget = if by_operations {
+                        EliminationBudget {
+                            remaining: value as usize,
+                            bits: u64::MAX,
+                        }
+                    } else {
+                        unlimited(value)
+                    };
+                    if reference {
+                        rational_rref(&mut matrix.clone(), columns, Some(&mut budget)).is_ok()
+                    } else {
+                        integer_rref(
+                            &matrix,
+                            columns,
+                            Elimination::GaussJordan,
+                            Some(&mut budget),
+                        )
+                        .is_ok()
+                    }
+                };
+                let (mut low, mut high) = (0u64, 1_000_000u64);
+                while low < high {
+                    let mid = low + (high - low) / 2;
+                    if succeeds(mid) {
+                        high = mid;
+                    } else {
+                        low = mid + 1;
+                    }
+                }
+                low
+            };
+            for by_operations in [true, false] {
+                assert_eq!(
+                    minimal(false, by_operations),
+                    minimal(true, by_operations),
+                    "seed {seed}, by operations: {by_operations}"
+                );
+            }
+            // The error reported below the limit is the same as well.
+            let run = |reference: bool, remaining: usize, bits: u64| {
+                let mut budget = EliminationBudget { remaining, bits };
+                if reference {
+                    rational_rref(&mut matrix.clone(), columns, Some(&mut budget)).err()
+                } else {
+                    integer_rref(
+                        &matrix,
+                        columns,
+                        Elimination::GaussJordan,
+                        Some(&mut budget),
+                    )
+                    .err()
+                }
+            };
+            for remaining in [0usize, 3, 10, 30, 100] {
+                for bits in [1u64, 3, 5, 8, 20, 64] {
+                    assert_eq!(
+                        run(false, remaining, bits),
+                        run(true, remaining, bits),
+                        "seed {seed}, remaining {remaining}, bits {bits}"
+                    );
+                }
+            }
+        }
+    }
+
+    fn q(value: i64) -> Q {
+        Q::from_integer(bi(value))
+    }
+
+    /// The solver as it was before the integer elimination: rational Gauss-Jordan
+    /// elimination, the solution read off the unnormalised pivot rows.
+    fn reference_solution(a: &[Vec<Q>], b: &[Q]) -> Option<LinearSystemSolution> {
+        let columns = a[0].len();
+        let mut aug: Vec<Vec<Q>> = a
+            .iter()
+            .zip(b)
+            .map(|(row, bi)| row.iter().cloned().chain([bi.clone()]).collect())
+            .collect();
+        let (pivots, _) = rational_rref(&mut aug, columns, None).ok()?;
+        if aug[pivots.len()..]
+            .iter()
+            .any(|row| !row[columns].is_zero())
+        {
+            return None;
+        }
+        let mut x = vec![Q::zero(); columns];
+        for (row, &column) in pivots.iter().enumerate() {
+            x[column] = &aug[row][columns] / &aug[row][column];
+        }
+        Some(LinearSystemSolution {
+            particular: x,
+            rank: pivots.len(),
+            nullity: columns - pivots.len(),
+        })
+    }
+
+    #[test]
+    fn solving_matches_the_rational_reference() {
+        let (mut consistent, mut inconsistent) = (0, 0);
+        for seed in 0..400u64 {
+            let rows = 1 + (seed % 10) as usize;
+            let columns = 1 + (seed / 4 % 8) as usize;
+            let a = pseudo_random_matrix(5000 + seed, rows, columns, seed % 2 == 1);
+            // Right-hand sides: one in the column space, one arbitrary.
+            let witness: Vec<Q> = (0..columns)
+                .map(|c| q((c as i64 * 7 + seed as i64) % 5 - 2))
+                .collect();
+            let in_span: Vec<Q> = a
+                .iter()
+                .map(|row| row.iter().zip(&witness).map(|(x, y)| x * y).sum())
+                .collect();
+            let arbitrary: Vec<Q> = (0..rows)
+                .map(|r| q((r as i64 * 3 + seed as i64) % 7 - 3))
+                .collect();
+            for b in [in_span, arbitrary] {
+                let expected = reference_solution(&a, &b);
+                assert_eq!(
+                    solve_linear_system_with_rank(&a, &b),
+                    expected,
+                    "seed {seed}"
+                );
+                if expected.is_some() {
+                    consistent += 1;
+                } else {
+                    inconsistent += 1;
+                }
+            }
+        }
+        assert!(
+            consistent > 200 && inconsistent > 50,
+            "{consistent} {inconsistent}"
+        );
+    }
+
+    /// The kernel computation as it was before the integer elimination.
+    fn reference_kernel(
+        a: &[Vec<Q>],
+        columns: usize,
+        limits: RationalKernelLimits,
+    ) -> Result<String, RationalKernelError> {
+        if a.iter()
+            .flatten()
+            .any(|x| x.numer().bits().max(x.denom().bits()) > limits.max_coefficient_bits)
+        {
+            return Err(RationalKernelError::BudgetExceeded("coefficient bits"));
+        }
+        let mut budget = EliminationBudget {
+            remaining: limits.max_operations,
+            bits: limits.max_coefficient_bits,
+        };
+        let mut reduced = a.to_vec();
+        let (pivots, rows) = rational_rref(&mut reduced, columns, Some(&mut budget))?;
+        let rank = pivots.len();
+        let free: Vec<_> = (0..columns).filter(|c| !pivots.contains(c)).collect();
+        let mut basis = Vec::new();
+        for &f in &free {
+            let mut v = vec![Q::zero(); columns];
+            v[f] = Q::one();
+            for (i, &p) in pivots.iter().enumerate() {
+                v[p] = -&reduced[i][f] / &reduced[i][p];
+                budget.check(&v[p])?;
+            }
+            basis.push(v);
+        }
+        let mut minor: Vec<Vec<Q>> = rows
+            .iter()
+            .enumerate()
+            .map(|(i, &r)| {
+                let mut row: Vec<_> = pivots.iter().map(|&c| a[r][c].clone()).collect();
+                row.extend((0..rank).map(|j| if i == j { Q::one() } else { Q::zero() }));
+                row
+            })
+            .collect();
+        rational_rref(&mut minor, rank, Some(&mut budget))?;
+        let mut inverse = Vec::new();
+        for (i, row) in minor.iter().enumerate() {
+            let mut out = Vec::new();
+            for x in &row[rank..] {
+                let v = x / &row[i];
+                budget.check(&v)?;
+                out.push(v);
+            }
+            inverse.push(out);
+        }
+        Ok(format!(
+            "{basis:?} {free:?} {pivots:?} {rows:?} {inverse:?}"
+        ))
+    }
+
+    #[test]
+    fn kernels_match_the_rational_reference_including_budgets() {
+        for seed in 0..150u64 {
+            let rows = 1 + (seed % 8) as usize;
+            let columns = 1 + (seed / 3 % 7) as usize;
+            let matrix = pseudo_random_matrix(9000 + seed, rows, columns, seed % 2 == 0);
+            for (max_operations, max_coefficient_bits) in [
+                (usize::MAX, u64::MAX),
+                (usize::MAX, 6),
+                (150, u64::MAX),
+                (40, 12),
+                (usize::MAX, 3),
+            ] {
+                let limits = RationalKernelLimits {
+                    max_entries: usize::MAX / 4,
+                    max_operations,
+                    max_coefficient_bits,
+                };
+                let actual = rational_kernel_with_certificate(&matrix, columns, limits).map(|k| {
+                    format!(
+                        "{:?} {:?} {:?} {:?} {:?}",
+                        k.basis,
+                        k.free_columns,
+                        k.pivot_columns,
+                        k.independent_rows,
+                        k.inverse_minor
+                    )
+                });
+                assert_eq!(
+                    actual,
+                    reference_kernel(&matrix, columns, limits),
+                    "seed {seed}, limits {max_operations} {max_coefficient_bits}"
+                );
+            }
+        }
     }
 
     #[test]

@@ -1,0 +1,26 @@
+# Fingerprints (FNV-1a 64 of the Debug output, and its length) of
+# tests/linalg_workloads.rs; re-bless only for intentional changes.
+adaptive/eulerian/default	1572cd4f92f98320:903
+adaptive/eulerian/laurent	1de2fa5407d08249:900
+adaptive/hermite/denominator	6a44da11b70521fc:653
+adaptive/narayana/default	8a12ad2cf554b0ec:1003
+adaptive/narayana/laurent	6e3c5b8274a0c981:992
+adaptive/no-recurrence/squares	e761c8b7a1a5637b:45
+adaptive/shifted-legendre/laurent	bdaf2584a6492a80:873
+adaptive/shifted-legendre/laurent-wide	e7988c769ab98acd:881
+adaptive/type-b-eulerian/default	0c44a6863b3ee47f:903
+adaptive/type-b-eulerian/derivative	18035a2aec124822:900
+hadamard-lift/av123	a9abded10d0d9f23:78969
+hadamard-lift/av321	5b78a6f789eb4d0e:100665
+kernel/eulerian hankel order 3 width 9	c183fb36dc8e5ea0:130422
+kernel/integer 24x18 rank 10 with budgets	6d80446d81f8730d:10759
+kernel/integer 60x40 rank 22	2cb5021f4e7a718b:90760
+kernel/rational 18x15 rank 8 with budgets	33fc7d3339c616b0:19068
+kernel/sparse 30x22 rank 12 with budgets	3ead4a12eca9ecf5:16469
+kernel/sparse 90x56 rank 30	0ad8c960ce095ebf:198274
+kernel/type-b-eulerian hankel order 3 width 10	1eb48e653f98b510:279578
+kernel/zero rows 0x5	de97110baa0c2d0c:881
+solve/integer 50x32 rank 18	cfea5b945222a484:4157
+solve/rational 30x24 rank 14	b0866519daac6030:2329
+solve/sparse 80x48 rank 26	7e39f7765cc480ea:7127
+solve/square 40	3c8bdb4188222f49:1219

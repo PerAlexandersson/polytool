@@ -322,6 +322,30 @@ Performance:
   annihilator systems 4 to 23 times, difference image annihilators
   (Touchard `Delta`) 5 to 8 times, right pseudo-division of large dividends
   26 to 33 times; the whole set 16.6 s to 2.7 s.
+- `linalg`: the exact linear systems and kernels
+  (`solve_linear_system`, `solve_linear_system_with_rank`,
+  `rational_kernel_with_certificate`) eliminate on integer rows, with the
+  fraction-free update `(v * row - t * pivot_row) / previous_pivot` (exact
+  division), instead of `Ratio<BigInt>` entries that were reduced by a gcd
+  after every operation.  Solving uses forward elimination with the smallest
+  pivot row and back substitution on integers (the solution, rank, nullity
+  and consistency do not depend on the pivot rows); the kernel keeps the
+  Gauss-Jordan pivot order, so the basis, `independent_rows`, the inverse
+  minor and the point at which a `RationalKernelLimits` budget is exceeded
+  (operation count and coefficient bits, checked on the reduced rational
+  values) are exactly those of the rational elimination.  The recurrence fit
+  builds its equations without rational products for integer entries.
+  Every result is unchanged (the new `tests/linalg_workloads.rs` compares
+  fingerprints of the complete outputs of 24 workloads with recorded ones
+  from the previous implementation, and unit tests compare against the
+  rational reference).  Release timings on that set (best of two runs of
+  three, 28.0 s to 1.6 s in all): `solve_linear_system_with_rank` on
+  integer, sparse and rational matrices 49 to 67 times faster, kernels 11 to
+  28 times, adaptive searches 4 to 38 times (Narayana with the default
+  options 14.4 s to 0.38 s, shifted Legendre with `try_laurent` 4.7 s to
+  0.28 s), the Hadamard lifts of the 321- and 123-avoiding families 2.7 and
+  5.2 times (1.09 s to 0.41 s, 0.95 s to 0.18 s; the rest is the lift's own
+  annihilator-system search).
 - The default exact real-rootedness test no longer switches large
   one-signed palindromic inputs to the Uspensky path and counts real roots
   directly (signs at infinity only); degree-79 Eulerian, type-B Eulerian and

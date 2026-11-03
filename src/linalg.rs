@@ -4,7 +4,9 @@
 //! definiteness checks, determinants, exact characteristic polynomials
 //! ([`characteristic_polynomial_bigint`]) and closed-walk counts
 //! ([`closed_walk_counts_bigint`]), linear system solving, and total
-//! non-negativity (TNN) checking.
+//! non-negativity (TNN) checking.  The exact linear systems and kernels eliminate
+//! on integer rows (a fraction-free Gauss-Jordan or Bareiss update) rather than
+//! on reduced rational entries.
 //!
 //! # Total non-negativity
 //!
@@ -19,6 +21,7 @@
 // re-exported below at its historical `linalg::*` path.
 mod definiteness;
 mod determinants;
+mod integer_elimination;
 mod linear_systems;
 mod modular;
 mod sparse_modular;
