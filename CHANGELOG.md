@@ -10,6 +10,12 @@ coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
 
+- `AdaptiveSearchResult`, `RecurrenceJsonSearch` and `RecurrenceRepresentation`
+  have a new `verification_equations` field; Rust struct literals must add it.
+  Older serialized records without this field remain readable (default 0).
+- `LiftOperation::BasisMap::basis_family` is boxed to keep the enum compact
+  as recurrence metadata grows. Its serialized JSON is unchanged.
+
 - `recurrence::RealRootednessTheorem` and
   `recurrence::VeroneseParentProofRoute` have the new variant
   `LiuWangThreeTerm`; exhaustive matches must add it.
@@ -372,6 +378,17 @@ Performance:
   14.5 s to 0.94 s, 4.9 s to 0.19 s).
 
 Additions:
+
+- `polytool real-rooted --json` returns only the exact real-rootedness result,
+  zero-based input index and degree for each polynomial; the zero polynomial
+  has degree `null`. Plain-text output is unchanged.
+- Recurrence search reports `verification_equations`, the dense coefficient
+  slots checked on held-out rows before cancellation, not an independence count.
+- `polytool recurrence --first-index N` uses the requested numbering in every
+  output, with skipped input rows still counted. `recurrence-generate` accepts
+  the same flag to relabel a record while preserving its generated rows.
+  `RecurrenceJson::reindexed` exposes this exact index substitution in Rust.
+  `RecurrenceRepresentations::reindexed` also updates complexity and the frontier.
 
 - `recurrence::check_liu_wang_three_term_theorem`: Liu and Wang's Theorem 2.1
   and Corollary 2.4 (Adv. Appl. Math. 38 (2007) 542-560) for lag rules

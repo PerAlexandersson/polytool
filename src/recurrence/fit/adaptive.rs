@@ -42,6 +42,7 @@
 //! the historical normalization and are skipped in the third stage.
 
 use super::*;
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -184,6 +185,10 @@ pub struct AdaptiveSearchResult {
     pub fit_polynomials: usize,
     /// Number of held-out polynomials verified after fitting.
     pub verification_polynomials: usize,
+    /// Dense coefficient equations checked on held-out rows, before cancellation.
+    /// This counts slots through the largest degree of an evaluated summand,
+    /// including zero slots; it is not a rank or an independence estimate.
+    pub verification_equations: usize,
     /// Number of candidates actually solved (not just counted).
     pub candidates_tried: usize,
     /// Counters for the adaptive search stages up to the returned result.
@@ -386,6 +391,43 @@ fn verify_heldout_tail(
         || recurrence_holds_from_rational_with_derivs(polys, derivs, rec, opts.rec_len, fit_len + 1)
 }
 
+pub(super) fn heldout_equation_count(
+    polys: &[Vec<BigRational>],
+    rec: &Recurrence,
+    fit_len: usize,
+) -> usize {
+    // Count coefficient slots of the actual identity, not the larger search
+    // ansatz. Keep the degree bound before summands cancel to zero.
+    let length = |p: &[BigRational]| p.iter().rposition(|c| !c.is_zero()).map_or(0, |i| i + 1);
+    let product_length = |a: usize, b: usize| {
+        if a == 0 || b == 0 {
+            0
+        } else {
+            a + b - 1
+        }
+    };
+    (fit_len..polys.len())
+        .map(|row| {
+            let n = row + 1;
+            let mut slots = rec.denominator.as_ref().map_or(length(&polys[row]), |p| {
+                product_length(length(&bivar_eval_n(p, n)), length(&polys[row]))
+            });
+            for term in &rec.terms {
+                let derivative_length =
+                    length(&polys[row - term.offset]).saturating_sub(term.deriv_order);
+                slots = slots.max(product_length(
+                    length(&bivar_eval_n(&term.coeff, n)),
+                    derivative_length,
+                ));
+            }
+            if let Some(p) = &rec.inhomogeneous {
+                slots = slots.max(length(&bivar_eval_n(p, n)));
+            }
+            slots.max(1)
+        })
+        .sum()
+}
+
 fn homogeneous_degree_bound_rejects(
     polys: &[Vec<BigRational>],
     derivs: &[Vec<Vec<BigRational>>],
@@ -497,6 +539,7 @@ pub(super) struct FoundAdaptiveCandidate {
     pub(super) num_equations: usize,
     pub(super) fit_polynomials: usize,
     pub(super) verification_polynomials: usize,
+    pub(super) verification_equations: usize,
     pub(super) candidates_tried: usize,
 }
 
@@ -510,6 +553,7 @@ impl FoundAdaptiveCandidate {
             num_equations: self.num_equations,
             fit_polynomials: self.fit_polynomials,
             verification_polynomials: self.verification_polynomials,
+            verification_equations: self.verification_equations,
             candidates_tried: self.candidates_tried,
             diagnostics,
         }
@@ -672,6 +716,7 @@ pub(super) fn evaluate_adaptive_candidate_in_chart(
                     eprintln!("  -> found by modular lift{suffix}!");
                 }
                 return Some(FoundAdaptiveCandidate {
+                    verification_equations: heldout_equation_count(ctx.polys, &rec, fit_len),
                     recurrence: rec,
                     opts: opts.clone(),
                     num_unknowns: unknowns,
@@ -721,6 +766,7 @@ pub(super) fn evaluate_adaptive_candidate_in_chart(
             eprintln!("  -> found{suffix}!");
         }
         Some(FoundAdaptiveCandidate {
+            verification_equations: heldout_equation_count(ctx.polys, &rec, fit_len),
             recurrence: rec,
             opts: opts.clone(),
             num_unknowns: unknowns,
@@ -978,6 +1024,39 @@ pub fn find_recurrence_adaptive_with_budget(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn heldout_slots_include_denominators_derivatives_and_forcing() {
+        let record: crate::recurrence::RecurrenceJson = serde_json::from_value(serde_json::json!({
+            "schema": "polytool.recurrence.v1", "first_index": 1,
+            "initial_polynomials": [["1"]],
+            "recurrence": {
+                "denominator": {"coeffs": [["0", "0", "1"]]},
+                "inhomogeneous": {"coeffs": [["0", "0", "0", "0", "0", "0", "1"]]},
+                "terms": [
+                    {"offset": 1, "deriv_order": 1, "sign": "none",
+                     "coeff": {"coeffs": [["0", "0", "0", "0", "1"]]}},
+                    {"offset": 1, "deriv_order": 0, "sign": "none",
+                     "coeff": {"coeffs": [["0", "0", "0", "0", "0", "0", "0", "-3"],
+                                           ["0", "0", "0", "0", "0", "0", "0", "1"]]}}
+                ]
+            }
+        }))
+        .unwrap();
+        let (mut rule, _, _) = record.to_recurrence_parts().unwrap();
+        let rows = i64_polys_to_rational(&[vec![1], vec![0, 0], vec![1, 0], vec![1]]);
+        // At n=3 both right-hand products vanish; forcing has degree 6.
+        // At n=4 the (n-3)t^7 term survives, giving eight slots.
+        assert_eq!(heldout_equation_count(&rows, &rule, 2), 7 + 8);
+        rule.inhomogeneous = None;
+        rule.terms.truncate(1);
+        let rows = i64_polys_to_rational(&[vec![0, 0], vec![1], vec![0, 0, 1], vec![0]]);
+        // Degrees: t^2*1; t^2*t^2; t^4*D(t^2).
+        assert_eq!(heldout_equation_count(&rows, &rule, 1), 3 + 5 + 6);
+        let zeros = i64_polys_to_rational(&[vec![0], vec![], vec![0, 0]]);
+        assert_eq!(heldout_equation_count(&zeros, &rule, 1), 2);
+        assert_eq!(heldout_equation_count(&zeros, &rule, zeros.len()), 0);
+    }
 
     #[test]
     fn adaptive_geometric() {

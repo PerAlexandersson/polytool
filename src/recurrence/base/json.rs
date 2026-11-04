@@ -84,6 +84,10 @@ pub struct RecurrenceJsonSearch {
     pub fit_polynomials: usize,
     /// Number of held-out rows verified after fitting.
     pub verification_polynomials: usize,
+    /// Held-out coefficient slots of the actual recurrence before cancellation;
+    /// not an independent-equation count. Absent in older records.
+    #[serde(default)]
+    pub verification_equations: usize,
     /// Number of candidates that were actually solved before this one was accepted.
     pub candidates_tried: usize,
     /// Bounds of the winning candidate configuration.
@@ -134,6 +138,29 @@ impl From<&RecurrenceOptions> for RecurrenceOptionsJson {
 }
 
 impl RecurrenceJson {
+    /// Relabel the first row, substituting the index in every coefficient.
+    ///
+    /// Seeds and search counts are unchanged. Alternating signs are shifted
+    /// together with the coefficient polynomials, so replay gives the same rows.
+    pub fn reindexed(&self, first_index: usize) -> Result<Self, RecurrenceError> {
+        let (rule, old_index, seeds) = self.to_recurrence_parts()?;
+        let difference = old_index as i128 - first_index as i128;
+        let shift = i64::try_from(difference).map_err(|_| {
+            RecurrenceError::InvalidInput("recurrence index shift exceeds i64".into())
+        })?;
+        let rule = rule.shift_index(shift);
+        let mut search = self.search.clone();
+        if let Some(search) = &mut search {
+            search.recurrence_text = rule.to_string();
+        }
+        Ok(Self::from_recurrence_rational(
+            &rule,
+            first_index,
+            &seeds,
+            search,
+        ))
+    }
+
     /// Create a JSON record from a recurrence and initial rows.
     pub fn from_recurrence_rational(
         recurrence: &Recurrence,
@@ -328,6 +355,7 @@ mod tests {
                 equations: result.num_equations,
                 fit_polynomials: result.fit_polynomials,
                 verification_polynomials: result.verification_polynomials,
+                verification_equations: result.verification_equations,
                 candidates_tried: result.candidates_tried,
                 options: RecurrenceOptionsJson::from(&result.opts),
             }),

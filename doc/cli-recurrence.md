@@ -28,6 +28,7 @@ Options:
 
 ```
 --skip-prefix <k>    Ignore the first k input polynomials before searching
+--first-index <n>    Index of the first input row (nonnegative integer)
 --min-rec-len <k>    Minimum recurrence depth to try (default: 1)
 --max-rec-len <k>    Maximum recurrence depth (default: 5)
 --min-var-deg <d>    Minimum degree in t for coefficients (default: 0)
@@ -77,6 +78,25 @@ status `3`; with `--format json`, the JSON status is `budget_exhausted` and
 includes `candidates_considered`, `candidates_tried`, and `max_candidates`.
 If all configured candidates have been checked, the JSON status is instead
 `not_found`. Omitting the option preserves the unbounded behavior.
+
+By default, retained rows are numbered from 1, including after
+`--skip-prefix`. With explicit `--first-index N`, the original first input row
+is `P_N`, so `--skip-prefix K` makes the first retained row `P_(N+K)`.
+Every coefficient, denominator, forcing term and alternating sign is shifted
+to that numbering. Text, Python, JSON, representation LaTeX and theorem-match
+reports use the same indices. Indices must be nonnegative and fit the supported
+integer range.
+
+Successful JSON search metadata includes `search.verification_equations`:
+the number of dense coefficient slots checked on held-out rows. For each row
+we count from degree zero through the largest degree of an evaluated summand
+on either side, before cancellation between summands. Derivatives, denominators
+and forcing terms contribute their actual degrees; a zero identity contributes
+one slot. This counts equations, including zero or dependent ones, **not**
+independent constraints or a probability of correctness. It is zero with
+`--no-verify`; older JSON records without the field remain readable (default 0).
+Representation entries expose the same count directly as well as in their
+nested recurrence JSON.
 
 ### Several recurrence representations
 
@@ -131,8 +151,9 @@ representations. On budget exhaustion, unresolved cells are conservatively
 labelled `incomplete`. This API does not return a complete coefficient kernel
 or an Ore-ideal basis.
 
-Rows after `skip_prefix` are renumbered from 1. `first_checked_index` is the
-first checked target in this numbering; `first_checked_input_row` refers to
+Rows after `skip_prefix` are renumbered from 1 unless `--first-index` is
+explicitly supplied, as described above. `first_checked_index` is the
+first checked target in the output numbering; `first_checked_input_row` refers to
 the original input. JSON retains **every** initial row before the checked
 domain, even when the actual lag is smaller. We do not cancel polynomial
 common factors or extend a checked domain implicitly. Vanishing denominators
@@ -484,7 +505,8 @@ polytool recurrence --json < polys.txt > recurrence.json
 ```
 
 The JSON schema stores exact rational coefficients as strings, the recurrence
-terms, the LHS denominator if present, and the minimal initial polynomial rows.
+terms, the LHS denominator if present, and enough initial polynomial rows
+to reach the checked recurrence domain.
 Generate more rows from the saved recurrence with:
 
 ```sh
@@ -492,7 +514,17 @@ polytool recurrence-generate --recurrence recurrence.json --rows 100 > rows-100.
 ```
 
 Use `--additional n` instead of `--rows n` to keep all initial rows and append
-`n` newly generated rows.
+`n` newly generated rows. By default generation preserves the record's
+`first_index`. To relabel it, use:
+
+```sh
+polytool recurrence-generate --recurrence recurrence.json --first-index 0 --rows 100
+```
+
+This shifts the rule as well as its labels: it generates exactly the same rows,
+with a different starting index. It does not skip rows or evaluate the original
+rule at a different starting point. Rust callers can use
+`RecurrenceJson::reindexed(first_index)` for the same operation.
 
 ### B-files from a recurrence
 

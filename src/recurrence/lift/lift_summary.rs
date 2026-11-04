@@ -142,7 +142,7 @@ pub enum LiftOperation {
         basis: String,
         /// The basis family: rule, first index `i0` and seeds
         /// (`polytool.recurrence.v1`).
-        basis_family: RecurrenceJson,
+        basis_family: Box<RecurrenceJson>,
         /// The source interval of the map theorem used, as text (empty
         /// when no theorem conclusion applies).
         source_interval: String,

@@ -56,6 +56,7 @@ pub(crate) fn search_theorem_report(
     result: &AdaptiveSearchResult,
     polys: &[Vec<BigRational>],
     search: &AdaptiveSearchOptions,
+    first_index: usize,
 ) -> RecurrenceTheoremReport {
     let searched = polys.get(search.skip_prefix..).unwrap_or(&[]);
     let initial_count = result.export_initial_count(searched.len());
@@ -72,11 +73,16 @@ pub(crate) fn search_theorem_report(
             equations: result.num_equations,
             fit_polynomials: result.fit_polynomials,
             verification_polynomials: result.verification_polynomials,
+            verification_equations: result.verification_equations,
             candidates_tried: result.candidates_tried,
             options: RecurrenceOptionsJson::from(&result.opts),
         }),
-    );
-    RecurrenceTheoremReport::for_search(result, recurrence_json, searched)
+    )
+    .reindexed(first_index)
+    .expect("CLI index shift was validated");
+    let mut shifted_result = result.clone();
+    shifted_result.recurrence = result.recurrence.shift_index(1 - first_index as i64);
+    RecurrenceTheoremReport::for_search(&shifted_result, recurrence_json, searched)
 }
 
 /// Print one stderr note per conditional theorem match (no-op without matches).

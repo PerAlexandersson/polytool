@@ -56,7 +56,15 @@ CLI.
 
 ```sh
 polytool real-rooted < polys.txt
+polytool real-rooted --json < polys.txt
 ```
+
+The root-only JSON response is `{"items":[{"index":0,"degree":2,
+"real_rooted":true}]}`. Indices are zero-based positions among parsed
+polynomials. Trailing zero coefficients do not affect the degree; the zero
+polynomial has degree `null`, and a nonzero constant has degree `0`.
+This command performs only the real-rootedness test, without computing the
+additional properties reported by `properties --json`.
 
 `real-rooted` accepts arbitrary-size integer coefficients in dense-list and
 expanded-polynomial input.

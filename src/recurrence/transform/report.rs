@@ -819,6 +819,7 @@ fn independent_search(
                     equations: found.num_equations,
                     fit_polynomials: found.fit_polynomials,
                     verification_polynomials: found.verification_polynomials,
+                    verification_equations: found.verification_equations,
                     candidates_tried: found.candidates_tried,
                     options: RecurrenceOptionsJson::from(&found.opts),
                 };

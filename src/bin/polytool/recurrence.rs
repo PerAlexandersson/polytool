@@ -28,6 +28,9 @@ pub(crate) fn print_recurrence_help() {
     print_rational_coefficient_input_help();
     println!();
     println!("Search options:");
+    println!("  --first-index <n>          Index of the first input row (nonnegative)");
+    println!("                             With --skip-prefix, discarded rows still count.");
+    println!("                             Default: renumber the retained rows from 1.");
     println!("  --skip-prefix <n>          Ignore the first n input polynomials");
     println!("  --min-rec-len <n>          Minimum number of previous rows to use");
     println!("  --max-rec-len <n>          Maximum number of previous rows to use");
@@ -99,6 +102,8 @@ pub(crate) fn print_recurrence_generate_help() {
     println!();
     println!("Options:");
     println!("  --recurrence <file|->      Read recurrence JSON from file, or stdin with -");
+    println!("  --first-index <n>          Relabel the first row and shift the rule accordingly");
+    println!("                             Default: keep the JSON record's first_index.");
     println!("  --rows <n>                 Output n total rows, including initial rows");
     println!("  --additional <n>           Output initial rows plus n generated rows");
     println!("  --json                     Emit generated rows as JSON");
@@ -171,10 +176,17 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
     let mut format = RecurrenceOutputFormat::Text;
     let mut representations = false;
     let mut theorem_matches = false;
+    let mut first_index = None;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--first-index" => {
+                first_index = Some(
+                    parse_usize_option(args, &mut i, "--first-index")
+                        .unwrap_or_else(|error| usage_error(&error)),
+                );
+            }
             "--representations" => representations = true,
             "--json" => {
                 format = RecurrenceOutputFormat::Json;
@@ -423,6 +435,14 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
         return;
     }
 
+    let output_first_index = first_index
+        .map_or(Some(1), |n: usize| n.checked_add(search.skip_prefix))
+        .unwrap_or_else(|| usage_error("first index plus skipped rows overflows"));
+    if output_first_index > i64::MAX as usize
+        || output_first_index.checked_add(polys.len()).is_none()
+    {
+        usage_error("first index or final row index is too large");
+    }
     if representations {
         if matches!(format, RecurrenceOutputFormat::Python) {
             eprintln!("--representations supports text or JSON; use a candidate's recurrence_json for row generation");
@@ -430,6 +450,9 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
         }
         match find_recurrence_representations_rational(&polys, &search, budget) {
             Ok(report) => {
+                let report = report
+                    .reindexed(output_first_index)
+                    .unwrap_or_else(|error| usage_error(&error.to_string()));
                 if matches!(format, RecurrenceOutputFormat::Json) {
                     println!("{}", serde_json::to_string_pretty(&report).unwrap());
                 } else {
@@ -473,18 +496,19 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             let searched_polys = polys.get(search.skip_prefix..).unwrap_or(&[]);
             let initial_count = res.export_initial_count(searched_polys.len());
             let initial_polys = &searched_polys[..initial_count];
-            let theorem_report = search_theorem_report(&res, &polys, &search);
+            let rule = res.recurrence.shift_index(1 - output_first_index as i64);
+            let theorem_report = search_theorem_report(&res, &polys, &search, output_first_index);
             match format {
                 RecurrenceOutputFormat::Json if theorem_matches => {
                     println!("{}", serde_json::to_string_pretty(&theorem_report).unwrap());
                 }
                 RecurrenceOutputFormat::Json => {
                     let recurrence_json = RecurrenceJson::from_recurrence_rational(
-                        &res.recurrence,
-                        1,
+                        &rule,
+                        output_first_index,
                         initial_polys,
                         Some(RecurrenceJsonSearch {
-                            recurrence_text: res.recurrence.to_string(),
+                            recurrence_text: rule.to_string(),
                             source_rows: polys.len(),
                             skip_prefix: search.skip_prefix,
                             unknowns: res.num_unknowns,
@@ -492,6 +516,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                             equations: res.num_equations,
                             fit_polynomials: res.fit_polynomials,
                             verification_polynomials: res.verification_polynomials,
+                            verification_equations: res.verification_equations,
                             candidates_tried: res.candidates_tried,
                             options: RecurrenceOptionsJson::from(&res.opts),
                         }),
@@ -504,11 +529,14 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                 RecurrenceOutputFormat::Python => {
                     println!(
                         "{}",
-                        res.recurrence.to_python_definition_rational(initial_polys)
+                        rule.to_python_definition_rational_indexed(
+                            initial_polys,
+                            output_first_index as i64
+                        )
                     );
                 }
                 RecurrenceOutputFormat::Text => {
-                    println!("{}", res.recurrence);
+                    println!("{rule}");
                     if theorem_matches {
                         print_theorem_report_text(&theorem_report);
                     }
@@ -627,6 +655,11 @@ pub(crate) fn format_rational_row(coeffs: &[RecurrenceBigRational]) -> String {
         .join(", ")
 }
 
+fn usage_error(message: &str) -> ! {
+    eprintln!("{message}");
+    std::process::exit(2);
+}
+
 fn read_recurrence_json(path: &str) -> Result<RecurrenceJson, String> {
     let input = if path == "-" {
         read_limited_text(io::stdin(), "recurrence JSON from stdin")?
@@ -664,6 +697,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     }
 
     let mut recurrence_path: Option<String> = None;
+    let mut first_index_override = None;
     let mut rows: Option<usize> = None;
     let mut additional: Option<usize> = None;
     let mut format = "text";
@@ -683,6 +717,12 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
             "--recurrence" => {
                 i += 1;
                 recurrence_path = args.get(i).cloned();
+            }
+            "--first-index" => {
+                first_index_override = Some(
+                    parse_usize_option(args, &mut i, "--first-index")
+                        .unwrap_or_else(|error| usage_error(&error)),
+                );
             }
             "--rows" => {
                 i += 1;
@@ -790,13 +830,18 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
         );
     }
 
-    let recurrence_json = match read_recurrence_json(&path) {
+    let mut recurrence_json = match read_recurrence_json(&path) {
         Ok(value) => value,
         Err(error) => {
             eprintln!("{error}");
             return;
         }
     };
+    if let Some(first_index) = first_index_override {
+        recurrence_json = recurrence_json
+            .reindexed(first_index)
+            .unwrap_or_else(|error| usage_error(&error.to_string()));
+    }
     let (recurrence, first_index, initial_polys) = match recurrence_json.to_recurrence_parts() {
         Ok(parts) => parts,
         Err(error) => {
