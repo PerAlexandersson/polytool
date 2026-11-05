@@ -189,3 +189,130 @@ fn registry_help_and_completion_cover_every_command() {
     }
     assert_eq!(run(&["completions", "unknown"], "").status.code(), Some(2));
 }
+
+#[test]
+fn json_only_commands_accept_explicit_json_without_changing_reports() {
+    let jobs = [
+        ("root-enclosures", r#"{"polynomials":[["-1","0","1"]]}"#),
+        (
+            "recurrence-transform",
+            r#"{"oeis_id":"A008292","row_count":4,"transformation":{"kind":"f_polynomial","schedule":{"first_index":1,"first_degree":0,"step":1}}}"#,
+        ),
+        (
+            "recurrence-implicit",
+            r#"{"oeis_id":"A007318","row_count":4,"transformation":{"kind":"diagonal","weight":{"kind":"factorial_power","power":1}}}"#,
+        ),
+        (
+            "recurrence-search-representations",
+            r#"{"oeis_id":"A007318","row_count":4,"limits":{"max_depth":1},"transformations":[{"kind":"diagonal","weight":{"kind":"factorial_power","power":1}}]}"#,
+        ),
+    ];
+    for (command, request) in jobs {
+        let default = success(run(&[command], request));
+        assert_eq!(success(run(&[command, "--json"], request)), default);
+        let compact = success(run(&[command, "--json", "--compact"], request));
+        assert_eq!(compact.lines().count(), 1);
+        assert_eq!(
+            serde_json::from_str::<Value>(&default).unwrap(),
+            serde_json::from_str::<Value>(&compact).unwrap()
+        );
+    }
+}
+
+#[test]
+fn enclosure_replay_rejects_tampering_in_library_and_cli() {
+    use polytool::recurrence::{verify_root_enclosures, RootEnclosureReport};
+    let request =
+        r#"{"polynomials":[["0","0","1","2","1"],["1","0","1"],[],["3/2"]],"max_width":"1/100"}"#;
+    let report: Value = serde_json::from_str(&success(run(&["root-enclosures"], request))).unwrap();
+    let decoded: RootEnclosureReport = serde_json::from_value(report.clone()).unwrap();
+    verify_root_enclosures(&decoded).unwrap();
+    let verified: Value = serde_json::from_str(&success(run(
+        &["root-enclosures", "--verify", "--json", "--compact"],
+        &report.to_string(),
+    )))
+    .unwrap();
+    assert_eq!(verified["verified"], true);
+    assert_eq!(verified["polynomials"], 4);
+    for (pointer, value) in [
+        ("/schema", json!("unknown.schema")),
+        ("/items/0/roots/0/multiplicity", json!(7)),
+        ("/items/0/roots/0/lower", json!("-99")),
+        ("/items/1/real_rooted", json!(true)),
+        ("/request/polynomials/0/0", json!("1")),
+        ("/request/max_width", json!("-1")),
+    ] {
+        let mut tampered = report.clone();
+        *tampered.pointer_mut(pointer).unwrap() = value;
+        let decoded: RootEnclosureReport = serde_json::from_value(tampered.clone()).unwrap();
+        assert!(verify_root_enclosures(&decoded).is_err(), "{pointer}");
+        let output = run(&["root-enclosures", "--verify"], &tampered.to_string());
+        assert_eq!(output.status.code(), Some(2), "{pointer}");
+        assert!(output.stdout.is_empty());
+    }
+}
+
+#[test]
+fn veronese_search_reuses_report_wrappers_and_explicit_menu_selection() {
+    let record = json!({"schema":"polytool.recurrence.v1", "first_index":0,
+    "initial_polynomials":[["1"],["1"]], "recurrence":{"terms":[
+        {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["2"]]}},
+        {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","1"]]}}
+    ]}});
+    let args = ["recurrence-veronese-lifts", "--json", "--parent-rows", "4"];
+    let expected = success(run(&args, &record.to_string()));
+    let wrapper = json!({"schema":"polytool.recurrence-theorems.v1", "recurrence_json":record});
+    assert_eq!(success(run(&args, &wrapper.to_string())), expected);
+    let menu = json!({"schema":"polytool.recurrence-representations.v1", "representations":[
+        {"recurrence_json":record}, {"recurrence_json":record}
+    ]});
+    assert_eq!(run(&args, &menu.to_string()).status.code(), Some(2));
+    let selected = [&args[..], &["--candidate", "1"]].concat();
+    assert_eq!(success(run(&selected, &menu.to_string())), expected);
+}
+
+#[test]
+fn scout_rejects_invalid_options_before_reading_a_symbol() {
+    for args in [
+        vec!["--format", "bogus"],
+        vec!["--box", "NaN", "1", "-1", "1"],
+        vec!["--tol", "inf"],
+        vec!["--min-imag", "-inf"],
+        vec!["--min-imag", "-1"],
+        vec!["--tol", "0"],
+        vec!["--max-iter", "0"],
+        vec!["--box", "-1e308", "1e308", "-1", "1"],
+    ] {
+        let args = [&["bkw-scout"][..], &args[..]].concat();
+        let output = run(&args, "not a symbol");
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        assert!(output.stdout.is_empty());
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            !error.contains("parse BKW symbol"),
+            "late validation: {args:?}: {error}"
+        );
+    }
+}
+
+#[test]
+fn scout_json_with_mathematica_is_one_valid_document() {
+    let args = [
+        "bkw-scout",
+        "--grid",
+        "1",
+        "--include-real-axis",
+        "--no-refine",
+        "--json",
+    ];
+    let plain: Value = serde_json::from_str(&success(run(&args, "1;0;1"))).unwrap();
+    let with_formula = [&args[..], &["--mathematica"]].concat();
+    let mut augmented: Value = serde_json::from_str(&success(run(&with_formula, "1;0;1"))).unwrap();
+    assert!(augmented["mathematica"]
+        .as_str()
+        .unwrap()
+        .contains("Reduce"));
+    augmented.as_object_mut().unwrap().remove("mathematica");
+    assert_eq!(augmented, plain);
+    assert!(!plain["candidates"].as_array().unwrap().is_empty());
+}

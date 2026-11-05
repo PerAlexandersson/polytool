@@ -220,7 +220,12 @@ interface: for `{"polynomials": [["0", "0", "1", "3", "3", "1"]],
 "max_width": "1/1000", "interval": {...}}` it returns enclosures with
 multiplicities (`lower == upper` is an exact rational root; otherwise exactly
 one root lies strictly inside and neither endpoint is a root), degree,
-valuation, `real_rooted` and exact interval verdicts. The MCP `real_roots`
+valuation, `real_rooted` and exact interval verdicts. Save this report and use
+`polytool root-enclosures --verify < report.json` to recompute its embedded
+request and compare every field. The library entry points are
+`recurrence::{root_enclosures, verify_root_enclosures}`; replay verifies only
+the finite computation. See the [workflow example](workflows.md#replay-exact-root-enclosures).
+The MCP `real_roots`
 midpoints are representatives only. In Rust use
 `real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval}`; fixed-cap diagonal
 multiplier tests use `recurrence::jensen_fixed_cap_check` (Jensen polynomial

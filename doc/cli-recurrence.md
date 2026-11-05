@@ -1,7 +1,8 @@
 # Recurrence search
 
 For a complete generation/search/replay pipeline, see [CLI workflows](workflows.md).
-`recurrence-generate` and `recurrence-theorems` share a bounded JSON reader:
+`recurrence-generate`, `recurrence-theorems` and `recurrence-veronese-lifts`
+share a bounded JSON reader:
 they accept plain recurrence records, theorem reports with `recurrence_json`,
 and recurrence representation menus. Select a zero-based `representations`
 entry with `--candidate N`; a menu with multiple entries requires this option.

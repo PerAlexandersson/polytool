@@ -41,9 +41,10 @@ polytool recurrence-generate --recurrence report.json --rows 20
 polytool recurrence --representations --json < rows.txt > menu.json
 polytool recurrence-generate --recurrence menu.json --candidate 0 --rows 20
 polytool recurrence-theorems --recurrence menu.json --candidate 0 --json
+polytool recurrence-veronese-lifts --recurrence menu.json --candidate 0 --json
 ```
 
-Both readers accept `polytool.recurrence.v1`, the embedded `recurrence_json`
+All three readers accept `polytool.recurrence.v1`, the embedded `recurrence_json`
 in `polytool.recurrence-theorems.v1`, and entries of the `representations`
 array in `polytool.recurrence-representations.v1`. Candidate indices are
 zero-based positions in that array, not positions in its `frontier` array.
@@ -51,6 +52,23 @@ A menu with multiple entries requires `--candidate`; one entry is selected
 automatically. Other report schemas need their own replay commands. Extracting
 a recurrence does not verify a report or strengthen its evidence labels.
 Use `--recurrence -` to read any of these supported inputs from stdin.
+
+## Replay exact root enclosures
+
+```sh
+printf '{"polynomials":[["-2","0","1"]],"max_width":"1/100"}\n' |
+  polytool root-enclosures --json > enclosures.json
+polytool root-enclosures --verify < enclosures.json
+```
+
+Replay recomputes the embedded request and checks the entire report, including
+root multiplicities and interval verdicts. It verifies the supplied finite
+computation; it does not prove real-rootedness for an infinite family. The
+browser verifier and CLI use the same library replay function.
+
+`root-enclosures`, `recurrence-transform`, `recurrence-implicit` and
+`recurrence-search-representations` always produce JSON. They accept `--json`
+for consistency with other commands and `--compact` for one-line output.
 
 ## Get formulas and exact scalar results
 

@@ -266,8 +266,13 @@ polytool bkw-scout \
 ```
 
 The same symbol can be supplied on stdin, one coefficient polynomial per line.
-Use `--format json` for machine-readable output, and `--mathematica` to print a
-`Reduce` skeleton for exact equal-modulus follow-up.
+Use `--json` (or `--format json`) for machine-readable output, and
+`--mathematica` for a `Reduce` skeleton for exact equal-modulus follow-up.
+Together these options put the skeleton in a `mathematica` string field in
+the same JSON document. Floating-point options must be finite; `--tol` and
+`--max-iter` must be positive, and `--min-imag` nonnegative. Invalid options
+are rejected before reading or scouting the symbol. If numerical overflow
+prevents valid JSON, the command fails with a diagnostic and no partial result.
 
 ## Compute resultant/discriminant
 

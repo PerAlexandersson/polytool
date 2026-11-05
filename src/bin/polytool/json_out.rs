@@ -1,6 +1,25 @@
-//! Hand-written JSON fragments shared by the text/JSON report printers.
+//! JSON fragments and result printing shared by the CLI report adapters.
 
 use num_bigint::BigInt;
+
+/// Print a complete JSON result, or fail before writing data on an error.
+pub(crate) fn print_json_result<T: serde::Serialize>(result: Result<T, String>, compact: bool) {
+    let text = result.and_then(|value| {
+        if compact {
+            serde_json::to_string(&value)
+        } else {
+            serde_json::to_string_pretty(&value)
+        }
+        .map_err(|error| error.to_string())
+    });
+    match text {
+        Ok(text) => println!("{text}"),
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+    }
+}
 
 fn json_escape(input: &str) -> String {
     let mut out = String::with_capacity(input.len());

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `root-enclosures --verify` replays saved reports through a shared exact
+  library verifier, also used by the browser. JSON-only enclosure, transform,
+  implicit and representation-search commands accept explicit `--json`.
+- Veronese lift searches accept theorem wrappers and representation menus
+  through the same reader as recurrence generation and theorem matching.
+- BKW scout validates formats and finite numerical options before searching.
+  `--json --mathematica` emits one JSON document with a formula string, and
+  non-finite numerical results fail before writing JSON.
 - CLI help groups commands by task; `help --json` exports their names, aliases
   and summaries. OEIS maintenance subcommands now reach their detailed help.
   `completions bash|zsh|fish` emits command-name shell completion scripts.
