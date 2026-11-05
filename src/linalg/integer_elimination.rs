@@ -22,8 +22,11 @@
 //!
 //! Rows that are not touched by a step (their entry in the pivot column is zero) are
 //! not rescaled; each row records the pivot (its *level*) at which its integers are
-//! valid and is brought to the current level when it is next used, which telescopes
-//! to one multiplication and one exact division.
+//! valid. A pivot row is brought to the current level when it is next used.
+//! For a target row at level `L`, we combine that rescaling with elimination:
+//! `(v * (prev/L) * row - (prev/L) * t * pivot_row) / prev` simplifies to
+//! `(v * row - t * pivot_row) / L`. This avoids separately multiplying and
+//! dividing every entry of a stale target row, with the same integer result.
 //!
 //! With a [`EliminationBudget`], the true rational entries are reconstructed lazily:
 //! every row carries the exact rational scalar `c` with `true row = c * integer
@@ -277,28 +280,24 @@ fn integer_eliminate(
             if r == row || rows[r][col].is_zero() {
                 continue;
             }
-            // Bring the target row to the current level.
-            if levels[r] != previous {
-                if !rescale_row(&mut rows[r], &previous, &levels[r]) {
-                    return Ok(None);
-                }
-                if budget.is_some() {
-                    scales[r] *= Q::new(levels[r].clone(), previous.clone());
-                }
-                levels[r] = previous.clone();
-            }
+            // Fuse rescaling from the target's level with elimination. The
+            // common `previous` factor cancels, so we divide by its own level.
+            let divisor = &levels[r];
             let target = &mut rows[r];
             let t = target[col].clone();
             if let Some(b) = budget.as_deref_mut() {
                 b.check_factor(&t, &scales[r], &value, &pivot_scale)?;
-                // true row' = c * previous / value * row'.
-                scales[r] *= Q::new(previous.clone(), value.clone());
+                // true row' = c * target_level / value * row'.
+                scales[r] *= Q::new(divisor.clone(), value.clone());
             }
             let start = if r < row { 0 } else { col };
             for j in start..width {
                 let pivot_entry = &pivot_row[j];
                 let entry = &mut target[j];
-                if !(entry.is_zero() && pivot_entry.is_zero()) {
+                if j == col {
+                    // v * t - t * v is zero without either multiplication.
+                    *entry = BigInt::zero();
+                } else if !(entry.is_zero() && pivot_entry.is_zero()) {
                     let mut updated = if entry.is_zero() {
                         BigInt::zero()
                     } else {
@@ -307,8 +306,8 @@ fn integer_eliminate(
                     if !pivot_entry.is_zero() {
                         updated -= &t * pivot_entry;
                     }
-                    if !previous.is_one() {
-                        let (quotient, remainder) = updated.div_rem(&previous);
+                    if !divisor.is_one() {
+                        let (quotient, remainder) = updated.div_rem(divisor);
                         if !remainder.is_zero() {
                             return Ok(None);
                         }

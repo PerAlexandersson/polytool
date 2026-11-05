@@ -149,12 +149,12 @@ fn main() {
                 println!(
                     "{}",
                     serde_json::json!({
-                            "case": name, "run": run, "elapsed_ms": elapsed_ms,
-                            "status": status, "considered": d.considered_candidates,
-                    "search": search, "candidate_limit": candidate_limit, "outcome": key,
-                            "modular_prefilter_ms": d.modular_prefilter_ms,
-                            "exact_solve_ms": d.exact_solve_ms,
-                        })
+                        "case": name, "run": run, "elapsed_ms": elapsed_ms,
+                        "status": status, "considered": d.considered_candidates,
+                        "search": search, "candidate_limit": candidate_limit, "outcome": key,
+                        "modular_prefilter_ms": d.modular_prefilter_ms,
+                        "exact_solve_ms": d.exact_solve_ms,
+                    })
                 );
             }
         }

@@ -335,11 +335,11 @@ pub fn solve_linear_system(a: &[Vec<BigRational>], b: &[BigRational]) -> Option<
 
 /// Solve a nonsingular square system `Ax = b` over `Q`.
 ///
-/// This uses ordinary forward elimination followed by back-substitution.  It is
-/// faster than [`solve_linear_system`] when the caller already knows that the
-/// chosen rows form a full-rank square subsystem, because it does not compute a
-/// full reduced row-echelon form.  Returns `None` if the input is not square or
-/// if a zero pivot proves that the matrix is singular.
+/// Integer inputs use fraction-free forward elimination and integer back
+/// substitution, reducing rationals only for the final solution coordinates.
+/// Other inputs use rational forward elimination and back substitution.
+/// Returns `None` if the input is not square or if a zero pivot proves that the
+/// matrix is singular.
 pub fn solve_full_rank_square_linear_system(
     a: &[Vec<BigRational>],
     b: &[BigRational],
@@ -466,22 +466,14 @@ fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option
         denom = pivot;
     }
 
-    let mut x = vec![Q::zero(); n];
-    for row in (0..n).rev() {
-        let diagonal = aug[row][row].clone();
-        if diagonal.is_zero() {
-            return None;
-        }
-        let mut value = Q::from_integer(aug[row][n].clone());
-        for (col, coeff) in aug[row].iter().enumerate().take(n).skip(row + 1) {
-            if !coeff.is_zero() {
-                value -= Q::from_integer(coeff.clone()) * &x[col];
-            }
-        }
-        x[row] = value / Q::from_integer(diagonal);
-    }
-
-    Some(x)
+    back_substitute(
+        &IntegerRref {
+            rows: aug,
+            pivots: (0..n).collect(),
+            origins: Vec::new(),
+        },
+        n,
+    )
 }
 
 #[cfg(test)]
@@ -865,6 +857,75 @@ mod tests {
             solve_linear_system_with_rank(&a, &b),
             reference_solution(&a, &b)
         );
+    }
+
+    #[test]
+    fn sparse_solves_with_delayed_row_updates_stay_fraction_free() {
+        // Skipped pivot columns leave rows at different integer levels. Include
+        // negative pivots, rational row scalings, free columns and dependent rows.
+        let base = [
+            [2, 0, 0, 3, 0, 1],
+            [0, 0, -3, 0, 2, 1],
+            [0, 0, 0, 5, 0, 2],
+            [0, 0, 0, 0, 0, 7],
+            [0, 0, 0, 10, 0, 4],
+            [0, 0, 0, 0, 0, 0],
+        ];
+        for (rotation, shift) in
+            (0..base.len()).flat_map(|rotation| [0, 96].map(move |shift| (rotation, shift)))
+        {
+            let scale = Q::from_integer(BigInt::one() << shift);
+            let mut a: Vec<Vec<Q>> = base
+                .iter()
+                .enumerate()
+                .map(|(i, row)| {
+                    row.iter()
+                        .map(|&v| q(v) * &scale / q(i as i64 + 2))
+                        .collect()
+                })
+                .collect();
+            a.rotate_left(rotation);
+            let b: Vec<Q> = a
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .enumerate()
+                        .map(|(j, x)| x / q(j as i64 + 2))
+                        .sum()
+                })
+                .collect();
+            let augmented: Vec<Vec<Q>> = a
+                .iter()
+                .zip(&b)
+                .map(|(row, rhs)| row.iter().cloned().chain([rhs.clone()]).collect())
+                .collect();
+            let Some(IntegerEliminationResult::Echelon(echelon)) =
+                integer_echelon_for_solve(&augmented, 6)
+            else {
+                panic!("consistent delayed updates must not need the rational fallback");
+            };
+            let expected = reference_solution(&a, &b).unwrap();
+            assert_eq!(echelon.pivots, [0, 2, 3, 5]);
+            assert_eq!(back_substitute(&echelon, 6), Some(expected.particular));
+        }
+    }
+
+    #[test]
+    fn square_integer_back_substitution_matches_rational_reference() {
+        for seed in 0..100u64 {
+            let n = 1 + (seed % 10) as usize;
+            let a = pseudo_random_matrix(7000 + seed, n, n, false);
+            let b: Vec<_> = (0..n).map(|i| q(i as i64 - 3)).collect();
+            let expected = reference_solution(&a, &b)
+                .filter(|solution| solution.rank == n)
+                .map(|solution| solution.particular);
+            let integer_aug = square_rational_system_as_bigint_augmented(&a, &b).unwrap();
+            assert_eq!(
+                solve_full_rank_square_integer_augmented(integer_aug),
+                expected,
+                "seed {seed}"
+            );
+        }
     }
 
     #[test]

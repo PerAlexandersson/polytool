@@ -82,6 +82,12 @@ elimination used to spend about 80% of these workloads in the gcd reductions of
 (see its module documentation), and the remaining cost is `num_bigint`
 multiplication and exact division.
 
+The integer update now combines delayed target-row scaling with elimination and
+sets the eliminated pivot-column entry to zero without computing cancelling
+products. The integer square solver uses the same integer back substitution as
+the general solver, reducing fractions only for final solution coordinates.
+These changes preserve the integer update results and rational certificate budgets.
+
 Exact solves stop when a row proves `0 = c` with nonzero `c`; this path returns
 no rank. Kernel and certificate computations still request complete reduction.
 `benchmark_exact_solving` measures six bounded recurrence searches (including

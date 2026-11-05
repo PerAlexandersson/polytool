@@ -5,6 +5,10 @@
 - Exact linear solves stop as soon as a contradictory row proves inconsistency;
   consistent solves and complete kernel/certificate reductions retain their
   existing rank and budget contracts.
+- Integer elimination combines delayed row scaling with its update and skips
+  the products that cancel in the pivot column. Integer square solves also use
+  integer back substitution, avoiding rational reductions in each dot product.
+  Exact outputs and certificate budgets are unchanged.
 
 This release is `polytool` 0.6.0, `exact-real-roots` 0.2.0 and the new
 `ore-algebra` 0.1.0.  Existing CLI
