@@ -43,11 +43,102 @@ pub(crate) fn supplied_theorem_report(
     Ok(fields.into_iter().collect())
 }
 
+pub(crate) fn discover_proofs(
+    input: &crate::requests::DiscoverRecurrenceProofsRequest,
+) -> Result<BTreeMap<String, serde_json::Value>, McpError> {
+    use polytool::recurrence::{discover_recurrence_proofs, RealRootednessTheoremOptions};
+    validate_mcp_text(&input.recurrence_json, "recurrence JSON").map_err(invalid_params)?;
+    let record: RecurrenceJson = serde_json::from_str(&input.recurrence_json)
+        .map_err(|error| invalid_params(error.to_string()))?;
+    let (rule, _, seeds) = record
+        .to_recurrence_parts()
+        .map_err(|e| invalid_params(e.to_string()))?;
+    crate::recurrence_options::validate_recurrence_for_generation(&rule, &seeds)?;
+    let maximum_start_delay = input.maximum_start_delay.unwrap_or(3);
+    if maximum_start_delay > 16 {
+        return Err(invalid_params("maximum_start_delay must be at most 16"));
+    }
+    let report = discover_recurrence_proofs(
+        &record,
+        &RealRootednessTheoremOptions {
+            maximum_start_delay,
+            ..Default::default()
+        },
+    )
+    .map_err(|e| invalid_params(e.to_string()))?;
+    let serde_json::Value::Object(fields) =
+        serde_json::to_value(report).expect("serialize proof report")
+    else {
+        unreachable!()
+    };
+    Ok(fields.into_iter().collect())
+}
+
+pub(crate) fn verify_proofs(text: &str) -> Result<BTreeMap<String, serde_json::Value>, McpError> {
+    use polytool::recurrence::RecurrenceProofDiscoveryReport;
+    validate_mcp_text(text, "proof report JSON").map_err(invalid_params)?;
+    let report: RecurrenceProofDiscoveryReport =
+        serde_json::from_str(text).map_err(|e| invalid_params(e.to_string()))?;
+    let (rule, _, seeds) = report
+        .recurrence
+        .to_recurrence_parts()
+        .map_err(|e| invalid_params(e.to_string()))?;
+    crate::recurrence_options::validate_recurrence_for_generation(&rule, &seeds)?;
+    if report.maximum_start_delay > 16 {
+        return Err(invalid_params("maximum_start_delay must be at most 16"));
+    }
+    report.verify().map_err(|e| invalid_params(e.to_string()))?;
+    Ok(BTreeMap::from([
+        ("verified".into(), serde_json::json!(true)),
+        ("status".into(), serde_json::json!(report.status)),
+        ("lean_replay".into(), serde_json::json!(report.lean_replay)),
+    ]))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::requests::{FindRecurrenceRequest, RationalCoefficientInput};
     use crate::{PolynomialToolsServer, RecurrenceTheoremsRequest};
     use rmcp::{handler::server::wrapper::Parameters, Json};
+
+    #[test]
+    fn general_proof_discovery_and_replay_share_the_library_certificate() {
+        use crate::{DiscoverRecurrenceProofsRequest, VerifyRecurrenceProofsRequest};
+        let server = PolynomialToolsServer::new();
+        let record = serde_json::json!({
+            "schema":"polytool.recurrence.v1", "first_index":0,
+            "initial_polynomials":[["1"]],
+            "recurrence":{"terms":[{"offset":1,"deriv_order":0,"sign":"none",
+                "coeff":{"coeffs":[["1","1"],["1"]]}}]}
+        });
+        let Json(report) = server
+            .discover_recurrence_proofs(Parameters(DiscoverRecurrenceProofsRequest {
+                recurrence_json: record.to_string(),
+                maximum_start_delay: Some(0),
+            }))
+            .unwrap();
+        assert_eq!(report["status"], "proved");
+        assert_eq!(report["lean_replay"], "not_attempted");
+        let Json(verified) = server
+            .verify_recurrence_proofs(Parameters(VerifyRecurrenceProofsRequest {
+                report_json: serde_json::to_string(&report).unwrap(),
+            }))
+            .unwrap();
+        assert_eq!(verified["verified"], true);
+        let mut tampered = report;
+        tampered.insert("status".into(), serde_json::json!("not_proved"));
+        assert!(server
+            .verify_recurrence_proofs(Parameters(VerifyRecurrenceProofsRequest {
+                report_json: serde_json::to_string(&tampered).unwrap(),
+            }))
+            .is_err());
+        assert!(server
+            .discover_recurrence_proofs(Parameters(DiscoverRecurrenceProofsRequest {
+                recurrence_json: record.to_string(),
+                maximum_start_delay: Some(17),
+            }))
+            .is_err());
+    }
 
     fn rows(text: &[&[i64]]) -> Vec<Vec<RationalCoefficientInput>> {
         text.iter()

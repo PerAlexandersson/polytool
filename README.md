@@ -179,3 +179,7 @@ by task; `polytool help --json` provides a machine-readable command index.
 
 Report issues in the Git repository, or contact Per Alexandersson
 (@PerAlexandersson, <per.w.alexandersson@gmail.com>).
+
+For general recurrence proofs, use `polytool recurrence-prove --recurrence
+recurrence.json`. The [proof-discovery guide](doc/proof-discovery.md) explains
+the exact theorem checks, certificates and Lean correspondence.

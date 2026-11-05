@@ -1072,6 +1072,7 @@ impl VeroneseSectionCertification {
 fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
     match route {
         VeroneseParentProofRoute::PeriodicProduct => "periodic_product",
+        VeroneseParentProofRoute::ProductRecurrence => "product_recurrence",
         VeroneseParentProofRoute::PaperTheorem => "paper_theorem",
         VeroneseParentProofRoute::RootDomain => "root_domain",
         VeroneseParentProofRoute::ThreeTermRecurrence => "three_term_recurrence",

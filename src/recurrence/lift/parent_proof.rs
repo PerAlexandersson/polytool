@@ -220,6 +220,8 @@ pub enum VeroneseParentProofStatus {
 pub enum VeroneseParentProofRoute {
     /// `P_(n+k) = c(x) P_n` with `c` and the seeds real-rooted of one sign.
     PeriodicProduct,
+    /// General product induction, with all roots strictly negative.
+    ProductRecurrence,
     /// A matched paper theorem (`match_recurrence_theorems`).
     PaperTheorem,
     /// A root-domain claim of `transform_recurrence`.
@@ -657,6 +659,12 @@ fn theorem_attempt(
         ..RealRootednessTheoremOptions::default()
     };
     let report = match route {
+        VeroneseParentProofRoute::ProductRecurrence => check_product_recurrence_theorem(
+            record.rule,
+            record.first_index,
+            record.seeds,
+            &options,
+        )?,
         VeroneseParentProofRoute::ThreeTermRecurrence => check_three_term_recurrence_theorem(
             record.rule,
             record.first_index,
@@ -1255,6 +1263,19 @@ pub fn prove_parent_real_rootedness(
         .then_some(VeroneseParentProofRoute::PeriodicProduct);
     let mut interlacing = None;
 
+    // General product seeds are available directly to all parent transfers.
+    if proved.is_none() {
+        let (attempt, _) = theorem_attempt(
+            &normalized,
+            VeroneseParentProofRoute::ProductRecurrence,
+            "product_recurrence",
+        )?;
+        if attempt.success {
+            proved = Some(VeroneseParentProofRoute::ProductRecurrence);
+        }
+        proof.attempts.push(attempt);
+    }
+
     // Route 2.
     if proved.is_none() {
         let (attempts, window_interlacing) = theorem_route(&normalized, &rows);
@@ -1274,8 +1295,9 @@ pub fn prove_parent_real_rootedness(
         proof.attempts.extend(attempts);
     }
 
-    // Routes 4 to 7b.
-    if proved.is_none() {
+    // Routes 4 to 7b. Product induction already settles real-rootedness,
+    // but these routes may supply the stronger interlacing conclusion.
+    if proved.is_none() || proved == Some(VeroneseParentProofRoute::ProductRecurrence) {
         for (route, variant) in [
             (
                 VeroneseParentProofRoute::ThreeTermRecurrence,

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `recurrence-prove` and MCP `discover_recurrence_proofs` try six general
+  recurrence criteria with replayable exact certificates and explicit
+  obligations; no named-sequence lookup or external attestation is used.
+  `--verify` / `verify_recurrence_proofs` replays the complete report.
+- General product induction supports index-dependent linear/quadratic and
+  separable multipliers, plus bounded factorization of higher-degree
+  multipliers with constant leading coefficient. It is also available to
+  parent transfers when the required negative-root domain is proved.
+  Rust proof certificates remain distinct from Lean replay.
+
 - Recurrence alternatives have an aligned text comparison table, stable
   candidate numbers, verification counts and explicit checked singularities.
   The unsupported `--representations --theorem-matches` combination now fails

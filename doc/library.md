@@ -1467,3 +1467,14 @@ integral version reports any non-exact division).  The search statistics are
 deterministic counters; no wall-clock times are recorded.  The MCP tool
 `enumerate_real_rooted` exposes the operation with conservative ceilings (see
 [the MCP notes](mcp.md)).
+
+## Direct general recurrence proofs
+
+`recurrence::discover_recurrence_proofs` runs the general product, three-term,
+Liu–Wang, derivative-lag and Ma–Wang theorem checks on a `RecurrenceJson`.
+`RecurrenceProofDiscoveryReport::verify` replays the complete search; the
+standalone `check_product_recurrence_theorem` also produces a replayable
+`RealRootednessTheoremReport`. The product checker is reused by
+`prove_parent_real_rootedness` when negative roots are certified. See
+[General recurrence proof discovery](proof-discovery.md) for contracts and
+Lean correspondence. No catalogue fallback occurs in direct discovery.

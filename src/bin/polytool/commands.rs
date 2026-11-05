@@ -119,6 +119,13 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         run: crate::cmd_recurrence_transform,
     },
     CommandSpec {
+        name: "recurrence-prove",
+        aliases: &[],
+        group: "Generate and find recurrences",
+        summary: "Discover and replay general recurrence proofs",
+        run: crate::recurrence_prove::cmd_recurrence_prove,
+    },
+    CommandSpec {
         name: "recurrence-theorems",
         aliases: &[],
         group: "Generate and find recurrences",

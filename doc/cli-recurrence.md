@@ -1,7 +1,7 @@
 # Recurrence search
 
 For a complete generation/search/replay pipeline, see [CLI workflows](workflows.md).
-`recurrence-generate`, `recurrence-theorems` and `recurrence-veronese-lifts`
+`recurrence-generate`, `recurrence-prove`, `recurrence-theorems` and `recurrence-veronese-lifts`
 share a bounded JSON reader:
 they accept plain recurrence records, theorem reports with `recurrence_json`,
 and recurrence representation menus. Select a zero-based `representations`
@@ -664,3 +664,12 @@ polytool recurrence --python < polys.txt > recurrence.py
 
 The generated Python uses exact `fractions.Fraction` arithmetic and dense
 coefficient lists in ascending powers of `t`.
+
+## General proof discovery
+
+`polytool recurrence-prove --recurrence recurrence.json --json` checks six
+general theorem families and emits a replayable report with exact hypotheses,
+conclusions and unresolved obligations. Use `--candidate N` for a menu and
+`polytool recurrence-prove --verify --json < proof.json` to replay. See
+[General recurrence proof discovery](proof-discovery.md) for the supported
+rules, evidence boundaries, product certificates and Lean correspondence.

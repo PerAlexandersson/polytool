@@ -820,6 +820,26 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
+        description = "Discover general all-index proofs for a supplied recurrence and seeds: product induction, Favard/three-term, Liu-Wang, derivative-lag, Ma-Wang interval and Liu-Wang three-term. Checks hypotheses exactly and returns replayable certificates and failed/unresolved obligations. No named-sequence algorithms or catalogue attestations. A proved result concerns the recurrence-defined sequence; a finite fit still needs an all-index identity for another family. Lean replay is not attempted."
+    )]
+    pub fn discover_recurrence_proofs(
+        &self,
+        Parameters(input): Parameters<crate::requests::DiscoverRecurrenceProofsRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        crate::theorems::discover_proofs(&input).map(Json)
+    }
+
+    #[tool(
+        description = "Replay a polytool.recurrence-proof-discovery.v1 report: recompute every general theorem attempt and independently replay its exact sign certificates. Rejects altered conclusions, missing attempts or substituted evidence. A valid not_proved report is not a real-rootedness proof; Rust replay is not Lean replay."
+    )]
+    pub fn verify_recurrence_proofs(
+        &self,
+        Parameters(input): Parameters<crate::requests::VerifyRecurrenceProofsRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        crate::theorems::verify_proofs(&input.report_json).map(Json)
+    }
+
+    #[tool(
         description = "Search for Veronese-section lifts of a sequence Q_n(y) given as a polytool.recurrence.v1 record: parents P_n(x) with a constant-coefficient recurrence and polynomial seeds such that Q_n = V_(r,j)(P_n) for all n >= n0, where V_(r,j)(P)(y) = sum_k [x^(r k + j)] P(x) y^k. A real-rooted parent with coefficients of one sign has zero or real-rooted sections (Polya frequency sequences), so a lift transfers real-rootedness. Supported input: derivative-free terms with coefficients independent of n, no (-1)^n factors, a constant or no denominator, no inhomogeneous term, order at most 12. For each modulus r = 2..max_modulus, chi(L, x^r) is factored over Q and each monic divisor G with r deg_L G <= d is kept when its norm prod_(w^r=1) G(L, w x) divides chi; seeds are solved exactly and the first d rows compared, which proves the identity for all n. Returns polytool.recurrence-veronese-lifts.v1: input_characteristic_polynomial ([i][j] = coefficient of L^i y^j, exact strings, with _text), lifts (modulus, residue, status proved_product_parent | parent_real_rootedness_open | parent_row_zero | parent_row_mixed_signs | parent_row_not_real_rooted, failing_row_index, statement, parent/section characteristic polynomials and cofactor with _text forms, parent_recurrence as a polytool.recurrence.v1 record with seeds for generate_recurrence_rows, parent_row_check), rejected_candidates (reason norm_does_not_divide | seeds_not_determined | seeds_not_polynomial | row_mismatch), skipped_moduli and exhausted_budget. Only proved_product_parent is a proof; the search is bounded and finding nothing proves nothing."
     )]
     pub fn find_veronese_section_lifts(

@@ -32,6 +32,7 @@ mod properties;
 mod recurrence;
 mod recurrence_implicit;
 mod recurrence_input;
+mod recurrence_prove;
 mod recurrence_search_representations;
 mod recurrence_theorems;
 mod recurrence_transform;
