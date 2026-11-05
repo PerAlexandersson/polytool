@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Exact linear solves stop as soon as a contradictory row proves inconsistency;
+  consistent solves and complete kernel/certificate reductions retain their
+  existing rank and budget contracts.
+
 This release is `polytool` 0.6.0, `exact-real-roots` 0.2.0 and the new
 `ore-algebra` 0.1.0.  Existing CLI
 commands and flags, MCP tool names and the web export names are unchanged; new

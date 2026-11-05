@@ -82,6 +82,14 @@ elimination used to spend about 80% of these workloads in the gcd reductions of
 (see its module documentation), and the remaining cost is `num_bigint`
 multiplication and exact division.
 
+Exact solves stop when a row proves `0 = c` with nonzero `c`; this path returns
+no rank. Kernel and certificate computations still request complete reduction.
+`benchmark_exact_solving` measures six bounded recurrence searches (including
+500- and 1,500-candidate cutoffs) and emits JSON Lines with exact outcome keys.
+Build separate release executables before and after a change, alternate their
+order, and compare outcome keys and search options as well as timings. A cutoff
+is an incomplete search, not evidence that no recurrence exists.
+
 ## Examples
 
 The tracked programs in `examples/` are run with
@@ -97,6 +105,8 @@ The tracked programs in `examples/` are run with
   exact root counting.
 - `benchmark_recurrence_fixtures`: benchmarks adaptive recurrence search on the
   fixture suite in `fixtures/recurrence-benchmarks/`.
+- `benchmark_exact_solving`: benchmarks bounded recurrence searches;
+  `--repeat N` and `--only SUBSTRING` select repetitions and cases.
 - `brenti_recognition`: recognizes the Pascal rows as rows of a planar strip
   digraph and checks the chain polynomials of a small TNN matrix.
 - `generate_recurrence_benchmarks OUT_DIR`: regenerates the synthetic

@@ -4,7 +4,8 @@
 //! no modular or floating-point rank decisions are used.
 
 use super::integer_elimination::{
-    back_substitute, integer_row, integer_rref, Elimination, EliminationBudget, IntegerRref,
+    back_substitute, integer_echelon_for_solve, integer_row, integer_rref, Elimination,
+    EliminationBudget, IntegerEliminationResult, IntegerRref,
 };
 use super::Q;
 use crate::BigRational;
@@ -274,7 +275,11 @@ pub fn solve_linear_system_with_rank(
 
     // The solution, the rank and the consistency do not depend on the pivot rows, so
     // the integer forward elimination with back substitution decides them.
-    if let Ok(Some(echelon)) = integer_rref(&aug, num_cols, Elimination::ForwardSmallestRow, None) {
+    if let Some(outcome) = integer_echelon_for_solve(&aug, num_cols) {
+        let echelon = match outcome {
+            IntegerEliminationResult::Inconsistent => return None,
+            IntegerEliminationResult::Echelon(echelon) => echelon,
+        };
         let rank = echelon.pivots.len();
         if echelon.rows[rank..]
             .iter()
@@ -818,6 +823,48 @@ mod tests {
             rank: pivots.len(),
             nullity: columns - pivots.len(),
         })
+    }
+
+    #[test]
+    fn exact_contradictions_stop_solve_but_not_full_reduction() {
+        for (a, b) in [
+            (vec![vec![q(0), q(0)]], vec![q(1)]),
+            (vec![vec![q(1), q(1)], vec![q(2), q(2)]], vec![q(3), q(7)]),
+            (
+                vec![vec![q(0), q(1) / q(2)], vec![q(0), q(1) / q(3)]],
+                vec![q(1), q(1)],
+            ),
+        ] {
+            let columns = a[0].len();
+            let augmented = a
+                .iter()
+                .zip(&b)
+                .map(|(row, rhs)| row.iter().cloned().chain([rhs.clone()]).collect::<Vec<_>>())
+                .collect::<Vec<_>>();
+            assert!(matches!(
+                integer_echelon_for_solve(&augmented, columns),
+                Some(IntegerEliminationResult::Inconsistent)
+            ));
+            assert_eq!(
+                solve_linear_system_with_rank(&a, &b),
+                reference_solution(&a, &b)
+            );
+            // Kernel/certificate consumers still receive complete reduction,
+            // including when the trailing column is not a system RHS.
+            let full = integer_rref(&augmented, columns, Elimination::GaussJordan, None)
+                .unwrap()
+                .unwrap();
+            let (expected, pivots, _) = reference_reduction(&augmented, columns, None).unwrap();
+            assert_eq!(full.pivots, pivots);
+            assert_eq!(full.rows.len(), expected.len());
+        }
+        // Zero rows and rank-deficient consistent systems must not be rejected.
+        let a = vec![vec![q(0), q(0)], vec![q(1), q(2)], vec![q(2), q(4)]];
+        let b = vec![q(0), q(3), q(6)];
+        assert_eq!(
+            solve_linear_system_with_rank(&a, &b),
+            reference_solution(&a, &b)
+        );
     }
 
     #[test]

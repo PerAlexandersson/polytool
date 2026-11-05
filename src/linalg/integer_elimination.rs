@@ -173,8 +173,42 @@ pub(super) fn integer_rref(
     matrix: &[Vec<Q>],
     columns: usize,
     mode: Elimination,
-    mut budget: Option<&mut EliminationBudget>,
+    budget: Option<&mut EliminationBudget>,
 ) -> Result<Option<IntegerRref>, RationalKernelError> {
+    match integer_eliminate(matrix, columns, mode, budget, false)? {
+        Some(IntegerEliminationResult::Echelon(reduced)) => Ok(Some(reduced)),
+        Some(IntegerEliminationResult::Inconsistent) => {
+            unreachable!("inconsistency detection disabled")
+        }
+        None => Ok(None),
+    }
+}
+
+/// A solve may terminate before echelon form when an exact contradictory row appears.
+pub(super) enum IntegerEliminationResult {
+    Echelon(IntegerRref),
+    Inconsistent,
+}
+
+/// Forward elimination of a validated augmented system, stopping as soon as an
+/// integer row proves `0 = c` with `c != 0`. No rank is claimed on that path.
+/// `None` requests the existing exact fallback after a non-exact division.
+pub(super) fn integer_echelon_for_solve(
+    matrix: &[Vec<Q>],
+    columns: usize,
+) -> Option<IntegerEliminationResult> {
+    integer_eliminate(matrix, columns, Elimination::ForwardSmallestRow, None, true)
+        .ok()
+        .flatten()
+}
+
+fn integer_eliminate(
+    matrix: &[Vec<Q>],
+    columns: usize,
+    mode: Elimination,
+    mut budget: Option<&mut EliminationBudget>,
+    stop_on_inconsistency: bool,
+) -> Result<Option<IntegerEliminationResult>, RationalKernelError> {
     let row_count = matrix.len();
     let width = matrix.first().map_or(0, Vec::len);
     let mut rows = Vec::with_capacity(row_count);
@@ -182,6 +216,12 @@ pub(super) fn integer_rref(
     let mut scales: Vec<Q> = Vec::new();
     for row in matrix {
         let (entries, scale) = integer_row(row);
+        if stop_on_inconsistency
+            && !entries[columns].is_zero()
+            && entries[..columns].iter().all(Zero::is_zero)
+        {
+            return Ok(Some(IntegerEliminationResult::Inconsistent));
+        }
         rows.push(entries);
         if budget.is_some() {
             scales.push(Q::new_raw(BigInt::one(), scale));
@@ -282,6 +322,14 @@ pub(super) fn integer_rref(
                     }
                 }
             }
+            if stop_on_inconsistency
+                && !target[columns].is_zero()
+                && target[..columns].iter().all(Zero::is_zero)
+            {
+                // Every operation so far is exact and preserves the solution
+                // set. A contradictory row suffices; finishing the rank does not.
+                return Ok(Some(IntegerEliminationResult::Inconsistent));
+            }
             levels[r] = value.clone();
         }
         // The pivot row is unchanged; as an upper row from now on its integers
@@ -292,11 +340,11 @@ pub(super) fn integer_rref(
         pivots.push(col);
     }
     origins.truncate(pivots.len());
-    Ok(Some(IntegerRref {
+    Ok(Some(IntegerEliminationResult::Echelon(IntegerRref {
         rows,
         pivots,
         origins,
-    }))
+    })))
 }
 
 /// The solution of the consistent system `[A | b]` (`columns` columns of `A`) from the
