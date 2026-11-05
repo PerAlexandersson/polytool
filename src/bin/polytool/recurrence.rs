@@ -73,6 +73,9 @@ pub(crate) fn print_recurrence_help() {
     println!("                             With --json: structured candidates and coverage");
     println!("  --json                     Emit recurrence JSON with initial conditions");
     println!("  --format json              Alias for --json");
+    println!("  --latex                    Emit LaTeX with subscripts, seeds and starting index");
+    println!("  --format latex             Alias for --latex; coefficients remain expanded");
+    println!("                             JSON also includes this presentation in latex.");
     println!("  --python                   Emit exact Python code for the recurrence");
     println!("  --format python            Alias for --python");
     println!("  --verbose                  Print candidate search details");
@@ -157,6 +160,7 @@ enum RecurrenceOutputFormat {
     Text,
     Json,
     Python,
+    Latex,
 }
 
 pub(crate) fn cmd_recurrence(args: &[String]) {
@@ -194,6 +198,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             "--python" => {
                 format = RecurrenceOutputFormat::Python;
             }
+            "--latex" => format = RecurrenceOutputFormat::Latex,
             "--format" => {
                 let value = match next_option_value(args, &mut i, "--format") {
                     Ok(value) => value,
@@ -206,6 +211,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     "text" => RecurrenceOutputFormat::Text,
                     "json" => RecurrenceOutputFormat::Json,
                     "python" => RecurrenceOutputFormat::Python,
+                    "latex" => RecurrenceOutputFormat::Latex,
                     other => {
                         eprintln!("unknown recurrence output format: {other}");
                         return;
@@ -445,16 +451,38 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
     }
     if representations {
         if matches!(format, RecurrenceOutputFormat::Python) {
-            eprintln!("--representations supports text or JSON; use a candidate's recurrence_json for row generation");
+            eprintln!("--representations supports text, JSON or LaTeX; use a candidate's recurrence_json for row generation");
             return;
         }
         match find_recurrence_representations_rational(&polys, &search, budget) {
             Ok(report) => {
-                let report = report
+                let mut report = report
                     .reindexed(output_first_index)
                     .unwrap_or_else(|error| usage_error(&error.to_string()));
+                for item in &mut report.representations {
+                    item.recurrence_json = item
+                        .recurrence_json
+                        .clone()
+                        .with_latex()
+                        .unwrap_or_else(|error| usage_error(&error.to_string()));
+                }
                 if matches!(format, RecurrenceOutputFormat::Json) {
                     println!("{}", serde_json::to_string_pretty(&report).unwrap());
+                } else if matches!(format, RecurrenceOutputFormat::Latex) {
+                    println!(
+                        "% {:?}; {} configurations inspected.",
+                        report.status, report.configurations_considered
+                    );
+                    for (i, item) in report.representations.iter().enumerate() {
+                        println!("% Representation {i}");
+                        println!(
+                            "{}",
+                            item.recurrence_json
+                                .latex
+                                .as_deref()
+                                .expect("LaTeX populated")
+                        );
+                    }
                 } else {
                     println!("Exact fits to supplied rows (not all-rank proofs).");
                     println!(
@@ -497,33 +525,28 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             let initial_count = res.export_initial_count(searched_polys.len());
             let initial_polys = &searched_polys[..initial_count];
             let rule = res.recurrence.shift_index(1 - output_first_index as i64);
-            let theorem_report = search_theorem_report(&res, &polys, &search, output_first_index);
+            let mut theorem_report =
+                search_theorem_report(&res, &polys, &search, output_first_index);
+            let recurrence_json = theorem_report
+                .recurrence_json
+                .clone()
+                .with_latex()
+                .unwrap_or_else(|error| usage_error(&error.to_string()));
+            theorem_report.recurrence_json = recurrence_json.clone();
             match format {
                 RecurrenceOutputFormat::Json if theorem_matches => {
                     println!("{}", serde_json::to_string_pretty(&theorem_report).unwrap());
                 }
                 RecurrenceOutputFormat::Json => {
-                    let recurrence_json = RecurrenceJson::from_recurrence_rational(
-                        &rule,
-                        output_first_index,
-                        initial_polys,
-                        Some(RecurrenceJsonSearch {
-                            recurrence_text: rule.to_string(),
-                            source_rows: polys.len(),
-                            skip_prefix: search.skip_prefix,
-                            unknowns: res.num_unknowns,
-                            weighted_unknowns: res.weighted_unknowns,
-                            equations: res.num_equations,
-                            fit_polynomials: res.fit_polynomials,
-                            verification_polynomials: res.verification_polynomials,
-                            verification_equations: res.verification_equations,
-                            candidates_tried: res.candidates_tried,
-                            options: RecurrenceOptionsJson::from(&res.opts),
-                        }),
-                    );
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&recurrence_json).unwrap()
+                    );
+                }
+                RecurrenceOutputFormat::Latex => {
+                    println!(
+                        "{}",
+                        recurrence_json.latex.as_deref().expect("LaTeX populated")
                     );
                 }
                 RecurrenceOutputFormat::Python => {
@@ -542,7 +565,12 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     }
                 }
             }
-            if !theorem_matches || format == RecurrenceOutputFormat::Python {
+            if !theorem_matches
+                || matches!(
+                    format,
+                    RecurrenceOutputFormat::Python | RecurrenceOutputFormat::Latex
+                )
+            {
                 note_theorem_matches(&theorem_report);
             }
             eprintln!(

@@ -766,7 +766,7 @@ mod tests {
         let rec = find_polynomial_recurrence(&polys, &alternating_opts)
             .expect("should find alternating-sign recurrence");
         assert_eq!(format!("{rec}"), "P(n) = (-1)^n P(n-1)");
-        assert_eq!(rec.to_latex(), "P(n) = (-1)^n P(n-1)");
+        assert_eq!(rec.to_latex(), "P_{n} = (-1)^n P_{n-1}");
         assert!(rec
             .to_mathematica_definition(&polys)
             .contains("Expand[(-1)^n*P[n - 1, t]]"));

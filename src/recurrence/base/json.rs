@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub const RECURRENCE_JSON_SCHEMA: &str = "polytool.recurrence.v1";
 
 /// Stable JSON representation of a recurrence together with initial rows.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RecurrenceJson {
     /// Schema identifier. Currently `polytool.recurrence.v1`.
@@ -21,6 +21,28 @@ pub struct RecurrenceJson {
     /// Optional metadata from an adaptive search.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search: Option<RecurrenceJsonSearch>,
+    /// Optional presentation with seeds and a starting index, one `$...$`
+    /// formula per line. Ignored when evaluating the recurrence. Use
+    /// [`Self::with_latex`] to refresh it after editing a record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latex: Option<String>,
+}
+
+impl std::fmt::Debug for RecurrenceJson {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut record = f.debug_struct("RecurrenceJson");
+        record
+            .field("schema", &self.schema)
+            .field("first_index", &self.first_index)
+            .field("initial_polynomials", &self.initial_polynomials)
+            .field("recurrence", &self.recurrence)
+            .field("search", &self.search);
+        // Preserve existing diagnostic fingerprints when presentation is absent.
+        if self.latex.is_some() {
+            record.field("latex", &self.latex);
+        }
+        record.finish()
+    }
 }
 
 /// Stable JSON representation of a recurrence without initial rows.
@@ -138,6 +160,41 @@ impl From<&RecurrenceOptions> for RecurrenceOptionsJson {
 }
 
 impl RecurrenceJson {
+    /// Render the initial rows and recurrence, one `$...$` formula per line.
+    ///
+    /// The recurrence starts immediately after all supplied initial rows.
+    /// Search records include a LaTeX comment marking their finite-fit status.
+    /// Coefficients stay expanded. The stored `latex` field is ignored.
+    /// Invalid records, insufficient initial rows and index overflow return
+    /// an error.
+    pub fn to_latex(&self) -> Result<String, RecurrenceError> {
+        let (rule, first_index, seeds) = self.to_recurrence_parts()?;
+        if seeds.len() < rule.max_offset() {
+            return Err(RecurrenceError::InvalidInput(
+                "not enough initial rows for LaTeX recurrence definition".into(),
+            ));
+        }
+        let start = first_index.checked_add(seeds.len()).ok_or_else(|| {
+            RecurrenceError::InvalidInput("LaTeX recurrence index overflows".into())
+        })?;
+        let mut lines = Vec::new();
+        if self.search.is_some() {
+            lines.push("% Candidate fitted to finite rows; validity for all n is unproved.".into());
+        }
+        for (offset, row) in seeds.into_iter().enumerate() {
+            let polynomial = BivarPoly { coeffs: vec![row] }.to_latex();
+            lines.push(format!("$P_{{{}}} = {polynomial}$", first_index + offset));
+        }
+        lines.push(format!("${} \\quad (n \\geq {start})$", rule.to_latex()));
+        Ok(lines.join("\n"))
+    }
+
+    /// Refresh the optional LaTeX presentation from this record's exact data.
+    pub fn with_latex(mut self) -> Result<Self, RecurrenceError> {
+        self.latex = Some(self.to_latex()?);
+        Ok(self)
+    }
+
     /// Relabel the first row, substituting the index in every coefficient.
     ///
     /// Seeds and search counts are unchanged. Alternating signs are shifted
@@ -153,12 +210,12 @@ impl RecurrenceJson {
         if let Some(search) = &mut search {
             search.recurrence_text = rule.to_string();
         }
-        Ok(Self::from_recurrence_rational(
-            &rule,
-            first_index,
-            &seeds,
-            search,
-        ))
+        let record = Self::from_recurrence_rational(&rule, first_index, &seeds, search);
+        if self.latex.is_some() {
+            record.with_latex()
+        } else {
+            Ok(record)
+        }
     }
 
     /// Create a JSON record from a recurrence and initial rows.
@@ -177,6 +234,7 @@ impl RecurrenceJson {
                 .collect(),
             recurrence: RecurrenceJsonData::from_recurrence(recurrence),
             search,
+            latex: None,
         }
     }
 

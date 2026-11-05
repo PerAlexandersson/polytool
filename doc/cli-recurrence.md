@@ -57,8 +57,10 @@ Options:
                       Disable default modular candidate rejection
 --max-candidates <n> Inspect at most n adaptive candidate configurations
 --json               Emit recurrence JSON with initial conditions
+--latex              Emit LaTeX with subscripts, initial conditions and starting index
 --python             Emit exact standalone Python code using Fraction arithmetic
 --format json        Alias for --json
+--format latex       Alias for --latex (coefficients remain expanded)
 --format python      Alias for --python
 --verbose            Print each candidate tried
 ```
@@ -525,6 +527,42 @@ This shifts the rule as well as its labels: it generates exactly the same rows,
 with a different starting index. It does not skip rows or evaluate the original
 rule at a different starting point. Rust callers can use
 `RecurrenceJson::reindexed(first_index)` for the same operation.
+
+### LaTeX presentation
+
+```sh
+polytool recurrence --first-index 0 --latex < polys.txt
+```
+
+The output contains one formula per line, with subscripts, exact fractions,
+grouped coefficients and derivative notation. For example:
+
+```latex
+% Candidate fitted to finite rows; validity for all n is unproved.
+$P_{0} = 1$
+$P_{n} = \bigl(1 + t\bigr)\, P_{n-1} \quad (n \geq 1)$
+```
+
+All supplied seed rows in the exported record are printed. The starting index
+is immediately after them, including any extra seeds needed before the
+recurrence can generate rows. `--first-index` and `--skip-prefix` use the same
+conventions as JSON and Python export. The LaTeX comment records the finite-fit
+status; the displayed continuation is a candidate recurrence for the input
+sequence. Coefficients remain expanded: factorization is a separate feature.
+
+`--json` includes the same text in the optional `latex` field. Generation
+uses the exact recurrence data and ignores that presentation field. Older
+records without it remain accepted. With `--theorem-matches`, the field is in
+the nested `recurrence_json`; theorem notes go to stderr in LaTeX mode.
+
+`--representations --latex` prints each definition with a numbered LaTeX
+comment. Representation JSON retains its bare formula in `latex` and includes
+the complete definition in `recurrence_json.latex`.
+
+Rust callers can use `Recurrence::to_latex()` for a bare formula or
+`RecurrenceJson::to_latex()` for the complete presentation. The latter checks
+seed availability and index overflow. `RecurrenceJson::with_latex()` refreshes
+the optional stored presentation; `reindexed()` refreshes it when present.
 
 ### B-files from a recurrence
 

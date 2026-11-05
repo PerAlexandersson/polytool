@@ -238,3 +238,50 @@ fn generation_reindex_transports_all_terms_and_parity() {
         .remove("verification_equations");
     assert!(serde_json::from_value::<RecurrenceJson>(old).is_ok());
 }
+
+#[test]
+fn latex_cli_and_json_share_the_indexed_definition() {
+    let value = search(&["--first-index", "5", "--skip-prefix", "2"]);
+    let latex = value["latex"].as_str().unwrap();
+    assert!(latex.starts_with("% Candidate fitted to finite rows;"));
+    assert!(latex.contains("$P_{7} = "));
+    let seed_count = value["initial_polynomials"].as_array().unwrap().len();
+    assert!(latex.ends_with(&format!("(n \\geq {})$", 7 + seed_count)));
+    assert!(!latex.contains("P(n"));
+
+    for option in [vec!["--latex"], vec!["--format", "latex"]] {
+        let mut args = vec![
+            "recurrence",
+            "--first-index",
+            "5",
+            "--skip-prefix",
+            "2",
+            "--no-laurent",
+            "--max-rec-len",
+            "1",
+            "--max-diff-deg",
+            "0",
+            "--max-idx-deg",
+            "1",
+            "--max-var-deg",
+            "1",
+        ];
+        args.extend(option);
+        let output = run(&args, &source_rows());
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout).unwrap().trim_end(), latex);
+    }
+    let report = search(&["--theorem-matches", "--first-index", "0"]);
+    assert!(report["recurrence_json"]["latex"]
+        .as_str()
+        .unwrap()
+        .contains("$P_{0} = 1$"));
+    let report = search(&["--representations", "--first-index", "0"]);
+    for item in report["representations"].as_array().unwrap() {
+        assert!(item["latex"].as_str().unwrap().contains("P_{n}"));
+        assert!(item["recurrence_json"]["latex"]
+            .as_str()
+            .unwrap()
+            .contains("$P_{0} = 1$"));
+    }
+}

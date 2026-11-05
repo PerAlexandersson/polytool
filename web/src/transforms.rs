@@ -659,7 +659,7 @@ mod tests {
         assert!(parse(&recurrence_theorems("{}"))["error"].is_string());
 
         let latex = parse(&recurrence_latex(&record.to_string()));
-        assert!(latex["latex"].as_str().unwrap().contains("P(n)"));
+        assert!(latex["latex"].as_str().unwrap().contains("P_{n}"));
     }
 
     fn pascal_search_request() -> Value {
