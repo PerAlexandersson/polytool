@@ -88,6 +88,14 @@ products. The integer square solver uses the same integer back substitution as
 the general solver, reducing fractions only for final solution coordinates.
 These changes preserve the integer update results and rational certificate budgets.
 
+Rational square systems now clear denominators once per augmented row using
+the same helper as general integer elimination. Integer-only rows retain their
+direct conversion path, and rational elimination remains an exact fallback.
+`benchmark_rational_square --size 48 --repeat 5` measures integer, row-scaled,
+mixed-denominator, fractional-RHS and Hilbert systems with known exact solutions.
+Setup and solution comparison are outside the timer; denominator clearing is
+included. Use separate binaries and alternate their order for comparisons.
+
 Exact solves stop when a row proves `0 = c` with nonzero `c`; this path returns
 no rank. Kernel and certificate computations still request complete reduction.
 `benchmark_exact_solving` measures six bounded recurrence searches (including
@@ -113,6 +121,8 @@ The tracked programs in `examples/` are run with
   fixture suite in `fixtures/recurrence-benchmarks/`.
 - `benchmark_exact_solving`: benchmarks bounded recurrence searches;
   `--repeat N` and `--only SUBSTRING` select repetitions and cases.
+- `benchmark_rational_square`: benchmarks exact square solving with integer and
+  fractional inputs; `--size N`, `--repeat N` and `--only SUBSTRING` select cases.
 - `brenti_recognition`: recognizes the Pascal rows as rows of a planar strip
   digraph and checks the chain polynomials of a small TNN matrix.
 - `generate_recurrence_benchmarks OUT_DIR`: regenerates the synthetic

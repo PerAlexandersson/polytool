@@ -335,9 +335,10 @@ pub fn solve_linear_system(a: &[Vec<BigRational>], b: &[BigRational]) -> Option<
 
 /// Solve a nonsingular square system `Ax = b` over `Q`.
 ///
-/// Integer inputs use fraction-free forward elimination and integer back
-/// substitution, reducing rationals only for the final solution coordinates.
-/// Other inputs use rational forward elimination and back substitution.
+/// Each equation's denominators are cleared once, including its right-hand
+/// side. Fraction-free forward elimination and integer back substitution then
+/// reduce rationals only for the final solution coordinates. Rational
+/// elimination remains the fallback if the integer solver cannot finish.
 /// Returns `None` if the input is not square or if a zero pivot proves that the
 /// matrix is singular.
 pub fn solve_full_rank_square_linear_system(
@@ -352,10 +353,9 @@ pub fn solve_full_rank_square_linear_system(
         return Some(vec![]);
     }
 
-    if let Some(integer_aug) = square_rational_system_as_bigint_augmented(a, b) {
-        if let Some(solution) = solve_full_rank_square_integer_augmented(integer_aug) {
-            return Some(solution);
-        }
+    let integer_aug = square_rational_system_as_bigint_augmented(a, b);
+    if let Some(solution) = solve_full_rank_square_integer_augmented(integer_aug) {
+        return Some(solution);
     }
 
     let mut aug: Vec<Vec<Q>> = a
@@ -405,17 +405,20 @@ pub fn solve_full_rank_square_linear_system(
     Some(x)
 }
 
-fn square_rational_system_as_bigint_augmented(a: &[Vec<Q>], b: &[Q]) -> Option<Vec<Vec<BigInt>>> {
+fn square_rational_system_as_bigint_augmented(a: &[Vec<Q>], b: &[Q]) -> Vec<Vec<BigInt>> {
     a.iter()
         .zip(b.iter())
-        .map(|row| {
-            let (row, rhs) = row;
-            let mut augmented = row
+        .map(|(row, rhs)| {
+            // Keep the integer-input path free of temporary rational copies.
+            let integer = row
                 .iter()
+                .chain(std::iter::once(rhs))
                 .map(|entry| entry.denom().is_one().then(|| entry.numer().clone()))
-                .collect::<Option<Vec<_>>>()?;
-            augmented.push(rhs.denom().is_one().then(|| rhs.numer().clone())?);
-            Some(augmented)
+                .collect::<Option<Vec<_>>>();
+            integer.unwrap_or_else(|| {
+                let augmented: Vec<_> = row.iter().cloned().chain([rhs.clone()]).collect();
+                integer_row(&augmented).0
+            })
         })
         .collect()
 }
@@ -576,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn test_solve_full_rank_square_rational_fallback() {
+    fn test_solve_full_rank_square_rational_inputs() {
         // x - y = 0, x/2 + y = 2 -> x = y = 4/3.
         let half = Q::new(bi(1), bi(2));
         let a = vec![
@@ -919,13 +922,64 @@ mod tests {
             let expected = reference_solution(&a, &b)
                 .filter(|solution| solution.rank == n)
                 .map(|solution| solution.particular);
-            let integer_aug = square_rational_system_as_bigint_augmented(&a, &b).unwrap();
+            let integer_aug = square_rational_system_as_bigint_augmented(&a, &b);
             assert_eq!(
                 solve_full_rank_square_integer_augmented(integer_aug),
                 expected,
                 "seed {seed}"
             );
         }
+    }
+
+    #[test]
+    fn square_denominator_clearing_includes_rhs_and_preserves_row_swaps() {
+        let a = vec![
+            vec![q(0), q(1) / q(2), -q(1) / q(3)],
+            vec![q(2) / q(5), q(0), q(3) / q(7)],
+            vec![q(1), q(0), q(1) / q(11)],
+        ];
+        let b = vec![q(1) / q(13), -q(2) / q(17), q(3) / q(19)];
+        let augmented = square_rational_system_as_bigint_augmented(&a, &b);
+        assert_eq!(augmented[0], [bi(0), bi(39), bi(-26), bi(6)]);
+        let expected = reference_solution(&a, &b).unwrap().particular;
+        assert_eq!(
+            solve_full_rank_square_integer_augmented(augmented),
+            Some(expected.clone())
+        );
+        assert_eq!(solve_full_rank_square_linear_system(&a, &b), Some(expected));
+
+        // Only the RHS needs denominator clearing in this one-equation system.
+        assert_eq!(
+            solve_full_rank_square_linear_system(&[vec![q(2)]], &[q(1) / q(3)]),
+            Some(vec![q(1) / q(6)])
+        );
+    }
+
+    #[test]
+    fn square_rational_inputs_match_reference_without_rational_fallback() {
+        let (mut nonsingular, mut singular) = (0, 0);
+        for seed in 0..200u64 {
+            let n = 1 + (seed % 10) as usize;
+            let a = pseudo_random_matrix(8000 + seed, n, n, true);
+            let b: Vec<_> = (0..n).map(|i| q(i as i64 - 3) / q(i as i64 + 2)).collect();
+            let expected = reference_solution(&a, &b)
+                .filter(|solution| solution.rank == n)
+                .map(|solution| solution.particular);
+            if expected.is_some() {
+                nonsingular += 1;
+            } else {
+                singular += 1;
+            }
+            assert_eq!(
+                solve_full_rank_square_integer_augmented(
+                    square_rational_system_as_bigint_augmented(&a, &b)
+                ),
+                expected,
+                "seed {seed}"
+            );
+            assert_eq!(solve_full_rank_square_linear_system(&a, &b), expected);
+        }
+        assert!(nonsingular > 0 && singular > 0);
     }
 
     #[test]

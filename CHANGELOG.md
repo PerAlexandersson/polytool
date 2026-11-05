@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rational square systems clear denominators once per equation, including the
+  right-hand side, and use the existing fraction-free integer solver. Integral
+  inputs retain their direct conversion path; exact results are unchanged.
+
 - Exact linear solves stop as soon as a contradictory row proves inconsistency;
   consistent solves and complete kernel/certificate reductions retain their
   existing rank and budget contracts.
