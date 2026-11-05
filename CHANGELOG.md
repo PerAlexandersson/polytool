@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Square solves return immediately when exact elimination proves singularity,
+  instead of repeating the solve with rational arithmetic. Non-exact division
+  still requests the existing fallback.
+
 - Exact recurrence fitting builds integer matrices directly when source rows
   and derivatives are integral. Fractional inputs retain the rational path;
   fitted coefficients may still be rational, and exact verification is unchanged.

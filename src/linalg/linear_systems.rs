@@ -259,8 +259,10 @@ pub(crate) fn solve_integer_fit_system(
         row.push(value);
     }
     if square {
-        if let Some(solution) = solve_full_rank_square_integer_augmented(matrix.clone()) {
-            return Some(solution);
+        match solve_full_rank_square_integer_augmented(matrix.clone()) {
+            Ok(solution) => return Some(solution),
+            Err(SquareSolveFailure::Singular) => return None,
+            Err(SquareSolveFailure::Fallback) => {}
         }
     } else if let Some(outcome) = integer_echelon_from_integer_rows(matrix.clone(), columns) {
         match outcome {
@@ -404,8 +406,10 @@ pub fn solve_full_rank_square_linear_system(
     }
 
     let integer_aug = square_rational_system_as_bigint_augmented(a, b);
-    if let Some(solution) = solve_full_rank_square_integer_augmented(integer_aug) {
-        return Some(solution);
+    match solve_full_rank_square_integer_augmented(integer_aug) {
+        Ok(solution) => return Some(solution),
+        Err(SquareSolveFailure::Singular) => return None,
+        Err(SquareSolveFailure::Fallback) => {}
     }
 
     let mut aug: Vec<Vec<Q>> = a
@@ -473,24 +477,33 @@ fn square_rational_system_as_bigint_augmented(a: &[Vec<Q>], b: &[Q]) -> Vec<Vec<
         .collect()
 }
 
-fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option<Vec<Q>> {
+/// Singularity is an exact conclusion; only an unfinished elimination needs
+/// the rational fallback. Keeping these outcomes distinct avoids solving twice.
+#[derive(Debug, PartialEq, Eq)]
+enum SquareSolveFailure {
+    Singular,
+    Fallback,
+}
+
+fn solve_full_rank_square_integer_augmented(
+    mut aug: Vec<Vec<BigInt>>,
+) -> Result<Vec<Q>, SquareSolveFailure> {
     let n = aug.len();
     if aug.iter().any(|row| row.len() != n + 1) {
-        return None;
+        return Err(SquareSolveFailure::Fallback);
     }
     if n == 0 {
-        return Some(vec![]);
+        return Ok(vec![]);
     }
 
     let mut denom = BigInt::one();
 
     for col in 0..n {
-        let pivot_row = (col..n).find(|&row| !aug[row][col].is_zero())?;
+        let pivot_row = (col..n)
+            .find(|&row| !aug[row][col].is_zero())
+            .ok_or(SquareSolveFailure::Singular)?;
         aug.swap(col, pivot_row);
         let pivot = aug[col][col].clone();
-        if pivot.is_zero() {
-            return None;
-        }
         if col == n - 1 {
             break;
         }
@@ -510,7 +523,7 @@ fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option
                 } else {
                     let (quotient, remainder) = numerator.div_rem(&denom);
                     if !remainder.is_zero() {
-                        return None;
+                        return Err(SquareSolveFailure::Fallback);
                     }
                     *cell = quotient;
                 }
@@ -527,6 +540,7 @@ fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option
         },
         n,
     )
+    .ok_or(SquareSolveFailure::Fallback)
 }
 
 #[cfg(test)]
@@ -538,6 +552,46 @@ mod tests {
     // -----------------------------------------------------------------------
     // Solve linear system
     // -----------------------------------------------------------------------
+
+    #[test]
+    fn square_singularity_is_distinct_from_an_unfinished_solve() {
+        for a in [
+            vec![vec![q(0), q(1)], vec![q(0), q(2)]],
+            vec![vec![q(1), q(2)], vec![q(2), q(4)]],
+            vec![
+                vec![q(0), q(1), q(2)],
+                vec![q(1), q(0), q(3)],
+                vec![q(1), q(1), q(5)],
+            ],
+        ] {
+            // Both consistent and inconsistent right-hand sides have no unique solution.
+            for b in [
+                vec![q(0); a.len()],
+                (0..a.len()).map(|i| q(i as i64 + 1)).collect(),
+            ] {
+                let augmented = square_rational_system_as_bigint_augmented(&a, &b);
+                assert_eq!(
+                    solve_full_rank_square_integer_augmented(augmented),
+                    Err(SquareSolveFailure::Singular)
+                );
+                assert_eq!(solve_full_rank_square_linear_system(&a, &b), None);
+                assert_eq!(
+                    solve_integer_fit_system(
+                        a.iter()
+                            .map(|row| row.iter().map(|c| c.numer().clone()).collect())
+                            .collect(),
+                        b.iter().map(|c| c.numer().clone()).collect(),
+                        true
+                    ),
+                    None
+                );
+            }
+        }
+        assert_eq!(
+            solve_full_rank_square_integer_augmented(vec![vec![bi(1)]]),
+            Err(SquareSolveFailure::Fallback)
+        );
+    }
 
     #[test]
     fn linear_system_reports_rank_and_nullity() {
@@ -974,7 +1028,7 @@ mod tests {
                 .map(|solution| solution.particular);
             let integer_aug = square_rational_system_as_bigint_augmented(&a, &b);
             assert_eq!(
-                solve_full_rank_square_integer_augmented(integer_aug),
+                solve_full_rank_square_integer_augmented(integer_aug).ok(),
                 expected,
                 "seed {seed}"
             );
@@ -993,7 +1047,7 @@ mod tests {
         assert_eq!(augmented[0], [bi(0), bi(39), bi(-26), bi(6)]);
         let expected = reference_solution(&a, &b).unwrap().particular;
         assert_eq!(
-            solve_full_rank_square_integer_augmented(augmented),
+            solve_full_rank_square_integer_augmented(augmented).ok(),
             Some(expected.clone())
         );
         assert_eq!(solve_full_rank_square_linear_system(&a, &b), Some(expected));
@@ -1023,7 +1077,8 @@ mod tests {
             assert_eq!(
                 solve_full_rank_square_integer_augmented(
                     square_rational_system_as_bigint_augmented(&a, &b)
-                ),
+                )
+                .ok(),
                 expected,
                 "seed {seed}"
             );

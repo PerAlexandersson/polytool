@@ -95,6 +95,10 @@ direct conversion path, and rational elimination remains an exact fallback.
 mixed-denominator, fractional-RHS and Hilbert systems with known exact solutions.
 Setup and solution comparison are outside the timer; denominator clearing is
 included. Use separate binaries and alternate their order for comparisons.
+The `singular_early` and `singular_late` cases check rejection near the first
+and last pivot; their exact expected result is `None`. Proven singularity
+returns immediately, while a non-exact division still requests the fallback.
+The `bidiagonal` and `block_diagonal` cases measure sparse nonsingular systems.
 
 Exact solves stop when a row proves `0 = c` with nonzero `c`; this path returns
 no rank. Kernel and certificate computations still request complete reduction.
