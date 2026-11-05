@@ -121,6 +121,15 @@ polytool recurrence --representations --json \
   --max-candidates 2000 < rows.txt > representations.json
 ```
 
+Without `--json`, the command prints an aligned comparison table followed by
+numbered formulas and their checked index ranges. `lag` and `deriv` are actual
+orders; `deg(n,t)` and `lhs(n,t)` are the coefficient/forcing and left-factor
+degrees. `coeffs` counts nonzero scalar coefficients, `fit`/`check` count fitting
+and held-out rows, and `eqs` counts held-out coefficient equations, including
+dependent ones. A `*` marks the frontier. Table/formula indices match the JSON
+menu, so the same `--candidate N` selects the displayed formula. Checked
+singular indices, when present, are listed next to its formula.
+
 The additive Rust APIs are
 `recurrence::find_recurrence_representations_rational` and the `i64` convenience
 wrapper `find_recurrence_representations`. Both take rows, existing
@@ -183,12 +192,18 @@ the menu includes length/order `(3,0)`, `(2,1)`, and `(1,2)`. Tests fit 40 rows,
 then independently replay each exported recurrence through row 60. This is
 finite exact verification, not an all-rank certificate.
 
-To generate rows from one entry, extract its nested object:
+To generate rows or check conditional theorem matches for one entry, select
+its zero-based index directly:
 
 ```sh
-jq '.representations[0].recurrence_json' representations.json > recurrence.json
-polytool recurrence-generate --recurrence recurrence.json --rows 60
+polytool recurrence-generate --recurrence representations.json --candidate 0 --rows 60
+polytool recurrence-theorems --recurrence representations.json --candidate 0 --json
 ```
+
+`--representations --theorem-matches` is rejected with this follow-up command;
+the flag is not silently ignored. The separate theorem command checks the
+selected recurrence and its exported initial rows. A conditional theorem match
+does not establish the recurrence for all indices of the intended sequence.
 
 ### Complete recurrence spaces and certificates
 

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Recurrence alternatives have an aligned text comparison table, stable
+  candidate numbers, verification counts and explicit checked singularities.
+  The unsupported `--representations --theorem-matches` combination now fails
+  before reading input and gives the existing per-candidate theorem command.
+  Search results and JSON/LaTeX formats are unchanged.
 - Polynomial input errors include physical line numbers; rational-list errors
   also identify the coefficient. Rational inputs reuse the library parser.
   Report row indices and accepted input syntax are unchanged.

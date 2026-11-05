@@ -58,6 +58,7 @@ pub(crate) fn print_recurrence_help() {
     println!("  --no-modular-prefilter     Disable default modular candidate rejection");
     println!("  --max-candidates <n>       Inspect at most n candidate configurations");
     println!("  --representations          Return a menu of length/derivative tradeoffs");
+    println!("                             Text: comparison table and numbered formulas; JSON: full menu.");
     println!("  --space                    Complete bounded spaces; read a recurrence-space JSON request from stdin");
     println!(
         "  --verify-space             Replay a recurrence-space JSON report from stdin (no search)"
@@ -82,8 +83,11 @@ pub(crate) fn print_recurrence_help() {
     println!("                             separate from the finite fit evidence. With --json,");
     println!("                             emit polytool.recurrence-theorems.v1 (the usual");
     println!("                             record is its recurrence_json). Without the flag a");
-    println!("                             match is only noted on stderr. Not used with");
-    println!("                             --representations; see recurrence-theorems.");
+    println!("                             match is only noted on stderr. Cannot combine with");
+    println!("                             --representations; save its JSON menu, then use");
+    println!(
+        "                             recurrence-theorems --recurrence menu.json --candidate N."
+    );
     println!("  -h, --help                 Print this help text");
     println!();
     println!("Example:");
@@ -162,6 +166,77 @@ enum RecurrenceOutputFormat {
     Json,
     Python,
     Latex,
+}
+
+fn print_representations_text(report: &RecurrenceRepresentations) {
+    println!("Exact fits to supplied rows (not all-rank proofs).");
+    println!(
+        "{:?}; {} configurations inspected.",
+        report.status, report.configurations_considered
+    );
+    if report.representations.is_empty() {
+        println!("No representations found within the inspected bounds.");
+        return;
+    }
+
+    let mut table = vec![[
+        "id", "", "lag", "deriv", "deg(n,t)", "lhs(n,t)", "coeffs", "fit", "check", "eqs",
+    ]
+    .map(String::from)
+    .to_vec()];
+    for (index, item) in report.representations.iter().enumerate() {
+        let c = &item.complexity;
+        table.push(vec![
+            format!("[{index}]"),
+            if report.frontier.contains(&index) {
+                "*"
+            } else {
+                ""
+            }
+            .into(),
+            c.rec_len.to_string(),
+            c.diff_deg.to_string(),
+            format!("{},{}", c.idx_deg, c.var_deg),
+            format!("{},{}", c.denom_idx_deg, c.denom_var_deg),
+            c.nonzero_coefficients.to_string(),
+            item.fit_polynomials.to_string(),
+            item.verification_polynomials.to_string(),
+            item.verification_equations.to_string(),
+        ]);
+    }
+    let widths: Vec<_> = (0..table[0].len())
+        .map(|column| table.iter().map(|row| row[column].len()).max().unwrap_or(0))
+        .collect();
+    println!();
+    for row in table {
+        println!(
+            "{}",
+            row.iter()
+                .zip(&widths)
+                .map(|(cell, width)| format!("{cell:>width$}"))
+                .collect::<Vec<_>>()
+                .join("  ")
+        );
+    }
+    println!("* Nondominated among returned candidates; indices match the JSON menu.");
+    println!("deg/lhs: degrees in (n,t) of RHS/forcing coefficients and the left factor.");
+    println!("coeffs: nonzero scalar coefficients; fit/check: fitted/held-out rows.");
+    println!("eqs: held-out coefficient equations, not independent constraints.");
+    println!();
+    for (index, item) in report.representations.iter().enumerate() {
+        println!("[{index}] {}", item.recurrence);
+        println!(
+            "    Checked n={}..={}.",
+            item.first_checked_index, item.last_checked_index
+        );
+        if !item.singular_checked_indices.is_empty() {
+            println!(
+                "    Cannot generate at checked singular indices: {:?}.",
+                item.singular_checked_indices
+            );
+        }
+    }
+    println!("Use --json to save the menu; select an entry with --candidate N in recurrence-generate or recurrence-theorems.");
 }
 
 pub(crate) fn cmd_recurrence(args: &[String]) {
@@ -436,6 +511,13 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
         i += 1;
     }
 
+    if representations && theorem_matches {
+        usage_error("--representations cannot be combined with --theorem-matches; save the menu with --json, then run `polytool recurrence-theorems --recurrence menu.json --candidate N` (0-based)");
+    }
+    if representations && matches!(format, RecurrenceOutputFormat::Python) {
+        usage_error("--representations supports text, JSON or LaTeX; use a candidate's recurrence_json for row generation");
+    }
+
     let polys = read_polys_rational();
     if polys.len() < 3 {
         eprintln!("Need at least 3 polynomials for recurrence search.");
@@ -451,9 +533,6 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
         usage_error("first index or final row index is too large");
     }
     if representations {
-        if matches!(format, RecurrenceOutputFormat::Python) {
-            usage_error("--representations supports text, JSON or LaTeX; use a candidate's recurrence_json for row generation");
-        }
         match find_recurrence_representations_rational(&polys, &search, budget) {
             Ok(report) => {
                 let mut report = report
@@ -484,28 +563,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         );
                     }
                 } else {
-                    println!("Exact fits to supplied rows (not all-rank proofs).");
-                    println!(
-                        "{:?}; {} configurations inspected.",
-                        report.status, report.configurations_considered
-                    );
-                    for (i, item) in report.representations.iter().enumerate() {
-                        println!(
-                            "{}[{}] length {}, derivative order {}, checked n={}..={}: {}",
-                            if report.frontier.contains(&i) {
-                                "* "
-                            } else {
-                                "  "
-                            },
-                            i,
-                            item.complexity.rec_len,
-                            item.complexity.diff_deg,
-                            item.first_checked_index,
-                            item.last_checked_index,
-                            item.recurrence
-                        );
-                    }
-                    println!("* Nondominated among returned candidates; use --json for bounds and coverage.");
+                    print_representations_text(&report);
                 }
                 if report.status == RepresentationSearchStatus::BudgetExhausted {
                     std::process::exit(3);
