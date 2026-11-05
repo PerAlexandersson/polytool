@@ -38,6 +38,7 @@ pub use determinants::{
     bareiss_leading_principal_minors_bigint, bareiss_leading_principal_minors_polynomial_bigint,
     characteristic_polynomial_bigint, closed_walk_counts_bigint, determinant,
 };
+pub(crate) use linear_systems::solve_integer_fit_system;
 pub use linear_systems::{
     rational_kernel_with_certificate, solve_full_rank_square_linear_system, solve_linear_system,
     solve_linear_system_with_rank, LinearSystemSolution, RationalKernel, RationalKernelError,

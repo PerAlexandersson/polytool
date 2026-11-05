@@ -104,6 +104,12 @@ Build separate release executables before and after a change, alternate their
 order, and compare outcome keys and search options as well as timings. A cutoff
 is an incomplete search, not evidence that no recurrence exists.
 
+For integral source rows and derivatives, exact recurrence fitting constructs
+the matrix with `BigInt` entries and feeds the existing integer elimination
+directly. Fractional sources retain rational construction and row denominator
+clearing. Both paths use the same column layout, normalization charts and
+verification; integral input does not require integral solution coefficients.
+
 ## Examples
 
 The tracked programs in `examples/` are run with

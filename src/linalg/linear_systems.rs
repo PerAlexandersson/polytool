@@ -4,8 +4,8 @@
 //! no modular or floating-point rank decisions are used.
 
 use super::integer_elimination::{
-    back_substitute, integer_echelon_for_solve, integer_row, integer_rref, Elimination,
-    EliminationBudget, IntegerEliminationResult, IntegerRref,
+    back_substitute, integer_echelon_for_solve, integer_echelon_from_integer_rows, integer_row,
+    integer_rref, Elimination, EliminationBudget, IntegerEliminationResult, IntegerRref,
 };
 use super::Q;
 use crate::BigRational;
@@ -235,6 +235,56 @@ pub fn rational_kernel_with_certificate(
         independent_rows: rows,
         inverse_minor: inverse,
     })
+}
+
+/// Solve an owned integer fit system without an intermediate rational matrix.
+/// The existing rational entry points remain the fallback on an unfinished
+/// integer elimination. Free coordinates are zero, as in the rational solver.
+pub(crate) fn solve_integer_fit_system(
+    mut matrix: Vec<Vec<BigInt>>,
+    rhs: Vec<BigInt>,
+    square: bool,
+) -> Option<Vec<Q>> {
+    let columns = matrix.first().map_or(0, Vec::len);
+    if matrix.len() != rhs.len()
+        || matrix.iter().any(|row| row.len() != columns)
+        || (square && matrix.len() != columns)
+    {
+        return None;
+    }
+    if matrix.is_empty() {
+        return Some(Vec::new());
+    }
+    for (row, value) in matrix.iter_mut().zip(rhs) {
+        row.push(value);
+    }
+    if square {
+        if let Some(solution) = solve_full_rank_square_integer_augmented(matrix.clone()) {
+            return Some(solution);
+        }
+    } else if let Some(outcome) = integer_echelon_from_integer_rows(matrix.clone(), columns) {
+        match outcome {
+            IntegerEliminationResult::Inconsistent => return None,
+            IntegerEliminationResult::Echelon(echelon) => {
+                if let Some(solution) = back_substitute(&echelon, columns) {
+                    return Some(solution);
+                }
+            }
+        }
+    }
+    let mut rational_rhs = Vec::with_capacity(matrix.len());
+    let rational_matrix: Vec<Vec<Q>> = matrix
+        .into_iter()
+        .map(|mut row| {
+            rational_rhs.push(Q::from_integer(row.pop().unwrap()));
+            row.into_iter().map(Q::from_integer).collect()
+        })
+        .collect();
+    if square {
+        solve_full_rank_square_linear_system(&rational_matrix, &rational_rhs)
+    } else {
+        solve_linear_system(&rational_matrix, &rational_rhs)
+    }
 }
 
 /// Solve `Ax = b` over ℚ and report the rank and nullity of `A`.
@@ -1007,6 +1057,20 @@ mod tests {
                     expected,
                     "seed {seed}"
                 );
+                if seed % 2 == 0 {
+                    let integer_matrix = a
+                        .iter()
+                        .map(|row| row.iter().map(|c| c.numer().clone()).collect())
+                        .collect();
+                    let integer_rhs = b.iter().map(|c| c.numer().clone()).collect();
+                    assert_eq!(
+                        solve_integer_fit_system(integer_matrix, integer_rhs, false),
+                        expected
+                            .as_ref()
+                            .map(|solution| solution.particular.clone()),
+                        "integer input seed {seed}"
+                    );
+                }
                 if expected.is_some() {
                     consistent += 1;
                 } else {

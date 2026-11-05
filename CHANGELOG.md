@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Exact recurrence fitting builds integer matrices directly when source rows
+  and derivatives are integral. Fractional inputs retain the rational path;
+  fitted coefficients may still be rational, and exact verification is unchanged.
+
 - Rational square systems clear denominators once per equation, including the
   right-hand side, and use the existing fraction-free integer solver. Integral
   inputs retain their direct conversion path; exact results are unchanged.

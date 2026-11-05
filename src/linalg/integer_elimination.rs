@@ -209,11 +209,10 @@ fn integer_eliminate(
     matrix: &[Vec<Q>],
     columns: usize,
     mode: Elimination,
-    mut budget: Option<&mut EliminationBudget>,
+    budget: Option<&mut EliminationBudget>,
     stop_on_inconsistency: bool,
 ) -> Result<Option<IntegerEliminationResult>, RationalKernelError> {
     let row_count = matrix.len();
-    let width = matrix.first().map_or(0, Vec::len);
     let mut rows = Vec::with_capacity(row_count);
     // `scales[r]`: the rational `c` with true row = `c * rows[r]` (budgeted runs only).
     let mut scales: Vec<Q> = Vec::new();
@@ -230,6 +229,42 @@ fn integer_eliminate(
             scales.push(Q::new_raw(BigInt::one(), scale));
         }
     }
+    integer_eliminate_rows(rows, scales, columns, mode, budget, stop_on_inconsistency)
+}
+
+/// Forward elimination of an already integral augmented system.
+pub(super) fn integer_echelon_from_integer_rows(
+    rows: Vec<Vec<BigInt>>,
+    columns: usize,
+) -> Option<IntegerEliminationResult> {
+    if rows
+        .iter()
+        .any(|row| !row[columns].is_zero() && row[..columns].iter().all(Zero::is_zero))
+    {
+        return Some(IntegerEliminationResult::Inconsistent);
+    }
+    integer_eliminate_rows(
+        rows,
+        Vec::new(),
+        columns,
+        Elimination::ForwardSmallestRow,
+        None,
+        true,
+    )
+    .ok()
+    .flatten()
+}
+
+fn integer_eliminate_rows(
+    mut rows: Vec<Vec<BigInt>>,
+    mut scales: Vec<Q>,
+    columns: usize,
+    mode: Elimination,
+    mut budget: Option<&mut EliminationBudget>,
+    stop_on_inconsistency: bool,
+) -> Result<Option<IntegerEliminationResult>, RationalKernelError> {
+    let row_count = rows.len();
+    let width = rows.first().map_or(0, Vec::len);
     // `levels[r]`: the pivot at which `rows[r]` is valid (1 initially).
     let mut levels: Vec<BigInt> = vec![BigInt::one(); row_count];
     let mut origins: Vec<usize> = (0..row_count).collect();
