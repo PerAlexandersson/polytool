@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Polynomial input errors include physical line numbers; rational-list errors
+  also identify the coefficient. Rational inputs reuse the library parser.
+  Report row indices and accepted input syntax are unchanged.
+- Invalid benchmark/PF-pencil arguments consistently exit with status 2.
+  Usage hints go to stderr, keeping stdout clear on argument errors; explicit
+  help/version requests reject extra arguments. Bash completion handles
+  `help oeis` and stops suggesting commands in unrelated argument positions.
 - `root-enclosures --verify` replays saved reports through a shared exact
   library verifier, also used by the browser. JSON-only enclosure, transform,
   implicit and representation-search commands accept explicit `--json`.

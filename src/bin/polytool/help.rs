@@ -42,7 +42,7 @@ pub(crate) fn print_rational_coefficient_input_help() {
     println!("  Coefficients are in ascending degree order and may be arbitrary-size");
     println!("  integers or exact rationals such as 42, -17, or 3/7.");
     println!("  Brackets and whitespace-separated coefficients are accepted.");
-    println!("  Expanded polynomial expressions are not accepted by recurrence.");
+    println!("  This command expects coefficient lists, not expanded expressions.");
     println!("  Blank lines and lines starting with # are ignored.");
 }
 

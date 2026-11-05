@@ -98,6 +98,8 @@ Help groups commands by task. `help --json` emits the `polytool.commands.v1`
 index, with names, aliases, groups and summaries. Completion scripts cover
 command names for Bash, Zsh and Fish (plus OEIS subcommands in Bash);
 they do not complete every option value.
+Bash also completes OEIS subcommands after `polytool help oeis`.
+Explicit `help` and `--version` requests reject unexpected trailing arguments.
 
 Diagnostics go to stderr; data goes to stdout. Invalid options and malformed
 input fail with a nonzero status (normally 2). Some commands use 1 for a
@@ -106,3 +108,12 @@ An exact root test reporting `false` is still a successful computation.
 A completed recurrence search finding nothing also remains successful, with
 `status: "not_found"` in JSON. Inspect result fields as well as exit status.
 For shell pipelines, enable `set -o pipefail` in Bash to catch upstream failures.
+
+Polynomial parse errors include the one-based physical input line, counting
+blank lines and comments. Rational coefficient-list errors also identify the
+one-based coefficient position. Report row indices remain zero-based and skip
+comments/blanks, so a malformed second row on physical line 5 has row index 1.
+`family-check --json` keeps these diagnostics inside its `parse_errors` array;
+other polynomial readers fail before emitting a partial result. Invalid usage
+prints a short diagnostic and a help command to stderr where a usage hint is
+needed; request `--help` explicitly for the full help text on stdout.

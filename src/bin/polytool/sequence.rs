@@ -118,13 +118,10 @@ pub(crate) fn cmd_sequence(args: &[String]) {
         i += 1;
     }
     if positional.len() != 2 {
-        print_sequence_help();
-        std::process::exit(2);
+        crate::input::usage_error("sequence", "expected a sequence name and max-n");
     }
     let Some(kind) = SequenceKind::parse(positional[0]) else {
-        eprintln!("unknown sequence: {}", positional[0]);
-        print_sequence_help();
-        std::process::exit(2);
+        crate::input::usage_error("sequence", &format!("unknown sequence: {}", positional[0]));
     };
     let max_n = positional[1].parse::<usize>().unwrap_or_else(|_| {
         eprintln!(

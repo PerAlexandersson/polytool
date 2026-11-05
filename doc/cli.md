@@ -36,6 +36,10 @@ Polynomials are given as comma-separated integer coefficients in
 **ascending degree order**: `a_0, a_1, ..., a_d` represents
 `a_0 + a_1 t + ... + a_d t^d`.
 
+Parse errors identify the one-based physical input line, including skipped
+comments and blank lines. Rational-list readers also identify the coefficient
+position. These source locations are separate from zero-based report row indices.
+
 A text file `polys.txt` might look like:
 
 ```

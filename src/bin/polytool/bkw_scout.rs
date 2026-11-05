@@ -46,7 +46,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
         match args[i].as_str() {
             "-h" | "--help" => {
                 bkw_scout_usage();
-                std::process::exit(2);
+                return;
             }
             "--symbol" => {
                 i += 1;
@@ -152,9 +152,10 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
             }
             "--json" => format = "json".to_string(),
             other => {
-                eprintln!("Unknown bkw-scout option: {}", other);
-                bkw_scout_usage();
-                std::process::exit(2);
+                crate::input::usage_error(
+                    "bkw-scout",
+                    &format!("unknown bkw-scout option: {other}"),
+                );
             }
         }
         i += 1;

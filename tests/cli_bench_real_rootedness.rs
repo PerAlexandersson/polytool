@@ -148,15 +148,23 @@ fn invalid_options_are_rejected() {
         vec!["--degrees", "x"],
         vec!["--degrees", "2"],
         vec!["--max-slowdown", "2"],
-        vec!["--baseline", "/nonexistent/polytool-baseline.json"],
         vec!["--unknown"],
     ] {
         let output = run_bench(&args);
-        assert_eq!(output.status.code(), Some(1), "args: {args:?}");
+        assert_eq!(output.status.code(), Some(2), "args: {args:?}");
+        assert!(output.stdout.is_empty(), "args: {args:?}");
         assert!(!stderr_of(&output).is_empty(), "args: {args:?}");
         assert!(
             !stdout_of(&output).contains("\tverdict\t"),
             "no report is printed for bad arguments: {args:?}"
         );
     }
+}
+
+#[test]
+fn unreadable_baseline_is_an_operational_failure() {
+    let output = run_bench(&["--baseline", "/nonexistent/polytool-baseline.json"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(!stderr_of(&output).is_empty());
 }

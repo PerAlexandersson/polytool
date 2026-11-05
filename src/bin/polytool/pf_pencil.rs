@@ -464,36 +464,33 @@ pub(crate) fn cmd_pf_pencil(args: &[String]) {
             }
             "--json" => format = OutputFormat::Json,
             other => {
-                eprintln!("unknown option: {other}");
-                print_pf_pencil_help();
-                std::process::exit(1);
+                crate::input::usage_error("pf-pencil", &format!("unknown option: {other}"));
             }
         }
         i += 1;
     }
 
     if all_family_h == case_id.is_some() {
-        eprintln!("choose exactly one of --case or --all-family-h");
-        print_pf_pencil_help();
-        std::process::exit(1);
+        crate::input::usage_error(
+            "pf-pencil",
+            "choose exactly one of --case or --all-family-h",
+        );
     }
 
     let degrees = if let Some(d) = degree {
         if min_degree.is_some() || max_degree.is_some() {
             eprintln!("--degree cannot be combined with --min-degree or --max-degree");
-            std::process::exit(1);
+            std::process::exit(2);
         }
         vec![d]
     } else {
         let min = min_degree.unwrap_or(1);
         let Some(max) = max_degree else {
-            eprintln!("expected --degree or --max-degree");
-            print_pf_pencil_help();
-            std::process::exit(1);
+            crate::input::usage_error("pf-pencil", "expected --degree or --max-degree");
         };
         if min > max {
             eprintln!("--min-degree must be <= --max-degree");
-            std::process::exit(1);
+            std::process::exit(2);
         }
         (min..=max).collect()
     };
@@ -503,9 +500,7 @@ pub(crate) fn cmd_pf_pencil(args: &[String]) {
     } else {
         let id = case_id.expect("case_id checked");
         let Some(case) = pf_pencil_case(&id) else {
-            eprintln!("unknown PF pencil case: {id}");
-            print_pf_pencil_help();
-            std::process::exit(1);
+            crate::input::usage_error("pf-pencil", &format!("unknown PF pencil case: {id}"));
         };
         vec![case]
     };

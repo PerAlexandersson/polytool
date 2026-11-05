@@ -7,10 +7,6 @@ gamma-positivity, resultants, Ehrhart/h\*-vector conversion, recurrence search
 for polynomial sequences, finite Athanasiadis--Wagner interlacing matrices,
 and standard sequences — all with exact arithmetic.
 
-Rename note: this crate was renamed from `polynomial-tools` to `polytool`
-before publication. Use `polytool` in Cargo manifests, Rust imports, CLI
-documentation, and MCP server configuration.
-
 ## Features
 
 - Exact real-rootedness testing by adaptive subresultant integer root
@@ -37,10 +33,16 @@ documentation, and MCP server configuration.
 From the repository root:
 
 ```sh
-cargo build --release -p polytool
+cargo build --locked --release -p polytool
 ```
 
-The CLI binary is at `target/release/polytool`.
+The CLI binary is at `target/release/polytool`, or under `CARGO_TARGET_DIR`
+when that environment variable is set. Run that binary directly, or install
+it on your Cargo binary path from the Polytool directory:
+
+```sh
+cargo install --locked --path .
+```
 
 Use `polytool --version` (or `polytool -V`) for a single deterministic line:
 
@@ -54,12 +56,6 @@ Git metadata, the suffix is `(git unavailable)` rather than a fabricated
 revision.  Reproducible packaging environments may set `POLYTOOL_GIT_COMMIT`
 to a full or at least 12-digit hexadecimal revision; an empty or malformed
 value deliberately selects the unavailable form.
-
-On the generated standalone `main` branch, the equivalent command is:
-
-```sh
-cargo build --release
-```
 
 ## Using as a crate
 
@@ -118,6 +114,7 @@ integer coefficients in ascending degree order (`1, 11, 11, 1` is
 
 ```sh
 echo "1, 11, 11, 1" | polytool real-rooted
+polytool sequence eulerian 8 --format rows > polys.txt
 polytool interlacing --json < polys.txt
 polytool properties < polys.txt
 polytool sequence eulerian 5

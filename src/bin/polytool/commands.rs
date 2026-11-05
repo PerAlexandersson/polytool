@@ -290,12 +290,17 @@ fn print_completions(args: &[String]) {
     match args.first().map(String::as_str).filter(|_| args.len() == 1) {
         Some("bash") => println!(
             r#"_polytool() {{
-  local words='{names}' reply
-  if [[ ${{COMP_WORDS[1]}} == oeis ]]; then words='list info generate add check evidence --help'; fi
-  if (( COMP_CWORD == 1 )) || [[ ${{COMP_WORDS[1]}} == help ]] || {{ [[ ${{COMP_WORDS[1]}} == oeis ]] && (( COMP_CWORD == 2 )); }}; then
-    COMPREPLY=()
+  local words='' reply
+  COMPREPLY=()
+  if (( COMP_CWORD == 1 )) || {{ [[ ${{COMP_WORDS[1]}} == help ]] && (( COMP_CWORD == 2 )); }}; then
+    words='{names}'
+  elif {{ [[ ${{COMP_WORDS[1]}} == oeis ]] && (( COMP_CWORD == 2 )); }} ||
+       {{ [[ ${{COMP_WORDS[1]}} == help && ${{COMP_WORDS[2]}} == oeis ]] && (( COMP_CWORD == 3 )); }}; then
+    words='list info generate add check evidence --help'
+  fi
+  if [[ -n $words ]]; then
     while IFS= read -r reply; do COMPREPLY+=("$reply"); done < <(compgen -W "$words" -- "${{COMP_WORDS[COMP_CWORD]}}")
-  else COMPREPLY=(); fi
+  fi
 }}
 complete -o default -F _polytool polytool"#
         ),

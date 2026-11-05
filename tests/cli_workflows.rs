@@ -29,34 +29,19 @@ fn success(output: Output) -> String {
 
 #[test]
 fn invalid_options_and_missing_values_fail() {
-    for command in [
-        "real-rooted",
-        "properties",
-        "interlacing",
-        "interlacing-profile",
-        "gamma-expansion",
-        "coefficient-tests",
-        "family-check",
-        "recurrence",
-        "recurrence-generate",
-        "resultant",
-        "discriminant",
-        "bkw-scout",
-        "cyclic-sieving",
-        "cyclic-sieving-sequence",
-        "bicyclic-sieving",
-        "hstar-inequalities",
-        "hstar-to-ehrhart",
-        "ehrhart-to-hstar",
-        "pf-pencil",
-        "sequence",
-    ] {
+    let metadata: Value = serde_json::from_str(&success(run(&["help", "--json"], ""))).unwrap();
+    for command in metadata["commands"].as_array().unwrap() {
+        let command = command["name"].as_str().unwrap();
         let output = run(&[command, "--typo"], "");
         assert!(
             !output.status.success(),
             "{command} ignored an invalid option"
         );
         assert!(!output.stderr.is_empty(), "{command} needs a diagnostic");
+        assert!(
+            output.stdout.is_empty(),
+            "{command} polluted stdout on an argument error"
+        );
     }
     for args in [
         vec!["recurrence", "--max-candidates", "bogus"],
@@ -66,6 +51,67 @@ fn invalid_options_and_missing_values_fail() {
     ] {
         let output = run(&args, "");
         assert_eq!(output.status.code(), Some(2), "{args:?}");
+    }
+}
+
+#[test]
+fn missing_arguments_and_invalid_help_paths_leave_stdout_empty() {
+    for args in [
+        vec!["sequence"],
+        vec!["sequence", "unknown", "2"],
+        vec!["oeis"],
+        vec!["bench"],
+        vec!["bench", "compare", "--typo"],
+        vec!["bench", "interlacing", "--typo"],
+        vec!["bench", "recurrence-fixtures", "--typo"],
+        vec!["bench", "real-rootedness", "--typo"],
+        vec!["pf-pencil"],
+        vec!["pf-pencil", "--all-family-h"],
+        vec!["help", "recurrence", "typo"],
+        vec!["help", "oeis", "add", "typo"],
+        vec!["help", "oeis", "unknown"],
+        vec!["help", "unknown"],
+        vec!["--version", "typo"],
+        vec!["--help", "typo"],
+    ] {
+        let output = run(&args, "");
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        assert!(output.stdout.is_empty(), "{args:?}");
+        assert!(!output.stderr.is_empty(), "{args:?}");
+    }
+}
+
+#[test]
+fn input_errors_locate_physical_lines_without_changing_row_indices() {
+    let input = "# input\r\n1,2\r\n\r\n  # comment\r\n1,,3\r\n";
+    for command in ["real-rooted", "properties", "interlacing", "recurrence"] {
+        let output = run(&[command, "--json"], input);
+        assert_eq!(output.status.code(), Some(2), "{command}");
+        assert!(output.stdout.is_empty(), "{command}");
+        let message = String::from_utf8(output.stderr).unwrap();
+        assert!(message.contains("line 5"), "{command}: {message}");
+        if command == "recurrence" {
+            assert!(message.contains("coefficient 2"), "{message}");
+        }
+    }
+    let output = run(&["family-check", "--json"], input);
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["parse_errors"][0]["index"], 1);
+    assert!(report["parse_errors"][0]["error"]
+        .as_str()
+        .unwrap()
+        .contains("line 5"));
+
+    for command in ["recurrence", "bernstein-expansion"] {
+        let output = run(&[command], "# input\n1, 3/0\n");
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        let message = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            message.contains("line 2") && message.contains("coefficient 2"),
+            "{message}"
+        );
+        assert!(message.contains("zero denominator"), "{message}");
     }
 }
 
