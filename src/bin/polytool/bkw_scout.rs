@@ -42,20 +42,20 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
         match args[i].as_str() {
             "-h" | "--help" => {
                 bkw_scout_usage();
-                return;
+                std::process::exit(2);
             }
             "--symbol" => {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--symbol requires an argument.");
-                    return;
+                    std::process::exit(2);
                 }
                 symbol_input = Some(args[i].clone());
             }
             "--box" => {
                 if i + 4 >= args.len() {
                     eprintln!("--box requires four numeric arguments.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.re_min = parse_f64_arg("--box re_min", &args[i + 1]);
                 options.re_max = parse_f64_arg("--box re_max", &args[i + 2]);
@@ -67,7 +67,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--grid requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 let grid = parse_usize_arg("--grid", &args[i]);
                 options.grid_re = grid;
@@ -77,7 +77,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--grid-re requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.grid_re = parse_usize_arg("--grid-re", &args[i]);
             }
@@ -85,7 +85,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--grid-im requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.grid_im = parse_usize_arg("--grid-im", &args[i]);
             }
@@ -93,7 +93,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--top requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.max_results = parse_usize_arg("--top", &args[i]);
             }
@@ -104,7 +104,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--min-imag requires a numeric argument.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.min_imaginary_abs = parse_f64_arg("--min-imag", &args[i]);
             }
@@ -112,7 +112,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--refine-steps requires a nonnegative integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.refine_steps = parse_usize_arg("--refine-steps", &args[i]);
             }
@@ -123,7 +123,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--tol requires a numeric argument.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.root_options.tolerance = parse_f64_arg("--tol", &args[i]);
             }
@@ -131,7 +131,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--max-iter requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.root_options.max_iterations = parse_usize_arg("--max-iter", &args[i]);
             }
@@ -139,7 +139,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--format requires text or json.");
-                    return;
+                    std::process::exit(2);
                 }
                 format = args[i].clone();
             }
@@ -149,7 +149,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
             other => {
                 eprintln!("Unknown bkw-scout option: {}", other);
                 bkw_scout_usage();
-                return;
+                std::process::exit(2);
             }
         }
         i += 1;
@@ -157,11 +157,11 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
 
     if options.re_min > options.re_max || options.im_min > options.im_max {
         eprintln!("Invalid box: lower bounds must be <= upper bounds.");
-        return;
+        std::process::exit(2);
     }
     if options.grid_re == 0 || options.grid_im == 0 || options.max_results == 0 {
         eprintln!("Grid sizes and --top must be positive.");
-        return;
+        std::process::exit(2);
     }
 
     let input = match symbol_input {
@@ -170,7 +170,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
             Ok(input) => input,
             Err(error) => {
                 eprintln!("{error}");
-                return;
+                std::process::exit(2);
             }
         },
     };
@@ -178,7 +178,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
         Ok(symbol) => symbol,
         Err(e) => {
             eprintln!("{}", e);
-            return;
+            std::process::exit(2);
         }
     };
 
@@ -188,7 +188,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
         "json" => print_bkw_json(&symbol, &options, &candidates),
         other => {
             eprintln!("Unknown output format: {}", other);
-            return;
+            std::process::exit(2);
         }
     }
 

@@ -33,7 +33,7 @@ pub(crate) fn read_stdin_or_exit() -> String {
 }
 
 pub(crate) fn is_help_arg(arg: &str) -> bool {
-    matches!(arg, "-h" | "--help" | "help")
+    matches!(arg, "-h" | "--help")
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

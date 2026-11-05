@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- CLI help groups commands by task; `help --json` exports their names, aliases
+  and summaries. OEIS maintenance subcommands now reach their detailed help.
+  `completions bash|zsh|fish` emits command-name shell completion scripts.
+- `sequence --format rows` supplies coefficient lists for pipelines;
+  `recurrence-generate --format rows` names its existing default format.
+  Recurrence generation and theorem matching accept theorem wrappers and
+  representation menus, with explicit zero-based `--candidate` selection
+  required for menus containing multiple entries.
+- Invalid CLI options and input no longer silently succeed in the affected
+  checking, recurrence, BKW and sieving commands. `resultant` requires exactly
+  two polynomials. Resultants and discriminants support exact decimal-string
+  `--json` output; unsupported options are rejected.
+- Interlacing reports reuse successful strict tests for the weak result.
+  Shared-root, same-degree, failed and incompatible cases retain their checks.
+- A static documentation builder combines task recipes, an executable-derived
+  CLI reference and searchable rustdoc. Its GitHub workflow builds artifacts
+  and supports separately requested manual Pages publication.
+
 - Square elimination delays scaling rows whose pivot-column entry is zero,
   using the same exact row-level invariant as the general solver. Sparse
   systems avoid unnecessary updates; pivot choice and exact results are unchanged.

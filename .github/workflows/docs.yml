@@ -1,0 +1,42 @@
+name: Documentation
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Deploy the verified documentation to GitHub Pages
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+      - name: Build and check documentation
+        run: python3 scripts/build-docs.py --output "$RUNNER_TEMP/polytool-docs"
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/polytool-docs
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/deploy-pages@v4
+        id: deployment

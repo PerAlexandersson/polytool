@@ -105,8 +105,10 @@ For the undirected question "do `f` and `g` interlace in some order?", use
 More library examples (real-rootedness and interlacing, Athanasiadis--Wagner
 interlacing matrices, planar networks, polynomial arithmetic, recurrence
 search, enumeration of real-rooted integer polynomials, ...) are in
-[doc/library.md](doc/library.md).  API documentation is on
-[docs.rs](https://docs.rs/polytool).
+[doc/library.md](doc/library.md). Build searchable API documentation with
+`cargo doc --no-deps --open`. The crate has not yet been published on docs.rs.
+The [documentation build guide](doc/development.md#documentation-site)
+combines the guides, generated CLI reference and rustdoc into a static site.
 
 ## CLI quick start
 
@@ -127,6 +129,10 @@ echo "1, 0, -3, 1" | polytool discriminant
 Many commands accept `--json` for machine-readable output, and large integer
 coefficients are serialized as strings.  See [doc/cli.md](doc/cli.md) for the
 input format and the full command reference.
+
+Start with the [CLI workflows](doc/workflows.md) for generation, recurrence
+discovery, report reuse and shell pipelines. `polytool --help` groups commands
+by task; `polytool help --json` provides a machine-readable command index.
 
 ## MCP server and web app
 

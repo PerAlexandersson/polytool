@@ -1,5 +1,34 @@
 # Development
 
+## Documentation site
+
+Source API documentation uses Rust's `//!` and `///` comments. Build it with
+`cargo doc --locked --no-deps`. To combine the guides, executable-derived
+command reference and searchable rustdoc for all three core libraries, install
+Python 3.9 or later and Pandoc, then run from the repository root:
+
+```sh
+python3 scripts/build-docs.py --output /tmp/polytool-docs
+python3 -m http.server --directory /tmp/polytool-docs 8000
+```
+
+The output directory must be new or empty and outside the source workspace.
+The builder uses a fresh external Cargo target directory, checks local guide
+links and rejects symbolic links in the site. It renders every `doc/*.md`
+guide, gathers command names from `polytool help --json`, and gathers details
+from each command's `--help`, including OEIS maintenance subcommands. Add
+new commands to `src/bin/polytool/commands.rs` and their detailed help to
+`help.rs`; the workflow test checks that every registered command has help.
+
+The Documentation GitHub workflow builds an artifact for pull requests and
+manual runs. Publishing is manual: configure the repository's Pages source
+as GitHub Actions, then run the workflow on `main` with `publish` enabled.
+The deployment job uses the `github-pages` environment and its protection
+rules. Ordinary builds and pull requests do not deploy. This site is separate
+from the WebAssembly application.
+
+## Checks
+
 Run the core tests:
 
 ```sh

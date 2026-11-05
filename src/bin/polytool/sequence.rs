@@ -1,13 +1,13 @@
 //! `polytool sequence`: standard polynomial sequences.
 
-use crate::input::{polynomial_degree_bigint, strip_trailing_zeros_bigint, OutputFormat};
+use crate::input::{next_option_value, polynomial_degree_bigint, strip_trailing_zeros_bigint};
 use crate::json_out::{json_bigint_vec, json_string};
 use num_bigint::BigInt;
 use polytool::*;
 
 pub(crate) fn print_sequence_help() {
     println!("Usage:");
-    println!("  polytool sequence <name> <max-n> [--json]");
+    println!("  polytool sequence <name> <max-n> [--format text|rows|json]");
     println!("  polytool sequence --help");
     println!();
     println!("Generate standard polynomial sequences.");
@@ -21,7 +21,8 @@ pub(crate) fn print_sequence_help() {
     println!("  hermite");
     println!();
     println!("Options:");
-    println!("  --json           Emit machine-readable JSON");
+    println!("  --format <name>  text (default), rows (coefficient lists), or json");
+    println!("  --json           Alias for --format json");
     println!("  -h, --help       Print this help text");
     println!();
     println!("Note: generated coefficients use arbitrary-size integers.");
@@ -99,31 +100,41 @@ impl SequenceKind {
 
 pub(crate) fn cmd_sequence(args: &[String]) {
     let mut positional = Vec::new();
-    let mut format = OutputFormat::Text;
-    for arg in args {
-        match arg.as_str() {
-            "--json" => format = OutputFormat::Json,
+    let mut format = "text";
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--json" => format = "json",
+            "--format" => {
+                format = next_option_value(args, &mut i, "--format")
+                    .unwrap_or_else(|error| fail(&error));
+                if !matches!(format, "text" | "rows" | "json") {
+                    fail(&format!("unknown sequence output format: {format}"));
+                }
+            }
+            other if other.starts_with('-') => fail(&format!("unknown sequence option: {other}")),
             other => positional.push(other),
         }
+        i += 1;
     }
     if positional.len() != 2 {
         print_sequence_help();
-        std::process::exit(1);
+        std::process::exit(2);
     }
     let Some(kind) = SequenceKind::parse(positional[0]) else {
         eprintln!("unknown sequence: {}", positional[0]);
         print_sequence_help();
-        std::process::exit(1);
+        std::process::exit(2);
     };
     let max_n = positional[1].parse::<usize>().unwrap_or_else(|_| {
         eprintln!(
             "expected a nonnegative integer max-n, got '{}'",
             positional[1]
         );
-        std::process::exit(1);
+        std::process::exit(2);
     });
     let polynomials = kind.polynomials(max_n);
-    if format == OutputFormat::Json {
+    if format == "json" {
         let items = polynomials
             .iter()
             .enumerate()
@@ -151,6 +162,25 @@ pub(crate) fn cmd_sequence(args: &[String]) {
     }
     for (index, coeffs) in polynomials.iter().enumerate() {
         let c = strip_trailing_zeros_bigint(coeffs);
-        println!("{} = {}", kind.label(index), format_poly_bigint_coeffs(c));
+        if format == "rows" {
+            if c.is_empty() {
+                println!("0");
+            } else {
+                println!(
+                    "{}",
+                    c.iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        } else {
+            println!("{} = {}", kind.label(index), format_poly_bigint_coeffs(c));
+        }
     }
+}
+
+fn fail(message: &str) -> ! {
+    eprintln!("{message}");
+    std::process::exit(2);
 }

@@ -1,5 +1,13 @@
 # CLI usage
 
+For complete examples see [CLI workflows](workflows.md). Run `polytool --help`
+for commands grouped by task, `polytool help --json` for the command index,
+and `polytool oeis add --help` for nested help. `sequence --format rows`
+emits coefficient lists suitable for piping into the checking and recurrence
+commands. Resultants and discriminants also support exact `--json` output.
+Invalid options and input return a nonzero exit status; result fields still
+distinguish negative mathematical answers from failed commands.
+
 The `polytool` command-line interface reads polynomials from standard input and
 writes text or, with `--json`, machine-readable output.  This page covers the
 input format and the general-purpose commands.  The commands for specific areas

@@ -102,7 +102,7 @@ pub(crate) fn cmd_coefficient_tests(args: &[String]) {
         Ok(format) => format,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let reports = read_polys_bigint()

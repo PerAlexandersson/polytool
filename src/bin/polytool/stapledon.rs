@@ -23,15 +23,15 @@ pub(crate) fn cmd_stapledon(args: &[String]) {
     }
 
     if args.len() != 1 {
-        print_stapledon_help();
-        return;
+        eprintln!("stapledon expects one degree bound");
+        std::process::exit(2);
     }
 
     let n: usize = match args[0].parse() {
         Ok(n) => n,
         Err(_) => {
             eprintln!("Expected a nonnegative integer degree bound.");
-            return;
+            std::process::exit(2);
         }
     };
 

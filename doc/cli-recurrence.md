@@ -1,5 +1,13 @@
 # Recurrence search
 
+For a complete generation/search/replay pipeline, see [CLI workflows](workflows.md).
+`recurrence-generate` and `recurrence-theorems` share a bounded JSON reader:
+they accept plain recurrence records, theorem reports with `recurrence_json`,
+and recurrence representation menus. Select a zero-based `representations`
+entry with `--candidate N`; a menu with multiple entries requires this option.
+Extraction does not verify a report's claims. `recurrence-generate --format rows`
+names the default coefficient-list output explicitly.
+
 Part of the [CLI reference](cli.md).  See also
 [recurrence transformations](cli-recurrence-transforms.md) and
 [searching equivalent representations](cli-recurrence-representations.md).

@@ -420,7 +420,7 @@ pub(crate) fn cmd_pf_pencil(args: &[String]) {
                     Ok(value) => Some(value.to_string()),
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -430,7 +430,7 @@ pub(crate) fn cmd_pf_pencil(args: &[String]) {
                     Ok(value) => Some(value),
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -439,7 +439,7 @@ pub(crate) fn cmd_pf_pencil(args: &[String]) {
                     Ok(value) => Some(value),
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -448,7 +448,7 @@ pub(crate) fn cmd_pf_pencil(args: &[String]) {
                     Ok(value) => Some(value),
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -458,7 +458,7 @@ pub(crate) fn cmd_pf_pencil(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }

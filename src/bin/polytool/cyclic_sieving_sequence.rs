@@ -158,7 +158,7 @@ pub(crate) fn cmd_cyclic_sieving_sequence(args: &[String]) {
         Ok(options) => options,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let polynomials = read_polys_bigint()
@@ -174,7 +174,7 @@ pub(crate) fn cmd_cyclic_sieving_sequence(args: &[String]) {
         Ok(reports) => reports,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     if options.format == OutputFormat::Json {

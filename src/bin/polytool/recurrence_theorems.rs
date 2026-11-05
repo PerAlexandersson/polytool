@@ -2,19 +2,20 @@
 //! `polytool recurrence --theorem-matches`.
 
 use crate::input::error_text;
-use crate::input::{is_help_arg, read_limited_text};
+use crate::input::{is_help_arg, parse_usize_option};
+use crate::recurrence_input::read_recurrence_json;
 use polytool::recurrence::{
     AdaptiveSearchOptions, AdaptiveSearchResult, BigRational, RecurrenceJson, RecurrenceJsonSearch,
     RecurrenceOptionsJson,
 };
 use polytool::renewal::RecurrenceTheoremReport;
-use std::fs;
-use std::io;
 
 pub(crate) fn print_recurrence_theorems_help() {
     println!("Usage:");
     println!("  polytool recurrence-theorems --recurrence <file|-> [--json]");
     println!("  polytool recurrence-theorems --help");
+    println!("  --candidate <index>  Select a representation menu entry (0-based)");
+    println!("  Also accepts theorem wrappers and recurrence representation menus.");
     println!();
     println!("Check a supplied recurrence JSON record (polytool.recurrence.v1, e.g. from");
     println!("`polytool recurrence --json`) against the supported interlacing theorems and");
@@ -139,10 +140,19 @@ pub(crate) fn cmd_recurrence_theorems(args: &[String]) {
         return;
     }
     let mut path = None;
+    let mut candidate = None;
     let mut json = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--candidate" => {
+                candidate = Some(
+                    parse_usize_option(args, &mut i, "--candidate").unwrap_or_else(|error| {
+                        eprintln!("{error}");
+                        std::process::exit(2);
+                    }),
+                );
+            }
             "--recurrence" => {
                 i += 1;
                 path = args.get(i).cloned();
@@ -159,18 +169,7 @@ pub(crate) fn cmd_recurrence_theorems(args: &[String]) {
         eprintln!("recurrence-theorems needs --recurrence <file|->");
         std::process::exit(2);
     };
-    let input = if path == "-" {
-        read_limited_text(io::stdin(), "recurrence JSON from stdin")
-    } else {
-        fs::File::open(&path)
-            .map_err(|e| format!("failed to open recurrence JSON `{path}`: {e}"))
-            .and_then(|file| read_limited_text(file, &format!("recurrence JSON `{path}`")))
-    };
-    let report = input
-        .and_then(|text| {
-            serde_json::from_str::<RecurrenceJson>(&text)
-                .map_err(|e| format!("failed to parse recurrence JSON: {e}"))
-        })
+    let report = read_recurrence_json(&path, candidate)
         .and_then(|record| RecurrenceTheoremReport::for_supplied(&record).map_err(error_text));
     let report = match report {
         Ok(report) => report,
