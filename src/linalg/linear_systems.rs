@@ -5,7 +5,8 @@
 
 use super::integer_elimination::{
     back_substitute, integer_echelon_for_solve, integer_echelon_from_integer_rows, integer_row,
-    integer_rref, Elimination, EliminationBudget, IntegerEliminationResult, IntegerRref,
+    integer_rref, rescale_row, Elimination, EliminationBudget, IntegerEliminationResult,
+    IntegerRref,
 };
 use super::Q;
 use crate::BigRational;
@@ -496,40 +497,48 @@ fn solve_full_rank_square_integer_augmented(
         return Ok(vec![]);
     }
 
-    let mut denom = BigInt::one();
+    let mut previous = BigInt::one();
+    let mut levels = vec![BigInt::one(); n];
 
     for col in 0..n {
         let pivot_row = (col..n)
             .find(|&row| !aug[row][col].is_zero())
             .ok_or(SquareSolveFailure::Singular)?;
         aug.swap(col, pivot_row);
+        levels.swap(col, pivot_row);
+        if levels[col] != previous && !rescale_row(&mut aug[col][col..], &previous, &levels[col]) {
+            return Err(SquareSolveFailure::Fallback);
+        }
         let pivot = aug[col][col].clone();
         if col == n - 1 {
             break;
         }
 
         let pivot_tail = aug[col][col + 1..=n].to_vec();
-        for target_row in &mut aug[(col + 1)..n] {
+        for (target_row, level) in aug[(col + 1)..n].iter_mut().zip(&mut levels[(col + 1)..n]) {
+            if target_row[col].is_zero() {
+                continue;
+            }
             let row_pivot = target_row[col].clone();
             target_row[col] = BigInt::zero();
             for (cell, tail) in target_row[(col + 1)..=n].iter_mut().zip(&pivot_tail) {
-                let numerator = if row_pivot.is_zero() {
-                    &*cell * &pivot
-                } else {
-                    &*cell * &pivot - &row_pivot * tail
-                };
-                if denom.is_one() {
+                // Fuse scaling from this row's level with elimination, as in
+                // the general solver. Untouched rows keep their earlier level.
+                let numerator = &*cell * &pivot - &row_pivot * tail;
+                if level.is_one() {
                     *cell = numerator;
                 } else {
-                    let (quotient, remainder) = numerator.div_rem(&denom);
+                    let (quotient, remainder) = numerator.div_rem(level);
                     if !remainder.is_zero() {
                         return Err(SquareSolveFailure::Fallback);
                     }
                     *cell = quotient;
                 }
             }
+            *level = pivot.clone();
         }
-        denom = pivot;
+        levels[col] = pivot.clone();
+        previous = pivot;
     }
 
     back_substitute(
@@ -552,6 +561,33 @@ mod tests {
     // -----------------------------------------------------------------------
     // Solve linear system
     // -----------------------------------------------------------------------
+
+    #[test]
+    fn square_delayed_scaling_handles_stale_rows_and_signed_swaps() {
+        // Consecutive skipped updates, negative pivots, and a later swap of
+        // rows at different levels. Compare each ordering with rational RREF.
+        let base = [
+            [2, 1, 0, 0, 0],
+            [0, -3, 1, 0, 0],
+            [0, 0, 0, 5, 1],
+            [0, 0, 7, 0, 1],
+            [0, 1, 0, 0, 11],
+        ];
+        for rotate in 0..5 {
+            let a: Vec<Vec<Q>> = (0..5)
+                .map(|i| base[(i + rotate) % 5].iter().copied().map(q).collect())
+                .collect();
+            let b: Vec<Q> = (0..5).map(|i| Q::new(bi(i + 1), bi(3))).collect();
+            let expected = reference_solution(&a, &b).unwrap().particular;
+            assert_eq!(
+                solve_full_rank_square_integer_augmented(
+                    square_rational_system_as_bigint_augmented(&a, &b)
+                ),
+                Ok(expected.clone())
+            );
+            assert_eq!(solve_full_rank_square_linear_system(&a, &b), Some(expected));
+        }
+    }
 
     #[test]
     fn square_singularity_is_distinct_from_an_unfinished_solve() {

@@ -99,6 +99,10 @@ The `singular_early` and `singular_late` cases check rejection near the first
 and last pivot; their exact expected result is `None`. Proven singularity
 returns immediately, while a non-exact division still requests the fallback.
 The `bidiagonal` and `block_diagonal` cases measure sparse nonsingular systems.
+Square elimination now also keeps a level for each row, skipping rows with a
+zero pivot-column entry. A selected pivot row is brought to the current level;
+target updates fuse scaling and elimination, dividing by the target's own
+level. The existing integer rescaling helper checks every exact division.
 
 Exact solves stop when a row proves `0 = c` with nonzero `c`; this path returns
 no rank. Kernel and certificate computations still request complete reduction.

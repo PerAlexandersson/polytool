@@ -123,7 +123,7 @@ pub(super) struct IntegerRref {
 
 /// Replace `row` by `row * numerator / denominator` (an exact integer division by
 /// the theory above); `false` if a division was not exact.
-fn rescale_row(row: &mut [BigInt], numerator: &BigInt, denominator: &BigInt) -> bool {
+pub(super) fn rescale_row(row: &mut [BigInt], numerator: &BigInt, denominator: &BigInt) -> bool {
     for entry in row.iter_mut().filter(|entry| !entry.is_zero()) {
         *entry *= numerator;
         let (quotient, remainder) = entry.div_rem(denominator);

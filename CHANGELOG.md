@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Square elimination delays scaling rows whose pivot-column entry is zero,
+  using the same exact row-level invariant as the general solver. Sparse
+  systems avoid unnecessary updates; pivot choice and exact results are unchanged.
+
 - Square solves return immediately when exact elimination proves singularity,
   instead of repeating the solve with rational arithmetic. Non-exact division
   still requests the existing fallback.
