@@ -96,9 +96,9 @@ def main():
             "--bin", "polytool", env=env)
         # Fresh target directory prevents unrelated workspace API pages leaking
         # into the site. --no-deps retains only these three public libraries.
-        for relative in ("Cargo.toml", "crates/exact-real-roots/Cargo.toml", "crates/ore-algebra/Cargo.toml"):
-            run("cargo", "doc", "--locked", "--no-deps", "--lib",
-                "--manifest-path", str(ROOT / relative), env=env)
+        run("cargo", "doc", "--locked", "--no-deps", "--lib",
+            "--manifest-path", manifest, "-p", "polytool", "-p", "exact-real-roots",
+            "-p", "ore-algebra", env=env)
         shutil.copytree(temp / "target/doc", output / "api")
         binary = str(temp / "target/debug/polytool")
         metadata = json.loads(captured(binary, "help", "--json"))
