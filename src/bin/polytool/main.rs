@@ -128,7 +128,7 @@ fn main() {
     }
 
     match cmd.as_str() {
-        "real-rooted" => cmd_real_rooted(),
+        "real-rooted" => cmd_real_rooted(rest),
         "interlacing" => cmd_interlacing(rest),
         "interlacing-profile" => cmd_interlacing_profile(rest),
         "properties" => cmd_properties(rest),

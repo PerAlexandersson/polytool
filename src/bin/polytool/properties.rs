@@ -143,15 +143,31 @@ fn print_property_reports_json(reports: &[PropertyReport]) {
     );
 }
 
-pub(crate) fn cmd_real_rooted() {
-    for coeffs in read_polys_bigint() {
+pub(crate) fn cmd_real_rooted(args: &[String]) {
+    let format = OutputFormat::from_args(args).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    });
+    let mut items = Vec::new();
+    for (index, coeffs) in read_polys_bigint().into_iter().enumerate() {
         let c = strip_trailing_zeros_bigint(&coeffs);
         let rr = is_real_rooted_bigint_coeffs(c);
+        if format == OutputFormat::Json {
+            items.push(serde_json::json!({
+                "index": index,
+                "degree": c.len().checked_sub(1),
+                "real_rooted": rr,
+            }));
+            continue;
+        }
         println!(
             "{}: {}",
             format_poly_bigint_coeffs(c),
             if rr { "real-rooted" } else { "NOT real-rooted" }
         );
+    }
+    if format == OutputFormat::Json {
+        println!("{}", serde_json::json!({"items": items}));
     }
 }
 

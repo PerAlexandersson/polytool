@@ -34,6 +34,18 @@ coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
 
+- `RecurrenceJson` has a new optional `latex` presentation field; Rust struct
+  literals must add `latex: None`. Older JSON records remain readable. The
+  recurrence generator ignores this field, and `reindexed` refreshes it when
+  present. `Recurrence::to_latex` now uses subscripts and cleaner signs, while
+  plain-text output keeps `P(n)`.
+
+- `AdaptiveSearchResult`, `RecurrenceJsonSearch` and `RecurrenceRepresentation`
+  have a new `verification_equations` field; Rust struct literals must add it.
+  Older serialized records without this field remain readable (default 0).
+- `LiftOperation::BasisMap::basis_family` is boxed to keep the enum compact
+  as recurrence metadata grows. Its serialized JSON is unchanged.
+
 - `recurrence::RealRootednessTheorem` and
   `recurrence::VeroneseParentProofRoute` have the new variant
   `LiuWangThreeTerm`; exhaustive matches must add it.
@@ -396,6 +408,26 @@ Performance:
   14.5 s to 0.94 s, 4.9 s to 0.19 s).
 
 Additions:
+
+- `polytool recurrence --latex` (alias `--format latex`) prints initial rows
+  and the recurrence's starting index, one formula per line. Search JSON
+  includes the same presentation in `latex`; coefficients remain expanded.
+  `--representations --latex` prints the candidate menu as LaTeX definitions.
+  `RecurrenceJson::{to_latex, with_latex}` expose the complete renderer in Rust.
+- LaTeX output groups polynomial coefficients, omits unit multipliers, puts
+  negative signs outside rational fractions, and handles zero right sides,
+  forcing terms and derivatives with subscripted row indices.
+
+- `polytool real-rooted --json` returns only the exact real-rootedness result,
+  zero-based input index and degree for each polynomial; the zero polynomial
+  has degree `null`. Plain-text output is unchanged.
+- Recurrence search reports `verification_equations`, the dense coefficient
+  slots checked on held-out rows before cancellation, not an independence count.
+- `polytool recurrence --first-index N` uses the requested numbering in every
+  output, with skipped input rows still counted. `recurrence-generate` accepts
+  the same flag to relabel a record while preserving its generated rows.
+  `RecurrenceJson::reindexed` exposes this exact index substitution in Rust.
+  `RecurrenceRepresentations::reindexed` also updates complexity and the frontier.
 
 - `recurrence::check_liu_wang_three_term_theorem`: Liu and Wang's Theorem 2.1
   and Corollary 2.4 (Adv. Appl. Math. 38 (2007) 542-560) for lag rules

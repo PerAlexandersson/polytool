@@ -132,6 +132,10 @@ pub(crate) fn print_command_help(command: &str) -> bool {
             "real-rooted",
             "Check whether each input polynomial has only real roots.",
             &[
+                "Options:",
+                "  --json  Emit items with zero-based index, degree, and real_rooted.",
+                "          The zero polynomial has degree null; constants have degree 0.",
+                "",
                 "Note:",
                 "  Accepts arbitrary-size integer coefficients.",
                 "",

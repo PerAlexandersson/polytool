@@ -607,60 +607,64 @@ impl Recurrence {
         self.to_python_definition_rational(&rational_polys)
     }
 
-    /// Format the recurrence as a LaTeX expression.
+    /// Format the recurrence as a LaTeX expression with subscripted row indices.
+    /// Coefficients are expanded; initial rows and the starting index are
+    /// included by [`RecurrenceJson::to_latex`].
     pub fn to_latex(&self) -> String {
-        let mut s = String::new();
-        if let Some(ref denom) = self.denominator {
-            let dl = denom.to_latex();
-            if denom.num_terms() > 1 {
-                s.push_str(&format!("\\bigl({dl}\\bigr) "));
-            } else {
-                s.push_str(&format!("{dl} \\cdot "));
-            }
-        }
-        s.push_str("P(n) = ");
-
-        let mut first = true;
+        let lhs = self.denominator.as_ref().map_or_else(
+            || "P_{n}".to_string(),
+            |coefficient| {
+                let (negative, product) = latex_summand(coefficient, Some("P_{n}"));
+                format!("{}{product}", if negative { "-" } else { "" })
+            },
+        );
+        let mut rhs = String::new();
         for term in &self.terms {
-            let cl = term.coeff.to_latex();
-            let pref = fmt_poly_ref_latex_with_sign(term.sign, term.offset, term.deriv_order);
-
-            if first {
-                first = false;
-                if cl == "1" {
-                    s.push_str(&pref);
-                } else if cl == "-1" {
-                    s.push_str(&format!("-{pref}"));
-                } else if term.coeff.num_terms() > 1 {
-                    s.push_str(&format!("\\bigl({cl}\\bigr) {pref}"));
-                } else {
-                    s.push_str(&format!("{cl} \\cdot {pref}"));
-                }
-            } else if cl.starts_with('-') && term.coeff.is_monomial() {
-                let pos = &cl[1..];
-                if pos == "1" {
-                    s.push_str(&format!(" - {pref}"));
-                } else {
-                    s.push_str(&format!(" - {pos} \\cdot {pref}"));
-                }
-            } else if term.coeff.num_terms() > 1 {
-                s.push_str(&format!(" + \\bigl({cl}\\bigr) {pref}"));
-            } else if cl == "1" {
-                s.push_str(&format!(" + {pref}"));
-            } else {
-                s.push_str(&format!(" + {cl} \\cdot {pref}"));
+            if term.coeff.is_zero() {
+                continue;
             }
+            let reference = fmt_poly_ref_latex_with_sign(term.sign, term.offset, term.deriv_order);
+            append_latex_summand(&mut rhs, latex_summand(&term.coeff, Some(&reference)));
         }
-
-        if let Some(ref inh) = self.inhomogeneous {
-            if !first {
-                s.push_str(" + ");
-            }
-            s.push_str(&inh.to_latex());
+        if let Some(forcing) = self.inhomogeneous.as_ref().filter(|p| !p.is_zero()) {
+            append_latex_summand(&mut rhs, latex_summand(forcing, None));
         }
-
-        s
+        if rhs.is_empty() {
+            rhs.push('0');
+        }
+        format!("{lhs} = {rhs}")
     }
+}
+
+fn latex_summand(coefficient: &BivarPoly, reference: Option<&str>) -> (bool, String) {
+    let latex = coefficient.to_latex();
+    let negative = latex.starts_with('-');
+    let magnitude = if negative {
+        coefficient.clone().negated().to_latex()
+    } else {
+        latex
+    };
+    let grouped = if coefficient.num_terms() > 1 && (reference.is_some() || negative) {
+        format!("\\bigl({magnitude}\\bigr)")
+    } else {
+        magnitude.clone()
+    };
+    let text = match reference {
+        Some(reference) if magnitude == "1" => reference.to_string(),
+        Some(reference) => format!("{grouped}\\, {reference}"),
+        None => grouped,
+    };
+    (negative, text)
+}
+
+fn append_latex_summand(output: &mut String, (negative, text): (bool, String)) {
+    output.push_str(match (output.is_empty(), negative) {
+        (true, true) => "-",
+        (true, false) => "",
+        (false, true) => " - ",
+        (false, false) => " + ",
+    });
+    output.push_str(&text);
 }
 
 impl BivarPoly {

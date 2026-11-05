@@ -57,10 +57,9 @@ pub struct RecurrenceRepresentation {
     pub complexity: RepresentationComplexity,
     /// Always `exact_fit`; checking a finite input cannot certify an identity.
     pub evidence: String,
-    /// First checked target in the renumbered sequence (whose first row is 1).
+    /// First checked target in the output numbering (first row 1 by default).
     pub first_checked_index: usize,
-    /// Last checked target index in the same renumbering (the number of rows after
-    /// `skip_prefix`).
+    /// Last checked target index in the same numbering.
     pub last_checked_index: usize,
     /// First checked target as a 1-based position in the original input.
     pub first_checked_input_row: usize,
@@ -69,6 +68,9 @@ pub struct RecurrenceRepresentation {
     /// Number of trailing rows reserved for held-out verification; zero when verification
     /// is disabled.
     pub verification_polynomials: usize,
+    /// Coefficient slots checked on held-out rows, before cancellation.
+    #[serde(default)]
+    pub verification_equations: usize,
     /// Supplied target indices at which the denominator is the zero polynomial.
     /// The identity can still hold there, but it cannot generate that row.
     pub singular_checked_indices: Vec<usize>,
@@ -119,6 +121,41 @@ pub struct RecurrenceRepresentations {
     pub frontier: Vec<usize>,
     /// One entry per requested `(rec_len, diff_deg)` cell, in ascending lexicographic order.
     pub coverage: Vec<RepresentationCoverage>,
+}
+
+impl RecurrenceRepresentations {
+    /// Relabel each representation's first retained row, preserving its rows.
+    ///
+    /// Coefficients, checked indices, text and LaTeX are shifted together.
+    /// Complexity and the frontier are recomputed because index substitution
+    /// can change the number of nonzero coefficients. Search counts and input
+    /// positions retain their original meaning.
+    pub fn reindexed(&self, first_index: usize) -> Result<Self, RecurrenceError> {
+        let mut report = self.clone();
+        for item in &mut report.representations {
+            let old_index = item.recurrence_json.first_index;
+            let shift_index = |index: usize| {
+                index
+                    .checked_sub(old_index)
+                    .and_then(|offset| first_index.checked_add(offset))
+                    .ok_or_else(|| {
+                        RecurrenceError::InvalidInput("checked index out of range".into())
+                    })
+            };
+            item.recurrence_json = item.recurrence_json.reindexed(first_index)?;
+            let (rule, _, _) = item.recurrence_json.to_recurrence_parts()?;
+            item.recurrence = rule.to_string();
+            item.latex = rule.to_latex();
+            item.complexity = complexity(&rule);
+            item.first_checked_index = shift_index(item.first_checked_index)?;
+            item.last_checked_index = shift_index(item.last_checked_index)?;
+            for index in &mut item.singular_checked_indices {
+                *index = shift_index(*index)?;
+            }
+        }
+        report.frontier = representation_frontier(&report.representations);
+        Ok(report)
+    }
 }
 
 fn degrees(poly: &BivarPoly) -> (usize, usize, usize) {
@@ -198,6 +235,16 @@ fn dominates(a: &RecurrenceRepresentation, b: &RecurrenceRepresentation) -> bool
     aa != bb && aa.iter().zip(bb).all(|(x, y)| *x <= y)
         // An unusable row-generation formula cannot suppress a usable one.
         && a.singular_checked_indices.iter().all(|n| b.singular_checked_indices.contains(n))
+}
+
+fn representation_frontier(representations: &[RecurrenceRepresentation]) -> Vec<usize> {
+    (0..representations.len())
+        .filter(|&i| {
+            !representations
+                .iter()
+                .any(|other| dominates(other, &representations[i]))
+        })
+        .collect()
 }
 
 // The scalar fitter fixes the constant denominator coefficient to 1. Reuse
@@ -287,6 +334,7 @@ fn denominator_fallback(
     }
     let counts = candidate_complexity(opts);
     Some(FoundAdaptiveCandidate {
+        verification_equations: super::adaptive::heldout_equation_count(ctx.polys, &rec, fit_len),
         recurrence: rec,
         opts: opts.clone(),
         num_unknowns: fitted.diagnostics.unknowns,
@@ -438,6 +486,7 @@ pub fn find_recurrence_representations_rational(
                 equations: found.num_equations,
                 fit_polynomials: found.fit_polynomials,
                 verification_polynomials: found.verification_polynomials,
+                verification_equations: found.verification_equations,
                 candidates_tried: found.candidates_tried,
                 options: (&opts).into(),
             };
@@ -468,6 +517,7 @@ pub fn find_recurrence_representations_rational(
                 first_checked_input_row: search.skip_prefix + first,
                 fit_polynomials: found.fit_polynomials,
                 verification_polynomials: found.verification_polynomials,
+                verification_equations: found.verification_equations,
                 singular_checked_indices: singular,
             };
             // Exact JSON equality includes initial rows and checked start.
@@ -493,13 +543,7 @@ pub fn find_recurrence_representations_rational(
             }
         }
     }
-    let frontier = (0..representations.len())
-        .filter(|&i| {
-            !representations
-                .iter()
-                .any(|other| dominates(other, &representations[i]))
-        })
-        .collect();
+    let frontier = representation_frontier(&representations);
     Ok(RecurrenceRepresentations {
         schema: "polytool.recurrence-representations.v1".into(),
         status,
