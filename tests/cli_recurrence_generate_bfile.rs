@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn run_polytool(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_polytool"))
@@ -22,11 +23,17 @@ fn stdout(output: &Output) -> String {
 
 /// The recurrence JSON of a catalog entry, written to a file of its own.
 fn recurrence_file(id: &str) -> PathBuf {
+    static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
     let info = run_polytool(&["oeis", "info", id, "--json"]);
     let value: serde_json::Value = serde_json::from_slice(&info.stdout).unwrap();
     let dir = std::env::temp_dir().join(format!("polytool-bfile-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join(format!("{id}.json"));
+    // Tests run concurrently and can request the same catalog entry. Give each
+    // call its own file so a writer cannot truncate another test's input.
+    let file = dir.join(format!(
+        "{id}-{}.json",
+        NEXT_FILE.fetch_add(1, Ordering::Relaxed)
+    ));
     std::fs::write(
         &file,
         serde_json::to_vec(&value["recurrence_data"]).unwrap(),
