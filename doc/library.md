@@ -327,6 +327,15 @@ ascending `Vec<BigInt>` polynomials in `q`: `q_integer(n)`, `q_factorial(n)`,
 
 ## Standard sequences and indexing
 
+`sequences::schur::rectangular_elementary_substitution_polynomials_bigint`
+evaluates rectangular dual Jacobi–Trudi determinants with one elementary
+coordinate varied, using exact polynomial Bareiss elimination. Its positive
+integer alphabet, height, and moving elementary index determine the family;
+rows start at width zero with `[1]`. The moving index may exceed alphabet size:
+substitution precedes specialization. The sign is `(-1)^(moving-height)`.
+See `examples/rectangular_schur_substitution.rs` for an interior-height example.
+
+
 `polytool::sequences` generators take `max_n` and return `rows[n]` for
 `n = 0..=max_n` (the n-th member of the family, with `rows[0]` the `n = 0`
 member), so Eulerian rows are `A_0 = 1, A_1 = 1, A_2 = 1 + t, ...`.  The
