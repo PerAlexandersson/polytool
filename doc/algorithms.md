@@ -190,6 +190,23 @@ Default `recurrence` output is unchanged: a match is only noted on stderr, and
 MCP `find_recurrence` response gains the additive `theorem_matches` field, and
 the MCP tool `recurrence_theorems` checks a supplied record.
 
+#### Trivially real-rooted sequences
+
+`recurrence::is_trivially_real_rooted(rule, first_index, seeds)` classifies the
+*proof* of a recursively defined sequence: the defining recurrence has the
+product form `B(n) P_n = A(x,n) P_(n-k)` and `check_product_recurrence_theorem`
+proves it (nonzero seeds that are real-rooted, `B(n) != 0` and `A(x,n)`
+real-rooted on the whole index range, exactly and uniformly in `n`). It is no
+low-degree heuristic and says nothing about a single polynomial, so
+`polytool real-rooted`, which sees only polynomials, has no such flag. The flag
+appears where the recurrence is known: `trivially_real_rooted` in each
+`polytool.recurrence-real-rootedness-theorem.v1` report (true only for a proved
+product theorem), at the top of `polytool.recurrence-proof-discovery.v1`
+(`recurrence-prove`), and in `polytool.recurrence-theorems.v1`
+(`recurrence-theorems`, supplied records only). It is false or absent for a
+record carrying search metadata, because a fit does not establish the
+recurrence.
+
 ## Veronese-section lifts
 
 `recurrence::find_veronese_section_lifts(&Recurrence, initial_rows,

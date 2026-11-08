@@ -137,11 +137,12 @@ pub use parent_theorems::{
     check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem,
     check_liu_wang_three_term_theorem, check_ma_wang_interval_theorem,
     check_product_recurrence_theorem, check_three_term_recurrence_theorem,
-    check_weyl_step_preserver, discover_recurrence_proofs, IteratedPreserverCertificate,
-    IteratedPreserverCoordinates, LeftHandFactorNormalization, RealRootednessTheorem,
-    RealRootednessTheoremConclusion, RealRootednessTheoremOptions, RealRootednessTheoremReport,
-    RealRootednessTheoremStatus, RecurrenceProofDiscoveryReport, RowInterlacing,
-    WeylStepPreserverVerdict, REAL_ROOTEDNESS_THEOREM_SCHEMA, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
+    check_weyl_step_preserver, discover_recurrence_proofs, is_trivially_real_rooted,
+    IteratedPreserverCertificate, IteratedPreserverCoordinates, LeftHandFactorNormalization,
+    RealRootednessTheorem, RealRootednessTheoremConclusion, RealRootednessTheoremOptions,
+    RealRootednessTheoremReport, RealRootednessTheoremStatus, RecurrenceProofDiscoveryReport,
+    RowInterlacing, WeylStepPreserverVerdict, REAL_ROOTEDNESS_THEOREM_SCHEMA,
+    RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
 mod row_factor;
 pub use row_factor::{

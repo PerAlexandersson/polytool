@@ -636,7 +636,7 @@ impl Recurrence {
     }
 }
 
-fn latex_summand(coefficient: &BivarPoly, reference: Option<&str>) -> (bool, String) {
+pub(super) fn latex_summand(coefficient: &BivarPoly, reference: Option<&str>) -> (bool, String) {
     let latex = coefficient.to_latex();
     let negative = latex.starts_with('-');
     let magnitude = if negative {
@@ -657,7 +657,7 @@ fn latex_summand(coefficient: &BivarPoly, reference: Option<&str>) -> (bool, Str
     (negative, text)
 }
 
-fn append_latex_summand(output: &mut String, (negative, text): (bool, String)) {
+pub(super) fn append_latex_summand(output: &mut String, (negative, text): (bool, String)) {
     output.push_str(match (output.is_empty(), negative) {
         (true, true) => "-",
         (true, false) => "",

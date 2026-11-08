@@ -285,3 +285,20 @@ fn latex_cli_and_json_share_the_indexed_definition() {
             .contains("$P_{0} = 1$"));
     }
 }
+
+#[test]
+fn latex_factors_index_dependent_coefficients() {
+    // Rows of (n + 2) P_n = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^2 P_{n-2}.
+    let rows = "1\n1,1\n1,3,1\n1,6,6,1\n1,10,20,10,1\n1,15,50,50,15,1\n\
+                1,21,105,175,105,21,1\n1,28,196,490,490,196,28,1\n\
+                1,36,336,1176,1764,1176,336,36,1\n1,45,540,2520,5292,5292,2520,540,45,1\n\
+                1,55,825,4950,13860,19404,13860,4950,825,55,1\n\
+                1,66,1210,9075,32670,60984,60984,32670,9075,1210,66,1";
+    let output = run(&["recurrence", "--latex", "--first-index", "0"], rows);
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains(
+        "$(n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2} P_{n-2} \\quad (n \\geq 2)$"
+    ));
+    assert!(text.starts_with("% Candidate fitted to finite rows;"));
+}

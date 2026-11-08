@@ -44,6 +44,40 @@
   degree hypotheses failed now carry the shared hypothesis.  All earlier
   proved theorem reports and parent proofs replay
   (`check_recorded_parent_proof`).
+
+- `polytool recurrence --max-work N`: a deterministic work budget for the
+  adaptive search (`AdaptiveSearchBudget::max_work`, `with_max_work`).  Work
+  units are computed from the dimensions of the exact and modular solves and
+  checks, never from the clock, so the same input and `N` give the same output
+  on any machine; the search stops with `budget_exhausted` (exit status 3).
+  JSON reports `work_units` and `max_work` (and `search.work_units` for a found
+  record); `AdaptiveSearchDiagnostics::work_units`.  Combines with
+  `--max-candidates`; rejected with `--representations`.
+
+- "Trivially real-rooted" proof classification:
+  `recurrence::is_trivially_real_rooted(rule, first_index, seeds)` is true when
+  the defining recurrence is `B(n) P_n = A(x,n) P_(n-k)` and the product theorem
+  proves it.  New `trivially_real_rooted` field in
+  `RealRootednessTheoremReport`, `RecurrenceProofDiscoveryReport`
+  (`recurrence-prove`) and `RecurrenceTheoremReport` (`recurrence-theorems`,
+  supplied records only; absent for fitted ones).  `real-rooted` sees only
+  polynomials and has no such flag.
+
+- `polytool recurrence --latex` (and the `latex` field of the JSON records, also
+  with `--representations` and `--theorem-matches`) now factors every
+  coefficient over `Q`: `(n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2}
+  P_{n-2}`.  New `BivarPoly::irreducible_factorization` /
+  `irreducible_factorization_with_budget` (univariate and monic fast paths,
+  otherwise the shear `t = v + c n` onto the monic bivariate factorization;
+  factors are primitive integer polynomials with a canonical sign; the product is
+  re-expanded and compared exactly) returning `BivarFactorization` or a
+  `BivarFactorizationError` (an exhausted budget is `Incomplete`, never a partial
+  result); `Recurrence::to_latex_factored{,_with_budget}`.  A coefficient whose
+  factorization does not finish stays expanded and is noted by a `%` comment
+  line.  **Behaviour change:** `RecurrenceJson::to_latex` and `with_latex` now
+  factor; `RecurrenceJson::to_latex_expanded` keeps the previous expanded text.
+  `Recurrence::to_latex` is unchanged.
+
 - New theorem `recurrence::check_hypergeometric_row_theorem` and parent route
   8b (`VeroneseParentProofRoute::HypergeometricRow`, tried after the iterated
   preserver, recorded only when the rule has a row relation of hypergeometric

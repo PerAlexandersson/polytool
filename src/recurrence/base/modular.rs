@@ -287,6 +287,7 @@ fn recurrence_system_consistent_mod_images(
     opts: &RecurrenceOptions,
     modulus: i64,
     solve_request: ModularSolveRequest,
+    work: Option<&WorkMeter>,
 ) -> ModularSystemResult {
     let poly_supports = modular_poly_supports(polys_mod);
     let deriv_supports = modular_derivative_supports(derivs_mod);
@@ -301,15 +302,20 @@ fn recurrence_system_consistent_mod_images(
         opts,
         modulus,
         solve_request,
+        work,
     )
 }
 
+/// With a `work` meter the solve is charged before it is assembled; when the
+/// charge does not fit the result is "consistent, rank unknown" (no verdict)
+/// and the meter is exhausted, which the caller must check.
 fn recurrence_system_consistent_mod_supports(
     polys: &[Vec<BigRational>],
     images: ModularImageView<'_>,
     opts: &RecurrenceOptions,
     modulus: i64,
     solve_request: ModularSolveRequest,
+    work: Option<&WorkMeter>,
 ) -> ModularSystemResult {
     let m = polys.len();
     if m <= opts.rec_len {
@@ -377,6 +383,14 @@ fn recurrence_system_consistent_mod_supports(
     let eqs_per_nn = max_t_deg + 1;
     let num_nn = m - opts.rec_len;
     let num_rows = num_nn * eqs_per_nn;
+    if work.is_some_and(|meter| !meter.try_charge(elimination_work(num_rows, num_vars))) {
+        return ModularSystemResult {
+            consistent: true,
+            coefficient_full_rank: false,
+            full_rank_pivot_rows: None,
+            modular_solution: None,
+        };
+    }
     let max_n_pow = opts
         .idx_deg
         .max(opts.denom_idx_deg)
@@ -547,6 +561,7 @@ fn recurrence_system_consistent_mod_supports(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn recurrence_solution_holds_from_mod_images(
     polys: &[Vec<BigRational>],
     polys_mod: &[Vec<i64>],
@@ -555,6 +570,7 @@ fn recurrence_solution_holds_from_mod_images(
     modulus: i64,
     solution: &[u64],
     start_nn: usize,
+    work: Option<&WorkMeter>,
 ) -> bool {
     let m = polys.len();
     let first_nn = start_nn.max(opts.rec_len + 1);
@@ -609,6 +625,16 @@ fn recurrence_solution_holds_from_mod_images(
             opts.inhomo_var_deg
         });
     let max_t_deg = max_j + max_poly_deg;
+    // No verdict (`true`) when the check does not fit the work limit; the
+    // caller sees the exhausted meter.
+    if work.is_some_and(|meter| {
+        !meter.try_charge(evaluation_work(
+            (m - first_nn + 1) * (max_t_deg + 1),
+            num_vars,
+        ))
+    }) {
+        return true;
+    }
     let max_n_pow = opts
         .idx_deg
         .max(opts.denom_idx_deg)
@@ -721,6 +747,7 @@ fn recurrence_system_mod_prime(
         opts,
         modulus,
         ModularSolveRequest::ConsistencyOnly,
+        None,
     ))
 }
 
@@ -737,6 +764,18 @@ pub(in crate::recurrence) struct ModularPrefilterCache {
 }
 
 impl ModularPrefilterCache {
+    /// Work units ([`WorkMeter`]) of building the cache for `polys`: one per
+    /// coefficient and derivative order for each precomputed prime.
+    pub(in crate::recurrence) fn construction_work(
+        polys: &[Vec<BigRational>],
+        max_diff_deg: usize,
+    ) -> u64 {
+        let coefficients: u64 = polys.iter().map(|poly| poly.len().max(1) as u64).sum();
+        coefficients
+            .saturating_mul(max_diff_deg as u64 + 1)
+            .saturating_mul(MODULAR_PREFILTER_PRECOMPUTED_PRIMES as u64)
+    }
+
     pub(in crate::recurrence) fn new(polys: &[Vec<BigRational>], max_diff_deg: usize) -> Self {
         let primes = MODULAR_PREFILTER_PRIMES
             .iter()
@@ -796,10 +835,12 @@ pub(in crate::recurrence) fn modular_prefilter_with_cache(
     fit_len: usize,
     opts: &RecurrenceOptions,
     cache: &ModularPrefilterCache,
+    work: Option<&WorkMeter>,
 ) -> ModularPrefilterResult {
     if !opts.modular_prefilter || opts.leader_x_power > 0 {
         return ModularPrefilterResult::default();
     }
+    let work_exhausted = || work.is_some_and(WorkMeter::is_exhausted);
 
     let unknowns = count_unknowns(opts);
     let tail_verify_end =
@@ -842,7 +883,11 @@ pub(in crate::recurrence) fn modular_prefilter_with_cache(
             } else {
                 ModularSolveRequest::FullRankSolution
             },
+            work,
         );
+        if work_exhausted() {
+            return ModularPrefilterResult::default();
+        }
         let tail_consistent = match (
             tail_verify_end,
             result.full_rank_pivot_rows.is_some(),
@@ -856,9 +901,13 @@ pub(in crate::recurrence) fn modular_prefilter_with_cache(
                 prime_images.modulus,
                 solution,
                 fit_len + 1,
+                work,
             ),
             _ => true,
         };
+        if work_exhausted() {
+            return ModularPrefilterResult::default();
+        }
         if result.consistent && !tail_consistent {
             // A full-rank modular fit has a unique solution with a nonzero
             // pivot determinant modulo this prime. If a held-out row fails,
@@ -907,7 +956,11 @@ pub(in crate::recurrence) fn modular_prefilter_with_cache(
                         opts,
                         prime_images.modulus,
                         ModularSolveRequest::ConsistencyOnly,
+                        work,
                     );
+                    if work_exhausted() {
+                        return ModularPrefilterResult::default();
+                    }
                     if !extended.consistent && extended.coefficient_full_rank {
                         return ModularPrefilterResult {
                             rejected: true,
@@ -1198,6 +1251,7 @@ mod tests {
             modulus,
             &[1, 1],
             4,
+            None,
         ));
         assert!(!recurrence_solution_holds_from_mod_images(
             &polys,
@@ -1207,6 +1261,7 @@ mod tests {
             modulus,
             &[1, 2],
             4,
+            None,
         ));
     }
 
@@ -1224,7 +1279,7 @@ mod tests {
             ..Default::default()
         };
 
-        let prefilter = modular_prefilter_with_cache(&polys, 3, &opts, &cache);
+        let prefilter = modular_prefilter_with_cache(&polys, 3, &opts, &cache, None);
         assert!(!prefilter.rejected);
         assert!(prefilter.full_rank_pivot_rows.is_none());
         assert!(find_polynomial_recurrence_rational(&polys, &opts).is_none());

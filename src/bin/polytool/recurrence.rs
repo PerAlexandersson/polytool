@@ -4,7 +4,8 @@
 use crate::help::print_rational_coefficient_input_help;
 use crate::input::error_text;
 use crate::input::{
-    is_help_arg, next_option_value, parse_usize_option, read_polys_rational, read_stdin_or_exit,
+    is_help_arg, next_option_value, parse_u64_option, parse_usize_option, read_polys_rational,
+    read_stdin_or_exit,
 };
 use crate::recurrence_input::read_recurrence_json;
 use crate::recurrence_theorems::{
@@ -57,6 +58,36 @@ pub(crate) fn print_recurrence_help() {
     println!("  --no-verify                Use all input rows for fitting");
     println!("  --no-modular-prefilter     Disable default modular candidate rejection");
     println!("  --max-candidates <n>       Inspect at most n candidate configurations");
+    println!(
+        "  --max-work <n>             Stop after n deterministic work units, counted across the"
+    );
+    println!(
+        "                             whole search (modular and exact solves, held-out checks,"
+    );
+    println!(
+        "                             precomputation) from the dimensions of the systems, never"
+    );
+    println!(
+        "                             from the clock: the same n gives the same output on every"
+    );
+    println!(
+        "                             machine.  A step runs only if its whole cost fits, so the"
+    );
+    println!(
+        "                             units used never exceed n.  Reaching n ends the search as"
+    );
+    println!(
+        "                             budget_exhausted (exit status 3, like --max-candidates)."
+    );
+    println!(
+        "                             JSON reports work_units and max_work (a found record has"
+    );
+    println!(
+        "                             search.work_units).  One solve of r equations in c unknowns"
+    );
+    println!(
+        "                             costs r*c*(min(r,c)+1) units.  Not with --representations."
+    );
     println!("  --representations          Return a menu of length/derivative tradeoffs");
     println!("                             Text: comparison table and numbered formulas; JSON: full menu.");
     println!("  --space                    Complete bounded spaces; read a recurrence-space JSON request from stdin");
@@ -72,8 +103,20 @@ pub(crate) fn print_recurrence_help() {
     println!("                             With --json: structured candidates and coverage");
     println!("  --json                     Emit recurrence JSON with initial conditions");
     println!("  --format json              Alias for --json");
-    println!("  --latex                    Emit LaTeX with subscripts, seeds and starting index");
-    println!("  --format latex             Alias for --latex; coefficients remain expanded");
+    println!("  --latex                    Emit LaTeX with subscripts, seeds and starting index;");
+    println!("                             every coefficient is factored over Q and the product");
+    println!("                             verified by exact re-expansion, e.g.");
+    println!("                             (n + 2) P_{{n}} = (2n + 1)(1 + t) P_{{n-1}} - (n - 1)(1 - t)^{{2}} P_{{n-2}}");
+    println!(
+        "                             A coefficient whose factorization exhausts its budget stays"
+    );
+    println!(
+        "                             expanded, noted by a % comment line.  A recurrence fitted to"
+    );
+    println!(
+        "                             rows keeps its candidate comment (not proved for all n)."
+    );
+    println!("  --format latex             Alias for --latex");
     println!("                             JSON also includes this presentation in latex.");
     println!("  --python                   Emit exact Python code for the recurrence");
     println!("  --format python            Alias for --python");
@@ -499,6 +542,15 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     }
                 };
             }
+            "--max-work" => {
+                budget.max_work = match parse_u64_option(args, &mut i, "--max-work") {
+                    Ok(value) => Some(value),
+                    Err(error) => {
+                        eprintln!("{error}");
+                        std::process::exit(2);
+                    }
+                };
+            }
             "--verbose" => {
                 search.verbose = true;
             }
@@ -511,6 +563,11 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
         i += 1;
     }
 
+    if representations && budget.max_work.is_some() {
+        usage_error(
+            "--max-work is not supported with --representations; bound it with --max-candidates",
+        );
+    }
     if representations && theorem_matches {
         usage_error("--representations cannot be combined with --theorem-matches; save the menu with --json, then run `polytool recurrence-theorems --recurrence menu.json --candidate N` (0-based)");
     }
@@ -585,6 +642,11 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             let rule = res.recurrence.shift_index(1 - output_first_index as i64);
             let mut theorem_report =
                 search_theorem_report(&res, &polys, &search, output_first_index);
+            if budget.max_work.is_some() {
+                if let Some(metadata) = theorem_report.recurrence_json.search.as_mut() {
+                    metadata.work_units = Some(res.diagnostics.work_units);
+                }
+            }
             let recurrence_json = theorem_report
                 .recurrence_json
                 .clone()
@@ -651,6 +713,8 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         "candidates_considered": summary.diagnostics.considered_candidates,
                         "candidates_tried": summary.candidates_tried,
                         "max_candidates": budget.max_candidates,
+                        "work_units": summary.diagnostics.work_units,
+                        "max_work": budget.max_work,
                     }))
                     .unwrap()
                 );
@@ -666,14 +730,16 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         "candidates_considered": summary.diagnostics.considered_candidates,
                         "candidates_tried": summary.candidates_tried,
                         "max_candidates": budget.max_candidates,
+                        "work_units": summary.diagnostics.work_units,
+                        "max_work": budget.max_work,
                     }))
                     .unwrap()
                 );
             }
             eprintln!(
-                "Recurrence search exhausted its candidate budget after {} candidates; \
+                "Recurrence search exhausted its budget after {} candidates and {} work units; \
                  unsearched candidates remain.",
-                summary.diagnostics.considered_candidates
+                summary.diagnostics.considered_candidates, summary.diagnostics.work_units
             );
             std::process::exit(3);
         }

@@ -676,6 +676,7 @@ fn search_report(
             verification_polynomials: found.verification_polynomials,
             verification_equations: found.verification_equations,
             candidates_tried: found.candidates_tried,
+            work_units: None,
             options: RecurrenceOptionsJson::from(&found.opts),
         }),
     ));

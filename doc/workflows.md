@@ -78,8 +78,8 @@ printf '2,-3,1\n' | polytool discriminant --json
 printf '%s\n' '-1,1' '-3,1' | polytool resultant --json
 ```
 
-LaTeX includes initial conditions and the starting index. General coefficient
-factorization is a separate feature. Scalar JSON stores exact integers as
+LaTeX includes initial conditions, the starting index and every coefficient
+factored over Q. Scalar JSON stores exact integers as
 decimal strings: discriminants use `{"items":[{"index":0,"discriminant":"1"}]}`;
 resultants use `{"resultant":"-2"}` and require exactly two input polynomials.
 

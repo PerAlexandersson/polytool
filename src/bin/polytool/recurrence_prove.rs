@@ -23,7 +23,10 @@ pub(crate) fn print_recurrence_prove_help() {
         "  --candidate N          Explicit 0-based menu choice (required for multiple entries)"
     );
     println!("  --max-start-delay N    Induction-start retries, default 3 (maximum 16)");
-    println!("  --json                 Emit polytool.recurrence-proof-discovery.v1");
+    println!("  --json                 Emit polytool.recurrence-proof-discovery.v1; its");
+    println!("                         trivially_real_rooted is true when the supplied (not");
+    println!("                         fitted) rule is B(n) P_n = A(x,n) P_(n-k) and product");
+    println!("                         induction proves it");
     println!("  --verify               Replay the complete report from stdin; no search flags");
     println!("Exit status: 0 proved (or valid replay), 1 no proof, 2 invalid input/replay.");
     println!();
@@ -119,6 +122,9 @@ fn run(args: &[String]) -> Result<bool, String> {
     } else {
         println!("Proof discovery: {}", report.status);
         println!("{}", report.statement);
+        if report.trivially_real_rooted {
+            println!("Trivially real-rooted: product seed class, proved by product induction.");
+        }
         for attempt in &report.attempts {
             println!("\n{:?}: {:?}", attempt.theorem, attempt.status);
             if let Some(conclusion) = &attempt.conclusion {

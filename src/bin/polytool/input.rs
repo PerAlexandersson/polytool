@@ -88,6 +88,17 @@ pub(crate) fn parse_usize_option(
         .map_err(|_| format!("{option} expects a nonnegative integer, got '{value}'"))
 }
 
+pub(crate) fn parse_u64_option(
+    args: &[String],
+    index: &mut usize,
+    option: &str,
+) -> Result<u64, String> {
+    let value = next_option_value(args, index, option)?;
+    value
+        .parse()
+        .map_err(|_| format!("{option} expects a nonnegative integer, got '{value}'"))
+}
+
 pub(crate) fn read_polys_bigint() -> Vec<Vec<BigInt>> {
     read_poly_parse_results_bigint()
         .into_iter()

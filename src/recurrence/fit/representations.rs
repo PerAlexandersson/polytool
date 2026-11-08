@@ -459,6 +459,7 @@ pub fn find_recurrence_representations_rational(
         search,
         fit_search: search,
         pass_label: None,
+        work: &WorkMeter::new(None),
     };
     for opts in candidates {
         let cell = coverage
@@ -488,6 +489,7 @@ pub fn find_recurrence_representations_rational(
                 verification_polynomials: found.verification_polynomials,
                 verification_equations: found.verification_equations,
                 candidates_tried: found.candidates_tried,
+                work_units: None,
                 options: (&opts).into(),
             };
             // Keep *all* rows before the checked domain, not only max_offset().
