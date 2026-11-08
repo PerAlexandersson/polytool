@@ -32,8 +32,8 @@ commands richly (entries with `usage`, `description`, `options`, `examples` or
 `doc/commands/` and per topic under `doc/topics/`, indexed by the command
 reference. If the JSON only lists names and summaries (or the binary has no
 `help --json`), it falls back to scraping each command's `--help`. Every
-`doc/*.md` guide is included automatically, including a future `doc/python.md`
-(which also gets a navigation entry); guides not named on the front page are
+`doc/*.md` guide is included automatically, including the Python guide once it
+exists (which also gets a navigation entry); guides not named on the front page are
 listed under "More guides". Rustdoc for `polytool`, `ore-algebra` and
 `exact-real-roots` is published under `/api/`.
 
