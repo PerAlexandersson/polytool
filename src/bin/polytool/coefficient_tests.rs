@@ -1,22 +1,8 @@
 //! `polytool coefficient-tests`: Newton and Kurtz coefficient criteria.
 
-use crate::help::print_coefficient_input_help;
 use crate::input::{read_polys_bigint, strip_trailing_zeros_bigint, OutputFormat};
 use crate::json_out::{json_bigint_vec, json_string};
 use polytool::*;
-
-pub(crate) fn print_coefficient_tests_help() {
-    println!("Usage:");
-    println!("  polytool coefficient-tests [options]");
-    println!("  polytool coefficient-tests --help");
-    println!();
-    println!("Check Newton inequalities and Kurtz's sufficient real-rootedness condition.");
-    println!();
-    print_coefficient_input_help();
-    println!();
-    println!("Options:");
-    println!("  --json    Emit machine-readable JSON");
-}
 
 fn coefficient_check_json(check: &CoefficientInequalityCheck) -> String {
     format!(

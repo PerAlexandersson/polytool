@@ -1,0 +1,59 @@
+Degree law and leading-coefficient signs of a recurrence for all n.
+
+Decide the degree law deg P_n = D(n) and the sign of the leading coefficient of
+every row P_n of a recurrence family (rule, first index and seed rows), for all
+n, exactly. D(n) is periodic by residue class (affine laws, half growth and
+other periodic laws); it is read off exactly computed rows and then proved for
+every index by one of the routes of the RealRooted tactic
+rr_row_leadingCoeff_pos: cone (nonnegative top-coefficient multipliers),
+recurrence (a growth-ratio invariant rho), subseq (separate residue classes),
+twoStep (P_n = q P_(n-2)), cancel (first-order rules whose top terms cancel,
+optionally with a ratio bound [x^(D-1)] P_n >= rho lead P_n) and coefficients
+(nonnegative coefficients in an affine degree envelope; the degree is then only
+bounded). Every statement about all n is decided by the exact integer-range sign
+checker; the rows before the induction start are computed exactly. A route that
+fails is not a disproof.
+
+The recurrence input is recurrence.v1 JSON, a theorem wrapper or a
+representation menu; with a menu, --candidate is required unless it has one
+entry. --verify replays a certificate read from standard input and takes no
+search flags.
+
+Usage: polytool recurrence-degree --recurrence <FILE|-> [--candidate N] [--count N] [--max-period P]
+       polytool recurrence-degree --verify < certificate.json
+
+Options:
+      --recurrence <FILE|->  Read recurrence JSON from FILE, or stdin with -
+      --candidate <N>        Explicit 0-based menu choice
+      --count <N>            Rows computed to read off the law [default: 36]
+      --max-period <P>       Largest period of the law [default: 6]
+      --verify               Replay a certificate from stdin; no search flags
+  -h, --help                 Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Details:
+  JSON output is polytool.recurrence-leading-coefficient.v1. With --verify and
+  --json the reply is {"verified": true, "status": ...}.
+
+Examples:
+  polytool recurrence --json < rows.txt | polytool recurrence-degree --recurrence -
+  polytool recurrence-degree --recurrence rec.json --json > certificate.json
+    polytool recurrence-degree --verify < certificate.json
+
+Exit status:
+  0  proved (or the replayed certificate is valid)
+  1  not proved
+  2  usage error, invalid input or a failed replay
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --rows -> --count
+
+See also:
+  polytool recurrence-prove, polytool recurrence, polytool help recurrence-json

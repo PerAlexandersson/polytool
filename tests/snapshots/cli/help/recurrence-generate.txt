@@ -1,0 +1,96 @@
+Generate coefficient rows from recurrence JSON.
+
+Generate coefficient rows from recurrence JSON emitted by `polytool recurrence
+--json`. The input also accepts theorem wrappers and representation menus (pick
+a menu entry with --candidate, 0-based). `--recurrence -` reads standard input.
+
+Row selection: --count N outputs N rows in total, including the initial rows;
+--additional-count N outputs the initial rows plus N generated rows. Use only
+one of them. --first-index relabels the first row and shifts the rule
+accordingly (default: keep the JSON record's first_index).
+
+Formats: text (the default; `rows` is an alias) and json print the generated
+rows. The OEIS text formats read the rows from --from-index on as an OEIS
+triangle, with the recurrence index n shifted to the OEIS row number, and show
+--count rows (default 10):
+  oeis-example   %e block "Triangle begins:" with aligned columns
+  oeis-formula   %F sentence: the recurrence in plain ASCII with its initial
+                 rows, e.g. P(n,x) = (2+x)*P(n-1,x) + ...
+  mathematica    %t program: memoized P[n_, x_] and the flattened rows
+  pari           %o PARI/GP program listing the same rows
+  oeis-json      all four as JSON (schema polytool.oeis-text.v1)
+Without --first-term-index the first row keeps its own index as its OEIS row
+number.
+
+B-file output (--format bfile, alias b-file): the rows are flattened into OEIS
+b-file lines `index value`, coefficients in ascending powers within each row,
+and every coefficient must be an integer. A term cap never splits a row.
+
+Usage: polytool recurrence-generate --recurrence <FILE|-> --count <N> [OPTIONS]
+       polytool recurrence-generate --recurrence <FILE|-> --additional-count <N> [OPTIONS]
+       polytool recurrence-generate --recurrence <FILE|-> --format bfile --max-terms <N> [OPTIONS]
+
+Options:
+      --recurrence <FILE|->   Read recurrence JSON from FILE, or stdin with -
+      --candidate <N>         Select a representation menu entry (0-based)
+      --first-index <N>       Relabel the first row and shift the rule accordingly
+      --count <N>             Output N rows in total, including initial rows
+      --additional-count <N>  Output initial rows plus N generated rows
+  -h, --help                  Print help
+
+B-file and OEIS text output:
+      --first-term-index <K>  Index of the first term (the OEIS offset; default 0)
+      --from-index <K>        Start at the row with absolute index K (default: first index)
+      --descending            Write each row from its highest coefficient down
+      --trim-zeros <WHERE>    Drop zeros before --descending is applied (default none) [possible values: none, low, high, both]
+      --regular-triangle      Row i has exactly L0 + i entries: pad with high zeros
+
+B-file output:
+      --max-terms <N>  Write at most N terms, whole rows only
+      --nearest-row    With --max-terms, stop at the whole row nearest to N terms
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, rows, json, bfile, b-file, oeis-example, oeis-formula, mathematica, pari, oeis-json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Details:
+  B-file and OEIS text options:
+    --trim-zeros     none keeps everything; low drops zeros at the constant end,
+                     high at the leading end, both at both ends of each row.
+    --regular-triangle  Row i (counted from the first) has exactly L0 + i entries,
+                     where L0 is the length of the first row: shorter rows are
+                     padded with high zeros and generation stops before a longer
+                     row.
+    --first-term-index, --from-index, --descending, --trim-zeros and
+                     --regular-triangle need --format bfile or an OEIS text format.
+    --max-terms and --nearest-row need --format bfile. Without --count or
+                     --additional-count, rows are generated until the cap is
+                     reached. --nearest-row stops at the whole row nearest to N
+                     terms (it may exceed N; ties go to fewer rows) instead of the
+                     longest prefix with at most N terms.
+
+Examples:
+  polytool recurrence --input rows.txt --json > recurrence.json
+  polytool recurrence-generate --recurrence recurrence.json --count 50
+  polytool recurrence-generate --recurrence eulerian.json --format bfile \
+        --first-term-index 1 --max-terms 1000 > b008292.txt
+  polytool recurrence-generate --recurrence rec.json --format mathematica \
+        --from-index 1 --first-term-index 0 --descending --count 11
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --rows -> --count
+  --additional -> --additional-count
+  --offset -> --first-term-index
+  --first-row -> --from-index
+  --reversed -> --descending
+
+See also:
+  polytool recurrence, polytool oeis, polytool help recurrence-json, polytool help output-formats, polytool help indexing

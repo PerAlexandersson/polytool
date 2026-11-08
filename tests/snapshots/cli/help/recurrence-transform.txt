@@ -1,0 +1,95 @@
+Change polynomial coordinates and transport a recurrence.
+
+Apply an exact change of polynomial coordinates to a sequence, transport its
+defining recurrence into the new coordinates, and optionally search
+independently there. Reads one JSON request from standard input and prints a
+polytool.recurrence-transform.v1 report. Bounds belong in the request, not on
+the command line.
+
+Usage: polytool recurrence-transform [--compact] < request.json
+       polytool recurrence-transform --verify < report.json
+
+Options:
+      --verify   Replay a report exactly from its embedded request
+      --compact  Print compact JSON
+  -h, --help     Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: json] [possible values: json]
+      --json             Emit JSON (the default; accepted for uniformity)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Details:
+  Request fields:
+    transformation   {"kind": ...} with kind one of
+                       multiply_power {power}      Q_n = x^r P_n
+                       divide_power {power}        Q_n = P_n / x^r (needs x^r | P_n)
+                       reversal {schedule}         Q_n = x^(d_n) P_n(1/x)
+                       affine {a, b}               Q_n = P_n(a x + b), a != 0
+                       mobius {a, b, c, e, schedule}
+                                       Q_n = (c x + e)^(d_n) P_n((a x + b)/(c x + e))
+                       f_polynomial {schedule}     Q_n = (1 + x)^(d_n) P_n(x/(1 + x))
+                       gamma {schedule}            gamma coordinates at symmetry index d_n
+                                                   (rules transported when the even and odd
+                                                   parts of the identity are proportional)
+                                                   (otherwise transported.system: the even
+                                                   part and its odd companion, two relations)
+                       symmetric_decomposition {schedule}
+                                       (a_n, b_n) with P_n = a_n + x b_n
+                     a, b, c, e are exact rationals as strings ("3/2").
+    schedule         {first_index, first_degree, step, last_index?}:
+                     d_n = first_degree + step*(n - first_index) on
+                     first_index <= n (<= last_index); decreasing needs last_index
+    source_recurrence  defining polytool.recurrence.v1 rule with seeds, or
+    oeis_id          a bundled OEIS family (e.g. "A008292"), or
+    rows             explicit rows (ascending rational strings) with row_origin
+    row_count        rows generated from the source (default 10)
+    search           {} or bounds {max_rec_len, max_var_deg, max_idx_deg,
+                     max_diff_deg, try_denominator, max_candidates, ...}:
+                     also search independently in the new coordinates
+    limits           {max_rows, max_degree, ...} resource limits
+    root_domain      optional {} or {candidate_intervals, assumptions,
+                     default_window, max_candidate_intervals, max_observed_rows,
+                     max_observed_degree}: attach root-domain information
+                     (never needed for the algebraic results). An interval is
+                     {lower?, upper?} with endpoints {value, per_index?, closed?};
+                     an assumption is {subject: source|transformed, component?,
+                     property: real_rooted|real_rooted_in|real_roots_in, interval?,
+                     first_index?, last_index?, note?}
+
+  Report:
+    transformation      exact row map, inverse, image conditions, domain
+    transformed_states  [row][component][coefficient]
+    reconstruction_verified  inverse(map(P_n)) == P_n for every row
+    conditions          certified_all_indices (from the source rule) or
+                        checked_supplied_rows (finite evidence)
+    transported         evidence transported_identity: exact consequence of
+                        the source rule, with transformed seeds
+    transported.system  rank-two gamma case: [even part, odd companion] as
+                        implicit relations of the gamma rows, exact consequences
+                        where the rows are symmetric (see conditions)
+    independent_search  evidence finite_fit, kept separately
+    root_domain         implications (direction, hypotheses with status,
+                        converse), claims labelled finite_exact_observation,
+                        supplied_assumption, proposed_interval,
+                        completed_recurrence_induction or
+                        certified_family_invariant, the Rolle recurrence match
+                        with its interval attempts, and exact root enclosures
+
+Examples:
+  echo '{"oeis_id":"A008292","row_count":8,"search":{},
+      "transformation":{"kind":"f_polynomial",
+      "schedule":{"first_index":1,"first_degree":0,"step":1}}}' \
+      | polytool recurrence-transform
+  polytool recurrence-transform --input request.json > report.json
+    polytool recurrence-transform --verify --input report.json
+
+Exit status:
+  0  success (or a replay that verified)
+  2  invalid input or a failed replay
+
+See also:
+  polytool recurrence-implicit, polytool recurrence-search-representations, polytool help json-schemas

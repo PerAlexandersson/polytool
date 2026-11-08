@@ -1,7 +1,7 @@
 //! `polytool bench`: recurrence-fixture timings, benchmark comparison and
 //! interlacing timings.
 
-use crate::bench_real_rootedness::{cmd_bench_real_rootedness, print_real_rootedness_help};
+use crate::bench_real_rootedness::cmd_bench_real_rootedness;
 use crate::input::{polynomial_degree_bigint, strip_trailing_zeros_bigint};
 use crate::json_out::json_bool_option;
 use crate::sequence::SequenceKind;
@@ -14,45 +14,6 @@ use std::fs;
 use std::hint::black_box;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-
-pub(crate) fn print_bench_help() {
-    println!("Usage:");
-    println!("  polytool bench recurrence-fixtures [options]");
-    println!("  polytool bench interlacing [options]");
-    println!("  polytool bench real-rootedness [options]");
-    println!("  polytool bench --help");
-    println!();
-    println!("Run built-in timing suites and print tab-separated results.");
-    println!();
-    println!("Subcommands:");
-    println!("  recurrence-fixtures   Time adaptive recurrence search on fixture rows");
-    println!("  compare               Compare two recurrence-fixture JSON benchmark runs");
-    println!("  interlacing           Time consecutive interlacing checks on a sequence");
-    println!("  real-rootedness       Verdict-checked timing suite on degree 20-80 families");
-    println!();
-    println!("Recurrence fixture options:");
-    println!("  --base <dir>              Fixture directory containing manifest.tsv");
-    println!("  --only <substring>        Run only fixture slugs containing substring");
-    println!("  --repeat <n>              Repeat each fixture n times (default: 1)");
-    println!("  --no-modular-prefilter    Disable default modular recurrence prefilter");
-    println!("  --summary                 Append fixture and category summaries to stdout");
-    println!("  --report <path.md>        Write a Markdown benchmark report");
-    println!("  --format <tsv|json>       Output format (default: tsv)");
-    println!("  --json                    Alias for --format json");
-    println!("                            JSON includes adaptive counters and timing buckets");
-    println!();
-    println!("Compare options:");
-    println!("  polytool bench compare [options] <old.json> <new.json>");
-    println!("  --top <n>                 Number of worst regressions to show (default: 10)");
-    println!("  --format <tsv|json>       Output format (default: tsv)");
-    println!();
-    println!("Interlacing options:");
-    println!("  --sequence <name>         Sequence name (default: eulerian)");
-    println!("  --max-n <n>               Maximum n/index to generate (default: 20)");
-    println!("  --repeat <n>              Repeat each pair n times (default: 3)");
-    println!();
-    print_real_rootedness_help();
-}
 
 #[derive(Debug)]
 struct BenchRecurrenceOptions {
@@ -1195,14 +1156,14 @@ fn parse_bench_interlacing_options(args: &[String]) -> Result<BenchInterlacingOp
                 options.sequence = SequenceKind::parse(value)
                     .ok_or_else(|| format!("unknown sequence: {value}"))?;
             }
-            "--max-n" => {
+            "--max-index" => {
                 i += 1;
                 let value = args
                     .get(i)
-                    .ok_or_else(|| "--max-n expects a nonnegative integer".to_string())?;
-                options.max_n = value
-                    .parse()
-                    .map_err(|_| format!("--max-n expects a nonnegative integer, got '{value}'"))?;
+                    .ok_or_else(|| "--max-index expects a nonnegative integer".to_string())?;
+                options.max_n = value.parse().map_err(|_| {
+                    format!("--max-index expects a nonnegative integer, got '{value}'")
+                })?;
             }
             "--repeat" => {
                 i += 1;

@@ -15,8 +15,8 @@ The server is intentionally small:
 
 `find_recurrence_representations` accepts the same polynomial input forms and
 top-level search controls as `find_recurrence`. For example, pass
-`max_rec_len: 3`, `max_diff_deg: 2`, `max_var_deg: 3`, `max_idx_deg: 1`,
-`try_denominator: true`, `max_denom_var_deg: 0`, `max_denom_idx_deg: 1`, and
+`max_recurrence_length: 3`, `max_derivative_order: 2`, `max_variable_degree: 3`, `max_index_degree: 1`,
+`try_denominator: true`, `max_denominator_variable_degree: 0`, `max_denominator_index_degree: 1`, and
 `max_candidates: 2000` alongside the rows.
 
 The result uses `polytool.recurrence-representations.v1`, shared with the CLI
@@ -510,11 +510,11 @@ Flat compact-result example (all search controls are top-level):
 ```json
 {
   "coefficients": [[1], [2], [4], [8], [16]],
-  "min_rec_len": 1,
-  "max_rec_len": 1,
-  "max_var_deg": 0,
-  "max_idx_deg": 0,
-  "max_diff_deg": 0,
+  "min_recurrence_length": 1,
+  "max_recurrence_length": 1,
+  "max_variable_degree": 0,
+  "max_index_degree": 0,
+  "max_derivative_order": 0,
   "max_candidates": 1,
   "include_code": false
 }
@@ -539,25 +539,30 @@ The raw `tools/list` schema exposes every search control as an ordinary
 top-level property:
 
 - `skip_prefix`: ignore leading input rows;
-- `min_rec_len`, `max_rec_len`: recurrence-length bounds;
-- `min_var_deg`, `max_var_deg`: polynomial-variable degree bounds;
-- `min_idx_deg`, `max_idx_deg`: recurrence-index degree bounds;
-- `min_diff_deg`, `max_diff_deg`: derivative-order bounds;
+- `min_recurrence_length`, `max_recurrence_length`: recurrence-length bounds;
+- `min_variable_degree`, `max_variable_degree`: polynomial-variable degree bounds;
+- `min_index_degree`, `max_index_degree`: recurrence-index degree bounds;
+- `min_derivative_order`, `max_derivative_order`: derivative-order bounds;
 - `try_inhomogeneous`: search for an additive inhomogeneous term;
-- `min_inhomo_var_deg`, `max_inhomo_var_deg`: its variable-degree bounds;
-- `min_inhomo_idx_deg`, `max_inhomo_idx_deg`: its index-degree bounds;
+- `min_inhomogeneous_variable_degree`, `max_inhomogeneous_variable_degree`: its variable-degree bounds;
+- `min_inhomogeneous_index_degree`, `max_inhomogeneous_index_degree`: its index-degree bounds;
 - `try_denominator`: search for a nonconstant left-hand denominator;
 - `try_alternating_sign`: search terms multiplied by `(-1)^n`;
 - `try_laurent`: after the historical passes, also try left-hand factors
   with a power `x^e` and other normalization charts (default true in the
   MCP tools; the library default is false);
-- `max_laurent_x_power`: largest such power `e` (default 2);
-- `max_denom_var_deg`, `max_denom_idx_deg`: denominator degree bounds;
-- `min_margin`: minimum excess of equations over unknowns;
+- `max_laurent_power`: largest such power `e` (default 2);
+- `max_denominator_variable_degree`, `max_denominator_index_degree`: denominator degree bounds;
+- `min_equation_margin`: minimum excess of equations over unknowns;
 - `fit_extra_rows`: add rows to the fit before holdout verification;
-- `no_verify`: disable holdout verification;
+- `no_held_out_rows`: disable holdout verification;
 - `modular_prefilter`: enable the modular inconsistency prefilter;
 - `max_candidates`: deterministic outer-candidate budget.
+
+The abbreviated names used up to version 0.6.0 (`min_rec_len`, `max_var_deg`,
+`max_idx_deg`, `max_diff_deg`, `min_inhomo_var_deg`, `max_denom_idx_deg`,
+`max_laurent_x_power`, `min_margin`, `no_verify`, ...) are still accepted as
+aliases; see "Renamed request fields" in `doc/mcp.md`.
 
 For compatibility, the same search controls may still be nested under
 `options`. If a field is supplied in both places, its top-level value wins:
@@ -565,8 +570,8 @@ For compatibility, the same search controls may still be nested under
 ```json
 {
   "coefficients": [[1], [2], [4], [8], [16]],
-  "options": { "max_rec_len": 3, "max_var_deg": 0 },
-  "max_rec_len": 1
+  "options": { "max_recurrence_length": 3, "max_variable_degree": 0 },
+  "max_recurrence_length": 1
 }
 ```
 
@@ -953,7 +958,7 @@ Search exactly for a planar strip digraph (edges from column `x` to `x + 1`
 depending only on the height, with monotone targets) whose path counts from
 `(0,0)` to `(n,k)` are the coefficients of the input rows.  Give `polynomials`
 or `text` (rows `P_1, P_2, ...` with `P_0 = 1` implicit, or `P_0, P_1, ...`
-with `first_row_index: 0`).  Optional bounds: `max_target_span`, `weights`
+with `first_index: 0`).  Optional bounds: `max_target_span`, `weights`
 (`"rational"` or `"integer"`), `max_search_nodes` (default and maximum
 1000000) and `max_integer_search_nodes` (default 10000, maximum 100000).  At
 most 64 rows of degree at most 64.
@@ -1072,7 +1077,7 @@ Report issues in the Git repository, or contact Per Alexandersson
 ## General recurrence proof discovery
 
 `discover_recurrence_proofs` takes `recurrence_json` and optional
-`maximum_start_delay` (default 3, at most 16). It tries six general theorem
+`max_start_delay` (default 3, at most 16). It tries six general theorem
 families without catalogue lookup. `verify_recurrence_proofs` takes
 `report_json` and replays every attempt and exact certificate. A proved
 result concerns the recurrence-defined sequence; finite fits require a

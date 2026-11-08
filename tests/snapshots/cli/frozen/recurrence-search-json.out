@@ -1,0 +1,76 @@
+{
+  "schema": "polytool.recurrence.v1",
+  "first_index": 1,
+  "initial_polynomials": [
+    [
+      "1"
+    ]
+  ],
+  "recurrence": {
+    "terms": [
+      {
+        "offset": 1,
+        "deriv_order": 0,
+        "sign": "none",
+        "coeff": {
+          "coeffs": [
+            [
+              "1",
+              "-1",
+              "0"
+            ],
+            [
+              "0",
+              "1",
+              "0"
+            ]
+          ]
+        }
+      },
+      {
+        "offset": 1,
+        "deriv_order": 1,
+        "sign": "none",
+        "coeff": {
+          "coeffs": [
+            [
+              "0",
+              "1",
+              "-1"
+            ],
+            [
+              "0",
+              "0",
+              "0"
+            ]
+          ]
+        }
+      }
+    ]
+  },
+  "search": {
+    "recurrence_text": "P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)",
+    "source_rows": 8,
+    "skip_prefix": 0,
+    "unknowns": 12,
+    "weighted_unknowns": 18,
+    "equations": 28,
+    "fit_polynomials": 5,
+    "verification_polynomials": 3,
+    "verification_equations": 21,
+    "candidates_tried": 10,
+    "options": {
+      "var_deg": 2,
+      "idx_deg": 1,
+      "diff_deg": 1,
+      "rec_len": 1,
+      "homogeneous": true,
+      "inhomo_var_deg": 0,
+      "inhomo_idx_deg": 0,
+      "denom_var_deg": 0,
+      "denom_idx_deg": 0,
+      "alternating_sign": false
+    }
+  },
+  "latex": "% Candidate fitted to finite rows; validity for all n is unproved.\n$P_{1} = 1$\n$P_{n} = (1 + nt - t) P_{n-1} + t(1 - t) P_{n-1}' \\quad (n \\geq 2)$"
+}

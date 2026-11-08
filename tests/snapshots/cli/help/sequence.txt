@@ -1,0 +1,40 @@
+Generate standard polynomial sequences.
+
+Generate the first polynomials of a standard family. Generated coefficients use
+arbitrary-size integers.
+
+Names:
+  eulerian
+  narayana
+  type-b-eulerian  (aliases: type-b, type_b_eulerian, type_b)
+  chebyshev-t      (aliases: chebyshev_t, t)
+  chebyshev-u      (aliases: chebyshev_u, u)
+  hermite
+
+The Eulerian and Narayana sequences are labelled A_1, ..., A_N and N_1, ...,
+N_N; the other families start at index 0. With --format rows the output is one
+ascending coefficient list per line, ready for the other commands.
+
+Usage: polytool sequence [OPTIONS] <NAME> <MAX-N>
+
+Arguments:
+  <NAME>   Family name (see the list above)
+  <MAX-N>  Number of polynomials (the largest index)
+
+Options:
+  -h, --help  Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, rows, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Examples:
+  polytool sequence eulerian 5
+  polytool sequence eulerian 6 --format rows | polytool real-rooted
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+See also:
+  polytool oeis, polytool recurrence, polytool help output-formats

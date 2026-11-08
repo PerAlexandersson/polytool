@@ -1,0 +1,61 @@
+Check TNN of a coefficient triangle; canonical planar network.
+
+Decide exactly whether the coefficient triangle R = (r_{n,k}) of the input rows
+is a lower-unitriangular totally nonnegative (TNN) matrix. On success, print the
+weights lambda[n][k] of its canonical planar network Gamma_N(lambda)
+(lambda[n][k] is the weight of the vertical edge (n+1,k) -> (n,k); horizontal
+edges have weight 1) and re-evaluate the network's path matrix against R
+(reconstruct, evaluate, compare). On failure, say why: a shape problem (not
+lower-unitriangular), a negative entry, or an explicit negative minor (rows,
+columns, exact value; zero-based indices).
+
+By default, row n is a monic polynomial P_n of degree n, with r_{n,k} = [t^k]
+P_n. The rows may start at P_0 = 1 or at P_1, in which case P_0 = 1 is
+prepended. With --matrix, each line is a matrix row, either a square
+lower-triangular matrix (every row as long as the number of rows) or triangular
+rows (row n has n + 1 entries); shape errors then name the offending entry.
+
+Usage: polytool tnn-network [OPTIONS]
+
+Options:
+      --matrix  Read matrix rows instead of monic polynomial rows
+      --chain   Also compute and check the chain polynomials
+  -h, --help    Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One polynomial per line on stdin (or --input FILE): ascending integer
+  coefficient lists such as `1, 3, 2`, or expanded notation such as
+  `1 + 3t + 2t^2`. See `polytool help input`.
+
+Details:
+  --chain computes the chain polynomials p_0 = 1, p_n = t * sum_{k<n} r_{n,k} p_k,
+  and checks that each is real-rooted with zeros in [-1, 0] and that p_n
+  interlaces p_{n+1}.
+
+  Guardrails:
+
+    TNN of R does NOT make the row polynomials real-rooted: [[1,0,0],[1,1,0],[1,1,1]] is
+    TNN, yet its last row is 1 + t + t^2. Branden--Saud Maia Leite (arXiv:2412.06595,
+    Thm 3.7): if R is TNN then the chain polynomials are real-rooted in [-1, 0] and
+    interlace. The --chain report keeps the TNN verdict separate from these polynomial
+    checks. A finite triangle certifies only the supplied prefix.
+
+  JSON output has the schema polytool.tnn-network.v1.
+
+Examples:
+  printf '1,1\n1,2,1\n1,3,3,1\n' | polytool tnn-network --chain
+  printf '1\n1,1\n1,1,1\n' | polytool tnn-network
+  printf '1,0,0\n1,1,0\n2,0,1\n' | polytool tnn-network --matrix --json
+
+Exit status:
+  0  R is TNN and the network certificate re-evaluates to R
+  1  R is not lower-unitriangular TNN (the report says why), or a check the theory guarantees failed
+  2  invalid input or options
+
+See also:
+  polytool brenti-recognize, polytool pf-network, polytool left-production

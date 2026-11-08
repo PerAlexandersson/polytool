@@ -1,0 +1,11 @@
+A036969 d=3
+  alpha(k,d) = (k+1)^2
+  beta(k,d)  = 1
+  common denominator cleared: 1
+  J_alpha,d(t) = 1 + 12t + 27t^2 + 16t^3 [real-rooted]
+  t J_beta,d(t) = t + 3t^2 + 3t^3 + t^4 [real-rooted]
+  lambda=0: 1 + 12t + 27t^2 + 16t^3 [real-rooted]
+  lambda=1: 1 + 13t + 30t^2 + 19t^3 + t^4 [real-rooted]
+  lambda=10: 1 + 22t + 57t^2 + 46t^3 + 10t^4 [real-rooted]
+  lambda=100: 1 + 112t + 327t^2 + 316t^3 + 100t^4 [real-rooted]
+  finite evidence ok: true

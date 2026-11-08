@@ -1,0 +1,50 @@
+Generate rows of a bundled OEIS family.
+
+Generate OEIS polynomial rows from the bundled exact recurrence of one family.
+--count gives the number of complete rows and is required. --from-index selects
+the first displayed OEIS row (default: the catalog's start row); strict b-file
+output must begin at the catalog's start row.
+
+Formats (several have aliases):
+  polynomial   expanded polynomials, one per row (default; poly, polynomials)
+  rows         coefficient lists, ascending degree (coefficients, text)
+  triangle     aligned triangle (table)
+  json         rows as JSON
+  jsonl        one JSON row per line (json-lines)
+  csv          comma-separated coefficients
+  bfile        OEIS b-file lines `index value` (b-file); --max-terms caps the
+               number of terms and never splits a row
+
+An experimental catalog entry needs --include-experimental.
+
+Usage: polytool oeis generate <A-NUMBER> --count <N> [OPTIONS]
+
+Arguments:
+  <A-NUMBER>  OEIS A-number (A followed by six digits)
+
+Options:
+      --count <N>             Number of complete rows to emit (required)
+      --from-index <K>        First displayed OEIS row (default: catalog start)
+      --max-terms <N>         B-file cap on terms; never splits a row
+      --include-experimental  Permit an experimental catalog entry
+  -h, --help                  Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: polynomial] [possible values: polynomial, polynomials, poly, rows, coefficients, text, triangle, table, json, jsonl, json-lines, csv, bfile, b-file]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Examples:
+  polytool oeis generate A008292 --count 6 --format triangle
+  polytool oeis generate A008292 --count 30 --format bfile
+  polytool oeis generate A008292 --count 6 --format rows | polytool real-rooted
+
+Exit status:
+  0  rows written
+  2  usage error, unknown or experimental entry, or --max-terms smaller than the first row
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --rows -> --count
+  --start-row -> --from-index
+
+See also:
+  polytool oeis info, polytool recurrence-generate, polytool help output-formats

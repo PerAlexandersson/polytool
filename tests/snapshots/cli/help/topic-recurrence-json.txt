@@ -1,0 +1,21 @@
+The polytool.recurrence.v1 record, wrappers and menus
+
+`polytool recurrence --json` prints a polytool.recurrence.v1 record:
+  schema                 "polytool.recurrence.v1"
+  first_index            index n of the first initial polynomial
+  initial_polynomials    seed rows (ascending coefficient strings)
+  recurrence.terms       one term per (offset, derivative order, sign) with an
+                         exact coefficient polynomial in t and n
+  search                 options and diagnostics of the search that found it
+
+Commands that consume a recurrence (recurrence-generate, recurrence-degree,
+recurrence-prove, recurrence-theorems, recurrence-veronese-lifts) take
+--recurrence FILE or --recurrence - (stdin) and also accept two wrappers: a
+polytool.recurrence-theorems.v1 report (its recurrence_json is used) and a
+polytool.recurrence-representations.v1 menu, from which --candidate N
+(zero-based) selects one entry; a menu with several entries requires
+--candidate. Extracting a recurrence from a report does not verify the report's
+claims.
+
+A record fitted to rows is a candidate: it reproduces the rows it was fitted and
+verified on, which is evidence, not a proof for all n.

@@ -1,46 +1,10 @@
 //! `polytool cyclic-sieving`: one cyclic sieving order.
 
-use crate::help::print_coefficient_input_help;
 use crate::input::error_text;
 use crate::input::{read_polys_bigint, strip_trailing_zeros_bigint, OutputFormat};
 use crate::json_out::{json_bigint_vec, json_bool_option, json_string, json_usize_vec};
 use num_bigint::BigInt;
 use polytool::*;
-
-pub(crate) fn print_cyclic_sieving_help() {
-    println!("Usage:");
-    println!("  polytool cyclic-sieving --order <n> [options]");
-    println!("  polytool cyclic-sieving --help");
-    println!();
-    println!("Profile or check P(q) at powers of a primitive n-th root of unity.");
-    println!();
-    print_coefficient_input_help();
-    println!();
-    println!("Options:");
-    println!("  --order <n>          Cyclic group order");
-    println!("  --fixed-counts <xs>  Fixed-point counts fix(g^0),...,fix(g^(n-1))");
-    println!("  --orbit-sizes <xs>   Alternative to --fixed-counts: the multiset of orbit sizes");
-    println!("                       (each a divisor of n) of a concrete C_n-action");
-    println!("  --json               Emit machine-readable JSON");
-    println!();
-    println!("Without fixed counts or orbit sizes, this profiles exact root-of-unity");
-    println!("evaluations only.");
-    println!();
-    println!("Every run also reports the orbit decomposition of the polynomial (exact integer");
-    println!("arithmetic, Alexandersson-Amini, 'The cone of cyclic sieving phenomena',");
-    println!("Discrete Math. 342 (2019), arXiv:1804.01447):");
-    println!("  - reduce f modulo q^n-1 to residues c_0..c_{{n-1}}; f(zeta^d) is an integer for");
-    println!("    all d iff c_j = c_gcd(j,n) (Desarmenien); violating gcd classes are listed;");
-    println!("  - if integral, f = sum_(r|n) a_r h_r mod q^n-1 with h_r = 1+q^r+...+q^(n-r),");
-    println!("    a_r = sum_(e|r) mu(r/e) c_e = number of orbits of size n/r a CSP action needs;");
-    println!("    S_k = k*a_(n/k) = sum_(j|k) mu(k/j) f(zeta^j) elements lie in orbits of size k;");
-    println!("  - cone condition: all a_r >= 0 (equivalently all S_k >= 0).  For f in N[q] this");
-    println!("    is necessary and sufficient for a C_n-action making (X, C_n, f) a CSP.");
-    println!("The hypothesis (natural coefficients) and the cone condition are reported");
-    println!("separately.  With --orbit-sizes the predicted orbit counts are compared with");
-    println!("the actual ones.  JSON adds 'orbit_decomposition' and 'orbit_sizes_check'");
-    println!("next to the unchanged 'report' of every item; exact integers are strings.");
-}
 
 #[derive(Clone, Debug)]
 struct CyclicSievingOptions {

@@ -1,29 +1,11 @@
 //! `polytool hstar-to-ehrhart`, `ehrhart-to-hstar` and `hstar-inequalities`.
 
-use crate::help::print_coefficient_input_help;
 use crate::input::{
     read_polys_bigint, read_polys_rational, strip_trailing_zeros_bigint, OutputFormat,
 };
 use crate::json_out::{json_bigint_vec, json_string, json_string_vec};
 use num_bigint::BigInt;
 use polytool::*;
-
-pub(crate) fn print_hstar_inequalities_help() {
-    println!("Usage:");
-    println!("  polytool hstar-inequalities [options]");
-    println!("  polytool hstar-inequalities --help");
-    println!();
-    println!("Check named Ehrhart h*-vector inequalities with exact integer arithmetic.");
-    println!();
-    print_coefficient_input_help();
-    println!();
-    println!("Options:");
-    println!("  --dimension <d>  Use dimension d instead of len(h*)-1 (at most 4096)");
-    println!("  --json           Emit machine-readable JSON");
-    println!();
-    println!("Example:");
-    println!("  echo '1, 4, 1, 0' | polytool hstar-inequalities --dimension 3");
-}
 
 pub(crate) fn cmd_hstar_to_ehrhart(args: &[String]) {
     let format = match OutputFormat::from_args(args) {

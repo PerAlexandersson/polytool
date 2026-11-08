@@ -1,0 +1,22 @@
+Polynomial family check
+- Polynomials: 8
+- Required checks: passed
+
+Properties:
+0: real-rooted, palindromic, gamma-positive [1], unimodal, log-concave, ultra-log-concave
+1: real-rooted, palindromic, gamma-positive [1], unimodal, log-concave, ultra-log-concave
+2: real-rooted, palindromic, gamma-positive [1, 2], unimodal, log-concave, ultra-log-concave
+3: real-rooted, palindromic, gamma-positive [1, 8], unimodal, log-concave, ultra-log-concave
+4: real-rooted, palindromic, gamma-positive [1, 22, 16], unimodal, log-concave, ultra-log-concave
+5: real-rooted, palindromic, gamma-positive [1, 52, 136], unimodal, log-concave, ultra-log-concave
+6: real-rooted, palindromic, gamma-positive [1, 114, 720, 272], unimodal, log-concave, ultra-log-concave
+7: real-rooted, palindromic, gamma-positive [1, 240, 3072, 3968], unimodal, log-concave, ultra-log-concave
+
+Consecutive interlacing:
+0-1: weak=true, strict=true, status=strictly_interlace
+1-2: weak=true, strict=true, status=strictly_interlace
+2-3: weak=true, strict=true, status=strictly_interlace
+3-4: weak=true, strict=true, status=strictly_interlace
+4-5: weak=true, strict=true, status=strictly_interlace
+5-6: weak=true, strict=true, status=strictly_interlace
+6-7: weak=true, strict=true, status=strictly_interlace

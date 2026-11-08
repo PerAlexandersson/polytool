@@ -1,0 +1,8 @@
+row 0: 0 previous rows interlace before first failure (checked 0/0); strict=0, weak=0; indices=[]; 1
+row 1: 1 previous rows interlace before first failure (checked 1/1); strict=1, weak=1; indices=[0]; 1 + t
+row 2: 1 previous rows interlace before first failure (checked 2/2); strict=1, weak=1; indices=[1]; 1 + 4t + t^2
+row 3: 1 previous rows interlace before first failure (checked 2/3); strict=1, weak=1; indices=[2]; 1 + 11t + 11t^2 + t^3
+row 4: 1 previous rows interlace before first failure (checked 2/4); strict=1, weak=1; indices=[3]; 1 + 26t + 66t^2 + 26t^3 + t^4
+row 5: 1 previous rows interlace before first failure (checked 2/5); strict=1, weak=1; indices=[4]; 1 + 57t + 302t^2 + 302t^3 + 57t^4 + t^5
+row 6: 1 previous rows interlace before first failure (checked 2/6); strict=1, weak=1; indices=[5]; 1 + 120t + 1191t^2 + 2416t^3 + 1191t^4 + 120t^5 + t^6
+row 7: 1 previous rows interlace before first failure (checked 2/7); strict=1, weak=1; indices=[6]; 1 + 247t + 4293t^2 + 15619t^3 + 15619t^4 + 4293t^5 + 247t^6 + t^7

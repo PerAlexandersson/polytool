@@ -12,53 +12,6 @@ use polytool::real_rooted_enumeration::{
 const DEFAULT_MAX_NODES: u64 = 1_000_000;
 const DEFAULT_MAX_RESULTS: usize = 10_000;
 
-pub(crate) fn print_enumerate_real_rooted_help() {
-    println!("Usage:");
-    println!("  polytool enumerate-real-rooted --degree <n> --leading-desc <a0,a1,...> [options]");
-    println!("  polytool enumerate-real-rooted --help");
-    println!();
-    println!("Enumerate every real-rooted integer polynomial");
-    println!("  p(x) = a_0 x^n + a_1 x^(n-1) + ... + a_n");
-    println!("of degree n whose first t leading coefficients a_0, ..., a_(t-1) are given,");
-    println!("with 3 <= t <= n + 1 and a_0 != 0 (either sign).  Reducible polynomials and");
-    println!("polynomials with repeated roots are included.  The search is the");
-    println!("Greaves--Syatriadi derivative-tower algorithm (arXiv:2504.09241) with exact,");
-    println!("certified endpoints: no floating point is used.  Nothing is read from stdin.");
-    println!();
-    println!("Coefficient order:");
-    println!("  --leading-desc is DESCENDING: a_0 (leading), a_1, a_2, ...");
-    println!("  each output polynomial is ASCENDING, as in all other polytool commands:");
-    println!("  c_0, c_1, ..., c_n  represents  c_0 + c_1 x + ... + c_n x^n");
-    println!("  (so c_k = a_(n-k)).  Output lines can be piped into `polytool real-rooted`.");
-    println!("  Results are sorted lexicographically by (a_t, ..., a_n).");
-    println!();
-    println!("Options:");
-    println!("  --degree <n>                 Degree n >= 2 (required)");
-    println!("  --leading-desc <list>        Comma- or space-separated a_0, ..., a_(t-1)");
-    println!("                               (required; arbitrary-size integers)");
-    println!("  --max-results <k|none>       Stop after k results (default {DEFAULT_MAX_RESULTS})");
-    println!("  --max-nodes <k|none>         Stop after examining k search nodes");
-    println!("                               (default {DEFAULT_MAX_NODES})");
-    println!("  --max-coefficient-bits <b|none>");
-    println!("                               Stop if a derivative-tower coefficient needs more");
-    println!("                               than b bits (default none)");
-    println!("  --format <text|json>         Output format (default text)");
-    println!("  --json                       Same as --format json");
-    println!();
-    println!("Status:");
-    println!("  complete        the list is the full set (it may be empty)");
-    println!("  resource_limit  a budget was hit; the list is an initial segment of the");
-    println!("                  full sorted set, and limit_reached names the budget");
-    println!("  invalid_input   (exit code 2) the arguments were rejected");
-    println!("  internal_error  (exit code 1) an internal certification check failed");
-    println!("Errors are reported on stderr; with JSON output a status object is also");
-    println!("printed on stdout.");
-    println!("JSON coefficients are strings, so they stay exact beyond 2^53.");
-    println!();
-    println!("Example:");
-    println!("  polytool enumerate-real-rooted --degree 6 --leading-desc 1,0,-15 --format json");
-}
-
 struct EnumerateOptions {
     format: OutputFormat,
     degree: usize,
@@ -82,14 +35,12 @@ fn parse_leading(value: &str) -> Result<Vec<BigInt>, String> {
         .split(|c: char| c == ',' || c.is_whitespace())
         .filter(|token| !token.is_empty())
     {
-        out.push(
-            token
-                .parse::<BigInt>()
-                .map_err(|_| format!("--leading-desc: invalid integer '{token}'"))?,
-        );
+        out.push(token.parse::<BigInt>().map_err(|_| {
+            format!("--leading-coefficients-descending: invalid integer '{token}'")
+        })?);
     }
     if out.is_empty() {
-        return Err("--leading-desc expects at least one integer".to_string());
+        return Err("--leading-coefficients-descending expects at least one integer".to_string());
     }
     Ok(out)
 }
@@ -121,7 +72,7 @@ fn parse_args(args: &[String]) -> Result<EnumerateOptions, String> {
                     format!("--degree expects a nonnegative integer, got '{value}'")
                 })?);
             }
-            "--leading-desc" => {
+            "--leading-coefficients-descending" => {
                 leading = Some(parse_leading(next_option_value(args, &mut i, option)?)?);
             }
             "--max-results" => {
@@ -141,7 +92,7 @@ fn parse_args(args: &[String]) -> Result<EnumerateOptions, String> {
     Ok(EnumerateOptions {
         format,
         degree: degree.ok_or("--degree is required")?,
-        leading: leading.ok_or("--leading-desc is required")?,
+        leading: leading.ok_or("--leading-coefficients-descending is required")?,
         limits,
     })
 }

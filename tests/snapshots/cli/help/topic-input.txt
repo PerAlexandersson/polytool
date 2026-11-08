@@ -1,0 +1,24 @@
+Input formats: polynomials, rationals, JSON, --input
+
+Polynomial input (most commands): one polynomial per line on stdin, or in the
+file named by --input FILE (`--input -` is stdin).
+  1, 3, 2              dense coefficients a_0, a_1, ..., a_d (ascending)
+  [1, 3, 2]            brackets ([], {}, ()) are allowed
+  1 3 2                whitespace-separated coefficients
+  1 + 3t + 2t^2        expanded notation (integer-coefficient commands)
+  # a comment          blank lines and lines starting with # are skipped
+
+Coefficients are arbitrary-size integers. Commands that read rational
+coefficient lists (recurrence, bernstein-expansion, ehrhart-to-hstar) also
+accept exact rationals such as 3/7, but not expanded notation.
+
+Errors name the physical input line (`line 5: coefficient 2: ...`), while
+reported indices count only polynomial lines. The input is limited to 16 MiB and
+a polynomial to the library's coefficient limit.
+
+JSON input: root-enclosures, recurrence-transform, recurrence-implicit,
+recurrence-search-representations, bicyclic-sieving and `recurrence --space`
+read one JSON document; their help pages list the request fields. Commands that
+consume a recurrence take --recurrence FILE (or `-` for stdin), which may be a
+polytool.recurrence.v1 record, a theorem wrapper or a representation menu (see
+`polytool help recurrence-json`).

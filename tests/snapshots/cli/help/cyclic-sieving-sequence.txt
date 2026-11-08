@@ -1,0 +1,40 @@
+Profile candidate cyclic sieving orders for a sequence.
+
+For a polynomial sequence P_n(q), profile candidate cyclic group orders n+offset
+for every input polynomial; by default the offsets are -2,-1,0,1,2,3.
+
+The optional fixed-counts file has one entry per line, in the form `<index>
+<order>: c_0,...,c_{order-1}`; blank lines and lines starting with # are
+ignored.
+
+Usage: polytool cyclic-sieving-sequence [OPTIONS]
+
+Options:
+      --first-index <N>           Index of the first input polynomial [default: 0]
+      --order-offsets <LIST>      Candidate order offsets, comma-separated [default: -2,-1,0,1,2,3]
+      --fixed-counts-file <FILE>  Lines `<index> <order>: c_0,...,c_{order-1}` of fixed-point counts
+  -h, --help                      Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One polynomial per line on stdin (or --input FILE): ascending integer
+  coefficient lists such as `1, 3, 2`, or expanded notation such as
+  `1 + 3t + 2t^2`. See `polytool help input`.
+
+Examples:
+  polytool sequence eulerian 6 --format rows | polytool cyclic-sieving-sequence
+  polytool sequence eulerian 6 --format rows | polytool cyclic-sieving-sequence --first-index 1 --order-offsets 0,1 --json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --offsets -> --order-offsets
+
+See also:
+  polytool cyclic-sieving, polytool help indexing

@@ -28,84 +28,6 @@ pub(crate) const OEIS_DATA_ENV: &str = "OEIS_DATA_DIR";
 /// Fewest complete rows `oeis add` accepts.
 const MIN_ROWS: usize = 5;
 
-pub(crate) fn print_oeis_add_help() {
-    println!("Usage:");
-    println!("  polytool oeis add <A-number>... [options]");
-    println!("  polytool oeis add --ids-file <file> [options]");
-    println!(
-        "  polytool oeis add <A-number> --bfile <file> --name <title> --layout <layout> [options]"
-    );
-    println!(
-        "  polytool oeis add <A-number> --recurrence-json <file> [--prefix-rows <p>] [options]"
-    );
-    println!();
-    println!("Read OEIS terms, cut them into complete rows, run the adaptive recurrence");
-    println!("search (the same search and options as `polytool recurrence`) on a prefix");
-    println!("of the rows, and check the recurrence exactly against every remaining");
-    println!("term through the catalog's own row generator.  A passing entry is written");
-    println!("to the catalog data file with provenance `polytool_recurrence_search`;");
-    println!("its status is `verified` when held-out rows were checked, else");
-    println!("`validated`.  Rebuild polytool to bundle new entries.");
-    println!();
-    println!("Input:");
-    println!(
-        "  --oeis-data <dir>       Local OEIS internal-format copy (default: ${OEIS_DATA_ENV});"
-    );
-    println!("                          reads <dir>/seq/A123/A123456.seq (or <dir>/A123/...),");
-    println!("                          and a real b-file <dir>/files/A123/b123456.txt when it");
-    println!("                          extends the %S/%T/%U terms");
-    println!("  --bfile <file>          Explicit b-file (one A-number only); needs --name and");
-    println!("                          --layout; the offset defaults to the first b-file index");
-    println!("  --name <title>          Sequence title (with --bfile)");
-    println!("  --offset <n>            First flattened index and displayed row (with --bfile)");
-    println!("  --ids-file <file>       A-numbers, one per line (# comments allowed)");
-    println!();
-    println!("Rows:");
-    println!("  OEIS `tabl` sequences are read as regular triangles (rows of length");
-    println!("  1, 2, 3, ...).  Other sequences need an explicit rule:");
-    println!("  --layout triangle       Treat the terms as a regular triangle");
-    println!("  --layout table          Irregular table; requires --row-widths");
-    println!("  --row-widths <W+S[/R]>  Row i has W + S*floor(i/R) terms (R defaults to 1):");
-    println!("                          1+2 gives 1, 3, 5, ...; 1+1/2 gives 1, 1, 2, 2, ...");
-    println!("  --fit-rows <n>          Rows given to the search (default: all but");
-    println!("                          max(2, rows/4), which are held out)");
-    println!();
-    println!("Supplied recurrence (no search):");
-    println!("  --recurrence-json <file>  A polytool.recurrence.v1 object (rule, first_index and");
-    println!("                          initial polynomials; one A-number only).  Its first");
-    println!("                          initial row is matched with the first OEIS row after");
-    println!("                          the prefix; the rows it generates are compared exactly");
-    println!("                          with every OEIS term.  Provenance `supplied_recurrence`,");
-    println!("                          status `validated`.  A table layout may omit");
-    println!("                          --row-widths: the generated rows give the widths.");
-    println!("  --prefix-rows <p>       Store the first p complete OEIS rows as authoritative");
-    println!("                          prefix rows before the supplied rows (default 0)");
-    println!();
-    println!("Catalog:");
-    println!("  --catalog <file>        Data file (default: ./{DEFAULT_CATALOG_PATH} if present)");
-    println!("  --dry-run               Do not write; print each new entry as a JSONL line");
-    println!("  --replace               Search again (or take the supplied recurrence) and update");
-    println!("                          entries already present; a replaced entry loses its");
-    println!("                          real_rootedness flag and evidence record");
-    println!("  --json                  Emit a polytool.oeis-add.v1 report");
-    println!();
-    println!("Search options (as in `polytool recurrence`): --skip-prefix, --min/max-rec-len,");
-    println!("  --min/max-var-deg, --min/max-idx-deg, --min/max-diff-deg, --inhomogeneous,");
-    println!("  --min/max-inhomo-var-deg, --min/max-inhomo-idx-deg, --denominator,");
-    println!("  --max-denom-var-deg, --max-denom-idx-deg, --alternating-sign, --min-margin,");
-    println!("  --fit-extra-rows, --no-verify, --no-modular-prefilter, --max-candidates <n>,");
-    println!("  --verbose.");
-    println!();
-    println!("Outcomes per A-number: added, updated, already_present, no_recurrence");
-    println!("(nothing within the bounds or budget), layout_unsupported, insufficient_data,");
-    println!("mismatch (a held-out term differs), unavailable (no record).  The exit");
-    println!("status is 0 when every outcome is added, updated or already_present.");
-    println!();
-    println!("Examples:");
-    println!("  polytool oeis add A008292 --oeis-data ~/oeis --dry-run");
-    println!("  polytool oeis add --ids-file ids.txt --max-candidates 20000");
-}
-
 /// Parse one search option shared with `polytool recurrence`; returns
 /// `Ok(false)` when `args[*index]` is not a search option.
 pub(crate) fn parse_search_option(
@@ -118,41 +40,41 @@ pub(crate) fn parse_search_option(
     let value = |index: &mut usize| parse_usize_option(args, index, option);
     match option {
         "--skip-prefix" => search.skip_prefix = value(index)?,
-        "--min-rec-len" => search.min_rec_len = value(index)?,
-        "--max-rec-len" => search.max_rec_len = value(index)?,
-        "--min-var-deg" => search.min_var_deg = value(index)?,
-        "--max-var-deg" => search.max_var_deg = value(index)?,
-        "--min-idx-deg" => search.min_idx_deg = value(index)?,
-        "--max-idx-deg" => search.max_idx_deg = value(index)?,
-        "--min-diff-deg" => search.min_diff_deg = value(index)?,
-        "--max-diff-deg" => search.max_diff_deg = value(index)?,
-        "--inhomogeneous" => search.try_inhomogeneous = true,
-        "--min-inhomo-var-deg"
-        | "--max-inhomo-var-deg"
-        | "--min-inhomo-idx-deg"
-        | "--max-inhomo-idx-deg" => {
+        "--min-recurrence-length" => search.min_rec_len = value(index)?,
+        "--max-recurrence-length" => search.max_rec_len = value(index)?,
+        "--min-variable-degree" => search.min_var_deg = value(index)?,
+        "--max-variable-degree" => search.max_var_deg = value(index)?,
+        "--min-index-degree" => search.min_idx_deg = value(index)?,
+        "--max-index-degree" => search.max_idx_deg = value(index)?,
+        "--min-derivative-order" => search.min_diff_deg = value(index)?,
+        "--max-derivative-order" => search.max_diff_deg = value(index)?,
+        "--try-inhomogeneous" => search.try_inhomogeneous = true,
+        "--min-inhomogeneous-variable-degree"
+        | "--max-inhomogeneous-variable-degree"
+        | "--min-inhomogeneous-index-degree"
+        | "--max-inhomogeneous-index-degree" => {
             search.try_inhomogeneous = true;
             let parsed = value(index)?;
             match option {
-                "--min-inhomo-var-deg" => search.min_inhomo_var_deg = parsed,
-                "--max-inhomo-var-deg" => search.max_inhomo_var_deg = parsed,
-                "--min-inhomo-idx-deg" => search.min_inhomo_idx_deg = parsed,
+                "--min-inhomogeneous-variable-degree" => search.min_inhomo_var_deg = parsed,
+                "--max-inhomogeneous-variable-degree" => search.max_inhomo_var_deg = parsed,
+                "--min-inhomogeneous-index-degree" => search.min_inhomo_idx_deg = parsed,
                 _ => search.max_inhomo_idx_deg = parsed,
             }
         }
-        "--denominator" | "--try-denominator" => search.try_denominator = true,
-        "--max-denom-var-deg" => {
+        "--try-denominator" => search.try_denominator = true,
+        "--max-denominator-variable-degree" => {
             search.try_denominator = true;
             search.max_denom_var_deg = value(index)?;
         }
-        "--max-denom-idx-deg" => {
+        "--max-denominator-index-degree" => {
             search.try_denominator = true;
             search.max_denom_idx_deg = value(index)?;
         }
-        "--alternating-sign" => search.try_alternating_sign = true,
-        "--min-margin" => search.min_margin = value(index)?,
+        "--try-alternating-sign" => search.try_alternating_sign = true,
+        "--min-equation-margin" => search.min_margin = value(index)?,
         "--fit-extra-rows" => search.fit_extra_rows = value(index)?,
-        "--no-verify" => search.no_verify = true,
+        "--no-held-out-rows" => search.no_verify = true,
         "--no-modular-prefilter" => search.modular_prefilter = false,
         "--modular-prefilter" => search.modular_prefilter = true,
         "--max-candidates" => budget.max_candidates = Some(value(index)?),
@@ -227,13 +149,11 @@ fn parse_add_options(args: &[String]) -> Result<AddOptions, String> {
             "--name" => {
                 options.name = Some(next_option_value(args, &mut index, "--name")?.to_string())
             }
-            "--offset" => {
-                let value = next_option_value(args, &mut index, "--offset")?;
-                options.offset = Some(
-                    value
-                        .parse()
-                        .map_err(|_| format!("--offset expects an integer, got '{value}'"))?,
-                );
+            "--first-term-index" => {
+                let value = next_option_value(args, &mut index, "--first-term-index")?;
+                options.offset = Some(value.parse().map_err(|_| {
+                    format!("--first-term-index expects an integer, got '{value}'")
+                })?);
             }
             "--layout" => {
                 options.layout = Some(match next_option_value(args, &mut index, "--layout")? {
@@ -304,7 +224,7 @@ fn parse_add_options(args: &[String]) -> Result<AddOptions, String> {
         }
     } else {
         if options.name.is_some() || options.offset.is_some() {
-            return Err("--name and --offset are only used with --bfile".to_string());
+            return Err("--name and --first-term-index are only used with --bfile".to_string());
         }
         if options.oeis_data.is_none() {
             options.oeis_data = std::env::var_os(OEIS_DATA_ENV).map(PathBuf::from);
@@ -362,7 +282,7 @@ pub(crate) fn source_record(options: &AddOptions, id: &str) -> Result<OeisSource
         let offset = options.offset.unwrap_or(first);
         if offset != first {
             return Err(format!(
-                "--offset {offset} differs from the first b-file index {first}"
+                "--first-term-index {offset} differs from the first b-file index {first}"
             ));
         }
         return Ok(OeisSourceRecord {
@@ -599,10 +519,6 @@ fn add_one(options: &AddOptions, id: &str, present: bool) -> AddResult {
 }
 
 pub(crate) fn cmd_oeis_add(args: &[String]) {
-    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        print_oeis_add_help();
-        return;
-    }
     let options = parse_add_options(args).unwrap_or_else(|error| {
         eprintln!("{error}");
         std::process::exit(2);

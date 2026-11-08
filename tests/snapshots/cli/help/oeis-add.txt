@@ -1,0 +1,162 @@
+Search a recurrence for OEIS rows and record it in the catalog.
+
+Read OEIS terms, cut them into complete rows, run the adaptive recurrence search
+(the same search and options as `polytool recurrence`) on a prefix of the rows,
+and check the recurrence exactly against every remaining term through the
+catalog's own row generator. A passing entry is written to the catalog data file
+with provenance `polytool_recurrence_search`; its status is `verified` when
+held-out rows were checked, else `validated`. Rebuild polytool to bundle new
+entries. This is a maintenance command for a source checkout.
+
+Rows: OEIS `tabl` sequences are read as regular triangles (rows of length 1, 2,
+3, ...). Other sequences need an explicit rule: --layout triangle (also
+regular_triangle, tabl) treats the terms as a regular triangle; --layout table
+(also tabf) is an irregular table and requires --row-widths. --fit-rows gives
+the number of rows to the search (default: all but max(2, rows/4), which are
+held out).
+
+Supplied recurrence (no search): --recurrence-json reads a
+polytool.recurrence.v1 object (rule, first_index and initial polynomials; one
+A-number only). Its first initial row is matched with the first OEIS row after
+the prefix, and the rows it generates are compared exactly with every OEIS term.
+Provenance is `supplied_recurrence`, status `validated`. A table layout may omit
+--row-widths: the generated rows give the widths. Search options and --fit-rows
+do not apply.
+
+Outcomes per A-number: added, updated, already_present, no_recurrence (nothing
+within the bounds or budget), layout_unsupported, insufficient_data, mismatch (a
+held-out term differs) and unavailable (no record).
+
+Usage: polytool oeis add <A-NUMBER>... [OPTIONS]
+       polytool oeis add --ids-file <FILE> [OPTIONS]
+       polytool oeis add <A-NUMBER> --bfile <FILE> --name <TITLE> --layout <LAYOUT> [OPTIONS]
+       polytool oeis add <A-NUMBER> --recurrence-json <FILE> [--prefix-rows <P>] [OPTIONS]
+
+Arguments:
+  [A-NUMBER]...  OEIS A-number (A followed by six digits)
+
+Options:
+  -h, --help  Print help
+
+Input:
+      --oeis-data <DIR>       Local OEIS internal-format copy (default: $OEIS_DATA_DIR)
+      --bfile <FILE>          Explicit b-file (one A-number only)
+      --name <TITLE>          Sequence title (with --bfile)
+      --first-term-index <K>  Index of the first term and displayed row (with --bfile)
+      --ids-file <FILE>       A-numbers, one per line (# comments allowed)
+
+Rows:
+      --layout <LAYOUT>       How terms form rows: triangle or table
+      --row-widths <W+S[/R]>  Row i has W + S*floor(i/R) terms (R defaults to 1)
+      --fit-rows <N>          Rows given to the search (rest are held out)
+
+Supplied recurrence:
+      --recurrence-json <FILE>  Use a supplied polytool.recurrence.v1 record (no search)
+      --prefix-rows <P>         Store the first P OEIS rows as authoritative prefix rows [default: 0]
+
+Catalog:
+      --catalog <FILE>  Catalog data file (default: ./data/oeis-catalog.jsonl if present)
+      --dry-run         Do not write; print each new entry as a JSONL line
+      --replace         Search again and update entries already present
+
+Recurrence search:
+      --max-candidates <N>
+          Inspect at most N candidate configurations
+      --verbose
+          Print candidate search details
+      --skip-prefix <N>
+          Ignore the first N input polynomials [default: 0]
+      --min-recurrence-length <N>
+          Minimum number of previous rows a recurrence uses [default: 1]
+      --max-recurrence-length <N>
+          Maximum number of previous rows a recurrence uses [default: 5]
+      --min-variable-degree <D>
+          Minimum degree in t of the recurrence coefficients [default: 0]
+      --max-variable-degree <D>
+          Maximum degree in t of the recurrence coefficients [default: 3]
+      --min-index-degree <D>
+          Minimum degree in the index n of the recurrence coefficients [default: 0]
+      --max-index-degree <D>
+          Maximum degree in the index n of the recurrence coefficients [default: 3]
+      --min-derivative-order <D>
+          Minimum order of the derivatives P'(n-k), P''(n-k), ... used [default: 0]
+      --max-derivative-order <D>
+          Maximum order of the derivatives used [default: 2]
+      --try-inhomogeneous
+          Also try an inhomogeneous term
+      --min-inhomogeneous-variable-degree <D>
+          Minimum degree in t of the inhomogeneous term [default: 0]
+      --max-inhomogeneous-variable-degree <D>
+          Maximum degree in t of the inhomogeneous term [default: 3]
+      --min-inhomogeneous-index-degree <D>
+          Minimum degree in n of the inhomogeneous term [default: 0]
+      --max-inhomogeneous-index-degree <D>
+          Maximum degree in n of the inhomogeneous term [default: 3]
+      --try-denominator
+          Also try a left-hand-side denominator (rational recurrences)
+      --max-denominator-variable-degree <D>
+          Maximum degree in t of the denominator [default: 2]
+      --max-denominator-index-degree <D>
+          Maximum degree in n of the denominator [default: 2]
+      --try-alternating-sign
+          Also try alternating-sign terms
+      --min-equation-margin <N>
+          Require at least N more equations than unknowns [default: 1]
+      --fit-extra-rows <N>
+          Fit on N rows beyond the first solvable prefix [default: 1]
+      --no-held-out-rows
+          Fit on every input row (no held-out verification rows)
+      --no-modular-prefilter
+          Disable the default modular rejection of candidates
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Details:
+  Row widths: --row-widths 1+2 gives rows of 1, 3, 5, ... terms; 1+1/2 gives 1, 1,
+  2, 2, ... The triangle layout means --row-widths 1+1.
+
+  --replace: a replaced entry loses its real_rootedness flag and evidence record.
+
+  --bfile needs --name and --layout, and applies to exactly one A-number.
+  Otherwise OEIS data is required: --oeis-data <dir> or $OEIS_DATA_DIR. It reads
+  <dir>/seq/A123/A123456.seq (or <dir>/A123/...), and a real b-file
+  <dir>/files/A123/b123456.txt when it extends the %S/%T/%U terms.
+
+  JSON output is polytool.oeis-add.v1.
+
+Examples:
+  polytool oeis add A008292 --oeis-data ~/oeis --dry-run
+  polytool oeis add --ids-file ids.txt --max-candidates 20000
+  polytool oeis add A008292 --oeis-data ~/oeis --recurrence-json rec.json --dry-run
+
+Exit status:
+  0  every outcome is added, updated or already_present
+  1  some A-number had another outcome
+  2  usage error or unreadable data
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --offset -> --first-term-index
+  --min-rec-len -> --min-recurrence-length
+  --max-rec-len -> --max-recurrence-length
+  --min-var-deg -> --min-variable-degree
+  --max-var-deg -> --max-variable-degree
+  --min-idx-deg -> --min-index-degree
+  --max-idx-deg -> --max-index-degree
+  --min-diff-deg -> --min-derivative-order
+  --max-diff-deg -> --max-derivative-order
+  --inhomogeneous -> --try-inhomogeneous
+  --min-inhomo-var-deg -> --min-inhomogeneous-variable-degree
+  --max-inhomo-var-deg -> --max-inhomogeneous-variable-degree
+  --min-inhomo-idx-deg -> --min-inhomogeneous-index-degree
+  --max-inhomo-idx-deg -> --max-inhomogeneous-index-degree
+  --denominator -> --try-denominator
+  --max-denom-var-deg -> --max-denominator-variable-degree
+  --max-denom-idx-deg -> --max-denominator-index-degree
+  --alternating-sign -> --try-alternating-sign
+  --min-margin -> --min-equation-margin
+  --no-verify -> --no-held-out-rows
+
+See also:
+  polytool oeis check, polytool recurrence, polytool oeis evidence

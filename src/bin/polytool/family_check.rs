@@ -1,38 +1,12 @@
 //! `polytool family-check`: properties, consecutive interlacing and optional
 //! recurrence search in one pass.
 
-use crate::help::print_coefficient_input_help;
 use crate::input::{read_poly_parse_results_bigint, strip_trailing_zeros_bigint, OutputFormat};
 use crate::interlacing::{interlacing_report, interlacing_report_json, InterlacingReport};
 use crate::json_out::{json_bool_option, json_string};
 use crate::properties::{property_labels, property_report, property_report_json, PropertyReport};
 use num_bigint::BigInt;
 use polytool::recurrence::*;
-
-pub(crate) fn print_family_check_help() {
-    println!("Usage:");
-    println!("  polytool family-check [options]");
-    println!("  polytool family-check --help");
-    println!();
-    println!("Check a polynomial family in one pass: properties, consecutive");
-    println!("interlacing, and optionally recurrence search.");
-    println!();
-    print_coefficient_input_help();
-    println!();
-    println!("Options:");
-    println!("  --recurrence                  Search for an adaptive recurrence");
-    println!("  --require-real-rooted         Fail if any row is not real-rooted");
-    println!("  --require-palindromic         Fail if any row is not palindromic");
-    println!("  --require-gamma-positive      Fail if any row is not gamma-positive");
-    println!("  --require-unimodal            Fail if any row is not unimodal");
-    println!("  --require-log-concave         Fail if any row is not log-concave");
-    println!("  --require-ultra-log-concave   Fail if any row is not ultra-log-concave");
-    println!("  --require-weak-interlacing    Fail if consecutive rows do not weakly interlace");
-    println!("  --json                        Emit machine-readable JSON");
-    println!("  -h, --help                    Print this help text");
-    println!();
-    println!("All checks, including --recurrence, accept arbitrary-size integer coefficients.");
-}
 
 #[derive(Clone, Debug)]
 struct FamilyCheckOptions {
@@ -87,7 +61,7 @@ fn parse_family_check_args(args: &[String]) -> Result<FamilyCheckOptions, String
     for arg in args {
         match arg.as_str() {
             "--json" => options.format = OutputFormat::Json,
-            "--recurrence" => options.recurrence = true,
+            "--find-recurrence" => options.recurrence = true,
             "--require-real-rooted" => options.require_real_rooted = true,
             "--require-palindromic" => options.require_palindromic = true,
             "--require-gamma-positive" => options.require_gamma_positive = true,

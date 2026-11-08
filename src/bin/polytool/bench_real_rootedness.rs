@@ -34,27 +34,6 @@ const SCHEMA: &str = "polytool.bench.real-rootedness.v1";
 /// `--max-slowdown` gate.
 const SLOWDOWN_FLOOR_US: f64 = 1000.0;
 
-pub(crate) fn print_real_rootedness_help() {
-    println!("Real-rootedness regression suite options:");
-    println!("  polytool bench real-rootedness [options]");
-    println!("  --quick                   Small degrees (about 8-14); fast enough for CI");
-    println!("  --degrees <d1,d2,...>     Override the degree list of the scaling families");
-    println!("                            (4..=200; the full default takes a few minutes)");
-    println!("                            (default: 20,40,60,80; quick: 8,14)");
-    println!("  --only <substring>        Run only cases whose name contains substring");
-    println!("  --repeat <n>              Time each check n times (default: 1)");
-    println!("  --format <tsv|json>       Output format (default: tsv)");
-    println!("  --json                    Alias for --format json");
-    println!("  --baseline <run.json>     Compare verdicts and timings with a saved JSON run");
-    println!("  --max-slowdown <x>        With --baseline, fail when a check whose baseline");
-    println!("                            median is at least 1 ms became more than x times slower");
-    println!();
-    println!("Each check has an exact expected verdict; any mismatch (or a verdict that");
-    println!("differs from the baseline) is reported as a failure and exits with status 1.");
-    println!("Check kinds: real_rooted, interlacing (strict, f << g), root_count (distinct");
-    println!("real roots), hstar_identity (Ehrhart <-> h* conversion round trips).");
-}
-
 #[derive(Debug)]
 struct Options {
     quick: bool,

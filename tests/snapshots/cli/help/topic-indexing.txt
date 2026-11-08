@@ -1,0 +1,18 @@
+Indices: index, --first-index and --from-index
+
+An index is the position of a polynomial P_n in a sequence; a row is a row of a
+triangle or table. Two options set indices, with different meanings:
+
+  --first-index K   labels the first input row: it is P_K. Defaults differ by
+                    command and are shown in each help page: recurrence
+                    numbers the retained rows from 1 (rows dropped by
+                    --skip-prefix still count when --first-index is given),
+                    cyclic-sieving-sequence starts at 0, brenti-recognize,
+                    pf-network and left-production use 1 (P_0 = 1 implicit).
+  --from-index K    selects where the output starts (recurrence-generate,
+                    oeis generate); earlier indices are computed but not shown.
+
+Reports: a zero-based `index` is a position in the input list (real-rooted,
+properties, ... JSON items); `first_index` is the sequence index of the first
+polynomial (recurrence JSON, transform schedules, root-enclosures). OEIS row
+JSON carries both `first_row` (old name) and `first_index` with equal values.

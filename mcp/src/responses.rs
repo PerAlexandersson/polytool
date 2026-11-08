@@ -18,6 +18,9 @@ pub struct OeisSequenceSummary {
     pub status: String,
     pub layout: String,
     pub first_row: i64,
+    /// Same value as `first_row` (the index of the first row); `first_row` is
+    /// kept for compatibility.
+    pub first_index: i64,
     pub flattened_offset: i64,
     pub bfile_available: bool,
     pub source_rows: usize,
@@ -51,6 +54,9 @@ pub struct OeisPolynomialRow {
 pub struct GenerateOeisRowsResponse {
     pub id: String,
     pub first_row: i64,
+    /// Same value as `first_row` (the index of the first row); `first_row` is
+    /// kept for compatibility.
+    pub first_index: i64,
     pub row_count: usize,
     pub rows: Vec<OeisPolynomialRow>,
 }
@@ -709,6 +715,8 @@ pub struct StripDigraphItem {
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct BrentiRecognitionOptionsItem {
     pub first_row_index: usize,
+    /// Same value as `first_row_index`; the old key is kept for compatibility.
+    pub first_index: usize,
     pub max_target_span: Option<usize>,
     pub weights: String,
     pub max_search_nodes: usize,
@@ -759,6 +767,8 @@ pub struct PfNetworkItem {
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct PfNetworkOptionsItem {
     pub first_row_index: usize,
+    /// Same value as `first_row_index`; the old key is kept for compatibility.
+    pub first_index: usize,
     pub max_step_length: usize,
     pub max_rise: usize,
     pub weights: String,
@@ -812,6 +822,8 @@ pub struct ProductionNetworkItem {
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct LeftProductionResponse {
     pub first_row_index: usize,
+    /// Same value as `first_row_index`; the old key is kept for compatibility.
+    pub first_index: usize,
     pub rows: usize,
     /// The triangle `A_N` (triangular rows, exact integer strings).
     pub triangle: Vec<Vec<String>>,

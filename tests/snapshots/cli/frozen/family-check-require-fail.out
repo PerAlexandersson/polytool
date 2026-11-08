@@ -1,0 +1,11 @@
+Polynomial family check
+- Polynomials: 2
+- Required checks: failed
+- First failure: polynomial 0 is not real-rooted
+
+Properties:
+0: palindromic
+1: real-rooted, palindromic, gamma-positive [1, 0], unimodal, log-concave, ultra-log-concave
+
+Consecutive interlacing:
+0-1: weak=false, strict=null, status=not_real_rooted_or_incompatible

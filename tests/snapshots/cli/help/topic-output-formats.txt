@@ -1,0 +1,18 @@
+Output: --format, --json, --compact, stdout and stderr
+
+Every command with structured output accepts --format FORMAT and the shorthand
+--json (= --format json); `polytool help <command>` lists its formats and the
+default. Text output is for reading; JSON output is for scripts and is versioned
+(see `polytool help json-schemas`).
+
+JSON-only commands (root-enclosures, recurrence-transform, recurrence-implicit,
+recurrence-search-representations, recurrence --space/--verify-space) print
+pretty JSON by default and accept --compact for one line; --json is accepted
+there as a no-op.
+
+Exact values: integers and rationals that can exceed 2^53 are JSON strings
+("12345678901234567890", "3/7"); small counts and indices are numbers.
+
+Streams: the answer goes to stdout; progress notes, deprecation warnings and
+errors go to stderr, so `polytool ... --json | jq` stays valid. A closed pipe
+(`polytool ... | head`) ends the program quietly with status 141.

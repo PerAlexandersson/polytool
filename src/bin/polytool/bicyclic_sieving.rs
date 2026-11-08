@@ -6,37 +6,6 @@ use num_bigint::BigInt;
 use polytool::*;
 use serde_json::Value;
 
-pub(crate) fn print_bicyclic_sieving_help() {
-    println!("Usage:");
-    println!("  polytool bicyclic-sieving --order1 <n1> --order2 <n2> [options] < matrix.json");
-    println!("  polytool bicyclic-sieving --help");
-    println!();
-    println!("Check bicyclic sieving (Barcelo-Reiner-Stanton) of f(q,t) for G = C_n1 x C_n2.");
-    println!();
-    println!("Input:");
-    println!("  A JSON coefficient matrix on stdin: f[i][j] is the coefficient of q^i t^j, e.g.");
-    println!("    [[1,0],[0,1]]   represents   1 + q t");
-    println!("  Entries are integers or decimal strings (use strings beyond 64 bits).");
-    println!();
-    println!("Options:");
-    println!("  --order1 <n1>        Order of the cyclic group acting through q");
-    println!("  --order2 <n2>        Order of the cyclic group acting through t");
-    println!("  --fixed-table <json> n1 x n2 JSON matrix of fix(g1^d1 g2^d2), d1<n1, d2<n2");
-    println!("  --json               Emit machine-readable JSON");
-    println!();
-    println!("The polynomial is reduced modulo (q^n1-1, t^n2-1) and evaluated exactly at all");
-    println!("points (zeta_n1^d1, zeta_n2^d2) (limit n1*n2 <= 2500).  If every coefficient");
-    println!("c_(j1,j2) equals c_(gcd(j1,n1),gcd(j2,n2)) the polynomial lies in the product");
-    println!("basis h_r1(q) h_r2(t) (Alexandersson-Amini, multivariate basis theorem) and its");
-    println!("coordinates a_(r1,r2) (two-dimensional Moebius inversion) are reported, with");
-    println!("f(zeta^d1, omega^d2) = sum over (n1/r1)|d1, (n2/r2)|d2 of (n1/r1)(n2/r2) a_(r1,r2).");
-    println!("These coordinates are NOT orbit counts and need not be nonnegative: for the");
-    println!("diagonal action of C_2 x C_2 on two points, f = 1 + qt has coordinates");
-    println!("1, -1, -1, 2.  Integrality at all points is reported separately from product");
-    println!("form (they differ in general when gcd(n1,n2) > 1).  With --fixed-table the");
-    println!("command checks f(zeta^d1, omega^d2) = fix(g1^d1 g2^d2) for all d1, d2.");
-}
-
 fn parse_bigint_json_value(value: &Value) -> Result<BigInt, String> {
     match value {
         Value::Number(number) => {

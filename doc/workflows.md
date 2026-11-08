@@ -17,13 +17,13 @@ the supplied rows, not proofs for an infinite family.
 ```sh
 polytool sequence eulerian 12 --format rows > rows.txt
 polytool recurrence --json --first-index 1 < rows.txt > recurrence.json
-polytool recurrence-generate --recurrence recurrence.json --rows 20 --format rows
+polytool recurrence-generate --recurrence recurrence.json --count 20 --format rows
 ```
 
 Eulerian and Narayana output starts at index 1; the other standard families
 start at 0. Row files do not carry indices: set `--first-index` explicitly
 when needed. `recurrence` defaults to 1. The generator reads the index stored
-in the recurrence. `--rows` counts total rows, including the initial rows.
+in the recurrence. `--count` counts total rows, including the initial rows.
 Recurrence discovery from finitely many rows gives a candidate identity;
 held-out checks are evidence, not an all-indices proof.
 
@@ -36,10 +36,10 @@ rows suitable for recurrence input.
 
 ```sh
 polytool recurrence --json --theorem-matches < rows.txt > report.json
-polytool recurrence-generate --recurrence report.json --rows 20
+polytool recurrence-generate --recurrence report.json --count 20
 
 polytool recurrence --representations --json < rows.txt > menu.json
-polytool recurrence-generate --recurrence menu.json --candidate 0 --rows 20
+polytool recurrence-generate --recurrence menu.json --candidate 0 --count 20
 polytool recurrence-theorems --recurrence menu.json --candidate 0 --json
 polytool recurrence-veronese-lifts --recurrence menu.json --candidate 0 --json
 ```

@@ -436,7 +436,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Search adaptively for a polynomial recurrence. Provide exactly one of `polynomials`, `coefficients`, `expressions`, or `text`. Pass search controls such as `min_rec_len`, `max_rec_len`, degree bounds, `try_denominator`, `fit_extra_rows`, `modular_prefilter`, and `max_candidates` as top-level arguments. Legacy nested `options` is accepted; a top-level control wins when both are supplied. Set `include_code` to false for a compact result without Mathematica, Python, Sage, or recurrence JSON. When the found recurrence matches a supported interlacing theorem (weighted renewal, fixed-delay predecessor), the additive field theorem_matches lists conditional matches: exact hypotheses, conclusion, window and a finite boundary-row check. They are separate from the finite-fit evidence and never prove the recurrence for all n."
+        description = "Search adaptively for a polynomial recurrence. Provide exactly one of `polynomials`, `coefficients`, `expressions`, or `text`. Pass search controls such as `min_recurrence_length`, `max_recurrence_length`, degree bounds (`max_variable_degree`, `max_index_degree`, ...; the older abbreviated names such as `max_rec_len` are accepted as aliases), `try_denominator`, `fit_extra_rows`, `modular_prefilter`, and `max_candidates` as top-level arguments. Legacy nested `options` is accepted; a top-level control wins when both are supplied. Set `include_code` to false for a compact result without Mathematica, Python, Sage, or recurrence JSON. When the found recurrence matches a supported interlacing theorem (weighted renewal, fixed-delay predecessor), the additive field theorem_matches lists conditional matches: exact hypotheses, conclusion, window and a finite boundary-row check. They are separate from the finite-fit evidence and never prove the recurrence for all n."
     )]
     pub fn find_recurrence(
         &self,
@@ -1498,6 +1498,7 @@ impl PolynomialToolsServer {
         Ok(Json(GenerateOeisRowsResponse {
             id: entry.id.to_string(),
             first_row,
+            first_index: first_row,
             row_count: rows.len(),
             rows,
         }))
@@ -1536,7 +1537,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Search exactly for a planar strip digraph (edges from column x to x+1 depending only on the height, monotone targets) whose path counts from (0,0) to (n,k) are the coefficients [t^k] P_n of the input rows (P_1, P_2, ... with P_0 = 1 implicit, or first_row_index=0). Bounds: max_target_span, weights (rational|integer), max_search_nodes, max_integer_search_nodes. Verdict: certified (digraph re-verified against every row), impossible_within_bounds (exact), or inconclusive (budget exhausted). Guardrail: a certificate proves that the coefficient matrix of P_0..P_N is TNN (Lindstrom--Gessel--Viennot), NOT that the rows are real-rooted or PF ([1+t, 1+t+t^2] is certified); it covers only the supplied prefix."
+        description = "Search exactly for a planar strip digraph (edges from column x to x+1 depending only on the height, monotone targets) whose path counts from (0,0) to (n,k) are the coefficients [t^k] P_n of the input rows (P_1, P_2, ... with P_0 = 1 implicit, or first_index=0; the old name first_row_index is accepted). Bounds: max_target_span, weights (rational|integer), max_search_nodes, max_integer_search_nodes. Verdict: certified (digraph re-verified against every row), impossible_within_bounds (exact), or inconclusive (budget exhausted). Guardrail: a certificate proves that the coefficient matrix of P_0..P_N is TNN (Lindstrom--Gessel--Viennot), NOT that the rows are real-rooted or PF ([1+t, 1+t+t^2] is certified); it covers only the supplied prefix."
     )]
     pub fn recognize_brenti_strip_digraph(
         &self,
@@ -1546,7 +1547,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Search exactly for a planar network on {0..N} x Z that is invariant under height shifts (steps (length, rise, weight) into each column n stand for the edges (n-length, y) -> (n, y+rise) at every height y, so P_n = sum weight * t^rise * P_(n-length), P_0 = 1) whose rows are the input polynomials (P_1, P_2, ... or first_row_index=0). Valid networks have primitive steps and no crossing edges; then the Toeplitz matrix of every row is a path matrix of fully compatible sources and sinks, hence TNN (Lindstrom--Gessel--Viennot, Brenti 1995), so every supplied row is a Polya frequency sequence: real-rooted with nonpositive zeros. Bounds: max_step_length, max_rise, weights (rational|integer), max_search_nodes, max_integer_search_nodes. Verdict: certified (re-verified: planarity, rows, rebuilt Toeplitz windows), impossible_within_bounds (exact; a non-real-rooted row rules out every network), or inconclusive. Guardrail: certifies PF rows, NOT TNN of the coefficient matrix (that is check_tnn_network / recognize_brenti_strip_digraph); covers only the supplied rows."
+        description = "Search exactly for a planar network on {0..N} x Z that is invariant under height shifts (steps (length, rise, weight) into each column n stand for the edges (n-length, y) -> (n, y+rise) at every height y, so P_n = sum weight * t^rise * P_(n-length), P_0 = 1) whose rows are the input polynomials (P_1, P_2, ... or first_index=0; the old name first_row_index is accepted). Valid networks have primitive steps and no crossing edges; then the Toeplitz matrix of every row is a path matrix of fully compatible sources and sinks, hence TNN (Lindstrom--Gessel--Viennot, Brenti 1995), so every supplied row is a Polya frequency sequence: real-rooted with nonpositive zeros. Bounds: max_step_length, max_rise, weights (rational|integer), max_search_nodes, max_integer_search_nodes. Verdict: certified (re-verified: planarity, rows, rebuilt Toeplitz windows), impossible_within_bounds (exact; a non-real-rooted row rules out every network), or inconclusive. Guardrail: certifies PF rows, NOT TNN of the coefficient matrix (that is check_tnn_network / recognize_brenti_strip_digraph); covers only the supplied rows."
     )]
     pub fn recognize_pf_network(
         &self,

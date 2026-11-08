@@ -1,0 +1,109 @@
+{
+  "frontier": [
+    0
+  ],
+  "request": {
+    "domain_start": 0,
+    "limits": {
+      "max_coefficient_bits": 4096,
+      "max_columns": 128,
+      "max_degree": 512,
+      "max_matrix_entries": 500000,
+      "max_operations": 20000000,
+      "max_rows": 512,
+      "max_shapes": 16
+    },
+    "row_origin": 0,
+    "rows": null,
+    "shapes": [
+      {
+        "derivative_order": 0,
+        "index_degree": 0,
+        "kind": "box",
+        "leading_index_degree": 0,
+        "leading_variable_degree": 0,
+        "length": 1,
+        "variable_degree": 0
+      }
+    ],
+    "source": {
+      "coefficients": [
+        [
+          "2"
+        ]
+      ],
+      "origin": 0,
+      "provenance": null,
+      "seeds": [
+        [
+          "1"
+        ]
+      ]
+    },
+    "source_recurrence": null
+  },
+  "results": [
+    {
+      "all_checked_rows_zero": false,
+      "certificate": {
+        "absence_duals": [],
+        "basis": [
+          [
+            "2",
+            "1"
+          ]
+        ],
+        "free_columns": [
+          1
+        ],
+        "independent_rows": [
+          0
+        ],
+        "inverse_minor": [
+          [
+            "-1"
+          ]
+        ],
+        "pivot_columns": [
+          0
+        ]
+      },
+      "equations": 1,
+      "evidence": "conditional_on_source",
+      "h": 1,
+      "last_required_source_row": 1,
+      "monomials": [
+        {
+          "derivative_order": 0,
+          "index_degree": 0,
+          "lag": 0,
+          "variable_degree": 0
+        },
+        {
+          "derivative_order": 0,
+          "index_degree": 0,
+          "lag": 1,
+          "variable_degree": 0
+        }
+      ],
+      "reason": null,
+      "representatives": [
+        {
+          "basis_index": 0,
+          "coefficients": [
+            "2",
+            "1"
+          ],
+          "formula": "(1) P[n+1] = (2) P[n+0]",
+          "requires_x_division": false,
+          "singular_ranks": []
+        }
+      ],
+      "residual_count": 1,
+      "status": "successor_exists",
+      "successor_projection_rank": 1,
+      "target_lag": 1
+    }
+  ],
+  "schema": "polytool.recurrence-spaces.v1"
+}

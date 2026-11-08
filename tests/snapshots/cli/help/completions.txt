@@ -1,0 +1,22 @@
+Generate shell completion (commands, subcommands, flags, topics).
+
+Print a completion script for bash, zsh or fish. It completes command names,
+nested subcommands, every flag, flag values with a fixed set of choices, and
+`polytool help <command|topic>`.
+
+Usage: polytool completions <SHELL>
+
+Arguments:
+  <SHELL>  Shell to generate for [possible values: bash, zsh, fish]
+
+Options:
+  -h, --help  Print help
+
+Examples:
+  polytool completions bash > ~/.local/share/bash-completion/completions/polytool
+  polytool completions zsh > "${fpath[1]}/_polytool"
+  polytool completions fish > ~/.config/fish/completions/polytool.fish
+
+Exit status:
+  0  script printed
+  2  unknown shell

@@ -2,6 +2,72 @@
 
 ## Unreleased
 
+- CLI usability (issue #41, phases 0-3). The command line is parsed by `clap`
+  from one declarative specification (`src/bin/polytool/cli/spec.rs`,
+  `commands/`) that also drives every help page, `polytool help --json`, shell
+  completion and the deprecated-spelling tables.
+  - Help: `polytool help <command> [<subcommand>]` at any depth (each `oeis`
+    and `bench` subcommand has its own page), topic pages (`polytool help
+    getting-started|input|coefficient-order|indexing|output-formats|
+    json-schemas|exit-codes|budgets|recurrence-json|compatibility`), examples
+    and exit statuses on every page, a grouped overview with a "Start here"
+    block, and `polytool help --json` with flags, defaults, choices,
+    positionals, subcommands, examples, exit codes and topics (additive keys
+    in `polytool.commands.v1`). `polytool` without arguments prints the
+    overview to stderr (exit status 1, as before).
+  - Usage errors suggest the nearest flag, command or topic and end with
+    ``Run `polytool help <command>` for usage.`` (stderr, exit status 2).
+    Usage-error messages now come from clap and their wording changed.
+  - `polytool completions bash|zsh|fish` completes subcommands, flags, flag
+    values and help topics, not only command names.
+  - Uniform options: `--flag=value` everywhere; `--format <...>` and `--json`
+    on every command with structured output (`--format json` on JSON-only
+    commands); `--input <file|->` on every command that reads input.
+  - **Renamed flags (breaking-change notes).** Abbreviated and inconsistent
+    flag names have spelled-out canonical names; the old spellings still work
+    unchanged on stdout, but each use prints a deprecation warning on stderr
+    (`POLYTOOL_DEPRECATION_WARNINGS=0` silences it). Scripts that require an
+    empty stderr must switch to the new names or set the variable. The full
+    table is in `doc/cli.md` and `polytool help compatibility`: the recurrence
+    search flags (`--max-rec-len` -> `--max-recurrence-length`, `--max-var-deg`
+    -> `--max-variable-degree`, `--max-idx-deg` -> `--max-index-degree`,
+    `--max-diff-deg` -> `--max-derivative-order`, `--inhomogeneous` ->
+    `--try-inhomogeneous`, `--denominator` -> `--try-denominator`,
+    `--min-margin` -> `--min-equation-margin`, `--no-verify` ->
+    `--no-held-out-rows`, ...); `--rows` -> `--count`; `--additional` ->
+    `--additional-count`; `--first-row K`/`--start-row K` -> `--from-index K`
+    (output selection) and `--first-row <0|1>` -> `--first-index <0|1>`
+    (labelling the first input row); `--offset` -> `--first-term-index`;
+    `--reversed` -> `--descending`; `--leading-desc` ->
+    `--leading-coefficients-descending`; `family-check --recurrence` ->
+    `--find-recurrence`; `--offsets` -> `--order-offsets`; the network
+    budgets `--max-integer-nodes`/`--max-span`/`--max-length` ->
+    `--max-integer-search-nodes`/`--max-target-span`/`--max-step-length`;
+    the `bkw-scout` flags `--max-iter`/`--tol`/`--min-imag`/`--grid-re`/
+    `--grid-im` -> `--max-iterations`/`--tolerance`/`--min-imaginary-part`/
+    `--real-grid-points`/`--imaginary-grid-points`; `bench interlacing
+    --max-n` -> `--max-index`. Hand-written per-command help functions and
+    the old `help` module were removed.
+  - Additive JSON keys: `first_index` next to `first_row` (`oeis generate
+    --json`, OEIS catalog JSON) and next to `first_row_index`
+    (`brenti-recognize`, `pf-network`, `left-production`).
+  - MCP: request fields renamed to the same spelled-out words, with the old
+    names accepted as serde aliases (`min_rec_len` -> `min_recurrence_length`
+    and the rest of the search-option family, `first_row_index` ->
+    `first_index`, `generate_oeis_rows` `rows`/`first_row` ->
+    `count`/`from_index`, `generate_recurrence_rows` `rows`/`additional` ->
+    `count`/`additional_count`, `maximum_start_delay` -> `max_start_delay`,
+    `offsets` -> `order_offsets`); the published tool schemas show the new
+    names. Responses add `first_index` next to `first_row` and
+    `first_row_index`.
+  - Tests: golden snapshots of every help page and topic
+    (`tests/snapshots/cli/help`, re-bless with `POLYTOOL_BLESS_CLI_HELP=1`),
+    frozen external invocations whose stdout and exit status must not change
+    (`tests/cli_compatibility.rs`), and an old-versus-new spelling table,
+    universal-option and flag-coverage tests (`tests/cli_help_and_aliases.rs`).
+  - Dependencies: `clap` and `clap_complete` 4.5 (MSRV 1.74, compatible with
+    the crate's 1.82).
+
 - New module `recurrence::leading_coefficient` (issue #37):
   `certify_leading_coefficient` decides a degree law `deg P_n = D(n)`,
   periodic by residue class (`RecurrenceDegreeLaw`: affine laws, half growth,

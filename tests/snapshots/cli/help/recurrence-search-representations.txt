@@ -1,0 +1,97 @@
+Bounded search over equivalent representations and relations.
+
+Search a bounded queue of equivalent representations of one polynomial sequence:
+apply the allowed coordinate changes, transport the known certified relations,
+certify complete spaces after factorial maps, fit the new coordinates, and feed
+certified relations into later steps. Prints a
+polytool.recurrence-representation-search.v1 report. All bounds belong in the
+JSON request on standard input.
+
+Usage: polytool recurrence-search-representations [--compact] < request.json
+       polytool recurrence-search-representations --verify < report.json
+
+Options:
+      --verify   Replay a report: rerun the search and every step and certificate
+      --compact  Print compact JSON
+  -h, --help     Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: json] [possible values: json]
+      --json             Emit JSON (the default; accepted for uniformity)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Details:
+  Request fields:
+    source_recurrence  defining polytool.recurrence.v1 rule with seeds, or
+    oeis_id            a bundled OEIS family (e.g. "A007318"), or
+    rows               rows only (exploratory: every description is a finite fit)
+    row_origin         original index of rows[0] (default: source first index, else 0)
+    row_count          rows generated from a source (default 12)
+    transformations    the allowed maps (recurrence-transform / recurrence-implicit
+                       registry: multiply_power, divide_power, reversal, affine,
+                       mobius, f_polynomial, gamma, symmetric_decomposition,
+                       diagonal, derivative_antecedent)
+                       and the lossy derivative {"kind":"derivative","order":m}:
+                       its lost coefficients are recorded (lost_data) and the parent
+                       is assessed through Q with and without them
+    search             fit bounds {max_rec_len, max_var_deg, max_idx_deg,
+                       max_diff_deg, try_denominator, max_candidates}
+                       (default 2, 2, 1, 1, true, 2000)
+    fits               run the fit menu in every representation (default true)
+    certified_spaces   certify complete spaces after factorial maps (default true),
+                       and after Moebius-class maps, polynomial diagonal weights and
+                       derivative maps (implicit_spaces)
+    space_shapes       explicit complete-space supports (default: a bounded menu)
+    root_domain        optional root-domain analysis of every coordinate change
+    limits             {max_depth (2), max_representations (16), max_steps (160),
+                       max_sources_per_edge (2), max_space_shapes (16), max_rows,
+                       max_degree, max_search_candidates, max_search_degree,
+                       max_operations, max_coefficient_bits}
+
+  Report:
+    representations    the source (0) and every new representation: chain of maps,
+                       certified map normal form, rows, exact reconstruction of
+                       the source, embedded replayable steps and complete spaces,
+                       and ranked descriptions labelled
+                         finite_fit | certified_annihilating_relation |
+                         equivalent_generating_description
+    edges              every map application: new_representation | duplicate_map
+                       (certified equal normal forms; rows are never compared) |
+                       rejected | skipped_budget
+    ranked             all descriptions by shift length, derivative order,
+                       coefficient degree, index degree, components, reconstruction
+    budget, status     limits that cut work; status complete | budget_exhausted
+    steps[k].implicit_relation  a certified (also implicit-only) parent relation
+                       transported through diagonal, derivative_antecedent or
+                       derivative maps, with carried conditions and, for lossy maps,
+                       the parent's description with and without the lost data
+    steps[k].vector_transport  a certified vector system of a vector parent
+                       transported exactly through a componentwise Moebius-class map
+    implicit_spaces    polytool.recurrence-implicit-search.v1 complete spaces after
+                       Moebius-class maps, polynomial diagonal weights and derivatives
+
+  Vector representations: after symmetric_decomposition the pair (a_n, b_n) is
+  mapped componentwise by every scalar bijective map (a schedule acts on b at d_n
+  - 1, its symmetry index), fitted by first-order vector systems (vector_fit), and
+  its certified systems are transported through Moebius-class maps. Vector
+  descriptions carry vector_assessment (uniqueness: the shared left factor is a
+  nonzero polynomial at every index). A rank-two gamma transport is reported as
+  transported_gamma_system (even part and odd companion), certified only where the
+  symmetry of the rows is certified.
+
+Examples:
+  echo '{"oeis_id":"A007318","limits":{"max_depth":1},
+      "transformations":[{"kind":"diagonal",
+      "weight":{"kind":"factorial_power","power":1}}]}' \
+      | polytool recurrence-search-representations
+  polytool recurrence-search-representations --verify --input report.json
+
+Exit status:
+  0  success (or a replay that verified)
+  2  invalid input or a failed replay
+
+See also:
+  polytool recurrence-transform, polytool recurrence-implicit, polytool help json-schemas

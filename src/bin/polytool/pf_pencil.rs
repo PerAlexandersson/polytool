@@ -6,32 +6,6 @@ use num_bigint::BigInt;
 use polytool::numeric::binomial_bigint;
 use polytool::*;
 
-pub(crate) fn print_pf_pencil_help() {
-    println!("Usage:");
-    println!("  polytool pf-pencil --case <OEIS-id> --degree <d> [options]");
-    println!("  polytool pf-pencil --case <OEIS-id> --min-degree <a> --max-degree <b> [options]");
-    println!("  polytool pf-pencil --all-family-h --max-degree <b> [options]");
-    println!("  polytool pf-pencil --help");
-    println!();
-    println!("Check built-in Family H PF-bidiagonal/Jensen endpoint pencils.");
-    println!();
-    println!("Options:");
-    println!("  --case <OEIS-id>       Built-in case such as A036969");
-    println!("  --degree <d>           Check one old-row degree");
-    println!("  --min-degree <d>       First degree for a range (default: 1)");
-    println!("  --max-degree <d>       Last degree for a range");
-    println!("  --all-family-h         Check all built-in Family H cases");
-    println!("  --lambdas <list>       Comma-separated nonnegative integer lambdas");
-    println!("                         (default: 0,1,10,100)");
-    println!("  --json                 Emit machine-readable JSON");
-    println!("  -h, --help             Print this help text");
-    println!();
-    println!("Supported cases:");
-    println!("  A036969 A071951 A080248 A156289 A160562 A269945");
-    println!("  A166960 A166961 A166962 A166972 A191935");
-    println!("  A371081 A371259 A390433 A198204");
-}
-
 #[derive(Clone, Copy, Debug)]
 struct PfPencilCase {
     id: &'static str,

@@ -129,9 +129,35 @@ development notes.
 ## General recurrence proof discovery
 
 `discover_recurrence_proofs` takes `recurrence_json` and optional
-`maximum_start_delay` (default 3, at most 16). It tries six general theorem
+`max_start_delay` (default 3, at most 16). It tries six general theorem
 families without catalogue lookup. `verify_recurrence_proofs` takes
 `report_json` and replays every attempt and exact certificate. A proved
 result concerns the recurrence-defined sequence; finite fits require a
 separate all-index identity. Lean replay is not attempted. See
 [the proof-discovery guide](proof-discovery.md).
+
+## Renamed request fields
+
+After 0.6.0, polytool renamed request fields so that a tool field, the matching CLI flag
+and the JSON key use the same spelled-out words (`max_index_degree` is
+`--max-index-degree`). The old names remain accepted as aliases, so existing
+clients keep working; the published tool schemas show the new names only.
+
+| Old field | New field | Tools |
+|-----------|-----------|-------|
+| `min_rec_len`, `max_rec_len` | `min_recurrence_length`, `max_recurrence_length` | find_recurrence, find_recurrence_representations, recurrence options |
+| `min_var_deg`, `max_var_deg` | `min_variable_degree`, `max_variable_degree` | same |
+| `min_idx_deg`, `max_idx_deg` | `min_index_degree`, `max_index_degree` | same |
+| `min_diff_deg`, `max_diff_deg` | `min_derivative_order`, `max_derivative_order` | same |
+| `min/max_inhomo_var_deg`, `min/max_inhomo_idx_deg` | `min/max_inhomogeneous_variable_degree`, `min/max_inhomogeneous_index_degree` | same |
+| `max_denom_var_deg`, `max_denom_idx_deg` | `max_denominator_variable_degree`, `max_denominator_index_degree` | same |
+| `max_laurent_x_power`, `min_margin`, `no_verify` | `max_laurent_power`, `min_equation_margin`, `no_held_out_rows` | same |
+| `first_row_index` | `first_index` | recognize_brenti_strip_digraph, recognize_pf_network, check_left_production_matrix |
+| `rows`, `first_row` | `count`, `from_index` | generate_oeis_rows |
+| `rows`, `additional` | `count`, `additional_count` | generate_recurrence_rows |
+| `maximum_start_delay` | `max_start_delay` | discover_recurrence_proofs |
+| `offsets` | `order_offsets` | cyclic_sieving_sequence |
+
+Responses are additive: `first_index` is reported next to `first_row`
+(OEIS tools) and next to `first_row_index` (planar-network tools).
+

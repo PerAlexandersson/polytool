@@ -1,0 +1,25 @@
+Search budgets and what happens when one is exhausted
+
+Searches are bounded by deterministic budgets: the same budget gives the same
+answer on every machine (time limits are only used by `oeis evidence`).
+
+  --max-candidates N        recurrence, oeis add, recurrence-veronese-lifts:
+                            candidate configurations inspected
+  --max-work N              recurrence: deterministic work units (solve sizes)
+  --max-search-nodes N      brenti-recognize, pf-network: search-tree nodes
+  --max-integer-search-nodes N  brenti-recognize, pf-network: integer search
+                            per column (old spelling --max-integer-nodes)
+  --max-results, --max-nodes, --max-coefficient-bits
+                            enumerate-real-rooted
+  --max-iterations N        bkw-scout: Durand--Kerner iterations
+  --max-start-delay N       recurrence-prove
+  --per-entry-timeout-seconds S  oeis evidence (wall clock)
+  limits {...}              JSON requests of recurrence --space,
+                            recurrence-search-representations, recurrence-implicit
+
+When a budget is exhausted the answer is never a negative: the report says so
+(`budget_exhausted`, `inconclusive`, `incomplete_budget`, `resource_limit`).
+recurrence, recurrence --representations, recurrence --space, brenti-recognize
+and pf-network then exit with status 3; enumerate-real-rooted exits 0 with
+status resource_limit and an initial segment of the sorted list. Each command's
+help page lists its exit statuses.

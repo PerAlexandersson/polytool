@@ -1,0 +1,61 @@
+Strongest coefficient property on the first rows of each entry.
+
+Compute, for each entry, the strongest coefficient property that holds on every
+one of its first N rows (fewer if the entry cannot generate that many), exactly,
+from the catalog's own rows. Properties, strongest first: real_rooted,
+ultra_log_concave, log_concave, unimodal, none. real_rooted is the exact
+polytool check (any coefficient signs); the other three need a row with
+nonnegative coefficients and no zero between two nonzero ones, and then use
+polytool's own log-concavity, ultra-log-concavity and unimodality checks
+(ultra-log-concavity at the row's degree). The record lists the first failing
+row (displayed OEIS row index) of each stronger property.
+
+This is evidence about finitely many rows, not a proof, and it is separate from
+the real_rootedness flag.
+
+Usage: polytool oeis evidence [A-NUMBER...|--all] --count <N> [OPTIONS]
+
+Arguments:
+  [A-NUMBER]...  OEIS A-number (A followed by six digits)
+
+Options:
+      --count <N>                      Number of rows to check (required, at least 1)
+      --all                            Every catalog entry (instead of listing A-numbers)
+      --ids-file <FILE>                Restrict to the listed A-numbers
+      --write                          Store the records in the catalog data file
+      --per-entry-timeout-seconds <S>  Limit per entry, checked before each row (0 = none) [default: 60]
+      --as-of <YYYY-MM-DD>             Date to record (default: today, UTC)
+      --catalog <FILE>                 Data file to read (and to write with --write)
+  -h, --help                           Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Details:
+  Give either A-numbers (or --ids-file) or --all, not both.
+
+  --write changes only the `evidence` key of each computed entry. It needs a data
+  file: the default is ./data/oeis-catalog.jsonl if present, else the bundled
+  catalog, and then --write is not possible.
+
+  An entry over --per-entry-timeout-seconds gets no record (an existing record is
+  kept) and is listed.
+
+  Besides the per-entry lines the report gives the distribution of `strongest` and
+  lists every lean_proved entry whose evidence is weaker than real_rooted (a
+  contradiction to investigate). JSON output is polytool.oeis-evidence.v1.
+
+Examples:
+  polytool oeis evidence A008292 --count 20
+  polytool oeis evidence --all --count 12 --catalog data/oeis-catalog.jsonl --write
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --rows -> --count
+
+See also:
+  polytool oeis check, polytool real-rooted, polytool properties

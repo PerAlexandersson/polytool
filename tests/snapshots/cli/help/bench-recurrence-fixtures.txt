@@ -1,0 +1,33 @@
+Time adaptive recurrence search on fixture rows.
+
+Time the adaptive recurrence search on the fixture rows listed in the
+manifest.tsv of a fixture directory. The recurrence-search options of each
+fixture come from its manifest entry. JSON output includes adaptive counters and
+timing buckets.
+
+Usage: polytool bench recurrence-fixtures [OPTIONS]
+
+Options:
+      --base <DIR>            Fixture directory containing manifest.tsv
+      --only <TEXT>           Run only fixture slugs containing TEXT
+      --repeat <N>            Repeat each fixture N times [default: 1]
+      --no-modular-prefilter  Disable the default modular recurrence prefilter
+      --summary               Append fixture and category summaries to stdout
+      --report <FILE>         Write a Markdown benchmark report
+  -h, --help                  Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: tsv] [possible values: tsv, json, text]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Examples:
+  polytool bench recurrence-fixtures --base fixtures --only eulerian --repeat 3
+  polytool bench recurrence-fixtures --base fixtures --format json > run.json
+
+Exit status:
+  0  finished
+  1  a fixture, file or check failed
+  2  usage error
+
+See also:
+  polytool bench compare, polytool recurrence

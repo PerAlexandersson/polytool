@@ -1,12 +1,37 @@
-//! Shared input handling: bounded stdin reads, coefficient-list parsing,
-//! option-value parsing and the common `--json` output-format flag.
+//! Shared input handling: bounded stdin reads (or the `--input <file|->`
+//! replacement), coefficient-list parsing, option-value parsing and the
+//! common `--json` output-format flag.
 
 use num_bigint::BigInt;
 use polytool::recurrence::BigRational as RecurrenceBigRational;
 use polytool::*;
 use std::io::{self, Read};
+use std::sync::OnceLock;
 
 const MAX_CLI_INPUT_BYTES: usize = 16 * 1024 * 1024;
+
+/// The file named by `--input`, read instead of standard input.
+static INPUT_PATH: OnceLock<String> = OnceLock::new();
+
+/// Read the command input from `path` instead of stdin (`-` keeps stdin).
+pub(crate) fn set_input_path(path: &str) {
+    if path != "-" {
+        let _ = INPUT_PATH.set(path.to_string());
+    }
+}
+
+/// Read the whole command input (stdin, or the `--input` file) within the
+/// CLI size limit; `what` names the content in error messages.
+pub(crate) fn read_command_input(what: &str) -> Result<String, String> {
+    match INPUT_PATH.get() {
+        Some(path) => {
+            let file = std::fs::File::open(path)
+                .map_err(|error| format!("failed to open input file `{path}`: {error}"))?;
+            read_limited_text(file, &format!("{what} `{path}`"))
+        }
+        None => read_limited_text(io::stdin(), what),
+    }
+}
 
 pub(crate) fn read_limited_text(reader: impl Read, description: &str) -> Result<String, String> {
     let mut input = String::new();
@@ -23,7 +48,7 @@ pub(crate) fn read_limited_text(reader: impl Read, description: &str) -> Result<
 }
 
 pub(crate) fn read_stdin_or_exit() -> String {
-    match read_limited_text(io::stdin(), "stdin") {
+    match read_command_input("stdin") {
         Ok(input) => input,
         Err(error) => {
             eprintln!("{error}");

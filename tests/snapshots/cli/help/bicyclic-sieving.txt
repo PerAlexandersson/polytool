@@ -1,0 +1,52 @@
+Check bicyclic sieving for C_n1 x C_n2 and f(q,t).
+
+Check bicyclic sieving (Barcelo-Reiner-Stanton) of f(q,t) for G = C_n1 x C_n2.
+
+Input is a JSON coefficient matrix: f[i][j] is the coefficient of q^i t^j, for
+example
+
+  [[1,0],[0,1]]   represents   1 + q t
+
+Entries are integers or decimal strings (use strings beyond 64 bits).
+
+The polynomial is reduced modulo (q^n1-1, t^n2-1) and evaluated exactly at all
+points (zeta_n1^d1, zeta_n2^d2); the limit is n1*n2 <= 2500. If every
+coefficient c_(j1,j2) equals c_(gcd(j1,n1),gcd(j2,n2)), the polynomial lies in
+the product basis h_r1(q) h_r2(t) (Alexandersson-Amini, multivariate basis
+theorem) and its coordinates a_(r1,r2) (two-dimensional Moebius inversion) are
+reported, with f(zeta^d1, omega^d2) = sum over (n1/r1)|d1, (n2/r2)|d2 of
+(n1/r1)(n2/r2) a_(r1,r2).
+
+These coordinates are NOT orbit counts and need not be nonnegative: for the
+diagonal action of C_2 x C_2 on two points,
+  f = 1 + qt  has coordinates  1, -1, -1, 2.
+
+Integrality at all points is reported separately from product form (they differ
+in general when gcd(n1,n2) > 1). With --fixed-table the command checks
+f(zeta^d1, omega^d2) = fix(g1^d1 g2^d2) for all d1, d2.
+
+Usage: polytool bicyclic-sieving --order1 <N1> --order2 <N2> [OPTIONS]
+
+Options:
+      --order1 <N1>         Order of the cyclic group acting through q
+      --order2 <N2>         Order of the cyclic group acting through t
+      --fixed-table <JSON>  N1 x N2 JSON matrix of fix(g1^d1 g2^d2), d1<N1, d2<N2
+  -h, --help                Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Examples:
+  echo '[[1,0],[0,1]]' | polytool bicyclic-sieving --order1 2 --order2 2
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+See also:
+  polytool cyclic-sieving

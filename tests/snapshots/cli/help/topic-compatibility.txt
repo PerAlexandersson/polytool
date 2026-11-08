@@ -1,0 +1,95 @@
+Renamed commands and flags, and their deprecated spellings
+
+Old spellings keep working. Each use prints one warning on stderr (stdout is
+unchanged); set POLYTOOL_DEPRECATION_WARNINGS=0 to silence the warnings. The
+spellings used by published scripts (the recurrence search flags, --rows,
+--first-row, --start-row, --offset and the recurrence-* commands) are frozen:
+they will not be removed in the 0.x series.
+
+Naming rules: names are spelled out; `index` is a position in a sequence and
+`row` a row of a triangle; --first-index labels the first input row and
+--from-index selects where output starts; --count is the number of rows or
+polynomials to produce; options that widen a search start with --try-; limits
+start with --max-. A renamed JSON key is emitted under both names, and the MCP
+server accepts both request field names.
+
+Deprecated spellings (old -> new):
+  family-check:
+      --recurrence -> --find-recurrence
+  enumerate-real-rooted:
+      --leading-desc -> --leading-coefficients-descending
+  recurrence:
+      --max-laurent-x-power -> --max-laurent-power
+      --min-rec-len -> --min-recurrence-length
+      --max-rec-len -> --max-recurrence-length
+      --min-var-deg -> --min-variable-degree
+      --max-var-deg -> --max-variable-degree
+      --min-idx-deg -> --min-index-degree
+      --max-idx-deg -> --max-index-degree
+      --min-diff-deg -> --min-derivative-order
+      --max-diff-deg -> --max-derivative-order
+      --inhomogeneous -> --try-inhomogeneous
+      --min-inhomo-var-deg -> --min-inhomogeneous-variable-degree
+      --max-inhomo-var-deg -> --max-inhomogeneous-variable-degree
+      --min-inhomo-idx-deg -> --min-inhomogeneous-index-degree
+      --max-inhomo-idx-deg -> --max-inhomogeneous-index-degree
+      --denominator -> --try-denominator
+      --max-denom-var-deg -> --max-denominator-variable-degree
+      --max-denom-idx-deg -> --max-denominator-index-degree
+      --alternating-sign -> --try-alternating-sign
+      --min-margin -> --min-equation-margin
+      --no-verify -> --no-held-out-rows
+  recurrence-generate:
+      --rows -> --count
+      --additional -> --additional-count
+      --offset -> --first-term-index
+      --first-row -> --from-index
+      --reversed -> --descending
+  recurrence-degree:
+      --rows -> --count
+  oeis generate:
+      --rows -> --count
+      --start-row -> --from-index
+  oeis add:
+      --offset -> --first-term-index
+      --min-rec-len -> --min-recurrence-length
+      --max-rec-len -> --max-recurrence-length
+      --min-var-deg -> --min-variable-degree
+      --max-var-deg -> --max-variable-degree
+      --min-idx-deg -> --min-index-degree
+      --max-idx-deg -> --max-index-degree
+      --min-diff-deg -> --min-derivative-order
+      --max-diff-deg -> --max-derivative-order
+      --inhomogeneous -> --try-inhomogeneous
+      --min-inhomo-var-deg -> --min-inhomogeneous-variable-degree
+      --max-inhomo-var-deg -> --max-inhomogeneous-variable-degree
+      --min-inhomo-idx-deg -> --min-inhomogeneous-index-degree
+      --max-inhomo-idx-deg -> --max-inhomogeneous-index-degree
+      --denominator -> --try-denominator
+      --max-denom-var-deg -> --max-denominator-variable-degree
+      --max-denom-idx-deg -> --max-denominator-index-degree
+      --alternating-sign -> --try-alternating-sign
+      --min-margin -> --min-equation-margin
+      --no-verify -> --no-held-out-rows
+  oeis evidence:
+      --rows -> --count
+  cyclic-sieving-sequence:
+      --offsets -> --order-offsets
+  brenti-recognize:
+      --first-row -> --first-index
+      --max-span -> --max-target-span
+      --max-integer-nodes -> --max-integer-search-nodes
+  pf-network:
+      --first-row -> --first-index
+      --max-length -> --max-step-length
+      --max-integer-nodes -> --max-integer-search-nodes
+  left-production:
+      --first-row -> --first-index
+  bench interlacing:
+      --max-n -> --max-index
+  bkw-scout:
+      --grid-re -> --real-grid-points
+      --grid-im -> --imaginary-grid-points
+      --min-imag -> --min-imaginary-part
+      --tol -> --tolerance
+      --max-iter -> --max-iterations

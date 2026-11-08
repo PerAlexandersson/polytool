@@ -4,30 +4,12 @@
 use crate::cyclic_sieving::{
     cyclic_sieving_report_json, parse_bigint_values, print_cyclic_sieving_report_text,
 };
-use crate::help::print_coefficient_input_help;
 use crate::input::{read_polys_bigint, strip_trailing_zeros_bigint, OutputFormat};
 use crate::json_out::{json_bigint_vec, json_string, json_string_vec};
 use num_bigint::BigInt;
 use polytool::*;
 use std::collections::BTreeMap;
 use std::fs;
-
-pub(crate) fn print_cyclic_sieving_sequence_help() {
-    println!("Usage:");
-    println!("  polytool cyclic-sieving-sequence [options]");
-    println!("  polytool cyclic-sieving-sequence --help");
-    println!();
-    println!("For a polynomial sequence P_n(q), profile candidate cyclic group orders");
-    println!("n-2, n-1, n, n+1, n+2, n+3 by default.");
-    println!();
-    print_coefficient_input_help();
-    println!();
-    println!("Options:");
-    println!("  --first-index <n>         Index of the first input row (default: 0)");
-    println!("  --offsets <list>          Candidate order offsets (default: -2,-1,0,1,2,3)");
-    println!("  --fixed-counts-file <f>   Lines: <index> <order>: c_0,...,c_{{order-1}}");
-    println!("  --json                    Emit machine-readable JSON");
-}
 
 #[derive(Clone, Debug)]
 struct CyclicSievingSequenceOptions {
@@ -114,11 +96,11 @@ fn parse_cyclic_sieving_sequence_args(
                     .parse()
                     .map_err(|_| format!("--first-index expects an integer, got '{value}'"))?;
             }
-            "--offsets" => {
+            "--order-offsets" => {
                 i += 1;
                 let value = args
                     .get(i)
-                    .ok_or_else(|| "--offsets expects a comma-separated list".to_string())?;
+                    .ok_or_else(|| "--order-offsets expects a comma-separated list".to_string())?;
                 options.offsets = parse_offsets(value)?;
             }
             "--fixed-counts-file" => {

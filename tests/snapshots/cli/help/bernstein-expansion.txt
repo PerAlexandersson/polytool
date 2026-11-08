@@ -1,0 +1,38 @@
+Expand polynomials in a fixed-degree Bernstein basis.
+
+Expand each input polynomial in the standard Bernstein basis
+
+  binomial(n,j) t^j (1-t)^(n-j),  0 <= j <= n.
+
+Coefficients may be arbitrary-size integers or exact rationals such as 42, -17
+or 3/7. The command expects coefficient lists, not expanded expressions. With
+--json the coordinates are rational strings. A row whose degree exceeds the
+ambient degree is reported as an error.
+
+Usage: polytool bernstein-expansion [OPTIONS]
+
+Options:
+      --degree <N>  Use ambient degree N for every row (default: degree of each row)
+  -h, --help        Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One exact coefficient list per line on stdin (or --input FILE), in
+  ascending degree order; entries are integers or rationals such as 3/7.
+  See `polytool help input`.
+
+Examples:
+  echo '1, 2, 3' | polytool bernstein-expansion --degree 3
+  echo '1, 1/2' | polytool bernstein --json
+
+Exit status:
+  0  every row was expanded
+  1  some row could not be expanded in the requested degree
+  2  usage error or invalid input
+
+See also:
+  polytool gamma-expansion, polytool help coefficient-order

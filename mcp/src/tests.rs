@@ -555,27 +555,27 @@ fn find_recurrence_schema_is_flat_and_documents_every_control() {
         "options",
         "include_code",
         "skip_prefix",
-        "min_rec_len",
-        "max_rec_len",
-        "min_var_deg",
-        "max_var_deg",
-        "min_idx_deg",
-        "max_idx_deg",
-        "min_diff_deg",
-        "max_diff_deg",
+        "min_recurrence_length",
+        "max_recurrence_length",
+        "min_variable_degree",
+        "max_variable_degree",
+        "min_index_degree",
+        "max_index_degree",
+        "min_derivative_order",
+        "max_derivative_order",
         "try_inhomogeneous",
-        "min_inhomo_var_deg",
-        "max_inhomo_var_deg",
-        "min_inhomo_idx_deg",
-        "max_inhomo_idx_deg",
+        "min_inhomogeneous_variable_degree",
+        "max_inhomogeneous_variable_degree",
+        "min_inhomogeneous_index_degree",
+        "max_inhomogeneous_index_degree",
         "try_denominator",
         "try_alternating_sign",
         "try_laurent",
-        "max_laurent_x_power",
-        "max_denom_var_deg",
-        "max_denom_idx_deg",
-        "min_margin",
-        "no_verify",
+        "max_laurent_power",
+        "max_denominator_variable_degree",
+        "max_denominator_index_degree",
+        "min_equation_margin",
+        "no_held_out_rows",
         "fit_extra_rows",
         "modular_prefilter",
         "max_candidates",
@@ -597,11 +597,11 @@ fn flat_and_legacy_recurrence_controls_work_with_top_level_precedence() {
     let server = PolynomialToolsServer::new();
     let flat: FindRecurrenceRequest = serde_json::from_value(json!({
         "coefficients": [[1], [2], [4], [8], [16]],
-        "min_rec_len": 1,
-        "max_rec_len": 1,
-        "max_var_deg": 0,
-        "max_idx_deg": 0,
-        "max_diff_deg": 0,
+        "min_recurrence_length": 1,
+        "max_recurrence_length": 1,
+        "max_variable_degree": 0,
+        "max_index_degree": 0,
+        "max_derivative_order": 0,
         "max_candidates": 1
     }))
     .unwrap();
@@ -2698,4 +2698,91 @@ fn certify_veronese_section_lift_validates_limits() {
             .certify_veronese_section_lift(Parameters(request))
             .is_err());
     }
+}
+
+#[test]
+fn renamed_request_fields_accept_old_and_new_names() {
+    let new: FindRecurrenceRequest = serde_json::from_value(json!({
+        "coefficients": [[1], [2], [4], [8], [16]],
+        "min_recurrence_length": 1,
+        "max_recurrence_length": 1,
+        "max_variable_degree": 0,
+        "max_index_degree": 0,
+        "max_derivative_order": 0,
+        "max_inhomogeneous_variable_degree": 1,
+        "max_denominator_index_degree": 1,
+        "max_laurent_power": 1,
+        "min_equation_margin": 1,
+        "no_held_out_rows": false,
+        "max_candidates": 1
+    }))
+    .unwrap();
+    let old: FindRecurrenceRequest = serde_json::from_value(json!({
+        "coefficients": [[1], [2], [4], [8], [16]],
+        "min_rec_len": 1,
+        "max_rec_len": 1,
+        "max_var_deg": 0,
+        "max_idx_deg": 0,
+        "max_diff_deg": 0,
+        "max_inhomo_var_deg": 1,
+        "max_denom_idx_deg": 1,
+        "max_laurent_x_power": 1,
+        "min_margin": 1,
+        "no_verify": false,
+        "max_candidates": 1
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&new).unwrap(),
+        serde_json::to_value(&old).unwrap()
+    );
+    let server = PolynomialToolsServer::new();
+    let Json(new_result) = server.find_recurrence(Parameters(new)).unwrap();
+    let Json(old_result) = server.find_recurrence(Parameters(old)).unwrap();
+    assert_eq!(
+        serde_json::to_value(&new_result).unwrap(),
+        serde_json::to_value(&old_result).unwrap()
+    );
+
+    let schema = serde_json::to_value(schemars::schema_for!(FindRecurrenceRequest)).unwrap();
+    let properties = schema["properties"].as_object().unwrap();
+    assert!(properties.contains_key("max_recurrence_length"));
+    assert!(!properties.contains_key("max_rec_len"));
+
+    for (old, new) in [
+        (
+            json!({"id": "A008292", "rows": 3, "first_row": 2}),
+            json!({"id": "A008292", "count": 3, "from_index": 2}),
+        ),
+        (
+            json!({"id": "A008292", "rows": 3}),
+            json!({"id": "A008292", "count": 3}),
+        ),
+    ] {
+        let old: GenerateOeisRowsRequest = serde_json::from_value(old).unwrap();
+        let new: GenerateOeisRowsRequest = serde_json::from_value(new).unwrap();
+        let Json(old) = server.generate_oeis_rows(Parameters(old)).unwrap();
+        let Json(new) = server.generate_oeis_rows(Parameters(new)).unwrap();
+        assert_eq!(old, new);
+        assert_eq!(new.first_index, new.first_row);
+    }
+    let old: DiscoverRecurrenceProofsRequest =
+        serde_json::from_value(json!({"recurrence_json": "{}", "maximum_start_delay": 2})).unwrap();
+    let new: DiscoverRecurrenceProofsRequest =
+        serde_json::from_value(json!({"recurrence_json": "{}", "max_start_delay": 2})).unwrap();
+    assert_eq!(old.maximum_start_delay, new.maximum_start_delay);
+    for request in [
+        json!({"text": "1\n1,1\n1,4,1", "first_row_index": 1}),
+        json!({"text": "1\n1,1\n1,4,1", "first_index": 1}),
+    ] {
+        let request: LeftProductionRequest = serde_json::from_value(request).unwrap();
+        assert_eq!(request.first_row_index, Some(1));
+    }
+    let request: GenerateRecurrenceRowsRequest =
+        serde_json::from_value(json!({"recurrence_json": "{}", "count": 3, "additional_count": 1}))
+            .unwrap();
+    assert_eq!((request.rows, request.additional), (Some(3), Some(1)));
+    let request: CyclicSievingSequenceRequest =
+        serde_json::from_value(json!({"text": "1", "order_offsets": [0]})).unwrap();
+    assert_eq!(request.offsets, Some(vec![0]));
 }

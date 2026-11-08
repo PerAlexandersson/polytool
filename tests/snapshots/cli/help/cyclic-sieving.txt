@@ -1,0 +1,50 @@
+Check/profile one cyclic sieving order.
+
+Profile or check P(q) at powers of a primitive N-th root of unity. Without fixed
+counts or orbit sizes, only the exact root-of-unity evaluations are profiled.
+
+Every run also reports the orbit decomposition of the polynomial (exact integer
+arithmetic; Alexandersson-Amini, 'The cone of cyclic sieving phenomena',
+Discrete Math. 342 (2019), arXiv:1804.01447):
+
+  - reduce f modulo q^n-1 to residues c_0..c_{n-1}; f(zeta^d) is an integer for
+    all d iff c_j = c_gcd(j,n) (Desarmenien); violating gcd classes are listed;
+  - if integral, f = sum_(r|n) a_r h_r mod q^n-1 with h_r = 1+q^r+...+q^(n-r),
+    a_r = sum_(e|r) mu(r/e) c_e = number of orbits of size n/r a CSP action needs;
+    S_k = k*a_(n/k) = sum_(j|k) mu(k/j) f(zeta^j) elements lie in orbits of size k;
+  - cone condition: all a_r >= 0 (equivalently all S_k >= 0). For f in N[q] this
+    is necessary and sufficient for a C_n-action making (X, C_n, f) a CSP.
+
+The hypothesis (natural coefficients) and the cone condition are reported
+separately. With --orbit-sizes the predicted orbit counts are compared with the
+actual ones. JSON adds `orbit_decomposition` and `orbit_sizes_check` next to the
+unchanged `report` of every item; exact integers are strings.
+
+Usage: polytool cyclic-sieving --order <N> [OPTIONS]
+
+Options:
+      --order <N>            Cyclic group order (positive integer)
+      --fixed-counts <LIST>  Fixed-point counts fix(g^0),...,fix(g^(N-1)), comma-separated
+      --orbit-sizes <LIST>   Alternative to --fixed-counts: orbit sizes (divisors of N), comma-separated
+  -h, --help                 Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One polynomial per line on stdin (or --input FILE): ascending integer
+  coefficient lists such as `1, 3, 2`, or expanded notation such as
+  `1 + 3t + 2t^2`. See `polytool help input`.
+
+Examples:
+  echo '1, 1, 1' | polytool cyclic-sieving --order 3
+  echo '1, 1, 1' | polytool cyclic-sieving --order 3 --orbit-sizes 3 --json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+See also:
+  polytool cyclic-sieving-sequence, polytool bicyclic-sieving

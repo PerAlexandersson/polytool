@@ -1,0 +1,84 @@
+Search for a height-invariant planar network: PF rows.
+
+Search exactly for a planar network D on {0..N} x Z that is invariant under
+height shifts: for each column n it has steps (length, rise, weight) standing
+for the edges (n - length, y) -> (n, y + rise) at every height y, so
+
+  P_n = sum over steps into n of weight * t^rise * P_(n - length),  P_0 = 1.
+
+Edges are straight segments; the network is valid when every positive-weight
+step is primitive (gcd(length, rise) = 1) and no two edges meet away from a
+common endpoint. Then the Toeplitz matrix of every row is a path matrix of fully
+compatible sources (0, i) and sinks (n, j), hence totally nonnegative, so every
+row is a Polya frequency (PF) sequence: real-rooted with only nonpositive zeros.
+The certificate is re-verified exactly: structure, planarity, every row, and the
+explicitly rebuilt (deg+1) x (deg+1) path matrix against the Toeplitz window of
+the row.
+
+The search tries, column by column, every inclusion-minimal set of steps that is
+planar with the edges already chosen and admits nonnegative weights for that row
+(exact linear feasibility). By default the input is P_1, P_2, ... with P_0 = 1
+implicit.
+
+The verdict is one of:
+
+  certified                 a network, re-verified against every input row
+  impossible_within_bounds  an exact proof that no network within the bounds
+                            reproduces the rows (a row that is not real-rooted
+                            rules out every network)
+  inconclusive              a search budget ran out
+
+Usage: polytool pf-network [OPTIONS]
+
+Options:
+      --first-index <0|1>    Index of the first input row (0: it must be P_0 = 1) [default: 1]
+      --max-step-length <L>  Largest step length [default: 3]
+      --max-rise <R>         Largest rise [default: 3]
+      --weights <KIND>       Nonnegative rational or integer weights [default: rational] [possible values: rational, integer]
+  -h, --help                 Print help
+
+Limits:
+      --max-search-nodes <N>          Budget on column supports [default: 1000000]
+      --max-integer-search-nodes <N>  Budget on the integer search per row [default: 10000]
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One polynomial per line on stdin (or --input FILE): ascending integer
+  coefficient lists such as `1, 3, 2`, or expanded notation such as
+  `1 + 3t + 2t^2`. See `polytool help input`.
+
+Details:
+  Guardrails:
+
+    A certificate proves that every supplied row is PF (real-rooted, nonpositive
+    zeros). It does NOT prove that the coefficient matrix of the rows is TNN, and it
+    says nothing about rows beyond the input. Conversely, tnn-network and
+    brenti-recognize certify TNN of the coefficient matrix, not PF rows.
+    impossible_within_bounds is relative to --max-step-length and --max-rise unless
+    the obstruction is a row that is not real-rooted. See also left-production for
+    the Chen--Fu--Ruan certificate of a whole triangle.
+
+  JSON output has the schema polytool.pf-network.v1.
+
+Examples:
+  printf '1,1\n1,2,1\n1,3,3,1\n' | polytool pf-network
+  printf '1,1\n1,4,1\n1,11,11,1\n' | polytool pf-network --json
+  printf '1,1,1\n' | polytool pf-network
+
+Exit status:
+  0  certified
+  1  impossible within the bounds
+  2  invalid input or options
+  3  inconclusive (a budget was exhausted)
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --first-row -> --first-index
+  --max-length -> --max-step-length
+  --max-integer-nodes -> --max-integer-search-nodes
+
+See also:
+  polytool left-production, polytool tnn-network, polytool brenti-recognize, polytool help budgets

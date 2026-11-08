@@ -1,0 +1,37 @@
+JSON schema identifiers and their versioning policy
+
+Machine-readable reports carry a `schema` key `polytool.<name>.v<N>`. Within a
+version, keys are only added, never removed or renamed; a renamed key keeps
+being emitted under its old name next to the new one. A breaking change bumps
+the version. Simple per-polynomial reports (real-rooted, interlacing,
+properties, gamma-expansion, ...) have the shape {"items": [...]} without a
+schema key.
+
+  polytool.commands.v1                     polytool help --json
+  polytool.recurrence.v1                   recurrence --json (a found recurrence)
+  polytool.recurrence-representations.v1   recurrence --representations --json
+  polytool.recurrence-spaces.v1            recurrence --space / --verify-space
+  polytool.recurrence-theorems.v1          recurrence --theorem-matches --json,
+                                           recurrence-theorems
+  polytool.recurrence-leading-coefficient.v1  recurrence-degree
+  polytool.recurrence-proof-discovery.v1   recurrence-prove
+  polytool.recurrence-real-rootedness-theorem.v1  recurrence-prove reports
+  polytool.recurrence-veronese-lifts.v1    recurrence-veronese-lifts
+  polytool.recurrence-veronese-certificate.v1  recurrence-veronese-lifts
+  polytool.recurrence-transform.v1         recurrence-transform
+  polytool.recurrence-implicit.v1          recurrence-implicit
+  polytool.recurrence-implicit-search.v1   recurrence-implicit --search
+  polytool.recurrence-representation-search.v1  recurrence-search-representations
+  polytool.image_recurrence.v1             implicit image rules
+  polytool.recurrence-*-lift(s).v1         lift searches and certificates
+  polytool.root-enclosures.v1              root-enclosures
+  polytool.oeis-catalog.v1                 oeis list --json, oeis info --json
+  polytool.oeis-rows.v1                    oeis generate --json
+  polytool.oeis-text.v1                    recurrence-generate --format oeis-json
+  polytool.oeis-add.v1, oeis-check.v1, oeis-evidence.v1  oeis add/check/evidence
+  polytool.brenti-recognize.v1             brenti-recognize --json
+  polytool.pf-network.v1                   pf-network --json
+  polytool.left-production.v1              left-production --json
+  polytool.tnn-network.v1                  tnn-network --json
+  polytool.pf-pencil.v1                    pf-pencil --json
+  polytool.bench.real-rootedness.v1        bench real-rootedness --json

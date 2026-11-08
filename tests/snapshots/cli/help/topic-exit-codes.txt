@@ -1,0 +1,178 @@
+Exit statuses of every command
+
+General rule:
+  0  the command answered, also when the mathematical answer is negative
+     (a polynomial that is not real-rooted, a search that found nothing)
+  1  a decided negative where the command documents it (family-check with
+     --require-*, failed certificates and replays, impossible networks)
+  2  usage error or invalid input; stdout stays empty
+  3  inconclusive: a search budget was exhausted before a decision
+  141 stdout was closed early (broken pipe)
+
+Per command:
+  real-rooted
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  interlacing
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  interlacing-profile
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  properties
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  family-check
+      0 checked; every --require-* condition holds
+      1 some row fails a --require-* condition
+      2 usage error or unreadable input
+  coefficient-tests
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  enumerate-real-rooted
+      0 complete, or stopped by a budget (status resource_limit)
+      1 internal certification error
+      2 usage error or invalid arguments
+  root-enclosures
+      0 success (or a valid replay with --verify)
+      2 invalid input, or a replay that does not match
+  resultant
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  discriminant
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  sequence
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  recurrence
+      0 finished (a recurrence was found, or none within the bounds)
+      2 usage error or invalid input
+      3 the search budget was exhausted before the space was covered
+  recurrence-generate
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  recurrence-transform
+      0 success (or a replay that verified)
+      2 invalid input or a failed replay
+  recurrence-degree
+      0 proved (or the replayed certificate is valid)
+      1 not proved
+      2 usage error, invalid input or a failed replay
+  recurrence-prove
+      0 proved (or the replayed certificate is valid)
+      1 not proved
+      2 usage error, invalid input or a failed replay
+  recurrence-theorems
+      0 at least one theorem matches
+      1 no theorem matches
+      2 usage error or invalid input
+  recurrence-veronese-lifts
+      0 at least one lift found
+      1 no lift found
+      2 invalid or unsupported input
+  recurrence-implicit
+      0 success (or a replay that verified)
+      2 invalid input or a failed replay
+  recurrence-search-representations
+      0 success (or a replay that verified)
+      2 invalid input or a failed replay
+  oeis
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  oeis list
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  oeis info
+      0 found
+      2 usage error, or the A-number is not in the bundled catalog
+  oeis generate
+      0 rows written
+      2 usage error, unknown or experimental entry, or --max-terms smaller than the first row
+  oeis add
+      0 every outcome is added, updated or already_present
+      1 some A-number had another outcome
+      2 usage error or unreadable data
+  oeis check
+      0 no entry mismatches
+      1 some entry mismatches
+      2 usage error or unreadable data
+  oeis evidence
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  gamma-expansion
+      0 every row has a gamma expansion
+      1 some row is not palindromic
+      2 usage error or invalid input
+  bernstein-expansion
+      0 every row was expanded
+      1 some row could not be expanded in the requested degree
+      2 usage error or invalid input
+  hstar-to-ehrhart
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  ehrhart-to-hstar
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  hstar-inequalities
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  stapledon
+      0 finished (rows beyond the bound are reported but do not change the status)
+      2 usage error or invalid input
+  cyclic-sieving
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  cyclic-sieving-sequence
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  bicyclic-sieving
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  tnn-network
+      0 R is TNN and the network certificate re-evaluates to R
+      1 R is not lower-unitriangular TNN (the report says why), or a check the theory guarantees failed
+      2 invalid input or options
+  brenti-recognize
+      0 certified
+      1 impossible within the bounds
+      2 invalid input or options
+      3 inconclusive (a budget was exhausted)
+  pf-network
+      0 certified
+      1 impossible within the bounds
+      2 invalid input or options
+      3 inconclusive (a budget was exhausted)
+  left-production
+      0 Q_N is TNN and the certificate re-verifies (rows certified PF)
+      1 not certified
+      2 invalid input or options (for example deg P_n != n)
+  bench
+      0 finished
+      1 a fixture, file or check failed
+      2 usage error
+  bench recurrence-fixtures
+      0 finished
+      1 a fixture, file or check failed
+      2 usage error
+  bench compare
+      0 finished
+      1 a fixture, file or check failed
+      2 usage error
+  bench interlacing
+      0 finished
+      1 a fixture, file or check failed
+      2 usage error
+  bench real-rootedness
+      0 finished
+      1 a fixture, file or check failed
+      2 usage error
+  bkw-scout
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  pf-pencil
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  completions
+      0 script printed
+      2 unknown shell

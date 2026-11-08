@@ -1,0 +1,24 @@
+Run built-in timing suites.
+
+Run built-in timing suites and print tab-separated results. Choose a suite with
+a subcommand; run `polytool help bench <subcommand>` for its options.
+
+Usage: polytool bench <COMMAND>
+
+Commands:
+  recurrence-fixtures  Time adaptive recurrence search on fixture rows. [aliases: recurrence]
+  compare              Compare two recurrence-fixture JSON benchmark runs.
+  interlacing          Time consecutive interlacing checks on a sequence.
+  real-rootedness      Verdict-checked timing suite on degree 20-80 families. [aliases: real-rooted]
+
+Options:
+  -h, --help  Print help
+
+Examples:
+  polytool bench interlacing --max-index 10
+  polytool bench real-rootedness --quick
+
+Exit status:
+  0  finished
+  1  a fixture, file or check failed
+  2  usage error

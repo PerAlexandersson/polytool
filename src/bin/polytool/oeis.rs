@@ -15,40 +15,6 @@ use polytool::recurrence::*;
 use polytool::*;
 use serde_json::{json, Value};
 
-pub(crate) fn print_oeis_help() {
-    println!("Usage:");
-    println!("  polytool oeis list [--json] [--include-experimental]");
-    println!("  polytool oeis info <A-number> [--json]");
-    println!("  polytool oeis generate <A-number> --rows <n> [options]");
-    println!("  polytool oeis add <A-number>... [options]   (see `oeis add --help`)");
-    println!("  polytool oeis check [A-number...] [options] (see `oeis check --help`)");
-    println!("  polytool oeis evidence [A-number...|--all] --rows <n> [options]");
-    println!("                                              (see `oeis evidence --help`)");
-    println!("  polytool oeis --help");
-    println!();
-    println!("Generate OEIS polynomial rows from bundled exact recurrences.");
-    println!();
-    println!("Generation options:");
-    println!("  --rows <n>             Number of complete rows to emit");
-    println!("  --start-row <n>         First displayed OEIS row (default: catalog start)");
-    println!("  --format <format>       rows, triangle, polynomial, json, jsonl, csv, bfile");
-    println!("                          (default: polynomial)");
-    println!("  --max-terms <n>         B-file cap; never splits a row");
-    println!("  --include-experimental  Permit an experimental catalog entry");
-    println!();
-    println!("Catalog maintenance (source checkout):");
-    println!("  oeis add     Search a recurrence for OEIS rows, check it on held-out terms,");
-    println!("               and record it with provenance in data/oeis-catalog.jsonl");
-    println!("  oeis check   Re-validate catalog entries against a local OEIS copy");
-    println!("  oeis evidence  Compute the strongest coefficient property (real-rooted, ultra-");
-    println!("               log-concave, log-concave, unimodal) on the first rows of entries");
-    println!();
-    println!("Examples:");
-    println!("  polytool oeis generate A008292 --rows 6 --format triangle");
-    println!("  polytool oeis generate A008292 --rows 30 --format bfile");
-    println!("  polytool oeis add A008292 --oeis-data ~/oeis --dry-run");
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum OeisOutputFormat {
     Rows,
@@ -82,6 +48,7 @@ fn oeis_entry_json(entry: &polytool::oeis::OeisSequenceDefinition) -> Value {
         "status": entry.status.as_str(),
         "layout": entry.layout.as_str(),
         "first_row": entry.first_row,
+        "first_index": entry.first_row,
         "flattened_offset": entry.flattened_offset,
         "bfile_available": entry.bfile_prefix_verified,
         "source_rows": entry.source_rows,
@@ -265,22 +232,22 @@ fn cmd_oeis_generate(args: &[String]) {
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
-            "--rows" => {
+            "--count" => {
                 row_count = Some(
-                    parse_usize_option(args, &mut index, "--rows").unwrap_or_else(|error| {
+                    parse_usize_option(args, &mut index, "--count").unwrap_or_else(|error| {
                         eprintln!("{error}");
                         std::process::exit(2);
                     }),
                 );
             }
-            "--start-row" => {
+            "--from-index" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    eprintln!("--start-row expects a value");
+                    eprintln!("--from-index expects a value");
                     std::process::exit(2);
                 };
                 first_row = Some(value.parse().unwrap_or_else(|_| {
-                    eprintln!("--start-row expects an integer, got '{value}'");
+                    eprintln!("--from-index expects an integer, got '{value}'");
                     std::process::exit(2);
                 }));
             }
@@ -318,7 +285,7 @@ fn cmd_oeis_generate(args: &[String]) {
         std::process::exit(2);
     };
     let Some(row_count) = row_count else {
-        eprintln!("oeis generate needs --rows <n>");
+        eprintln!("oeis generate needs --count <n>");
         std::process::exit(2);
     };
     let Some(entry) = polytool::oeis::by_id(id) else {
@@ -388,6 +355,7 @@ fn cmd_oeis_generate(args: &[String]) {
                     "schema": "polytool.oeis-rows.v1",
                     "id": entry.id,
                     "first_row": first_row,
+                    "first_index": first_row,
                     "row_count": rows.len(),
                     "rows": bigint_rows_json(&rows),
                 }))
@@ -453,21 +421,8 @@ pub(crate) fn cmd_oeis(args: &[String]) {
         "add" => add::cmd_oeis_add(rest),
         "check" => check::cmd_oeis_check(rest),
         "evidence" => evidence::cmd_oeis_evidence(rest),
-        "--help" | "-h" | "help" => print_oeis_help(),
         other => {
             crate::input::usage_error("oeis", &format!("unknown oeis subcommand: {other}"));
         }
     }
-}
-
-/// Route nested help without running catalog readers or writers.
-pub(crate) fn print_oeis_subcommand_help(command: Option<&str>) -> bool {
-    match command {
-        Some("add") => add::print_oeis_add_help(),
-        Some("check") => check::print_oeis_check_help(),
-        Some("evidence") => evidence::print_oeis_evidence_help(),
-        None | Some("list" | "info" | "generate" | "help" | "--help" | "-h") => print_oeis_help(),
-        Some(_) => return false,
-    }
-    true
 }

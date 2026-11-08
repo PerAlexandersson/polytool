@@ -1,0 +1,78 @@
+Parent sequences whose coefficient sections are the sequence.
+
+Search for parent sequences P_n(x) whose Veronese coefficient section is the
+sequence Q_n(y) given by a polytool.recurrence.v1 record (for example from
+`polytool recurrence --json`):
+
+  V_(r,j)(P)(y) = sum_k [x^(r k + j)] P(x) y^k,   Q_n = V_(r,j)(P_n) for all n >= n0.
+
+If P_n is real-rooted with coefficients of one sign, every section is zero or
+real-rooted with nonpositive roots (Polya frequency sequences,
+Aissen-Schoenberg-Whitney-Edrei), so a lift transfers real-rootedness to Q_n.
+
+Supported input: derivative-free terms without (-1)^n factors and with
+coefficients independent of n, a constant (or no) denominator, no inhomogeneous
+term. Anything else exits with status 2. Theorem wrappers and representation
+menus are accepted (select an entry with --candidate, 0-based). Without
+--recurrence the record is read from standard input.
+
+The search is bounded: no lift found does not mean that none exists.
+
+Usage: polytool recurrence-veronese-lifts [--recurrence <FILE|->] [OPTIONS]
+
+Options:
+      --recurrence <FILE|->  Read recurrence JSON from FILE (default: stdin)
+      --candidate <N>        Select a representation menu entry (0-based)
+      --max-modulus <R>      Largest modulus, 2..=6 [default: 4]
+      --parent-rows <N>      Parent rows checked exactly [default: 12]
+      --max-candidates <N>   Candidate parents G tried per modulus [default: 256]
+  -h, --help                 Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Details:
+  Method, for each modulus r = 2..max-modulus (at most the order d):
+    chi(L, y) = L^d - sum_k c_k(y) L^(d-k) is the characteristic polynomial of
+    Q_m = sum_k c_k(y) Q_(m-k). chi(L, x^r) is factored over Q; each monic divisor
+    G(L, x) with r deg_L G <= d is a candidate parent recurrence. G is kept when
+    N = prod_(w^r=1) G(L, w x) divides chi; for each residue j the parent seeds
+    are solved exactly (polynomial seeds required) and the first d rows are
+    compared. N | chi, chi monic and d matching rows prove the identity for all n.
+
+  Status of a lift:
+    proved_product_parent        order-one parent P_n = c^(n-n0) P_(n0) with c and
+                                 P_(n0) real-rooted of one sign: every Q_n (n >= n0)
+                                 is zero or real-rooted with nonpositive roots
+    parent_real_rootedness_open  all checked parent rows are real-rooted of one
+                                 sign (finite evidence, not a proof)
+    parent_row_zero, parent_row_mixed_signs, parent_row_not_real_rooted
+                                 a checked parent row fails: no proof from this lift
+  Lifts are listed proved first, then open, then failing. Rejected candidates give
+  a reason: norm_does_not_divide, seeds_not_determined, seeds_not_polynomial or
+  row_mismatch.
+
+  JSON output is the polytool.recurrence-veronese-lifts.v1 report (exact rationals
+  as strings; each parent as a polytool.recurrence.v1 record in
+  parent_recurrence).
+
+Examples:
+  echo '{"schema":"polytool.recurrence.v1","first_index":0,
+      "initial_polynomials":[["1"],["1"]],"recurrence":{"terms":[
+      {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["2"]]}},
+      {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","1"]]}}]}}' \
+      | polytool recurrence-veronese-lifts
+  polytool recurrence-veronese-lifts --recurrence rec.json --max-modulus 3 --json
+
+Exit status:
+  0  at least one lift found
+  1  no lift found
+  2  invalid or unsupported input
+
+See also:
+  polytool recurrence, polytool recurrence-transform, polytool help recurrence-json

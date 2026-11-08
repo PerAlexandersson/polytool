@@ -118,7 +118,7 @@ polytool sequence eulerian 8 --format rows > polys.txt
 polytool interlacing --json < polys.txt
 polytool properties < polys.txt
 polytool sequence eulerian 5
-polytool oeis generate A008292 --rows 8 --format triangle
+polytool oeis generate A008292 --count 8 --format triangle
 polytool recurrence < polys.txt
 echo "1, 0, -3, 1" | polytool discriminant
 ```

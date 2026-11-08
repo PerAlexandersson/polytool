@@ -72,10 +72,10 @@ input or options.
 `brenti-recognize` searches exactly for a planar strip digraph (edges from
 column `x` to `x + 1` that depend only on the height, with monotone targets)
 whose path counts from `(0,0)` to `(n,k)` are the coefficients of the input
-rows `P_1, P_2, ...` (`P_0 = 1` implicit; `--first-row 0` reads `P_0, P_1, ...`).
-Bounds mirror `BrentiRecognitionOptions`: `--max-span <k>`,
+rows `P_1, P_2, ...` (`P_0 = 1` implicit; `--first-index 0` reads `P_0, P_1, ...`).
+Bounds mirror `BrentiRecognitionOptions`: `--max-target-span <k>`,
 `--weights rational|integer`, `--max-search-nodes <n>`,
-`--max-integer-nodes <n>`.  The verdict is `certified` (the digraph is
+`--max-integer-search-nodes <n>`.  The verdict is `certified` (the digraph is
 re-verified against every row), `impossible_within_bounds` (exact) or
 `inconclusive` (a budget ran out); exit status 0, 1 and 3 respectively, and 2
 for invalid input or options.
@@ -140,9 +140,9 @@ totally nonnegative (Lindström--Gessel--Viennot) and the row is PF
 (Aissen--Schoenberg--Whitney).  The search tries, column by column, every
 inclusion-minimal set of steps that is planar together with the edges already
 chosen and admits nonnegative weights for that row; this is exact for the
-bounds `--max-length <L>` and `--max-rise <R>` (default 3 and 3).  Other
-options: `--first-row <0|1>`, `--weights rational|integer`,
-`--max-search-nodes <n>`, `--max-integer-nodes <n>`.  The certificate is
+bounds `--max-step-length <L>` and `--max-rise <R>` (default 3 and 3).  Other
+options: `--first-index <0|1>`, `--weights rational|integer`,
+`--max-search-nodes <n>`, `--max-integer-search-nodes <n>`.  The certificate is
 re-verified exactly: structure, planarity, every row, and the path matrix
 rebuilt over the explicit lattice against the `(deg + 1) x (deg + 1)` Toeplitz
 window of the row.  The PF conclusion comes from planarity and height
@@ -199,7 +199,7 @@ planar network for `Q_N = L D` (canonical network weights of `L`, diagonal
 idempotent numbers, and Brenti's `n`-recursive triangles (Pascal, Delannoy,
 derangements) without naming the family.  The criterion is sufficient, not
 necessary: `Q_4` of the Eulerian triangle has `q_{4,2} = -5` although the rows
-are real-rooted, and the Narayana triangle fails at `Q_4`.  `--first-row 0`
+are real-rooted, and the Narayana triangle fails at `Q_4`.  `--first-index 0`
 reads `P_0, P_1, ...`; by default `P_0 = 1` is prepended.  Exit status 0 if
 certified, 1 if not, 2 for invalid input.
 

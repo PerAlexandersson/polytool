@@ -1,39 +1,7 @@
 //! `polytool bkw-scout`: numerical BKW equal-modulus scouting.
 
-use crate::input::read_limited_text;
 use crate::json_out::json_string;
 use polytool::*;
-use std::io::{self};
-
-pub(crate) fn bkw_scout_usage() {
-    println!("Usage:");
-    println!("  polytool bkw-scout [options]");
-    println!("  polytool bkw-scout --help");
-    println!();
-    println!("Input symbol: z-coefficient polynomials in x, ascending z-degree.");
-    println!("Example: F(x,z)=1-xz+z^2 is `1; -x; 1`.");
-    println!();
-    println!("Options:");
-    println!("  --symbol <s>             Symbol coefficients, e.g. '1; -x; 1'");
-    println!("                           If omitted, read the symbol from stdin.");
-    println!("  --box <r0> <r1> <i0> <i1>");
-    println!("                           Complex x rectangle (default: -3 3 -3 3)");
-    println!("  --grid <n>               Use an n by n grid (default: 61)");
-    println!("  --grid-re <n>            Number of real-axis grid samples");
-    println!("  --grid-im <n>            Number of imaginary-axis grid samples");
-    println!("  --top <n>                Number of candidates to print (default: 20)");
-    println!("  --include-real-axis      Include samples with Im(x)=0");
-    println!("  --min-imag <eps>         Minimum |Im(x)| unless real axis is included");
-    println!("  --refine-steps <n>       Local coordinate-refinement steps (default: 8)");
-    println!("  --no-refine              Disable local refinement");
-    println!("  --tol <eps>              Positive finite Durand--Kerner root tolerance");
-    println!("  --max-iter <n>           Positive Durand--Kerner max iterations");
-    println!("  --format <text|json>     Output format (default: text)");
-    println!("  --json                  Alias for --format json");
-    println!("  --mathematica            Also print an exact Mathematica Reduce skeleton");
-    println!("                          With JSON, adds a mathematica string field");
-    println!("  All floating-point options must be finite; --min-imag must be nonnegative.");
-}
 
 pub(crate) fn cmd_bkw_scout(args: &[String]) {
     let mut options = BkwScoutOptions::default();
@@ -44,10 +12,6 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "-h" | "--help" => {
-                bkw_scout_usage();
-                return;
-            }
             "--symbol" => {
                 i += 1;
                 if i >= args.len() {
@@ -77,21 +41,21 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 options.grid_re = grid;
                 options.grid_im = grid;
             }
-            "--grid-re" => {
+            "--real-grid-points" => {
                 i += 1;
                 if i >= args.len() {
-                    eprintln!("--grid-re requires a positive integer.");
+                    eprintln!("--real-grid-points requires a positive integer.");
                     std::process::exit(2);
                 }
-                options.grid_re = parse_usize_arg("--grid-re", &args[i]);
+                options.grid_re = parse_usize_arg("--real-grid-points", &args[i]);
             }
-            "--grid-im" => {
+            "--imaginary-grid-points" => {
                 i += 1;
                 if i >= args.len() {
-                    eprintln!("--grid-im requires a positive integer.");
+                    eprintln!("--imaginary-grid-points requires a positive integer.");
                     std::process::exit(2);
                 }
-                options.grid_im = parse_usize_arg("--grid-im", &args[i]);
+                options.grid_im = parse_usize_arg("--imaginary-grid-points", &args[i]);
             }
             "--top" => {
                 i += 1;
@@ -104,13 +68,13 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
             "--include-real-axis" => {
                 options.include_real_axis = true;
             }
-            "--min-imag" => {
+            "--min-imaginary-part" => {
                 i += 1;
                 if i >= args.len() {
-                    eprintln!("--min-imag requires a numeric argument.");
+                    eprintln!("--min-imaginary-part requires a numeric argument.");
                     std::process::exit(2);
                 }
-                options.min_imaginary_abs = parse_f64_arg("--min-imag", &args[i]);
+                options.min_imaginary_abs = parse_f64_arg("--min-imaginary-part", &args[i]);
             }
             "--refine-steps" => {
                 i += 1;
@@ -123,21 +87,21 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
             "--no-refine" => {
                 options.refine_steps = 0;
             }
-            "--tol" => {
+            "--tolerance" => {
                 i += 1;
                 if i >= args.len() {
-                    eprintln!("--tol requires a numeric argument.");
+                    eprintln!("--tolerance requires a numeric argument.");
                     std::process::exit(2);
                 }
-                options.root_options.tolerance = parse_f64_arg("--tol", &args[i]);
+                options.root_options.tolerance = parse_f64_arg("--tolerance", &args[i]);
             }
-            "--max-iter" => {
+            "--max-iterations" => {
                 i += 1;
                 if i >= args.len() {
-                    eprintln!("--max-iter requires a positive integer.");
+                    eprintln!("--max-iterations requires a positive integer.");
                     std::process::exit(2);
                 }
-                options.root_options.max_iterations = parse_usize_arg("--max-iter", &args[i]);
+                options.root_options.max_iterations = parse_usize_arg("--max-iterations", &args[i]);
             }
             "--format" => {
                 i += 1;
@@ -182,17 +146,17 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
         std::process::exit(2);
     }
     if options.min_imaginary_abs < 0.0 {
-        eprintln!("--min-imag must be nonnegative.");
+        eprintln!("--min-imaginary-part must be nonnegative.");
         std::process::exit(2);
     }
     if options.root_options.tolerance <= 0.0 || options.root_options.max_iterations == 0 {
-        eprintln!("--tol and --max-iter must be positive.");
+        eprintln!("--tolerance and --max-iterations must be positive.");
         std::process::exit(2);
     }
 
     let input = match symbol_input {
         Some(s) => s,
-        None => match read_limited_text(io::stdin(), "BKW symbol from stdin") {
+        None => match crate::input::read_command_input("BKW symbol from stdin") {
             Ok(input) => input,
             Err(error) => {
                 eprintln!("{error}");

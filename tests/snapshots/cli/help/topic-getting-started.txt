@@ -1,0 +1,24 @@
+A five-minute tour of polytool
+
+Every command reads its input from stdin (or from --input FILE) and writes its
+answer to stdout; progress notes, warnings and errors go to stderr. Polynomials
+are dense coefficient lists in ascending degree order, one per line.
+
+Generate a family, check it, and look for a recurrence:
+  polytool sequence eulerian 8 --format rows > eulerian.txt
+  polytool real-rooted --input eulerian.txt
+  polytool properties --json < eulerian.txt
+  polytool family-check --require-real-rooted --require-weak-interlacing < eulerian.txt
+  polytool recurrence --json < eulerian.txt > recurrence.json
+  polytool recurrence-generate --recurrence recurrence.json --count 10
+
+Work with the bundled OEIS families:
+  polytool oeis list
+  polytool oeis info A008292
+  polytool oeis generate A008292 --count 8 --format rows | polytool interlacing
+
+Pipe JSON between commands: --json (or --format json) gives a stable, versioned
+JSON report (see `polytool help json-schemas`); exact integers are JSON strings.
+
+Next steps: `polytool help <command>` for any command, `polytool help input`,
+`polytool help indexing` and `polytool help exit-codes`.

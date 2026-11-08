@@ -1,0 +1,30 @@
+List the bundled recurrence-backed OEIS families.
+
+List the catalog of OEIS polynomial families bundled with polytool. The text
+output has one tab-separated line per family: A-number, status, whether a
+verified b-file prefix exists (bfile or no-bfile) and the sequence name. Entries
+with the status experimental are hidden unless --include-experimental is given.
+
+Usage: polytool oeis list [OPTIONS]
+
+Options:
+      --include-experimental  Also list experimental catalog entries
+  -h, --help                  Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Details:
+  JSON output is polytool.oeis-catalog.v1: {"count": ..., "sequences": [...]}.
+
+Examples:
+  polytool oeis list
+  polytool oeis list --json --include-experimental
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+See also:
+  polytool oeis info, polytool oeis generate

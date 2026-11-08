@@ -1,0 +1,29 @@
+Convert Ehrhart polynomials to h*-vectors.
+
+Convert each Ehrhart polynomial into its h*-vector. Input coefficients may be
+integers or exact rationals; the h*-vector entries are arbitrary-size integers.
+
+Usage: polytool ehrhart-to-hstar [OPTIONS]
+
+Options:
+  -h, --help  Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One exact coefficient list per line on stdin (or --input FILE), in
+  ascending degree order; entries are integers or rationals such as 3/7.
+  See `polytool help input`.
+
+Examples:
+  echo '1, 2, 2' | polytool ehrhart-to-hstar
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+See also:
+  polytool hstar-to-ehrhart, polytool hstar-inequalities

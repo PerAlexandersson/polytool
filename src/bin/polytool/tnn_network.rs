@@ -2,7 +2,6 @@
 //! a monic polynomial sequence (or of a lower-unitriangular matrix), its
 //! canonical planar network, and optional chain polynomials.
 
-use crate::help::print_coefficient_input_help;
 use crate::input::read_polys_bigint;
 use crate::json_out::{json_bigint_vec, json_string, json_usize_vec};
 use num_bigint::BigInt;
@@ -16,56 +15,6 @@ pub(crate) const TNN_NETWORK_NOTE: &str = "TNN of the coefficient matrix does no
      this finite prefix.";
 
 const CHAIN_THEOREM: &str = "Brändén--Saud Maia Leite, arXiv:2412.06595, Theorem 3.7";
-
-pub(crate) fn print_tnn_network_help() {
-    println!("Usage:");
-    println!("  polytool tnn-network [--matrix] [--chain] [--json]");
-    println!("  polytool tnn-network --help");
-    println!();
-    println!("Decide exactly whether the coefficient triangle R = (r_{{n,k}}) of the input");
-    println!("rows is a lower-unitriangular totally nonnegative (TNN) matrix.  On success,");
-    println!("print the weights lambda[n][k] of its canonical planar network Gamma_N(lambda)");
-    println!("(lambda[n][k] is the weight of the vertical edge (n+1,k) -> (n,k); horizontal");
-    println!("edges have weight 1) and re-evaluate the network's path matrix against R");
-    println!("(reconstruct -> evaluate -> compare).  On failure, say why: a shape problem");
-    println!("(not lower-unitriangular), a negative entry, or an explicit negative minor");
-    println!("(rows, columns, exact value; zero-based indices).");
-    println!();
-    print_coefficient_input_help();
-    println!();
-    println!("  Default (polynomial rows): row n is a monic polynomial P_n of degree n,");
-    println!("  r_{{n,k}} = [t^k] P_n.  The rows may start at P_0 = 1 or at P_1, in which");
-    println!("  case P_0 = 1 is prepended.");
-    println!("  With --matrix: each line is a matrix row, either a square lower-triangular");
-    println!("  matrix (every row as long as the number of rows) or triangular rows (row n");
-    println!("  has n + 1 entries).  Shape errors then name the offending entry.");
-    println!();
-    println!("Options:");
-    println!("  --matrix  Read matrix rows instead of monic polynomial rows");
-    println!("  --chain   Also compute the chain polynomials p_0 = 1,");
-    println!("            p_n = t * sum_{{k<n}} r_{{n,k}} p_k, and check that each is real-rooted");
-    println!("            with zeros in [-1, 0] and that p_n interlaces p_{{n+1}}");
-    println!("  --json    Emit machine-readable JSON (schema polytool.tnn-network.v1)");
-    println!();
-    println!("Guardrails:");
-    println!("  TNN of R does NOT make the row polynomials real-rooted:");
-    println!("  [[1,0,0],[1,1,0],[1,1,1]] is TNN, yet its last row is 1 + t + t^2.");
-    println!("  Brändén--Saud Maia Leite (arXiv:2412.06595, Thm 3.7): if R is TNN then the");
-    println!("  chain polynomials are real-rooted in [-1, 0] and interlace.  The --chain");
-    println!("  report keeps the TNN verdict separate from these polynomial checks.");
-    println!("  A finite triangle certifies only the supplied prefix.");
-    println!();
-    println!("Exit status:");
-    println!("  0  R is TNN and the network certificate re-evaluates to R");
-    println!("  1  R is not lower-unitriangular TNN (the report says why), or a check that");
-    println!("     the theory guarantees failed");
-    println!("  2  invalid input or options");
-    println!();
-    println!("Examples:");
-    println!("  printf '1,1\\n1,2,1\\n1,3,3,1\\n' | polytool tnn-network --chain");
-    println!("  printf '1\\n1,1\\n1,1,1\\n' | polytool tnn-network");
-    println!("  printf '1,0,0\\n1,1,0\\n2,0,1\\n' | polytool tnn-network --matrix --json");
-}
 
 #[derive(Default)]
 struct TnnNetworkOptions {

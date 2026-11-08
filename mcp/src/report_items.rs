@@ -415,6 +415,7 @@ pub(crate) fn oeis_sequence_summary(
         status: entry.status.as_str().to_string(),
         layout: entry.layout.as_str().to_string(),
         first_row: entry.first_row,
+        first_index: entry.first_row,
         flattened_offset: entry.flattened_offset,
         bfile_available: entry.bfile_prefix_verified,
         source_rows: entry.source_rows,

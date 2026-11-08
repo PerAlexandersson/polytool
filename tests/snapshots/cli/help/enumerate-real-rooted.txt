@@ -1,0 +1,57 @@
+Enumerate real-rooted integer polynomials by leading prefix.
+
+Enumerate every real-rooted integer polynomial
+  p(x) = a_0 x^n + a_1 x^(n-1) + ... + a_n
+of degree n whose first t leading coefficients a_0, ..., a_(t-1) are given, with
+3 <= t <= n + 1 and a_0 != 0 (either sign). Reducible polynomials and
+polynomials with repeated roots are included. The search is the
+Greaves--Syatriadi derivative-tower algorithm (arXiv:2504.09241) with exact,
+certified endpoints: no floating point is used. Nothing is read from stdin.
+
+Coefficient order: --leading-coefficients-descending is DESCENDING (a_0 first);
+each output polynomial is ASCENDING, as in all other polytool commands (c_0,
+c_1, ..., c_n with c_k = a_(n-k)), so output lines can be piped into `polytool
+real-rooted`. Results are sorted lexicographically by (a_t, ..., a_n).
+
+Usage: polytool enumerate-real-rooted --degree <N> --leading-coefficients-descending <A0,A1,...> [OPTIONS]
+
+Options:
+      --degree <N>
+          Degree n >= 2 (required)
+      --leading-coefficients-descending <LIST>
+          Comma- or space-separated a_0, ..., a_(t-1), leading first (required)
+  -h, --help
+          Print help
+
+Limits:
+      --max-results <K|none>           Stop after K results [default: 10000]
+      --max-nodes <K|none>             Stop after examining K search nodes [default: 1000000]
+      --max-coefficient-bits <B|none>  Stop if a derivative-tower coefficient needs more than B bits [default: none]
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Details:
+  Status values:
+    complete        the list is the full set (it may be empty)
+    resource_limit  a budget was hit; the list is an initial segment of the full
+                    sorted set, and limit_reached names the budget
+    invalid_input   (exit status 2) the arguments were rejected
+    internal_error  (exit status 1) an internal certification check failed
+  Errors are reported on stderr; with JSON output a status object is also printed
+  on stdout. JSON coefficients are strings, so they stay exact beyond 2^53.
+
+Examples:
+  polytool enumerate-real-rooted --degree 6 --leading-coefficients-descending 1,0,-15 --json
+
+Exit status:
+  0  complete, or stopped by a budget (status resource_limit)
+  1  internal certification error
+  2  usage error or invalid arguments
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --leading-desc -> --leading-coefficients-descending
+
+See also:
+  polytool real-rooted, polytool help coefficient-order, polytool help budgets

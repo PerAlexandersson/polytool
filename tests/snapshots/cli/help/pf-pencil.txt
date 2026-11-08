@@ -1,0 +1,41 @@
+Check built-in PF/Jensen endpoint pencils.
+
+Check built-in Family H PF-bidiagonal/Jensen endpoint pencils. Choose exactly
+one of --case and --all-family-h, and either --degree or --max-degree
+(optionally with --min-degree); --degree cannot be combined with the range
+options.
+
+Usage: polytool pf-pencil --case <OEIS-ID> --degree <D> [OPTIONS]
+       polytool pf-pencil --case <OEIS-ID> --min-degree <A> --max-degree <B> [OPTIONS]
+       polytool pf-pencil --all-family-h --max-degree <B> [OPTIONS]
+
+Options:
+      --case <OEIS-ID>  Built-in case such as A036969
+      --degree <D>      Check one old-row degree
+      --min-degree <D>  First degree of a range [default: 1]
+      --max-degree <D>  Last degree of a range
+      --all-family-h    Check all built-in Family H cases
+      --lambdas <LIST>  Comma-separated nonnegative integer lambdas [default: 0,1,10,100]
+  -h, --help            Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Details:
+  Supported cases:
+
+    A036969 A071951 A080248 A156289 A160562 A269945
+    A166960 A166961 A166962 A166972 A191935
+    A371081 A371259 A390433 A198204
+
+Examples:
+  polytool pf-pencil --case A036969 --degree 4
+  polytool pf-pencil --all-family-h --max-degree 6 --json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+See also:
+  polytool oeis

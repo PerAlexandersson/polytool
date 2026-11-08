@@ -2,7 +2,6 @@
 //! triangle, whose total nonnegativity certifies the triangle, its reversal
 //! and Pólya frequency rows.
 
-use crate::help::print_coefficient_input_help;
 use crate::input::{parse_usize_option, read_polys_bigint};
 use crate::json_out::{json_string, json_string_vec, json_usize_vec};
 use num_bigint::BigInt;
@@ -16,56 +15,6 @@ pub(crate) const LEFT_PRODUCTION_NOTE: &str = "If the left production matrix Q_N
      the rows P_0, ..., P_N are Pólya frequency sequences (real-rooted, nonpositive zeros) \
      and the triangle and its reversal are TNN, for this prefix only. If Q_N is not TNN, \
      nothing follows about the rows (the Eulerian rows are real-rooted, yet q_{4,2} = -5).";
-
-pub(crate) fn print_left_production_help() {
-    println!("Usage:");
-    println!("  polytool left-production [--first-row <0|1>] [--json]");
-    println!("  polytool left-production --help");
-    println!();
-    println!("Read rows P_0, ..., P_N with deg P_n = n (a lower-triangular matrix A with");
-    println!("nonzero diagonal, a_{{n,k}} = [t^k] P_n), compute exactly the leading block");
-    println!("Q_N of its left production matrix Q = A (1 ⊕ A^{{-1}}), i.e.");
-    println!("  a_{{n,0}} = q_{{n,0}},  a_{{n,k}} = sum_{{i=k..n}} q_{{n,i}} a_{{i-1,k-1}},");
-    println!("and decide whether Q_N is totally nonnegative (TNN).  By Chen--Fu--Ruan");
-    println!("(arXiv:2512.08369) a TNN Q_N certifies, for the supplied rows: every row is a");
-    println!("Pólya frequency sequence (real-rooted, nonpositive zeros), and A_N and its");
-    println!("reversal [a_{{n,n-k}}] are TNN.  On success the certificate is re-verified:");
-    println!("A_N is regenerated from Q_N, Q_N is checked TNN, and for every row n the");
-    println!("unified-network window M_{{n,n}}[n..2n; 0..n] is compared with the transposed");
-    println!("Toeplitz section of P_n (Theorem 4).  An explicit planar network for Q_N is");
-    println!("printed: Q_N = L D with L the canonical network Gamma_N(lambda) and D the");
-    println!("diagonal of Q_N.  On failure an explicit negative minor of Q_N is given when");
-    println!("found.");
-    println!();
-    print_coefficient_input_help();
-    println!();
-    println!("  By default the input is P_1, P_2, ... with P_0 = 1 prepended.");
-    println!();
-    println!("Options:");
-    println!("  --first-row <0|1>  Index of the first input row (default 1: P_0 = 1 is");
-    println!("                     prepended; 0: the input starts with P_0)");
-    println!("  --json             Emit machine-readable JSON");
-    println!("                     (schema polytool.left-production.v1)");
-    println!();
-    println!("Guardrails:");
-    println!("  The criterion is sufficient, not necessary: if Q_N is not TNN nothing");
-    println!("  follows about the rows (the Eulerian rows are real-rooted, but");
-    println!("  q_{{4,2}} = -5).  A certificate covers only the supplied rows.  Covered");
-    println!("  families include exponential Riordan arrays R[f', f] with f' PF (Stirling");
-    println!("  numbers of both kinds, Lah numbers), r-Whitney numbers, and Brenti's");
-    println!("  n-recursive triangles with nonnegative coefficients (Pascal, Delannoy).");
-    println!();
-    println!("Exit status:");
-    println!("  0  Q_N is TNN and the certificate re-verifies (rows certified PF)");
-    println!("  1  not certified");
-    println!("  2  invalid input or options (e.g. deg P_n != n)");
-    println!();
-    println!("Examples:");
-    println!("  printf '0,1\\n0,1,1\\n0,1,3,1\\n0,1,7,6,1\\n' | polytool left-production");
-    println!(
-        "  printf '1,1\\n1,4,1\\n1,11,11,1\\n1,26,66,26,1\\n' | polytool left-production --json"
-    );
-}
 
 struct LeftProductionArgs {
     json: bool,
@@ -82,7 +31,7 @@ fn parse_left_production_args(args: &[String]) -> Result<LeftProductionArgs, Str
         let arg = args[index].as_str();
         match arg {
             "--json" => parsed.json = true,
-            "--first-row" => parsed.first_row_index = parse_usize_option(args, &mut index, arg)?,
+            "--first-index" => parsed.first_row_index = parse_usize_option(args, &mut index, arg)?,
             other => return Err(format!("unknown left-production option: {other}")),
         }
         index += 1;
@@ -127,10 +76,11 @@ fn json_option<T>(value: Option<T>, render: impl FnOnce(T) -> String) -> String 
 
 fn report_json(report: &LeftProductionReport, first_row_index: usize, rows: usize) -> String {
     format!(
-        "{{\"schema\":\"polytool.left-production.v1\",\"first_row_index\":{},\"rows\":{},\
+        "{{\"schema\":\"polytool.left-production.v1\",\"first_row_index\":{},\"first_index\":{},\"rows\":{},\
          \"triangle\":{},\"production_matrix\":{},\"tnn\":{},\"failure_reason\":{},\
          \"negative_minor\":{},\"certificate_verified\":{},\"rows_certified_pf\":{},\
          \"production_network\":{},\"message\":{},\"note\":{}}}",
+        first_row_index,
         first_row_index,
         rows,
         matrix_json(&report.triangle),

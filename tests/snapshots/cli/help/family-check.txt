@@ -1,0 +1,47 @@
+Check properties and consecutive interlacing together.
+
+Check a polynomial family in one pass: the properties of every row, weak and
+strict interlacing of consecutive rows and, with --find-recurrence, an adaptive
+recurrence search. The --require-* options turn a property into a requirement:
+the command then exits 1 when some row fails it. All checks accept
+arbitrary-size integer coefficients.
+
+Usage: polytool family-check [OPTIONS]
+
+Options:
+      --find-recurrence  Also search for an adaptive recurrence
+  -h, --help             Print help
+
+Requirements:
+      --require-real-rooted        Exit 1 if any row is not real-rooted
+      --require-palindromic        Exit 1 if any row is not palindromic
+      --require-gamma-positive     Exit 1 if any row is not gamma-positive
+      --require-unimodal           Exit 1 if any row is not unimodal
+      --require-log-concave        Exit 1 if any row is not log-concave
+      --require-ultra-log-concave  Exit 1 if any row is not ultra-log-concave
+      --require-weak-interlacing   Exit 1 if some consecutive rows do not weakly interlace
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One polynomial per line on stdin (or --input FILE): ascending integer
+  coefficient lists such as `1, 3, 2`, or expanded notation such as
+  `1 + 3t + 2t^2`. See `polytool help input`.
+
+Examples:
+  polytool sequence eulerian 8 --format rows | polytool family-check
+  polytool family-check --require-real-rooted --require-weak-interlacing --input rows.txt
+
+Exit status:
+  0  checked; every --require-* condition holds
+  1  some row fails a --require-* condition
+  2  usage error or unreadable input
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --recurrence -> --find-recurrence
+
+See also:
+  polytool properties, polytool interlacing, polytool recurrence

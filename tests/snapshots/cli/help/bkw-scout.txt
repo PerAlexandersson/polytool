@@ -1,0 +1,57 @@
+Scout BKW equal-modulus loci for a recurrence symbol.
+
+Scout, numerically, the equal-modulus loci of the roots of a recurrence symbol
+on a grid of complex values of x. The result is floating-point evidence, not a
+proof; it comes with a Mathematica Reduce skeleton for exact follow-up.
+
+The symbol is given as z-coefficient polynomials in x in ascending z-degree,
+separated by semicolons. For example, F(x,z) = 1 - xz + z^2 is `1; -x; 1`.
+Without --symbol the symbol is read from standard input. All floating-point
+options must be finite; --min-imaginary-part must be nonnegative.
+
+Usage: polytool bkw-scout [OPTIONS]
+
+Options:
+      --symbol <TEXT>              Symbol coefficients, for example '1; -x; 1'
+      --box <R0> <R1> <I0> <I1>    Complex x rectangle [default: -3 3 -3 3]
+      --grid <N>                   Use an N by N grid [default: 61]
+      --real-grid-points <N>       Number of real-axis grid samples
+      --imaginary-grid-points <N>  Number of imaginary-axis grid samples
+      --top <N>                    Number of candidates to print [default: 20]
+      --include-real-axis          Include samples with Im(x) = 0
+      --min-imaginary-part <EPS>   Minimum |Im(x)| unless the real axis is included
+      --refine-steps <N>           Local coordinate-refinement steps [default: 8]
+      --no-refine                  Disable local refinement
+      --tolerance <EPS>            Positive Durand--Kerner root tolerance
+      --max-iterations <N>         Positive Durand--Kerner iteration limit
+      --mathematica                Also print an exact Mathematica Reduce skeleton
+  -h, --help                       Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  Text on stdin (or --input FILE); see the description above.
+
+Details:
+  With --json, --mathematica adds a `mathematica` string field.
+
+Examples:
+  polytool bkw-scout --symbol '1; -x; 1' --top 5
+  echo '1; -x; 1' | polytool bkw-scout --box -2 2 -2 2 --grid 41 --json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --grid-re -> --real-grid-points
+  --grid-im -> --imaginary-grid-points
+  --min-imag -> --min-imaginary-part
+  --tol -> --tolerance
+  --max-iter -> --max-iterations
+
+See also:
+  polytool recurrence-theorems

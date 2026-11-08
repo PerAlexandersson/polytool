@@ -24,6 +24,9 @@ rust_2018_idioms = { level = "warn", priority = -1 }
 unsafe_code = "forbid"
 
 [dependencies]
+# clap 4.6 needs Rust 1.85; the library keeps rust-version 1.82.
+clap = { version = "~4.5.40", default-features = false, features = ["std", "help", "usage", "error-context", "suggestions"] }
+clap_complete = "~4.5.40"
 exact-real-roots = { version = "0.2.0", path = "crates/exact-real-roots" }
 ore-algebra = { version = "0.1.0", path = "crates/ore-algebra" }
 num-bigint = "0.4"

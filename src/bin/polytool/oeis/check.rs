@@ -11,25 +11,6 @@ use std::path::PathBuf;
 /// Upper bound on generated rows per entry while covering the OEIS terms.
 const MAX_CHECK_ROWS: usize = 4096;
 
-pub(crate) fn print_oeis_check_help() {
-    println!("Usage:");
-    println!("  polytool oeis check [A-number...] [--oeis-data <dir>] [options]");
-    println!();
-    println!("Regenerate catalog entries and compare their flattened rows with every");
-    println!("term of the local OEIS record (the %S/%T/%U data, or a real b-file when it");
-    println!("extends them).  Entries whose flattened alignment is not verified, or");
-    println!("whose record is missing locally, are reported as unchecked.");
-    println!();
-    println!("Options:");
-    println!("  --oeis-data <dir>    Local OEIS internal-format copy (default: ${OEIS_DATA_ENV})");
-    println!("  --catalog <file>     Check the entries of a data file (for example after");
-    println!("                       `oeis add`, before rebuilding) instead of the bundled ones");
-    println!("  --ids-file <file>    Restrict to the listed A-numbers");
-    println!("  --json               Emit a polytool.oeis-check.v1 report");
-    println!();
-    println!("The exit status is 1 when any entry mismatches, else 0.");
-}
-
 fn fail<T>(error: String) -> T {
     eprintln!("{error}");
     std::process::exit(2);
@@ -106,10 +87,6 @@ fn check_entry(root: &std::path::Path, entry: &'static OeisSequenceDefinition) -
 }
 
 pub(crate) fn cmd_oeis_check(args: &[String]) {
-    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        print_oeis_check_help();
-        return;
-    }
     let mut oeis_data: Option<PathBuf> = None;
     let mut catalog: Option<String> = None;
     let mut ids = Vec::new();

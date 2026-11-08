@@ -2,57 +2,13 @@
 //! `polytool recurrence --theorem-matches`.
 
 use crate::input::error_text;
-use crate::input::{is_help_arg, parse_usize_option};
+use crate::input::parse_usize_option;
 use crate::recurrence_input::read_recurrence_json;
 use polytool::recurrence::{
     AdaptiveSearchOptions, AdaptiveSearchResult, BigRational, RecurrenceJson, RecurrenceJsonSearch,
     RecurrenceOptionsJson,
 };
 use polytool::renewal::RecurrenceTheoremReport;
-
-pub(crate) fn print_recurrence_theorems_help() {
-    println!("Usage:");
-    println!("  polytool recurrence-theorems --recurrence <file|-> [--json]");
-    println!("  polytool recurrence-theorems --help");
-    println!("  --candidate <index>  Select a representation menu entry (0-based)");
-    println!("  Also accepts theorem wrappers and recurrence representation menus.");
-    println!();
-    println!("Check a supplied recurrence JSON record (polytool.recurrence.v1, e.g. from");
-    println!("`polytool recurrence --json`) against the supported interlacing theorems and");
-    println!("report explicit conditional theorem matches.");
-    println!();
-    println!("Theorems (paper proofs, not Lean checked;");
-    println!("https://github.com/PerAlexandersson/RealRooted/issues/2037):");
-    println!("  weighted_renewal_window          P_n = sum_j r_j t^j P_(n-1-ell*j), r_0 = 1,");
-    println!("                                   r_j >= 0, R(z) = sum r_j z^j real-rooted;");
-    println!("                                   P_n << P_(n+s) for d*s <= d*ell+1, d = deg R.");
-    println!(
-        "  fixed_delay_predecessor_window   P_n = P_(n-1) + w(n) t P_(n-L), w polynomial in n"
-    );
-    println!("                                   with w(n) >= 0 for all integers n >= 1 (exact");
-    println!("                                   certificate, not sampling); Q_A << Q_B for");
-    println!("                                   B - A <= L with Q_(max(0, n-L)) boundary.");
-    println!();
-    println!("Hypotheses are checked exactly. The record's initial rows are compared with the");
-    println!("canonical boundary rows (finite check; `canonical_after_relabel` when the first");
-    println!("supplied row plays the role of index 0). A match is conditional: it never shows");
-    println!("that the recurrence holds for the intended sequence for all n.");
-    println!();
-    println!("Options:");
-    println!("  --recurrence <file|->   Read recurrence JSON from a file, or stdin with -");
-    println!("  --json                  Emit the polytool.recurrence-theorems.v1 report; its");
-    println!("                          trivially_real_rooted (supplied, not fitted, records");
-    println!("                          only) is true when the rule is B(n) P_n = A(x,n) P_(n-k)");
-    println!("                          and product induction proves it");
-    println!("  -h, --help              Print this help text");
-    println!();
-    println!("Exit status: 0 with at least one match, 1 with none, 2 on invalid input.");
-    println!();
-    println!("Example:");
-    println!(
-        "  polytool recurrence --json < rows.txt | polytool recurrence-theorems --recurrence -"
-    );
-}
 
 /// Theorem report for an adaptive-search result; `polys` are all input rows.
 /// Its `recurrence_json` is the record that `recurrence --json` prints.
@@ -145,10 +101,6 @@ pub(crate) fn print_theorem_report_text(report: &RecurrenceTheoremReport) {
 }
 
 pub(crate) fn cmd_recurrence_theorems(args: &[String]) {
-    if args.iter().any(|arg| is_help_arg(arg)) {
-        print_recurrence_theorems_help();
-        return;
-    }
     let mut path = None;
     let mut candidate = None;
     let mut json = false;

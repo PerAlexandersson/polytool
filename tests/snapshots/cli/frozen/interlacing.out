@@ -1,0 +1,7 @@
+1 & 1 + t: strictly interlace
+1 + t & 1 + 4t + t^2: strictly interlace
+1 + 4t + t^2 & 1 + 11t + 11t^2 + t^3: strictly interlace
+1 + 11t + 11t^2 + t^3 & 1 + 26t + 66t^2 + 26t^3 + t^4: strictly interlace
+1 + 26t + 66t^2 + 26t^3 + t^4 & 1 + 57t + 302t^2 + 302t^3 + 57t^4 + t^5: strictly interlace
+1 + 57t + 302t^2 + 302t^3 + 57t^4 + t^5 & 1 + 120t + 1191t^2 + 2416t^3 + 1191t^4 + 120t^5 + t^6: strictly interlace
+1 + 120t + 1191t^2 + 2416t^3 + 1191t^4 + 120t^5 + t^6 & 1 + 247t + 4293t^2 + 15619t^3 + 15619t^4 + 4293t^5 + 247t^6 + t^7: strictly interlace

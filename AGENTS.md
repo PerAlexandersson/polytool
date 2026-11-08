@@ -39,9 +39,19 @@
     for rows: `pf_network` (height-invariant networks), `left_production`
     (Chen--Fu--Ruan left production matrices);
   - standard sequences: `sequences` (with `deco` and `literature`).
-- The CLI is `src/bin/polytool/`: `main.rs` dispatches, each subcommand (or
-  close group) has its own module, and `input`, `json_out` and `help` hold the
-  shared parsing, JSON fragments and help text.  `mcp/` and `web/` are adapters
+- The CLI is `src/bin/polytool/`: `cli.rs` builds the clap parser from the
+  declarative specification (types in `src/bin/polytool/cli/spec.rs`, topic pages
+  in `src/bin/polytool/cli/topics.rs`)
+  and normalizes the arguments for the handlers; `commands.rs` and
+  `commands/*.rs` hold every command's specification (flags, deprecated
+  spellings, help text, examples, exit codes), which also drives help pages,
+  `help --json` and completion. Each subcommand (or close group) has its own
+  handler module; `input` and `json_out` hold the shared input reading and
+  JSON fragments. A new flag goes into the command's specification and its
+  handler; a rename keeps the old spelling in `.deprecated(&[...])`. Help
+  snapshots live in `tests/snapshots/cli/` (re-bless deliberately with
+  `POLYTOOL_BLESS_CLI_HELP=1`; the frozen invocation outputs are a
+  compatibility promise).  `mcp/` and `web/` are adapters
   over the library, not separate implementations.  Put mathematics in the library
   and keep adapters thin.
 - The web page `web/index.html` is markup only. Styles are in `web/app.css` and the

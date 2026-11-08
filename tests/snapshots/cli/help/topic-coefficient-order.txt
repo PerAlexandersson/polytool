@@ -1,0 +1,16 @@
+Coefficient order: ascending, and the three exceptions
+
+Coefficient lists are in ascending degree order everywhere: entry i is the
+coefficient of t^i, so `1, 3, 2` is 1 + 3t + 2t^2. JSON reports use the same
+order. The exceptions are explicit in their names:
+
+  enumerate-real-rooted --leading-coefficients-descending A0,A1,...
+      gives the leading coefficients first (descending); its output is ascending.
+  recurrence-generate --descending
+      prints each generated row highest degree first.
+  bkw-scout --symbol '1; -x; 1'
+      lists the coefficients of z^0, z^1, ... (ascending in z); each is a
+      polynomial in x.
+
+Triangles (oeis generate --format triangle, b-files) list row n, then row n+1,
+each row in ascending order.

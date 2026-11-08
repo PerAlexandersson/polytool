@@ -1,0 +1,66 @@
+Search for a planar strip digraph reproducing the rows.
+
+Search exactly for a planar strip digraph D (heights 0..H, edges from column x
+to column x + 1 that depend only on the height, monotone targets) whose weighted
+path counts from (0,0) to (n,k) are the coefficients [t^k] P_n of the input
+rows. By default the input is P_1, P_2, ... with P_0 = 1 implicit.
+
+The verdict is one of:
+
+  certified                 a digraph, re-verified against every input row
+  impossible_within_bounds  an exact proof that no digraph within the bounds
+                            reproduces the rows
+  inconclusive              a search budget ran out
+
+Usage: polytool brenti-recognize [OPTIONS]
+
+Options:
+      --first-index <0|1>    Index of the first input row (0: it must be P_0 = 1) [default: 1]
+      --max-target-span <K>  At most K consecutive target heights per height [default: no bound]
+      --weights <KIND>       Nonnegative rational or integer weights [default: rational] [possible values: rational, integer]
+  -h, --help                 Print help
+
+Limits:
+      --max-search-nodes <N>          Budget on partial supports [default: 1000000]
+      --max-integer-search-nodes <N>  Budget on the integer search per column [default: 10000]
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One polynomial per line on stdin (or --input FILE): ascending integer
+  coefficient lists such as `1, 3, 2`, or expanded notation such as
+  `1 + 3t + 2t^2`. See `polytool help input`.
+
+Details:
+  Guardrails:
+
+    A certificate proves that the coefficient matrix of P_0, ..., P_N is totally
+    nonnegative (Lindstrom--Gessel--Viennot). It does NOT prove that the rows are
+    real-rooted or PF: [1 + t, 1 + t + t^2] is certified. The transitions here depend
+    on the height, so the digraph is invariant under shifts in x, not in y; Brenti's
+    PF theorem needs height-shift invariance. Only the supplied prefix is covered.
+    For PF certificates of the rows themselves use pf-network or left-production.
+
+  JSON output has the schema polytool.brenti-recognize.v1.
+
+Examples:
+  printf '1,1\n1,2,1\n1,3,3,1\n' | polytool brenti-recognize
+  printf '0,1\n0,1,1\n0,1,3,1\n0,1,7,6,1\n' | polytool brenti-recognize --weights integer
+  printf '1,1\n1,4,1\n1,11,11,1\n' | polytool brenti-recognize --json
+
+Exit status:
+  0  certified
+  1  impossible within the bounds
+  2  invalid input or options
+  3  inconclusive (a budget was exhausted)
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --first-row -> --first-index
+  --max-span -> --max-target-span
+  --max-integer-nodes -> --max-integer-search-nodes
+
+See also:
+  polytool tnn-network, polytool pf-network, polytool left-production, polytool help budgets

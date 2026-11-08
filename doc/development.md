@@ -16,9 +16,14 @@ The output directory must be new or empty and outside the source workspace.
 The builder uses a fresh external Cargo target directory, checks local guide
 links and rejects symbolic links in the site. It renders every `doc/*.md`
 guide, gathers command names from `polytool help --json`, and gathers details
-from each command's `--help`, including OEIS maintenance subcommands. Add
-new commands to `src/bin/polytool/commands.rs` and their detailed help to
-`help.rs`; the workflow test checks that every registered command has help.
+from each command's `--help`, including OEIS maintenance subcommands. A new
+command is one `CommandSpec` in `src/bin/polytool/commands/` (registered in
+`commands.rs`): its flags, help text, examples and exit codes drive the clap
+parser, the help pages, `polytool help --json` and completion. The CLI tests
+check that every page has usage, examples and exit status, that every
+documented flag reaches its handler, and compare the pages with the snapshots
+in `tests/snapshots/cli/help` (`POLYTOOL_BLESS_CLI_HELP=1` re-blesses them
+after a deliberate change).
 
 The Documentation GitHub workflow builds an artifact for pull requests and
 manual runs. Publishing is manual: configure the repository's Pages source

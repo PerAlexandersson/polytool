@@ -1,0 +1,37 @@
+Re-validate catalog entries against a local OEIS copy.
+
+Regenerate catalog entries and compare their flattened rows with every term of
+the local OEIS record (the %S/%T/%U data, or a real b-file when it extends
+them). Entries whose flattened alignment is not verified, or whose record is
+missing locally, are reported as unchecked.
+
+Usage: polytool oeis check [A-NUMBER...] [--oeis-data <DIR>] [OPTIONS]
+
+Arguments:
+  [A-NUMBER]...  OEIS A-number (A followed by six digits)
+
+Options:
+      --oeis-data <DIR>  Local OEIS internal-format copy (default: $OEIS_DATA_DIR)
+      --catalog <FILE>   Check the entries of a data file instead of the bundled ones
+      --ids-file <FILE>  Restrict to the listed A-numbers
+  -h, --help             Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Details:
+  --catalog is useful after `oeis add`, before rebuilding polytool. JSON output is
+  polytool.oeis-check.v1.
+
+Examples:
+  polytool oeis check --oeis-data ~/oeis
+  polytool oeis check A008292 A008293 --oeis-data ~/oeis --json
+
+Exit status:
+  0  no entry mismatches
+  1  some entry mismatches
+  2  usage error or unreadable data
+
+See also:
+  polytool oeis add, polytool oeis evidence

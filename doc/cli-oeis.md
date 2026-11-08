@@ -12,13 +12,13 @@ rows; installed binaries do not need an OEIS database, Python, or SymPy.
 ```sh
 polytool oeis list
 polytool oeis info A008292 --json
-polytool oeis generate A008292 --rows 8
-polytool oeis generate A008292 --rows 8 --format triangle
-polytool oeis generate A008292 --rows 40 --format bfile --max-terms 1000
+polytool oeis generate A008292 --count 8
+polytool oeis generate A008292 --count 8 --format triangle
+polytool oeis generate A008292 --count 40 --format bfile --max-terms 1000
 ```
 
 Generation formats are `rows`, `triangle`, `polynomial`, `json`, `jsonl`,
-`csv`, and `bfile`.  `--start-row` selects a later displayed OEIS row.  Strict
+`csv`, and `bfile`.  `--from-index` selects a later displayed OEIS row.  Strict
 b-file output is enabled only when the bundled complete-row prefix has been
 matched against OEIS data; `--max-terms` stops before a row that would cross
 the cap.  The same formatter writes b-files for any recurrence with
@@ -193,9 +193,9 @@ weaker properties.  `rows_checked` is smaller than the requested count only
 when the entry cannot generate more rows.
 
 ```sh
-polytool oeis evidence A008292 A122431 --rows 50            # print only
-polytool oeis evidence --all --rows 50 --write              # record every entry in the data file
-polytool oeis evidence A001263 --rows 30 --json
+polytool oeis evidence A008292 A122431 --count 50            # print only
+polytool oeis evidence --all --count 50 --write              # record every entry in the data file
+polytool oeis evidence A001263 --count 30 --json
 polytool oeis info A122431                                  # shows the record, labelled evidence
                                                             # ("none recorded" until one is written)
 ```

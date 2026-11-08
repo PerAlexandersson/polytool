@@ -1,0 +1,32 @@
+Compute a Stapledon decomposition.
+
+Compute the Stapledon decomposition of each input polynomial with respect to the
+degree bound N, printed as `f = a + x (b)`. A polynomial whose degree exceeds N
+is reported on standard error and skipped. Coefficients are arbitrary-size
+integers.
+
+Usage: polytool stapledon [OPTIONS] <N>
+
+Arguments:
+  <N>  Degree bound (nonnegative integer)
+
+Options:
+  -h, --help  Print help
+
+Input and output:
+      --input <FILE>  Read the input from FILE instead of stdin (`-` is stdin)
+
+Input:
+  One polynomial per line on stdin (or --input FILE): ascending integer
+  coefficient lists such as `1, 3, 2`, or expanded notation such as
+  `1 + 3t + 2t^2`. See `polytool help input`.
+
+Examples:
+  echo '1, 4, 1' | polytool stapledon 3
+
+Exit status:
+  0  finished (rows beyond the bound are reported but do not change the status)
+  2  usage error or invalid input
+
+See also:
+  polytool hstar-inequalities

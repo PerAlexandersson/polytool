@@ -1,0 +1,170 @@
+Search for a polynomial recurrence.
+
+Search adaptively for a linear differential-polynomial recurrence among the
+input polynomial sequence. The recurrence relates P_n to earlier rows P_(n-k)
+and their derivatives with coefficients that are polynomials in t and in the
+index n. A recurrence found this way is a finite fit (evidence on the supplied
+rows), not a proof for all n; held-out rows are used to check it unless
+--no-held-out-rows is given.
+
+Input is read as dense coefficient lists, one polynomial per line, ascending
+degree, with arbitrary-size integers or exact rationals such as 42, -17 or 3/7.
+This command expects coefficient lists, not expanded expressions.
+
+--first-index labels the first input row (nonnegative); with --skip-prefix the
+discarded rows still count. By default the retained rows are renumbered from 1.
+
+Output formats: text (default), json (the recurrence JSON with initial
+conditions), latex (every coefficient is factored over Q and the product
+verified by exact re-expansion, e.g. (n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} -
+(n - 1)(1 - t)^{2} P_{n-2}; a coefficient whose factorization exhausts its
+budget stays expanded, noted by a % comment line) and python (exact Python
+code). --latex and --python are shorthands for the matching --format value.
+
+--space and --verify-space are separate modes: they read a JSON request (or a
+replayed report) from standard input, emit exact JSON and accept only an
+optional --json; bounds belong in the request. Source-backed positives are
+conditional on the supplied source and seeds, rows-only positives are fits, and
+dual negatives prove absence within the shape. The opt-in request field
+"coefficient_rescaling": {"kind":"factorial_power","power":m} searches Q[n] =
+T(P[n]) with T(X^k) = X^k/(k!)^m, m >= 1, and certifies complete spaces from
+r(U+m(A+J)+1) residuals (constant-index source).
+
+Usage: polytool recurrence [OPTIONS]
+       polytool recurrence --space [--json] < request.json
+       polytool recurrence --verify-space [--json] < report.json
+
+Options:
+      --first-index <N>        Index of the first input row (nonnegative)
+      --no-laurent             Do not vary the left-hand side (x^e, n-factors, charts)
+      --max-laurent-power <E>  Largest left-hand power x^E (default 2)
+      --representations        Return a menu of length/derivative tradeoffs
+      --theorem-matches        Also report conditional theorem matches
+      --latex                  Emit LaTeX (same as --format latex)
+      --python                 Emit exact Python code (same as --format python)
+      --verbose                Print candidate search details
+      --space                  Complete bounded spaces: read a space request (JSON)
+      --verify-space           Replay a recurrence-space report (JSON), no search
+  -h, --help                   Print help
+
+Limits:
+      --max-candidates <N>  Inspect at most N candidate configurations
+      --max-work <N>        Stop after N deterministic work units
+
+Recurrence search:
+      --skip-prefix <N>
+          Ignore the first N input polynomials [default: 0]
+      --min-recurrence-length <N>
+          Minimum number of previous rows a recurrence uses [default: 1]
+      --max-recurrence-length <N>
+          Maximum number of previous rows a recurrence uses [default: 5]
+      --min-variable-degree <D>
+          Minimum degree in t of the recurrence coefficients [default: 0]
+      --max-variable-degree <D>
+          Maximum degree in t of the recurrence coefficients [default: 3]
+      --min-index-degree <D>
+          Minimum degree in the index n of the recurrence coefficients [default: 0]
+      --max-index-degree <D>
+          Maximum degree in the index n of the recurrence coefficients [default: 3]
+      --min-derivative-order <D>
+          Minimum order of the derivatives P'(n-k), P''(n-k), ... used [default: 0]
+      --max-derivative-order <D>
+          Maximum order of the derivatives used [default: 2]
+      --try-inhomogeneous
+          Also try an inhomogeneous term
+      --min-inhomogeneous-variable-degree <D>
+          Minimum degree in t of the inhomogeneous term [default: 0]
+      --max-inhomogeneous-variable-degree <D>
+          Maximum degree in t of the inhomogeneous term [default: 3]
+      --min-inhomogeneous-index-degree <D>
+          Minimum degree in n of the inhomogeneous term [default: 0]
+      --max-inhomogeneous-index-degree <D>
+          Maximum degree in n of the inhomogeneous term [default: 3]
+      --try-denominator
+          Also try a left-hand-side denominator (rational recurrences)
+      --max-denominator-variable-degree <D>
+          Maximum degree in t of the denominator [default: 2]
+      --max-denominator-index-degree <D>
+          Maximum degree in n of the denominator [default: 2]
+      --try-alternating-sign
+          Also try alternating-sign terms
+      --min-equation-margin <N>
+          Require at least N more equations than unknowns [default: 1]
+      --fit-extra-rows <N>
+          Fit on N rows beyond the first solvable prefix [default: 1]
+      --no-held-out-rows
+          Fit on every input row (no held-out verification rows)
+      --no-modular-prefilter
+          Disable the default modular rejection of candidates
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json, latex, python]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One exact coefficient list per line on stdin (or --input FILE), in
+  ascending degree order; entries are integers or rationals such as 3/7.
+  See `polytool help input`.
+
+Details:
+  Budgets:
+    --max-work counts deterministic work units over the whole search (modular and
+    exact solves, held-out checks, precomputation) from the dimensions of the
+    systems, never from the clock: the same N gives the same output on every
+    machine. A step runs only if its whole cost fits, so the units used never
+    exceed N. One solve of r equations in c unknowns costs r*c*(min(r,c)+1) units.
+    Reaching --max-work or --max-candidates ends the search as budget_exhausted
+    (exit status 3). JSON reports work_units and max_work (a found record has
+    search.work_units). --max-work is not supported with --representations.
+
+  --representations:
+    Text output is a comparison table and numbered formulas; JSON is the full
+    menu. Save the menu with --json and select an entry with --candidate N in
+    recurrence-generate or recurrence-theorems. It cannot be combined with
+    --theorem-matches or --format python.
+
+  --theorem-matches:
+    Also report conditional theorem matches (weighted renewal, fixed-delay
+    predecessor), kept separate from the finite fit evidence. With --json the
+    output is polytool.recurrence-theorems.v1 (the usual record is its
+    recurrence_json). Without the flag a match is only noted on stderr.
+
+  --space / --verify-space (JSON):
+    The reply is a space report; the JSON output lists structured candidates and
+    coverage. Exit status 3 means some requested shape is not completed.
+
+Examples:
+  printf '1\n1\n2\n3\n5\n8\n' | polytool recurrence
+  polytool sequence eulerian 8 --format rows | polytool recurrence --json > recurrence.json
+  polytool recurrence --input rows.txt --representations
+
+Exit status:
+  0  finished (a recurrence was found, or none within the bounds)
+  2  usage error or invalid input
+  3  the search budget was exhausted before the space was covered
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --max-laurent-x-power -> --max-laurent-power
+  --min-rec-len -> --min-recurrence-length
+  --max-rec-len -> --max-recurrence-length
+  --min-var-deg -> --min-variable-degree
+  --max-var-deg -> --max-variable-degree
+  --min-idx-deg -> --min-index-degree
+  --max-idx-deg -> --max-index-degree
+  --min-diff-deg -> --min-derivative-order
+  --max-diff-deg -> --max-derivative-order
+  --inhomogeneous -> --try-inhomogeneous
+  --min-inhomo-var-deg -> --min-inhomogeneous-variable-degree
+  --max-inhomo-var-deg -> --max-inhomogeneous-variable-degree
+  --min-inhomo-idx-deg -> --min-inhomogeneous-index-degree
+  --max-inhomo-idx-deg -> --max-inhomogeneous-index-degree
+  --denominator -> --try-denominator
+  --max-denom-var-deg -> --max-denominator-variable-degree
+  --max-denom-idx-deg -> --max-denominator-index-degree
+  --alternating-sign -> --try-alternating-sign
+  --min-margin -> --min-equation-margin
+  --no-verify -> --no-held-out-rows
+
+See also:
+  polytool recurrence-generate, polytool recurrence-theorems, polytool recurrence-prove, polytool help budgets, polytool help recurrence-json, polytool help indexing

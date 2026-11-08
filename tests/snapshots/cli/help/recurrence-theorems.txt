@@ -1,0 +1,52 @@
+Conditional interlacing theorem matches for recurrence JSON.
+
+Check a supplied recurrence JSON record (polytool.recurrence.v1, e.g. from
+`polytool recurrence --json`) against the supported interlacing theorems and
+report explicit conditional theorem matches. Also accepts theorem wrappers and
+recurrence representation menus (select an entry with --candidate, 0-based).
+
+Hypotheses are checked exactly. The record's initial rows are compared with the
+canonical boundary rows (finite check; `canonical_after_relabel` when the first
+supplied row plays the role of index 0). A match is conditional: it never shows
+that the recurrence holds for the intended sequence for all n.
+
+Usage: polytool recurrence-theorems --recurrence <FILE|-> [--candidate N] [--json]
+
+Options:
+      --recurrence <FILE|->  Read recurrence JSON from FILE, or stdin with -
+      --candidate <N>        Select a representation menu entry (0-based)
+  -h, --help                 Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Details:
+  Theorems (paper proofs, not Lean checked):
+    weighted_renewal_window          P_n = sum_j r_j t^j P_(n-1-ell*j), r_0 = 1,
+                                     r_j >= 0, R(z) = sum r_j z^j real-rooted;
+                                     P_n << P_(n+s) for d*s <= d*ell+1, d = deg R.
+    fixed_delay_predecessor_window   P_n = P_(n-1) + w(n) t P_(n-L), w polynomial in n
+                                     with w(n) >= 0 for all integers n >= 1 (exact
+                                     certificate, not sampling); Q_A << Q_B for
+                                     B - A <= L with Q_(max(0, n-L)) boundary.
+
+  JSON output is the polytool.recurrence-theorems.v1 report; its
+  trivially_real_rooted (supplied, not fitted, records only) is true when the rule
+  is B(n) P_n = A(x,n) P_(n-k) and product induction proves it.
+
+Examples:
+  polytool recurrence --json < rows.txt | polytool recurrence-theorems --recurrence -
+  polytool recurrence-theorems --recurrence menu.json --candidate 0 --json
+
+Exit status:
+  0  at least one theorem matches
+  1  no theorem matches
+  2  usage error or invalid input
+
+See also:
+  polytool recurrence, polytool recurrence-prove, polytool help recurrence-json

@@ -1,0 +1,89 @@
+polytool <version>
+Exact univariate polynomial toolkit for combinatorial research.
+
+Usage:
+  polytool <command> [options]           Run a command (input on stdin)
+  polytool help <command> [<subcommand>] Full help for a command
+  polytool help <topic>                  Read a topic (see Topics)
+  polytool help --json                   Machine-readable index
+
+Start here:
+  real-rooted                        Check real-rootedness of each polynomial
+  properties                         Show real-rootedness, unimodality, and related properties
+  family-check                       Check properties and consecutive interlacing together
+  recurrence                         Search for a polynomial recurrence
+  oeis                               List and generate recurrence-backed OEIS families
+
+Check polynomials:
+  real-rooted                        Check real-rootedness of each polynomial
+  interlacing                        Check interlacing of consecutive polynomial pairs
+  interlacing-profile                Count consecutive previous interlacings until first fail
+  properties                         Show real-rootedness, unimodality, and related properties
+  family-check                       Check properties and consecutive interlacing together
+  coefficient-tests                  Check Newton and Kurtz coefficient criteria
+  enumerate-real-rooted              Enumerate real-rooted integer polynomials by leading prefix
+
+Roots and algebra:
+  root-enclosures                    Exact rational root enclosures with multiplicities
+  resultant                          Compute the resultant of two polynomials
+  discriminant                       Compute the discriminant of each polynomial
+
+Sequences and recurrences:
+  sequence                           Generate standard polynomial sequences
+  recurrence                         Search for a polynomial recurrence
+  recurrence-generate                Generate coefficient rows from recurrence JSON
+  recurrence-transform               Change polynomial coordinates and transport a recurrence
+  recurrence-degree                  Degree law and leading-coefficient signs of a recurrence for all n
+  recurrence-prove                   Discover and replay general recurrence proofs
+  recurrence-theorems                Conditional interlacing theorem matches for recurrence JSON
+  recurrence-veronese-lifts          Parent sequences whose coefficient sections are the sequence
+  recurrence-implicit                Diagonal maps and antecedents: implicit relations, uniqueness
+  recurrence-search-representations  Bounded search over equivalent representations and relations
+
+OEIS families:
+  oeis                               List and generate recurrence-backed OEIS families
+
+Expansions and conversions:
+  gamma-expansion                    Expand palindromic polynomials in the gamma basis
+  bernstein-expansion                Expand polynomials in a fixed-degree Bernstein basis
+  hstar-to-ehrhart                   Convert h*-vectors to Ehrhart polynomials
+  ehrhart-to-hstar                   Convert Ehrhart polynomials to h*-vectors
+  hstar-inequalities                 Check named Ehrhart h*-vector inequalities
+  stapledon                          Compute a Stapledon decomposition
+
+Cyclic sieving:
+  cyclic-sieving                     Check/profile one cyclic sieving order
+  cyclic-sieving-sequence            Profile candidate cyclic sieving orders for a sequence
+  bicyclic-sieving                   Check bicyclic sieving for C_n1 x C_n2 and f(q,t)
+
+Planar networks:
+  tnn-network                        Check TNN of a coefficient triangle; canonical planar network
+  brenti-recognize                   Search for a planar strip digraph reproducing the rows
+  pf-network                         Search for a height-invariant planar network: PF rows
+  left-production                    Chen--Fu--Ruan left production matrix: TNN triangle, PF rows
+
+Developer tools:
+  bench                              Run built-in timing suites
+  bkw-scout                          Scout BKW equal-modulus loci for a recurrence symbol
+  pf-pencil                          Check built-in PF/Jensen endpoint pencils
+
+Shell support:
+  completions                        Generate shell completion (commands, subcommands, flags, topics)
+
+Topics (polytool help <topic>):
+  getting-started                    A five-minute tour of polytool
+  input                              Input formats: polynomials, rationals, JSON, --input
+  coefficient-order                  Coefficient order: ascending, and the three exceptions
+  indexing                           Indices: index, --first-index and --from-index
+  output-formats                     Output: --format, --json, --compact, stdout and stderr
+  json-schemas                       JSON schema identifiers and their versioning policy
+  exit-codes                         Exit statuses of every command
+  budgets                            Search budgets and what happens when one is exhausted
+  recurrence-json                    The polytool.recurrence.v1 record, wrappers and menus
+  compatibility                      Renamed commands and flags, and their deprecated spellings
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version and build commit
+
+Run `polytool help <command>` for command-specific help.

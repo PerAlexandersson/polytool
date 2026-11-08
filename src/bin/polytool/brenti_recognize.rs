@@ -1,7 +1,6 @@
 //! `polytool brenti-recognize`: exact search for a planar strip digraph whose
 //! rows from `(0,0)` are the input polynomials.
 
-use crate::help::print_coefficient_input_help;
 use crate::input::{next_option_value, parse_usize_option, read_polys_bigint};
 use crate::json_out::{json_string, json_usize_vec};
 use num_bigint::BigInt;
@@ -14,58 +13,6 @@ pub(crate) const BRENTI_RECOGNIZE_NOTE: &str = "A certificate shows that the sup
      P_0, ..., P_N is totally nonnegative. It does not show that the rows are real-rooted \
      or Pólya frequency sequences ([1 + t, 1 + t + t^2] is recognized), and it covers \
      only the supplied prefix.";
-
-pub(crate) fn print_brenti_recognize_help() {
-    println!("Usage:");
-    println!("  polytool brenti-recognize [options]");
-    println!("  polytool brenti-recognize --help");
-    println!();
-    println!("Search exactly for a planar strip digraph D (heights 0..H, edges from column");
-    println!("x to column x + 1 that depend only on the height, monotone targets) whose");
-    println!("weighted path counts from (0,0) to (n,k) are the coefficients [t^k] P_n of the");
-    println!("input rows.  The verdict is one of:");
-    println!("  certified                 a digraph, re-verified against every input row");
-    println!("  impossible_within_bounds  an exact proof that no digraph within the bounds");
-    println!("                            reproduces the rows");
-    println!("  inconclusive              a search budget ran out");
-    println!();
-    print_coefficient_input_help();
-    println!();
-    println!("  By default the input is P_1, P_2, ... with P_0 = 1 implicit.");
-    println!();
-    println!("Options:");
-    println!("  --first-row <0|1>          Digraph row of the first input polynomial");
-    println!("                             (default 1; with 0 the first row must be 1)");
-    println!("  --max-span <k>             At most k consecutive target heights per height");
-    println!("                             (bounds the out-degree; default: no bound)");
-    println!("  --weights <rational|integer>");
-    println!("                             Nonnegative rational (default) or integer weights");
-    println!("  --max-search-nodes <n>     Budget on partial supports (default 1000000)");
-    println!("  --max-integer-nodes <n>    Budget on the integer search per column");
-    println!("                             (default 10000)");
-    println!("  --json                     Emit machine-readable JSON");
-    println!("                             (schema polytool.brenti-recognize.v1)");
-    println!();
-    println!("Guardrails:");
-    println!("  A certificate proves that the coefficient matrix of P_0, ..., P_N is totally");
-    println!("  nonnegative (Lindström--Gessel--Viennot).  It does NOT prove that the rows");
-    println!("  are real-rooted or PF: [1 + t, 1 + t + t^2] is certified.  The transitions");
-    println!("  here depend on the height, so the digraph is invariant under shifts in x,");
-    println!("  not in y; Brenti's PF theorem needs height-shift invariance.  Only the");
-    println!("  supplied prefix is covered.  For PF certificates of the rows themselves");
-    println!("  use pf-network or left-production.");
-    println!();
-    println!("Exit status:");
-    println!("  0  certified");
-    println!("  1  impossible within the bounds");
-    println!("  2  invalid input or options");
-    println!("  3  inconclusive (a budget was exhausted)");
-    println!();
-    println!("Examples:");
-    println!("  printf '1,1\\n1,2,1\\n1,3,3,1\\n' | polytool brenti-recognize");
-    println!("  printf '0,1\\n0,1,1\\n0,1,3,1\\n0,1,7,6,1\\n' | polytool brenti-recognize --weights integer");
-    println!("  printf '1,1\\n1,4,1\\n1,11,11,1\\n' | polytool brenti-recognize --json");
-}
 
 struct BrentiRecognizeArgs {
     json: bool,
@@ -80,8 +27,8 @@ fn parse_brenti_recognize_args(args: &[String]) -> Result<BrentiRecognizeArgs, S
         let arg = args[index].as_str();
         match arg {
             "--json" => json = true,
-            "--first-row" => options.first_row_index = parse_usize_option(args, &mut index, arg)?,
-            "--max-span" => {
+            "--first-index" => options.first_row_index = parse_usize_option(args, &mut index, arg)?,
+            "--max-target-span" => {
                 options.max_target_span = Some(parse_usize_option(args, &mut index, arg)?)
             }
             "--weights" => {
@@ -98,7 +45,7 @@ fn parse_brenti_recognize_args(args: &[String]) -> Result<BrentiRecognizeArgs, S
             "--max-search-nodes" => {
                 options.max_search_nodes = parse_usize_option(args, &mut index, arg)?
             }
-            "--max-integer-nodes" => {
+            "--max-integer-search-nodes" => {
                 options.max_integer_search_nodes = parse_usize_option(args, &mut index, arg)?
             }
             other => return Err(format!("unknown brenti-recognize option: {other}")),
@@ -186,11 +133,12 @@ fn result_json(
         }
     };
     format!(
-        "{{\"schema\":\"polytool.brenti-recognize.v1\",\"options\":{{\"first_row_index\":{},\
+        "{{\"schema\":\"polytool.brenti-recognize.v1\",\"options\":{{\"first_row_index\":{},\"first_index\":{},\
          \"max_target_span\":{},\"weights\":{},\"max_search_nodes\":{},\
          \"max_integer_search_nodes\":{}}},\"rows\":{},\"verdict\":{},\"certified\":{},\
          \"digraph\":{},\"row_indices\":{},\"certificate_verified\":{},\
          \"supports_checked\":{},\"obstruction\":{},\"reason\":{},\"message\":{},\"note\":{}}}",
+        options.first_row_index,
         options.first_row_index,
         json_option(options.max_target_span, |v| v.to_string()),
         json_string(weight_domain_name(options.weights)),

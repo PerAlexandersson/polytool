@@ -5,14 +5,14 @@
 use crate::input::read_limited_text;
 use polytool::recurrence::RecurrenceJson;
 use serde_json::Value;
-use std::{fs, io};
+use std::fs;
 
 pub(crate) fn read_recurrence_json(
     path: &str,
     candidate: Option<usize>,
 ) -> Result<RecurrenceJson, String> {
     let input = if path == "-" {
-        read_limited_text(io::stdin(), "recurrence JSON from stdin")?
+        crate::input::read_command_input("recurrence JSON from stdin")?
     } else {
         let file = fs::File::open(path)
             .map_err(|e| format!("failed to open recurrence JSON `{path}`: {e}"))?;

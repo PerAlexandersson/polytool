@@ -1,43 +1,12 @@
 //! Discover and replay general recurrence proofs through the library registry.
 
-use crate::input::{error_text, is_help_arg, parse_usize_option, read_stdin_or_exit};
+use crate::input::{error_text, parse_usize_option, read_stdin_or_exit};
 use crate::recurrence_input::read_recurrence_json;
 use polytool::recurrence::{
     discover_recurrence_proofs, RealRootednessTheoremOptions, RecurrenceProofDiscoveryReport,
 };
 
-pub(crate) fn print_recurrence_prove_help() {
-    println!("Usage: polytool recurrence-prove --recurrence <file|-> [--candidate N] [--json]");
-    println!("       polytool recurrence-prove --verify [--json] < proof.json");
-    println!("       polytool recurrence-prove --help");
-    println!();
-    println!("Discover general proofs for a recurrence and seeds; no named-sequence lookup.");
-    println!("Tries product induction, Favard/three-term, Liu-Wang, derivative-lag,");
-    println!("Ma-Wang interval and Liu-Wang three-term criteria, with exact all-index");
-    println!("hypothesis checks. Reports every attempt, its obligations and conclusion.");
-    println!("A fit still needs an all-index identity for an independently defined family.");
-    println!("Rust certificates can be replayed; Lean replay is not attempted.");
-    println!();
-    println!("  --recurrence <file|->  recurrence.v1, theorem wrapper or representation menu");
-    println!(
-        "  --candidate N          Explicit 0-based menu choice (required for multiple entries)"
-    );
-    println!("  --max-start-delay N    Induction-start retries, default 3 (maximum 16)");
-    println!("  --json                 Emit polytool.recurrence-proof-discovery.v1; its");
-    println!("                         trivially_real_rooted is true when the supplied (not");
-    println!("                         fitted) rule is B(n) P_n = A(x,n) P_(n-k) and product");
-    println!("                         induction proves it");
-    println!("  --verify               Replay the complete report from stdin; no search flags");
-    println!("Exit status: 0 proved (or valid replay), 1 no proof, 2 invalid input/replay.");
-    println!();
-    println!("Example: polytool recurrence --json < rows.txt | polytool recurrence-prove --recurrence - --json");
-}
-
 pub(crate) fn cmd_recurrence_prove(args: &[String]) {
-    if args.iter().any(|s| is_help_arg(s)) {
-        print_recurrence_prove_help();
-        return;
-    }
     match run(args) {
         Ok(proved) => {
             if !proved {

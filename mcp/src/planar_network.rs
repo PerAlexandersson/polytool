@@ -361,6 +361,7 @@ pub(crate) fn brenti_recognition_response(
         .map_err(|error| invalid_params(error.to_string()))?;
     let options_item = BrentiRecognitionOptionsItem {
         first_row_index: options.first_row_index,
+        first_index: options.first_row_index,
         max_target_span: options.max_target_span,
         weights: match options.weights {
             BrentiWeightDomain::Rational => "rational",
@@ -530,6 +531,7 @@ pub(crate) fn pf_network_response(input: &PfNetworkRequest) -> Result<PfNetworkR
     let mut response = PfNetworkResponse {
         options: PfNetworkOptionsItem {
             first_row_index: options.first_row_index,
+            first_index: options.first_row_index,
             max_step_length: options.max_step_length,
             max_rise: options.max_rise,
             weights: match options.weights {
@@ -597,6 +599,7 @@ pub(crate) fn left_production_response(
         .map_err(|error| invalid_params(error.to_string()))?;
     Ok(LeftProductionResponse {
         first_row_index,
+        first_index: first_row_index,
         rows: polys.len(),
         triangle: report
             .triangle

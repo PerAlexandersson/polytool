@@ -1,12 +1,70 @@
 # CLI usage
 
-For complete examples see [CLI workflows](workflows.md). Run `polytool --help`
-for commands grouped by task, `polytool help --json` for the command index,
-and `polytool oeis add --help` for nested help. `sequence --format rows`
-emits coefficient lists suitable for piping into the checking and recurrence
-commands. Resultants and discriminants also support exact `--json` output.
-Invalid options and input return a nonzero exit status; result fields still
-distinguish negative mathematical answers from failed commands.
+For complete examples see [CLI workflows](workflows.md). `polytool --help`
+lists the commands grouped by task with a "Start here" block, and
+`polytool help <command> [<subcommand>]` (or `<command> --help`) prints the
+full page of a command: description, options, input, examples, exit status
+and deprecated spellings. `sequence --format rows` emits coefficient lists
+suitable for piping into the checking and recurrence commands. Invalid options
+and input return a nonzero exit status; result fields still distinguish
+negative mathematical answers from failed commands.
+
+## Help, options and compatibility
+
+- **Topics.** `polytool help <topic>` explains concepts shared by many
+  commands: `getting-started`, `input`, `coefficient-order`, `indexing`,
+  `output-formats`, `json-schemas`, `exit-codes`, `budgets`,
+  `recurrence-json` and `compatibility`.
+- **Machine-readable index.** `polytool help --json` (schema
+  `polytool.commands.v1`) lists every command and subcommand with its flags
+  (value placeholder, default, choices, deprecated aliases), positionals,
+  examples, exit statuses and the topics. The documentation generator and the
+  shell completion use the same specification.
+- **Completion.** `polytool completions bash|zsh|fish` completes commands,
+  subcommands, flags, fixed flag values and `polytool help` topics.
+- **Uniform options.** `--flag value` and `--flag=value` are equivalent. Every
+  command with structured output accepts `--format <...>` and `--json`
+  (`--json` = `--format json`); JSON-only commands accept `--format json` and
+  `--compact`. Every command that reads input accepts `--input <file|->`
+  instead of standard input.
+- **Errors.** A usage error is reported on stderr with exit status 2, suggests
+  the nearest flag, command or topic (`did you mean`), and ends with
+  ``Run `polytool help <command>` for usage.``
+- **Renamed flags.** Since 0.6.0, polytool spells out the abbreviated flags and makes
+  the index vocabulary consistent (`--first-index` labels the first input row,
+  `--from-index` selects where output starts, `--count` is the number of rows
+  to produce). The old spellings keep working and print one warning on stderr
+  per use; set `POLYTOOL_DEPRECATION_WARNINGS=0` to silence them. Standard
+  output is unchanged. `polytool help compatibility` lists every old -> new
+  pair; the main ones are:
+
+  | Old | New | Commands |
+  |-----|-----|----------|
+  | `--min/max-rec-len` | `--min/max-recurrence-length` | recurrence, oeis add |
+  | `--min/max-var-deg` | `--min/max-variable-degree` | recurrence, oeis add |
+  | `--min/max-idx-deg` | `--min/max-index-degree` | recurrence, oeis add |
+  | `--min/max-diff-deg` | `--min/max-derivative-order` | recurrence, oeis add |
+  | `--min/max-inhomo-var-deg`, `--min/max-inhomo-idx-deg` | `--min/max-inhomogeneous-variable-degree`, `--min/max-inhomogeneous-index-degree` | recurrence, oeis add |
+  | `--max-denom-var-deg`, `--max-denom-idx-deg` | `--max-denominator-variable-degree`, `--max-denominator-index-degree` | recurrence, oeis add |
+  | `--inhomogeneous`, `--denominator`, `--alternating-sign` | `--try-inhomogeneous`, `--try-denominator`, `--try-alternating-sign` | recurrence, oeis add |
+  | `--min-margin`, `--no-verify`, `--max-laurent-x-power` | `--min-equation-margin`, `--no-held-out-rows`, `--max-laurent-power` | recurrence, oeis add |
+  | `--rows` | `--count` | recurrence-generate, recurrence-degree, oeis generate, oeis evidence |
+  | `--additional` | `--additional-count` | recurrence-generate |
+  | `--first-row K` | `--from-index K` | recurrence-generate |
+  | `--start-row K` | `--from-index K` | oeis generate |
+  | `--offset` | `--first-term-index` | recurrence-generate, oeis add |
+  | `--reversed` | `--descending` | recurrence-generate |
+  | `--first-row <0\|1>` | `--first-index <0\|1>` | brenti-recognize, pf-network, left-production |
+  | `--max-integer-nodes`, `--max-span`, `--max-length` | `--max-integer-search-nodes`, `--max-target-span`, `--max-step-length` | brenti-recognize, pf-network |
+  | `--leading-desc` | `--leading-coefficients-descending` | enumerate-real-rooted |
+  | `--recurrence` (switch) | `--find-recurrence` | family-check |
+  | `--offsets` | `--order-offsets` | cyclic-sieving-sequence |
+  | `--max-iter`, `--tol`, `--min-imag`, `--grid-re`, `--grid-im` | `--max-iterations`, `--tolerance`, `--min-imaginary-part`, `--real-grid-points`, `--imaginary-grid-points` | bkw-scout |
+  | `--max-n` | `--max-index` | bench interlacing |
+
+  JSON output is additive: `oeis generate --json` and the OEIS catalog JSON
+  carry `first_index` next to `first_row`, and the planar-network reports
+  carry `first_index` next to `first_row_index`.
 
 The `polytool` command-line interface reads polynomials from standard input and
 writes text or, with `--json`, machine-readable output.  This page covers the
@@ -48,12 +106,8 @@ A text file `polys.txt` might look like:
 1, 57, 302, 302, 57, 1
 ```
 
-The commands `interlacing`, `interlacing-profile`, `properties`,
-`gamma-expansion`, `bernstein-expansion`, `family-check`, `sequence`, `coefficient-tests`,
-`hstar-to-ehrhart`, `ehrhart-to-hstar`, `hstar-inequalities`,
-`cyclic-sieving`, `cyclic-sieving-sequence`, `bicyclic-sieving`, `tnn-network`,
-`brenti-recognize`, `pf-network`, and `left-production` also accept `--json` for
-machine-readable output.
+Every command with structured output accepts `--json` (or `--format json`)
+for machine-readable output; `polytool help <command>` lists its formats.
 Large integer coefficients in JSON output are serialized as strings.
 
 The exact property commands `real-rooted`, `interlacing`,
@@ -61,7 +115,7 @@ The exact property commands `real-rooted`, `interlacing`,
 checks inside `family-check` accept arbitrary-size integer coefficients.
 Standard sequence generation, resultants, discriminants, Ehrhart conversion,
 Stapledon decomposition, the standalone `recurrence` command, and
-`family-check --recurrence` also use arbitrary-size exact integers in the
+`family-check --find-recurrence` also use arbitrary-size exact integers in the
 CLI.
 
 ## Check real-rootedness
@@ -242,7 +296,7 @@ is exact even when its gamma coefficients exceed `i64`.
 polytool family-check \
   --require-real-rooted \
   --require-weak-interlacing \
-  --recurrence \
+  --find-recurrence \
   --json < polys.txt
 ```
 
@@ -273,8 +327,8 @@ The same symbol can be supplied on stdin, one coefficient polynomial per line.
 Use `--json` (or `--format json`) for machine-readable output, and
 `--mathematica` for a `Reduce` skeleton for exact equal-modulus follow-up.
 Together these options put the skeleton in a `mathematica` string field in
-the same JSON document. Floating-point options must be finite; `--tol` and
-`--max-iter` must be positive, and `--min-imag` nonnegative. Invalid options
+the same JSON document. Floating-point options must be finite; `--tolerance` and
+`--max-iterations` must be positive, and `--min-imaginary-part` nonnegative. Invalid options
 are rejected before reading or scouting the symbol. If numerical overflow
 prevents valid JSON, the command fails with a diagnostic and no partial result.
 
@@ -304,13 +358,13 @@ nothing is read from stdin.
 
 ```sh
 # All real-rooted x^3 - 3x + c: c = -2, ..., 2
-polytool enumerate-real-rooted --degree 3 --leading-desc 1,0,-3
+polytool enumerate-real-rooted --degree 3 --leading-coefficients-descending 1,0,-3
 
 # Monic, trace 0, a_2 = -15 (degree 6), as JSON with exact string coefficients
-polytool enumerate-real-rooted --degree 6 --leading-desc 1,0,-15 --format json
+polytool enumerate-real-rooted --degree 6 --leading-coefficients-descending 1,0,-15 --format json
 ```
 
-The prefix `--leading-desc` is in **descending** order (`a_0, a_1, ...`), while
+The prefix `--leading-coefficients-descending` is in **descending** order (`a_0, a_1, ...`), while
 every output polynomial is in the usual **ascending** order `c_0, ..., c_n`
 (`c_k = a_(n-k)`), one per line, so the rows can be piped into
 `polytool real-rooted`.  Rows are sorted lexicographically by
@@ -343,7 +397,7 @@ polytool bench compare old.json new.json --top 10
 Run consecutive interlacing timings for a generated sequence:
 
 ```sh
-polytool bench interlacing --sequence eulerian --max-n 30 --repeat 5
+polytool bench interlacing --sequence eulerian --max-index 30 --repeat 5
 ```
 
 Run the real-rootedness regression suite on positive-coefficient families of

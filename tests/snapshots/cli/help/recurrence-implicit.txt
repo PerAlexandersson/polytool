@@ -1,0 +1,130 @@
+Diagonal maps and antecedents: implicit relations, uniqueness.
+
+Map a sequence with a defining rule by a diagonal coefficient map or a
+derivative antecedent, transport the rule into an implicit differential relation
+(derivatives on any row) with exceptional-index conditions, and assess the
+resulting generating description: annihilation evidence and a uniqueness
+argument are reported separately. Prints a polytool.recurrence-implicit.v1
+report. All bounds belong in the JSON request on standard input.
+
+The modes are exclusive: transport (default), --verify, --assess, --search and
+--verify-search.
+
+Usage: polytool recurrence-implicit [--compact] < request.json
+       polytool recurrence-implicit --verify < report.json
+       polytool recurrence-implicit --assess < description.json
+       polytool recurrence-implicit --search [--compact] < search.json
+       polytool recurrence-implicit --verify-search < search-report.json
+
+Options:
+      --verify         Replay a report exactly and re-check every certificate
+      --assess         Assess a generating description and print the assessment
+      --search         Search implicit relations directly (JSON search request)
+      --verify-search  Replay a search report and re-check every kernel certificate
+      --compact        Print compact JSON
+  -h, --help           Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: json] [possible values: json]
+      --json             Emit JSON (the default; accepted for uniformity)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Details:
+  Request fields:
+    transformation   {"kind": "diagonal", "weight": W} with W one of
+                       {"kind":"factorial_power","power":m}  lambda = 1/(k!)^m
+                       {"kind":"binomial","m":m}             lambda = binom(k+m,m), Q = W_m P
+                       {"kind":"inverse_binomial","m":m}     lambda = 1/binom(k+m,m), P = W_m Q
+                       {"kind":"product","scale":"c","factorial_exponent":p,
+                        "factors":[{"coeffs":{"coeffs":[[..]]},"exponent":e}]}
+                                       lambda = c (k!)^p prod f(n,k)^e
+                     or {"kind": "derivative_antecedent", "g": ["g0", ...]}:
+                       Q_n with P_n = D^m(g Q_n)/m!, m = deg g (exact back substitution)
+                     ({"kind": "derivative", "order": m}, Q_n = D^m P_n, is lossy:
+                     it is searched and transported by --search and the representation
+                     search, which record the lost coefficients)
+    source_recurrence  defining polytool.recurrence.v1 rule with seeds, or
+    oeis_id          a bundled OEIS family (e.g. "A065826")
+    row_count        rows generated from the source (default 10)
+    source_relations [{relation, first_base}] further relations of P, transported
+    target_relations [{relation, first_base}] relations of Q to store (checked on rows)
+    boundary_conditions [{condition, first_base}] coefficient conditions of Q
+    search           {} or bounds: fit a successor rule to Q and try to prove it
+                     by a reconstruction certificate L o T = sum H_nu S^nu M
+    limits           {max_rows, max_degree, ...} resource limits
+    root_domain      optional {} or {candidate_intervals, assumptions, ...} as in
+                     recurrence-transform: multiplier-sequence (diagonal) and Rolle
+                     (derivative antecedent) adapters with their direction, Rolle
+                     inductions on the defining rule of P and on a certified fit of
+                     Q, assumptions, a fixed-cap Jensen test and exact root enclosures
+
+  A relation is {"terms": [{"shift": i, "deriv_order": d, "coeff": {"coeffs":
+  ...}}]} meaning sum c(n,x) D^d Q[n+i] = 0 (coeffs[a][b] multiplies n^a x^b); a
+  condition is {"terms": [{"shift": i, "coefficient_index": k, "coeff": [..]}]}
+  meaning sum c(n) [x^k] Q[n+i] = 0 (coeff ascending in n).
+
+  Report:
+    map_conditions     weights defined and nonzero: certified_all_indices or
+                       checked_supplied_rows (uncertified, visible)
+    transports         transported relation, clearing certificate (common
+                       multiplier H, exceptional indices), reconstruction certificate
+    description        seeds, relations, exceptional_index_conditions,
+                       boundary_conditions
+    assessment         equivalent_description | certified_consequence |
+                       finite_evidence | inconsistent_seeds, with the uniqueness argument
+    additional_relations  stored relations outside the description (row equations)
+    independent_search finite_fit, or certified_by_reconstruction after an upgrade
+    root_domain        when requested: its request, implications, claims (with
+                       evidence labels), Rolle theorems, jensen_fixed_cap (fixed_cap
+                       evidence only), assumption checks and observations
+
+  Modes:
+    --verify         Replay a report exactly and re-check every certificate
+    --assess         Assess a generating description (for example after removing a
+                     condition) and print the assessment
+    --search         Search implicit relations directly
+                     (polytool.recurrence-implicit-search.v1)
+    --verify-search  Replay a search report and re-check every kernel certificate
+
+  Direct search (--search) request fields:
+    source_recurrence | oeis_id | rows (+ row_origin)   the rows P (rows only: finite fits)
+    transformation   optional scalar map Q = T(P) applied first (diagonal,
+                     derivative_antecedent, derivative {order}, Moebius-class maps, ...)
+    supports         [{role, max_shift, derivative_order, index_degree, variable_degree}]
+                     role successor (no derivative on row n+R) | implicit_successor
+                     (derivatives on every row) | row_equation (max_shift 0); default:
+                     implicit_successor (1,1,1,1) and row_equation (0,2,1,1)
+    row_count, domain_start, conditions (default true), condition_index_degree (1),
+    limits           complete-space limits {max_rows, max_columns, max_degree, ...}
+  Each support is one exact kernel with a rank certificate. With a constant-index
+  monic pure-lag source and the identity, factorial_power or derivative map a
+  finite theorem makes the kernel the complete space (certified_complete_space);
+  otherwise relations are finite_fit, or certified_by_division when M o T = sum H
+  S^nu L for the defining rule L. Moebius-class maps (multiply_power,
+  divide_power, affine; reversal, mobius, f_polynomial with an unbounded schedule)
+  need k(max(u+s)+1) residuals (transported-source theorem), and diagonal weights
+  c (k!)^(-m) prod f_j(n,k)^(e_j), e_j > 0 (binomial, product), need
+  k(max(u+s)+w+1) for m = 0 or k(U+m(A+J)+w+1), w the total (n,k) degree (weight
+  theorem); completeness_basis names the theorem. Exceptional indices of a leader
+  get a coefficient-condition search; every representative carries a generating
+  description and assessment.
+
+Examples:
+  echo '{"oeis_id":"A065826","row_count":9,"search":{},
+      "transformation":{"kind":"diagonal",
+      "weight":{"kind":"inverse_binomial","m":1}}}' \
+      | polytool recurrence-implicit
+  echo '{"oeis_id":"A007318","transformation":{"kind":"diagonal",
+      "weight":{"kind":"factorial_power","power":1}},
+      "supports":[{"role":"implicit_successor","max_shift":1,"derivative_order":1}]}' \
+      | polytool recurrence-implicit --search
+
+Exit status:
+  0  success (or a replay that verified)
+  2  invalid input or a failed replay
+
+See also:
+  polytool recurrence-transform, polytool recurrence-search-representations, polytool help json-schemas

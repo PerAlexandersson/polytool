@@ -12,6 +12,7 @@ mod bench_real_rootedness;
 mod bicyclic_sieving;
 mod bkw_scout;
 mod brenti_recognize;
+mod cli;
 mod coefficient_tests;
 mod commands;
 mod cyclic_sieving;
@@ -20,7 +21,6 @@ mod ehrhart;
 mod enumerate_real_rooted;
 mod expansion;
 mod family_check;
-mod help;
 mod input;
 mod interlacing;
 mod json_out;
@@ -55,8 +55,7 @@ use crate::ehrhart::{cmd_ehrhart_to_hstar, cmd_hstar_inequalities, cmd_hstar_to_
 use crate::enumerate_real_rooted::cmd_enumerate_real_rooted;
 use crate::expansion::{cmd_bernstein_expansion, cmd_gamma_expansion};
 use crate::family_check::cmd_family_check;
-use crate::help::{print_command_help, print_top_level_help};
-use crate::input::{is_help_arg, usage_error};
+use crate::input::usage_error;
 use crate::interlacing::{cmd_interlacing, cmd_interlacing_profile};
 use crate::left_production::cmd_left_production;
 use crate::oeis::cmd_oeis;
@@ -96,68 +95,30 @@ fn exit_quietly_on_broken_pipe() {
     }));
 }
 
-fn print_help_path(path: &[String]) -> bool {
-    if path.first().is_some_and(|name| name == "oeis") {
-        return crate::oeis::print_oeis_subcommand_help(path.get(1).map(String::as_str));
-    }
-    path.first().is_some_and(|name| print_command_help(name))
-}
-
 fn main() {
     exit_quietly_on_broken_pipe();
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        print_top_level_help();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let Some((first, rest)) = args.split_first() else {
+        crate::cli::print_top_level_help(&mut std::io::stderr());
         std::process::exit(1);
-    }
-
-    let cmd = &args[1];
-    let rest = &args[2..];
-    if matches!(cmd.as_str(), "-V" | "--version") {
-        if !rest.is_empty() {
-            usage_error("", "--version does not accept additional arguments");
-        }
-        println!("{}", polytool::version::build_version());
-        return;
-    }
-    if cmd == "help" && rest == ["--json"] {
-        crate::commands::print_metadata();
-        return;
-    }
-    if is_help_arg(cmd) || cmd == "help" {
-        let valid_path = if cmd == "help" {
-            rest.len() <= 1 || (rest[0] == "oeis" && rest.len() == 2)
-        } else {
-            rest.is_empty()
-        };
-        if !valid_path {
-            usage_error(
-                "",
-                "expected `polytool help <command>` or `polytool help oeis <subcommand>`",
-            );
-        }
-        if cmd == "help" && !rest.is_empty() {
-            if is_help_arg(&rest[0]) {
-                print_top_level_help();
-            } else if !print_help_path(rest) {
-                usage_error("", &format!("unknown help topic: {}", rest.join(" ")));
+    };
+    match first.as_str() {
+        "-V" | "--version" => {
+            if !rest.is_empty() {
+                usage_error("", "--version does not accept additional arguments");
             }
-        } else {
-            print_top_level_help();
+            println!("{}", polytool::version::build_version());
         }
-        return;
-    }
-    if rest.iter().any(|arg| is_help_arg(arg)) {
-        if !print_help_path(&args[1..]) {
-            usage_error("", &format!("unknown help topic: {}", args[1..].join(" ")));
+        "-h" | "--help" => {
+            if !rest.is_empty() {
+                usage_error(
+                    "",
+                    "--help does not accept additional arguments; use `polytool help <command>`",
+                );
+            }
+            crate::cli::print_top_level_help(&mut std::io::stdout());
         }
-        return;
-    }
-
-    if let Some(command) = crate::commands::find(cmd) {
-        (command.run)(rest);
-    } else {
-        eprintln!("Unknown command: {cmd}. Run `polytool --help` for available commands.");
-        std::process::exit(2);
+        "help" => crate::cli::run_help(rest),
+        _ => crate::cli::run(&args),
     }
 }

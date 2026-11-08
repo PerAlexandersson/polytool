@@ -1,0 +1,30 @@
+Check named Ehrhart h*-vector inequalities.
+
+Check named Ehrhart h*-vector inequalities with exact integer arithmetic. Each
+input polynomial is an h*-vector in ascending degree order.
+
+Usage: polytool hstar-inequalities [OPTIONS]
+
+Options:
+      --dimension <D>  Use dimension D instead of len(h*)-1 (at most 4096)
+  -h, --help           Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  One polynomial per line on stdin (or --input FILE): ascending integer
+  coefficient lists such as `1, 3, 2`, or expanded notation such as
+  `1 + 3t + 2t^2`. See `polytool help input`.
+
+Examples:
+  echo '1, 4, 1, 0' | polytool hstar-inequalities --dimension 3
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+See also:
+  polytool hstar-to-ehrhart, polytool ehrhart-to-hstar

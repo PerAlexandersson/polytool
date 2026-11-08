@@ -5,32 +5,6 @@ use crate::json_out::{json_bigint_vec, json_string};
 use num_bigint::BigInt;
 use polytool::*;
 
-pub(crate) fn print_sequence_help() {
-    println!("Usage:");
-    println!("  polytool sequence <name> <max-n> [--format text|rows|json]");
-    println!("  polytool sequence --help");
-    println!();
-    println!("Generate standard polynomial sequences.");
-    println!();
-    println!("Names:");
-    println!("  eulerian");
-    println!("  narayana");
-    println!("  type-b-eulerian  (aliases: type-b, type_b_eulerian)");
-    println!("  chebyshev-t      (aliases: chebyshev_t, t)");
-    println!("  chebyshev-u      (aliases: chebyshev_u, u)");
-    println!("  hermite");
-    println!();
-    println!("Options:");
-    println!("  --format <name>  text (default), rows (coefficient lists), or json");
-    println!("  --json           Alias for --format json");
-    println!("  -h, --help       Print this help text");
-    println!();
-    println!("Note: generated coefficients use arbitrary-size integers.");
-    println!();
-    println!("Example:");
-    println!("  polytool sequence eulerian 5");
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SequenceKind {
     Eulerian,

@@ -1,0 +1,30 @@
+Show one bundled OEIS family and its recurrence.
+
+Show the catalog record of one bundled family: name, status, row layout and
+indexing, evidence, and the exact recurrence that generates the rows. With
+--json the report also carries the recurrence as polytool.recurrence.v1 data
+(which `polytool recurrence-generate` reads), its LaTeX form and a Mathematica
+form.
+
+Usage: polytool oeis info [OPTIONS] <A-NUMBER>
+
+Arguments:
+  <A-NUMBER>  OEIS A-number (A followed by six digits)
+
+Options:
+  -h, --help  Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Examples:
+  polytool oeis info A008292
+  polytool oeis info A008292 --json
+
+Exit status:
+  0  found
+  2  usage error, or the A-number is not in the bundled catalog
+
+See also:
+  polytool oeis list, polytool oeis generate, polytool help recurrence-json

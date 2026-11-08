@@ -1,10 +1,9 @@
 //! `polytool recurrence` (search, representations, complete spaces) and
 //! `polytool recurrence-generate`.
 
-use crate::help::print_rational_coefficient_input_help;
 use crate::input::error_text;
 use crate::input::{
-    is_help_arg, next_option_value, parse_u64_option, parse_usize_option, read_polys_rational,
+    next_option_value, parse_u64_option, parse_usize_option, read_polys_rational,
     read_stdin_or_exit,
 };
 use crate::recurrence_input::read_recurrence_json;
@@ -15,193 +14,6 @@ use num_bigint::BigInt;
 use polytool::recurrence::BigRational as RecurrenceBigRational;
 use polytool::recurrence::*;
 use serde_json::{json, Value};
-
-pub(crate) fn print_recurrence_help() {
-    println!("Usage:");
-    println!("  polytool recurrence [options]");
-    println!("  polytool recurrence --help");
-    println!();
-    println!("Search adaptively for a linear differential-polynomial recurrence");
-    println!("among the input polynomial sequence.");
-    println!();
-    print_rational_coefficient_input_help();
-    println!();
-    println!("Search options:");
-    println!("  --first-index <n>          Index of the first input row (nonnegative)");
-    println!("                             With --skip-prefix, discarded rows still count.");
-    println!("                             Default: renumber the retained rows from 1.");
-    println!("  --skip-prefix <n>          Ignore the first n input polynomials");
-    println!("  --min-rec-len <n>          Minimum number of previous rows to use");
-    println!("  --max-rec-len <n>          Maximum number of previous rows to use");
-    println!("  --min-var-deg <d>          Minimum t-degree for recurrence coefficients");
-    println!("  --max-var-deg <d>          Maximum t-degree for recurrence coefficients");
-    println!("  --min-idx-deg <d>          Minimum n-degree for recurrence coefficients");
-    println!("  --max-idx-deg <d>          Maximum n-degree for recurrence coefficients");
-    println!("  --min-diff-deg <d>         Minimum derivative order");
-    println!("  --max-diff-deg <d>         Maximum derivative order");
-    println!("  --inhomogeneous            Try inhomogeneous terms");
-    println!("  --min-inhomo-var-deg <d>   Minimum t-degree for inhomogeneous terms");
-    println!("  --max-inhomo-var-deg <d>   Maximum t-degree for inhomogeneous terms");
-    println!("  --min-inhomo-idx-deg <d>   Minimum n-degree for inhomogeneous terms");
-    println!("  --max-inhomo-idx-deg <d>   Maximum n-degree for inhomogeneous terms");
-    println!("  --denominator              Try LHS denominators");
-    println!("  --try-denominator          Alias for --denominator");
-    println!("  --max-denom-var-deg <d>    Maximum t-degree for denominators");
-    println!("  --max-denom-idx-deg <d>    Maximum n-degree for denominators");
-    println!("  --alternating-sign         Also try alternating-sign terms");
-    println!(
-        "  --no-laurent               Do not vary the left-hand side (x^e, n-factors, charts)"
-    );
-    println!("  --max-laurent-x-power <e>  Largest left-hand power x^e (default 2)");
-    println!("  --min-margin <n>           Require equations >= unknowns + n");
-    println!("  --fit-extra-rows <n>       Extra rows beyond the first solvable prefix");
-    println!("  --no-verify                Use all input rows for fitting");
-    println!("  --no-modular-prefilter     Disable default modular candidate rejection");
-    println!("  --max-candidates <n>       Inspect at most n candidate configurations");
-    println!(
-        "  --max-work <n>             Stop after n deterministic work units, counted across the"
-    );
-    println!(
-        "                             whole search (modular and exact solves, held-out checks,"
-    );
-    println!(
-        "                             precomputation) from the dimensions of the systems, never"
-    );
-    println!(
-        "                             from the clock: the same n gives the same output on every"
-    );
-    println!(
-        "                             machine.  A step runs only if its whole cost fits, so the"
-    );
-    println!(
-        "                             units used never exceed n.  Reaching n ends the search as"
-    );
-    println!(
-        "                             budget_exhausted (exit status 3, like --max-candidates)."
-    );
-    println!(
-        "                             JSON reports work_units and max_work (a found record has"
-    );
-    println!(
-        "                             search.work_units).  One solve of r equations in c unknowns"
-    );
-    println!(
-        "                             costs r*c*(min(r,c)+1) units.  Not with --representations."
-    );
-    println!("  --representations          Return a menu of length/derivative tradeoffs");
-    println!("                             Text: comparison table and numbered formulas; JSON: full menu.");
-    println!("  --space                    Complete bounded spaces; read a recurrence-space JSON request from stdin");
-    println!(
-        "  --verify-space             Replay a recurrence-space JSON report from stdin (no search)"
-    );
-    println!("                             These two modes emit exact JSON and accept only optional --json.");
-    println!("                             Source-backed positives are conditional on the supplied source/seeds.");
-    println!("                             Rows-only positives are fits; dual negatives prove absence in shape.");
-    println!("                             Opt-in \"coefficient_rescaling\": {{\"kind\":\"factorial_power\",\"power\":m}}");
-    println!("                             searches Q[n] = T(P[n]), T(X^k) = X^k/(k!)^m, m >= 1, and certifies");
-    println!("                             complete spaces from r(U+m(A+J)+1) residuals (constant-index source).");
-    println!("                             With --json: structured candidates and coverage");
-    println!("  --json                     Emit recurrence JSON with initial conditions");
-    println!("  --format json              Alias for --json");
-    println!("  --latex                    Emit LaTeX with subscripts, seeds and starting index;");
-    println!("                             every coefficient is factored over Q and the product");
-    println!("                             verified by exact re-expansion, e.g.");
-    println!("                             (n + 2) P_{{n}} = (2n + 1)(1 + t) P_{{n-1}} - (n - 1)(1 - t)^{{2}} P_{{n-2}}");
-    println!(
-        "                             A coefficient whose factorization exhausts its budget stays"
-    );
-    println!(
-        "                             expanded, noted by a % comment line.  A recurrence fitted to"
-    );
-    println!(
-        "                             rows keeps its candidate comment (not proved for all n)."
-    );
-    println!("  --format latex             Alias for --latex");
-    println!("                             JSON also includes this presentation in latex.");
-    println!("  --python                   Emit exact Python code for the recurrence");
-    println!("  --format python            Alias for --python");
-    println!("  --verbose                  Print candidate search details");
-    println!("  --theorem-matches          Also report conditional theorem matches");
-    println!("                             (weighted renewal, fixed-delay predecessor),");
-    println!("                             separate from the finite fit evidence. With --json,");
-    println!("                             emit polytool.recurrence-theorems.v1 (the usual");
-    println!("                             record is its recurrence_json). Without the flag a");
-    println!("                             match is only noted on stderr. Cannot combine with");
-    println!("                             --representations; save its JSON menu, then use");
-    println!(
-        "                             recurrence-theorems --recurrence menu.json --candidate N."
-    );
-    println!("  -h, --help                 Print this help text");
-    println!();
-    println!("Example:");
-    println!("  printf '1\\n1\\n2\\n3\\n5\\n8\\n' | polytool recurrence");
-    println!("  polytool recurrence --json < rows.txt > recurrence.json");
-}
-
-pub(crate) fn print_recurrence_generate_help() {
-    println!("Usage:");
-    println!("  polytool recurrence-generate --recurrence <file|-> --rows <n>");
-    println!("  polytool recurrence-generate --recurrence <file|-> --additional <n>");
-    println!("  polytool recurrence-generate --recurrence <file|-> --format bfile --max-terms <n>");
-    println!("  polytool recurrence-generate --help");
-    println!("  --candidate <index>  Select a representation menu entry (0-based)");
-    println!("  Accepts recurrence JSON, theorem wrappers and representation menus.");
-    println!("  --format rows is an alias for the default coefficient-list output.");
-    println!();
-    println!("Generate coefficient rows from recurrence JSON emitted by");
-    println!("`polytool recurrence --json`.");
-    println!();
-    println!("Options:");
-    println!("  --recurrence <file|->      Read recurrence JSON from file, or stdin with -");
-    println!("  --first-index <n>          Relabel the first row and shift the rule accordingly");
-    println!("                             Default: keep the JSON record's first_index.");
-    println!("  --rows <n>                 Output n total rows, including initial rows");
-    println!("  --additional <n>           Output initial rows plus n generated rows");
-    println!("  --json                     Emit generated rows as JSON");
-    println!("  --format <format>          text (default), json (--json), bfile, or an OEIS");
-    println!("                             text format: oeis-example, oeis-formula,");
-    println!("                             mathematica, pari, oeis-json");
-    println!("  -h, --help                 Print this help text");
-    println!();
-    println!("OEIS text formats: the rows from --first-row on, read as an OEIS triangle");
-    println!("(--offset, --reversed, --trim-zeros, --regular-triangle), with the recurrence");
-    println!("index n shifted to the OEIS row number.  --rows <n> rows are shown (default 10).");
-    println!("  oeis-example               %e block \"Triangle begins:\" with aligned columns");
-    println!("  oeis-formula               %F sentence: the recurrence in plain ASCII with its");
-    println!("                             initial rows, e.g. P(n,x) = (2+x)*P(n-1,x) + ...");
-    println!("  mathematica                %t program: memoized P[n_, x_] and the flattened rows");
-    println!("  pari                       %o PARI/GP program listing the same rows");
-    println!("  oeis-json                  all four as JSON (schema polytool.oeis-text.v1)");
-    println!("Without --offset the first row keeps its own index as its OEIS row number.");
-    println!();
-    println!("B-file output (--format bfile): the rows are flattened into OEIS b-file");
-    println!("lines `index value`, coefficients in ascending powers within each row, and");
-    println!("every coefficient must be an integer.  A term cap never splits a row.");
-    println!("  --offset <k>               Index of the first term (the OEIS offset; default 0)");
-    println!("  --max-terms <n>            Write at most n terms, whole rows only.  Without");
-    println!("                             --rows/--additional, rows are generated until the");
-    println!("                             cap is reached");
-    println!("  --nearest-row              With --max-terms, stop at the whole row nearest");
-    println!("                             to n terms (it may exceed n; ties go to fewer)");
-    println!("                             instead of the longest prefix with at most n");
-    println!("  --reversed                 Write each row from its highest coefficient down");
-    println!("  --trim-zeros <none|low|high|both>");
-    println!("                             Drop zeros at the low (constant) end, the high");
-    println!("                             (leading) end or both ends of each row, before");
-    println!("                             --reversed is applied (default none)");
-    println!("  --first-row <k>            Start at the row with absolute index k (default");
-    println!("                             the record's first index); also for OEIS text");
-    println!("  --regular-triangle         Row i (from the first) has exactly L0 + i entries:");
-    println!("                             pad shorter rows with high zeros, stop before a");
-    println!("                             longer row; also for OEIS text");
-    println!();
-    println!("Examples:");
-    println!("  polytool recurrence-generate --recurrence recurrence.json --rows 50");
-    println!("  polytool recurrence-generate --recurrence eulerian.json --format bfile \\");
-    println!("      --offset 1 --max-terms 1000 > b008292.txt");
-    println!("  polytool recurrence-generate --recurrence rec.json --format mathematica \\");
-    println!("      --first-row 1 --offset 0 --reversed --rows 11");
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecurrenceOutputFormat {
@@ -283,11 +95,6 @@ fn print_representations_text(report: &RecurrenceRepresentations) {
 }
 
 pub(crate) fn cmd_recurrence(args: &[String]) {
-    if args.iter().any(|arg| is_help_arg(arg)) {
-        print_recurrence_help();
-        return;
-    }
-
     if args.iter().any(|x| x == "--space" || x == "--verify-space") {
         cmd_recurrence_space(args);
         return;
@@ -346,8 +153,29 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     }
                 };
             }
-            "--min-rec-len" => {
-                search.min_rec_len = match parse_usize_option(args, &mut i, "--min-rec-len") {
+            "--min-recurrence-length" => {
+                search.min_rec_len =
+                    match parse_usize_option(args, &mut i, "--min-recurrence-length") {
+                        Ok(value) => value,
+                        Err(error) => {
+                            eprintln!("{error}");
+                            std::process::exit(2);
+                        }
+                    };
+            }
+            "--max-recurrence-length" => {
+                search.max_rec_len =
+                    match parse_usize_option(args, &mut i, "--max-recurrence-length") {
+                        Ok(value) => value,
+                        Err(error) => {
+                            eprintln!("{error}");
+                            std::process::exit(2);
+                        }
+                    };
+            }
+            "--min-variable-degree" => {
+                search.min_var_deg = match parse_usize_option(args, &mut i, "--min-variable-degree")
+                {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
@@ -355,8 +183,9 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     }
                 };
             }
-            "--max-rec-len" => {
-                search.max_rec_len = match parse_usize_option(args, &mut i, "--max-rec-len") {
+            "--max-variable-degree" => {
+                search.max_var_deg = match parse_usize_option(args, &mut i, "--max-variable-degree")
+                {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
@@ -364,8 +193,8 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     }
                 };
             }
-            "--min-var-deg" => {
-                search.min_var_deg = match parse_usize_option(args, &mut i, "--min-var-deg") {
+            "--min-index-degree" => {
+                search.min_idx_deg = match parse_usize_option(args, &mut i, "--min-index-degree") {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
@@ -373,8 +202,8 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     }
                 };
             }
-            "--max-var-deg" => {
-                search.max_var_deg = match parse_usize_option(args, &mut i, "--max-var-deg") {
+            "--max-index-degree" => {
+                search.max_idx_deg = match parse_usize_option(args, &mut i, "--max-index-degree") {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
@@ -382,49 +211,33 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     }
                 };
             }
-            "--min-idx-deg" => {
-                search.min_idx_deg = match parse_usize_option(args, &mut i, "--min-idx-deg") {
-                    Ok(value) => value,
-                    Err(error) => {
-                        eprintln!("{error}");
-                        std::process::exit(2);
-                    }
-                };
+            "--min-derivative-order" => {
+                search.min_diff_deg =
+                    match parse_usize_option(args, &mut i, "--min-derivative-order") {
+                        Ok(value) => value,
+                        Err(error) => {
+                            eprintln!("{error}");
+                            std::process::exit(2);
+                        }
+                    };
             }
-            "--max-idx-deg" => {
-                search.max_idx_deg = match parse_usize_option(args, &mut i, "--max-idx-deg") {
-                    Ok(value) => value,
-                    Err(error) => {
-                        eprintln!("{error}");
-                        std::process::exit(2);
-                    }
-                };
+            "--max-derivative-order" => {
+                search.max_diff_deg =
+                    match parse_usize_option(args, &mut i, "--max-derivative-order") {
+                        Ok(value) => value,
+                        Err(error) => {
+                            eprintln!("{error}");
+                            std::process::exit(2);
+                        }
+                    };
             }
-            "--min-diff-deg" => {
-                search.min_diff_deg = match parse_usize_option(args, &mut i, "--min-diff-deg") {
-                    Ok(value) => value,
-                    Err(error) => {
-                        eprintln!("{error}");
-                        std::process::exit(2);
-                    }
-                };
-            }
-            "--max-diff-deg" => {
-                search.max_diff_deg = match parse_usize_option(args, &mut i, "--max-diff-deg") {
-                    Ok(value) => value,
-                    Err(error) => {
-                        eprintln!("{error}");
-                        std::process::exit(2);
-                    }
-                };
-            }
-            "--inhomogeneous" => {
+            "--try-inhomogeneous" => {
                 search.try_inhomogeneous = true;
             }
-            "--min-inhomo-var-deg" => {
+            "--min-inhomogeneous-variable-degree" => {
                 search.try_inhomogeneous = true;
                 search.min_inhomo_var_deg =
-                    match parse_usize_option(args, &mut i, "--min-inhomo-var-deg") {
+                    match parse_usize_option(args, &mut i, "--min-inhomogeneous-variable-degree") {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
@@ -432,10 +245,10 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         }
                     };
             }
-            "--max-inhomo-var-deg" => {
+            "--max-inhomogeneous-variable-degree" => {
                 search.try_inhomogeneous = true;
                 search.max_inhomo_var_deg =
-                    match parse_usize_option(args, &mut i, "--max-inhomo-var-deg") {
+                    match parse_usize_option(args, &mut i, "--max-inhomogeneous-variable-degree") {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
@@ -443,10 +256,10 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         }
                     };
             }
-            "--min-inhomo-idx-deg" => {
+            "--min-inhomogeneous-index-degree" => {
                 search.try_inhomogeneous = true;
                 search.min_inhomo_idx_deg =
-                    match parse_usize_option(args, &mut i, "--min-inhomo-idx-deg") {
+                    match parse_usize_option(args, &mut i, "--min-inhomogeneous-index-degree") {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
@@ -454,10 +267,10 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         }
                     };
             }
-            "--max-inhomo-idx-deg" => {
+            "--max-inhomogeneous-index-degree" => {
                 search.try_inhomogeneous = true;
                 search.max_inhomo_idx_deg =
-                    match parse_usize_option(args, &mut i, "--max-inhomo-idx-deg") {
+                    match parse_usize_option(args, &mut i, "--max-inhomogeneous-index-degree") {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
@@ -465,18 +278,18 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         }
                     };
             }
-            "--denominator" | "--try-denominator" => {
+            "--try-denominator" => {
                 search.try_denominator = true;
             }
-            "--alternating-sign" => {
+            "--try-alternating-sign" => {
                 search.try_alternating_sign = true;
             }
             "--no-laurent" => {
                 search.try_laurent = false;
             }
-            "--max-laurent-x-power" => {
+            "--max-laurent-power" => {
                 search.max_laurent_x_power =
-                    match parse_usize_option(args, &mut i, "--max-laurent-x-power") {
+                    match parse_usize_option(args, &mut i, "--max-laurent-power") {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
@@ -484,10 +297,10 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         }
                     };
             }
-            "--max-denom-var-deg" => {
+            "--max-denominator-variable-degree" => {
                 search.try_denominator = true;
                 search.max_denom_var_deg =
-                    match parse_usize_option(args, &mut i, "--max-denom-var-deg") {
+                    match parse_usize_option(args, &mut i, "--max-denominator-variable-degree") {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
@@ -495,10 +308,10 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         }
                     };
             }
-            "--max-denom-idx-deg" => {
+            "--max-denominator-index-degree" => {
                 search.try_denominator = true;
                 search.max_denom_idx_deg =
-                    match parse_usize_option(args, &mut i, "--max-denom-idx-deg") {
+                    match parse_usize_option(args, &mut i, "--max-denominator-index-degree") {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
@@ -506,8 +319,9 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         }
                     };
             }
-            "--min-margin" => {
-                search.min_margin = match parse_usize_option(args, &mut i, "--min-margin") {
+            "--min-equation-margin" => {
+                search.min_margin = match parse_usize_option(args, &mut i, "--min-equation-margin")
+                {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
@@ -524,7 +338,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     }
                 };
             }
-            "--no-verify" => {
+            "--no-held-out-rows" => {
                 search.no_verify = true;
             }
             "--no-modular-prefilter" => {
@@ -827,11 +641,6 @@ struct BFileRequest {
 }
 
 pub(crate) fn cmd_recurrence_generate(args: &[String]) {
-    if args.iter().any(|arg| is_help_arg(arg)) {
-        print_recurrence_generate_help();
-        return;
-    }
-
     fn usage_error(message: &str) -> ! {
         eprintln!("{message}");
         std::process::exit(2);
@@ -872,14 +681,14 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
                         .unwrap_or_else(|error| usage_error(&error)),
                 );
             }
-            "--rows" => {
+            "--count" => {
                 rows = Some(
-                    parse_usize_option(args, &mut i, "--rows").unwrap_or_else(|e| usage_error(&e)),
+                    parse_usize_option(args, &mut i, "--count").unwrap_or_else(|e| usage_error(&e)),
                 );
             }
-            "--additional" => {
+            "--additional-count" => {
                 additional = Some(
-                    parse_usize_option(args, &mut i, "--additional")
+                    parse_usize_option(args, &mut i, "--additional-count")
                         .unwrap_or_else(|e| usage_error(&e)),
                 );
             }
@@ -902,18 +711,20 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
                     )),
                 };
             }
-            "--offset" => {
-                let value =
-                    next_option_value(args, &mut i, "--offset").unwrap_or_else(|e| usage_error(&e));
+            "--first-term-index" => {
+                let value = next_option_value(args, &mut i, "--first-term-index")
+                    .unwrap_or_else(|e| usage_error(&e));
                 bfile.options.first_index = value.parse().unwrap_or_else(|_| {
-                    usage_error(&format!("--offset expects an integer, got '{value}'"))
+                    usage_error(&format!(
+                        "--first-term-index expects an integer, got '{value}'"
+                    ))
                 });
                 reading_given = true;
                 offset_given = true;
             }
-            "--first-row" => {
+            "--from-index" => {
                 first_row = Some(
-                    parse_usize_option(args, &mut i, "--first-row")
+                    parse_usize_option(args, &mut i, "--from-index")
                         .unwrap_or_else(|e| usage_error(&e)),
                 );
                 reading_given = true;
@@ -929,7 +740,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
                 );
                 bfile.given = true;
             }
-            "--reversed" => {
+            "--descending" => {
                 bfile.options.orientation = polytool::oeis::BFileRowOrientation::Reversed;
                 reading_given = true;
             }
@@ -964,7 +775,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
         std::process::exit(2);
     };
     if rows.is_some() && additional.is_some() {
-        eprintln!("use only one of --rows or --additional");
+        eprintln!("use only one of --count or --additional-count");
         std::process::exit(2);
     }
     let oeis_text_format = matches!(
@@ -976,7 +787,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     }
     if format != "bfile" && !oeis_text_format && reading_given {
         usage_error(
-            "--offset, --first-row, --reversed, --trim-zeros and --regular-triangle need \
+            "--first-term-index, --from-index, --descending, --trim-zeros and --regular-triangle need \
              --format bfile or an OEIS text format",
         );
     }
@@ -1020,7 +831,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
             bfile.options.first_index
         } else if oeis_text_format {
             i64::try_from(first_row.unwrap_or(first_index))
-                .unwrap_or_else(|_| usage_error("--first-row does not fit in i64"))
+                .unwrap_or_else(|_| usage_error("--from-index does not fit in i64"))
         } else {
             0
         },
@@ -1050,7 +861,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     }
 
     if format == "bfile" && (first_row.is_some() || regular_triangle) {
-        // Read the rows from `--first-row` on as OEIS rows, then flatten them.
+        // Read the rows from `--from-index` on as OEIS rows, then flatten them.
         let presentation = polytool::oeis::OeisRecurrencePresentation::from_recurrence_json(
             &recurrence_json,
             first_row,
@@ -1073,7 +884,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
         let Some(max_terms) = bfile.options.max_terms.filter(|_| total_rows.is_none()) else {
             let Some(total_rows) = total_rows else {
                 usage_error(
-                    "recurrence-generate --format bfile needs --rows <n>, --additional <n> or --max-terms <n>",
+                    "recurrence-generate --format bfile needs --count <n>, --additional-count <n> or --max-terms <n>",
                 );
             };
             let generated =
@@ -1105,7 +916,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
             if kept == 0 {
                 barren_rows += 1;
                 if barren_rows > 10_000 {
-                    usage_error("10000 consecutive rows without b-file terms; use --rows");
+                    usage_error("10000 consecutive rows without b-file terms; use --count");
                 }
             } else {
                 barren_rows = 0;
@@ -1118,7 +929,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     }
 
     let Some(total_rows) = total_rows else {
-        eprintln!("recurrence-generate needs --rows <n> or --additional <n>");
+        eprintln!("recurrence-generate needs --count <n> or --additional-count <n>");
         std::process::exit(2);
     };
     let generated = match recurrence.generate_rows_rational(&initial_polys, first_index, total_rows)
@@ -1164,7 +975,7 @@ fn collect_bfile_rows(
         (None, Some(max_terms)) => max_terms,
         (None, None) => {
             eprintln!(
-                "recurrence-generate --format bfile needs --rows <n>, --additional <n> or --max-terms <n>"
+                "recurrence-generate --format bfile needs --count <n>, --additional-count <n> or --max-terms <n>"
             );
             std::process::exit(2);
         }
@@ -1182,7 +993,7 @@ fn collect_bfile_rows(
         if kept == 0 {
             barren_rows += 1;
             if barren_rows > 10_000 {
-                eprintln!("10000 consecutive rows without b-file terms; use --rows");
+                eprintln!("10000 consecutive rows without b-file terms; use --count");
                 std::process::exit(2);
             }
         } else {

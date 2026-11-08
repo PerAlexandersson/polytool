@@ -17,7 +17,7 @@ Part of the [CLI reference](cli.md).  See also
 
 Given a sequence of polynomials (one per line), search for a polynomial
 recurrence `f(n,t) P_n(t) = Σ c_{r,d}(n,t) D^d P_{n-r}(t)`. With
-`--alternating-sign`, the search also allows terms
+`--try-alternating-sign`, the search also allows terms
 `(-1)^n c_{r,d}(n,t) D^d P_{n-r}(t)`:
 
 ```sh
@@ -30,7 +30,7 @@ and inhomogeneous unknowns are delayed. A candidate is only solved when the
 available fitting prefix has at least `unknowns + min_margin` scalar equations.
 By default the last input row is reserved for exact verification, the fit uses
 the first solvable prefix plus one extra row, and modular prefiltering rejects
-impossible candidates before exact rational solving. Use `--no-verify` to fit
+impossible candidates before exact rational solving. Use `--no-held-out-rows` to fit
 against all input rows.
 
 Options:
@@ -38,30 +38,30 @@ Options:
 ```
 --skip-prefix <k>    Ignore the first k input polynomials before searching
 --first-index <n>    Index of the first input row (nonnegative integer)
---min-rec-len <k>    Minimum recurrence depth to try (default: 1)
---max-rec-len <k>    Maximum recurrence depth (default: 5)
---min-var-deg <d>    Minimum degree in t for coefficients (default: 0)
---max-var-deg <d>    Maximum degree in t for coefficients (default: 3)
---min-idx-deg <d>    Minimum degree in n for coefficients (default: 0)
---max-idx-deg <d>    Maximum degree in n for coefficients (default: 3)
---min-diff-deg <d>   Minimum derivative order (default: 0)
---max-diff-deg <d>   Maximum derivative order (default: 2)
---inhomogeneous      Also try inhomogeneous recurrences
---min-inhomo-var-deg Minimum degree in t for the inhomogeneous term
---max-inhomo-var-deg Maximum degree in t for the inhomogeneous term
---min-inhomo-idx-deg Minimum degree in n for the inhomogeneous term
---max-inhomo-idx-deg Maximum degree in n for the inhomogeneous term
---denominator        Allow a nontrivial LHS factor f(n,t)
---alternating-sign   Also allow right-hand-side terms multiplied by (-1)^n
+--min-recurrence-length <k>    Minimum recurrence depth to try (default: 1)
+--max-recurrence-length <k>    Maximum recurrence depth (default: 5)
+--min-variable-degree <d>    Minimum degree in t for coefficients (default: 0)
+--max-variable-degree <d>    Maximum degree in t for coefficients (default: 3)
+--min-index-degree <d>    Minimum degree in n for coefficients (default: 0)
+--max-index-degree <d>    Maximum degree in n for coefficients (default: 3)
+--min-derivative-order <d>   Minimum derivative order (default: 0)
+--max-derivative-order <d>   Maximum derivative order (default: 2)
+--try-inhomogeneous      Also try inhomogeneous recurrences
+--min-inhomogeneous-variable-degree Minimum degree in t for the inhomogeneous term
+--max-inhomogeneous-variable-degree Maximum degree in t for the inhomogeneous term
+--min-inhomogeneous-index-degree Minimum degree in n for the inhomogeneous term
+--max-inhomogeneous-index-degree Maximum degree in n for the inhomogeneous term
+--try-denominator        Allow a nontrivial LHS factor f(n,t)
+--try-alternating-sign   Also allow right-hand-side terms multiplied by (-1)^n
 --no-laurent         Skip the left-hand side variation stage (x^e factors and
                       normalization charts; on by default in this command)
---max-laurent-x-power <e>
+--max-laurent-power <e>
                       Largest left-hand power x^e (default: 2)
---max-denom-var-deg  Max degree in t for f(n,t) (default: 2, implies --denominator)
---max-denom-idx-deg  Max degree in n for f(n,t) (default: 2, implies --denominator)
---min-margin <k>     Require equations >= unknowns + k (default: 1)
+--max-denominator-variable-degree  Max degree in t for f(n,t) (default: 2, implies --try-denominator)
+--max-denominator-index-degree  Max degree in n for f(n,t) (default: 2, implies --try-denominator)
+--min-equation-margin <k>     Require equations >= unknowns + k (default: 1)
 --fit-extra-rows <k> Extra rows after the first solvable prefix (default: 1)
---no-verify          Fit all rows instead of reserving held-out verification rows
+--no-held-out-rows          Fit all rows instead of reserving held-out verification rows
 --no-modular-prefilter
                       Disable default modular candidate rejection
 --max-candidates <n> Inspect at most n adaptive candidate configurations
@@ -121,7 +121,7 @@ on either side, before cancellation between summands. Derivatives, denominators
 and forcing terms contribute their actual degrees; a zero identity contributes
 one slot. This counts equations, including zero or dependent ones, **not**
 independent constraints or a probability of correctness. It is zero with
-`--no-verify`; older JSON records without the field remain readable (default 0).
+`--no-held-out-rows`; older JSON records without the field remain readable (default 0).
 Representation entries expose the same count directly as well as in their
 nested recurrence JSON.
 
@@ -132,8 +132,8 @@ of stopping at the first match:
 
 ```sh
 polytool recurrence --representations --json \
-  --max-rec-len 3 --max-diff-deg 2 --max-var-deg 3 --max-idx-deg 1 \
-  --denominator --max-denom-var-deg 0 --max-denom-idx-deg 1 \
+  --max-recurrence-length 3 --max-derivative-order 2 --max-variable-degree 3 --max-index-degree 1 \
+  --try-denominator --max-denominator-variable-degree 0 --max-denominator-index-degree 1 \
   --max-candidates 2000 < rows.txt > representations.json
 ```
 
@@ -212,7 +212,7 @@ To generate rows or check conditional theorem matches for one entry, select
 its zero-based index directly:
 
 ```sh
-polytool recurrence-generate --recurrence representations.json --candidate 0 --rows 60
+polytool recurrence-generate --recurrence representations.json --candidate 0 --count 60
 polytool recurrence-theorems --recurrence representations.json --candidate 0 --json
 ```
 
@@ -552,15 +552,15 @@ to reach the checked recurrence domain.
 Generate more rows from the saved recurrence with:
 
 ```sh
-polytool recurrence-generate --recurrence recurrence.json --rows 100 > rows-100.txt
+polytool recurrence-generate --recurrence recurrence.json --count 100 > rows-100.txt
 ```
 
-Use `--additional n` instead of `--rows n` to keep all initial rows and append
+Use `--additional-count n` instead of `--count n` to keep all initial rows and append
 `n` newly generated rows. By default generation preserves the record's
 `first_index`. To relabel it, use:
 
 ```sh
-polytool recurrence-generate --recurrence recurrence.json --first-index 0 --rows 100
+polytool recurrence-generate --recurrence recurrence.json --first-index 0 --count 100
 ```
 
 This shifts the rule as well as its labels: it generates exactly the same rows,
@@ -636,28 +636,28 @@ triangle is read by rows).  Every coefficient must be an integer.
 
 ```sh
 polytool recurrence-generate --recurrence recurrence.json --format bfile \
-  --offset 1 --max-terms 1000 > b008292.txt
+  --first-term-index 1 --max-terms 1000 > b008292.txt
 ```
 
-- `--offset K` is the index of the first term (the OEIS offset; default 0).
+- `--first-term-index K` is the index of the first term (the OEIS offset; default 0).
 - `--max-terms N` caps the number of terms and never splits a row: by default
   the output is the longest prefix of whole rows with at most `N` terms, and the
   command fails if even the first row is longer.  `--nearest-row` instead picks
   the whole row nearest to `N` terms, which may exceed it (a tie goes to the
-  shorter prefix).  Without `--rows` or `--additional`, rows are generated until
+  shorter prefix).  Without `--count` or `--additional-count`, rows are generated until
   the cap is reached.
-- `--reversed` writes each row from its highest coefficient down to its
+- `--descending` writes each row from its highest coefficient down to its
   constant term.
 - `--trim-zeros none|low|high|both` drops zero coefficients at the constant
   (low) end, the leading (high) end or both ends of each stored row, before
-  `--reversed` is applied.  The default keeps every coefficient, as
+  `--descending` is applied.  The default keeps every coefficient, as
   `oeis generate --format bfile` does.
 
-- `--first-row K` starts at the row with absolute index `K` of the record
+- `--from-index K` starts at the row with absolute index `K` of the record
   (default its first index); `--regular-triangle` reads the rows as a regular
   triangle (see below).
 
-For a catalog entry, `polytool oeis generate A008292 --rows 12 --format bfile
+For a catalog entry, `polytool oeis generate A008292 --count 12 --format bfile
 --max-terms N` writes the same lines with the catalog's own offset; both
 commands use the library function `oeis::flatten_rows_to_bfile`.
 
@@ -678,19 +678,19 @@ The formats `oeis-example`, `oeis-formula`, `mathematica`, `pari` and
 - `pari`: a `%o` PARI/GP program listing the same rows with `T(N)`;
 - `oeis-json`: all four (schema `polytool.oeis-text.v1`).
 
-The rows from `--first-row` on are read as OEIS rows: `--offset` is the OEIS
+The rows from `--from-index` on are read as OEIS rows: `--first-term-index` is the OEIS
 row number of the first row (default: the first row keeps its own index),
-`--reversed` lists each row in descending powers, `--trim-zeros` drops zeros
+`--descending` lists each row in descending powers, `--trim-zeros` drops zeros
 at the ends of each ascending row, and `--regular-triangle` gives row `i`
 (counted from the first) exactly `L0 + i` entries, padding a shorter row with
 zeros at its high end and stopping before a row that is longer.  The index
 `n` of the formula and programs is the OEIS row number (the recurrence is
-shifted to it); `--rows N` sets the number of rows shown (default 10).
+shifted to it); `--count N` sets the number of rows shown (default 10).
 
 ```sh
 # A156919: the reversed rows from n = 1 on, offset 0.
 polytool recurrence-generate --recurrence rec.json --format oeis-formula \
-  --first-row 1 --offset 0 --reversed --regular-triangle
+  --from-index 1 --first-term-index 0 --descending --regular-triangle
 ```
 
 The web interface exports this compact JSON record and links back to these
@@ -712,7 +712,7 @@ degree law `deg P_n = D(n)` and the sign of the leading coefficient of every
 row, for all `n`, exactly (library: `certify_leading_coefficient`, see
 [Library usage](library.md#degree-laws-and-leading-coefficients-of-recurrence-rows)).
 `D(n)` is periodic by residue class (affine, half growth, Veronese sections,
-two-step products); it is read off exactly computed rows (`--rows N`, default
+two-step products); it is read off exactly computed rows (`--count N`, default
 36; `--max-period P`, default 6) and proved for every later index by one of
 the RealRooted routes `cone`, `recurrence`, `subseq`, `twoStep`, `cancel` or
 `coefficients`.  The text output lists the conclusion, every hypothesis with

@@ -1,0 +1,26 @@
+Time consecutive interlacing checks on a sequence.
+
+Time the interlacing check of each consecutive pair of polynomials of a built-in
+sequence and print one tab-separated line per pair.
+
+Usage: polytool bench interlacing [OPTIONS]
+
+Options:
+      --sequence <NAME>  Sequence name [default: eulerian]
+      --max-index <N>    Largest sequence index to generate [default: 20]
+      --repeat <N>       Repeat each pair N times [default: 3]
+  -h, --help             Print help
+
+Examples:
+  polytool bench interlacing --sequence eulerian --max-index 12 --repeat 5
+
+Exit status:
+  0  finished
+  1  a fixture, file or check failed
+  2  usage error
+
+Deprecated spellings (still accepted; they print a warning on stderr):
+  --max-n -> --max-index
+
+See also:
+  polytool interlacing, polytool sequence

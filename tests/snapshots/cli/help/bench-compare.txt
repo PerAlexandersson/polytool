@@ -1,0 +1,29 @@
+Compare two recurrence-fixture JSON benchmark runs.
+
+Compare two JSON runs written by `bench recurrence-fixtures --format json` and
+show the worst regressions of the second run relative to the first.
+
+Usage: polytool bench compare [OPTIONS] <OLD> <NEW>
+
+Arguments:
+  <OLD>  Earlier benchmark run (JSON)
+  <NEW>  Later benchmark run (JSON)
+
+Options:
+      --top <N>  Number of worst regressions to show [default: 10]
+  -h, --help     Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: tsv] [possible values: tsv, json, text]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Examples:
+  polytool bench compare --top 5 old.json new.json
+
+Exit status:
+  0  finished
+  1  a fixture, file or check failed
+  2  usage error
+
+See also:
+  polytool bench recurrence-fixtures

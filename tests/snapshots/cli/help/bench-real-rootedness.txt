@@ -1,0 +1,40 @@
+Verdict-checked timing suite on degree 20-80 families.
+
+Run a timing suite over families of polynomials of degree 20-80. Each check has
+an exact expected verdict; any mismatch (or a verdict that differs from the
+baseline) is reported as a failure and exits with status 1.
+
+Check kinds: real_rooted, interlacing (strict, f << g), root_count (distinct
+real roots), hstar_identity (Ehrhart <-> h* conversion round trips).
+
+Usage: polytool bench real-rootedness [OPTIONS]
+
+Options:
+      --quick                Small degrees (about 8-14); fast enough for CI
+      --degrees <D1,D2,...>  Degrees of the scaling families (each 4..=200) [default: 20,40,60,80; quick: 8,14]
+      --only <TEXT>          Run only cases whose name contains TEXT
+      --repeat <N>           Time each check N times [default: 1]
+      --baseline <FILE>      Compare verdicts and timings with a saved JSON run
+      --max-slowdown <X>     With --baseline, fail when a check is more than X times slower
+  -h, --help                 Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: tsv] [possible values: tsv, json, text]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Details:
+  --max-slowdown applies to checks whose baseline median is at least 1 ms, and
+  requires --baseline. The full default degree list takes a few minutes.
+
+Examples:
+  polytool bench real-rootedness --quick
+  polytool bench real-rootedness --quick --json > baseline.json
+  polytool bench real-rootedness --quick --baseline baseline.json --max-slowdown 3
+
+Exit status:
+  0  finished
+  1  a fixture, file or check failed
+  2  usage error
+
+See also:
+  polytool real-rooted, polytool bench interlacing

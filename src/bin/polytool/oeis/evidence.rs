@@ -14,44 +14,6 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// Default per-entry time limit in seconds.
 const DEFAULT_ENTRY_TIMEOUT_SECONDS: u64 = 60;
 
-pub(crate) fn print_oeis_evidence_help() {
-    println!("Usage:");
-    println!("  polytool oeis evidence [A-number...|--all] --rows <n> [options]");
-    println!();
-    println!("Compute, for each entry, the strongest coefficient property that holds on");
-    println!("every one of its first <n> rows (fewer if the entry cannot generate that");
-    println!("many), exactly, from the catalog's own rows.  Properties, strongest first:");
-    println!("real_rooted, ultra_log_concave, log_concave, unimodal, none.  real_rooted");
-    println!("is the exact polytool check (any coefficient signs); the other three need a");
-    println!("row with nonnegative coefficients and no zero between two nonzero ones, and");
-    println!("then use polytool's own log-concavity, ultra-log-concavity and unimodality");
-    println!("checks (ultra-log-concavity at the row's degree).  The record lists the");
-    println!("first failing row (displayed OEIS row index) of each stronger property.");
-    println!();
-    println!("This is evidence about finitely many rows, not a proof, and it is separate");
-    println!("from the real_rootedness flag.");
-    println!();
-    println!("Options:");
-    println!("  --rows <n>             Number of rows to check (required, at least 1)");
-    println!("  --all                  Every catalog entry (instead of listing A-numbers)");
-    println!("  --ids-file <file>      Restrict to the listed A-numbers");
-    println!("  --write                Store the records in the catalog data file; only the");
-    println!("                         `evidence` key of each computed entry changes");
-    println!("  --per-entry-timeout-seconds <s>");
-    println!("                         Limit per entry, checked before each row (default");
-    println!("                         {DEFAULT_ENTRY_TIMEOUT_SECONDS}; 0 = none).  An entry over the limit gets no record");
-    println!("                         (an existing record is kept) and is listed");
-    println!("  --as-of <YYYY-MM-DD>   Date to record (default: today, UTC)");
-    println!("  --catalog <file>       Data file to read (and to write with --write);");
-    println!("                         default ./data/oeis-catalog.jsonl if present, else");
-    println!("                         the bundled catalog (then --write is not possible)");
-    println!("  --json                 Emit a polytool.oeis-evidence.v1 report");
-    println!();
-    println!("Besides the per-entry lines the report gives the distribution of `strongest`");
-    println!("and lists every lean_proved entry whose evidence is weaker than real_rooted");
-    println!("(a contradiction to investigate).");
-}
-
 fn fail<T>(error: String) -> T {
     eprintln!("{error}");
     std::process::exit(2);
@@ -191,10 +153,6 @@ fn line_without_evidence(record: &OeisCatalogRecord) -> String {
 }
 
 pub(crate) fn cmd_oeis_evidence(args: &[String]) {
-    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        print_oeis_evidence_help();
-        return;
-    }
     let mut ids: Vec<String> = Vec::new();
     let mut all = false;
     let mut rows: Option<usize> = None;
@@ -209,8 +167,8 @@ pub(crate) fn cmd_oeis_evidence(args: &[String]) {
             "--all" => all = true,
             "--write" => write = true,
             "--json" => json_output = true,
-            "--rows" => {
-                rows = Some(parse_usize_option(args, &mut index, "--rows").unwrap_or_else(fail))
+            "--count" => {
+                rows = Some(parse_usize_option(args, &mut index, "--count").unwrap_or_else(fail))
             }
             "--per-entry-timeout-seconds" => {
                 timeout_seconds =
@@ -243,7 +201,7 @@ pub(crate) fn cmd_oeis_evidence(args: &[String]) {
         index += 1;
     }
     let Some(rows) = rows.filter(|&rows| rows > 0) else {
-        fail::<()>("oeis evidence needs --rows <n> with n at least 1".to_string());
+        fail::<()>("oeis evidence needs --count <n> with n at least 1".to_string());
         return;
     };
     if all == !ids.is_empty() {

@@ -1,0 +1,163 @@
+{
+  "schema": "polytool.recurrence-representations.v1",
+  "status": "complete",
+  "search": {
+    "skip_prefix": 0,
+    "min_rec_len": 1,
+    "max_rec_len": 1,
+    "min_var_deg": 0,
+    "max_var_deg": 2,
+    "min_idx_deg": 0,
+    "max_idx_deg": 1,
+    "min_diff_deg": 0,
+    "max_diff_deg": 2,
+    "try_inhomogeneous": false,
+    "min_inhomo_var_deg": 0,
+    "max_inhomo_var_deg": 3,
+    "min_inhomo_idx_deg": 0,
+    "max_inhomo_idx_deg": 3,
+    "try_denominator": false,
+    "try_alternating_sign": false,
+    "max_denom_var_deg": 2,
+    "max_denom_idx_deg": 2,
+    "min_margin": 1,
+    "no_verify": false,
+    "fit_extra_rows": 1,
+    "modular_prefilter": true,
+    "verbose": false,
+    "try_laurent": true,
+    "max_laurent_x_power": 2
+  },
+  "max_candidates": null,
+  "source_rows": 8,
+  "configurations_considered": 18,
+  "configurations_available": 18,
+  "insufficient_fit_rows": 0,
+  "representations": [
+    {
+      "recurrence": "P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)",
+      "latex": "P_{n} = \\bigl(1 + nt - t\\bigr)\\, P_{n-1} + \\bigl(t - t^{2}\\bigr)\\, P_{n-1}'",
+      "recurrence_json": {
+        "schema": "polytool.recurrence.v1",
+        "first_index": 1,
+        "initial_polynomials": [
+          [
+            "1"
+          ]
+        ],
+        "recurrence": {
+          "terms": [
+            {
+              "offset": 1,
+              "deriv_order": 0,
+              "sign": "none",
+              "coeff": {
+                "coeffs": [
+                  [
+                    "1",
+                    "-1",
+                    "0"
+                  ],
+                  [
+                    "0",
+                    "1",
+                    "0"
+                  ]
+                ]
+              }
+            },
+            {
+              "offset": 1,
+              "deriv_order": 1,
+              "sign": "none",
+              "coeff": {
+                "coeffs": [
+                  [
+                    "0",
+                    "1",
+                    "-1"
+                  ],
+                  [
+                    "0",
+                    "0",
+                    "0"
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        "search": {
+          "recurrence_text": "P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)",
+          "source_rows": 8,
+          "skip_prefix": 0,
+          "unknowns": 12,
+          "weighted_unknowns": 18,
+          "equations": 28,
+          "fit_polynomials": 5,
+          "verification_polynomials": 3,
+          "verification_equations": 21,
+          "candidates_tried": 10,
+          "options": {
+            "var_deg": 2,
+            "idx_deg": 1,
+            "diff_deg": 1,
+            "rec_len": 1,
+            "homogeneous": true,
+            "inhomo_var_deg": 0,
+            "inhomo_idx_deg": 0,
+            "denom_var_deg": 0,
+            "denom_idx_deg": 0,
+            "alternating_sign": false
+          }
+        },
+        "latex": "% Candidate fitted to finite rows; validity for all n is unproved.\n$P_{1} = 1$\n$P_{n} = (1 + nt - t) P_{n-1} + t(1 - t) P_{n-1}' \\quad (n \\geq 2)$"
+      },
+      "complexity": {
+        "rec_len": 1,
+        "diff_deg": 1,
+        "var_deg": 2,
+        "idx_deg": 1,
+        "denom_var_deg": 0,
+        "denom_idx_deg": 0,
+        "inhomogeneous": false,
+        "alternating_sign": false,
+        "nonzero_coefficients": 6
+      },
+      "evidence": "exact_fit",
+      "first_checked_index": 2,
+      "last_checked_index": 8,
+      "first_checked_input_row": 2,
+      "fit_polynomials": 5,
+      "verification_polynomials": 3,
+      "verification_equations": 21,
+      "singular_checked_indices": []
+    }
+  ],
+  "frontier": [
+    0
+  ],
+  "coverage": [
+    {
+      "rec_len": 1,
+      "diff_deg": 0,
+      "representation": null,
+      "status": "not_found",
+      "configurations_considered": 6
+    },
+    {
+      "rec_len": 1,
+      "diff_deg": 1,
+      "representation": 0,
+      "status": "found",
+      "configurations_considered": 6
+    },
+    {
+      "rec_len": 1,
+      "diff_deg": 2,
+      "representation": 0,
+      "status": "found",
+      "configurations_considered": 6
+    }
+  ]
+}

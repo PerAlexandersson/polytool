@@ -179,30 +179,54 @@ pub struct RecurrenceSearchOptionsInput {
     /// Ignore this many leading polynomial rows before searching.
     pub skip_prefix: Option<usize>,
     /// Minimum recurrence length (largest lag).
+    #[serde(rename = "min_recurrence_length", alias = "min_rec_len")]
     pub min_rec_len: Option<usize>,
     /// Maximum recurrence length (largest lag).
+    #[serde(rename = "max_recurrence_length", alias = "max_rec_len")]
     pub max_rec_len: Option<usize>,
     /// Minimum degree in the polynomial variable.
+    #[serde(rename = "min_variable_degree", alias = "min_var_deg")]
     pub min_var_deg: Option<usize>,
     /// Maximum degree in the polynomial variable.
+    #[serde(rename = "max_variable_degree", alias = "max_var_deg")]
     pub max_var_deg: Option<usize>,
     /// Minimum degree in the recurrence index.
+    #[serde(rename = "min_index_degree", alias = "min_idx_deg")]
     pub min_idx_deg: Option<usize>,
     /// Maximum degree in the recurrence index.
+    #[serde(rename = "max_index_degree", alias = "max_idx_deg")]
     pub max_idx_deg: Option<usize>,
     /// Minimum derivative order allowed in recurrence terms.
+    #[serde(rename = "min_derivative_order", alias = "min_diff_deg")]
     pub min_diff_deg: Option<usize>,
     /// Maximum derivative order allowed in recurrence terms.
+    #[serde(rename = "max_derivative_order", alias = "max_diff_deg")]
     pub max_diff_deg: Option<usize>,
     /// Search for an additive inhomogeneous term.
     pub try_inhomogeneous: Option<bool>,
     /// Minimum polynomial-variable degree of the inhomogeneous term.
+    #[serde(
+        rename = "min_inhomogeneous_variable_degree",
+        alias = "min_inhomo_var_deg"
+    )]
     pub min_inhomo_var_deg: Option<usize>,
     /// Maximum polynomial-variable degree of the inhomogeneous term.
+    #[serde(
+        rename = "max_inhomogeneous_variable_degree",
+        alias = "max_inhomo_var_deg"
+    )]
     pub max_inhomo_var_deg: Option<usize>,
     /// Minimum recurrence-index degree of the inhomogeneous term.
+    #[serde(
+        rename = "min_inhomogeneous_index_degree",
+        alias = "min_inhomo_idx_deg"
+    )]
     pub min_inhomo_idx_deg: Option<usize>,
     /// Maximum recurrence-index degree of the inhomogeneous term.
+    #[serde(
+        rename = "max_inhomogeneous_index_degree",
+        alias = "max_inhomo_idx_deg"
+    )]
     pub max_inhomo_idx_deg: Option<usize>,
     /// Search for a nonconstant denominator on the left-hand side.
     pub try_denominator: Option<bool>,
@@ -212,14 +236,22 @@ pub struct RecurrenceSearchOptionsInput {
     /// `x^e`, `n`-dependent factors and normalization charts (default true).
     pub try_laurent: Option<bool>,
     /// Largest power `e` of the left-hand monomial `x^e` (default 2).
+    #[serde(rename = "max_laurent_power", alias = "max_laurent_x_power")]
     pub max_laurent_x_power: Option<usize>,
     /// Maximum polynomial-variable degree of the denominator.
+    #[serde(
+        rename = "max_denominator_variable_degree",
+        alias = "max_denom_var_deg"
+    )]
     pub max_denom_var_deg: Option<usize>,
     /// Maximum recurrence-index degree of the denominator.
+    #[serde(rename = "max_denominator_index_degree", alias = "max_denom_idx_deg")]
     pub max_denom_idx_deg: Option<usize>,
     /// Minimum excess of equations over unknowns.
+    #[serde(rename = "min_equation_margin", alias = "min_margin")]
     pub min_margin: Option<usize>,
     /// Disable holdout verification of fitted recurrences.
+    #[serde(rename = "no_held_out_rows", alias = "no_verify")]
     pub no_verify: Option<bool>,
     /// Add this many rows to the fit before holdout verification.
     pub fit_extra_rows: Option<usize>,
@@ -332,30 +364,54 @@ pub struct FindRecurrenceRequest {
     /// Ignore this many leading polynomial rows before searching.
     pub skip_prefix: Option<usize>,
     /// Minimum recurrence length (largest lag).
+    #[serde(rename = "min_recurrence_length", alias = "min_rec_len")]
     pub min_rec_len: Option<usize>,
     /// Maximum recurrence length (largest lag).
+    #[serde(rename = "max_recurrence_length", alias = "max_rec_len")]
     pub max_rec_len: Option<usize>,
     /// Minimum degree in the polynomial variable.
+    #[serde(rename = "min_variable_degree", alias = "min_var_deg")]
     pub min_var_deg: Option<usize>,
     /// Maximum degree in the polynomial variable.
+    #[serde(rename = "max_variable_degree", alias = "max_var_deg")]
     pub max_var_deg: Option<usize>,
     /// Minimum degree in the recurrence index.
+    #[serde(rename = "min_index_degree", alias = "min_idx_deg")]
     pub min_idx_deg: Option<usize>,
     /// Maximum degree in the recurrence index.
+    #[serde(rename = "max_index_degree", alias = "max_idx_deg")]
     pub max_idx_deg: Option<usize>,
     /// Minimum derivative order allowed in recurrence terms.
+    #[serde(rename = "min_derivative_order", alias = "min_diff_deg")]
     pub min_diff_deg: Option<usize>,
     /// Maximum derivative order allowed in recurrence terms.
+    #[serde(rename = "max_derivative_order", alias = "max_diff_deg")]
     pub max_diff_deg: Option<usize>,
     /// Search for an additive inhomogeneous term.
     pub try_inhomogeneous: Option<bool>,
     /// Minimum polynomial-variable degree of the inhomogeneous term.
+    #[serde(
+        rename = "min_inhomogeneous_variable_degree",
+        alias = "min_inhomo_var_deg"
+    )]
     pub min_inhomo_var_deg: Option<usize>,
     /// Maximum polynomial-variable degree of the inhomogeneous term.
+    #[serde(
+        rename = "max_inhomogeneous_variable_degree",
+        alias = "max_inhomo_var_deg"
+    )]
     pub max_inhomo_var_deg: Option<usize>,
     /// Minimum recurrence-index degree of the inhomogeneous term.
+    #[serde(
+        rename = "min_inhomogeneous_index_degree",
+        alias = "min_inhomo_idx_deg"
+    )]
     pub min_inhomo_idx_deg: Option<usize>,
     /// Maximum recurrence-index degree of the inhomogeneous term.
+    #[serde(
+        rename = "max_inhomogeneous_index_degree",
+        alias = "max_inhomo_idx_deg"
+    )]
     pub max_inhomo_idx_deg: Option<usize>,
     /// Search for a nonconstant denominator on the left-hand side.
     pub try_denominator: Option<bool>,
@@ -365,14 +421,22 @@ pub struct FindRecurrenceRequest {
     /// `x^e`, `n`-dependent factors and normalization charts (default true).
     pub try_laurent: Option<bool>,
     /// Largest power `e` of the left-hand monomial `x^e` (default 2).
+    #[serde(rename = "max_laurent_power", alias = "max_laurent_x_power")]
     pub max_laurent_x_power: Option<usize>,
     /// Maximum polynomial-variable degree of the denominator.
+    #[serde(
+        rename = "max_denominator_variable_degree",
+        alias = "max_denom_var_deg"
+    )]
     pub max_denom_var_deg: Option<usize>,
     /// Maximum recurrence-index degree of the denominator.
+    #[serde(rename = "max_denominator_index_degree", alias = "max_denom_idx_deg")]
     pub max_denom_idx_deg: Option<usize>,
     /// Minimum excess of equations over unknowns.
+    #[serde(rename = "min_equation_margin", alias = "min_margin")]
     pub min_margin: Option<usize>,
     /// Disable holdout verification of fitted recurrences.
+    #[serde(rename = "no_held_out_rows", alias = "no_verify")]
     pub no_verify: Option<bool>,
     /// Add this many rows to the fit before holdout verification.
     pub fit_extra_rows: Option<usize>,
@@ -482,6 +546,7 @@ pub struct CyclicSievingSequenceRequest {
     pub text: Option<String>,
     pub first_index: Option<isize>,
     /// Candidate order offsets (default `[-2, -1, 0, 1, 2, 3]`); every positive candidate order `first_index + position + offset` must be at most 10000, non-positive ones are skipped.
+    #[serde(rename = "order_offsets", alias = "offsets")]
     pub offsets: Option<Vec<isize>>,
     pub fixed_counts: Option<Vec<CyclicSievingFixedCountsInput>>,
 }
@@ -516,7 +581,9 @@ pub struct GetOeisSequenceRequest {
 #[serde(deny_unknown_fields)]
 pub struct GenerateOeisRowsRequest {
     pub id: String,
+    #[serde(rename = "count", alias = "rows")]
     pub rows: usize,
+    #[serde(rename = "from_index", alias = "first_row")]
     pub first_row: Option<i64>,
     pub include_experimental: Option<bool>,
 }
@@ -536,7 +603,9 @@ pub enum SequenceKind {
 #[serde(deny_unknown_fields)]
 pub struct GenerateRecurrenceRowsRequest {
     pub recurrence_json: String,
+    #[serde(rename = "count", alias = "rows")]
     pub rows: Option<usize>,
+    #[serde(rename = "additional_count", alias = "additional")]
     pub additional: Option<usize>,
 }
 
@@ -555,6 +624,7 @@ pub struct DiscoverRecurrenceProofsRequest {
     /// A polytool.recurrence.v1 record, including seeds.
     pub recurrence_json: String,
     /// Induction-start retries, default 3; at most 16.
+    #[serde(rename = "max_start_delay", alias = "maximum_start_delay")]
     pub maximum_start_delay: Option<usize>,
 }
 
@@ -711,13 +781,14 @@ pub enum BrentiWeightsInput {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BrentiRecognitionRequest {
-    /// Rows `P_1, P_2, ...` (or `P_0, P_1, ...` with `first_row_index = 0`),
+    /// Rows `P_1, P_2, ...` (or `P_0, P_1, ...` with `first_index = 0`),
     /// ascending coefficients.
     pub polynomials: Option<Vec<BigIntPolynomialInput>>,
     /// The same rows as newline-separated coefficient lists or expressions.
     pub text: Option<String>,
     /// Digraph row of the first polynomial: 1 (default, `P_0 = 1` implicit)
     /// or 0 (the first row must be `1`).
+    #[serde(rename = "first_index", alias = "first_row_index")]
     pub first_row_index: Option<usize>,
     /// At most this many consecutive target heights per height (bounds the
     /// out-degree; default: no bound).
@@ -737,13 +808,14 @@ pub struct BrentiRecognitionRequest {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PfNetworkRequest {
-    /// Rows `P_1, P_2, ...` (or `P_0, P_1, ...` with `first_row_index = 0`),
+    /// Rows `P_1, P_2, ...` (or `P_0, P_1, ...` with `first_index = 0`),
     /// ascending coefficients.
     pub polynomials: Option<Vec<BigIntPolynomialInput>>,
     /// The same rows as newline-separated coefficient lists or expressions.
     pub text: Option<String>,
     /// Network row of the first polynomial: 1 (default, `P_0 = 1` implicit)
     /// or 0 (the first row must be `1`).
+    #[serde(rename = "first_index", alias = "first_row_index")]
     pub first_row_index: Option<usize>,
     /// Largest step length (default 3, maximum 8).
     pub max_step_length: Option<usize>,
@@ -764,11 +836,12 @@ pub struct PfNetworkRequest {
 #[serde(deny_unknown_fields)]
 pub struct LeftProductionRequest {
     /// Rows `P_1, P_2, ...` with `deg P_n = n` (or `P_0, P_1, ...` with
-    /// `first_row_index = 0`), ascending coefficients.
+    /// `first_index = 0`), ascending coefficients.
     pub polynomials: Option<Vec<BigIntPolynomialInput>>,
     /// The same rows as newline-separated coefficient lists or expressions.
     pub text: Option<String>,
     /// Index of the first row: 1 (default, `P_0 = 1` is prepended) or 0.
+    #[serde(rename = "first_index", alias = "first_row_index")]
     pub first_row_index: Option<usize>,
 }
 
