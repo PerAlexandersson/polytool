@@ -220,6 +220,14 @@ pub struct RecurrenceTheoremReport {
     pub theorem_matches: Vec<RecurrenceTheoremMatch>,
     /// Theorems that did not apply, with reasons.
     pub rejected_theorems: Vec<RecurrenceTheoremRejection>,
+    /// Whether the supplied recurrence is in the product seed class
+    /// `B(n) P_n = A(x,n) P_(n-k)` and the product proof succeeds, so the
+    /// sequence it defines is *trivially* real-rooted
+    /// ([`crate::recurrence::is_trivially_real_rooted`]).  Present only for a
+    /// supplied (not fitted) recurrence; absent for a search result, because
+    /// a fit does not establish the defining recurrence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trivially_real_rooted: Option<bool>,
 }
 
 fn strip(row: &[BigRational]) -> &[BigRational] {
@@ -599,6 +607,13 @@ impl RecurrenceTheoremReport {
             },
             theorem_matches: matches.theorem_matches,
             rejected_theorems: matches.rejected_theorems,
+            trivially_real_rooted: record
+                .search
+                .is_none()
+                .then(|| {
+                    crate::recurrence::is_trivially_real_rooted(&recurrence, first_index, &rows)
+                })
+                .and_then(Result::ok),
         })
     }
 
@@ -628,6 +643,7 @@ impl RecurrenceTheoremReport {
             },
             theorem_matches: matches.theorem_matches,
             rejected_theorems: matches.rejected_theorems,
+            trivially_real_rooted: None,
         }
     }
 }

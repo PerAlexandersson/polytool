@@ -25,7 +25,7 @@ fn complete_definition_groups_signs_fractions_and_derivatives() {
     }))
     .unwrap();
     assert_eq!(
-        record.to_latex().unwrap(),
+        record.to_latex_expanded().unwrap(),
         concat!(
             "$P_{5} = 1$\n$P_{6} = 1 + t$\n$P_{7} = 0$\n",
             "$\\bigl(n + 2\\bigr)\\, P_{n} = \\bigl(n + 1\\bigr)\\, P_{n-1}",
@@ -66,4 +66,83 @@ fn zero_rhs_negative_seed_and_invalid_domains() {
     record.first_index = 0;
     record.recurrence.terms[0].offset = 2;
     assert!(record.to_latex().is_err());
+}
+
+fn erik_record(extra: serde_json::Value) -> RecurrenceJson {
+    let mut record = json!({
+        "schema": "polytool.recurrence.v1", "first_index": 0,
+        "initial_polynomials": [["1"], ["1", "1"]],
+        "recurrence": {
+            "denominator": {"coeffs": [["2"], ["1"]]},
+            "terms": [
+                {"offset": 1, "deriv_order": 0, "sign": "none",
+                 "coeff": {"coeffs": [["1", "1"], ["2", "2"]]}},
+                {"offset": 2, "deriv_order": 0, "sign": "none",
+                 "coeff": {"coeffs": [["1", "-2", "1"], ["-1", "2", "-1"]]}}
+            ]
+        }
+    });
+    if let Some(object) = extra.as_object() {
+        for (key, value) in object {
+            record[key] = value.clone();
+        }
+    }
+    serde_json::from_value(record).unwrap()
+}
+
+#[test]
+fn coefficients_are_factored_over_the_rationals() {
+    let record = erik_record(json!({}));
+    assert_eq!(
+        record.to_latex().unwrap(),
+        concat!(
+            "$P_{0} = 1$\n$P_{1} = 1 + t$\n",
+            "$(n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2} P_{n-2}",
+            " \\quad (n \\geq 2)$"
+        )
+    );
+    // The expanded presentation is still available and is a different text.
+    assert!(record
+        .to_latex_expanded()
+        .unwrap()
+        .contains("\\bigl(n + 2\\bigr)"));
+}
+
+#[test]
+fn factored_text_re_expands_to_the_stored_coefficients() {
+    use polytool::recurrence::BivarPoly;
+    let record = erik_record(json!({}));
+    let (rule, _, _) = record.to_recurrence_parts().unwrap();
+    let mut coefficients: Vec<BivarPoly> =
+        rule.terms.iter().map(|term| term.coeff.clone()).collect();
+    coefficients.extend(rule.denominator.clone());
+    for coefficient in coefficients {
+        let factorization = coefficient.irreducible_factorization().unwrap();
+        assert_eq!(factorization.expand(), coefficient);
+        assert!(factorization
+            .factors
+            .iter()
+            .all(|(_, multiplicity)| *multiplicity >= 1));
+    }
+}
+
+#[test]
+fn search_records_keep_their_candidate_status_line() {
+    let record = erik_record(json!({
+        "search": {
+            "recurrence_text": "(n + 2) P(n) = ...", "source_rows": 2, "skip_prefix": 0,
+            "unknowns": 8, "weighted_unknowns": 8, "equations": 8, "fit_polynomials": 2,
+            "verification_polynomials": 0, "candidates_tried": 1,
+            "options": {
+                "var_deg": 2, "idx_deg": 1, "diff_deg": 0, "rec_len": 2,
+                "homogeneous": true, "inhomo_var_deg": 1, "inhomo_idx_deg": 1,
+                "denom_var_deg": 0, "denom_idx_deg": 1, "alternating_sign": false
+            }
+        }
+    }));
+    let latex = record.to_latex().unwrap();
+    assert!(
+        latex.starts_with("% Candidate fitted to finite rows; validity for all n is unproved.\n")
+    );
+    assert!(latex.contains("(2n + 1)(1 + t) P_{n-1}"));
 }

@@ -114,6 +114,12 @@ pub struct RecurrenceJsonSearch {
     pub candidates_tried: usize,
     /// Bounds of the winning candidate configuration.
     pub options: RecurrenceOptionsJson,
+    /// Deterministic work units charged by the search that found this
+    /// recurrence (see [`AdaptiveSearchBudget`]); present only when the search
+    /// ran under a work limit (`polytool recurrence --max-work`), absent in
+    /// older records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_units: Option<u64>,
 }
 
 /// Search-space options for the recurrence that was found.
@@ -160,14 +166,27 @@ impl From<&RecurrenceOptions> for RecurrenceOptionsJson {
 }
 
 impl RecurrenceJson {
-    /// Render the initial rows and recurrence, one `$...$` formula per line.
+    /// Render the initial rows and recurrence, one `$...$` formula per line,
+    /// with every recurrence coefficient factored over `Q`.
     ///
     /// The recurrence starts immediately after all supplied initial rows.
     /// Search records include a LaTeX comment marking their finite-fit status.
-    /// Coefficients stay expanded. The stored `latex` field is ignored.
+    /// Each coefficient is factored exactly and verified by re-expansion (see
+    /// [`BivarPoly::irreducible_factorization`]); a coefficient whose
+    /// factorization does not finish within the default budget stays expanded
+    /// and a `%` comment line says so.  The stored `latex` field is ignored.
     /// Invalid records, insufficient initial rows and index overflow return
-    /// an error.
+    /// an error.  [`Self::to_latex_expanded`] never factors.
     pub fn to_latex(&self) -> Result<String, RecurrenceError> {
+        self.latex_presentation(true)
+    }
+
+    /// Like [`Self::to_latex`], with every coefficient fully expanded.
+    pub fn to_latex_expanded(&self) -> Result<String, RecurrenceError> {
+        self.latex_presentation(false)
+    }
+
+    fn latex_presentation(&self, factored: bool) -> Result<String, RecurrenceError> {
         let (rule, first_index, seeds) = self.to_recurrence_parts()?;
         if seeds.len() < rule.max_offset() {
             return Err(RecurrenceError::InvalidInput(
@@ -181,11 +200,22 @@ impl RecurrenceJson {
         if self.search.is_some() {
             lines.push("% Candidate fitted to finite rows; validity for all n is unproved.".into());
         }
+        let (formula, notes) = if factored {
+            let report = rule.to_latex_factored_with_budget(
+                crate::factorization::DEFAULT_RECOMBINATION_SUBSET_LIMIT,
+            );
+            (report.formula, report.unfactored_notes)
+        } else {
+            (rule.to_latex(), Vec::new())
+        };
+        for note in notes {
+            lines.push(format!("% {note}"));
+        }
         for (offset, row) in seeds.into_iter().enumerate() {
             let polynomial = BivarPoly { coeffs: vec![row] }.to_latex();
             lines.push(format!("$P_{{{}}} = {polynomial}$", first_index + offset));
         }
-        lines.push(format!("${} \\quad (n \\geq {start})$", rule.to_latex()));
+        lines.push(format!("${formula} \\quad (n \\geq {start})$"));
         Ok(lines.join("\n"))
     }
 
@@ -415,6 +445,7 @@ mod tests {
                 verification_polynomials: result.verification_polynomials,
                 verification_equations: result.verification_equations,
                 candidates_tried: result.candidates_tried,
+                work_units: None,
                 options: RecurrenceOptionsJson::from(&result.opts),
             }),
         );

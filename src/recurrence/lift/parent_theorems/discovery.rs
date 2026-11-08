@@ -29,6 +29,13 @@ pub struct RecurrenceProofDiscoveryReport {
     pub statement: String,
     /// Every theorem attempt, including failed and unresolved hypotheses.
     pub attempts: Vec<RealRootednessTheoremReport>,
+    /// Whether the supplied (not fitted) recurrence is in the product seed
+    /// class `B(n) P_n = A(x,n) P_(n-k)` and the product attempt proved it:
+    /// the sequence is *trivially* real-rooted.  Always false for a record
+    /// carrying search metadata, since a fit does not establish the
+    /// recurrence.
+    #[serde(default)]
+    pub trivially_real_rooted: bool,
     /// Always `not_attempted`: exact Rust replay is separate from Lean replay.
     pub lean_replay: String,
 }
@@ -85,6 +92,8 @@ pub fn discover_recurrence_proofs(
         )?);
     }
     let proved = attempts.iter().any(RealRootednessTheoremReport::is_proved);
+    let trivially_real_rooted =
+        record.search.is_none() && attempts.iter().any(|attempt| attempt.trivially_real_rooted);
     Ok(RecurrenceProofDiscoveryReport {
         schema: RECURRENCE_PROOF_DISCOVERY_SCHEMA.into(),
         recurrence: record.clone(),
@@ -93,6 +102,7 @@ pub fn discover_recurrence_proofs(
         status: if proved { "proved" } else { "not_proved" }.into(),
         statement: "Each proved attempt establishes its conclusion for the recurrence-defined sequence. Applying it to an independently defined sequence requires an all-index recurrence identity and the stated seeds; finite fitting or held-out checks do not establish that identity. No Lean replay was attempted.".into(),
         attempts,
+        trivially_real_rooted,
         lean_replay: LIFT_LEAN_REPLAY_NOT_ATTEMPTED.into(),
     })
 }

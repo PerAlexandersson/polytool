@@ -41,6 +41,31 @@ pub fn check_product_recurrence_theorem(
     )
 }
 
+/// Whether the sequence defined by `rule` and `seeds` is *trivially*
+/// real-rooted: the rule has the product form `B(n) P_n = A(x,n) P_(n-k)` and
+/// [`check_product_recurrence_theorem`] proves it (no root region requested).
+///
+/// This classifies the proof of a recursively defined sequence; it is never
+/// a property read off a single polynomial or a fitted recurrence.  The same
+/// flag is [`RealRootednessTheoremReport::trivially_real_rooted`].
+///
+/// # Errors
+///
+/// Errors parsing or normalizing the recurrence and seeds.
+pub fn is_trivially_real_rooted(
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<Q>],
+) -> Result<bool, RecurrenceError> {
+    Ok(check_product_recurrence_theorem(
+        rule,
+        first_index,
+        seeds,
+        &RealRootednessTheoremOptions::default(),
+    )?
+    .trivially_real_rooted)
+}
+
 pub(super) fn product_report(
     rule: &Recurrence,
     first_index: usize,

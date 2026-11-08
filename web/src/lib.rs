@@ -191,6 +191,7 @@ fn recurrence_json_output(
             verification_polynomials: result.verification_polynomials,
             verification_equations: result.verification_equations,
             candidates_tried: result.candidates_tried,
+            work_units: None,
             options: RecurrenceOptionsJson::from(&result.opts),
         }),
     );

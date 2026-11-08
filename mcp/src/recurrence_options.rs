@@ -40,6 +40,7 @@ pub(crate) fn recurrence_json_string(
             verification_polynomials: result.verification_polynomials,
             verification_equations: result.verification_equations,
             candidates_tried: result.candidates_tried,
+            work_units: None,
             options: RecurrenceOptionsJson::from(&result.opts),
         }),
     );
@@ -341,6 +342,7 @@ pub(crate) fn apply_recurrence_options(
     };
     let budget = AdaptiveSearchBudget {
         max_candidates: input.max_candidates,
+        ..AdaptiveSearchBudget::unbounded()
     };
 
     if let Some(value) = input.skip_prefix {

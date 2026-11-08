@@ -65,11 +65,12 @@ Options:
 --no-modular-prefilter
                       Disable default modular candidate rejection
 --max-candidates <n> Inspect at most n adaptive candidate configurations
+--max-work <n>       Stop after n deterministic work units across the whole search
 --json               Emit recurrence JSON with initial conditions
 --latex              Emit LaTeX with subscripts, initial conditions and starting index
 --python             Emit exact standalone Python code using Fraction arithmetic
 --format json        Alias for --json
---format latex       Alias for --latex (coefficients remain expanded)
+--format latex       Alias for --latex
 --format python      Alias for --python
 --verbose            Print each candidate tried
 ```
@@ -89,6 +90,21 @@ status `3`; with `--format json`, the JSON status is `budget_exhausted` and
 includes `candidates_considered`, `candidates_tried`, and `max_candidates`.
 If all configured candidates have been checked, the JSON status is instead
 `not_found`. Omitting the option preserves the unbounded behavior.
+
+`--max-work N` bounds what happens *inside* the candidates. Work is counted in
+abstract units computed from the dimensions of the systems that are solved
+(a modular or exact solve of `r` equations in `c` unknowns costs
+`r * c * (min(r, c) + 1)`; held-out and lift checks, derivative and modular
+precomputation, and each candidate and its structural prechecks are charged
+too), never from the clock, so the same input, options and `N` stop at the same
+step on any machine. A stage is charged before it runs and runs only if its
+whole cost fits, so the units used never exceed `N`; the first stage that does
+not fit ends the search as `budget_exhausted` (exit status `3`). The JSON status
+carries `work_units` and `max_work`, and a found record has `search.work_units`.
+The option combines with `--max-candidates` (whichever limit is hit first
+ends the search); it is not supported with `--representations`, which has its
+own `--max-candidates` bound. A pipeline that fixes one `N` is both reproducible
+and bounded in time.
 
 By default, retained rows are numbered from 1, including after
 `--skip-prefix`. With explicit `--first-index N`, the original first input row
@@ -564,7 +580,16 @@ grouped coefficients and derivative notation. For example:
 ```latex
 % Candidate fitted to finite rows; validity for all n is unproved.
 $P_{0} = 1$
-$P_{n} = \bigl(1 + t\bigr)\, P_{n-1} \quad (n \geq 1)$
+$P_{n} = (1 + t) P_{n-1} \quad (n \geq 1)$
+```
+
+A recurrence with index-dependent coefficients looks like this (seeds
+`1` and `1 + t`):
+
+```latex
+$P_{0} = 1$
+$P_{1} = 1 + t$
+$(n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2} P_{n-2} \quad (n \geq 2)$
 ```
 
 All supplied seed rows in the exported record are printed. The starting index
@@ -572,7 +597,20 @@ is immediately after them, including any extra seeds needed before the
 recurrence can generate rows. `--first-index` and `--skip-prefix` use the same
 conventions as JSON and Python export. The LaTeX comment records the finite-fit
 status; the displayed continuation is a candidate recurrence for the input
-sequence. Coefficients remain expanded: factorization is a separate feature.
+sequence.
+
+Every coefficient is factored exactly over $\mathbb{Q}$ in `n` and `t`
+(`BivarPoly::irreducible_factorization`): polynomials in one variable and
+polynomials monic in `n` go straight to the exact factorization routines, any
+other coefficient is first sheared by `t = v + c n` (with `c` chosen so the top
+homogeneous part is nonzero at `(1, c)`), which makes it monic up to a constant.
+The factors are mapped back, written as primitive integer polynomials whose first
+displayed term (ascending powers of `t`, then descending powers of `n`) is
+positive, repeated factors carry exponents, and the rational constant and overall
+sign are written in front.  The product is multiplied out and compared with the
+coefficient before it is printed.  If the factorization budget (recombination
+subsets) is exhausted, that coefficient stays expanded and a `%` comment line
+names it; an unfinished factorization is never presented as complete.
 
 `--json` includes the same text in the optional `latex` field. Generation
 uses the exact recurrence data and ignores that presentation field. Older
@@ -583,8 +621,10 @@ the nested `recurrence_json`; theorem notes go to stderr in LaTeX mode.
 comment. Representation JSON retains its bare formula in `latex` and includes
 the complete definition in `recurrence_json.latex`.
 
-Rust callers can use `Recurrence::to_latex()` for a bare formula or
-`RecurrenceJson::to_latex()` for the complete presentation. The latter checks
+Rust callers can use `Recurrence::to_latex()` for a bare expanded formula,
+`Recurrence::to_latex_factored()` for the factored one, or
+`RecurrenceJson::to_latex()` (factored) and `RecurrenceJson::to_latex_expanded()`
+for the complete presentation. The latter checks
 seed availability and index overflow. `RecurrenceJson::with_latex()` refreshes
 the optional stored presentation; `reindexed()` refreshes it when present.
 

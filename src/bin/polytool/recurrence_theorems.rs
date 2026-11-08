@@ -40,7 +40,10 @@ pub(crate) fn print_recurrence_theorems_help() {
     println!();
     println!("Options:");
     println!("  --recurrence <file|->   Read recurrence JSON from a file, or stdin with -");
-    println!("  --json                  Emit the polytool.recurrence-theorems.v1 report");
+    println!("  --json                  Emit the polytool.recurrence-theorems.v1 report; its");
+    println!("                          trivially_real_rooted (supplied, not fitted, records");
+    println!("                          only) is true when the rule is B(n) P_n = A(x,n) P_(n-k)");
+    println!("                          and product induction proves it");
     println!("  -h, --help              Print this help text");
     println!();
     println!("Exit status: 0 with at least one match, 1 with none, 2 on invalid input.");
@@ -76,6 +79,7 @@ pub(crate) fn search_theorem_report(
             verification_polynomials: result.verification_polynomials,
             verification_equations: result.verification_equations,
             candidates_tried: result.candidates_tried,
+            work_units: None,
             options: RecurrenceOptionsJson::from(&result.opts),
         }),
     )
@@ -131,6 +135,12 @@ pub(crate) fn print_theorem_report_text(report: &RecurrenceTheoremReport) {
     }
     for rejection in &report.rejected_theorems {
         println!("Not matched {}: {}", rejection.theorem, rejection.reason);
+    }
+    if let Some(trivial) = report.trivially_real_rooted {
+        println!(
+            "Trivially real-rooted (product seed class, product proof): {}",
+            if trivial { "yes" } else { "no" }
+        );
     }
 }
 

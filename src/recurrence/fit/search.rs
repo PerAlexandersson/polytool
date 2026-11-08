@@ -92,6 +92,7 @@ pub(super) fn find_polynomial_recurrence_rational_with_derivs_and_rows(
         opts,
         exact_row_indices,
         LeaderChart::CONSTANT,
+        None,
     )
 }
 
@@ -139,6 +140,7 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
     opts: &RecurrenceOptions,
     exact_row_indices: Option<&[usize]>,
     chart: LeaderChart,
+    work: Option<&WorkMeter>,
 ) -> Option<Recurrence> {
     let m = polys.len();
     if m <= opts.rec_len {
@@ -160,9 +162,9 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
             .flatten()
             .all(|c| c.denom().is_one());
     if integral {
-        fit_in_leader_chart::<BigInt>(polys, derivs, opts, exact_row_indices, chart)
+        fit_in_leader_chart::<BigInt>(polys, derivs, opts, exact_row_indices, chart, work)
     } else {
-        fit_in_leader_chart::<BigRational>(polys, derivs, opts, exact_row_indices, chart)
+        fit_in_leader_chart::<BigRational>(polys, derivs, opts, exact_row_indices, chart, work)
     }
 }
 
@@ -172,6 +174,7 @@ fn fit_in_leader_chart<C: FitEntry>(
     opts: &RecurrenceOptions,
     exact_row_indices: Option<&[usize]>,
     chart: LeaderChart,
+    work: Option<&WorkMeter>,
 ) -> Option<Recurrence> {
     let m = polys.len();
     // The current row enters as `x^e P_n` for the left-hand monomial `x^e`.
@@ -266,6 +269,11 @@ fn fit_in_leader_chart<C: FitEntry>(
         all_row_indices = (0..num_rows).collect::<Vec<_>>();
         &all_row_indices
     };
+    // The dense solve is charged before its matrix is allocated; when it does
+    // not fit the work limit the fit stops (the meter is then exhausted).
+    if work.is_some_and(|meter| !meter.try_charge(elimination_work(row_indices.len(), num_vars))) {
+        return None;
+    }
 
     let zero = BigRational::zero();
     let mut matrix = vec![vec![C::zero(); num_vars]; row_indices.len()];
@@ -603,8 +611,9 @@ mod tests {
                 },
             ] {
                 let rational =
-                    fit_in_leader_chart::<BigRational>(&polys, &derivs, &opts, None, chart);
-                let integer = fit_in_leader_chart::<BigInt>(&polys, &derivs, &opts, None, chart);
+                    fit_in_leader_chart::<BigRational>(&polys, &derivs, &opts, None, chart, None);
+                let integer =
+                    fit_in_leader_chart::<BigInt>(&polys, &derivs, &opts, None, chart, None);
                 assert_eq!(
                     format!("{integer:?}"),
                     format!("{rational:?}"),
@@ -632,6 +641,7 @@ mod tests {
                 &opts,
                 selected,
                 LeaderChart::CONSTANT,
+                None,
             );
             let rational = fit_in_leader_chart::<BigRational>(
                 &polys,
@@ -639,6 +649,7 @@ mod tests {
                 &opts,
                 selected,
                 LeaderChart::CONSTANT,
+                None,
             );
             assert_eq!(format!("{integer:?}"), format!("{rational:?}"));
             assert_eq!(integer.unwrap().to_string(), "P(n) = 1/2 P(n-1)");

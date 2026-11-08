@@ -140,7 +140,7 @@ pub use discovery::{
     discover_recurrence_proofs, RecurrenceProofDiscoveryReport, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
 mod product;
-pub use product::check_product_recurrence_theorem;
+pub use product::{check_product_recurrence_theorem, is_trivially_real_rooted};
 mod derivative_lag;
 mod hypergeometric_row;
 mod iterated_preserver;
@@ -321,6 +321,14 @@ pub struct RealRootednessTheoremReport {
     /// The conclusion, present exactly when the status is `proved`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conclusion: Option<RealRootednessTheoremConclusion>,
+    /// Whether this is a *trivial* real-rootedness proof: the defining
+    /// recurrence has the product form `B(n) P_n = A(x,n) P_(n-k)` and the
+    /// product theorem ([`check_product_recurrence_theorem`]) is proved.  It
+    /// classifies the proof of the sequence defined by the recurrence and
+    /// seeds, not a single polynomial; it is false for every other theorem
+    /// and whenever the product proof is not complete.
+    #[serde(default)]
+    pub trivially_real_rooted: bool,
     /// Lean replay status: always `"not_attempted"`.
     pub lean_replay: String,
     /// The row route of the Lean library RealRooted
@@ -371,6 +379,7 @@ impl RealRootednessTheoremReport {
             normal_form: String::new(),
             hypotheses: Vec::new(),
             conclusion: None,
+            trivially_real_rooted: false,
             lean_replay: LIFT_LEAN_REPLAY_NOT_ATTEMPTED.into(),
             lean_route: None,
             lean_declarations: Vec::new(),
@@ -404,6 +413,8 @@ impl RealRootednessTheoremReport {
         if self.status == RealRootednessTheoremStatus::Proved {
             self.conclusion = Some(conclusion);
         }
+        self.trivially_real_rooted = self.theorem == RealRootednessTheorem::ProductRecurrence
+            && self.status == RealRootednessTheoremStatus::Proved;
         self
     }
 

@@ -326,3 +326,47 @@ fn discovery_replay_rejects_tampering_and_does_not_infer_a_proof_from_failure() 
     )
     .is_err());
 }
+
+#[test]
+fn trivially_real_rooted_classifies_the_product_seed_class() {
+    // (n^2+1) P_n = (x+n) P_(n-1): product class, proved.
+    let rule = product(&[&[0, 1], &[1]], Some(&[&[1], &[0], &[1]]), 1);
+    let rec = record(&rule, &[&[1]], 0);
+    let (_, first, seeds) = rec.to_recurrence_parts().unwrap();
+    assert!(is_trivially_real_rooted(&rule, first, &seeds).unwrap());
+    let report = checked(&rec);
+    assert!(report.trivially_real_rooted);
+    assert!(report.attempts[0].trivially_real_rooted);
+    assert!(report.attempts[1..]
+        .iter()
+        .all(|a| !a.trivially_real_rooted));
+
+    // A fitted record is never classified from the fit alone.
+    let mut fitted = rec.clone();
+    fitted.search = Some(RecurrenceJsonSearch {
+        recurrence_text: rule.to_string(),
+        source_rows: 1,
+        skip_prefix: 0,
+        unknowns: 1,
+        weighted_unknowns: 1,
+        equations: 1,
+        fit_polynomials: 1,
+        verification_polynomials: 0,
+        verification_equations: 0,
+        candidates_tried: 1,
+        options: RecurrenceOptionsJson::from(&RecurrenceOptions::default()),
+        work_units: None,
+    });
+    assert!(!checked(&fitted).trivially_real_rooted);
+
+    // A product whose multiplier has a non-real root (x^2 + 1) is not proved.
+    let bad = product(&[&[1, 0, 1]], None, 1);
+    let (_, first, seeds) = record(&bad, &[&[1]], 0).to_recurrence_parts().unwrap();
+    assert!(!is_trivially_real_rooted(&bad, first, &seeds).unwrap());
+    // Three-term families are proved, but not trivially.
+    let mut three = product(&[&[0, 1]], None, 1);
+    three.terms.push(RecurrenceTerm::new(2, 0, b(&[&[-1]])));
+    let report = checked(&record(&three, &[&[1], &[0, 1]], 0));
+    assert_eq!(report.status, "proved");
+    assert!(!report.trivially_real_rooted);
+}

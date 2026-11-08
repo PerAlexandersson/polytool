@@ -213,16 +213,41 @@ impl AdaptiveSearchResult {
     }
 }
 
-/// Deterministic limit for an adaptive recurrence search.
+/// Deterministic limits for an adaptive recurrence search.
 ///
 /// A candidate is counted when its parameter configuration is taken from the
 /// adaptive iterator, before fit-row, structural, modular, or exact-solve
 /// filtering.  This bounds the same outer search loop on every machine.
+///
+/// The work limit bounds what happens inside the candidates.  Work is counted
+/// in abstract units that depend only on the dimensions of the systems that
+/// are solved, never on the clock, so a search with the same inputs and the
+/// same limit stops at the same step on every machine.  A stage is charged
+/// before it runs and runs only if its whole cost fits in the remaining limit;
+/// the first stage that does not fit ends the search as
+/// [`AdaptiveSearchOutcome::BudgetExhausted`], and the units used never exceed
+/// the limit.  The unit model:
+///
+/// * a linear solve (each modular prime, and the exact solve) of `r`
+///   equations in `c` unknowns costs `r * c * (min(r, c) + 1)`, the
+///   operations of dense elimination and the assembly of its matrix;
+/// * checking a candidate against `r` equations costs `r` times the number
+///   of unknowns (modular held-out check) or the number of equations itself
+///   (exact lift and held-out checks);
+/// * the derivative rows and modular images cost one unit per coefficient,
+///   derivative order and prime;
+/// * each candidate costs one unit, and its structural prechecks one unit
+///   per equation.
+///
+/// The units used are reported in [`AdaptiveSearchDiagnostics::work_units`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct AdaptiveSearchBudget {
     /// Maximum number of candidate configurations to inspect. `None` preserves
     /// the historical unbounded behavior; `Some(0)` inspects none.
     pub max_candidates: Option<usize>,
+    /// Maximum number of deterministic work units (see the type
+    /// documentation).  `None` is unlimited; `Some(0)` allows no work at all.
+    pub max_work: Option<u64>,
 }
 
 impl AdaptiveSearchBudget {
@@ -230,6 +255,7 @@ impl AdaptiveSearchBudget {
     pub const fn unbounded() -> Self {
         Self {
             max_candidates: None,
+            max_work: None,
         }
     }
 
@@ -237,7 +263,14 @@ impl AdaptiveSearchBudget {
     pub const fn limited(max_candidates: usize) -> Self {
         Self {
             max_candidates: Some(max_candidates),
+            max_work: None,
         }
+    }
+
+    /// Return this budget with a limit of `max_work` deterministic work units.
+    pub const fn with_max_work(mut self, max_work: u64) -> Self {
+        self.max_work = Some(max_work);
+        self
     }
 
     pub(super) fn allows_candidate(self, candidates_considered: usize) -> bool {
@@ -273,6 +306,10 @@ pub struct AdaptiveSearchDiagnostics {
     pub generated_candidates: usize,
     /// Number of candidates inspected before the search returned.
     pub considered_candidates: usize,
+    /// Deterministic work units charged before the search returned (see
+    /// [`AdaptiveSearchBudget`] for the unit model).  Identical on every
+    /// machine for the same input, options and budget.
+    pub work_units: u64,
     /// Candidates skipped because no prefix had enough rows/equations.
     pub insufficient_fit_rows: usize,
     /// Candidates rejected by the equation-count margin after selecting a fit prefix.
@@ -568,6 +605,7 @@ pub(super) struct AdaptiveCandidateContext<'a> {
     pub(super) search: &'a AdaptiveSearchOptions,
     pub(super) fit_search: &'a AdaptiveSearchOptions,
     pub(super) pass_label: Option<&'static str>,
+    pub(super) work: &'a WorkMeter,
 }
 
 fn adaptive_pass_suffix(pass_label: Option<&str>) -> &'static str {
@@ -598,6 +636,25 @@ pub(super) fn evaluate_adaptive_candidate_in_chart(
     diagnostics: &mut AdaptiveSearchDiagnostics,
     tried: &mut usize,
 ) -> Option<FoundAdaptiveCandidate> {
+    let found = evaluate_candidate_stages(ctx, opts, chart, diagnostics, tried);
+    diagnostics.work_units = ctx.work.used();
+    found
+}
+
+/// The stages of one candidate.  Each stage that does work is charged to
+/// `ctx.work` first; a stage that does not fit ends the candidate with
+/// `None`, and the caller sees the exhausted meter.
+fn evaluate_candidate_stages(
+    ctx: &AdaptiveCandidateContext<'_>,
+    opts: &RecurrenceOptions,
+    chart: LeaderChart,
+    diagnostics: &mut AdaptiveSearchDiagnostics,
+    tried: &mut usize,
+) -> Option<FoundAdaptiveCandidate> {
+    let work = ctx.work;
+    if !work.try_charge(1) {
+        return None;
+    }
     let historical = chart.is_constant() && opts.leader_x_power == 0;
     diagnostics.considered_candidates += 1;
     let m = ctx.polys.len();
@@ -628,6 +685,9 @@ pub(super) fn evaluate_adaptive_candidate_in_chart(
     }
 
     if historical {
+        if !work.try_charge(equations as u64) {
+            return None;
+        }
         let timer = timer_now();
         let degree_bound_rejects =
             homogeneous_degree_bound_rejects(ctx.polys, ctx.derivs, opts, fit_len);
@@ -651,6 +711,14 @@ pub(super) fn evaluate_adaptive_candidate_in_chart(
             return None;
         }
     }
+
+    // Held-out rows are those after the fit prefix: one unit per equation.
+    let heldout_work = if ctx.search.no_verify {
+        0
+    } else {
+        count_equations_from_prefix_degrees(m, opts, ctx.prefix_max_degrees)
+            .saturating_sub(equations) as u64
+    };
 
     *tried += 1;
 
@@ -683,8 +751,11 @@ pub(super) fn evaluate_adaptive_candidate_in_chart(
     let mut modular_candidate = None;
     let cached_solve_opts = if let Some(cache) = ctx.modular_cache.filter(|_| historical) {
         let timer = timer_now();
-        let prefilter = modular_prefilter_with_cache(ctx.polys, fit_len, opts, cache);
+        let prefilter = modular_prefilter_with_cache(ctx.polys, fit_len, opts, cache, Some(work));
         diagnostics.modular_prefilter_ms += elapsed_ms(timer);
+        if work.is_exhausted() {
+            return None;
+        }
         if prefilter.rejected {
             diagnostics.modular_prefilter_rejections += 1;
             return None;
@@ -700,11 +771,17 @@ pub(super) fn evaluate_adaptive_candidate_in_chart(
     let solve_opts = cached_solve_opts.as_ref().unwrap_or(opts);
 
     if let Some(candidate) = modular_candidate.as_ref() {
+        if !work.try_charge((equations + unknowns) as u64) {
+            return None;
+        }
         diagnostics.modular_lift_attempts += 1;
         let timer = timer_now();
         let lifted = verified_recurrence_from_modular_lift(fit_polys, fit_derivs, opts, candidate);
         diagnostics.modular_lift_ms += elapsed_ms(timer);
         if let Some(rec) = lifted {
+            if !work.try_charge(heldout_work) {
+                return None;
+            }
             let timer = timer_now();
             let verified =
                 verify_heldout_tail(ctx.polys, ctx.derivs, &rec, opts, fit_len, ctx.search);
@@ -748,9 +825,16 @@ pub(super) fn evaluate_adaptive_candidate_in_chart(
         solve_opts,
         exact_row_indices.as_deref(),
         chart,
+        Some(work),
     );
     diagnostics.exact_solve_ms += elapsed_ms(timer);
+    if work.is_exhausted() {
+        return None;
+    }
     if let Some(rec) = rec {
+        if !work.try_charge(heldout_work) {
+            return None;
+        }
         let timer = timer_now();
         let verified = verify_heldout_tail(ctx.polys, ctx.derivs, &rec, opts, fit_len, ctx.search);
         diagnostics.heldout_verify_ms += elapsed_ms(timer);
@@ -802,12 +886,32 @@ pub fn find_recurrence_adaptive_rational_with_budget(
     let candidates = CandidateIterator::new(m, search);
     diagnostics.candidate_generation_ms += elapsed_ms(timer);
     diagnostics.generated_candidates = candidates.total_candidates();
-    if budget.max_candidates == Some(0) && diagnostics.generated_candidates > 0 {
+    if (budget.max_candidates == Some(0) || budget.max_work == Some(0))
+        && diagnostics.generated_candidates > 0
+    {
         return AdaptiveSearchOutcome::BudgetExhausted(AdaptiveSearchSummary {
             candidates_tried: 0,
             diagnostics,
         });
     }
+
+    // The precomputation is charged first and skipped when it does not fit.
+    let work = WorkMeter::new(budget.max_work);
+    let coefficient_count: u64 = polys.iter().map(|poly| poly.len().max(1) as u64).sum();
+    let derivative_work = coefficient_count.saturating_mul(search.max_diff_deg as u64 + 1);
+    let cache_work = if search.modular_prefilter {
+        ModularPrefilterCache::construction_work(polys, search.max_diff_deg)
+    } else {
+        0
+    };
+    if !work.try_charge(derivative_work) || !work.try_charge(cache_work) {
+        diagnostics.work_units = work.used();
+        return AdaptiveSearchOutcome::BudgetExhausted(AdaptiveSearchSummary {
+            candidates_tried: 0,
+            diagnostics,
+        });
+    }
+    diagnostics.work_units = work.used();
 
     let prefix_max_degrees = prefix_max_degrees_rational(polys);
     let timer = timer_now();
@@ -832,6 +936,7 @@ pub fn find_recurrence_adaptive_rational_with_budget(
         search,
         fit_search: search,
         pass_label: None,
+        work: &work,
     };
     for opts in candidates {
         if !budget.allows_candidate(diagnostics.considered_candidates) {
@@ -844,6 +949,12 @@ pub fn find_recurrence_adaptive_rational_with_budget(
             evaluate_adaptive_candidate(&primary_context, &opts, &mut diagnostics, &mut tried)
         {
             return AdaptiveSearchOutcome::Found(found.into_result(diagnostics));
+        }
+        if work.is_exhausted() {
+            return AdaptiveSearchOutcome::BudgetExhausted(AdaptiveSearchSummary {
+                candidates_tried: tried,
+                diagnostics,
+            });
         }
     }
 
@@ -873,6 +984,7 @@ pub fn find_recurrence_adaptive_rational_with_budget(
             search,
             fit_search: &rational_search,
             pass_label: Some("rational"),
+            work: &work,
         };
         for opts in rational_candidates {
             // Skip candidates without a denominator (already tried above).
@@ -891,6 +1003,12 @@ pub fn find_recurrence_adaptive_rational_with_budget(
             {
                 return AdaptiveSearchOutcome::Found(found.into_result(diagnostics));
             }
+            if work.is_exhausted() {
+                return AdaptiveSearchOutcome::BudgetExhausted(AdaptiveSearchSummary {
+                    candidates_tried: tried,
+                    diagnostics,
+                });
+            }
         }
     }
 
@@ -904,6 +1022,7 @@ pub fn find_recurrence_adaptive_rational_with_budget(
             tried,
             &derivs,
             &prefix_max_degrees,
+            &work,
         );
     }
 
@@ -924,6 +1043,7 @@ fn left_hand_variation_search(
     mut tried: usize,
     derivs: &[Vec<Vec<BigRational>>],
     prefix_max_degrees: &[usize],
+    work: &WorkMeter,
 ) -> AdaptiveSearchOutcome {
     let m = polys.len();
     // The left-hand factors of the variants are those of the historical
@@ -950,6 +1070,7 @@ fn left_hand_variation_search(
         search,
         fit_search: &effective,
         pass_label: Some("left-hand"),
+        work,
     };
     while let Some((opts, chart)) = candidates.next_candidate() {
         // The historical candidates (constant chart, no monomial x^e) were
@@ -971,6 +1092,12 @@ fn left_hand_variation_search(
             &mut tried,
         ) {
             return AdaptiveSearchOutcome::Found(found.into_result(diagnostics));
+        }
+        if work.is_exhausted() {
+            return AdaptiveSearchOutcome::BudgetExhausted(AdaptiveSearchSummary {
+                candidates_tried: tried,
+                diagnostics,
+            });
         }
     }
     AdaptiveSearchOutcome::NoRecurrence(AdaptiveSearchSummary {
