@@ -49,6 +49,13 @@
 //!    criterion, as for the rows `k! S(n, k)` of the ordered set partitions),
 //!    proved when every hypothesis is verified and the certified interval
 //!    lies in `(-inf, 0]` (`U <= 0`);
+//!
+//!    Route 7b, tried after route 7, is **Liu--Wang three-term**:
+//!    [`check_liu_wang_three_term_theorem`] (lag rules `P_n = A_n(x) P_(n-1)
+//!    [+ V_n(x) P'_(n-1)] + B_n(x) P_(n-2)` with degree steps `0` or `1` and
+//!    `B_n <= 0` on the real line, on `(-inf, 0]` or on a root window, as for
+//!    the Lucas and Fibonacci-type rows), proved when every hypothesis is
+//!    verified and the theorem certifies a root region in `(-inf, 0]`;
 //! 8. **iterated preserver**: [`check_iterated_preserver_theorem`]
 //!    (first-order rules `P_n = a_n(x) S_n(P_(n-1))` with a real-rooted
 //!    multiplier after the identity or an operator of the preserver menu,
@@ -71,15 +78,16 @@
 //!     (see "One-signed rows" below); the verdict is conditional on the flag,
 //!     never proved.
 //!
-//! Routes 4 to 8 run whether or not the root-domain route is enabled.
+//! Routes 4 to 7, 7b and 8 run whether or not the root-domain route is enabled.
 //! Routes 4 and 5 conclude that every parent row from the first index on is
 //! real-rooted with every root in `(-inf, 0)`; route 6 that every parent row
 //! is zero (only seed rows) or real-rooted with every root in `(-inf, 0]`
 //! (`(-inf, 0)` without the power of `x`), so it runs without a requested
 //! root region; route 7 that every parent row is real-rooted with every root
-//! in `[L, U]`, `U <= 0`; route 8 that every parent row is zero (only seed
-//! rows) or real-rooted with every root in `(-inf, 0]`.  All five move their
-//! induction start up to three rows past
+//! in `[L, U]`, `U <= 0`; route 7b that every parent row is real-rooted with
+//! every root in `(-inf, 0)` or `(-inf, 0]`; route 8 that every parent row is
+//! zero (only seed rows) or real-rooted with every root in `(-inf, 0]`.  All six
+//! move their induction start up to three rows past
 //! the parent seeds when the theorem fails at the seeds (the default
 //! [`RealRootednessTheoremOptions::maximum_start_delay`]; the skipped rows
 //! are checked exactly by the theorem), and the attempt names the delay
@@ -101,7 +109,7 @@
 //!   every step for the constant family); the parent rows are the canonical
 //!   rows (relabelled), so `P_(m-1) << P_m` weakly for every
 //!   `m >= first_index + 1`;
-//! - routes 4 to 8: the theorem report's own conclusion
+//! - routes 4 to 7, 7b and 8: the theorem report's own conclusion
 //!   ([`RealRootednessTheoremConclusion::interlacing`] from
 //!   `interlacing_from` on, strict or weak as the theorem states);
 //! - routes 1 and 3 conclude no interlacing, and an attested parent records
@@ -245,6 +253,9 @@ pub enum VeroneseParentProofRoute {
     /// [`check_ma_wang_interval_theorem`] with an interval `[L, U]`,
     /// `U <= 0`.
     MaWangInterval,
+    /// [`check_liu_wang_three_term_theorem`] with a root region in
+    /// `(-inf, 0]`.
+    LiuWangThreeTerm,
     /// [`check_iterated_preserver_theorem`] with the region `(-inf, 0]`.
     IteratedPreserver,
     /// A caller-supplied attestation.
@@ -746,10 +757,12 @@ fn root_domain_menu(
 /// `(-inf, 0)` (routes 4 and 5) or, for route 6, in `(-inf, 0]` (every
 /// conclusion of that theorem, so it runs without a requested region); route
 /// 7 (Ma--Wang) runs without a requested region and succeeds when its
-/// interval `[L, U]` has `U <= 0`; route 8 (iterated preserver) runs without
-/// a requested region and succeeds when its region is `(-inf, 0]`.  The
-/// last value is whether the theorem applies (status other than
-/// `not_applicable`); a route-8 attempt that does not apply is not recorded.
+/// interval `[L, U]` has `U <= 0`; route 7b (Liu--Wang three-term) runs
+/// without a requested region and succeeds when it certifies a region in
+/// `(-inf, 0]`; route 8 (iterated preserver) runs without a requested region
+/// and succeeds when its region is `(-inf, 0]`.  The last value is whether
+/// the theorem applies (status other than `not_applicable`); a route-8
+/// attempt that does not apply is not recorded.
 fn theorem_attempt(
     record: &ParentRecurrenceRecord<'_>,
     route: VeroneseParentProofRoute,
@@ -783,6 +796,12 @@ fn theorem_attempt(
             record.seeds,
             &RealRootednessTheoremOptions::default(),
         )?,
+        VeroneseParentProofRoute::LiuWangThreeTerm => check_liu_wang_three_term_theorem(
+            record.rule,
+            record.first_index,
+            record.seeds,
+            &RealRootednessTheoremOptions::default(),
+        )?,
         VeroneseParentProofRoute::IteratedPreserver => check_iterated_preserver_theorem(
             record.rule,
             record.first_index,
@@ -791,11 +810,15 @@ fn theorem_attempt(
         )?,
         _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
     };
-    // The Ma--Wang interval and the iterated-preserver region settle the
-    // parent statement only when they lie in (-inf, 0].
+    // The Ma--Wang interval settles the parent statement only when it lies
+    // in (-inf, 0], the Liu--Wang three-term theorem only with a certified
+    // region in (-inf, 0], and the iterated preserver only with its region
+    // (-inf, 0].
     let outside_ray = matches!(
         route,
-        VeroneseParentProofRoute::MaWangInterval | VeroneseParentProofRoute::IteratedPreserver
+        VeroneseParentProofRoute::MaWangInterval
+            | VeroneseParentProofRoute::LiuWangThreeTerm
+            | VeroneseParentProofRoute::IteratedPreserver
     ) && report.is_proved()
         && !report
             .conclusion
@@ -806,9 +829,15 @@ fn theorem_attempt(
             .is_some_and(|upper| !upper.is_positive());
     let detail = match (&report.status, &report.conclusion) {
         (RealRootednessTheoremStatus::Proved, Some(conclusion)) if outside_ray => format!(
-            "{}: {}; the certified region is not contained in (-inf, 0], so the rows are \
-             real-rooted but this route does not give coefficients of one sign",
-            report.normal_form, conclusion.statement
+            "{}: {}; the {} not contained in (-inf, 0], so the rows are real-rooted but this \
+             route does not give coefficients of one sign",
+            report.normal_form,
+            conclusion.statement,
+            if conclusion.root_region.is_some() {
+                "certified region is"
+            } else {
+                "theorem certifies no root region, so the roots are"
+            }
         ),
         (RealRootednessTheoremStatus::Proved, Some(conclusion)) if report.start_delay > 0 => {
             format!(
@@ -1377,7 +1406,7 @@ pub fn prove_parent_real_rootedness(
         proof.attempts.extend(attempts);
     }
 
-    // Routes 4 to 8.
+    // Routes 4 to 7, 7b and 8.
     if proved.is_none() {
         for (route, variant) in [
             (
@@ -1390,6 +1419,10 @@ pub fn prove_parent_real_rootedness(
                 "liu_wang_derivative_lag",
             ),
             (VeroneseParentProofRoute::MaWangInterval, "ma_wang_interval"),
+            (
+                VeroneseParentProofRoute::LiuWangThreeTerm,
+                "liu_wang_three_term",
+            ),
             (
                 VeroneseParentProofRoute::IteratedPreserver,
                 "iterated_preserver",
@@ -1551,13 +1584,14 @@ mod catalog_flag_tests {
             .collect()
     }
 
-    /// The Lucas polynomials A034807 (`P_n = P_(n-1) + x P_(n-2)`, `P_0 = 2`,
-    /// `P_1 = 1`) are flagged `lean_proved`; no polytool route proves them,
-    /// so the verdict is conditional on the flag, with one-signed rows proved.
+    /// The Jabotinsky-type rows A039692 (`P_n = (x + n) P_(n-1) + n (n - 1 +
+    /// 2x) P_(n-2)`, `P_0 = 1`, `P_1 = 3 + x`) are flagged `lean_proved`; no
+    /// polytool route proves them, so the verdict is conditional on the flag,
+    /// with one-signed rows proved.
     #[test]
     fn a_flagged_catalog_parent_is_conditional_on_the_flag() {
-        let (rule, seeds, first_index) = catalog_parent("A034807");
-        assert_eq!(seeds, vec![vec![q(2)], vec![q(1)]]);
+        let (rule, seeds, first_index) = catalog_parent("A039692");
+        assert_eq!(seeds, vec![vec![q(1)], vec![q(3), q(1)]]);
         let proof = prove(&rule, &seeds, first_index);
         assert_eq!(
             proof.status,
@@ -1565,7 +1599,7 @@ mod catalog_flag_tests {
             "{proof:#?}"
         );
         assert_eq!(proof.route, Some(VeroneseParentProofRoute::Attestation));
-        assert_eq!(proof.conditional_on, ["oeis_catalog:A034807:lean_proved"]);
+        assert_eq!(proof.conditional_on, ["oeis_catalog:A039692:lean_proved"]);
         assert!(proof.statement.contains("not proved here"));
         let attempt = proof.attempts.last().unwrap();
         assert!(attempt.success);
@@ -1617,9 +1651,9 @@ mod catalog_flag_tests {
     /// longer applies.
     #[test]
     fn a_parent_differing_in_one_coefficient_or_seed_does_not_match() {
-        let (rule, seeds, first_index) = catalog_parent("A034807");
+        let (rule, seeds, first_index) = catalog_parent("A039692");
         let mut changed_rule = rule.clone();
-        changed_rule.terms[1].coeff.coeffs[0][1] = q(2);
+        changed_rule.terms[1].coeff.coeffs[1][1] = q(3);
         let proof = prove(&changed_rule, &seeds, first_index);
         assert_ne!(
             proof.status,
@@ -1630,7 +1664,7 @@ mod catalog_flag_tests {
         let summary = proof.attempts.last().unwrap();
         assert_eq!(summary.variant, "oeis_catalog");
         assert!(!summary.success);
-        assert!(summary.detail.contains("oeis_catalog:A034807:lean_proved"));
+        assert!(summary.detail.contains("oeis_catalog:A039692:lean_proved"));
 
         let mut changed_seeds = seeds.clone();
         changed_seeds[1] = vec![q(2)];
@@ -1646,13 +1680,13 @@ mod catalog_flag_tests {
         assert!(catalog_attempts(&proof).is_empty());
     }
 
-    /// The flag gives real-rootedness only: a flagged parent whose rule
-    /// cancels (A003506, `P_n = (2 + 2x) P_(n-1) - (1 + x)^2 P_(n-2)`) is not
-    /// shown one-signed, so the catalog route fails.
+    /// The flag gives real-rootedness only: a flagged parent that no route
+    /// proves and whose rows are not shown one-signed by the weight test
+    /// (A008303) stays open.
     #[test]
     fn a_flagged_parent_without_a_one_sign_proof_stays_open() {
-        let (rule, seeds, first_index) = catalog_parent("A003506");
-        assert!(crate::oeis::by_id("A003506")
+        let (rule, seeds, first_index) = catalog_parent("A008303");
+        assert!(crate::oeis::by_id("A008303")
             .unwrap()
             .real_rootedness()
             .is_some());
@@ -1924,11 +1958,11 @@ mod left_hand_factor_tests {
         normalization.verify().unwrap();
     }
 
-    /// The Lucas polynomials times `x` still match their `lean_proved`
+    /// The rows of A039692 times `x` still match their `lean_proved`
     /// catalog flag through the normalized rule.
     #[test]
     fn a_catalog_flag_matches_the_normalized_rule() {
-        let entry = crate::oeis::by_id("A034807").unwrap();
+        let entry = crate::oeis::by_id("A039692").unwrap();
         let (rule, rows) = entry.recurrence_parts().unwrap();
         let first_index = entry.recurrence_first_index;
         let count = rule.generation_initial_count(first_index, rows.len());
@@ -1938,7 +1972,7 @@ mod left_hand_factor_tests {
             VeroneseParentProofStatus::ConditionalOnAttestation,
             "{proof:#?}"
         );
-        assert_eq!(proof.conditional_on, ["oeis_catalog:A034807:lean_proved"]);
+        assert_eq!(proof.conditional_on, ["oeis_catalog:A039692:lean_proved"]);
         assert!(proof.left_hand_factor_normalization.is_some());
     }
 

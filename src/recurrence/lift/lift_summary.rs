@@ -566,7 +566,9 @@ impl LiftSummary {
     /// the summary of a current recomputation of the same lift: equal, or
     /// equal except for a weaker parent statement (`open` where the
     /// recomputation is `proved` or `attested`, `attested` where it is
-    /// `proved` or attested with the same labels), with its own verdict
+    /// `proved` or attested with the same labels) and a recorded parent root
+    /// region containing the recomputed one (the parent is now proved in a
+    /// smaller region, which meets the recorded requirement), with its own verdict
     /// consistent ([`LiftSummary::is_consistent`]) and no interlacing claim
     /// beyond the recomputation's.  A parent that grew stronger in a later
     /// version of the parent provers keeps the old record valid; a record
@@ -579,7 +581,7 @@ impl LiftSummary {
             && self.input_first_index == recomputed.input_first_index
             && self.parent == recomputed.parent
             && self.identity == recomputed.identity
-            && self.root_transfer == recomputed.root_transfer
+            && root_transfer_is_supported_by(&self.root_transfer, &recomputed.root_transfer)
             && self.hypotheses == recomputed.hypotheses
             && self.lean_replay == recomputed.lean_replay;
         let weaker_parent = match (&self.parent_proof, &recomputed.parent_proof) {
@@ -599,6 +601,30 @@ impl LiftSummary {
         };
         same_rest && weaker_parent && interlacing_supported && self.is_consistent()
     }
+}
+
+/// Whether a recorded root transfer claims nothing beyond `recomputed`:
+/// equal, or equal except for a recorded parent root region that contains
+/// the recomputed one (a parent now proved in a smaller region still meets
+/// the recorded, weaker requirement; both regions index-independent).
+fn root_transfer_is_supported_by(
+    recorded: &LiftRootTransfer,
+    recomputed: &LiftRootTransfer,
+) -> bool {
+    if recorded == recomputed {
+        return true;
+    }
+    let regions = match (&recorded.parent_root_region, &recomputed.parent_root_region) {
+        (Some(outer), Some(inner)) => {
+            crate::recurrence::lift::preserver_image::region_contains(outer, inner)
+        }
+        _ => false,
+    };
+    regions
+        && recorded.theorem == recomputed.theorem
+        && recorded.parent_hypothesis == recomputed.parent_hypothesis
+        && recorded.input_root_region == recomputed.input_root_region
+        && recorded.input_conclusion == recomputed.input_conclusion
 }
 
 // ---------------------------------------------------------------------------
@@ -1116,6 +1142,7 @@ fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
         VeroneseParentProofRoute::LiuWang => "liu_wang",
         VeroneseParentProofRoute::LiuWangDerivativeLag => "liu_wang_derivative_lag",
         VeroneseParentProofRoute::MaWangInterval => "ma_wang_interval",
+        VeroneseParentProofRoute::LiuWangThreeTerm => "liu_wang_three_term",
         VeroneseParentProofRoute::IteratedPreserver => "iterated_preserver",
         VeroneseParentProofRoute::Attestation => "attestation",
     }

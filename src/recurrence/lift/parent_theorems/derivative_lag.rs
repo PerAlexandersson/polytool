@@ -608,7 +608,7 @@ pub(super) fn derivative_lag_report(
 }
 
 /// The multiplicity of the root `0` of a nonzero `p`.
-fn order_at_zero(p: &[Q]) -> Option<usize> {
+pub(super) fn order_at_zero(p: &[Q]) -> Option<usize> {
     p.iter().position(|c| !c.is_zero())
 }
 
@@ -627,7 +627,7 @@ fn scale_bivariate(c: &Bivariate, factor: usize) -> Bivariate {
 }
 
 /// `c(n, x) / f(n)` as `(..) + (..) x + (..) x^2`, `0` when zero.
-fn x_polynomial_text(c: &Bivariate, f: &[Q]) -> String {
+pub(super) fn x_polynomial_text(c: &Bivariate, f: &[Q]) -> String {
     let terms: Vec<String> = (0..x_width(c))
         .filter_map(|k| {
             let column = x_column(c, k);
@@ -746,7 +746,7 @@ fn vanishing_at_zero_hypothesis(c1: &Bivariate, c2: &Bivariate, first: usize) ->
 
 /// `c(n, x) / f(n) <= 0` (`< 0` when `strict`) for every `x < 0` and
 /// `n >= first` (module documentation, "Deciding the hypotheses").
-fn negative_axis_sign_hypothesis(
+pub(super) fn negative_axis_sign_hypothesis(
     name: &str,
     statement: &str,
     label: &str,

@@ -10,6 +10,9 @@ coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
 
+- `recurrence::RealRootednessTheorem` and
+  `recurrence::VeroneseParentProofRoute` have the new variant
+  `LiuWangThreeTerm`; exhaustive matches must add it.
 - `recurrence::RealRootednessTheorem` has the new variant
   `IteratedPreserver`, `recurrence::VeroneseParentProofRoute` the new variant
   `IteratedPreserver`, and `recurrence::RealRootednessTheoremReport` the new
@@ -19,9 +22,10 @@ Breaking changes:
   parent provers run the new theorem as route 8 (after Ma--Wang) and record
   its attempt only for rules of its form, so the recorded parent proofs of
   other rules are unchanged; the attestation and catalog-flag routes are now
-  numbered 9 and 10.  A first-order parent that only an attestation or a
-  catalog flag settled before (without the root-domain route) is now proved,
-  so such recorded certifications differ from their recomputation.
+  numbered 9 and 10 (route 7b, Liu--Wang three-term, runs before route 8).
+  A first-order parent that only an attestation or a catalog flag settled
+  before (without the root-domain route) is now proved; records made before
+  keep replaying through the new `is_supported_by` checks (Additions).
 - `recurrence::RootEndpoint` has the new public field `exact`
   (`Option<ExactQuadraticEndpoint>`); struct literals must add it (or use the
   new `RootEndpoint::rational`).  Serialized endpoints without the field still
@@ -387,6 +391,19 @@ Performance:
 
 Additions:
 
+- `recurrence::check_liu_wang_three_term_theorem`: Liu and Wang's Theorem 2.1
+  and Corollary 2.4 (Adv. Appl. Math. 38 (2007) 542-560) for lag rules
+  `P_n = A_n(x) P_(n-1) [+ V_n(x) P'_(n-1)] + B_n(x) P_(n-2)` with
+  `x`-dependent coefficients, every hypothesis decided for all indices:
+  degree steps `0` or `1` (half growth), `B_n <= 0` on the real line, on
+  `(-inf, 0]` with an exact root-location induction, or on a root window,
+  in the identity, divided-by-`x^m`, reversed and gauged coordinates; weak
+  interlacing and the certified root region in a
+  `RealRootednessTheoremReport` (`theorem: "liu_wang_three_term"`) with
+  `verify()`.  It is route 7b of `prove_parent_real_rootedness`
+  (`VeroneseParentProofRoute::LiuWangThreeTerm`, lift-summary route
+  `liu_wang_three_term`), which settles the parent when the region lies in
+  `(-inf, 0]`.
 - Iterated real-rootedness preservers: `recurrence::check_iterated_preserver_theorem`
   (theorem `iterated_preserver`, with `recurrence::IteratedPreserverCertificate`
   in the report) proves a first-order rule `P_n = T_n(P_(n-1))` real-rooted
@@ -406,6 +423,17 @@ Additions:
   `verify()` replays the operator identity; the parent
   provers use the theorem as route 8 (region `(-inf, 0]`).  Of the 389
   first-order catalog rules, 202 are proved by it.
+- Recorded certifications stay valid when the parent provers grow stronger:
+  `VeroneseParentProof::is_supported_by` and
+  `recurrence::check_recorded_parent_proof` accept a recorded parent proof that
+  claims nothing beyond today's result (`not_proved`, or conditional on an
+  attestation where the statement is now proved outright; a proved record
+  needs the same route, statement and interlacing; attempts may differ), and
+  reject one that claims more; `VeroneseSectionCertification::check_against_recomputation`
+  and `LiftSummary::is_supported_by` (used by `BasisMapLiftCertification::verify`)
+  apply the same rule to whole certifications.  Recorded Veronese
+  certificates with an open or attested parent are kept as regression
+  fixtures (`tests/recorded_certifications.rs`).
 - Exact quadratic endpoints of root regions: `recurrence::ExactQuadraticEndpoint`
   (`a + b sqrt(d)` as rational strings, with `to_quadratic_number`,
   `from_quadratic_number` and the plain-ASCII `to_plain_text`, e.g.

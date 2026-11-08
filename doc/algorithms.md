@@ -367,7 +367,8 @@ of this stage.
 
 `recurrence::check_three_term_recurrence_theorem`,
 `recurrence::check_liu_wang_theorem`,
-`recurrence::check_liu_wang_derivative_lag_theorem` and
+`recurrence::check_liu_wang_derivative_lag_theorem`,
+`recurrence::check_liu_wang_three_term_theorem` and
 `recurrence::check_ma_wang_interval_theorem` take a rule
 `f(n) P_n = sum c_(k,d)(n, x) D^d P_(n-k)` (`f` free of `x`, no `(-1)^n`
 factors, no inhomogeneous term), a first index and `K` seed rows; the rule
@@ -474,9 +475,52 @@ named in the conclusion, and the interlacing claim is not extended over
 them).  Derangement excedances (A271697): `P_1 = 1`, `P_2 = 0`,
 `P_n = (n-2) x P_(n-1) + x(1-x) P'_(n-1) + (n-2) x P_(n-2)`; the start moves
 two rows to `P_3 = x`, `P_4 = x + x^2`, and the quotients are the A046739
-rows.  Not covered: the half-growth degree law `D0 + (n + e)/2` (plateaus),
+rows.  Not covered: the half-growth degree law `D0 + (n + e)/2` (plateaus;
+`check_liu_wang_three_term_theorem` covers it with weak interlacing),
 and lag coefficients of the wrong sign, such as binomial Eulerian (A046802,
 `W_n = (1 - n) x`), which need vector lifts.
+
+**Liu--Wang three-term.**  L. L. Liu and Y. Wang, Adv. Appl. Math. 38
+(2007) 542-560, Theorem 2.1: for `F = a f + b g` with `deg F` in
+`{deg f, deg f + 1}`, `f, g` real-rooted, `g << f` (weak), `F` and `g` with
+leading coefficients of one sign and `b(r) <= 0` at the roots of `f`, `F` is
+real-rooted and `f << F` (Theorem 2.3: several interlacers, here `P'_(n-1)`
+and `P_(n-2)`).  `check_liu_wang_three_term_theorem` iterates it (Corollary
+2.4) for `f(n) P_n = c_1 P_(n-1) [+ c_d P'_(n-1)] + c_2 P_(n-2)` from the last
+two seeds (checked exactly: real-rooted, degree step `0` or `1`, weak
+interlacing).  After normalizing the signs (rows times `-1` or `(-1)^n`, so
+`A_n` and `V_n` change sign) the degree law is a finite state machine on
+`deg P_(n-1) - deg P_(n-2)` in `{0, 1}`: each reachable step gives
+`l_n = u_n l_(n-1) + v_n l_(n-2)` for the leading coefficients (with
+`u_n = [x^k] A_n + deg P_(n-1) [x^(k+1)] V_n`), and `l_n > 0` follows from
+`u_n, v_n >= 0`, `u_n + v_n > 0` (with `deg P_(n-1)` replaced by its value at
+the seeds and `[x^(k+1)] V_n >= 0` when the schedule has two states), or, on
+one state, from a positive-ratio induction `l_n / l_(n-1) >= g(n) > 0`
+(`v_n <= 0`, `u_n + v_n / g(n-1) - g(n) >= 0`).  The sign condition holds
+when `B_n` (and `V_n`) is `<= 0` everywhere (degree `0`, or degree two with
+`p_2, p_0 <= 0` and `p_1^2 <= 4 p_2 p_0`; a vanishing discriminant is
+Proposition 3.3), or on `x <= 0` together with a root location: seeds with
+roots `< 0` and `P_n(0) > 0` for every `n` (the same positive-sequence
+tests on `p_n = A_n(0) p_(n-1) + B_n(0) p_(n-2)`, `V_n(0) = 0`; since
+`P_(n-1) << P_n` puts every root but the largest at most the largest root of
+`P_(n-1)`, `P_n(0) > 0` excludes a largest root `>= 0`), or nonnegative
+coefficients of the seeds and of `A_n, B_n, V_n`.  Windows (no derivative
+term): `B_n <= 0` on `W` (Taylor-shift monomial tests, or convexity with
+`B_n(L), B_n(U) <= 0`), `A_n > 0`, `B_n >= 0` right of `U` (then
+`F(x) = a f + b g > 0` there), and, with full growth, `A_n < 0`, `B_n >= 0`
+left of `L` (then `(-1)^(deg g) F(x) > 0`), and seeds with roots in `W`.
+Coordinates: `P_n / x^m` (same rule; with a derivative term `A_n + m V_n / x`),
+the reversal at the nominal degree `deg P_(N-2) + n - N + 2` (an upper
+bound for `deg P_n`; `x A_n(1/x)` and `x^2 B_n(1/x)` are polynomials) and a
+gauge `P_n / (x + v)^(e + n - N + 2)` with `x + v` dividing `c_1` and
+`(x + v)^2` dividing `c_2`; the last two give real-rootedness and a root
+region of `P_n`, but no interlacing claim.  A failed sufficient test is not
+a disproof.  Covered: Lucas and Fibonacci-type rows (A034807, A061896),
+A008306, the Narayana-type squares (A084534), Legendre-type gauges
+(A090452, A109983), windows (A209599, A236076) and the half-growth
+derivative-lag rows A008299, A124324, A136011, A358623.  Not covered:
+A235706 (the power of `x` dividing `P_n` grows with `n`) and A039692
+(`B_n(-1) > 0` at the common root `-1`).
 
 **Ma--Wang interval step.**  S.-M. Ma and Y. Wang, Electron. J. Combin. 15
 (2008) R17, Theorem 2 and Corollary 3, in the closed two-endpoint form of

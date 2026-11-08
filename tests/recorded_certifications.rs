@@ -157,3 +157,28 @@ fn a_recorded_proof_stronger_than_the_recomputation_is_refused() {
         .parent_proof
         .is_supported_by(&open.certification.parent_proof));
 }
+
+/// A basis-map lift recorded when its coefficient family was only attested
+/// (catalog flag), with the parent root region of the attestation: the
+/// parent is now proved, in a smaller region, and the record still replays;
+/// a record claiming the proved verdict with the old parent does not.
+#[test]
+fn a_basis_map_lift_with_a_weaker_recorded_parent_keeps_replaying() {
+    let path = format!(
+        "{}/tests/fixtures/recorded-certifications/basis-map-parent-attested.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let recorded: polytool::recurrence::BasisMapLiftCertification =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        recorded.lift_summary.verdict,
+        polytool::recurrence::LiftVerdict::ConditionalOnAttestation
+    );
+    recorded.verify().unwrap();
+    let mut tampered = recorded.clone();
+    tampered.lift_summary.verdict = polytool::recurrence::LiftVerdict::Proved;
+    assert!(tampered.verify().is_err());
+    let mut tampered = recorded.clone();
+    tampered.lift_summary.root_transfer.input_root_region.upper = None;
+    assert!(tampered.verify().is_err());
+}

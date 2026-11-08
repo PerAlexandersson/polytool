@@ -72,7 +72,7 @@
 //!   the search;
 //! - `parent_theorems`: [`check_three_term_recurrence_theorem`],
 //!   [`check_liu_wang_theorem`], [`check_liu_wang_derivative_lag_theorem`],
-//!   [`check_ma_wang_interval_theorem`] and
+//!   [`check_liu_wang_three_term_theorem`], [`check_ma_wang_interval_theorem`] and
 //!   [`check_iterated_preserver_theorem`], general real-rootedness theorems for
 //!   recurrences with exactly checked hypotheses and a replayable
 //!   [`RealRootednessTheoremReport`];
@@ -133,10 +133,11 @@ pub use parent_proof::{
 mod parent_theorems;
 pub use parent_theorems::{
     check_iterated_preserver_theorem, check_liu_wang_derivative_lag_theorem,
-    check_liu_wang_theorem, check_ma_wang_interval_theorem, check_three_term_recurrence_theorem,
-    IteratedPreserverCertificate, LeftHandFactorNormalization, RealRootednessTheorem,
-    RealRootednessTheoremConclusion, RealRootednessTheoremOptions, RealRootednessTheoremReport,
-    RealRootednessTheoremStatus, RowInterlacing, REAL_ROOTEDNESS_THEOREM_SCHEMA,
+    check_liu_wang_theorem, check_liu_wang_three_term_theorem, check_ma_wang_interval_theorem,
+    check_three_term_recurrence_theorem, IteratedPreserverCertificate, LeftHandFactorNormalization,
+    RealRootednessTheorem, RealRootednessTheoremConclusion, RealRootednessTheoremOptions,
+    RealRootednessTheoremReport, RealRootednessTheoremStatus, RowInterlacing,
+    REAL_ROOTEDNESS_THEOREM_SCHEMA,
 };
 mod row_factor;
 pub use row_factor::{
