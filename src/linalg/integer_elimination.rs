@@ -40,6 +40,44 @@ use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Zero};
 
+// Test hook: while a `ForcedFallback` guard lives on this thread, every integer
+// elimination reports an unfinished (inexact) division, so the rational fallbacks
+// run on inputs where they would otherwise never be reached.
+#[cfg(test)]
+thread_local! {
+    static FORCE_FALLBACK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+pub(super) struct ForcedFallback;
+
+#[cfg(test)]
+impl ForcedFallback {
+    pub(super) fn engage() -> Self {
+        FORCE_FALLBACK.with(|flag| flag.set(true));
+        Self
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForcedFallback {
+    fn drop(&mut self) {
+        FORCE_FALLBACK.with(|flag| flag.set(false));
+    }
+}
+
+/// Whether the integer elimination must pretend that an exact division failed.
+pub(super) fn fallback_forced() -> bool {
+    #[cfg(test)]
+    {
+        FORCE_FALLBACK.with(std::cell::Cell::get)
+    }
+    #[cfg(not(test))]
+    {
+        false
+    }
+}
+
 /// Operation and size limits of one elimination.
 pub(super) struct EliminationBudget {
     pub(super) remaining: usize,
@@ -263,6 +301,9 @@ fn integer_eliminate_rows(
     mut budget: Option<&mut EliminationBudget>,
     stop_on_inconsistency: bool,
 ) -> Result<Option<IntegerEliminationResult>, RationalKernelError> {
+    if fallback_forced() {
+        return Ok(None);
+    }
     let row_count = rows.len();
     let width = rows.first().map_or(0, Vec::len);
     // `levels[r]`: the pivot at which `rows[r]` is valid (1 initially).
@@ -385,8 +426,10 @@ fn integer_eliminate_rows(
 /// forward echelon form of `integer_rref`, with every free variable zero: back
 /// substitution on integers.  With `D` the last pivot (the determinant of the pivot
 /// minor), the entries `N_j = D * x_j` are integers by Cramer's rule, and
-/// `N_i = (D * b_i - sum_(j > i) a_ij N_j) / a_ii` is an exact division.  `None` if a
-/// division is not exact or the system is inconsistent.
+/// `N_i = (D * b_i - sum_(j > i) a_ij N_j) / a_ii` is an exact division.  Only the pivot
+/// rows are read: the rows below them are not inspected, so the caller must already
+/// have excluded a nonzero right-hand side there (an inconsistent system).  `None` only
+/// if a division is not exact, which Cramer's rule rules out for a consistent system.
 pub(super) fn back_substitute(echelon: &IntegerRref, columns: usize) -> Option<Vec<Q>> {
     let rank = echelon.pivots.len();
     let mut solution = vec![Q::zero(); columns];

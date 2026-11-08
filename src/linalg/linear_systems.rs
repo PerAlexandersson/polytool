@@ -4,9 +4,9 @@
 //! no modular or floating-point rank decisions are used.
 
 use super::integer_elimination::{
-    back_substitute, integer_echelon_for_solve, integer_echelon_from_integer_rows, integer_row,
-    integer_rref, rescale_row, Elimination, EliminationBudget, IntegerEliminationResult,
-    IntegerRref,
+    back_substitute, fallback_forced, integer_echelon_for_solve, integer_echelon_from_integer_rows,
+    integer_row, integer_rref, rescale_row, Elimination, EliminationBudget,
+    IntegerEliminationResult, IntegerRref,
 };
 use super::Q;
 use crate::BigRational;
@@ -259,6 +259,9 @@ pub(crate) fn solve_integer_fit_system(
     for (row, value) in matrix.iter_mut().zip(rhs) {
         row.push(value);
     }
+    // The integer elimination works in place, so the one copy of the system below is
+    // what keeps the rational fallback possible: a partially eliminated matrix cannot
+    // be turned back into the input.
     if square {
         match solve_full_rank_square_integer_augmented(matrix.clone()) {
             Ok(solution) => return Some(solution),
@@ -269,6 +272,15 @@ pub(crate) fn solve_integer_fit_system(
         match outcome {
             IntegerEliminationResult::Inconsistent => return None,
             IntegerEliminationResult::Echelon(echelon) => {
+                // Rows below the pivot rows have no coefficient left, so a nonzero
+                // right-hand side there is a contradiction.
+                let rank = echelon.pivots.len();
+                if echelon.rows[rank..]
+                    .iter()
+                    .any(|row| !row[columns].is_zero())
+                {
+                    return None;
+                }
                 if let Some(solution) = back_substitute(&echelon, columns) {
                     return Some(solution);
                 }
@@ -490,7 +502,7 @@ fn solve_full_rank_square_integer_augmented(
     mut aug: Vec<Vec<BigInt>>,
 ) -> Result<Vec<Q>, SquareSolveFailure> {
     let n = aug.len();
-    if aug.iter().any(|row| row.len() != n + 1) {
+    if aug.iter().any(|row| row.len() != n + 1) || fallback_forced() {
         return Err(SquareSolveFailure::Fallback);
     }
     if n == 0 {

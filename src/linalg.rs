@@ -21,6 +21,8 @@
 // re-exported below at its historical `linalg::*` path.
 mod definiteness;
 mod determinants;
+#[cfg(test)]
+mod differential_tests;
 mod integer_elimination;
 mod linear_systems;
 mod modular;

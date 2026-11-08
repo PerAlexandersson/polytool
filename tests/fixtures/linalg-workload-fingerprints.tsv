@@ -10,9 +10,10 @@ adaptive/shifted-legendre/laurent	bdaf2584a6492a80:873
 adaptive/shifted-legendre/laurent-wide	e7988c769ab98acd:881
 adaptive/type-b-eulerian/default	0c44a6863b3ee47f:903
 adaptive/type-b-eulerian/derivative	18035a2aec124822:900
-# Hadamard snapshots include optional exact endpoints and unsuccessful Liu-Wang attempts.
-hadamard-lift/av123	9960d618f226abab:79275
-hadamard-lift/av321	062183cbe1d88056:101277
+# Hadamard snapshots include optional exact endpoints and unsuccessful Liu-Wang and
+# product-recurrence attempts.
+hadamard-lift/av123	7f8c7a01664075e2:79436
+hadamard-lift/av321	cd76f12fdf03d162:101599
 kernel/eulerian hankel order 3 width 9	c183fb36dc8e5ea0:130422
 kernel/integer 24x18 rank 10 with budgets	6d80446d81f8730d:10759
 kernel/integer 60x40 rank 22	2cb5021f4e7a718b:90760
