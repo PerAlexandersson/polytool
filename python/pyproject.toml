@@ -3,9 +3,9 @@ requires = ["maturin>=1.9.4,<2"]
 build-backend = "maturin"
 
 [project]
-# The PyPI name `polytool` belongs to an unrelated project: choose the
-# distribution name before the first upload (the import name stays `polytool`).
-name = "polytool"
+# Distribution name on PyPI (`polytool` itself belongs to an unrelated
+# project); the import name is `polytool`.
+name = "polytool-exact"
 description = "Exact polynomial, recurrence and real-rootedness tools (Python bindings of the Rust polytool library)"
 readme = "README.md"
 license = "MIT"

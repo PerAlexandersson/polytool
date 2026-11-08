@@ -20,8 +20,9 @@ mathematics and the JSON schemas are those of the [library](library.md).
 The package is built with [maturin](https://www.maturin.rs/) from the
 `python/` directory of the repository.  It needs Rust 1.85 or newer and
 CPython 3.10 or newer; one `abi3` wheel serves every CPython version from 3.10
-on.  Prebuilt wheels on PyPI are planned; until then, install from source
-inside a virtual environment:
+on.  Prebuilt wheels will be published on PyPI as `polytool-exact`
+(`pip install polytool-exact`; the import name is `polytool`); until then,
+install from source inside a virtual environment:
 
 ```sh
 python -m venv ~/.venvs/polytool && . ~/.venvs/polytool/bin/activate
@@ -34,7 +35,7 @@ or, from a checkout:
 cd python
 pip install maturin
 maturin build --release --out /tmp/polytool-wheels
-pip install /tmp/polytool-wheels/polytool-*.whl
+pip install /tmp/polytool-wheels/polytool_exact-*.whl
 ```
 
 `maturin develop --release` installs an editable build into the active
@@ -321,7 +322,7 @@ from the same source, `test_cli_parity.py` compares `properties`,
 ```sh
 cd python
 maturin build --release --out /tmp/polytool-wheels
-pip install --force-reinstall /tmp/polytool-wheels/polytool-*.whl pytest
+pip install --force-reinstall /tmp/polytool-wheels/polytool_exact-*.whl pytest
 cargo build --release --bin polytool --manifest-path ../Cargo.toml
 POLYTOOL_CLI=<target directory>/release/polytool pytest tests
 ```
