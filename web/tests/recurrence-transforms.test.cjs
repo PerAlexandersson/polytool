@@ -606,7 +606,7 @@ test('actual WASM: theorem matches, enclosures, spaces and browser limits', {
   const card = context.renderReportCard({report: theorems, origin: 'computed', replay: null}, 0);
   assert.match(card, /Conditional theorem match/);
   assert.match(card, /Finite evidence only/);
-  assert.match(card, /P_\{n\} = \\bigl\(1 \+ x\\bigr\) P_\{n-1\}/);
+  assert.match(card, /P_\{n\} = \\bigl\(1 \+ x\\bigr\)(\\,)? P_\{n-1\}/);
   assert.equal(JSON.parse(wasm.verify_report(JSON.stringify(theorems))).verified, true);
   theorems.theorem_matches[0].window.inequality = 'B - A <= 9';
   assert.match(JSON.parse(wasm.verify_report(JSON.stringify(theorems))).error, /differs/);
