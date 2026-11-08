@@ -25,12 +25,57 @@ documented flag reaches its handler, and compare the pages with the snapshots
 in `tests/snapshots/cli/help` (`POLYTOOL_BLESS_CLI_HELP=1` re-blesses them
 after a deliberate change).
 
-The Documentation GitHub workflow builds an artifact for pull requests and
-manual runs. Publishing is manual: configure the repository's Pages source
-as GitHub Actions, then run the workflow on `main` with `publish` enabled.
-The deployment job uses the `github-pages` environment and its protection
-rules. Ordinary builds and pull requests do not deploy. This site is separate
-from the WebAssembly application.
+`build-docs.py` options: `--target-dir DIR` reuses a Cargo target directory
+outside the workspace (its `doc/` is rebuilt each run); `--binary PATH` takes
+help output from an existing `polytool` instead of building one;
+`--command-source scrape` forces the `--help` scraping path.
+
+The command reference has two sources. When `polytool help --json` describes
+commands richly (entries with `usage`, `description`, `options`, `examples` or
+`exit_codes`, nested `subcommands`, and an optional top-level `topics` list of
+`{name, title, body}`), the builder writes one page per command under
+`doc/commands/` and per topic under `doc/topics/`, indexed by the command
+reference. If the JSON only lists names and summaries (or the binary has no
+`help --json`), it falls back to scraping each command's `--help`. Every
+`doc/*.md` guide is included automatically, including the Python guide once it
+exists (which also gets a navigation entry); guides not named on the front page are
+listed under "More guides". Rustdoc for `polytool`, `ore-algebra` and
+`exact-real-roots` is published under `/api/`.
+
+## Continuous integration
+
+Two workflows in `.github/workflows/` run on every push to `main` and every
+pull request (newer pushes cancel running pull-request runs).
+
+`ci.yml`:
+
+- `core`: formatting, OEIS catalog data tests, clippy, tests, package check,
+  `ore-algebra` tests.
+- `companions`: MCP formatting, clippy and tests; `cargo check` of the web crate.
+- `msrv`: matrix over `polytool`, `ore-algebra`, `exact-real-roots`, `mcp` and
+  `web`; each job reads the package's declared `rust-version` (currently 1.82,
+  and 1.89 for `mcp`) and runs `cargo check --lib --bins` on that toolchain.
+  Raise an MSRV only in the manifest.
+- `mcp-release`: `cargo build --release` of `polytool-mcp`, the stdio smoke test
+  in release mode, and the binary uploaded as artifact `polytool-mcp-linux-x86_64`.
+- `web`: `cargo check --target wasm32-unknown-unknown`, `wasm-pack build
+  --target no-modules` (as `web/build.sh`), the CLI, then
+  `web/tests/string_safety.mjs` and `node --test web/tests/*.test.cjs` with
+  `POLYTOOL_WASM_DIR` and `POLYTOOL_CLI` set, so the real WASM exports and
+  browser/CLI parity are tested. The bundle is uploaded as `polytool-web-pkg`.
+
+All Rust jobs use `Swatinem/rust-cache`. The same commands run locally; for
+example the web job is `wasm-pack build --release --target no-modules
+--out-dir DIR` in `web/` followed by the Node commands above.
+
+`docs.yml` builds the site with `scripts/build-docs.py` (which fails on broken
+local links, unresolved guide links and symbolic links), checks that the front
+page, command reference and the three rustdoc entry points exist, and uploads
+the Pages artifact. Pull requests only build. A push to `main`, or a manual run
+on `main` with `publish` left enabled, deploys to GitHub Pages through the
+`github-pages` environment. One-time setup: in the repository settings set
+Pages source to "GitHub Actions". The site is separate from the WebAssembly
+application.
 
 ## Checks
 

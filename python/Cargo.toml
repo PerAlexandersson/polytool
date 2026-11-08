@@ -1,0 +1,36 @@
+[package]
+name = "polytool-python"
+version = "0.6.0"
+edition = "2021"
+# PyO3 0.30 needs Rust 1.85.
+rust-version = "1.85"
+license = "MIT"
+authors = ["Per Alexandersson <per.w.alexandersson@gmail.com>"]
+description = "Python bindings for polytool (PyO3, abi3 wheels for CPython >= 3.10)"
+readme = "README.md"
+repository = "https://github.com/PerAlexandersson/polytool"
+publish = false
+
+# The extension module `polytool._polytool`; maturin builds it and packages it
+# with the pure-Python files under `python/polytool/`.
+[lib]
+name = "_polytool"
+crate-type = ["cdylib"]
+
+[lints.rust]
+missing_docs = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unsafe_code = "forbid"
+
+[dependencies]
+polytool = { path = ".." }
+num-bigint = "0.4"
+num-rational = "0.4"
+num-traits = "0.2"
+num-integer = "0.1"
+serde = "1"
+serde_json = "1"
+# `abi3-py310`: one wheel per platform for every CPython >= 3.10.  maturin sets
+# PYO3_BUILD_EXTENSION_MODULE, so the deprecated `extension-module` feature is
+# not needed and `cargo test` links against libpython.
+pyo3 = { version = "0.30.1", features = ["abi3-py310", "num-bigint", "num-rational"] }

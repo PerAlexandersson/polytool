@@ -4,7 +4,7 @@
 
 - The crate must build standalone.  Its manifest, tests, examples, build script,
   and published sources must not use path dependencies outside this directory
-  (the in-tree `crates/`, `mcp/`, and `web/` packages are fine).
+  (the in-tree `crates/`, `mcp/`, `web/`, and `python/` packages are fine).
 - Validate with `cargo metadata --locked --format-version 1 --no-deps`.
 - Keep build output (`target/`, `pkg/`, and similar) out of the source tree,
   for example by setting `CARGO_TARGET_DIR`.
@@ -51,8 +51,9 @@
   handler; a rename keeps the old spelling in `.deprecated(&[...])`. Help
   snapshots live in `tests/snapshots/cli/` (re-bless deliberately with
   `POLYTOOL_BLESS_CLI_HELP=1`; the frozen invocation outputs are a
-  compatibility promise).  `mcp/` and `web/` are adapters
-  over the library, not separate implementations.  Put mathematics in the library
+  compatibility promise).  `mcp/`, `web/` and `python/` (PyO3 bindings,
+  `doc/python.md`) are adapters over the library, not separate
+  implementations.  Put mathematics in the library
   and keep adapters thin.
 - The web page `web/index.html` is markup only. Styles are in `web/app.css` and the
   classic (non-module) scripts in `web/js/`, loaded in the order listed in
@@ -134,7 +135,7 @@
 - Update the documentation and focused tests in the same change when public API,
   CLI input/output, exactness guarantees, or standalone build behavior changes.
   `README.md` is a short landing page; the detailed material lives in `doc/`
-  (`cli*.md` for the CLI reference, `library.md`, `mcp.md` and `mcp/README.md`,
+  (`cli*.md` for the CLI reference, `library.md`, `mcp.md` and `mcp/README.md`, `python.md`,
   `web.md`, `development.md`, `algorithms.md`) and in `CHANGELOG.md`.  Put CLI
   details in the matching `doc/cli*.md` page and release notes in `CHANGELOG.md`.
 - Every module starts with `//!` documentation (purpose, entry points,

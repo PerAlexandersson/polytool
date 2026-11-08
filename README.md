@@ -167,6 +167,7 @@ by task; `polytool help --json` provides a machine-readable command index.
     h\*-vectors, cyclic and bicyclic sieving, Stapledon decomposition.
 - [doc/library.md](doc/library.md): Rust library usage.
 - [doc/mcp.md](doc/mcp.md) and [mcp/README.md](mcp/README.md): MCP server.
+- [doc/python.md](doc/python.md) and [python/README.md](python/README.md): Python bindings.
 - [doc/web.md](doc/web.md): web wrapper contract and build.
 - [doc/development.md](doc/development.md): tests and checked examples.
 - [doc/algorithms.md](doc/algorithms.md): algorithm notes.

@@ -1,0 +1,179 @@
+name: Python
+
+# Builds and tests the Python bindings in python/ (PyO3 + maturin, abi3
+# wheels for CPython >= 3.10).  Publishing to PyPI is a separate job that only
+# runs for a `python-v*` tag when the repository owner has enabled it (see the
+# `publish` job); pushes and pull requests never publish.
+
+on:
+  push:
+    branches: [main]
+    tags: ["python-v*"]
+    paths:
+      - "python/**"
+      - "src/**"
+      - "crates/**"
+      - "data/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "doc/python.md"
+      - ".github/workflows/python.yml"
+  pull_request:
+    paths:
+      - "python/**"
+      - "src/**"
+      - "crates/**"
+      - "data/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "doc/python.md"
+      - ".github/workflows/python.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  crate:
+    name: Crate checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: python
+      - name: Check formatting
+        run: cargo fmt --manifest-path python/Cargo.toml --all -- --check
+      - name: Check lints
+        run: cargo clippy --manifest-path python/Cargo.toml --all-targets -- -D warnings
+      - name: Rust unit tests
+        run: cargo test --manifest-path python/Cargo.toml
+
+  msrv:
+    name: MSRV (Rust 1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@1.85
+      - name: Check
+        # Resolve dependencies to versions that support the declared MSRV.
+        env:
+          CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
+        run: cargo check --manifest-path python/Cargo.toml
+
+  test:
+    name: pytest (CPython ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            python -> target
+      - name: Install build and test tools
+        run: python -m pip install "maturin>=1.9.4,<2" pytest
+      - name: Build and install the wheel
+        working-directory: python
+        run: |
+          maturin build --release --out dist
+          python -m pip install dist/*.whl
+      # The parity tests compare the Python results with the CLI's JSON.
+      - name: Build the CLI
+        run: cargo build --locked --release --bin polytool
+      - name: Run pytest
+        working-directory: python
+        env:
+          POLYTOOL_CLI: ${{ github.workspace }}/target/release/polytool
+        run: python -m pytest -p no:cacheprovider tests
+
+  wheels:
+    name: Wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the abi3 wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          args: --release --out dist
+          manylinux: auto
+      - name: Smoke test
+        shell: bash
+        run: |
+          python -m pip install python/dist/*.whl
+          python -c "import polytool; assert polytool.is_real_rooted([1, 11, 11, 1]); assert polytool.oeis.generate('A008292', 4)[3] == [1, 11, 11, 1]"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}
+          path: python/dist/*.whl
+
+  sdist:
+    name: Source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: python/dist/*.tar.gz
+
+  # Disabled unless the repository owner opts in: it needs the repository
+  # variable PYPI_PUBLISHING_ENABLED=true, a `pypi` environment with required
+  # reviewers, and a PyPI trusted publisher for this workflow.  It runs only
+  # for a `python-v*` tag, after every other job has passed.
+  publish:
+    name: Publish to PyPI
+    if: startsWith(github.ref, 'refs/tags/python-v') && vars.PYPI_PUBLISHING_ENABLED == 'true'
+    needs: [crate, msrv, test, wheels, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
