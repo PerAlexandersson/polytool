@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- RealRooted row routes `variableDelay` and `subseq` (issue #46, first
+  step).  New theorems `recurrence::check_variable_delay_theorem` (theorem
+  `variable_delay`, certificate `recurrence::VariableDelayCertificate`):
+  fixed-delay rules `f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)`, `L >= 2`,
+  with `A/f > 0` and `B/f >= 0` for every index, a constant first row and
+  the seed rows as exact window steps, proving nonnegative coefficients,
+  every root in `(-inf, 0)` and `P_A << P_B` for `A <= B <= A + L`
+  (RealRooted `strictInterl_of_scaled_fixedDelay_recurrence`); and
+  `recurrence::check_residue_class_subsequence_theorem` (theorem
+  `residue_class_subsequences`, certificate
+  `recurrence::ResidueClassCertificate`): rules whose lags are all multiples
+  of `p >= 2` are proved one residue class at a time by the other theorems,
+  each class report replayed, zero classes allowed.  `RealRootednessTheoremReport`
+  gains the optional fields `variable_delay` and `residue_classes` (omitted
+  from the JSON otherwise).  `recurrence-prove` / MCP
+  `discover_recurrence_proofs` record the two attempts only when the rule
+  has their form (other reports are unchanged); parent routes 8c and 8d
+  (`VeroneseParentProofRoute::VariableDelay`, `ResidueClassSubsequences`)
+  run only for a parent the earlier routes leave open and are recorded only
+  where they apply.  Catalog sweep (`recurrence-prove`, 60 s per entry):
+  519 -> 540 of 787 proved, no regressions; newly proved A003982, A099605,
+  A102547, A109446, A109447, A118394, A118931, A118933, A132918, A137374,
+  A171608, A201013, A211956, A223168, A286100, A305540, A317496, A317497,
+  A318772, A318773, A321434.  **Breaking:** `RealRootednessTheorem` and
+  `VeroneseParentProofRoute` gain two variants each; exhaustive matches need
+  arms.  Discovery reports of rules with lags of gcd `>= 2` or of the
+  fixed-delay form now carry one more attempt, so such reports written
+  before this change no longer replay.
+
 - CLI usability (issue #41, phases 0-3). The command line is parsed by `clap`
   from one declarative specification (`src/bin/polytool/cli/spec.rs`,
   `commands/`) that also drives every help page, `polytool help --json`, shell

@@ -43,7 +43,11 @@ pub struct RecurrenceProofDiscoveryReport {
 /// Try all supported general theorem families, independently of sequence names.
 ///
 /// Tries product induction, Favard/three-term, Liu--Wang first order,
-/// derivative-lag, Ma--Wang interval and Liu--Wang three-term criteria.
+/// derivative-lag, Ma--Wang interval and Liu--Wang three-term criteria, and
+/// records the fixed-delay window ([`check_variable_delay_theorem`]) and the
+/// residue-class decomposition
+/// ([`check_residue_class_subsequence_theorem`]) when the rule has their
+/// form.
 /// This is theorem discovery for a supplied rule, not recurrence fitting.
 /// Failed sufficient hypotheses do not disprove real-rootedness. There is no
 /// catalogue fallback or external attestation route.
@@ -90,6 +94,17 @@ pub fn discover_recurrence_proofs(
             &seeds,
             options,
         )?);
+    }
+    // RealRooted row routes (`variableDelay`, `subseq`): recorded only where
+    // the rule has their form, so the reports of other rules are unchanged.
+    for theorem in [
+        RealRootednessTheorem::VariableDelay,
+        RealRootednessTheorem::ResidueClassSubsequences,
+    ] {
+        let attempt = check_with_first_proving_start(theorem, &rule, first_index, &seeds, options)?;
+        if attempt.status != RealRootednessTheoremStatus::NotApplicable {
+            attempts.push(attempt);
+        }
     }
     let proved = attempts.iter().any(RealRootednessTheoremReport::is_proved);
     let trivially_real_rooted =

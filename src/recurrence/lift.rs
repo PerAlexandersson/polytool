@@ -144,6 +144,11 @@ pub use parent_theorems::{
     RowInterlacing, WeylStepPreserverVerdict, REAL_ROOTEDNESS_THEOREM_SCHEMA,
     RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
+// RealRooted row routes `variableDelay` and `subseq`.
+pub use parent_theorems::{
+    check_residue_class_subsequence_theorem, check_variable_delay_theorem, ResidueClassCertificate,
+    ResidueClassProof, VariableDelayCertificate, VariableDelaySeedStep,
+};
 mod row_factor;
 pub use row_factor::{
     find_row_factor_lifts, RowFactorCertificate, RowFactorIdentityStatus, RowFactorLift,

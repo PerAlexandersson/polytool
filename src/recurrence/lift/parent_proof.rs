@@ -75,6 +75,19 @@
 //!    verified (its region is `(-inf, 0)` or `(-inf, 0]`); the attempt is
 //!    recorded only when the rule has the theorem's form (a fitted relation
 //!    of hypergeometric shape), as for route 8;
+//!
+//!    Routes 8c and 8d, tried after route 8b and only for a parent that the
+//!    earlier routes leave open, are the RealRooted row routes
+//!    **fixed-delay window** ([`check_variable_delay_theorem`], route
+//!    `variableDelay`: `P_n = a(n) P_(n-1) + b(n) x P_(n-L)`, `L >= 2`,
+//!    `a > 0`, `b >= 0`, every root in `(-inf, 0)`) and **residue classes**
+//!    ([`check_residue_class_subsequence_theorem`], route `subseq`: every
+//!    lag a multiple of `p >= 2`, each class `P_(n0 + j + p m)` proved by a
+//!    theorem above), proved when every hypothesis is verified and the
+//!    certified region lies in `(-inf, 0]` (route 8d is run with the
+//!    requested region `(-inf, 0)` and, failing that, without one, since
+//!    its classes may have roots at `0`); each attempt is recorded only when
+//!    the rule has the route's form;
 //! 9. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
@@ -279,6 +292,11 @@ pub enum VeroneseParentProofRoute {
     IteratedPreserver,
     /// [`check_hypergeometric_row_theorem`] with a region in `(-inf, 0]`.
     HypergeometricRow,
+    /// [`check_variable_delay_theorem`] (region `(-inf, 0)`).
+    VariableDelay,
+    /// [`check_residue_class_subsequence_theorem`] with a region in
+    /// `(-inf, 0]`.
+    ResidueClassSubsequences,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -870,6 +888,31 @@ fn theorem_attempt(
             record.seeds,
             &RealRootednessTheoremOptions::default(),
         )?,
+        VeroneseParentProofRoute::VariableDelay => {
+            check_variable_delay_theorem(record.rule, record.first_index, record.seeds, &options)?
+        }
+        VeroneseParentProofRoute::ResidueClassSubsequences => {
+            // Classes with roots at 0 (for example P_n = x^2 P_(n-2)) are
+            // proved only without the open request.
+            let requested = check_residue_class_subsequence_theorem(
+                record.rule,
+                record.first_index,
+                record.seeds,
+                &options,
+            )?;
+            if requested.is_proved()
+                || requested.status == RealRootednessTheoremStatus::NotApplicable
+            {
+                requested
+            } else {
+                check_residue_class_subsequence_theorem(
+                    record.rule,
+                    record.first_index,
+                    record.seeds,
+                    &RealRootednessTheoremOptions::default(),
+                )?
+            }
+        }
         _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
     };
     // The Ma--Wang interval settles the parent statement only when it lies
@@ -882,6 +925,7 @@ fn theorem_attempt(
             | VeroneseParentProofRoute::LiuWangThreeTerm
             | VeroneseParentProofRoute::IteratedPreserver
             | VeroneseParentProofRoute::HypergeometricRow
+            | VeroneseParentProofRoute::ResidueClassSubsequences
     ) && report.is_proved()
         && !report
             .conclusion
@@ -1557,6 +1601,34 @@ fn prove_parent_with_routes(
                     | VeroneseParentProofRoute::HypergeometricRow
             ) && !applicable
             {
+                continue;
+            }
+            let success = attempt.success;
+            proof.attempts.push(attempt);
+            if success {
+                proved = Some(route);
+                interlacing = theorem_interlacing;
+                break;
+            }
+        }
+    }
+
+    // Routes 8c and 8d (RealRooted row routes), for a parent left open;
+    // recorded only where the rule has the route's form.
+    if proved.is_none() {
+        for (route, variant) in [
+            (VeroneseParentProofRoute::VariableDelay, "variable_delay"),
+            (
+                VeroneseParentProofRoute::ResidueClassSubsequences,
+                "residue_class_subsequences",
+            ),
+        ] {
+            if !allowed(route) {
+                continue;
+            }
+            let (attempt, theorem_interlacing, applicable) =
+                theorem_attempt(&normalized, route, variant)?;
+            if !applicable {
                 continue;
             }
             let success = attempt.success;

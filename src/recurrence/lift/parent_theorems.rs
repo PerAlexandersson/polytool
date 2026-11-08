@@ -46,7 +46,15 @@
 //!   factors in `k` (a row relation proved for every `n` by an invariant
 //!   row-annihilator system), shown to be the image of `(1 + x)^M(n)` under
 //!   a product of nonnegative multiplier sequences (Pólya--Schur, Laguerre,
-//!   `1/(alpha)_k`), with every root in `(-inf, 0]`.
+//!   `1/(alpha)_k`), with every root in `(-inf, 0]`;
+//! - [`check_variable_delay_theorem`]: fixed-delay rules
+//!   `P_n = a(n) P_(n-1) + b(n) x P_(n-L)`, `L >= 2`, `a > 0`, `b >= 0` (the
+//!   RealRooted route `variableDelay`), with every root in `(-inf, 0)` and
+//!   `P_A << P_B` for `A <= B <= A + L`;
+//! - [`check_residue_class_subsequence_theorem`]: rules whose lags are all
+//!   multiples of `p >= 2` (the RealRooted route `subseq`), proved one
+//!   residue class `P_(n0 + j + p m)` at a time by the theorems above, each
+//!   class report kept as a sub-certificate.
 //!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
@@ -149,6 +157,9 @@ mod liu_wang;
 mod liu_wang_three_term;
 mod ma_wang;
 mod three_term;
+// RealRooted row routes (`variableDelay`, `subseq`).
+mod residue_class;
+mod variable_delay;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
 pub use hypergeometric_row::check_hypergeometric_row_theorem;
 pub use iterated_preserver::{
@@ -160,7 +171,13 @@ pub use left_hand_factor::LeftHandFactorNormalization;
 pub use liu_wang::check_liu_wang_theorem;
 pub use liu_wang_three_term::check_liu_wang_three_term_theorem;
 pub use ma_wang::check_ma_wang_interval_theorem;
+pub use residue_class::{
+    check_residue_class_subsequence_theorem, ResidueClassCertificate, ResidueClassProof,
+};
 pub use three_term::check_three_term_recurrence_theorem;
+pub use variable_delay::{
+    check_variable_delay_theorem, VariableDelayCertificate, VariableDelaySeedStep,
+};
 
 type Q = BigRational;
 
@@ -191,6 +208,11 @@ pub enum RealRootednessTheorem {
     IteratedPreserver,
     /// [`check_hypergeometric_row_theorem`].
     HypergeometricRow,
+    /// [`check_variable_delay_theorem`] (RealRooted route `variableDelay`).
+    VariableDelay,
+    /// [`check_residue_class_subsequence_theorem`] (RealRooted route
+    /// `subseq`).
+    ResidueClassSubsequences,
 }
 
 /// Outcome of a theorem check.
@@ -357,6 +379,18 @@ pub struct RealRootednessTheoremReport {
     /// for the other theorems and when the step is not recognized.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iterated_preserver: Option<IteratedPreserverCertificate>,
+    /// For [`check_variable_delay_theorem`]: the delay and the seed rows as
+    /// exact steps of the window, replayed by
+    /// [`RealRootednessTheoremReport::verify`].  Omitted for the other
+    /// theorems and when the rule does not have the theorem's form.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variable_delay: Option<VariableDelayCertificate>,
+    /// For [`check_residue_class_subsequence_theorem`]: the period and the
+    /// class families with their theorem reports, replayed by
+    /// [`RealRootednessTheoremReport::verify`].  Omitted for the other
+    /// theorems and when the rule does not have the theorem's form.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub residue_classes: Option<ResidueClassCertificate>,
 }
 
 impl RealRootednessTheoremReport {
@@ -385,6 +419,8 @@ impl RealRootednessTheoremReport {
             lean_declarations: Vec::new(),
             left_hand_factor_normalization: None,
             iterated_preserver: None,
+            variable_delay: None,
+            residue_classes: None,
         }
     }
 
@@ -403,6 +439,8 @@ impl RealRootednessTheoremReport {
         self.lean_route = None;
         self.lean_declarations.clear();
         self.iterated_preserver = None;
+        self.variable_delay = None;
+        self.residue_classes = None;
         self
     }
 
@@ -465,9 +503,24 @@ impl RealRootednessTheoremReport {
                 Some(interval.at(0)?)
             }
         };
+        // The residue-class check passes its start-delay bound to the class
+        // checks and never moves its own start.
+        let maximum_start_delay = match (&self.residue_classes, self.theorem) {
+            (Some(certificate), RealRootednessTheorem::ResidueClassSubsequences) => {
+                if certificate.class_maximum_start_delay > residue_class::MAXIMUM_CLASS_START_DELAY
+                {
+                    return Err(RecurrenceError::VerificationFailed(format!(
+                        "the class start-delay bound exceeds {}",
+                        residue_class::MAXIMUM_CLASS_START_DELAY
+                    )));
+                }
+                certificate.class_maximum_start_delay
+            }
+            _ => self.start_delay,
+        };
         let options = RealRootednessTheoremOptions {
             root_region,
-            maximum_start_delay: self.start_delay,
+            maximum_start_delay,
         };
         let recomputed = check_with_start_delay(
             self.theorem,
@@ -510,6 +563,7 @@ impl RealRootednessTheoremReport {
             }
             (None, _) => {}
         }
+        self.verify_row_route_certificates()?;
         for hypothesis in &self.hypotheses {
             if let Some(IndexSignDecision::Holds { certificate }) = &hypothesis.sign_decision {
                 certificate.verify().map_err(|error| {
@@ -519,6 +573,71 @@ impl RealRootednessTheoremReport {
                     ))
                 })?;
             }
+        }
+        Ok(())
+    }
+}
+
+impl RealRootednessTheoremReport {
+    /// The certificates of the RealRooted row routes: the seed steps of a
+    /// proved fixed-delay report are replayed on the checked seed rows, and
+    /// the selected proof of every residue class is verified on its own.
+    fn verify_row_route_certificates(&self) -> Result<(), RecurrenceError> {
+        let mismatch = |what: &str| Err(RecurrenceError::VerificationFailed(what.into()));
+        match (&self.variable_delay, self.theorem) {
+            (Some(certificate), RealRootednessTheorem::VariableDelay) => {
+                if self.is_proved() {
+                    let (rule, first_index, seeds) = self.recurrence.to_recurrence_parts()?;
+                    let seeds = if self.start_delay == 0 {
+                        seeds
+                    } else {
+                        let generated = rule
+                            .generate_rows_rational(
+                                &seeds,
+                                first_index,
+                                seeds.len() + self.start_delay,
+                            )
+                            .map_err(|error| {
+                                RecurrenceError::VerificationFailed(error.to_string())
+                            })?;
+                        normalized_seed_rows(&rule, first_index, &generated)?
+                    };
+                    certificate.verify_seed_steps(first_index, &seeds)?;
+                }
+            }
+            (None, RealRootednessTheorem::VariableDelay) if self.is_proved() => {
+                return mismatch("a proved fixed-delay report needs its certificate");
+            }
+            (Some(_), _) => {
+                return mismatch("a fixed-delay certificate on a report of another theorem");
+            }
+            (None, _) => {}
+        }
+        match (&self.residue_classes, self.theorem) {
+            (Some(certificate), RealRootednessTheorem::ResidueClassSubsequences) => {
+                for class in &certificate.classes {
+                    if let Some(position) = class.selected {
+                        let proof = class.attempts.get(position).ok_or_else(|| {
+                            RecurrenceError::VerificationFailed(
+                                "a residue class selects a missing attempt".into(),
+                            )
+                        })?;
+                        if !proof.is_proved() || proof.recurrence != class.recurrence {
+                            return mismatch(
+                                "a residue class selects an attempt that is not its proof",
+                            );
+                        }
+                        proof.verify()?;
+                    }
+                }
+            }
+            (None, RealRootednessTheorem::ResidueClassSubsequences) if self.is_proved() => {
+                return mismatch("a proved residue-class report needs its certificate");
+            }
+            (Some(_), _) => {
+                return mismatch("a residue-class certificate on a report of another theorem");
+            }
+            (None, _) => {}
         }
         Ok(())
     }
@@ -564,6 +683,12 @@ fn check_at_supplied_seeds(
         }
         RealRootednessTheorem::HypergeometricRow => {
             hypergeometric_row::hypergeometric_row_report(rule, first_index, seeds, options)
+        }
+        RealRootednessTheorem::VariableDelay => {
+            variable_delay::variable_delay_report(rule, first_index, seeds, options)
+        }
+        RealRootednessTheorem::ResidueClassSubsequences => {
+            residue_class::residue_class_report(rule, first_index, seeds, options)
         }
     }
 }
@@ -732,6 +857,10 @@ fn check_with_first_proving_start(
                     .is_some_and(|c| !c.coordinates.is_identity()))
     };
     let report = check_with_start_delay(theorem, rule, first_index, seeds, options, 0)?;
+    // The residue classes move their own induction starts.
+    if theorem == RealRootednessTheorem::ResidueClassSubsequences {
+        return Ok(report);
+    }
     if (report.is_proved() && !without_region(&report))
         || report.status == RealRootednessTheoremStatus::NotApplicable
     {
