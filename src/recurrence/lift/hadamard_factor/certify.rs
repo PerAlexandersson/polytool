@@ -700,7 +700,7 @@ pub(in crate::recurrence::lift) fn verify_system(
 
 /// `(A^(l) P)_m = 0` exactly for every generator at `m = from` and at
 /// `m = r + 1` for every restart base `r`.
-pub(super) fn check_system_rows(
+pub(in crate::recurrence::lift) fn check_system_rows(
     generators: &[DOp],
     parent: &super::prepare::PreparedLiftRule,
     from: usize,

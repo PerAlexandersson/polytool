@@ -87,7 +87,7 @@ pub(super) fn step_image(a: &DOp, parent: &DOp) -> Result<DOp, RecurrenceError> 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::recurrence::lift) struct InvariantAnnihilatorSystem {
     /// `A^(l)`, shifts below the parent order.
-    pub(super) generators: Vec<DOp>,
+    pub(in crate::recurrence::lift) generators: Vec<DOp>,
     /// `nu_l(n, x)`, nonzero.
     pub(super) step_multipliers: Vec<Biv>,
     /// `B_(l,j)`, shift-free; `step_quotients[l][j]`.
@@ -97,7 +97,7 @@ pub(in crate::recurrence::lift) struct InvariantAnnihilatorSystem {
 impl InvariantAnnihilatorSystem {
     /// The integer bases `m >= from` where some `nu_l(m, .)` is the zero
     /// polynomial, ascending and without repetition.
-    pub(super) fn restart_bases(&self, from: usize) -> Vec<usize> {
+    pub(in crate::recurrence::lift) fn restart_bases(&self, from: usize) -> Vec<usize> {
         let mut bases: Vec<usize> = self
             .step_multipliers
             .iter()
@@ -216,12 +216,12 @@ impl EchelonBasis {
 
 /// `mu r = sum_l Z_l o A^(l)`: an invariant system with the decomposition of
 /// the remainder.
-pub(super) struct RemainderDecomposition {
-    pub(super) system: InvariantAnnihilatorSystem,
+pub(in crate::recurrence::lift) struct RemainderDecomposition {
+    pub(in crate::recurrence::lift) system: InvariantAnnihilatorSystem,
     /// `mu(n, x)`.
-    pub(super) multiplier: Biv,
+    pub(in crate::recurrence::lift) multiplier: Biv,
     /// `Z_l`, shift-free, one per generator.
-    pub(super) quotients: Vec<DOp>,
+    pub(in crate::recurrence::lift) quotients: Vec<DOp>,
 }
 
 /// The pivots guessed from the parent rows with the ansatz
@@ -340,7 +340,7 @@ fn guess_pivots(
 /// Search an invariant annihilator system whose module contains `remainder`
 /// (module documentation), with parent rows checked from the base `from`
 /// on: `None` when no ansatz size gives one.
-pub(super) fn find_invariant_annihilator_system(
+pub(in crate::recurrence::lift) fn find_invariant_annihilator_system(
     remainder: &DOp,
     parent: &PreparedLiftRule,
     from: usize,

@@ -1145,6 +1145,7 @@ fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
         VeroneseParentProofRoute::MaWangInterval => "ma_wang_interval",
         VeroneseParentProofRoute::LiuWangThreeTerm => "liu_wang_three_term",
         VeroneseParentProofRoute::IteratedPreserver => "iterated_preserver",
+        VeroneseParentProofRoute::HypergeometricRow => "hypergeometric_row",
         VeroneseParentProofRoute::Attestation => "attestation",
     }
 }

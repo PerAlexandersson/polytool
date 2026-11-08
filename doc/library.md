@@ -743,8 +743,9 @@ in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 `recurrence::check_liu_wang_theorem`,
 `recurrence::check_liu_wang_derivative_lag_theorem`,
 `recurrence::check_liu_wang_three_term_theorem`,
-`recurrence::check_ma_wang_interval_theorem` and
-`recurrence::check_iterated_preserver_theorem` apply a paper theorem to a
+`recurrence::check_ma_wang_interval_theorem`,
+`recurrence::check_iterated_preserver_theorem` and
+`recurrence::check_hypergeometric_row_theorem` apply a paper theorem to a
 family given by a rule, a first index and seed rows (the rule applies from
 `first_index + seeds.len()` on), and check every hypothesis exactly for all
 indices.  The result (`RealRootednessTheoremReport`,
@@ -848,6 +849,32 @@ region).  `verify()` replays it.
   free of `n` once the first pair of rows it generates is checked to
   interlace (Corollary 2.5: a real-rootedness preserver keeps the
   alternation of two polynomials); otherwise none is claimed.
+- Hypergeometric rows: rows whose coefficient ratio `[x^k] P_n /
+  [x^(k-1)] P_n` is a product of factors linear in `k` and affine in `n`.
+  A row relation `p(n, k) [x^k] P_n + q(n, k) [x^(k-1)] P_n = 0` (total
+  degree at most 4) is fitted exactly and proved for every `n` by an
+  invariant row-annihilator system of the rule, the certificate of the
+  Hadamard-factor lifts (`H(n) = p(n, theta) + x q(n, theta + 1)` is in the
+  module of an invariant system).  In the coordinates `U_j = [x^(j +
+  v(n))] P_n` (valuation `v(n)` affine) or `U_j = [x^(d(n) - j)] P_n`
+  (reversal at the degree), the ratio `C(n) prod (j + a) / prod (j + b)` is
+  matched with multiplier sequences applied to `(1 + x)^M(n)`: the base
+  `j - M - 1` over `j`, complements `j - M' - 1` (`k -> M'!/(M' - k)!`,
+  Pólya--Schur, Theorem 7.1 of P. Brändén, arXiv:1410.6601, with
+  exponential generating function `(1 + x)^M'`), pairs `(j + a)/(j + b)`
+  with `a - b` a nonnegative integer and `b > -1` (the polynomial
+  `(k + b + 1) ... (k + a)`, Laguerre's theorem), reciprocals `1/(b + 1)_k`
+  with `b > -1`, and the scale `C_eff > 0`; every condition is decided for
+  all `n` by the sign checker.  The support (`[x^k] P_n = 0` outside
+  `[v(n), d(n)]`) comes from valuation and degree bounds of the rule or from
+  the relation, and the first coefficient `U_0(n) != 0` from its scalar
+  recurrence (a hypergeometric solution with positive ratio, or positive lag
+  coefficients).  It proves every row nonzero and real-rooted with every root
+  in `(-inf, 0)` (`(-inf, 0]` with a valuation), no interlacing: OEIS
+  A330798 (`sum_k binom(n, k) (2n + 1)_k / (n + 2)_k x^k`), A124848,
+  A110608, A119308, A123160, A124860, A128540, A253283, A286785, A357613,
+  A359363, A376827.  Families such as A318397 (`binom(n, k)^2 binom(2(n -
+  k), n - k)`, a double Narayana transform) stay `unresolved`.
 
 When a theorem fails at the supplied seeds, the checks retry with the
 induction start moved up to `RealRootednessTheoremOptions::maximum_start_delay`

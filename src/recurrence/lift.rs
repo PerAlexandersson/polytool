@@ -132,8 +132,9 @@ pub use parent_proof::{
 };
 mod parent_theorems;
 pub use parent_theorems::{
-    check_iterated_preserver_theorem, check_liu_wang_derivative_lag_theorem,
-    check_liu_wang_theorem, check_liu_wang_three_term_theorem, check_ma_wang_interval_theorem,
+    check_hypergeometric_row_theorem, check_iterated_preserver_theorem,
+    check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem,
+    check_liu_wang_three_term_theorem, check_ma_wang_interval_theorem,
     check_product_recurrence_theorem, check_three_term_recurrence_theorem,
     check_weyl_step_preserver, discover_recurrence_proofs, IteratedPreserverCertificate,
     IteratedPreserverCoordinates, LeftHandFactorNormalization, RealRootednessTheorem,

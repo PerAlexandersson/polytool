@@ -40,7 +40,13 @@
 //!   in `(-inf, 0]`, `[0, inf)` or on the line, applied from the last seed
 //!   rows on (the earlier seed rows, for example rows that do not follow the
 //!   rule, are checked exactly), also in the coordinates
-//!   [`IteratedPreserverCoordinates`].
+//!   [`IteratedPreserverCoordinates`];
+//! - [`check_hypergeometric_row_theorem`]: row-hypergeometric families, whose
+//!   coefficient ratio `[x^k] P_n / [x^(k-1)] P_n` is a product of linear
+//!   factors in `k` (a row relation proved for every `n` by an invariant
+//!   row-annihilator system), shown to be the image of `(1 + x)^M(n)` under
+//!   a product of nonnegative multiplier sequences (Pólya--Schur, Laguerre,
+//!   `1/(alpha)_k`), with every root in `(-inf, 0]`.
 //!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
@@ -136,6 +142,7 @@ pub use discovery::{
 mod product;
 pub use product::check_product_recurrence_theorem;
 mod derivative_lag;
+mod hypergeometric_row;
 mod iterated_preserver;
 mod left_hand_factor;
 mod liu_wang;
@@ -143,6 +150,7 @@ mod liu_wang_three_term;
 mod ma_wang;
 mod three_term;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
+pub use hypergeometric_row::check_hypergeometric_row_theorem;
 pub use iterated_preserver::{
     check_iterated_preserver_theorem, check_weyl_step_preserver, IteratedPreserverCertificate,
     IteratedPreserverCoordinates, WeylStepPreserverVerdict,
@@ -181,6 +189,8 @@ pub enum RealRootednessTheorem {
     LiuWangThreeTerm,
     /// [`check_iterated_preserver_theorem`].
     IteratedPreserver,
+    /// [`check_hypergeometric_row_theorem`].
+    HypergeometricRow,
 }
 
 /// Outcome of a theorem check.
@@ -540,6 +550,9 @@ fn check_at_supplied_seeds(
         }
         RealRootednessTheorem::IteratedPreserver => {
             iterated_preserver::iterated_preserver_report(rule, first_index, seeds, options)
+        }
+        RealRootednessTheorem::HypergeometricRow => {
+            hypergeometric_row::hypergeometric_row_report(rule, first_index, seeds, options)
         }
     }
 }

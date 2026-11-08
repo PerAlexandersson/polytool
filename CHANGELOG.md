@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- New theorem `recurrence::check_hypergeometric_row_theorem` and parent route
+  8b (`VeroneseParentProofRoute::HypergeometricRow`, tried after the iterated
+  preserver, recorded only when the rule has a row relation of hypergeometric
+  shape): rows whose coefficient ratio `[x^k] P_n / [x^(k-1)] P_n` factors
+  into terms linear in `k` and affine in `n`.  The row relation
+  `p(n, k) [x^k] P_n + q(n, k) [x^(k-1)] P_n = 0` is fitted exactly and
+  proved for every `n` by an invariant row-annihilator system of the rule
+  (the Hadamard-factor certificate); in the identity coordinates (valuation
+  `v(n)` affine) or after the reversal at the degree, the ratio is matched
+  with the image of `(1 + x)^M(n)` under a product of nonnegative multiplier
+  sequences (complements `M'!/(M' - k)!` by Pólya--Schur, Theorem 7.1 of
+  Brändén, arXiv:1410.6601; polynomials with roots `<= 0` by Laguerre's
+  theorem; `1/(alpha)_k`, `alpha > 0`; a positive scale), every condition
+  decided for all `n` by the sign checker, with the support of the rows from
+  valuation and degree bounds and the first coefficient from its scalar
+  recurrence.  It proves every row nonzero and real-rooted with every root
+  in `(-inf, 0)` (`(-inf, 0]` with a valuation).  Of the 860 catalog
+  entries, 28 parents are newly proved: A056939, A089503, A094305, A106246,
+  A108426, A110608, A119308, A120986, A123160, A124848, A124860, A124932,
+  A125092, A128540, A132812, A135065, A145596, A181543, A197208, A253283,
+  A286785, A330798, A347056, A352880, A357613, A359363, A376827, A391045.
+  Every other parent proof is unchanged (the route runs only when the earlier
+  routes fail) and recorded proofs replay.  **Breaking:**
+  `RealRootednessTheorem` and `VeroneseParentProofRoute` gain the variant
+  `HypergeometricRow`; exhaustive matches need an arm.  The general proof
+  discovery (`recurrence-prove`, MCP `discover_recurrence_proofs`) is
+  unchanged.
+
 - The iterated-preserver theorem (`recurrence::check_iterated_preserver_theorem`,
   parent route 8) recognizes Brändén's Weyl step `S_n = A + B D + C D^2`
   (P. Brändén, Trans. Amer. Math. Soc. 358 (2006), Corollary 3.5): the

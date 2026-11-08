@@ -65,6 +65,16 @@
 //!    `P_2 = 1 + 3x + x^2`), proved when every hypothesis is verified and the
 //!    certified region is `(-inf, 0]`; the attempt is recorded only when
 //!    the rule has the theorem's form (not `not_applicable`);
+//!
+//!    Route 8b, tried after route 8, is **hypergeometric row**:
+//!    [`check_hypergeometric_row_theorem`] (rows whose coefficient ratio is
+//!    a product of factors linear in `k`, with a row relation proved for
+//!    every `n` by an invariant row-annihilator system, written as the
+//!    image of `(1 + x)^M(n)` under a product of nonnegative multiplier
+//!    sequences, as for OEIS A330798), proved when every hypothesis is
+//!    verified (its region is `(-inf, 0)` or `(-inf, 0]`); the attempt is
+//!    recorded only when the rule has the theorem's form (a fitted relation
+//!    of hypergeometric shape), as for route 8;
 //! 9. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
@@ -79,7 +89,7 @@
 //!     (see "One-signed rows" below); the verdict is conditional on the flag,
 //!     never proved.
 //!
-//! Routes 4 to 7, 7b and 8 run whether or not the root-domain route is enabled.
+//! Routes 4 to 7, 7b, 8 and 8b run whether or not the root-domain route is enabled.
 //! Routes 4 and 5 conclude that every parent row from the first index on is
 //! real-rooted with every root in `(-inf, 0)`; route 6 that every parent row
 //! is zero (only seed rows) or real-rooted with every root in `(-inf, 0]`
@@ -267,6 +277,8 @@ pub enum VeroneseParentProofRoute {
     LiuWangThreeTerm,
     /// [`check_iterated_preserver_theorem`] with the region `(-inf, 0]`.
     IteratedPreserver,
+    /// [`check_hypergeometric_row_theorem`] with a region in `(-inf, 0]`.
+    HypergeometricRow,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -852,6 +864,12 @@ fn theorem_attempt(
             record.seeds,
             &RealRootednessTheoremOptions::default(),
         )?,
+        VeroneseParentProofRoute::HypergeometricRow => check_hypergeometric_row_theorem(
+            record.rule,
+            record.first_index,
+            record.seeds,
+            &RealRootednessTheoremOptions::default(),
+        )?,
         _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
     };
     // The Ma--Wang interval settles the parent statement only when it lies
@@ -863,6 +881,7 @@ fn theorem_attempt(
         VeroneseParentProofRoute::MaWangInterval
             | VeroneseParentProofRoute::LiuWangThreeTerm
             | VeroneseParentProofRoute::IteratedPreserver
+            | VeroneseParentProofRoute::HypergeometricRow
     ) && report.is_proved()
         && !report
             .conclusion
@@ -1517,17 +1536,27 @@ fn prove_parent_with_routes(
                 VeroneseParentProofRoute::IteratedPreserver,
                 "iterated_preserver",
             ),
+            (
+                VeroneseParentProofRoute::HypergeometricRow,
+                "hypergeometric_row",
+            ),
         ] {
             if !allowed(route) {
                 continue;
             }
             let (attempt, theorem_interlacing, applicable) =
                 theorem_attempt(&normalized, route, variant)?;
-            // Route 8 is recorded only where the rule has its form (a
-            // first-order step recognized as a multiplier after a menu
-            // operator), so that the records of other parents are those of
-            // the routes before it.
-            if route == VeroneseParentProofRoute::IteratedPreserver && !applicable {
+            // Routes 8 and 8b are recorded only where the rule has their
+            // form (a first-order step recognized as a multiplier after a
+            // menu operator; a fitted row relation of hypergeometric shape),
+            // so that the records of other parents are those of the routes
+            // before them.
+            if matches!(
+                route,
+                VeroneseParentProofRoute::IteratedPreserver
+                    | VeroneseParentProofRoute::HypergeometricRow
+            ) && !applicable
+            {
                 continue;
             }
             let success = attempt.success;
