@@ -57,9 +57,10 @@
 //!    the Lucas and Fibonacci-type rows), proved when every hypothesis is
 //!    verified and the theorem certifies a root region in `(-inf, 0]`;
 //! 8. **iterated preserver**: [`check_iterated_preserver_theorem`]
-//!    (first-order rules `P_n = a_n(x) S_n(P_(n-1))` with a real-rooted
-//!    multiplier after the identity or an operator of the preserver menu,
-//!    applied from the last seed row on, every earlier seed row checked
+//!    (first-order or single-lag rules `P_n = a_n(x) S_n(P_(n-L))` with a
+//!    real-rooted multiplier after the identity or an operator of the
+//!    preserver menu, Brändén's Weyl step `A + B D + C D^2` included,
+//!    applied from the last seed rows on, every earlier seed row checked
 //!    exactly, as for the 3-Pascal rows `P_n = (1 + x) P_(n-1)` after
 //!    `P_2 = 1 + 3x + x^2`), proved when every hypothesis is verified and the
 //!    certified region is `(-inf, 0]`; the attempt is recorded only when

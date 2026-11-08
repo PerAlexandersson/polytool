@@ -32,13 +32,15 @@
 //!   `[L, U]` and weak interlacing of consecutive rows, by the exact
 //!   two-endpoint criterion with the endpoint multiplicities tracked through
 //!   the induction;
-//! - [`check_iterated_preserver_theorem`]: first-order rules
-//!   `P_n = T_n(P_(n-1))` whose step is a real-rooted multiplier `a_n(x)`
-//!   after the identity or an operator of the preserver menu (Laguerre,
-//!   Pólya--Schur, Rolle, the Euler step), with every root in `(-inf, 0]`,
-//!   `[0, inf)` or on the line, applied from the last seed row on (the
-//!   earlier seed rows, for example rows that do not follow the rule, are
-//!   checked exactly).
+//! - [`check_iterated_preserver_theorem`]: first-order rules, and rules
+//!   with a single lag, `P_n = T_n(P_(n-L))`, whose step is a real-rooted multiplier
+//!   `a_n(x)` after the identity or an operator of the preserver menu
+//!   (Laguerre, Pólya--Schur, Rolle, the Euler step, Brändén's Weyl step
+//!   `A + B D + C D^2`, see [`check_weyl_step_preserver`]), with every root
+//!   in `(-inf, 0]`, `[0, inf)` or on the line, applied from the last seed
+//!   rows on (the earlier seed rows, for example rows that do not follow the
+//!   rule, are checked exactly), also in the coordinates
+//!   [`IteratedPreserverCoordinates`].
 //!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
@@ -141,7 +143,10 @@ mod liu_wang_three_term;
 mod ma_wang;
 mod three_term;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
-pub use iterated_preserver::{check_iterated_preserver_theorem, IteratedPreserverCertificate};
+pub use iterated_preserver::{
+    check_iterated_preserver_theorem, check_weyl_step_preserver, IteratedPreserverCertificate,
+    IteratedPreserverCoordinates, WeylStepPreserverVerdict,
+};
 pub(in crate::recurrence) use left_hand_factor::rule_with_x_free_left_hand_factor;
 pub use left_hand_factor::LeftHandFactorNormalization;
 pub use liu_wang::check_liu_wang_theorem;
@@ -675,7 +680,10 @@ fn extend_interlacing_backward(
 /// the report at the supplied seeds.  For
 /// [`check_liu_wang_three_term_theorem`], whose conclusion may come without
 /// a root region, a proved report without a region is replaced by the first
-/// later start that proves the theorem with one.
+/// later start that proves the theorem with one; for
+/// [`check_iterated_preserver_theorem`], a report proved in coordinates other
+/// than the identity is replaced by the first later start that proves it in
+/// the identity coordinates.
 fn check_with_first_proving_start(
     theorem: RealRootednessTheorem,
     rule: &Recurrence,
@@ -683,12 +691,21 @@ fn check_with_first_proving_start(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    // A weaker proof is kept as a fallback while a later start may give the
+    // preferred one: a Liu--Wang three-term proof without a root region, an
+    // iterated-preserver proof in coordinates other than the identity (so
+    // that a proof in the identity coordinates, at any start, comes first).
     let without_region = |report: &RealRootednessTheoremReport| {
-        theorem == RealRootednessTheorem::LiuWangThreeTerm
+        (theorem == RealRootednessTheorem::LiuWangThreeTerm
             && report
                 .conclusion
                 .as_ref()
-                .is_some_and(|c| c.root_region.is_none())
+                .is_some_and(|c| c.root_region.is_none()))
+            || (theorem == RealRootednessTheorem::IteratedPreserver
+                && report
+                    .iterated_preserver
+                    .as_ref()
+                    .is_some_and(|c| !c.coordinates.is_identity()))
     };
     let report = check_with_start_delay(theorem, rule, first_index, seeds, options, 0)?;
     if (report.is_proved() && !without_region(&report))

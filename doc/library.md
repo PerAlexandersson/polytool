@@ -829,8 +829,25 @@ region).  `verify()` replays it.
   `u(n) > 0` and `u(n) + v(n) deg P_(n-1) > 0` (so `u + v k > 0` for every
   `k <= deg P_(n-1)`, RealRooted `IsPFPolynomial.generalStep_of_natDegree_le`
   with `d = deg P_(n-1)`) replace the menu's `v >= 0` (OEIS A166960,
-  A166961, A166962, A166972).  A linear multiplier gives weak interlacing of
-  consecutive rows; otherwise none is claimed.
+  A166961, A166962, A166972).  The menu ends with Brändén's Weyl step
+  `S_n = A + B D + C D^2` (P. Brändén, Trans. Amer. Math. Soc. 358 (2006),
+  Corollary 3.5): `B^2 - 4AC >= 0` on the line, `A` strictly interlacing or
+  strictly alternating left of `B` with leading coefficients of the same
+  sign, and `S_n(x^k)` of degree `deg A + k` with leading coefficients of
+  one sign for every `k >= 0` (exact for fixed operators, the sign checker
+  for index-dependent ones; `(-inf, 0]` when every coefficient has one
+  sign); OEIS A048854, A143497, A151775, A397048 are proved this way, while
+  the half-line Euler step of A036969, whose discriminant is negative for
+  `x > 5/4`, is not a global preserver (`check_weyl_step_preserver` returns
+  the point, by Borcea--Brändén 2010, Theorem 1.3).  A single-lag rule
+  `P_n = T_n(P_(n-L))` runs in each residue class (A305540, A321434), and
+  after the identity the induction may run on `P_n / x^e` (A269945), on
+  `P_n(x + r)` or on the reversal at the nominal degree (A008957, A191935);
+  `IteratedPreserverCertificate::coordinates` records which.  A linear
+  multiplier gives weak interlacing of consecutive rows, as does a Weyl step
+  free of `n` once the first pair of rows it generates is checked to
+  interlace (Corollary 2.5: a real-rootedness preserver keeps the
+  alternation of two polynomials); otherwise none is claimed.
 
 When a theorem fails at the supplied seeds, the checks retry with the
 induction start moved up to `RealRootednessTheoremOptions::maximum_start_delay`

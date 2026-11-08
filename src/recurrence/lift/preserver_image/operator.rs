@@ -211,8 +211,11 @@ pub enum PreserverOperator {
         raising: Vec<IndexRationalFunction>,
     },
     /// A general element `(1/denominator(n)) sum_d c_d(n, x) D^d` of the
-    /// Weyl algebra.  No transfer theorem applies: the identity can be
-    /// certified, the lift stays open.
+    /// Weyl algebra.  No transfer theorem applies to the lifts: the identity
+    /// can be certified, the lift stays open.  As the step of
+    /// `check_iterated_preserver_theorem`, a second-order element
+    /// `A + B D + C D^2` is decided by Brändén's Corollary 3.5 (see
+    /// `check_weyl_step_preserver`).
     WeylOperator {
         /// The terms `c_d(n, x) D^d`.
         terms: Vec<OperatorTermJson>,

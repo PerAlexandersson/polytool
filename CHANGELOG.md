@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- The iterated-preserver theorem (`recurrence::check_iterated_preserver_theorem`,
+  parent route 8) recognizes Brändén's Weyl step `S_n = A + B D + C D^2`
+  (P. Brändén, Trans. Amer. Math. Soc. 358 (2006), Corollary 3.5): the
+  discriminant `B^2 - 4AC >= 0` on the line, `A` strictly interlacing or
+  strictly alternating left of `B` with leading coefficients of the same
+  sign, and `S_n(x^k)` of degree `deg A + k` with leading coefficients of one
+  sign for every `k >= 0`, decided exactly for fixed operators and by the
+  sign checker for index-dependent ones; coefficients of one sign keep every
+  root in `(-inf, 0]`.  It is tried after the other menu operators, so the
+  half-line Euler step still proves its rows (A036969).  A step free of `n`
+  with checked alternating start rows also gives weak interlacing
+  (Corollary 2.5).  The new `recurrence::check_weyl_step_preserver` decides a
+  fixed operator, or refutes it as a global preserver at a rational point
+  with a negative discriminant (Borcea--Brändén 2010, Theorem 1.3).  The
+  theorem also accepts single-lag rules `P_n = T_n(P_(n-L))` (induction in
+  each residue class, degree step decided class by class) and runs, after the
+  identity, in the coordinates `recurrence::IteratedPreserverCoordinates`
+  (power gauge `P_n / x^e`, translation `P_n(x + r)`, reversal at the nominal
+  degree), each an exact Ore-algebra identity replayed by
+  `IteratedPreserverCertificate::verify_operator_identity`.  A proof in the
+  identity coordinates at a later induction start is preferred, so every
+  report proved before is unchanged.  Of the 860 catalog entries, 31 parents
+  are newly proved (most were settled before only by a `lean_proved`
+  catalog flag): A008957, A048854, A079621, A086915, A088729, A102537,
+  A104978, A105278, A130850, A133081, A137597, A143497, A151775, A176230,
+  A191935, A241171, A243662, A269945, A286724, A290596, A290598, A292219,
+  A304330, A304334, A305540, A321434, A331333, A345013, A370258, A371080,
+  A397048.  The parent of A026386, proved by the product induction before, is
+  now settled by route 8; its recorded proofs replay by their own route.
+
 - `recurrence-prove` and MCP `discover_recurrence_proofs` try six general
   recurrence criteria with replayable exact certificates and explicit
   obligations; no named-sequence lookup or external attestation is used.
@@ -94,6 +124,12 @@ Breaking changes:
 - `LiftOperation::BasisMap::basis_family` is boxed to keep the enum compact
   as recurrence metadata grows. Its serialized JSON is unchanged.
 
+- `recurrence::IteratedPreserverCertificate` has the new public fields `lag`
+  (default 1) and `coordinates` (`IteratedPreserverCoordinates`, default the
+  identity), both omitted from the JSON at their defaults, so existing
+  certificates load and serialize unchanged; struct literals must add them.
+  The certificate's `preserver` may now be a
+  `PreserverOperator::WeylOperator` (Brändén's Weyl step).
 - `recurrence::RealRootednessTheorem` and
   `recurrence::VeroneseParentProofRoute` have the new variant
   `LiuWangThreeTerm`; exhaustive matches must add it.

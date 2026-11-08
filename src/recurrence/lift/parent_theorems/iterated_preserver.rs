@@ -72,24 +72,74 @@
 //! its finite ends (as the report records it) and is met only when it
 //! contains the certified closed region.
 //!
+//! # Brändén's Weyl step
+//!
+//! The menu ends with the general second-order operator
+//! `S_n = A + B D + C D^2` (recorded as [`PreserverOperator::WeylOperator`]),
+//! a real-rootedness preserver on the whole line under the hypotheses of
+//! Brändén's Corollary 3.5 (P. Brändén, Trans. Amer. Math. Soc. 358 (2006)):
+//! `B^2 - 4AC >= 0` on the line, `A` strictly interlacing or strictly
+//! alternating left of `B` with leading coefficients of the same sign, and
+//! `S_n(x^k)` of degree `deg A + k` with leading coefficients of one sign for
+//! every `k >= 0`, each decided for every `n >= N` (exactly for fixed
+//! operators, by the sign checker for index-dependent ones; see
+//! [`check_weyl_step_preserver`] for the fixed case).  It keeps `(-inf, 0]`
+//! (respectively `[0, inf)`) when every coefficient of `A`, `B`, `C` (of the
+//! reflected operator) has one sign, since a real-rooted polynomial with
+//! coefficients of one sign has its roots in `(-inf, 0]`.  A negative
+//! discriminant refutes the operator as a global preserver (Borcea and
+//! Brändén 2010, Theorem 1.3, necessary condition); the earlier menu
+//! operators, in particular the half-line Euler step, are tried first.
+//!
+//! # Lags and coordinates
+//!
+//! The rule may also have a single lag `L >= 1`, `f(n) P_n = sum_d c_d(n, x)
+//! D^d P_(n-L)`: the induction then runs in each residue class of `n`
+//! modulo `L` from the last `L` seed rows `P_(N-L), ..., P_(N-1)`, which
+//! must all be nonzero and in the region; the degree step is decided class
+//! by class (`n = s + L t`, `t >= 1`, for the class start `s`, by the sign
+//! checker in `t`), and the degree-local Euler condition uses an upper bound
+//! of `deg P_(n-L)` valid in every class.  The induction may also run on
+//! rows `Q_n` in other coordinates ([`IteratedPreserverCoordinates`]: the
+//! power gauge `P_n / x^e`, a translation `P_n(x + r)`, the reversal at the
+//! nominal degree), tried after the identity, with the region of `P_n`
+//! derived from that of `Q_n`; the seed rows before the class starts are
+//! checked in `P` coordinates.
+//!
 //! # Interlacing
 //!
-//! Only for a pure multiplier of degree exactly one (`S_n = id`,
-//! `delta = 1`): `P_n = a_n P_(n-1)` with `a_n` linear adds one real root,
-//! and inserting one root into a list of roots gives the weak interlacing
-//! `P_(n-1) ⪯ P_n` of Liu and Wang (`... <= s_2 <= r_2 <= s_1 <= r_1`) for
-//! every `n >= N`; it is extended over the seed rows only as far as it is
-//! checked exactly.  No interlacing is claimed otherwise.
+//! For a pure multiplier of degree exactly one (`S_n = id`, `delta = 1`,
+//! lag one, identity coordinates): `P_n = a_n P_(n-1)` with `a_n` linear
+//! adds one real root, and inserting one root into a list of roots gives the
+//! weak interlacing `P_(n-1) ⪯ P_n` of Liu and Wang
+//! (`... <= s_2 <= r_2 <= s_1 <= r_1`) for every `n >= N`.  For a step
+//! `T = g(x) S` free of `n` with `S` a proved Weyl step (lag one, identity
+//! coordinates, `delta = 1`): `T` preserves real-rootedness, hence the
+//! alternation of two polynomials (Brändén 2006, Corollary 2.5), so when
+//! `P_(N-1) ⪯ P_N` is checked exactly, every pair `P_(n-1), P_n` with
+//! `n >= N` alternates, which for degrees `d, d + 1` is the weak
+//! interlacing `P_(n-1) ⪯ P_n`.  Both are extended over the seed rows only
+//! as far as they are checked exactly.  No interlacing is claimed otherwise.
 
 use super::*;
 use crate::polynomial::Polynomial;
 use crate::recurrence::implicit::algebra::{to_theta, Biv, DOp};
+use crate::recurrence::implicit::biv_json;
 use crate::recurrence::lift::lift_summary::{nonpositive_ray, real_line};
 use crate::recurrence::lift::preserver_image::{
     operator_transfer, polynomial_hypotheses, region_contains,
 };
 use crate::recurrence::lift::veronese_algebra::classify_row;
-use crate::recurrence::{IndexRationalFunction, PreserverOperator};
+use crate::recurrence::{IndexRationalFunction, OperatorTermJson, PreserverOperator};
+
+mod coordinates;
+mod weyl_step;
+pub use coordinates::IteratedPreserverCoordinates;
+pub use weyl_step::{check_weyl_step_preserver, WeylStepPreserverVerdict};
+use weyl_step::{
+    weyl_step_hypotheses, weyl_step_parts, weyl_step_region_hypotheses, weyl_step_text,
+    BRANDEN_WEYL_STEP,
+};
 
 const REFERENCE: &str = "Iterated real-rootedness preservers (induction on n): if P_m is \
      nonzero and real-rooted with every root in a closed region R and, for every n > m, \
@@ -132,22 +182,53 @@ pub struct IteratedPreserverCertificate {
     pub region: RootInterval,
     /// The operator identity in words.
     pub operator_identity: String,
+    /// The lag `L` of the rule `P_n = T_n(P_(n-L))` (module documentation,
+    /// "Lags and coordinates"); `1` when omitted.
+    #[serde(default = "lag_one", skip_serializing_if = "is_lag_one")]
+    pub lag: usize,
+    /// The coordinates `Q_n` the induction runs on; the identity when
+    /// omitted.  `start_degree`, `degree_step`, the multiplier and the
+    /// preserver refer to the rows `Q_n`, `region` to the rows `P_n`.
+    #[serde(
+        default,
+        skip_serializing_if = "IteratedPreserverCoordinates::is_identity"
+    )]
+    pub coordinates: IteratedPreserverCoordinates,
+}
+
+fn lag_one() -> usize {
+    1
+}
+
+fn is_lag_one(lag: &usize) -> bool {
+    *lag == 1
 }
 
 impl IteratedPreserverCertificate {
     /// Replay the recognition: the step operator of `rule` (the rule the
-    /// check ran on, after a left-hand factor normalization) equals
-    /// `a_n(x) S_n` exactly in the Ore algebra, the degree step is the one of
-    /// the rule, and the region is one of the certified closed regions.
+    /// check ran on, after a left-hand factor normalization), transformed to
+    /// the recorded coordinates, equals `a_n(x) S_n` exactly in the Ore
+    /// algebra, the lag and the degree step are those of the rule, and the
+    /// region is one of the certified closed regions.
     ///
     /// # Errors
     ///
     /// [`RecurrenceError::VerificationFailed`] when the rule is not a
-    /// first-order rule of the theorem's form, the identity does not hold,
-    /// the degree step differs or the region is not supported;
+    /// single-lag rule of the theorem's form, the identity does not hold,
+    /// the lag or the degree step differs or the region is not supported;
     /// [`RecurrenceError::InvalidInput`] when a recorded value does not parse.
     pub fn verify_operator_identity(&self, rule: &Recurrence) -> Result<(), RecurrenceError> {
-        let (terms, f) = step_operator(rule).map_err(RecurrenceError::VerificationFailed)?;
+        let (terms, f, lag) = step_operator(rule).map_err(RecurrenceError::VerificationFailed)?;
+        if lag != self.lag {
+            return Err(RecurrenceError::VerificationFailed(
+                "the recorded lag differs from the rule's".into(),
+            ));
+        }
+        let terms = self.coordinates.transform_step(&terms).ok_or_else(|| {
+            RecurrenceError::VerificationFailed(
+                "the step operator has no polynomial form in the recorded coordinates".into(),
+            )
+        })?;
         let decomposition = Decomposition::from_certificate(self)?;
         if !decomposition.identity_holds(&terms, &f) {
             return Err(RecurrenceError::VerificationFailed(
@@ -173,11 +254,14 @@ impl IteratedPreserverCertificate {
 /// `seeds` (the rule applies from `N = first_index + seeds.len()` on; the
 /// induction starts at the last seed row `P_(N-1)`).
 ///
-/// The rule must be first order, `f(n) P_n = sum_d c_d(n, x) D^d P_(n-1)`
-/// with `f` free of `x`.  Its step operator is recognized exactly as
+/// The rule must have a single lag, `f(n) P_n = sum_d c_d(n, x) D^d
+/// P_(n-L)` with `f` free of `x` (module documentation, "Lags and
+/// coordinates"; the coordinates other than the identity are tried after
+/// it).  Its step operator is recognized exactly as
 /// `T_n = a_n(x) S_n` with `S_n` the identity or an operator of the
 /// preserver menu ([`PreserverOperator`]: `phi(n, D)`, `f(n, theta)`, the
-/// Euler step, `x^m D^j`, `D^j x^m`); then, for a closed region `R` among
+/// Euler step, `x^m D^j`, `D^j x^m`, and Brändén's Weyl step
+/// `A + B D + C D^2`); then, for a closed region `R` among
 /// `(-inf, 0]`, `[0, inf)` and the line, the hypotheses are: the side
 /// conditions and the region transfer of `S_n` for every `n >= N`; `a_n`
 /// real-rooted with every root in `R` for every `n >= N` (fixed factors
@@ -325,9 +409,9 @@ fn is_zero_row(p: &[Q]) -> bool {
 }
 
 /// The first index of the conclusion: after the last zero seed row before
-/// the induction start (the start row itself must be nonzero).
-fn claim_first_index(first_index: usize, seeds: &[Vec<Q>]) -> usize {
-    seeds[..seeds.len() - 1]
+/// the class starts (the start rows themselves must be nonzero).
+fn claim_first_index(first_index: usize, seeds: &[Vec<Q>], lag: usize) -> usize {
+    seeds[..seeds.len() - lag]
         .iter()
         .rposition(|row| is_zero_row(row))
         .map_or(first_index, |offset| first_index + offset + 1)
@@ -345,22 +429,26 @@ fn reflected(p: &[Q]) -> Vec<Q> {
 // The step operator and its decompositions
 // ---------------------------------------------------------------------------
 
-/// The step `f(n) T_n = sum_d c_d(n, x) D^d` of a first-order rule, or why
-/// the rule does not have that form.
-fn step_operator(rule: &Recurrence) -> Result<(StepCoefficients, Vec<Q>), String> {
+/// The step `f(n) T_n = sum_d c_d(n, x) D^d` and the lag `L` of a
+/// single-lag rule `P_n = T_n(P_(n-L))`, or why the rule does not have that
+/// form.
+fn step_operator(rule: &Recurrence) -> Result<(StepCoefficients, Vec<Q>, usize), String> {
     let shape = recurrence_shape(rule)?;
-    if shape.terms.is_empty() {
+    let Some(&(lag, _)) = shape.terms.keys().next() else {
         return Err("the rule has no nonzero term".into());
-    }
-    if shape.terms.keys().any(|(offset, _)| *offset != 1) {
-        return Err("the rule is not first order: P_n = T_n(P_(n-1))".into());
+    };
+    if lag == 0 || shape.terms.keys().any(|(offset, _)| *offset != lag) {
+        return Err(
+            "the rule is not first order: P_n = T_n(P_(n-1)), or T_n(P_(n-L)) with one lag L"
+                .into(),
+        );
     }
     let terms = shape
         .terms
         .into_iter()
         .map(|((_, order), coefficients)| (order, coefficients))
         .collect();
-    Ok((terms, shape.denominator))
+    Ok((terms, shape.denominator, lag))
 }
 
 /// `delta = max_d (deg_x c_d - d)`.
@@ -659,6 +747,26 @@ fn menu_shapes(s: &StepCoefficients, f: &[Q]) -> Vec<(Vec<IndexFraction>, Preser
             ));
         }
     }
+    // Branden's Weyl step A + B D + C D^2 (last: the operators above have
+    // their own theorems, and the Euler step is a half-line theorem).
+    if max_order <= 2 {
+        out.push((
+            unit(),
+            PreserverOperator::WeylOperator {
+                terms: s
+                    .iter()
+                    .map(|(order, c)| OperatorTermJson {
+                        deriv_order: *order,
+                        coeff: biv_json(&Biv::new(c.clone())),
+                    })
+                    .collect(),
+                denominator: vec_poly::trim(f)
+                    .iter()
+                    .map(format_rational_coeff)
+                    .collect(),
+            },
+        ));
+    }
     out
 }
 
@@ -721,38 +829,102 @@ fn decompositions(terms: &StepCoefficients, f: &[Q]) -> Vec<Decomposition> {
 // The check
 // ---------------------------------------------------------------------------
 
-/// The parts of the family the attempts share.
+/// The parts of the family the attempts in one coordinate system share.
 struct Family<'a> {
-    terms: &'a StepCoefficients,
+    /// The step in the coordinates.
+    terms: StepCoefficients,
+    /// The step of the rows `P_n` (the rule's own).
+    original_terms: &'a StepCoefficients,
     f: &'a [Q],
+    lag: usize,
+    coordinates: IteratedPreserverCoordinates,
     first_index: usize,
+    /// The seed rows `P_first, ..., P_(N-1)` (normalized, in `P`
+    /// coordinates).
     seeds: &'a [Vec<Q>],
+    /// The class starts `P_(N-L), ..., P_(N-1)` in the coordinates.
+    start_rows: Vec<Vec<Q>>,
     n_first: usize,
     start: usize,
     start_degree: usize,
     delta: Option<i64>,
-    /// `deg P_(n-1)` as a polynomial in `n` (for `delta >= 0`).
+    /// An upper bound of `deg Q_(n-L)` as a polynomial in `n` (exact for
+    /// lag one; for `delta >= 0`).
     previous_degree: Option<Vec<Q>>,
-    degree_hypothesis: LiftHypothesis,
+    degree_hypotheses: Vec<LiftHypothesis>,
     requested: Option<&'a RealInterval>,
 }
 
-/// One decomposition with one region.
-struct Attempt {
-    region: ClosedRegion,
-    decomposition: Decomposition,
-    hypotheses: Vec<LiftHypothesis>,
-    normal_form: String,
-    reference: String,
-    lean_declarations: Vec<String>,
-}
-
-impl Attempt {
-    fn open_count(&self) -> usize {
-        self.hypotheses
+impl<'a> Family<'a> {
+    /// The family in `coordinates`, or `None` when the step or a start row
+    /// has no polynomial form there.
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        original_terms: &'a StepCoefficients,
+        f: &'a [Q],
+        lag: usize,
+        coordinates: IteratedPreserverCoordinates,
+        first_index: usize,
+        seeds: &'a [Vec<Q>],
+        requested: Option<&'a RealInterval>,
+    ) -> Option<Self> {
+        let terms = coordinates.transform_step(original_terms)?;
+        let start_rows = seeds[seeds.len() - lag..]
             .iter()
-            .filter(|h| h.status != LiftHypothesisStatus::Verified)
-            .count()
+            .map(|row| coordinates.transform_row(row))
+            .collect::<Option<Vec<_>>>()?;
+        let n_first = first_index + seeds.len();
+        let start = n_first - 1;
+        let start_degree = vec_poly::degree(&start_rows[lag - 1]).unwrap_or(0);
+        let delta = degree_step(&terms);
+        let class_degrees: Vec<usize> = start_rows
+            .iter()
+            .map(|row| vec_poly::degree(row).unwrap_or(0))
+            .collect();
+        let previous_degree = delta
+            .filter(|&delta| delta >= 0)
+            .map(|delta| previous_degree_bound(n_first, lag, &class_degrees, delta));
+        let degree_hypotheses = if lag == 1 {
+            vec![degree_step_hypothesis(&terms, n_first, start, start_degree)]
+        } else {
+            (0..lag)
+                .map(|class| {
+                    class_degree_step_hypothesis(
+                        &terms,
+                        lag,
+                        n_first - lag + class,
+                        class_degrees[class],
+                        class,
+                    )
+                })
+                .collect()
+        };
+        Some(Self {
+            terms,
+            original_terms,
+            f,
+            lag,
+            coordinates,
+            first_index,
+            seeds,
+            start_rows,
+            n_first,
+            start,
+            start_degree,
+            delta,
+            previous_degree,
+            degree_hypotheses,
+            requested,
+        })
+    }
+
+    /// `P` for the identity coordinates, `Q` otherwise.
+    fn row_letter(&self) -> &'static str {
+        if self.coordinates.is_identity() {
+            "P"
+        } else {
+            "Q"
+        }
     }
 }
 
@@ -781,21 +953,7 @@ fn degree_step_hypothesis(
     }
     // e(n) = deg P_(n-1) = start_degree + delta (n - 1 - start).
     let previous_degree = previous_degree_polynomial(start, start_degree, delta);
-    let mut lambda = vec![Q::zero()];
-    for (d, c) in terms {
-        let Some(degree) = x_degree(c) else {
-            continue;
-        };
-        if degree as i64 - *d as i64 != delta {
-            continue;
-        }
-        let mut product = x_column(c, degree);
-        for t in 0..*d {
-            let factor = vec_poly::sub(&previous_degree, &[Q::from_integer(BigInt::from(t))]);
-            product = vec_poly::mul(&product, &factor);
-        }
-        lambda = vec_poly::add(&lambda, &product);
-    }
+    let lambda = leading_lambda(terms, delta, &[Q::zero(), Q::one()], &previous_degree);
     let mut hypothesis = sign_hypothesis(
         name,
         &statement,
@@ -812,6 +970,82 @@ fn degree_step_hypothesis(
     hypothesis
 }
 
+/// `Lambda(n(t), e(t))` as a polynomial in `t`, with `n(t)` and `e(t)`
+/// polynomials in `t`: the coefficient of `x^(e + delta)` in
+/// `f(n) T_n(x^e)`.
+fn leading_lambda(terms: &StepCoefficients, delta: i64, index: &[Q], degree: &[Q]) -> Vec<Q> {
+    let mut lambda = vec![Q::zero()];
+    for (d, c) in terms {
+        let Some(x_power) = x_degree(c) else {
+            continue;
+        };
+        if x_power as i64 - *d as i64 != delta {
+            continue;
+        }
+        let mut product = vec_poly::compose(&x_column(c, x_power), index);
+        for t in 0..*d {
+            let factor = vec_poly::sub(degree, &[Q::from_integer(BigInt::from(t))]);
+            product = vec_poly::mul(&product, &factor);
+        }
+        lambda = vec_poly::add(&lambda, &product);
+    }
+    lambda
+}
+
+/// The degree step of the residue class of the start row `class_start`
+/// (lag `L >= 2`): `Lambda(s + L t, deg P_s + delta (t - 1)) != 0` for every
+/// `t >= 1`.
+fn class_degree_step_hypothesis(
+    terms: &StepCoefficients,
+    lag: usize,
+    class_start: usize,
+    class_degree: usize,
+    class: usize,
+) -> LiftHypothesis {
+    let name = format!("degree_step_class_{class}");
+    let statement = format!(
+        "deg P_n = deg P_(n-{lag}) + delta for every n = {class_start} + {lag} t, t >= 1: the \
+         coefficient Lambda(n, e) of x^(e + delta) in f(n) T_n(x^e) is nonzero at e = deg \
+         P_(n-{lag}) = deg P_{class_start} + delta (t - 1)"
+    );
+    let Some(delta) = degree_step(terms) else {
+        return unresolved_hypothesis(&name, &statement, "the step operator is zero".into());
+    };
+    if delta < 0 {
+        return unresolved_hypothesis(
+            &name,
+            &statement,
+            format!("the step lowers the degree (delta = {delta}), so rows eventually vanish"),
+        );
+    }
+    let to_q = |value: i64| Q::from_integer(BigInt::from(value));
+    let index = [to_q(class_start as i64), to_q(lag as i64)];
+    let degree = vec_poly::trim(&[to_q(class_degree as i64 - delta), to_q(delta)]);
+    let lambda = leading_lambda(terms, delta, &index, &degree);
+    let mut hypothesis = sign_hypothesis(
+        &name,
+        &statement,
+        "Lambda(n(t), e(t)) in t",
+        &IndexFunction::polynomial(lambda),
+        1,
+        IndexSignCondition::Nonzero,
+    );
+    // The sign checker runs in t: report a failure at the row index
+    // n = s + L t.
+    if let LiftHypothesisStatus::Failed {
+        witness: Some(witness),
+    } = &mut hypothesis.status
+    {
+        *witness = BigInt::from(class_start) + BigInt::from(lag) * &*witness;
+    }
+    hypothesis.evidence = format!(
+        "delta = {delta}, n = {class_start} + {lag} t, deg P_(n-{lag}) = {}: {}",
+        format_index_polynomial(&degree, "t"),
+        hypothesis.evidence.replace(" n = ", " t = ")
+    );
+    hypothesis
+}
+
 /// `e(n) = deg P_(n-1) = start_degree + delta (n - 1 - start)`.
 fn previous_degree_polynomial(start: usize, start_degree: usize, delta: i64) -> Vec<Q> {
     let delta_q = Q::from_integer(BigInt::from(delta));
@@ -822,39 +1056,103 @@ fn previous_degree_polynomial(start: usize, start_degree: usize, delta: i64) -> 
     ])
 }
 
-/// The row hypotheses: `P_m` and the earlier seeds in the region.
-fn row_hypotheses(family: &Family<'_>, region: ClosedRegion) -> Vec<LiftHypothesis> {
+/// An upper bound of `deg P_(n-L)` valid in every residue class:
+/// `max_c (D_c - delta (s_c + L)/L) + delta n / L` (class `c` starting at
+/// `s_c = N - L + c` with degree `D_c`); for `L = 1` this is the exact
+/// [`previous_degree_polynomial`].
+fn previous_degree_bound(
+    n_first: usize,
+    lag: usize,
+    class_degrees: &[usize],
+    delta: i64,
+) -> Vec<Q> {
+    if lag == 1 {
+        return previous_degree_polynomial(n_first - 1, class_degrees[0], delta);
+    }
+    let lag_q = Q::from_integer(BigInt::from(lag));
+    let slope = Q::from_integer(BigInt::from(delta)) / &lag_q;
+    let constant = class_degrees
+        .iter()
+        .enumerate()
+        .map(|(c, &degree)| {
+            Q::from_integer(BigInt::from(degree))
+                - &slope * (Q::from_integer(BigInt::from(n_first - lag + c)) + &lag_q)
+        })
+        .max()
+        .unwrap_or_else(Q::zero);
+    vec_poly::trim(&[constant, slope])
+}
+
+/// The row hypotheses: the class starts in the working region `region`
+/// (in the coordinates) and the earlier seeds in the certified region
+/// `claimed` (in `P` coordinates).
+fn row_hypotheses(
+    family: &Family<'_>,
+    region: ClosedRegion,
+    claimed: ClosedRegion,
+) -> Vec<LiftHypothesis> {
     let mut out = Vec::new();
     let start = family.start;
-    let seed = &family.seeds[family.seeds.len() - 1];
-    out.push(exact_hypothesis(
-        "start_row_in_region",
-        &format!(
-            "P_{start} is nonzero and real-rooted with every root in {}",
-            region.text()
-        ),
-        if region.contains_roots_of(seed) {
-            Ok(format!(
-                "P_{start} has degree {}; checked exactly",
-                family.start_degree
-            ))
-        } else {
-            Err((
-                Some(start),
-                format!(
-                    "P_{start} is zero, not real-rooted, or has a root outside {} (exact)",
-                    region.text()
-                ),
-            ))
-        },
-    ));
-    let earlier = &family.seeds[..family.seeds.len() - 1];
+    let letter = family.row_letter();
+    if family.lag == 1 {
+        let seed = &family.start_rows[0];
+        out.push(exact_hypothesis(
+            "start_row_in_region",
+            &format!(
+                "{letter}_{start} is nonzero and real-rooted with every root in {}",
+                region.text()
+            ),
+            if region.contains_roots_of(seed) {
+                Ok(format!(
+                    "{letter}_{start} has degree {}; checked exactly",
+                    family.start_degree
+                ))
+            } else {
+                Err((
+                    Some(start),
+                    format!(
+                        "{letter}_{start} is zero, not real-rooted, or has a root outside {} \
+                         (exact)",
+                        region.text()
+                    ),
+                ))
+            },
+        ));
+    } else {
+        let first_start = family.n_first - family.lag;
+        let failing = family
+            .start_rows
+            .iter()
+            .position(|row| !region.contains_roots_of(row));
+        out.push(exact_hypothesis(
+            "start_rows_in_region",
+            &format!(
+                "the class starts {letter}_{first_start}, ..., {letter}_{start} are nonzero and \
+                 real-rooted with every root in {}",
+                region.text()
+            ),
+            match failing {
+                None => Ok(format!(
+                    "checked exactly for {letter}_{first_start}, ..., {letter}_{start}"
+                )),
+                Some(offset) => Err((
+                    Some(first_start + offset),
+                    format!(
+                        "{letter}_{} is zero, not real-rooted, or has a root outside {} (exact)",
+                        first_start + offset,
+                        region.text()
+                    ),
+                )),
+            },
+        ));
+    }
+    let earlier = &family.seeds[..family.seeds.len() - family.lag];
     if !earlier.is_empty() {
         let first = family.first_index;
         let last = first + earlier.len() - 1;
         let failing = earlier
             .iter()
-            .position(|row| !is_zero_row(row) && !region.contains_roots_of(row));
+            .position(|row| !is_zero_row(row) && !claimed.contains_roots_of(row));
         let zero_rows: Vec<String> = earlier
             .iter()
             .enumerate()
@@ -874,7 +1172,7 @@ fn row_hypotheses(family: &Family<'_>, region: ClosedRegion) -> Vec<LiftHypothes
             &format!(
                 "every nonzero seed row among P_{first}, ..., P_{last} is real-rooted with every \
                  root in {}",
-                region.text()
+                claimed.text()
             ),
             match failing {
                 None => Ok(format!(
@@ -885,7 +1183,7 @@ fn row_hypotheses(family: &Family<'_>, region: ClosedRegion) -> Vec<LiftHypothes
                     format!(
                         "P_{} is not real-rooted, or has a root outside {} (exact)",
                         first + offset,
-                        region.text()
+                        claimed.text()
                     ),
                 )),
             },
@@ -946,6 +1244,9 @@ fn preserver_hypotheses(
     n_first: usize,
     previous_degree: Option<&[Q]>,
 ) -> (Vec<LiftHypothesis>, String, Vec<String>) {
+    if let Some((parts, denominator)) = weyl_step_of(operator) {
+        return weyl_step_preserver_hypotheses(&parts, &denominator, region, n_first);
+    }
     let transfer = operator_transfer(operator, n_first);
     let mut out = transfer.hypotheses.clone();
     let mut theorem = transfer.theorem.clone();
@@ -1022,6 +1323,66 @@ fn preserver_hypotheses(
     (out, theorem, lean_declarations)
 }
 
+/// The coefficients `(A, B, C)` and the denominator of a Weyl-step operator
+/// `S_n = (A + B D + C D^2) / delta_S(n)`.
+fn weyl_step_of(operator: &PreserverOperator) -> Option<([Bivariate; 3], Vec<Q>)> {
+    if !matches!(operator, PreserverOperator::WeylOperator { .. }) {
+        return None;
+    }
+    let (numerator, denominator) = operator.weyl_parts()?;
+    Some((weyl_step_parts(&numerator)?, denominator))
+}
+
+/// The hypotheses of Brändén's Weyl step for the region (module
+/// documentation, "Brändén's Weyl step").
+fn weyl_step_preserver_hypotheses(
+    parts: &[Bivariate; 3],
+    denominator: &[Q],
+    region: ClosedRegion,
+    n_first: usize,
+) -> (Vec<LiftHypothesis>, String, Vec<String>) {
+    let mut out = weyl_step_hypotheses(parts, n_first);
+    if vec_poly::degree(denominator).is_some_and(|d| d >= 1) {
+        out.push(sign_hypothesis(
+            "preserver_coefficients_defined",
+            &format!(
+                "the coefficients of S_n are finite at every n >= {n_first} (their common \
+                 denominator does not vanish)"
+            ),
+            "delta_S(n)",
+            &IndexFunction::polynomial(denominator.to_vec()),
+            n_first,
+            IndexSignCondition::Nonzero,
+        ));
+    }
+    let how = match region {
+        ClosedRegion::RealLine => {
+            "Branden's Corollary 3.5 holds for real-rooted polynomials anywhere on the line"
+        }
+        ClosedRegion::NonpositiveRay => {
+            out.extend(weyl_step_region_hypotheses(parts, false, n_first));
+            "with coefficients of one sign, S_n maps a polynomial with coefficients of one sign \
+             to one with coefficients of one sign, real-rooted by Corollary 3.5, so with every \
+             root in (-inf, 0]"
+        }
+        ClosedRegion::NonnegativeRay => {
+            out.extend(weyl_step_region_hypotheses(parts, true, n_first));
+            "the reflected operator (x -> -x) has coefficients of one sign, so S_n keeps [0, inf) \
+             by Corollary 3.5 and the reflection"
+        }
+    };
+    out.push(exact_hypothesis(
+        "preserver_keeps_region",
+        &format!(
+            "S_n maps every polynomial that is zero or real-rooted with every root in {} to zero or \
+             such a polynomial, for every n >= {n_first}",
+            region.text()
+        ),
+        Ok(how.to_string()),
+    ));
+    (out, BRANDEN_WEYL_STEP.to_string(), Vec::new())
+}
+
 const EULER_STEP_DEGREE_LOCAL: &str = "The degree-local Euler step: T = kappa (theta + a)(theta + \
      b) + x (u + v theta), theta = x D, with kappa, a, b > 0, u + v k > 0 for every k <= d and a \
      negative comparison defect kappa (a b - (a + b + 1)^2/4) + (u - (a + b + 1) v/2) s - v^2 \
@@ -1064,13 +1425,55 @@ fn degree_local_raising_hypothesis(
     ))
 }
 
+/// One decomposition with one region.
+struct Attempt {
+    /// The certified region of the rows `P_n`.
+    claimed: ClosedRegion,
+    decomposition: Decomposition,
+    hypotheses: Vec<LiftHypothesis>,
+    normal_form: String,
+    reference: String,
+    lean_declarations: Vec<String>,
+}
+
+impl Attempt {
+    fn open_count(&self) -> usize {
+        self.hypotheses
+            .iter()
+            .filter(|h| h.status != LiftHypothesisStatus::Verified)
+            .count()
+    }
+}
+
+/// The text of `S_n` in the normal form.
+fn preserver_text(decomposition: &Decomposition) -> String {
+    match &decomposition.preserver {
+        None => "the identity".to_string(),
+        Some(operator) => match weyl_step_of(operator) {
+            Some((parts, denominator)) if vec_poly::degree(&denominator) == Some(0) => {
+                let scale = vec_poly::trim(&denominator)[0].recip();
+                let parts = parts.map(|p| {
+                    p.iter()
+                        .map(|row| vec_poly::scale(row, &scale))
+                        .collect::<Bivariate>()
+                });
+                weyl_step_text(&parts)
+            }
+            Some((parts, denominator)) => format!(
+                "({}) / ({})",
+                weyl_step_text(&parts),
+                format_index_polynomial(&denominator, "n")
+            ),
+            None => operator.text(),
+        },
+    }
+}
+
 fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedRegion) -> Attempt {
+    let claimed = family.coordinates.claimed_region(region);
     let mut hypotheses = Vec::new();
     hypotheses.extend(denominator_hypothesis(family.f, family.n_first));
-    let operator_text = decomposition
-        .preserver
-        .as_ref()
-        .map_or_else(|| "the identity".to_string(), PreserverOperator::text);
+    let operator_text = preserver_text(decomposition);
     hypotheses.push(exact_hypothesis(
         "operator_identity",
         "the step operator T_n of the rule equals a_n(x) S_n",
@@ -1079,8 +1482,8 @@ fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedReg
              Ore algebra (S_n = {operator_text})"
         )),
     ));
-    hypotheses.extend(row_hypotheses(family, region));
-    hypotheses.push(family.degree_hypothesis.clone());
+    hypotheses.extend(row_hypotheses(family, region, claimed));
+    hypotheses.extend(family.degree_hypotheses.iter().cloned());
     hypotheses.extend(multiplier_hypotheses(decomposition, region, family.n_first));
     let mut reference = REFERENCE.to_string();
     let mut lean_declarations = Vec::new();
@@ -1104,13 +1507,28 @@ fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedReg
              (-inf, 0]",
         );
     }
+    if family.lag > 1 {
+        reference.push_str(&format!(
+            "; with lag L = {}, the induction runs in each residue class of n modulo L from its \
+             start row",
+            family.lag
+        ));
+    }
+    if let Some(text) = family.coordinates.text() {
+        reference.push_str(&format!(
+            "; the induction runs on the rows {text} (exact coordinate change of the rule; the \
+             rows P_n have every root in {} when the rows Q_n have every root in {})",
+            claimed.text(),
+            region.text()
+        ));
+    }
     if let Some(requested) = family.requested {
         let statement = format!(
             "the requested region {} contains the certified region {}",
             open_root_interval(requested),
-            region.text()
+            claimed.text()
         );
-        hypotheses.push(if region.lies_in(requested) {
+        hypotheses.push(if claimed.lies_in(requested) {
             exact_hypothesis("requested_root_region", &statement, Ok("exact".into()))
         } else {
             unresolved_hypothesis(
@@ -1121,13 +1539,19 @@ fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedReg
             )
         });
     }
-    let normal_form = format!(
-        "P_n = a_n(x) S_n(P_(n-1)) for n >= {}, with a_n(x) = {} and S_n = {operator_text}",
+    let letter = family.row_letter();
+    let lag = family.lag;
+    let mut normal_form = format!(
+        "{letter}_n = a_n(x) S_n({letter}_(n-{lag})) for n >= {}, with a_n(x) = {} and S_n = \
+         {operator_text}",
         family.n_first,
         decomposition.multiplier_text()
     );
+    if let Some(text) = family.coordinates.text() {
+        normal_form = format!("{text}: {normal_form}");
+    }
     Attempt {
-        region,
+        claimed,
         decomposition: decomposition.clone(),
         hypotheses,
         normal_form,
@@ -1154,20 +1578,15 @@ pub(super) fn iterated_preserver_report(
     if seeds.is_empty() {
         return Ok(report.not_applicable("the theorem needs a seed row"));
     }
-    let (terms, f) = match step_operator(rule) {
+    let (terms, f, lag) = match step_operator(rule) {
         Ok(step) => step,
         Err(reason) => return Ok(report.not_applicable(reason)),
     };
-    let candidates = decompositions(&terms, &f);
-    if candidates.is_empty() {
-        return Ok(report.not_applicable(
-            "the step T_n is not a multiplier a_n(x) after the identity or an operator of the \
-             preserver menu (phi(n, D), f(n, theta), the Euler step, x^m D^j, D^j x^m)",
-        ));
+    if seeds.len() < lag {
+        return Ok(
+            report.not_applicable(format!("the rule has lag {lag} and needs {lag} seed rows"))
+        );
     }
-    let n_first = first_index + seeds.len();
-    let start = n_first - 1;
-    let start_degree = vec_poly::degree(&seeds[seeds.len() - 1]).unwrap_or(0);
     // The requested region as the report records it: open at its finite ends
     // (so that a replay sees the same request).
     let requested = options.root_region.as_ref().map(|region| RealInterval {
@@ -1176,40 +1595,100 @@ pub(super) fn iterated_preserver_report(
         upper: region.upper.clone(),
         upper_closed: false,
     });
-    let family = Family {
-        terms: &terms,
-        f: &f,
-        first_index,
-        seeds,
+    let n_first = first_index + seeds.len();
+    let mut coordinate_list = vec![IteratedPreserverCoordinates::Identity];
+    coordinate_list.extend(coordinates::coordinate_candidates(
+        &terms,
+        lag,
         n_first,
-        start,
-        start_degree,
-        delta: degree_step(&terms),
-        previous_degree: degree_step(&terms)
-            .filter(|&delta| delta >= 0)
-            .map(|delta| previous_degree_polynomial(start, start_degree, delta)),
-        degree_hypothesis: degree_step_hypothesis(&terms, n_first, start, start_degree),
-        requested: requested.as_ref(),
-    };
-    let mut best: Option<Attempt> = None;
-    'regions: for region in ClosedRegion::ALL {
-        for decomposition in &candidates {
-            let attempt = attempt(&family, decomposition, region);
-            let proved = status_of(&attempt.hypotheses) == RealRootednessTheoremStatus::Proved;
-            if proved
-                || best
-                    .as_ref()
-                    .is_none_or(|b| attempt.open_count() < b.open_count())
-            {
-                best = Some(attempt);
-            }
-            if proved {
-                break 'regions;
+        &seeds[seeds.len() - lag..],
+    ));
+    let mut best: Option<(Attempt, Family<'_>)> = None;
+    'coordinates: for coordinates in coordinate_list {
+        let Some(family) = Family::new(
+            &terms,
+            &f,
+            lag,
+            coordinates,
+            first_index,
+            seeds,
+            requested.as_ref(),
+        ) else {
+            continue;
+        };
+        let candidates = decompositions(&family.terms, &f);
+        let mut found: Option<Attempt> = None;
+        let mut proved = false;
+        'regions: for region in ClosedRegion::ALL {
+            for decomposition in &candidates {
+                let attempt = attempt(&family, decomposition, region);
+                proved = status_of(&attempt.hypotheses) == RealRootednessTheoremStatus::Proved;
+                let better = found.as_ref().map_or_else(
+                    || {
+                        best.as_ref()
+                            .is_none_or(|(b, _)| attempt.open_count() < b.open_count())
+                    },
+                    |b| attempt.open_count() < b.open_count(),
+                );
+                if proved || better {
+                    found = Some(attempt);
+                }
+                if proved {
+                    break 'regions;
+                }
             }
         }
+        if let Some(attempt) = found {
+            best = Some((attempt, family));
+        }
+        if proved {
+            break 'coordinates;
+        }
     }
-    let attempt = best.expect("at least one decomposition and region");
+    let Some((attempt, family)) = best else {
+        return Ok(report.not_applicable(
+            "the step T_n is not a multiplier a_n(x) after the identity or an operator of the \
+             preserver menu (phi(n, D), f(n, theta), the Euler step, x^m D^j, D^j x^m)",
+        ));
+    };
     Ok(finish_report(report, &family, attempt))
+}
+
+/// Brändén's Corollary 2.5 for a step `T = g(x) S` free of `n` with `S` a
+/// proved Weyl step (module documentation, "Interlacing"): the first index
+/// `N` when `P_(N-1) ⪯ P_N` is checked exactly.
+fn weyl_step_interlacing_start(family: &Family<'_>, attempt: &Attempt) -> Option<usize> {
+    let applies = family.lag == 1
+        && family.coordinates.is_identity()
+        && family.delta == Some(1)
+        && family.f.len() <= 1
+        && family
+            .original_terms
+            .values()
+            .all(|c| c.iter().skip(1).all(|row| row.iter().all(Zero::is_zero)))
+        && attempt
+            .decomposition
+            .preserver
+            .as_ref()
+            .is_some_and(|operator| weyl_step_of(operator).is_some());
+    if !applies {
+        return None;
+    }
+    let previous = vec_poly::trim(&family.seeds[family.seeds.len() - 1]);
+    let f0 = family.f.first()?.clone();
+    let next = vec_poly::scale(
+        &ore_operator(family.original_terms).apply_row(&previous, family.n_first),
+        &f0.recip(),
+    );
+    let (previous, next) = (
+        integer_coefficients(&previous),
+        integer_coefficients(&vec_poly::trim(&next)),
+    );
+    if vec_poly::is_zero(&previous) || vec_poly::is_zero(&next) {
+        return None;
+    }
+    (crate::check_weak_interlacing_bigint_coeffs(&previous, &next) == Some(true))
+        .then_some(family.n_first)
 }
 
 fn finish_report(
@@ -1217,20 +1696,34 @@ fn finish_report(
     family: &Family<'_>,
     attempt: Attempt,
 ) -> RealRootednessTheoremReport {
-    let region = attempt.region;
+    let region = attempt.claimed;
     let delta = family.delta.unwrap_or(0).max(0) as usize;
+    let proved = status_of(&attempt.hypotheses) == RealRootednessTheoremStatus::Proved;
     let pure_linear = attempt.decomposition.preserver.is_none()
         && delta == 1
+        && family.lag == 1
+        && family.coordinates.is_identity()
         && family.terms.keys().all(|&d| d == 0);
-    let interlacing_from = pure_linear.then(|| {
-        extend_interlacing_backward(
-            family.seeds,
-            family.first_index,
-            family.n_first,
-            RowInterlacing::Weak,
-        )
+    let mut weyl_interlacing = false;
+    let interlacing_from = if pure_linear {
+        Some(family.n_first)
+    } else if proved {
+        let start = weyl_step_interlacing_start(family, &attempt);
+        weyl_interlacing = start.is_some();
+        start
+    } else {
+        None
+    }
+    .map(|from| {
+        extend_interlacing_backward(family.seeds, family.first_index, from, RowInterlacing::Weak)
     });
     report.reference = attempt.reference;
+    if weyl_interlacing {
+        report.reference.push_str(
+            "; a linear operator preserving real-rootedness preserves the alternation of two \
+             polynomials (P. Branden, Trans. Amer. Math. Soc. 358 (2006), Corollary 2.5)",
+        );
+    }
     report.normal_form = attempt.normal_form;
     report.hypotheses = attempt.hypotheses;
     report.lean_declarations = attempt.lean_declarations;
@@ -1238,6 +1731,9 @@ fn finish_report(
     // A step that lowers the degree has no certificate (its degree step is
     // not a valid record, and the check is not proved).
     let lowers_degree = family.delta.is_none_or(|d| d < 0);
+    let coordinates_note = family.coordinates.text().map_or(String::new(), |text| {
+        format!(" (in the coordinates {text})")
+    });
     report.iterated_preserver = (!lowers_degree).then(|| IteratedPreserverCertificate {
         induction_start: family.start,
         start_degree: family.start_degree,
@@ -1251,18 +1747,25 @@ fn finish_report(
         preserver: decomposition.preserver.clone(),
         region: region.root_interval(),
         operator_identity: format!(
-            "f(n) T_n = sum_d c_d(n, x) D^d equals f(n) a_n(x) S_n with a_n(x) = {}",
+            "f(n) T_n = sum_d c_d(n, x) D^d equals f(n) a_n(x) S_n with a_n(x) = {}{coordinates_note}",
             decomposition.multiplier_text()
         ),
+        lag: family.lag,
+        coordinates: family.coordinates.clone(),
     });
     let root_region = (region != ClosedRegion::RealLine).then(|| region.root_interval());
-    let claim_first = claim_first_index(family.first_index, family.seeds);
+    let claim_first = claim_first_index(family.first_index, family.seeds, family.lag);
+    let letter = family.row_letter();
+    let lag = family.lag;
     let mut statement = format!(
         "every P_n, n >= {claim_first}, is nonzero and real-rooted with every root in {}; deg \
-         P_n = deg P_(n-1) + {delta} for n >= {}",
+         {letter}_n = deg {letter}_(n-{lag}) + {delta} for n >= {}",
         region.text(),
         family.n_first
     );
+    if let Some(text) = family.coordinates.text() {
+        statement.push_str(&format!(" ({text})"));
+    }
     if claim_first > family.first_index {
         statement.push_str(&format!(
             "; P_{}, ..., P_{} are zero or real-rooted with every root in {} (seed rows, \
@@ -1273,10 +1776,17 @@ fn finish_report(
         ));
     }
     if let Some(from) = interlacing_from {
-        statement.push_str(&format!(
-            "; P_(n-1) interlaces P_n (weakly: P_n = a_n P_(n-1) with a_n linear adds one real \
-             root) for n >= {from}"
-        ));
+        if weyl_interlacing {
+            statement.push_str(&format!(
+                "; P_(n-1) interlaces P_n (weakly: the step preserves the alternation of \
+                 P_(N-1) and P_N, Branden's Corollary 2.5) for n >= {from}"
+            ));
+        } else {
+            statement.push_str(&format!(
+                "; P_(n-1) interlaces P_n (weakly: P_n = a_n P_(n-1) with a_n linear adds one \
+                 real root) for n >= {from}"
+            ));
+        }
     }
     report.finish(RealRootednessTheoremConclusion {
         first_index: claim_first,
