@@ -1,0 +1,32 @@
+[build-system]
+requires = ["maturin>=1.9.4,<2"]
+build-backend = "maturin"
+
+[project]
+# The PyPI name `polytool` belongs to an unrelated project: choose the
+# distribution name before the first upload (the import name stays `polytool`).
+name = "polytool"
+description = "Exact polynomial, recurrence and real-rootedness tools (Python bindings of the Rust polytool library)"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Per Alexandersson", email = "per.w.alexandersson@gmail.com" }]
+requires-python = ">=3.9"
+keywords = ["polynomials", "real-rootedness", "interlacing", "recurrences", "combinatorics"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/PerAlexandersson/polytool"
+Documentation = "https://github.com/PerAlexandersson/polytool/blob/main/doc/python.md"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "polytool._polytool"

@@ -4,7 +4,7 @@
 
 - The crate must build standalone.  Its manifest, tests, examples, build script,
   and published sources must not use path dependencies outside this directory
-  (the in-tree `crates/`, `mcp/`, and `web/` packages are fine).
+  (the in-tree `crates/`, `mcp/`, `web/`, and `python/` packages are fine).
 - Validate with `cargo metadata --locked --format-version 1 --no-deps`.
 - Keep build output (`target/`, `pkg/`, and similar) out of the source tree,
   for example by setting `CARGO_TARGET_DIR`.
@@ -41,8 +41,8 @@
   - standard sequences: `sequences` (with `deco` and `literature`).
 - The CLI is `src/bin/polytool/`: `main.rs` dispatches, each subcommand (or
   close group) has its own module, and `input`, `json_out` and `help` hold the
-  shared parsing, JSON fragments and help text.  `mcp/` and `web/` are adapters
-  over the library, not separate implementations.  Put mathematics in the library
+  shared parsing, JSON fragments and help text.  `mcp/`, `web/` and
+  `python/` (PyO3 bindings, `doc/python.md`) are adapters over the library, not separate implementations.  Put mathematics in the library
   and keep adapters thin.
 - The web page `web/index.html` is markup only. Styles are in `web/app.css` and the
   classic (non-module) scripts in `web/js/`, loaded in the order listed in
@@ -124,7 +124,7 @@
 - Update the documentation and focused tests in the same change when public API,
   CLI input/output, exactness guarantees, or standalone build behavior changes.
   `README.md` is a short landing page; the detailed material lives in `doc/`
-  (`cli*.md` for the CLI reference, `library.md`, `mcp.md` and `mcp/README.md`,
+  (`cli*.md` for the CLI reference, `library.md`, `mcp.md` and `mcp/README.md`, `python.md`,
   `web.md`, `development.md`, `algorithms.md`) and in `CHANGELOG.md`.  Put CLI
   details in the matching `doc/cli*.md` page and release notes in `CHANGELOG.md`.
 - Every module starts with `//!` documentation (purpose, entry points,

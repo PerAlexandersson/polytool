@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- Python bindings (issue #40): the new crate `python/` (PyO3 0.30 and
+  maturin, one `abi3` wheel for CPython 3.9 and newer, Rust 1.85) builds the
+  package `polytool`, a thin adapter over the library.  Coefficients are exact
+  Python `int` and `fractions.Fraction` values in ascending degree order;
+  floats are refused.  The first surface: the `Polynomial` class (arithmetic,
+  polynomial division over Q, evaluation, composition, shift, dilation,
+  reversal, Bernstein, magic and arbitrary basis coordinates);
+  `is_real_rooted`, `count_real_roots`, `isolate_real_roots` (exact
+  enclosures with multiplicities), `interlaces` (directed, `None` when the
+  degrees do not admit the test), `interlaces_either_order`, the coefficient
+  predicates, `gamma_coefficients`, `discriminant`, `resultant` and
+  `properties` (an item of `polytool properties --json`);
+  `find_recurrence(rows, **options)` with the CLI search options under
+  spelled-out names, returning a `Recurrence` (`generate`, lazy `iterate`,
+  `latex`, `to_json`/`from_json`, `reindexed`, `match_theorems`) whose
+  `to_json(indent=2)` equals `polytool recurrence --json`;
+  `prove_real_rooted` (`ProofReport` with `status`, `route`, `certificate`,
+  `attempts` and an exact `verify()` replay, the report of `recurrence-prove`)
+  and `certify_leading_coefficient` (the certificate of `recurrence-degree`);
+  and `polytool.oeis` (`ids`, `info`, `generate`, `recurrence`).  Reports
+  convert to `dict` through their existing JSON schemas; notebooks get
+  `_repr_latex_`.  A pytest suite checks big integers, fractions, round trips,
+  the docstring and tutorial examples, and parity with the CLI JSON; the
+  workflow `.github/workflows/python.yml` builds wheels on Linux, macOS and
+  Windows and runs the suite.  Publishing to PyPI stays disabled until the
+  owner enables it.  Guide: `doc/python.md`.
+
 - New module `recurrence::leading_coefficient` (issue #37):
   `certify_leading_coefficient` decides a degree law `deg P_n = D(n)`,
   periodic by residue class (`RecurrenceDegreeLaw`: affine laws, half growth,
