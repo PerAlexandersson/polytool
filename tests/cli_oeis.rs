@@ -119,7 +119,7 @@ fn oeis_info_exports_recurrence_dialects() {
         1
     );
     assert!(value["recurrence_data"].get("search").is_none());
-    assert!(value["latex"].as_str().unwrap().contains("P(n-1)"));
+    assert!(value["latex"].as_str().unwrap().contains("P_{n-1}"));
     assert!(value["mathematica"].as_str().unwrap().contains("P["));
     assert!(value["sage"].as_str().unwrap().contains("def P"));
     assert!(value["python"].as_str().unwrap().contains("def P"));

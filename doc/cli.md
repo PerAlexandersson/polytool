@@ -1,5 +1,13 @@
 # CLI usage
 
+For complete examples see [CLI workflows](workflows.md). Run `polytool --help`
+for commands grouped by task, `polytool help --json` for the command index,
+and `polytool oeis add --help` for nested help. `sequence --format rows`
+emits coefficient lists suitable for piping into the checking and recurrence
+commands. Resultants and discriminants also support exact `--json` output.
+Invalid options and input return a nonzero exit status; result fields still
+distinguish negative mathematical answers from failed commands.
+
 The `polytool` command-line interface reads polynomials from standard input and
 writes text or, with `--json`, machine-readable output.  This page covers the
 input format and the general-purpose commands.  The commands for specific areas
@@ -27,6 +35,10 @@ For the Rust API see [library.md](library.md); for the MCP server see
 Polynomials are given as comma-separated integer coefficients in
 **ascending degree order**: `a_0, a_1, ..., a_d` represents
 `a_0 + a_1 t + ... + a_d t^d`.
+
+Parse errors identify the one-based physical input line, including skipped
+comments and blank lines. Rational-list readers also identify the coefficient
+position. These source locations are separate from zero-based report row indices.
 
 A text file `polys.txt` might look like:
 
@@ -56,7 +68,15 @@ CLI.
 
 ```sh
 polytool real-rooted < polys.txt
+polytool real-rooted --json < polys.txt
 ```
+
+The root-only JSON response is `{"items":[{"index":0,"degree":2,
+"real_rooted":true}]}`. Indices are zero-based positions among parsed
+polynomials. Trailing zero coefficients do not affect the degree; the zero
+polynomial has degree `null`, and a nonzero constant has degree `0`.
+This command performs only the real-rootedness test, without computing the
+additional properties reported by `properties --json`.
 
 `real-rooted` accepts arbitrary-size integer coefficients in dense-list and
 expanded-polynomial input.
@@ -250,8 +270,13 @@ polytool bkw-scout \
 ```
 
 The same symbol can be supplied on stdin, one coefficient polynomial per line.
-Use `--format json` for machine-readable output, and `--mathematica` to print a
-`Reduce` skeleton for exact equal-modulus follow-up.
+Use `--json` (or `--format json`) for machine-readable output, and
+`--mathematica` for a `Reduce` skeleton for exact equal-modulus follow-up.
+Together these options put the skeleton in a `mathematica` string field in
+the same JSON document. Floating-point options must be finite; `--tol` and
+`--max-iter` must be positive, and `--min-imag` nonnegative. Invalid options
+are rejected before reading or scouting the symbol. If numerical overflow
+prevents valid JSON, the command fails with a diagnostic and no partial result.
 
 ## Compute resultant/discriminant
 

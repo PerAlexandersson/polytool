@@ -604,9 +604,7 @@ pub(crate) fn cmd_bench_real_rootedness(args: &[String]) {
     let options = match parse_options(args) {
         Ok(options) => options,
         Err(error) => {
-            eprintln!("{error}");
-            print_real_rootedness_help();
-            std::process::exit(1);
+            crate::input::usage_error("bench", &error);
         }
     };
     let baseline = match options.baseline.as_ref().map(read_baseline).transpose() {

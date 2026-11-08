@@ -142,7 +142,7 @@ pub enum LiftOperation {
         basis: String,
         /// The basis family: rule, first index `i0` and seeds
         /// (`polytool.recurrence.v1`).
-        basis_family: RecurrenceJson,
+        basis_family: Box<RecurrenceJson>,
         /// The source interval of the map theorem used, as text (empty
         /// when no theorem conclusion applies).
         source_interval: String,
@@ -1136,6 +1136,7 @@ impl VeroneseSectionCertification {
 fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
     match route {
         VeroneseParentProofRoute::PeriodicProduct => "periodic_product",
+        VeroneseParentProofRoute::ProductRecurrence => "product_recurrence",
         VeroneseParentProofRoute::PaperTheorem => "paper_theorem",
         VeroneseParentProofRoute::RootDomain => "root_domain",
         VeroneseParentProofRoute::ThreeTermRecurrence => "three_term_recurrence",

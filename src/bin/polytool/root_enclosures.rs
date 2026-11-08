@@ -3,12 +3,19 @@
 
 use crate::input::error_text;
 use crate::input::{is_help_arg, read_stdin_or_exit};
-use polytool::recurrence::{root_enclosures, RootEnclosureRequest};
+use crate::json_out::print_json_result;
+use polytool::recurrence::{
+    root_enclosures, verify_root_enclosures, RootEnclosureReport, RootEnclosureRequest,
+    ROOT_ENCLOSURES_SCHEMA,
+};
 
 pub(crate) fn print_root_enclosures_help() {
     println!("Usage:");
     println!("  polytool root-enclosures [--compact] < request.json");
+    println!("  polytool root-enclosures --verify [--compact] < report.json");
     println!("  polytool root-enclosures --help");
+    println!("  --json explicitly requests JSON (already the default).");
+    println!("  --verify recomputes the embedded request and checks the complete report.");
     println!();
     println!("Isolate the real roots of each polynomial exactly. Every distinct real root");
     println!("gets a rational enclosure [lower, upper] and its multiplicity: lower == upper");
@@ -51,9 +58,12 @@ pub(crate) fn cmd_root_enclosures(args: &[String]) {
         return;
     }
     let mut compact = false;
+    let mut verify = false;
     for arg in args {
         match arg.as_str() {
             "--compact" => compact = true,
+            "--verify" => verify = true,
+            "--json" => {}
             other => {
                 eprintln!("unknown option: {other}; parameters belong in the JSON request");
                 std::process::exit(2);
@@ -61,21 +71,22 @@ pub(crate) fn cmd_root_enclosures(args: &[String]) {
         }
     }
     let input = read_stdin_or_exit();
+    if verify {
+        let outcome = serde_json::from_str::<RootEnclosureReport>(&input)
+            .map_err(error_text)
+            .and_then(|report| {
+                verify_root_enclosures(&report).map_err(error_text)?;
+                Ok(serde_json::json!({
+                    "schema": ROOT_ENCLOSURES_SCHEMA,
+                    "verified": true,
+                    "polynomials": report.items.len(),
+                }))
+            });
+        print_json_result(outcome, compact);
+        return;
+    }
     let outcome = serde_json::from_str::<RootEnclosureRequest>(&input)
         .map_err(error_text)
         .and_then(|request| root_enclosures(&request).map_err(error_text));
-    match outcome {
-        Ok(report) => {
-            let text = if compact {
-                serde_json::to_string(&report)
-            } else {
-                serde_json::to_string_pretty(&report)
-            };
-            println!("{}", text.expect("serialize root enclosures"));
-        }
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(2);
-        }
-    }
+    print_json_result(outcome, compact);
 }

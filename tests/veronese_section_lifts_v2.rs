@@ -446,48 +446,37 @@ fn index_dependent_parent_and_attestations() {
         ..VeroneseSectionCertifyOptions::default()
     };
 
-    // The parent factor (x + m)^3 depends on the index and has degree three:
-    // not a periodic product, no paper theorem matches, and no theorem route
-    // applies.
+    // The parent factor (x + m)^3 depends on the index; the general product
+    // rule proves it without an attestation or root-domain transformation
+    // search.
     let open = run(&without_root_domain(Vec::new()));
     assert!(matches!(
         open.identity,
         VeroneseSectionIdentityStatus::Certified { .. }
     ));
-    assert_eq!(
-        open.verdict,
-        VeroneseSectionVerdict::IdentityCertifiedParentOpen
-    );
+    assert_eq!(open.verdict, VeroneseSectionVerdict::Proved);
 
-    // An attestation of a different record, or one starting too late, is
-    // not applied; the exact record gives a conditional verdict.
+    assert_eq!(
+        open.parent_proof.route,
+        Some(VeroneseParentProofRoute::ProductRecurrence)
+    );
+    // Attestations, whether matching, different or late, cannot downgrade
+    // the unconditional product proof to a conditional verdict.
     let different = run(&without_root_domain(vec![attestation(
         product_parent(&[1, 1]),
         0,
     )]));
-    assert_eq!(
-        different.verdict,
-        VeroneseSectionVerdict::IdentityCertifiedParentOpen
-    );
+    assert_eq!(different.verdict, VeroneseSectionVerdict::Proved);
     let late = run(&without_root_domain(vec![attestation(parent.clone(), 1)]));
-    assert_eq!(
-        late.verdict,
-        VeroneseSectionVerdict::IdentityCertifiedParentOpen
-    );
+    assert_eq!(late.verdict, VeroneseSectionVerdict::Proved);
     let applied = run(&without_root_domain(vec![attestation(parent.clone(), 0)]));
-    assert_eq!(
-        applied.verdict,
-        VeroneseSectionVerdict::ConditionalOnAttestation
-    );
-    assert_eq!(
-        applied.parent_proof.conditional_on,
-        vec!["test attestation".to_string()]
-    );
+    assert_eq!(applied.verdict, VeroneseSectionVerdict::Proved);
+    assert!(applied.parent_proof.conditional_on.is_empty());
     assert_replays(&applied);
 
     // For the first-order parent P_m = m (1 + x) P_(m-1) of the even sections
-    // of m! (1 + x)^m, the root-domain route (identity map, Rolle induction)
-    // proves the parent outright, and without it the Liu--Wang route does.
+    // of m! (1 + x)^m, preserve Liu--Wang's stronger interlacing conclusion
+    // even though product induction already proves real-rootedness.
     let input = factorial_binomial_input();
     let seeds = rows(&[&[1], &[1]]);
     let first_order = factorial_binomial_parent();
@@ -500,7 +489,7 @@ fn index_dependent_parent_and_attestations() {
     assert_eq!(proved.verdict, VeroneseSectionVerdict::Proved);
     assert_eq!(
         proved.parent_proof.route,
-        Some(VeroneseParentProofRoute::RootDomain)
+        Some(VeroneseParentProofRoute::LiuWang)
     );
     let proved = run_with(
         &input,

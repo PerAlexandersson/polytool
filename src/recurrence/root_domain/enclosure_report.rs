@@ -91,6 +91,26 @@ pub struct RootEnclosureReport {
     pub items: Vec<RootEnclosureItem>,
 }
 
+/// Replay a root-enclosure report from its embedded request and require exact
+/// equality, including the schema, enclosures, multiplicities and verdicts.
+///
+/// This verifies the supplied finite computation, not an infinite family.
+/// Malformed requests retain the limits and errors of [`root_enclosures`].
+pub fn verify_root_enclosures(report: &RootEnclosureReport) -> Result<(), RecurrenceError> {
+    if report.schema != ROOT_ENCLOSURES_SCHEMA {
+        return Err(RecurrenceError::InvalidInput(format!(
+            "expected root-enclosure schema {ROOT_ENCLOSURES_SCHEMA}, got {}",
+            report.schema
+        )));
+    }
+    if root_enclosures(&report.request)? != *report {
+        return Err(RecurrenceError::VerificationFailed(
+            "root enclosures differ from the exact recomputation".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// Exact rational root enclosures with multiplicities, and exact interval
 /// tests, for a batch of polynomials.
 ///

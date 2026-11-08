@@ -2,14 +2,13 @@
 //! sections are a recurrence-defined sequence (thin adapter over
 //! `polytool::recurrence::find_veronese_section_lifts`).
 
-use crate::input::{error_text, is_help_arg, parse_usize_option, read_limited_text};
+use crate::input::{error_text, is_help_arg, parse_usize_option};
+use crate::recurrence_input::read_recurrence_json;
 use polytool::recurrence::{
-    find_veronese_section_lifts, format_characteristic_polynomial, BigRational, RecurrenceJson,
+    find_veronese_section_lifts, format_characteristic_polynomial, BigRational,
     VeroneseSectionLiftOptions, VeroneseSectionLiftReport, MAX_VERONESE_SECTION_MODULUS,
 };
 use polytool::Polynomial;
-use std::fs;
-use std::io;
 
 pub(crate) fn print_recurrence_veronese_lifts_help() {
     let defaults = VeroneseSectionLiftOptions::default();
@@ -57,6 +56,8 @@ pub(crate) fn print_recurrence_veronese_lifts_help() {
     println!("Options:");
     println!("  --recurrence <file|->   Read the recurrence JSON from a file, or stdin with -");
     println!("                          (default: stdin)");
+    println!("  --candidate <index>    Select a representation menu entry (0-based)");
+    println!("                          Accepts recurrence records, theorem wrappers and menus.");
     println!(
         "  --max-modulus <r>       Largest modulus, 2..={MAX_VERONESE_SECTION_MODULUS} (default {})",
         defaults.max_modulus
@@ -160,8 +161,17 @@ fn optional_index(index: Option<usize>) -> String {
 
 fn parse_args(
     args: &[String],
-) -> Result<(Option<String>, VeroneseSectionLiftOptions, bool), String> {
+) -> Result<
+    (
+        Option<String>,
+        Option<usize>,
+        VeroneseSectionLiftOptions,
+        bool,
+    ),
+    String,
+> {
     let mut path = None;
+    let mut candidate = None;
     let mut options = VeroneseSectionLiftOptions::default();
     let mut json = false;
     let mut index = 0;
@@ -174,6 +184,9 @@ fn parse_args(
                         .cloned()
                         .ok_or("--recurrence expects a file or -")?,
                 );
+            }
+            "--candidate" => {
+                candidate = Some(parse_usize_option(args, &mut index, "--candidate")?);
             }
             "--max-modulus" => {
                 options.max_modulus = parse_usize_option(args, &mut index, "--max-modulus")?
@@ -191,7 +204,7 @@ fn parse_args(
         }
         index += 1;
     }
-    Ok((path, options, json))
+    Ok((path, candidate, options, json))
 }
 
 pub(crate) fn cmd_recurrence_veronese_lifts(args: &[String]) {
@@ -199,15 +212,8 @@ pub(crate) fn cmd_recurrence_veronese_lifts(args: &[String]) {
         print_recurrence_veronese_lifts_help();
         return;
     }
-    let outcome = parse_args(args).and_then(|(path, options, json)| {
-        let text = match path.as_deref() {
-            None | Some("-") => read_limited_text(io::stdin(), "recurrence JSON from stdin"),
-            Some(path) => fs::File::open(path)
-                .map_err(|e| format!("failed to open recurrence JSON `{path}`: {e}"))
-                .and_then(|file| read_limited_text(file, &format!("recurrence JSON `{path}`"))),
-        }?;
-        let record: RecurrenceJson = serde_json::from_str(&text)
-            .map_err(|e| format!("failed to parse recurrence JSON: {e}"))?;
+    let outcome = parse_args(args).and_then(|(path, candidate, options, json)| {
+        let record = read_recurrence_json(path.as_deref().unwrap_or("-"), candidate)?;
         let (recurrence, first_index, rows) = record.to_recurrence_parts().map_err(error_text)?;
         let report = find_veronese_section_lifts(&recurrence, &rows, first_index, &options)
             .map_err(error_text)?;

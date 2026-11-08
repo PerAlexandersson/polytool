@@ -2,6 +2,78 @@
 
 ## Unreleased
 
+- `recurrence-prove` and MCP `discover_recurrence_proofs` try six general
+  recurrence criteria with replayable exact certificates and explicit
+  obligations; no named-sequence lookup or external attestation is used.
+  `--verify` / `verify_recurrence_proofs` replays the complete report.
+- General product induction supports index-dependent linear/quadratic and
+  separable multipliers, plus bounded factorization of higher-degree
+  multipliers with constant leading coefficient. It is also available to
+  parent transfers when the required negative-root domain is proved.
+  Rust proof certificates remain distinct from Lean replay.
+
+- Recurrence alternatives have an aligned text comparison table, stable
+  candidate numbers, verification counts and explicit checked singularities.
+  The unsupported `--representations --theorem-matches` combination now fails
+  before reading input and gives the existing per-candidate theorem command.
+  Search results and JSON/LaTeX formats are unchanged.
+- Polynomial input errors include physical line numbers; rational-list errors
+  also identify the coefficient. Rational inputs reuse the library parser.
+  Report row indices and accepted input syntax are unchanged.
+- Invalid benchmark/PF-pencil arguments consistently exit with status 2.
+  Usage hints go to stderr, keeping stdout clear on argument errors; explicit
+  help/version requests reject extra arguments. Bash completion handles
+  `help oeis` and stops suggesting commands in unrelated argument positions.
+- `root-enclosures --verify` replays saved reports through a shared exact
+  library verifier, also used by the browser. JSON-only enclosure, transform,
+  implicit and representation-search commands accept explicit `--json`.
+- Veronese lift searches accept theorem wrappers and representation menus
+  through the same reader as recurrence generation and theorem matching.
+- BKW scout validates formats and finite numerical options before searching.
+  `--json --mathematica` emits one JSON document with a formula string, and
+  non-finite numerical results fail before writing JSON.
+- CLI help groups commands by task; `help --json` exports their names, aliases
+  and summaries. OEIS maintenance subcommands now reach their detailed help.
+  `completions bash|zsh|fish` emits command-name shell completion scripts.
+- `sequence --format rows` supplies coefficient lists for pipelines;
+  `recurrence-generate --format rows` names its existing default format.
+  Recurrence generation and theorem matching accept theorem wrappers and
+  representation menus, with explicit zero-based `--candidate` selection
+  required for menus containing multiple entries.
+- Invalid CLI options and input no longer silently succeed in the affected
+  checking, recurrence, BKW and sieving commands. `resultant` requires exactly
+  two polynomials. Resultants and discriminants support exact decimal-string
+  `--json` output; unsupported options are rejected.
+- Interlacing reports reuse successful strict tests for the weak result.
+  Shared-root, same-degree, failed and incompatible cases retain their checks.
+- A static documentation builder combines task recipes, an executable-derived
+  CLI reference and searchable rustdoc. Its GitHub workflow builds artifacts
+  and supports separately requested manual Pages publication.
+
+- Square elimination delays scaling rows whose pivot-column entry is zero,
+  using the same exact row-level invariant as the general solver. Sparse
+  systems avoid unnecessary updates; pivot choice and exact results are unchanged.
+
+- Square solves return immediately when exact elimination proves singularity,
+  instead of repeating the solve with rational arithmetic. Non-exact division
+  still requests the existing fallback.
+
+- Exact recurrence fitting builds integer matrices directly when source rows
+  and derivatives are integral. Fractional inputs retain the rational path;
+  fitted coefficients may still be rational, and exact verification is unchanged.
+
+- Rational square systems clear denominators once per equation, including the
+  right-hand side, and use the existing fraction-free integer solver. Integral
+  inputs retain their direct conversion path; exact results are unchanged.
+
+- Exact linear solves stop as soon as a contradictory row proves inconsistency;
+  consistent solves and complete kernel/certificate reductions retain their
+  existing rank and budget contracts.
+- Integer elimination combines delayed row scaling with its update and skips
+  the products that cancel in the pivot column. Integer square solves also use
+  integer back substitution, avoiding rational reductions in each dot product.
+  Exact outputs and certificate budgets are unchanged.
+
 This release is `polytool` 0.6.0, `exact-real-roots` 0.2.0 and the new
 `ore-algebra` 0.1.0.  Existing CLI
 commands and flags, MCP tool names and the web export names are unchanged; new
@@ -9,6 +81,18 @@ commands and tools are listed under Additions.  Some MCP responses now give
 coefficients as decimal strings (see Breaking changes).
 
 Breaking changes:
+
+- `RecurrenceJson` has a new optional `latex` presentation field; Rust struct
+  literals must add `latex: None`. Older JSON records remain readable. The
+  recurrence generator ignores this field, and `reindexed` refreshes it when
+  present. `Recurrence::to_latex` now uses subscripts and cleaner signs, while
+  plain-text output keeps `P(n)`.
+
+- `AdaptiveSearchResult`, `RecurrenceJsonSearch` and `RecurrenceRepresentation`
+  have a new `verification_equations` field; Rust struct literals must add it.
+  Older serialized records without this field remain readable (default 0).
+- `LiftOperation::BasisMap::basis_family` is boxed to keep the enum compact
+  as recurrence metadata grows. Its serialized JSON is unchanged.
 
 - `recurrence::RealRootednessTheorem` and
   `recurrence::VeroneseParentProofRoute` have the new variant
@@ -390,6 +474,26 @@ Performance:
   14.5 s to 0.94 s, 4.9 s to 0.19 s).
 
 Additions:
+
+- `polytool recurrence --latex` (alias `--format latex`) prints initial rows
+  and the recurrence's starting index, one formula per line. Search JSON
+  includes the same presentation in `latex`; coefficients remain expanded.
+  `--representations --latex` prints the candidate menu as LaTeX definitions.
+  `RecurrenceJson::{to_latex, with_latex}` expose the complete renderer in Rust.
+- LaTeX output groups polynomial coefficients, omits unit multipliers, puts
+  negative signs outside rational fractions, and handles zero right sides,
+  forcing terms and derivatives with subscripted row indices.
+
+- `polytool real-rooted --json` returns only the exact real-rootedness result,
+  zero-based input index and degree for each polynomial; the zero polynomial
+  has degree `null`. Plain-text output is unchanged.
+- Recurrence search reports `verification_equations`, the dense coefficient
+  slots checked on held-out rows before cancellation, not an independence count.
+- `polytool recurrence --first-index N` uses the requested numbering in every
+  output, with skipped input rows still counted. `recurrence-generate` accepts
+  the same flag to relabel a record while preserving its generated rows.
+  `RecurrenceJson::reindexed` exposes this exact index substitution in Rust.
+  `RecurrenceRepresentations::reindexed` also updates complexity and the frontier.
 
 - `recurrence::check_liu_wang_three_term_theorem`: Liu and Wang's Theorem 2.1
   and Corollary 2.4 (Adv. Appl. Math. 38 (2007) 542-560) for lag rules

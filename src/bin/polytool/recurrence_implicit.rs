@@ -4,6 +4,7 @@
 
 use crate::input::error_text;
 use crate::input::{is_help_arg, read_stdin_or_exit};
+use crate::json_out::print_json_result;
 use polytool::recurrence::{
     assess_generating_description, implicit_transform_recurrence_with_root_domain,
     parse_implicit_transform_input, search_implicit_relations, verify_implicit_relation_search,
@@ -107,6 +108,7 @@ pub(crate) fn print_recurrence_implicit_help() {
     );
     println!("  --verify-search  Replay a search report and re-check every kernel certificate");
     println!("  --compact   Print compact JSON");
+    println!("  --json      Explicit JSON output (already the default)");
     println!("  -h, --help  Print this help text");
     println!();
     println!("Direct search (--search) request fields:");
@@ -172,6 +174,7 @@ pub(crate) fn cmd_recurrence_implicit(args: &[String]) {
             "--search" => search = true,
             "--verify-search" => verify_search = true,
             "--compact" => compact = true,
+            "--json" => {}
             other => {
                 eprintln!("unknown option: {other}; bounds belong in the JSON request");
                 std::process::exit(2);
@@ -236,18 +239,5 @@ pub(crate) fn cmd_recurrence_implicit(args: &[String]) {
             })
             .and_then(|report| serde_json::to_value(report).map_err(error_text))
     };
-    match outcome {
-        Ok(value) => {
-            let text = if compact {
-                serde_json::to_string(&value)
-            } else {
-                serde_json::to_string_pretty(&value)
-            };
-            println!("{}", text.expect("serialize JSON value"));
-        }
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(2);
-        }
-    }
+    print_json_result(outcome, compact);
 }

@@ -270,7 +270,7 @@ pub(crate) fn cmd_family_check(args: &[String]) {
         Ok(options) => options,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let mut parse_errors = Vec::new();

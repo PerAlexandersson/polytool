@@ -13,6 +13,7 @@ mod bicyclic_sieving;
 mod bkw_scout;
 mod brenti_recognize;
 mod coefficient_tests;
+mod commands;
 mod cyclic_sieving;
 mod cyclic_sieving_sequence;
 mod ehrhart;
@@ -30,6 +31,8 @@ mod pf_pencil;
 mod properties;
 mod recurrence;
 mod recurrence_implicit;
+mod recurrence_input;
+mod recurrence_prove;
 mod recurrence_search_representations;
 mod recurrence_theorems;
 mod recurrence_transform;
@@ -52,7 +55,7 @@ use crate::enumerate_real_rooted::cmd_enumerate_real_rooted;
 use crate::expansion::{cmd_bernstein_expansion, cmd_gamma_expansion};
 use crate::family_check::cmd_family_check;
 use crate::help::{print_command_help, print_top_level_help};
-use crate::input::is_help_arg;
+use crate::input::{is_help_arg, usage_error};
 use crate::interlacing::{cmd_interlacing, cmd_interlacing_profile};
 use crate::left_production::cmd_left_production;
 use crate::oeis::cmd_oeis;
@@ -92,6 +95,13 @@ fn exit_quietly_on_broken_pipe() {
     }));
 }
 
+fn print_help_path(path: &[String]) -> bool {
+    if path.first().is_some_and(|name| name == "oeis") {
+        return crate::oeis::print_oeis_subcommand_help(path.get(1).map(String::as_str));
+    }
+    path.first().is_some_and(|name| print_command_help(name))
+}
+
 fn main() {
     exit_quietly_on_broken_pipe();
     let args: Vec<String> = std::env::args().collect();
@@ -103,16 +113,33 @@ fn main() {
     let cmd = &args[1];
     let rest = &args[2..];
     if matches!(cmd.as_str(), "-V" | "--version") {
+        if !rest.is_empty() {
+            usage_error("", "--version does not accept additional arguments");
+        }
         println!("{}", polytool::version::build_version());
         return;
     }
-    if is_help_arg(cmd) {
+    if cmd == "help" && rest == ["--json"] {
+        crate::commands::print_metadata();
+        return;
+    }
+    if is_help_arg(cmd) || cmd == "help" {
+        let valid_path = if cmd == "help" {
+            rest.len() <= 1 || (rest[0] == "oeis" && rest.len() == 2)
+        } else {
+            rest.is_empty()
+        };
+        if !valid_path {
+            usage_error(
+                "",
+                "expected `polytool help <command>` or `polytool help oeis <subcommand>`",
+            );
+        }
         if cmd == "help" && !rest.is_empty() {
             if is_help_arg(&rest[0]) {
                 print_top_level_help();
-            } else if !print_command_help(&rest[0]) {
-                eprintln!("Unknown command: {}", rest[0]);
-                std::process::exit(1);
+            } else if !print_help_path(rest) {
+                usage_error("", &format!("unknown help topic: {}", rest.join(" ")));
             }
         } else {
             print_top_level_help();
@@ -120,52 +147,16 @@ fn main() {
         return;
     }
     if rest.iter().any(|arg| is_help_arg(arg)) {
-        if !print_command_help(cmd) {
-            eprintln!("Unknown command: {}", cmd);
-            std::process::exit(1);
+        if !print_help_path(&args[1..]) {
+            usage_error("", &format!("unknown help topic: {}", args[1..].join(" ")));
         }
         return;
     }
 
-    match cmd.as_str() {
-        "real-rooted" => cmd_real_rooted(),
-        "interlacing" => cmd_interlacing(rest),
-        "interlacing-profile" => cmd_interlacing_profile(rest),
-        "properties" => cmd_properties(rest),
-        "gamma-expansion" | "gamma" => cmd_gamma_expansion(rest),
-        "bernstein-expansion" | "bernstein" => cmd_bernstein_expansion(rest),
-        "family-check" => cmd_family_check(rest),
-        "sequence" => cmd_sequence(rest),
-        "oeis" => cmd_oeis(rest),
-        "pf-pencil" | "pf-bidiagonal-pencil" => cmd_pf_pencil(rest),
-        "recurrence" => cmd_recurrence(rest),
-        "recurrence-generate" => cmd_recurrence_generate(rest),
-        "recurrence-transform" => cmd_recurrence_transform(rest),
-        "recurrence-theorems" => cmd_recurrence_theorems(rest),
-        "recurrence-veronese-lifts" => cmd_recurrence_veronese_lifts(rest),
-        "root-enclosures" => cmd_root_enclosures(rest),
-        "recurrence-implicit" => cmd_recurrence_implicit(rest),
-        "recurrence-search-representations" => cmd_recurrence_search_representations(rest),
-        "bench" => cmd_bench(rest),
-        "bkw-scout" => cmd_bkw_scout(rest),
-        "resultant" => cmd_resultant(),
-        "discriminant" => cmd_discriminant(),
-        "coefficient-tests" => cmd_coefficient_tests(rest),
-        "hstar-to-ehrhart" => cmd_hstar_to_ehrhart(rest),
-        "ehrhart-to-hstar" => cmd_ehrhart_to_hstar(rest),
-        "hstar-inequalities" => cmd_hstar_inequalities(rest),
-        "cyclic-sieving" => cmd_cyclic_sieving(rest),
-        "cyclic-sieving-sequence" => cmd_cyclic_sieving_sequence(rest),
-        "bicyclic-sieving" => cmd_bicyclic_sieving(rest),
-        "stapledon" => cmd_stapledon(rest),
-        "tnn-network" => cmd_tnn_network(rest),
-        "brenti-recognize" => cmd_brenti_recognize(rest),
-        "enumerate-real-rooted" => cmd_enumerate_real_rooted(rest),
-        "pf-network" => cmd_pf_network(rest),
-        "left-production" => cmd_left_production(rest),
-        _ => {
-            eprintln!("Unknown command: {}", cmd);
-            std::process::exit(1);
-        }
+    if let Some(command) = crate::commands::find(cmd) {
+        (command.run)(rest);
+    } else {
+        eprintln!("Unknown command: {cmd}. Run `polytool --help` for available commands.");
+        std::process::exit(2);
     }
 }

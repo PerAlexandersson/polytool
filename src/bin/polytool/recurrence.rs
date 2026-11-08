@@ -4,9 +4,9 @@
 use crate::help::print_rational_coefficient_input_help;
 use crate::input::error_text;
 use crate::input::{
-    is_help_arg, next_option_value, parse_usize_option, read_limited_text, read_polys_rational,
-    read_stdin_or_exit,
+    is_help_arg, next_option_value, parse_usize_option, read_polys_rational, read_stdin_or_exit,
 };
+use crate::recurrence_input::read_recurrence_json;
 use crate::recurrence_theorems::{
     note_theorem_matches, print_theorem_report_text, search_theorem_report,
 };
@@ -14,8 +14,6 @@ use num_bigint::BigInt;
 use polytool::recurrence::BigRational as RecurrenceBigRational;
 use polytool::recurrence::*;
 use serde_json::{json, Value};
-use std::fs;
-use std::io::{self};
 
 pub(crate) fn print_recurrence_help() {
     println!("Usage:");
@@ -28,6 +26,9 @@ pub(crate) fn print_recurrence_help() {
     print_rational_coefficient_input_help();
     println!();
     println!("Search options:");
+    println!("  --first-index <n>          Index of the first input row (nonnegative)");
+    println!("                             With --skip-prefix, discarded rows still count.");
+    println!("                             Default: renumber the retained rows from 1.");
     println!("  --skip-prefix <n>          Ignore the first n input polynomials");
     println!("  --min-rec-len <n>          Minimum number of previous rows to use");
     println!("  --max-rec-len <n>          Maximum number of previous rows to use");
@@ -57,6 +58,7 @@ pub(crate) fn print_recurrence_help() {
     println!("  --no-modular-prefilter     Disable default modular candidate rejection");
     println!("  --max-candidates <n>       Inspect at most n candidate configurations");
     println!("  --representations          Return a menu of length/derivative tradeoffs");
+    println!("                             Text: comparison table and numbered formulas; JSON: full menu.");
     println!("  --space                    Complete bounded spaces; read a recurrence-space JSON request from stdin");
     println!(
         "  --verify-space             Replay a recurrence-space JSON report from stdin (no search)"
@@ -70,6 +72,9 @@ pub(crate) fn print_recurrence_help() {
     println!("                             With --json: structured candidates and coverage");
     println!("  --json                     Emit recurrence JSON with initial conditions");
     println!("  --format json              Alias for --json");
+    println!("  --latex                    Emit LaTeX with subscripts, seeds and starting index");
+    println!("  --format latex             Alias for --latex; coefficients remain expanded");
+    println!("                             JSON also includes this presentation in latex.");
     println!("  --python                   Emit exact Python code for the recurrence");
     println!("  --format python            Alias for --python");
     println!("  --verbose                  Print candidate search details");
@@ -78,8 +83,11 @@ pub(crate) fn print_recurrence_help() {
     println!("                             separate from the finite fit evidence. With --json,");
     println!("                             emit polytool.recurrence-theorems.v1 (the usual");
     println!("                             record is its recurrence_json). Without the flag a");
-    println!("                             match is only noted on stderr. Not used with");
-    println!("                             --representations; see recurrence-theorems.");
+    println!("                             match is only noted on stderr. Cannot combine with");
+    println!("                             --representations; save its JSON menu, then use");
+    println!(
+        "                             recurrence-theorems --recurrence menu.json --candidate N."
+    );
     println!("  -h, --help                 Print this help text");
     println!();
     println!("Example:");
@@ -93,12 +101,17 @@ pub(crate) fn print_recurrence_generate_help() {
     println!("  polytool recurrence-generate --recurrence <file|-> --additional <n>");
     println!("  polytool recurrence-generate --recurrence <file|-> --format bfile --max-terms <n>");
     println!("  polytool recurrence-generate --help");
+    println!("  --candidate <index>  Select a representation menu entry (0-based)");
+    println!("  Accepts recurrence JSON, theorem wrappers and representation menus.");
+    println!("  --format rows is an alias for the default coefficient-list output.");
     println!();
     println!("Generate coefficient rows from recurrence JSON emitted by");
     println!("`polytool recurrence --json`.");
     println!();
     println!("Options:");
     println!("  --recurrence <file|->      Read recurrence JSON from file, or stdin with -");
+    println!("  --first-index <n>          Relabel the first row and shift the rule accordingly");
+    println!("                             Default: keep the JSON record's first_index.");
     println!("  --rows <n>                 Output n total rows, including initial rows");
     println!("  --additional <n>           Output initial rows plus n generated rows");
     println!("  --json                     Emit generated rows as JSON");
@@ -152,6 +165,78 @@ enum RecurrenceOutputFormat {
     Text,
     Json,
     Python,
+    Latex,
+}
+
+fn print_representations_text(report: &RecurrenceRepresentations) {
+    println!("Exact fits to supplied rows (not all-rank proofs).");
+    println!(
+        "{:?}; {} configurations inspected.",
+        report.status, report.configurations_considered
+    );
+    if report.representations.is_empty() {
+        println!("No representations found within the inspected bounds.");
+        return;
+    }
+
+    let mut table = vec![[
+        "id", "", "lag", "deriv", "deg(n,t)", "lhs(n,t)", "coeffs", "fit", "check", "eqs",
+    ]
+    .map(String::from)
+    .to_vec()];
+    for (index, item) in report.representations.iter().enumerate() {
+        let c = &item.complexity;
+        table.push(vec![
+            format!("[{index}]"),
+            if report.frontier.contains(&index) {
+                "*"
+            } else {
+                ""
+            }
+            .into(),
+            c.rec_len.to_string(),
+            c.diff_deg.to_string(),
+            format!("{},{}", c.idx_deg, c.var_deg),
+            format!("{},{}", c.denom_idx_deg, c.denom_var_deg),
+            c.nonzero_coefficients.to_string(),
+            item.fit_polynomials.to_string(),
+            item.verification_polynomials.to_string(),
+            item.verification_equations.to_string(),
+        ]);
+    }
+    let widths: Vec<_> = (0..table[0].len())
+        .map(|column| table.iter().map(|row| row[column].len()).max().unwrap_or(0))
+        .collect();
+    println!();
+    for row in table {
+        println!(
+            "{}",
+            row.iter()
+                .zip(&widths)
+                .map(|(cell, width)| format!("{cell:>width$}"))
+                .collect::<Vec<_>>()
+                .join("  ")
+        );
+    }
+    println!("* Nondominated among returned candidates; indices match the JSON menu.");
+    println!("deg/lhs: degrees in (n,t) of RHS/forcing coefficients and the left factor.");
+    println!("coeffs: nonzero scalar coefficients; fit/check: fitted/held-out rows.");
+    println!("eqs: held-out coefficient equations, not independent constraints.");
+    println!();
+    for (index, item) in report.representations.iter().enumerate() {
+        println!("[{index}] {}", item.recurrence);
+        println!(
+            "    Checked n={}..={}.",
+            item.first_checked_index, item.last_checked_index
+        );
+        if !item.singular_checked_indices.is_empty() {
+            println!(
+                "    Cannot generate at checked singular indices: {:?}.",
+                item.singular_checked_indices
+            );
+        }
+    }
+    println!("Use --json to save the menu; select an entry with --candidate N in recurrence-generate or recurrence-theorems.");
 }
 
 pub(crate) fn cmd_recurrence(args: &[String]) {
@@ -171,10 +256,17 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
     let mut format = RecurrenceOutputFormat::Text;
     let mut representations = false;
     let mut theorem_matches = false;
+    let mut first_index = None;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--first-index" => {
+                first_index = Some(
+                    parse_usize_option(args, &mut i, "--first-index")
+                        .unwrap_or_else(|error| usage_error(&error)),
+                );
+            }
             "--representations" => representations = true,
             "--json" => {
                 format = RecurrenceOutputFormat::Json;
@@ -182,21 +274,23 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             "--python" => {
                 format = RecurrenceOutputFormat::Python;
             }
+            "--latex" => format = RecurrenceOutputFormat::Latex,
             "--format" => {
                 let value = match next_option_value(args, &mut i, "--format") {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
                 format = match value {
                     "text" => RecurrenceOutputFormat::Text,
                     "json" => RecurrenceOutputFormat::Json,
                     "python" => RecurrenceOutputFormat::Python,
+                    "latex" => RecurrenceOutputFormat::Latex,
                     other => {
                         eprintln!("unknown recurrence output format: {other}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -205,7 +299,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -214,7 +308,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -223,7 +317,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -232,7 +326,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -241,7 +335,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -250,7 +344,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -259,7 +353,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -268,7 +362,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -277,7 +371,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -291,7 +385,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
-                            return;
+                            std::process::exit(2);
                         }
                     };
             }
@@ -302,7 +396,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
-                            return;
+                            std::process::exit(2);
                         }
                     };
             }
@@ -313,7 +407,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
-                            return;
+                            std::process::exit(2);
                         }
                     };
             }
@@ -324,7 +418,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
-                            return;
+                            std::process::exit(2);
                         }
                     };
             }
@@ -343,7 +437,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
-                            return;
+                            std::process::exit(2);
                         }
                     };
             }
@@ -354,7 +448,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
-                            return;
+                            std::process::exit(2);
                         }
                     };
             }
@@ -365,7 +459,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         Ok(value) => value,
                         Err(error) => {
                             eprintln!("{error}");
-                            return;
+                            std::process::exit(2);
                         }
                     };
             }
@@ -374,7 +468,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -383,7 +477,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => value,
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -401,7 +495,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     Ok(value) => Some(value),
                     Err(error) => {
                         eprintln!("{error}");
-                        return;
+                        std::process::exit(2);
                     }
                 };
             }
@@ -411,56 +505,71 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             "--theorem-matches" => theorem_matches = true,
             other => {
                 eprintln!("unknown recurrence option: {other}");
-                return;
+                std::process::exit(2);
             }
         }
         i += 1;
     }
 
+    if representations && theorem_matches {
+        usage_error("--representations cannot be combined with --theorem-matches; save the menu with --json, then run `polytool recurrence-theorems --recurrence menu.json --candidate N` (0-based)");
+    }
+    if representations && matches!(format, RecurrenceOutputFormat::Python) {
+        usage_error("--representations supports text, JSON or LaTeX; use a candidate's recurrence_json for row generation");
+    }
+
     let polys = read_polys_rational();
     if polys.len() < 3 {
         eprintln!("Need at least 3 polynomials for recurrence search.");
-        return;
+        std::process::exit(2);
     }
 
+    let output_first_index = first_index
+        .map_or(Some(1), |n: usize| n.checked_add(search.skip_prefix))
+        .unwrap_or_else(|| usage_error("first index plus skipped rows overflows"));
+    if output_first_index > i64::MAX as usize
+        || output_first_index.checked_add(polys.len()).is_none()
+    {
+        usage_error("first index or final row index is too large");
+    }
     if representations {
-        if matches!(format, RecurrenceOutputFormat::Python) {
-            eprintln!("--representations supports text or JSON; use a candidate's recurrence_json for row generation");
-            return;
-        }
         match find_recurrence_representations_rational(&polys, &search, budget) {
             Ok(report) => {
+                let mut report = report
+                    .reindexed(output_first_index)
+                    .unwrap_or_else(|error| usage_error(&error.to_string()));
+                for item in &mut report.representations {
+                    item.recurrence_json = item
+                        .recurrence_json
+                        .clone()
+                        .with_latex()
+                        .unwrap_or_else(|error| usage_error(&error.to_string()));
+                }
                 if matches!(format, RecurrenceOutputFormat::Json) {
                     println!("{}", serde_json::to_string_pretty(&report).unwrap());
-                } else {
-                    println!("Exact fits to supplied rows (not all-rank proofs).");
+                } else if matches!(format, RecurrenceOutputFormat::Latex) {
                     println!(
-                        "{:?}; {} configurations inspected.",
+                        "% {:?}; {} configurations inspected.",
                         report.status, report.configurations_considered
                     );
                     for (i, item) in report.representations.iter().enumerate() {
+                        println!("% Representation {i}");
                         println!(
-                            "{}[{}] length {}, derivative order {}, checked n={}..={}: {}",
-                            if report.frontier.contains(&i) {
-                                "* "
-                            } else {
-                                "  "
-                            },
-                            i,
-                            item.complexity.rec_len,
-                            item.complexity.diff_deg,
-                            item.first_checked_index,
-                            item.last_checked_index,
-                            item.recurrence
+                            "{}",
+                            item.recurrence_json
+                                .latex
+                                .as_deref()
+                                .expect("LaTeX populated")
                         );
                     }
-                    println!("* Nondominated among returned candidates; use --json for bounds and coverage.");
+                } else {
+                    print_representations_text(&report);
                 }
                 if report.status == RepresentationSearchStatus::BudgetExhausted {
                     std::process::exit(3);
                 }
             }
-            Err(error) => eprintln!("{error}"),
+            Err(error) => usage_error(&error.to_string()),
         }
         return;
     }
@@ -473,48 +582,53 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             let searched_polys = polys.get(search.skip_prefix..).unwrap_or(&[]);
             let initial_count = res.export_initial_count(searched_polys.len());
             let initial_polys = &searched_polys[..initial_count];
-            let theorem_report = search_theorem_report(&res, &polys, &search);
+            let rule = res.recurrence.shift_index(1 - output_first_index as i64);
+            let mut theorem_report =
+                search_theorem_report(&res, &polys, &search, output_first_index);
+            let recurrence_json = theorem_report
+                .recurrence_json
+                .clone()
+                .with_latex()
+                .unwrap_or_else(|error| usage_error(&error.to_string()));
+            theorem_report.recurrence_json = recurrence_json.clone();
             match format {
                 RecurrenceOutputFormat::Json if theorem_matches => {
                     println!("{}", serde_json::to_string_pretty(&theorem_report).unwrap());
                 }
                 RecurrenceOutputFormat::Json => {
-                    let recurrence_json = RecurrenceJson::from_recurrence_rational(
-                        &res.recurrence,
-                        1,
-                        initial_polys,
-                        Some(RecurrenceJsonSearch {
-                            recurrence_text: res.recurrence.to_string(),
-                            source_rows: polys.len(),
-                            skip_prefix: search.skip_prefix,
-                            unknowns: res.num_unknowns,
-                            weighted_unknowns: res.weighted_unknowns,
-                            equations: res.num_equations,
-                            fit_polynomials: res.fit_polynomials,
-                            verification_polynomials: res.verification_polynomials,
-                            candidates_tried: res.candidates_tried,
-                            options: RecurrenceOptionsJson::from(&res.opts),
-                        }),
-                    );
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&recurrence_json).unwrap()
                     );
                 }
+                RecurrenceOutputFormat::Latex => {
+                    println!(
+                        "{}",
+                        recurrence_json.latex.as_deref().expect("LaTeX populated")
+                    );
+                }
                 RecurrenceOutputFormat::Python => {
                     println!(
                         "{}",
-                        res.recurrence.to_python_definition_rational(initial_polys)
+                        rule.to_python_definition_rational_indexed(
+                            initial_polys,
+                            output_first_index as i64
+                        )
                     );
                 }
                 RecurrenceOutputFormat::Text => {
-                    println!("{}", res.recurrence);
+                    println!("{rule}");
                     if theorem_matches {
                         print_theorem_report_text(&theorem_report);
                     }
                 }
             }
-            if !theorem_matches || format == RecurrenceOutputFormat::Python {
+            if !theorem_matches
+                || matches!(
+                    format,
+                    RecurrenceOutputFormat::Python | RecurrenceOutputFormat::Latex
+                )
+            {
                 note_theorem_matches(&theorem_report);
             }
             eprintln!(
@@ -627,15 +741,9 @@ pub(crate) fn format_rational_row(coeffs: &[RecurrenceBigRational]) -> String {
         .join(", ")
 }
 
-fn read_recurrence_json(path: &str) -> Result<RecurrenceJson, String> {
-    let input = if path == "-" {
-        read_limited_text(io::stdin(), "recurrence JSON from stdin")?
-    } else {
-        let file = fs::File::open(path)
-            .map_err(|e| format!("failed to open recurrence JSON `{path}`: {e}"))?;
-        read_limited_text(file, &format!("recurrence JSON `{path}`"))?
-    };
-    serde_json::from_str(&input).map_err(|e| format!("failed to parse recurrence JSON: {e}"))
+fn usage_error(message: &str) -> ! {
+    eprintln!("{message}");
+    std::process::exit(2);
 }
 
 /// A rational coefficient row as integers, or `None` if some coefficient is
@@ -664,6 +772,8 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     }
 
     let mut recurrence_path: Option<String> = None;
+    let mut candidate = None;
+    let mut first_index_override = None;
     let mut rows: Option<usize> = None;
     let mut additional: Option<usize> = None;
     let mut format = "text";
@@ -680,24 +790,39 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--candidate" => {
+                candidate = Some(
+                    parse_usize_option(args, &mut i, "--candidate")
+                        .unwrap_or_else(|e| usage_error(&e)),
+                );
+            }
             "--recurrence" => {
                 i += 1;
                 recurrence_path = args.get(i).cloned();
             }
+            "--first-index" => {
+                first_index_override = Some(
+                    parse_usize_option(args, &mut i, "--first-index")
+                        .unwrap_or_else(|error| usage_error(&error)),
+                );
+            }
             "--rows" => {
-                i += 1;
-                rows = args.get(i).and_then(|s| s.parse().ok());
+                rows = Some(
+                    parse_usize_option(args, &mut i, "--rows").unwrap_or_else(|e| usage_error(&e)),
+                );
             }
             "--additional" => {
-                i += 1;
-                additional = args.get(i).and_then(|s| s.parse().ok());
+                additional = Some(
+                    parse_usize_option(args, &mut i, "--additional")
+                        .unwrap_or_else(|e| usage_error(&e)),
+                );
             }
             "--json" => format = "json",
             "--format" => {
                 let value =
                     next_option_value(args, &mut i, "--format").unwrap_or_else(|e| usage_error(&e));
                 format = match value {
-                    "text" => "text",
+                    "text" | "rows" => "text",
                     "json" => "json",
                     "bfile" | "b-file" => "bfile",
                     "oeis-example" => "oeis-example",
@@ -762,7 +887,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
             }
             other => {
                 eprintln!("unknown recurrence-generate option: {other}");
-                return;
+                std::process::exit(2);
             }
         }
         i += 1;
@@ -770,11 +895,11 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
 
     let Some(path) = recurrence_path else {
         eprintln!("recurrence-generate needs --recurrence <file|->");
-        return;
+        std::process::exit(2);
     };
     if rows.is_some() && additional.is_some() {
         eprintln!("use only one of --rows or --additional");
-        return;
+        std::process::exit(2);
     }
     let oeis_text_format = matches!(
         format,
@@ -790,18 +915,23 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
         );
     }
 
-    let recurrence_json = match read_recurrence_json(&path) {
+    let mut recurrence_json = match read_recurrence_json(&path, candidate) {
         Ok(value) => value,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
+    if let Some(first_index) = first_index_override {
+        recurrence_json = recurrence_json
+            .reindexed(first_index)
+            .unwrap_or_else(|error| usage_error(&error.to_string()));
+    }
     let (recurrence, first_index, initial_polys) = match recurrence_json.to_recurrence_parts() {
         Ok(parts) => parts,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
 
@@ -812,7 +942,7 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
             Some(total) => Some(total),
             None => {
                 eprintln!("recurrence row count overflow");
-                return;
+                std::process::exit(2);
             }
         }
     } else {
@@ -923,14 +1053,14 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
 
     let Some(total_rows) = total_rows else {
         eprintln!("recurrence-generate needs --rows <n> or --additional <n>");
-        return;
+        std::process::exit(2);
     };
     let generated = match recurrence.generate_rows_rational(&initial_polys, first_index, total_rows)
     {
         Ok(rows) => rows,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
 

@@ -122,6 +122,8 @@ impl fmt::Display for BivarPoly {
 fn fmt_rational_latex(r: &BigRational) -> String {
     if r.denom() == &BigInt::one() {
         format!("{}", r.numer())
+    } else if r < &BigRational::zero() {
+        format!("-\\frac{{{}}}{{{}}}", -r.numer(), r.denom())
     } else {
         format!("\\frac{{{}}}{{{}}}", r.numer(), r.denom())
     }
@@ -150,7 +152,8 @@ fn fmt_monomial_latex(c: &BigRational, n_pow: usize, t_pow: usize) -> String {
 }
 
 impl BivarPoly {
-    /// Format as a LaTeX expression.
+    /// Format as an expanded LaTeX expression, in ascending powers of `t`
+    /// and descending powers of `n` within each coefficient.
     pub fn to_latex(&self) -> String {
         let mut terms: Vec<String> = Vec::new();
         let width = self.coefficient_width();
@@ -160,7 +163,7 @@ impl BivarPoly {
         let max_j = width - 1;
         let max_i = self.coeffs.len().saturating_sub(1);
         for j in 0..=max_j {
-            for i in 0..=max_i {
+            for i in (0..=max_i).rev() {
                 let Some(c) = self.coefficient(i, j) else {
                     continue;
                 };
@@ -194,9 +197,10 @@ fn fmt_poly_ref_latex(offset: usize, deriv_order: usize) -> String {
         format!("n-{offset}")
     };
     match deriv_order {
-        0 => format!("P({sub})"),
-        1 => format!("P'({sub})"),
-        d => format!("P^{{({d})}}({sub})"),
+        0 => format!("P_{{{sub}}}"),
+        1 => format!("P_{{{sub}}}'"),
+        2 => format!("P_{{{sub}}}''"),
+        d => format!("P_{{{sub}}}^{{({d})}}"),
     }
 }
 

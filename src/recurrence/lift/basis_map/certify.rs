@@ -1051,7 +1051,7 @@ fn summary(
     let parent_region = coefficient_roots.map(|p| p.target_interval.clone());
     let operation = LiftOperation::BasisMap {
         basis: map.name().to_string(),
-        basis_family: map.recurrence_json(),
+        basis_family: Box::new(map.recurrence_json()),
         source_interval: conclusion
             .map(|c| c.input_interval.to_string())
             .unwrap_or_default(),

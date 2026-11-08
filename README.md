@@ -7,10 +7,6 @@ gamma-positivity, resultants, Ehrhart/h\*-vector conversion, recurrence search
 for polynomial sequences, finite Athanasiadis--Wagner interlacing matrices,
 and standard sequences — all with exact arithmetic.
 
-Rename note: this crate was renamed from `polynomial-tools` to `polytool`
-before publication. Use `polytool` in Cargo manifests, Rust imports, CLI
-documentation, and MCP server configuration.
-
 ## Features
 
 - Exact real-rootedness testing by adaptive subresultant integer root
@@ -37,10 +33,16 @@ documentation, and MCP server configuration.
 From the repository root:
 
 ```sh
-cargo build --release -p polytool
+cargo build --locked --release -p polytool
 ```
 
-The CLI binary is at `target/release/polytool`.
+The CLI binary is at `target/release/polytool`, or under `CARGO_TARGET_DIR`
+when that environment variable is set. Run that binary directly, or install
+it on your Cargo binary path from the Polytool directory:
+
+```sh
+cargo install --locked --path .
+```
 
 Use `polytool --version` (or `polytool -V`) for a single deterministic line:
 
@@ -54,12 +56,6 @@ Git metadata, the suffix is `(git unavailable)` rather than a fabricated
 revision.  Reproducible packaging environments may set `POLYTOOL_GIT_COMMIT`
 to a full or at least 12-digit hexadecimal revision; an empty or malformed
 value deliberately selects the unavailable form.
-
-On the generated standalone `main` branch, the equivalent command is:
-
-```sh
-cargo build --release
-```
 
 ## Using as a crate
 
@@ -105,8 +101,10 @@ For the undirected question "do `f` and `g` interlace in some order?", use
 More library examples (real-rootedness and interlacing, Athanasiadis--Wagner
 interlacing matrices, planar networks, polynomial arithmetic, recurrence
 search, enumeration of real-rooted integer polynomials, ...) are in
-[doc/library.md](doc/library.md).  API documentation is on
-[docs.rs](https://docs.rs/polytool).
+[doc/library.md](doc/library.md). Build searchable API documentation with
+`cargo doc --no-deps --open`. The crate has not yet been published on docs.rs.
+The [documentation build guide](doc/development.md#documentation-site)
+combines the guides, generated CLI reference and rustdoc into a static site.
 
 ## CLI quick start
 
@@ -116,6 +114,7 @@ integer coefficients in ascending degree order (`1, 11, 11, 1` is
 
 ```sh
 echo "1, 11, 11, 1" | polytool real-rooted
+polytool sequence eulerian 8 --format rows > polys.txt
 polytool interlacing --json < polys.txt
 polytool properties < polys.txt
 polytool sequence eulerian 5
@@ -127,6 +126,10 @@ echo "1, 0, -3, 1" | polytool discriminant
 Many commands accept `--json` for machine-readable output, and large integer
 coefficients are serialized as strings.  See [doc/cli.md](doc/cli.md) for the
 input format and the full command reference.
+
+Start with the [CLI workflows](doc/workflows.md) for generation, recurrence
+discovery, report reuse and shell pipelines. `polytool --help` groups commands
+by task; `polytool help --json` provides a machine-readable command index.
 
 ## MCP server and web app
 
@@ -176,3 +179,7 @@ input format and the full command reference.
 
 Report issues in the Git repository, or contact Per Alexandersson
 (@PerAlexandersson, <per.w.alexandersson@gmail.com>).
+
+For general recurrence proofs, use `polytool recurrence-prove --recurrence
+recurrence.json`. The [proof-discovery guide](doc/proof-discovery.md) explains
+the exact theorem checks, certificates and Lean correspondence.

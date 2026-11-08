@@ -254,13 +254,13 @@ pub(crate) fn cmd_bicyclic_sieving(args: &[String]) {
         };
         if let Err(error) = result {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
         i += 1;
     }
     let (Some(order1), Some(order2)) = (order1, order2) else {
         eprintln!("bicyclic-sieving requires --order1 <n1> and --order2 <n2>");
-        return;
+        std::process::exit(2);
     };
     let matrix = match parse_bigint_matrix_json(&read_stdin_or_exit(), "stdin") {
         Ok(matrix) => matrix,
@@ -277,6 +277,9 @@ pub(crate) fn cmd_bicyclic_sieving(args: &[String]) {
                 print_bicyclic_sieving_report_text(&report);
             }
         }
-        Err(error) => eprintln!("{error}"),
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
     }
 }

@@ -361,6 +361,7 @@ impl Search<'_> {
                     continue;
                 };
                 let json = RecurrenceJson {
+                    latex: None,
                     schema: RECURRENCE_JSON_SCHEMA.to_string(),
                     first_index: self.origin,
                     initial_polynomials: bound.initial_rows.clone(),

@@ -42,7 +42,7 @@ pub(crate) fn print_rational_coefficient_input_help() {
     println!("  Coefficients are in ascending degree order and may be arbitrary-size");
     println!("  integers or exact rationals such as 42, -17, or 3/7.");
     println!("  Brackets and whitespace-separated coefficients are accepted.");
-    println!("  Expanded polynomial expressions are not accepted by recurrence.");
+    println!("  This command expects coefficient lists, not expanded expressions.");
     println!("  Blank lines and lines starting with # are ignored.");
 }
 
@@ -53,55 +53,17 @@ pub(crate) fn print_top_level_help() {
     println!("Usage:");
     println!("  polytool <command> [options]");
     println!("  polytool --help");
-    println!("  polytool help <command>");
+    println!("  polytool help <command> [subcommand]");
+    println!("  polytool help --json   Machine-readable command index");
     println!();
-    println!("Commands:");
-    println!("  real-rooted       Check real-rootedness of each polynomial");
-    println!("  interlacing       Check interlacing of consecutive polynomial pairs");
-    println!("  interlacing-profile");
-    println!("                    Count consecutive previous interlacings until first fail");
-    println!("  properties        Show real-rootedness, unimodality, and related properties");
-    println!("  gamma-expansion   Expand palindromic polynomials in the gamma basis");
-    println!("  bernstein-expansion");
-    println!("                    Expand polynomials in a fixed-degree Bernstein basis");
-    println!("  family-check      Check properties and consecutive interlacing together");
-    println!("  sequence          Generate standard polynomial sequences");
-    println!("  oeis              List and generate recurrence-backed OEIS families");
-    println!("  pf-pencil         Check built-in PF/Jensen endpoint pencils");
-    println!("  recurrence        Search for a polynomial recurrence");
-    println!("  recurrence-generate");
-    println!("                    Generate coefficient rows from recurrence JSON");
-    println!("  recurrence-transform");
-    println!("                    Change polynomial coordinates and transport a recurrence");
-    println!("  recurrence-theorems");
-    println!("                    Conditional interlacing theorem matches for recurrence JSON");
-    println!("  recurrence-veronese-lifts");
-    println!("                    Parent sequences whose coefficient sections are the sequence");
-    println!("  root-enclosures   Exact rational root enclosures with multiplicities");
-    println!("  recurrence-implicit");
-    println!("                    Diagonal maps and antecedents: implicit relations, uniqueness");
-    println!("  recurrence-search-representations");
-    println!("                    Bounded search over equivalent representations and relations");
-    println!("  bench             Run built-in timing suites");
-    println!("  bkw-scout         Scout BKW equal-modulus loci for a recurrence symbol");
-    println!("  resultant         Compute the resultant of two polynomials");
-    println!("  discriminant      Compute the discriminant of each polynomial");
-    println!("  coefficient-tests Check Newton and Kurtz coefficient criteria");
-    println!("  hstar-to-ehrhart  Convert h*-vectors to Ehrhart polynomials");
-    println!("  ehrhart-to-hstar  Convert Ehrhart polynomials to h*-vectors");
-    println!("  hstar-inequalities");
-    println!("                    Check named Ehrhart h*-vector inequalities");
-    println!("  cyclic-sieving    Check/profile one cyclic sieving order");
-    println!("  cyclic-sieving-sequence");
-    println!("                    Profile candidate cyclic sieving orders for a sequence");
-    println!("  bicyclic-sieving  Check bicyclic sieving for C_n1 x C_n2 and f(q,t)");
-    println!("  stapledon         Compute a Stapledon decomposition");
-    println!("  tnn-network       Check TNN of a coefficient triangle; canonical planar network");
-    println!("  brenti-recognize  Search for a planar strip digraph reproducing the rows");
-    println!("  enumerate-real-rooted");
-    println!("                    Enumerate real-rooted integer polynomials by leading prefix");
-    println!("  pf-network        Search for a height-invariant planar network: PF rows");
-    println!("  left-production   Chen--Fu--Ruan left production matrix: TNN triangle, PF rows");
+    let mut group = "";
+    for command in crate::commands::COMMANDS {
+        if command.group != group {
+            group = command.group;
+            println!("{group}:");
+        }
+        println!("  {:<34} {}", command.name, command.summary);
+    }
     println!();
     println!("Options:");
     println!("  -h, --help        Print help text");
@@ -128,10 +90,15 @@ fn print_stdin_command_help(command: &str, summary: &str, extra: &[&str]) {
 
 pub(crate) fn print_command_help(command: &str) -> bool {
     match command {
+        "completions" => println!("Usage: polytool completions <bash|zsh|fish>\nGenerate command-name shell completion; redirect to your shell completion file."),
         "real-rooted" => print_stdin_command_help(
             "real-rooted",
             "Check whether each input polynomial has only real roots.",
             &[
+                "Options:",
+                "  --json  Emit items with zero-based index, degree, and real_rooted.",
+                "          The zero polynomial has degree null; constants have degree 0.",
+                "",
                 "Note:",
                 "  Accepts arbitrary-size integer coefficients.",
                 "",
@@ -229,6 +196,7 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "recurrence" => print_recurrence_help(),
         "recurrence-generate" => print_recurrence_generate_help(),
         "recurrence-transform" => print_recurrence_transform_help(),
+        "recurrence-prove" => crate::recurrence_prove::print_recurrence_prove_help(),
         "recurrence-theorems" => print_recurrence_theorems_help(),
         "recurrence-veronese-lifts" => print_recurrence_veronese_lifts_help(),
         "root-enclosures" => print_root_enclosures_help(),
@@ -238,8 +206,11 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "bkw-scout" => bkw_scout_usage(),
         "resultant" => print_stdin_command_help(
             "resultant",
-            "Compute the resultant of the first two input polynomials.",
+            "Compute the resultant of exactly two input polynomials.",
             &[
+                "Options:",
+                "  --json    Emit exact values as decimal strings",
+                "",
                 "Note:",
                 "  Accepts arbitrary-size integer coefficients.",
                 "",
@@ -251,6 +222,9 @@ pub(crate) fn print_command_help(command: &str) -> bool {
             "discriminant",
             "Compute the discriminant of each input polynomial.",
             &[
+                "Options:",
+                "  --json    Emit exact values as decimal strings",
+                "",
                 "Note:",
                 "  Accepts arbitrary-size integer coefficients.",
                 "",

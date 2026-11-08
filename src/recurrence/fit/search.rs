@@ -6,22 +6,39 @@ use crate::linalg;
 use num_traits::One;
 use num_traits::Zero;
 
-/// `a * b`, without the gcd reduction of `Ratio` multiplication when both factors
-/// are integers (the value is already in lowest terms).
-fn product(a: &BigRational, b: &BigRational) -> BigRational {
-    if a.denom().is_one() && b.denom().is_one() {
-        BigRational::new_raw(a.numer() * b.numer(), BigInt::one())
-    } else {
-        a * b
+/// Coefficients used while constructing a fit system. Integer source data goes
+/// directly to the fraction-free solver; fractional data retains the rational path.
+trait FitEntry: Clone + Zero + std::ops::Neg<Output = Self> + std::ops::AddAssign {
+    fn product(a: &BigRational, b: &BigRational) -> Self;
+    fn solve(matrix: Vec<Vec<Self>>, rhs: Vec<Self>, square: bool) -> Option<Vec<BigRational>>;
+}
+
+impl FitEntry for BigInt {
+    fn product(a: &BigRational, b: &BigRational) -> Self {
+        debug_assert!(a.denom().is_one() && b.denom().is_one());
+        a.numer() * b.numer()
+    }
+
+    fn solve(matrix: Vec<Vec<Self>>, rhs: Vec<Self>, square: bool) -> Option<Vec<BigRational>> {
+        linalg::solve_integer_fit_system(matrix, rhs, square)
     }
 }
 
-/// `-(a * b)`, with the integer fast path of [`product`].
-fn negated_product(a: &BigRational, b: &BigRational) -> BigRational {
-    if a.denom().is_one() && b.denom().is_one() {
-        BigRational::new_raw(-(a.numer() * b.numer()), BigInt::one())
-    } else {
-        -(a * b)
+impl FitEntry for BigRational {
+    fn product(a: &BigRational, b: &BigRational) -> Self {
+        if a.denom().is_one() && b.denom().is_one() {
+            BigRational::new_raw(a.numer() * b.numer(), BigInt::one())
+        } else {
+            a * b
+        }
+    }
+
+    fn solve(matrix: Vec<Vec<Self>>, rhs: Vec<Self>, square: bool) -> Option<Vec<BigRational>> {
+        if square {
+            linalg::solve_full_rank_square_linear_system(&matrix, &rhs)
+        } else {
+            linalg::solve_linear_system(&matrix, &rhs)
+        }
     }
 }
 
@@ -136,6 +153,27 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
     if chart.is_constant() && modular_prefilter_rejects(polys, derivs, opts) {
         return None;
     }
+    let integral = polys.iter().flatten().all(|c| c.denom().is_one())
+        && derivs
+            .iter()
+            .flatten()
+            .flatten()
+            .all(|c| c.denom().is_one());
+    if integral {
+        fit_in_leader_chart::<BigInt>(polys, derivs, opts, exact_row_indices, chart)
+    } else {
+        fit_in_leader_chart::<BigRational>(polys, derivs, opts, exact_row_indices, chart)
+    }
+}
+
+fn fit_in_leader_chart<C: FitEntry>(
+    polys: &[Vec<BigRational>],
+    derivs: &[Vec<Vec<BigRational>>],
+    opts: &RecurrenceOptions,
+    exact_row_indices: Option<&[usize]>,
+    chart: LeaderChart,
+) -> Option<Recurrence> {
+    let m = polys.len();
     // The current row enters as `x^e P_n` for the left-hand monomial `x^e`.
     let leader_x_power = opts.leader_x_power;
     let shifted_rows: Vec<Vec<BigRational>>;
@@ -230,8 +268,8 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
     };
 
     let zero = BigRational::zero();
-    let mut matrix: Vec<Vec<BigRational>> = vec![vec![zero.clone(); num_vars]; row_indices.len()];
-    let mut rhs: Vec<BigRational> = vec![zero.clone(); row_indices.len()];
+    let mut matrix = vec![vec![C::zero(); num_vars]; row_indices.len()];
+    let mut rhs = vec![C::zero(); row_indices.len()];
     let max_n_pow = opts
         .idx_deg
         .max(opts.denom_idx_deg)
@@ -258,12 +296,12 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
         // RHS = the fixed chart monomial times P_nn: the coefficient of
         // t^l in n^a t^e P_nn(t) (moved to RHS with negation).
         rhs[row] = if l >= chart.x_power {
-            negated_product(
+            -C::product(
                 current.get(l - chart.x_power).unwrap_or(&zero),
                 &n_powers[chart.index_power],
             )
         } else {
-            BigRational::zero()
+            C::zero()
         };
 
         // Denominator unknowns: d[i][j] * nn^i * (coeff of t^{l-j} in P_nn).
@@ -279,7 +317,7 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
                     let Some(pc) = current.get(l - j).filter(|pc| !pc.is_zero()) else {
                         continue;
                     };
-                    matrix[row][denom_col(i, j)] = product(pc, &n_powers[i]);
+                    matrix[row][denom_col(i, j)] = C::product(pc, &n_powers[i]);
                 }
             }
         }
@@ -302,9 +340,9 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
                             };
                             // -(rc * ni), with ni = (-1)^flip n^i.
                             matrix[row][coeff_col(r, d, sign_idx, i, j)] = if flip {
-                                product(rc, &n_powers[i])
+                                C::product(rc, &n_powers[i])
                             } else {
-                                negated_product(rc, &n_powers[i])
+                                -C::product(rc, &n_powers[i])
                             };
                         }
                     }
@@ -316,7 +354,7 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
         if !opts.homogeneous {
             for i in 0..=opts.inhomo_idx_deg {
                 if l <= opts.inhomo_var_deg {
-                    let val = -n_powers[i].clone();
+                    let val = -C::product(&BigRational::one(), &n_powers[i]);
                     matrix[row][inhomo_col(i, l)] += val;
                 }
             }
@@ -324,11 +362,8 @@ pub(super) fn find_polynomial_recurrence_in_leader_chart(
     }
 
     // --- Solve ---
-    let solution = if exact_row_indices.is_some() && matrix.len() == num_vars {
-        linalg::solve_full_rank_square_linear_system(&matrix, &rhs)?
-    } else {
-        linalg::solve_linear_system(&matrix, &rhs)?
-    };
+    let square = exact_row_indices.is_some() && matrix.len() == num_vars;
+    let solution = C::solve(matrix, rhs, square)?;
 
     // NOTE: No normalization here. The system is non-homogeneous (the fixed
     // constant 1 in f(n,t) pins the scale), so the solution is uniquely
@@ -528,6 +563,87 @@ fn extract_bivar(
 mod tests {
     use super::*;
     use crate::recurrence::test_support::*;
+
+    #[test]
+    fn integer_and_rational_fit_paths_agree_across_charts() {
+        let polys = i64_polys_to_rational(&[
+            vec![1],
+            vec![1, 1],
+            vec![1, 2, 1],
+            vec![1, 3, 3, 1],
+            vec![1, 4, 6, 4, 1],
+            vec![1, 5, 10, 10, 5, 1],
+        ]);
+        let derivs = rational_derivatives_up_to(&polys, 1);
+        let mut found = 0;
+        for flags in 0..32 {
+            let opts = RecurrenceOptions {
+                rec_len: 1 + (flags & 1),
+                idx_deg: 1,
+                var_deg: 1,
+                diff_deg: (flags >> 1) & 1,
+                homogeneous: flags & 4 == 0,
+                alternating_sign: flags & 8 != 0,
+                leader_x_power: (flags >> 4) & 1,
+                denom_idx_deg: 1,
+                denom_var_deg: 1,
+                inhomo_idx_deg: 1,
+                inhomo_var_deg: 1,
+                ..Default::default()
+            };
+            for chart in [
+                LeaderChart::CONSTANT,
+                LeaderChart {
+                    index_power: 1,
+                    x_power: 0,
+                },
+                LeaderChart {
+                    index_power: 0,
+                    x_power: 1,
+                },
+            ] {
+                let rational =
+                    fit_in_leader_chart::<BigRational>(&polys, &derivs, &opts, None, chart);
+                let integer = fit_in_leader_chart::<BigInt>(&polys, &derivs, &opts, None, chart);
+                assert_eq!(
+                    format!("{integer:?}"),
+                    format!("{rational:?}"),
+                    "flags {flags}, chart {chart:?}"
+                );
+                found += usize::from(integer.is_some());
+            }
+        }
+        assert!(found > 0);
+
+        // A selected square system with an integral input and a fractional solution.
+        let polys = i64_polys_to_rational(&[vec![16], vec![8], vec![4], vec![2], vec![1]]);
+        let derivs = rational_derivatives_up_to(&polys, 0);
+        let opts = RecurrenceOptions {
+            rec_len: 1,
+            idx_deg: 0,
+            var_deg: 0,
+            diff_deg: 0,
+            ..Default::default()
+        };
+        for selected in [None, Some(&[0][..]), Some(&[0, 0][..])] {
+            let integer = fit_in_leader_chart::<BigInt>(
+                &polys,
+                &derivs,
+                &opts,
+                selected,
+                LeaderChart::CONSTANT,
+            );
+            let rational = fit_in_leader_chart::<BigRational>(
+                &polys,
+                &derivs,
+                &opts,
+                selected,
+                LeaderChart::CONSTANT,
+            );
+            assert_eq!(format!("{integer:?}"), format!("{rational:?}"));
+            assert_eq!(integer.unwrap().to_string(), "P(n) = 1/2 P(n-1)");
+        }
+    }
 
     #[test]
     fn rational_input_geometric() {
@@ -766,7 +882,7 @@ mod tests {
         let rec = find_polynomial_recurrence(&polys, &alternating_opts)
             .expect("should find alternating-sign recurrence");
         assert_eq!(format!("{rec}"), "P(n) = (-1)^n P(n-1)");
-        assert_eq!(rec.to_latex(), "P(n) = (-1)^n P(n-1)");
+        assert_eq!(rec.to_latex(), "P_{n} = (-1)^n P_{n-1}");
         assert!(rec
             .to_mathematica_definition(&polys)
             .contains("Expand[(-1)^n*P[n - 1, t]]"));

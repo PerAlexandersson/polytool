@@ -1,6 +1,10 @@
 //! Paper theorems that prove a recurrence-defined family real-rooted, with
 //! every hypothesis checked exactly for all indices.
 //!
+//! - [`discover_recurrence_proofs`]: try all six general criteria and retain
+//!   every attempt in a replayable report, without catalogue attestations;
+//! - [`check_product_recurrence_theorem`]: product induction for uniformly
+//!   real-rooted multipliers and nonvanishing scalar denominators;
 //! - [`check_three_term_recurrence_theorem`]: three-term recurrences
 //!   `P_n = (a_n x + b_n) P_(n-1) - c_n P_(n-2)` (orthogonal-polynomial
 //!   recurrences, Favard), also after the coordinate change
@@ -107,7 +111,7 @@
 //! row that is checked exactly (a seed, or a root-region failure at a
 //! computed row).
 //!
-//! Related: `parent_proof` uses the four provers as parent routes of the
+//! Related: `parent_proof` uses these provers as parent routes of the
 //! Veronese-section lifts; [`match_recurrence_theorems`] (renewal windows) and
 //! the Rolle routes of [`transform_recurrence`] cover other families.
 
@@ -123,6 +127,12 @@ use num_traits::{One, Signed, Zero};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+mod discovery;
+pub use discovery::{
+    discover_recurrence_proofs, RecurrenceProofDiscoveryReport, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
+};
+mod product;
+pub use product::check_product_recurrence_theorem;
 mod derivative_lag;
 mod iterated_preserver;
 mod left_hand_factor;
@@ -152,6 +162,8 @@ const GENERATED_ROWS: usize = 12;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RealRootednessTheorem {
+    /// Product induction with uniformly real-rooted multipliers.
+    ProductRecurrence,
     /// [`check_three_term_recurrence_theorem`].
     ThreeTermRecurrence,
     /// [`check_liu_wang_theorem`].
@@ -503,6 +515,9 @@ fn check_at_supplied_seeds(
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     match theorem {
+        RealRootednessTheorem::ProductRecurrence => {
+            product::product_report(rule, first_index, seeds, options)
+        }
         RealRootednessTheorem::ThreeTermRecurrence => {
             three_term::three_term_report(rule, first_index, seeds, options)
         }

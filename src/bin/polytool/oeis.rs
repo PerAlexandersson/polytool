@@ -444,8 +444,7 @@ fn cmd_oeis_generate(args: &[String]) {
 
 pub(crate) fn cmd_oeis(args: &[String]) {
     let Some((subcommand, rest)) = args.split_first() else {
-        print_oeis_help();
-        std::process::exit(2);
+        crate::input::usage_error("oeis", "expected an OEIS subcommand");
     };
     match subcommand.as_str() {
         "list" => cmd_oeis_list(rest),
@@ -456,9 +455,19 @@ pub(crate) fn cmd_oeis(args: &[String]) {
         "evidence" => evidence::cmd_oeis_evidence(rest),
         "--help" | "-h" | "help" => print_oeis_help(),
         other => {
-            eprintln!("unknown oeis subcommand: {other}");
-            print_oeis_help();
-            std::process::exit(2);
+            crate::input::usage_error("oeis", &format!("unknown oeis subcommand: {other}"));
         }
     }
+}
+
+/// Route nested help without running catalog readers or writers.
+pub(crate) fn print_oeis_subcommand_help(command: Option<&str>) -> bool {
+    match command {
+        Some("add") => add::print_oeis_add_help(),
+        Some("check") => check::print_oeis_check_help(),
+        Some("evidence") => evidence::print_oeis_evidence_help(),
+        None | Some("list" | "info" | "generate" | "help" | "--help" | "-h") => print_oeis_help(),
+        Some(_) => return false,
+    }
+    true
 }

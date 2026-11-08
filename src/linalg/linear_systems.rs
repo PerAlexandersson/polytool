@@ -4,7 +4,9 @@
 //! no modular or floating-point rank decisions are used.
 
 use super::integer_elimination::{
-    back_substitute, integer_row, integer_rref, Elimination, EliminationBudget, IntegerRref,
+    back_substitute, integer_echelon_for_solve, integer_echelon_from_integer_rows, integer_row,
+    integer_rref, rescale_row, Elimination, EliminationBudget, IntegerEliminationResult,
+    IntegerRref,
 };
 use super::Q;
 use crate::BigRational;
@@ -236,6 +238,58 @@ pub fn rational_kernel_with_certificate(
     })
 }
 
+/// Solve an owned integer fit system without an intermediate rational matrix.
+/// The existing rational entry points remain the fallback on an unfinished
+/// integer elimination. Free coordinates are zero, as in the rational solver.
+pub(crate) fn solve_integer_fit_system(
+    mut matrix: Vec<Vec<BigInt>>,
+    rhs: Vec<BigInt>,
+    square: bool,
+) -> Option<Vec<Q>> {
+    let columns = matrix.first().map_or(0, Vec::len);
+    if matrix.len() != rhs.len()
+        || matrix.iter().any(|row| row.len() != columns)
+        || (square && matrix.len() != columns)
+    {
+        return None;
+    }
+    if matrix.is_empty() {
+        return Some(Vec::new());
+    }
+    for (row, value) in matrix.iter_mut().zip(rhs) {
+        row.push(value);
+    }
+    if square {
+        match solve_full_rank_square_integer_augmented(matrix.clone()) {
+            Ok(solution) => return Some(solution),
+            Err(SquareSolveFailure::Singular) => return None,
+            Err(SquareSolveFailure::Fallback) => {}
+        }
+    } else if let Some(outcome) = integer_echelon_from_integer_rows(matrix.clone(), columns) {
+        match outcome {
+            IntegerEliminationResult::Inconsistent => return None,
+            IntegerEliminationResult::Echelon(echelon) => {
+                if let Some(solution) = back_substitute(&echelon, columns) {
+                    return Some(solution);
+                }
+            }
+        }
+    }
+    let mut rational_rhs = Vec::with_capacity(matrix.len());
+    let rational_matrix: Vec<Vec<Q>> = matrix
+        .into_iter()
+        .map(|mut row| {
+            rational_rhs.push(Q::from_integer(row.pop().unwrap()));
+            row.into_iter().map(Q::from_integer).collect()
+        })
+        .collect();
+    if square {
+        solve_full_rank_square_linear_system(&rational_matrix, &rational_rhs)
+    } else {
+        solve_linear_system(&rational_matrix, &rational_rhs)
+    }
+}
+
 /// Solve `Ax = b` over ℚ and report the rank and nullity of `A`.
 ///
 /// Returns `None` if the dimensions are invalid or the system is
@@ -274,7 +328,11 @@ pub fn solve_linear_system_with_rank(
 
     // The solution, the rank and the consistency do not depend on the pivot rows, so
     // the integer forward elimination with back substitution decides them.
-    if let Ok(Some(echelon)) = integer_rref(&aug, num_cols, Elimination::ForwardSmallestRow, None) {
+    if let Some(outcome) = integer_echelon_for_solve(&aug, num_cols) {
+        let echelon = match outcome {
+            IntegerEliminationResult::Inconsistent => return None,
+            IntegerEliminationResult::Echelon(echelon) => echelon,
+        };
         let rank = echelon.pivots.len();
         if echelon.rows[rank..]
             .iter()
@@ -330,11 +388,12 @@ pub fn solve_linear_system(a: &[Vec<BigRational>], b: &[BigRational]) -> Option<
 
 /// Solve a nonsingular square system `Ax = b` over `Q`.
 ///
-/// This uses ordinary forward elimination followed by back-substitution.  It is
-/// faster than [`solve_linear_system`] when the caller already knows that the
-/// chosen rows form a full-rank square subsystem, because it does not compute a
-/// full reduced row-echelon form.  Returns `None` if the input is not square or
-/// if a zero pivot proves that the matrix is singular.
+/// Each equation's denominators are cleared once, including its right-hand
+/// side. Fraction-free forward elimination and integer back substitution then
+/// reduce rationals only for the final solution coordinates. Rational
+/// elimination remains the fallback if the integer solver cannot finish.
+/// Returns `None` if the input is not square or if a zero pivot proves that the
+/// matrix is singular.
 pub fn solve_full_rank_square_linear_system(
     a: &[Vec<BigRational>],
     b: &[BigRational],
@@ -347,10 +406,11 @@ pub fn solve_full_rank_square_linear_system(
         return Some(vec![]);
     }
 
-    if let Some(integer_aug) = square_rational_system_as_bigint_augmented(a, b) {
-        if let Some(solution) = solve_full_rank_square_integer_augmented(integer_aug) {
-            return Some(solution);
-        }
+    let integer_aug = square_rational_system_as_bigint_augmented(a, b);
+    match solve_full_rank_square_integer_augmented(integer_aug) {
+        Ok(solution) => return Some(solution),
+        Err(SquareSolveFailure::Singular) => return None,
+        Err(SquareSolveFailure::Fallback) => {}
     }
 
     let mut aug: Vec<Vec<Q>> = a
@@ -400,83 +460,96 @@ pub fn solve_full_rank_square_linear_system(
     Some(x)
 }
 
-fn square_rational_system_as_bigint_augmented(a: &[Vec<Q>], b: &[Q]) -> Option<Vec<Vec<BigInt>>> {
+fn square_rational_system_as_bigint_augmented(a: &[Vec<Q>], b: &[Q]) -> Vec<Vec<BigInt>> {
     a.iter()
         .zip(b.iter())
-        .map(|row| {
-            let (row, rhs) = row;
-            let mut augmented = row
+        .map(|(row, rhs)| {
+            // Keep the integer-input path free of temporary rational copies.
+            let integer = row
                 .iter()
+                .chain(std::iter::once(rhs))
                 .map(|entry| entry.denom().is_one().then(|| entry.numer().clone()))
-                .collect::<Option<Vec<_>>>()?;
-            augmented.push(rhs.denom().is_one().then(|| rhs.numer().clone())?);
-            Some(augmented)
+                .collect::<Option<Vec<_>>>();
+            integer.unwrap_or_else(|| {
+                let augmented: Vec<_> = row.iter().cloned().chain([rhs.clone()]).collect();
+                integer_row(&augmented).0
+            })
         })
         .collect()
 }
 
-fn solve_full_rank_square_integer_augmented(mut aug: Vec<Vec<BigInt>>) -> Option<Vec<Q>> {
+/// Singularity is an exact conclusion; only an unfinished elimination needs
+/// the rational fallback. Keeping these outcomes distinct avoids solving twice.
+#[derive(Debug, PartialEq, Eq)]
+enum SquareSolveFailure {
+    Singular,
+    Fallback,
+}
+
+fn solve_full_rank_square_integer_augmented(
+    mut aug: Vec<Vec<BigInt>>,
+) -> Result<Vec<Q>, SquareSolveFailure> {
     let n = aug.len();
     if aug.iter().any(|row| row.len() != n + 1) {
-        return None;
+        return Err(SquareSolveFailure::Fallback);
     }
     if n == 0 {
-        return Some(vec![]);
+        return Ok(vec![]);
     }
 
-    let mut denom = BigInt::one();
+    let mut previous = BigInt::one();
+    let mut levels = vec![BigInt::one(); n];
 
     for col in 0..n {
-        let pivot_row = (col..n).find(|&row| !aug[row][col].is_zero())?;
+        let pivot_row = (col..n)
+            .find(|&row| !aug[row][col].is_zero())
+            .ok_or(SquareSolveFailure::Singular)?;
         aug.swap(col, pivot_row);
-        let pivot = aug[col][col].clone();
-        if pivot.is_zero() {
-            return None;
+        levels.swap(col, pivot_row);
+        if levels[col] != previous && !rescale_row(&mut aug[col][col..], &previous, &levels[col]) {
+            return Err(SquareSolveFailure::Fallback);
         }
+        let pivot = aug[col][col].clone();
         if col == n - 1 {
             break;
         }
 
         let pivot_tail = aug[col][col + 1..=n].to_vec();
-        for target_row in &mut aug[(col + 1)..n] {
+        for (target_row, level) in aug[(col + 1)..n].iter_mut().zip(&mut levels[(col + 1)..n]) {
+            if target_row[col].is_zero() {
+                continue;
+            }
             let row_pivot = target_row[col].clone();
             target_row[col] = BigInt::zero();
             for (cell, tail) in target_row[(col + 1)..=n].iter_mut().zip(&pivot_tail) {
-                let numerator = if row_pivot.is_zero() {
-                    &*cell * &pivot
-                } else {
-                    &*cell * &pivot - &row_pivot * tail
-                };
-                if denom.is_one() {
+                // Fuse scaling from this row's level with elimination, as in
+                // the general solver. Untouched rows keep their earlier level.
+                let numerator = &*cell * &pivot - &row_pivot * tail;
+                if level.is_one() {
                     *cell = numerator;
                 } else {
-                    let (quotient, remainder) = numerator.div_rem(&denom);
+                    let (quotient, remainder) = numerator.div_rem(level);
                     if !remainder.is_zero() {
-                        return None;
+                        return Err(SquareSolveFailure::Fallback);
                     }
                     *cell = quotient;
                 }
             }
+            *level = pivot.clone();
         }
-        denom = pivot;
+        levels[col] = pivot.clone();
+        previous = pivot;
     }
 
-    let mut x = vec![Q::zero(); n];
-    for row in (0..n).rev() {
-        let diagonal = aug[row][row].clone();
-        if diagonal.is_zero() {
-            return None;
-        }
-        let mut value = Q::from_integer(aug[row][n].clone());
-        for (col, coeff) in aug[row].iter().enumerate().take(n).skip(row + 1) {
-            if !coeff.is_zero() {
-                value -= Q::from_integer(coeff.clone()) * &x[col];
-            }
-        }
-        x[row] = value / Q::from_integer(diagonal);
-    }
-
-    Some(x)
+    back_substitute(
+        &IntegerRref {
+            rows: aug,
+            pivots: (0..n).collect(),
+            origins: Vec::new(),
+        },
+        n,
+    )
+    .ok_or(SquareSolveFailure::Fallback)
 }
 
 #[cfg(test)]
@@ -488,6 +561,73 @@ mod tests {
     // -----------------------------------------------------------------------
     // Solve linear system
     // -----------------------------------------------------------------------
+
+    #[test]
+    fn square_delayed_scaling_handles_stale_rows_and_signed_swaps() {
+        // Consecutive skipped updates, negative pivots, and a later swap of
+        // rows at different levels. Compare each ordering with rational RREF.
+        let base = [
+            [2, 1, 0, 0, 0],
+            [0, -3, 1, 0, 0],
+            [0, 0, 0, 5, 1],
+            [0, 0, 7, 0, 1],
+            [0, 1, 0, 0, 11],
+        ];
+        for rotate in 0..5 {
+            let a: Vec<Vec<Q>> = (0..5)
+                .map(|i| base[(i + rotate) % 5].iter().copied().map(q).collect())
+                .collect();
+            let b: Vec<Q> = (0..5).map(|i| Q::new(bi(i + 1), bi(3))).collect();
+            let expected = reference_solution(&a, &b).unwrap().particular;
+            assert_eq!(
+                solve_full_rank_square_integer_augmented(
+                    square_rational_system_as_bigint_augmented(&a, &b)
+                ),
+                Ok(expected.clone())
+            );
+            assert_eq!(solve_full_rank_square_linear_system(&a, &b), Some(expected));
+        }
+    }
+
+    #[test]
+    fn square_singularity_is_distinct_from_an_unfinished_solve() {
+        for a in [
+            vec![vec![q(0), q(1)], vec![q(0), q(2)]],
+            vec![vec![q(1), q(2)], vec![q(2), q(4)]],
+            vec![
+                vec![q(0), q(1), q(2)],
+                vec![q(1), q(0), q(3)],
+                vec![q(1), q(1), q(5)],
+            ],
+        ] {
+            // Both consistent and inconsistent right-hand sides have no unique solution.
+            for b in [
+                vec![q(0); a.len()],
+                (0..a.len()).map(|i| q(i as i64 + 1)).collect(),
+            ] {
+                let augmented = square_rational_system_as_bigint_augmented(&a, &b);
+                assert_eq!(
+                    solve_full_rank_square_integer_augmented(augmented),
+                    Err(SquareSolveFailure::Singular)
+                );
+                assert_eq!(solve_full_rank_square_linear_system(&a, &b), None);
+                assert_eq!(
+                    solve_integer_fit_system(
+                        a.iter()
+                            .map(|row| row.iter().map(|c| c.numer().clone()).collect())
+                            .collect(),
+                        b.iter().map(|c| c.numer().clone()).collect(),
+                        true
+                    ),
+                    None
+                );
+            }
+        }
+        assert_eq!(
+            solve_full_rank_square_integer_augmented(vec![vec![bi(1)]]),
+            Err(SquareSolveFailure::Fallback)
+        );
+    }
 
     #[test]
     fn linear_system_reports_rank_and_nullity() {
@@ -579,7 +719,7 @@ mod tests {
     }
 
     #[test]
-    fn test_solve_full_rank_square_rational_fallback() {
+    fn test_solve_full_rank_square_rational_inputs() {
         // x - y = 0, x/2 + y = 2 -> x = y = 4/3.
         let half = Q::new(bi(1), bi(2));
         let a = vec![
@@ -821,6 +961,169 @@ mod tests {
     }
 
     #[test]
+    fn exact_contradictions_stop_solve_but_not_full_reduction() {
+        for (a, b) in [
+            (vec![vec![q(0), q(0)]], vec![q(1)]),
+            (vec![vec![q(1), q(1)], vec![q(2), q(2)]], vec![q(3), q(7)]),
+            (
+                vec![vec![q(0), q(1) / q(2)], vec![q(0), q(1) / q(3)]],
+                vec![q(1), q(1)],
+            ),
+        ] {
+            let columns = a[0].len();
+            let augmented = a
+                .iter()
+                .zip(&b)
+                .map(|(row, rhs)| row.iter().cloned().chain([rhs.clone()]).collect::<Vec<_>>())
+                .collect::<Vec<_>>();
+            assert!(matches!(
+                integer_echelon_for_solve(&augmented, columns),
+                Some(IntegerEliminationResult::Inconsistent)
+            ));
+            assert_eq!(
+                solve_linear_system_with_rank(&a, &b),
+                reference_solution(&a, &b)
+            );
+            // Kernel/certificate consumers still receive complete reduction,
+            // including when the trailing column is not a system RHS.
+            let full = integer_rref(&augmented, columns, Elimination::GaussJordan, None)
+                .unwrap()
+                .unwrap();
+            let (expected, pivots, _) = reference_reduction(&augmented, columns, None).unwrap();
+            assert_eq!(full.pivots, pivots);
+            assert_eq!(full.rows.len(), expected.len());
+        }
+        // Zero rows and rank-deficient consistent systems must not be rejected.
+        let a = vec![vec![q(0), q(0)], vec![q(1), q(2)], vec![q(2), q(4)]];
+        let b = vec![q(0), q(3), q(6)];
+        assert_eq!(
+            solve_linear_system_with_rank(&a, &b),
+            reference_solution(&a, &b)
+        );
+    }
+
+    #[test]
+    fn sparse_solves_with_delayed_row_updates_stay_fraction_free() {
+        // Skipped pivot columns leave rows at different integer levels. Include
+        // negative pivots, rational row scalings, free columns and dependent rows.
+        let base = [
+            [2, 0, 0, 3, 0, 1],
+            [0, 0, -3, 0, 2, 1],
+            [0, 0, 0, 5, 0, 2],
+            [0, 0, 0, 0, 0, 7],
+            [0, 0, 0, 10, 0, 4],
+            [0, 0, 0, 0, 0, 0],
+        ];
+        for (rotation, shift) in
+            (0..base.len()).flat_map(|rotation| [0, 96].map(move |shift| (rotation, shift)))
+        {
+            let scale = Q::from_integer(BigInt::one() << shift);
+            let mut a: Vec<Vec<Q>> = base
+                .iter()
+                .enumerate()
+                .map(|(i, row)| {
+                    row.iter()
+                        .map(|&v| q(v) * &scale / q(i as i64 + 2))
+                        .collect()
+                })
+                .collect();
+            a.rotate_left(rotation);
+            let b: Vec<Q> = a
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .enumerate()
+                        .map(|(j, x)| x / q(j as i64 + 2))
+                        .sum()
+                })
+                .collect();
+            let augmented: Vec<Vec<Q>> = a
+                .iter()
+                .zip(&b)
+                .map(|(row, rhs)| row.iter().cloned().chain([rhs.clone()]).collect())
+                .collect();
+            let Some(IntegerEliminationResult::Echelon(echelon)) =
+                integer_echelon_for_solve(&augmented, 6)
+            else {
+                panic!("consistent delayed updates must not need the rational fallback");
+            };
+            let expected = reference_solution(&a, &b).unwrap();
+            assert_eq!(echelon.pivots, [0, 2, 3, 5]);
+            assert_eq!(back_substitute(&echelon, 6), Some(expected.particular));
+        }
+    }
+
+    #[test]
+    fn square_integer_back_substitution_matches_rational_reference() {
+        for seed in 0..100u64 {
+            let n = 1 + (seed % 10) as usize;
+            let a = pseudo_random_matrix(7000 + seed, n, n, false);
+            let b: Vec<_> = (0..n).map(|i| q(i as i64 - 3)).collect();
+            let expected = reference_solution(&a, &b)
+                .filter(|solution| solution.rank == n)
+                .map(|solution| solution.particular);
+            let integer_aug = square_rational_system_as_bigint_augmented(&a, &b);
+            assert_eq!(
+                solve_full_rank_square_integer_augmented(integer_aug).ok(),
+                expected,
+                "seed {seed}"
+            );
+        }
+    }
+
+    #[test]
+    fn square_denominator_clearing_includes_rhs_and_preserves_row_swaps() {
+        let a = vec![
+            vec![q(0), q(1) / q(2), -q(1) / q(3)],
+            vec![q(2) / q(5), q(0), q(3) / q(7)],
+            vec![q(1), q(0), q(1) / q(11)],
+        ];
+        let b = vec![q(1) / q(13), -q(2) / q(17), q(3) / q(19)];
+        let augmented = square_rational_system_as_bigint_augmented(&a, &b);
+        assert_eq!(augmented[0], [bi(0), bi(39), bi(-26), bi(6)]);
+        let expected = reference_solution(&a, &b).unwrap().particular;
+        assert_eq!(
+            solve_full_rank_square_integer_augmented(augmented).ok(),
+            Some(expected.clone())
+        );
+        assert_eq!(solve_full_rank_square_linear_system(&a, &b), Some(expected));
+
+        // Only the RHS needs denominator clearing in this one-equation system.
+        assert_eq!(
+            solve_full_rank_square_linear_system(&[vec![q(2)]], &[q(1) / q(3)]),
+            Some(vec![q(1) / q(6)])
+        );
+    }
+
+    #[test]
+    fn square_rational_inputs_match_reference_without_rational_fallback() {
+        let (mut nonsingular, mut singular) = (0, 0);
+        for seed in 0..200u64 {
+            let n = 1 + (seed % 10) as usize;
+            let a = pseudo_random_matrix(8000 + seed, n, n, true);
+            let b: Vec<_> = (0..n).map(|i| q(i as i64 - 3) / q(i as i64 + 2)).collect();
+            let expected = reference_solution(&a, &b)
+                .filter(|solution| solution.rank == n)
+                .map(|solution| solution.particular);
+            if expected.is_some() {
+                nonsingular += 1;
+            } else {
+                singular += 1;
+            }
+            assert_eq!(
+                solve_full_rank_square_integer_augmented(
+                    square_rational_system_as_bigint_augmented(&a, &b)
+                )
+                .ok(),
+                expected,
+                "seed {seed}"
+            );
+            assert_eq!(solve_full_rank_square_linear_system(&a, &b), expected);
+        }
+        assert!(nonsingular > 0 && singular > 0);
+    }
+
+    #[test]
     fn solving_matches_the_rational_reference() {
         let (mut consistent, mut inconsistent) = (0, 0);
         for seed in 0..400u64 {
@@ -845,6 +1148,20 @@ mod tests {
                     expected,
                     "seed {seed}"
                 );
+                if seed % 2 == 0 {
+                    let integer_matrix = a
+                        .iter()
+                        .map(|row| row.iter().map(|c| c.numer().clone()).collect())
+                        .collect();
+                    let integer_rhs = b.iter().map(|c| c.numer().clone()).collect();
+                    assert_eq!(
+                        solve_integer_fit_system(integer_matrix, integer_rhs, false),
+                        expected
+                            .as_ref()
+                            .map(|solution| solution.particular.clone()),
+                        "integer input seed {seed}"
+                    );
+                }
                 if expected.is_some() {
                     consistent += 1;
                 } else {

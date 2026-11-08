@@ -1,6 +1,7 @@
 //! `polytool bkw-scout`: numerical BKW equal-modulus scouting.
 
 use crate::input::read_limited_text;
+use crate::json_out::json_string;
 use polytool::*;
 use std::io::{self};
 
@@ -25,10 +26,13 @@ pub(crate) fn bkw_scout_usage() {
     println!("  --min-imag <eps>         Minimum |Im(x)| unless real axis is included");
     println!("  --refine-steps <n>       Local coordinate-refinement steps (default: 8)");
     println!("  --no-refine              Disable local refinement");
-    println!("  --tol <eps>              Durand--Kerner root tolerance");
-    println!("  --max-iter <n>           Durand--Kerner max iterations");
+    println!("  --tol <eps>              Positive finite Durand--Kerner root tolerance");
+    println!("  --max-iter <n>           Positive Durand--Kerner max iterations");
     println!("  --format <text|json>     Output format (default: text)");
+    println!("  --json                  Alias for --format json");
     println!("  --mathematica            Also print an exact Mathematica Reduce skeleton");
+    println!("                          With JSON, adds a mathematica string field");
+    println!("  All floating-point options must be finite; --min-imag must be nonnegative.");
 }
 
 pub(crate) fn cmd_bkw_scout(args: &[String]) {
@@ -48,14 +52,14 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--symbol requires an argument.");
-                    return;
+                    std::process::exit(2);
                 }
                 symbol_input = Some(args[i].clone());
             }
             "--box" => {
                 if i + 4 >= args.len() {
                     eprintln!("--box requires four numeric arguments.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.re_min = parse_f64_arg("--box re_min", &args[i + 1]);
                 options.re_max = parse_f64_arg("--box re_max", &args[i + 2]);
@@ -67,7 +71,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--grid requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 let grid = parse_usize_arg("--grid", &args[i]);
                 options.grid_re = grid;
@@ -77,7 +81,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--grid-re requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.grid_re = parse_usize_arg("--grid-re", &args[i]);
             }
@@ -85,7 +89,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--grid-im requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.grid_im = parse_usize_arg("--grid-im", &args[i]);
             }
@@ -93,7 +97,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--top requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.max_results = parse_usize_arg("--top", &args[i]);
             }
@@ -104,7 +108,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--min-imag requires a numeric argument.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.min_imaginary_abs = parse_f64_arg("--min-imag", &args[i]);
             }
@@ -112,7 +116,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--refine-steps requires a nonnegative integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.refine_steps = parse_usize_arg("--refine-steps", &args[i]);
             }
@@ -123,7 +127,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--tol requires a numeric argument.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.root_options.tolerance = parse_f64_arg("--tol", &args[i]);
             }
@@ -131,7 +135,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--max-iter requires a positive integer.");
-                    return;
+                    std::process::exit(2);
                 }
                 options.root_options.max_iterations = parse_usize_arg("--max-iter", &args[i]);
             }
@@ -139,29 +143,51 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
                 i += 1;
                 if i >= args.len() {
                     eprintln!("--format requires text or json.");
-                    return;
+                    std::process::exit(2);
                 }
                 format = args[i].clone();
             }
             "--mathematica" => {
                 print_mathematica = true;
             }
+            "--json" => format = "json".to_string(),
             other => {
-                eprintln!("Unknown bkw-scout option: {}", other);
-                bkw_scout_usage();
-                return;
+                crate::input::usage_error(
+                    "bkw-scout",
+                    &format!("unknown bkw-scout option: {other}"),
+                );
             }
         }
         i += 1;
     }
 
+    if !matches!(format.as_str(), "text" | "json") {
+        eprintln!("Unknown output format: {format}; expected text or json.");
+        std::process::exit(2);
+    }
     if options.re_min > options.re_max || options.im_min > options.im_max {
         eprintln!("Invalid box: lower bounds must be <= upper bounds.");
-        return;
+        std::process::exit(2);
     }
     if options.grid_re == 0 || options.grid_im == 0 || options.max_results == 0 {
         eprintln!("Grid sizes and --top must be positive.");
-        return;
+        std::process::exit(2);
+    }
+    if !(options.re_max - options.re_min).is_finite()
+        || !(options.im_max - options.im_min).is_finite()
+        || !(options.re_max + options.re_min).is_finite()
+        || !(options.im_max + options.im_min).is_finite()
+    {
+        eprintln!("Box endpoints overflow grid arithmetic; choose a smaller box.");
+        std::process::exit(2);
+    }
+    if options.min_imaginary_abs < 0.0 {
+        eprintln!("--min-imag must be nonnegative.");
+        std::process::exit(2);
+    }
+    if options.root_options.tolerance <= 0.0 || options.root_options.max_iterations == 0 {
+        eprintln!("--tol and --max-iter must be positive.");
+        std::process::exit(2);
     }
 
     let input = match symbol_input {
@@ -170,7 +196,7 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
             Ok(input) => input,
             Err(error) => {
                 eprintln!("{error}");
-                return;
+                std::process::exit(2);
             }
         },
     };
@@ -178,21 +204,27 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
         Ok(symbol) => symbol,
         Err(e) => {
             eprintln!("{}", e);
-            return;
+            std::process::exit(2);
         }
     };
 
     let candidates = symbol.scout_equal_modulus_locus(&options);
     match format.as_str() {
         "text" => print_bkw_text(&symbol, &options, &candidates),
-        "json" => print_bkw_json(&symbol, &options, &candidates),
+        "json" => {
+            if !candidates.iter().all(candidate_has_finite_json_fields) {
+                eprintln!("Numerical scout produced non-finite results; cannot emit JSON. Try a smaller box or a different symbol.");
+                std::process::exit(2);
+            }
+            print_bkw_json(&symbol, &options, &candidates, print_mathematica);
+        }
         other => {
             eprintln!("Unknown output format: {}", other);
-            return;
+            std::process::exit(2);
         }
     }
 
-    if print_mathematica {
+    if print_mathematica && format == "text" {
         println!();
         println!("Mathematica exact equal-modulus skeleton:");
         println!("{}", symbol.mathematica_equal_modulus_query());
@@ -200,10 +232,37 @@ pub(crate) fn cmd_bkw_scout(args: &[String]) {
 }
 
 fn parse_f64_arg(name: &str, value: &str) -> f64 {
-    value.parse::<f64>().unwrap_or_else(|_| {
-        eprintln!("{} expects a floating-point number, got '{}'.", name, value);
-        std::process::exit(2);
-    })
+    value
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite())
+        .unwrap_or_else(|| {
+            eprintln!(
+                "{} expects a finite floating-point number, got '{}'.",
+                name, value
+            );
+            std::process::exit(2);
+        })
+}
+
+fn candidate_has_finite_json_fields(candidate: &BkwScoutCandidate) -> bool {
+    [
+        candidate.x.re,
+        candidate.x.im,
+        candidate.relative_modulus_gap,
+        candidate.log_modulus_gap,
+        candidate.root_residual,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+        && candidate
+            .dominance_ratio
+            .is_none_or(|value| value.is_finite() || value == f64::INFINITY)
+        && candidate.roots_by_modulus.iter().all(|root| {
+            [root.root.re, root.root.im, root.modulus]
+                .iter()
+                .all(|value| value.is_finite())
+        })
 }
 
 fn parse_usize_arg(name: &str, value: &str) -> usize {
@@ -278,7 +337,12 @@ fn print_bkw_text(symbol: &BkwSymbol, options: &BkwScoutOptions, candidates: &[B
     );
 }
 
-fn print_bkw_json(symbol: &BkwSymbol, options: &BkwScoutOptions, candidates: &[BkwScoutCandidate]) {
+fn print_bkw_json(
+    symbol: &BkwSymbol,
+    options: &BkwScoutOptions,
+    candidates: &[BkwScoutCandidate],
+    mathematica: bool,
+) {
     println!("{{");
     println!("  \"symbol\": {:?},", symbol.format_symbol());
     println!(
@@ -327,6 +391,12 @@ fn print_bkw_json(symbol: &BkwSymbol, options: &BkwScoutOptions, candidates: &[B
         println!("    }}{}", comma);
     }
     println!("  ],");
+    if mathematica {
+        println!(
+            "  \"mathematica\": {},",
+            json_string(&symbol.mathematica_equal_modulus_query())
+        );
+    }
     println!(
         "{}",
         concat!(
@@ -335,4 +405,38 @@ fn print_bkw_json(symbol: &BkwSymbol, options: &BkwScoutOptions, candidates: &[B
         )
     );
     println!("}}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_finite_results_cannot_reach_json_numeric_fields() {
+        let symbol = BkwSymbol::from_z_coefficients(vec![vec![1], vec![0], vec![1]])
+            .expect("quadratic symbol");
+        let options = BkwScoutOptions {
+            grid_re: 1,
+            grid_im: 1,
+            include_real_axis: true,
+            refine_steps: 0,
+            ..BkwScoutOptions::default()
+        };
+        let candidate = symbol.scout_equal_modulus_locus(&options).remove(0);
+        assert!(candidate_has_finite_json_fields(&candidate));
+        let mut altered = candidate.clone();
+        altered.root_residual = f64::NAN;
+        assert!(!candidate_has_finite_json_fields(&altered));
+        let mut altered = candidate.clone();
+        altered.roots_by_modulus[0].root.re = f64::INFINITY;
+        assert!(!candidate_has_finite_json_fields(&altered));
+        let mut altered = candidate;
+        // The existing JSON convention represents this case as "Infinity".
+        altered.dominance_ratio = Some(f64::INFINITY);
+        assert!(candidate_has_finite_json_fields(&altered));
+        for value in [f64::NAN, f64::NEG_INFINITY] {
+            altered.dominance_ratio = Some(value);
+            assert!(!candidate_has_finite_json_fields(&altered));
+        }
+    }
 }

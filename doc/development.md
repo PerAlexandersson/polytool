@@ -1,5 +1,34 @@
 # Development
 
+## Documentation site
+
+Source API documentation uses Rust's `//!` and `///` comments. Build it with
+`cargo doc --locked --no-deps`. To combine the guides, executable-derived
+command reference and searchable rustdoc for all three core libraries, install
+Python 3.9 or later and Pandoc, then run from the repository root:
+
+```sh
+python3 scripts/build-docs.py --output /tmp/polytool-docs
+python3 -m http.server --directory /tmp/polytool-docs 8000
+```
+
+The output directory must be new or empty and outside the source workspace.
+The builder uses a fresh external Cargo target directory, checks local guide
+links and rejects symbolic links in the site. It renders every `doc/*.md`
+guide, gathers command names from `polytool help --json`, and gathers details
+from each command's `--help`, including OEIS maintenance subcommands. Add
+new commands to `src/bin/polytool/commands.rs` and their detailed help to
+`help.rs`; the workflow test checks that every registered command has help.
+
+The Documentation GitHub workflow builds an artifact for pull requests and
+manual runs. Publishing is manual: configure the repository's Pages source
+as GitHub Actions, then run the workflow on `main` with `publish` enabled.
+The deployment job uses the `github-pages` environment and its protection
+rules. Ordinary builds and pull requests do not deploy. This site is separate
+from the WebAssembly application.
+
+## Checks
+
 Run the core tests:
 
 ```sh
@@ -82,6 +111,42 @@ elimination used to spend about 80% of these workloads in the gcd reductions of
 (see its module documentation), and the remaining cost is `num_bigint`
 multiplication and exact division.
 
+The integer update now combines delayed target-row scaling with elimination and
+sets the eliminated pivot-column entry to zero without computing cancelling
+products. The integer square solver uses the same integer back substitution as
+the general solver, reducing fractions only for final solution coordinates.
+These changes preserve the integer update results and rational certificate budgets.
+
+Rational square systems now clear denominators once per augmented row using
+the same helper as general integer elimination. Integer-only rows retain their
+direct conversion path, and rational elimination remains an exact fallback.
+`benchmark_rational_square --size 48 --repeat 5` measures integer, row-scaled,
+mixed-denominator, fractional-RHS and Hilbert systems with known exact solutions.
+Setup and solution comparison are outside the timer; denominator clearing is
+included. Use separate binaries and alternate their order for comparisons.
+The `singular_early` and `singular_late` cases check rejection near the first
+and last pivot; their exact expected result is `None`. Proven singularity
+returns immediately, while a non-exact division still requests the fallback.
+The `bidiagonal` and `block_diagonal` cases measure sparse nonsingular systems.
+Square elimination now also keeps a level for each row, skipping rows with a
+zero pivot-column entry. A selected pivot row is brought to the current level;
+target updates fuse scaling and elimination, dividing by the target's own
+level. The existing integer rescaling helper checks every exact division.
+
+Exact solves stop when a row proves `0 = c` with nonzero `c`; this path returns
+no rank. Kernel and certificate computations still request complete reduction.
+`benchmark_exact_solving` measures six bounded recurrence searches (including
+500- and 1,500-candidate cutoffs) and emits JSON Lines with exact outcome keys.
+Build separate release executables before and after a change, alternate their
+order, and compare outcome keys and search options as well as timings. A cutoff
+is an incomplete search, not evidence that no recurrence exists.
+
+For integral source rows and derivatives, exact recurrence fitting constructs
+the matrix with `BigInt` entries and feeds the existing integer elimination
+directly. Fractional sources retain rational construction and row denominator
+clearing. Both paths use the same column layout, normalization charts and
+verification; integral input does not require integral solution coefficients.
+
 ## Examples
 
 The tracked programs in `examples/` are run with
@@ -97,6 +162,10 @@ The tracked programs in `examples/` are run with
   exact root counting.
 - `benchmark_recurrence_fixtures`: benchmarks adaptive recurrence search on the
   fixture suite in `fixtures/recurrence-benchmarks/`.
+- `benchmark_exact_solving`: benchmarks bounded recurrence searches;
+  `--repeat N` and `--only SUBSTRING` select repetitions and cases.
+- `benchmark_rational_square`: benchmarks exact square solving with integer and
+  fractional inputs; `--size N`, `--repeat N` and `--only SUBSTRING` select cases.
 - `brenti_recognition`: recognizes the Pascal rows as rows of a planar strip
   digraph and checks the chain polynomials of a small TNN matrix.
 - `generate_recurrence_benchmarks OUT_DIR`: regenerates the synthetic

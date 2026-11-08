@@ -1068,3 +1068,13 @@ cargo fmt --manifest-path mcp/Cargo.toml
 
 Report issues in the Git repository, or contact Per Alexandersson
 (@PerAlexandersson, <per.w.alexandersson@gmail.com>).
+
+## General recurrence proof discovery
+
+`discover_recurrence_proofs` takes `recurrence_json` and optional
+`maximum_start_delay` (default 3, at most 16). It tries six general theorem
+families without catalogue lookup. `verify_recurrence_proofs` takes
+`report_json` and replays every attempt and exact certificate. A proved
+result concerns the recurrence-defined sequence; finite fits require a
+separate all-index identity. Lean replay is not attempted. See
+[the proof-discovery guide](../doc/proof-discovery.md).

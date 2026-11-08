@@ -327,6 +327,15 @@ ascending `Vec<BigInt>` polynomials in `q`: `q_integer(n)`, `q_factorial(n)`,
 
 ## Standard sequences and indexing
 
+`sequences::schur::rectangular_elementary_substitution_polynomials_bigint`
+evaluates rectangular dual Jacobi–Trudi determinants with one elementary
+coordinate varied, using exact polynomial Bareiss elimination. Its positive
+integer alphabet, height, and moving elementary index determine the family;
+rows start at width zero with `[1]`. The moving index may exceed alphabet size:
+substitution precedes specialization. The sign is `(-1)^(moving-height)`.
+See `examples/rectangular_schur_substitution.rs` for an interior-height example.
+
+
 `polytool::sequences` generators take `max_n` and return `rows[n]` for
 `n = 0..=max_n` (the n-th member of the family, with `rows[0]` the `n = 0`
 member), so Eulerian rows are `A_0 = 1, A_1 = 1, A_2 = 1 + t, ...`.  The
@@ -1489,3 +1498,14 @@ integral version reports any non-exact division).  The search statistics are
 deterministic counters; no wall-clock times are recorded.  The MCP tool
 `enumerate_real_rooted` exposes the operation with conservative ceilings (see
 [the MCP notes](mcp.md)).
+
+## Direct general recurrence proofs
+
+`recurrence::discover_recurrence_proofs` runs the general product, three-term,
+Liu–Wang, derivative-lag and Ma–Wang theorem checks on a `RecurrenceJson`.
+`RecurrenceProofDiscoveryReport::verify` replays the complete search; the
+standalone `check_product_recurrence_theorem` also produces a replayable
+`RealRootednessTheoremReport`. The product checker is reused by
+`prove_parent_real_rootedness` when negative roots are certified. See
+[General recurrence proof discovery](proof-discovery.md) for contracts and
+Lean correspondence. No catalogue fallback occurs in direct discovery.

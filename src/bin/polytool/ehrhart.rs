@@ -30,7 +30,7 @@ pub(crate) fn cmd_hstar_to_ehrhart(args: &[String]) {
         Ok(format) => format,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let mut json_items = Vec::new();
@@ -63,7 +63,7 @@ pub(crate) fn cmd_ehrhart_to_hstar(args: &[String]) {
         Ok(format) => format,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let mut json_items = Vec::new();
@@ -242,7 +242,7 @@ pub(crate) fn cmd_hstar_inequalities(args: &[String]) {
         Ok(options) => options,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let reports = read_polys_bigint()

@@ -548,6 +548,24 @@ pub struct RecurrenceTheoremsRequest {
     pub recurrence_json: String,
 }
 
+/// General proof search for a recurrence-defined sequence, without catalogue lookup.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DiscoverRecurrenceProofsRequest {
+    /// A polytool.recurrence.v1 record, including seeds.
+    pub recurrence_json: String,
+    /// Induction-start retries, default 3; at most 16.
+    pub maximum_start_delay: Option<usize>,
+}
+
+/// Replay a complete general recurrence proof-discovery report.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VerifyRecurrenceProofsRequest {
+    /// A polytool.recurrence-proof-discovery.v1 report as JSON text.
+    pub report_json: String,
+}
+
 /// A supplied `polytool.recurrence.v1` record for the sequence `Q_n(y)` and
 /// the bounds of the Veronese-section lift search.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]

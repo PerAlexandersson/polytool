@@ -33,7 +33,18 @@ pub(crate) fn read_stdin_or_exit() -> String {
 }
 
 pub(crate) fn is_help_arg(arg: &str) -> bool {
-    matches!(arg, "-h" | "--help" | "help")
+    matches!(arg, "-h" | "--help")
+}
+
+/// Reject a command's arguments without writing help text into its data stream.
+pub(crate) fn usage_error(command: &str, message: &str) -> ! {
+    eprintln!("{message}");
+    if command.is_empty() {
+        eprintln!("Run `polytool --help` for usage.");
+    } else {
+        eprintln!("Run `polytool help {command}` for usage.");
+    }
+    std::process::exit(2);
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -78,8 +89,7 @@ pub(crate) fn parse_usize_option(
 }
 
 pub(crate) fn read_polys_bigint() -> Vec<Vec<BigInt>> {
-    let input = read_stdin_or_exit();
-    parse_polynomials_bigint(&input)
+    read_poly_parse_results_bigint()
         .into_iter()
         .map(|result| match result {
             Ok(polynomial) => polynomial,
@@ -99,24 +109,28 @@ pub(crate) fn error_text<E: std::fmt::Display>(error: E) -> String {
 
 pub(crate) fn read_poly_parse_results_bigint() -> Vec<Result<Vec<BigInt>, String>> {
     let input = read_stdin_or_exit();
-    parse_polynomials_bigint(&input)
-        .into_iter()
-        .map(|result| result.map_err(error_text))
+    polynomial_input_lines(&input)
+        .map(|(number, line)| {
+            parse_polynomial_bigint(line).map_err(|error| format!("line {number}: {error}"))
+        })
         .collect()
+}
+
+/// Preserve physical source lines while ignoring comments and blank lines.
+fn polynomial_input_lines(input: &str) -> impl Iterator<Item = (usize, &str)> {
+    input.lines().enumerate().filter_map(|(index, line)| {
+        let trimmed = line.trim();
+        (!trimmed.is_empty() && !trimmed.starts_with('#')).then_some((index + 1, line))
+    })
 }
 
 pub(crate) fn read_polys_rational() -> Vec<Vec<RecurrenceBigRational>> {
     let input = read_stdin_or_exit();
-    input
-        .lines()
-        .filter(|l| {
-            let t = l.trim();
-            !t.is_empty() && !t.starts_with('#')
-        })
-        .map(|line| match parse_coeff_list_rational(line) {
+    polynomial_input_lines(&input)
+        .map(|(number, line)| match parse_coeff_list_rational(line) {
             Ok(polynomial) => polynomial,
             Err(error) => {
-                eprintln!("Invalid polynomial input: {error}");
+                eprintln!("Invalid polynomial input at line {number}: {error}");
                 std::process::exit(2);
             }
         })
@@ -130,7 +144,7 @@ fn parse_coeff_list_rational(input: &str) -> Result<Vec<RecurrenceBigRational>, 
     }
     if s.chars().any(|c| c.is_ascii_alphabetic()) {
         return Err(format!(
-            "recurrence input expects coefficient lists, got expanded polynomial '{}'",
+            "expected a coefficient list, got expanded polynomial '{}'",
             input
         ));
     }
@@ -150,30 +164,12 @@ fn parse_coeff_list_rational(input: &str) -> Result<Vec<RecurrenceBigRational>, 
 
     parts
         .iter()
-        .map(|part| parse_big_rational(part.trim()))
+        .enumerate()
+        .map(|(index, part)| {
+            polytool::recurrence::parse_rational_coeff(part)
+                .map_err(|error| format!("coefficient {}: {error}", index + 1))
+        })
         .collect()
-}
-
-fn parse_big_rational(token: &str) -> Result<RecurrenceBigRational, String> {
-    if token.is_empty() {
-        return Err("empty coefficient".to_string());
-    }
-    if let Some((num, den)) = token.split_once('/') {
-        let num = parse_bigint(num.trim())?;
-        let den = parse_bigint(den.trim())?;
-        if den == BigInt::from(0) {
-            return Err(format!("zero denominator in coefficient '{}'", token));
-        }
-        Ok(RecurrenceBigRational::new(num, den))
-    } else {
-        Ok(RecurrenceBigRational::from_integer(parse_bigint(token)?))
-    }
-}
-
-fn parse_bigint(token: &str) -> Result<BigInt, String> {
-    token
-        .parse::<BigInt>()
-        .map_err(|e| format!("invalid integer '{}': {}", token, e))
 }
 
 fn strip_coeff_list_brackets(s: &str) -> &str {
@@ -205,4 +201,33 @@ pub(crate) fn polynomial_degree_bigint(coeffs: &[BigInt]) -> usize {
         .iter()
         .rposition(|c| c != &BigInt::from(0))
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rational_lists_keep_exact_values_and_existing_syntax() {
+        let expected = vec![
+            RecurrenceBigRational::new(1.into(), 2.into()),
+            RecurrenceBigRational::new((-3).into(), 4.into()),
+        ];
+        for input in ["1/2 -3/4", "[ 2 / 4, 3 / -4 ]", "{1/2,-3/4}", "(1/2,-3/4)"] {
+            assert_eq!(
+                parse_coeff_list_rational(input).unwrap(),
+                expected,
+                "{input}"
+            );
+        }
+        assert!(parse_coeff_list_rational("[]").unwrap().is_empty());
+        let huge = "1234567890123456789012345678901234567890";
+        assert_eq!(
+            parse_coeff_list_rational(huge).unwrap()[0].to_string(),
+            huge
+        );
+        for input in ["1,,2", "1,2/0", "1,2/3/4", "1+x", "[1,2)"] {
+            assert!(parse_coeff_list_rational(input).is_err(), "{input}");
+        }
+    }
 }

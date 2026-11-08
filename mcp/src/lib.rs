@@ -37,6 +37,7 @@ pub use requests::{
     RecurrenceSearchOptionsInput, RecurrenceSpacesToolRequest, SequenceKind,
     TotallyNonnegativeNetworkRequest, VerifyRecurrenceSpacesToolRequest,
 };
+pub use requests::{DiscoverRecurrenceProofsRequest, VerifyRecurrenceProofsRequest};
 pub use requests::{LeftProductionRequest, PfNetworkRequest};
 pub use requests::{
     RecurrenceRepresentationSearchToolRequest, VerifyRecurrenceRepresentationSearchToolRequest,

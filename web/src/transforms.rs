@@ -208,10 +208,7 @@ fn verify_enclosures_value(report_json: &str) -> Result<serde_json::Value, Strin
     let report: RootEnclosureReport = serde_json::from_str(report_json).map_err(error_text)?;
     check_schema(&report.schema, ROOT_ENCLOSURES_SCHEMA)?;
     check_enclosure_request(&report.request)?;
-    let recomputed = polytool::recurrence::root_enclosures(&report.request).map_err(error_text)?;
-    if recomputed != report {
-        return Err("root enclosures differ from the exact recomputation".into());
-    }
+    polytool::recurrence::verify_root_enclosures(&report).map_err(error_text)?;
     Ok(serde_json::json!({
         "schema": ROOT_ENCLOSURES_SCHEMA,
         "verified": true,
@@ -659,7 +656,7 @@ mod tests {
         assert!(parse(&recurrence_theorems("{}"))["error"].is_string());
 
         let latex = parse(&recurrence_latex(&record.to_string()));
-        assert!(latex["latex"].as_str().unwrap().contains("P(n)"));
+        assert!(latex["latex"].as_str().unwrap().contains("P_{n}"));
     }
 
     fn pascal_search_request() -> Value {

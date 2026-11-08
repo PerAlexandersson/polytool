@@ -219,6 +219,7 @@ fn rule_of_json_data(data: &RecurrenceJsonData) -> Result<Recurrence, Recurrence
         initial_polynomials: Vec::new(),
         recurrence: data.clone(),
         search: None,
+        latex: None,
     };
     Ok(record.to_recurrence_parts()?.0)
 }

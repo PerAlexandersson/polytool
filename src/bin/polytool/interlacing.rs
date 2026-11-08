@@ -37,7 +37,13 @@ pub(crate) fn interlacing_report(
     q: &[BigInt],
 ) -> InterlacingReport {
     let strict = check_interlacing_bigint_coeffs(p, q);
-    let weak = check_weak_interlacing_bigint_coeffs(p, q);
+    // Strict interlacing implies weak interlacing, including the library's
+    // zero-polynomial convention. Avoid a gcd and a second Bézout test.
+    let weak = if strict == Some(true) {
+        Some(true)
+    } else {
+        check_weak_interlacing_bigint_coeffs(p, q)
+    };
     InterlacingReport {
         pair_index,
         left_index,
@@ -47,6 +53,30 @@ pub(crate) fn interlacing_report(
         strict,
         weak,
         status: interlacing_status(strict, weak),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn report_reuse_matches_independent_checks_including_degeneracies() {
+        let mut polynomials = vec![vec![]];
+        for a in -1..=1 {
+            for b in -1..=1 {
+                for c in -1..=1 {
+                    polynomials.push(vec![BigInt::from(a), BigInt::from(b), BigInt::from(c)]);
+                }
+            }
+        }
+        for p in &polynomials {
+            for q in &polynomials {
+                let report = interlacing_report(0, 0, 1, p, q);
+                assert_eq!(report.strict, check_interlacing_bigint_coeffs(p, q));
+                assert_eq!(report.weak, check_weak_interlacing_bigint_coeffs(p, q));
+            }
+        }
     }
 }
 
@@ -164,13 +194,13 @@ pub(crate) fn cmd_interlacing(args: &[String]) {
         Ok(format) => format,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let polys = read_polys_bigint();
     if polys.len() < 2 {
         eprintln!("Need at least two polynomials for interlacing check.");
-        return;
+        std::process::exit(2);
     }
     let reports = polys
         .windows(2)
@@ -201,7 +231,7 @@ pub(crate) fn cmd_interlacing_profile(args: &[String]) {
         Ok(format) => format,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let polys = read_polys_bigint()
@@ -210,7 +240,7 @@ pub(crate) fn cmd_interlacing_profile(args: &[String]) {
         .collect::<Vec<_>>();
     if polys.is_empty() {
         eprintln!("Need at least one polynomial for interlacing profile.");
-        return;
+        std::process::exit(2);
     }
 
     let mut pair_index = 0;

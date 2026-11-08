@@ -349,12 +349,12 @@ pub(crate) fn cmd_cyclic_sieving(args: &[String]) {
         Ok(options) => options,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let Some(order) = options.order else {
         eprintln!("cyclic-sieving requires --order <n>");
-        return;
+        std::process::exit(2);
     };
     let mut reports = Vec::new();
     let mut decompositions = Vec::new();
@@ -366,7 +366,7 @@ pub(crate) fn cmd_cyclic_sieving(args: &[String]) {
                 Ok(check) => Some(check),
                 Err(error) => {
                     eprintln!("{error}");
-                    return;
+                    std::process::exit(2);
                 }
             },
             None => None,
@@ -387,7 +387,7 @@ pub(crate) fn cmd_cyclic_sieving(args: &[String]) {
             }
             Err(error) => {
                 eprintln!("{error}");
-                return;
+                std::process::exit(2);
             }
         }
     }

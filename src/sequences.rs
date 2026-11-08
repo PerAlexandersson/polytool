@@ -63,6 +63,7 @@ use std::iter::FusedIterator;
 
 pub mod deco;
 pub mod literature;
+pub mod schur;
 
 /// Lazy, endless iterator over the members of a recurrence-defined polynomial
 /// family, as exact integer coefficient vectors (ascending degree order).

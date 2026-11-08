@@ -156,8 +156,7 @@ struct BenchRecurrenceCategorySummary {
 
 pub(crate) fn cmd_bench(args: &[String]) {
     let Some((subcommand, rest)) = args.split_first() else {
-        print_bench_help();
-        std::process::exit(1);
+        crate::input::usage_error("bench", "expected a benchmark subcommand");
     };
     match subcommand.as_str() {
         "recurrence-fixtures" | "recurrence" => cmd_bench_recurrence_fixtures(rest),
@@ -165,9 +164,7 @@ pub(crate) fn cmd_bench(args: &[String]) {
         "interlacing" => cmd_bench_interlacing(rest),
         "real-rootedness" | "real-rooted" => cmd_bench_real_rootedness(rest),
         _ => {
-            eprintln!("unknown bench subcommand: {subcommand}");
-            print_bench_help();
-            std::process::exit(1);
+            crate::input::usage_error("bench", &format!("unknown bench subcommand: {subcommand}"));
         }
     }
 }
@@ -952,9 +949,7 @@ fn cmd_bench_compare(args: &[String]) {
     let options = match parse_bench_compare_options(args) {
         Ok(options) => options,
         Err(error) => {
-            eprintln!("{error}");
-            print_bench_help();
-            std::process::exit(1);
+            crate::input::usage_error("bench", &error);
         }
     };
     let old_report = match read_benchmark_json(&options.old_path) {
@@ -1050,9 +1045,7 @@ fn cmd_bench_recurrence_fixtures(args: &[String]) {
     let options = match parse_bench_recurrence_options(args) {
         Ok(options) => options,
         Err(error) => {
-            eprintln!("{error}");
-            print_bench_help();
-            std::process::exit(1);
+            crate::input::usage_error("bench", &error);
         }
     };
     let manifest = match parse_recurrence_fixture_manifest(&options.base) {
@@ -1232,9 +1225,7 @@ fn cmd_bench_interlacing(args: &[String]) {
     let options = match parse_bench_interlacing_options(args) {
         Ok(options) => options,
         Err(error) => {
-            eprintln!("{error}");
-            print_bench_help();
-            std::process::exit(1);
+            crate::input::usage_error("bench", &error);
         }
     };
     let polynomials = options.sequence.polynomials(options.max_n);

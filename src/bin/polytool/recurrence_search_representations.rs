@@ -4,6 +4,7 @@
 
 use crate::input::error_text;
 use crate::input::{is_help_arg, read_stdin_or_exit};
+use crate::json_out::print_json_result;
 use polytool::recurrence::{
     search_representations, verify_representation_search, RepresentationSearchReport,
     RepresentationSearchRequest, EQUIVALENT_DESCRIPTION_LABEL,
@@ -88,6 +89,7 @@ pub(crate) fn print_recurrence_search_representations_help() {
     println!("  --verify    Replay a report: rerun the search, replay every step and space");
     println!("              certificate, re-derive every representation from the source");
     println!("  --compact   Print compact JSON");
+    println!("  --json      Explicit JSON output (already the default)");
     println!("  -h, --help  Print this help text");
     println!();
     println!("Exit status: 0 on success, 2 on invalid input or a failed replay.");
@@ -110,6 +112,7 @@ pub(crate) fn cmd_recurrence_search_representations(args: &[String]) {
         match arg.as_str() {
             "--verify" => verify = true,
             "--compact" => compact = true,
+            "--json" => {}
             other => {
                 eprintln!("unknown option: {other}; bounds belong in the JSON request");
                 std::process::exit(2);
@@ -141,18 +144,5 @@ pub(crate) fn cmd_recurrence_search_representations(args: &[String]) {
             .and_then(|request| search_representations(&request).map_err(error_text))
             .and_then(|report| serde_json::to_value(report).map_err(error_text))
     };
-    match outcome {
-        Ok(value) => {
-            let text = if compact {
-                serde_json::to_string(&value)
-            } else {
-                serde_json::to_string_pretty(&value)
-            };
-            println!("{}", text.expect("serialize JSON value"));
-        }
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(2);
-        }
-    }
+    print_json_result(outcome, compact);
 }

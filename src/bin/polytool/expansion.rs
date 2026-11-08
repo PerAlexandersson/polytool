@@ -15,7 +15,7 @@ pub(crate) fn cmd_gamma_expansion(args: &[String]) {
         Ok(format) => format,
         Err(error) => {
             eprintln!("{error}");
-            return;
+            std::process::exit(2);
         }
     };
     let mut had_error = false;

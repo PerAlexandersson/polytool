@@ -38,6 +38,7 @@ pub(crate) fn recurrence_json_string(
             equations: result.num_equations,
             fit_polynomials: result.fit_polynomials,
             verification_polynomials: result.verification_polynomials,
+            verification_equations: result.verification_equations,
             candidates_tried: result.candidates_tried,
             options: RecurrenceOptionsJson::from(&result.opts),
         }),
