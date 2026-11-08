@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Python bindings (issue #40): the new crate `python/` (PyO3 0.30 and
-  maturin, one `abi3` wheel for CPython 3.9 and newer, Rust 1.85) builds the
+  maturin, one `abi3` wheel for CPython 3.10 and newer, Rust 1.85) builds the
   package `polytool`, a thin adapter over the library.  Coefficients are exact
   Python `int` and `fractions.Fraction` values in ascending degree order;
   floats are refused.  The first surface: the `Polynomial` class (arithmetic,

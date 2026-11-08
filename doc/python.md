@@ -19,7 +19,7 @@ mathematics and the JSON schemas are those of the [library](library.md).
 
 The package is built with [maturin](https://www.maturin.rs/) from the
 `python/` directory of the repository.  It needs Rust 1.85 or newer and
-CPython 3.9 or newer; one `abi3` wheel serves every CPython version from 3.9
+CPython 3.10 or newer; one `abi3` wheel serves every CPython version from 3.10
 on.  Prebuilt wheels on PyPI are planned; until then, install from source
 inside a virtual environment:
 

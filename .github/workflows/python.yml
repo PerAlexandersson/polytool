@@ -1,7 +1,7 @@
 name: Python
 
 # Builds and tests the Python bindings in python/ (PyO3 + maturin, abi3
-# wheels for CPython >= 3.9).  Publishing to PyPI is a separate job that only
+# wheels for CPython >= 3.10).  Publishing to PyPI is a separate job that only
 # runs for a `python-v*` tag when the repository owner has enabled it (see the
 # `publish` job); pushes and pull requests never publish.
 
@@ -85,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.9", "3.13"]
+        python: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5

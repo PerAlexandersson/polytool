@@ -10,7 +10,7 @@ description = "Exact polynomial, recurrence and real-rootedness tools (Python bi
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Per Alexandersson", email = "per.w.alexandersson@gmail.com" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["polynomials", "real-rootedness", "interlacing", "recurrences", "combinatorics"]
 classifiers = [
     "Programming Language :: Rust",
