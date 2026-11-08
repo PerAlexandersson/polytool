@@ -7,7 +7,9 @@ use super::super::hadamard_factor::prepare::{
     prepare_lift_rule, shift_free_from_json, shift_free_json, PreparedLiftRule,
 };
 use super::super::lift_summary::{fixed_preserver_interlacing, proved_parent_interlacing};
-use super::super::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
+use super::super::parent_proof::{
+    prove_parent_by_routes, prove_parent_real_rootedness, ParentRecurrenceRecord,
+};
 use super::super::section_certify::{
     division_identity_holds, n_coefficients, pseudo_divide_row, x_free_leader, ForwardDivision,
 };
@@ -20,6 +22,7 @@ use super::theorems::{
 use super::transport::transported_system;
 use crate::real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval};
 use crate::recurrence::implicit::algebra::{roots_in_domain, Biv, DOp};
+use crate::recurrence::VeroneseParentProofRoute;
 use crate::recurrence::{
     format_rational_coeff, parse_rational_coeff, LiftHypothesis, LiftHypothesisStatus,
     LiftIdentityStatus, LiftInterlacing, LiftInterlacingClaim, LiftOperation, LiftParent,
@@ -266,13 +269,6 @@ impl BasisMapLiftCertification {
                     "the input cannot be replayed: {error}"
                 ))
             })?;
-        let recomputed = certify_basis_map_lift(
-            &rule,
-            &rows,
-            n0,
-            &self.candidate,
-            &BasisMapLiftOptions::default(),
-        )?;
         // A record written before exact endpoints were recorded carries the
         // rational outer region only: compare it in that form (a recorded
         // exact form must equal the recomputed one).
@@ -280,20 +276,63 @@ impl BasisMapLiftCertification {
         recorded_region
             .check_exact_endpoints()
             .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
-        let mut recomputed_summary = recomputed.lift_summary;
-        let fresh_region = &mut recomputed_summary.root_transfer.input_root_region;
-        if recorded_region.agrees_with_recomputed(fresh_region) {
-            *fresh_region = recorded_region.clone();
-        }
         // The recorded summary may carry a weaker parent statement than the
         // current parent provers give (LiftSummary::is_supported_by).
-        if recomputed.identity != self.identity
-            || !self.lift_summary.is_supported_by(&recomputed_summary)
-        {
-            return fail("the recomputed certification differs from the recorded one");
+        let supported = |recomputed: BasisMapLiftCertification| {
+            let mut recomputed_summary = recomputed.lift_summary;
+            let fresh_region = &mut recomputed_summary.root_transfer.input_root_region;
+            if recorded_region.agrees_with_recomputed(fresh_region) {
+                *fresh_region = recorded_region.clone();
+            }
+            recomputed.identity == self.identity
+                && self.lift_summary.is_supported_by(&recomputed_summary)
+        };
+        let options = BasisMapLiftOptions::default();
+        let recomputed = certify_basis_map_lift(&rule, &rows, n0, &self.candidate, &options)?;
+        if supported(recomputed) {
+            return Ok(());
         }
-        Ok(())
+        // A coefficient family recorded as proved by routes the current
+        // cascade no longer reaches first: replay those routes alone
+        // (`parent_proof` module documentation, "Replaying recorded proofs").
+        if let Some(routes) = recorded_coefficient_routes(&self.lift_summary.parent_proof) {
+            let replay = certify_basis_map_lift_with_parent_routes(
+                &rule,
+                &rows,
+                n0,
+                &self.candidate,
+                &options,
+                Some(&routes),
+            )?;
+            if supported(replay) {
+                return Ok(());
+            }
+        }
+        fail("the recomputed certification differs from the recorded one")
     }
+}
+
+/// The parent routes of a recorded `basis_map_coefficient_roots(R, ...)`
+/// proof, when every name is a polytool route (not an attestation).
+fn recorded_coefficient_routes(parent: &LiftParentProof) -> Option<Vec<VeroneseParentProofRoute>> {
+    let LiftParentProof::Proved { route, .. } = parent else {
+        return None;
+    };
+    let names = route
+        .strip_prefix("basis_map_coefficient_roots(")?
+        .strip_suffix(')')?;
+    let mut routes = Vec::new();
+    for name in names.split(',').map(str::trim) {
+        let route: VeroneseParentProofRoute =
+            serde_json::from_value(serde_json::Value::String(name.into())).ok()?;
+        if route == VeroneseParentProofRoute::Attestation {
+            return None;
+        }
+        if !routes.contains(&route) {
+            routes.push(route);
+        }
+    }
+    (!routes.is_empty()).then_some(routes)
 }
 
 // ---------------------------------------------------------------------------
@@ -692,6 +731,7 @@ fn prove_shifted(
     a: &Q,
     b: &Q,
     options: &BasisMapLiftOptions,
+    routes: Option<&[VeroneseParentProofRoute]>,
 ) -> Result<VeroneseParentProof, RecurrenceError> {
     let (rule, seeds) = affine_family(
         &coefficient.rule,
@@ -705,12 +745,15 @@ fn prove_shifted(
         seeds: &seeds,
         first_index: coefficient.first_index,
     };
-    prove_parent_real_rootedness(
-        &record,
-        coefficient.first_index,
-        &options.attestations,
-        options.try_root_domain,
-    )
+    match routes {
+        Some(routes) => prove_parent_by_routes(&record, coefficient.first_index, routes),
+        None => prove_parent_real_rootedness(
+            &record,
+            coefficient.first_index,
+            &options.attestations,
+            options.try_root_domain,
+        ),
+    }
 }
 
 /// Prove that every `R_n` is zero or real-rooted in a rational interval
@@ -720,6 +763,7 @@ fn prove_coefficient_roots(
     r_rows: &[Vec<Q>],
     source: &AlgebraicInterval,
     options: &BasisMapLiftOptions,
+    routes: Option<&[VeroneseParentProofRoute]>,
 ) -> Result<BasisMapCoefficientRootProof, RecurrenceError> {
     let inner: RealInterval = source.rational_inner(INNER_BITS);
     let one = Q::from_integer(1.into());
@@ -768,13 +812,13 @@ fn prove_coefficient_roots(
         None => Vec::new(),
     };
     let (upper, upper_bound) = first_proved(&upper_candidates, |b| {
-        prove_shifted(coefficient, &one, b, options)
+        prove_shifted(coefficient, &one, b, options, routes)
     })?;
     let (lower, lower_bound) = if lower_candidates.is_empty() {
         (None, None)
     } else {
         let (l, proof) = first_proved(&lower_candidates, |b| {
-            prove_shifted(coefficient, &-one.clone(), b, options)
+            prove_shifted(coefficient, &-one.clone(), b, options, routes)
         })?;
         (Some(l), Some(proof))
     };
@@ -936,6 +980,20 @@ pub fn certify_basis_map_lift(
     candidate: &BasisMapLiftCandidate,
     options: &BasisMapLiftOptions,
 ) -> Result<BasisMapLiftCertification, RecurrenceError> {
+    certify_basis_map_lift_with_parent_routes(recurrence, rows, n0, candidate, options, None)
+}
+
+/// [`certify_basis_map_lift`] with the parent provers of the coefficient
+/// family restricted to `routes` when given (the replay of a recorded
+/// proof).
+fn certify_basis_map_lift_with_parent_routes(
+    recurrence: &Recurrence,
+    rows: &[Vec<Q>],
+    n0: usize,
+    candidate: &BasisMapLiftCandidate,
+    options: &BasisMapLiftOptions,
+    routes: Option<&[VeroneseParentProofRoute]>,
+) -> Result<BasisMapLiftCertification, RecurrenceError> {
     if !(1..=MAX_BASIS_MAP_LIFT_CHECKED_ROWS).contains(&options.checked_rows)
         || options.max_operator_terms > MAX_BASIS_MAP_OPERATOR_TERMS
     {
@@ -959,7 +1017,7 @@ pub fn certify_basis_map_lift(
             ))
         })?;
     let coefficient = prepare_lift_rule(&r_rule, &r_rows, n0, "coefficient family")?;
-    certify_prepared(&input, &coefficient, candidate, options)
+    certify_prepared_with_parent_routes(&input, &coefficient, candidate, options, routes)
 }
 
 pub(super) fn certify_prepared(
@@ -967,6 +1025,16 @@ pub(super) fn certify_prepared(
     coefficient: &PreparedLiftRule,
     candidate: &BasisMapLiftCandidate,
     options: &BasisMapLiftOptions,
+) -> Result<BasisMapLiftCertification, RecurrenceError> {
+    certify_prepared_with_parent_routes(input, coefficient, candidate, options, None)
+}
+
+fn certify_prepared_with_parent_routes(
+    input: &PreparedLiftRule,
+    coefficient: &PreparedLiftRule,
+    candidate: &BasisMapLiftCandidate,
+    options: &BasisMapLiftOptions,
+    routes: Option<&[VeroneseParentProofRoute]>,
 ) -> Result<BasisMapLiftCertification, RecurrenceError> {
     let map = &candidate.basis;
     let n0 = input.first_index;
@@ -999,6 +1067,7 @@ pub(super) fn certify_prepared(
             &r_rows,
             &conclusion.input_interval,
             options,
+            routes,
         )?),
         None => None,
     };

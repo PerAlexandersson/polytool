@@ -535,9 +535,14 @@ Additions:
   needs the same route, statement and interlacing; attempts may differ), and
   reject one that claims more; `VeroneseSectionCertification::check_against_recomputation`
   and `LiftSummary::is_supported_by` (used by `BasisMapLiftCertification::verify`)
-  apply the same rule to whole certifications.  Recorded Veronese
-  certificates with an open or attested parent are kept as regression
-  fixtures (`tests/recorded_certifications.rs`).
+  apply the same rule to whole certifications.  A record proved by a route
+  that the current cascade no longer reaches first (for example the paper
+  theorem or the root domain, now preceded by the product induction) is
+  replayed by that route alone and accepted only when the replay proves the
+  parent with the recorded statement and interlacing (also for the
+  coefficient family of a basis-map lift).  Recorded Veronese and basis-map
+  certificates are kept as regression fixtures
+  (`tests/recorded_certifications.rs`).
 - Exact quadratic endpoints of root regions: `recurrence::ExactQuadraticEndpoint`
   (`a + b sqrt(d)` as rational strings, with `to_quadratic_number`,
   `from_quadratic_number` and the plain-ASCII `to_plain_text`, e.g.

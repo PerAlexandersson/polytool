@@ -1,0 +1,632 @@
+{
+ "schema": "polytool.recurrence-basis-map-lift.v1",
+ "input": {
+  "schema": "polytool.recurrence.v1",
+  "first_index": 0,
+  "initial_polynomials": [
+   [
+    "1"
+   ]
+  ],
+  "recurrence": {
+   "terms": [
+    {
+     "offset": 1,
+     "deriv_order": 0,
+     "sign": "none",
+     "coeff": {
+      "coeffs": [
+       [
+        "1",
+        "0"
+       ],
+       [
+        "1",
+        "1"
+       ]
+      ]
+     }
+    },
+    {
+     "offset": 1,
+     "deriv_order": 1,
+     "sign": "none",
+     "coeff": {
+      "coeffs": [
+       [
+        "0",
+        "0"
+       ],
+       [
+        "0",
+        "1"
+       ]
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "candidate": {
+  "basis": {
+   "name": "A008277",
+   "family": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 1,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "1",
+          "1"
+         ]
+        ]
+       }
+      },
+      {
+       "offset": 1,
+       "deriv_order": 1,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "0",
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   }
+  },
+  "coefficient_family": {
+   "schema": "polytool.recurrence.v1",
+   "first_index": 0,
+   "initial_polynomials": [
+    [
+     "1"
+    ]
+   ],
+   "recurrence": {
+    "terms": [
+     {
+      "offset": 1,
+      "deriv_order": 0,
+      "sign": "none",
+      "coeff": {
+       "coeffs": [
+        [
+         "1",
+         "0"
+        ],
+        [
+         "0",
+         "1"
+        ]
+       ]
+      }
+     }
+    ]
+   }
+  }
+ },
+ "identity": {
+  "status": "certified",
+  "certificate": {
+   "input": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 0,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "1",
+          "0"
+         ],
+         [
+          "1",
+          "1"
+         ]
+        ]
+       }
+      },
+      {
+       "offset": 1,
+       "deriv_order": 1,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "0",
+          "0"
+         ],
+         [
+          "0",
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "basis": {
+    "name": "A008277",
+    "family": {
+     "schema": "polytool.recurrence.v1",
+     "first_index": 1,
+     "initial_polynomials": [
+      [
+       "1"
+      ]
+     ],
+     "recurrence": {
+      "terms": [
+       {
+        "offset": 1,
+        "deriv_order": 0,
+        "sign": "none",
+        "coeff": {
+         "coeffs": [
+          [
+           "1",
+           "1"
+          ]
+         ]
+        }
+       },
+       {
+        "offset": 1,
+        "deriv_order": 1,
+        "sign": "none",
+        "coeff": {
+         "coeffs": [
+          [
+           "0",
+           "1"
+          ]
+         ]
+        }
+       }
+      ]
+     }
+    }
+   },
+   "coefficient_family": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 0,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "1",
+          "0"
+         ],
+         [
+          "0",
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "direction": "input_by_transported",
+   "multiplier": [
+    "1"
+   ],
+   "quotients": [
+    {
+     "shift": 0,
+     "row": [
+      [
+       {
+        "deriv_order": 0,
+        "coeff": {
+         "coeffs": [
+          [
+           "1"
+          ]
+         ]
+        }
+       }
+      ]
+     ]
+    }
+   ],
+   "exceptional_bases": []
+  }
+ },
+ "map_theorem": {
+  "schema": "polytool.recurrence-basis-map-theorem.v1",
+  "basis_name": "A008277",
+  "basis": {
+   "schema": "polytool.recurrence.v1",
+   "first_index": 1,
+   "initial_polynomials": [
+    [
+     "1"
+    ]
+   ],
+   "recurrence": {
+    "terms": [
+     {
+      "offset": 1,
+      "deriv_order": 0,
+      "sign": "none",
+      "coeff": {
+       "coeffs": [
+        [
+         "1",
+         "1"
+        ]
+       ]
+      }
+     },
+     {
+      "offset": 1,
+      "deriv_order": 1,
+      "sign": "none",
+      "coeff": {
+       "coeffs": [
+        [
+         "0",
+         "1"
+        ]
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "shape": {
+   "kind": "ray_differential",
+   "initial_row": [
+    "1"
+   ],
+   "a": "1",
+   "b": "1",
+   "kappa": "1",
+   "root": "0"
+  },
+  "status": "proved",
+  "theorem": "ray basis maps: for L f = (a + b t) f + kappa (t - h) f', b > 0, kappa >= 0, and g real-rooted with every root <= h, of multiplicity m at h, T(u^k) = L^k g sends every real polynomial with all roots in S to one with all roots in (-inf, h] if and only if S lies in (-inf, a + b h + kappa m] (RealRooted rayBasisMap_maps_realRootedIn_iff; the step is Ma and Wang, EJC 15 (2008) R17, Theorem 2)",
+  "hypotheses": [
+   {
+    "name": "multiplier_slope_positive",
+    "statement": "b > 0",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact"
+   },
+   {
+    "name": "kappa_nonnegative",
+    "statement": "kappa >= 0",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact"
+   },
+   {
+    "name": "initial_row_roots",
+    "statement": "g = P_0 is nonzero and real-rooted with every root <= 0",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact root isolation"
+   }
+  ],
+  "conclusions": [
+   {
+    "input_interval": {
+     "upper": {
+      "value": {
+       "rational_part": "1",
+       "sqrt_coefficient": "0",
+       "radicand": "1",
+       "text": "1",
+       "lower_bound": "1",
+       "upper_bound": "1"
+      },
+      "closed": true
+     }
+    },
+    "output_interval": {
+     "upper": {
+      "value": {
+       "rational_part": "0",
+       "sqrt_coefficient": "0",
+       "radicand": "1",
+       "text": "0",
+       "lower_bound": "0",
+       "upper_bound": "0"
+      },
+      "closed": true
+     }
+    },
+    "nonnegative_coefficients": true,
+    "sharp": true,
+    "statement": "source (-inf, a + b h + kappa m] = (-inf, 1] with m = 0, target (-inf, 0]",
+    "hypotheses": [
+     "multiplier_slope_positive",
+     "kappa_nonnegative",
+     "initial_row_roots"
+    ]
+   }
+  ],
+  "lean_declarations": [
+   "RealRooted.rayBasisMap_maps_realRootedIn_iff"
+  ],
+  "lean_replay": "not_attempted"
+ },
+ "conclusion": {
+  "input_interval": {
+   "upper": {
+    "value": {
+     "rational_part": "1",
+     "sqrt_coefficient": "0",
+     "radicand": "1",
+     "text": "1",
+     "lower_bound": "1",
+     "upper_bound": "1"
+    },
+    "closed": true
+   }
+  },
+  "output_interval": {
+   "upper": {
+    "value": {
+     "rational_part": "0",
+     "sqrt_coefficient": "0",
+     "radicand": "1",
+     "text": "0",
+     "lower_bound": "0",
+     "upper_bound": "0"
+    },
+    "closed": true
+   }
+  },
+  "nonnegative_coefficients": true,
+  "sharp": true,
+  "statement": "source (-inf, a + b h + kappa m] = (-inf, 1] with m = 0, target (-inf, 0]",
+  "hypotheses": [
+   "multiplier_slope_positive",
+   "kappa_nonnegative",
+   "initial_row_roots"
+  ]
+ },
+ "coefficient_roots": {
+  "source_interval": {
+   "upper": {
+    "value": {
+     "rational_part": "1",
+     "sqrt_coefficient": "0",
+     "radicand": "1",
+     "text": "1",
+     "lower_bound": "1",
+     "upper_bound": "1"
+    },
+    "closed": true
+   }
+  },
+  "target_interval": {
+   "upper": {
+    "value": "0",
+    "closed": true
+   }
+  },
+  "upper_bound": {
+   "status": "proved",
+   "route": "paper_theorem",
+   "statement": "every parent row P_n, n >= 0, is zero or real-rooted with coefficients of one sign",
+   "conditional_on": [],
+   "attempts": [
+    {
+     "route": "periodic_product",
+     "variant": "P_(n+k) = c(x) P_n",
+     "success": false,
+     "detail": "the rule is not P_(n+k) = c(x) P_n with c free of n"
+    },
+    {
+     "route": "paper_theorem",
+     "variant": "fixed_delay_predecessor_window",
+     "success": true,
+     "detail": "Q_0 = 1, Q_n = Q_(n-1) + w(n) t Q_(max(0, n-1)), w(n) = n (paper_proof_not_lean_checked): For every n >= 1: Q_n has nonnegative coefficients and constant term 1, is real-rooted, and Q_i << Q_n (oriented weak interlacing) for p(n) <= i <= n. Hence Q_A << Q_B whenever 0 <= A <= B and B - A <= 1.; the identifying seeds equal the canonical rows (Canonical), so every parent row is a canonical row"
+    }
+   ],
+   "rows_checked": 10,
+   "interlacing": {
+    "kind": "weak",
+    "orientation": "previous_interlaces_next",
+    "from_index": 1,
+    "justification": {
+     "theorem": "fixed_delay_predecessor_window (paper_proof_not_lean_checked; https://github.com/PerAlexandersson/RealRooted/issues/2037): For every n >= 1: Q_n has nonnegative coefficients and constant term 1, is real-rooted, and Q_i << Q_n (oriented weak interlacing) for p(n) <= i <= n. Hence Q_A << Q_B whenever 0 <= A <= B and B - A <= 1.",
+     "premises": [
+      "p(n) = max(0, n-1) with 1 >= 1 is nondecreasing and 0 <= p(n) < n for n >= 1 (exact_structural)",
+      "w(n) >= 0 for every integer n >= 1: w(1+m) has nonnegative coefficients [1, 1] in m (exact_symbolic_certificate)",
+      "window: Q_A << Q_B for 0 <= A <= B with B - A <= 1 (B - A <= 1)",
+      "the identifying parent seeds equal the canonical rows (Canonical), so every parent row is a canonical row and consecutive parent rows are consecutive canonical rows"
+     ]
+    }
+   }
+  },
+  "parent_proof": {
+   "status": "proved",
+   "route": "basis_map_coefficient_roots(paper_theorem)",
+   "statement": "every coefficient row R_n, n >= 0, is zero or real-rooted with every root in (-inf, 0]"
+  }
+ },
+ "lift_summary": {
+  "operation": {
+   "kind": "basis_map",
+   "basis": "A008277",
+   "basis_family": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 1,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "1",
+          "1"
+         ]
+        ]
+       }
+      },
+      {
+       "offset": 1,
+       "deriv_order": 1,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "0",
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "source_interval": "(-inf, 1]",
+   "target_interval": "(-inf, 0]"
+  },
+  "input_first_index": 0,
+  "parent": {
+   "recurrence": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 0,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "1",
+          "0"
+         ],
+         [
+          "0",
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "relation": "Q_n = T_P(R_n), T_P(u^k) = P_(1 + k), P the basis family A008277",
+   "index_shift": 0
+  },
+  "identity": {
+   "status": "certified",
+   "method": "basis_map_division_input_by_transported"
+  },
+  "root_transfer": {
+   "theorem": "ray basis maps: for L f = (a + b t) f + kappa (t - h) f', b > 0, kappa >= 0, and g real-rooted with every root <= h, of multiplicity m at h, T(u^k) = L^k g sends every real polynomial with all roots in S to one with all roots in (-inf, h] if and only if S lies in (-inf, a + b h + kappa m] (RealRooted rayBasisMap_maps_realRootedIn_iff; the step is Ma and Wang, EJC 15 (2008) R17, Theorem 2)",
+   "parent_hypothesis": "every coefficient row R_n is zero or real-rooted with every root in the source interval of the map theorem",
+   "parent_root_region": {
+    "upper": {
+     "value": "0",
+     "closed": true
+    }
+   },
+   "input_root_region": {
+    "upper": {
+     "value": "0",
+     "closed": true
+    }
+   },
+   "input_conclusion": "every input row Q_n, n >= 0, is zero or real-rooted with every root in (-inf, 0] (nonnegative coefficients when the coefficient row has a positive leading coefficient)"
+  },
+  "hypotheses": [
+   {
+    "name": "multiplier_slope_positive",
+    "statement": "b > 0",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact"
+   },
+   {
+    "name": "kappa_nonnegative",
+    "statement": "kappa >= 0",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact"
+   },
+   {
+    "name": "initial_row_roots",
+    "statement": "g = P_0 is nonzero and real-rooted with every root <= 0",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact root isolation"
+   }
+  ],
+  "parent_proof": {
+   "status": "proved",
+   "route": "basis_map_coefficient_roots(paper_theorem)",
+   "statement": "every coefficient row R_n, n >= 0, is zero or real-rooted with every root in (-inf, 0]"
+  },
+  "verdict": "proved",
+  "input_interlacing": {
+   "status": "not_proved",
+   "reason": "the map theorem does not prove that T_P preserves real-rootedness on the whole line"
+  },
+  "lean_replay": "not_attempted"
+ }
+}

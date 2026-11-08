@@ -123,7 +123,13 @@
 //! the current result ([`VeroneseParentProof::is_supported_by`]), not equal
 //! it.  A weaker record (`not_proved`, or conditional on an attestation
 //! where the statement is now proved outright) stays valid; a record that
-//! claims more than the current provers give is rejected.
+//! claims more than the current provers give is rejected.  A record proved
+//! by a route `R` that the current cascade no longer reaches (an earlier
+//! route now settles the parent first, as the product induction does for
+//! records of the paper-theorem and root-domain routes) is replayed by `R`
+//! alone, with every other route skipped: it is accepted exactly when that
+//! replay proves the parent by `R` with the recorded statement and
+//! interlacing, so a record whose own route fails is never accepted.
 //!
 //! # Left-hand factors `x^e f(n)`
 //!
@@ -384,7 +390,11 @@ impl VeroneseParentProof {
 /// Replay a recorded parent proof: run the parent provers on `record` with
 /// the recorded options and check that the record claims nothing beyond the
 /// result ([`VeroneseParentProof::is_supported_by`]).  A record made with
-/// an earlier, weaker version of the provers keeps replaying.
+/// an earlier, weaker version of the provers keeps replaying.  A record
+/// proved by a polytool route `R` that the current cascade no longer reaches
+/// first is replayed by `R` alone (every other route skipped) and accepted
+/// exactly when that replay proves the parent by `R` with the recorded
+/// statement and interlacing.
 ///
 /// # Errors
 ///
@@ -399,13 +409,38 @@ pub fn check_recorded_parent_proof(
 ) -> Result<(), RecurrenceError> {
     let recomputed =
         prove_parent_real_rootedness(record, needed_from, attestations, try_root_domain)?;
-    if recorded.is_supported_by(&recomputed) {
+    if recorded.is_supported_by(&recomputed)
+        || recorded_route_replays(record, needed_from, recorded)?
+    {
         Ok(())
     } else {
         Err(RecurrenceError::VerificationFailed(
             "the recorded parent proof claims more than the parent provers give".into(),
         ))
     }
+}
+
+/// Whether a recorded proof `proved` by a polytool route `R` is reproduced
+/// by replaying `R` alone on the same record (module documentation,
+/// "Replaying recorded proofs"): the replay must be proved by `R` with the
+/// recorded statement and interlacing
+/// ([`VeroneseParentProof::is_supported_by`] of the replay).  `false` for
+/// any other recorded status or an attested proof.
+pub(in crate::recurrence) fn recorded_route_replays(
+    record: &ParentRecurrenceRecord<'_>,
+    needed_from: usize,
+    recorded: &VeroneseParentProof,
+) -> Result<bool, RecurrenceError> {
+    let route = match (recorded.status, recorded.route) {
+        (VeroneseParentProofStatus::Proved, Some(route))
+            if route != VeroneseParentProofRoute::Attestation =>
+        {
+            route
+        }
+        _ => return Ok(false),
+    };
+    let replay = prove_parent_by_routes(record, needed_from, &[route])?;
+    Ok(replay.route == Some(route) && recorded.is_supported_by(&replay))
 }
 
 /// A parent rule with its identifying seeds and first index: the input of
@@ -1331,6 +1366,34 @@ pub fn prove_parent_real_rootedness(
     attestations: &[VeroneseParentAttestation],
     try_root_domain: bool,
 ) -> Result<VeroneseParentProof, RecurrenceError> {
+    prove_parent_with_routes(record, needed_from, attestations, try_root_domain, None)
+}
+
+/// Replay of the routes `routes` alone (module documentation, "Replaying
+/// recorded proofs"): the provers with every other route skipped (no
+/// attempt recorded for it), the root-domain route enabled when it is
+/// among `routes`, and no attestations.  The result is proved only by one
+/// of `routes`; it is a correct proof whenever it is proved, like every
+/// result of the provers.
+pub(in crate::recurrence) fn prove_parent_by_routes(
+    record: &ParentRecurrenceRecord<'_>,
+    needed_from: usize,
+    routes: &[VeroneseParentProofRoute],
+) -> Result<VeroneseParentProof, RecurrenceError> {
+    let try_root_domain = routes.contains(&VeroneseParentProofRoute::RootDomain);
+    prove_parent_with_routes(record, needed_from, &[], try_root_domain, Some(routes))
+}
+
+/// The parent provers, restricted to `only` when given (attestation and
+/// catalog-flag routes are then skipped too).
+fn prove_parent_with_routes(
+    record: &ParentRecurrenceRecord<'_>,
+    needed_from: usize,
+    attestations: &[VeroneseParentAttestation],
+    try_root_domain: bool,
+    only: Option<&[VeroneseParentProofRoute]>,
+) -> Result<VeroneseParentProof, RecurrenceError> {
+    let allowed = |route: VeroneseParentProofRoute| only.is_none_or(|r| r.contains(&route));
     let rows = record
         .rule
         .generate_rows_rational(
@@ -1378,25 +1441,28 @@ pub fn prove_parent_real_rootedness(
     }
 
     // Route 1.
-    let periodic = periodic_product_parent(normalized.rule, normalized.seeds);
-    proof.attempts.push(VeroneseParentProofAttempt {
-        route: VeroneseParentProofRoute::PeriodicProduct,
-        variant: "P_(n+k) = c(x) P_n".into(),
-        success: periodic.is_ok(),
-        detail: match &periodic {
-            Ok(()) => "c and the seeds are nonzero, real-rooted and of one sign, so \
-                       P_(n0 + k m + i) = c^m P_(n0 + i) is too"
-                .into(),
-            Err(reason) => reason.clone(),
-        },
-    });
-    let mut proved = periodic
-        .is_ok()
-        .then_some(VeroneseParentProofRoute::PeriodicProduct);
+    let mut proved = None;
+    if allowed(VeroneseParentProofRoute::PeriodicProduct) {
+        let periodic = periodic_product_parent(normalized.rule, normalized.seeds);
+        proof.attempts.push(VeroneseParentProofAttempt {
+            route: VeroneseParentProofRoute::PeriodicProduct,
+            variant: "P_(n+k) = c(x) P_n".into(),
+            success: periodic.is_ok(),
+            detail: match &periodic {
+                Ok(()) => "c and the seeds are nonzero, real-rooted and of one sign, so \
+                           P_(n0 + k m + i) = c^m P_(n0 + i) is too"
+                    .into(),
+                Err(reason) => reason.clone(),
+            },
+        });
+        proved = periodic
+            .is_ok()
+            .then_some(VeroneseParentProofRoute::PeriodicProduct);
+    }
     let mut interlacing = None;
 
     // General product seeds are available directly to all parent transfers.
-    if proved.is_none() {
+    if proved.is_none() && allowed(VeroneseParentProofRoute::ProductRecurrence) {
         let (attempt, _, _) = theorem_attempt(
             &normalized,
             VeroneseParentProofRoute::ProductRecurrence,
@@ -1409,7 +1475,7 @@ pub fn prove_parent_real_rootedness(
     }
 
     // Route 2.
-    if proved.is_none() {
+    if proved.is_none() && allowed(VeroneseParentProofRoute::PaperTheorem) {
         let (attempts, window_interlacing) = theorem_route(&normalized, &rows);
         if attempts.iter().any(|a| a.success) {
             proved = Some(VeroneseParentProofRoute::PaperTheorem);
@@ -1419,7 +1485,7 @@ pub fn prove_parent_real_rootedness(
     }
 
     // Route 3.
-    if proved.is_none() && try_root_domain {
+    if proved.is_none() && try_root_domain && allowed(VeroneseParentProofRoute::RootDomain) {
         let attempts = root_domain_route(&normalized, &rows);
         if attempts.iter().any(|a| a.success) {
             proved = Some(VeroneseParentProofRoute::RootDomain);
@@ -1451,6 +1517,9 @@ pub fn prove_parent_real_rootedness(
                 "iterated_preserver",
             ),
         ] {
+            if !allowed(route) {
+                continue;
+            }
             let (attempt, theorem_interlacing, applicable) =
                 theorem_attempt(&normalized, route, variant)?;
             // Route 8 is recorded only where the rule has its form (a
@@ -1478,6 +1547,10 @@ pub fn prove_parent_real_rootedness(
         return Ok(proof);
     }
 
+    if only.is_some() {
+        proof.statement = format!("open: the replayed routes do not prove that {conclusion}");
+        return Ok(proof);
+    }
     // Route 9.
     for attestation in attestations {
         let matches = same_record(record, &attestation.recurrence)?

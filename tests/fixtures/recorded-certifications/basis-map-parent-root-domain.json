@@ -1,0 +1,544 @@
+{
+ "schema": "polytool.recurrence-basis-map-lift.v1",
+ "input": {
+  "schema": "polytool.recurrence.v1",
+  "first_index": 0,
+  "initial_polynomials": [
+   [
+    "1"
+   ]
+  ],
+  "recurrence": {
+   "terms": [
+    {
+     "offset": 1,
+     "deriv_order": 0,
+     "sign": "none",
+     "coeff": {
+      "coeffs": [
+       [
+        "2",
+        "1"
+       ],
+       [
+        "1",
+        "0"
+       ]
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "candidate": {
+  "basis": {
+   "name": "A007318",
+   "family": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 0,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "1",
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   }
+  },
+  "coefficient_family": {
+   "schema": "polytool.recurrence.v1",
+   "first_index": 0,
+   "initial_polynomials": [
+    [
+     "1"
+    ]
+   ],
+   "recurrence": {
+    "terms": [
+     {
+      "offset": 1,
+      "deriv_order": 0,
+      "sign": "none",
+      "coeff": {
+       "coeffs": [
+        [
+         "1",
+         "1"
+        ],
+        [
+         "1",
+         "0"
+        ]
+       ]
+      }
+     }
+    ]
+   }
+  }
+ },
+ "identity": {
+  "status": "certified",
+  "certificate": {
+   "input": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 0,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "2",
+          "1"
+         ],
+         [
+          "1",
+          "0"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "basis": {
+    "name": "A007318",
+    "family": {
+     "schema": "polytool.recurrence.v1",
+     "first_index": 0,
+     "initial_polynomials": [
+      [
+       "1"
+      ]
+     ],
+     "recurrence": {
+      "terms": [
+       {
+        "offset": 1,
+        "deriv_order": 0,
+        "sign": "none",
+        "coeff": {
+         "coeffs": [
+          [
+           "1",
+           "1"
+          ]
+         ]
+        }
+       }
+      ]
+     }
+    }
+   },
+   "coefficient_family": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 0,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "1",
+          "1"
+         ],
+         [
+          "1",
+          "0"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "direction": "input_by_transported",
+   "multiplier": [
+    "1"
+   ],
+   "quotients": [
+    {
+     "shift": 0,
+     "row": [
+      [
+       {
+        "deriv_order": 0,
+        "coeff": {
+         "coeffs": [
+          [
+           "1"
+          ]
+         ]
+        }
+       }
+      ]
+     ]
+    }
+   ],
+   "exceptional_bases": []
+  }
+ },
+ "map_theorem": {
+  "schema": "polytool.recurrence-basis-map-theorem.v1",
+  "basis_name": "A007318",
+  "basis": {
+   "schema": "polytool.recurrence.v1",
+   "first_index": 0,
+   "initial_polynomials": [
+    [
+     "1"
+    ]
+   ],
+   "recurrence": {
+    "terms": [
+     {
+      "offset": 1,
+      "deriv_order": 0,
+      "sign": "none",
+      "coeff": {
+       "coeffs": [
+        [
+         "1",
+         "1"
+        ]
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "shape": {
+   "kind": "geometric",
+   "initial_row": [
+    "1"
+   ],
+   "constant": "1",
+   "slope": "1"
+  },
+  "status": "proved",
+  "theorem": "geometric family P_k = g(t) (a + d t)^k: T(p) = g(t) p(a + d t), so the roots of T(p) are those of g and the points (r - a)/d for the roots r of p (elementary)",
+  "hypotheses": [
+   {
+    "name": "initial_row_nonzero",
+    "statement": "g = P_0 is nonzero",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact"
+   },
+   {
+    "name": "initial_row_real_rooted",
+    "statement": "g is real-rooted",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact root isolation"
+   },
+   {
+    "name": "initial_row_nonpositive_roots",
+    "statement": "every root of g is <= 0",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact root isolation"
+   }
+  ],
+  "conclusions": [
+   {
+    "input_interval": {},
+    "output_interval": {},
+    "nonnegative_coefficients": false,
+    "sharp": true,
+    "statement": "every real-rooted input has a real-rooted image (an affine substitution times g)",
+    "hypotheses": [
+     "initial_row_nonzero",
+     "initial_row_real_rooted"
+    ]
+   },
+   {
+    "input_interval": {
+     "upper": {
+      "value": {
+       "rational_part": "1",
+       "sqrt_coefficient": "0",
+       "radicand": "1",
+       "text": "1",
+       "lower_bound": "1",
+       "upper_bound": "1"
+      },
+      "closed": true
+     }
+    },
+    "output_interval": {
+     "upper": {
+      "value": {
+       "rational_part": "0",
+       "sqrt_coefficient": "0",
+       "radicand": "1",
+       "text": "0",
+       "lower_bound": "0",
+       "upper_bound": "0"
+      },
+      "closed": true
+     }
+    },
+    "nonnegative_coefficients": true,
+    "sharp": true,
+    "statement": "an input root r <= 1 gives the root (r - a)/d <= 0; a larger root gives a positive root",
+    "hypotheses": [
+     "initial_row_nonzero",
+     "initial_row_real_rooted",
+     "initial_row_nonpositive_roots"
+    ]
+   }
+  ],
+  "lean_replay": "not_attempted"
+ },
+ "conclusion": {
+  "input_interval": {
+   "upper": {
+    "value": {
+     "rational_part": "1",
+     "sqrt_coefficient": "0",
+     "radicand": "1",
+     "text": "1",
+     "lower_bound": "1",
+     "upper_bound": "1"
+    },
+    "closed": true
+   }
+  },
+  "output_interval": {
+   "upper": {
+    "value": {
+     "rational_part": "0",
+     "sqrt_coefficient": "0",
+     "radicand": "1",
+     "text": "0",
+     "lower_bound": "0",
+     "upper_bound": "0"
+    },
+    "closed": true
+   }
+  },
+  "nonnegative_coefficients": true,
+  "sharp": true,
+  "statement": "an input root r <= 1 gives the root (r - a)/d <= 0; a larger root gives a positive root",
+  "hypotheses": [
+   "initial_row_nonzero",
+   "initial_row_real_rooted",
+   "initial_row_nonpositive_roots"
+  ]
+ },
+ "coefficient_roots": {
+  "source_interval": {
+   "upper": {
+    "value": {
+     "rational_part": "1",
+     "sqrt_coefficient": "0",
+     "radicand": "1",
+     "text": "1",
+     "lower_bound": "1",
+     "upper_bound": "1"
+    },
+    "closed": true
+   }
+  },
+  "target_interval": {
+   "upper": {
+    "value": "0",
+    "closed": true
+   }
+  },
+  "upper_bound": {
+   "status": "proved",
+   "route": "root_domain",
+   "statement": "every parent row P_n, n >= 0, is zero or real-rooted with coefficients of one sign",
+   "conditional_on": [],
+   "attempts": [
+    {
+     "route": "periodic_product",
+     "variant": "P_(n+k) = c(x) P_n",
+     "success": false,
+     "detail": "the rule is not P_(n+k) = c(x) P_n with c free of n"
+    },
+    {
+     "route": "paper_theorem",
+     "variant": "match_recurrence_theorems",
+     "success": false,
+     "detail": "no theorem matched (weighted_renewal_window: coefficients must be index-independent; fixed_delay_predecessor_window: only P_(n-1) and one term w(n) t P_(n-L) are supported)"
+    },
+    {
+     "route": "root_domain",
+     "variant": "identity (affine 1, 0)",
+     "success": true,
+     "detail": "source claim: every P_n, n >= 0, is real-rooted in (-inf, 0] (CertifiedFamilyInvariant): the completed induction for Q_n and real_affine_equivalence (target to source; every map condition certified for all indices)"
+    }
+   ],
+   "rows_checked": 10
+  },
+  "parent_proof": {
+   "status": "proved",
+   "route": "basis_map_coefficient_roots(root_domain)",
+   "statement": "every coefficient row R_n, n >= 0, is zero or real-rooted with every root in (-inf, 0]"
+  }
+ },
+ "lift_summary": {
+  "operation": {
+   "kind": "basis_map",
+   "basis": "A007318",
+   "basis_family": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 0,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "1",
+          "1"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "source_interval": "(-inf, 1]",
+   "target_interval": "(-inf, 0]"
+  },
+  "input_first_index": 0,
+  "parent": {
+   "recurrence": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 0,
+    "initial_polynomials": [
+     [
+      "1"
+     ]
+    ],
+    "recurrence": {
+     "terms": [
+      {
+       "offset": 1,
+       "deriv_order": 0,
+       "sign": "none",
+       "coeff": {
+        "coeffs": [
+         [
+          "1",
+          "1"
+         ],
+         [
+          "1",
+          "0"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "relation": "Q_n = T_P(R_n), T_P(u^k) = P_(0 + k), P the basis family A007318",
+   "index_shift": 0
+  },
+  "identity": {
+   "status": "certified",
+   "method": "basis_map_division_input_by_transported"
+  },
+  "root_transfer": {
+   "theorem": "geometric family P_k = g(t) (a + d t)^k: T(p) = g(t) p(a + d t), so the roots of T(p) are those of g and the points (r - a)/d for the roots r of p (elementary)",
+   "parent_hypothesis": "every coefficient row R_n is zero or real-rooted with every root in the source interval of the map theorem",
+   "parent_root_region": {
+    "upper": {
+     "value": "0",
+     "closed": true
+    }
+   },
+   "input_root_region": {
+    "upper": {
+     "value": "0",
+     "closed": true
+    }
+   },
+   "input_conclusion": "every input row Q_n, n >= 0, is zero or real-rooted with every root in (-inf, 0] (nonnegative coefficients when the coefficient row has a positive leading coefficient)"
+  },
+  "hypotheses": [
+   {
+    "name": "initial_row_nonzero",
+    "statement": "g = P_0 is nonzero",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact"
+   },
+   {
+    "name": "initial_row_real_rooted",
+    "statement": "g is real-rooted",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact root isolation"
+   },
+   {
+    "name": "initial_row_nonpositive_roots",
+    "statement": "every root of g is <= 0",
+    "status": {
+     "kind": "verified"
+    },
+    "evidence": "exact root isolation"
+   }
+  ],
+  "parent_proof": {
+   "status": "proved",
+   "route": "basis_map_coefficient_roots(root_domain)",
+   "statement": "every coefficient row R_n, n >= 0, is zero or real-rooted with every root in (-inf, 0]"
+  },
+  "verdict": "proved",
+  "input_interlacing": {
+   "status": "not_proved",
+   "reason": "the parent route root_domain proves no interlacing of consecutive parent rows"
+  },
+  "lean_replay": "not_attempted"
+ }
+}

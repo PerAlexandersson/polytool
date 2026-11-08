@@ -13,7 +13,9 @@
 use super::super::implicit::algebra::{roots_in_domain, Biv, DOp};
 use super::super::implicit::runnable_record_from_annihilator;
 use super::hadamard_factor::prepare::x_free_left_hand_factor_rule;
-use super::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
+use super::parent_proof::{
+    prove_parent_real_rootedness, recorded_route_replays, ParentRecurrenceRecord,
+};
 use super::section_certify::{
     gauge_parent_relation, n_coefficients, pseudo_divide_row, residue_row, x_free_leader,
 };
@@ -285,8 +287,10 @@ impl VeroneseSectionCertification {
             self.verdict,
             &self.parent_proof,
         );
+        let parent_supported = self.parent_proof.is_supported_by(&recomputed.parent_proof)
+            || (same_rest && self.recorded_parent_route_replays()?);
         if same_rest
-            && self.parent_proof.is_supported_by(&recomputed.parent_proof)
+            && parent_supported
             && self.statement == statement
             && self.lift_summary.is_some()
         {
@@ -296,6 +300,30 @@ impl VeroneseSectionCertification {
                 "the recorded certification claims more than its recomputation supports".into(),
             ))
         }
+    }
+}
+
+impl VeroneseSectionCertification {
+    /// Whether the recorded parent proof, proved by a route `R`, is
+    /// reproduced by replaying `R` alone on the candidate's parent
+    /// (`parent_proof` module documentation, "Replaying recorded proofs").
+    fn recorded_parent_route_replays(&self) -> Result<bool, RecurrenceError> {
+        let (parent_rule, parent_first, parent_rows) =
+            self.candidate.parent.to_recurrence_parts()?;
+        let parent = prepare_rule(&parent_rule, &parent_rows, parent_first, "parent")?;
+        let needed_from = usize::try_from(
+            self.input_first_index as i64 + self.candidate.index_shift,
+        )
+        .map_err(|_| RecurrenceError::InvalidInput("the parent index is negative".into()))?;
+        recorded_route_replays(
+            &ParentRecurrenceRecord {
+                rule: &parent.rule,
+                seeds: &parent.seeds,
+                first_index: parent.first_index,
+            },
+            needed_from,
+            &self.parent_proof,
+        )
     }
 }
 
