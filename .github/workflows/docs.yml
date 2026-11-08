@@ -1,33 +1,55 @@
 name: Documentation
 
+# Builds the guides, the command reference and rustdoc (under /api/) with
+# scripts/build-docs.py, which also checks local links.  Every push to main and
+# every pull request builds the site; a push to main (or a manual run on main)
+# then deploys it to GitHub Pages.  The repository's Pages source must be
+# "GitHub Actions".
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
       publish:
-        description: Deploy the verified documentation to GitHub Pages
+        description: Deploy the verified documentation to GitHub Pages (main only)
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
+
+# One Pages deployment at a time; never cancel a deployment half way, but a
+# newer pull request build supersedes an older one.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Pandoc
         run: sudo apt-get update && sudo apt-get install -y pandoc
       - name: Build and check documentation
         run: python3 scripts/build-docs.py --output "$RUNNER_TEMP/polytool-docs"
+      - name: Check expected pages
+        run: |
+          for page in index.html README.html doc/command-reference.html api/polytool/index.html \
+                      api/ore_algebra/index.html api/exact_real_roots/index.html; do
+            test -f "$RUNNER_TEMP/polytool-docs/$page" || { echo "missing $page"; exit 1; }
+          done
       - uses: actions/upload-pages-artifact@v4
         with:
           path: ${{ runner.temp }}/polytool-docs
 
   deploy:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish))
     needs: build
     runs-on: ubuntu-latest
     permissions:

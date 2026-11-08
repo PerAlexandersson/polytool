@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch or pull request supersedes a running one.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -82,3 +87,154 @@ jobs:
 
       - name: Check web package
         run: cargo check --manifest-path web/Cargo.toml
+
+  # The MSRV of each package is its declared `rust-version`; the jobs read it
+  # from the manifest, so raising it there is enough.  Only the shipped targets
+  # (library, binaries, wasm wrapper) are checked, not dev-dependencies.
+  msrv:
+    name: MSRV (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: core
+            manifest: Cargo.toml
+          - package: ore-algebra
+            manifest: crates/ore-algebra/Cargo.toml
+          - package: exact-real-roots
+            manifest: crates/exact-real-roots/Cargo.toml
+          - package: mcp
+            manifest: mcp/Cargo.toml
+          - package: web
+            manifest: web/Cargo.toml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Read declared rust-version
+        id: msrv
+        run: |
+          version=$(sed -n 's/^rust-version *= *"\([0-9.]*\)".*/\1/p' "${{ matrix.manifest }}" | head -n 1)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Declared MSRV: $version"
+
+      - name: Install Rust ${{ steps.msrv.outputs.version }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-${{ matrix.package }}
+
+      - name: Check with the declared MSRV
+        run: cargo check --manifest-path "${{ matrix.manifest }}" --lib --bins
+
+  # The MCP server is the shipped binary: build it in release mode and keep it
+  # as an artifact, then run its stdio smoke test against that build profile.
+  mcp-release:
+    name: MCP release build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            mcp -> target
+          key: mcp-release
+
+      - name: Build release binary
+        run: cargo build --release --manifest-path mcp/Cargo.toml
+
+      - name: Smoke test the release binary
+        run: cargo test --release --manifest-path mcp/Cargo.toml --test stdio_smoke
+
+      - name: Locate binary
+        id: binary
+        run: |
+          target=$(cargo metadata --no-deps --format-version 1 --manifest-path mcp/Cargo.toml \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')
+          binary=$(find "$target/release" -maxdepth 1 -type f -perm -u+x -name polytool-mcp | head -n 1)
+          test -n "$binary"
+          echo "path=$binary" >> "$GITHUB_OUTPUT"
+
+      - name: Upload MCP server
+        uses: actions/upload-artifact@v4
+        with:
+          name: polytool-mcp-linux-x86_64
+          path: ${{ steps.binary.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
+
+  # Build the real WebAssembly bundle, as web/build.sh does, and run the Node
+  # tests against it and against the CLI (browser/CLI report parity).
+  web:
+    name: Web app (wasm + Node tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            web -> target
+          key: web-wasm
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check the wasm target
+        run: cargo check --manifest-path web/Cargo.toml --target wasm32-unknown-unknown
+
+      - name: Build the wasm bundle
+        working-directory: web
+        run: wasm-pack build --release --target no-modules --out-dir pkg
+
+      - name: Build the CLI for browser/CLI parity tests
+        run: cargo build --bin polytool
+
+      - name: Run web wrapper tests
+        run: cargo test --manifest-path web/Cargo.toml
+
+      - name: Run Node tests
+        env:
+          POLYTOOL_WASM_DIR: ${{ github.workspace }}/web/pkg
+          POLYTOOL_CLI: ${{ github.workspace }}/target/debug/polytool
+        run: |
+          node web/tests/string_safety.mjs
+          node --test web/tests/*.test.cjs
+
+      - name: Upload wasm bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: polytool-web-pkg
+          path: web/pkg
+          retention-days: 14
+
+  # The documentation build (guides, command reference, rustdoc, link check)
+  # runs in docs.yml on every push to main and every pull request.
