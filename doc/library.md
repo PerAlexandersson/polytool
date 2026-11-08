@@ -1303,6 +1303,70 @@ the rational values see a slightly larger correct interval; `verify()` also
 accepts records written without the exact form.  See
 [algorithms.md](algorithms.md#basis-map-lifts).
 
+## Degree laws and leading coefficients of recurrence rows
+
+`certify_leading_coefficient(rule, first_index, seeds, &options)` decides,
+for a recurrence `f(n) P_n = sum s_t(n) c_t(n, x) D^(d_t) P_(n - j_t)` with
+seed rows, a degree law `deg P_n = D(n)` and the sign of every leading
+coefficient for all `n` (issue #37).  `D(n)` is periodic by residue class
+(`RecurrenceDegreeLaw`: start, period, base degrees, growth per period and a
+sign per residue), so affine laws, half growth and the periodic laws of
+Veronese sections and two-step products are covered.  The law is read off
+exactly computed rows; the rows before the induction start are recorded
+exactly, and every later index is covered by one of the routes of the
+RealRooted tactic `rr_row_leadingCoeff_pos`, each statement about all `n`
+decided by `decide_index_rational_function_sign` on the residue classes:
+
+| route | condition on the top-coefficient recurrence | RealRooted |
+|---|---|---|
+| `cone` | signed multipliers `m_j(n) >= 0`, `sum_j m_j(n) > 0` | `LinRec.natDegree_eq_and_leadingCoeff_pos(_of_degreeLaw)` |
+| `recurrence` | a ratio invariant `mu(n) >= rho mu(n - 1)`, `rho > 0` rational | `LinRec.natDegree_eq_and_leadingCoeff_pos_of_ratio`, `ScalarRec.pos_of_ratio` |
+| `subseq` | as `cone`, lags multiples of the period | `LinRec.degreeLaw_periodic_decomp` |
+| `twoStep` | `P_n = q(x) P_(n-2)`, `lead q > 0` | `twoStepProduct_natDegree`, `twoStepProduct_leadingCoeff_pos` |
+| `cancel` | first order, top terms grow or cancel exactly, nonnegative coefficients; optionally the invariant `[x^(D-1)] P_n >= rho lead P_n` | `derivativeRecurrence_natDegree_eq_and_leadingCoeff_pos_of_cancel`, with `rho`: `LinRec.natDegree_eq_and_leadingCoeff_pos_of_cancel` |
+| `coefficients` | nonnegative coefficients in an affine envelope, positive constant terms (degree only bounded) | `LinRec.natDegree_le_and_hasNonnegCoeffs`, `HasNonnegCoeffs.pos_leadingCoeff` |
+
+A certificate also reports a constant leading coefficient (for example monic
+rows) when the window and the top-coefficient recurrence fix it.  A
+certificate that is not proved is not a disproof (`not_proved`, with one line
+per attempt); a zero row moves `holds_from` past it.
+`LeadingCoefficientCertificate::verify` replays the recorded route and every
+sign certificate.  The Liu--Wang, derivative-lag and Liu--Wang three-term
+theorem checks use it where their own degree steps are too narrow (hypothesis
+`degree_law`), and the hypergeometric-row check in the reversal coordinates,
+where its first coefficient is the leading coefficient (hypothesis
+`first_coefficient`).  The command-line query is `polytool recurrence-degree`.
+
+```rust
+use num_bigint::BigInt;
+use polytool::recurrence::{
+    certify_leading_coefficient, BigRational, BivarPoly, LeadingCoefficientOptions,
+    LeadingCoefficientSign, Recurrence, RecurrenceTerm,
+};
+
+let q = |v: i64| BigRational::from_integer(BigInt::from(v));
+// P_n = P_(n-1) + x P_(n-3), P_0 = P_1 = P_2 = 1 (OEIS A102547): deg P_n = floor(n/3).
+let rule = Recurrence {
+    terms: vec![
+        RecurrenceTerm::new(1, 0, BivarPoly::from_coefficients_normalized(vec![vec![q(1)]])),
+        RecurrenceTerm::new(3, 0, BivarPoly::from_coefficients_normalized(vec![vec![q(0), q(1)]])),
+    ],
+    denominator: None,
+    inhomogeneous: None,
+};
+let certificate = certify_leading_coefficient(
+    &rule,
+    0,
+    &[vec![q(1)], vec![q(1)], vec![q(1)]],
+    &LeadingCoefficientOptions::default(),
+)?;
+assert!(certificate.is_proved());
+assert_eq!(certificate.degree_at(31), Some(10));
+assert_eq!(certificate.sign_at(31), Some(LeadingCoefficientSign::Positive));
+certificate.verify()?;
+# Ok::<(), polytool::recurrence::RecurrenceError>(())
+```
+
 ## Exact sign decisions for an integer index
 
 `decide_index_rational_function_sign(p, q, &range, condition)` decides

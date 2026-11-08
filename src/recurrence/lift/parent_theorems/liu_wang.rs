@@ -43,6 +43,13 @@
 //! since the last factor is `prod (-s_i) > 0`; with one root `t_1 >= 0` the
 //! left side would be `<= 0`.  So every root of `P_n` is `< 0`.
 //!
+//! Rules with `deg_x a_n > 1` or `deg_x b_n > 2` are admitted when the
+//! shared module ([`crate::recurrence::certify_leading_coefficient`])
+//! proves `deg P_n = deg P_(n-1) + 1` with leading coefficients of one sign
+//! for every `n >= N` (the top terms cancel); this replaces condition 1
+//! (hypothesis `degree_law`), and the argument above uses nothing else of
+//! the x-degrees (`lambda_n` is then `lead P_n / lead P_(n-1) > 0`).
+//!
 //! Conditions 1 and 4 are sign conditions on rational functions of `n`
 //! ([`crate::decide_index_rational_function_sign`]); condition 2 is checked
 //! on the coefficient polynomial; condition 3 is decided for a separable
@@ -172,26 +179,57 @@ pub(super) fn liu_wang_report(
     let empty = Bivariate::new();
     let c0 = shape.terms.get(&(1, 0)).unwrap_or(&empty);
     let c1 = shape.terms.get(&(1, 1)).unwrap_or(&empty);
-    if x_degree(c0).is_some_and(|d| d > 1) || x_degree(c1).is_some_and(|d| d > 2) {
-        return Ok(report.not_applicable(
-            "deg_x c_0 > 1 or deg_x c_1 > 2: the degree may grow by more than one",
-        ));
-    }
     let n_first = first_index + seeds.len();
     let start = n_first - 1;
+    // Higher x-degrees are admitted only when the shared leading-coefficient
+    // module proves growth one with leading coefficients of one sign (the
+    // top terms cancel); Theorem 2.1 and the root-location induction need
+    // only that, not the x-degrees of a_n and b_n.
+    let high_degree_law =
+        if x_degree(c0).is_some_and(|d| d > 1) || x_degree(c1).is_some_and(|d| d > 2) {
+            match shared_degree_law_hypothesis(
+                "degree_law",
+                &format!(
+                    "deg P_n = deg P_(n-1) + 1 with leading coefficients of one sign for every \
+                     n >= {n_first}"
+                ),
+                (rule, first_index, seeds),
+                (start, None),
+                |step| step == 1,
+                |_| false,
+            ) {
+                Some(hypothesis) => Some(hypothesis),
+                None => {
+                    return Ok(report.not_applicable(
+                        "deg_x c_0 > 1 or deg_x c_1 > 2: the degree may grow by more than one",
+                    ))
+                }
+            }
+        } else {
+            None
+        };
     let seed = &seeds[seeds.len() - 1];
     let d = vec_poly::degree(seed).unwrap_or(0);
     let f = &shape.denominator;
     let over_f = |p: Vec<Q>| IndexFunction::new(p, f.clone());
-    report.normal_form = format!(
-        "P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1) for n >= {n_first}, with a_n(x) = ({}) + ({}) x \
-         and b_n(x) = ({}) + ({}) x + ({}) x^2",
-        over_f(x_column(c0, 0)).text(),
-        over_f(x_column(c0, 1)).text(),
-        over_f(x_column(c1, 0)).text(),
-        over_f(x_column(c1, 1)).text(),
-        over_f(x_column(c1, 2)).text(),
-    );
+    report.normal_form = if high_degree_law.is_some() {
+        format!(
+            "P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1) for n >= {n_first}, with a_n(x) = {} and \
+             b_n(x) = {}",
+            super::derivative_lag::x_polynomial_text(c0, f),
+            super::derivative_lag::x_polynomial_text(c1, f),
+        )
+    } else {
+        format!(
+            "P_n = a_n(x) P_(n-1) + b_n(x) P'_(n-1) for n >= {n_first}, with a_n(x) = ({}) + ({}) \
+             x and b_n(x) = ({}) + ({}) x + ({}) x^2",
+            over_f(x_column(c0, 0)).text(),
+            over_f(x_column(c0, 1)).text(),
+            over_f(x_column(c1, 0)).text(),
+            over_f(x_column(c1, 1)).text(),
+            over_f(x_column(c1, 2)).text(),
+        )
+    };
 
     let negative_axis = RealInterval {
         lower: None,
@@ -227,17 +265,21 @@ pub(super) fn liu_wang_report(
         &vec_poly::trim(&x_column(c0, 1)),
         &vec_poly::mul(&previous_degree, &vec_poly::trim(&x_column(c1, 2))),
     ));
-    hypotheses.push(sign_hypothesis(
-        "degree_step_positive",
-        &format!(
-            "lambda_n = [x^1] a_n + (deg P_(n-1)) [x^2] b_n > 0 for every n >= {n_first} \
+    if let Some(hypothesis) = high_degree_law {
+        hypotheses.push(hypothesis);
+    } else {
+        hypotheses.push(sign_hypothesis(
+            "degree_step_positive",
+            &format!(
+                "lambda_n = [x^1] a_n + (deg P_(n-1)) [x^2] b_n > 0 for every n >= {n_first} \
              (deg P_n = deg P_(n-1) + 1 with leading coefficients of one sign)"
-        ),
-        "lambda_n",
-        &lambda,
-        n_first,
-        IndexSignCondition::Positive,
-    ));
+            ),
+            "lambda_n",
+            &lambda,
+            n_first,
+            IndexSignCondition::Positive,
+        ));
+    }
     let b_at_zero = x_column(c1, 0);
     let statement = format!("b_n(0) = 0 for every n >= {n_first}");
     hypotheses.push(if b_at_zero.is_empty() {

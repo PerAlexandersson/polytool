@@ -77,6 +77,15 @@
 //! ([`crate::decide_index_rational_function_sign`]); a failed sufficient
 //! test is not a disproof.
 //!
+//! In the identity coordinates, when this schedule is unresolved (a step
+//! table outside the cases above, or a sequence `l_n` that neither the
+//! one-signed test nor the positive-ratio induction covers), the hypothesis
+//! `degree_law` is taken from the shared module
+//! ([`crate::recurrence::certify_leading_coefficient`]) when it proves
+//! degree steps `0` or `1` (only `1` when the seeds and coefficient degrees
+//! give full growth) and positive leading coefficients after the sign
+//! normalization for every `n >= N - 2`.
+//!
 //! # The sign condition
 //!
 //! "`B_n(x) <= 0` for every real `x`" is decided for `deg_x c_2 = 0` by the
@@ -661,6 +670,7 @@ pub(super) fn liu_wang_three_term_report(
         .ok()
         .map(|rows| rows[start - first_index..].to_vec());
     let input = AnalysisInput {
+        rule,
         first_index,
         seeds,
         options,
@@ -720,6 +730,8 @@ fn has_root_region(report: &RealRootednessTheoremReport) -> bool {
 
 /// The family data shared by the coordinate attempts.
 struct AnalysisInput<'a> {
+    /// The rule as checked (for the shared degree law).
+    rule: &'a Recurrence,
     first_index: usize,
     seeds: &'a [Vec<Q>],
     options: &'a RealRootednessTheoremOptions,
@@ -740,6 +752,7 @@ fn analyze(
     input: &AnalysisInput<'_>,
 ) -> RealRootednessTheoremReport {
     let AnalysisInput {
+        rule,
         first_index,
         seeds,
         options,
@@ -1007,7 +1020,7 @@ fn analyze(
     });
 
     // The degree law.
-    hypotheses.extend(match degree_difference.filter(|_| seeds_ok) {
+    let local_degree_law = match degree_difference.filter(|_| seeds_ok) {
         None => vec![unresolved_hypothesis(
             "degree_law",
             &format!(
@@ -1024,7 +1037,36 @@ fn analyze(
             n_first,
             generated.as_deref(),
         ),
-    });
+    };
+    let expects_full_growth = degree_difference == Some(1) && (alpha == 1 || beta == 2);
+    // In the identity coordinates, the shared leading-coefficient module
+    // where the degree-step state machine is too narrow: degree steps 0 or 1
+    // and positive leading coefficients after the sign normalization.
+    let shared_degree_law = (seeds_ok
+        && matches!(coordinates, Coordinates::Identity)
+        && local_degree_law
+            .iter()
+            .any(|h| h.status != LiftHypothesisStatus::Verified))
+    .then(|| {
+        shared_degree_law_hypothesis(
+            "degree_law",
+            &format!(
+                "deg P_n - deg P_(n-1) is 0 or 1 and P_n, P_(n-2) have positive leading \
+                 coefficients (after the sign normalization) for every n >= {n_first}"
+            ),
+            (rule, first_index, seeds),
+            (previous_index, None),
+            // Full growth from the seeds (used by the root windows) needs
+            // every step to be one.
+            |step| step == 1 || (step == 0 && !expects_full_growth),
+            row_sign,
+        )
+    })
+    .flatten();
+    match shared_degree_law {
+        Some(hypothesis) => hypotheses.push(hypothesis),
+        None => hypotheses.extend(local_degree_law),
+    }
 
     // The sign condition.
     let (sign_hypothesis, lag_sign) =

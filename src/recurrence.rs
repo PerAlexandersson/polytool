@@ -41,6 +41,11 @@
 //! - `representation`: the bounded queue search over equivalent
 //!   representations (scalar and vector) that composes all of these
 //!   ([`search_representations`]);
+//! - `leading_coefficient`: degree laws `deg P_n = D(n)` (periodic by
+//!   residue class) and signs of the leading coefficients of recurrence
+//!   rows for every index ([`certify_leading_coefficient`], a replayable
+//!   [`LeadingCoefficientCertificate`] naming the RealRooted route), used
+//!   by the theorem checks where their own degree steps are too narrow;
 //! - `lift`: parent sequences whose real-rootedness transfers to the given
 //!   sequence: Veronese-section lifts ([`find_veronese_section_lifts`],
 //!   [`certify_veronese_section_lift`]), symmetric-companion lifts
@@ -80,6 +85,8 @@ pub use implicit::*;
 // The `BivarPoly` conversions of the Ore-algebra adapter, for every submodule.
 #[allow(unused_imports)]
 pub(in crate::recurrence) use implicit::algebra::BivarConversion;
+mod leading_coefficient;
+pub use leading_coefficient::*;
 mod lift;
 pub use lift::*;
 mod representation;

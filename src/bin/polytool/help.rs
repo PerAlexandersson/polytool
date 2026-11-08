@@ -196,6 +196,7 @@ pub(crate) fn print_command_help(command: &str) -> bool {
         "recurrence" => print_recurrence_help(),
         "recurrence-generate" => print_recurrence_generate_help(),
         "recurrence-transform" => print_recurrence_transform_help(),
+        "recurrence-degree" => crate::recurrence_degree::print_recurrence_degree_help(),
         "recurrence-prove" => crate::recurrence_prove::print_recurrence_prove_help(),
         "recurrence-theorems" => print_recurrence_theorems_help(),
         "recurrence-veronese-lifts" => print_recurrence_veronese_lifts_help(),

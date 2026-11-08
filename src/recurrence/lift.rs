@@ -131,6 +131,7 @@ pub use parent_proof::{
     VeroneseParentProofRoute, VeroneseParentProofStatus,
 };
 mod parent_theorems;
+pub(in crate::recurrence) use parent_theorems::rule_with_x_free_left_hand_factor;
 pub use parent_theorems::{
     check_hypergeometric_row_theorem, check_iterated_preserver_theorem,
     check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem,

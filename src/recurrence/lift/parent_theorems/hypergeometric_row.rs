@@ -87,7 +87,12 @@
 //! that reaches `U_0` is `U_0(n - r)` times a fixed number of ratio factors
 //! `R(n - r, t)`), and `U_0(n) != 0` with one sign follows from
 //! `sigma_r(n) / f(n) > 0` for every lag that occurs and nonzero seeds of one
-//! sign.  The rows before the induction start are checked exactly.
+//! sign (or from a hypergeometric solution of that recurrence); when neither
+//! applies, the shared module
+//! ([`crate::recurrence::certify_leading_coefficient`]) may prove it for the
+//! scalar recurrence read as a family of constant rows (for example a
+//! growth-ratio invariant for `U_0(n) = 3 U_0(n - 1) - 2 U_0(n - 2)`).  The
+//! rows before the induction start are checked exactly.
 //!
 //! The conclusion: every `P_n` is nonzero and real-rooted with every root in
 //! `(-inf, 0)`, or in `(-inf, 0]` when the rows are divisible by `x` (or the
@@ -937,13 +942,28 @@ pub(super) fn hypergeometric_row_report(
             (n, value)
         })
         .collect();
-    report.hypotheses.push(first_coefficient_hypothesis(
+    let mut first_coefficient = first_coefficient_hypothesis(
         &lag_coefficients,
         &IndexFunction::polynomial(shape.denominator.clone()),
         &values,
         start,
         max_lag,
-    ));
+    );
+    // Otherwise the shared leading-coefficient module, applied to U_0 as a
+    // family of constants: its scalar recurrence with seeds U_0(n),
+    // start - max_lag <= n < start.
+    if first_coefficient.status != LiftHypothesisStatus::Verified {
+        if let Some(hypothesis) = shared_first_coefficient_hypothesis(
+            &lag_coefficients,
+            &shape.denominator,
+            &values,
+            start,
+            max_lag,
+        ) {
+            first_coefficient = hypothesis;
+        }
+    }
+    report.hypotheses.push(first_coefficient);
 
     // The region and the rows before the induction start.
     let full_support = coordinates == Coordinates::Identity || {
@@ -1428,6 +1448,68 @@ fn relation_hypothesis(
             restart,
             exceptional
         )),
+    )
+}
+
+/// `U_0(n) != 0` with one sign for every `n >= start - max_lag` from the
+/// shared leading-coefficient module: the scalar recurrence
+/// `f(n) U_0(n) = sum_r sigma_r(n) U_0(n - r)` (valid for `n >= start`),
+/// cleared of the denominators `L(n)` of the `sigma_r`, is a recurrence of
+/// constant rows `f(n) L(n) U_0(n) = sum_r (L sigma_r)(n) U_0(n - r)` with
+/// the seeds `U_0(start - max_lag), ..., U_0(start - 1)`, and a proved
+/// certificate with degree zero and one sign from the first seed on is the
+/// claim (the module also checks `f(n) L(n) != 0`).  `None` when it is not
+/// proved.
+fn shared_first_coefficient_hypothesis(
+    lag_coefficients: &BTreeMap<usize, IndexFunction>,
+    left: &[Q],
+    values: &[(usize, Q)],
+    start: usize,
+    max_lag: usize,
+) -> Option<LiftHypothesis> {
+    let first = start.checked_sub(max_lag)?;
+    let seeds: Vec<Vec<Q>> = values
+        .iter()
+        .filter(|(n, _)| *n < start)
+        .map(|(_, value)| vec![value.clone()])
+        .collect();
+    if seeds.len() != max_lag || lag_coefficients.is_empty() {
+        return None;
+    }
+    let common = lag_coefficients
+        .values()
+        .fold(vec![Q::one()], |acc, c| vec_poly::mul(&acc, &c.denominator));
+    let constant_in_x = |p: Vec<Q>| {
+        BivarPoly::from_coefficients_normalized(p.into_iter().map(|c| vec![c]).collect())
+    };
+    let terms = lag_coefficients
+        .iter()
+        .map(|(&lag, c)| {
+            let others = lag_coefficients
+                .iter()
+                .filter(|(other, _)| **other != lag)
+                .fold(vec![Q::one()], |acc, (_, o)| {
+                    vec_poly::mul(&acc, &o.denominator)
+                });
+            RecurrenceTerm::new(lag, 0, constant_in_x(vec_poly::mul(&c.numerator, &others)))
+        })
+        .collect();
+    let scalar = Recurrence {
+        terms,
+        denominator: Some(constant_in_x(vec_poly::mul(left, &common))),
+        inhomogeneous: None,
+    };
+    shared_degree_law_hypothesis(
+        "first_coefficient",
+        &format!(
+            "the first coefficient U_0(n) is nonzero with one sign for every n >= {first} (its \
+             scalar recurrence, as a family of constant rows, by the shared leading-coefficient \
+             module)"
+        ),
+        (&scalar, first, &seeds),
+        (first, Some(0)),
+        |step| step == 0,
+        |_| false,
     )
 }
 

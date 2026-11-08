@@ -119,6 +119,13 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
         run: crate::cmd_recurrence_transform,
     },
     CommandSpec {
+        name: "recurrence-degree",
+        aliases: &[],
+        group: "Generate and find recurrences",
+        summary: "Degree law and leading-coefficient signs of a recurrence for all n",
+        run: crate::recurrence_degree::cmd_recurrence_degree,
+    },
+    CommandSpec {
         name: "recurrence-prove",
         aliases: &[],
         group: "Generate and find recurrences",

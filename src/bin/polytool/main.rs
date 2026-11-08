@@ -30,6 +30,7 @@ mod pf_network;
 mod pf_pencil;
 mod properties;
 mod recurrence;
+mod recurrence_degree;
 mod recurrence_implicit;
 mod recurrence_input;
 mod recurrence_prove;

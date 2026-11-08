@@ -217,7 +217,10 @@ fn the_parent_provers_prove_the_one_signed_members() {
             assert!(proof.conditional_on.is_empty());
         }
     }
-    assert!(by_new_route >= 60, "{by_new_route}");
+    // 59: A121314, A209414 and A360282 are proved earlier in the cascade by
+    // the derivative-lag check, whose degree law comes from the shared
+    // leading-coefficient module where a lag multiplier is negative.
+    assert!(by_new_route >= 59, "{by_new_route}");
 }
 
 /// Derivative-lag rules `P_n = A_n P_(n-1) + V_n P'_(n-1) + B_n P_(n-2)` with

@@ -59,7 +59,8 @@
   `polytool::recurrence::*` etc. Add new code to the matching submodule and
   re-export it from the facade. `src/recurrence/` is grouped one level deeper
   (`base`, `fit`, `transform`, `implicit`, `root_domain`, `representation`,
-  `lift`);
+  `lift`, and the single module `leading_coefficient` with degree laws and
+  leading-coefficient certificates);
   each group has a `<group>.rs` facade that re-exports its members, and a
   cross-group helper is `pub(in crate::recurrence)`. The MCP crate (`mcp/src/`)
   is split the same way (requests, responses, parsing, server, tests).

@@ -47,6 +47,22 @@ Exit codes are 0 for a proof, 1 for no proof, and 2 for invalid input.
 With `--verify`, 0 means the report replays, including a valid `not_proved`
 report; the replay output preserves the discovery status.
 
+## Degree laws
+
+The Liu--Wang, derivative-lag and Liu--Wang three-term criteria need a degree
+law with leading coefficients of one sign.  Each first tries its own exact
+degree step; where that is too narrow (a negative lag multiplier of the top
+coefficients, top terms that cancel, a degree-step table outside the
+supported cases) it takes the hypothesis `degree_law` from the shared
+leading-coefficient module (`certify_leading_coefficient`, also the command
+`polytool recurrence-degree`), whose certificate is recomputed when the
+report is replayed.  The hypergeometric-row criterion does the same for its
+first coefficient in the reversal coordinates (the leading coefficient,
+hypothesis `first_coefficient`).  Reports proved by the local steps are
+unchanged.  The module works without any real-rootedness hypothesis, so it
+can also be run first to see the degree schedule, the exceptional initial
+rows and the leading-coefficient signs of a fitted recurrence.
+
 ## Product certificates
 
 For each recurrence index, the multiplier checker supports:

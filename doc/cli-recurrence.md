@@ -1,8 +1,8 @@
 # Recurrence search
 
 For a complete generation/search/replay pipeline, see [CLI workflows](workflows.md).
-`recurrence-generate`, `recurrence-prove`, `recurrence-theorems` and `recurrence-veronese-lifts`
-share a bounded JSON reader:
+`recurrence-generate`, `recurrence-degree`, `recurrence-prove`, `recurrence-theorems` and
+`recurrence-veronese-lifts` share a bounded JSON reader:
 they accept plain recurrence records, theorem reports with `recurrence_json`,
 and recurrence representation menus. Select a zero-based `representations`
 entry with `--candidate N`; a menu with multiple entries requires this option.
@@ -664,6 +664,28 @@ polytool recurrence --python < polys.txt > recurrence.py
 
 The generated Python uses exact `fractions.Fraction` arithmetic and dense
 coefficient lists in ascending powers of `t`.
+
+## Degree laws and leading coefficients
+
+`polytool recurrence-degree --recurrence recurrence.json [--json]` decides the
+degree law `deg P_n = D(n)` and the sign of the leading coefficient of every
+row, for all `n`, exactly (library: `certify_leading_coefficient`, see
+[Library usage](library.md#degree-laws-and-leading-coefficients-of-recurrence-rows)).
+`D(n)` is periodic by residue class (affine, half growth, Veronese sections,
+two-step products); it is read off exactly computed rows (`--rows N`, default
+36; `--max-period P`, default 6) and proved for every later index by one of
+the RealRooted routes `cone`, `recurrence`, `subseq`, `twoStep`, `cancel` or
+`coefficients`.  The text output lists the conclusion, every hypothesis with
+its status, the attempts of a family that is not proved, and the RealRooted
+declarations; `--json` emits `polytool.recurrence-leading-coefficient.v1`, and
+`polytool recurrence-degree --verify < certificate.json` replays it.  Exit
+status 0 proved (or a valid replay), 1 not proved (a failed route is not a
+disproof), 2 invalid input or replay.
+
+```sh
+polytool recurrence --json < rows.txt | polytool recurrence-degree --recurrence - --json > degree.json
+polytool recurrence-degree --verify < degree.json
+```
 
 ## General proof discovery
 

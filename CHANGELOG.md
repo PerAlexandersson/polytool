@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+- New module `recurrence::leading_coefficient` (issue #37):
+  `certify_leading_coefficient` decides a degree law `deg P_n = D(n)`,
+  periodic by residue class (`RecurrenceDegreeLaw`: affine laws, half growth,
+  Veronese sections, two-step products), and the sign of every leading
+  coefficient of a recurrence family for all `n`, exactly.  The law is read
+  off computed rows; the rows before the induction start are recorded
+  exactly and every later index is covered by a route of the RealRooted
+  tactic `rr_row_leadingCoeff_pos` (`cone`, `recurrence` with a rational
+  growth-ratio invariant, `subseq`, `twoStep`, first-order `cancel`
+  (optionally with the coefficient-ratio invariant `[x^(D-1)] P_n >= rho
+  lead P_n`, which proves A101343), and
+  `coefficients` with an affine degree envelope), each all-`n` condition
+  decided by `decide_index_rational_function_sign` on the residue classes.
+  The replayable `LeadingCoefficientCertificate`
+  (`polytool.recurrence-leading-coefficient.v1`) names the route and its
+  RealRooted declarations, reports a constant leading coefficient (monic
+  rows) when the top-coefficient recurrence holds and fixes it (never on a
+  class where the `cancel` route's top terms cancel), and a not-proved
+  certificate lists its attempts (not a disproof).  `verify` replays the
+  recorded route and refuses laws outside the searched range.  On the 860
+  catalog entries it proves 784 laws (653 `cone`, 97 `recurrence`, 14
+  `twoStep`, 12 `cancel`, 8 `subseq`), 390 of them with a constant leading
+  coefficient.  New command `polytool recurrence-degree` (with `--verify`).
+  The derivative-lag check takes its degree law from the module where its
+  one-signed degree steps fail or an x-degree exceeds its bounds; the
+  Liu--Wang check admits higher x-degrees when the module proves growth one;
+  the Liu--Wang three-term check uses it in the identity coordinates where
+  its degree-step state machine is unresolved (hypothesis `degree_law` in
+  each); the hypergeometric-row check proves its first coefficient with it
+  (the scalar recurrence of `U_0` as a family of constant rows) where the
+  hypergeometric fit and the positive-coefficient test fail.  Newly proved
+  theorem checks: derivative-lag for A046716, A054142, A082985, A084534,
+  A104684, A121314, A126216, A172431, A209414, A360282 (a negative lag
+  multiplier with a ratio invariant) and hypergeometric-row for A134346;
+  A367270 (Liu--Wang three-term) is proved at the supplied seeds instead of
+  one row later.  The parent cascade proves the same 585 catalog parents as
+  before; A121314, A209414 and A360282 are now reached by the derivative-lag
+  route (strict interlacing) before the Liu--Wang three-term route.  Every
+  other proved report is unchanged; not-proved derivative-lag reports whose
+  degree hypotheses failed now carry the shared hypothesis.  All earlier
+  proved theorem reports and parent proofs replay
+  (`check_recorded_parent_proof`).
 - New theorem `recurrence::check_hypergeometric_row_theorem` and parent route
   8b (`VeroneseParentProofRoute::HypergeometricRow`, tried after the iterated
   preserver, recorded only when the rule has a row relation of hypergeometric

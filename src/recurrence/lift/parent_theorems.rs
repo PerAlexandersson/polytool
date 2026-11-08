@@ -133,7 +133,7 @@ use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 mod discovery;
 pub use discovery::{
@@ -738,6 +738,71 @@ fn check_with_first_proving_start(
         }
     }
     Ok(proved_without_region.unwrap_or(report))
+}
+
+/// The degree law of a theorem from the shared leading-coefficient module
+/// ([`certify_leading_coefficient`]), for checks whose own degree argument
+/// is too narrow: a verified hypothesis `name` when the certificate of the
+/// family `rule`, `first_index`, `seeds` is proved with an exact law, every
+/// row from `P_from` on is covered, every step `deg P_n - deg P_(n-1)`,
+/// `n > from`, satisfies `allowed_step`, and the normalized leading
+/// coefficients `(-1)^[negated(n)] lead P_n`, `n >= from`, have one sign
+/// (and, with `degree_at_from`, `deg P_from` is that degree).  `None`
+/// otherwise (the caller keeps its own hypotheses).  The certificate is
+/// recomputed when the report is replayed.
+fn shared_degree_law_hypothesis(
+    name: &str,
+    statement: &str,
+    (rule, first_index, seeds): (&Recurrence, usize, &[Vec<Q>]),
+    (from, degree_at_from): (usize, Option<usize>),
+    allowed_step: impl Fn(i64) -> bool,
+    negated: impl Fn(usize) -> bool,
+) -> Option<LiftHypothesis> {
+    let certificate = certify_leading_coefficient(
+        rule,
+        first_index,
+        seeds,
+        &LeadingCoefficientOptions::default(),
+    )
+    .ok()?;
+    if !certificate.is_proved() || !certificate.degree_is_exact {
+        return None;
+    }
+    let law = certificate.degree_law.as_ref()?;
+    let normalized = |n: usize| {
+        certificate
+            .sign_at(n)
+            .map(|sign| (sign == LeadingCoefficientSign::Positive) != negated(n))
+    };
+    let sign = normalized(from)?;
+    if degree_at_from.is_some_and(|degree| certificate.degree_at(from) != Some(degree)) {
+        return None;
+    }
+    // Past `max(from, start) + 2 period` the steps and the normalized signs
+    // (a period dividing `2 period`) repeat.
+    let mut steps = BTreeSet::new();
+    for n in from + 1..=from.max(law.start) + 2 * law.period + 2 {
+        let step = certificate.degree_at(n)? as i64 - certificate.degree_at(n - 1)? as i64;
+        if !allowed_step(step) || normalized(n)? != sign {
+            return None;
+        }
+        steps.insert(step);
+    }
+    Some(LiftHypothesis {
+        name: name.into(),
+        statement: statement.into(),
+        status: LiftHypothesisStatus::Verified,
+        evidence: format!(
+            "shared degree-law certificate, route {} (RealRooted {}): {}; degree steps {:?} from \
+             n = {}; the certificate is recomputed when the report is replayed",
+            certificate.lean_route.as_deref().unwrap_or("-"),
+            certificate.lean_declarations.join(", "),
+            certificate.conclusion.as_deref().unwrap_or_default(),
+            steps,
+            from + 1
+        ),
+        sign_decision: None,
+    })
 }
 
 /// `proved` when every hypothesis is verified, `hypothesis_failed` when one

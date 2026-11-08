@@ -24,7 +24,14 @@
 //!    one sign, and `P_(N-2)` strictly interlaces `P_(N-1)` (simple roots, no
 //!    common root; the exact Bézout test);
 //! 3. degree law: `lambda_n > 0` when `mu = 0`, otherwise `lambda_n >= 0`,
-//!    `mu_n >= 0` and `lambda_n + mu_n > 0`;
+//!    `mu_n >= 0` and `lambda_n + mu_n > 0`; when these one-signed
+//!    conditions fail, or when an x-degree exceeds the bounds above (top
+//!    terms that cancel), the hypothesis `degree_law` instead takes
+//!    `deg P_n = deg P_(n-1) + 1` with leading coefficients of one sign for
+//!    every `n >= N - 1` from the shared module
+//!    ([`crate::recurrence::certify_leading_coefficient`], for example a
+//!    growth-ratio invariant for a negative `mu_n`), which is all that the
+//!    proof below uses of hypothesis 3;
 //! 4. `V_n(0) = 0` and `W_n(0) = 0`, and `A_n(0) > 0`;
 //! 5. `V_n(x) <= 0` and `W_n(x) <= 0` for every `x < 0`;
 //! 6. for every `x < 0`, `V_n(x) < 0` or `W_n(x) < 0` (decided as
@@ -308,16 +315,42 @@ pub(super) fn derivative_lag_report(
     let c0 = shape.terms.get(&(1, 0)).unwrap_or(&empty);
     let c1 = shape.terms.get(&(1, 1)).unwrap_or(&empty);
     let c2 = shape.terms.get(&(2, 0)).unwrap_or(&empty);
-    if x_degree(c0).is_some_and(|d| d > 1)
-        || x_degree(c1).is_some_and(|d| d > 2)
-        || x_degree(c2).is_some_and(|d| d > 2)
-    {
-        return Ok(report.not_applicable(
-            "deg_x c_0 > 1, deg_x c_1 > 2 or deg_x c_2 > 2: the degree may grow by more than one",
-        ));
-    }
-    let f = &shape.denominator;
     let n_first = first_index + seeds.len();
+    // Hypothesis 3 from the shared leading-coefficient module: growth one
+    // with leading coefficients of one sign from P_(N-2) on.
+    let shared_degree_law = || {
+        shared_degree_law_hypothesis(
+            "degree_law",
+            &format!(
+                "deg P_n = deg P_(n-1) + 1 with leading coefficients of one sign for every n >= \
+                 {}",
+                n_first - 1
+            ),
+            (rule, first_index, seeds),
+            (n_first - 2, None),
+            |step| step == 1,
+            |_| false,
+        )
+    };
+    // Higher x-degrees are admitted only when the shared module proves the
+    // degree law (the top terms cancel); the rest of the argument does not
+    // depend on the x-degrees.
+    let high_degree_law =
+        if x_degree(c0).is_some_and(|d| d > 1)
+            || x_degree(c1).is_some_and(|d| d > 2)
+            || x_degree(c2).is_some_and(|d| d > 2)
+        {
+            match shared_degree_law() {
+                Some(hypothesis) => Some(hypothesis),
+                None => return Ok(report.not_applicable(
+                    "deg_x c_0 > 1, deg_x c_1 > 2 or deg_x c_2 > 2: the degree may grow by more \
+                     than one",
+                )),
+            }
+        } else {
+            None
+        };
+    let f = &shape.denominator;
     let previous_index = n_first - 2;
     let current_index = n_first - 1;
     let previous = vec_poly::trim(&seeds[seeds.len() - 2]);
@@ -466,6 +499,7 @@ pub(super) fn derivative_lag_report(
         earlier_rows_hypothesis(&seeds[..seeds.len() - 2], first_index, gauge > 0);
     hypotheses.extend(earlier);
     // Hypothesis 3: the degree law.
+    let mut degree_hypotheses: Vec<LiftHypothesis> = Vec::new();
     let d = current_degree.unwrap_or(0);
     let previous_row_degree = vec![
         Q::from_integer(BigInt::from(d as i64 - n_first as i64)),
@@ -478,7 +512,7 @@ pub(super) fn derivative_lag_report(
     let lag_leading = x_column(c2, 2);
     let degree_statement = "(deg P_n = deg P_(n-1) + 1 with leading coefficients of one sign)";
     if lag_leading.is_empty() {
-        hypotheses.push(sign_hypothesis(
+        degree_hypotheses.push(sign_hypothesis(
             "degree_step_positive",
             &format!(
                 "lambda_n = [x^1] A_n + (deg P_(n-1)) [x^2] V_n > 0 for every n >= {n_first} \
@@ -491,7 +525,7 @@ pub(super) fn derivative_lag_report(
         ));
     } else {
         let mu = over_f(lag_leading);
-        hypotheses.push(sign_hypothesis(
+        degree_hypotheses.push(sign_hypothesis(
             "derivative_degree_step_nonnegative",
             &format!(
                 "lambda_n = [x^1] A_n + (deg P_(n-1)) [x^2] V_n >= 0 for every n >= {n_first}"
@@ -501,7 +535,7 @@ pub(super) fn derivative_lag_report(
             n_first,
             IndexSignCondition::Nonnegative,
         ));
-        hypotheses.push(sign_hypothesis(
+        degree_hypotheses.push(sign_hypothesis(
             "lag_degree_step_nonnegative",
             &format!("mu_n = [x^2] W_n >= 0 for every n >= {n_first}"),
             "mu_n",
@@ -509,7 +543,7 @@ pub(super) fn derivative_lag_report(
             n_first,
             IndexSignCondition::Nonnegative,
         ));
-        hypotheses.push(sign_hypothesis(
+        degree_hypotheses.push(sign_hypothesis(
             "degree_step_positive",
             &format!("lambda_n + mu_n > 0 for every n >= {n_first} {degree_statement}"),
             "lambda_n + mu_n",
@@ -517,6 +551,20 @@ pub(super) fn derivative_lag_report(
             n_first,
             IndexSignCondition::Positive,
         ));
+    }
+    match high_degree_law {
+        Some(hypothesis) => hypotheses.push(hypothesis),
+        None => {
+            // The shared module where the one-signed degree steps are too
+            // narrow (for example a negative lag term with a ratio bound).
+            let local_holds = degree_hypotheses
+                .iter()
+                .all(|h| h.status == LiftHypothesisStatus::Verified);
+            match (!local_holds).then(shared_degree_law).flatten() {
+                Some(hypothesis) => hypotheses.push(hypothesis),
+                None => hypotheses.extend(degree_hypotheses),
+            }
+        }
     }
     // Hypothesis 4.
     hypotheses.push(vanishing_at_zero_hypothesis(c1, c2, n_first));
