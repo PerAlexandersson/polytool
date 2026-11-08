@@ -120,10 +120,23 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Declared MSRV: $version"
 
+      # Stable Cargo resolves a missing lockfile MSRV-aware (the MSRV Cargo
+      # would pick dependency releases that need a newer Rust).
+      - name: Install stable Rust (resolver)
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install Rust ${{ steps.msrv.outputs.version }}
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
+
+      - name: Resolve dependencies for the declared MSRV
+        run: |
+          root=$(cargo +stable locate-project --workspace --manifest-path "${{ matrix.manifest }}" --message-format plain)
+          if [ ! -f "$(dirname "$root")/Cargo.lock" ]; then
+            CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback \
+              cargo +stable generate-lockfile --manifest-path "${{ matrix.manifest }}"
+          fi
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
