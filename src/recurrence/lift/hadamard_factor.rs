@@ -189,7 +189,7 @@
 //! # Root transfer
 //!
 //! The Pólya--Schur characterization of multiplier sequences (Pólya and
-//! Schur 1914; Theorem 40 of Brändén, *Unimodality, log-concavity,
+//! Schur 1914; Theorem 7.1 of Brändén, *Unimodality, log-concavity,
 //! real-rootedness and beyond*, arXiv:1410.6601): `x^k -> lambda_k x^k`
 //! preserves real-rootedness iff `sum_k binom(m, k) lambda_k x^k` is
 //! real-rooted with zeros of one sign for every `m`, iff

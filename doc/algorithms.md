@@ -801,7 +801,7 @@ binomials whose fitted rule is not smaller than the input's (a product of two
 binomial factors, with a Jacobi-type quotient, is the natural candidate).
 
 **Root transfer.**  The Pólya--Schur characterization of multiplier sequences
-(Pólya and Schur 1914; Theorem 40 of Brändén, arXiv:1410.6601):
+(Pólya and Schur 1914; Theorem 7.1 of Brändén, arXiv:1410.6601):
 `(lambda_k)` is a multiplier sequence iff `sum_k lambda_k x^k / k!` (or its
 reflection) is `C x^m e^(a x) prod (1 + alpha_j x)` with `a, alpha_j >= 0`, iff
 `sum_k binom(m, k) lambda_k x^k` is real-rooted with zeros of one sign for every
