@@ -58,6 +58,13 @@ pub const DISCOVERY_THEOREMS: [RealRootednessTheorem; 8] = [
     RealRootednessTheorem::HypergeometricRow,
 ];
 
+/// The RealRooted row routes tried after [`DISCOVERY_THEOREMS`]; their
+/// attempts are recorded only when the rule has their form.
+pub const ROW_ROUTE_THEOREMS: [RealRootednessTheorem; 2] = [
+    RealRootednessTheorem::VariableDelay,
+    RealRootednessTheorem::ResidueClassSubsequences,
+];
+
 /// The theorems of the first version of the schema; every report records
 /// an attempt of each.
 const FIRST_VERSION_THEOREMS: usize = 6;
@@ -206,7 +213,10 @@ pub struct RecurrenceProofDiscoveryReport {
 /// preserver and hypergeometric-row criteria (the order of the parent
 /// cascade), then the tail after rows that are zero or not real-rooted and
 /// certified alternative representations (module documentation), with the
-/// default [`AlternativeRepresentationOptions`].
+/// default [`AlternativeRepresentationOptions`]. The RealRooted row routes
+/// fixed-delay window ([`check_variable_delay_theorem`]) and residue-class
+/// decomposition ([`check_residue_class_subsequence_theorem`]) are recorded
+/// after them, only when the rule has their form.
 /// This is theorem discovery for a supplied rule, not recurrence fitting.
 /// Failed sufficient hypotheses do not disprove real-rootedness. There is no
 /// catalogue fallback or external attestation route.
@@ -327,10 +337,19 @@ fn run_theorems(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<Vec<RealRootednessTheoremReport>, RecurrenceError> {
-    DISCOVERY_THEOREMS
+    let mut attempts = DISCOVERY_THEOREMS
         .iter()
         .map(|theorem| check_with_first_proving_start(*theorem, rule, first_index, seeds, options))
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    // RealRooted row routes (`variableDelay`, `subseq`): recorded only where
+    // the rule has their form, so the reports of other rules are unchanged.
+    for theorem in ROW_ROUTE_THEOREMS {
+        let attempt = check_with_first_proving_start(theorem, rule, first_index, seeds, options)?;
+        if attempt.status != RealRootednessTheoremStatus::NotApplicable {
+            attempts.push(attempt);
+        }
+    }
+    Ok(attempts)
 }
 
 /// The first proved index of a list of attempts.

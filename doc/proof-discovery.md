@@ -36,9 +36,12 @@ Neither fitting nor held-out checks prove that identity.
 | Liu–Wang three-term | Polynomial lag coefficient, optionally a derivative; degree growth zero or one, appropriate sign and root-location checks; also the degenerate case `A_n = a_n g(x)`, `B_n = b_n g(x)^2` with proportional seeds, where every row is `c_n g^(n-N+2) P_(N-2)` and the check proves `c_n != 0` (a positive sequence, or a hypergeometric closed form `c_n / c_(n-1) = r(n)`, which allows `a_n` to vanish at isolated indices) | Real-rootedness and weak interlacing; root domain when certified |
 | Iterated preserver | First-order or single-lag rules `P_n = a_n(x) S_n(P_(n-L))`: a real-rooted multiplier after the identity or a preserver of the menu (Laguerre, Pólya–Schur, Rolle, Euler step, Brändén's Weyl step), also in gauge, translation and reversal coordinates; earlier seed rows checked exactly | Real-rootedness with roots in `(-inf, 0]`, `[0, inf)` or on the line |
 | Hypergeometric row | Rows whose coefficient ratio is a product of factors linear in `k` (a row relation proved for every `n`), the image of `(1 + x)^M(n)` under nonnegative multiplier sequences | Real-rootedness with roots in `(-inf, 0]` |
+| Fixed-delay window (RealRooted `variableDelay`) | `f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)`, `L >= 2`; `A/f > 0`, `B/f >= 0` for every index, constant first row, seed rows as exact window steps | Nonnegative coefficients, roots in `(-inf, 0)`, `P_A << P_B` for `A <= B <= A + L` |
+| Residue classes (RealRooted `subseq`) | Every lag a multiple of `p >= 2`; each class `P_(first + j + p m)` proved by one of the rules above (zero classes allowed) | Zero (named) or real-rooted rows, hull of the class root regions; no interlacing of consecutive rows |
 
-The dispatcher tries all eight, in the order of the parent cascade of the
-lift provers, and records every result. `proved` means that at least one
+The dispatcher tries the first eight, in the order of the parent cascade of
+the lift provers, and records every result; the last two (the RealRooted row
+routes) are recorded only when the rule has their form. `proved` means that at least one
 attempt checked every hypothesis. `not_proved` means that this search did
 not find a proof; failure of a sufficient hypothesis is not a
 counterexample. Each attempt records its own starting index, interlacing
@@ -196,7 +199,8 @@ replay do not generate a Lean kernel certificate. Existing Lean declarations
 are reusable building blocks; normalizations, exact arithmetic certificates,
 index shifts and inductions still require formal replay when one is wanted.
 The inventory below was source-inspected at RealRooted revision
-`1fc0e36cc67a28fa0fa0be4a1bab818926e020fd`.
+`1fc0e36cc67a28fa0fa0be4a1bab818926e020fd` (the two row routes at
+`0d0bf80e278275b57f8a1ba4b12edce102b56747`).
 
 | General building block | Primary Lean source | Additional correspondence work |
 | --- | --- | --- |
@@ -206,6 +210,8 @@ The inventory below was source-inspected at RealRooted revision
 | `derivLag_strictInterl_of_nonnegCoeffs` and Liu–Wang steps | [Derivative-lag](https://github.com/PerAlexandersson/RealRooted/blob/1fc0e36cc67a28fa0fa0be4a1bab818926e020fd/RealRooted/DerivativeRecurrence/QuadraticLagStrict.lean) | Report-specific `halfGrowth`/`sign` conditions and any power-of-x normalization |
 | `affineEndpointStep_closed` and endpoint multiplicities | [Ma–Wang endpoint step](https://github.com/PerAlexandersson/RealRooted/blob/1fc0e36cc67a28fa0fa0be4a1bab818926e020fd/RealRooted/MaWang/EndpointTwoSided.lean#L298) | Affine coordinate change and multiplicity-counter induction |
 | Three-term sign and window steps | [Three-term recurrence](https://github.com/PerAlexandersson/RealRooted/blob/1fc0e36cc67a28fa0fa0be4a1bab818926e020fd/RealRooted/ThreeTermRecurrence/Interlacing.lean) | Degree and root-region invariants appropriate to the selected route |
+| `strictInterl_of_scaled_fixedDelay_recurrence`, `hasNonnegCoeffs_of_scaled_fixedDelay_recurrence` (route `variableDelay`) | [Fixed-delay window](https://github.com/PerAlexandersson/RealRooted/blob/0d0bf80e278275b57f8a1ba4b12edce102b56747/RealRooted/Interlacing/VariableDelay.lean#L280) | Division by the constant first row, the seed rows as window steps, the sign certificates of `a` and `b` |
+| `exists_mul_add_lt` (route `subseq`) | [Residue reassembly](https://github.com/PerAlexandersson/RealRooted/blob/0d0bf80e278275b57f8a1ba4b12edce102b56747/RealRooted/ThreeTermRecurrence/HalfGrowth.lean#L127) | The class rules in the class index and each class report's own correspondence; Lean's `rr_row_subseq_splits` covers periods 2 to 6 and class rules with one or two lags |
 
 The existing theorem reports retain their paper references and applicable
 Lean declaration names. No theorem is labeled Lean-replayed merely because

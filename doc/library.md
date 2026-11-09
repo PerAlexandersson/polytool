@@ -744,8 +744,10 @@ in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 `recurrence::check_liu_wang_derivative_lag_theorem`,
 `recurrence::check_liu_wang_three_term_theorem`,
 `recurrence::check_ma_wang_interval_theorem`,
-`recurrence::check_iterated_preserver_theorem` and
-`recurrence::check_hypergeometric_row_theorem` apply a paper theorem to a
+`recurrence::check_iterated_preserver_theorem`,
+`recurrence::check_hypergeometric_row_theorem`,
+`recurrence::check_variable_delay_theorem` and
+`recurrence::check_residue_class_subsequence_theorem` apply a paper theorem to a
 family given by a rule, a first index and seed rows (the rule applies from
 `first_index + seeds.len()` on), and check every hypothesis exactly for all
 indices.  The result (`RealRootednessTheoremReport`,
@@ -875,6 +877,35 @@ region).  `verify()` replays it.
   A110608, A119308, A123160, A124860, A128540, A253283, A286785, A357613,
   A359363, A376827.  Families such as A318397 (`binom(n, k)^2 binom(2(n -
   k), n - k)`, a double Narayana transform) stay `unresolved`.
+- Fixed-delay window (RealRooted row route `variableDelay`,
+  `RealRooted/Interlacing/VariableDelay.lean`, after Fisk, Example 16.10):
+  `f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)`, `L >= 2`, with `a = A / f > 0`
+  and `b = B / f >= 0` for every `n >= N` (sign checker), a nonzero constant
+  first row, and every later seed row an exact window step `a_m P_(m-1) +
+  b_m x P_(max(m-L, first))` with rational `a_m > 0`, `b_m >= 0` (recorded in
+  `RealRootednessTheoremReport::variable_delay` and replayed by
+  `VariableDelayCertificate::verify_seed_steps`).  It proves every row
+  nonzero with nonnegative coefficients (up to the sign of the first row) and
+  every root in `(-inf, 0)`, and `P_A << P_B` (weak interlacing, RealRooted
+  `StrictInterl`) for `A <= B <= A + L`.  `lean_declarations` names
+  `strictInterl_of_scaled_fixedDelay_recurrence` (or
+  `strictInterl_of_fixedDelay_recurrence` when every `a = 1`) and
+  `hasNonnegCoeffs_of_scaled_fixedDelay_recurrence`.  OEIS A201013
+  (`P_n = (n + 2) P_(n-1) + binom(n + 2, 2) x P_(n-3)`) is proved this way;
+  the paper-theorem route `fixed_delay_predecessor_window` covers `a = 1`
+  with canonical seeds only.
+- Residue classes (RealRooted row route `subseq`): when every lag of the
+  rule is a multiple of `p >= 2` (the gcd), each class `P_(first + j + p m)`,
+  `m >= 0`, is an exactly derived family in `m` (the rule at
+  `n = first + j + p m`, lags divided by `p`, the class seed rows),
+  proved by the first theorem of the class menu (the checks above and the
+  fixed-delay window) that proves it, its report kept in
+  `RealRootednessTheoremReport::residue_classes` and replayed; a class of
+  zero seed rows is identically zero (homogeneous rule, `f` nonzero on the
+  class, decided exactly).  It proves every row zero (named in the
+  conclusion) or real-rooted, with the hull of the class regions; no
+  interlacing of consecutive rows.  OEIS A099605, A132918, A137374, A171608,
+  A211956, A223168 and A286100 (lags `2` and `4`) are proved this way.
 
 When a theorem fails at the supplied seeds, the checks retry with the
 induction start moved up to `RealRootednessTheoremOptions::maximum_start_delay`

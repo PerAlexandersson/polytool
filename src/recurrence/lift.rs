@@ -136,7 +136,7 @@ pub use parent_theorems::{
     certify_recurrence_equality, discover_recurrence_proofs_with_options,
     AlternativeRepresentationOptions, AlternativeRepresentationProof,
     AlternativeRepresentationSearch, RecurrenceEqualityCertificate, RecurrenceProofTail,
-    DISCOVERY_THEOREMS, RECURRENCE_EQUALITY_SCHEMA,
+    DISCOVERY_THEOREMS, RECURRENCE_EQUALITY_SCHEMA, ROW_ROUTE_THEOREMS,
 };
 pub use parent_theorems::{
     check_hypergeometric_row_theorem, check_iterated_preserver_theorem,
@@ -149,6 +149,11 @@ pub use parent_theorems::{
     RealRootednessTheoremReport, RealRootednessTheoremStatus, RecurrenceProofDiscoveryReport,
     RowInterlacing, WeylStepPreserverVerdict, REAL_ROOTEDNESS_THEOREM_SCHEMA,
     RECURRENCE_PROOF_DISCOVERY_SCHEMA,
+};
+// RealRooted row routes `variableDelay` and `subseq`.
+pub use parent_theorems::{
+    check_residue_class_subsequence_theorem, check_variable_delay_theorem, ResidueClassCertificate,
+    ResidueClassProof, VariableDelayCertificate, VariableDelaySeedStep,
 };
 mod row_factor;
 pub use row_factor::{
