@@ -138,7 +138,8 @@ def test_zero_residue_classes_are_reported():
     assert report.certificate["conclusion"]["zero_residue_classes"] == zero
     assert report.verify()
     data = report.to_dict()
-    del data["attempts"][-1]["conclusion"]["zero_residue_classes"]
+    attempt = next(a for a in data["attempts"] if a["theorem"] == "residue_class_subsequences")
+    del attempt["conclusion"]["zero_residue_classes"]
     with pytest.raises(polytool.VerificationError):
         polytool.ProofReport.from_json(data).verify()
 
