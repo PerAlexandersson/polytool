@@ -727,7 +727,7 @@ pub(super) fn proved_parent_interlacing(
             proof.interlacing.as_ref().ok_or_else(|| {
                 format!(
                     "the parent route {} proves no interlacing of consecutive parent rows",
-                    parent_route_label(route)
+                    route.as_str()
                 )
             })
         }
@@ -1104,7 +1104,7 @@ impl VeroneseSectionCertification {
             VeroneseParentProofStatus::Proved => match proof.route {
                 Some(route) if route != VeroneseParentProofRoute::Attestation => {
                     LiftParentProof::Proved {
-                        route: parent_route_label(route).into(),
+                        route: route.as_str().into(),
                         statement,
                     }
                 }
@@ -1145,28 +1145,6 @@ impl VeroneseSectionCertification {
     }
 }
 
-/// The snake-case label of a parent route.
-fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
-    match route {
-        VeroneseParentProofRoute::PeriodicProduct => "periodic_product",
-        VeroneseParentProofRoute::ProductRecurrence => "product_recurrence",
-        VeroneseParentProofRoute::PaperTheorem => "paper_theorem",
-        VeroneseParentProofRoute::RootDomain => "root_domain",
-        VeroneseParentProofRoute::ThreeTermRecurrence => "three_term_recurrence",
-        VeroneseParentProofRoute::LiuWang => "liu_wang",
-        VeroneseParentProofRoute::LiuWangDerivativeLag => "liu_wang_derivative_lag",
-        VeroneseParentProofRoute::MaWangInterval => "ma_wang_interval",
-        VeroneseParentProofRoute::LiuWangThreeTerm => "liu_wang_three_term",
-        VeroneseParentProofRoute::IteratedPreserver => "iterated_preserver",
-        VeroneseParentProofRoute::HypergeometricRow => "hypergeometric_row",
-        VeroneseParentProofRoute::VariableDelay => "variable_delay",
-        VeroneseParentProofRoute::ResidueClassSubsequences => "residue_class_subsequences",
-        VeroneseParentProofRoute::IndexSectionLift => "index_section_lift",
-        VeroneseParentProofRoute::FactorGauge => "factor_gauge",
-        VeroneseParentProofRoute::Attestation => "attestation",
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Hadamard-factor and row-factor lifts
 // ---------------------------------------------------------------------------
@@ -1179,7 +1157,7 @@ pub(super) fn parent_proof_summary(proof: &VeroneseParentProof) -> LiftParentPro
         VeroneseParentProofStatus::Proved => match proof.route {
             Some(route) if route != VeroneseParentProofRoute::Attestation => {
                 LiftParentProof::Proved {
-                    route: parent_route_label(route).into(),
+                    route: route.as_str().into(),
                     statement,
                 }
             }

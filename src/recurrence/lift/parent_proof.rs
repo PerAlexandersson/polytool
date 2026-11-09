@@ -332,6 +332,73 @@ pub enum VeroneseParentProofRoute {
     Attestation,
 }
 
+impl VeroneseParentProofRoute {
+    /// The snake-case name, as serialized (for example `"liu_wang"`).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            VeroneseParentProofRoute::PeriodicProduct => "periodic_product",
+            VeroneseParentProofRoute::PaperTheorem => "paper_theorem",
+            VeroneseParentProofRoute::RootDomain => "root_domain",
+            VeroneseParentProofRoute::Attestation => "attestation",
+            VeroneseParentProofRoute::ProductRecurrence
+            | VeroneseParentProofRoute::ThreeTermRecurrence
+            | VeroneseParentProofRoute::LiuWang
+            | VeroneseParentProofRoute::LiuWangDerivativeLag
+            | VeroneseParentProofRoute::MaWangInterval
+            | VeroneseParentProofRoute::LiuWangThreeTerm
+            | VeroneseParentProofRoute::IteratedPreserver
+            | VeroneseParentProofRoute::HypergeometricRow
+            | VeroneseParentProofRoute::VariableDelay
+            | VeroneseParentProofRoute::ResidueClassSubsequences
+            | VeroneseParentProofRoute::IndexSectionLift
+            | VeroneseParentProofRoute::FactorGauge => match self.theorem() {
+                Some(theorem) => theorem.as_str(),
+                None => unreachable!(),
+            },
+        }
+    }
+
+    /// The [`RealRootednessTheorem`] behind a theorem route (the route and
+    /// the theorem have the same name); `None` for the periodic-product,
+    /// paper-theorem, root-domain and attestation routes.
+    pub const fn theorem(self) -> Option<RealRootednessTheorem> {
+        match self {
+            VeroneseParentProofRoute::ProductRecurrence => {
+                Some(RealRootednessTheorem::ProductRecurrence)
+            }
+            VeroneseParentProofRoute::ThreeTermRecurrence => {
+                Some(RealRootednessTheorem::ThreeTermRecurrence)
+            }
+            VeroneseParentProofRoute::LiuWang => Some(RealRootednessTheorem::LiuWang),
+            VeroneseParentProofRoute::LiuWangDerivativeLag => {
+                Some(RealRootednessTheorem::LiuWangDerivativeLag)
+            }
+            VeroneseParentProofRoute::MaWangInterval => Some(RealRootednessTheorem::MaWangInterval),
+            VeroneseParentProofRoute::LiuWangThreeTerm => {
+                Some(RealRootednessTheorem::LiuWangThreeTerm)
+            }
+            VeroneseParentProofRoute::IteratedPreserver => {
+                Some(RealRootednessTheorem::IteratedPreserver)
+            }
+            VeroneseParentProofRoute::HypergeometricRow => {
+                Some(RealRootednessTheorem::HypergeometricRow)
+            }
+            VeroneseParentProofRoute::VariableDelay => Some(RealRootednessTheorem::VariableDelay),
+            VeroneseParentProofRoute::ResidueClassSubsequences => {
+                Some(RealRootednessTheorem::ResidueClassSubsequences)
+            }
+            VeroneseParentProofRoute::IndexSectionLift => {
+                Some(RealRootednessTheorem::IndexSectionLift)
+            }
+            VeroneseParentProofRoute::FactorGauge => Some(RealRootednessTheorem::FactorGauge),
+            VeroneseParentProofRoute::PeriodicProduct
+            | VeroneseParentProofRoute::PaperTheorem
+            | VeroneseParentProofRoute::RootDomain
+            | VeroneseParentProofRoute::Attestation => None,
+        }
+    }
+}
+
 /// One tried route.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

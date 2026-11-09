@@ -852,14 +852,9 @@ impl ProofReport {
     /// ``"three_term_recurrence"``), or ``None``; attempts on the record come
     /// first, then those on its tail and on a certified alternative.
     #[getter]
-    fn route(&self) -> PyResult<Option<String>> {
+    fn route(&self) -> Option<String> {
         self.first_proved_attempt()
-            .map(|attempt| {
-                serde_json::to_value(attempt.theorem)
-                    .map_err(polytool_error)
-                    .map(|value| value.as_str().unwrap_or_default().to_owned())
-            })
-            .transpose()
+            .map(|attempt| attempt.theorem.as_str().to_owned())
     }
 
     /// The first proved attempt (a ``dict`` of schema
@@ -908,15 +903,15 @@ impl ProofReport {
         Ok(true)
     }
 
-    fn __repr__(&self) -> PyResult<String> {
-        Ok(match self.route()? {
+    fn __repr__(&self) -> String {
+        match self.route() {
             Some(route) => format!("<ProofReport proved by {route}>"),
             None => format!(
                 "<ProofReport {} after {} attempts>",
                 self.report.status,
                 self.report.attempts.len()
             ),
-        })
+        }
     }
 }
 

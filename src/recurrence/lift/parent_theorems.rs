@@ -263,6 +263,44 @@ pub enum RealRootednessTheorem {
     FactorGauge,
 }
 
+impl RealRootednessTheorem {
+    /// Every theorem, in the order of the parent cascade and of
+    /// [`discover_recurrence_proofs`].
+    pub const ALL: [RealRootednessTheorem; 12] = [
+        RealRootednessTheorem::ProductRecurrence,
+        RealRootednessTheorem::ThreeTermRecurrence,
+        RealRootednessTheorem::LiuWang,
+        RealRootednessTheorem::LiuWangDerivativeLag,
+        RealRootednessTheorem::MaWangInterval,
+        RealRootednessTheorem::LiuWangThreeTerm,
+        RealRootednessTheorem::IteratedPreserver,
+        RealRootednessTheorem::HypergeometricRow,
+        RealRootednessTheorem::VariableDelay,
+        RealRootednessTheorem::ResidueClassSubsequences,
+        RealRootednessTheorem::IndexSectionLift,
+        RealRootednessTheorem::FactorGauge,
+    ];
+
+    /// The snake-case name, as serialized (for example
+    /// `"three_term_recurrence"`).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            RealRootednessTheorem::ProductRecurrence => "product_recurrence",
+            RealRootednessTheorem::ThreeTermRecurrence => "three_term_recurrence",
+            RealRootednessTheorem::LiuWang => "liu_wang",
+            RealRootednessTheorem::LiuWangDerivativeLag => "liu_wang_derivative_lag",
+            RealRootednessTheorem::MaWangInterval => "ma_wang_interval",
+            RealRootednessTheorem::LiuWangThreeTerm => "liu_wang_three_term",
+            RealRootednessTheorem::IteratedPreserver => "iterated_preserver",
+            RealRootednessTheorem::HypergeometricRow => "hypergeometric_row",
+            RealRootednessTheorem::VariableDelay => "variable_delay",
+            RealRootednessTheorem::ResidueClassSubsequences => "residue_class_subsequences",
+            RealRootednessTheorem::IndexSectionLift => "index_section_lift",
+            RealRootednessTheorem::FactorGauge => "factor_gauge",
+        }
+    }
+}
+
 /// Outcome of a theorem check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
