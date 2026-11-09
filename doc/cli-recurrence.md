@@ -739,3 +739,8 @@ report with exact hypotheses, conclusions and unresolved obligations. Use
 `polytool recurrence-prove --verify --json < proof.json` to replay. See
 [General recurrence proof discovery](proof-discovery.md) for the supported
 rules, evidence boundaries, product certificates and Lean correspondence.
+
+The index-section lift (theorem `index_section_lift`) is recorded only when the
+rows, possibly reversed, are every `p`-th row (`p <= 5`) of a
+constant-coefficient parent found by factoring; its `index_section` certificate
+holds the period, the transform, the parent record and the parent's proof.

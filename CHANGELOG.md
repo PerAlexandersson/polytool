@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Index-section lift (RealRooted row route `pathPower`, the inverse of
+  `subseq`). New theorem `recurrence::check_index_section_lift_theorem`
+  (theorem `index_section_lift`, certificate
+  `recurrence::IndexSectionCertificate` with `IndexSectionTransform`,
+  constant `MAX_INDEX_SECTION_PERIOD`): for a rule with multipliers depending
+  on `x` only, the rows (possibly reversed, after an exceptional prefix row)
+  are every `p`-th row (`p <= 5`) of a constant-coefficient parent found by
+  factoring `chi_T(w^p)`, with `Res_w(psi(w), z - w^p) = chi_T(z)` and
+  polynomial parent seeds; the identity holds for every index by an
+  equal-order recurrence argument, and the parent is proved by the other
+  theorems. Proves OEIS A109955, A109960, A116088, A116089, A127893, A193636
+  and A206294; A114123, A184883 and A216182 are reported with an open
+  parent. `RealRootednessTheoremReport` gains the optional field
+  `index_section`. `recurrence-prove` / MCP `discover_recurrence_proofs`
+  record the attempt only when a section identity is found (other reports
+  are unchanged, and saved tail or alternative attempt lists without it
+  still replay); new parent route 8e
+  (`VeroneseParentProofRoute::IndexSectionLift`) runs only for a parent left
+  open and is recorded only when a section identity is found.
 - Proof discovery (issues #42, #45, #46 step 1). `recurrence-prove`
   (`discover_recurrence_proofs`, MCP `discover_recurrence_proofs`, Python
   `prove_real_rooted`) runs the iterated-preserver and hypergeometric-row

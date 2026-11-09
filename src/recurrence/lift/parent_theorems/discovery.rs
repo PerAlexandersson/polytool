@@ -349,6 +349,18 @@ fn run_theorems(
             attempts.push(attempt);
         }
     }
+    // Index-section lift (RealRooted `pathPower`): recorded only when a
+    // section identity with a parent family is found.
+    let attempt = check_with_first_proving_start(
+        RealRootednessTheorem::IndexSectionLift,
+        rule,
+        first_index,
+        seeds,
+        options,
+    )?;
+    if attempt.status != RealRootednessTheoremStatus::NotApplicable {
+        attempts.push(attempt);
+    }
     Ok(attempts)
 }
 
@@ -646,7 +658,12 @@ fn verify_attempts(
     let required: Vec<RealRootednessTheorem> = if require_first_version {
         DISCOVERY_THEOREMS[..FIRST_VERSION_THEOREMS].to_vec()
     } else {
-        reference.iter().map(|a| a.theorem).collect()
+        // Reports saved before the index-section lift existed omit it.
+        reference
+            .iter()
+            .map(|a| a.theorem)
+            .filter(|theorem| *theorem != RealRootednessTheorem::IndexSectionLift)
+            .collect()
     };
     if required.iter().any(|theorem| !recorded.contains(theorem)) {
         return failed("a theorem attempt is missing");

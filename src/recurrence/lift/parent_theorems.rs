@@ -57,7 +57,12 @@
 //! - [`check_residue_class_subsequence_theorem`]: rules whose lags are all
 //!   multiples of `p >= 2` (the RealRooted route `subseq`), proved one
 //!   residue class `P_(n0 + j + p m)` at a time by the theorems above, each
-//!   class report kept as a sub-certificate.
+//!   class report kept as a sub-certificate;
+//! - [`check_index_section_lift_theorem`]: rules with `x`-only multipliers
+//!   whose rows (possibly reversed) are every `p`-th row of a parent family
+//!   with a constant-coefficient rule (the RealRooted route `pathPower`), the
+//!   section identity certified for every index and the parent proved by the
+//!   theorems above, its report kept as a sub-certificate.
 //!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
@@ -172,8 +177,14 @@ mod three_term;
 // RealRooted row routes (`variableDelay`, `subseq`).
 mod residue_class;
 mod variable_delay;
+// Index-section lift (RealRooted `pathPower`).
+mod index_section;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
 pub use hypergeometric_row::check_hypergeometric_row_theorem;
+pub use index_section::{
+    check_index_section_lift_theorem, IndexSectionCertificate, IndexSectionTransform,
+    MAX_INDEX_SECTION_PERIOD,
+};
 pub use iterated_preserver::{
     check_iterated_preserver_theorem, check_weyl_step_preserver, IteratedPreserverCertificate,
     IteratedPreserverCoordinates, WeylStepPreserverVerdict,
@@ -225,6 +236,8 @@ pub enum RealRootednessTheorem {
     /// [`check_residue_class_subsequence_theorem`] (RealRooted route
     /// `subseq`).
     ResidueClassSubsequences,
+    /// [`check_index_section_lift_theorem`] (RealRooted route `pathPower`).
+    IndexSectionLift,
 }
 
 /// Outcome of a theorem check.
@@ -407,6 +420,12 @@ pub struct RealRootednessTheoremReport {
     /// theorems and when the rule does not have the theorem's form.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub residue_classes: Option<ResidueClassCertificate>,
+    /// For [`check_index_section_lift_theorem`]: the period, the transform,
+    /// the parent family and its theorem reports, replayed by
+    /// [`RealRootednessTheoremReport::verify`].  Omitted for the other
+    /// theorems and when no section identity is found.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_section: Option<IndexSectionCertificate>,
 }
 
 impl RealRootednessTheoremReport {
@@ -437,6 +456,7 @@ impl RealRootednessTheoremReport {
             iterated_preserver: None,
             variable_delay: None,
             residue_classes: None,
+            index_section: None,
         }
     }
 
@@ -457,6 +477,7 @@ impl RealRootednessTheoremReport {
         self.iterated_preserver = None;
         self.variable_delay = None;
         self.residue_classes = None;
+        self.index_section = None;
         self
     }
 
@@ -533,6 +554,22 @@ impl RealRootednessTheoremReport {
                 certificate.class_maximum_start_delay
             }
             _ => self.start_delay,
+        };
+        // The index-section lift passes its start-delay bound to the parent
+        // checks and never moves its own start.
+        let maximum_start_delay = match (&self.index_section, self.theorem) {
+            (Some(certificate), RealRootednessTheorem::IndexSectionLift) => {
+                if certificate.parent_maximum_start_delay
+                    > index_section::MAXIMUM_PARENT_START_DELAY
+                {
+                    return Err(RecurrenceError::VerificationFailed(format!(
+                        "the parent start-delay bound exceeds {}",
+                        index_section::MAXIMUM_PARENT_START_DELAY
+                    )));
+                }
+                certificate.parent_maximum_start_delay
+            }
+            _ => maximum_start_delay,
         };
         let options = RealRootednessTheoremOptions {
             root_region,
@@ -655,6 +692,24 @@ impl RealRootednessTheoremReport {
             }
             (None, _) => {}
         }
+        // Index-section lift: the certificate is recomputed on its own.
+        match (&self.index_section, self.theorem) {
+            (Some(certificate), RealRootednessTheorem::IndexSectionLift) => {
+                let (rule, first_index, seeds) = self.recurrence.to_recurrence_parts()?;
+                let rule = match &self.left_hand_factor_normalization {
+                    Some(normalization) => normalization.normalized_recurrence()?,
+                    None => rule,
+                };
+                certificate.verify(&rule, first_index, &seeds)?;
+            }
+            (None, RealRootednessTheorem::IndexSectionLift) if self.is_proved() => {
+                return mismatch("a proved index-section report needs its certificate");
+            }
+            (Some(_), _) => {
+                return mismatch("an index-section certificate on a report of another theorem");
+            }
+            (None, _) => {}
+        }
         Ok(())
     }
 }
@@ -705,6 +760,9 @@ fn check_at_supplied_seeds(
         }
         RealRootednessTheorem::ResidueClassSubsequences => {
             residue_class::residue_class_report(rule, first_index, seeds, options)
+        }
+        RealRootednessTheorem::IndexSectionLift => {
+            index_section::index_section_report(rule, first_index, seeds, options)
         }
     }
 }
@@ -875,6 +933,10 @@ fn check_with_first_proving_start(
     let report = check_with_start_delay(theorem, rule, first_index, seeds, options, 0)?;
     // The residue classes move their own induction starts.
     if theorem == RealRootednessTheorem::ResidueClassSubsequences {
+        return Ok(report);
+    }
+    // The index-section search tries its own exceptional prefix rows.
+    if theorem == RealRootednessTheorem::IndexSectionLift {
         return Ok(report);
     }
     if (report.is_proved() && !without_region(&report))

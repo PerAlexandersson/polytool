@@ -1161,6 +1161,7 @@ fn parent_route_label(route: VeroneseParentProofRoute) -> &'static str {
         VeroneseParentProofRoute::HypergeometricRow => "hypergeometric_row",
         VeroneseParentProofRoute::VariableDelay => "variable_delay",
         VeroneseParentProofRoute::ResidueClassSubsequences => "residue_class_subsequences",
+        VeroneseParentProofRoute::IndexSectionLift => "index_section_lift",
         VeroneseParentProofRoute::Attestation => "attestation",
     }
 }

@@ -75,7 +75,10 @@
 //!   [`check_liu_wang_three_term_theorem`], [`check_ma_wang_interval_theorem`] and
 //!   [`check_iterated_preserver_theorem`], general real-rootedness theorems for
 //!   recurrences with exactly checked hypotheses and a replayable
-//!   [`RealRootednessTheoremReport`];
+//!   [`RealRootednessTheoremReport`]; [`check_index_section_lift_theorem`]
+//!   proves a family whose rows are every `p`-th row of a
+//!   constant-coefficient parent proved by those theorems (also parent route
+//!   8e);
 //! - `section_report`: [`certify_veronese_section_lift`] and its
 //!   `polytool.recurrence-veronese-certificate.v1` report;
 //! - `symmetric_companion`: operators, search, certificate and verifier, and
@@ -154,6 +157,11 @@ pub use parent_theorems::{
 pub use parent_theorems::{
     check_residue_class_subsequence_theorem, check_variable_delay_theorem, ResidueClassCertificate,
     ResidueClassProof, VariableDelayCertificate, VariableDelaySeedStep,
+};
+// Index-section lift (RealRooted route `pathPower`).
+pub use parent_theorems::{
+    check_index_section_lift_theorem, IndexSectionCertificate, IndexSectionTransform,
+    MAX_INDEX_SECTION_PERIOD,
 };
 mod row_factor;
 pub use row_factor::{

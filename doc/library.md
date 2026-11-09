@@ -746,8 +746,9 @@ in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 `recurrence::check_ma_wang_interval_theorem`,
 `recurrence::check_iterated_preserver_theorem`,
 `recurrence::check_hypergeometric_row_theorem`,
-`recurrence::check_variable_delay_theorem` and
-`recurrence::check_residue_class_subsequence_theorem` apply a paper theorem to a
+`recurrence::check_variable_delay_theorem`,
+`recurrence::check_residue_class_subsequence_theorem` and
+`recurrence::check_index_section_lift_theorem` apply a paper theorem to a
 family given by a rule, a first index and seed rows (the rule applies from
 `first_index + seeds.len()` on), and check every hypothesis exactly for all
 indices.  The result (`RealRootednessTheoremReport`,
@@ -906,6 +907,45 @@ region).  `verify()` replays it.
   conclusion) or real-rooted, with the hull of the class regions; no
   interlacing of consecutive rows.  OEIS A099605, A132918, A137374, A171608,
   A211956, A223168 and A286100 (lags `2` and `4`) are proved this way.
+- Index-section lift (RealRooted row route `pathPower`, the inverse of
+  `subseq`): for a rule `P_n = sum_k a_k(x) P_(n-k)` of order `r` whose
+  multipliers depend on `x` only, the rows (after `s` exceptional prefix
+  rows, `s` the seeds beyond the order or one more) are shown to be every
+  `p`-th row of a parent family, `P_(first + s + m) = T(Q_(p m))` for every
+  `m >= 0`, with `T` the identity or the reversal
+  `S_m(x) = x^(d m + e) P_(first + s + m)(1/x)` (`d` the degree slope of the
+  rule, `e` the smallest offset making the seeds polynomial).  The search
+  factors `chi_T(w^p)` over `Q[x]` for `p = 2, ..., 5`
+  (`MAX_INDEX_SECTION_PERIOD`), takes the monic divisors `psi(w)` of degree
+  `r` with `Res_w(psi(w), z - w^p) = chi_T(z)` (exact, from the power sums of
+  the roots of `psi`), and solves the `r x r` seed system over `Q(x)` for
+  polynomial parent seeds; at most 64 divisors are examined and 6 parents
+  sent to the parent menu (deterministic counts).  The identity holds for
+  every index by an equal-order recurrence argument: the characteristic
+  polynomial of the `p`-th power of the companion matrix of `psi` is the
+  resultant, so by Cayley--Hamilton `m -> Q_(p m)` follows the transformed
+  rule, and it agrees with `S` on the `r` seeds.  The parent is proved by
+  the theorems above (the parent menu); its report and the section data are
+  kept in `RealRootednessTheoremReport::index_section`
+  (`IndexSectionCertificate`, recomputed by `IndexSectionCertificate::verify`:
+  transform, resultant, divisibility, seed agreement and the parent proof's
+  replay).  The exceptional rows and the section rows before the parent's
+  first proved index are checked exactly.  It proves every row nonzero and
+  real-rooted; the root region is the parent's (identity) or its reciprocal
+  image closed at `0` (reversal: a degree drop of the reversed row is a root
+  of `P_n` at `0`, as for A116088); no interlacing.  OEIS A109955, A109960,
+  A116088, A116089, A127893, A193636 and A206294 (parents
+  `Q_n = Q_(n-1) + x Q_(n-L)`, proved by the fixed-delay window) are proved
+  this way; A114123, A184883 and A216182 have a section identity whose
+  parent `1/(1 - t - x t^2 - x t^3)` stays open (status
+  `hypothesis_failed`, "parent open").  `lean_declarations` names
+  `LinearRecurrence.ofMatrix_pow_isSolution_subsequence` and, as used,
+  `RealRooted.Tactic.reflectedRecurrence_isSolution` and
+  `RealRooted.Tactic.prependedRecurrence_isSolution`; RealRooted's route
+  fixes the parent (path-power clique polynomials), polytool takes any
+  parent proved here.  The lift is also parent route 8e of the Veronese
+  parent provers (`VeroneseParentProofRoute::IndexSectionLift`), for a
+  parent the earlier routes leave open.
 
 When a theorem fails at the supplied seeds, the checks retry with the
 induction start moved up to `RealRootednessTheoremOptions::maximum_start_delay`

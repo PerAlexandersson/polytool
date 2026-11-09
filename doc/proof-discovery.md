@@ -38,10 +38,14 @@ Neither fitting nor held-out checks prove that identity.
 | Hypergeometric row | Rows whose coefficient ratio is a product of factors linear in `k` (a row relation proved for every `n`), the image of `(1 + x)^M(n)` under nonnegative multiplier sequences | Real-rootedness with roots in `(-inf, 0]` |
 | Fixed-delay window (RealRooted `variableDelay`) | `f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)`, `L >= 2`; `A/f > 0`, `B/f >= 0` for every index, constant first row, seed rows as exact window steps | Nonnegative coefficients, roots in `(-inf, 0)`, `P_A << P_B` for `A <= B <= A + L` |
 | Residue classes (RealRooted `subseq`) | Every lag a multiple of `p >= 2`; each class `P_(first + j + p m)` proved by one of the rules above (zero classes allowed) | Zero (named) or real-rooted rows, hull of the class root regions; no interlacing of consecutive rows |
+| Index-section lift (RealRooted `pathPower`) | Multipliers depending on `x` only; `P_(first + s + m) = T(Q_(p m))` for every `m`, with `T` the identity or the reversal `x^(d m + e) P(1/x)`, `p <= 5`, `s` exceptional prefix rows, and a parent `Q` with a constant-coefficient rule found by factoring `chi_T(w^p)`: `Res_w(psi(w), z - w^p) = chi_T(z)` and polynomial parent seeds (an equal-order recurrence argument, nothing fitted); the parent proved by one of the rules above | Nonzero real-rooted rows; the parent region (identity) or its reciprocal image closed at `0` (reversal); no interlacing |
 
 The dispatcher tries the first eight, in the order of the parent cascade of
-the lift provers, and records every result; the last two (the RealRooted row
-routes) are recorded only when the rule has their form. `proved` means that at least one
+the lift provers, and records every result; the two RealRooted row routes
+after them are recorded only when the rule has their form, and the
+index-section lift only when it finds a section identity (its search and the
+all-index argument are documented in the module `index_section` of
+`recurrence::lift::parent_theorems` and in `library.md`). `proved` means that at least one
 attempt checked every hypothesis. `not_proved` means that this search did
 not find a proof; failure of a sufficient hypothesis is not a
 counterexample. Each attempt records its own starting index, interlacing
@@ -211,6 +215,7 @@ The inventory below was source-inspected at RealRooted revision
 | `affineEndpointStep_closed` and endpoint multiplicities | [Ma–Wang endpoint step](https://github.com/PerAlexandersson/RealRooted/blob/1fc0e36cc67a28fa0fa0be4a1bab818926e020fd/RealRooted/MaWang/EndpointTwoSided.lean#L298) | Affine coordinate change and multiplicity-counter induction |
 | Three-term sign and window steps | [Three-term recurrence](https://github.com/PerAlexandersson/RealRooted/blob/1fc0e36cc67a28fa0fa0be4a1bab818926e020fd/RealRooted/ThreeTermRecurrence/Interlacing.lean) | Degree and root-region invariants appropriate to the selected route |
 | `strictInterl_of_scaled_fixedDelay_recurrence`, `hasNonnegCoeffs_of_scaled_fixedDelay_recurrence` (route `variableDelay`) | [Fixed-delay window](https://github.com/PerAlexandersson/RealRooted/blob/0d0bf80e278275b57f8a1ba4b12edce102b56747/RealRooted/Interlacing/VariableDelay.lean#L280) | Division by the constant first row, the seed rows as window steps, the sign certificates of `a` and `b` |
+| `LinearRecurrence.ofMatrix_pow_isSolution_subsequence`, `RealRooted.Tactic.reflectedRecurrence_isSolution`, `RealRooted.Tactic.prependedRecurrence_isSolution` (route `pathPower`) | [Subsequence recurrence](https://github.com/PerAlexandersson/RealRooted/blob/0d0bf80e278275b57f8a1ba4b12edce102b56747/RealRooted/Mathlib/Algebra/LinearRecurrence/Subsequence.lean#L121), [path-power route](https://github.com/PerAlexandersson/RealRooted/blob/0d0bf80e278275b57f8a1ba4b12edce102b56747/RealRooted/Tactic/Row/PathPower.lean) | Lean's route fixes the parent (path-power clique polynomials, the `CubicParent` instance of Tran--Zumba); here any constant-coefficient parent found by factoring `chi_T(w^p)` and proved by a polytool theorem, whose report is the parent's correspondence |
 | `exists_mul_add_lt` (route `subseq`) | [Residue reassembly](https://github.com/PerAlexandersson/RealRooted/blob/0d0bf80e278275b57f8a1ba4b12edce102b56747/RealRooted/ThreeTermRecurrence/HalfGrowth.lean#L127) | The class rules in the class index and each class report's own correspondence; Lean's `rr_row_subseq_splits` covers periods 2 to 6 and class rules with one or two lags |
 
 The existing theorem reports retain their paper references and applicable

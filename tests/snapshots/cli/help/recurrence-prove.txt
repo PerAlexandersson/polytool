@@ -8,6 +8,10 @@ checks. Reports every attempt, its obligations and conclusion. A fit still needs
 an all-index identity for an independently defined family. Rust certificates can
 be replayed; Lean replay is not attempted.
 
+Index-section lift (recorded only when it applies): the rows, possibly reversed,
+are every p-th row (p <= 5) of a constant-coefficient parent found by factoring,
+an identity for every index; the parent is proved by the criteria.
+
 When no criterion proves the record:
   - tail: if one of the first rows is zero or not real-rooted, the criteria run
     on the record starting after the last such row; a proof then says "every

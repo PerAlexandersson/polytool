@@ -563,7 +563,7 @@ pub(super) fn search_modulus_with_factors(
 
 /// All exponent vectors `a` with `a_i <= multiplicity_i` and
 /// `sum a_i deg_L(f_i) == target`, in lexicographic order.
-fn collect_exponent_vectors(
+pub(super) fn collect_exponent_vectors(
     shift_degrees: &[usize],
     multiplicities: &[usize],
     target: usize,
@@ -602,14 +602,14 @@ pub(super) struct CandidateEvaluation {
 }
 
 /// Outcome of the exact seed solve.
-enum SeedSolve {
+pub(super) enum SeedSolve {
     Solved(Vec<UnivariatePolynomial>),
     NotDetermined,
     NotPolynomial,
 }
 
 /// Parent recurrence `P_n = sum_k -g_(e-k)(x) P_(n-k)` of a monic `G`.
-fn parent_recurrence_from_characteristic(parent: &BivariatePolynomial) -> Recurrence {
+pub(super) fn parent_recurrence_from_characteristic(parent: &BivariatePolynomial) -> Recurrence {
     let order = degree_in_shift(parent);
     let mut terms = Vec::new();
     for offset in 1..=order {
@@ -635,7 +635,7 @@ fn parent_recurrence_from_characteristic(parent: &BivariatePolynomial) -> Recurr
     }
 }
 
-fn polynomial_row(polynomial: &UnivariatePolynomial) -> Vec<BigRational> {
+pub(super) fn polynomial_row(polynomial: &UnivariatePolynomial) -> Vec<BigRational> {
     if polynomial.is_zero() {
         vec![BigRational::zero()]
     } else {
@@ -646,7 +646,7 @@ fn polynomial_row(polynomial: &UnivariatePolynomial) -> Vec<BigRational> {
 /// Solve `matrix * s = rhs` over `Q(y)` exactly by fraction-free (Bareiss)
 /// elimination with row pivoting on the first `columns` independent rows,
 /// and require a polynomial solution.
-fn solve_section_system(
+pub(super) fn solve_section_system(
     matrix: &[Vec<UnivariatePolynomial>],
     rhs: &[UnivariatePolynomial],
     columns: usize,
