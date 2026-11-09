@@ -78,7 +78,9 @@
 //!   [`RealRootednessTheoremReport`]; [`check_index_section_lift_theorem`]
 //!   proves a family whose rows are every `p`-th row of a
 //!   constant-coefficient parent proved by those theorems (also parent route
-//!   8e);
+//!   8e); [`check_factor_gauge_theorem`] proves rules whose lag-`j`
+//!   multiplier is `kappa_j(n) q(x)^j` through `P_n = q^(n-e) g S_n` with a
+//!   bounded residual `S_n` (also parent route 8f);
 //! - `section_report`: [`certify_veronese_section_lift`] and its
 //!   `polytool.recurrence-veronese-certificate.v1` report;
 //! - `symmetric_companion`: operators, search, certificate and verifier, and
@@ -163,6 +165,12 @@ pub use parent_theorems::{
 pub use parent_theorems::{
     check_index_section_lift_theorem, IndexSectionCertificate, IndexSectionTransform,
     MAX_INDEX_SECTION_PERIOD,
+};
+// Factor gauge with a bounded residual (RealRooted `powerForm`, `closedForm`,
+// `factorPower`).
+pub use parent_theorems::{
+    check_factor_gauge_theorem, FactorGaugeCertificate, FactorGaugeDominantRoot,
+    FactorGaugeResidualShape,
 };
 mod row_factor;
 pub use row_factor::{

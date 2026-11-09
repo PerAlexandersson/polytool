@@ -239,7 +239,10 @@ pub struct RecurrenceProofDiscoveryReport {
 /// default [`AlternativeRepresentationOptions`]. The RealRooted row routes
 /// fixed-delay window ([`check_variable_delay_theorem`]) and residue-class
 /// decomposition ([`check_residue_class_subsequence_theorem`]) are recorded
-/// after them, only when the rule has their form.
+/// after them, only when the rule has their form, then the index-section
+/// lift ([`check_index_section_lift_theorem`]) when a section identity
+/// exists and the factor gauge ([`check_factor_gauge_theorem`]) when the
+/// rule has its form and the residual shape is decided.
 /// This is theorem discovery for a supplied rule, not recurrence fitting.
 /// Failed sufficient hypotheses do not disprove real-rootedness. There is no
 /// catalogue fallback or external attestation route.
@@ -377,6 +380,18 @@ fn run_theorems(
     // section identity with a parent family is found.
     let attempt = check_with_first_proving_start(
         RealRootednessTheorem::IndexSectionLift,
+        rule,
+        first_index,
+        seeds,
+        options,
+    )?;
+    if attempt.status != RealRootednessTheoremStatus::NotApplicable {
+        attempts.push(attempt);
+    }
+    // Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`):
+    // recorded only when the rule has the form and the residual is decided.
+    let attempt = check_with_first_proving_start(
+        RealRootednessTheorem::FactorGauge,
         rule,
         first_index,
         seeds,
@@ -729,11 +744,17 @@ fn verify_attempts(
     let required: Vec<RealRootednessTheorem> = if require_first_version {
         DISCOVERY_THEOREMS[..FIRST_VERSION_THEOREMS].to_vec()
     } else {
-        // Reports saved before the index-section lift existed omit it.
+        // Reports saved before the index-section lift or the factor gauge
+        // existed omit them.
         reference
             .iter()
             .map(|a| a.theorem)
-            .filter(|theorem| *theorem != RealRootednessTheorem::IndexSectionLift)
+            .filter(|theorem| {
+                !matches!(
+                    theorem,
+                    RealRootednessTheorem::IndexSectionLift | RealRootednessTheorem::FactorGauge
+                )
+            })
             .collect()
     };
     if required.iter().any(|theorem| !recorded.contains(theorem)) {

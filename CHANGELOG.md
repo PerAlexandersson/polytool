@@ -13,6 +13,28 @@
   `tests/discovery_fingerprints.rs` (fingerprints of the discovery report and
   the parent proof of every bundled catalog family; the full sweep is
   `#[ignore]`d) and shared integration-test helpers in `tests/common/`.
+- Factor gauge with a bounded residual (RealRooted row routes `powerForm`,
+  `closedForm` and `factorPower`). New theorem
+  `recurrence::check_factor_gauge_theorem` (theorem `factor_gauge`,
+  certificate `recurrence::FactorGaugeCertificate` with
+  `FactorGaugeResidualShape` and `FactorGaugeDominantRoot`): for a rule
+  `f(n) P_n = sum_j kappa_j(n) q(x)^j P_(n-j)` of order at least two with one
+  fixed monic `q`, `P_n = q^(n-e) g S_n` with `S_n` in the fixed span of the
+  gauged seed rows; `S_n` is shown real-rooted for every index by its degree
+  (at most one), the discriminant (degree two), the formal cubic discriminant
+  (degree three) or the palindromic-quartic criterion in `u = x + 1/x`, each
+  a sign of a polynomial in `n` decided exactly when the coefficients of
+  `S_n` are polynomials in `n` (proved by an identity; otherwise
+  `not_applicable`), and nonzero by a coefficient polynomial, a dominant
+  rational characteristic root or the leading-coefficient certificate.
+  Proves OEIS A110200, A124376, A128541, A133109, A141611, A157169 and
+  A157171 (catalog sweep 688 -> 695 proved, none lost).
+  `RealRootednessTheoremReport` gains the optional field `factor_gauge`.
+  `recurrence-prove` / MCP `discover_recurrence_proofs` record the attempt
+  only when the rule has the theorem's form (other reports are unchanged,
+  and saved tail or alternative attempt lists without it still replay); new
+  parent route 8f (`VeroneseParentProofRoute::FactorGauge`) runs only for a
+  parent left open and is recorded only when the rule has the form.
 - Soundness fix: residue-class proofs with zero classes.
   `check_residue_class_subsequence_theorem` admits classes whose seed rows
   are all zero (infinitely many zero rows, as for OEIS A003982, A132918 and

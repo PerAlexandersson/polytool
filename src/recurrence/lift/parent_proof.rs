@@ -104,6 +104,16 @@
 //!    region lies in `(-inf, 0]` (run with the requested region `(-inf, 0)`
 //!    and, failing that, without one, since a reversed section may have
 //!    roots at `0`); recorded only when a section identity is found;
+//!
+//!    Route 8f, tried after route 8e and only for a parent still open, is
+//!    the **factor gauge** ([`check_factor_gauge_theorem`], routes
+//!    `powerForm`, `closedForm` and `factorPower`: every lag-`j` multiplier
+//!    is `kappa_j(n) q(x)^j` for one fixed `q`, so `P_n = q^(n-e) g S_n`
+//!    with a bounded residual `S_n` decided for every index), proved when
+//!    every hypothesis is verified and the certified region lies in
+//!    `(-inf, 0]` (run with the requested region `(-inf, 0)` and, failing
+//!    that, without one, since `q` or `g` may have roots at `0`); recorded
+//!    only when the rule has the theorem's form;
 //! 9. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
@@ -316,6 +326,8 @@ pub enum VeroneseParentProofRoute {
     ResidueClassSubsequences,
     /// [`check_index_section_lift_theorem`] with a region in `(-inf, 0]`.
     IndexSectionLift,
+    /// [`check_factor_gauge_theorem`] with a region in `(-inf, 0]`.
+    FactorGauge,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -954,6 +966,29 @@ fn theorem_attempt(
                 )?
             }
         }
+        VeroneseParentProofRoute::FactorGauge => {
+            // A gauge factor or common factor with a root at 0 certifies a
+            // region closed at 0, so the open request is retried without a
+            // region.
+            let requested = check_factor_gauge_theorem(
+                record.rule,
+                record.first_index,
+                record.seeds,
+                &options,
+            )?;
+            if requested.is_proved()
+                || requested.status == RealRootednessTheoremStatus::NotApplicable
+            {
+                requested
+            } else {
+                check_factor_gauge_theorem(
+                    record.rule,
+                    record.first_index,
+                    record.seeds,
+                    &RealRootednessTheoremOptions::default(),
+                )?
+            }
+        }
         _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
     };
     // The Ma--Wang interval settles the parent statement only when it lies
@@ -968,6 +1003,7 @@ fn theorem_attempt(
             | VeroneseParentProofRoute::HypergeometricRow
             | VeroneseParentProofRoute::ResidueClassSubsequences
             | VeroneseParentProofRoute::IndexSectionLift
+            | VeroneseParentProofRoute::FactorGauge
     ) && report.is_proved()
         && !report
             .conclusion
@@ -1694,6 +1730,23 @@ fn prove_parent_with_routes(
         if applicable {
             if attempt.success {
                 proved = Some(VeroneseParentProofRoute::IndexSectionLift);
+                interlacing = theorem_interlacing;
+            }
+            proof.attempts.push(attempt);
+        }
+    }
+
+    // Route 8f (factor gauge), for a parent left open; recorded only where
+    // the rule has the theorem's form.
+    if proved.is_none() && allowed(VeroneseParentProofRoute::FactorGauge) {
+        let (attempt, theorem_interlacing, applicable) = theorem_attempt(
+            &normalized,
+            VeroneseParentProofRoute::FactorGauge,
+            "factor_gauge",
+        )?;
+        if applicable {
+            if attempt.success {
+                proved = Some(VeroneseParentProofRoute::FactorGauge);
                 interlacing = theorem_interlacing;
             }
             proof.attempts.push(attempt);
