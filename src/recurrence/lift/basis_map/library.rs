@@ -2,8 +2,9 @@
 //! with its proved [`BasisMapTheoremReport`].
 
 use super::map::BasisMap;
+use super::published::{fingerprint_candidate, PublishedFamily};
 use super::theorems::{
-    check_basis_map_preserves_pf, BasisMapTheoremOptions, BasisMapTheoremReport,
+    check_basis_map_preserves_pf, BasisMapShape, BasisMapTheoremOptions, BasisMapTheoremReport,
 };
 use crate::recurrence::RecurrenceError;
 use crate::vec_poly;
@@ -12,6 +13,16 @@ use num_traits::{One, Zero};
 /// Rows compared to recognise duplicate and identity maps and to require
 /// triangular rows.
 const LIBRARY_FINGERPRINT_ROWS: usize = 8;
+
+/// The published transformations added by
+/// [`BasisMapLibraryOptions::include_published_maps`] (the derangement
+/// transformation is not triangular, so it is a forward map only).
+const PUBLISHED_LIBRARY_FAMILIES: [PublishedFamily; 4] = [
+    PublishedFamily::Narayana(0),
+    PublishedFamily::Narayana(1),
+    PublishedFamily::Narayana(2),
+    PublishedFamily::EulerianTransformation,
+];
 
 /// One map of a [`BasisMapLibrary`].
 #[derive(Debug, Clone, PartialEq)]
@@ -28,11 +39,20 @@ pub struct BasisMapLibraryEntry {
 /// Options of [`BasisMapLibrary::build`].
 #[derive(Debug, Clone, Default)]
 pub struct BasisMapLibraryOptions {
-    /// Include every bundled OEIS catalog entry whose map is admitted.
-    /// Default false ([`BasisMapLibrary::oeis_catalog`] sets it).
+    /// Include every bundled OEIS catalog entry whose map is admitted and
+    /// has a companion form (catalog families with index-dependent rules
+    /// are not added; the published ones come in through
+    /// `include_published_maps`).  Default false ([`BasisMapLibrary::oeis_catalog`] sets it).
     pub include_oeis_catalog: bool,
     /// Further maps, tried first.
     pub maps: Vec<BasisMap>,
+    /// Include the published transformations with index-dependent rules
+    /// that the backward lift can use: the Narayana transformations
+    /// `N_(k,m)`, `m = 0, 1, 2`, and the Eulerian transformation `A°`
+    /// (module documentation of `basis_map`, "Published transformations"),
+    /// tried after the catalog maps.  Default false
+    /// ([`BasisMapLibrary::oeis_catalog`] sets it).
+    pub include_published_maps: bool,
     /// Options of the theorem checks.
     pub theorem: BasisMapTheoremOptions,
 }
@@ -41,7 +61,10 @@ pub struct BasisMapLibraryOptions {
 ///
 /// A map is admitted when [`check_basis_map_preserves_pf`] proves at least
 /// one conclusion, the family has the companion form the transport needs
-/// (a rule free of `n` with a constant leader and no exceptional prefix),
+/// (a rule free of `n` with a constant leader and no exceptional prefix)
+/// or is a published transformation with an index-dependent rule (the
+/// index-side transport certifies its lifts from Riordan coefficient
+/// families),
 /// its first rows are nonzero with strictly increasing degrees (so that the
 /// triangular expansion applies), and it is not the identity `u^k -> t^k`.
 /// Maps with the same first rows are kept once (the others are recorded as
@@ -68,7 +91,18 @@ impl BasisMapLibrary {
                 let Ok(map) = BasisMap::from_oeis(definition.id) else {
                     continue;
                 };
+                // Catalog maps keep the companion-form admission (and so
+                // their order); the published index-dependent maps are
+                // added below.
+                if map.companion_operators().is_err() {
+                    continue;
+                }
                 let _ = library.admit(map, &options.theorem);
+            }
+        }
+        if options.include_published_maps {
+            for family in PUBLISHED_LIBRARY_FAMILIES {
+                let _ = library.admit(family.canonical_map(), &options.theorem);
             }
         }
         Ok(library)
@@ -82,6 +116,7 @@ impl BasisMapLibrary {
     pub fn oeis_catalog() -> Result<Self, RecurrenceError> {
         Self::build(&BasisMapLibraryOptions {
             include_oeis_catalog: true,
+            include_published_maps: true,
             ..BasisMapLibraryOptions::default()
         })
     }
@@ -112,7 +147,8 @@ impl BasisMapLibrary {
         map: BasisMap,
         options: &BasisMapTheoremOptions,
     ) -> Result<bool, RecurrenceError> {
-        if map.companion_operators().is_err() {
+        let companion = map.companion_operators().is_ok();
+        if !companion && fingerprint_candidate(&map)?.is_none() {
             return Ok(false);
         }
         let rows = map.basis_rows(LIBRARY_FINGERPRINT_ROWS)?;
@@ -144,6 +180,15 @@ impl BasisMapLibrary {
         }
         let theorem = check_basis_map_preserves_pf(&map, options)?;
         if !theorem.is_proved() {
+            return Ok(false);
+        }
+        let published = matches!(
+            theorem.shape,
+            BasisMapShape::Narayana { .. }
+                | BasisMapShape::EulerianTransformation
+                | BasisMapShape::DerangementTransformation
+        );
+        if !companion && !published {
             return Ok(false);
         }
         self.entries.push(BasisMapLibraryEntry {

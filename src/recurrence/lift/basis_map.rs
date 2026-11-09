@@ -114,6 +114,60 @@
 //!   (RealRooted `newtonPreservesNonposRooted_iff_parametersAffine`); a
 //!   failing input `(u + r)^n` is searched exactly and reported.
 //!
+//! - **Published transformations** (index-dependent rules, recognised for
+//!   every index; section below): the Narayana transformations, the
+//!   Eulerian transformation `A°` and the derangement transformation.
+//!
+//! ## Published transformations
+//!
+//! A map whose first rows equal those of one of the following families is
+//! recognised by an all-index recurrence-equality certificate
+//! ([`crate::recurrence::certify_recurrence_equality`]) between its record
+//! and the canonical record below (with the map's first index); a family
+//! that only starts like one gets no conclusion.  The canonical rules are
+//! the ones proved in RealRooted.
+//!
+//! - **Narayana** `N_(k,m)(t) = sum_j C(k,j) C(k+m,j) / C(m+j,j) t^j`,
+//!   `m >= 0` an integer (Mao and Wang, arXiv:2607.01572, Eq. (2); `m = 0,
+//!   1` are the types B and A): `(k + 2m) N_(k,m) = ((k + 2m) + (3k + 2m -
+//!   2) t) N_(k-1,m) + 2 t (1 - t) N'_(k-1,m)` for `k >= 1`, `N_(0,m) = 1`
+//!   (RealRooted `narayanaPolynomial_deriv_lag_rec` for `k >= 2`;
+//!   `narayanaPolynomial_one` gives `N_(1,m) = 1 + t`, which the rule
+//!   produces at `k = 1`).  Theorem (Mao and Wang, Theorem 1; RealRooted
+//!   `narayanaTransformPreservesPF`): every PF input has a PF image.  So
+//!   the conclusion is `(-inf, 0] -> (-inf, 0]` (a negative leading
+//!   coefficient only changes the sign).
+//! - **Eulerian** `A°`: `u^0 -> 1`, `u^k -> t A_k(t)` with the Eulerian
+//!   polynomials `A_k` (`A_1 = 1`).  With `E_k = A°(u^k)`: `E_k = k t
+//!   E_(k-1) + t (1 - t) E'_(k-1)` for `k >= 1`, `E_0 = 1` (from the
+//!   RealRooted definition `generalizedEulerian 1`, `G_k = (1 + k t)
+//!   G_(k-1) + t (1 - t) G'_(k-1)`, `E_(k+1) = t G_k`: with `v = t (1 -
+//!   t)`, `(k + 1) t E_k + v E_k' = t G_(k-1) ((k + 1) t + 1 - t) + t v
+//!   G'_(k-1) = t G_k`).  Theorem (Athanasiadis, arXiv:2302.00754, Theorem 1; RealRooted
+//!   `EulerianTransform.transform_magicExpansion_isPF`): every nonnegative
+//!   combination of the magic basis `u^k (1 + u)^(d - k)`, `0 <= k <= d`,
+//!   has a PF image.
+//! - **Derangement** `D`: `u^k -> d_k(t)`, the derangement polynomials by
+//!   excedances, `d_0 = 1`, `d_1 = 0`, `d_k = (k - 1) t (d_(k-1) + d_(k-2)) +
+//!   t (1 - t) d'_(k-1)` for `k >= 2` (RealRooted
+//!   `DerangementTransform.polynomial_succ`).  Theorem (Brändén and Solus,
+//!   arXiv:1808.04141, Corollary 3.7; RealRooted
+//!   `DerangementTransform.transform_magicExpansion_isPF`): as for `A°`.
+//!   `D` is not injective, so it is never a library map of the backward
+//!   lift (its rows are not triangular); it is a forward map only.
+//!
+//! *The magic-cone hypothesis is decided through roots.*  Let `p = c
+//! prod_i (u - x_i)` have degree `d`, every root in `[-1, 0]` and `c > 0`.
+//! Its magic coordinates are the coefficients of `sum_k c_k s^k = (1 -
+//! s)^d p(s / (1 - s)) = c prod_i ((1 + x_i) s - x_i)`, all nonnegative
+//! since `1 + x_i >= 0` and `-x_i >= 0`.  So every input in `R([-1, 0])`
+//! is, up to sign, a nonnegative magic combination (with `d = deg p`), and
+//! the conclusion of both theorems is `[-1, 0] -> (-inf, 0]`.  Inputs with
+//! nonnegative magic coordinates but roots outside `[-1, 0]` are not used
+//! (no all-index coordinate test is implemented), and `A°` is never
+//! applied to inputs that merely have nonpositive roots: that is Brenti's
+//! conjecture, refuted by Brändén and Jochemko.
+//!
 //! ## The affine-current theorem
 //!
 //! Let `P_0 = 1`, `P_1 = l + m t` and `P_(k+2) = (a + d t) P_(k+1) + (b t +
@@ -189,6 +243,48 @@
 //! For a map of order one `Phi` is a scalar rule for `H` (the transported
 //! rule).
 //!
+//! # Index-side transport
+//!
+//! A map with an index-dependent rule (the published transformations) has
+//! no companion form.  When the coefficient family is a *Riordan family*
+//! instead, the transport runs on the index side.  Let `R` have a rule free
+//! of `n` and of derivatives with a constant leader and coefficients of
+//! degree at most one in `u`, valid from its first base, and let `N(z)` be
+//! the numerator `(a(z) - u b(z)) sum_(m >= 0) R_(n0+m) z^m` computed from
+//! the identifying rows (free of `u`, checked; `a(0) != 0`, `b(0) = 0`).
+//! Then `sum_m R_(n0+m) z^m = g(z) / (1 - u f(z))` with `f = b / a`, `g = N
+//! / a`, so `R_(n0+m) = sum_k [z^m] g f^k u^k` and the image generating
+//! function is `H~(z) = sum_m H_(n0+m) z^m = g(z) P~(f(z))`, `P~(w) = sum_k
+//! P_(i0+k) w^k` (formal power series; `f(0) = 0`).
+//!
+//! The basis rule `f_P(n, t) P_n = sum_j c_j(n, t) D^(d_j) P_(n - r_j)`
+//! (from `n = i0 + K` on) reads `Lambda P~ = pi(w)` with `Lambda =
+//! f_P(i0 + theta_w, t) - sum_j w^(r_j) c_j(i0 + r_j + theta_w, t) D^(d_j)`
+//! and the polynomial `pi(w) = sum_(k < K) w^k (f_P P_k - sum_j c_j D^(d_j)
+//! P_(k - r_j))` at `n = i0 + k` (`P` zero at negative indices).  The ring
+//! homomorphism `w -> f(z)`, `theta_w -> rho(z) (theta_z - gamma(z))`,
+//! `rho = f / (z f')`, `gamma = z g' / g` (it respects `[theta_w, w] = w`,
+//! since `[rho theta_z, f] = rho z f' = f`) satisfies `(L F)(f) g =
+//! L^ (g F(f))` for every operator `L` in `(w, theta_w)` and series `F`, so
+//! `Lambda^ H~ = g pi(f)`.  Multiplying on the left by a polynomial
+//! `C(z)` that clears every denominator (of the coefficients of
+//! `Lambda^` and of `g pi(f)`) and removing a common polynomial factor gives
+//! `Omega H~ = psi(z)`, a polynomial of degree `delta`, with `Omega = sum
+//! c_(a,b,d)(t) z^a theta_z^b D^d`.  Comparing coefficients of `z^M`,
+//! `sum c_(a,b,d)(t) (M - a)^b D^d H_(n0 + M - a) = 0` for `M > delta`; at
+//! base `n = n0 + M - A` (`A` the largest `a`) this is the relation `Phi`
+//! with the terms `c_(a,b,d)(t) (n + A - a - n0)^b D^d S^(A - a)`, valid
+//! from the base `max(n0, n0 + delta + 1 - A)`.  Everything is exact
+//! rational arithmetic; `Phi` is checked on a few image rows as a
+//! regression guard.  The certificates below use `Phi` like the companion
+//! system (a scalar system), with its own leader (required free of `t` and
+//! `D`), its own first valid base, and, for the reverse division, the image
+//! rows that determine `H` by `Phi` (up to the last integer root of its
+//! leader).  [`BasisMapDivisionCertificate::verify`] recomputes `Phi` the
+//! same way.  Other coefficient families (an index-dependent rule, for
+//! example the Narayana rows themselves) are not supported: the identity
+//! status is then `unsupported`.
+//!
 //! # The lift certificate
 //!
 //! The input `Q` has the relation `M` (from the base `b_M`, `K` identifying
@@ -229,7 +325,8 @@
 //! [`find_basis_map_lifts`] tries every map of a [`BasisMapLibrary`] (by
 //! default the admitted maps of the bundled OEIS catalog: proved, with a
 //! companion form and triangular rows, not the identity, one map per
-//! distinct set of first rows): it expands the input rows, rejects maps
+//! distinct set of first rows; then the published Narayana maps `m = 0, 1,
+//! 2` and `A°`): it expands the input rows, rejects maps
 //! whose expanded rows have a root outside every source (a near miss),
 //! fits a derivative-free rule to the expanded rows and certifies the
 //! candidate.  [`apply_basis_map_to_family`] builds the rule of `T_P(R)`
@@ -248,14 +345,18 @@
 //! Only coefficient rules without derivatives in `u` are transported (`T o
 //! D_u` is not an operator image in general); index-dependent basis rules
 //! and exceptional prefixes have no companion form (their theorems are
-//! still checked); the backward lift needs triangular basis rows (so not
-//! the constant-current maps, whose degrees repeat); interlacing of
-//! consecutive image rows is not claimed.
+//! still checked; the published ones are transported on the index side
+//! from Riordan coefficient families only); the backward lift needs
+//! triangular basis rows (so not the constant-current maps, whose degrees
+//! repeat, nor the derangement transformation); interlacing of consecutive
+//! image rows is not claimed.
 //!
 //! The group is split into `quadratic` (exact `a + b sqrt(d)` and
 //! intervals), `map` (the map, its inverse and intertwining relation),
-//! `theorems` (the shapes and their checks), `transport` (`Phi`), `certify`
-//! (identity, root location, summary), `library`, `search` and `forward`.
+//! `theorems` (the shapes and their checks), `published` (the canonical
+//! published families and their recognition), `transport` (`Phi`),
+//! `riordan` (the index-side transport), `certify` (identity, root
+//! location, summary), `library`, `search` and `forward`.
 
 mod map;
 mod quadratic;
@@ -270,6 +371,8 @@ pub use theorems::{
     BasisMapTheoremOptions, BasisMapTheoremReport, BasisMapTheoremStatus, BASIS_MAP_THEOREM_SCHEMA,
 };
 mod certify;
+mod published;
+mod riordan;
 mod transport;
 pub use certify::{
     certify_basis_map_lift, BasisMapCoefficientRootProof, BasisMapDivisionCertificate,

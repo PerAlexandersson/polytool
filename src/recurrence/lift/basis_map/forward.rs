@@ -8,7 +8,7 @@ use super::certify::{
     certify_prepared, BasisMapLiftCandidate, BasisMapLiftCertification, BasisMapLiftOptions,
 };
 use super::map::{apply_with_rows, BasisMap};
-use super::transport::{transported_scalar_rule, transported_system};
+use super::transport::{transport_coefficient_family, transported_scalar_rule, TransportKind};
 use crate::recurrence::{
     find_recurrence_adaptive_rational_with_budget, AdaptiveSearchBudget, AdaptiveSearchOptions,
     AdaptiveSearchOutcome, ImplicitRelation, Recurrence, RecurrenceError, RecurrenceJson,
@@ -64,7 +64,8 @@ impl Default for BasisMapImageOptions {
 #[serde(rename_all = "snake_case")]
 pub enum BasisMapImageConstruction {
     /// The transported rule `sum_i e_i(n, A) H_(n+i) = 0` (a map of order
-    /// one, `T o u = A o T`): exact by construction.
+    /// one, `T o u = A o T`), or the index-side rule of a published map and
+    /// a Riordan coefficient family: exact by construction.
     Transported,
     /// A map of order two or more: a runnable scalar rule of the first
     /// component `H_n = T(R_n)` of the transported system, computed as a
@@ -137,7 +138,8 @@ fn eliminated_rule(
 /// # Errors
 ///
 /// [`RecurrenceError`] when `R` cannot be replayed or validated, has
-/// derivatives in `u`, when the map has no companion form, or when no rule
+/// derivatives in `u`, when the map has no companion form and `R` is not
+/// a Riordan family (module documentation, "Index-side transport"), or when no rule
 /// for the image is found or certified.
 pub fn apply_basis_map_to_family(
     map: &BasisMap,
@@ -151,61 +153,81 @@ pub fn apply_basis_map_to_family(
             RecurrenceError::InvalidInput(format!("the family cannot be replayed: {error}"))
         })?;
     let coefficient = prepare_lift_rule(&rule, &rows, n0, "coefficient family")?;
-    let system = transported_system(
-        &coefficient.relation,
-        map,
-        options.certification.max_operator_terms,
-    )?;
+    let transport =
+        transport_coefficient_family(&coefficient, map, options.certification.max_operator_terms)?;
+    let system = &transport.system;
     let image_rows = |count: usize| -> Result<Vec<Vec<Q>>, RecurrenceError> {
         let r_rows = coefficient.rows(count)?;
         let width = r_rows.iter().map(Vec::len).max().unwrap_or(1);
         let basis = map.basis_rows(width)?;
         Ok(r_rows.iter().map(|r| apply_with_rows(r, &basis)).collect())
     };
-    let (image, construction): (PreparedLiftRule, BasisMapImageConstruction) = if system.size() == 1
-    {
-        let (image_rule, _) = transported_scalar_rule(&system)?;
-        let rows = image_rows(coefficient.seeds.len() + 2)?;
-        (
-            prepare_lift_rule(&image_rule, &rows, n0, "image")?,
-            BasisMapImageConstruction::Transported,
-        )
-    } else if let Some(image_rule) = eliminated_rule(&system, coefficient.leader_shift, options)? {
-        let rows =
-            image_rows(coefficient.seeds.len() + 2 * system.size() * coefficient.leader_shift)?;
-        (
-            prepare_lift_rule(&image_rule, &rows, n0, "image")?,
-            BasisMapImageConstruction::Eliminated,
-        )
-    } else {
-        let rows = image_rows(options.fit_rows.max(8))?;
-        let search = AdaptiveSearchOptions {
-            max_rec_len: 2 * system.size() * coefficient.leader_shift,
-            max_var_deg: 4,
-            max_idx_deg: 3,
-            max_diff_deg: 0,
-            max_denom_var_deg: 0,
-            max_denom_idx_deg: 3,
-            ..AdaptiveSearchOptions::default()
-        };
-        let found = match find_recurrence_adaptive_rational_with_budget(
-            &rows,
-            &search,
-            AdaptiveSearchBudget::limited(options.fit_candidates),
-        ) {
-            AdaptiveSearchOutcome::Found(found) => found,
-            _ => {
-                return Err(RecurrenceError::Unsupported(
-                    "no rule for the image rows was found within the budget".into(),
-                ))
-            }
-        };
-        let image_rule = found.recurrence.shift_index(1 - n0 as i64);
-        (
-            prepare_lift_rule(&image_rule, &rows, n0, "image")?,
-            BasisMapImageConstruction::Fitted,
-        )
+    // The transported scalar rule, when it holds from the first index on
+    // (an index-side rule may hold only from a later base; then a rule is
+    // fitted and certified instead).
+    let transported = match transport.kind {
+        TransportKind::Companion if system.size() == 1 => {
+            let (image_rule, _) = transported_scalar_rule(system)?;
+            let rows = image_rows(coefficient.seeds.len() + 2)?;
+            Some(prepare_lift_rule(&image_rule, &rows, n0, "image")?)
+        }
+        TransportKind::Riordan if transport.valid_from_base == n0 => {
+            let (image_rule, _) = transported_scalar_rule(system)?;
+            let rows = image_rows(transport.identifying_rows + 2)?;
+            prepare_lift_rule(&image_rule, &rows, n0, "image").ok()
+        }
+        _ => None,
     };
+    // Order and derivative bounds of the fallback fit (the companion bounds
+    // are unchanged; an index-side rule may carry derivatives).
+    let (fit_order, fit_derivatives) = match transport.kind {
+        TransportKind::Companion => (coefficient.leader_shift, 0),
+        TransportKind::Riordan => (transport.order, system.entries[0][0].max_derivative()),
+    };
+    let eliminated = if transported.is_none() && system.size() > 1 {
+        eliminated_rule(system, coefficient.leader_shift, options)?
+    } else {
+        None
+    };
+    let (image, construction): (PreparedLiftRule, BasisMapImageConstruction) =
+        if let Some(image) = transported {
+            (image, BasisMapImageConstruction::Transported)
+        } else if let Some(image_rule) = eliminated {
+            let rows =
+                image_rows(coefficient.seeds.len() + 2 * system.size() * coefficient.leader_shift)?;
+            (
+                prepare_lift_rule(&image_rule, &rows, n0, "image")?,
+                BasisMapImageConstruction::Eliminated,
+            )
+        } else {
+            let rows = image_rows(options.fit_rows.max(8))?;
+            let search = AdaptiveSearchOptions {
+                max_rec_len: 2 * system.size() * fit_order,
+                max_var_deg: 4,
+                max_idx_deg: 3,
+                max_diff_deg: fit_derivatives,
+                max_denom_var_deg: 0,
+                max_denom_idx_deg: 3,
+                ..AdaptiveSearchOptions::default()
+            };
+            let found = match find_recurrence_adaptive_rational_with_budget(
+                &rows,
+                &search,
+                AdaptiveSearchBudget::limited(options.fit_candidates),
+            ) {
+                AdaptiveSearchOutcome::Found(found) => found,
+                _ => {
+                    return Err(RecurrenceError::Unsupported(
+                        "no rule for the image rows was found within the budget".into(),
+                    ))
+                }
+            };
+            let image_rule = found.recurrence.shift_index(1 - n0 as i64);
+            (
+                prepare_lift_rule(&image_rule, &rows, n0, "image")?,
+                BasisMapImageConstruction::Fitted,
+            )
+        };
     let candidate = BasisMapLiftCandidate {
         basis: map.clone(),
         coefficient_family: RecurrenceJson::from_recurrence_rational(

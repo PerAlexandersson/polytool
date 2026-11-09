@@ -853,6 +853,21 @@ polynomials (the leader is nonzero at every target, decided exactly), and
 union of root sets: `F` is checked once exactly, the cofactors by the parent
 provers; a non-real-rooted `F` fails the route.
 
+*Division route.*  When `M_S` is not `F^h` times an operator with an `x`-free
+leader, a cofactor rule `L_S` (leader free of `x`, order and derivative order
+at most those of `M`) is fitted to `S_n = Q_n / F^(e(n))` and `M_S` is right
+pseudo-divided by it, `w(n) M_S = sum_nu H_nu S^nu L_S` with remainder zero.
+Then `(M F^e S)_n = 0` wherever `L_S` holds and `w(n) != 0`; the other bases
+are evaluated exactly, and the identifying rows agree, so again
+`Q_n = F^(e(n)) S_n`.
+
+*Exceptional leading rows.*  When the rule does not reproduce the rows from
+`n0`, or gives no lift there, the same rule is prepared from `n0 + p`
+(`p <= max_exceptional_prefix_rows`); it reproduces the supplied tail rows
+and applies the rule only at the input's targets, so its rows are the input
+rows.  The `p` leading rows are decided exactly (zero or real-rooted, roots
+`<= 0`); the summary keeps `n0` and records them as a hypothesis.
+
 ## Gamma lifts
 
 `recurrence::certify_gamma_lift` certifies `Q_n = lambda(n) Gamma_(n+s)(c z)`
@@ -1023,6 +1038,18 @@ companion form: the state `V(p) = (T(p), ..., T(u^(R-1) p))` satisfies
 | `(a + b t) f + kappa (t - l)(t - h) f'` | `[a + b l - kappa (h-l) m_l, a + b h + kappa (h-l) m_h] -> [l, h]`, iff | RealRooted `intervalBasisMap_maps_realRootedIn_iff` |
 | `(a + b t) f - kappa f'` | real-rooted inputs to real-rooted images | Ma--Wang Thm 2 |
 | `(L + k s) P_k`, `s >= 0` | `T = U_g o R_s`; `(-inf, 0] -> (-inf, h]` | RealRooted `basisMap_factorization_of_scalarIndex_recurrence`; Su--Yang--Zhang 2013 Thm 4; Brenti 1989 Thm 2.4.3 |
+| Narayana `N_(k,m)`, `m >= 0` | `(-inf, 0] -> (-inf, 0]` (PF to PF) | Mao--Wang arXiv:2607.01572 Thm 1; RealRooted `narayanaTransformPreservesPF`, `narayanaPolynomial_deriv_lag_rec` |
+| Eulerian `A°`: `1, t A_k` | `[-1, 0] -> (-inf, 0]` | Athanasiadis arXiv:2302.00754 Thm 1; RealRooted `EulerianTransform.transform_magicExpansion_isPF` |
+| derangement `d_k` | `[-1, 0] -> (-inf, 0]` (forward only) | Brändén--Solus arXiv:1808.04141 Cor 3.7; RealRooted `DerangementTransform.transform_magicExpansion_isPF` |
+
+The last three are recognised by an all-index recurrence-equality certificate
+with the canonical (RealRooted) rule.  Athanasiadis' and Brändén--Solus'
+hypothesis is a nonnegative combination of the magic basis
+`u^k (1 + u)^(d - k)`; an input `p = c prod (u - x_i)` of degree `d` with
+`c > 0` and roots in `[-1, 0]` has the magic coordinates of
+`(1 - s)^d p(s/(1 - s)) = c prod ((1 + x_i) s - x_i)`, all nonnegative, which
+is how the hypothesis is decided.  (Brenti's conjecture for all inputs with
+nonpositive roots is false and is not used.)
 
 Here `beta = b/d`, `K = beta^2 + a beta - c > 0`, `eta = m/d >= 0`,
 `s = l - eta a`, `e = 2 eta - 1`.  The affine-current proof (common interlacer
@@ -1040,6 +1067,22 @@ gives `w(n) (M H)_n = 0` from the first base of `R`'s rule on, the other
 bases (finitely many) are evaluated exactly, the identifying rows agree, and
 the leader of `M` never vanishes, so `H = Q`.  For maps of order one the
 reverse division `w Phi = sum H_nu S^nu M` is also tried.
+
+**Index-side transport.**  An index-dependent basis rule has no companion
+form.  If the coefficient family is Riordan, `sum_m R_(n0+m) z^m =
+g(z)/(1 - u f(z))` (a rule free of `n` and of derivatives, a constant leader,
+coefficients of degree at most one in `u`, and a numerator `N` free of `u`;
+`f = b/a`, `g = N/a`), then `H~(z) = g P~(f(z))`.  The basis rule gives
+`Lambda P~ = pi(w)` with `Lambda = f_P(i0 + theta_w) - sum_j w^(r_j)
+c_j(i0 + r_j + theta_w) D^(d_j)` and a polynomial `pi` from the seeds; the
+homomorphism `w -> f`, `theta_w -> rho (theta_z - gamma)`,
+`rho = f/(z f')`, `gamma = z g'/g`, turns it into `Lambda^ H~ = g pi(f)`.
+Clearing denominators on the left gives `sum c_(a,b,d)(t) z^a theta_z^b D^d
+H~ = psi(z)`, a polynomial of degree `delta`, i.e. the scalar rule
+`sum c_(a,b,d)(t) (n + A - a - n0)^b D^d H_(n + A - a) = 0` from the base
+`max(n0, n0 + delta + 1 - A)`.  It enters the division certificate like a
+transported system of size one (its own leader, first base and identifying
+rows).
 
 **Forward rules.**  `apply_basis_map_to_family` needs a rule `M` for
 `H_n = T(R_n)`.  For a map of order one it is the transported scalar rule.
