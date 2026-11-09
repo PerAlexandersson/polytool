@@ -113,7 +113,7 @@ fn the_catalog_targets_are_proved() {
     for (id, shape, gauge, closed) in expected {
         let report = check(id);
         assert!(report.is_proved(), "{id}: {:?}", report.open_hypotheses());
-        let certificate = report.factor_gauge.as_ref().unwrap();
+        let certificate = report.factor_gauge_certificate().unwrap();
         assert_eq!(certificate.residual_shape, shape, "{id}");
         assert_eq!(certificate.gauge_factor, gauge, "{id}");
         let conclusion = report.conclusion.as_ref().unwrap();
@@ -152,7 +152,7 @@ fn palindromic_quartics_use_the_u_substitution() {
         report.lean_declarations,
         vec!["RealRooted.splits_palindromic_quartic"]
     );
-    let certificate = report.factor_gauge.as_ref().unwrap();
+    let certificate = report.factor_gauge_certificate().unwrap();
     // P_n = (1 + x)^(n - 4) S_n, S_n = a x^4 + b x^3 + c x^2 + b x + a with
     // a = 1, b = 2n + 2, c = (n^2 + 3n + 10)/2.
     assert_eq!(certificate.gauge_index, 4);
@@ -174,7 +174,7 @@ fn exponential_coordinates_prove_nonzero_rows_by_a_dominant_root() {
     // A110200 (catalog first index 0): P_n = (1+x)^(n-2) (1+x) S_n with
     // S_n = (4^(n+1) - 1)/3 + (2^(n+1) - 1)^2 x.
     let report = check("A110200");
-    let certificate = report.factor_gauge.as_ref().unwrap();
+    let certificate = report.factor_gauge_certificate().unwrap();
     assert_eq!(certificate.common_factor, vec!["1", "1"]);
     assert!(certificate.residual_coefficients.is_none());
     let dominant = certificate.dominant_root.as_ref().unwrap();
@@ -254,7 +254,7 @@ fn quadratic_and_cubic_pencils_are_decided_by_discriminants() {
     let seeds = rows(&[&a, &p1]);
     let report = check_factor_gauge_theorem(&rule, 0, &seeds, &options()).unwrap();
     assert!(report.is_proved(), "{:?}", report.open_hypotheses());
-    let certificate = report.factor_gauge.as_ref().unwrap();
+    let certificate = report.factor_gauge_certificate().unwrap();
     assert_eq!(certificate.residual_shape, FactorGaugeResidualShape::Cubic);
     assert_eq!(certificate.gauge_factor, vec!["1"]);
     assert_eq!(
@@ -330,7 +330,7 @@ fn rules_without_a_common_gauge_are_not_applicable() {
             "{}",
             report.normal_form
         );
-        assert!(report.factor_gauge.is_none());
+        assert!(report.factor_gauge_certificate().is_none());
         report.normal_form
     };
     // Chebyshev: 2x P_(n-1) - P_(n-2), q = x from lag 1 but -1 != x^2.
@@ -400,21 +400,33 @@ fn tampered_reports_do_not_replay() {
     let report = check("A124376");
     report.verify().unwrap();
     let edits: Vec<Edit> = vec![
-        Box::new(|v| v["factor_gauge"]["gauge_factor"] = serde_json::json!(["2", "1"])),
-        Box::new(|v| v["factor_gauge"]["common_factor"] = serde_json::json!(["1", "1"])),
-        Box::new(|v| v["factor_gauge"]["residual_seeds"][0][1] = serde_json::json!("7")),
-        Box::new(|v| v["factor_gauge"]["residual_coefficients"][2][0] = serde_json::json!("6")),
-        Box::new(|v| v["factor_gauge"]["residual_shape"] = serde_json::json!("quadratic")),
-        Box::new(|v| v["factor_gauge"]["scalar_multipliers"][0] = serde_json::json!(["4"])),
-        Box::new(|v| v["factor_gauge"]["gauge_index"] = serde_json::json!(3)),
         Box::new(|v| {
-            v["factor_gauge"]
+            v["certificate"]["factor_gauge"]["gauge_factor"] = serde_json::json!(["2", "1"])
+        }),
+        Box::new(|v| {
+            v["certificate"]["factor_gauge"]["common_factor"] = serde_json::json!(["1", "1"])
+        }),
+        Box::new(|v| {
+            v["certificate"]["factor_gauge"]["residual_seeds"][0][1] = serde_json::json!("7")
+        }),
+        Box::new(|v| {
+            v["certificate"]["factor_gauge"]["residual_coefficients"][2][0] = serde_json::json!("6")
+        }),
+        Box::new(|v| {
+            v["certificate"]["factor_gauge"]["residual_shape"] = serde_json::json!("quadratic")
+        }),
+        Box::new(|v| {
+            v["certificate"]["factor_gauge"]["scalar_multipliers"][0] = serde_json::json!(["4"])
+        }),
+        Box::new(|v| v["certificate"]["factor_gauge"]["gauge_index"] = serde_json::json!(3)),
+        Box::new(|v| {
+            v["certificate"]["factor_gauge"]
                 .as_object_mut()
                 .unwrap()
                 .remove("residual_coefficients");
         }),
         Box::new(|v| {
-            v.as_object_mut().unwrap().remove("factor_gauge");
+            v.as_object_mut().unwrap().remove("certificate");
         }),
         Box::new(|v| v["hypotheses"][1]["evidence"] = serde_json::json!("trust me")),
         Box::new(|v| {
@@ -428,7 +440,7 @@ fn tampered_reports_do_not_replay() {
     }
     // The certificate alone: other seeds do not replay.
     let (rule, mut seeds, first) = catalog("A124376");
-    let certificate = report.factor_gauge.as_ref().unwrap();
+    let certificate = report.factor_gauge_certificate().unwrap();
     certificate.verify(&rule, first, &seeds).unwrap();
     seeds[3][1] = q(8);
     assert!(certificate.verify(&rule, first, &seeds).is_err());
@@ -457,7 +469,7 @@ fn discovery_records_the_gauge_only_where_it_applies() {
     assert_eq!(attempt.theorem, RealRootednessTheorem::FactorGauge);
     assert!(attempt.is_proved());
     report.verify().unwrap();
-    // A report saved without the attempt still replays.
+    // A report without the attempt does not replay.
     let mut older = report.clone();
     older.attempts.pop();
     older.status = "not_proved".into();
@@ -468,7 +480,7 @@ fn discovery_records_the_gauge_only_where_it_applies() {
         .next()
         .unwrap()
         .into();
-    older.verify().unwrap();
+    assert!(older.verify().is_err());
 
     // Chebyshev rows: no gauge, so no attempt is recorded.
     let rule = constant_rule(&[&[0, 2], &[-1]]);

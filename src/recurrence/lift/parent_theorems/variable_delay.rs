@@ -160,7 +160,7 @@ impl VariableDelayCertificate {
 /// - `P_(first_index)` is a nonzero constant;
 /// - every later seed row is `a_m P_(n-1) + b_m x P_(first_index + max(m-L,
 ///   0))` with rational `a_m > 0`, `b_m >= 0` (solved exactly, recorded in
-///   [`RealRootednessTheoremReport::variable_delay`]);
+///   [`RealRootednessTheoremReport::variable_delay_certificate`]);
 /// - a requested root region must contain `(-inf, 0)`.
 ///
 /// When all hold, every `P_n`, `n >= first_index`, is nonzero and
@@ -218,7 +218,7 @@ pub fn check_variable_delay_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::VariableDelay,
         rule,
         first_index,
@@ -247,7 +247,45 @@ fn window_step(seed: &[Q], previous: &[Q], delayed: &[Q]) -> Option<(Q, Q)> {
         .then_some((a, b))
 }
 
-pub(super) fn variable_delay_report(
+/// The registry entry of the fixed-delay theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::VariableDelay,
+    check_at_supplied_seeds: variable_delay_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
+    certificate_name: Some("fixed-delay"),
+    discovery: DiscoveryPolicy::WhenApplicable,
+    in_residue_class_menu: true,
+    in_index_section_menu: true,
+    parent: ParentPolicy {
+        stage: ParentStage::WhileUnproved,
+        region: ParentRegion::OpenNonpositiveRay,
+        record_only_if_applicable: true,
+    },
+};
+
+/// Replay the certificate of a recomputed fixed-delay report: the seed steps
+/// of a proved report on the checked (possibly moved) seed rows.
+pub(super) fn verify_certificate_in_report(
+    certificate: &VariableDelayCertificate,
+    report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    if !report.is_proved() {
+        return Ok(());
+    }
+    let (rule, first_index, seeds) = report.recurrence.to_recurrence_parts()?;
+    let seeds = if report.start_delay == 0 {
+        seeds
+    } else {
+        let generated = rule
+            .generate_rows_rational(&seeds, first_index, seeds.len() + report.start_delay)
+            .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
+        normalized_seed_rows(&rule, first_index, &generated)?
+    };
+    certificate.verify_seed_steps(first_index, &seeds)
+}
+
+fn variable_delay_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],
@@ -412,11 +450,13 @@ pub(super) fn variable_delay_report(
     } else {
         SCALED_DECLARATIONS.iter().map(|s| s.to_string()).collect()
     };
-    report.variable_delay = constant.map(|c| VariableDelayCertificate {
-        delay,
-        first_row: format_rational_coeff(&c),
-        unscaled,
-        seed_steps,
+    report.certificate = constant.map(|c| {
+        RouteCertificate::VariableDelay(VariableDelayCertificate {
+            delay,
+            first_row: format_rational_coeff(&c),
+            unscaled,
+            seed_steps,
+        })
     });
     let negative_axis = RealInterval {
         lower: None,

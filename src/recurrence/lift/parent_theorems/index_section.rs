@@ -170,20 +170,6 @@ const SELF_CHECK_ROWS: usize = 3;
 /// checks to try.
 pub(super) const MAXIMUM_PARENT_START_DELAY: usize = 16;
 
-/// The theorems tried on the parent, in order.
-const PARENT_MENU: [RealRootednessTheorem; 10] = [
-    RealRootednessTheorem::ProductRecurrence,
-    RealRootednessTheorem::ThreeTermRecurrence,
-    RealRootednessTheorem::LiuWang,
-    RealRootednessTheorem::LiuWangDerivativeLag,
-    RealRootednessTheorem::MaWangInterval,
-    RealRootednessTheorem::LiuWangThreeTerm,
-    RealRootednessTheorem::IteratedPreserver,
-    RealRootednessTheorem::HypergeometricRow,
-    RealRootednessTheorem::VariableDelay,
-    RealRootednessTheorem::ResidueClassSubsequences,
-];
-
 /// The transformation `T` of an [`IndexSectionCertificate`] (module
 /// documentation, "Transformed family").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -337,7 +323,7 @@ impl IndexSectionCertificate {
             };
             if !proves_every_row(proof)
                 || proof.recurrence != self.parent
-                || !PARENT_MENU.contains(&proof.theorem)
+                || !route(proof.theorem).in_index_section_menu
             {
                 return failed("the selected parent attempt is not a proof of the parent".into());
             }
@@ -358,7 +344,7 @@ impl IndexSectionCertificate {
 /// identity or a reversal and `Q` a polynomial parent family with a
 /// constant-coefficient rule; it is proved when a theorem of the parent menu
 /// proves the parent and the exceptional rows check exactly.  The
-/// certificate is kept in [`RealRootednessTheoremReport::index_section`] and
+/// certificate is kept in [`RealRootednessTheoremReport::index_section_certificate`] and
 /// replayed by [`RealRootednessTheoremReport::verify`].  No interlacing is
 /// concluded.
 ///
@@ -401,7 +387,7 @@ impl IndexSectionCertificate {
 /// )
 /// .unwrap();
 /// assert!(report.is_proved());
-/// assert_eq!(report.index_section.as_ref().unwrap().period, 3);
+/// assert_eq!(report.index_section_certificate().unwrap().period, 3);
 /// report.verify().unwrap();
 /// ```
 pub fn check_index_section_lift_theorem(
@@ -410,7 +396,7 @@ pub fn check_index_section_lift_theorem(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::IndexSectionLift,
         rule,
         first_index,
@@ -711,8 +697,10 @@ fn prove_parent(
 ) -> (Vec<RealRootednessTheoremReport>, Option<usize>) {
     let mut attempts = Vec::new();
     let mut fallback = None;
-    for theorem in PARENT_MENU {
-        let Ok(attempt) = check_with_first_proving_start(theorem, rule, 0, seeds, options) else {
+    // The theorems of the index-section menu, in the route order.
+    for route in ROUTES.iter().filter(|route| route.in_index_section_menu) {
+        let Ok(attempt) = check_with_first_proving_start(route.theorem, rule, 0, seeds, options)
+        else {
             continue;
         };
         if attempt.status == RealRootednessTheoremStatus::NotApplicable {
@@ -935,22 +923,12 @@ fn search_section_lifts(
 fn proves_every_row(report: &RealRootednessTheoremReport) -> bool {
     report.is_proved()
         && report
-            .residue_classes
-            .as_ref()
+            .residue_class_certificate()
             .is_none_or(|certificate| certificate.classes.iter().all(|class| !class.zero))
         && report
             .conclusion
             .as_ref()
             .is_some_and(|conclusion| !conclusion.has_zero_residue_classes())
-}
-
-/// The index-independent root region of a proved report, if any.
-fn proved_region(report: &RealRootednessTheoremReport) -> Option<RealInterval> {
-    let region = report.conclusion.as_ref()?.root_region.as_ref()?;
-    if !region.is_index_independent() {
-        return None;
-    }
-    region.at(0).ok()
 }
 
 /// The region of the rows `x^D S(1/x)` from a region of the rows `S`
@@ -985,41 +963,6 @@ fn reversed_region(region: &RealInterval) -> Option<RealInterval> {
     None
 }
 
-/// Whether the nonzero `p` is real-rooted with every root in `region`,
-/// roots at a closed finite end allowed.
-fn row_in_region(p: &[Q], region: &RealInterval) -> bool {
-    let mut q = vec_poly::trim(p);
-    for (end, closed) in [
-        (&region.lower, region.lower_closed),
-        (&region.upper, region.upper_closed),
-    ] {
-        if let (Some(value), true) = (end, closed) {
-            while q.len() > 1 {
-                match vec_poly::exact_div_by_t_minus(&q, value) {
-                    Some(quotient) => q = vec_poly::trim(&quotient),
-                    None => break,
-                }
-            }
-        }
-    }
-    !vec_poly::is_zero(&q) && (q.len() <= 1 || has_real_roots_in(&q, region))
-}
-
-/// Whether the requested (open) region contains `certified`.
-fn requested_region_contains(requested: &RealInterval, certified: &RealInterval) -> bool {
-    let lower_ok = match (&requested.lower, &certified.lower) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(a), Some(l)) => a < l || (a == l && !certified.lower_closed),
-    };
-    let upper_ok = match (&requested.upper, &certified.upper) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(b), Some(u)) => b > u || (b == u && !certified.upper_closed),
-    };
-    lower_ok && upper_ok
-}
-
 // ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
@@ -1047,7 +990,39 @@ fn polynomial_text(p: &UnivariatePolynomial) -> String {
     format_shift_polynomial(&[p.coeffs().to_vec()], "x")
 }
 
-pub(super) fn index_section_report(
+/// The registry entry of the index-section lift ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::IndexSectionLift,
+    check_at_supplied_seeds: index_section_report,
+    start_policy: StartPolicy::OwnStarts,
+    is_preferred: any_proof,
+    certificate_name: Some("index-section"),
+    discovery: DiscoveryPolicy::WhenApplicable,
+    in_residue_class_menu: false,
+    in_index_section_menu: false,
+    parent: ParentPolicy {
+        stage: ParentStage::WhileUnproved,
+        region: ParentRegion::OpenNonpositiveRayThenUnrestricted,
+        record_only_if_applicable: true,
+    },
+};
+
+/// Replay the certificate of a recomputed index-section report: the
+/// certificate is recomputed on its own
+/// ([`IndexSectionCertificate::verify`]) on the checked rule.
+pub(super) fn verify_certificate_in_report(
+    certificate: &IndexSectionCertificate,
+    report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    let (rule, first_index, seeds) = report.recurrence.to_recurrence_parts()?;
+    let rule = match &report.left_hand_factor_normalization {
+        Some(normalization) => normalization.normalized_recurrence()?,
+        None => rule,
+    };
+    certificate.verify(&rule, first_index, &seeds)
+}
+
+fn index_section_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],
@@ -1190,10 +1165,10 @@ pub(super) fn index_section_report(
                 let row = vec_poly::trim(row);
                 vec_poly::is_zero(&row) || !is_real_rooted_rational(&row)
             });
-            if region
-                .as_ref()
-                .is_some_and(|r| rows.iter().any(|row| !row_in_region(row, r)))
-            {
+            if region.as_ref().is_some_and(|r| {
+                rows.iter()
+                    .any(|row| !has_real_roots_in_closed_region(row, r))
+            }) {
                 region = None;
             }
             let last = first_index + checked_count - 1;
@@ -1246,16 +1221,18 @@ pub(super) fn index_section_report(
     report.hypotheses = hypotheses;
     let parent_record =
         RecurrenceJson::from_recurrence_rational(&lift.parent_rule, 0, &lift.parent_seeds, None);
-    report.index_section = Some(IndexSectionCertificate {
-        period,
-        transform: lift.transform,
-        exceptional_rows: lift.exceptional_rows,
-        parent: parent_record,
-        divisors_examined: examined,
-        parent_maximum_start_delay: options.maximum_start_delay,
-        parent_attempts: lift.attempts.clone(),
-        selected: lift.selected,
-    });
+    report.certificate = Some(RouteCertificate::IndexSectionLift(
+        IndexSectionCertificate {
+            period,
+            transform: lift.transform,
+            exceptional_rows: lift.exceptional_rows,
+            parent: parent_record,
+            divisors_examined: examined,
+            parent_maximum_start_delay: options.maximum_start_delay,
+            parent_attempts: lift.attempts.clone(),
+            selected: lift.selected,
+        },
+    ));
     let mut statement = format!(
         "every P_n, n >= {first_index}, is nonzero and real-rooted: P_({section_first} + m) = \
          T(Q_({period} m)) for every m >= 0 with {} and the parent psi(w) = {psi_text}",

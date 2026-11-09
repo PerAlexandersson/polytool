@@ -9,14 +9,25 @@ use num_bigint::BigInt;
 use polytool::oeis;
 use polytool::recurrence::{
     check_iterated_preserver_theorem, check_recorded_parent_proof, check_weyl_step_preserver,
-    prove_parent_real_rootedness, BigRational, BivarPoly, IteratedPreserverCoordinates,
-    LiftHypothesisStatus, ParentRecurrenceRecord, PreserverOperator, RealRootednessTheoremOptions,
-    RealRootednessTheoremReport, Recurrence, RecurrenceTerm, RowInterlacing, VeroneseParentProof,
-    VeroneseParentProofRoute, VeroneseParentProofStatus, WeylStepPreserverVerdict,
+    prove_parent_real_rootedness, BigRational, BivarPoly, IteratedPreserverCertificate,
+    IteratedPreserverCoordinates, LiftHypothesisStatus, ParentRecurrenceRecord, PreserverOperator,
+    RealRootednessTheoremOptions, RealRootednessTheoremReport, Recurrence, RecurrenceTerm,
+    RouteCertificate, RowInterlacing, VeroneseParentProof, VeroneseParentProofRoute,
+    VeroneseParentProofStatus, WeylStepPreserverVerdict,
 };
 
 mod common;
 use common::q;
+
+/// The iterated-preserver certificate of a report, for tampering.
+fn iterated_preserver_mut(
+    report: &mut RealRootednessTheoremReport,
+) -> &mut IteratedPreserverCertificate {
+    match report.certificate.as_mut() {
+        Some(RouteCertificate::IteratedPreserver(certificate)) => certificate,
+        _ => panic!("the report has no iterated-preserver certificate"),
+    }
+}
 
 fn row(values: &[i64]) -> Vec<BigRational> {
     values.iter().map(|&v| q(v)).collect()
@@ -93,7 +104,7 @@ fn parent_proof(
 
 fn is_weyl_step(report: &RealRootednessTheoremReport) -> bool {
     matches!(
-        report.iterated_preserver.as_ref().unwrap().preserver,
+        report.iterated_preserver_certificate().unwrap().preserver,
         Some(PreserverOperator::WeylOperator { .. })
     )
 }
@@ -169,7 +180,7 @@ fn single_lag_rules_run_in_each_residue_class() {
         assert_eq!(seeds.len(), 2, "{id}");
         let report = check(&rule, first_index, &seeds);
         assert!(report.is_proved(), "{id}: {report:#?}");
-        let certificate = report.iterated_preserver.as_ref().unwrap();
+        let certificate = report.iterated_preserver_certificate().unwrap();
         assert_eq!(certificate.lag, 2, "{id}");
         assert!(certificate.coordinates.is_identity());
         assert!(certificate.verify_operator_identity(&rule).is_ok());
@@ -187,11 +198,10 @@ fn single_lag_rules_run_in_each_residue_class() {
         assert!(report.conclusion.as_ref().unwrap().interlacing.is_none());
         // A tampered lag is refused.
         let mut tampered = report.clone();
-        tampered.iterated_preserver.as_mut().unwrap().lag = 1;
+        iterated_preserver_mut(&mut tampered).lag = 1;
         assert!(tampered.verify().is_err());
         assert!(tampered
-            .iterated_preserver
-            .as_ref()
+            .iterated_preserver_certificate()
             .unwrap()
             .verify_operator_identity(&rule)
             .is_err());
@@ -201,7 +211,7 @@ fn single_lag_rules_run_in_each_residue_class() {
     let (rule, first_index, seeds) = catalog("A026386");
     let report = check(&rule, first_index, &seeds);
     assert!(report.is_proved(), "{report:#?}");
-    assert_eq!(report.iterated_preserver.as_ref().unwrap().lag, 2);
+    assert_eq!(report.iterated_preserver_certificate().unwrap().lag, 2);
 }
 
 #[test]
@@ -212,7 +222,7 @@ fn a_power_gauge_turns_the_rows_into_an_euler_step() {
     let report = check(&rule, first_index, &seeds);
     assert!(report.is_proved(), "{report:#?}");
     assert_eq!(report.start_delay, 1);
-    let certificate = report.iterated_preserver.as_ref().unwrap();
+    let certificate = report.iterated_preserver_certificate().unwrap();
     assert_eq!(
         certificate.coordinates,
         IteratedPreserverCoordinates::PowerGauge { power: 1 }
@@ -224,8 +234,7 @@ fn a_power_gauge_turns_the_rows_into_an_euler_step() {
     assert_eq!(region_text(&report).as_deref(), Some("(-inf, 0]"));
     // Recorded in other coordinates, the identity no longer replays.
     let mut tampered = report.clone();
-    tampered.iterated_preserver.as_mut().unwrap().coordinates =
-        IteratedPreserverCoordinates::Identity;
+    iterated_preserver_mut(&mut tampered).coordinates = IteratedPreserverCoordinates::Identity;
     assert!(tampered.verify().is_err());
 }
 
@@ -238,7 +247,7 @@ fn the_reversal_turns_the_rows_into_an_euler_step() {
         let (rule, first_index, seeds) = catalog(id);
         let report = check(&rule, first_index, &seeds);
         assert!(report.is_proved(), "{id}: {report:#?}");
-        let certificate = report.iterated_preserver.as_ref().unwrap();
+        let certificate = report.iterated_preserver_certificate().unwrap();
         assert_eq!(
             certificate.coordinates,
             IteratedPreserverCoordinates::Reversal {
@@ -255,7 +264,7 @@ fn the_reversal_turns_the_rows_into_an_euler_step() {
         assert_eq!(proof.status, VeroneseParentProofStatus::Proved, "{id}");
         // A different nominal degree is refused.
         let mut tampered = report.clone();
-        tampered.iterated_preserver.as_mut().unwrap().coordinates =
+        iterated_preserver_mut(&mut tampered).coordinates =
             IteratedPreserverCoordinates::Reversal {
                 nominal_previous_degree: vec!["0".into(), "1".into()],
             };
@@ -273,7 +282,7 @@ fn a_translation_moves_the_euler_step_to_the_origin() {
     let seeds = vec![row(&[1])];
     let report = check(&rule, 0, &seeds);
     assert!(report.is_proved(), "{report:#?}");
-    let certificate = report.iterated_preserver.as_ref().unwrap();
+    let certificate = report.iterated_preserver_certificate().unwrap();
     assert_eq!(
         certificate.coordinates,
         IteratedPreserverCoordinates::Translation { shift: "-1".into() }
@@ -281,12 +290,11 @@ fn a_translation_moves_the_euler_step_to_the_origin() {
     // Q_n = P_n(x - 1) has its roots in (-inf, 0], so P_n in (-inf, -1].
     assert_eq!(region_text(&report).as_deref(), Some("(-inf, 0]"));
     let mut tampered = report.clone();
-    tampered.iterated_preserver.as_mut().unwrap().coordinates =
+    iterated_preserver_mut(&mut tampered).coordinates =
         IteratedPreserverCoordinates::Translation { shift: "1".into() };
     assert!(tampered.verify().is_err());
     assert!(tampered
-        .iterated_preserver
-        .as_ref()
+        .iterated_preserver_certificate()
         .unwrap()
         .verify_operator_identity(&rule)
         .is_err());
@@ -338,7 +346,7 @@ fn the_half_line_euler_step_still_wins_where_the_weyl_step_fails() {
     let report = check(&rule, first_index, &seeds);
     assert!(report.is_proved());
     assert!(matches!(
-        report.iterated_preserver.as_ref().unwrap().preserver,
+        report.iterated_preserver_certificate().unwrap().preserver,
         Some(PreserverOperator::EulerStep { .. })
     ));
     // A step with no other menu shape and a negative discriminant at x = 0:
@@ -405,21 +413,20 @@ fn a_tampered_weyl_step_is_refused() {
     let (rule, first_index, seeds) = catalog("A143497");
     let report = check(&rule, first_index, &seeds);
     let mut tampered = report.clone();
-    let certificate = tampered.iterated_preserver.as_mut().unwrap();
+    let certificate = iterated_preserver_mut(&mut tampered);
     let Some(PreserverOperator::WeylOperator { terms, .. }) = certificate.preserver.as_mut() else {
         panic!("a Weyl step");
     };
     terms[0].coeff.coeffs[0][0] = "5".into();
     assert!(tampered
-        .iterated_preserver
-        .as_ref()
+        .iterated_preserver_certificate()
         .unwrap()
         .verify_operator_identity(&rule)
         .is_err());
     assert!(tampered.verify().is_err());
     // A proved report without its certificate is refused.
     let mut stripped = report.clone();
-    stripped.iterated_preserver = None;
+    stripped.certificate = None;
     assert!(stripped.verify().is_err());
 }
 

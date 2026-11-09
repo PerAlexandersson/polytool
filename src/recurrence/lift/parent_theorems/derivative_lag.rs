@@ -271,7 +271,7 @@ pub fn check_liu_wang_derivative_lag_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::LiuWangDerivativeLag,
         rule,
         first_index,
@@ -280,8 +280,25 @@ pub fn check_liu_wang_derivative_lag_theorem(
     )
 }
 
+/// The registry entry of the derivative-lag theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::LiuWangDerivativeLag,
+    check_at_supplied_seeds: derivative_lag_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
+    certificate_name: None,
+    discovery: DiscoveryPolicy::Always,
+    in_residue_class_menu: true,
+    in_index_section_menu: true,
+    parent: ParentPolicy {
+        stage: ParentStage::ReplacesEarly,
+        region: ParentRegion::Unrestricted,
+        record_only_if_applicable: false,
+    },
+};
+
 /// The check with the induction at the given (normalized) seeds.
-pub(super) fn derivative_lag_report(
+fn derivative_lag_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<BigRational>],

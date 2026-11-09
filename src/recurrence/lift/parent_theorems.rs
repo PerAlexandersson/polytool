@@ -142,6 +142,21 @@
 //! row that is checked exactly (a seed, or a root-region failure at a
 //! computed row).
 //!
+//! # Route registry
+//!
+//! Each theorem's module declares its registry entry (a `ROUTE` constant):
+//! the theorem and its check at the supplied seeds, whether the check may
+//! move its induction start and which proof it prefers, the name of its
+//! [`RouteCertificate`], when [`discover_recurrence_proofs`] records its
+//! attempt, whether the residue-class and index-section checks offer it on
+//! their sub-families, and how the parent cascade runs it.  The private
+//! `registry::ROUTES` lists the entries in the order of
+//! [`RealRootednessTheorem::ALL`], and every dispatch on a theorem goes
+//! through it.  [`check_real_rootedness_theorem`] checks any theorem by
+//! name; the `check_*` functions above are its wrappers.  A report carries
+//! at most one [`RouteCertificate`], of its own theorem, replayed by
+//! [`RealRootednessTheoremReport::verify`].
+//!
 //! Related: `parent_proof` uses these provers as parent routes of the
 //! Veronese-section lifts; [`match_recurrence_theorems`] (renewal windows) and
 //! the Rolle routes of [`transform_recurrence`] cover other families.
@@ -165,8 +180,7 @@ pub use discovery::{
 pub use discovery::{
     discover_recurrence_proofs_with_options, AlternativeRepresentationOptions,
     AlternativeRepresentationProof, AlternativeRepresentationSearch,
-    RealRootedOutsideZeroResidueClasses, RecurrenceProofTail, DISCOVERY_THEOREMS,
-    ROW_ROUTE_THEOREMS,
+    RealRootedOutsideZeroResidueClasses, RecurrenceProofTail,
 };
 mod recurrence_equality;
 pub use recurrence_equality::{
@@ -189,6 +203,15 @@ mod variable_delay;
 mod index_section;
 // Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`).
 mod factor_gauge;
+// The registry of the theorem routes.
+mod registry;
+use registry::{any_proof, route, DiscoveryPolicy, ParentPolicy, StartPolicy};
+pub(in crate::recurrence) use registry::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
+// The route certificates and the JSON form of the reports.
+mod certificate;
+pub use certificate::RouteCertificate;
+// Root-region helpers shared by the checks.
+mod region;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
 pub use factor_gauge::{
     check_factor_gauge_theorem, FactorGaugeCertificate, FactorGaugeDominantRoot,
@@ -208,6 +231,10 @@ pub use left_hand_factor::LeftHandFactorNormalization;
 pub use liu_wang::check_liu_wang_theorem;
 pub use liu_wang_three_term::check_liu_wang_three_term_theorem;
 pub use ma_wang::check_ma_wang_interval_theorem;
+use region::{
+    has_real_roots_below, has_real_roots_in, has_real_roots_in_closed_region,
+    has_real_roots_in_region, open_root_interval, proved_region, requested_region_contains,
+};
 pub use residue_class::{
     check_residue_class_subsequence_theorem, ResidueClassCertificate, ResidueClassProof,
 };
@@ -255,6 +282,44 @@ pub enum RealRootednessTheorem {
     /// [`check_factor_gauge_theorem`] (RealRooted routes `powerForm`,
     /// `closedForm`, `factorPower`).
     FactorGauge,
+}
+
+impl RealRootednessTheorem {
+    /// Every theorem, in the order of the parent cascade and of
+    /// [`discover_recurrence_proofs`].
+    pub const ALL: [RealRootednessTheorem; 12] = [
+        RealRootednessTheorem::ProductRecurrence,
+        RealRootednessTheorem::ThreeTermRecurrence,
+        RealRootednessTheorem::LiuWang,
+        RealRootednessTheorem::LiuWangDerivativeLag,
+        RealRootednessTheorem::MaWangInterval,
+        RealRootednessTheorem::LiuWangThreeTerm,
+        RealRootednessTheorem::IteratedPreserver,
+        RealRootednessTheorem::HypergeometricRow,
+        RealRootednessTheorem::VariableDelay,
+        RealRootednessTheorem::ResidueClassSubsequences,
+        RealRootednessTheorem::IndexSectionLift,
+        RealRootednessTheorem::FactorGauge,
+    ];
+
+    /// The snake-case name, as serialized (for example
+    /// `"three_term_recurrence"`).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            RealRootednessTheorem::ProductRecurrence => "product_recurrence",
+            RealRootednessTheorem::ThreeTermRecurrence => "three_term_recurrence",
+            RealRootednessTheorem::LiuWang => "liu_wang",
+            RealRootednessTheorem::LiuWangDerivativeLag => "liu_wang_derivative_lag",
+            RealRootednessTheorem::MaWangInterval => "ma_wang_interval",
+            RealRootednessTheorem::LiuWangThreeTerm => "liu_wang_three_term",
+            RealRootednessTheorem::IteratedPreserver => "iterated_preserver",
+            RealRootednessTheorem::HypergeometricRow => "hypergeometric_row",
+            RealRootednessTheorem::VariableDelay => "variable_delay",
+            RealRootednessTheorem::ResidueClassSubsequences => "residue_class_subsequences",
+            RealRootednessTheorem::IndexSectionLift => "index_section_lift",
+            RealRootednessTheorem::FactorGauge => "factor_gauge",
+        }
+    }
 }
 
 /// Outcome of a theorem check.
@@ -476,37 +541,17 @@ pub struct RealRootednessTheoremReport {
     /// ran on.  Omitted when the supplied rule was used as it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub left_hand_factor_normalization: Option<LeftHandFactorNormalization>,
-    /// For [`check_iterated_preserver_theorem`]: the recognized step
-    /// `T_n = a_n(x) S_n`, the induction start, the degree step and the
-    /// region, replayed by [`RealRootednessTheoremReport::verify`].  Omitted
-    /// for the other theorems and when the step is not recognized.
+    /// The route certificate, for the theorems whose reports carry one
+    /// ([`RouteCertificate`]), replayed by
+    /// [`RealRootednessTheoremReport::verify`]; it is of the report's own
+    /// theorem.  Omitted for the other theorems, when the rule does not have
+    /// the theorem's form, and for a step that lowers the degree
+    /// ([`check_iterated_preserver_theorem`]) or a family without a section
+    /// identity ([`check_index_section_lift_theorem`]).  Accessors such as
+    /// [`Self::factor_gauge_certificate`] return the certificate of one
+    /// route.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub iterated_preserver: Option<IteratedPreserverCertificate>,
-    /// For [`check_variable_delay_theorem`]: the delay and the seed rows as
-    /// exact steps of the window, replayed by
-    /// [`RealRootednessTheoremReport::verify`].  Omitted for the other
-    /// theorems and when the rule does not have the theorem's form.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub variable_delay: Option<VariableDelayCertificate>,
-    /// For [`check_residue_class_subsequence_theorem`]: the period and the
-    /// class families with their theorem reports, replayed by
-    /// [`RealRootednessTheoremReport::verify`].  Omitted for the other
-    /// theorems and when the rule does not have the theorem's form.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub residue_classes: Option<ResidueClassCertificate>,
-    /// For [`check_index_section_lift_theorem`]: the period, the transform,
-    /// the parent family and its theorem reports, replayed by
-    /// [`RealRootednessTheoremReport::verify`].  Omitted for the other
-    /// theorems and when no section identity is found.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub index_section: Option<IndexSectionCertificate>,
-    /// For [`check_factor_gauge_theorem`]: the gauge factor, the scalar
-    /// multipliers, the common factor, the residual window and its
-    /// coefficient polynomials, replayed by
-    /// [`RealRootednessTheoremReport::verify`].  Omitted for the other
-    /// theorems and when the rule does not have the theorem's form.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub factor_gauge: Option<FactorGaugeCertificate>,
+    pub certificate: Option<RouteCertificate>,
 }
 
 impl RealRootednessTheoremReport {
@@ -534,11 +579,7 @@ impl RealRootednessTheoremReport {
             lean_route: None,
             lean_declarations: Vec::new(),
             left_hand_factor_normalization: None,
-            iterated_preserver: None,
-            variable_delay: None,
-            residue_classes: None,
-            index_section: None,
-            factor_gauge: None,
+            certificate: None,
         }
     }
 
@@ -556,11 +597,7 @@ impl RealRootednessTheoremReport {
         self.start_delay = 0;
         self.lean_route = None;
         self.lean_declarations.clear();
-        self.iterated_preserver = None;
-        self.variable_delay = None;
-        self.residue_classes = None;
-        self.index_section = None;
-        self.factor_gauge = None;
+        self.certificate = None;
         self
     }
 
@@ -623,36 +660,17 @@ impl RealRootednessTheoremReport {
                 Some(interval.at(0)?)
             }
         };
-        // The residue-class check passes its start-delay bound to the class
-        // checks and never moves its own start.
-        let maximum_start_delay = match (&self.residue_classes, self.theorem) {
-            (Some(certificate), RealRootednessTheorem::ResidueClassSubsequences) => {
-                if certificate.class_maximum_start_delay > residue_class::MAXIMUM_CLASS_START_DELAY
-                {
-                    return Err(RecurrenceError::VerificationFailed(format!(
-                        "the class start-delay bound exceeds {}",
-                        residue_class::MAXIMUM_CLASS_START_DELAY
-                    )));
-                }
-                certificate.class_maximum_start_delay
-            }
-            _ => self.start_delay,
-        };
-        // The index-section lift passes its start-delay bound to the parent
-        // checks and never moves its own start.
-        let maximum_start_delay = match (&self.index_section, self.theorem) {
-            (Some(certificate), RealRootednessTheorem::IndexSectionLift) => {
-                if certificate.parent_maximum_start_delay
-                    > index_section::MAXIMUM_PARENT_START_DELAY
-                {
-                    return Err(RecurrenceError::VerificationFailed(format!(
-                        "the parent start-delay bound exceeds {}",
-                        index_section::MAXIMUM_PARENT_START_DELAY
-                    )));
-                }
-                certificate.parent_maximum_start_delay
-            }
-            _ => maximum_start_delay,
+        // A check that keeps its own start (the residue classes, the
+        // index-section lift) passes its start-delay bound to its sub-checks.
+        let own_certificate = self
+            .certificate
+            .as_ref()
+            .filter(|certificate| certificate.theorem() == self.theorem);
+        let maximum_start_delay = match own_certificate {
+            Some(certificate) => certificate
+                .sub_check_start_delay_bound()?
+                .unwrap_or(self.start_delay),
+            None => self.start_delay,
         };
         let options = RealRootednessTheoremOptions {
             root_region,
@@ -679,27 +697,7 @@ impl RealRootednessTheoremReport {
                 ));
             }
         }
-        match (&self.iterated_preserver, self.theorem) {
-            (Some(certificate), RealRootednessTheorem::IteratedPreserver) => {
-                let checked_rule = match &self.left_hand_factor_normalization {
-                    Some(normalization) => normalization.normalized_recurrence()?,
-                    None => rule.clone(),
-                };
-                certificate.verify_operator_identity(&checked_rule)?;
-            }
-            (None, RealRootednessTheorem::IteratedPreserver) if self.is_proved() => {
-                return Err(RecurrenceError::VerificationFailed(
-                    "a proved iterated-preserver report needs its certificate".into(),
-                ));
-            }
-            (Some(_), _) => {
-                return Err(RecurrenceError::VerificationFailed(
-                    "an iterated-preserver certificate on a report of another theorem".into(),
-                ));
-            }
-            (None, _) => {}
-        }
-        self.verify_row_route_certificates()?;
+        self.verify_route_certificate()?;
         for hypothesis in &self.hypotheses {
             if let Some(IndexSignDecision::Holds { certificate }) = &hypothesis.sign_decision {
                 certificate.verify().map_err(|error| {
@@ -715,112 +713,34 @@ impl RealRootednessTheoremReport {
 }
 
 impl RealRootednessTheoremReport {
-    /// The certificates of the RealRooted row routes: the seed steps of a
-    /// proved fixed-delay report are replayed on the checked seed rows, and
-    /// the selected proof of every residue class is verified on its own.
-    fn verify_row_route_certificates(&self) -> Result<(), RecurrenceError> {
-        let mismatch = |what: &str| Err(RecurrenceError::VerificationFailed(what.into()));
-        match (&self.variable_delay, self.theorem) {
-            (Some(certificate), RealRootednessTheorem::VariableDelay) => {
-                if self.is_proved() {
-                    let (rule, first_index, seeds) = self.recurrence.to_recurrence_parts()?;
-                    let seeds = if self.start_delay == 0 {
-                        seeds
-                    } else {
-                        let generated = rule
-                            .generate_rows_rational(
-                                &seeds,
-                                first_index,
-                                seeds.len() + self.start_delay,
-                            )
-                            .map_err(|error| {
-                                RecurrenceError::VerificationFailed(error.to_string())
-                            })?;
-                        normalized_seed_rows(&rule, first_index, &generated)?
-                    };
-                    certificate.verify_seed_steps(first_index, &seeds)?;
-                }
-            }
-            (None, RealRootednessTheorem::VariableDelay) if self.is_proved() => {
-                return mismatch("a proved fixed-delay report needs its certificate");
-            }
-            (Some(_), _) => {
-                return mismatch("a fixed-delay certificate on a report of another theorem");
-            }
-            (None, _) => {}
-        }
-        match (&self.residue_classes, self.theorem) {
-            (Some(certificate), RealRootednessTheorem::ResidueClassSubsequences) => {
-                for class in &certificate.classes {
-                    if let Some(position) = class.selected {
-                        let proof = class.attempts.get(position).ok_or_else(|| {
-                            RecurrenceError::VerificationFailed(
-                                "a residue class selects a missing attempt".into(),
-                            )
-                        })?;
-                        if !proof.is_proved() || proof.recurrence != class.recurrence {
-                            return mismatch(
-                                "a residue class selects an attempt that is not its proof",
-                            );
-                        }
-                        proof.verify()?;
-                    }
-                }
-            }
-            (None, RealRootednessTheorem::ResidueClassSubsequences) if self.is_proved() => {
-                return mismatch("a proved residue-class report needs its certificate");
-            }
-            (Some(_), _) => {
-                return mismatch("a residue-class certificate on a report of another theorem");
-            }
-            (None, _) => {}
-        }
-        // Index-section lift: the certificate is recomputed on its own.
-        match (&self.index_section, self.theorem) {
-            (Some(certificate), RealRootednessTheorem::IndexSectionLift) => {
-                let (rule, first_index, seeds) = self.recurrence.to_recurrence_parts()?;
-                let rule = match &self.left_hand_factor_normalization {
-                    Some(normalization) => normalization.normalized_recurrence()?,
-                    None => rule,
-                };
-                certificate.verify(&rule, first_index, &seeds)?;
-            }
-            (None, RealRootednessTheorem::IndexSectionLift) if self.is_proved() => {
-                return mismatch("a proved index-section report needs its certificate");
-            }
-            (Some(_), _) => {
-                return mismatch("an index-section certificate on a report of another theorem");
-            }
-            (None, _) => {}
-        }
-        // Factor gauge: every identity of the certificate is replayed on the
-        // checked rule and the (possibly moved) seed rows.
-        match (&self.factor_gauge, self.theorem) {
-            (Some(certificate), RealRootednessTheorem::FactorGauge) => {
-                let (rule, first_index, seeds) = self.recurrence.to_recurrence_parts()?;
-                let rule = match &self.left_hand_factor_normalization {
-                    Some(normalization) => normalization.normalized_recurrence()?,
-                    None => rule,
-                };
-                let seeds = if self.start_delay == 0 {
-                    seeds
+    /// Replay the route certificate (its theorem's own replay,
+    /// [`RouteCertificate`]); a proved report of a theorem with a
+    /// certificate must carry it, and no report carries the certificate of
+    /// another theorem.
+    fn verify_route_certificate(&self) -> Result<(), RecurrenceError> {
+        let failed = |what: String| Err(RecurrenceError::VerificationFailed(what));
+        match &self.certificate {
+            Some(certificate) if certificate.theorem() != self.theorem => {
+                let name = route(certificate.theorem())
+                    .certificate_name
+                    .unwrap_or_default();
+                let article = if name.starts_with(|c: char| "aeiou".contains(c)) {
+                    "an"
                 } else {
-                    let generated = rule
-                        .generate_rows_rational(&seeds, first_index, seeds.len() + self.start_delay)
-                        .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
-                    normalized_seed_rows(&rule, first_index, &generated)?
+                    "a"
                 };
-                certificate.verify(&rule, first_index, &seeds)?;
+                failed(format!(
+                    "{article} {name} certificate on a report of another theorem"
+                ))
             }
-            (None, RealRootednessTheorem::FactorGauge) if self.is_proved() => {
-                return mismatch("a proved factor-gauge report needs its certificate");
-            }
-            (Some(_), _) => {
-                return mismatch("a factor-gauge certificate on a report of another theorem");
-            }
-            (None, _) => {}
+            Some(certificate) => certificate.verify_in_report(self),
+            None => match route(self.theorem).certificate_name {
+                Some(name) if self.is_proved() => {
+                    failed(format!("a proved {name} report needs its certificate"))
+                }
+                _ => Ok(()),
+            },
         }
-        Ok(())
     }
 }
 
@@ -840,44 +760,7 @@ fn check_at_supplied_seeds(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    match theorem {
-        RealRootednessTheorem::ProductRecurrence => {
-            product::product_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::ThreeTermRecurrence => {
-            three_term::three_term_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::LiuWang => {
-            liu_wang::liu_wang_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::LiuWangDerivativeLag => {
-            derivative_lag::derivative_lag_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::MaWangInterval => {
-            ma_wang::ma_wang_interval_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::LiuWangThreeTerm => {
-            liu_wang_three_term::liu_wang_three_term_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::IteratedPreserver => {
-            iterated_preserver::iterated_preserver_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::HypergeometricRow => {
-            hypergeometric_row::hypergeometric_row_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::VariableDelay => {
-            variable_delay::variable_delay_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::ResidueClassSubsequences => {
-            residue_class::residue_class_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::IndexSectionLift => {
-            index_section::index_section_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::FactorGauge => {
-            factor_gauge::factor_gauge_report(rule, first_index, seeds, options)
-        }
-    }
+    (route(theorem).check_at_supplied_seeds)(rule, first_index, seeds, options)
 }
 
 /// The theorem check with the induction start moved `delay` rows past the
@@ -1013,13 +896,14 @@ fn extend_interlacing_backward(
 /// Run the theorem at the supplied seeds and, unless it is proved or does
 /// not apply, with the induction start moved `1, ...,
 /// options.maximum_start_delay` rows later; the first proved report, else
-/// the report at the supplied seeds.  For
-/// [`check_liu_wang_three_term_theorem`], whose conclusion may come without
-/// a root region, a proved report without a region is replaced by the first
-/// later start that proves the theorem with one; for
-/// [`check_iterated_preserver_theorem`], a report proved in coordinates other
-/// than the identity is replaced by the first later start that proves it in
-/// the identity coordinates.
+/// the report at the supplied seeds.  The route's
+/// [`StartPolicy`](registry::StartPolicy) may keep the start at the supplied
+/// seeds (checks that move the starts of their sub-checks), and its
+/// `is_preferred` may reject a proof as weaker: such a proof is replaced by
+/// the first later start that gives a preferred one.  For
+/// [`check_liu_wang_three_term_theorem`] a proof without a root region is
+/// weaker; for [`check_iterated_preserver_theorem`] a proof in coordinates
+/// other than the identity.
 fn check_with_first_proving_start(
     theorem: RealRootednessTheorem,
     rule: &Recurrence,
@@ -1027,48 +911,93 @@ fn check_with_first_proving_start(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    // A weaker proof is kept as a fallback while a later start may give the
-    // preferred one: a Liu--Wang three-term proof without a root region, an
-    // iterated-preserver proof in coordinates other than the identity (so
-    // that a proof in the identity coordinates, at any start, comes first).
-    let without_region = |report: &RealRootednessTheoremReport| {
-        (theorem == RealRootednessTheorem::LiuWangThreeTerm
-            && report
-                .conclusion
-                .as_ref()
-                .is_some_and(|c| c.root_region.is_none()))
-            || (theorem == RealRootednessTheorem::IteratedPreserver
-                && report
-                    .iterated_preserver
-                    .as_ref()
-                    .is_some_and(|c| !c.coordinates.is_identity()))
-    };
+    let route = route(theorem);
     let report = check_with_start_delay(theorem, rule, first_index, seeds, options, 0)?;
-    // The residue classes move their own induction starts.
-    if theorem == RealRootednessTheorem::ResidueClassSubsequences {
+    if route.start_policy == StartPolicy::OwnStarts {
         return Ok(report);
     }
-    // The index-section search tries its own exceptional prefix rows.
-    if theorem == RealRootednessTheorem::IndexSectionLift {
+    // A weaker proof is kept as a fallback while a later start may give the
+    // preferred one (so that a preferred proof, at any start, comes first).
+    let preferred_proof =
+        |report: &RealRootednessTheoremReport| report.is_proved() && (route.is_preferred)(report);
+    if preferred_proof(&report) || report.status == RealRootednessTheoremStatus::NotApplicable {
         return Ok(report);
     }
-    if (report.is_proved() && !without_region(&report))
-        || report.status == RealRootednessTheoremStatus::NotApplicable
-    {
-        return Ok(report);
-    }
-    let mut proved_without_region = report.is_proved().then(|| report.clone());
+    let mut weaker_proof = report.is_proved().then(|| report.clone());
     for delay in 1..=options.maximum_start_delay {
         match check_with_start_delay(theorem, rule, first_index, seeds, options, delay) {
-            Ok(moved) if moved.is_proved() && !without_region(&moved) => return Ok(moved),
+            Ok(moved) if preferred_proof(&moved) => return Ok(moved),
             Ok(moved) if moved.is_proved() => {
-                proved_without_region.get_or_insert(moved);
+                weaker_proof.get_or_insert(moved);
             }
             Ok(_) => {}
             Err(_) => break,
         }
     }
-    Ok(proved_without_region.unwrap_or(report))
+    Ok(weaker_proof.unwrap_or(report))
+}
+
+/// Check `theorem` for the family given by `rule`, `first_index` and the
+/// seed rows `seeds` (the rule applies from `N = first_index + seeds.len()`
+/// on): the check of that theorem, for example
+/// [`check_three_term_recurrence_theorem`] for
+/// [`RealRootednessTheorem::ThreeTermRecurrence`], with the induction start
+/// moved when the theorem is not proved at the supplied seeds (module
+/// documentation, "Moving the induction start").  Every theorem of
+/// [`RealRootednessTheorem::ALL`] is checked this way.
+///
+/// # Errors
+///
+/// The errors of the theorem's check, for example a record that cannot be
+/// normalized or a rule that cannot generate the rows it needs.
+///
+/// # Example
+///
+/// ```
+/// use num_bigint::BigInt;
+/// use polytool::recurrence::{
+///     check_real_rootedness_theorem, BigRational, BivarPoly, RealRootednessTheorem,
+///     RealRootednessTheoremOptions, Recurrence, RecurrenceTerm,
+/// };
+///
+/// let q = |v: i64| BigRational::from_integer(BigInt::from(v));
+/// // Hermite: H_n = 2 x H_(n-1) - 2 (n - 1) H_(n-2), H_0 = 1, H_1 = 2 x.
+/// let rule = Recurrence {
+///     terms: vec![
+///         RecurrenceTerm::new(1, 0, BivarPoly::from_coefficients_normalized(vec![vec![q(0), q(2)]])),
+///         RecurrenceTerm::new(
+///             2,
+///             0,
+///             BivarPoly::from_coefficients_normalized(vec![vec![q(2)], vec![q(-2)]]),
+///         ),
+///     ],
+///     denominator: None,
+///     inhomogeneous: None,
+/// };
+/// let seeds = vec![vec![q(1)], vec![q(0), q(2)]];
+/// for theorem in RealRootednessTheorem::ALL {
+///     let report = check_real_rootedness_theorem(
+///         theorem,
+///         &rule,
+///         0,
+///         &seeds,
+///         &RealRootednessTheoremOptions::default(),
+///     )
+///     .unwrap();
+///     assert_eq!(report.theorem, theorem);
+///     if theorem == RealRootednessTheorem::ThreeTermRecurrence {
+///         assert!(report.is_proved());
+///     }
+/// }
+/// ```
+pub fn check_real_rootedness_theorem(
+    theorem: RealRootednessTheorem,
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<Q>],
+    options: &RealRootednessTheoremOptions,
+) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    check_with_first_proving_start(theorem, rule, first_index, seeds, options)
 }
 
 /// The degree law of a theorem from the shared leading-coefficient module
@@ -1152,16 +1081,6 @@ fn status_of(hypotheses: &[LiftHypothesis]) -> RealRootednessTheoremStatus {
     } else {
         RealRootednessTheoremStatus::Unresolved
     }
-}
-
-/// The interval with the same finite ends, both open.
-fn open_root_interval(interval: &RealInterval) -> RootInterval {
-    RootInterval::from_real(&RealInterval {
-        lower: interval.lower.clone(),
-        lower_closed: false,
-        upper: interval.upper.clone(),
-        upper_closed: false,
-    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1441,40 +1360,6 @@ fn has_simple_real_roots(p: &[Q]) -> bool {
     !vec_poly::is_zero(&integer)
         && crate::is_real_rooted_bigint_coeffs(&integer)
         && crate::has_simple_roots_bigint_coeffs(&integer)
-}
-
-/// Whether the nonzero `p` is real-rooted with every root `< point`: then
-/// `p(point + z)` has all its coefficients nonzero and of one sign, and
-/// conversely (Descartes' rule of signs).
-fn has_real_roots_below(p: &[Q], point: &Q) -> bool {
-    let p = vec_poly::trim(p);
-    if vec_poly::is_zero(&p) || !is_real_rooted_rational(&p) {
-        return false;
-    }
-    let shifted = vec_poly::compose(&p, &[point.clone(), Q::one()]);
-    shifted.iter().all(Signed::is_positive) || shifted.iter().all(Signed::is_negative)
-}
-
-/// Whether the nonzero real-rooted `p` has every root in the open
-/// `region`.
-fn has_real_roots_in(p: &[Q], region: &RealInterval) -> bool {
-    let p = vec_poly::trim(p);
-    if vec_poly::is_zero(&p) || !is_real_rooted_rational(&p) {
-        return false;
-    }
-    let upper_ok = region
-        .upper
-        .as_ref()
-        .is_none_or(|upper| has_real_roots_below(&p, upper));
-    let lower_ok = region.lower.as_ref().is_none_or(|lower| {
-        let reflected: Vec<Q> = p
-            .iter()
-            .enumerate()
-            .map(|(k, c)| if k % 2 == 1 { -c } else { c.clone() })
-            .collect();
-        has_real_roots_below(&reflected, &-lower)
-    });
-    upper_ok && lower_ok
 }
 
 /// `p / lead(p)`; the zero polynomial stays `[0]`.

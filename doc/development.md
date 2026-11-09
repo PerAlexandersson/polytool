@@ -112,6 +112,38 @@ well, `recurrence-transforms.test.cjs` checks that the CLI and the browser
 produce identical transform and implicit reports and that each replays the
 other's reports.
 
+## Adding a real-rootedness theorem route
+
+The theorem routes of `recurrence::check_real_rootedness_theorem`, of the
+proof discovery (`recurrence::discover_recurrence_proofs`) and of the parent
+cascade (`recurrence::prove_parent_real_rootedness`) are listed once, in the
+private registry `src/recurrence/lift/parent_theorems/registry.rs`
+(`ROUTES`, in the order of `RealRootednessTheorem::ALL`).  A new route needs:
+
+1. one module under `src/recurrence/lift/parent_theorems/` with the check at
+   the supplied seeds, its public wrapper `check_..._theorem` (a call of
+   `check_real_rootedness_theorem`) and its registry entry `ROUTE`: the
+   theorem, the check, the start policy (`MovesStart` or `OwnStarts`), the
+   preference among proofs at different starts, the certificate name, the
+   discovery policy (`Always` or `WhenApplicable`), the residue-class and
+   index-section menu flags, and the `ParentPolicy` (stage, requested region,
+   whether an attempt that does not apply is recorded);
+2. one line in `ROUTES` (the position is the order of the discovery attempts,
+   the menus and the cascade stage);
+3. the enum variants: `RealRootednessTheorem` (with `ALL` and `as_str`),
+   `VeroneseParentProofRoute` (with `theorem` and `of_theorem`) and, when its
+   reports carry a certificate, `RouteCertificate` (with `theorem`, the
+   replay dispatch and an accessor); the compiler points at every match;
+4. the exports in `src/recurrence/lift.rs`, the prose lists (the module
+   documentation of `parent_theorems` and `parent_proof`, `doc/library.md`,
+   `doc/proof-discovery.md`, the CLI and MCP help), a CHANGELOG entry, and a
+   re-blessed fingerprint file whose changed entries are those the route now
+   proves or records.
+
+The registry's unit tests and `tests/route_registry.rs` check that every
+theorem has one route in the frozen order, that the names are the serialized
+names, and that every theorem has its parent route.
+
 ## Proof-discovery fingerprints
 
 `tests/discovery_fingerprints.rs` is the evidence gate for refactorings of the
@@ -120,7 +152,8 @@ the complete JSON of `recurrence::discover_recurrence_proofs` (default
 options) and of `recurrence::prove_parent_real_rootedness` (first index, no
 attestations, root-domain route enabled) and compares both with
 `tests/fixtures/discovery-report-fingerprints.tsv`; a behaviour-preserving
-change leaves every line unchanged. A sample of 48 cheaper entries
+change leaves every line unchanged, and a change of results re-blesses the
+file with every changed entry explained. A sample of 48 cheaper entries
 runs in the normal test suite; the ignored full sweep takes about 7 minutes in
 release mode (each entry has a limit of 120 s, `POLYTOOL_DISCOVERY_ENTRY_SECONDS`):
 

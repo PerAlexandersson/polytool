@@ -314,7 +314,7 @@ pub fn check_liu_wang_three_term_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::LiuWangThreeTerm,
         rule,
         first_index,
@@ -474,33 +474,6 @@ fn hull_with_point(region: RealInterval, point: &Q) -> RealInterval {
     }
 }
 
-/// Whether the nonzero `p` is real-rooted with every root in `region`
-/// (closed or open ends).
-fn has_real_roots_in_region(p: &[Q], region: &RealInterval) -> bool {
-    let p = vec_poly::trim(p);
-    if vec_poly::is_zero(&p) || !is_real_rooted_rational(&p) {
-        return false;
-    }
-    let one_signed =
-        |q: &[Q]| q.iter().all(|c| !c.is_negative()) || q.iter().all(|c| !c.is_positive());
-    let upper_ok = region.upper.as_ref().is_none_or(|upper| {
-        if region.upper_closed {
-            one_signed(&vec_poly::compose(&p, &[upper.clone(), Q::one()]))
-        } else {
-            has_real_roots_below(&p, upper)
-        }
-    });
-    let lower_ok = region.lower.as_ref().is_none_or(|lower| {
-        let reflected = vec_poly::compose(&p, &[Q::zero(), -Q::one()]);
-        if region.lower_closed {
-            one_signed(&vec_poly::compose(&p, &[lower.clone(), -Q::one()]))
-        } else {
-            has_real_roots_below(&reflected, &-lower.clone())
-        }
-    });
-    upper_ok && lower_ok
-}
-
 /// The seed rows before the induction, each zero or real-rooted with every
 /// root in `region`, and the indices of the zero rows.
 fn earlier_rows_in_region(
@@ -623,13 +596,39 @@ fn gauge_candidates(c1: &Bivariate, c2: &Bivariate) -> Vec<Q> {
         .collect()
 }
 
+/// [`TheoremRoute::is_preferred`]: a proof whose conclusion comes without a
+/// root region is replaced by a later start that certifies one.
+fn proof_with_root_region(report: &RealRootednessTheoremReport) -> bool {
+    !report
+        .conclusion
+        .as_ref()
+        .is_some_and(|conclusion| conclusion.root_region.is_none())
+}
+
+/// The registry entry of the Liu--Wang three-term theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::LiuWangThreeTerm,
+    check_at_supplied_seeds: liu_wang_three_term_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: proof_with_root_region,
+    certificate_name: None,
+    discovery: DiscoveryPolicy::Always,
+    in_residue_class_menu: true,
+    in_index_section_menu: true,
+    parent: ParentPolicy {
+        stage: ParentStage::ReplacesEarly,
+        region: ParentRegion::Unrestricted,
+        record_only_if_applicable: false,
+    },
+};
+
 /// The check with the induction at the given (normalized) seeds: the
 /// identity coordinates first, then the gauges and the reversal (module
 /// documentation, "Coordinates"); the first report proved with a root
 /// region, else the first proved report (identity first), else the report
 /// in the identity coordinates (or, when the rule does not have the form
 /// there, the first other report that is not `not_applicable`).
-pub(super) fn liu_wang_three_term_report(
+fn liu_wang_three_term_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<BigRational>],

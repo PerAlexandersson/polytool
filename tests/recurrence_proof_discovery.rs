@@ -36,7 +36,10 @@ fn record(rule: &Recurrence, seeds: &[&[i64]], first: usize) -> RecurrenceJson {
 fn checked(record: &RecurrenceJson) -> RecurrenceProofDiscoveryReport {
     let report = discover_recurrence_proofs(record, &options()).unwrap();
     report.verify().unwrap();
-    assert_eq!(report.attempts.len(), DISCOVERY_THEOREMS.len());
+    // The first eight theorems are always attempted, in order; the others
+    // do not apply to these rules.
+    let theorems: Vec<RealRootednessTheorem> = report.attempts.iter().map(|a| a.theorem).collect();
+    assert_eq!(theorems, RealRootednessTheorem::ALL[..8]);
     assert_eq!(report.lean_replay, "not_attempted");
     report
 }

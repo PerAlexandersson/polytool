@@ -41,19 +41,6 @@ const REFERENCE: &str = "Residue-class subsequences: when every lag of the rule 
      is real-rooted when every class is; RealRooted route subseq \
      (RealRooted/Tactic/Row/Subseq.lean, reassembly by RealRooted.exists_mul_add_lt)";
 
-/// The theorems tried on a residue class, in order.
-const CLASS_MENU: [RealRootednessTheorem; 9] = [
-    RealRootednessTheorem::ProductRecurrence,
-    RealRootednessTheorem::ThreeTermRecurrence,
-    RealRootednessTheorem::LiuWang,
-    RealRootednessTheorem::LiuWangDerivativeLag,
-    RealRootednessTheorem::MaWangInterval,
-    RealRootednessTheorem::LiuWangThreeTerm,
-    RealRootednessTheorem::IteratedPreserver,
-    RealRootednessTheorem::HypergeometricRow,
-    RealRootednessTheorem::VariableDelay,
-];
-
 /// Largest induction-start delay a recorded certificate may ask the class
 /// checks to try (as for the CLI's `--max-start-delay`).
 pub(super) const MAXIMUM_CLASS_START_DELAY: usize = 16;
@@ -107,7 +94,7 @@ pub struct ResidueClassCertificate {
 /// proves it (with `options`, including its start delays); a class with
 /// only zero seed rows is identically zero when `f` does not vanish on its
 /// rule range (decided exactly).  The class reports are kept in
-/// [`RealRootednessTheoremReport::residue_classes`] and replayed by
+/// [`RealRootednessTheoremReport::residue_class_certificate`] and replayed by
 /// [`RealRootednessTheoremReport::verify`].
 ///
 /// When every class is proved, every row `P_n`, `n >= first_index`, is zero
@@ -160,7 +147,7 @@ pub struct ResidueClassCertificate {
 /// )
 /// .unwrap();
 /// assert!(report.is_proved());
-/// assert_eq!(report.residue_classes.as_ref().unwrap().period, 2);
+/// assert_eq!(report.residue_class_certificate().unwrap().period, 2);
 /// report.verify().unwrap();
 /// ```
 pub fn check_residue_class_subsequence_theorem(
@@ -169,7 +156,7 @@ pub fn check_residue_class_subsequence_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::ResidueClassSubsequences,
         rule,
         first_index,
@@ -244,15 +231,6 @@ fn class_rule(shape: &RecurrenceShape, first: usize, period: usize) -> Recurrenc
     }
 }
 
-/// The index-independent root region of a proved report, if any.
-fn proved_region(report: &RealRootednessTheoremReport) -> Option<RealInterval> {
-    let region = report.conclusion.as_ref()?.root_region.as_ref()?;
-    if !region.is_index_independent() {
-        return None;
-    }
-    region.at(0).ok()
-}
-
 /// The smallest interval containing `a` and `b`.
 fn hull(a: &RealInterval, b: &RealInterval) -> RealInterval {
     let (lower, lower_closed) = match (&a.lower, &b.lower) {
@@ -275,21 +253,6 @@ fn hull(a: &RealInterval, b: &RealInterval) -> RealInterval {
     }
 }
 
-/// Whether the requested (open) region contains `certified`.
-fn requested_region_contains(requested: &RealInterval, certified: &RealInterval) -> bool {
-    let lower_ok = match (&requested.lower, &certified.lower) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(a), Some(l)) => a < l || (a == l && !certified.lower_closed),
-    };
-    let upper_ok = match (&requested.upper, &certified.upper) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(b), Some(u)) => b > u || (b == u && !certified.upper_closed),
-    };
-    lower_ok && upper_ok
-}
-
 /// The RealRooted lemma that a class of zero seed rows stays zero, for the
 /// class shapes of `rr_row_subseq_splits`.
 fn zero_class_declaration(class: &Recurrence) -> Option<&'static str> {
@@ -303,7 +266,48 @@ fn zero_class_declaration(class: &Recurrence) -> Option<&'static str> {
     }
 }
 
-pub(super) fn residue_class_report(
+/// The registry entry of the residue-class theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::ResidueClassSubsequences,
+    check_at_supplied_seeds: residue_class_report,
+    start_policy: StartPolicy::OwnStarts,
+    is_preferred: any_proof,
+    certificate_name: Some("residue-class"),
+    discovery: DiscoveryPolicy::WhenApplicable,
+    in_residue_class_menu: false,
+    in_index_section_menu: true,
+    parent: ParentPolicy {
+        stage: ParentStage::WhileUnproved,
+        region: ParentRegion::OpenNonpositiveRayThenUnrestricted,
+        record_only_if_applicable: true,
+    },
+};
+
+/// Replay the certificate of a recomputed residue-class report: the selected
+/// proof of every residue class is verified on its own.
+pub(super) fn verify_certificate_in_report(
+    certificate: &ResidueClassCertificate,
+    _report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    for class in &certificate.classes {
+        if let Some(position) = class.selected {
+            let proof = class.attempts.get(position).ok_or_else(|| {
+                RecurrenceError::VerificationFailed(
+                    "a residue class selects a missing attempt".into(),
+                )
+            })?;
+            if !proof.is_proved() || proof.recurrence != class.recurrence {
+                return Err(RecurrenceError::VerificationFailed(
+                    "a residue class selects an attempt that is not its proof".into(),
+                ));
+            }
+            proof.verify()?;
+        }
+    }
+    Ok(())
+}
+
+fn residue_class_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],
@@ -410,10 +414,15 @@ pub(super) fn residue_class_report(
         let mut attempts = Vec::new();
         let mut selected = None;
         let mut fallback = None;
-        for theorem in CLASS_MENU {
-            let Ok(attempt) =
-                check_with_first_proving_start(theorem, &class, 0, &class_seeds, &class_options)
-            else {
+        // The theorems of the residue-class menu, in the route order.
+        for route in ROUTES.iter().filter(|route| route.in_residue_class_menu) {
+            let Ok(attempt) = check_with_first_proving_start(
+                route.theorem,
+                &class,
+                0,
+                &class_seeds,
+                &class_options,
+            ) else {
                 continue;
             };
             if attempt.status == RealRootednessTheoremStatus::NotApplicable {
@@ -462,7 +471,7 @@ pub(super) fn residue_class_report(
                         continue;
                     }
                     let holds = match &class_region {
-                        Some(r) => closed_region_contains_roots(&row, r),
+                        Some(r) => has_real_roots_in_closed_region(&row, r),
                         None => is_real_rooted_rational(&row),
                     };
                     if !holds {
@@ -556,11 +565,13 @@ pub(super) fn residue_class_report(
     }
     report.hypotheses = hypotheses;
     report.lean_declarations = declarations;
-    report.residue_classes = Some(ResidueClassCertificate {
-        period,
-        class_maximum_start_delay: options.maximum_start_delay,
-        classes,
-    });
+    report.certificate = Some(RouteCertificate::ResidueClassSubsequences(
+        ResidueClassCertificate {
+            period,
+            class_maximum_start_delay: options.maximum_start_delay,
+            classes,
+        },
+    ));
     zero_rows.sort_unstable();
     let conclusion_first = zero_rows.last().map_or(first_index, |last| last + 1);
     let mut statement = format!(
@@ -605,25 +616,4 @@ pub(super) fn residue_class_report(
         root_region: region.as_ref().map(RootInterval::from_real),
         statement,
     }))
-}
-
-/// Whether the nonzero `p` is real-rooted with every root in `region`,
-/// roots at a closed finite end allowed (they are divided out, then the open
-/// region is tested).
-fn closed_region_contains_roots(p: &[Q], region: &RealInterval) -> bool {
-    let mut q = vec_poly::trim(p);
-    for (end, closed) in [
-        (&region.lower, region.lower_closed),
-        (&region.upper, region.upper_closed),
-    ] {
-        if let (Some(value), true) = (end, closed) {
-            while q.len() > 1 {
-                match vec_poly::exact_div_by_t_minus(&q, value) {
-                    Some(quotient) => q = vec_poly::trim(&quotient),
-                    None => break,
-                }
-            }
-        }
-    }
-    !vec_poly::is_zero(&q) && (q.len() <= 1 || has_real_roots_in(&q, region))
 }

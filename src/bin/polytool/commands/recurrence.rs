@@ -551,8 +551,9 @@ may leave whole residue classes of zero rows (conclusion.zero_residue_classes,
 residues of n modulo the period); real_rooted_from_index is then omitted and
 real_rooted_outside_zero_residue_classes gives from_index and the zero classes
 (status proved). tail and alternative_representations hold the later stages, each
-alternative with its polytool.recurrence-equality.v1 certificate. Reports saved
-before a criterion was added still replay (attempts are additive)."#,
+alternative with its polytool.recurrence-equality.v1 certificate. Replay needs
+the attempts of exactly the criteria the current search records; recompute
+reports saved before a criterion was added."#,
     examples: &[
         "polytool recurrence --json < rows.txt | polytool recurrence-prove --recurrence - --json",
         "polytool recurrence-prove --recurrence rec.json --json > proof.json\npolytool recurrence-prove --verify < proof.json",

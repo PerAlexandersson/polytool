@@ -3,7 +3,10 @@
 //! [`discover_recurrence_proofs`] runs, in this order:
 //!
 //! 1. every general theorem of `parent_theorems` on the supplied record, in
-//!    the order of the parent cascade ([`DISCOVERY_THEOREMS`]);
+//!    the order of [`RealRootednessTheorem::ALL`]; the attempts of the first
+//!    eight are always recorded, those of the RealRooted row routes, the
+//!    index-section lift and the factor gauge only where the rule has their
+//!    form (status other than `not_applicable`);
 //! 2. **tail**: when no theorem proves the record and one of its first rows
 //!    (the seeds and the rows of the induction-start window) is zero or not
 //!    real-rooted, the same theorems on the *tail* record that starts after
@@ -26,17 +29,18 @@
 //!
 //! [`RecurrenceProofDiscoveryReport::verify`] checks a saved report's claims
 //! rather than byte equality with a recomputation.  The search is rerun on
-//! the recorded record and options; the recorded attempts must appear, in
-//! order, among the recomputed attempts (a subsequence), each equal to its
-//! recomputed attempt or replaying on its own (an earlier version of the
-//! check), or proving nothing where the current check proves (superseded);
-//! the six theorems of the first schema version must be recorded.  The tail
+//! the recorded record and options;
+//! the recorded attempts must be of the theorems of the recomputed attempts,
+//! in order, each equal to its recomputed attempt or replaying on its own
+//! (an earlier version of the check), or proving nothing where the current
+//! check proves (superseded).  The tail
 //! record is re-derived from the supplied record, every alternative replays
 //! its equality certificate and its attempts, and the summary fields
 //! (status, first proved index, triviality, statement) must follow from the
 //! recorded attempts alone, so a report never claims more than they prove.
-//! A recomputation that tries or proves more is fine: reports saved before
-//! a theorem was added keep replaying.
+//! A recomputation that proves more is fine; a report saved before a theorem
+//! was added (or before a check started to apply to the rule) no longer
+//! replays and is recomputed.
 
 use super::recurrence_equality::{certify_recurrence_equality, RecurrenceEqualityCertificate};
 use super::*;
@@ -45,33 +49,8 @@ use crate::recurrence::{AdaptiveSearchBudget, AdaptiveSearchOptions};
 /// Schema for a replayable general recurrence proof search.
 pub const RECURRENCE_PROOF_DISCOVERY_SCHEMA: &str = "polytool.recurrence-proof-discovery.v1";
 
-/// The theorems of the discovery search, in the order of the parent cascade
-/// (`prove_parent_real_rootedness`).
-pub const DISCOVERY_THEOREMS: [RealRootednessTheorem; 8] = [
-    RealRootednessTheorem::ProductRecurrence,
-    RealRootednessTheorem::ThreeTermRecurrence,
-    RealRootednessTheorem::LiuWang,
-    RealRootednessTheorem::LiuWangDerivativeLag,
-    RealRootednessTheorem::MaWangInterval,
-    RealRootednessTheorem::LiuWangThreeTerm,
-    RealRootednessTheorem::IteratedPreserver,
-    RealRootednessTheorem::HypergeometricRow,
-];
-
-/// The RealRooted row routes tried after [`DISCOVERY_THEOREMS`]; their
-/// attempts are recorded only when the rule has their form.
-pub const ROW_ROUTE_THEOREMS: [RealRootednessTheorem; 2] = [
-    RealRootednessTheorem::VariableDelay,
-    RealRootednessTheorem::ResidueClassSubsequences,
-];
-
-/// The theorems of the first version of the schema; every report records
-/// an attempt of each.
-const FIRST_VERSION_THEOREMS: usize = 6;
-
-/// The statement of a report of the first version of the schema (and the
-/// first sentence of every later statement).
-const FIRST_VERSION_STATEMENT: &str = "Each proved attempt establishes its conclusion for the \
+/// The first sentence of every statement.
+const STATEMENT_PREAMBLE: &str = "Each proved attempt establishes its conclusion for the \
      recurrence-defined sequence. Applying it to an independently defined sequence requires an \
      all-index recurrence identity and the stated seeds; finite fitting or held-out checks do \
      not establish that identity. No Lean replay was attempted.";
@@ -189,7 +168,7 @@ pub struct RecurrenceProofDiscoveryReport {
     /// What is, and is not, established by a successful search.
     pub statement: String,
     /// Every theorem attempt on the supplied record, including failed and
-    /// unresolved hypotheses, in the order of [`DISCOVERY_THEOREMS`].
+    /// unresolved hypotheses, in the order of [`RealRootednessTheorem::ALL`].
     pub attempts: Vec<RealRootednessTheoremReport>,
     /// Whether the supplied (not fitted) recurrence is in the product seed
     /// class `B(n) P_n = A(x,n) P_(n-k)` and the product attempt proved it:
@@ -364,41 +343,15 @@ fn run_theorems(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<Vec<RealRootednessTheoremReport>, RecurrenceError> {
-    let mut attempts = DISCOVERY_THEOREMS
-        .iter()
-        .map(|theorem| check_with_first_proving_start(*theorem, rule, first_index, seeds, options))
-        .collect::<Result<Vec<_>, _>>()?;
-    // RealRooted row routes (`variableDelay`, `subseq`): recorded only where
-    // the rule has their form, so the reports of other rules are unchanged.
-    for theorem in ROW_ROUTE_THEOREMS {
-        let attempt = check_with_first_proving_start(theorem, rule, first_index, seeds, options)?;
-        if attempt.status != RealRootednessTheoremStatus::NotApplicable {
+    // Every route in the registry order; a route recorded only where the
+    // rule has its form leaves the reports of other rules unchanged.
+    let mut attempts = Vec::new();
+    for route in &ROUTES {
+        let attempt =
+            check_with_first_proving_start(route.theorem, rule, first_index, seeds, options)?;
+        if route.discovery.records(&attempt) {
             attempts.push(attempt);
         }
-    }
-    // Index-section lift (RealRooted `pathPower`): recorded only when a
-    // section identity with a parent family is found.
-    let attempt = check_with_first_proving_start(
-        RealRootednessTheorem::IndexSectionLift,
-        rule,
-        first_index,
-        seeds,
-        options,
-    )?;
-    if attempt.status != RealRootednessTheoremStatus::NotApplicable {
-        attempts.push(attempt);
-    }
-    // Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`):
-    // recorded only when the rule has the form and the residual is decided.
-    let attempt = check_with_first_proving_start(
-        RealRootednessTheorem::FactorGauge,
-        rule,
-        first_index,
-        seeds,
-        options,
-    )?;
-    if attempt.status != RealRootednessTheoremStatus::NotApplicable {
-        attempts.push(attempt);
     }
     Ok(attempts)
 }
@@ -478,7 +431,7 @@ impl RecurrenceProofDiscoveryReport {
         }
         .into();
         self.not_applicable_reason = if is_proved { None } else { not_applicable };
-        let mut statement = String::from(FIRST_VERSION_STATEMENT);
+        let mut statement = String::from(STATEMENT_PREAMBLE);
         if let Some(from) = from {
             statement.push_str(&format!(
                 " Proved through {route}: every row P_n with n >= {from} is nonzero and \
@@ -568,7 +521,7 @@ impl RecurrenceProofDiscoveryReport {
             &options,
             &alternative_options,
         )?;
-        verify_attempts(&self.attempts, &recomputed.attempts, &plain, &options, true)?;
+        verify_attempts(&self.attempts, &recomputed.attempts, &plain, &options)?;
         let inhomogeneous = rule.inhomogeneous.as_ref().is_some_and(|g| !g.is_zero());
         let proved_directly = self.attempts.iter().any(|a| a.is_proved());
         match &self.tail {
@@ -588,13 +541,7 @@ impl RecurrenceProofDiscoveryReport {
                 }
                 let reference =
                     run_theorems(&rule, tail.first_index, &tail_record_seeds(tail)?, &options)?;
-                verify_attempts(
-                    &tail.attempts,
-                    &reference,
-                    &tail.recurrence,
-                    &options,
-                    false,
-                )?;
+                verify_attempts(&tail.attempts, &reference, &tail.recurrence, &options)?;
             }
         }
         let tail_proved = self
@@ -638,7 +585,6 @@ impl RecurrenceProofDiscoveryReport {
                         &reference,
                         &alternative.equality.alternative,
                         &options,
-                        false,
                     )?;
                 } else if !alternative.attempts.is_empty() {
                     return failed("theorem attempts on an uncertified alternative");
@@ -664,56 +610,32 @@ impl RecurrenceProofDiscoveryReport {
         if &expected == self {
             return Ok(());
         }
-        // A report of the first schema version: no tail, alternatives or
-        // first proved index, and the original statement and status.
-        let mut legacy = expected;
-        legacy.status = if self.attempts.iter().any(|a| a.is_proved()) {
-            "proved"
-        } else {
-            "not_proved"
-        }
-        .into();
-        legacy.statement = FIRST_VERSION_STATEMENT.into();
-        legacy.real_rooted_from_index = None;
-        legacy.real_rooted_outside_zero_residue_classes = None;
-        legacy.not_applicable_reason = None;
-        if self.tail.is_none() && self.alternative_representations.is_none() && &legacy == self {
-            return Ok(());
-        }
         failed("the report summary does not match its attempts")
     }
 }
 
 /// Replay a list of recorded attempts on `record` against `reference`, the
 /// attempts of the current search on the same record and options: the
-/// recorded attempts must appear among the reference attempts in the same
-/// order (a subsequence; each theorem at most once), refer to `record` and
-/// the recorded options, and each must equal its reference attempt, or
-/// replay on its own (a report of an earlier version of a check), or prove
-/// nothing where the current check proves the theorem (superseded).  With
-/// `require_first_version` the six theorems of the first schema version
-/// must all be recorded; otherwise every reference theorem must be.
+/// recorded attempts must be of the same theorems in the same order, refer
+/// to `record` and the recorded options, and each must equal its reference
+/// attempt, or replay on its own (a report of an earlier version of a
+/// check), or prove nothing where the current check proves the theorem
+/// (superseded).
 fn verify_attempts(
     attempts: &[RealRootednessTheoremReport],
     reference: &[RealRootednessTheoremReport],
     record: &RecurrenceJson,
     options: &RealRootednessTheoremOptions,
-    require_first_version: bool,
 ) -> Result<(), RecurrenceError> {
     let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
+    let recorded = attempts.iter().map(|attempt| attempt.theorem);
+    if !recorded.eq(reference.iter().map(|attempt| attempt.theorem)) {
+        return failed("the theorem attempts differ from those of the search");
+    }
     let (expected_rule, expected_first, expected_seeds) = record.to_recurrence_parts()?;
     let expected_data =
         RecurrenceJson::from_recurrence_rational(&expected_rule, 0, &[], None).recurrence;
-    let mut position = 0;
-    for attempt in attempts {
-        let Some(offset) = reference[position..]
-            .iter()
-            .position(|current| current.theorem == attempt.theorem)
-        else {
-            return failed("theorem attempts are out of order, repeated or unknown");
-        };
-        let current = &reference[position + offset];
-        position += offset + 1;
+    for (attempt, current) in attempts.iter().zip(reference) {
         if attempt.start_delay > options.maximum_start_delay {
             return failed("an attempt moves its start further than the recorded bound");
         }
@@ -739,26 +661,6 @@ fn verify_attempts(
                 return Err(error);
             }
         }
-    }
-    let recorded: Vec<RealRootednessTheorem> = attempts.iter().map(|a| a.theorem).collect();
-    let required: Vec<RealRootednessTheorem> = if require_first_version {
-        DISCOVERY_THEOREMS[..FIRST_VERSION_THEOREMS].to_vec()
-    } else {
-        // Reports saved before the index-section lift or the factor gauge
-        // existed omit them.
-        reference
-            .iter()
-            .map(|a| a.theorem)
-            .filter(|theorem| {
-                !matches!(
-                    theorem,
-                    RealRootednessTheorem::IndexSectionLift | RealRootednessTheorem::FactorGauge
-                )
-            })
-            .collect()
-    };
-    if required.iter().any(|theorem| !recorded.contains(theorem)) {
-        return failed("a theorem attempt is missing");
     }
     Ok(())
 }

@@ -87,7 +87,10 @@
 //!   constant-coefficient parent proved by those theorems (also parent route
 //!   8e); [`check_factor_gauge_theorem`] proves rules whose lag-`j`
 //!   multiplier is `kappa_j(n) q(x)^j` through `P_n = q^(n-e) g S_n` with a
-//!   bounded residual `S_n` (also parent route 8f);
+//!   bounded residual `S_n` (also parent route 8f); every theorem is also
+//!   reached by name through [`check_real_rootedness_theorem`] (the list
+//!   [`RealRootednessTheorem::ALL`], one registry entry per theorem), and a
+//!   report carries at most one [`RouteCertificate`];
 //! - `section_report`: [`certify_veronese_section_lift`] and its
 //!   `polytool.recurrence-veronese-certificate.v1` report;
 //! - `symmetric_companion`: operators, search, certificate and verifier, and
@@ -150,21 +153,21 @@ pub use parent_theorems::{
     certify_recurrence_equality, discover_recurrence_proofs_with_options,
     AlternativeRepresentationOptions, AlternativeRepresentationProof,
     AlternativeRepresentationSearch, RealRootedOutsideZeroResidueClasses,
-    RecurrenceEqualityCertificate, RecurrenceProofTail, DISCOVERY_THEOREMS,
-    RECURRENCE_EQUALITY_SCHEMA, ROW_ROUTE_THEOREMS,
+    RecurrenceEqualityCertificate, RecurrenceProofTail, RECURRENCE_EQUALITY_SCHEMA,
 };
 pub use parent_theorems::{
     check_hypergeometric_row_theorem, check_iterated_preserver_theorem,
     check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem,
     check_liu_wang_three_term_theorem, check_ma_wang_interval_theorem,
-    check_product_recurrence_theorem, check_three_term_recurrence_theorem,
-    check_weyl_step_preserver, discover_recurrence_proofs, is_trivially_real_rooted,
-    IteratedPreserverCertificate, IteratedPreserverCoordinates, LeftHandFactorNormalization,
-    RealRootednessTheorem, RealRootednessTheoremConclusion, RealRootednessTheoremOptions,
-    RealRootednessTheoremReport, RealRootednessTheoremStatus, RecurrenceProofDiscoveryReport,
-    RowInterlacing, WeylStepPreserverVerdict, ZeroResidueClasses, REAL_ROOTEDNESS_THEOREM_SCHEMA,
-    RECURRENCE_PROOF_DISCOVERY_SCHEMA,
+    check_product_recurrence_theorem, check_real_rootedness_theorem,
+    check_three_term_recurrence_theorem, check_weyl_step_preserver, discover_recurrence_proofs,
+    is_trivially_real_rooted, IteratedPreserverCertificate, IteratedPreserverCoordinates,
+    LeftHandFactorNormalization, RealRootednessTheorem, RealRootednessTheoremConclusion,
+    RealRootednessTheoremOptions, RealRootednessTheoremReport, RealRootednessTheoremStatus,
+    RecurrenceProofDiscoveryReport, RouteCertificate, RowInterlacing, WeylStepPreserverVerdict,
+    ZeroResidueClasses, REAL_ROOTEDNESS_THEOREM_SCHEMA, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
+use parent_theorems::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
 // RealRooted row routes `variableDelay` and `subseq`.
 pub use parent_theorems::{
     check_residue_class_subsequence_theorem, check_variable_delay_theorem, ResidueClassCertificate,

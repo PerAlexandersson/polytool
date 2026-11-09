@@ -352,7 +352,7 @@ impl FactorGaugeCertificate {
 /// real-rooted, with every root in `(-inf, 0)` or `(-inf, 0]` when that is
 /// certified; for a constant residual and a linear `q`, `P_(n-1)`
 /// interlaces `P_n` (weakly) for every `n >= N`.  The data are recorded in
-/// [`RealRootednessTheoremReport::factor_gauge`].  The induction start is
+/// [`RealRootednessTheoremReport::factor_gauge_certificate`].  The induction start is
 /// moved past the seeds as for the other theorems.
 ///
 /// # Errors
@@ -390,7 +390,7 @@ impl FactorGaugeCertificate {
 ///     check_factor_gauge_theorem(&rule, 0, &seeds, &RealRootednessTheoremOptions::default())
 ///         .unwrap();
 /// assert!(report.is_proved());
-/// let certificate = report.factor_gauge.as_ref().unwrap();
+/// let certificate = report.factor_gauge_certificate().unwrap();
 /// assert_eq!(certificate.residual_shape, FactorGaugeResidualShape::PalindromicQuartic);
 /// report.verify().unwrap();
 /// ```
@@ -400,7 +400,7 @@ pub fn check_factor_gauge_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::FactorGauge,
         rule,
         first_index,
@@ -957,7 +957,47 @@ fn palindromic_hypotheses(
 /// in `n` and condition.
 type PalindromicCondition<'a> = (&'static str, &'static str, &'a Vec<Q>, IndexSignCondition);
 
-pub(super) fn factor_gauge_report(
+/// The registry entry of the factor gauge ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::FactorGauge,
+    check_at_supplied_seeds: factor_gauge_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
+    certificate_name: Some("factor-gauge"),
+    discovery: DiscoveryPolicy::WhenApplicable,
+    in_residue_class_menu: false,
+    in_index_section_menu: false,
+    parent: ParentPolicy {
+        stage: ParentStage::WhileUnproved,
+        region: ParentRegion::OpenNonpositiveRayThenUnrestricted,
+        record_only_if_applicable: true,
+    },
+};
+
+/// Replay the certificate of a recomputed factor-gauge report: every
+/// identity of the certificate on the checked rule and the (possibly moved)
+/// seed rows ([`FactorGaugeCertificate::verify`]).
+pub(super) fn verify_certificate_in_report(
+    certificate: &FactorGaugeCertificate,
+    report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    let (rule, first_index, seeds) = report.recurrence.to_recurrence_parts()?;
+    let rule = match &report.left_hand_factor_normalization {
+        Some(normalization) => normalization.normalized_recurrence()?,
+        None => rule,
+    };
+    let seeds = if report.start_delay == 0 {
+        seeds
+    } else {
+        let generated = rule
+            .generate_rows_rational(&seeds, first_index, seeds.len() + report.start_delay)
+            .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
+        normalized_seed_rows(&rule, first_index, &generated)?
+    };
+    certificate.verify(&rule, first_index, &seeds)
+}
+
+fn factor_gauge_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],
@@ -1228,7 +1268,7 @@ pub(super) fn factor_gauge_report(
             .lean_declarations
             .push("RealRooted.eq_pow_mul_of_factoredThreeTerm".into());
     }
-    report.factor_gauge = Some(FactorGaugeCertificate {
+    report.certificate = Some(RouteCertificate::FactorGauge(FactorGaugeCertificate {
         gauge_factor: format_polynomial(&gauged.q),
         left_hand_factor: format_polynomial(&gauged.f),
         scalar_multipliers: gauged
@@ -1248,7 +1288,7 @@ pub(super) fn factor_gauge_report(
             .as_ref()
             .map(|c| c.iter().map(|pi| format_polynomial(pi)).collect()),
         dominant_root,
-    });
+    }));
 
     let mut statement = format!(
         "every P_n, n >= {first_index}, is nonzero and real-rooted: P_n = q^(n-{gauge_index}) g \
