@@ -116,7 +116,9 @@ pub use gamma_lift::{
     GammaParentSymmetryStatus, GAMMA_LIFTS_SCHEMA, GAMMA_LIFT_CERTIFICATION_SCHEMA,
     MAX_GAMMA_LIFT_CHECKED_ROWS, MAX_GAMMA_LIFT_INDEX_SHIFT, MAX_GAMMA_LIFT_OPERATOR_TERMS,
 };
+mod family_product;
 mod hadamard_factor;
+pub use family_product::*;
 pub use hadamard_factor::prepare::{prepare_lift_rule, PreparedLiftRule};
 pub use hadamard_factor::{
     find_hadamard_factor_lifts, HadamardAnnihilatorGenerator, HadamardAnnihilatorSystem,
