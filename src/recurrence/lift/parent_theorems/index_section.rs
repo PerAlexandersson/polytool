@@ -938,6 +938,10 @@ fn proves_every_row(report: &RealRootednessTheoremReport) -> bool {
             .residue_classes
             .as_ref()
             .is_none_or(|certificate| certificate.classes.iter().all(|class| !class.zero))
+        && report
+            .conclusion
+            .as_ref()
+            .is_some_and(|conclusion| !conclusion.has_zero_residue_classes())
 }
 
 /// The index-independent root region of a proved report, if any.
@@ -1277,6 +1281,7 @@ pub(super) fn index_section_report(
         interlacing: None,
         simple_roots: false,
         root_region: region.as_ref().map(RootInterval::from_real),
+        zero_residue_classes: None,
         statement,
     }))
 }

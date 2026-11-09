@@ -1261,6 +1261,7 @@ fn analyze(
     );
     report.finish(RealRootednessTheoremConclusion {
         first_index: conclusion_first,
+        zero_residue_classes: None,
         interlacing_from: identity.then_some(current_index),
         interlacing: identity.then_some(RowInterlacing::Weak),
         simple_roots: false,
@@ -1273,6 +1274,7 @@ fn analyze(
 fn placeholder_conclusion(first_index: usize) -> RealRootednessTheoremConclusion {
     RealRootednessTheoremConclusion {
         first_index,
+        zero_residue_classes: None,
         interlacing_from: None,
         interlacing: None,
         simple_roots: false,

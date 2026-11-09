@@ -813,18 +813,39 @@ impl ProofReport {
         &self.report.status
     }
 
-    /// Whether some theorem proved the conclusion (on the record, its tail
-    /// or a certified alternative representation).
+    /// Whether some theorem proved its conclusion (on the record, its tail
+    /// or a certified alternative representation).  A residue-class proof
+    /// may leave whole residue classes of zero rows: then
+    /// :attr:`real_rooted_from_index` is ``None`` and
+    /// :attr:`real_rooted_outside_zero_residue_classes` names them.
     #[getter]
     fn is_proved(&self) -> bool {
         self.first_proved_attempt().is_some()
     }
 
     /// The first index ``N`` with every row ``P_n``, ``n >= N``, proved
-    /// nonzero and real-rooted, or ``None``.
+    /// nonzero and real-rooted, or ``None`` (not proved, or proved only
+    /// outside residue classes of zero rows).
     #[getter]
     fn real_rooted_from_index(&self) -> Option<usize> {
         self.report.real_rooted_from_index
+    }
+
+    /// For a family proved only up to residue classes of zero rows, a
+    /// ``dict`` with ``from_index`` and ``zero_residue_classes``
+    /// (``period`` and ``residues`` of ``n`` modulo the period): every row
+    /// ``P_n``, ``n >= from_index``, in those classes is zero and every other
+    /// such row is nonzero and real-rooted.  ``None`` otherwise.
+    #[getter]
+    fn real_rooted_outside_zero_residue_classes<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        self.report
+            .real_rooted_outside_zero_residue_classes
+            .as_ref()
+            .map(|rows| serialize_to_python(py, rows))
+            .transpose()
     }
 
     /// The theorem of the first proved attempt (for example

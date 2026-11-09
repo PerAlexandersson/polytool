@@ -118,6 +118,31 @@ def test_prove_real_rooted_and_replay(legendre_record):
     assert "three_term_recurrence" in repr(report)
 
 
+def test_zero_residue_classes_are_reported():
+    # P_n = t^2 P_(n-2), P_0 = 1, P_1 = 0: every odd row is zero, so no
+    # index N has every later row nonzero and real-rooted.
+    record = {
+        "schema": "polytool.recurrence.v1",
+        "first_index": 0,
+        "initial_polynomials": [["1"], ["0"]],
+        "recurrence": {"terms": [{"offset": 2, "deriv_order": 0, "sign": "none",
+                                  "coeff": {"coeffs": [["0", "0", "1"]]}}]},
+    }
+    report = polytool.prove_real_rooted(record)
+    assert report.status == "proved" and report.is_proved
+    assert report.route == "residue_class_subsequences"
+    assert report.real_rooted_from_index is None
+    zero = {"period": 2, "residues": [1]}
+    assert report.real_rooted_outside_zero_residue_classes == {
+        "from_index": 0, "zero_residue_classes": zero}
+    assert report.certificate["conclusion"]["zero_residue_classes"] == zero
+    assert report.verify()
+    data = report.to_dict()
+    del data["attempts"][-1]["conclusion"]["zero_residue_classes"]
+    with pytest.raises(polytool.VerificationError):
+        polytool.ProofReport.from_json(data).verify()
+
+
 def test_not_proved_is_not_a_disproof():
     # P_n = (1 + t^2) P_(n-1): never real-rooted, so no theorem applies.
     record = {

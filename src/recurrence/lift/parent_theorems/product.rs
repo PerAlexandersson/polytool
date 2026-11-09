@@ -116,6 +116,7 @@ pub(super) fn product_report(
     );
     Ok(report.finish(RealRootednessTheoremConclusion {
         first_index,
+        zero_residue_classes: None,
         interlacing_from: None,
         interlacing: None,
         simple_roots: false,

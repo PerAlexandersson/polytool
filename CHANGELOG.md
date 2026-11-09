@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Soundness fix: residue-class proofs with zero classes.
+  `check_residue_class_subsequence_theorem` admits classes whose seed rows
+  are all zero (infinitely many zero rows, as for OEIS A003982, A132918 and
+  A286100), but its conclusion's `first_index` read as "every row from here
+  on is nonzero and real-rooted", and `recurrence-prove` reported
+  `real_rooted_from_index` for such families. The conclusion now records
+  the zero classes in the new optional field
+  `RealRootednessTheoremConclusion::zero_residue_classes`
+  (`ZeroResidueClasses { period, residues }`, residues of the index `n`;
+  helpers `has_zero_residue_classes` and
+  `proves_row_nonzero_and_real_rooted`), and the discovery report omits
+  `real_rooted_from_index` for a proof with zero classes and sets the new
+  `real_rooted_outside_zero_residue_classes` (`from_index` and the classes;
+  Python `ProofReport.real_rooted_outside_zero_residue_classes`, CLI text
+  line); the status stays `proved`. Both fields are omitted otherwise, so
+  every other report keeps its exact JSON; saved reports of the three
+  families above no longer replay. A rule whose classes are all zero is not
+  applicable. The parent provers keep route 8d for such parents, whose
+  statement already allows zero rows.
+- `recurrence-prove`, `recurrence-degree`, `recurrence-theorems` and
+  `recurrence-generate` read the record from standard input (or
+  `--input FILE`) when `--recurrence` is omitted, as
+  `recurrence-veronese-lifts` already did; the `recurrence-prove` help lists
+  the RealRooted row routes.
 - Index-section lift (RealRooted row route `pathPower`, the inverse of
   `subseq`). New theorem `recurrence::check_index_section_lift_theorem`
   (theorem `index_section_lift`, certificate

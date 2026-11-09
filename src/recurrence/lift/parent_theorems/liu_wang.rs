@@ -338,6 +338,7 @@ pub(super) fn liu_wang_report(
     let root_region = open_root_interval(&negative_axis);
     Ok(report.finish(RealRootednessTheoremConclusion {
         first_index,
+        zero_residue_classes: None,
         interlacing_from: Some(n_first),
         interlacing: Some(RowInterlacing::Weak),
         simple_roots: false,

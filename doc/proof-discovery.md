@@ -37,7 +37,7 @@ Neither fitting nor held-out checks prove that identity.
 | Iterated preserver | First-order or single-lag rules `P_n = a_n(x) S_n(P_(n-L))`: a real-rooted multiplier after the identity or a preserver of the menu (Laguerre, Pólya–Schur, Rolle, Euler step, Brändén's Weyl step), also in gauge, translation and reversal coordinates; earlier seed rows checked exactly | Real-rootedness with roots in `(-inf, 0]`, `[0, inf)` or on the line |
 | Hypergeometric row | Rows whose coefficient ratio is a product of factors linear in `k` (a row relation proved for every `n`), the image of `(1 + x)^M(n)` under nonnegative multiplier sequences | Real-rootedness with roots in `(-inf, 0]` |
 | Fixed-delay window (RealRooted `variableDelay`) | `f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)`, `L >= 2`; `A/f > 0`, `B/f >= 0` for every index, constant first row, seed rows as exact window steps | Nonnegative coefficients, roots in `(-inf, 0)`, `P_A << P_B` for `A <= B <= A + L` |
-| Residue classes (RealRooted `subseq`) | Every lag a multiple of `p >= 2`; each class `P_(first + j + p m)` proved by one of the rules above (zero classes allowed) | Zero (named) or real-rooted rows, hull of the class root regions; no interlacing of consecutive rows |
+| Residue classes (RealRooted `subseq`) | Every lag a multiple of `p >= 2`; each class `P_(first + j + p m)` proved by one of the rules above (zero classes allowed, but not only zero classes) | Zero or real-rooted rows: the zero classes are named in `conclusion.zero_residue_classes`, every other row is nonzero and real-rooted; hull of the class root regions; no interlacing of consecutive rows |
 | Index-section lift (RealRooted `pathPower`) | Multipliers depending on `x` only; `P_(first + s + m) = T(Q_(p m))` for every `m`, with `T` the identity or the reversal `x^(d m + e) P(1/x)`, `p <= 5`, `s` exceptional prefix rows, and a parent `Q` with a constant-coefficient rule found by factoring `chi_T(w^p)`: `Res_w(psi(w), z - w^p) = chi_T(z)` and polynomial parent seeds (an equal-order recurrence argument, nothing fitted); the parent proved by one of the rules above | Nonzero real-rooted rows; the parent region (identity) or its reciprocal image closed at `0` (reversal); no interlacing |
 
 The dispatcher tries the first eight, in the order of the parent cascade of
@@ -51,8 +51,27 @@ not find a proof; failure of a sufficient hypothesis is not a
 counterexample. Each attempt records its own starting index, interlacing
 range, root domain and unresolved obligations, and the RealRooted
 declarations of its route where they are recorded (`lean_route`,
-`lean_declarations`). `real_rooted_from_index` is the first index of the
-proved rows.
+`lean_declarations`). `real_rooted_from_index` is the first index `N` with
+every row `P_n`, `n >= N`, proved nonzero and real-rooted.
+
+**Zero residue classes.** A residue class whose seed rows are all zero is
+zero at every index (for example `P_n = x^2 P_(n-2)` with `P_0 = 1`,
+`P_1 = 0`: every odd row is zero; OEIS A003982, A132918 and A286100 have
+such a class). The residue-class conclusion then records
+`zero_residue_classes: {period, residues}` (residues of the index `n`
+modulo the period, not of its offset from the first index): every row
+`P_n`, `n >= conclusion.first_index`, with `n mod period` in `residues` is
+zero, and only the other rows from `conclusion.first_index` on are nonzero
+and real-rooted. Since no index has every later row nonzero, the
+discovery report then omits `real_rooted_from_index` and sets
+`real_rooted_outside_zero_residue_classes: {from_index,
+zero_residue_classes}`; the status stays `proved` (the attempt proves its
+stated conclusion) and the statement names the zero rows. A consumer that
+turns a report into the claim "real-rooted from index `N` on" must read
+`real_rooted_from_index`, or check
+`RealRootednessTheoremConclusion::has_zero_residue_classes` on an attempt.
+The field is omitted for every other conclusion, so their JSON is
+unchanged. A rule whose classes are all zero is not applicable.
 
 ## When no criterion proves the record
 
@@ -139,7 +158,8 @@ always replays. The six criteria of the first schema version must be
 recorded. The tail record is re-derived from the supplied record, every
 alternative's equality certificate and attempts are recomputed, and the
 summary fields (`status`, `real_rooted_from_index`,
-`trivially_real_rooted`, `statement`) must follow from the recorded
+`real_rooted_outside_zero_residue_classes`, `trivially_real_rooted`,
+`statement`) must follow from the recorded
 attempts alone, so a report never claims more than its attempts prove. A
 recomputation that tries or proves more is fine: reports saved before the
 iterated-preserver and hypergeometric-row criteria (or any later one) were

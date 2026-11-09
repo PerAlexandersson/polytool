@@ -168,6 +168,7 @@ pub(super) fn proportional_rows_report(
     report.hypotheses = hypotheses;
     let conclusion = RealRootednessTheoremConclusion {
         first_index: input.first_index,
+        zero_residue_classes: None,
         interlacing_from: interlacing.then_some(n0 - 1),
         interlacing: interlacing.then_some(RowInterlacing::Weak),
         simple_roots: false,

@@ -57,7 +57,8 @@
 //! - [`check_residue_class_subsequence_theorem`]: rules whose lags are all
 //!   multiples of `p >= 2` (the RealRooted route `subseq`), proved one
 //!   residue class `P_(n0 + j + p m)` at a time by the theorems above, each
-//!   class report kept as a sub-certificate;
+//!   class report kept as a sub-certificate; classes of zero seed rows are
+//!   zero and named in [`RealRootednessTheoremConclusion::zero_residue_classes`];
 //! - [`check_index_section_lift_theorem`]: rules with `x`-only multipliers
 //!   whose rows (possibly reversed) are every `p`-th row of a parent family
 //!   with a constant-coefficient rule (the RealRooted route `pathPower`), the
@@ -157,8 +158,9 @@ pub use discovery::{
 };
 pub use discovery::{
     discover_recurrence_proofs_with_options, AlternativeRepresentationOptions,
-    AlternativeRepresentationProof, AlternativeRepresentationSearch, RecurrenceProofTail,
-    DISCOVERY_THEOREMS, ROW_ROUTE_THEOREMS,
+    AlternativeRepresentationProof, AlternativeRepresentationSearch,
+    RealRootedOutsideZeroResidueClasses, RecurrenceProofTail, DISCOVERY_THEOREMS,
+    ROW_ROUTE_THEOREMS,
 };
 mod recurrence_equality;
 pub use recurrence_equality::{
@@ -295,17 +297,54 @@ impl Default for RealRootednessTheoremOptions {
 /// Default of [`RealRootednessTheoremOptions::maximum_start_delay`].
 const DEFAULT_MAXIMUM_START_DELAY: usize = 3;
 
+/// Residue classes of indices whose rows are all zero, in a
+/// [`RealRootednessTheoremConclusion`] of
+/// [`check_residue_class_subsequence_theorem`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ZeroResidueClasses {
+    /// The period `p >= 2` (the gcd of the lags of the rule).
+    pub period: usize,
+    /// The residues `r`, `0 <= r < period`, ascending and not every residue:
+    /// every row `P_n` with `n mod period = r` (the index `n` itself, not
+    /// its offset from the first index) and `n` at least the conclusion's
+    /// first index is zero.
+    pub residues: Vec<usize>,
+}
+
+impl ZeroResidueClasses {
+    /// Whether the index `n` lies in one of the zero classes.
+    pub fn contains(&self, n: usize) -> bool {
+        self.period > 0 && self.residues.contains(&(n % self.period))
+    }
+}
+
 /// What a proved theorem gives.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RealRootednessTheoremConclusion {
-    /// Every row `P_n` with `n >= first_index` is nonzero and real-rooted.
+    /// Every row `P_n` with `n >= first_index` is nonzero and real-rooted,
+    /// except the rows of [`Self::zero_residue_classes`] when that is
+    /// present (they are zero).
     /// This is the record's first index, except for
-    /// [`check_liu_wang_derivative_lag_theorem`] and
-    /// [`check_iterated_preserver_theorem`] when seed rows are zero: then it
-    /// is the index after the last zero seed row (the statement names the
-    /// zero rows).
+    /// [`check_liu_wang_derivative_lag_theorem`],
+    /// [`check_iterated_preserver_theorem`] and
+    /// [`check_residue_class_subsequence_theorem`] when seed rows are zero:
+    /// then it is the index after the last zero seed row (the statement
+    /// names the zero rows) outside the zero residue classes.
     pub first_index: usize,
+    /// Infinitely many zero rows: when present, every row `P_n`,
+    /// `n >= first_index`, whose index lies in these residue classes is zero,
+    /// and only every *other* row `P_n`, `n >= first_index`, is nonzero and
+    /// real-rooted (the root region and the simple roots below concern those
+    /// rows).  Only [`check_residue_class_subsequence_theorem`] concludes
+    /// this, for a class whose seed rows are all zero.  A consumer that reads
+    /// the conclusion as "every row from `first_index` on is nonzero" must
+    /// check [`Self::has_zero_residue_classes`] first.  Omitted when absent
+    /// (every row from `first_index` on is nonzero), so earlier reports keep
+    /// their exact JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zero_residue_classes: Option<ZeroResidueClasses>,
     /// First index `m` with `P_(m-1)` interlacing `P_m` (in the sense of
     /// `interlacing`) for every later index; `None` when not claimed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -329,6 +368,26 @@ pub struct RealRootednessTheoremConclusion {
     pub root_region: Option<RootInterval>,
     /// The conclusion in words.
     pub statement: String,
+}
+
+impl RealRootednessTheoremConclusion {
+    /// Whether the conclusion leaves infinitely many zero rows
+    /// ([`Self::zero_residue_classes`]); it then does not state that every
+    /// row from [`Self::first_index`] on is nonzero.
+    pub fn has_zero_residue_classes(&self) -> bool {
+        self.zero_residue_classes.is_some()
+    }
+
+    /// Whether the conclusion states that the row `P_n` is nonzero and
+    /// real-rooted: `n >= first_index` and `n` outside the zero residue
+    /// classes.
+    pub fn proves_row_nonzero_and_real_rooted(&self, n: usize) -> bool {
+        n >= self.first_index
+            && !self
+                .zero_residue_classes
+                .as_ref()
+                .is_some_and(|zero| zero.contains(n))
+    }
 }
 
 /// The result of [`check_three_term_recurrence_theorem`],

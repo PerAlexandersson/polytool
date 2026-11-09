@@ -1612,7 +1612,7 @@
     {
       "aliases": [],
       "deprecated_aliases": [],
-      "description": "Generate coefficient rows from recurrence JSON emitted by `polytool recurrence\n--json`. The input also accepts theorem wrappers and representation menus (pick\na menu entry with --candidate, 0-based). `--recurrence -` reads standard input.\n\nRow selection: --count N outputs N rows in total, including the initial rows;\n--additional-count N outputs the initial rows plus N generated rows. Use only\none of them. --first-index relabels the first row and shifts the rule\naccordingly (default: keep the JSON record's first_index).\n\nFormats: text (the default; `rows` is an alias) and json print the generated\nrows. The OEIS text formats read the rows from --from-index on as an OEIS\ntriangle, with the recurrence index n shifted to the OEIS row number, and show\n--count rows (default 10):\n  oeis-example   %e block \"Triangle begins:\" with aligned columns\n  oeis-formula   %F sentence: the recurrence in plain ASCII with its initial\n                 rows, e.g. P(n,x) = (2+x)*P(n-1,x) + ...\n  mathematica    %t program: memoized P[n_, x_] and the flattened rows\n  pari           %o PARI/GP program listing the same rows\n  oeis-json      all four as JSON (schema polytool.oeis-text.v1)\nWithout --first-term-index the first row keeps its own index as its OEIS row\nnumber.\n\nB-file output (--format bfile, alias b-file): the rows are flattened into OEIS\nb-file lines `index value`, coefficients in ascending powers within each row,\nand every coefficient must be an integer. A term cap never splits a row.",
+      "description": "Generate coefficient rows from recurrence JSON emitted by `polytool recurrence\n--json`. The input also accepts theorem wrappers and representation menus (pick\na menu entry with --candidate, 0-based). Without --recurrence (or with\n`--recurrence -`) the record is read from standard input, or from --input FILE.\n\nRow selection: --count N outputs N rows in total, including the initial rows;\n--additional-count N outputs the initial rows plus N generated rows. Use only\none of them. --first-index relabels the first row and shifts the rule\naccordingly (default: keep the JSON record's first_index).\n\nFormats: text (the default; `rows` is an alias) and json print the generated\nrows. The OEIS text formats read the rows from --from-index on as an OEIS\ntriangle, with the recurrence index n shifted to the OEIS row number, and show\n--count rows (default 10):\n  oeis-example   %e block \"Triangle begins:\" with aligned columns\n  oeis-formula   %F sentence: the recurrence in plain ASCII with its initial\n                 rows, e.g. P(n,x) = (2+x)*P(n-1,x) + ...\n  mathematica    %t program: memoized P[n_, x_] and the flattened rows\n  pari           %o PARI/GP program listing the same rows\n  oeis-json      all four as JSON (schema polytool.oeis-text.v1)\nWithout --first-term-index the first row keeps its own index as its OEIS row\nnumber.\n\nB-file output (--format bfile, alias b-file): the rows are flattened into OEIS\nb-file lines `index value`, coefficients in ascending powers within each row,\nand every coefficient must be an integer. A term cap never splits a row.",
       "details": "B-file and OEIS text options:\n  --trim-zeros     none keeps everything; low drops zeros at the constant end,\n                   high at the leading end, both at both ends of each row.\n  --regular-triangle  Row i (counted from the first) has exactly L0 + i entries,\n                   where L0 is the length of the first row: shorter rows are\n                   padded with high zeros and generation stops before a longer\n                   row.\n  --first-term-index, --from-index, --descending, --trim-zeros and\n                   --regular-triangle need --format bfile or an OEIS text format.\n  --max-terms and --nearest-row need --format bfile. Without --count or\n                   --additional-count, rows are generated until the cap is\n                   reached. --nearest-row stops at the whole row nearest to N\n                   terms (it may exceed N; ties go to fewer rows) instead of the\n                   longest prefix with at most N terms.",
       "examples": [
         "polytool recurrence --input rows.txt --json > recurrence.json",
@@ -1637,7 +1637,7 @@
           "default": null,
           "deprecated_aliases": [],
           "heading": "Options",
-          "help": "Read recurrence JSON from FILE, or stdin with -",
+          "help": "Read recurrence JSON from FILE (default -: stdin or --input FILE)",
           "hidden": false,
           "long": "--recurrence",
           "name": "recurrence",
@@ -1867,9 +1867,9 @@
       "subcommands": [],
       "summary": "Generate coefficient rows from recurrence JSON",
       "usage": [
-        "polytool recurrence-generate --recurrence <FILE|-> --count <N> [OPTIONS]",
-        "polytool recurrence-generate --recurrence <FILE|-> --additional-count <N> [OPTIONS]",
-        "polytool recurrence-generate --recurrence <FILE|-> --format bfile --max-terms <N> [OPTIONS]"
+        "polytool recurrence-generate [--recurrence <FILE|->] --count <N> [OPTIONS]",
+        "polytool recurrence-generate [--recurrence <FILE|->] --additional-count <N> [OPTIONS]",
+        "polytool recurrence-generate [--recurrence <FILE|->] --format bfile --max-terms <N> [OPTIONS]"
       ]
     },
     {
@@ -2007,7 +2007,7 @@
           "default": null,
           "deprecated_aliases": [],
           "heading": "Options",
-          "help": "Read recurrence JSON from FILE, or stdin with -",
+          "help": "Read recurrence JSON from FILE (default -: stdin or --input FILE)",
           "hidden": false,
           "long": "--recurrence",
           "name": "recurrence",
@@ -2122,15 +2122,15 @@
       "subcommands": [],
       "summary": "Degree law and leading-coefficient signs of a recurrence for all n",
       "usage": [
-        "polytool recurrence-degree --recurrence <FILE|-> [--candidate N] [--count N] [--max-period P]",
+        "polytool recurrence-degree [--recurrence <FILE|->] [--candidate N] [--count N] [--max-period P]",
         "polytool recurrence-degree --verify < certificate.json"
       ]
     },
     {
       "aliases": [],
       "deprecated_aliases": [],
-      "description": "Discover general proofs for a recurrence and seeds; no named-sequence lookup.\nTries, in the order of the parent cascade, product induction, Favard/three-term,\nLiu-Wang, derivative-lag, Ma-Wang interval, Liu-Wang three-term, iterated\npreserver and hypergeometric-row criteria, with exact all-index hypothesis\nchecks. Reports every attempt, its obligations and conclusion. A fit still needs\nan all-index identity for an independently defined family. Rust certificates can\nbe replayed; Lean replay is not attempted.\n\nIndex-section lift (recorded only when it applies): the rows, possibly\nreversed, are every p-th row (p <= 5) of a constant-coefficient parent found by\nfactoring, an identity for every index; the parent is proved by the criteria.\n\nWhen no criterion proves the record:\n  - tail: if one of the first rows is zero or not real-rooted, the criteria run\n    on the record starting after the last such row; a proof then says \"every\n    row from index N on is real-rooted\" (real_rooted_from_index);\n  - alternative representations: the recurrence finder's menu on generated rows\n    proposes other rules (first-order derivative rules with a factor f(n), lag\n    at most two); a rule is used only after an all-index equality certificate\n    (Ore-algebra division and invariant row annihilators, exact), then the\n    criteria run on it. --max-representation-candidates bounds each finder pass\n    (deterministic count; 0 disables the stage).\nA rule with an inhomogeneous term matches no criterion: status not_applicable.\n\nThe recurrence input is recurrence.v1 JSON, a theorem wrapper or a\nrepresentation menu; with a menu, --candidate is required unless it has one\nentry. --verify replays the recorded routes of a report from standard input\n(every attempt, the tail and every equality certificate) and takes no search\nflags.",
-      "details": "JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is\ntrue when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and\nproduct induction proves it. real_rooted_from_index is the first index of the\nproved rows; tail and alternative_representations hold the later stages, each\nalternative with its polytool.recurrence-equality.v1 certificate. Reports saved\nbefore a criterion was added still replay (attempts are additive).",
+      "description": "Discover general proofs for a recurrence and seeds; no named-sequence lookup.\nTries, in the order of the parent cascade, product induction, Favard/three-term,\nLiu-Wang, derivative-lag, Ma-Wang interval, Liu-Wang three-term, iterated\npreserver and hypergeometric-row criteria, then the RealRooted row routes\nfixed-delay window (variable_delay: f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)\nwith a delay L of at least 2) and residue classes (residue_class_subsequences:\nevery lag a multiple of a period p of at least 2, each class P_(first + j + p m)\nproved by a criterion above), the last two recorded only when the rule has their\nform; every hypothesis is checked exactly for all indices. Reports every attempt, its obligations and\nconclusion. A fit still needs\nan all-index identity for an independently defined family. Rust certificates can\nbe replayed; Lean replay is not attempted.\n\nWhen no criterion proves the record:\n  - tail: if one of the first rows is zero or not real-rooted, the criteria run\n    on the record starting after the last such row; a proof then says \"every\n    row from index N on is real-rooted\" (real_rooted_from_index);\n  - alternative representations: the recurrence finder's menu on generated rows\n    proposes other rules (first-order derivative rules with a factor f(n), lag\n    at most two); a rule is used only after an all-index equality certificate\n    (Ore-algebra division and invariant row annihilators, exact), then the\n    criteria run on it. --max-representation-candidates bounds each finder pass\n    (deterministic count; 0 disables the stage).\nA rule with an inhomogeneous term matches no criterion: status not_applicable.\n\nThe recurrence input is recurrence.v1 JSON, a theorem wrapper or a\nrepresentation menu; with a menu, --candidate is required unless it has one\nentry. --verify replays the recorded routes of a report from standard input\n(every attempt, the tail and every equality certificate) and takes no search\nflags.",
+      "details": "JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is\ntrue when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and\nproduct induction proves it. real_rooted_from_index is the first index N with\nevery row P_n, n >= N, proved nonzero and real-rooted. A residue-class proof\nmay leave whole residue classes of zero rows (conclusion.zero_residue_classes,\nresidues of n modulo the period); real_rooted_from_index is then omitted and\nreal_rooted_outside_zero_residue_classes gives from_index and the zero classes\n(status proved). tail and alternative_representations hold the later stages, each\nalternative with its polytool.recurrence-equality.v1 certificate. Reports saved\nbefore a criterion was added still replay (attempts are additive).",
       "examples": [
         "polytool recurrence --json < rows.txt | polytool recurrence-prove --recurrence - --json",
         "polytool recurrence-prove --recurrence rec.json --json > proof.json\npolytool recurrence-prove --verify < proof.json"
@@ -2156,7 +2156,7 @@
           "default": null,
           "deprecated_aliases": [],
           "heading": "Options",
-          "help": "Read recurrence JSON from FILE, or stdin with -",
+          "help": "Read recurrence JSON from FILE (default -: stdin or --input FILE)",
           "hidden": false,
           "long": "--recurrence",
           "name": "recurrence",
@@ -2269,7 +2269,7 @@
       "subcommands": [],
       "summary": "Discover and replay general recurrence proofs",
       "usage": [
-        "polytool recurrence-prove --recurrence <FILE|-> [--candidate N] [--max-start-delay N] [--max-representation-candidates N]",
+        "polytool recurrence-prove [--recurrence <FILE|->] [--candidate N] [--max-start-delay N] [--max-representation-candidates N]",
         "polytool recurrence-prove --verify < proof.json"
       ]
     },
@@ -2303,7 +2303,7 @@
           "default": null,
           "deprecated_aliases": [],
           "heading": "Options",
-          "help": "Read recurrence JSON from FILE, or stdin with -",
+          "help": "Read recurrence JSON from FILE (default -: stdin or --input FILE)",
           "hidden": false,
           "long": "--recurrence",
           "name": "recurrence",
@@ -2380,7 +2380,7 @@
       "subcommands": [],
       "summary": "Conditional interlacing theorem matches for recurrence JSON",
       "usage": [
-        "polytool recurrence-theorems --recurrence <FILE|-> [--candidate N] [--json]"
+        "polytool recurrence-theorems [--recurrence <FILE|->] [--candidate N] [--json]"
       ]
     },
     {

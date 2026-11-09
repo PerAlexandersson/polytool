@@ -258,8 +258,11 @@ fn catalog_families_are_proved_one_residue_class_at_a_time() {
 
 #[test]
 fn zero_classes_are_named_in_the_conclusion() {
-    // A132918: P_n = x^2 P_(n-2), P_1 = 0; the odd rows vanish.
+    // A132918: P_n = x^2 P_(n-2), P_0 = 1, P_1 = 0 (the catalog rule with
+    // first index 0); the odd rows vanish, so no index has every later row
+    // nonzero.
     let (rule, seeds, first) = catalog("A132918");
+    assert_eq!(first, 0);
     let report = check_residue_class_subsequence_theorem(&rule, first, &seeds, &options()).unwrap();
     assert!(report.is_proved());
     let certificate = report.residue_classes.as_ref().unwrap();
@@ -274,10 +277,131 @@ fn zero_classes_are_named_in_the_conclusion() {
         "{}",
         conclusion.statement
     );
+    // Class j = 1 is n = 0 + 1 + 2 m: the residue 1 of n modulo 2.
+    assert_eq!(
+        conclusion.zero_residue_classes,
+        Some(ZeroResidueClasses {
+            period: 2,
+            residues: vec![1]
+        })
+    );
+    assert!(conclusion.has_zero_residue_classes());
+    assert_eq!(conclusion.first_index, 0);
+    assert!(conclusion.proves_row_nonzero_and_real_rooted(4));
+    assert!(!conclusion.proves_row_nonzero_and_real_rooted(3));
+    // Relabelled to start at index 1 (P_1 = 1, P_2 = 0), the residues are
+    // those of the index itself: the even rows vanish.
+    let shifted = RecurrenceJson::from_recurrence_rational(&rule, first, &seeds, None)
+        .reindexed(1)
+        .unwrap();
+    let (shifted_rule, shifted_first, shifted_seeds) = shifted.to_recurrence_parts().unwrap();
+    let shifted = check_residue_class_subsequence_theorem(
+        &shifted_rule,
+        shifted_first,
+        &shifted_seeds,
+        &options(),
+    )
+    .unwrap();
+    let shifted_conclusion = shifted.conclusion.as_ref().unwrap();
+    assert_eq!(
+        shifted_conclusion
+            .zero_residue_classes
+            .as_ref()
+            .unwrap()
+            .residues,
+        vec![0]
+    );
+    assert!(shifted_conclusion.proves_row_nonzero_and_real_rooted(3));
+    assert!(!shifted_conclusion.proves_row_nonzero_and_real_rooted(4));
+    assert!(!shifted_conclusion.proves_row_nonzero_and_real_rooted(0));
     assert!(report
         .lean_declarations
         .contains(&"RealRooted.eq_zero_of_product_rec".to_string()));
     assert!(conclusion.interlacing.is_none());
+    report.verify().unwrap();
+
+    // The zero classes cannot be dropped or moved.
+    assert!(tampered(&report, |v| {
+        v["conclusion"]
+            .as_object_mut()
+            .unwrap()
+            .remove("zero_residue_classes");
+    }));
+    assert!(tampered(&report, |v| {
+        v["conclusion"]["zero_residue_classes"]["residues"] = serde_json::json!([0]);
+    }));
+    assert!(tampered(&report, |v| {
+        v["conclusion"]["zero_residue_classes"] = serde_json::Value::Null;
+    }));
+}
+
+/// The catalog families of the row routes whose residue-class proof has a
+/// zero class, with the residues of `n` modulo 2 of their zero rows.
+const ZERO_CLASS_IDS: [(&str, usize); 3] = [("A003982", 1), ("A132918", 1), ("A286100", 1)];
+
+#[test]
+fn zero_classes_are_exactly_the_zero_rows() {
+    for id in NEWLY_PROVED {
+        let (rule, seeds, first) = catalog(id);
+        let report =
+            check_residue_class_subsequence_theorem(&rule, first, &seeds, &options()).unwrap();
+        let expected = ZERO_CLASS_IDS
+            .iter()
+            .find(|(zero_id, _)| *zero_id == id)
+            .map(|&(_, residue)| ZeroResidueClasses {
+                period: 2,
+                residues: vec![residue],
+            });
+        let Some(conclusion) = report.conclusion.as_ref() else {
+            assert!(expected.is_none(), "{id}");
+            continue;
+        };
+        assert_eq!(conclusion.zero_residue_classes, expected, "{id}");
+        // Without zero classes the JSON has no such key (earlier reports
+        // keep their exact serialization).
+        let json = serde_json::to_string(&report).unwrap();
+        assert_eq!(
+            json.contains("zero_residue_classes"),
+            expected.is_some(),
+            "{id}"
+        );
+        let generated = rule.generate_rows_rational(&seeds, first, 24).unwrap();
+        for (offset, row) in generated.iter().enumerate() {
+            let n = first + offset;
+            let zero = polytool::vec_poly::is_zero(&polytool::vec_poly::trim(row));
+            if conclusion.proves_row_nonzero_and_real_rooted(n) {
+                assert!(!zero, "{id}: P_{n}");
+                assert!(
+                    polytool::is_real_rooted_bigint_coeffs(&integer(row)),
+                    "{id}"
+                );
+            }
+            if n >= conclusion.first_index
+                && conclusion
+                    .zero_residue_classes
+                    .as_ref()
+                    .is_some_and(|classes| classes.contains(n))
+            {
+                assert!(zero, "{id}: P_{n} lies in a zero class");
+            }
+        }
+    }
+}
+
+#[test]
+fn only_zero_classes_are_not_applicable() {
+    // P_n = x^2 P_(n-2) with P_0 = P_1 = 0: every row is zero.
+    let rule = Recurrence {
+        terms: vec![RecurrenceTerm::new(2, 0, b(&[&[0, 0, 1]]))],
+        denominator: None,
+        inhomogeneous: None,
+    };
+    let report =
+        check_residue_class_subsequence_theorem(&rule, 0, &rows(&[&[0], &[0]]), &options())
+            .unwrap();
+    assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
+    assert!(report.conclusion.is_none() && report.hypotheses.is_empty());
+    report.verify().unwrap();
 }
 
 #[test]
@@ -375,6 +499,41 @@ fn discovery_records_the_row_routes_only_where_they_apply() {
         assert!(attempt.is_proved());
         report.verify().unwrap();
     }
+    // A residue-class proof with a zero class: no index has every later row
+    // nonzero, so `real_rooted_from_index` is omitted and the zero classes
+    // are reported.
+    for (id, residue) in ZERO_CLASS_IDS {
+        let record = record(id);
+        let report = discover_recurrence_proofs(&record, &options).unwrap();
+        assert_eq!(report.status, "proved", "{id}");
+        assert_eq!(report.real_rooted_from_index, None, "{id}");
+        let rows = report
+            .real_rooted_outside_zero_residue_classes
+            .as_ref()
+            .unwrap();
+        assert_eq!(rows.from_index, record.first_index, "{id}");
+        assert_eq!(rows.zero_residue_classes.residues, vec![residue], "{id}");
+        assert!(
+            report.statement.contains("infinitely many zero rows"),
+            "{id}"
+        );
+        assert!(report.tail.is_none() && report.alternative_representations.is_none());
+        report.verify().unwrap();
+        // A summary that hides the zero classes is rejected, and so is an
+        // attempt whose conclusion drops them.
+        let mut hidden = report.clone();
+        hidden.real_rooted_from_index = Some(record.first_index);
+        hidden.real_rooted_outside_zero_residue_classes = None;
+        assert!(hidden.verify().is_err(), "{id}");
+        let mut dropped = report.clone();
+        let attempt = dropped.attempts.iter_mut().find(|a| a.is_proved()).unwrap();
+        attempt.conclusion.as_mut().unwrap().zero_residue_classes = None;
+        assert!(dropped.verify().is_err(), "{id}");
+    }
+    // Without zero classes the summary is unchanged.
+    let report = discover_recurrence_proofs(&record("A099605"), &options).unwrap();
+    assert_eq!(report.real_rooted_from_index, Some(0));
+    assert!(report.real_rooted_outside_zero_residue_classes.is_none());
     // Eulerian rows (first order, lag 1): neither route applies.
     let report = discover_recurrence_proofs(&record("A008292"), &options).unwrap();
     assert_eq!(report.attempts.len(), DISCOVERY_THEOREMS.len());
@@ -400,7 +559,7 @@ fn parent_provers_use_the_row_routes_for_open_parents() {
     let interlacing = proof.interlacing.as_ref().unwrap();
     assert_eq!(interlacing.kind, RowInterlacing::Weak);
 
-    for id in ["A211956", "A171608", "A132918"] {
+    for id in ["A211956", "A171608", "A132918", "A003982", "A286100"] {
         let proof = parent(id);
         assert_eq!(proof.status, VeroneseParentProofStatus::Proved, "{id}");
         assert_eq!(
@@ -409,6 +568,18 @@ fn parent_provers_use_the_row_routes_for_open_parents() {
             "{id}"
         );
         assert!(proof.interlacing.is_none());
+        // The parent statement allows zero rows, so route 8d accepts zero
+        // residue classes; its detail names them.
+        assert!(proof.statement.contains("is zero or real-rooted"), "{id}");
+        let attempt = proof.attempts.last().unwrap();
+        assert!(attempt.success);
+        let zero_class = ZERO_CLASS_IDS.iter().any(|(zero_id, _)| *zero_id == id);
+        assert_eq!(
+            attempt.detail.contains("residue classes j = [1]"),
+            zero_class,
+            "{id}: {}",
+            attempt.detail
+        );
     }
     // A parent proved by an earlier route records no row-route attempt.
     let proof = parent("A008292");
