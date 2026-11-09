@@ -31,6 +31,14 @@
 
 ### Added and changed
 
+- Added 59 recurrence-backed OEIS families, with exact local OEIS term checks,
+  held-out recurrence checks and 50 dated Lean proof flags (upstream proof
+  files without `sorry`; entries whose rows differ from the upstream
+  definition stay unflagged). The catalog now contains 919 entries; existing
+  definitions and discovery fingerprints are unchanged, and eleven parent-proof
+  fingerprints change only in the diagnostic text of a failed attestation.
+  See [the source and validation notes](doc/oeis-catalog-additions-2026-11.md).
+
 - Route registry for the real-rootedness theorems: every theorem route is
   declared once (its check, start policy, discovery policy, menu membership
   and parent-cascade policy) and the dispatch, the discovery search, the

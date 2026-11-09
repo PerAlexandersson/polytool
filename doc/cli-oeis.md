@@ -58,14 +58,18 @@ The `source` field records where the recurrence came from:
 | `benchmark_fixture` | 73 | `polytool recurrence --json` on `fixtures/recurrence-benchmarks` (held-out verified); also records `fixture_slug` |
 | `lean_definition` | 630 | Fitted by an earlier version of the polytool recurrence search and transcribed into generated Lean definitions; validated against the OEIS data prefix (16 rows); records the last compared row as `validation_row` |
 | `curated_queue` | 71 | Fitted by recurrence search on database-cached rows; `verified` when checked on held-out rows |
-| `polytool_recurrence_search` | new | `polytool oeis add` (below); records `fit_rows`, `checked_terms`, `search_options` and the polytool version |
-| `supplied_recurrence` | 43 | `polytool oeis add --recurrence-json` (below): a supplied recurrence, validated against every OEIS term of the snapshot; records `checked_terms`, `terms_source`, the last compared row and the polytool version |
+| `polytool_recurrence_search` | 54 | `polytool oeis add` (below); records `fit_rows`, `checked_terms`, `search_options` and the polytool version |
+| `supplied_recurrence` | 91 | `polytool oeis add --recurrence-json` (below): a supplied recurrence, validated against every OEIS term of the snapshot; records `checked_terms`, `terms_source`, the last compared row and the polytool version |
 
 The first three tiers were produced by an earlier offline generator, which
 combined the benchmark fixtures, a curated recurrence queue, and generated
 Lean definitions with a local OEIS copy; its output was migrated to the data
 file unchanged (a test compares every entry's definition and first 20 rows
 with fingerprints captured before the migration).
+
+The catalog contains 919 entries. The [November 2026 additions](oeis-catalog-additions-2026-11.md)
+record the source revision, validation and conservative proof flags for 59
+additional families.
 
 To add sequences, run from the source directory with a local copy of the OEIS
 in its internal format (`seq/A123/A123456.seq` files):
@@ -144,7 +148,7 @@ JSON of `oeis info` and `oeis list --json` reports it as `real_rootedness`
 (`null` when unknown), and the Veronese parent provers use a `lean_proved`
 entry only as an attestation (verdict `conditional_on_attestation`, label
 `oeis_catalog:<A-number>:lean_proved`), see the library documentation.  The
-bundled catalog flags 753 entries `lean_proved` and one (A122431, whose row
+bundled catalog flags 795 entries `lean_proved` and one (A122431, whose row
 `3 + 3x + x^2` is not real-rooted) `known_not_real_rooted`.  A replaced entry
 (`oeis add --replace`) loses its flag, because the flag certifies the rows of
 the recurrence it was established for.

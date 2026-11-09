@@ -921,20 +921,20 @@ mod tests {
 
     #[test]
     fn catalog_is_sorted_unique_and_decodable() {
-        assert_eq!(catalog().len(), 860);
+        assert_eq!(catalog().len(), 919);
         assert_eq!(
             catalog()
                 .iter()
                 .filter(|entry| entry.status == OeisSequenceStatus::Verified)
                 .count(),
-            125
+            179
         );
         assert_eq!(
             catalog()
                 .iter()
                 .filter(|entry| entry.status == OeisSequenceStatus::Validated)
                 .count(),
-            735
+            740
         );
         assert_eq!(
             catalog()
@@ -998,7 +998,7 @@ mod tests {
         assert_eq!(count(OeisProvenanceSource::BenchmarkFixture), 73);
         assert_eq!(count(OeisProvenanceSource::LeanDefinition), 630);
         assert_eq!(count(OeisProvenanceSource::CuratedQueue), 71);
-        assert_eq!(count(OeisProvenanceSource::SuppliedRecurrence), 86);
+        assert_eq!(count(OeisProvenanceSource::SuppliedRecurrence), 91);
         for record in &records {
             let provenance = &record.provenance;
             match provenance.source {
@@ -1164,7 +1164,7 @@ mod tests {
                 .filter(|(_, flag)| flag.status == status)
                 .count()
         };
-        assert_eq!(count(OeisRealRootednessStatus::LeanProved), 753);
+        assert_eq!(count(OeisRealRootednessStatus::LeanProved), 803);
         assert_eq!(count(OeisRealRootednessStatus::KnownNotRealRooted), 1);
         for (entry, flag) in &flagged {
             assert_eq!(entry.real_rootedness(), Some(*flag));
