@@ -63,7 +63,13 @@
 //!   whose rows (possibly reversed) are every `p`-th row of a parent family
 //!   with a constant-coefficient rule (the RealRooted route `pathPower`), the
 //!   section identity certified for every index and the parent proved by the
-//!   theorems above, its report kept as a sub-certificate.
+//!   theorems above, its report kept as a sub-certificate;
+//! - [`check_factor_gauge_theorem`]: rules `f(n) P_n = sum_j kappa_j(n)
+//!   q(x)^j P_(n-j)` with one fixed factor `q` (the RealRooted routes
+//!   `powerForm`, `closedForm` and `factorPower`): `P_n = q^(n-e) g S_n`
+//!   with `S_n` in the fixed span of the gauged seed rows, real-rooted by
+//!   its degree, a discriminant or the palindromic-quartic criterion, each
+//!   decided for every index when the coordinates are polynomial in `n`.
 //!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
@@ -181,7 +187,13 @@ mod residue_class;
 mod variable_delay;
 // Index-section lift (RealRooted `pathPower`).
 mod index_section;
+// Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`).
+mod factor_gauge;
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
+pub use factor_gauge::{
+    check_factor_gauge_theorem, FactorGaugeCertificate, FactorGaugeDominantRoot,
+    FactorGaugeResidualShape,
+};
 pub use hypergeometric_row::check_hypergeometric_row_theorem;
 pub use index_section::{
     check_index_section_lift_theorem, IndexSectionCertificate, IndexSectionTransform,
@@ -240,6 +252,9 @@ pub enum RealRootednessTheorem {
     ResidueClassSubsequences,
     /// [`check_index_section_lift_theorem`] (RealRooted route `pathPower`).
     IndexSectionLift,
+    /// [`check_factor_gauge_theorem`] (RealRooted routes `powerForm`,
+    /// `closedForm`, `factorPower`).
+    FactorGauge,
 }
 
 /// Outcome of a theorem check.
@@ -485,6 +500,13 @@ pub struct RealRootednessTheoremReport {
     /// theorems and when no section identity is found.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub index_section: Option<IndexSectionCertificate>,
+    /// For [`check_factor_gauge_theorem`]: the gauge factor, the scalar
+    /// multipliers, the common factor, the residual window and its
+    /// coefficient polynomials, replayed by
+    /// [`RealRootednessTheoremReport::verify`].  Omitted for the other
+    /// theorems and when the rule does not have the theorem's form.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub factor_gauge: Option<FactorGaugeCertificate>,
 }
 
 impl RealRootednessTheoremReport {
@@ -516,6 +538,7 @@ impl RealRootednessTheoremReport {
             variable_delay: None,
             residue_classes: None,
             index_section: None,
+            factor_gauge: None,
         }
     }
 
@@ -537,6 +560,7 @@ impl RealRootednessTheoremReport {
         self.variable_delay = None;
         self.residue_classes = None;
         self.index_section = None;
+        self.factor_gauge = None;
         self
     }
 
@@ -769,6 +793,33 @@ impl RealRootednessTheoremReport {
             }
             (None, _) => {}
         }
+        // Factor gauge: every identity of the certificate is replayed on the
+        // checked rule and the (possibly moved) seed rows.
+        match (&self.factor_gauge, self.theorem) {
+            (Some(certificate), RealRootednessTheorem::FactorGauge) => {
+                let (rule, first_index, seeds) = self.recurrence.to_recurrence_parts()?;
+                let rule = match &self.left_hand_factor_normalization {
+                    Some(normalization) => normalization.normalized_recurrence()?,
+                    None => rule,
+                };
+                let seeds = if self.start_delay == 0 {
+                    seeds
+                } else {
+                    let generated = rule
+                        .generate_rows_rational(&seeds, first_index, seeds.len() + self.start_delay)
+                        .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
+                    normalized_seed_rows(&rule, first_index, &generated)?
+                };
+                certificate.verify(&rule, first_index, &seeds)?;
+            }
+            (None, RealRootednessTheorem::FactorGauge) if self.is_proved() => {
+                return mismatch("a proved factor-gauge report needs its certificate");
+            }
+            (Some(_), _) => {
+                return mismatch("a factor-gauge certificate on a report of another theorem");
+            }
+            (None, _) => {}
+        }
         Ok(())
     }
 }
@@ -822,6 +873,9 @@ fn check_at_supplied_seeds(
         }
         RealRootednessTheorem::IndexSectionLift => {
             index_section::index_section_report(rule, first_index, seeds, options)
+        }
+        RealRootednessTheorem::FactorGauge => {
+            factor_gauge::factor_gauge_report(rule, first_index, seeds, options)
         }
     }
 }

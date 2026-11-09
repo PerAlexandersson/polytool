@@ -497,6 +497,12 @@ Index-section lift (recorded only when it applies): the rows, possibly
 reversed, are every p-th row (p <= 5) of a constant-coefficient parent found by
 factoring, an identity for every index; the parent is proved by the criteria.
 
+Factor gauge (recorded only when it applies): every lag-j multiplier is
+kappa_j(n) q(x)^j for one fixed q, so P_n = q^(n-e) g S_n with S_n in the span
+of the gauged seed rows; S_n is real-rooted for every n by its degree (<= 1),
+a discriminant (degree 2 or 3) or the palindromic-quartic test (u = x + 1/x),
+signs of polynomials in n decided exactly.
+
 When no criterion proves the record:
   - tail: if one of the first rows is zero or not real-rooted, the criteria run
     on the record starting after the last such row; a proof then says "every

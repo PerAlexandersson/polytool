@@ -751,3 +751,9 @@ The index-section lift (theorem `index_section_lift`) is recorded only when the
 rows, possibly reversed, are every `p`-th row (`p <= 5`) of a
 constant-coefficient parent found by factoring; its `index_section` certificate
 holds the period, the transform, the parent record and the parent's proof.
+
+The factor gauge (theorem `factor_gauge`) is recorded only when every lag-`j`
+multiplier is `kappa_j(n) q(x)^j` for one fixed `q` and the residual shape is
+decided; its `factor_gauge` certificate holds `q`, the scalar multipliers, the
+common factor, the residual window and its coefficient polynomials (and the
+dominant root that proves the rows nonzero, when used).

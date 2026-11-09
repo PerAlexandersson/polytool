@@ -747,8 +747,9 @@ in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 `recurrence::check_iterated_preserver_theorem`,
 `recurrence::check_hypergeometric_row_theorem`,
 `recurrence::check_variable_delay_theorem`,
-`recurrence::check_residue_class_subsequence_theorem` and
-`recurrence::check_index_section_lift_theorem` apply a paper theorem to a
+`recurrence::check_residue_class_subsequence_theorem`,
+`recurrence::check_index_section_lift_theorem` and
+`recurrence::check_factor_gauge_theorem` apply a paper theorem to a
 family given by a rule, a first index and seed rows (the rule applies from
 `first_index + seeds.len()` on), and check every hypothesis exactly for all
 indices.  The result (`RealRootednessTheoremReport`,
@@ -955,6 +956,54 @@ region).  `verify()` replays it.
   fixes the parent (path-power clique polynomials), polytool takes any
   parent proved here.  The lift is also parent route 8e of the Veronese
   parent provers (`VeroneseParentProofRoute::IndexSectionLift`), for a
+  parent the earlier routes leave open.
+- Factor gauge with a bounded residual (RealRooted row routes `powerForm`,
+  `closedForm` and `factorPower`): for a rule
+  `f(n) P_n = sum_j kappa_j(n) q(x)^j P_(n-j)` of order `L >= 2` (no
+  derivative), with one monic `q` (the exact `j_0`-th root of the lag-`j_0`
+  multiplier, checked against every lag; a constant `q` is allowed), put
+  `e = N - 1` (the last seed row), `g` the gcd of the gauged window
+  `q^(e-m) P_m`, `m = e - L + 1, ..., e`, and `T_m = q^(e-m) P_m / g`.  Then
+  `P_n = q^(n-e) g S_n` for every `n >= e`, where `S_n = T_n` on the window
+  and `f(n) S_n = sum_j kappa_j(n) S_(n-j)` after it (multiply out: the
+  powers of `q` match), so `S_n` stays in the span `W` of the window and
+  its coefficients are scalar sequences with that scalar recurrence.  The
+  real-rootedness of `S_n` for every `n >= N` is decided from the shape of
+  `W` (`FactorGaugeResidualShape`): degree at most one (always); degree two,
+  `B^2 - 4AC >= 0`; degree three, the formal discriminant
+  `18abcd - 4b^3 d + b^2 c^2 - 4ac^3 - 27a^2 d^2 >= 0` (it is
+  `b^2 (c^2 - 4bd)` when `a = 0`, so it also covers degree drops);
+  palindromic quartics `a x^4 + b x^3 + c x^2 + b x + a` with `a` of one
+  strict sign, through `u = x + 1/x` and `h(u) = a u^2 + b u + (c - 2a)`:
+  both roots of `h` at most `-2` (`b >= 4a`, `h(-2) >= 0`, discriminant
+  `>= 0`, RealRooted `splits_palindromic_quartic`), both at least `2` (the
+  mirror), or `h(2) <= 0` and `h(-2) <= 0`.  For degree two and more the
+  coefficients of `S_n` must be polynomials `pi_k(n)`: the interpolant
+  through computed values is accepted only when it satisfies the scalar
+  recurrence identically and agrees with the window (an identity for every
+  index; for constant multipliers this is the case of characteristic roots
+  all `1`), and the conditions are signs of polynomials in `n` decided by
+  `decide_index_rational_function_sign`; otherwise the theorem is
+  `not_applicable`.  `S_n != 0` for every `n >= N` comes from the top
+  coefficient polynomial, from a coefficient `sum_i c_i lambda_i^n` of a
+  constant scalar recurrence with distinct rational characteristic roots
+  whose first root strictly dominates from an index `n*` on (exact
+  threshold, the values before it checked; `FactorGaugeDominantRoot`), or
+  from the shared leading-coefficient certificate.  `q`, `g` and every seed
+  row are checked exactly.  It proves every row nonzero and real-rooted;
+  the region `(-inf, 0)` (or `(-inf, 0]`) is claimed only when `q`, `g`,
+  the seeds and every coefficient of `S_n` (decided signs) have one sign,
+  and weak interlacing of consecutive rows only for a constant residual and
+  a linear `q` (`P_n = (s(n)/s(n-1)) q P_(n-1)`).  The data are kept in
+  `RealRootednessTheoremReport::factor_gauge` (`FactorGaugeCertificate`;
+  `FactorGaugeCertificate::verify` replays the rule factorization, the
+  window identities, the shape, the coefficient identities and the
+  dominant-root inequality).  OEIS A124376, A157169 and A157171
+  (palindromic quartic residual after `(1+x)^(n-4)`), A110200 (linear
+  residual, nonzero by the dominant root `4`), A133109 (monomial rows
+  `c_n x^(n-1)`), A141611 and A128541 are proved this way, as are A106246,
+  A124932, A125092, A128540, A127647 and the tail of A332496.  The gauge is
+  also parent route 8f (`VeroneseParentProofRoute::FactorGauge`), for a
   parent the earlier routes leave open.
 
 When a theorem fails at the supplied seeds, the checks retry with the
