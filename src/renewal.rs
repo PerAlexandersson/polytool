@@ -29,7 +29,6 @@ use crate::recurrence::{
     BivarPoly, ParseRationalError, Recurrence, RecurrenceError, RecurrenceSign,
 };
 use num_bigint::BigInt;
-use num_integer::Integer;
 use num_rational::BigRational;
 use num_traits::{One, Signed, Zero};
 use std::collections::BTreeMap;
@@ -313,11 +312,7 @@ impl WeightedRenewal {
         if seed.first() != Some(&BigRational::one()) || seed.iter().any(Signed::is_negative) {
             return Err(RenewalError::InvalidSeed);
         }
-        let scale = seed.iter().fold(BigInt::one(), |a, b| a.lcm(b.denom()));
-        let integers: Vec<_> = seed
-            .iter()
-            .map(|c| c.numer() * (&scale / c.denom()))
-            .collect();
+        let integers = crate::vec_poly::clear_denominators(&seed);
         if !is_real_rooted_bigint_coeffs(&integers) {
             return Err(RenewalError::SeedNotRealRooted);
         }

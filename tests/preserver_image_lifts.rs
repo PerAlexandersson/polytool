@@ -42,9 +42,8 @@ const EULERIAN_PLUS_DERIVATIVE: &str = r#"
 "-1/2","1/2","1/2","-1/2"],["0","0","0","0","0"],["0","0","0","0","0"]]}}]}}
 "#;
 
-fn q(value: i64) -> Q {
-    Q::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn rational_rows(rows: &[Vec<BigInt>]) -> Vec<Vec<Q>> {
     rows.iter()

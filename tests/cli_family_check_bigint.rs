@@ -4,32 +4,9 @@
 use num_bigint::BigInt;
 use polytool::recurrence::{find_recurrence_adaptive, AdaptiveSearchOptions};
 use serde_json::Value;
-use std::io::Write;
-use std::process::{Command, Output, Stdio};
 
-fn run_polytool(args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn polytool");
-    // The CLI may exit on an argument error before reading its input.
-    if let Err(error) = child
-        .stdin
-        .take()
-        .expect("polytool stdin")
-        .write_all(input.as_bytes())
-    {
-        assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
-    }
-    child.wait_with_output().expect("wait for polytool")
-}
-
-fn json(output: &Output) -> Value {
-    serde_json::from_slice(&output.stdout).expect("stdout is JSON")
-}
+mod common;
+use common::{json, run_polytool};
 
 /// Rows `(1 + scale x)^n` for `n = 0..=last`, as comma-separated lines and as
 /// `BigInt` coefficient vectors.

@@ -15,9 +15,8 @@ use polytool::recurrence::{
     VeroneseParentProofRoute, VeroneseParentProofStatus, WeylStepPreserverVerdict,
 };
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn row(values: &[i64]) -> Vec<BigRational> {
     values.iter().map(|&v| q(v)).collect()

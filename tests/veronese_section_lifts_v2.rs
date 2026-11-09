@@ -2,7 +2,6 @@
 //! certificates for index-dependent and gauged inputs, the parent provers,
 //! near misses, budgets and certificate replay.
 
-use num_bigint::BigInt;
 use polytool::recurrence::{
     certify_veronese_section_lift, find_veronese_section_lifts, BigRational, BivarPoly,
     LiftParentProof, LiftVerdict, Recurrence, RecurrenceError, RecurrenceJson, RecurrenceTerm,
@@ -12,9 +11,8 @@ use polytool::recurrence::{
     VeroneseSectionRecurrenceOptions, VeroneseSectionVerdict,
 };
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn row(values: &[i64]) -> Vec<BigRational> {
     values.iter().map(|&value| q(value)).collect()

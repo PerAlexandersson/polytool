@@ -12,9 +12,8 @@ use polytool::factorization::{
 
 type Q = BigRational;
 
-fn q(value: i64) -> Q {
-    Q::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn trim(mut polynomial: Vec<Q>) -> Vec<Q> {
     while polynomial.last().is_some_and(Zero::is_zero) {

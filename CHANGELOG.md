@@ -36,6 +36,17 @@
   `RowFactorDivisionCertificate`). Proves A008518. Existing certificates and
   reports serialize unchanged.
 
+- Behaviour-preserving refactoring (no output changes). New public API:
+  `vec_poly::clear_denominators` and `vec_poly::clear_denominators_with_scale`
+  (integer coefficients of `lcm(denominators) * p`, with the scale), replacing
+  about a dozen private copies; `oeis::parse_oeis_internal_format` and
+  `oeis::parse_bfile` (with `OeisSourceRecord`, `OeisTermsSource`,
+  `ParsedBFile` and the typed `OeisSourceError`), promoted from the CLI, which
+  keeps its messages. Deprecated, as unused: `OeisRecurrencePresentation::displayed_recurrence`
+  and `LeadingCoefficientCertificate::degree_steps_from`. New evidence gate
+  `tests/discovery_fingerprints.rs` (fingerprints of the discovery report and
+  the parent proof of every bundled catalog family; the full sweep is
+  `#[ignore]`d) and shared integration-test helpers in `tests/common/`.
 - Factor gauge with a bounded residual (RealRooted row routes `powerForm`,
   `closedForm` and `factorPower`). New theorem
   `recurrence::check_factor_gauge_theorem` (theorem `factor_gauge`,

@@ -3,9 +3,9 @@
 use polytool::real_rootedness::RealInterval;
 use polytool::recurrence::*;
 
-fn q(n: i64) -> BigRational {
-    BigRational::from_integer(n.into())
-}
+mod common;
+use common::q;
+
 fn b(rows: &[&[i64]]) -> BivarPoly {
     BivarPoly::from_coefficients_normalized(
         rows.iter()

@@ -5,9 +5,8 @@
 
 use polytool::recurrence::*;
 
-fn q(n: i64) -> BigRational {
-    BigRational::from_integer(n.into())
-}
+mod common;
+use common::q;
 
 /// The bundled catalog entry as the record `polytool oeis info --json`
 /// prints (`recurrence_data`).

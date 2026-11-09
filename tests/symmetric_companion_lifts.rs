@@ -16,9 +16,8 @@ use polytool::sequences::literature::{
 
 type Q = BigRational;
 
-fn q(value: i64) -> Q {
-    Q::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn qr(numerator: i64, denominator: i64) -> Q {
     Q::new(BigInt::from(numerator), BigInt::from(denominator))

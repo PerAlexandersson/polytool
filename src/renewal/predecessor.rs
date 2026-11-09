@@ -713,7 +713,6 @@ mod tests {
     use super::*;
     use crate::check_weak_interlacing_bigint_coeffs;
     use crate::recurrence::RecurrenceTerm;
-    use num_integer::Integer;
 
     fn q(n: i64) -> BigRational {
         BigRational::from_integer(n.into())
@@ -726,20 +725,14 @@ mod tests {
             coefficients: coefficients.to_vec(),
         }
     }
-    fn integer_row(row: &[BigRational]) -> Vec<BigInt> {
-        let scale = row.iter().fold(BigInt::one(), |a, b| a.lcm(b.denom()));
-        row.iter()
-            .map(|c| c.numer() * (&scale / c.denom()))
-            .collect()
-    }
     /// Finite sanity check of the proven window on generated rows.
     fn assert_window(rows: &[Vec<BigRational>], window: usize) {
         for b in 0..rows.len() {
             for a in b.saturating_sub(window)..=b {
                 assert_eq!(
                     check_weak_interlacing_bigint_coeffs(
-                        &integer_row(&rows[a]),
-                        &integer_row(&rows[b])
+                        &crate::vec_poly::clear_denominators(&rows[a]),
+                        &crate::vec_poly::clear_denominators(&rows[b])
                     ),
                     Some(true),
                     "Q_{a} << Q_{b}"
@@ -816,8 +809,8 @@ mod tests {
             for i in family.predecessor_at(n).unwrap()..=n {
                 assert_eq!(
                     check_weak_interlacing_bigint_coeffs(
-                        &integer_row(&rows[i]),
-                        &integer_row(&rows[n])
+                        &crate::vec_poly::clear_denominators(&rows[i]),
+                        &crate::vec_poly::clear_denominators(&rows[n])
                     ),
                     Some(true)
                 );

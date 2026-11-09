@@ -828,13 +828,8 @@ fn admissible_multiples_positive(
 
     // D P with integer coefficients; D = 1 along the derivative tower.
     let rational = antiderivative_rational_bigint(q);
-    let denominator = rational
-        .iter()
-        .fold(BigInt::one(), |acc, c| acc.lcm(c.denom()));
-    let scaled_antiderivative: Vec<BigInt> = rational
-        .iter()
-        .map(|c| c.numer() * (&denominator / c.denom()))
-        .collect();
+    let (denominator, scaled_antiderivative) =
+        crate::vec_poly::clear_denominators_with_scale(&rational);
 
     // Every root lies in [-M, M] for an integer M bounding the endpoints.
     let root_bound = roots

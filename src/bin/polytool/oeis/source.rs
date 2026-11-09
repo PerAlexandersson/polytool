@@ -13,28 +13,9 @@
 //!   offset and layout given on the command line.
 
 use num_bigint::BigInt;
+pub(crate) use polytool::oeis::OeisSourceRecord;
+use polytool::oeis::{parse_bfile, parse_oeis_internal_format, OeisTermsSource};
 use std::path::{Path, PathBuf};
-
-/// Terms and metadata of one OEIS sequence.
-#[derive(Debug, Clone)]
-pub(crate) struct OeisSourceRecord {
-    /// OEIS title (`%N`).
-    pub(crate) name: String,
-    /// First index of the flattened sequence (first value of `%O`).
-    pub(crate) offset: i64,
-    /// OEIS keywords (`%K`), such as `tabl` or `tabf`.
-    pub(crate) keywords: Vec<String>,
-    /// Flattened terms starting at `offset`.
-    pub(crate) terms: Vec<BigInt>,
-    /// `oeis_internal_format` or `bfile`.
-    pub(crate) terms_source: &'static str,
-}
-
-impl OeisSourceRecord {
-    pub(crate) fn has_keyword(&self, keyword: &str) -> bool {
-        self.keywords.iter().any(|value| value == keyword)
-    }
-}
 
 fn sequence_directory(id: &str) -> &str {
     &id[..4]
@@ -61,112 +42,23 @@ fn local_bfile(root: &Path, id: &str) -> Option<PathBuf> {
     .find(|path| path.is_file())
 }
 
-fn parse_term(token: &str) -> Option<BigInt> {
-    let token = token.trim();
-    let digits = token.strip_prefix(['-', '+']).unwrap_or(token);
-    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    token.parse().ok()
-}
-
-/// Parse one record in the OEIS internal format.
-pub(crate) fn parse_internal_format(text: &str, id: &str) -> Result<OeisSourceRecord, String> {
-    let mut name = String::new();
-    let mut offset = None;
-    let mut keywords = Vec::new();
-    let mut terms = Vec::new();
-    for line in text.lines() {
-        let mut parts = line.splitn(3, ' ');
-        let (Some(tag), Some(_), Some(rest)) = (parts.next(), parts.next(), parts.next()) else {
-            continue;
-        };
-        match tag {
-            "%N" => name = rest.trim().to_string(),
-            "%O" => {
-                let first = rest.split(',').next().unwrap_or("").trim();
-                offset = Some(
-                    first
-                        .parse::<i64>()
-                        .map_err(|_| format!("{id}: invalid offset line `{line}`"))?,
-                );
-            }
-            "%K" => keywords.extend(rest.split(',').map(|keyword| keyword.trim().to_string())),
-            "%S" | "%T" | "%U" => terms.extend(rest.split(',').filter_map(parse_term)),
-            _ => {}
-        }
-    }
-    let Some(offset) = offset else {
-        return Err(format!("{id}: missing %O offset"));
-    };
-    if name.is_empty() {
-        return Err(format!("{id}: missing %N name"));
-    }
-    Ok(OeisSourceRecord {
-        name,
-        offset,
-        keywords,
-        terms,
-        terms_source: "oeis_internal_format",
-    })
-}
-
-/// Parse a b-file: `n a(n)` lines with consecutive indices; `#` comments and
-/// blank lines are ignored.  Returns the first index and the terms.
-pub(crate) fn parse_bfile(text: &str) -> Result<(i64, Vec<BigInt>), String> {
-    if text.starts_with("version https://git-lfs") {
-        return Err("the b-file is a Git LFS pointer, not data".to_string());
-    }
-    let mut first = None;
-    let mut terms = Vec::new();
-    for (line_index, line) in text.lines().enumerate() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let mut parts = line.split_whitespace();
-        let (Some(index), Some(value)) = (parts.next(), parts.next()) else {
-            return Err(format!("b-file line {}: expected `n a(n)`", line_index + 1));
-        };
-        let index = index
-            .parse::<i64>()
-            .map_err(|_| format!("b-file line {}: invalid index", line_index + 1))?;
-        let value = parse_term(value)
-            .ok_or_else(|| format!("b-file line {}: invalid term", line_index + 1))?;
-        let expected = first.map(|first: i64| first + terms.len() as i64);
-        if let Some(expected) = expected {
-            if index != expected {
-                return Err(format!(
-                    "b-file line {}: index {index} does not follow {}",
-                    line_index + 1,
-                    expected - 1
-                ));
-            }
-        } else {
-            first = Some(index);
-        }
-        terms.push(value);
-    }
-    let first = first.ok_or_else(|| "b-file has no terms".to_string())?;
-    Ok((first, terms))
-}
-
 /// Read `id` from a local internal-format copy, preferring a usable b-file.
 pub(crate) fn read_local_record(root: &Path, id: &str) -> Result<OeisSourceRecord, String> {
     let path = sequence_file(root, id)
         .ok_or_else(|| format!("{id}: no local OEIS record under {}", root.display()))?;
     let text = std::fs::read(&path)
         .map_err(|error| format!("{id}: failed to read {}: {error}", path.display()))?;
-    let mut record = parse_internal_format(&String::from_utf8_lossy(&text), id)?;
+    let mut record = parse_oeis_internal_format(&String::from_utf8_lossy(&text), id)
+        .map_err(|error| error.to_string())?;
     if let Some(bfile) = local_bfile(root, id) {
         if let Ok(text) = std::fs::read_to_string(&bfile) {
-            if let Ok((first, terms)) = parse_bfile(&text) {
-                if first == record.offset
-                    && terms.len() > record.terms.len()
-                    && terms.starts_with(&record.terms)
+            if let Ok(bfile) = parse_bfile(&text) {
+                if bfile.first_index == record.offset
+                    && bfile.terms.len() > record.terms.len()
+                    && bfile.terms.starts_with(&record.terms)
                 {
-                    record.terms = terms;
-                    record.terms_source = "bfile";
+                    record.terms = bfile.terms;
+                    record.terms_source = OeisTermsSource::BFile;
                 }
             }
         }
@@ -238,25 +130,11 @@ mod tests {
         %O A000001 1,5\n";
 
     #[test]
-    fn internal_format_record_is_parsed() {
-        let record = parse_internal_format(RECORD, "A000001").unwrap();
-        assert_eq!(record.name, "Example triangle.");
-        assert_eq!(record.offset, 1);
-        assert!(record.has_keyword("tabl"));
-        assert_eq!(record.terms.len(), 10);
+    fn internal_format_record_splits_into_rows() {
+        let record = parse_oeis_internal_format(RECORD, "A000001").unwrap();
         let (rows, rest) = RowWidths::TRIANGLE.split(&record.terms);
         assert_eq!(rows.len(), 4);
         assert_eq!(rest, 0);
-    }
-
-    #[test]
-    fn bfiles_need_consecutive_indices() {
-        assert_eq!(
-            parse_bfile("# c\n0 1\n1 -2\n").unwrap(),
-            (0, vec![BigInt::from(1), BigInt::from(-2)])
-        );
-        assert!(parse_bfile("0 1\n2 1\n").is_err());
-        assert!(parse_bfile("version https://git-lfs.github.com/spec/v1\n").is_err());
     }
 
     #[test]

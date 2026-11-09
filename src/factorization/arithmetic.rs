@@ -124,13 +124,7 @@ pub fn evaluate_q(p: &[Q], x: &Q) -> Q {
 pub fn primitive_positive(p: &[Q]) -> (Vec<BigInt>, Q) {
     let p = trim_q(p.to_vec());
     assert!(!p.is_empty(), "a factor cannot be zero");
-    let denominator_lcm = p.iter().fold(BigInt::one(), |lcm, coefficient| {
-        lcm.lcm(coefficient.denom())
-    });
-    let mut integer_coeffs: Vec<BigInt> = p
-        .iter()
-        .map(|coefficient| coefficient.numer() * (&denominator_lcm / coefficient.denom()))
-        .collect();
+    let (denominator_lcm, mut integer_coeffs) = crate::vec_poly::clear_denominators_with_scale(&p);
     let content = integer_coeffs
         .iter()
         .filter(|coefficient| !coefficient.is_zero())

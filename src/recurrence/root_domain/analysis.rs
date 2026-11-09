@@ -99,7 +99,6 @@ use crate::real_rootedness::{
 };
 use crate::vec_poly;
 use crate::Polynomial;
-use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -1772,8 +1771,8 @@ pub(crate) fn analyze_root_domain(
                     })
                 });
             for (i, state) in observed {
-                let a = integer_row(&state[0]);
-                let xb = integer_row(&vec_poly::shift(&state[1]));
+                let a = crate::vec_poly::clear_denominators(&state[0]);
+                let xb = crate::vec_poly::clear_denominators(&vec_poly::shift(&state[1]));
                 checked += 1;
                 if !interlaces_either_order_bigint_coeffs(&a, &xb) {
                     failed.push(inputs.origin + i);
@@ -2000,13 +1999,6 @@ pub(crate) fn analyze_root_domain(
         observations,
         notes,
     })
-}
-
-fn integer_row(row: &[Q]) -> Vec<BigInt> {
-    let scale = row.iter().fold(BigInt::one(), |acc, c| acc.lcm(c.denom()));
-    row.iter()
-        .map(|c| (c * Q::from_integer(scale.clone())).to_integer())
-        .collect()
 }
 
 /// What the analysis established before the recurrence theorem is matched.

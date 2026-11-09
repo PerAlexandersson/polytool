@@ -39,9 +39,8 @@ const FINGERPRINTS: &str = concat!(
     "/tests/fixtures/ore-algebra-workload-fingerprints.tsv"
 );
 
-fn q(value: i64) -> Q {
-    Q::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 /// 64-bit FNV-1a of the text (stable across platforms and toolchains).
 fn fingerprint(text: &str) -> String {

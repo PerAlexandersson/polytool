@@ -3,19 +3,14 @@
 //! A008288 (Delannoy) basis map producing `[-3 - 2 sqrt(2), -3 + 2 sqrt(2)]`,
 //! and certificate replay with, without and with a wrong exact form.
 
-use num_bigint::BigInt;
 use polytool::recurrence::{
     apply_basis_map_to_family, format_root_interval_exact, root_enclosures, BasisMap,
-    BasisMapImageOptions, BigRational, BivarPoly, ExactQuadraticEndpoint, Recurrence,
-    RecurrenceJson, RecurrenceTerm, RootDomainRequest, RootEnclosureRequest, RootEndpoint,
-    RootInterval,
+    BasisMapImageOptions, BivarPoly, ExactQuadraticEndpoint, Recurrence, RecurrenceJson,
+    RecurrenceTerm, RootDomainRequest, RootEnclosureRequest, RootEndpoint, RootInterval,
 };
 
-type Q = BigRational;
-
-fn q(value: i64) -> Q {
-    Q::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn exact(a: &str, b: &str, d: &str) -> ExactQuadraticEndpoint {
     ExactQuadraticEndpoint {

@@ -10,9 +10,8 @@ use polytool::check_weak_interlacing_bigint_coeffs;
 use polytool::oeis;
 use polytool::recurrence::*;
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn integer(row: &[BigRational]) -> Vec<BigInt> {
     row.iter()

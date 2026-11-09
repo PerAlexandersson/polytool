@@ -646,15 +646,7 @@ fn integer_zeros_of_gcd(polynomials: &[Poly]) -> Option<Vec<String>> {
     {
         return None;
     }
-    let denominator = gcd
-        .coeffs()
-        .iter()
-        .fold(BigInt::one(), |a, c| a.lcm(c.denom()));
-    let integer: Vec<_> = gcd
-        .coeffs()
-        .iter()
-        .map(|c| c.numer() * (&denominator / c.denom()))
-        .collect();
+    let integer = crate::vec_poly::clear_denominators(gcd.coeffs());
     let chain = SturmChain::from_bigint_coeffs(&integer);
     let mut roots = BTreeSet::new();
     for (lo, hi) in chain.isolate_roots(&Q::new(BigInt::one(), BigInt::from(2))) {

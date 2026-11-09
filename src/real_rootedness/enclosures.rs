@@ -32,7 +32,6 @@ use crate::polynomial::Polynomial;
 use crate::BigRational;
 use exact_real_roots::{isolate_real_roots_bigint_coeffs, DyadicRational, IsolatedRealRoot};
 use num_bigint::BigInt;
-use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
 use std::cmp::Ordering;
 use std::fmt;
@@ -347,14 +346,6 @@ fn dyadic(value: &DyadicRational) -> Q {
     Q::new(value.numerator().clone(), value.denominator())
 }
 
-/// Primitive integer multiple of a rational polynomial (nonzero input).
-fn integer_multiple(p: &[Q]) -> Vec<BigInt> {
-    let scale = p.iter().fold(BigInt::one(), |acc, c| acc.lcm(c.denom()));
-    p.iter()
-        .map(|c| (c * Q::from_integer(scale.clone())).to_integer())
-        .collect()
-}
-
 /// Yun's square-free factorization: `factors[i]` is the monic product of the
 /// distinct irreducible factors of multiplicity exactly `i + 1`.
 fn squarefree_factors(p: &Polynomial<Q>) -> Vec<Polynomial<Q>> {
@@ -429,7 +420,8 @@ pub fn isolate_real_roots_rational_coeffs(coeffs: &[BigRational]) -> RealRootIso
     let squarefree = factors
         .iter()
         .fold(Polynomial::one(), |acc, f| acc * f.clone());
-    let isolated = isolate_real_roots_bigint_coeffs(&integer_multiple(polynomial.coeffs()));
+    let isolated =
+        isolate_real_roots_bigint_coeffs(&crate::vec_poly::clear_denominators(polynomial.coeffs()));
     let mut roots = Vec::with_capacity(isolated.len());
     for root in isolated {
         let (mut lower, mut upper) = match &root {

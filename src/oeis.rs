@@ -80,6 +80,11 @@ pub use bfile::{
     bfile_row_terms, flatten_rows_to_bfile, BFileError, BFileOptions, BFileRowOrientation,
     BFileStoppingRule, BFileText, BFileZeroPolicy,
 };
+mod source;
+pub use source::{
+    parse_bfile, parse_oeis_internal_format, OeisSourceError, OeisSourceRecord, OeisTermsSource,
+    ParsedBFile,
+};
 mod text;
 pub use text::{
     format_triangle_example, OeisRecurrencePresentation, OeisText, OeisTextError,

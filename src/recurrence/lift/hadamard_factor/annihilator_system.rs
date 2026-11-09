@@ -296,15 +296,7 @@ fn guess_pivots(
     // Integer equations (denominators cleared row by row).
     let integral: Vec<Vec<BigInt>> = equations
         .iter()
-        .map(|equation| {
-            let denominator = equation
-                .iter()
-                .fold(BigInt::one(), |acc, value| acc.lcm(value.denom()));
-            equation
-                .iter()
-                .map(|value| value.numer() * (&denominator / value.denom()))
-                .collect()
-        })
+        .map(|equation| crate::vec_poly::clear_denominators(equation))
         .collect();
     // Unknowns ascend by (shift, derivative order, ...): the vector led by
     // the smallest free column of a shift has the smallest leading term

@@ -1,22 +1,10 @@
 //! CLI error contracts, nested help and recurrence pipelines.
 
 use serde_json::{json, Value};
-use std::io::Write;
-use std::process::{Command, Output, Stdio};
+use std::process::Output;
 
-fn run(args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    if let Err(error) = child.stdin.take().unwrap().write_all(input.as_bytes()) {
-        assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
-    }
-    child.wait_with_output().unwrap()
-}
+mod common;
+use common::run_polytool as run;
 
 fn success(output: Output) -> String {
     assert!(

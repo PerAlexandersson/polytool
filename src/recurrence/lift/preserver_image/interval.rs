@@ -65,8 +65,7 @@ use crate::recurrence::{
 use crate::vec_poly;
 use crate::BigRational;
 use num_bigint::BigInt;
-use num_integer::Integer;
-use num_traits::{One, Signed, Zero};
+use num_traits::{Signed, Zero};
 
 type Q = BigRational;
 
@@ -75,16 +74,6 @@ const CANDIDATE_ROWS: usize = 12;
 
 /// Largest absolute value of an integer end tried for the three-term region.
 const CANDIDATE_BOUND: i64 = 64;
-
-/// The integer polynomial with the same roots.
-fn integer_coefficients(p: &[Q]) -> Vec<BigInt> {
-    let common = p
-        .iter()
-        .fold(BigInt::one(), |accumulator, c| accumulator.lcm(c.denom()));
-    p.iter()
-        .map(|c| c.numer() * (&common / c.denom()))
-        .collect()
-}
 
 /// Whether every coefficient of `p(point + sign z)` is nonzero and of one
 /// sign (for a real-rooted `p`: every root `< point` for `sign = 1`, every
@@ -104,9 +93,9 @@ fn three_term_candidate(rows: &[Vec<Q>]) -> Option<(Q, Q)> {
         .filter(|row| vec_poly::degree(row).is_some_and(|d| d > 0))
         .collect();
     if rows.is_empty()
-        || rows
-            .iter()
-            .any(|row| !crate::is_real_rooted_bigint_coeffs(&integer_coefficients(row)))
+        || rows.iter().any(|row| {
+            !crate::is_real_rooted_bigint_coeffs(&crate::vec_poly::clear_denominators(row))
+        })
     {
         return None;
     }

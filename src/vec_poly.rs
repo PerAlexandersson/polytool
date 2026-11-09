@@ -18,7 +18,8 @@
 //! [`prefix_sums`]), products with (powers of) a linear factor `a + b t`
 //! ([`mul_linear`], [`mul_linear_pow`]), [`has_nonnegative_coefficients`],
 //! and division-free evaluation at fractions ([`evaluate_homogeneous`],
-//! [`evaluate_at_ratio`]).
+//! [`evaluate_at_ratio`]), and clearing the denominators of a rational
+//! polynomial ([`clear_denominators`], [`clear_denominators_with_scale`]).
 //!
 //! # Conventions
 //!
@@ -60,6 +61,9 @@
 //! ```
 
 use crate::polynomial::CoeffRing;
+use num_bigint::BigInt;
+use num_integer::Integer;
+use num_rational::BigRational;
 
 // ---------------------------------------------------------------------------
 // Normalization and inspection
@@ -661,9 +665,75 @@ pub fn permanent<C: CoeffRing>(mat: &[Vec<Vec<C>>]) -> Vec<C> {
     current[full_mask].take().unwrap_or_else(|| vec![C::zero()])
 }
 
+/// The integer coefficients of `scale * p`, where `scale` is the least common
+/// multiple of the denominators of the coefficients of `p`.
+///
+/// The scale is positive, so the result has the same roots and the same
+/// coefficient signs as `p`; it is not divided by the content.  Zero
+/// coefficients stay zero and the length is kept (the empty slice gives the
+/// empty vector).  Use [`clear_denominators_with_scale`] when the scale is
+/// needed.
+///
+/// ```
+/// use num_bigint::BigInt;
+/// use num_rational::BigRational;
+/// use polytool::vec_poly;
+///
+/// let q = |n: i64, d: i64| BigRational::new(n.into(), d.into());
+/// // 1/2 - t/3 + 5 t^2 / 4 becomes 6 - 4t + 15 t^2 (scale 12).
+/// let p = [q(1, 2), q(-1, 3), q(5, 4)];
+/// assert_eq!(
+///     vec_poly::clear_denominators(&p),
+///     vec![BigInt::from(6), BigInt::from(-4), BigInt::from(15)]
+/// );
+/// ```
+pub fn clear_denominators(p: &[BigRational]) -> Vec<BigInt> {
+    clear_denominators_with_scale(p).1
+}
+
+/// [`clear_denominators`] together with the scale: `(scale, integers)` with
+/// `integers[i] = scale * p[i]` and `scale` the (positive) least common
+/// multiple of the denominators, `1` for the empty slice.
+///
+/// ```
+/// use num_bigint::BigInt;
+/// use num_rational::BigRational;
+/// use polytool::vec_poly;
+///
+/// let q = |n: i64, d: i64| BigRational::new(n.into(), d.into());
+/// let (scale, integers) = vec_poly::clear_denominators_with_scale(&[q(1, 2), q(-1, 3)]);
+/// assert_eq!(scale, BigInt::from(6));
+/// assert_eq!(integers, vec![BigInt::from(3), BigInt::from(-2)]);
+/// ```
+pub fn clear_denominators_with_scale(p: &[BigRational]) -> (BigInt, Vec<BigInt>) {
+    let scale = p.iter().fold(BigInt::from(1), |accumulator, coefficient| {
+        accumulator.lcm(coefficient.denom())
+    });
+    let integers = p
+        .iter()
+        .map(|coefficient| coefficient.numer() * (&scale / coefficient.denom()))
+        .collect();
+    (scale, integers)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clear_denominators_scales_by_the_lcm_and_keeps_signs_and_zeros() {
+        let q = |n: i64, d: i64| BigRational::new(n.into(), d.into());
+        let p = [q(0, 1), q(-1, 6), q(3, 4), q(0, 1)];
+        let (scale, integers) = clear_denominators_with_scale(&p);
+        assert_eq!(scale, BigInt::from(12));
+        assert_eq!(integers, [0, -2, 9, 0].map(BigInt::from).to_vec(),);
+        assert_eq!(clear_denominators(&p), integers);
+        assert_eq!(
+            clear_denominators_with_scale(&[]),
+            (BigInt::from(1), Vec::new())
+        );
+        assert_eq!(clear_denominators(&[q(0, 1)]), vec![BigInt::from(0)]);
+    }
 
     #[test]
     fn test_trim() {

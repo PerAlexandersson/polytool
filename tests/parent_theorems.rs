@@ -12,16 +12,8 @@ use polytool::recurrence::{
     RealRootednessTheoremStatus, Recurrence, RecurrenceTerm, RowInterlacing,
 };
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
-
-fn rows(values: &[&[i64]]) -> Vec<Vec<BigRational>> {
-    values
-        .iter()
-        .map(|row| row.iter().map(|&v| q(v)).collect())
-        .collect()
-}
+mod common;
+use common::{q, rows};
 
 /// `coeffs[i][j]` = coefficient of `n^i x^j`.
 fn bivar(coeffs: &[&[i64]]) -> BivarPoly {

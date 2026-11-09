@@ -1,36 +1,9 @@
 //! CLI tests for `polytool tnn-network` and `polytool brenti-recognize`.
 
 use serde_json::Value;
-use std::io::Write;
-use std::process::{Command, Output, Stdio};
 
-fn run_polytool(args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn polytool");
-    // The CLI may exit on an argument error before reading its input.
-    if let Err(error) = child
-        .stdin
-        .take()
-        .expect("polytool stdin")
-        .write_all(input.as_bytes())
-    {
-        assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
-    }
-    child.wait_with_output().expect("wait for polytool")
-}
-
-fn json(output: &Output) -> Value {
-    serde_json::from_slice(&output.stdout).expect("stdout is JSON")
-}
-
-fn stdout(output: &Output) -> String {
-    String::from_utf8(output.stdout.clone()).expect("stdout is utf8")
-}
+mod common;
+use common::{json, run_polytool, stdout};
 
 fn strings(values: &[&str]) -> Value {
     Value::from(values.iter().map(|v| Value::from(*v)).collect::<Vec<_>>())

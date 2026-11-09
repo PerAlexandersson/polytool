@@ -112,6 +112,30 @@ well, `recurrence-transforms.test.cjs` checks that the CLI and the browser
 produce identical transform and implicit reports and that each replays the
 other's reports.
 
+## Proof-discovery fingerprints
+
+`tests/discovery_fingerprints.rs` is the evidence gate for refactorings of the
+theorem routes. For every bundled OEIS catalog family (860 entries) it hashes
+the complete JSON of `recurrence::discover_recurrence_proofs` (default
+options) and of `recurrence::prove_parent_real_rootedness` (first index, no
+attestations, root-domain route enabled) and compares both with
+`tests/fixtures/discovery-report-fingerprints.tsv`; a behaviour-preserving
+change leaves every line unchanged. A sample of 48 cheaper entries
+runs in the normal test suite; the ignored full sweep takes about 7 minutes in
+release mode (each entry has a limit of 120 s, `POLYTOOL_DISCOVERY_ENTRY_SECONDS`):
+
+```text
+cargo test --release --test discovery_fingerprints -- --ignored every_
+```
+
+Re-bless only for an intentional change of results:
+`POLYTOOL_BLESS_DISCOVERY_FINGERPRINTS=1 cargo test --release --test
+discovery_fingerprints -- --ignored every_`.
+
+Integration tests share the helpers in `tests/common/mod.rs` (running the
+`polytool` binary with standard input, reading its output, exact-rational
+constructors); include them with `mod common;`.
+
 ## Ore-algebra workloads
 
 `tests/ore_algebra_workloads.rs` runs a fixed set of real workloads of the

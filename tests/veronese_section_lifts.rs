@@ -5,19 +5,12 @@
 //! that need a successful factorization are marked
 //! is unit-tested in the library.
 
-use num_bigint::BigInt;
 use polytool::recurrence::{
     find_veronese_section_lifts, format_characteristic_polynomial, BigRational, BivarPoly,
     Recurrence, RecurrenceError, RecurrenceJson, RecurrenceSign, RecurrenceTerm,
     VeroneseParentProofRoute, VeroneseSectionLift, VeroneseSectionLiftOptions,
     VeroneseSectionLiftRejectionReason, VeroneseSectionLiftReport, VeroneseSectionLiftStatus,
 };
-use std::io::Write;
-use std::process::{Command, Output, Stdio};
-
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
 
 fn row(values: &[i64]) -> Vec<BigRational> {
     values.iter().map(|&value| q(value)).collect()
@@ -318,17 +311,8 @@ const WORKED_JSON: &str = r#"{"schema":"polytool.recurrence.v1","first_index":0,
 {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["2"]]}},
 {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","1"]]}}]}}"#;
 
-fn run(args: &[&str], stdin: &[u8]) -> Output {
-    let mut process = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    process.stdin.take().unwrap().write_all(stdin).unwrap();
-    process.wait_with_output().unwrap()
-}
+mod common;
+use common::{q, run_polytool_bytes as run};
 
 #[test]
 fn cli_help_and_input_errors() {

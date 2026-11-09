@@ -1,35 +1,9 @@
 //! CLI handling of big-integer coefficients, malformed input and oversized input.
 
 use std::fs;
-use std::io::Write;
-use std::process::{Command, Output, Stdio};
 
-fn run_polytool(args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn polytool");
-
-    // The CLI may exit (e.g. on `--help` or an argument error) before reading
-    // its input; a closed pipe is then expected, not a test failure.
-    if let Err(error) = child
-        .stdin
-        .take()
-        .expect("polytool stdin")
-        .write_all(input.as_bytes())
-    {
-        assert_eq!(
-            error.kind(),
-            std::io::ErrorKind::BrokenPipe,
-            "write polytool stdin"
-        );
-    }
-
-    child.wait_with_output().expect("wait for polytool")
-}
+mod common;
+use common::run_polytool;
 
 #[test]
 fn real_rooted_accepts_bigint_coefficients() {

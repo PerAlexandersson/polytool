@@ -1,6 +1,4 @@
 //! CLI: conditional theorem matches stay separate from finite-fit evidence.
-use std::io::Write;
-use std::process::{Command, Output, Stdio};
 
 /// Rows of `1/(1 - x R(t x))` with `R = 1 + 3z + 2z^2` (labels 0..9).
 const RENEWAL_ROWS: &[u8] = b"1\n1\n1,3\n1,6,2\n1,9,13\n1,12,33,12\n1,15,62,63,4\n\
@@ -10,17 +8,8 @@ const RENEWAL_ROWS: &[u8] = b"1\n1\n1,3\n1,6,2\n1,9,13\n1,12,33,12\n1,15,62,63,4
 const PREDECESSOR_ROWS: &[u8] =
     b"1\n1,1\n1,3\n1,6,3\n1,10,15\n1,15,45,15\n1,21,105,105\n1,28,210,420,105\n";
 
-fn run(args: &[&str], stdin: &[u8]) -> Output {
-    let mut process = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    process.stdin.take().unwrap().write_all(stdin).unwrap();
-    process.wait_with_output().unwrap()
-}
+mod common;
+use common::run_polytool_bytes as run;
 
 const SEARCH: [&str; 7] = [
     "recurrence",

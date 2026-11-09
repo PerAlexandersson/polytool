@@ -9,7 +9,6 @@
 
 use super::*;
 use crate::polynomial::Polynomial;
-use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
 
 /// Exact univariate polynomial with rational coefficients.
@@ -268,15 +267,7 @@ pub(super) fn classify_row(coefficients: &[BigRational]) -> RowShape {
     }
     let has_positive = coefficients.iter().any(Signed::is_positive);
     let has_negative = coefficients.iter().any(Signed::is_negative);
-    let common_denominator = coefficients
-        .iter()
-        .fold(BigInt::one(), |accumulator, coefficient| {
-            accumulator.lcm(coefficient.denom())
-        });
-    let integer_coefficients: Vec<BigInt> = coefficients
-        .iter()
-        .map(|coefficient| coefficient.numer() * (&common_denominator / coefficient.denom()))
-        .collect();
+    let integer_coefficients = crate::vec_poly::clear_denominators(coefficients);
     RowShape {
         is_zero: false,
         has_one_sign: !(has_positive && has_negative),
