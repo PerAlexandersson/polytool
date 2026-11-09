@@ -68,6 +68,60 @@ assert_eq!(image.order, 2);
 image.verify().unwrap();
 ```
 
+## Row recurrences of hypergeometric triangles
+
+`recurrence::derive_hypergeometric_row_recurrence` turns a closed form into a
+certified recurrence record.  A term `T(n, k)` is given by its shift ratios
+`T(n, k+1) / T(n, k)` and `T(n+1, k) / T(n, k)` (products of powers of linear
+forms in `n` and `k`, written as text; one pair per residue class of `n` for
+parity-dependent forms), its support `ceil(lower(n)) <= k <= floor(upper(n))`,
+a first index and its first value, optionally times a polynomial `M(n, k)`;
+a `HypergeometricTriangle` is a finite sum of terms.  The search finds an
+operator `sum c_(i,j,l)(n) t^j theta^l S^i` (`theta = t d/dt`, which acts as
+`k` on coefficients) with a leader `c(n) S^I` that annihilates the rows
+`P_n(t) = sum_k T(n, k) t^k` for every `n`, by exact linear elimination.
+The proof checks the consistency of the ratios, that every ratio factor is
+nonzero on the support, an exact identity in `(n, k)` for the interior,
+exact identities in `n` for the finitely many boundary strips near
+`lower(n)` and `upper(n)` (boundary terms are never assumed to vanish; an
+operator whose strips fail is rejected), and the rows before the strips
+separate.  The certificate replays (`verify`).
+
+```rust
+use polytool::recurrence::{
+    derive_hypergeometric_row_recurrence, HypergeometricRowRecurrenceBudget,
+    HypergeometricTermDefinition, HypergeometricTriangle,
+};
+
+// T(n, k) = C(n, k)^2 C(2(n - k), n - k), 0 <= k <= n.
+let triangle = HypergeometricTriangle::single(HypergeometricTermDefinition::new(
+    0,
+    "(n-k)^3/(2*(k+1)^2*(2n-2k-1))",
+    "2*(n+1)^2*(2n-2k+1)/(n+1-k)^3",
+    "0",
+    "n",
+    "1",
+));
+let certificate = derive_hypergeometric_row_recurrence(
+    &triangle,
+    &HypergeometricRowRecurrenceBudget::default(),
+)
+.unwrap();
+certificate.verify().unwrap();
+// A first-order rule with theta^2; `certificate.record` is a runnable
+// `RecurrenceJson` with the seed rows.
+assert_eq!(certificate.record.first_index, 0);
+```
+
+`certify_hypergeometric_row_operator` certifies a given operator, and
+`certify_hypergeometric_row_record` proves that an arbitrary recurrence
+record (for example a fitted catalog rule) generates the triangle's rows for
+every index: its rule times `t^J` is checked with the same argument, its
+seeds are compared exactly and its left-hand factor must not vanish at a
+computed row.  This also certifies records whose operator is not a left
+multiple of the derived one, where `certify_recurrence_equality` (Ore
+division) cannot conclude.
+
 ## Real-rootedness and interlacing
 
 ```rust

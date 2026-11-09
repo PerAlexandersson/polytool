@@ -43,6 +43,20 @@
 
 ### Added and changed
 
+- Certified row recurrences of hypergeometric triangles
+  (`recurrence::derive_hypergeometric_row_recurrence`,
+  `certify_hypergeometric_row_operator`,
+  `certify_hypergeometric_row_record`; types `HypergeometricTriangle`,
+  `HypergeometricTermDefinition`, `EulerOperatorTerm`,
+  `HypergeometricRowRecurrenceCertificate`,
+  `HypergeometricRecordCertificate`): from the two shift ratios of `T(n, k)`
+  (linear factors, optionally by residue class of `n`), its support and a
+  first value, optionally times a polynomial, an annihilating operator in
+  `S`, `t` and `theta = t d/dt` is found by exact elimination and proved for
+  every index, boundary strips included, with replayable certificates
+  (schemas `polytool.hypergeometric-row-recurrence.v1` and
+  `polytool.hypergeometric-record.v1`).
+
 - Catalog lifts in proof discovery: when no theorem proves a record
   (directly, on its tail or on a certified alternative representation), it
   is connected to a family of the bundled OEIS catalog by an identity

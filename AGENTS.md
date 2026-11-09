@@ -69,8 +69,8 @@
   `src/linalg/`) are split by concern and re-exported, so public paths stay
   `polytool::recurrence::*` etc. Add new code to the matching submodule and
   re-export it from the facade. `src/recurrence/` is grouped one level deeper
-  (`base`, `fit`, `transform`, `implicit`, `root_domain`, `representation`,
-  `lift`, and the single module `leading_coefficient` with degree laws and
+  (`base`, `closed_form`, `fit`, `transform`, `implicit`, `root_domain`,
+  `representation`, `lift`, and the single module `leading_coefficient` with degree laws and
   leading-coefficient certificates);
   each group has a `<group>.rs` facade that re-exports its members, and a
   cross-group helper is `pub(in crate::recurrence)`. The MCP crate (`mcp/src/`)

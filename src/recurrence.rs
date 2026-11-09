@@ -36,6 +36,10 @@
 //!   `Q_n = lambda(n) T_n(P_(n+s))` with seeds and an
 //!   [`ImageRecurrenceCertificate`]); its Ore-algebra arithmetic is the
 //!   `ore-algebra` crate;
+//! - `closed_form`: recurrences derived from closed forms of the
+//!   coefficients: certified annihilating operators of the rows of sums of
+//!   hypergeometric terms ([`derive_hypergeometric_row_recurrence`], with a
+//!   replayable [`HypergeometricRowRecurrenceCertificate`]);
 //! - `root_domain`: optional root-domain information (theorem adapters, exact
 //!   root enclosures) for transformed results;
 //! - `representation`: the bounded queue search over equivalent
@@ -78,6 +82,8 @@ pub use crate::BigRational;
 
 mod base;
 pub use base::*;
+mod closed_form;
+pub use closed_form::*;
 mod error;
 pub use error::{ParseRationalError, RecurrenceError};
 mod fit;
