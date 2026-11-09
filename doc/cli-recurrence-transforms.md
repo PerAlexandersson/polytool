@@ -507,8 +507,10 @@ absolute index of a zero, mixed-sign or non-real-rooted row).  Rejections have
 `seeds_not_determined`, `seeds_not_polynomial` or `row_mismatch`) and
 `row_index`.
 
-Only `proved_product_parent` is a proof (an order-one parent
-`P_n = c^(n-n0) P_(n0)` with `c` and `P_(n0)` real-rooted of one sign);
+`proved_product_parent` (an order-one parent `P_n = c^(n-n0) P_(n0)` with
+`c` and `P_(n0)` real-rooted of one sign) and `proved_parent_route` (any other
+parent proved zero or real-rooted of one sign by the shared parent provers,
+the theorem routes of `recurrence-prove`) are proofs;
 `parent_real_rootedness_open` means that the checked parent rows pass, which
 is finite evidence.  Every listed lift is an exact identity for all `n`: the
 parent's sections satisfy a recurrence dividing `chi`, so `d` matching rows

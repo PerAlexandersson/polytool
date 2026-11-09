@@ -106,7 +106,8 @@ def test_prove_real_rooted_and_replay(legendre_record):
     certificate = report.certificate
     assert certificate["status"] == "proved"
     assert certificate["conclusion"]["interlacing"] == "strict"
-    assert len(report.attempts) == 6
+    assert len(report.attempts) == 8
+    assert report.real_rooted_from_index == 0
     assert report.verify() is True
     assert report.recurrence == Recurrence.from_json(legendre_record)
     assert polytool.ProofReport.from_json(report.to_json()).verify()
@@ -129,6 +130,48 @@ def test_not_proved_is_not_a_disproof():
     report = Recurrence.from_json(record).prove_real_rooted(maximum_start_delay=0)
     assert report.status == "not_proved"
     assert report.route is None and report.certificate is None
+    assert report.verify()
+
+
+def test_alternative_representation_proof():
+    # A030524: a constant-coefficient lag-three rule; the finder proposes
+    # n P_n = (6 + 3n + 2t) P_(n-1) + t (t + 9) P'_(n-1), certified equal for
+    # every n and proved by the Ma--Wang interval criterion.
+    record = {
+        "schema": "polytool.recurrence.v1",
+        "first_index": 1,
+        "initial_polynomials": [["1"], ["6", "1"], ["30", "12", "1"],
+                                ["135", "96", "18", "1"],
+                                ["567", "630", "198", "24", "1"]],
+        "recurrence": {"terms": [
+            {"offset": 1, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["9", "1"]]}},
+            {"offset": 2, "deriv_order": 0, "sign": "none",
+             "coeff": {"coeffs": [["-27", "-3"]]}},
+            {"offset": 3, "deriv_order": 0, "sign": "none",
+             "coeff": {"coeffs": [["27", "3"]]}}]},
+    }
+    report = polytool.prove_real_rooted(record)
+    assert report.status == "proved" and report.is_proved
+    assert report.route == "ma_wang_interval"
+    assert report.real_rooted_from_index == 1
+    data = report.to_dict()
+    alternative = data["alternative_representations"]["alternatives"][-1]
+    assert alternative["equality"]["status"] == "certified"
+    assert report.verify()
+
+
+def test_inhomogeneous_rule_is_not_applicable():
+    record = {
+        "schema": "polytool.recurrence.v1",
+        "first_index": 0,
+        "initial_polynomials": [["1"]],
+        "recurrence": {"terms": [{"offset": 1, "deriv_order": 0, "sign": "none",
+                                  "coeff": {"coeffs": [["1", "1"]]}}],
+                       "inhomogeneous": {"coeffs": [["1"]]}},
+    }
+    report = polytool.prove_real_rooted(record)
+    assert report.status == "not_applicable" and not report.is_proved
+    assert "inhomogeneous" in report.to_dict()["not_applicable_reason"]
     assert report.verify()
 
 

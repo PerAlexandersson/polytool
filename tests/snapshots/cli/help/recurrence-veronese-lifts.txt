@@ -12,9 +12,12 @@ Aissen-Schoenberg-Whitney-Edrei), so a lift transfers real-rootedness to Q_n.
 
 Supported input: derivative-free terms without (-1)^n factors and with
 coefficients independent of n, a constant (or no) denominator, no inhomogeneous
-term. Anything else exits with status 2. Theorem wrappers and representation
-menus are accepted (select an entry with --candidate, 0-based). Without
---recurrence the record is read from standard input.
+term. Anything else exits with status 2. Supplied rows that do not follow the
+recurrence (zero or other prefix rows) are dropped: the search runs on the
+shortest tail of rows that does, and the report names its first index
+(tail_first_index). Theorem wrappers and representation menus are accepted
+(select an entry with --candidate, 0-based). Without --recurrence the record is
+read from standard input.
 
 The search is bounded: no lift found does not mean that none exists.
 
@@ -49,6 +52,10 @@ Details:
     proved_product_parent        order-one parent P_n = c^(n-n0) P_(n0) with c and
                                  P_(n0) real-rooted of one sign: every Q_n (n >= n0)
                                  is zero or real-rooted with nonpositive roots
+    proved_parent_route          another parent, proved zero or real-rooted of one
+                                 sign for every n by the shared parent provers
+                                 (theorem routes of recurrence-prove): same
+                                 conclusion for every Q_n
     parent_real_rootedness_open  all checked parent rows are real-rooted of one
                                  sign (finite evidence, not a proof)
     parent_row_zero, parent_row_mixed_signs, parent_row_not_real_rooted

@@ -258,8 +258,10 @@ For each modulus `r = 2..max_modulus` (at most `d`):
    coefficient sign, real-rooted after clearing denominators);
 6. an order-one parent `G = L - c(x)` gives `P_n = c^(n-n0) P_(n0)`; when `c`
    and `P_(n0)` are real-rooted with coefficients of one sign the lift is
-   `proved_product_parent`.  Order-two and higher parents with passing rows
-   are `parent_real_rootedness_open` (finite evidence only); a failing row
+   `proved_product_parent`.  Other parents with passing rows go to the
+   shared parent provers (`prove_parent_real_rootedness`, no attestations):
+   a polytool proof gives `proved_parent_route`, otherwise the lift is
+   `parent_real_rootedness_open` (finite evidence only); a failing row
    gives `parent_row_zero`, `parent_row_mixed_signs` or
    `parent_row_not_real_rooted` with its index.
 
@@ -1100,7 +1102,8 @@ refuted, the parent fails or a hypothesis fails; `proved` if the identity is
 certified, the parent is proved and every hypothesis is verified;
 `conditional_on_attestation` with an attested parent instead; `open`
 otherwise.  The mappings preserve each operation's own verdict: a Veronese
-v1 lift is proved exactly for `proved_product_parent` (its identity is
+v1 lift is proved exactly for `proved_product_parent` and
+`proved_parent_route` (its identity is
 certified by the identifying rows), a v2 certification exactly for
 `VeroneseSectionVerdict::Proved`, and a symmetric-companion lift exactly when
 the preservation theorem applies (its parent proof is the preservation

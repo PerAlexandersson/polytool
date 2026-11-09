@@ -3,6 +3,8 @@
 `recurrence-prove` discovers proofs by matching general theorem hypotheses.
 It uses the recurrence, its starting index and its seeds. There are no
 sequence-name tests, catalogue lookups or caller attestations in this search.
+`recurrence-theorems` is a different command: the conditional
+renewal/predecessor-window matcher, whose schema is unchanged.
 
 ```sh
 polytool recurrence --json < rows.txt > recurrence.json
@@ -31,13 +33,84 @@ Neither fitting nor held-out checks prove that identity.
 | Liu–Wang first order | `P_n = A_n P_(n-1) + V_n P'_(n-1)`; degree, sign, seed and root-location induction | Real-rootedness, negative roots and weak interlacing |
 | Derivative-lag | An additional `W_n P_(n-2)` term; degree/sign conditions, including supported half-growth patterns | Real-rootedness and the reported interlacing/root domain |
 | Ma–Wang interval | Derivative coefficient `kappa_n (x-L)(x-U)`; endpoint conditions with multiplicities | Real-rootedness in a fixed interval and weak interlacing |
-| Liu–Wang three-term | Polynomial lag coefficient, optionally a derivative; degree growth zero or one, appropriate sign and root-location checks | Real-rootedness and weak interlacing; root domain when certified |
+| Liu–Wang three-term | Polynomial lag coefficient, optionally a derivative; degree growth zero or one, appropriate sign and root-location checks; also the degenerate case `A_n = a_n g(x)`, `B_n = b_n g(x)^2` with proportional seeds, where every row is `c_n g^(n-N+2) P_(N-2)` and the check proves `c_n != 0` (a positive sequence, or a hypergeometric closed form `c_n / c_(n-1) = r(n)`, which allows `a_n` to vanish at isolated indices) | Real-rootedness and weak interlacing; root domain when certified |
+| Iterated preserver | First-order or single-lag rules `P_n = a_n(x) S_n(P_(n-L))`: a real-rooted multiplier after the identity or a preserver of the menu (Laguerre, Pólya–Schur, Rolle, Euler step, Brändén's Weyl step), also in gauge, translation and reversal coordinates; earlier seed rows checked exactly | Real-rootedness with roots in `(-inf, 0]`, `[0, inf)` or on the line |
+| Hypergeometric row | Rows whose coefficient ratio is a product of factors linear in `k` (a row relation proved for every `n`), the image of `(1 + x)^M(n)` under nonnegative multiplier sequences | Real-rootedness with roots in `(-inf, 0]` |
 
-The dispatcher tries all six and records every result. `proved` means that
-at least one attempt checked every hypothesis. `not_proved` means that this
-search did not find a proof; failure of a sufficient hypothesis is not a
+The dispatcher tries all eight, in the order of the parent cascade of the
+lift provers, and records every result. `proved` means that at least one
+attempt checked every hypothesis. `not_proved` means that this search did
+not find a proof; failure of a sufficient hypothesis is not a
 counterexample. Each attempt records its own starting index, interlacing
-range, root domain and unresolved obligations.
+range, root domain and unresolved obligations, and the RealRooted
+declarations of its route where they are recorded (`lean_route`,
+`lean_declarations`). `real_rooted_from_index` is the first index of the
+proved rows.
+
+## When no criterion proves the record
+
+**Tail.** When one of the first rows (the seeds and the next
+`max-start-delay` rows) is zero or not real-rooted, no criterion can prove
+the record from its first index. Discovery then reruns every criterion on
+the *tail record*: the same rule, starting after the last such row, with
+seeds that are rows of the family (generated exactly where needed), so that
+the rule computes the same rows. A proof of the tail is the statement
+"every row from index `N` on is nonzero and real-rooted", reported as
+`real_rooted_from_index = N` with the tail under `tail` (its `reason` names
+the excluded row). Typical inputs are OEIS triangles with prefix rows that
+are not real-rooted or are zero. (Zero seed rows that the derivative-lag
+and iterated-preserver criteria handle themselves give such a proof
+directly.)
+
+**Alternative representations.** When neither the record nor its tail is
+proved, the recurrence finder (`recurrence --representations`) runs on
+exact generated rows in two bounded passes: first-order rules with
+derivatives and a left-hand factor `f(n)` (the Liu–Wang and Ma–Wang
+shapes), and rules of lag at most two. A common factor `c(n)` of the
+fitted coefficients is cancelled (rows where `c` vanishes stay seeds).
+Each fitted rule is only a candidate: it is used once
+`certify_recurrence_equality` proves, for every index, that it defines
+the family's rows (schema `polytool.recurrence-equality.v1`):
+
+- right pseudo-division in the Ore algebra, `w(n) E = H o L + R`, of one rule
+  by the other (`ore-algebra`), so that the rows of `L` satisfy `E` at every
+  base where `w(n) != 0`;
+- when the remainder `R` is not zero and `L` has order one, an invariant
+  row annihilator `A(n)` with `nu A(n+1) o T(n) = B(n) o A(n)` and
+  `mu R = Z o A` (as for the Hadamard-factor lifts), so that `R` kills
+  every row;
+- exact row checks at the integer roots of `w`, at the restart bases of the
+  annihilator induction and at the bases before the rule starts, equal seed
+  rows, and left-hand factors that do not vanish where a rule computes a
+  row.
+
+Either direction may succeed: the family's rows satisfy the alternative
+rule, or the alternative rows satisfy the defining rule. A candidate not
+certified against the family is compared with the alternatives certified
+before it (equality is transitive). The criteria then run on the certified
+alternative; the report keeps both certificates (`equality` and
+`attempts`). This proves, for example, the convolution triangles A030524,
+A049324–A049326 and A383348 (constant-coefficient lag rules) by Ma–Wang
+through a derivative rule `n P_n = (a + b n + 2 x) P_(n-1) + x (x + c)
+P'_(n-1)`, A321966 and A271704 through first-order and derivative-lag
+rules, and A180013 by the product route. The search is bounded:
+`--max-representation-candidates N` (default 300; 0 disables the stage)
+counts finder configurations per pass deterministically, at most four
+fitted rules are certified, and the Ore-algebra arithmetic has a term
+budget. Finding nothing proves nothing.
+
+**Not applicable.** A rule with an inhomogeneous term matches none of the
+criteria (they all need a homogeneous rule); the status is then
+`not_applicable` with `not_applicable_reason`.
+
+**Known limitation: left-hand factors depending on `x`.** A left-hand
+factor `x^e f(n)` is normalized exactly when `x^e` divides every
+right-hand coefficient. Other left-hand factors that depend on `x` (for
+example `prod_j (x + n + 2 + j)`) are not supported: the criteria report
+`not_applicable` with that reason, and the equality certificates reject
+them. Normalizing by exact division of the whole rule by a factor `h(n, x)`
+dividing every coefficient would be the natural extension; no catalog rule
+needs it yet.
 
 `--max-start-delay N` allows a theorem induction to start later after checking
 the skipped rows exactly (default 3, maximum 16 in CLI/MCP). The library also
@@ -46,6 +119,25 @@ The report schema is `polytool.recurrence-proof-discovery.v1`.
 Exit codes are 0 for a proof, 1 for no proof, and 2 for invalid input.
 With `--verify`, 0 means the report replays, including a valid `not_proved`
 report; the replay output preserves the discovery status.
+
+`--verify` checks a saved report's claims, not byte equality with a
+recomputation. The search is rerun on the recorded record and options
+(same recurrence, seeds, start delay bound and root region); the recorded
+attempts must appear, equal and in order, among the recomputed attempts
+(a subsequence; each criterion at most once), and each recorded attempt
+must equal its recomputed attempt or replay on its own (a report of an
+earlier version of that check). A recorded attempt that proves nothing
+where the current check proves is accepted as superseded; a proved attempt
+always replays. The six criteria of the first schema version must be
+recorded. The tail record is re-derived from the supplied record, every
+alternative's equality certificate and attempts are recomputed, and the
+summary fields (`status`, `real_rooted_from_index`,
+`trivially_real_rooted`, `statement`) must follow from the recorded
+attempts alone, so a report never claims more than its attempts prove. A
+recomputation that tries or proves more is fine: reports saved before the
+iterated-preserver and hypergeometric-row criteria (or any later one) were
+added keep replaying. Extra or repeated attempts, reordered attempts and
+attempts flipped to proved are rejected.
 
 ## Degree laws
 
@@ -123,15 +215,20 @@ its general step appears in the formal library.
 
 The library entry point is
 `polytool::recurrence::discover_recurrence_proofs(&record, &options)`.
-It returns `RecurrenceProofDiscoveryReport`; `report.verify()` recomputes the
-complete search and replays every attempt's exact certificates. Altered
+It returns `RecurrenceProofDiscoveryReport`; `report.verify()` replays the
+recorded routes (above) and every attempt's exact certificates. Altered
 conclusions, missing attempts and mismatched seeds are rejected.
-`check_product_recurrence_theorem` is also available independently.
+`discover_recurrence_proofs_with_options` takes the bounds of the
+alternative-representation stage (`AlternativeRepresentationOptions`), and
+`certify_recurrence_equality` certifies two definitions of one sequence on
+its own. `check_product_recurrence_theorem` is also available independently.
 
 MCP tools:
 
 - `discover_recurrence_proofs`: `recurrence_json` as JSON text, optional
-  `maximum_start_delay` (default 3, maximum 16);
+  `max_start_delay` (default 3, maximum 16) and
+  `max_representation_candidates` (default 300, maximum 2000, 0 disables the
+  alternative-representation stage);
 - `verify_recurrence_proofs`: `report_json` as JSON text.
 
 Both tools use the same library code as the CLI and retain the MCP input

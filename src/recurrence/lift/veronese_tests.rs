@@ -294,7 +294,8 @@ fn modulus_four_and_an_order_two_parent_at_modulus_two() {
     assert!(lift.status.is_proved());
 
     // At r = 2, chi(L, x^2) = ((L - 1)^2 - x)((L - 1)^2 + x): the parent
-    // V_(2,0)((1 + t)^n)(x) of order two is found, with an open status.
+    // V_(2,0)((1 + t)^n)(x) of order two is found; the shared parent
+    // provers prove it (Liu--Wang three-term).
     let factors = [
         factor(&[&[1, -1], &[-2], &[1]]),
         factor(&[&[1, 1], &[-2], &[1]]),
@@ -309,8 +310,11 @@ fn modulus_four_and_an_order_two_parent_at_modulus_two() {
     assert_eq!(open.parent_initial_rows, rows(&[&[1], &[1]]));
     assert_eq!(
         open.status,
-        VeroneseSectionLiftStatus::ParentRealRootednessOpen
+        VeroneseSectionLiftStatus::ProvedParentRoute {
+            route: VeroneseParentProofRoute::LiuWangThreeTerm
+        }
     );
+    assert!(open.status.is_proved());
     assert_eq!(open.cofactor, rows(&[&[1]]));
     assert_generates(open, &rule, &seeds);
 }
@@ -334,9 +338,12 @@ fn even_sections_of_fibonacci_polynomials() {
     .unwrap();
     let lift = find_lift(&evaluation, 0).expect("Fibonacci lift");
     assert_eq!(lift.parent_initial_rows, rows(&[&[1], &[1]]));
+    // The parent is proved by the shared parent provers (a paper theorem).
     assert_eq!(
         lift.status,
-        VeroneseSectionLiftStatus::ParentRealRootednessOpen
+        VeroneseSectionLiftStatus::ProvedParentRoute {
+            route: VeroneseParentProofRoute::PaperTheorem
+        }
     );
     assert_eq!(lift.parent_row_check.rows_checked, 12);
     assert_eq!(lift.parent_row_check.first_not_real_rooted_row_index, None);
@@ -357,10 +364,7 @@ fn even_sections_of_fibonacci_polynomials() {
         report.lifts[0].parent_characteristic_polynomial,
         rows(&[&[0, -1], &[-1], &[1]])
     );
-    assert_eq!(
-        report.lifts[0].status.label(),
-        "parent_real_rootedness_open"
-    );
+    assert_eq!(report.lifts[0].status.label(), "proved_parent_route");
     assert!(report.lifts.last().unwrap().status.is_failing());
 }
 
@@ -517,10 +521,19 @@ fn unsupported_and_invalid_inputs() {
         invalid(&rule, &rows(&[&[1]]), options.clone()),
         "too few rows"
     );
-    assert!(
-        invalid(&rule, &rows(&[&[1], &[1], &[1, 2]]), options.clone()),
-        "supplied row disagrees"
-    );
+    // A supplied row that does not follow the recurrence drops the rows
+    // before it: the search runs on the tail.
+    let tail = find_veronese_section_lifts(&rule, &rows(&[&[1], &[1], &[1, 2]]), 0, &options)
+        .expect("the tail from row 1 follows the recurrence");
+    assert_eq!(tail.tail_first_index, Some(1));
+    let json = serde_json::to_value(&tail).unwrap();
+    assert_eq!(json["tail_first_index"], 1);
+    let whole = find_veronese_section_lifts(&rule, &seeds, 0, &options).unwrap();
+    assert_eq!(whole.tail_first_index, None);
+    assert!(serde_json::to_value(&whole)
+        .unwrap()
+        .get("tail_first_index")
+        .is_none());
     for max_modulus in [1, MAX_VERONESE_SECTION_MODULUS + 1] {
         let options = VeroneseSectionLiftOptions {
             max_modulus,
@@ -618,7 +631,8 @@ fn lift_summaries_of_proved_open_and_failing_parents() {
         LiftParentProof::Failed { index: Some(1), .. }
     ));
 
-    // The Fibonacci parent is open.
+    // The Fibonacci parent is proved by the shared parent provers; with the
+    // open status (as before the provers were chained) its summary is open.
     let rule = recurrence(&[(1, &[2]), (2, &[-1]), (4, &[0, 1])]);
     let fibonacci = prepared(&rule, &[&[1], &[1], &[1], &[1]]);
     let evaluation = evaluate_veronese_section_lift_candidate(
@@ -628,7 +642,15 @@ fn lift_summaries_of_proved_open_and_failing_parents() {
         12,
     )
     .unwrap();
-    let open = find_lift(&evaluation, 0).unwrap();
+    let proved_by_route = find_lift(&evaluation, 0).unwrap();
+    assert_eq!(proved_by_route.lift_summary().verdict, LiftVerdict::Proved);
+    assert!(matches!(
+        &proved_by_route.lift_summary().parent_proof,
+        LiftParentProof::Proved { route, .. } if route == "paper_theorem"
+    ));
+    let mut open = proved_by_route.clone();
+    open.status = VeroneseSectionLiftStatus::ParentRealRootednessOpen;
+    let open = &open;
     let summary = open.lift_summary();
     assert_eq!(summary.verdict, LiftVerdict::Open);
     assert!(matches!(summary.parent_proof, LiftParentProof::Open { .. }));

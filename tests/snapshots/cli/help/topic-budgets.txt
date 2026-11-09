@@ -13,6 +13,8 @@ answer on every machine (time limits are only used by `oeis evidence`).
                             enumerate-real-rooted
   --max-iterations N        bkw-scout: Durand--Kerner iterations
   --max-start-delay N       recurrence-prove
+  --max-representation-candidates N  recurrence-prove: finder configurations
+                            per alternative-representation pass
   --per-entry-timeout-seconds S  oeis evidence (wall clock)
   limits {...}              JSON requests of recurrence --space,
                             recurrence-search-representations, recurrence-implicit

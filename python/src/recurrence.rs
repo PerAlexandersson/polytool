@@ -9,9 +9,9 @@ use polytool::recurrence::{
     AdaptiveSearchOutcome, AdaptiveSearchResult, BigRational,
     LeadingCoefficientCertificate as LibraryLeadingCoefficientCertificate,
     LeadingCoefficientOptions, LeadingCoefficientSign, RealRootednessTheoremOptions,
-    RealRootednessTheoremStatus, Recurrence as LibraryRecurrence, RecurrenceError, RecurrenceJson,
-    RecurrenceJsonSearch, RecurrenceOptionsJson, RecurrenceProofDiscoveryReport,
-    RecurrenceRowIterator,
+    RealRootednessTheoremReport, RealRootednessTheoremStatus, Recurrence as LibraryRecurrence,
+    RecurrenceError, RecurrenceJson, RecurrenceJsonSearch, RecurrenceOptionsJson,
+    RecurrenceProofDiscoveryReport, RecurrenceRowIterator,
 };
 use polytool::renewal::RecurrenceTheoremReport;
 use pyo3::exceptions::{PyStopIteration, PyValueError};
@@ -689,9 +689,12 @@ fn certify_record(
 /// ``recurrence`` is a :class:`Recurrence`, or a ``polytool.recurrence.v1``
 /// record as JSON text or ``dict``.  The search tries, in order, product
 /// induction, the three-term (Favard) theorem, Liu--Wang first order,
-/// Liu--Wang derivative lag, the Ma--Wang interval criterion and the
-/// Liu--Wang three-term theorem, and checks every hypothesis exactly for all
-/// ``n`` (``polytool recurrence-prove``).  When a theorem fails at the
+/// Liu--Wang derivative lag, the Ma--Wang interval criterion, the
+/// Liu--Wang three-term theorem, the iterated-preserver and the
+/// hypergeometric-row criteria, and checks every hypothesis exactly for all
+/// ``n`` (``polytool recurrence-prove``); then the tail after rows that are
+/// zero or not real-rooted, and alternative representations with an
+/// all-index equality certificate.  When a theorem fails at the
 /// supplied initial rows, its induction may start up to
 /// ``maximum_start_delay`` rows later (the skipped rows are checked
 /// exactly).  ``root_region=(lower, upper)`` (``None`` for an infinite end)
@@ -741,7 +744,7 @@ pub(crate) fn certify_leading_coefficient(
 /// ``polytool recurrence-prove --json``).
 ///
 /// ``status`` is ``"proved"`` when at least one theorem checked every
-/// hypothesis, else ``"not_proved"`` (no disproof).  ``attempts`` lists every
+/// hypothesis, else ``"not_proved"`` or ``"not_applicable"`` (no disproof).  ``attempts`` lists every
 /// theorem tried with its hypotheses; ``route`` and ``certificate`` name the
 /// first proved one.  :meth:`verify` replays the whole search exactly.
 #[pyclass(module = "polytool", frozen)]
@@ -750,11 +753,34 @@ pub struct ProofReport {
 }
 
 impl ProofReport {
-    fn first_proved_index(&self) -> Option<usize> {
-        self.report
+    /// The first proved attempt: on the supplied record, else on its tail,
+    /// else on a certified alternative representation.
+    fn first_proved_attempt(&self) -> Option<&RealRootednessTheoremReport> {
+        let direct = self
+            .report
             .attempts
             .iter()
-            .position(|attempt| attempt.status == RealRootednessTheoremStatus::Proved)
+            .find(|attempt| attempt.status == RealRootednessTheoremStatus::Proved);
+        let tail = || {
+            self.report.tail.as_ref().and_then(|tail| {
+                tail.attempts
+                    .iter()
+                    .find(|attempt| attempt.status == RealRootednessTheoremStatus::Proved)
+            })
+        };
+        let alternative = || {
+            self.report
+                .alternative_representations
+                .as_ref()
+                .and_then(|search| search.alternatives.iter().find(|a| a.proved))
+                .and_then(|alternative| {
+                    alternative
+                        .attempts
+                        .iter()
+                        .find(|attempt| attempt.status == RealRootednessTheoremStatus::Proved)
+                })
+        };
+        direct.or_else(tail).or_else(alternative)
     }
 }
 
@@ -780,25 +806,35 @@ impl ProofReport {
         serialize_to_python(py, &self.report)
     }
 
-    /// ``"proved"`` or ``"not_proved"``.
+    /// ``"proved"``, ``"not_proved"`` or ``"not_applicable"`` (a rule no
+    /// theorem matches, such as an inhomogeneous rule).
     #[getter]
     fn status(&self) -> &str {
         &self.report.status
     }
 
-    /// Whether some theorem proved the conclusion.
+    /// Whether some theorem proved the conclusion (on the record, its tail
+    /// or a certified alternative representation).
     #[getter]
     fn is_proved(&self) -> bool {
-        self.first_proved_index().is_some()
+        self.first_proved_attempt().is_some()
+    }
+
+    /// The first index ``N`` with every row ``P_n``, ``n >= N``, proved
+    /// nonzero and real-rooted, or ``None``.
+    #[getter]
+    fn real_rooted_from_index(&self) -> Option<usize> {
+        self.report.real_rooted_from_index
     }
 
     /// The theorem of the first proved attempt (for example
-    /// ``"three_term_recurrence"``), or ``None``.
+    /// ``"three_term_recurrence"``), or ``None``; attempts on the record come
+    /// first, then those on its tail and on a certified alternative.
     #[getter]
     fn route(&self) -> PyResult<Option<String>> {
-        self.first_proved_index()
-            .map(|index| {
-                serde_json::to_value(self.report.attempts[index].theorem)
+        self.first_proved_attempt()
+            .map(|attempt| {
+                serde_json::to_value(attempt.theorem)
                     .map_err(polytool_error)
                     .map(|value| value.as_str().unwrap_or_default().to_owned())
             })
@@ -810,8 +846,8 @@ impl ProofReport {
     /// hypotheses and the conclusion), or ``None``.
     #[getter]
     fn certificate<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
-        self.first_proved_index()
-            .map(|index| serialize_to_python(py, &self.report.attempts[index]))
+        self.first_proved_attempt()
+            .map(|attempt| serialize_to_python(py, attempt))
             .transpose()
     }
 

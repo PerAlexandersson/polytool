@@ -25,19 +25,19 @@ type Q = BigRational;
 /// `A(n)` with its invariance certificate
 /// `nu(n, x) A(n + 1) o T(n) = B(n) o A(n)`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct InvariantAnnihilator {
+pub(in crate::recurrence::lift) struct InvariantAnnihilator {
     /// `A(n)`, shift-free, of positive order.
-    pub(super) annihilator: DOp,
+    pub(in crate::recurrence::lift) annihilator: DOp,
     /// `nu(n, x)`.
-    pub(super) step_multiplier: Biv,
+    pub(in crate::recurrence::lift) step_multiplier: Biv,
     /// `B(n)`, shift-free.
-    pub(super) step_quotient: DOp,
+    pub(in crate::recurrence::lift) step_quotient: DOp,
 }
 
 /// `T(n)` of a first-order parent relation `g(n) S + C_0(n)` (leader free of
 /// `x` and `D`): `T = -C_0`, so `g(n) P_(n+1) = T(n) P_n` wherever the
 /// relation holds.  `None` for parents of other orders.
-pub(super) fn step_operator(parent: &DOp) -> Option<DOp> {
+pub(in crate::recurrence::lift) fn step_operator(parent: &DOp) -> Option<DOp> {
     let (k, _) = x_free_leader(parent).ok()?;
     (k == 1).then(|| parent.column(0).scale(&-Q::one()))
 }
@@ -52,7 +52,10 @@ pub(super) fn shift_coefficients(op: &DOp, by: i64) -> DOp {
 }
 
 /// `nu A(n + 1) o T(n) - B o A(n)` vanishes.
-pub(super) fn invariance_holds(invariant: &InvariantAnnihilator, step: &DOp) -> bool {
+pub(in crate::recurrence::lift) fn invariance_holds(
+    invariant: &InvariantAnnihilator,
+    step: &DOp,
+) -> bool {
     let left = shift_coefficients(&invariant.annihilator, 1)
         .compose(step)
         .left_multiply(&invariant.step_multiplier);
@@ -223,7 +226,7 @@ fn right_gcd(f: &DOp, g: &DOp, max_terms: usize) -> Result<DOp, RecurrenceError>
 /// Search an invariant annihilator dividing `remainder` (module
 /// documentation): `None` when the gcd loop reaches order zero or an
 /// operator without a derivative.
-pub(super) fn find_invariant_annihilator(
+pub(in crate::recurrence::lift) fn find_invariant_annihilator(
     remainder: &DOp,
     step: &DOp,
     max_terms: usize,

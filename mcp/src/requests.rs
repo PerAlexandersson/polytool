@@ -626,6 +626,11 @@ pub struct DiscoverRecurrenceProofsRequest {
     /// Induction-start retries, default 3; at most 16.
     #[serde(rename = "max_start_delay", alias = "maximum_start_delay")]
     pub maximum_start_delay: Option<usize>,
+    /// Recurrence-finder configurations per pass of the
+    /// alternative-representation stage, default 300; 0 disables it; at
+    /// most 2000.
+    #[serde(default)]
+    pub max_representation_candidates: Option<usize>,
 }
 
 /// Replay a complete general recurrence proof-discovery report.

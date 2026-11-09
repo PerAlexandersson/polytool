@@ -19,6 +19,12 @@ fn print_report_text(report: &VeroneseSectionLiftReport) {
         "Input characteristic polynomial: chi(L, y) = {}",
         format_characteristic_polynomial(&report.input_characteristic_polynomial, "y")
     );
+    if let Some(index) = report.tail_first_index {
+        println!(
+            "Supplied rows before index {index} do not follow the recurrence; the search uses \
+             the rows from index {index} on."
+        );
+    }
     if report.lifts.is_empty() {
         println!("No Veronese-section lift found.");
     }

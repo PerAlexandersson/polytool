@@ -25,6 +25,15 @@ pub enum VeroneseSectionLiftStatus {
     /// input row `Q_n`, `n >= n0`, is zero or real-rooted with nonpositive
     /// roots.
     ProvedProductParent,
+    /// The parent is not a periodic product, but the shared parent provers
+    /// ([`prove_parent_real_rootedness`], without attestations) prove that
+    /// every parent row is zero or real-rooted with coefficients of one sign
+    /// by the polytool route `route`; so every input row `Q_n`,
+    /// `n >= n0`, is zero or real-rooted with nonpositive roots.
+    ProvedParentRoute {
+        /// The parent route that proved the parent statement.
+        route: VeroneseParentProofRoute,
+    },
     /// Every checked parent row is nonzero, real-rooted and has coefficients
     /// of one sign, but real-rootedness of all parent rows is not proved.
     ParentRealRootednessOpen,
@@ -51,6 +60,7 @@ impl VeroneseSectionLiftStatus {
     pub fn label(&self) -> &'static str {
         match self {
             Self::ProvedProductParent => "proved_product_parent",
+            Self::ProvedParentRoute { .. } => "proved_parent_route",
             Self::ParentRealRootednessOpen => "parent_real_rootedness_open",
             Self::ParentRowZero { .. } => "parent_row_zero",
             Self::ParentRowMixedSigns { .. } => "parent_row_mixed_signs",
@@ -60,7 +70,10 @@ impl VeroneseSectionLiftStatus {
 
     /// Whether the lift proves that every input row is zero or real-rooted.
     pub fn is_proved(&self) -> bool {
-        matches!(self, Self::ProvedProductParent)
+        matches!(
+            self,
+            Self::ProvedProductParent | Self::ProvedParentRoute { .. }
+        )
     }
 
     /// Whether a checked parent row fails, so this lift cannot give a proof.
@@ -74,14 +87,16 @@ impl VeroneseSectionLiftStatus {
             Self::ParentRowZero { index }
             | Self::ParentRowMixedSigns { index }
             | Self::ParentRowNotRealRooted { index } => Some(*index),
-            Self::ProvedProductParent | Self::ParentRealRootednessOpen => None,
+            Self::ProvedProductParent
+            | Self::ProvedParentRoute { .. }
+            | Self::ParentRealRootednessOpen => None,
         }
     }
 
     /// Sorting group: proved, open, failing.
     pub(super) fn group(&self) -> usize {
         match self {
-            Self::ProvedProductParent => 0,
+            Self::ProvedProductParent | Self::ProvedParentRoute { .. } => 0,
             Self::ParentRealRootednessOpen => 1,
             _ => 2,
         }
@@ -95,6 +110,15 @@ impl VeroneseSectionLiftStatus {
                  row has only nonpositive real roots, so every input row Q_n (n >= n0) is zero or \
                  real-rooted with nonpositive roots"
                 .into(),
+            Self::ProvedParentRoute { route } => format!(
+                "the parent provers prove every parent row zero or real-rooted with coefficients \
+                 of one sign (route {}), so every input row Q_n (n >= n0) is zero or real-rooted \
+                 with nonpositive roots",
+                serde_json::to_value(route)
+                    .ok()
+                    .and_then(|value| value.as_str().map(str::to_string))
+                    .unwrap_or_default()
+            ),
             Self::ParentRealRootednessOpen => "every checked parent row is real-rooted with \
                  coefficients of one sign; real-rootedness of all parent rows is open"
                 .into(),
@@ -266,6 +290,12 @@ pub struct VeroneseSectionLiftReport {
     pub skipped_moduli: Vec<VeroneseSectionLiftSkippedModulus>,
     /// Whether the candidate budget stopped the search at some modulus.
     pub exhausted_budget: bool,
+    /// `Some(k)` when the supplied rows before index `k` do not follow the
+    /// recurrence (for example zero or other prefix rows): the search then
+    /// runs on the rows from `k` on, whose seeds are those supplied rows,
+    /// and every lift concerns `Q_n`, `n >= k`.  `None` when every supplied
+    /// row follows the recurrence.
+    pub tail_first_index: Option<usize>,
 }
 
 /// Plain-text form of a characteristic polynomial with `[i][j]` = coefficient
@@ -385,6 +415,9 @@ impl Serialize for VeroneseSectionLiftReport {
         state.serialize_field("rejected_candidates", &self.rejected_candidates)?;
         state.serialize_field("skipped_moduli", &self.skipped_moduli)?;
         state.serialize_field("exhausted_budget", &self.exhausted_budget)?;
+        if let Some(index) = self.tail_first_index {
+            state.serialize_field("tail_first_index", &index)?;
+        }
         state.end()
     }
 }

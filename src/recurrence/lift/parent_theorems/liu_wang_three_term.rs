@@ -210,6 +210,8 @@ use super::derivative_lag::{negative_axis_sign_hypothesis, order_at_zero, x_poly
 use super::three_term::fit_index_rational_function;
 use super::*;
 
+mod proportional_rows;
+
 const REFERENCE: &str = "L. L. Liu and Y. Wang, Adv. Appl. Math. 38 (2007) 542-560, Theorem 2.1 \
      and Corollary 2.4 (A unified approach to polynomial sequences with only real zeros; the \
      lag row as the interlacer, b_n = 0), weak interlacing of consecutive rows, with \
@@ -714,10 +716,22 @@ pub(super) fn liu_wang_three_term_report(
             fallback = Some(attempt);
         }
     }
-    Ok(match fallback {
+    let result = match fallback {
         Some(attempt) if identity.status == RealRootednessTheoremStatus::NotApplicable => attempt,
         _ => identity,
-    })
+    };
+    // The degenerate case of proportional rows (submodule
+    // `proportional_rows`), tried only when nothing above proves the rule.
+    if !result.is_proved() && derivative.is_none() {
+        if let Some(proportional) =
+            proportional_rows::proportional_rows_report(report, c1, c2, &input)
+        {
+            if proportional.is_proved() {
+                return Ok(proportional);
+            }
+        }
+    }
+    Ok(result)
 }
 
 /// Whether a report concludes a root region.

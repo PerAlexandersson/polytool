@@ -65,10 +65,18 @@ fn assert_proved(id: &str, closed_at_zero: bool) -> RealRootednessTheoremReport 
     let proof =
         prove_parent_real_rootedness(&record, family.recurrence_first_index, &[], true).unwrap();
     assert_eq!(proof.status, VeroneseParentProofStatus::Proved, "{id}");
-    assert_eq!(
-        proof.route,
-        Some(VeroneseParentProofRoute::HypergeometricRow),
-        "{id}"
+    // Rows proportional to powers of one polynomial (A124860, A128540) are
+    // proved earlier in the cascade by the Liu--Wang three-term route.
+    assert!(
+        matches!(
+            proof.route,
+            Some(
+                VeroneseParentProofRoute::HypergeometricRow
+                    | VeroneseParentProofRoute::LiuWangThreeTerm
+            )
+        ),
+        "{id}: {:?}",
+        proof.route
     );
     check_recorded_parent_proof(&record, family.recurrence_first_index, &[], true, &proof).unwrap();
     report

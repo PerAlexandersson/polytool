@@ -933,6 +933,13 @@ impl VeroneseSectionLift {
                 route: "periodic_product".into(),
                 statement: self.status.statement(),
             },
+            VeroneseSectionLiftStatus::ProvedParentRoute { route } => LiftParentProof::Proved {
+                route: serde_json::to_value(route)
+                    .ok()
+                    .and_then(|value| value.as_str().map(str::to_string))
+                    .unwrap_or_default(),
+                statement: self.status.statement(),
+            },
             VeroneseSectionLiftStatus::ParentRealRootednessOpen => LiftParentProof::Open {
                 statement: self.status.statement(),
             },
@@ -969,9 +976,15 @@ impl VeroneseSectionLift {
             Vec::new(),
             parent_proof,
         )
-        .with_input_interlacing(LiftInterlacingClaim::not_proved(
-            "the periodic-product parent route proves no interlacing of consecutive parent rows",
-        ))
+        .with_input_interlacing(LiftInterlacingClaim::not_proved(match self.status {
+            VeroneseSectionLiftStatus::ProvedParentRoute { .. } => {
+                "this lift records no interlacing of consecutive parent rows"
+            }
+            _ => {
+                "the periodic-product parent route proves no interlacing of consecutive parent \
+                 rows"
+            }
+        }))
     }
 }
 

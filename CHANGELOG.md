@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- Proof discovery (issues #42, #45, #46 step 1). `recurrence-prove`
+  (`discover_recurrence_proofs`, MCP `discover_recurrence_proofs`, Python
+  `prove_real_rooted`) runs the iterated-preserver and hypergeometric-row
+  criteria after the six earlier ones, in the order of the parent cascade
+  (`DISCOVERY_THEOREMS`). When no criterion proves the record it tries the
+  tail after rows that are zero or not real-rooted (`tail`,
+  `real_rooted_from_index`) and alternative representations from the
+  recurrence finder (`alternative_representations`), each used only after an
+  all-index equality certificate (new `certify_recurrence_equality`,
+  `RecurrenceEqualityCertificate`, schema `polytool.recurrence-equality.v1`).
+  New flag `--max-representation-candidates` (MCP
+  `max_representation_candidates`), new
+  `discover_recurrence_proofs_with_options` and
+  `AlternativeRepresentationOptions`. Inhomogeneous rules get the status
+  `not_applicable` with `not_applicable_reason`. All report fields are
+  additive. `RecurrenceProofDiscoveryReport::verify` now checks a saved
+  report's claims instead of byte equality: the recorded attempts must be a
+  subsequence of the recomputed ones, each equal or replaying on its own, and
+  the summary must follow from them, so reports saved before a criterion was
+  added keep replaying.
+- `check_liu_wang_three_term_theorem` proves the degenerate case of
+  proportional rows (`A_n = a_n g`, `B_n = b_n g^2`, rows `c_n g^k P_(N-2)`)
+  by a positive scalar sequence or a hypergeometric closed form for `c_n`
+  (which allows an isolated zero of `a_n`), tried only when nothing else
+  proves the rule.
+- Veronese-section lifts: supplied rows that do not follow the recurrence are
+  dropped and the search runs on the tail (`tail_first_index`) instead of
+  failing; an open parent is passed to the shared parent provers, with the
+  new status `proved_parent_route` (`VeroneseSectionLiftStatus::ProvedParentRoute`).
+
 - CLI usability (issue #41, phases 0-3). The command line is parsed by `clap`
   from one declarative specification (`src/bin/polytool/cli/spec.rs`,
   `commands/`) that also drives every help page, `polytool help --json`, shell

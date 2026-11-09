@@ -3,7 +3,8 @@
 use crate::input::{error_text, parse_usize_option, read_stdin_or_exit};
 use crate::recurrence_input::read_recurrence_json;
 use polytool::recurrence::{
-    discover_recurrence_proofs, RealRootednessTheoremOptions, RecurrenceProofDiscoveryReport,
+    discover_recurrence_proofs_with_options, AlternativeRepresentationOptions,
+    RealRootednessTheoremOptions, RealRootednessTheoremReport, RecurrenceProofDiscoveryReport,
 };
 
 pub(crate) fn cmd_recurrence_prove(args: &[String]) {
@@ -21,7 +22,7 @@ pub(crate) fn cmd_recurrence_prove(args: &[String]) {
 }
 
 fn run(args: &[String]) -> Result<bool, String> {
-    let (mut path, mut candidate, mut delay) = (None, None, None);
+    let (mut path, mut candidate, mut delay, mut representations) = (None, None, None, None);
     let (mut json, mut verify) = (false, false);
     let mut i = 0;
     while i < args.len() {
@@ -38,6 +39,13 @@ fn run(args: &[String]) -> Result<bool, String> {
             "--max-start-delay" => {
                 delay = Some(parse_usize_option(args, &mut i, "--max-start-delay")?)
             }
+            "--max-representation-candidates" => {
+                representations = Some(parse_usize_option(
+                    args,
+                    &mut i,
+                    "--max-representation-candidates",
+                )?)
+            }
             "--json" => json = true,
             "--verify" => verify = true,
             other => return Err(format!("unknown recurrence-prove option: {other}")),
@@ -45,7 +53,7 @@ fn run(args: &[String]) -> Result<bool, String> {
         i += 1;
     }
     if verify {
-        if path.is_some() || candidate.is_some() || delay.is_some() {
+        if path.is_some() || candidate.is_some() || delay.is_some() || representations.is_some() {
             return Err("--verify cannot be combined with search flags".into());
         }
         let report: RecurrenceProofDiscoveryReport =
@@ -75,12 +83,21 @@ fn run(args: &[String]) -> Result<bool, String> {
         path.ok_or("recurrence-prove needs --recurrence <file|->")?,
         candidate,
     )?;
-    let report = discover_recurrence_proofs(
+    let alternative_options = AlternativeRepresentationOptions {
+        max_candidates: representations
+            .unwrap_or(AlternativeRepresentationOptions::default().max_candidates),
+        ..Default::default()
+    };
+    if alternative_options.max_candidates > 100_000 {
+        return Err("--max-representation-candidates must be at most 100000".into());
+    }
+    let report = discover_recurrence_proofs_with_options(
         &record,
         &RealRootednessTheoremOptions {
             maximum_start_delay,
             ..Default::default()
         },
+        &alternative_options,
     )
     .map_err(error_text)?;
     if json {
@@ -89,32 +106,78 @@ fn run(args: &[String]) -> Result<bool, String> {
             serde_json::to_string_pretty(&report).map_err(error_text)?
         );
     } else {
-        println!("Proof discovery: {}", report.status);
-        println!("{}", report.statement);
-        if report.trivially_real_rooted {
-            println!("Trivially real-rooted: product seed class, proved by product induction.");
-        }
-        for attempt in &report.attempts {
-            println!("\n{:?}: {:?}", attempt.theorem, attempt.status);
-            if let Some(conclusion) = &attempt.conclusion {
-                println!("  {}", conclusion.statement);
-            } else {
-                println!("  {}", attempt.normal_form);
-            }
-            for hypothesis in &attempt.hypotheses {
-                println!(
-                    "  {} [{:?}]: {}",
-                    hypothesis.name, hypothesis.status, hypothesis.evidence
-                );
-            }
-            println!("  Reference: {}", attempt.reference);
-            if !attempt.lean_declarations.is_empty() {
-                println!(
-                    "  Related Lean: {} (replay not attempted)",
-                    attempt.lean_declarations.join(", ")
-                );
-            }
-        }
+        print_report_text(&report);
     }
     Ok(report.status == "proved")
+}
+
+fn print_attempts_text(attempts: &[RealRootednessTheoremReport], indent: &str) {
+    for attempt in attempts {
+        println!("\n{indent}{:?}: {:?}", attempt.theorem, attempt.status);
+        if let Some(conclusion) = &attempt.conclusion {
+            println!("{indent}  {}", conclusion.statement);
+        } else {
+            println!("{indent}  {}", attempt.normal_form);
+        }
+        for hypothesis in &attempt.hypotheses {
+            println!(
+                "{indent}  {} [{:?}]: {}",
+                hypothesis.name, hypothesis.status, hypothesis.evidence
+            );
+        }
+        println!("{indent}  Reference: {}", attempt.reference);
+        if !attempt.lean_declarations.is_empty() {
+            println!(
+                "{indent}  Related Lean: {} (replay not attempted)",
+                attempt.lean_declarations.join(", ")
+            );
+        }
+    }
+}
+
+fn print_report_text(report: &RecurrenceProofDiscoveryReport) {
+    println!("Proof discovery: {}", report.status);
+    if let Some(index) = report.real_rooted_from_index {
+        println!("Every row P_n with n >= {index} is nonzero and real-rooted.");
+    }
+    if let Some(reason) = &report.not_applicable_reason {
+        println!("Not applicable: {reason}");
+    }
+    println!("{}", report.statement);
+    if report.trivially_real_rooted {
+        println!("Trivially real-rooted: product seed class, proved by product induction.");
+    }
+    print_attempts_text(&report.attempts, "");
+    if let Some(tail) = &report.tail {
+        println!("\nTail from index {}: {}", tail.first_index, tail.reason);
+        print_attempts_text(&tail.attempts, "  ");
+    }
+    if let Some(search) = &report.alternative_representations {
+        println!(
+            "\nAlternative representations: {} fitted rule(s), {} finder configuration(s); {} \
+             examined",
+            search.fitted_rules,
+            search.configurations_considered,
+            search.alternatives.len()
+        );
+        for alternative in &search.alternatives {
+            let equality = &alternative.equality;
+            let rule = equality
+                .alternative
+                .to_recurrence_parts()
+                .map(|(rule, _, _)| rule.to_string())
+                .unwrap_or_default();
+            println!("\n  Alternative rule: {rule}");
+            println!(
+                "  Equality with the family: {} {}",
+                equality.status,
+                equality.method.as_deref().unwrap_or("")
+            );
+            println!("  {}", equality.statement);
+            for reason in &equality.reasons {
+                println!("  - {reason}");
+            }
+            print_attempts_text(&alternative.attempts, "  ");
+        }
+    }
 }

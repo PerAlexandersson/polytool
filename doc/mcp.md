@@ -70,7 +70,9 @@ most 64 rows of degree at most 64 and steps of length and rise at most 8 for
 `polytool.recurrence-veronese-lifts.v1` report: parents `P_n(x)` whose
 coefficient sections are the supplied sequence, each with its
 `parent_recurrence` record (usable with `generate_recurrence_rows`) and a
-status, of which only `proved_product_parent` is a proof.  The MCP server
+status, of which `proved_product_parent` and `proved_parent_route` are
+proofs (`tail_first_index` names the first used row when supplied rows that
+do not follow the recurrence were dropped).  The MCP server
 bounds the work: recurrence order at most 12, `max_modulus` at most 6,
 `parent_rows` default 12 and at most 64, `max_candidates` default 256 and at
 most 4096.
@@ -129,9 +131,17 @@ development notes.
 ## General recurrence proof discovery
 
 `discover_recurrence_proofs` takes `recurrence_json` and optional
-`max_start_delay` (default 3, at most 16). It tries six general theorem
-families without catalogue lookup. `verify_recurrence_proofs` takes
-`report_json` and replays every attempt and exact certificate. A proved
+`max_start_delay` (default 3, at most 16) and `max_representation_candidates`
+(default 300, at most 2000, 0 disables the alternative-representation stage).
+It tries the eight general theorem families of the parent cascade (product,
+three-term, Liu--Wang, derivative lag, Ma--Wang interval, Liu--Wang
+three-term, iterated preserver, hypergeometric row) without catalogue
+lookup, then the tail after rows that are zero or not real-rooted, then
+alternative rules from the recurrence finder, each used only after an
+all-index equality certificate. `verify_recurrence_proofs` takes
+`report_json` and replays the recorded routes (every attempt, the tail and
+every equality certificate; attempts are additive, so older reports still
+replay). A proved
 result concerns the recurrence-defined sequence; finite fits require a
 separate all-index identity. Lean replay is not attempted. See
 [the proof-discovery guide](proof-discovery.md).

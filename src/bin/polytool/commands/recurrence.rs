@@ -467,20 +467,35 @@ pub(crate) const RECURRENCE_PROVE: CommandSpec = CommandSpec {
     group: GROUP,
     summary: "Discover and replay general recurrence proofs",
     usage: &[
-        "recurrence-prove --recurrence <FILE|-> [--candidate N] [--max-start-delay N]",
+        "recurrence-prove --recurrence <FILE|-> [--candidate N] [--max-start-delay N] \
+         [--max-representation-candidates N]",
         "recurrence-prove --verify < proof.json",
     ],
     description: r#"Discover general proofs for a recurrence and seeds; no named-sequence lookup.
-Tries product induction, Favard/three-term, Liu-Wang, derivative-lag, Ma-Wang
-interval and Liu-Wang three-term criteria, with exact all-index hypothesis
+Tries, in the order of the parent cascade, product induction, Favard/three-term,
+Liu-Wang, derivative-lag, Ma-Wang interval, Liu-Wang three-term, iterated
+preserver and hypergeometric-row criteria, with exact all-index hypothesis
 checks. Reports every attempt, its obligations and conclusion. A fit still needs
 an all-index identity for an independently defined family. Rust certificates can
 be replayed; Lean replay is not attempted.
 
+When no criterion proves the record:
+  - tail: if one of the first rows is zero or not real-rooted, the criteria run
+    on the record starting after the last such row; a proof then says "every
+    row from index N on is real-rooted" (real_rooted_from_index);
+  - alternative representations: the recurrence finder's menu on generated rows
+    proposes other rules (first-order derivative rules with a factor f(n), lag
+    at most two); a rule is used only after an all-index equality certificate
+    (Ore-algebra division and invariant row annihilators, exact), then the
+    criteria run on it. --max-representation-candidates bounds each finder pass
+    (deterministic count; 0 disables the stage).
+A rule with an inhomogeneous term matches no criterion: status not_applicable.
+
 The recurrence input is recurrence.v1 JSON, a theorem wrapper or a
 representation menu; with a menu, --candidate is required unless it has one
-entry. --verify replays the complete report from standard input and takes no
-search flags."#,
+entry. --verify replays the recorded routes of a report from standard input
+(every attempt, the tail and every equality certificate) and takes no search
+flags."#,
     input: InputKind::Json,
     output: OutputKind::JsonSwitch,
     flags: &[
@@ -492,11 +507,20 @@ search flags."#,
             "Induction-start retries (maximum 16)",
         )
         .default("3"),
-        switch("verify", "Replay the complete report from stdin; no search flags"),
+        option(
+            "max-representation-candidates",
+            "N",
+            "Finder configurations per alternative-representation pass (0: off)",
+        )
+        .default("300"),
+        switch("verify", "Replay the recorded routes of a report from stdin; no search flags"),
     ],
     details: r#"JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is
 true when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and
-product induction proves it."#,
+product induction proves it. real_rooted_from_index is the first index of the
+proved rows; tail and alternative_representations hold the later stages, each
+alternative with its polytool.recurrence-equality.v1 certificate. Reports saved
+before a criterion was added still replay (attempts are additive)."#,
     examples: &[
         "polytool recurrence --json < rows.txt | polytool recurrence-prove --recurrence - --json",
         "polytool recurrence-prove --recurrence rec.json --json > proof.json\npolytool recurrence-prove --verify < proof.json",
@@ -578,9 +602,12 @@ Aissen-Schoenberg-Whitney-Edrei), so a lift transfers real-rootedness to Q_n.
 
 Supported input: derivative-free terms without (-1)^n factors and with
 coefficients independent of n, a constant (or no) denominator, no inhomogeneous
-term. Anything else exits with status 2. Theorem wrappers and representation
-menus are accepted (select an entry with --candidate, 0-based). Without
---recurrence the record is read from standard input.
+term. Anything else exits with status 2. Supplied rows that do not follow the
+recurrence (zero or other prefix rows) are dropped: the search runs on the
+shortest tail of rows that does, and the report names its first index
+(tail_first_index). Theorem wrappers and representation menus are accepted
+(select an entry with --candidate, 0-based). Without --recurrence the record is
+read from standard input.
 
 The search is bounded: no lift found does not mean that none exists."#,
     input: InputKind::Json,
@@ -604,6 +631,10 @@ Status of a lift:
   proved_product_parent        order-one parent P_n = c^(n-n0) P_(n0) with c and
                                P_(n0) real-rooted of one sign: every Q_n (n >= n0)
                                is zero or real-rooted with nonpositive roots
+  proved_parent_route          another parent, proved zero or real-rooted of one
+                               sign for every n by the shared parent provers
+                               (theorem routes of recurrence-prove): same
+                               conclusion for every Q_n
   parent_real_rootedness_open  all checked parent rows are real-rooted of one
                                sign (finite evidence, not a proof)
   parent_row_zero, parent_row_mixed_signs, parent_row_not_real_rooted

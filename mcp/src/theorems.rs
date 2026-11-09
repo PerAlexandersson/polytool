@@ -46,7 +46,10 @@ pub(crate) fn supplied_theorem_report(
 pub(crate) fn discover_proofs(
     input: &crate::requests::DiscoverRecurrenceProofsRequest,
 ) -> Result<BTreeMap<String, serde_json::Value>, McpError> {
-    use polytool::recurrence::{discover_recurrence_proofs, RealRootednessTheoremOptions};
+    use polytool::recurrence::{
+        discover_recurrence_proofs_with_options, AlternativeRepresentationOptions,
+        RealRootednessTheoremOptions,
+    };
     validate_mcp_text(&input.recurrence_json, "recurrence JSON").map_err(invalid_params)?;
     let record: RecurrenceJson = serde_json::from_str(&input.recurrence_json)
         .map_err(|error| invalid_params(error.to_string()))?;
@@ -58,12 +61,22 @@ pub(crate) fn discover_proofs(
     if maximum_start_delay > 16 {
         return Err(invalid_params("maximum_start_delay must be at most 16"));
     }
-    let report = discover_recurrence_proofs(
+    let mut alternative = AlternativeRepresentationOptions::default();
+    if let Some(candidates) = input.max_representation_candidates {
+        if candidates > 2000 {
+            return Err(invalid_params(
+                "max_representation_candidates must be at most 2000",
+            ));
+        }
+        alternative.max_candidates = candidates;
+    }
+    let report = discover_recurrence_proofs_with_options(
         &record,
         &RealRootednessTheoremOptions {
             maximum_start_delay,
             ..Default::default()
         },
+        &alternative,
     )
     .map_err(|e| invalid_params(e.to_string()))?;
     let serde_json::Value::Object(fields) =
@@ -115,6 +128,7 @@ mod tests {
             .discover_recurrence_proofs(Parameters(DiscoverRecurrenceProofsRequest {
                 recurrence_json: record.to_string(),
                 maximum_start_delay: Some(0),
+                max_representation_candidates: None,
             }))
             .unwrap();
         assert_eq!(report["status"], "proved");
@@ -136,6 +150,7 @@ mod tests {
             .discover_recurrence_proofs(Parameters(DiscoverRecurrenceProofsRequest {
                 recurrence_json: record.to_string(),
                 maximum_start_delay: Some(17),
+                max_representation_candidates: None,
             }))
             .is_err());
     }

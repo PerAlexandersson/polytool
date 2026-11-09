@@ -216,8 +216,10 @@ returns the conditional theorem report of `polytool recurrence-theorems`.
 `prove_real_rooted` (also a `Recurrence` method) runs the general theorem
 search of `polytool recurrence-prove` ([proof-discovery.md](proof-discovery.md)):
 product induction, three-term (Favard), Liu--Wang, Liu--Wang derivative lag,
-Ma--Wang interval and Liu--Wang three-term criteria, each hypothesis decided
-exactly for every `n`.
+Ma--Wang interval, Liu--Wang three-term, iterated-preserver and
+hypergeometric-row criteria, each hypothesis decided exactly for every `n`,
+then the tail after rows that are zero or not real-rooted and certified
+alternative representations.
 
 ```pycon
 >>> report = narayana.prove_real_rooted()

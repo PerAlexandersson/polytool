@@ -9,8 +9,8 @@ use num_bigint::BigInt;
 use polytool::recurrence::{
     find_veronese_section_lifts, format_characteristic_polynomial, BigRational, BivarPoly,
     Recurrence, RecurrenceError, RecurrenceJson, RecurrenceSign, RecurrenceTerm,
-    VeroneseSectionLift, VeroneseSectionLiftOptions, VeroneseSectionLiftRejectionReason,
-    VeroneseSectionLiftReport, VeroneseSectionLiftStatus,
+    VeroneseParentProofRoute, VeroneseSectionLift, VeroneseSectionLiftOptions,
+    VeroneseSectionLiftRejectionReason, VeroneseSectionLiftReport, VeroneseSectionLiftStatus,
 };
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
@@ -164,16 +164,21 @@ fn sections_of_two_plus_three_x_and_modulus_four() {
     let rule = recurrence(&[(1, &[4]), (2, &[-6]), (3, &[4]), (4, &[-1, 1])]);
     let seeds = product_sections(1, 1, 4, 0, 4);
     let report = lifts(&rule, &as_slices(&seeds), &Default::default());
-    let best = &report.lifts[0];
-    assert_eq!((best.modulus, best.residue), (4, 0));
-    assert_eq!(parent_text(best), "L - 1 - x");
-    assert!(best.status.is_proved());
-    // The order-two parent sum_k C(n, 2k) x^k at modulus 2 stays open.
-    let open = find(&report, 2, 0, "L^2 - 2L + 1 - x").expect("order-two parent");
+    // Proved lifts come first, by modulus: the chained order-two parent at
+    // modulus 2 (below), then the product parent at modulus 4.
+    let product = find(&report, 4, 0, "L - 1 - x").expect("modulus-four parent");
     assert_eq!(
-        open.status,
-        VeroneseSectionLiftStatus::ParentRealRootednessOpen
+        product.status,
+        VeroneseSectionLiftStatus::ProvedProductParent
     );
+    assert_eq!((report.lifts[0].modulus, report.lifts[0].residue), (2, 0));
+    // The order-two parent sum_k C(n, 2k) x^k at modulus 2 is proved by the
+    // shared parent provers.
+    let open = find(&report, 2, 0, "L^2 - 2L + 1 - x").expect("order-two parent");
+    assert!(matches!(
+        open.status,
+        VeroneseSectionLiftStatus::ProvedParentRoute { .. }
+    ));
 }
 
 #[test]
@@ -191,7 +196,9 @@ fn even_sections_of_fibonacci_polynomials() {
     assert_eq!(best.parent_initial_rows, rows(&[&[1], &[1]]));
     assert_eq!(
         best.status,
-        VeroneseSectionLiftStatus::ParentRealRootednessOpen
+        VeroneseSectionLiftStatus::ProvedParentRoute {
+            route: VeroneseParentProofRoute::PaperTheorem
+        }
     );
     assert_eq!(best.parent_row_check.rows_checked, 12);
     assert_eq!(best.parent_row_check.first_not_real_rooted_row_index, None);

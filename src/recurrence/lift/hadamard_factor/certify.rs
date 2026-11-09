@@ -203,7 +203,7 @@ impl ProductParent {
 
 /// `mu f = Z o g + rem` in the Weyl algebra (shift-free operators), with
 /// `mu` a power of the leading coefficient of `g` and `ord rem < ord g`.
-pub(super) fn right_pseudo_divide(
+pub(in crate::recurrence::lift) fn right_pseudo_divide(
     f: &DOp,
     g: &DOp,
     max_terms: usize,

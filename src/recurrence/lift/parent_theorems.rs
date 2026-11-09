@@ -1,8 +1,11 @@
 //! Paper theorems that prove a recurrence-defined family real-rooted, with
 //! every hypothesis checked exactly for all indices.
 //!
-//! - [`discover_recurrence_proofs`]: try all six general criteria and retain
-//!   every attempt in a replayable report, without catalogue attestations;
+//! - [`discover_recurrence_proofs`]: try every general criterion below (in
+//!   the order of the parent cascade), then the tail after rows that are not
+//!   real-rooted and certified alternative representations
+//!   ([`certify_recurrence_equality`]), and retain every attempt in a
+//!   replayable report, without catalogue attestations;
 //! - [`check_product_recurrence_theorem`]: product induction for uniformly
 //!   real-rooted multipliers and nonvanishing scalar denominators;
 //! - [`check_three_term_recurrence_theorem`]: three-term recurrences
@@ -138,6 +141,15 @@ use std::collections::{BTreeMap, BTreeSet};
 mod discovery;
 pub use discovery::{
     discover_recurrence_proofs, RecurrenceProofDiscoveryReport, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
+};
+pub use discovery::{
+    discover_recurrence_proofs_with_options, AlternativeRepresentationOptions,
+    AlternativeRepresentationProof, AlternativeRepresentationSearch, RecurrenceProofTail,
+    DISCOVERY_THEOREMS,
+};
+mod recurrence_equality;
+pub use recurrence_equality::{
+    certify_recurrence_equality, RecurrenceEqualityCertificate, RECURRENCE_EQUALITY_SCHEMA,
 };
 mod product;
 pub use product::{check_product_recurrence_theorem, is_trivially_real_rooted};

@@ -729,9 +729,13 @@ polytool recurrence-degree --verify < degree.json
 
 ## General proof discovery
 
-`polytool recurrence-prove --recurrence recurrence.json --json` checks six
-general theorem families and emits a replayable report with exact hypotheses,
-conclusions and unresolved obligations. Use `--candidate N` for a menu and
+`polytool recurrence-prove --recurrence recurrence.json --json` checks eight
+general theorem families (the parent cascade, including the iterated-preserver
+and hypergeometric-row criteria), then the tail after rows that are zero or not
+real-rooted and certified alternative representations
+(`--max-representation-candidates N`, 0 disables them), and emits a replayable
+report with exact hypotheses, conclusions and unresolved obligations. Use
+`--candidate N` for a menu and
 `polytool recurrence-prove --verify --json < proof.json` to replay. See
 [General recurrence proof discovery](proof-discovery.md) for the supported
 rules, evidence boundaries, product certificates and Lean correspondence.

@@ -36,7 +36,7 @@ fn record(rule: &Recurrence, seeds: &[&[i64]], first: usize) -> RecurrenceJson {
 fn checked(record: &RecurrenceJson) -> RecurrenceProofDiscoveryReport {
     let report = discover_recurrence_proofs(record, &options()).unwrap();
     report.verify().unwrap();
-    assert_eq!(report.attempts.len(), 6);
+    assert_eq!(report.attempts.len(), DISCOVERY_THEOREMS.len());
     assert_eq!(report.lean_replay, "not_attempted");
     report
 }

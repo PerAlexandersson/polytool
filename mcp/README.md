@@ -689,16 +689,18 @@ Example arguments:
 The response is `polytool.recurrence-veronese-lifts.v1`:
 `input_characteristic_polynomial` (`[i][j]` is the coefficient of `L^i y^j`,
 exact strings) with `input_characteristic_polynomial_text`, `lifts`,
-`rejected_candidates`, `skipped_moduli` and `exhausted_budget`.  Each lift has
-`modulus`, `residue`, `status` (`proved_product_parent`,
-`parent_real_rootedness_open`, `parent_row_zero`, `parent_row_mixed_signs` or
+`rejected_candidates`, `skipped_moduli`, `exhausted_budget` and, when supplied
+rows that do not follow the recurrence were dropped, `tail_first_index`.  Each
+lift has `modulus`, `residue`, `status` (`proved_product_parent`,
+`proved_parent_route`, `parent_real_rootedness_open`, `parent_row_zero`, `parent_row_mixed_signs` or
 `parent_row_not_real_rooted`), `failing_row_index`, `statement`, the parent
 characteristic polynomial `G(L, x)`, the section characteristic polynomial
 `N(L, y)` and the `cofactor` `chi / N` (each with a `_text` form),
 `parent_recurrence` (a `polytool.recurrence.v1` record with the parent seeds,
 accepted by `generate_recurrence_rows`) and `parent_row_check`.  For the
 example the first lift is `G = L - 1 - x` with seed `1`, the parent `(1 + x)^n`,
-status `proved_product_parent`.  Only that status is a proof; an open status
+status `proved_product_parent`.  It and `proved_parent_route` (an open parent
+proved by the shared parent provers) are proofs; an open status
 is finite evidence, and an empty `lifts` list means only that the bounded
 search found nothing.
 
@@ -1077,9 +1079,17 @@ Report issues in the Git repository, or contact Per Alexandersson
 ## General recurrence proof discovery
 
 `discover_recurrence_proofs` takes `recurrence_json` and optional
-`max_start_delay` (default 3, at most 16). It tries six general theorem
-families without catalogue lookup. `verify_recurrence_proofs` takes
-`report_json` and replays every attempt and exact certificate. A proved
+`max_start_delay` (default 3, at most 16) and `max_representation_candidates`
+(default 300, at most 2000, 0 disables the alternative-representation stage).
+It tries the eight general theorem families of the parent cascade (product,
+three-term, Liu--Wang, derivative lag, Ma--Wang interval, Liu--Wang
+three-term, iterated preserver, hypergeometric row) without catalogue
+lookup, then the tail after rows that are zero or not real-rooted, then
+alternative rules from the recurrence finder, each used only after an
+all-index equality certificate. `verify_recurrence_proofs` takes
+`report_json` and replays the recorded routes (every attempt, the tail and
+every equality certificate; attempts are additive, so older reports still
+replay). A proved
 result concerns the recurrence-defined sequence; finite fits require a
 separate all-index identity. Lean replay is not attempted. See
 [the proof-discovery guide](../doc/proof-discovery.md).

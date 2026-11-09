@@ -133,6 +133,12 @@ pub use parent_proof::{
 mod parent_theorems;
 pub(in crate::recurrence) use parent_theorems::rule_with_x_free_left_hand_factor;
 pub use parent_theorems::{
+    certify_recurrence_equality, discover_recurrence_proofs_with_options,
+    AlternativeRepresentationOptions, AlternativeRepresentationProof,
+    AlternativeRepresentationSearch, RecurrenceEqualityCertificate, RecurrenceProofTail,
+    DISCOVERY_THEOREMS, RECURRENCE_EQUALITY_SCHEMA,
+};
+pub use parent_theorems::{
     check_hypergeometric_row_theorem, check_iterated_preserver_theorem,
     check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem,
     check_liu_wang_three_term_theorem, check_ma_wang_interval_theorem,
