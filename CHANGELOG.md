@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Normalized all-index equality. New
+  `certify_normalized_recurrence_equality(source, target, options)` proves
+  `T_n = c(n) x^(alpha n + beta) S_(n + s)` for every `n` from the target's
+  first index plus `d` dropped leading rows, searching a small menu (index
+  shift `|s| <= 4`, `d <= 3`, affine exponent, hypergeometric scalar with
+  `c(n) / c(n - 1) = p(n) / q(n)` of degree at most 2) and certifying the
+  first match: the normalized source rule is computed exactly (shift,
+  Leibniz expansion of `D^d (x^m V)`, scalar products), `c(n) != 0` for every
+  index is decided by `integer_range_sign`, and `certify_recurrence_equality`
+  proves the normalized source equal to the target's tail. A left-hand factor
+  `a(n) h(x)` whose `h` divides every coefficient is cancelled first. New
+  types `NormalizedRecurrenceEqualityCertificate`
+  (`polytool.recurrence-normalized-equality.v1`, replayed by recomputation),
+  `RecurrenceNormalization`, `NormalizedEqualityOptions`, and
+  `certify_recurrence_normalization` for a given normalization.
+  `transfer_real_rootedness_along_normalization` carries a proved root region
+  along a certified normalization in either direction (the hull with `0`
+  when a power of `x` is involved; uncovered rows checked exactly), as a
+  replayable `NormalizedRealRootednessTransfer`
+  (`polytool.normalized-real-rootedness-transfer.v1`). Identifies OEIS
+  A263789 (`n x` times the peak polynomials, shifted), A348576 (a shifted
+  Möbius image) and A257142 (a shifted forward Narayana image). No existing
+  serialization changes.
+
 - Published basis maps with index-dependent rules. New
   `BasisMap::narayana_transformation(m)` (Mao--Wang, arXiv:2607.01572,
   Theorem 1: PF to PF; RealRooted `narayanaTransformPreservesPF`),

@@ -47,6 +47,13 @@
 //!   rule through the intertwining relation of `T_P` with multiplication
 //!   by `u` (the `basis_map` module docs).
 //!
+//! Normalized equality, [`certify_normalized_recurrence_equality`]: two
+//! recurrence definitions agree for every index up to an index shift,
+//! dropped leading rows, a power `x^(alpha n + beta)` and a hypergeometric
+//! per-row scalar proved nonzero; [`transfer_real_rootedness_along_normalization`]
+//! carries a proved root region along it (the `normalized_equality` module
+//! docs).
+//!
 //! Every lift carries a uniform [`LiftSummary`] with the shared
 //! [`lift_verdict`].
 //!
@@ -171,6 +178,14 @@ pub use parent_theorems::{
 pub use parent_theorems::{
     check_factor_gauge_theorem, FactorGaugeCertificate, FactorGaugeDominantRoot,
     FactorGaugeResidualShape,
+};
+mod normalized_equality;
+pub use normalized_equality::{
+    certify_normalized_recurrence_equality, certify_recurrence_normalization,
+    transfer_real_rootedness_along_normalization, NormalizationTransferDirection,
+    NormalizedEqualityOptions, NormalizedRealRootednessTransfer,
+    NormalizedRecurrenceEqualityCertificate, RecurrenceNormalization,
+    NORMALIZED_REAL_ROOTEDNESS_TRANSFER_SCHEMA, NORMALIZED_RECURRENCE_EQUALITY_SCHEMA,
 };
 mod row_factor;
 pub use row_factor::{
