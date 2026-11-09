@@ -142,6 +142,14 @@
 //! row that is checked exactly (a seed, or a root-region failure at a
 //! computed row).
 //!
+//! # Route registry
+//!
+//! Each theorem's module declares its registry entry (a `ROUTE` constant:
+//! the theorem and its check at the supplied seeds), and the private
+//! `registry::ROUTES` lists them in the order of
+//! [`RealRootednessTheorem::ALL`].  [`check_real_rootedness_theorem`] checks
+//! any theorem by name; the `check_*` functions above are its wrappers.
+//!
 //! Related: `parent_proof` uses these provers as parent routes of the
 //! Veronese-section lifts; [`match_recurrence_theorems`] (renewal windows) and
 //! the Rolle routes of [`transform_recurrence`] cover other families.
@@ -189,6 +197,9 @@ mod variable_delay;
 mod index_section;
 // Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`).
 mod factor_gauge;
+// The registry of the theorem routes.
+mod registry;
+use registry::{route, TheoremRoute};
 // Root-region helpers shared by the checks.
 mod region;
 use region::{
@@ -884,44 +895,7 @@ fn check_at_supplied_seeds(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    match theorem {
-        RealRootednessTheorem::ProductRecurrence => {
-            product::product_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::ThreeTermRecurrence => {
-            three_term::three_term_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::LiuWang => {
-            liu_wang::liu_wang_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::LiuWangDerivativeLag => {
-            derivative_lag::derivative_lag_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::MaWangInterval => {
-            ma_wang::ma_wang_interval_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::LiuWangThreeTerm => {
-            liu_wang_three_term::liu_wang_three_term_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::IteratedPreserver => {
-            iterated_preserver::iterated_preserver_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::HypergeometricRow => {
-            hypergeometric_row::hypergeometric_row_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::VariableDelay => {
-            variable_delay::variable_delay_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::ResidueClassSubsequences => {
-            residue_class::residue_class_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::IndexSectionLift => {
-            index_section::index_section_report(rule, first_index, seeds, options)
-        }
-        RealRootednessTheorem::FactorGauge => {
-            factor_gauge::factor_gauge_report(rule, first_index, seeds, options)
-        }
-    }
+    (route(theorem).check_at_supplied_seeds)(rule, first_index, seeds, options)
 }
 
 /// The theorem check with the induction start moved `delay` rows past the
@@ -1113,6 +1087,69 @@ fn check_with_first_proving_start(
         }
     }
     Ok(proved_without_region.unwrap_or(report))
+}
+
+/// Check `theorem` for the family given by `rule`, `first_index` and the
+/// seed rows `seeds` (the rule applies from `N = first_index + seeds.len()`
+/// on): the check of that theorem, for example
+/// [`check_three_term_recurrence_theorem`] for
+/// [`RealRootednessTheorem::ThreeTermRecurrence`], with the induction start
+/// moved when the theorem is not proved at the supplied seeds (module
+/// documentation, "Moving the induction start").  Every theorem of
+/// [`RealRootednessTheorem::ALL`] is checked this way.
+///
+/// # Errors
+///
+/// The errors of the theorem's check, for example a record that cannot be
+/// normalized or a rule that cannot generate the rows it needs.
+///
+/// # Example
+///
+/// ```
+/// use num_bigint::BigInt;
+/// use polytool::recurrence::{
+///     check_real_rootedness_theorem, BigRational, BivarPoly, RealRootednessTheorem,
+///     RealRootednessTheoremOptions, Recurrence, RecurrenceTerm,
+/// };
+///
+/// let q = |v: i64| BigRational::from_integer(BigInt::from(v));
+/// // Hermite: H_n = 2 x H_(n-1) - 2 (n - 1) H_(n-2), H_0 = 1, H_1 = 2 x.
+/// let rule = Recurrence {
+///     terms: vec![
+///         RecurrenceTerm::new(1, 0, BivarPoly::from_coefficients_normalized(vec![vec![q(0), q(2)]])),
+///         RecurrenceTerm::new(
+///             2,
+///             0,
+///             BivarPoly::from_coefficients_normalized(vec![vec![q(2)], vec![q(-2)]]),
+///         ),
+///     ],
+///     denominator: None,
+///     inhomogeneous: None,
+/// };
+/// let seeds = vec![vec![q(1)], vec![q(0), q(2)]];
+/// for theorem in RealRootednessTheorem::ALL {
+///     let report = check_real_rootedness_theorem(
+///         theorem,
+///         &rule,
+///         0,
+///         &seeds,
+///         &RealRootednessTheoremOptions::default(),
+///     )
+///     .unwrap();
+///     assert_eq!(report.theorem, theorem);
+///     if theorem == RealRootednessTheorem::ThreeTermRecurrence {
+///         assert!(report.is_proved());
+///     }
+/// }
+/// ```
+pub fn check_real_rootedness_theorem(
+    theorem: RealRootednessTheorem,
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<Q>],
+    options: &RealRootednessTheoremOptions,
+) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    check_with_first_proving_start(theorem, rule, first_index, seeds, options)
 }
 
 /// The degree law of a theorem from the shared leading-coefficient module

@@ -613,7 +613,7 @@ pub fn check_hypergeometric_row_theorem(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::HypergeometricRow,
         rule,
         first_index,
@@ -622,8 +622,14 @@ pub fn check_hypergeometric_row_theorem(
     )
 }
 
+/// The registry entry of the row-hypergeometric theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::HypergeometricRow,
+    check_at_supplied_seeds: hypergeometric_row_report,
+};
+
 /// The theorem at the supplied seeds.
-pub(super) fn hypergeometric_row_report(
+fn hypergeometric_row_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],

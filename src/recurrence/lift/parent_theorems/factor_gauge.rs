@@ -400,7 +400,7 @@ pub fn check_factor_gauge_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::FactorGauge,
         rule,
         first_index,
@@ -957,7 +957,13 @@ fn palindromic_hypotheses(
 /// in `n` and condition.
 type PalindromicCondition<'a> = (&'static str, &'static str, &'a Vec<Q>, IndexSignCondition);
 
-pub(super) fn factor_gauge_report(
+/// The registry entry of the factor gauge ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::FactorGauge,
+    check_at_supplied_seeds: factor_gauge_report,
+};
+
+fn factor_gauge_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],

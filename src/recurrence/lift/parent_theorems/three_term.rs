@@ -228,7 +228,7 @@ pub fn check_three_term_recurrence_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::ThreeTermRecurrence,
         rule,
         first_index,
@@ -237,8 +237,14 @@ pub fn check_three_term_recurrence_theorem(
     )
 }
 
+/// The registry entry of the three-term theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::ThreeTermRecurrence,
+    check_at_supplied_seeds: three_term_report,
+};
+
 /// The check with the induction at the given (normalized) seeds.
-pub(super) fn three_term_report(
+fn three_term_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<BigRational>],

@@ -136,7 +136,7 @@ pub fn check_liu_wang_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::LiuWang,
         rule,
         first_index,
@@ -145,8 +145,14 @@ pub fn check_liu_wang_theorem(
     )
 }
 
+/// The registry entry of the Liu--Wang theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::LiuWang,
+    check_at_supplied_seeds: liu_wang_report,
+};
+
 /// The check with the induction at the given (normalized) seeds.
-pub(super) fn liu_wang_report(
+fn liu_wang_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<BigRational>],

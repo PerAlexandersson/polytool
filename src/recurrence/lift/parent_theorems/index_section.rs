@@ -410,7 +410,7 @@ pub fn check_index_section_lift_theorem(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::IndexSectionLift,
         rule,
         first_index,
@@ -1003,7 +1003,13 @@ fn polynomial_text(p: &UnivariatePolynomial) -> String {
     format_shift_polynomial(&[p.coeffs().to_vec()], "x")
 }
 
-pub(super) fn index_section_report(
+/// The registry entry of the index-section lift ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::IndexSectionLift,
+    check_at_supplied_seeds: index_section_report,
+};
+
+fn index_section_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],

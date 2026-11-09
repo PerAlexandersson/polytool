@@ -314,7 +314,7 @@ pub fn check_liu_wang_three_term_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::LiuWangThreeTerm,
         rule,
         first_index,
@@ -596,13 +596,19 @@ fn gauge_candidates(c1: &Bivariate, c2: &Bivariate) -> Vec<Q> {
         .collect()
 }
 
+/// The registry entry of the Liu--Wang three-term theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::LiuWangThreeTerm,
+    check_at_supplied_seeds: liu_wang_three_term_report,
+};
+
 /// The check with the induction at the given (normalized) seeds: the
 /// identity coordinates first, then the gauges and the reversal (module
 /// documentation, "Coordinates"); the first report proved with a root
 /// region, else the first proved report (identity first), else the report
 /// in the identity coordinates (or, when the rule does not have the form
 /// there, the first other report that is not `not_applicable`).
-pub(super) fn liu_wang_three_term_report(
+fn liu_wang_three_term_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<BigRational>],

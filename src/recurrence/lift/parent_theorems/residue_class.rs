@@ -169,7 +169,7 @@ pub fn check_residue_class_subsequence_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::ResidueClassSubsequences,
         rule,
         first_index,
@@ -279,7 +279,13 @@ fn zero_class_declaration(class: &Recurrence) -> Option<&'static str> {
     }
 }
 
-pub(super) fn residue_class_report(
+/// The registry entry of the residue-class theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::ResidueClassSubsequences,
+    check_at_supplied_seeds: residue_class_report,
+};
+
+fn residue_class_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],

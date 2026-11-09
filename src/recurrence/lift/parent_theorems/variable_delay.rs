@@ -218,7 +218,7 @@ pub fn check_variable_delay_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::VariableDelay,
         rule,
         first_index,
@@ -247,7 +247,13 @@ fn window_step(seed: &[Q], previous: &[Q], delayed: &[Q]) -> Option<(Q, Q)> {
         .then_some((a, b))
 }
 
-pub(super) fn variable_delay_report(
+/// The registry entry of the fixed-delay theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::VariableDelay,
+    check_at_supplied_seeds: variable_delay_report,
+};
+
+fn variable_delay_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],

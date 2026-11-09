@@ -227,7 +227,7 @@ pub fn check_ma_wang_interval_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::MaWangInterval,
         rule,
         first_index,
@@ -484,8 +484,14 @@ fn endpoint_threshold(
     }
 }
 
+/// The registry entry of the Ma--Wang interval theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::MaWangInterval,
+    check_at_supplied_seeds: ma_wang_interval_report,
+};
+
 /// The check with the induction at the given (normalized) seeds.
-pub(super) fn ma_wang_interval_report(
+fn ma_wang_interval_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<BigRational>],

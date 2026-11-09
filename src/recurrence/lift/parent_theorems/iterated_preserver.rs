@@ -319,7 +319,7 @@ pub fn check_iterated_preserver_theorem(
     seeds: &[Vec<BigRational>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    super::check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::IteratedPreserver,
         rule,
         first_index,
@@ -1560,8 +1560,14 @@ fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedReg
     }
 }
 
+/// The registry entry of the iterated-preserver theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::IteratedPreserver,
+    check_at_supplied_seeds: iterated_preserver_report,
+};
+
 /// The check with the induction at the given (normalized) seeds.
-pub(super) fn iterated_preserver_report(
+fn iterated_preserver_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<BigRational>],

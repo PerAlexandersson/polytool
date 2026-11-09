@@ -32,7 +32,7 @@ pub fn check_product_recurrence_theorem(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    check_with_first_proving_start(
+    check_real_rootedness_theorem(
         RealRootednessTheorem::ProductRecurrence,
         rule,
         first_index,
@@ -66,7 +66,13 @@ pub fn is_trivially_real_rooted(
     .trivially_real_rooted)
 }
 
-pub(super) fn product_report(
+/// The registry entry of the product theorem ([`super::registry::ROUTES`]).
+pub(super) const ROUTE: TheoremRoute = TheoremRoute {
+    theorem: RealRootednessTheorem::ProductRecurrence,
+    check_at_supplied_seeds: product_report,
+};
+
+fn product_report(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],
