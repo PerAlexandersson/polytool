@@ -97,3 +97,100 @@ pub(super) fn transported_scalar_rule(
             )
         })
 }
+
+/// How a [`Transport`] was obtained.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TransportKind {
+    /// The companion transport of an index-free map (`Phi = sum_i e_i(n, C) S^i`).
+    Companion,
+    /// The index-side transport through a Riordan coefficient family
+    /// (`super::riordan`): a scalar rule of the image.
+    Riordan,
+}
+
+/// The transported system with what the identity certificate needs: its
+/// leader `g(n) S^k I`, the first base from which `Phi W = 0` holds, and
+/// the number of image rows from the first index that determine `H` by
+/// `Phi` (used by the reverse division).
+#[derive(Debug, Clone)]
+pub(super) struct Transport {
+    pub(super) system: OperatorMatrix,
+    pub(super) order: usize,
+    pub(super) leader: Biv,
+    pub(super) valid_from_base: usize,
+    pub(super) identifying_rows: usize,
+    pub(super) kind: TransportKind,
+}
+
+/// The transported system of the coefficient family through `map`: the
+/// companion transport when the map has a companion form (unchanged), else
+/// the index-side transport when the coefficient family is a Riordan
+/// family.
+///
+/// # Errors
+///
+/// [`RecurrenceError::Unsupported`] when neither applies (with both
+/// reasons), [`RecurrenceError::LimitExceeded`] over the term budget, and
+/// the errors of the constructions.
+pub(super) fn transport_coefficient_family(
+    coefficient: &crate::recurrence::lift::hadamard_factor::prepare::PreparedLiftRule,
+    map: &BasisMap,
+    max_terms: usize,
+) -> Result<Transport, RecurrenceError> {
+    use crate::recurrence::lift::section_certify::x_free_leader;
+    let companion_reason = match map.companion_operators() {
+        Ok(_) => {
+            let system = transported_system(&coefficient.relation, map, max_terms)?;
+            let (order, leader) = x_free_leader(&coefficient.relation)?;
+            return Ok(Transport {
+                system,
+                order,
+                leader,
+                valid_from_base: coefficient.valid_from_base(),
+                identifying_rows: coefficient.seeds.len(),
+                kind: TransportKind::Companion,
+            });
+        }
+        Err(RecurrenceError::Unsupported(reason)) => reason,
+        Err(error) => return Err(error),
+    };
+    let transport = match super::riordan::riordan_transport(coefficient, map) {
+        Ok(transport) => transport,
+        Err(RecurrenceError::Unsupported(reason)) => {
+            return Err(RecurrenceError::Unsupported(format!(
+                "{companion_reason}; the index-side transport does not apply either: {reason}"
+            )))
+        }
+        Err(error) => return Err(error),
+    };
+    check_term_budget(transport.relation.term_count(), max_terms)?;
+    let (order, leader) = x_free_leader(&transport.relation)?;
+    // H is determined by Phi from the rows before valid_from_base + order and
+    // after every integer root of the leader at a base >= valid_from_base.
+    let leader_values: Vec<_> = leader
+        .rows()
+        .iter()
+        .map(|row| row.first().cloned().unwrap_or_else(num_traits::Zero::zero))
+        .collect();
+    let last_root = crate::recurrence::implicit::algebra::roots_in_domain(
+        &leader_values,
+        transport.valid_from_base,
+        None,
+    )
+    .into_iter()
+    .max();
+    let mut identifying = transport.valid_from_base + order - coefficient.first_index;
+    if let Some(root) = last_root {
+        identifying = identifying.max(root + order + 1 - coefficient.first_index);
+    }
+    Ok(Transport {
+        system: OperatorMatrix {
+            entries: vec![vec![transport.relation]],
+        },
+        order,
+        leader,
+        valid_from_base: transport.valid_from_base,
+        identifying_rows: identifying,
+        kind: TransportKind::Riordan,
+    })
+}

@@ -174,7 +174,8 @@ pub use parent_theorems::{
 };
 mod row_factor;
 pub use row_factor::{
-    find_row_factor_lifts, RowFactorCertificate, RowFactorIdentityStatus, RowFactorLift,
+    find_row_factor_lifts, RowFactorCertificate, RowFactorDivisionCertificate,
+    RowFactorDivisionQuotient, RowFactorExceptionalPrefix, RowFactorIdentityStatus, RowFactorLift,
     RowFactorLiftOptions, RowFactorLiftReport, RowFactorRejection, MAX_ROW_FACTOR_ROWS,
     ROW_FACTOR_LIFTS_SCHEMA,
 };

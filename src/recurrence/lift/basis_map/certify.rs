@@ -19,7 +19,7 @@ use super::quadratic::AlgebraicInterval;
 use super::theorems::{
     check_basis_map_preserves_pf, BasisMapConclusion, BasisMapTheoremOptions, BasisMapTheoremReport,
 };
-use super::transport::transported_system;
+use super::transport::{transport_coefficient_family, Transport};
 use crate::real_rootedness::{isolate_real_roots_rational_coeffs, RealInterval};
 use crate::recurrence::implicit::algebra::{roots_in_domain, Biv, DOp};
 use crate::recurrence::VeroneseParentProofRoute;
@@ -401,8 +401,9 @@ fn certify_identity(
             reason,
         },
     };
-    let system = match transported_system(&coefficient.relation, map, options.max_operator_terms) {
-        Ok(system) => system,
+    let transport = match transport_coefficient_family(coefficient, map, options.max_operator_terms)
+    {
+        Ok(transport) => transport,
         Err(RecurrenceError::Unsupported(reason)) => {
             return Ok(IdentityOutcome {
                 status: BasisMapIdentityStatus::Unsupported { reason },
@@ -411,19 +412,12 @@ fn certify_identity(
         Err(RecurrenceError::LimitExceeded(reason)) => return Ok(supported(reason)),
         Err(error) => return Err(error),
     };
-    let (k, leader) = match x_free_leader(&coefficient.relation) {
-        Ok(found) => found,
-        Err(RecurrenceError::Unsupported(reason)) => {
-            return Ok(IdentityOutcome {
-                status: BasisMapIdentityStatus::Unsupported { reason },
-            })
-        }
-        Err(error) => return Err(error),
-    };
+    let system = &transport.system;
+    let (k, leader) = (transport.order, transport.leader.clone());
     let mut reasons = Vec::new();
     // Direction A.
     let rho = first_component_row(&input.relation, system.size());
-    match pseudo_divide_row(&rho, &system, k, &leader, options.max_operator_terms) {
+    match pseudo_divide_row(&rho, system, k, &leader, options.max_operator_terms) {
         Ok(division) if division.remainder_is_zero() => {
             let certificate = build_certificate(
                 input,
@@ -432,9 +426,9 @@ fn certify_identity(
                 BasisMapDivisionDirection::InputByTransported,
                 &division,
                 input.valid_from_base(),
-                coefficient.valid_from_base(),
+                transport.valid_from_base,
             );
-            match check_certificate(&certificate, input, map, coefficient, &system) {
+            match check_certificate(&certificate, input, map, coefficient, &transport) {
                 Ok(()) => {
                     return Ok(IdentityOutcome {
                         status: BasisMapIdentityStatus::Certified {
@@ -476,10 +470,10 @@ fn certify_identity(
                         coefficient,
                         BasisMapDivisionDirection::TransportedByInput,
                         &division,
-                        coefficient.valid_from_base(),
+                        transport.valid_from_base,
                         input.valid_from_base(),
                     );
-                    match check_certificate(&certificate, input, map, coefficient, &system) {
+                    match check_certificate(&certificate, input, map, coefficient, &transport) {
                         Ok(()) => {
                             return Ok(IdentityOutcome {
                                 status: BasisMapIdentityStatus::Certified {
@@ -551,8 +545,9 @@ fn check_certificate(
     input: &PreparedLiftRule,
     map: &BasisMap,
     coefficient: &PreparedLiftRule,
-    system: &OperatorMatrix,
+    transport: &Transport,
 ) -> Result<(), RecurrenceError> {
+    let system = &transport.system;
     let fail = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
     let multiplier: Vec<Q> = certificate
         .multiplier
@@ -574,7 +569,7 @@ fn check_certificate(
             first_component_row(&input.relation, system.size()),
             system.clone(),
             input.valid_from_base(),
-            coefficient.valid_from_base(),
+            transport.valid_from_base,
         ),
         BasisMapDivisionDirection::TransportedByInput => {
             if system.size() != 1 {
@@ -585,7 +580,7 @@ fn check_certificate(
                 OperatorMatrix {
                     entries: vec![vec![input.relation.clone()]],
                 },
-                coefficient.valid_from_base(),
+                transport.valid_from_base,
                 input.valid_from_base(),
             )
         }
@@ -618,7 +613,7 @@ fn check_certificate(
     let n0 = input.first_index;
     let count = (top + order + 1)
         .saturating_sub(n0)
-        .max(input.seeds.len().max(coefficient.seeds.len()));
+        .max(input.seeds.len().max(transport.identifying_rows));
     if count > MAX_BASIS_MAP_LIFT_CHECKED_ROWS {
         return fail("the exceptional bases need more rows than the checked-row bound");
     }
@@ -641,7 +636,7 @@ fn check_certificate(
     // Identifying rows.
     let identifying = match certificate.direction {
         BasisMapDivisionDirection::InputByTransported => input.seeds.len(),
-        BasisMapDivisionDirection::TransportedByInput => coefficient.seeds.len(),
+        BasisMapDivisionDirection::TransportedByInput => transport.identifying_rows,
     };
     if q_rows[..identifying] != h_rows[..identifying] {
         return fail("the identifying rows differ");
@@ -669,13 +664,9 @@ impl BasisMapDivisionCertificate {
                 "the coefficient family and the input start at different indices".into(),
             ));
         }
-        let system = transported_system(
-            &coefficient.relation,
-            &self.basis,
-            MAX_BASIS_MAP_OPERATOR_TERMS,
-        )?;
-        x_free_leader(&coefficient.relation)?;
-        check_certificate(self, &input, &self.basis, &coefficient, &system)
+        let transport =
+            transport_coefficient_family(&coefficient, &self.basis, MAX_BASIS_MAP_OPERATOR_TERMS)?;
+        check_certificate(self, &input, &self.basis, &coefficient, &transport)
     }
 }
 

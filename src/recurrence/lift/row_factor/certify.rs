@@ -1,16 +1,24 @@
 //! The substitution `Q_n = F^(e(n)) S_n` into the input relation and the
 //! replayable [`RowFactorCertificate`].
 
-use super::super::hadamard_factor::prepare::prepare_lift_rule;
+use super::super::hadamard_factor::prepare::{
+    prepare_lift_rule, shift_free_from_json, shift_free_json, PreparedLiftRule,
+};
+use super::super::section_certify::{
+    division_identity_holds, n_coefficients, x_free_leader, ForwardDivision,
+};
+use super::super::section_operators::OperatorMatrix;
 use crate::polynomial::Polynomial;
-use crate::recurrence::implicit::algebra::{q, Biv, DOp};
+use crate::recurrence::implicit::algebra::{q, roots_in_domain, Biv, DOp};
 use crate::recurrence::lift::section_certify::n_polynomial;
 use crate::recurrence::{
-    decode_poly, ImplicitRelation, ImplicitRelationJson, RecurrenceError, RecurrenceJson,
+    decode_poly, format_rational_coeff, parse_rational_coeff, ImplicitRelation,
+    ImplicitRelationJson, OperatorTermJson, RecurrenceError, RecurrenceJson,
 };
 use crate::vec_poly;
 use crate::BigRational;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 type Q = BigRational;
 
@@ -177,6 +185,236 @@ impl RowFactorCertificate {
         let prepared = prepare_lift_rule(&rule, &rows, cofactor_first, "cofactor")?;
         if prepared.relation != cofactor {
             return failed("the cofactor record's rule is not the cofactor relation");
+        }
+        Ok(())
+    }
+}
+
+/// One quotient `H_nu` of a [`RowFactorDivisionCertificate`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RowFactorDivisionQuotient {
+    /// The shift `nu`.
+    pub shift: usize,
+    /// `H_nu`, a shift-free operator.
+    pub terms: Vec<OperatorTermJson>,
+}
+
+/// The identity behind a row-factor lift certified by division (module
+/// documentation of `row_factor`, "The division route"): the cofactor
+/// family `S` has its own rule `L_S` (leader free of `x`), and the
+/// substituted input relation `M_S` (`(M F^e S)_n = F^(e(n) - J) (M_S
+/// S)_n`) is a left multiple of it, `w(n) M_S = sum_nu H_nu S^nu L_S`.
+/// [`verify`](Self::verify) re-validates both records, recomputes `M_S`,
+/// checks the identity exactly, recomputes the exceptional bases and
+/// evaluates `M` there on the rows `F^(e(n)) S_n`, and compares the
+/// identifying rows of the input.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RowFactorDivisionCertificate {
+    /// `F`, ascending exact coefficients.
+    pub factor: Vec<String>,
+    /// The slope of `e(n)`.
+    pub exponent_slope: usize,
+    /// The offset of `e(n)` (`e(n0) >= 0`).
+    pub exponent_offset: i64,
+    /// The input: rule, first index `n0` and identifying seeds.
+    pub input: RecurrenceJson,
+    /// The cofactor `S`: rule `L_S`, first index `n0` and seeds.
+    pub cofactor: RecurrenceJson,
+    /// `w(n)`, ascending in `n`.
+    pub multiplier: Vec<String>,
+    /// The quotients `H_nu`.
+    pub quotients: Vec<RowFactorDivisionQuotient>,
+    /// Bases where `M` was evaluated exactly on the rows `F^(e(n)) S_n`:
+    /// those from the input's first valid base below the cofactor's, and
+    /// the integer roots of `w` from there on.
+    pub exceptional_bases: Vec<usize>,
+    /// What the certificate proves.
+    pub statement: String,
+}
+
+/// The exceptional bases of a division certificate.
+pub(super) fn division_exceptional_bases(
+    multiplier: &Biv,
+    input_from: usize,
+    cofactor_from: usize,
+) -> Vec<usize> {
+    let mut bases: Vec<usize> = (input_from..cofactor_from).collect();
+    let w = n_coefficients(multiplier);
+    if vec_poly::degree(&w).unwrap_or(0) > 0 {
+        bases.extend(roots_in_domain(&w, input_from.max(cofactor_from), None));
+    }
+    bases.sort_unstable();
+    bases.dedup();
+    bases
+}
+
+/// A record prepared from its seeds (rows regenerated).
+fn prepare_record(
+    record: &RecurrenceJson,
+    name: &str,
+) -> Result<PreparedLiftRule, RecurrenceError> {
+    let (rule, first_index, seeds) = record.to_recurrence_parts()?;
+    let rows = rule
+        .generate_rows_rational(&seeds, first_index, seeds.len() + 2)
+        .map_err(|error| {
+            RecurrenceError::VerificationFailed(format!("the {name} cannot be replayed: {error}"))
+        })?;
+    prepare_lift_rule(&rule, &rows, first_index, name)
+}
+
+impl RowFactorDivisionCertificate {
+    /// Build the certificate of a zero-remainder division and check it with
+    /// [`verify`](Self::verify).
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::VerificationFailed`] when the check fails.
+    pub(super) fn build(
+        input: &PreparedLiftRule,
+        cofactor: &PreparedLiftRule,
+        factor: &[String],
+        (slope, offset): (usize, i64),
+        division: &ForwardDivision,
+        max_rows: usize,
+    ) -> Result<Self, RecurrenceError> {
+        let n0 = input.first_index;
+        let certificate = Self {
+            factor: factor.to_vec(),
+            exponent_slope: slope,
+            exponent_offset: offset,
+            input: RecurrenceJson::from_recurrence_rational(&input.rule, n0, &input.seeds, None),
+            cofactor: RecurrenceJson::from_recurrence_rational(
+                &cofactor.rule,
+                n0,
+                &cofactor.seeds,
+                None,
+            ),
+            multiplier: n_coefficients(&division.multiplier)
+                .iter()
+                .map(format_rational_coeff)
+                .collect(),
+            quotients: division
+                .quotients
+                .iter()
+                .map(|(shift, row)| RowFactorDivisionQuotient {
+                    shift: *shift,
+                    terms: shift_free_json(&row[0]),
+                })
+                .collect(),
+            exceptional_bases: division_exceptional_bases(
+                &division.multiplier,
+                input.valid_from_base(),
+                cofactor.valid_from_base(),
+            ),
+            statement: format!(
+                "w(n) M_S = sum_nu H_nu S^nu L_S with zero remainder, so F^(e(n)) S_n satisfies \
+                 the input rule at every base n >= {} (exceptional bases evaluated exactly) and \
+                 agrees with Q_n on the {} identifying rows: Q_n = F^(e(n)) S_n for every n >= \
+                 {n0}",
+                input.valid_from_base(),
+                input.seeds.len()
+            ),
+        };
+        certificate.verify_with_rows(max_rows)?;
+        Ok(certificate)
+    }
+
+    /// Replay the certificate (type documentation).
+    ///
+    /// # Errors
+    ///
+    /// [`RecurrenceError::VerificationFailed`] for any mismatch, and the
+    /// errors of the replays.
+    pub fn verify(&self) -> Result<(), RecurrenceError> {
+        self.verify_with_rows(super::search::MAX_ROW_FACTOR_ROWS)
+    }
+
+    fn verify_with_rows(&self, max_rows: usize) -> Result<(), RecurrenceError> {
+        let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
+        let input = prepare_record(&self.input, "input")?;
+        let cofactor = prepare_record(&self.cofactor, "cofactor")?;
+        let n0 = input.first_index;
+        if cofactor.first_index != n0 {
+            return failed("the cofactor does not start at the input's first index");
+        }
+        let exponent = |n: usize| (self.exponent_slope * n) as i64 + self.exponent_offset;
+        if exponent(n0) < 0 {
+            return failed("e(n0) is negative");
+        }
+        let f = decode_poly(&self.factor)?;
+        if vec_poly::degree(&f).unwrap_or(0) == 0 {
+            return failed("the factor is constant");
+        }
+        x_free_leader(&cofactor.relation)?;
+        let substituted = substitute(
+            &input.relation,
+            &f,
+            self.exponent_slope,
+            self.exponent_offset,
+        );
+        let multiplier: Vec<Q> = self
+            .multiplier
+            .iter()
+            .map(|c| parse_rational_coeff(c))
+            .collect::<Result<_, _>>()?;
+        let multiplier = Biv::new(multiplier.into_iter().map(|c| vec![c]).collect());
+        let mut quotients = BTreeMap::new();
+        for quotient in &self.quotients {
+            quotients.insert(quotient.shift, vec![shift_free_from_json(&quotient.terms)?]);
+        }
+        let division = ForwardDivision {
+            multiplier: multiplier.clone(),
+            quotients,
+            remainder: vec![DOp::default()],
+        };
+        let divisor = OperatorMatrix {
+            entries: vec![vec![cofactor.relation.clone()]],
+        };
+        if multiplier.is_zero() || !division_identity_holds(&[substituted], &divisor, &division) {
+            return failed("the division identity w M_S = sum H S^nu L_S does not hold");
+        }
+        let exceptional = division_exceptional_bases(
+            &multiplier,
+            input.valid_from_base(),
+            cofactor.valid_from_base(),
+        );
+        if exceptional != self.exceptional_bases {
+            return failed("the recorded exceptional bases differ from the recomputed ones");
+        }
+        let top = exceptional.iter().max().copied().unwrap_or(0);
+        let count = (top + input.leader_shift + 1)
+            .saturating_sub(n0)
+            .max(input.seeds.len());
+        if count > max_rows {
+            return failed("the exceptional bases need more rows than the row bound");
+        }
+        let candidate: Vec<Vec<Q>> = cofactor
+            .rows(count)?
+            .iter()
+            .enumerate()
+            .map(|(offset, s)| {
+                vec_poly::trim(&vec_poly::mul(
+                    &vec_poly::pow(&f, exponent(n0 + offset) as usize),
+                    s,
+                ))
+            })
+            .collect();
+        for &base in &exceptional {
+            let value = input
+                .relation
+                .apply(&candidate, n0, base)
+                .ok_or_else(|| RecurrenceError::VerificationFailed("missing row".into()))?;
+            if !vec_poly::is_zero(&value) {
+                return failed(&format!(
+                    "the input rule fails at the exceptional base {base}"
+                ));
+            }
+        }
+        let identifying = input.seeds.len();
+        if input.rows(identifying)? != candidate[..identifying] {
+            return failed("the identifying rows differ");
         }
         Ok(())
     }
