@@ -104,7 +104,7 @@ fn parent_proof(
 
 fn is_weyl_step(report: &RealRootednessTheoremReport) -> bool {
     matches!(
-        report.iterated_preserver().unwrap().preserver,
+        report.iterated_preserver_certificate().unwrap().preserver,
         Some(PreserverOperator::WeylOperator { .. })
     )
 }
@@ -180,7 +180,7 @@ fn single_lag_rules_run_in_each_residue_class() {
         assert_eq!(seeds.len(), 2, "{id}");
         let report = check(&rule, first_index, &seeds);
         assert!(report.is_proved(), "{id}: {report:#?}");
-        let certificate = report.iterated_preserver().unwrap();
+        let certificate = report.iterated_preserver_certificate().unwrap();
         assert_eq!(certificate.lag, 2, "{id}");
         assert!(certificate.coordinates.is_identity());
         assert!(certificate.verify_operator_identity(&rule).is_ok());
@@ -201,7 +201,7 @@ fn single_lag_rules_run_in_each_residue_class() {
         iterated_preserver_mut(&mut tampered).lag = 1;
         assert!(tampered.verify().is_err());
         assert!(tampered
-            .iterated_preserver()
+            .iterated_preserver_certificate()
             .unwrap()
             .verify_operator_identity(&rule)
             .is_err());
@@ -211,7 +211,7 @@ fn single_lag_rules_run_in_each_residue_class() {
     let (rule, first_index, seeds) = catalog("A026386");
     let report = check(&rule, first_index, &seeds);
     assert!(report.is_proved(), "{report:#?}");
-    assert_eq!(report.iterated_preserver().unwrap().lag, 2);
+    assert_eq!(report.iterated_preserver_certificate().unwrap().lag, 2);
 }
 
 #[test]
@@ -222,7 +222,7 @@ fn a_power_gauge_turns_the_rows_into_an_euler_step() {
     let report = check(&rule, first_index, &seeds);
     assert!(report.is_proved(), "{report:#?}");
     assert_eq!(report.start_delay, 1);
-    let certificate = report.iterated_preserver().unwrap();
+    let certificate = report.iterated_preserver_certificate().unwrap();
     assert_eq!(
         certificate.coordinates,
         IteratedPreserverCoordinates::PowerGauge { power: 1 }
@@ -247,7 +247,7 @@ fn the_reversal_turns_the_rows_into_an_euler_step() {
         let (rule, first_index, seeds) = catalog(id);
         let report = check(&rule, first_index, &seeds);
         assert!(report.is_proved(), "{id}: {report:#?}");
-        let certificate = report.iterated_preserver().unwrap();
+        let certificate = report.iterated_preserver_certificate().unwrap();
         assert_eq!(
             certificate.coordinates,
             IteratedPreserverCoordinates::Reversal {
@@ -282,7 +282,7 @@ fn a_translation_moves_the_euler_step_to_the_origin() {
     let seeds = vec![row(&[1])];
     let report = check(&rule, 0, &seeds);
     assert!(report.is_proved(), "{report:#?}");
-    let certificate = report.iterated_preserver().unwrap();
+    let certificate = report.iterated_preserver_certificate().unwrap();
     assert_eq!(
         certificate.coordinates,
         IteratedPreserverCoordinates::Translation { shift: "-1".into() }
@@ -294,7 +294,7 @@ fn a_translation_moves_the_euler_step_to_the_origin() {
         IteratedPreserverCoordinates::Translation { shift: "1".into() };
     assert!(tampered.verify().is_err());
     assert!(tampered
-        .iterated_preserver()
+        .iterated_preserver_certificate()
         .unwrap()
         .verify_operator_identity(&rule)
         .is_err());
@@ -346,7 +346,7 @@ fn the_half_line_euler_step_still_wins_where_the_weyl_step_fails() {
     let report = check(&rule, first_index, &seeds);
     assert!(report.is_proved());
     assert!(matches!(
-        report.iterated_preserver().unwrap().preserver,
+        report.iterated_preserver_certificate().unwrap().preserver,
         Some(PreserverOperator::EulerStep { .. })
     ));
     // A step with no other menu shape and a negative discriminant at x = 0:
@@ -419,7 +419,7 @@ fn a_tampered_weyl_step_is_refused() {
     };
     terms[0].coeff.coeffs[0][0] = "5".into();
     assert!(tampered
-        .iterated_preserver()
+        .iterated_preserver_certificate()
         .unwrap()
         .verify_operator_identity(&rule)
         .is_err());

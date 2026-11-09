@@ -830,7 +830,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Replay a polytool.recurrence-proof-discovery.v1 report by its recorded routes: recompute every recorded theorem attempt and independently replay its exact sign certificates, re-derive the tail record, and replay every equality certificate of an alternative representation. Attempts are additive, so reports saved before a criterion was added still replay. Rejects altered conclusions, missing attempts or substituted evidence. A valid not_proved report is not a real-rootedness proof; Rust replay is not Lean replay."
+        description = "Replay a polytool.recurrence-proof-discovery.v1 report by its recorded routes: recompute every recorded theorem attempt and independently replay its exact sign certificates, re-derive the tail record, and replay every equality certificate of an alternative representation. The recorded attempts must be of exactly the criteria the current search records (recompute reports saved before a criterion was added). Rejects altered conclusions, missing attempts or substituted evidence. A valid not_proved report is not a real-rootedness proof; Rust replay is not Lean replay."
     )]
     pub fn verify_recurrence_proofs(
         &self,

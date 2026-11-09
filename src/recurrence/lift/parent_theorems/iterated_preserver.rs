@@ -273,7 +273,7 @@ impl IteratedPreserverCertificate {
 /// theorem checks ([`RealRootednessTheoremOptions::maximum_start_delay`]).
 ///
 /// The report carries the recognized step in
-/// [`RealRootednessTheoremReport::iterated_preserver`];
+/// [`RealRootednessTheoremReport::iterated_preserver_certificate`];
 /// [`RealRootednessTheoremReport::verify`] recomputes the report and replays
 /// the operator identity and every sign certificate.
 ///
@@ -1565,7 +1565,7 @@ fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedReg
 /// identity coordinates.
 fn proof_in_identity_coordinates(report: &RealRootednessTheoremReport) -> bool {
     !report
-        .iterated_preserver()
+        .iterated_preserver_certificate()
         .is_some_and(|certificate| !certificate.coordinates.is_identity())
 }
 
@@ -1576,9 +1576,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::MovesStart,
     is_preferred: proof_in_identity_coordinates,
     certificate_name: Some("iterated-preserver"),
-    discovery: DiscoveryPolicy::Always {
-        first_version: false,
-    },
+    discovery: DiscoveryPolicy::Always,
     in_residue_class_menu: true,
     in_index_section_menu: true,
     parent: ParentPolicy {

@@ -1,7 +1,7 @@
 //! Proof discovery beyond the supplied rule: the full theorem list, tails
 //! after rows that are not real-rooted, certified alternative
 //! representations, proportional rows, inhomogeneous rules, replay of
-//! first-version reports, and the Veronese-section tails and chaining.
+//! tampered attempt lists, and the Veronese-section tails and chaining.
 
 use polytool::recurrence::*;
 
@@ -39,9 +39,9 @@ fn every_parent_cascade_theorem_is_attempted_in_order() {
     let record = catalog_record("A001263");
     let report = discover(&record);
     let order: Vec<_> = report.attempts.iter().map(|a| a.theorem).collect();
-    assert_eq!(order, DISCOVERY_THEOREMS.to_vec());
+    assert_eq!(order, RealRootednessTheorem::ALL[..8]);
     assert_eq!(
-        &DISCOVERY_THEOREMS[6..],
+        &order[6..],
         &[
             RealRootednessTheorem::IteratedPreserver,
             RealRootednessTheorem::HypergeometricRow
@@ -271,33 +271,16 @@ fn inhomogeneous_rules_are_reported_not_applicable() {
 }
 
 #[test]
-fn first_version_reports_keep_replaying() {
+fn tampered_attempt_lists_do_not_replay() {
     let report = discover(&catalog_record("A008292"));
     assert_eq!(report.status, "proved");
-    // A report of the first schema version: six attempts, no new fields.
-    let mut legacy = serde_json::to_value(&report).unwrap();
-    let object = legacy.as_object_mut().unwrap();
-    object["attempts"].as_array_mut().unwrap().truncate(6);
-    object.remove("real_rooted_from_index");
-    object.insert(
-        "statement".into(),
-        serde_json::json!(
-            "Each proved attempt establishes its conclusion for the recurrence-defined \
-             sequence. Applying it to an independently defined sequence requires an all-index \
-             recurrence identity and the stated seeds; finite fitting or held-out checks do not \
-             establish that identity. No Lean replay was attempted."
-        ),
-    );
-    let legacy: RecurrenceProofDiscoveryReport = serde_json::from_value(legacy).unwrap();
-    legacy.verify().unwrap();
-    // Dropping a first-version attempt is rejected.
-    let mut dropped = legacy.clone();
-    dropped.attempts.remove(2);
-    assert!(dropped.verify().is_err());
-    // A report missing only a newer theorem in the middle still replays.
-    let mut without_preserver = report.clone();
-    without_preserver.attempts.remove(6);
-    without_preserver.verify().unwrap();
+    report.verify().unwrap();
+    // Dropping an attempt is rejected (also an attempt of a newer theorem).
+    for position in [2, 6] {
+        let mut dropped = report.clone();
+        dropped.attempts.remove(position);
+        assert!(dropped.verify().is_err(), "{position}");
+    }
     // Reordering is rejected.
     let mut reordered = report.clone();
     reordered.attempts.swap(6, 7);
@@ -317,7 +300,7 @@ fn first_version_reports_keep_replaying() {
     open.status = RealRootednessTheoremStatus::Proved;
     assert!(flipped.verify().is_err());
     // A not_proved status with a proved attempt is rejected.
-    let mut status = legacy;
+    let mut status = report;
     status.status = "not_proved".into();
     assert!(status.verify().is_err());
 }

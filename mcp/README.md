@@ -1088,8 +1088,9 @@ lookup, then the tail after rows that are zero or not real-rooted, then
 alternative rules from the recurrence finder, each used only after an
 all-index equality certificate. `verify_recurrence_proofs` takes
 `report_json` and replays the recorded routes (every attempt, the tail and
-every equality certificate; attempts are additive, so older reports still
-replay). A proved
+every equality certificate; the attempts must be of exactly the criteria
+the current search records, so reports saved before a criterion was added
+are recomputed). A proved
 result concerns the recurrence-defined sequence; finite fits require a
 separate all-index identity. Lean replay is not attempted. See
 [the proof-discovery guide](../doc/proof-discovery.md).

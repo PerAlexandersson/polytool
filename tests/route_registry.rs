@@ -6,7 +6,6 @@ use polytool::recurrence::{
     check_real_rootedness_theorem, check_residue_class_subsequence_theorem,
     check_variable_delay_theorem, BigRational, RealRootednessTheorem, RealRootednessTheoremOptions,
     RealRootednessTheoremReport, Recurrence, RouteCertificate, VeroneseParentProofRoute,
-    DISCOVERY_THEOREMS, ROW_ROUTE_THEOREMS,
 };
 use serde_json::Value;
 
@@ -130,16 +129,6 @@ fn every_theorem_has_exactly_one_parent_route_of_the_same_name() {
     );
 }
 
-#[test]
-fn the_discovery_lists_are_prefixes_of_the_theorem_order() {
-    let listed: Vec<RealRootednessTheorem> = DISCOVERY_THEOREMS
-        .iter()
-        .chain(ROW_ROUTE_THEOREMS.iter())
-        .copied()
-        .collect();
-    assert_eq!(listed, RealRootednessTheorem::ALL[..listed.len()]);
-}
-
 // ---------------------------------------------------------------------------
 // Route certificates in JSON
 // ---------------------------------------------------------------------------
@@ -174,26 +163,23 @@ fn parse(value: Value) -> Result<RealRootednessTheoremReport, serde_json::Error>
 }
 
 #[test]
-fn a_certificate_keeps_its_key_and_round_trips_byte_for_byte() {
-    for (report, key, theorem) in [
-        (
-            fixed_delay_report(),
-            "variable_delay",
-            RealRootednessTheorem::VariableDelay,
-        ),
+fn a_certificate_is_tagged_by_its_theorem_and_round_trips() {
+    for (report, theorem) in [
+        (fixed_delay_report(), RealRootednessTheorem::VariableDelay),
         (
             residue_class_report(),
-            "residue_classes",
             RealRootednessTheorem::ResidueClassSubsequences,
         ),
     ] {
         let certificate = report.certificate.as_ref().unwrap();
         assert_eq!(certificate.theorem(), theorem);
+        let value = serde_json::to_value(&report).unwrap();
+        let tagged = value["certificate"].as_object().unwrap();
+        assert_eq!(
+            tagged.keys().collect::<Vec<_>>(),
+            [&theorem.as_str().to_string()]
+        );
         let text = serde_json::to_string(&report).unwrap();
-        // The certificate is the last field, after the Lean replay status.
-        let lean_replay = text.find("\"lean_replay\":").unwrap();
-        let certificate_key = text.find(&format!("\"{key}\":")).unwrap();
-        assert!(lean_replay < certificate_key, "{key}");
         let parsed: RealRootednessTheoremReport = serde_json::from_str(&text).unwrap();
         assert_eq!(parsed, report);
         assert_eq!(serde_json::to_string(&parsed).unwrap(), text);
@@ -201,11 +187,11 @@ fn a_certificate_keeps_its_key_and_round_trips_byte_for_byte() {
     }
     // The accessors see only the certificate of their own route.
     let report = fixed_delay_report();
-    assert!(report.variable_delay().is_some());
-    assert!(report.residue_classes().is_none());
-    assert!(report.iterated_preserver().is_none());
-    assert!(report.index_section().is_none());
-    assert!(report.factor_gauge().is_none());
+    assert!(report.variable_delay_certificate().is_some());
+    assert!(report.residue_class_certificate().is_none());
+    assert!(report.iterated_preserver_certificate().is_none());
+    assert!(report.index_section_certificate().is_none());
+    assert!(report.factor_gauge_certificate().is_none());
 }
 
 #[test]
@@ -221,48 +207,39 @@ fn a_report_without_a_certificate_has_no_certificate_key() {
     .unwrap();
     assert!(report.certificate.is_none());
     let value = serde_json::to_value(&report).unwrap();
-    for key in [
-        "iterated_preserver",
-        "variable_delay",
-        "residue_classes",
-        "index_section",
-        "factor_gauge",
-    ] {
-        assert!(value.get(key).is_none(), "{key}");
-    }
+    assert!(value.get("certificate").is_none());
     assert_eq!(parse(value).unwrap(), report);
 }
 
 #[test]
-fn two_certificate_keys_are_a_parse_error() {
+fn two_certificates_are_a_parse_error() {
     let mut value = serde_json::to_value(fixed_delay_report()).unwrap();
     let other = serde_json::to_value(residue_class_report()).unwrap();
-    value["residue_classes"] = other["residue_classes"].clone();
-    let error = parse(value).unwrap_err().to_string();
-    assert!(error.contains("more than one route certificate"), "{error}");
+    value["certificate"]["residue_class_subsequences"] =
+        other["certificate"]["residue_class_subsequences"].clone();
+    assert!(parse(value).is_err());
 }
 
 #[test]
 fn an_unknown_key_is_a_parse_error() {
     let mut value = serde_json::to_value(fixed_delay_report()).unwrap();
-    value["certificate"] = value["variable_delay"].clone();
+    value["variable_delay"] = value["certificate"]["variable_delay"].clone();
     let error = parse(value).unwrap_err().to_string();
-    assert!(error.contains("unknown field `certificate`"), "{error}");
+    assert!(error.contains("unknown field `variable_delay`"), "{error}");
 }
 
 #[test]
 fn a_malformed_certificate_is_a_parse_error() {
     let mut value = serde_json::to_value(fixed_delay_report()).unwrap();
-    value["variable_delay"]["delay"] = Value::from("three");
+    value["certificate"]["variable_delay"]["delay"] = Value::from("three");
     assert!(parse(value).is_err());
     let mut value = serde_json::to_value(fixed_delay_report()).unwrap();
-    value["variable_delay"]["unexpected"] = Value::from(1);
+    value["certificate"]["variable_delay"]["unexpected"] = Value::from(1);
     assert!(parse(value).is_err());
-    // A certificate under the key of another route does not parse either.
+    // A certificate under the name of another theorem does not parse either.
     let mut value = serde_json::to_value(fixed_delay_report()).unwrap();
-    let certificate = value["variable_delay"].take();
-    value.as_object_mut().unwrap().remove("variable_delay");
-    value["factor_gauge"] = certificate;
+    let certificate = value["certificate"]["variable_delay"].take();
+    value["certificate"] = serde_json::json!({ "factor_gauge": certificate });
     assert!(parse(value).is_err());
 }
 
@@ -273,7 +250,7 @@ fn a_certificate_of_another_theorem_does_not_replay() {
     report.certificate = other.certificate.clone();
     assert!(matches!(
         report.certificate,
-        Some(RouteCertificate::ResidueClasses(_))
+        Some(RouteCertificate::ResidueClassSubsequences(_))
     ));
     assert!(report.verify().is_err());
     report.certificate = None;

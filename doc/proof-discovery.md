@@ -152,22 +152,20 @@ report; the replay output preserves the discovery status.
 `--verify` checks a saved report's claims, not byte equality with a
 recomputation. The search is rerun on the recorded record and options
 (same recurrence, seeds, start delay bound and root region); the recorded
-attempts must appear, equal and in order, among the recomputed attempts
-(a subsequence; each criterion at most once), and each recorded attempt
-must equal its recomputed attempt or replay on its own (a report of an
-earlier version of that check). A recorded attempt that proves nothing
-where the current check proves is accepted as superseded; a proved attempt
-always replays. The six criteria of the first schema version must be
-recorded. The tail record is re-derived from the supplied record, every
+attempts must be of exactly the criteria of the recomputed attempts, in
+order, and each recorded attempt must equal its recomputed attempt or
+replay on its own (a report of an earlier version of that check). A
+recorded attempt that proves nothing where the current check proves is
+accepted as superseded; a proved attempt always replays. The tail record is
+re-derived from the supplied record, every
 alternative's equality certificate and attempts are recomputed, and the
 summary fields (`status`, `real_rooted_from_index`,
 `real_rooted_outside_zero_residue_classes`, `trivially_real_rooted`,
 `statement`) must follow from the recorded
 attempts alone, so a report never claims more than its attempts prove. A
-recomputation that tries or proves more is fine: reports saved before the
-iterated-preserver and hypergeometric-row criteria (or any later one) were
-added keep replaying. Extra or repeated attempts, reordered attempts and
-attempts flipped to proved are rejected.
+recomputation that proves more is fine; a report saved before a criterion
+was added no longer replays and is recomputed. Missing, extra or repeated
+attempts, reordered attempts and attempts flipped to proved are rejected.
 
 ## Degree laws
 

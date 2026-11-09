@@ -352,7 +352,7 @@ impl FactorGaugeCertificate {
 /// real-rooted, with every root in `(-inf, 0)` or `(-inf, 0]` when that is
 /// certified; for a constant residual and a linear `q`, `P_(n-1)`
 /// interlaces `P_n` (weakly) for every `n >= N`.  The data are recorded in
-/// [`RealRootednessTheoremReport::factor_gauge`].  The induction start is
+/// [`RealRootednessTheoremReport::factor_gauge_certificate`].  The induction start is
 /// moved past the seeds as for the other theorems.
 ///
 /// # Errors
@@ -390,7 +390,7 @@ impl FactorGaugeCertificate {
 ///     check_factor_gauge_theorem(&rule, 0, &seeds, &RealRootednessTheoremOptions::default())
 ///         .unwrap();
 /// assert!(report.is_proved());
-/// let certificate = report.factor_gauge().unwrap();
+/// let certificate = report.factor_gauge_certificate().unwrap();
 /// assert_eq!(certificate.residual_shape, FactorGaugeResidualShape::PalindromicQuartic);
 /// report.verify().unwrap();
 /// ```
@@ -964,9 +964,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
     certificate_name: Some("factor-gauge"),
-    discovery: DiscoveryPolicy::WhenApplicable {
-        tolerated_when_missing: true,
-    },
+    discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: false,
     in_index_section_menu: false,
     parent: ParentPolicy {

@@ -94,7 +94,7 @@ pub struct ResidueClassCertificate {
 /// proves it (with `options`, including its start delays); a class with
 /// only zero seed rows is identically zero when `f` does not vanish on its
 /// rule range (decided exactly).  The class reports are kept in
-/// [`RealRootednessTheoremReport::residue_classes`] and replayed by
+/// [`RealRootednessTheoremReport::residue_class_certificate`] and replayed by
 /// [`RealRootednessTheoremReport::verify`].
 ///
 /// When every class is proved, every row `P_n`, `n >= first_index`, is zero
@@ -147,7 +147,7 @@ pub struct ResidueClassCertificate {
 /// )
 /// .unwrap();
 /// assert!(report.is_proved());
-/// assert_eq!(report.residue_classes().unwrap().period, 2);
+/// assert_eq!(report.residue_class_certificate().unwrap().period, 2);
 /// report.verify().unwrap();
 /// ```
 pub fn check_residue_class_subsequence_theorem(
@@ -273,9 +273,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
     certificate_name: Some("residue-class"),
-    discovery: DiscoveryPolicy::WhenApplicable {
-        tolerated_when_missing: false,
-    },
+    discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: false,
     in_index_section_menu: true,
     parent: ParentPolicy {
@@ -567,11 +565,13 @@ fn residue_class_report(
     }
     report.hypotheses = hypotheses;
     report.lean_declarations = declarations;
-    report.certificate = Some(RouteCertificate::ResidueClasses(ResidueClassCertificate {
-        period,
-        class_maximum_start_delay: options.maximum_start_delay,
-        classes,
-    }));
+    report.certificate = Some(RouteCertificate::ResidueClassSubsequences(
+        ResidueClassCertificate {
+            period,
+            class_maximum_start_delay: options.maximum_start_delay,
+            classes,
+        },
+    ));
     zero_rows.sort_unstable();
     let conclusion_first = zero_rows.last().map_or(first_index, |last| last + 1);
     let mut statement = format!(

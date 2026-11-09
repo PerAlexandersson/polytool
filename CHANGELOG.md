@@ -2,23 +2,51 @@
 
 ## Unreleased
 
-- Route registry for the real-rootedness theorems (behaviour-preserving: the
-  same attempts, proofs, parent records and JSON bytes). New public API:
+### Breaking
+
+- Real-rootedness theorem reports carry one route certificate:
+  `RealRootednessTheoremReport`'s five optional fields `iterated_preserver`,
+  `variable_delay`, `residue_classes`, `index_section` and `factor_gauge` are
+  replaced by `certificate: Option<RouteCertificate>` (new enum
+  `recurrence::RouteCertificate` with the variants `IteratedPreserver`,
+  `VariableDelay`, `ResidueClassSubsequences`, `IndexSectionLift` and
+  `FactorGauge`, named after their theorems, and `RouteCertificate::theorem`)
+  and the accessors `iterated_preserver_certificate`,
+  `variable_delay_certificate`, `residue_class_certificate`,
+  `index_section_certificate` and `factor_gauge_certificate`. In JSON the
+  certificate is `"certificate": {"<theorem>": {...}}` (for example
+  `{"index_section_lift": {...}}`) instead of a top-level key; the schema tag
+  is unchanged, saved reports with a certificate no longer parse, and their
+  hashes change. Recompute them.
+- `RecurrenceProofDiscoveryReport::verify` now requires the recorded attempts
+  to be of exactly the theorems the current search records, in order (each
+  attempt still equal to its recomputation, replaying on its own, or
+  superseded). Reports of the first schema version (six attempts and the
+  original statement) and saved attempt lists without a newer theorem's
+  attempt no longer replay; dropping any attempt is now detected.
+- Removed `recurrence::DISCOVERY_THEOREMS` and `recurrence::ROW_ROUTE_THEOREMS`:
+  the discovery search tries `RealRootednessTheorem::ALL` in order and always
+  records the first eight; the others are recorded where the rule has their
+  form.
+
+### Added and changed
+
+- Route registry for the real-rootedness theorems: every theorem route is
+  declared once (its check, start policy, discovery policy, menu membership
+  and parent-cascade policy) and the dispatch, the discovery search, the
+  residue-class and index-section menus and the parent cascade iterate it
+  (`doc/development.md`, "Adding a real-rootedness theorem route"). The
+  proofs, attempts and parent records of every catalog family are unchanged
+  apart from the certificate's JSON form. New public API:
   `RealRootednessTheorem::ALL` (every theorem, in the order of the parent
-  cascade and of the discovery attempts) and `RealRootednessTheorem::as_str`,
-  `VeroneseParentProofRoute::as_str` and `VeroneseParentProofRoute::theorem`
-  (the theorem a parent route runs), and
+  cascade and of the discovery attempts), `RealRootednessTheorem::as_str`,
+  `VeroneseParentProofRoute::as_str`, `VeroneseParentProofRoute::theorem`
+  (the theorem a parent route runs) and
   `recurrence::check_real_rootedness_theorem` (any theorem by name; the
-  twelve `check_*_theorem` functions are its wrappers).
-  `RealRootednessTheoremReport`'s five optional certificate fields
-  `iterated_preserver`, `variable_delay`, `residue_classes`, `index_section`
-  and `factor_gauge` are replaced by one field
-  `certificate: Option<RouteCertificate>` (the new enum
-  `recurrence::RouteCertificate`, one variant per certificate type) with
-  accessor methods of the old names (`report.factor_gauge()` for
-  `report.factor_gauge.as_ref()`); the JSON keeps the old keys, so saved
-  reports read and write unchanged. A report with two certificate keys, which
-  never replayed, is now a parse error.
+  twelve `check_*_theorem` functions are its wrappers). Every theorem route
+  of the parent provers now proves the parent only when its certified region
+  lies in `(-inf, 0]` (before, only seven routes checked this; the others
+  always certified such a region, so no record changes).
 
 - Behaviour-preserving refactoring (no output changes). New public API:
   `vec_poly::clear_denominators` and `vec_poly::clear_denominators_with_scale`

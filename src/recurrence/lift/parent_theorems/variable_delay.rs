@@ -160,7 +160,7 @@ impl VariableDelayCertificate {
 /// - `P_(first_index)` is a nonzero constant;
 /// - every later seed row is `a_m P_(n-1) + b_m x P_(first_index + max(m-L,
 ///   0))` with rational `a_m > 0`, `b_m >= 0` (solved exactly, recorded in
-///   [`RealRootednessTheoremReport::variable_delay`]);
+///   [`RealRootednessTheoremReport::variable_delay_certificate`]);
 /// - a requested root region must contain `(-inf, 0)`.
 ///
 /// When all hold, every `P_n`, `n >= first_index`, is nonzero and
@@ -254,9 +254,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
     certificate_name: Some("fixed-delay"),
-    discovery: DiscoveryPolicy::WhenApplicable {
-        tolerated_when_missing: false,
-    },
+    discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: true,
     in_index_section_menu: true,
     parent: ParentPolicy {

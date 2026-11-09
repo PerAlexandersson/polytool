@@ -612,9 +612,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::MovesStart,
     is_preferred: proof_with_root_region,
     certificate_name: None,
-    discovery: DiscoveryPolicy::Always {
-        first_version: true,
-    },
+    discovery: DiscoveryPolicy::Always,
     in_residue_class_menu: true,
     in_index_section_menu: true,
     parent: ParentPolicy {

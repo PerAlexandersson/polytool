@@ -344,7 +344,7 @@ impl IndexSectionCertificate {
 /// identity or a reversal and `Q` a polynomial parent family with a
 /// constant-coefficient rule; it is proved when a theorem of the parent menu
 /// proves the parent and the exceptional rows check exactly.  The
-/// certificate is kept in [`RealRootednessTheoremReport::index_section`] and
+/// certificate is kept in [`RealRootednessTheoremReport::index_section_certificate`] and
 /// replayed by [`RealRootednessTheoremReport::verify`].  No interlacing is
 /// concluded.
 ///
@@ -387,7 +387,7 @@ impl IndexSectionCertificate {
 /// )
 /// .unwrap();
 /// assert!(report.is_proved());
-/// assert_eq!(report.index_section().unwrap().period, 3);
+/// assert_eq!(report.index_section_certificate().unwrap().period, 3);
 /// report.verify().unwrap();
 /// ```
 pub fn check_index_section_lift_theorem(
@@ -923,7 +923,7 @@ fn search_section_lifts(
 fn proves_every_row(report: &RealRootednessTheoremReport) -> bool {
     report.is_proved()
         && report
-            .residue_classes()
+            .residue_class_certificate()
             .is_none_or(|certificate| certificate.classes.iter().all(|class| !class.zero))
         && report
             .conclusion
@@ -997,9 +997,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
     certificate_name: Some("index-section"),
-    discovery: DiscoveryPolicy::WhenApplicable {
-        tolerated_when_missing: true,
-    },
+    discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: false,
     in_index_section_menu: false,
     parent: ParentPolicy {
@@ -1223,16 +1221,18 @@ fn index_section_report(
     report.hypotheses = hypotheses;
     let parent_record =
         RecurrenceJson::from_recurrence_rational(&lift.parent_rule, 0, &lift.parent_seeds, None);
-    report.certificate = Some(RouteCertificate::IndexSection(IndexSectionCertificate {
-        period,
-        transform: lift.transform,
-        exceptional_rows: lift.exceptional_rows,
-        parent: parent_record,
-        divisors_examined: examined,
-        parent_maximum_start_delay: options.maximum_start_delay,
-        parent_attempts: lift.attempts.clone(),
-        selected: lift.selected,
-    }));
+    report.certificate = Some(RouteCertificate::IndexSectionLift(
+        IndexSectionCertificate {
+            period,
+            transform: lift.transform,
+            exceptional_rows: lift.exceptional_rows,
+            parent: parent_record,
+            divisors_examined: examined,
+            parent_maximum_start_delay: options.maximum_start_delay,
+            parent_attempts: lift.attempts.clone(),
+            selected: lift.selected,
+        },
+    ));
     let mut statement = format!(
         "every P_n, n >= {first_index}, is nonzero and real-rooted: P_({section_first} + m) = \
          T(Q_({period} m)) for every m >= 0 with {} and the parent psi(w) = {psi_text}",

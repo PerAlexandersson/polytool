@@ -5,7 +5,10 @@
 //! The order is policy: it is the order of the theorem stages of the parent
 //! cascade (`parent_proof`), of the attempts of [`discover_recurrence_proofs`]
 //! and of the residue-class and index-section menus.  Every dispatch on a
-//! theorem goes through [`route`].
+//! theorem goes through [`route`] or iterates [`ROUTES`].  Adding a route:
+//! one module with its `ROUTE` entry, one line in [`ROUTES`], and the enum
+//! variants (`doc/development.md`, "Adding a real-rootedness theorem
+//! route").
 
 use super::*;
 
@@ -35,54 +38,22 @@ pub(super) enum StartPolicy {
 /// When [`discover_recurrence_proofs`] records the attempt of a theorem.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum DiscoveryPolicy {
-    /// Recorded for every record ([`DISCOVERY_THEOREMS`]).  With
-    /// `first_version`, the theorem is one of the six of the first version
-    /// of the discovery schema, which every saved report records.
-    Always {
-        /// One of the theorems of the first schema version.
-        first_version: bool,
-    },
+    /// Recorded for every record.
+    Always,
     /// Recorded only when the check applies (its status is not
     /// `not_applicable`), so that the reports of other rules are unchanged.
-    /// With `tolerated_when_missing`, a saved tail or alternative attempt
-    /// list may omit it (it was saved before the theorem existed); without,
-    /// it is one of [`ROW_ROUTE_THEOREMS`].
-    WhenApplicable {
-        /// A saved attempt list without the theorem still replays.
-        tolerated_when_missing: bool,
-    },
+    WhenApplicable,
 }
 
 impl DiscoveryPolicy {
     /// Whether the attempt is recorded.
     pub(super) fn records(self, attempt: &RealRootednessTheoremReport) -> bool {
         match self {
-            DiscoveryPolicy::Always { .. } => true,
-            DiscoveryPolicy::WhenApplicable { .. } => {
+            DiscoveryPolicy::Always => true,
+            DiscoveryPolicy::WhenApplicable => {
                 attempt.status != RealRootednessTheoremStatus::NotApplicable
             }
         }
-    }
-
-    /// Whether every saved report records the attempt.
-    pub(super) fn in_first_version(self) -> bool {
-        matches!(
-            self,
-            DiscoveryPolicy::Always {
-                first_version: true
-            }
-        )
-    }
-
-    /// Whether a saved tail or alternative attempt list may omit the
-    /// attempt although the current search records it.
-    pub(super) fn tolerated_when_missing(self) -> bool {
-        matches!(
-            self,
-            DiscoveryPolicy::WhenApplicable {
-                tolerated_when_missing: true
-            }
-        )
     }
 }
 
@@ -215,29 +186,33 @@ mod tests {
     }
 
     #[test]
-    fn the_public_discovery_lists_are_the_discovery_policies() {
+    fn the_discovery_policies_record_the_first_eight_always() {
+        let all = theorems(&ROUTES);
         assert_eq!(
-            filtered(|route| matches!(route.discovery, DiscoveryPolicy::Always { .. })),
-            DISCOVERY_THEOREMS
+            filtered(|route| route.discovery == DiscoveryPolicy::Always),
+            all[..8]
         );
+    }
+
+    #[test]
+    fn every_theorem_has_its_parent_route_and_the_stages_follow_the_order() {
+        for route in &ROUTES {
+            let parent_route = VeroneseParentProofRoute::of_theorem(route.theorem);
+            assert_eq!(parent_route.theorem(), Some(route.theorem));
+            assert_eq!(parent_route.as_str(), route.theorem.as_str());
+        }
+        let stages: Vec<ParentStage> = ROUTES.iter().map(|route| route.parent.stage).collect();
+        let rank = |stage: &ParentStage| match stage {
+            ParentStage::Early => 0,
+            ParentStage::ReplacesEarly => 1,
+            ParentStage::WhileUnproved => 2,
+        };
+        assert!(stages
+            .windows(2)
+            .all(|pair| rank(&pair[0]) <= rank(&pair[1])));
         assert_eq!(
-            filtered(|route| route.discovery
-                == DiscoveryPolicy::WhenApplicable {
-                    tolerated_when_missing: false
-                }),
-            ROW_ROUTE_THEOREMS
-        );
-        // The theorems of the first schema version: the first six.
-        assert_eq!(
-            filtered(|route| route.discovery.in_first_version()),
-            DISCOVERY_THEOREMS[..6]
-        );
-        assert_eq!(
-            filtered(|route| route.discovery.tolerated_when_missing()),
-            [
-                RealRootednessTheorem::IndexSectionLift,
-                RealRootednessTheorem::FactorGauge
-            ]
+            filtered(|route| route.parent.stage == ParentStage::Early),
+            [RealRootednessTheorem::ProductRecurrence]
         );
     }
 

@@ -76,7 +76,7 @@ fn check(
         RealRootednessTheoremStatus::Proved
     };
     assert!(tampered.verify().is_err());
-    if report.iterated_preserver().is_some() {
+    if report.iterated_preserver_certificate().is_some() {
         // A different multiplier: both the recomputation and the replay of
         // the operator identity refuse it.
         let mut tampered = report.clone();
@@ -117,7 +117,7 @@ fn three_pascal_rows_follow_the_multiplier_from_the_last_seed() {
     // the seeds as far as it is checked exactly.
     assert_eq!(conclusion.interlacing, Some(RowInterlacing::Weak));
     assert!(conclusion.interlacing_from.unwrap() <= 3);
-    let certificate = report.iterated_preserver().unwrap();
+    let certificate = report.iterated_preserver_certificate().unwrap();
     assert_eq!(certificate.induction_start, 2);
     assert_eq!(certificate.start_degree, 2);
     assert_eq!(certificate.degree_step, 1);
@@ -139,7 +139,10 @@ fn catalog_multipliers_with_two_or_more_seeds() {
     let (rule, first_index, seeds) = catalog("A024462");
     let report = check(&rule, first_index, &seeds);
     assert_eq!(
-        report.iterated_preserver().unwrap().multiplier_fixed_factor,
+        report
+            .iterated_preserver_certificate()
+            .unwrap()
+            .multiplier_fixed_factor,
         vec!["1/3", "1"]
     );
 }
@@ -198,7 +201,7 @@ fn a_theta_polynomial_iterates() {
     let report = check(&rule, 0, &seeds);
     assert!(report.is_proved(), "{report:#?}");
     assert_eq!(region_text(&report).as_deref(), Some("(-inf, 0]"));
-    let certificate = report.iterated_preserver().unwrap();
+    let certificate = report.iterated_preserver_certificate().unwrap();
     assert!(matches!(
         certificate.preserver,
         Some(PreserverOperator::EulerPolynomial { .. })
@@ -214,7 +217,7 @@ fn a_multiplier_after_a_menu_operator() {
     let rule = first_order(&[(0, &[&[1, 1]]), (1, &[&[0, 1, 1]])]);
     let report = check(&rule, 0, &rows(&[&[1]]));
     assert!(report.is_proved(), "{report:#?}");
-    let certificate = report.iterated_preserver().unwrap();
+    let certificate = report.iterated_preserver_certificate().unwrap();
     assert_eq!(certificate.multiplier_fixed_factor, vec!["1", "1"]);
     assert!(certificate.preserver.is_some());
     // The central factorial rows A036969: (theta + 1)^2 + x, an Euler step.
@@ -222,7 +225,7 @@ fn a_multiplier_after_a_menu_operator() {
     let report = check(&rule, first_index, &seeds);
     assert!(report.is_proved(), "{report:#?}");
     assert!(matches!(
-        report.iterated_preserver().unwrap().preserver,
+        report.iterated_preserver_certificate().unwrap().preserver,
         Some(PreserverOperator::EulerStep { .. })
     ));
 }
@@ -236,7 +239,7 @@ fn euler_steps_use_the_degree_local_raising_condition() {
         let report = check(&rule, first_index, &seeds);
         assert!(report.is_proved(), "{id}: {report:#?}");
         assert!(matches!(
-            report.iterated_preserver().unwrap().preserver,
+            report.iterated_preserver_certificate().unwrap().preserver,
             Some(PreserverOperator::EulerStep { .. })
         ));
         assert!(report
@@ -289,7 +292,7 @@ fn a_multiplier_that_is_not_real_rooted_gives_no_claim() {
     };
     let report = check(&rule, 0, &rows(&[&[1], &[1, 1]]));
     assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
-    assert!(report.iterated_preserver().is_none());
+    assert!(report.iterated_preserver_certificate().is_none());
 }
 
 #[test]
@@ -300,7 +303,7 @@ fn a_tampered_region_or_degree_step_is_refused() {
     iterated_preserver_mut(&mut tampered).degree_step = 2;
     assert!(tampered.verify().is_err());
     assert!(tampered
-        .iterated_preserver()
+        .iterated_preserver_certificate()
         .unwrap()
         .verify_operator_identity(&rule)
         .is_err());
