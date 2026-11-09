@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Certified rowwise products of two rule-defined polynomial families:
+  `recurrence::{certify_polynomial_family_product, apply_polynomial_family_product}`
+  support ordinary, coefficientwise, factorial-weighted and inverse-factorial
+  products, with explicit parent index shifts. The new independent
+  `PolynomialFamilyProductCertificate` schema records both parent proofs,
+  exact annihilator closure, support and coefficient-anchor checks, and
+  certified equality with the target recurrence. PF sign hypotheses are
+  proved for all indices; ordinary products and Schur's factorial product
+  also admit the appropriate whole-line parent proofs. Replay rejects
+  altered certificates. Existing lift schemas and discovery routes are unchanged.
+
 - Behaviour-preserving refactoring (no output changes). New public API:
   `vec_poly::clear_denominators` and `vec_poly::clear_denominators_with_scale`
   (integer coefficients of `lcm(denominators) * p`, with the scale), replacing

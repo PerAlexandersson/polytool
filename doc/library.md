@@ -1259,6 +1259,101 @@ permutations, whose parents are second-order rules with derivative terms.  The
 certificate, its boundary conditions and the transfer theorem are in
 [algorithms.md](algorithms.md#hadamard-factor-lifts).
 
+## Products of two rule-defined families
+
+`recurrence::certify_polynomial_family_product(target, candidate, options)`
+certifies a target as a rowwise product of two defining recurrence records.
+`apply_polynomial_family_product(candidate, first_index, options)` constructs
+the forward image, including its certified defining rule. A
+`PolynomialFamilyProductCandidate` records both parents and explicit integer
+shifts: row `n` uses `left[n + left_index_shift]` and
+`right[n + right_index_shift]`. Shifts are bounded by 64 and never silently
+change the target's indexing. Exceptional source prefixes remain part of the
+original definitions; the requested tail must admit a runnable recurrence.
+
+The operations and sufficient root hypotheses are:
+
+| Operation | Coefficient or row formula | All-index parent hypotheses |
+| --- | --- | --- |
+| `Hadamard` | `q(n,k) = a(n,k) b(n,k)` | Both PF (Maló; Garloff–Wagner, Theorem 4(a)) |
+| `FactorialHadamard` | `q(n,k) = k! a(n,k) b(n,k)` | One real-rooted and the other PF (Schur); either order |
+| `InverseFactorialHadamard` | `q(n,k) = a(n,k) b(n,k) / k!` | Both PF, followed by PF-preserving division by factorials |
+| `Ordinary` | `Q_n(x) = A_n(x) B_n(x)` | Both real-rooted, on the whole real line |
+
+PF includes coefficient nonnegativity. The current checker combines the
+shared all-index nonpositive-root parent proof with a fixed positive constant
+coefficient proved by induction on the rule. A finite prefix of positive
+coefficients is insufficient. Whole-line parents are checked by the
+three-term theorem when the nonpositive-root parent proof does not apply.
+The output conclusion is `pf` or `zero_or_real_rooted`; no interlacing or
+strictness follows from this interface. Missing hypotheses make the lift
+unsupported, rather than conditional on an attestation.
+
+For Hadamard closure, invariant row-annihilator systems prove coefficient
+relations `p(n,k) a(n,k) + r(n,k) a(n,k-1) = 0` for the parents. Multiplying
+these relations gives the image relation; the factorial weights contribute
+an extra `k` on the appropriate side. The proposed image rule must satisfy
+that relation by an invariant annihilator certificate. Its constant
+coefficient and inductive degree envelope `deg P_n <= n+c` identify every
+row uniquely: the coefficient leader is proved nonzero for
+`1 <= k <= n+c` by an exact polynomial coefficient-cone test. Start, restart
+and exceptional indices are checked exactly. A second closure route
+identifies one rule-defined source with a binomial multiplier or a product
+of two binomial multipliers, by its certified coefficient relation, support,
+anchor and a symbolic ratio identity; it then uses the existing Hadamard
+conjugation certificate. Binomial-rule equality also handles inputs such as
+Eulerian polynomials that have no supported coefficient relation.
+
+Ordinary products use a tensor product of the parents' shift-only companion
+systems (size at most nine). Ore component elimination certifies the image
+rule, with every zero of the clearing multiplier checked on the actual
+product rows. Both constructions end with a replayable recurrence-equality
+certificate against the requested target. A recurrence fit proposes a
+forward image rule; the algebraic closure must independently certify it.
+These are bounded sufficient algorithms: unsupported differential ordinary
+products, singular coefficient leaders, variable coefficient anchors or
+larger annihilator systems are not inferred from sampled rows.
+For example, a fixed Eulerian polynomial multiplied coefficientwise by
+binomial rows has a certified forward construction. The growing pair
+`A_n` and `(1+x)^n` currently returns `Unsupported` when the bounded search
+does not find a runnable image rule; PF closure alone does not certify a
+fitted recurrence for that image.
+
+Checked forward constructions and target-rule equality cover A174148 from
+Narayana (A001263) and A350512, and A092879 from consecutive Fibonacci
+polynomials (A011973). In the catalog's recurrence coordinates, A174148
+starts at index 1 and uses both parent indices `n+1`; its excluded prefix
+rows `1` and `1+x` are separately PF. A092879 starts at index 0 and uses
+parent indices `n` and `n+1`.
+
+```rust
+use polytool::recurrence::{
+    apply_polynomial_family_product, PolynomialFamilyProductCandidate,
+    PolynomialFamilyProductOperation, PreserverParentLibrary,
+};
+let binomial = PreserverParentLibrary::named_family_records()
+    .into_iter().find(|(name, _)| name == "binomial").unwrap().1;
+let candidate = PolynomialFamilyProductCandidate {
+    left: binomial.clone(), right: binomial,
+    left_index_shift: 0, right_index_shift: 0,
+    operation: PolynomialFamilyProductOperation::Hadamard,
+};
+let proof = apply_polynomial_family_product(&candidate, 0, &Default::default())?;
+assert_eq!(proof.conclusion, "pf");
+proof.verify()?;
+# Ok::<(), polytool::recurrence::RecurrenceError>(())
+```
+
+The schema `polytool.polynomial-family-product.v1` is independent of existing
+single-parent lift schemas. `verify()` recomputes the closure, both parent
+proofs, sign hypotheses, identifying rows and recurrence equality. Its
+`lean_declarations` name the source-inspected counterparts
+`RealRooted.IsPFPolynomial.hadamardProduct`,
+`RealRooted.Tactic.hadamardProduct_sequence_pf`,
+`RealRooted.factorialHadamardProduct_eq_zero_or_splits_of_isPFPolynomial`
+and `Polynomial.Splits.mul` (the step used by
+`RealRooted.productSequence_splits`). `lean_replay` is `not_attempted`.
+
 ## Row-factor lifts
 
 `recurrence::find_row_factor_lifts` finds a fixed polynomial `F` and a
