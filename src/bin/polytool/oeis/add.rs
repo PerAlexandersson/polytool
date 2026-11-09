@@ -6,13 +6,13 @@ use super::catalog_file::{
     DEFAULT_CATALOG_PATH,
 };
 use super::sha256::sha256_hex;
-use super::source::{parse_bfile, read_local_record, OeisSourceRecord, RowWidths};
+use super::source::{read_local_record, OeisSourceRecord, RowWidths};
 use super::supplied::add_supplied_recurrence;
 use crate::input::{next_option_value, parse_usize_option};
 use num_bigint::BigInt;
 use polytool::oeis::{
-    OeisCatalogProvenance, OeisCatalogRecord, OeisLayout, OeisProvenanceSource, OeisSequenceStatus,
-    OeisValidationRow,
+    parse_bfile, OeisCatalogProvenance, OeisCatalogRecord, OeisLayout, OeisProvenanceSource,
+    OeisSequenceStatus, OeisTermsSource, OeisValidationRow,
 };
 use polytool::recurrence::{
     find_recurrence_adaptive_rational_with_budget, AdaptiveSearchBudget, AdaptiveSearchOptions,
@@ -278,7 +278,8 @@ pub(crate) fn source_record(options: &AddOptions, id: &str) -> Result<OeisSource
     if let Some(path) = &options.bfile {
         let text = std::fs::read_to_string(path)
             .map_err(|error| format!("failed to read {path}: {error}"))?;
-        let (first, terms) = parse_bfile(&text)?;
+        let bfile = parse_bfile(&text).map_err(|error| error.to_string())?;
+        let (first, terms) = (bfile.first_index, bfile.terms);
         let offset = options.offset.unwrap_or(first);
         if offset != first {
             return Err(format!(
@@ -290,7 +291,7 @@ pub(crate) fn source_record(options: &AddOptions, id: &str) -> Result<OeisSource
             offset,
             keywords: Vec::new(),
             terms,
-            terms_source: "bfile",
+            terms_source: OeisTermsSource::BFile,
         });
     }
     let root = options
