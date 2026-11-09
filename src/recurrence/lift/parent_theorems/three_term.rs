@@ -241,6 +241,8 @@ pub fn check_three_term_recurrence_theorem(
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::ThreeTermRecurrence,
     check_at_supplied_seeds: three_term_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
 };
 
 /// The check with the induction at the given (normalized) seeds.

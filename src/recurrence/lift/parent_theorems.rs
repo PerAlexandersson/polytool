@@ -199,7 +199,7 @@ mod index_section;
 mod factor_gauge;
 // The registry of the theorem routes.
 mod registry;
-use registry::{route, TheoremRoute};
+use registry::{any_proof, route, StartPolicy, TheoremRoute};
 // Root-region helpers shared by the checks.
 mod region;
 use region::{
@@ -1031,13 +1031,14 @@ fn extend_interlacing_backward(
 /// Run the theorem at the supplied seeds and, unless it is proved or does
 /// not apply, with the induction start moved `1, ...,
 /// options.maximum_start_delay` rows later; the first proved report, else
-/// the report at the supplied seeds.  For
-/// [`check_liu_wang_three_term_theorem`], whose conclusion may come without
-/// a root region, a proved report without a region is replaced by the first
-/// later start that proves the theorem with one; for
-/// [`check_iterated_preserver_theorem`], a report proved in coordinates other
-/// than the identity is replaced by the first later start that proves it in
-/// the identity coordinates.
+/// the report at the supplied seeds.  The route's
+/// [`StartPolicy`](registry::StartPolicy) may keep the start at the supplied
+/// seeds (checks that move the starts of their sub-checks), and its
+/// `is_preferred` may reject a proof as weaker: such a proof is replaced by
+/// the first later start that gives a preferred one.  For
+/// [`check_liu_wang_three_term_theorem`] a proof without a root region is
+/// weaker; for [`check_iterated_preserver_theorem`] a proof in coordinates
+/// other than the identity.
 fn check_with_first_proving_start(
     theorem: RealRootednessTheorem,
     rule: &Recurrence,
@@ -1045,48 +1046,30 @@ fn check_with_first_proving_start(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    // A weaker proof is kept as a fallback while a later start may give the
-    // preferred one: a Liu--Wang three-term proof without a root region, an
-    // iterated-preserver proof in coordinates other than the identity (so
-    // that a proof in the identity coordinates, at any start, comes first).
-    let without_region = |report: &RealRootednessTheoremReport| {
-        (theorem == RealRootednessTheorem::LiuWangThreeTerm
-            && report
-                .conclusion
-                .as_ref()
-                .is_some_and(|c| c.root_region.is_none()))
-            || (theorem == RealRootednessTheorem::IteratedPreserver
-                && report
-                    .iterated_preserver
-                    .as_ref()
-                    .is_some_and(|c| !c.coordinates.is_identity()))
-    };
+    let route = route(theorem);
     let report = check_with_start_delay(theorem, rule, first_index, seeds, options, 0)?;
-    // The residue classes move their own induction starts.
-    if theorem == RealRootednessTheorem::ResidueClassSubsequences {
+    if route.start_policy == StartPolicy::OwnStarts {
         return Ok(report);
     }
-    // The index-section search tries its own exceptional prefix rows.
-    if theorem == RealRootednessTheorem::IndexSectionLift {
+    // A weaker proof is kept as a fallback while a later start may give the
+    // preferred one (so that a preferred proof, at any start, comes first).
+    let preferred_proof =
+        |report: &RealRootednessTheoremReport| report.is_proved() && (route.is_preferred)(report);
+    if preferred_proof(&report) || report.status == RealRootednessTheoremStatus::NotApplicable {
         return Ok(report);
     }
-    if (report.is_proved() && !without_region(&report))
-        || report.status == RealRootednessTheoremStatus::NotApplicable
-    {
-        return Ok(report);
-    }
-    let mut proved_without_region = report.is_proved().then(|| report.clone());
+    let mut weaker_proof = report.is_proved().then(|| report.clone());
     for delay in 1..=options.maximum_start_delay {
         match check_with_start_delay(theorem, rule, first_index, seeds, options, delay) {
-            Ok(moved) if moved.is_proved() && !without_region(&moved) => return Ok(moved),
+            Ok(moved) if preferred_proof(&moved) => return Ok(moved),
             Ok(moved) if moved.is_proved() => {
-                proved_without_region.get_or_insert(moved);
+                weaker_proof.get_or_insert(moved);
             }
             Ok(_) => {}
             Err(_) => break,
         }
     }
-    Ok(proved_without_region.unwrap_or(report))
+    Ok(weaker_proof.unwrap_or(report))
 }
 
 /// Check `theorem` for the family given by `rule`, `first_index` and the

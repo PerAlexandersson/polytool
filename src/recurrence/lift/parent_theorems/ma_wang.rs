@@ -488,6 +488,8 @@ fn endpoint_threshold(
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::MaWangInterval,
     check_at_supplied_seeds: ma_wang_interval_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
 };
 
 /// The check with the induction at the given (normalized) seeds.

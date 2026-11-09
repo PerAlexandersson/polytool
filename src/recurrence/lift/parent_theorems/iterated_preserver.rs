@@ -1560,10 +1560,22 @@ fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedReg
     }
 }
 
+/// [`TheoremRoute::is_preferred`]: a proof in coordinates other than the
+/// identity is replaced by a later start that proves the theorem in the
+/// identity coordinates.
+fn proof_in_identity_coordinates(report: &RealRootednessTheoremReport) -> bool {
+    !report
+        .iterated_preserver
+        .as_ref()
+        .is_some_and(|certificate| !certificate.coordinates.is_identity())
+}
+
 /// The registry entry of the iterated-preserver theorem ([`super::registry::ROUTES`]).
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::IteratedPreserver,
     check_at_supplied_seeds: iterated_preserver_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: proof_in_identity_coordinates,
 };
 
 /// The check with the induction at the given (normalized) seeds.

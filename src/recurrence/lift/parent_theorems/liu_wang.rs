@@ -149,6 +149,8 @@ pub fn check_liu_wang_theorem(
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::LiuWang,
     check_at_supplied_seeds: liu_wang_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
 };
 
 /// The check with the induction at the given (normalized) seeds.

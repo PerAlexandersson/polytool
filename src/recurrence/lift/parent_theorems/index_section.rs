@@ -1007,6 +1007,8 @@ fn polynomial_text(p: &UnivariatePolynomial) -> String {
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::IndexSectionLift,
     check_at_supplied_seeds: index_section_report,
+    start_policy: StartPolicy::OwnStarts,
+    is_preferred: any_proof,
 };
 
 fn index_section_report(

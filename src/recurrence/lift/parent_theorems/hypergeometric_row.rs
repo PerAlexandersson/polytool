@@ -626,6 +626,8 @@ pub fn check_hypergeometric_row_theorem(
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::HypergeometricRow,
     check_at_supplied_seeds: hypergeometric_row_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
 };
 
 /// The theorem at the supplied seeds.

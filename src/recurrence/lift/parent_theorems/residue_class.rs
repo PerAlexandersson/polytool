@@ -283,6 +283,8 @@ fn zero_class_declaration(class: &Recurrence) -> Option<&'static str> {
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::ResidueClassSubsequences,
     check_at_supplied_seeds: residue_class_report,
+    start_policy: StartPolicy::OwnStarts,
+    is_preferred: any_proof,
 };
 
 fn residue_class_report(

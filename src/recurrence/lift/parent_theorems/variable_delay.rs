@@ -251,6 +251,8 @@ fn window_step(seed: &[Q], previous: &[Q], delayed: &[Q]) -> Option<(Q, Q)> {
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::VariableDelay,
     check_at_supplied_seeds: variable_delay_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
 };
 
 fn variable_delay_report(

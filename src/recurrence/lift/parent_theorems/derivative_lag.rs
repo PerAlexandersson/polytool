@@ -284,6 +284,8 @@ pub fn check_liu_wang_derivative_lag_theorem(
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::LiuWangDerivativeLag,
     check_at_supplied_seeds: derivative_lag_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
 };
 
 /// The check with the induction at the given (normalized) seeds.

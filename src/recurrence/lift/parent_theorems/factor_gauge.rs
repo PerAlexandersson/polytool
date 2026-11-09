@@ -961,6 +961,8 @@ type PalindromicCondition<'a> = (&'static str, &'static str, &'a Vec<Q>, IndexSi
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::FactorGauge,
     check_at_supplied_seeds: factor_gauge_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
 };
 
 fn factor_gauge_report(

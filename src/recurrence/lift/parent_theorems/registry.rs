@@ -18,12 +18,37 @@ pub(super) type TheoremCheck = fn(
     &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError>;
 
-/// One theorem route: its identity and how it is checked.
+/// Whether the check of a theorem may move its induction start (module
+/// documentation of `parent_theorems`, "Moving the induction start").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum StartPolicy {
+    /// Unless the check at the supplied seeds gives a preferred proof or does
+    /// not apply, retry with the start moved `1, ..., maximum_start_delay`
+    /// rows later.
+    MovesStart,
+    /// The report at the supplied seeds is final: the check passes the
+    /// start-delay bound to its sub-checks (the residue classes, the parent
+    /// family of an index section), which move their own starts.
+    OwnStarts,
+}
+
+/// One theorem route: its identity, how it is checked, and how its
+/// induction start moves.
 pub(in crate::recurrence) struct TheoremRoute {
     /// The theorem.
     pub(in crate::recurrence) theorem: RealRootednessTheorem,
     /// The check at the supplied seeds.
     pub(super) check_at_supplied_seeds: TheoremCheck,
+    /// Whether the induction start may move.
+    pub(super) start_policy: StartPolicy,
+    /// Whether a proved report is the preferred proof; a proof that is not
+    /// is kept only until a later start gives a preferred one.
+    pub(super) is_preferred: fn(&RealRootednessTheoremReport) -> bool,
+}
+
+/// [`TheoremRoute::is_preferred`] of a route without weaker proofs.
+pub(super) fn any_proof(_: &RealRootednessTheoremReport) -> bool {
+    true
 }
 
 /// Every theorem route, in the order of [`RealRootednessTheorem::ALL`].

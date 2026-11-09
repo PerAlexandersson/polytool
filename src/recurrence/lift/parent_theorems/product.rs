@@ -70,6 +70,8 @@ pub fn is_trivially_real_rooted(
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::ProductRecurrence,
     check_at_supplied_seeds: product_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: any_proof,
 };
 
 fn product_report(

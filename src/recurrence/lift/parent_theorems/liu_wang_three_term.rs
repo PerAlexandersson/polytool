@@ -596,10 +596,21 @@ fn gauge_candidates(c1: &Bivariate, c2: &Bivariate) -> Vec<Q> {
         .collect()
 }
 
+/// [`TheoremRoute::is_preferred`]: a proof whose conclusion comes without a
+/// root region is replaced by a later start that certifies one.
+fn proof_with_root_region(report: &RealRootednessTheoremReport) -> bool {
+    !report
+        .conclusion
+        .as_ref()
+        .is_some_and(|conclusion| conclusion.root_region.is_none())
+}
+
 /// The registry entry of the Liu--Wang three-term theorem ([`super::registry::ROUTES`]).
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::LiuWangThreeTerm,
     check_at_supplied_seeds: liu_wang_three_term_report,
+    start_policy: StartPolicy::MovesStart,
+    is_preferred: proof_with_root_region,
 };
 
 /// The check with the induction at the given (normalized) seeds: the
