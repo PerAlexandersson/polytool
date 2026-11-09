@@ -85,6 +85,8 @@ impl PartialEq for BasisMap {
     }
 }
 
+impl Eq for BasisMap {}
+
 impl BasisMap {
     /// The map of the family `rule` with first index `first_index` and seed
     /// rows `seeds` (`seeds[0]` is the basis element of `u^0`).

@@ -224,3 +224,20 @@ def test_theorem_matches(eulerian_rows):
     report = polytool.find_recurrence(eulerian_rows).match_theorems()
     assert report["schema"] == "polytool.recurrence-theorems.v1"
     assert "theorem_matches" in report
+
+
+def test_catalog_lift_proof():
+    # A123125 is the Eulerian triangle A008292 times t (with a first row 1):
+    # a normalized identification with the catalog family, proved by Liu--Wang.
+    report = polytool.oeis.recurrence("A123125").prove_real_rooted()
+    assert report.status == "proved" and report.is_proved
+    assert report.route == "catalog_lift:normalized_identification"
+    lift = report.catalog_lift
+    assert lift["catalog_family"] == "A008292"
+    assert lift["parent_proof"] == "polytool"
+    assert report.certificate == lift
+    assert report.verify()
+    # The stage can be switched off.
+    off = polytool.oeis.recurrence("A123125").prove_real_rooted(max_lift_candidates=0)
+    assert off.status == "not_proved" and off.catalog_lift is None
+    assert "catalog_lifts" not in off.to_dict()

@@ -1,4 +1,7 @@
-//! General recurrence proof discovery. No catalogue, sequence IDs or attestations.
+//! General recurrence proof discovery.  The general stages use no catalogue,
+//! sequence IDs or attestations; only the last stage (catalog lifts) consults
+//! the bundled OEIS catalog, and it keeps a catalog attestation apart from a
+//! proof.
 //!
 //! [`discover_recurrence_proofs`] runs, in this order:
 //!
@@ -19,7 +22,15 @@
 //!    (bounded passes, [`AlternativeRepresentationOptions`]); each fitted
 //!    rule is only a candidate until [`certify_recurrence_equality`] proves
 //!    that it defines the same rows for every index, and then the theorems
-//!    run on it ([`AlternativeRepresentationProof`]).
+//!    run on it ([`AlternativeRepresentationProof`]);
+//! 4. **catalog lifts**: when nothing above proves the family (and no root
+//!    region is requested), a normalized identification with a family of
+//!    the bundled OEIS catalog and a backward basis-map lift whose parent
+//!    statement polytool proves (or, reported separately as
+//!    `conditional_on_attestation`, that the catalog flags as proved
+//!    elsewhere); bounded by [`CatalogLiftOptions`], depth one (a parent is
+//!    proved by the stages above, never by another lift).  See the module
+//!    `catalog_lift` and [`CatalogLiftSearch`].
 //!
 //! A rule with an inhomogeneous term is matched by no theorem: the report
 //! says so with the status `not_applicable` and
@@ -38,13 +49,20 @@
 //! its equality certificate and its attempts, and the summary fields
 //! (status, first proved index, triviality, statement) must follow from the
 //! recorded attempts alone, so a report never claims more than they prove.
+//! The catalog-lift stage is replayed from its certificates
+//! ([`CatalogLiftSearch`]: every equality, parent report, transfer and
+//! basis-map certification) and its conclusion is recomputed from them.
 //! A recomputation that proves more is fine; a report saved before a theorem
 //! was added (or before a check started to apply to the rule) no longer
 //! replays and is recomputed.
 
 use super::recurrence_equality::{certify_recurrence_equality, RecurrenceEqualityCertificate};
 use super::*;
-use crate::recurrence::{AdaptiveSearchBudget, AdaptiveSearchOptions};
+use crate::recurrence::lift::catalog_lift::catalog_lift_search;
+use crate::recurrence::{
+    AdaptiveSearchBudget, AdaptiveSearchOptions, CatalogLiftOptions, CatalogLiftSearch,
+    CatalogParentProofKind,
+};
 
 /// Schema for a replayable general recurrence proof search.
 pub const RECURRENCE_PROOF_DISCOVERY_SCHEMA: &str = "polytool.recurrence-proof-discovery.v1";
@@ -160,10 +178,13 @@ pub struct RecurrenceProofDiscoveryReport {
     /// Optional requested root region (finite ends interpreted as open).
     pub requested_root_region: Option<RootInterval>,
     /// `proved` if at least one general theorem succeeded (on the record,
-    /// its tail or a certified alternative); `not_applicable` when the rule
-    /// has a form no theorem matches (an inhomogeneous term, see
-    /// `not_applicable_reason`); `not_proved` otherwise.  Neither of the
-    /// latter disproves real-rootedness.
+    /// its tail or a certified alternative) or a catalog lift rests on a
+    /// parent that polytool proves; `conditional_on_attestation` when the
+    /// only lift rests on a catalog flag (a proof made outside polytool; see
+    /// [`Self::catalog_lifts`]): not a polytool proof; `not_applicable` when
+    /// the rule has a form no theorem matches (an inhomogeneous term, see
+    /// `not_applicable_reason`); `not_proved` otherwise.  None of the latter
+    /// three disproves real-rootedness.
     pub status: String,
     /// What is, and is not, established by a successful search.
     pub statement: String,
@@ -206,6 +227,12 @@ pub struct RecurrenceProofDiscoveryReport {
     /// 3); omitted when not run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alternative_representations: Option<AlternativeRepresentationSearch>,
+    /// The catalog-lift stage (module documentation, step 4); omitted when
+    /// not run.  Its conclusion proves the record (status `proved`) when the
+    /// parent statement is polytool's own, and only conditionally (status
+    /// `conditional_on_attestation`) when it is a catalog flag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog_lifts: Option<CatalogLiftSearch>,
 }
 
 /// Try all supported general theorem families, independently of sequence names.
@@ -223,8 +250,11 @@ pub struct RecurrenceProofDiscoveryReport {
 /// exists and the factor gauge ([`check_factor_gauge_theorem`]) when the
 /// rule has its form and the residual shape is decided.
 /// This is theorem discovery for a supplied rule, not recurrence fitting.
-/// Failed sufficient hypotheses do not disprove real-rootedness. There is no
-/// catalogue fallback or external attestation route.
+/// Failed sufficient hypotheses do not disprove real-rootedness.  When
+/// nothing proves the record, the catalog-lift stage ([`CatalogLiftSearch`],
+/// default [`CatalogLiftOptions`]) connects it to a bundled OEIS catalog
+/// family by a certified identity; a lift whose parent is only a catalog
+/// flag gives the status `conditional_on_attestation`, never `proved`.
 ///
 /// # Errors
 ///
@@ -241,7 +271,8 @@ pub fn discover_recurrence_proofs(
 }
 
 /// [`discover_recurrence_proofs`] with explicit bounds of the
-/// alternative-representation stage (`max_candidates == 0` disables it).
+/// alternative-representation stage (`max_candidates == 0` disables it) and
+/// the default [`CatalogLiftOptions`].
 ///
 /// # Errors
 ///
@@ -250,6 +281,27 @@ pub fn discover_recurrence_proofs_with_options(
     record: &RecurrenceJson,
     options: &RealRootednessTheoremOptions,
     alternative_options: &AlternativeRepresentationOptions,
+) -> Result<RecurrenceProofDiscoveryReport, RecurrenceError> {
+    discover_recurrence_proofs_with_stages(
+        record,
+        options,
+        alternative_options,
+        &CatalogLiftOptions::default(),
+    )
+}
+
+/// [`discover_recurrence_proofs`] with explicit bounds of the
+/// alternative-representation stage and of the catalog-lift stage
+/// ([`CatalogLiftOptions::max_candidates`]` == 0` disables the latter).
+///
+/// # Errors
+///
+/// As [`discover_recurrence_proofs`].
+pub fn discover_recurrence_proofs_with_stages(
+    record: &RecurrenceJson,
+    options: &RealRootednessTheoremOptions,
+    alternative_options: &AlternativeRepresentationOptions,
+    lift_options: &CatalogLiftOptions,
 ) -> Result<RecurrenceProofDiscoveryReport, RecurrenceError> {
     let (rule, first_index, seeds) = record.to_recurrence_parts()?;
     validate_discovery_input(&rule, first_index, &seeds, options)?;
@@ -270,6 +322,7 @@ pub fn discover_recurrence_proofs_with_options(
         not_applicable_reason: None,
         tail: None,
         alternative_representations: None,
+        catalog_lifts: None,
     };
     let inhomogeneous = rule.inhomogeneous.as_ref().is_some_and(|g| !g.is_zero());
     if !report
@@ -300,6 +353,30 @@ pub fn discover_recurrence_proofs_with_options(
             };
             report.alternative_representations =
                 Some(alternative_search(&base, options, alternative_options)?);
+        }
+        let alternative_proved = report
+            .alternative_representations
+            .as_ref()
+            .is_some_and(|search| search.alternatives.iter().any(|a| a.proved));
+        if !tail_proved
+            && !alternative_proved
+            && lift_options.is_enabled()
+            && options.root_region.is_none()
+        {
+            let plain = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
+            let basis_record = match &report.tail {
+                Some(tail) => tail.recurrence.clone(),
+                None => plain.clone(),
+            };
+            // The stage only adds proofs: an error inside it leaves it out.
+            report.catalog_lifts = catalog_lift_search(
+                &plain,
+                &basis_record,
+                options,
+                alternative_options,
+                lift_options,
+            )
+            .ok();
         }
     }
     report.finish_summary(inhomogeneous.then(|| {
@@ -417,6 +494,22 @@ impl RecurrenceProofDiscoveryReport {
                 route = "a certified alternative representation";
             }
         }
+        let lift = self
+            .catalog_lifts
+            .as_ref()
+            .and_then(|search| search.conclusion.as_ref());
+        let mut conditional = None;
+        if proved.is_none() {
+            if let Some(conclusion) = lift {
+                match conclusion.parent_proof {
+                    CatalogParentProofKind::Polytool => {
+                        proved = Some(ProvedRows::EveryRow(conclusion.from_index));
+                        route = "a catalog lift";
+                    }
+                    CatalogParentProofKind::CatalogAttestation => conditional = Some(conclusion),
+                }
+            }
+        }
         let (from, outside_zero_classes) = match proved {
             Some(ProvedRows::EveryRow(from)) => (Some(from), None),
             Some(ProvedRows::OutsideZeroResidueClasses(rows)) => (None, Some(rows)),
@@ -424,10 +517,11 @@ impl RecurrenceProofDiscoveryReport {
         };
         let is_proved = from.is_some() || outside_zero_classes.is_some();
         self.real_rooted_from_index = from;
-        self.status = match (is_proved, &not_applicable) {
-            (true, _) => "proved",
-            (false, Some(_)) => "not_applicable",
-            (false, None) => "not_proved",
+        self.status = match (is_proved, conditional.is_some(), &not_applicable) {
+            (true, _, _) => "proved",
+            (false, true, _) => "conditional_on_attestation",
+            (false, false, Some(_)) => "not_applicable",
+            (false, false, None) => "not_proved",
         }
         .into();
         self.not_applicable_reason = if is_proved { None } else { not_applicable };
@@ -460,6 +554,16 @@ impl RecurrenceProofDiscoveryReport {
                 " Alternative representations are fitted rules; each is used only after an \
                  all-index equality certificate with the family.",
             );
+        }
+        if let (Some(conclusion), true) = (lift, from.is_some() && route == "a catalog lift") {
+            statement.push_str(&format!(" Catalog lift: {}", conclusion.statement));
+        }
+        if let Some(conclusion) = conditional {
+            statement.push_str(&format!(
+                " Not proved by polytool. Conditional on {}: {}",
+                conclusion.conditional_on.join(", "),
+                conclusion.statement
+            ));
         }
         self.statement = statement;
     }
@@ -508,20 +612,11 @@ impl RecurrenceProofDiscoveryReport {
         let (rule, first_index, seeds) = self.recurrence.to_recurrence_parts()?;
         validate_discovery_input(&rule, first_index, &seeds, &options)?;
         let plain = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
-        // The current search on the same record and options is the
-        // reference: the recorded attempts must be a subsequence of its
-        // attempts (a recomputation that tries or proves more is fine).
-        let alternative_options = self
-            .alternative_representations
-            .as_ref()
-            .map(|search| search.options.clone())
-            .unwrap_or_default();
-        let recomputed = discover_recurrence_proofs_with_options(
-            &self.recurrence,
-            &options,
-            &alternative_options,
-        )?;
-        verify_attempts(&self.attempts, &recomputed.attempts, &plain, &options)?;
+        // The current theorem checks on the same record and options are the
+        // reference: the recorded attempts must be of their theorems (a
+        // recomputation that proves more is fine).
+        let reference = run_theorems(&rule, first_index, &seeds, &options)?;
+        verify_attempts(&self.attempts, &reference, &plain, &options)?;
         let inhomogeneous = rule.inhomogeneous.as_ref().is_some_and(|g| !g.is_zero());
         let proved_directly = self.attempts.iter().any(|a| a.is_proved());
         match &self.tail {
@@ -598,6 +693,25 @@ impl RecurrenceProofDiscoveryReport {
                     return failed("the alternative search continues after a proof");
                 }
             }
+        }
+        if let Some(search) = &self.catalog_lifts {
+            let alternative_proved = self
+                .alternative_representations
+                .as_ref()
+                .is_some_and(|search| search.alternatives.iter().any(|a| a.proved));
+            if proved_directly
+                || tail_proved
+                || alternative_proved
+                || inhomogeneous
+                || options.root_region.is_some()
+            {
+                return failed("a catalog-lift stage is recorded although it is not run");
+            }
+            let basis_record = match &self.tail {
+                Some(tail) => tail.recurrence.clone(),
+                None => plain.clone(),
+            };
+            search.verify(&plain, &basis_record, &options)?;
         }
         let mut expected = self.clone();
         expected.trivially_real_rooted = self.recurrence.search.is_none()

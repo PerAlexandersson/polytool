@@ -2,7 +2,9 @@
 
 `recurrence-prove` discovers proofs by matching general theorem hypotheses.
 It uses the recurrence, its starting index and its seeds. There are no
-sequence-name tests, catalogue lookups or caller attestations in this search.
+sequence-name tests or caller attestations in this search; only its last
+stage (catalog lifts, below) consults the bundled OEIS catalog, and it keeps
+a catalog flag apart from a proof.
 `recurrence-theorems` is a different command: the conditional
 renewal/predecessor-window matcher, whose schema is unchanged.
 
@@ -128,6 +130,83 @@ counts finder configurations per pass deterministically, at most four
 fitted rules are certified, and the Ore-algebra arithmetic has a term
 budget. Finding nothing proves nothing.
 
+**Catalog lifts.** When nothing above proves the record (and no root region
+is requested), the last stage connects it to a family of the bundled OEIS
+catalog (919 entries, no external database) by an identity certified for
+every index, and transfers that family's statement. Two lifts are tried:
+
+1. *Normalized identification.* A catalog family `S` with
+   `T_n = c(n) x^(alpha n + beta) S_(n + s)` for every `n` from some index
+   on (`certify_normalized_recurrence_equality`: index shift, dropped
+   leading rows, a power of `x` with an affine exponent, a hypergeometric
+   scalar proved nonzero for every index). Candidates come from a
+   fingerprint index of the catalog, built once per process: the first 16
+   rows of every family with the power of `x` removed, denominators cleared,
+   the content divided out and a positive leading coefficient, so that the
+   scalar and the power of `x` do not change them and the index shift only
+   moves them. A family is a candidate when at least 6 of the record's first
+   16 rows match at one shift; a family with the record's own rule (up to
+   that shift) is skipped. The index is only a hint: each candidate's
+   equality is certified, the family is proved from scratch by the stages
+   above (never by another lift: depth one), and the proved statement
+   "every row from `f` on is nonzero and real-rooted with every root in
+   `R`" is carried to the record by
+   `transfer_real_rootedness_along_normalization` (a power of `x` adds the
+   root `0` to the region; rows the identity does not cover are checked
+   exactly). For example A123125 (Eulerian rows with an extra factor `x` and
+   a first row `1`) is the catalog family A008292 shifted by a power of `x`,
+   which Liu--Wang proves.
+2. *Backward basis-map lift.* `find_basis_map_lifts` with the library of
+   proved basis maps of the catalog and the published Narayana and Eulerian
+   transformations, on the record (on its tail record when discovery has a
+   tail): `Q_n = T_P(R_n)` for every `n`, the map theorem sends
+   polynomials with roots in a source `S` to ones with roots in a target
+   `J`, and the coefficient family `R` is proved to have its roots in `S`
+   by the shared parent provers (the same registry theorems). When the
+   identity is certified but those provers leave `R` open, `R` is
+   identified with a catalog family as in 1, and its transferred region must
+   lie in the source of a conclusion of the map theorem. For example A067613
+   is `T(R)` for the Hermite basis map of A060821.
+
+The record's statement is "every row from `N` on is nonzero and real-rooted
+with every root in the lift's region". Nonzero rows come from the identity
+(a nonzero scalar and a power of `x` times a nonzero parent row) for an
+identification with a polytool proof; otherwise (an attested parent, which
+only states "zero or real-rooted", and the basis-map routes) from the
+record's own leading-coefficient certificate (`recurrence-degree`), with the
+rows before its `holds_from` checked exactly.
+
+*Polytool proofs and catalog attestations.* A parent is either proved by
+polytool (its discovery report or theorem route is replayed) or only
+asserted by the catalog flag `lean_proved` of the identified family (label
+`oeis_catalog:<A-number>:lean_proved`, a Lean proof made outside polytool),
+also through the catalog-flag route of the parent provers for a basis-map
+coefficient family. A lift with a polytool parent is preferred. A lift
+that rests only on a flag gives the status `conditional_on_attestation`
+(exit status 1), never `proved`: `real_rooted_from_index` is omitted and the
+conditional claim is `catalog_lifts.conclusion` with its labels in
+`conditional_on`.
+
+The stage is bounded: `--max-lift-candidates N` (default 6; 0 disables the
+stage) counts the catalog families sent to certification (the record's and
+the coefficient families' together, more matching rows first, then catalog
+order); the backward search tries at most 512 maps, certifies at most 16
+candidates, runs only when the record's first 12 rows have degree at most
+24 (exact root location of the expanded rows is its cost), and keeps one
+geometric map `g (a + d t)^k` per pair (`g`, sign of `d`), since the lifts
+through the others differ from it by an affine change of the variable. The
+fingerprint index and the map library are built once per process; on a
+record the other stages leave unproved the stage costs about one second.
+The report records
+every identification (catalog id, the normalized-equality certificate, the
+parent's own discovery report, the transfer or the reason none applies),
+the basis-map search with its certifications and the coefficient
+identifications, and the `conclusion` (`route`: `normalized_identification`,
+`basis_map` or `basis_map_with_identified_coefficients`; `catalog_family`
+or `basis_map`; `parent_proof`: `polytool` or `catalog_attestation`;
+`from_index`, `root_region`, the leading-coefficient certificate and the
+exactly checked rows; `statement`).
+
 **Not applicable.** A rule with an inhomogeneous term matches none of the
 criteria (they all need a homogeneous rule); the status is then
 `not_applicable` with `not_applicable_reason`.
@@ -145,7 +224,8 @@ needs it yet.
 the skipped rows exactly (default 3, maximum 16 in CLI/MCP). The library also
 accepts a requested root region through `RealRootednessTheoremOptions`.
 The report schema is `polytool.recurrence-proof-discovery.v1`.
-Exit codes are 0 for a proof, 1 for no proof, and 2 for invalid input.
+Exit codes are 0 for a proof, 1 for no proof (including
+`conditional_on_attestation`), and 2 for invalid input.
 With `--verify`, 0 means the report replays, including a valid `not_proved`
 report; the replay output preserves the discovery status.
 
@@ -162,7 +242,14 @@ alternative's equality certificate and attempts are recomputed, and the
 summary fields (`status`, `real_rooted_from_index`,
 `real_rooted_outside_zero_residue_classes`, `trivially_real_rooted`,
 `statement`) must follow from the recorded
-attempts alone, so a report never claims more than its attempts prove. A
+attempts alone, so a report never claims more than its attempts prove.
+The catalog-lift stage is replayed from its certificates: every normalized
+equality (its source must be the named catalog family's record), every
+parent report (a depth-one discovery on that record, replayed itself), every
+transfer and its premise (a proved conclusion of the parent report, or the
+catalog flag of the named entry), the basis-map search with every
+certification, and each coefficient identification against its lift; the
+conclusion is then recomputed from the recorded attempts. A
 recomputation that proves more is fine; a report saved before a criterion
 was added no longer replays and is recomputed. Missing, extra or repeated
 attempts, reordered attempts and attempts flipped to proved are rejected.
@@ -252,16 +339,20 @@ It returns `RecurrenceProofDiscoveryReport`; `report.verify()` replays the
 recorded routes (above) and every attempt's exact certificates. Altered
 conclusions, missing attempts and mismatched seeds are rejected.
 `discover_recurrence_proofs_with_options` takes the bounds of the
-alternative-representation stage (`AlternativeRepresentationOptions`), and
+alternative-representation stage (`AlternativeRepresentationOptions`),
+`discover_recurrence_proofs_with_stages` also those of the catalog-lift
+stage (`CatalogLiftOptions`; the report field `catalog_lifts` is a
+`CatalogLiftSearch`), and
 `certify_recurrence_equality` certifies two definitions of one sequence on
 its own. `check_product_recurrence_theorem` is also available independently.
 
 MCP tools:
 
 - `discover_recurrence_proofs`: `recurrence_json` as JSON text, optional
-  `max_start_delay` (default 3, maximum 16) and
+  `max_start_delay` (default 3, maximum 16),
   `max_representation_candidates` (default 300, maximum 2000, 0 disables the
-  alternative-representation stage);
+  alternative-representation stage) and `max_lift_candidates` (default 6,
+  maximum 100, 0 disables the catalog-lift stage);
 - `verify_recurrence_proofs`: `report_json` as JSON text.
 
 Both tools use the same library code as the CLI and retain the MCP input

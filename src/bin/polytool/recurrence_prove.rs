@@ -3,8 +3,9 @@
 use crate::input::{error_text, parse_usize_option, read_stdin_or_exit};
 use crate::recurrence_input::read_recurrence_json;
 use polytool::recurrence::{
-    discover_recurrence_proofs_with_options, AlternativeRepresentationOptions,
-    RealRootednessTheoremOptions, RealRootednessTheoremReport, RecurrenceProofDiscoveryReport,
+    discover_recurrence_proofs_with_stages, AlternativeRepresentationOptions, CatalogLiftOptions,
+    CatalogLiftSearch, RealRootednessTheoremOptions, RealRootednessTheoremReport,
+    RecurrenceProofDiscoveryReport,
 };
 
 pub(crate) fn cmd_recurrence_prove(args: &[String]) {
@@ -23,6 +24,7 @@ pub(crate) fn cmd_recurrence_prove(args: &[String]) {
 
 fn run(args: &[String]) -> Result<bool, String> {
     let (mut path, mut candidate, mut delay, mut representations) = (None, None, None, None);
+    let mut lifts = None;
     let (mut json, mut verify) = (false, false);
     let mut i = 0;
     while i < args.len() {
@@ -46,6 +48,9 @@ fn run(args: &[String]) -> Result<bool, String> {
                     "--max-representation-candidates",
                 )?)
             }
+            "--max-lift-candidates" => {
+                lifts = Some(parse_usize_option(args, &mut i, "--max-lift-candidates")?)
+            }
             "--json" => json = true,
             "--verify" => verify = true,
             other => return Err(format!("unknown recurrence-prove option: {other}")),
@@ -53,7 +58,12 @@ fn run(args: &[String]) -> Result<bool, String> {
         i += 1;
     }
     if verify {
-        if path.is_some() || candidate.is_some() || delay.is_some() || representations.is_some() {
+        if path.is_some()
+            || candidate.is_some()
+            || delay.is_some()
+            || representations.is_some()
+            || lifts.is_some()
+        {
             return Err("--verify cannot be combined with search flags".into());
         }
         let report: RecurrenceProofDiscoveryReport =
@@ -90,13 +100,21 @@ fn run(args: &[String]) -> Result<bool, String> {
     if alternative_options.max_candidates > 100_000 {
         return Err("--max-representation-candidates must be at most 100000".into());
     }
-    let report = discover_recurrence_proofs_with_options(
+    let lift_options = CatalogLiftOptions {
+        max_candidates: lifts.unwrap_or(CatalogLiftOptions::default().max_candidates),
+        ..Default::default()
+    };
+    if lift_options.max_candidates > 1000 {
+        return Err("--max-lift-candidates must be at most 1000".into());
+    }
+    let report = discover_recurrence_proofs_with_stages(
         &record,
         &RealRootednessTheoremOptions {
             maximum_start_delay,
             ..Default::default()
         },
         &alternative_options,
+        &lift_options,
     )
     .map_err(error_text)?;
     if json {
@@ -186,5 +204,62 @@ fn print_report_text(report: &RecurrenceProofDiscoveryReport) {
             }
             print_attempts_text(&alternative.attempts, "  ");
         }
+    }
+    if let Some(search) = &report.catalog_lifts {
+        print_catalog_lifts_text(search);
+    }
+}
+
+fn print_catalog_lifts_text(search: &CatalogLiftSearch) {
+    println!(
+        "\nCatalog lifts: {} catalog famil{} certified",
+        search.candidates_tried(),
+        if search.candidates_tried() == 1 {
+            "y"
+        } else {
+            "ies"
+        }
+    );
+    for identification in &search.identifications {
+        println!(
+            "  {}: equality {}; {}",
+            identification.catalog_id,
+            identification.equality.status,
+            identification
+                .reason
+                .as_deref()
+                .unwrap_or(match identification.parent_proof {
+                    Some(polytool::recurrence::CatalogParentProofKind::Polytool) => {
+                        "parent proved by polytool"
+                    }
+                    _ => "parent attested by the catalog flag",
+                })
+        );
+    }
+    if let Some(stage) = &search.basis_maps {
+        match (&stage.search, &stage.error) {
+            (Some(lifts), _) => println!(
+                "  Basis maps: {} tried, {} certified candidate(s), proved: {}",
+                lifts.maps_tried,
+                lifts.lifts.len(),
+                lifts
+                    .proved()
+                    .map_or("none", |lift| lift.candidate.basis.name())
+            ),
+            (None, Some(error)) => println!("  Basis maps: not run ({error})"),
+            (None, None) => {}
+        }
+        for coefficient in &stage.coefficient_identifications {
+            println!(
+                "  Coefficient family of lift {}: {} (equality {})",
+                coefficient.lift,
+                coefficient.identification.catalog_id,
+                coefficient.identification.equality.status
+            );
+        }
+    }
+    match &search.conclusion {
+        Some(conclusion) => println!("  Conclusion: {}", conclusion.statement),
+        None => println!("  No lift concludes."),
     }
 }

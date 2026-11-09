@@ -4,9 +4,10 @@
 
 use polytool::real_rootedness::RealInterval;
 use polytool::recurrence::{
-    certify_leading_coefficient as library_certify_leading_coefficient, discover_recurrence_proofs,
-    find_recurrence_adaptive_rational_with_budget, AdaptiveSearchBudget, AdaptiveSearchOptions,
-    AdaptiveSearchOutcome, AdaptiveSearchResult, BigRational,
+    certify_leading_coefficient as library_certify_leading_coefficient,
+    discover_recurrence_proofs_with_stages, find_recurrence_adaptive_rational_with_budget,
+    AdaptiveSearchBudget, AdaptiveSearchOptions, AdaptiveSearchOutcome, AdaptiveSearchResult,
+    AlternativeRepresentationOptions, BigRational, CatalogLiftOptions, CatalogParentProofKind,
     LeadingCoefficientCertificate as LibraryLeadingCoefficientCertificate,
     LeadingCoefficientOptions, LeadingCoefficientSign, RealRootednessTheoremOptions,
     RealRootednessTheoremReport, RealRootednessTheoremStatus, Recurrence as LibraryRecurrence,
@@ -301,14 +302,21 @@ impl Recurrence {
 
     /// Try the general real-rootedness theorems on this recurrence; see
     /// :func:`polytool.prove_real_rooted`.
-    #[pyo3(signature = (*, maximum_start_delay = 3, root_region = None))]
+    #[pyo3(signature = (*, maximum_start_delay = 3, root_region = None, max_lift_candidates = 6))]
     fn prove_real_rooted(
         &self,
         py: Python<'_>,
         maximum_start_delay: usize,
         root_region: Option<&Bound<'_, PyAny>>,
+        max_lift_candidates: usize,
     ) -> PyResult<ProofReport> {
-        prove_record(py, self.record(), maximum_start_delay, root_region)
+        prove_record(
+            py,
+            self.record(),
+            maximum_start_delay,
+            root_region,
+            max_lift_candidates,
+        )
     }
 
     /// Certify the degree law and leading-coefficient signs of every row; see
@@ -647,13 +655,25 @@ fn prove_record(
     record: &RecurrenceJson,
     maximum_start_delay: usize,
     root_region: Option<&Bound<'_, PyAny>>,
+    max_lift_candidates: usize,
 ) -> PyResult<ProofReport> {
     let options = RealRootednessTheoremOptions {
         root_region: root_region.map(root_region_from_python).transpose()?,
         maximum_start_delay,
     };
+    let lifts = CatalogLiftOptions {
+        max_candidates: max_lift_candidates,
+        ..CatalogLiftOptions::default()
+    };
     let report = py
-        .detach(|| discover_recurrence_proofs(record, &options))
+        .detach(|| {
+            discover_recurrence_proofs_with_stages(
+                record,
+                &options,
+                &AlternativeRepresentationOptions::default(),
+                &lifts,
+            )
+        })
         .map_err(polytool_error)?;
     Ok(ProofReport { report })
 }
@@ -693,8 +713,14 @@ fn certify_record(
 /// Liu--Wang three-term theorem, the iterated-preserver and the
 /// hypergeometric-row criteria, and checks every hypothesis exactly for all
 /// ``n`` (``polytool recurrence-prove``); then the tail after rows that are
-/// zero or not real-rooted, and alternative representations with an
-/// all-index equality certificate.  When a theorem fails at the
+/// zero or not real-rooted, alternative representations with an
+/// all-index equality certificate, and catalog lifts: an identity,
+/// certified for every index, with a family of the bundled OEIS catalog
+/// (a normalized identification or a backward basis-map lift) whose
+/// parent statement polytool proves; at most ``max_lift_candidates``
+/// catalog families are certified (``0`` disables the stage).  A lift
+/// resting only on the catalog's ``lean_proved`` flag gives the status
+/// ``"conditional_on_attestation"``, never ``"proved"``.  When a theorem fails at the
 /// supplied initial rows, its induction may start up to
 /// ``maximum_start_delay`` rows later (the skipped rows are checked
 /// exactly).  ``root_region=(lower, upper)`` (``None`` for an infinite end)
@@ -704,15 +730,24 @@ fn certify_record(
 /// that no sufficient criterion applied; it is not a disproof.  A proof
 /// concerns the sequence the recurrence defines.
 #[pyfunction]
-#[pyo3(signature = (recurrence, *, maximum_start_delay = 3, root_region = None))]
+#[pyo3(signature = (
+    recurrence, *, maximum_start_delay = 3, root_region = None, max_lift_candidates = 6
+))]
 pub(crate) fn prove_real_rooted(
     py: Python<'_>,
     recurrence: &Bound<'_, PyAny>,
     maximum_start_delay: usize,
     root_region: Option<&Bound<'_, PyAny>>,
+    max_lift_candidates: usize,
 ) -> PyResult<ProofReport> {
     let record = Recurrence::record_from_python(recurrence)?;
-    prove_record(py, &record, maximum_start_delay, root_region)
+    prove_record(
+        py,
+        &record,
+        maximum_start_delay,
+        root_region,
+        max_lift_candidates,
+    )
 }
 
 /// Certify the degree law ``deg P_n = D(n)`` and the sign of every leading
@@ -744,9 +779,12 @@ pub(crate) fn certify_leading_coefficient(
 /// ``polytool recurrence-prove --json``).
 ///
 /// ``status`` is ``"proved"`` when at least one theorem checked every
-/// hypothesis, else ``"not_proved"`` or ``"not_applicable"`` (no disproof).  ``attempts`` lists every
-/// theorem tried with its hypotheses; ``route`` and ``certificate`` name the
-/// first proved one.  :meth:`verify` replays the whole search exactly.
+/// hypothesis (or a catalog lift rests on a parent polytool proves), else
+/// ``"conditional_on_attestation"`` (a catalog lift resting on a catalog
+/// flag), ``"not_proved"`` or ``"not_applicable"`` (no disproof).
+/// ``attempts`` lists every theorem tried with its hypotheses; ``route`` and
+/// ``certificate`` name the first proved one (for a catalog lift, the lift's
+/// route and conclusion).  :meth:`verify` replays the whole search exactly.
 #[pyclass(module = "polytool", frozen)]
 pub struct ProofReport {
     report: RecurrenceProofDiscoveryReport,
@@ -782,6 +820,16 @@ impl ProofReport {
         };
         direct.or_else(tail).or_else(alternative)
     }
+
+    /// The catalog-lift conclusion when it proves the record (a polytool
+    /// parent).
+    fn proved_lift(&self) -> Option<&polytool::recurrence::CatalogLiftConclusion> {
+        self.report
+            .catalog_lifts
+            .as_ref()
+            .and_then(|search| search.conclusion.as_ref())
+            .filter(|conclusion| conclusion.parent_proof == CatalogParentProofKind::Polytool)
+    }
 }
 
 #[pymethods]
@@ -806,21 +854,38 @@ impl ProofReport {
         serialize_to_python(py, &self.report)
     }
 
-    /// ``"proved"``, ``"not_proved"`` or ``"not_applicable"`` (a rule no
-    /// theorem matches, such as an inhomogeneous rule).
+    /// ``"proved"``, ``"conditional_on_attestation"`` (only a catalog lift
+    /// resting on a catalog flag, not a polytool proof), ``"not_proved"`` or
+    /// ``"not_applicable"`` (a rule no theorem matches, such as an
+    /// inhomogeneous rule).
     #[getter]
     fn status(&self) -> &str {
         &self.report.status
     }
 
-    /// Whether some theorem proved its conclusion (on the record, its tail
-    /// or a certified alternative representation).  A residue-class proof
+    /// Whether polytool proved the record (``status == "proved"``: a theorem
+    /// on the record, its tail or a certified alternative representation,
+    /// or a catalog lift with a polytool parent).  A residue-class proof
     /// may leave whole residue classes of zero rows: then
     /// :attr:`real_rooted_from_index` is ``None`` and
     /// :attr:`real_rooted_outside_zero_residue_classes` names them.
     #[getter]
     fn is_proved(&self) -> bool {
-        self.first_proved_attempt().is_some()
+        self.report.status == "proved"
+    }
+
+    /// The conclusion of the catalog-lift stage (a ``dict`` with
+    /// ``route``, ``catalog_family`` or ``basis_map``, ``parent_proof``
+    /// (``"polytool"`` or ``"catalog_attestation"``), ``conditional_on``,
+    /// ``from_index``, ``root_region`` and ``statement``), or ``None``.
+    #[getter]
+    fn catalog_lift<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        self.report
+            .catalog_lifts
+            .as_ref()
+            .and_then(|search| search.conclusion.as_ref())
+            .map(|conclusion| serialize_to_python(py, conclusion))
+            .transpose()
     }
 
     /// The first index ``N`` with every row ``P_n``, ``n >= N``, proved
@@ -850,20 +915,34 @@ impl ProofReport {
 
     /// The theorem of the first proved attempt (for example
     /// ``"three_term_recurrence"``), or ``None``; attempts on the record come
-    /// first, then those on its tail and on a certified alternative.
+    /// first, then those on its tail and on a certified alternative.  For a
+    /// record proved by a catalog lift, ``"catalog_lift:"`` followed by the
+    /// lift's route (for example ``"catalog_lift:normalized_identification"``).
     #[getter]
     fn route(&self) -> Option<String> {
-        self.first_proved_attempt()
-            .map(|attempt| attempt.theorem.as_str().to_owned())
+        if let Some(attempt) = self.first_proved_attempt() {
+            return Some(attempt.theorem.as_str().to_owned());
+        }
+        self.proved_lift().map(|conclusion| {
+            let route = serde_json::to_value(conclusion.route)
+                .ok()
+                .and_then(|value| value.as_str().map(str::to_owned))
+                .unwrap_or_default();
+            format!("catalog_lift:{route}")
+        })
     }
 
     /// The first proved attempt (a ``dict`` of schema
     /// ``polytool.recurrence-real-rootedness-theorem.v1`` with the
-    /// hypotheses and the conclusion), or ``None``.
+    /// hypotheses and the conclusion), the conclusion of a proving catalog
+    /// lift, or ``None``.
     #[getter]
     fn certificate<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
-        self.first_proved_attempt()
-            .map(|attempt| serialize_to_python(py, attempt))
+        if let Some(attempt) = self.first_proved_attempt() {
+            return serialize_to_python(py, attempt).map(Some);
+        }
+        self.proved_lift()
+            .map(|conclusion| serialize_to_python(py, conclusion))
             .transpose()
     }
 

@@ -11,6 +11,16 @@ const EXIT_PROVED: &[(i32, &str)] = &[
     (2, "usage error, invalid input or a failed replay"),
 ];
 
+/// Exit statuses of `recurrence-prove`.
+const EXIT_PROVE: &[(i32, &str)] = &[
+    (0, "proved by polytool (or the replayed report is valid)"),
+    (
+        1,
+        "not proved by polytool (also conditional_on_attestation)",
+    ),
+    (2, "usage error, invalid input or a failed replay"),
+];
+
 /// Exit statuses of the JSON-request commands.
 const EXIT_REQUEST: &[(i32, &str)] = &[
     (0, "success (or a replay that verified)"),
@@ -477,7 +487,7 @@ pub(crate) const RECURRENCE_PROVE: CommandSpec = CommandSpec {
     summary: "Discover and replay general recurrence proofs",
     usage: &[
         "recurrence-prove [--recurrence <FILE|->] [--candidate N] [--max-start-delay N] \
-         [--max-representation-candidates N]",
+         [--max-representation-candidates N] [--max-lift-candidates N]",
         "recurrence-prove --verify < proof.json",
     ],
     description: r#"Discover general proofs for a recurrence and seeds; no named-sequence lookup.
@@ -512,14 +522,26 @@ When no criterion proves the record:
     at most two); a rule is used only after an all-index equality certificate
     (Ore-algebra division and invariant row annihilators, exact), then the
     criteria run on it. --max-representation-candidates bounds each finder pass
-    (deterministic count; 0 disables the stage).
+    (deterministic count; 0 disables the stage);
+  - catalog lifts: the record is connected to a family of the bundled OEIS
+    catalog by an identity certified for every index: a normalized
+    identification T_n = c(n) x^(a n + b) S_(n+s) (candidates from a
+    fingerprint index of the catalog rows, the scalar proved nonzero), or a
+    backward basis-map lift Q_n = T_P(R_n) whose map theorem carries the roots
+    of R into a target interval. The parent (S, or R) is proved by the stages
+    above (never by another lift); R may also be identified with a catalog
+    family. When the parent is only flagged lean_proved in the catalog (a proof
+    made outside polytool), the status is conditional_on_attestation, never
+    proved. --max-lift-candidates bounds the catalog families certified
+    (deterministic order; 0 disables the stage). Not run when a root region is
+    requested.
 A rule with an inhomogeneous term matches no criterion: status not_applicable.
 
 The recurrence input is recurrence.v1 JSON, a theorem wrapper or a
 representation menu; with a menu, --candidate is required unless it has one
 entry. --verify replays the recorded routes of a report from standard input
-(every attempt, the tail and every equality certificate) and takes no search
-flags."#,
+(every attempt, the tail, every equality certificate and the catalog-lift
+certificates with their parent reports) and takes no search flags."#,
     input: InputKind::Json,
     output: OutputKind::JsonSwitch,
     flags: &[
@@ -541,6 +563,12 @@ flags."#,
             "Finder configurations per alternative-representation pass (0: off)",
         )
         .default("300"),
+        option(
+            "max-lift-candidates",
+            "N",
+            "Catalog families certified by the catalog-lift stage (0: off)",
+        )
+        .default("6"),
         switch("verify", "Replay the recorded routes of a report from stdin; no search flags"),
     ],
     details: r#"JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is
@@ -551,14 +579,22 @@ may leave whole residue classes of zero rows (conclusion.zero_residue_classes,
 residues of n modulo the period); real_rooted_from_index is then omitted and
 real_rooted_outside_zero_residue_classes gives from_index and the zero classes
 (status proved). tail and alternative_representations hold the later stages, each
-alternative with its polytool.recurrence-equality.v1 certificate. Replay needs
+alternative with its polytool.recurrence-equality.v1 certificate. catalog_lifts
+holds the catalog-lift stage: identifications (catalog id, normalized-equality
+certificate, the parent's own discovery report, the transfer), basis_maps (the
+backward basis-map search and coefficient identifications) and conclusion
+(route, catalog_family or basis_map, parent_proof polytool or
+catalog_attestation, conditional_on, from_index, root_region). Status
+conditional_on_attestation: the only lift rests on a catalog flag;
+real_rooted_from_index is then omitted and the claim is in
+catalog_lifts.conclusion. Replay needs
 the attempts of exactly the criteria the current search records; recompute
 reports saved before a criterion was added."#,
     examples: &[
         "polytool recurrence --json < rows.txt | polytool recurrence-prove --recurrence - --json",
         "polytool recurrence-prove --recurrence rec.json --json > proof.json\npolytool recurrence-prove --verify < proof.json",
     ],
-    exit_codes: EXIT_PROVED,
+    exit_codes: EXIT_PROVE,
     see_also: &["recurrence-degree", "recurrence-theorems", "topic:recurrence-json"],
     run: Some(crate::recurrence_prove::cmd_recurrence_prove),
     ..COMMAND

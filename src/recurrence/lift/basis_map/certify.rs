@@ -113,7 +113,7 @@ pub struct BasisMapDivisionQuotient {
 /// [`BasisMapDivisionDirection::TransportedByInput`] `rho = Phi` and
 /// `Delta = M`; plus the exceptional bases where the identity does not
 /// apply, which are checked exactly on rows.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BasisMapDivisionCertificate {
     /// The input: rule `M`, first index `n0` and the identifying seeds.
@@ -136,7 +136,7 @@ pub struct BasisMapDivisionCertificate {
 }
 
 /// Status of the identity `Q_n = T_P(R_n)`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BasisMapIdentityStatus {
     /// Proved for every `n >= n0`.
@@ -186,7 +186,7 @@ pub struct BasisMapCoefficientRootProof {
 }
 
 /// A candidate `Q_n = T_P(R_n)`: the map and the coefficient family.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BasisMapLiftCandidate {
     /// The basis map.
@@ -197,7 +197,7 @@ pub struct BasisMapLiftCandidate {
 
 /// The certification of one candidate (schema
 /// `polytool.recurrence-basis-map-lift.v1`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BasisMapLiftCertification {
     /// [`BASIS_MAP_LIFT_SCHEMA`].

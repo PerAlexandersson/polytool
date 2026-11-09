@@ -736,8 +736,11 @@ general theorem families (the parent cascade, including the iterated-preserver
 and hypergeometric-row criteria) and the RealRooted row routes fixed-delay
 window (`variable_delay`) and residue classes (`residue_class_subsequences`)
 where the rule has their form, then the tail after rows that are zero or not
-real-rooted and certified alternative representations
-(`--max-representation-candidates N`, 0 disables them), and emits a replayable
+real-rooted, certified alternative representations
+(`--max-representation-candidates N`, 0 disables them) and catalog lifts to a
+family of the bundled OEIS catalog (`--max-lift-candidates N`, default 6, 0
+disables them; a lift resting only on a catalog flag gives the status
+`conditional_on_attestation`, exit status 1), and emits a replayable
 report with exact hypotheses, conclusions and unresolved obligations. A
 residue-class proof may leave whole residue classes of zero rows: the report
 then omits `real_rooted_from_index` and names them in

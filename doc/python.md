@@ -218,8 +218,9 @@ search of `polytool recurrence-prove` ([proof-discovery.md](proof-discovery.md))
 product induction, three-term (Favard), Liu--Wang, Liu--Wang derivative lag,
 Ma--Wang interval, Liu--Wang three-term, iterated-preserver and
 hypergeometric-row criteria, each hypothesis decided exactly for every `n`,
-then the tail after rows that are zero or not real-rooted and certified
-alternative representations.
+then the tail after rows that are zero or not real-rooted, certified
+alternative representations and catalog lifts to a family of the bundled
+OEIS catalog (`max_lift_candidates=6`, `0` disables them).
 
 ```pycon
 >>> report = narayana.prove_real_rooted()
@@ -247,7 +248,11 @@ rows (for `P_n = t^2 P_(n-2)` with `P_1 = 0`, every odd row): then
 "not_proved"` is not a disproof.  `to_dict()` is the `polytool.recurrence-proof-discovery.v1` report
 of `polytool recurrence-prove --json`, `ProofReport.from_json` reads one
 back, and `verify()` replays the whole search, raising
-`polytool.VerificationError` on any mismatch.
+`polytool.VerificationError` on any mismatch.  A record proved by a catalog
+lift has `route` `"catalog_lift:<route>"` and its conclusion as `certificate`
+and `catalog_lift`; a lift resting only on the catalog's `lean_proved` flag
+gives `status == "conditional_on_attestation"` (`is_proved` is `False`) with
+the conditional claim in `catalog_lift`.
 
 ### Degree laws and leading coefficients
 
@@ -310,7 +315,7 @@ the catalog's statuses, real-rootedness flags and evidence records.
 | `gamma_coefficients`, `discriminant`, `resultant`, `properties` | exact values, `dict` |
 | `find_recurrence` | `Recurrence` or `None` |
 | `Recurrence`: `generate`, `iterate`, `latex`, `to_json`, `to_dict`, `from_json`, `reindexed`, `match_theorems` | rows, LaTeX, JSON |
-| `prove_real_rooted` | `ProofReport` (`status`, `route`, `certificate`, `attempts`, `real_rooted_from_index`, `real_rooted_outside_zero_residue_classes`, `verify`) |
+| `prove_real_rooted` | `ProofReport` (`status`, `route`, `certificate`, `attempts`, `real_rooted_from_index`, `real_rooted_outside_zero_residue_classes`, `catalog_lift`, `verify`) |
 | `certify_leading_coefficient` | `LeadingCoefficientCertificate` (`degree_at`, `sign_at`, `verify`) |
 | `oeis.ids`, `oeis.info`, `oeis.generate`, `oeis.recurrence` | catalog access |
 | `PolytoolError` (a `ValueError`), `VerificationError`, `BudgetExhaustedError` | exceptions |

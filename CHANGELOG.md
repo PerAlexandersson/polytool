@@ -4,6 +4,18 @@
 
 ### Breaking
 
+- Proof discovery (`recurrence-prove`, `discover_recurrence_proofs`, MCP
+  `discover_recurrence_proofs`, Python `prove_real_rooted`) has a fourth
+  stage, catalog lifts (below), run by default on records the other stages
+  leave unproved. Its reports gain the field `catalog_lifts`, and `status`
+  has a new value `conditional_on_attestation` (a lift that rests only on a
+  catalog `lean_proved` flag; exit status 1, `real_rooted_from_index`
+  omitted). Consumers that match the three earlier statuses must handle it;
+  `--max-lift-candidates 0` (`max_lift_candidates=0`,
+  `CatalogLiftOptions::disabled()`) restores the earlier reports. Python
+  `ProofReport.is_proved` is now `status == "proved"` (so also true for a
+  lift), and `route` is `"catalog_lift:<route>"` for a lift.
+
 - Real-rootedness theorem reports carry one route certificate:
   `RealRootednessTheoremReport`'s five optional fields `iterated_preserver`,
   `variable_delay`, `residue_classes`, `index_section` and `factor_gauge` are
@@ -30,6 +42,50 @@
   form.
 
 ### Added and changed
+
+- Catalog lifts in proof discovery: when no theorem proves a record
+  (directly, on its tail or on a certified alternative representation), it
+  is connected to a family of the bundled OEIS catalog by an identity
+  certified for every index, and the family's statement is transferred.
+  Two lifts: a normalized identification
+  `T_n = c(n) x^(alpha n + beta) S_(n + s)` (candidates from a fingerprint
+  index of the catalog rows built once per process, then
+  `certify_normalized_recurrence_equality`, a depth-one discovery of the
+  catalog family and `transfer_real_rootedness_along_normalization`), and a
+  backward basis-map lift (`find_basis_map_lifts` with the catalog library,
+  built once per process; a coefficient family that the parent provers
+  leave open may be identified with a catalog family). Nonzero rows come
+  from the identity or from the record's leading-coefficient certificate.
+  A parent proved by polytool gives `proved`; a parent known only from the
+  catalog's `lean_proved` flag gives `conditional_on_attestation`, never
+  `proved`. Bounded by `--max-lift-candidates N` (default 6, 0 disables;
+  MCP `max_lift_candidates`, Python `max_lift_candidates`); every
+  certificate is replayed by `verify`. New public API:
+  `discover_recurrence_proofs_with_stages`, `CatalogLiftOptions`,
+  `CatalogLiftSearch`, `CatalogIdentification`,
+  `CatalogCoefficientIdentification`, `CatalogBasisMapStage`,
+  `CatalogLiftConclusion`, `CatalogLiftRoute`, `CatalogParentProofKind`;
+  `BasisMap` and the basis-map certification and search reports now
+  implement `Eq`. On the bundled catalog the stage proves 8 more
+  families (A123125, A266326, A288874 and A340556 by identification with
+  A008292, A133080, A112007 and A008517; A046802, A067613, A162303 and
+  A257142 by the Eulerian transformation, the Hermite map of A060821 and the
+  Narayana transformation `N_(k,1)`) and gives 2 conditional results
+  (A008303 and A263789, each identified with the other, whose `lean_proved`
+  flag it rests on); no earlier report changes. The discovery fingerprints of
+  the 174 unproved entries change (their reports gain the stage); the parent
+  fingerprints are unchanged.
+- `BasisMapLiftSearchOptions::max_certifications` (default `None`) bounds
+  the candidates `find_basis_map_lifts` certifies; reaching it sets
+  `exhausted_budget` (a new public field: struct literals need
+  `..Default::default()`).
+- `BasisMapLibrary::build` keeps the first rows of each admitted map for the
+  duplicate test instead of regenerating them for every candidate:
+  `BasisMapLibrary::oeis_catalog()` takes about 0.1 s instead of 1.8 s
+  (same entries and aliases).
+- `RecurrenceProofDiscoveryReport::verify` recomputes the theorem attempts
+  on the record directly instead of rerunning the whole search (the same
+  reference attempts, without the cost of the later stages).
 
 - Added 59 recurrence-backed OEIS families, with exact local OEIS term checks,
   held-out recurrence checks and 50 dated Lean proof flags (upstream proof

@@ -1263,7 +1263,9 @@ impl NormalizedRealRootednessTransfer {
 }
 
 /// The exact interval of an index-independent region.
-fn algebraic_region(region: &RootInterval) -> Result<AlgebraicInterval, RecurrenceError> {
+pub(super) fn algebraic_region(
+    region: &RootInterval,
+) -> Result<AlgebraicInterval, RecurrenceError> {
     if !region.is_index_independent() {
         return Err(RecurrenceError::Unsupported(format!(
             "the region {region} depends on the index"

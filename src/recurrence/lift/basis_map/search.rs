@@ -44,6 +44,10 @@ pub struct BasisMapLiftSearchOptions {
     /// Largest number of maps tried; reaching it sets
     /// [`BasisMapLiftReport::exhausted_budget`].  Default 512.
     pub max_maps: usize,
+    /// Largest number of candidates sent to certification (each runs the
+    /// identity certificate and the parent provers); reaching it sets
+    /// [`BasisMapLiftReport::exhausted_budget`].  Default `None` (no bound).
+    pub max_certifications: Option<usize>,
     /// Stop at the first proved lift.  Default true.
     pub stop_at_first_proof: bool,
     /// The options of each certification.
@@ -60,6 +64,7 @@ impl Default for BasisMapLiftSearchOptions {
             max_coefficient_degree: 2,
             max_coefficient_index_degree: 2,
             max_maps: 512,
+            max_certifications: None,
             stop_at_first_proof: true,
             certification: BasisMapLiftOptions::default(),
         }
@@ -97,7 +102,7 @@ pub enum BasisMapLiftRejection {
 
 /// The result of [`find_basis_map_lifts`] (schema
 /// `polytool.recurrence-basis-map-lifts.v1`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BasisMapLiftReport {
     /// [`BASIS_MAP_LIFTS_SCHEMA`].
@@ -240,7 +245,11 @@ pub fn find_basis_map_lifts(
         exhausted_budget: false,
     };
     for entry in library.entries() {
-        if report.maps_tried >= options.max_maps {
+        if report.maps_tried >= options.max_maps
+            || options
+                .max_certifications
+                .is_some_and(|bound| report.lifts.len() >= bound)
+        {
             report.exhausted_budget = true;
             break;
         }

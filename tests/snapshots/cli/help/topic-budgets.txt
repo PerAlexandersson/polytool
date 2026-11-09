@@ -15,6 +15,8 @@ answer on every machine (time limits are only used by `oeis evidence`).
   --max-start-delay N       recurrence-prove
   --max-representation-candidates N  recurrence-prove: finder configurations
                             per alternative-representation pass
+  --max-lift-candidates N   recurrence-prove: catalog families certified by
+                            the catalog-lift stage
   --per-entry-timeout-seconds S  oeis evidence (wall clock)
   limits {...}              JSON requests of recurrence --space,
                             recurrence-search-representations, recurrence-implicit

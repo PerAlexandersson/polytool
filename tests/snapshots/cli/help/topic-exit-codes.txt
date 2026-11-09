@@ -60,8 +60,8 @@ Per command:
       1 not proved
       2 usage error, invalid input or a failed replay
   recurrence-prove
-      0 proved (or the replayed certificate is valid)
-      1 not proved
+      0 proved by polytool (or the replayed report is valid)
+      1 not proved by polytool (also conditional_on_attestation)
       2 usage error, invalid input or a failed replay
   recurrence-theorems
       0 at least one theorem matches

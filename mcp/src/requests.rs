@@ -617,7 +617,8 @@ pub struct RecurrenceTheoremsRequest {
     pub recurrence_json: String,
 }
 
-/// General proof search for a recurrence-defined sequence, without catalogue lookup.
+/// General proof search for a recurrence-defined sequence; only its last
+/// stage (catalog lifts) consults the bundled OEIS catalog.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DiscoverRecurrenceProofsRequest {
@@ -631,6 +632,10 @@ pub struct DiscoverRecurrenceProofsRequest {
     /// most 2000.
     #[serde(default)]
     pub max_representation_candidates: Option<usize>,
+    /// Catalog families certified by the catalog-lift stage, default 6; 0
+    /// disables it; at most 100.
+    #[serde(default)]
+    pub max_lift_candidates: Option<usize>,
 }
 
 /// Replay a complete general recurrence proof-discovery report.

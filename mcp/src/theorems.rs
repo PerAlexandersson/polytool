@@ -47,8 +47,8 @@ pub(crate) fn discover_proofs(
     input: &crate::requests::DiscoverRecurrenceProofsRequest,
 ) -> Result<BTreeMap<String, serde_json::Value>, McpError> {
     use polytool::recurrence::{
-        discover_recurrence_proofs_with_options, AlternativeRepresentationOptions,
-        RealRootednessTheoremOptions,
+        discover_recurrence_proofs_with_stages, AlternativeRepresentationOptions,
+        CatalogLiftOptions, RealRootednessTheoremOptions,
     };
     validate_mcp_text(&input.recurrence_json, "recurrence JSON").map_err(invalid_params)?;
     let record: RecurrenceJson = serde_json::from_str(&input.recurrence_json)
@@ -70,13 +70,21 @@ pub(crate) fn discover_proofs(
         }
         alternative.max_candidates = candidates;
     }
-    let report = discover_recurrence_proofs_with_options(
+    let mut lifts = CatalogLiftOptions::default();
+    if let Some(candidates) = input.max_lift_candidates {
+        if candidates > 100 {
+            return Err(invalid_params("max_lift_candidates must be at most 100"));
+        }
+        lifts.max_candidates = candidates;
+    }
+    let report = discover_recurrence_proofs_with_stages(
         &record,
         &RealRootednessTheoremOptions {
             maximum_start_delay,
             ..Default::default()
         },
         &alternative,
+        &lifts,
     )
     .map_err(|e| invalid_params(e.to_string()))?;
     let serde_json::Value::Object(fields) =
@@ -129,6 +137,7 @@ mod tests {
                 recurrence_json: record.to_string(),
                 maximum_start_delay: Some(0),
                 max_representation_candidates: None,
+                max_lift_candidates: None,
             }))
             .unwrap();
         assert_eq!(report["status"], "proved");
@@ -151,6 +160,15 @@ mod tests {
                 recurrence_json: record.to_string(),
                 maximum_start_delay: Some(17),
                 max_representation_candidates: None,
+                max_lift_candidates: None,
+            }))
+            .is_err());
+        assert!(server
+            .discover_recurrence_proofs(Parameters(DiscoverRecurrenceProofsRequest {
+                recurrence_json: record.to_string(),
+                maximum_start_delay: None,
+                max_representation_candidates: None,
+                max_lift_candidates: Some(101),
             }))
             .is_err());
     }

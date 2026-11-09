@@ -54,6 +54,12 @@
 //! carries a proved root region along it (the `normalized_equality` module
 //! docs).
 //!
+//! Catalog lifts, [`CatalogLiftSearch`]: the last stage of proof discovery
+//! ([`discover_recurrence_proofs_with_stages`]) connects an unproved record to
+//! a family of the bundled OEIS catalog by a normalized identification or a
+//! backward basis-map lift whose parent is proved by the general stages
+//! (the `catalog_lift` module docs).
+//!
 //! Every lift carries a uniform [`LiftSummary`] with the shared
 //! [`lift_verdict`].
 //!
@@ -151,9 +157,10 @@ mod parent_theorems;
 pub(in crate::recurrence) use parent_theorems::rule_with_x_free_left_hand_factor;
 pub use parent_theorems::{
     certify_recurrence_equality, discover_recurrence_proofs_with_options,
-    AlternativeRepresentationOptions, AlternativeRepresentationProof,
-    AlternativeRepresentationSearch, RealRootedOutsideZeroResidueClasses,
-    RecurrenceEqualityCertificate, RecurrenceProofTail, RECURRENCE_EQUALITY_SCHEMA,
+    discover_recurrence_proofs_with_stages, AlternativeRepresentationOptions,
+    AlternativeRepresentationProof, AlternativeRepresentationSearch,
+    RealRootedOutsideZeroResidueClasses, RecurrenceEqualityCertificate, RecurrenceProofTail,
+    RECURRENCE_EQUALITY_SCHEMA,
 };
 pub use parent_theorems::{
     check_hypergeometric_row_theorem, check_iterated_preserver_theorem,
@@ -191,6 +198,12 @@ pub use normalized_equality::{
     NormalizedEqualityOptions, NormalizedRealRootednessTransfer,
     NormalizedRecurrenceEqualityCertificate, RecurrenceNormalization,
     NORMALIZED_REAL_ROOTEDNESS_TRANSFER_SCHEMA, NORMALIZED_RECURRENCE_EQUALITY_SCHEMA,
+};
+pub(in crate::recurrence) mod catalog_lift;
+pub use catalog_lift::{
+    CatalogBasisMapStage, CatalogCoefficientIdentification, CatalogIdentification,
+    CatalogLiftConclusion, CatalogLiftOptions, CatalogLiftRoute, CatalogLiftSearch,
+    CatalogParentProofKind,
 };
 mod row_factor;
 pub use row_factor::{

@@ -147,9 +147,10 @@ names, and that every theorem has its parent route.
 ## Proof-discovery fingerprints
 
 `tests/discovery_fingerprints.rs` is the evidence gate for refactorings of the
-theorem routes. For every bundled OEIS catalog family (860 entries) it hashes
+theorem routes. For every bundled OEIS catalog family (919 entries) it hashes
 the complete JSON of `recurrence::discover_recurrence_proofs` (default
-options) and of `recurrence::prove_parent_real_rootedness` (first index, no
+options, so including the catalog-lift stage on the records the other stages
+leave unproved) and of `recurrence::prove_parent_real_rootedness` (first index, no
 attestations, root-domain route enabled) and compares both with
 `tests/fixtures/discovery-report-fingerprints.tsv`; a behaviour-preserving
 change leaves every line unchanged, and a change of results re-blesses the

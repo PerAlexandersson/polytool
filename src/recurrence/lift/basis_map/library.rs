@@ -72,6 +72,9 @@ pub struct BasisMapLibraryOptions {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BasisMapLibrary {
     entries: Vec<BasisMapLibraryEntry>,
+    /// The first [`LIBRARY_FINGERPRINT_ROWS`] basis rows of each entry (the
+    /// duplicate test), parallel to `entries`.
+    first_rows: Vec<Vec<Vec<crate::BigRational>>>,
 }
 
 impl BasisMapLibrary {
@@ -126,6 +129,18 @@ impl BasisMapLibrary {
         &self.entries
     }
 
+    /// Keep only the entries for which `keep` holds (in order).
+    pub(in crate::recurrence) fn retain_entries(
+        &mut self,
+        mut keep: impl FnMut(&BasisMapLibraryEntry) -> bool,
+    ) {
+        let kept: Vec<bool> = self.entries.iter().map(&mut keep).collect();
+        let mut flags = kept.iter();
+        self.entries.retain(|_| *flags.next().unwrap_or(&false));
+        let mut flags = kept.iter();
+        self.first_rows.retain(|_| *flags.next().unwrap_or(&false));
+    }
+
     /// Number of entries.
     pub fn len(&self) -> usize {
         self.entries.len()
@@ -169,13 +184,8 @@ impl BasisMapLibrary {
         if identity {
             return Ok(false);
         }
-        if let Some(existing) = self.entries.iter_mut().find(|entry| {
-            entry
-                .map
-                .basis_rows(LIBRARY_FINGERPRINT_ROWS)
-                .is_ok_and(|other| other == rows)
-        }) {
-            existing.aliases.push(map.name().to_string());
+        if let Some(position) = self.first_rows.iter().position(|other| *other == rows) {
+            self.entries[position].aliases.push(map.name().to_string());
             return Ok(false);
         }
         let theorem = check_basis_map_preserves_pf(&map, options)?;
@@ -196,6 +206,7 @@ impl BasisMapLibrary {
             theorem,
             aliases: Vec::new(),
         });
+        self.first_rows.push(rows);
         Ok(true)
     }
 }
