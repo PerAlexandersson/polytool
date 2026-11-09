@@ -231,7 +231,7 @@ pub struct FindRecurrenceResponse {
     pub candidates_considered: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parse_errors: Vec<ParsePolynomialItem>,
     /// Conditional theorem matches of a found recurrence (objects of
     /// `polytool.recurrence-theorems.v1`); omitted when none match.
@@ -316,7 +316,7 @@ pub struct HStarInequalitiesItem {
     pub codegree: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub all_applicable_hold: Option<bool>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checks: Vec<HStarInequalityCheckItem>,
 }
 
@@ -394,7 +394,7 @@ pub struct CyclicSievingReportItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub holds: Option<bool>,
     pub evaluations: Vec<RootOfUnityEvaluationItem>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checks: Vec<CyclicSievingPowerCheckItem>,
 }
 
@@ -597,10 +597,10 @@ pub struct CheckPolynomialFamilyResponse {
     pub all_required_checks_passed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub first_failure: Option<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parse_errors: Vec<ParsePolynomialItem>,
     pub items: Vec<FamilyPolynomialReport>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub consecutive_pairs: Vec<InterlacingPairItem>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lace: Option<LaceCheckResponse>,

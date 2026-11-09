@@ -2786,3 +2786,96 @@ fn renamed_request_fields_accept_old_and_new_names() {
         serde_json::from_value(json!({"text": "1", "order_offsets": [0]})).unwrap();
     assert_eq!(request.offsets, Some(vec![0]));
 }
+
+/// A successful response must contain every property its advertised output
+/// schema requires (MCP clients validate structured content against it).
+fn assert_required_properties_present<T: serde::Serialize + schemars::JsonSchema>(value: &T) {
+    let schema = serde_json::to_value(schemars::schema_for!(T)).unwrap();
+    let value = serde_json::to_value(value).unwrap();
+    let required = schema["required"].as_array().cloned().unwrap_or_default();
+    for property in required {
+        let name = property.as_str().unwrap();
+        assert!(
+            value.get(name).is_some(),
+            "required property {name:?} missing from {value}"
+        );
+    }
+}
+
+#[test]
+fn successful_responses_contain_every_required_schema_property() {
+    let server = PolynomialToolsServer::new();
+    let request: FindRecurrenceRequest = serde_json::from_value(json!({
+        "coefficients": [[1], [2], [4], [8], [16]],
+        "max_recurrence_length": 1,
+        "max_variable_degree": 0,
+        "max_index_degree": 0,
+        "max_derivative_order": 0
+    }))
+    .unwrap();
+    let Json(found) = server.find_recurrence(Parameters(request)).unwrap();
+    assert!(found.parse_errors.is_empty());
+    assert_required_properties_present(&found);
+    let schema = serde_json::to_value(schemars::schema_for!(
+        crate::responses::FindRecurrenceResponse
+    ))
+    .unwrap();
+    let required = schema["required"].as_array().cloned().unwrap_or_default();
+    assert!(!required.contains(&json!("parse_errors")));
+    for (schema, fields) in [
+        (
+            serde_json::to_value(schemars::schema_for!(
+                crate::responses::CheckPolynomialFamilyResponse
+            ))
+            .unwrap(),
+            &["parse_errors", "consecutive_pairs"][..],
+        ),
+        (
+            serde_json::to_value(schemars::schema_for!(
+                crate::responses::HStarInequalitiesItem
+            ))
+            .unwrap(),
+            &["checks"][..],
+        ),
+        (
+            serde_json::to_value(schemars::schema_for!(
+                crate::responses::CyclicSievingReportItem
+            ))
+            .unwrap(),
+            &["checks"][..],
+        ),
+    ] {
+        let required = schema["required"].as_array().cloned().unwrap_or_default();
+        for field in fields {
+            assert!(
+                !required.contains(&json!(field)),
+                "{field} must not be required"
+            );
+        }
+    }
+}
+
+/// A field omitted from the JSON when empty must also be optional in the
+/// schema: `skip_serializing_if` on a non-`Option` field needs `default`.
+#[test]
+fn skipped_response_fields_are_optional_in_the_schema() {
+    let source = include_str!("responses.rs");
+    let lines: Vec<&str> = source.lines().collect();
+    for (index, line) in lines.iter().enumerate() {
+        if !line.contains("skip_serializing_if") || line.contains("default") {
+            continue;
+        }
+        let field = lines[index + 1..]
+            .iter()
+            .find(|next| {
+                !next.trim_start().starts_with("#[") && !next.trim_start().starts_with("///")
+            })
+            .unwrap();
+        assert!(
+            field.contains(": Option<"),
+            "responses.rs:{}: `{}` is skipped when empty but required in the schema; add `default`",
+            index + 1,
+            field.trim()
+        );
+    }
+}
