@@ -370,3 +370,16 @@ fn trivially_real_rooted_classifies_the_product_seed_class() {
     assert_eq!(report.status, "proved");
     assert!(!report.trivially_real_rooted);
 }
+
+/// Theorem reports serialized before `trivially_real_rooted` existed keep
+/// their exact JSON (stored certificates are identified by a hash of it).
+#[test]
+fn theorem_report_serialization_omits_a_false_trivially_real_rooted() {
+    // A product whose multiplier has a non-real root (x^2 + 1): not proved.
+    let report = product_check(&product(&[&[1, 0, 1]], None, 1), &[&[1]]);
+    assert!(!report.trivially_real_rooted);
+    let json = serde_json::to_value(&report).unwrap();
+    assert!(json.get("trivially_real_rooted").is_none());
+    let reparsed: RealRootednessTheoremReport = serde_json::from_value(json.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&reparsed).unwrap(), json);
+}

@@ -361,7 +361,11 @@ pub struct RealRootednessTheoremReport {
     /// classifies the proof of the sequence defined by the recurrence and
     /// seeds, not a single polynomial; it is false for every other theorem
     /// and whenever the product proof is not complete.
-    #[serde(default)]
+    ///
+    /// Omitted from the JSON when false, so that reports serialized before
+    /// the field existed keep their exact form (stored certificates are
+    /// identified by a hash of their serialization).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub trivially_real_rooted: bool,
     /// Lean replay status: always `"not_attempted"`.
     pub lean_replay: String,

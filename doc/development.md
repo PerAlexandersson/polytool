@@ -5,7 +5,7 @@
 Source API documentation uses Rust's `//!` and `///` comments. Build it with
 `cargo doc --locked --no-deps`. To combine the guides, executable-derived
 command reference and searchable rustdoc for all three core libraries, install
-Python 3.9 or later and Pandoc, then run from the repository root:
+Python 3.10 or later and Pandoc, then run from the repository root:
 
 ```sh
 python3 scripts/build-docs.py --output /tmp/polytool-docs
@@ -37,15 +37,16 @@ commands richly (entries with `usage`, `description`, `options`, `examples` or
 `doc/commands/` and per topic under `doc/topics/`, indexed by the command
 reference. If the JSON only lists names and summaries (or the binary has no
 `help --json`), it falls back to scraping each command's `--help`. Every
-`doc/*.md` guide is included automatically, including the Python guide once it
-exists (which also gets a navigation entry); guides not named on the front page are
-listed under "More guides". Rustdoc for `polytool`, `ore-algebra` and
+`doc/*.md` guide is included automatically (the Python guide also gets a
+navigation entry); guides not named on the front page are listed under "More
+guides". Rustdoc for `polytool`, `ore-algebra` and
 `exact-real-roots` is published under `/api/`.
 
 ## Continuous integration
 
-Two workflows in `.github/workflows/` run on every push to `main` and every
-pull request (newer pushes cancel running pull-request runs).
+Three workflows in `.github/workflows/` run on pushes to `main` and on pull
+requests (newer pushes cancel running pull-request runs); `python.yml` runs
+only when the bindings, the library sources or its own files change.
 
 `ci.yml`:
 
@@ -55,7 +56,10 @@ pull request (newer pushes cancel running pull-request runs).
 - `msrv`: matrix over `polytool`, `ore-algebra`, `exact-real-roots`, `mcp` and
   `web`; each job reads the package's declared `rust-version` (currently 1.82,
   and 1.89 for `mcp`) and runs `cargo check --lib --bins` on that toolchain.
-  Raise an MSRV only in the manifest.
+  A package without a committed `Cargo.lock` (`web`, `mcp`) is first resolved
+  by stable Cargo with `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`,
+  so dependency releases that need a newer Rust are skipped. Raise an MSRV
+  only in the manifest.
 - `mcp-release`: `cargo build --release` of `polytool-mcp`, the stdio smoke test
   in release mode, and the binary uploaded as artifact `polytool-mcp-linux-x86_64`.
 - `web`: `cargo check --target wasm32-unknown-unknown`, `wasm-pack build
