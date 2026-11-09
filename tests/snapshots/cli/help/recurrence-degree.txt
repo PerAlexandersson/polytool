@@ -19,11 +19,11 @@ representation menu; with a menu, --candidate is required unless it has one
 entry. --verify replays a certificate read from standard input and takes no
 search flags.
 
-Usage: polytool recurrence-degree --recurrence <FILE|-> [--candidate N] [--count N] [--max-period P]
+Usage: polytool recurrence-degree [--recurrence <FILE|->] [--candidate N] [--count N] [--max-period P]
        polytool recurrence-degree --verify < certificate.json
 
 Options:
-      --recurrence <FILE|->  Read recurrence JSON from FILE, or stdin with -
+      --recurrence <FILE|->  Read recurrence JSON from FILE (default -: stdin or --input FILE)
       --candidate <N>        Explicit 0-based menu choice
       --count <N>            Rows computed to read off the law [default: 36]
       --max-period <P>       Largest period of the law [default: 6]

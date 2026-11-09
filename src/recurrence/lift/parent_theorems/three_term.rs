@@ -490,6 +490,7 @@ pub(super) fn three_term_report(
     report.hypotheses = hypotheses;
     Ok(report.finish(RealRootednessTheoremConclusion {
         first_index,
+        zero_residue_classes: None,
         interlacing_from: interlacing.then_some(start + 1),
         interlacing: interlacing.then_some(RowInterlacing::Strict),
         simple_roots: true,

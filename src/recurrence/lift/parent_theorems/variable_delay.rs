@@ -426,6 +426,7 @@ pub(super) fn variable_delay_report(
     };
     Ok(report.finish(RealRootednessTheoremConclusion {
         first_index,
+        zero_residue_classes: None,
         interlacing_from: Some(first_index + 1),
         interlacing: Some(RowInterlacing::Weak),
         simple_roots: false,

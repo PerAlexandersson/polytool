@@ -237,8 +237,14 @@ True
 ```
 
 `report.attempts` lists every theorem tried, with its hypotheses;
-`certificate` is the first proved one.  `status == "not_proved"` is not a
-disproof.  `to_dict()` is the `polytool.recurrence-proof-discovery.v1` report
+`certificate` is the first proved one.  `real_rooted_from_index` is the
+first index `N` with every row `P_n`, `n >= N`, proved nonzero and
+real-rooted.  A residue-class proof may leave whole residue classes of zero
+rows (for `P_n = t^2 P_(n-2)` with `P_1 = 0`, every odd row): then
+`real_rooted_from_index` is `None` and
+`real_rooted_outside_zero_residue_classes` is a `dict` with `from_index` and
+`zero_residue_classes` (`period`, `residues` of `n`).  `status ==
+"not_proved"` is not a disproof.  `to_dict()` is the `polytool.recurrence-proof-discovery.v1` report
 of `polytool recurrence-prove --json`, `ProofReport.from_json` reads one
 back, and `verify()` replays the whole search, raising
 `polytool.VerificationError` on any mismatch.
@@ -304,7 +310,7 @@ the catalog's statuses, real-rootedness flags and evidence records.
 | `gamma_coefficients`, `discriminant`, `resultant`, `properties` | exact values, `dict` |
 | `find_recurrence` | `Recurrence` or `None` |
 | `Recurrence`: `generate`, `iterate`, `latex`, `to_json`, `to_dict`, `from_json`, `reindexed`, `match_theorems` | rows, LaTeX, JSON |
-| `prove_real_rooted` | `ProofReport` (`status`, `route`, `certificate`, `attempts`, `verify`) |
+| `prove_real_rooted` | `ProofReport` (`status`, `route`, `certificate`, `attempts`, `real_rooted_from_index`, `real_rooted_outside_zero_residue_classes`, `verify`) |
 | `certify_leading_coefficient` | `LeadingCoefficientCertificate` (`degree_at`, `sign_at`, `verify`) |
 | `oeis.ids`, `oeis.info`, `oeis.generate`, `oeis.recurrence` | catalog access |
 | `PolytoolError` (a `ValueError`), `VerificationError`, `BudgetExhaustedError` | exceptions |

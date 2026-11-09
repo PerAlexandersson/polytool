@@ -1790,6 +1790,7 @@ fn finish_report(
     }
     report.finish(RealRootednessTheoremConclusion {
         first_index: claim_first,
+        zero_residue_classes: None,
         interlacing_from,
         interlacing: interlacing_from.map(|_| RowInterlacing::Weak),
         simple_roots: false,

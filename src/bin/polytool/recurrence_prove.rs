@@ -79,10 +79,9 @@ fn run(args: &[String]) -> Result<bool, String> {
     if maximum_start_delay > 16 {
         return Err("--max-start-delay must be at most 16".into());
     }
-    let record = read_recurrence_json(
-        path.ok_or("recurrence-prove needs --recurrence <file|->")?,
-        candidate,
-    )?;
+    // Without --recurrence the record is the command input (stdin or
+    // --input FILE).
+    let record = read_recurrence_json(path.unwrap_or("-"), candidate)?;
     let alternative_options = AlternativeRepresentationOptions {
         max_candidates: representations
             .unwrap_or(AlternativeRepresentationOptions::default().max_candidates),
@@ -139,6 +138,14 @@ fn print_report_text(report: &RecurrenceProofDiscoveryReport) {
     println!("Proof discovery: {}", report.status);
     if let Some(index) = report.real_rooted_from_index {
         println!("Every row P_n with n >= {index} is nonzero and real-rooted.");
+    }
+    if let Some(rows) = &report.real_rooted_outside_zero_residue_classes {
+        let zero = &rows.zero_residue_classes;
+        println!(
+            "Zero residue classes: every row P_n with n >= {} and n mod {} in {:?} is zero; \
+             every other row P_n with n >= {} is nonzero and real-rooted.",
+            rows.from_index, zero.period, zero.residues, rows.from_index
+        );
     }
     if let Some(reason) = &report.not_applicable_reason {
         println!("Not applicable: {reason}");

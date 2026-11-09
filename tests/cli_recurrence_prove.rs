@@ -108,3 +108,66 @@ fn help_and_invalid_flags_do_not_consume_input() {
         assert!(!String::from_utf8_lossy(&result.stderr).contains("parse recurrence JSON"));
     }
 }
+
+#[test]
+fn the_record_defaults_to_the_command_input() {
+    // Without --recurrence the record is read from stdin, or from the file
+    // named by the universal --input option, for every command whose main
+    // input is a recurrence record.
+    let record = input().to_string();
+    let path = std::env::temp_dir().join(format!(
+        "polytool-cli-recurrence-input-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(&path, &record).unwrap();
+    let file = path.to_str().unwrap();
+    for (command, extra) in [
+        ("recurrence-prove", vec!["--json"]),
+        ("recurrence-degree", vec!["--json"]),
+        ("recurrence-theorems", vec!["--json"]),
+        ("recurrence-generate", vec!["--count", "3"]),
+    ] {
+        let from_stdin = run(&[&[command][..], &extra].concat(), &record);
+        let from_file = run(&[&[command, "--input", file][..], &extra].concat(), "");
+        let explicit = run(&[&[command, "--recurrence", file][..], &extra].concat(), "");
+        assert!(!from_stdin.stdout.is_empty(), "{command}");
+        assert_eq!(from_stdin.stdout, from_file.stdout, "{command}");
+        assert_eq!(from_stdin.stdout, explicit.stdout, "{command}");
+        assert_eq!(
+            from_stdin.status.code(),
+            from_file.status.code(),
+            "{command}"
+        );
+    }
+    std::fs::remove_file(&path).unwrap();
+}
+
+#[test]
+fn zero_residue_classes_are_reported_by_the_cli() {
+    // P_n = x^2 P_(n-2), P_0 = 1, P_1 = 0: every odd row is zero.
+    let record = serde_json::json!({
+        "schema": "polytool.recurrence.v1", "first_index": 0,
+        "initial_polynomials": [["1"], ["0"]],
+        "recurrence": {"terms": [{"offset": 2, "deriv_order": 0, "sign": "none",
+            "coeff": {"coeffs": [["0", "0", "1"]]}}]}
+    });
+    let result = run(&["recurrence-prove", "--json"], &record.to_string());
+    assert!(result.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(report["status"], "proved");
+    assert!(report.get("real_rooted_from_index").is_none());
+    assert_eq!(
+        report["real_rooted_outside_zero_residue_classes"],
+        serde_json::json!({"from_index": 0,
+            "zero_residue_classes": {"period": 2, "residues": [1]}})
+    );
+    let text = run(&["recurrence-prove"], &record.to_string());
+    let text = String::from_utf8_lossy(&text.stdout);
+    assert!(
+        !text.contains("Every row P_n with n >= 0 is nonzero"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Zero residue classes: every row P_n with n >= 0 and n mod 2 in [1] is zero")
+    );
+}

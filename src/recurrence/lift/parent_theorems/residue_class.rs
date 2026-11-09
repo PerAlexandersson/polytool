@@ -24,6 +24,10 @@
 //! sub-certificate.  A class whose seed rows are all zero is identically
 //! zero (the rule is homogeneous and `f(n_0 + j + p m) != 0` for
 //! `m >= K_j`, decided exactly), as in RealRooted's `eq_zero_of_*_rec`.
+//! Such *zero classes* give infinitely many zero rows; the conclusion names
+//! them in [`RealRootednessTheoremConclusion::zero_residue_classes`]
+//! (residues of the index `n` modulo `p`), and its first index then bounds
+//! only the rows outside them.
 //!
 //! The RealRooted tactic `rr_row_subseq_splits` handles periods `2..=6`
 //! and class rules with one or two lags (product, derivative and three-term
@@ -109,7 +113,13 @@ pub struct ResidueClassCertificate {
 /// When every class is proved, every row `P_n`, `n >= first_index`, is zero
 /// (exactly the rows of the zero classes and the zero rows named in the
 /// statement) or real-rooted; the root region is the hull of the class
-/// regions when every live class certifies an index-independent one.  No
+/// regions when every live class certifies an index-independent one.  The
+/// zero classes are recorded in
+/// [`RealRootednessTheoremConclusion::zero_residue_classes`] (as residues
+/// of `n` modulo `p`): with zero classes the conclusion does *not* say that
+/// every row from its first index on is nonzero, only every row outside
+/// them.  A rule whose classes are all zero (only zero seed rows) is not
+/// applicable.  No
 /// interlacing of consecutive rows is concluded (the classes interlace
 /// within themselves only).  With a requested root region, every class is
 /// checked with it and the hull must lie in it.  The induction start of the
@@ -512,6 +522,13 @@ pub(super) fn residue_class_report(
             selected,
         });
     }
+    if zero_classes.len() == period {
+        return Ok(report
+            .not_applicable(
+                "every residue class has only zero seed rows, so every row is zero".to_string(),
+            )
+            .without_hypotheses());
+    }
     let region = region.flatten();
     if let Some(requested) = &options.root_region {
         let statement = format!(
@@ -550,9 +567,21 @@ pub(super) fn residue_class_report(
         "every P_n, n >= {first_index}, is zero or real-rooted, by the {period} residue classes \
          P_({first_index} + j + {period} m)"
     );
-    if !zero_classes.is_empty() {
+    // The zero classes as residues of the index itself (class j is
+    // n = first_index + j mod p).
+    let zero_residue_classes = (!zero_classes.is_empty()).then(|| {
+        let mut residues: Vec<usize> = zero_classes
+            .iter()
+            .map(|j| (first_index % period + j) % period)
+            .collect();
+        residues.sort_unstable();
+        ZeroResidueClasses { period, residues }
+    });
+    if let Some(zero) = &zero_residue_classes {
         statement.push_str(&format!(
-            "; the rows of the residue classes j = {zero_classes:?} are zero"
+            "; the rows of the residue classes j = {zero_classes:?} (the rows P_n with n mod \
+             {period} in {:?}) are zero",
+            zero.residues
         ));
     }
     if !zero_rows.is_empty() {
@@ -569,6 +598,7 @@ pub(super) fn residue_class_report(
     }
     Ok(report.finish(RealRootednessTheoremConclusion {
         first_index: conclusion_first,
+        zero_residue_classes,
         interlacing_from: None,
         interlacing: None,
         simple_roots: false,

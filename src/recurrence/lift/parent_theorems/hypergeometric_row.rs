@@ -860,6 +860,7 @@ pub(super) fn hypergeometric_row_report(
         ));
         return Ok(report.finish(RealRootednessTheoremConclusion {
             first_index,
+            zero_residue_classes: None,
             interlacing_from: None,
             interlacing: None,
             simple_roots: false,
@@ -1046,6 +1047,7 @@ pub(super) fn hypergeometric_row_report(
     );
     Ok(report.finish(RealRootednessTheoremConclusion {
         first_index,
+        zero_residue_classes: None,
         interlacing_from: None,
         interlacing: None,
         simple_roots: false,

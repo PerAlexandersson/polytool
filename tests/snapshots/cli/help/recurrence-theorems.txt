@@ -10,10 +10,10 @@ canonical boundary rows (finite check; `canonical_after_relabel` when the first
 supplied row plays the role of index 0). A match is conditional: it never shows
 that the recurrence holds for the intended sequence for all n.
 
-Usage: polytool recurrence-theorems --recurrence <FILE|-> [--candidate N] [--json]
+Usage: polytool recurrence-theorems [--recurrence <FILE|->] [--candidate N] [--json]
 
 Options:
-      --recurrence <FILE|->  Read recurrence JSON from FILE, or stdin with -
+      --recurrence <FILE|->  Read recurrence JSON from FILE (default -: stdin or --input FILE)
       --candidate <N>        Select a representation menu entry (0-based)
   -h, --help                 Print help
 

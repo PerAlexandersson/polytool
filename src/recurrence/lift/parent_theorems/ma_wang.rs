@@ -684,6 +684,7 @@ pub(super) fn ma_wang_interval_report(
     report.lean_declarations = LEAN_DECLARATIONS.iter().map(|s| s.to_string()).collect();
     Ok(report.finish(RealRootednessTheoremConclusion {
         first_index,
+        zero_residue_classes: None,
         interlacing_from: Some(n_first),
         interlacing: Some(RowInterlacing::Weak),
         simple_roots: false,

@@ -904,8 +904,18 @@ region).  `verify()` replays it.
   zero seed rows is identically zero (homogeneous rule, `f` nonzero on the
   class, decided exactly).  It proves every row zero (named in the
   conclusion) or real-rooted, with the hull of the class regions; no
-  interlacing of consecutive rows.  OEIS A099605, A132918, A137374, A171608,
-  A211956, A223168 and A286100 (lags `2` and `4`) are proved this way.
+  interlacing of consecutive rows.  Zero classes give infinitely many zero
+  rows: the conclusion then records them in
+  `RealRootednessTheoremConclusion::zero_residue_classes`
+  (`ZeroResidueClasses { period, residues }`, residues of the index `n`),
+  its `first_index` bounds only the rows outside them
+  (`proves_row_nonzero_and_real_rooted(n)`, `has_zero_residue_classes()`),
+  and the discovery report replaces `real_rooted_from_index` by
+  `real_rooted_outside_zero_residue_classes`.  The field is omitted for
+  every other conclusion.  OEIS A099605, A132918, A137374, A171608,
+  A211956, A223168 and A286100 (lags `2` and `4`) are proved this way;
+  A132918 and A286100 (even rows) and A003982 (odd rows) have a zero
+  class.
 
 When a theorem fails at the supplied seeds, the checks retry with the
 induction start moved up to `RealRootednessTheoremOptions::maximum_start_delay`

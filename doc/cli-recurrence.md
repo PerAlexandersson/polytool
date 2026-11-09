@@ -6,7 +6,9 @@ For a complete generation/search/replay pipeline, see [CLI workflows](workflows.
 they accept plain recurrence records, theorem reports with `recurrence_json`,
 and recurrence representation menus. Select a zero-based `representations`
 entry with `--candidate N`; a menu with multiple entries requires this option.
-Extraction does not verify a report's claims. `recurrence-generate --format rows`
+`--recurrence FILE` names the record; without it (or with `--recurrence -`)
+the record is the command input, standard input or the file named by the
+universal `--input FILE` option. Extraction does not verify a report's claims. `recurrence-generate --format rows`
 names the default coefficient-list output explicitly.
 
 Part of the [CLI reference](cli.md).  See also
@@ -731,10 +733,15 @@ polytool recurrence-degree --verify < degree.json
 
 `polytool recurrence-prove --recurrence recurrence.json --json` checks eight
 general theorem families (the parent cascade, including the iterated-preserver
-and hypergeometric-row criteria), then the tail after rows that are zero or not
+and hypergeometric-row criteria) and the RealRooted row routes fixed-delay
+window (`variable_delay`) and residue classes (`residue_class_subsequences`)
+where the rule has their form, then the tail after rows that are zero or not
 real-rooted and certified alternative representations
 (`--max-representation-candidates N`, 0 disables them), and emits a replayable
-report with exact hypotheses, conclusions and unresolved obligations. Use
+report with exact hypotheses, conclusions and unresolved obligations. A
+residue-class proof may leave whole residue classes of zero rows: the report
+then omits `real_rooted_from_index` and names them in
+`real_rooted_outside_zero_residue_classes`. Use
 `--candidate N` for a menu and
 `polytool recurrence-prove --verify --json < proof.json` to replay. See
 [General recurrence proof discovery](proof-discovery.md) for the supported

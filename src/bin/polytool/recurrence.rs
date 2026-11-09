@@ -770,10 +770,9 @@ pub(crate) fn cmd_recurrence_generate(args: &[String]) {
         i += 1;
     }
 
-    let Some(path) = recurrence_path else {
-        eprintln!("recurrence-generate needs --recurrence <file|->");
-        std::process::exit(2);
-    };
+    // Without --recurrence the record is the command input (stdin or
+    // --input FILE).
+    let path = recurrence_path.unwrap_or_else(|| "-".to_string());
     if rows.is_some() && additional.is_some() {
         eprintln!("use only one of --count or --additional-count");
         std::process::exit(2);

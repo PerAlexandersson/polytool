@@ -2,7 +2,8 @@ Generate coefficient rows from recurrence JSON.
 
 Generate coefficient rows from recurrence JSON emitted by `polytool recurrence
 --json`. The input also accepts theorem wrappers and representation menus (pick
-a menu entry with --candidate, 0-based). `--recurrence -` reads standard input.
+a menu entry with --candidate, 0-based). Without --recurrence (or with
+`--recurrence -`) the record is read from standard input, or from --input FILE.
 
 Row selection: --count N outputs N rows in total, including the initial rows;
 --additional-count N outputs the initial rows plus N generated rows. Use only
@@ -26,12 +27,12 @@ B-file output (--format bfile, alias b-file): the rows are flattened into OEIS
 b-file lines `index value`, coefficients in ascending powers within each row,
 and every coefficient must be an integer. A term cap never splits a row.
 
-Usage: polytool recurrence-generate --recurrence <FILE|-> --count <N> [OPTIONS]
-       polytool recurrence-generate --recurrence <FILE|-> --additional-count <N> [OPTIONS]
-       polytool recurrence-generate --recurrence <FILE|-> --format bfile --max-terms <N> [OPTIONS]
+Usage: polytool recurrence-generate [--recurrence <FILE|->] --count <N> [OPTIONS]
+       polytool recurrence-generate [--recurrence <FILE|->] --additional-count <N> [OPTIONS]
+       polytool recurrence-generate [--recurrence <FILE|->] --format bfile --max-terms <N> [OPTIONS]
 
 Options:
-      --recurrence <FILE|->   Read recurrence JSON from FILE, or stdin with -
+      --recurrence <FILE|->   Read recurrence JSON from FILE (default -: stdin or --input FILE)
       --candidate <N>         Select a representation menu entry (0-based)
       --first-index <N>       Relabel the first row and shift the rule accordingly
       --count <N>             Output N rows in total, including initial rows

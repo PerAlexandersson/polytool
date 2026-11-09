@@ -150,6 +150,19 @@ pub struct AlternativeRepresentationSearch {
     pub alternatives: Vec<AlternativeRepresentationProof>,
 }
 
+/// The summary of a proof that leaves residue classes of zero rows
+/// ([`RecurrenceProofDiscoveryReport::real_rooted_outside_zero_residue_classes`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RealRootedOutsideZeroResidueClasses {
+    /// The first index `N` of the statement (the conclusion's first index).
+    pub from_index: usize,
+    /// The zero classes: every row `P_n`, `n >= from_index`, whose index
+    /// lies in them is zero; every other row `P_n`, `n >= from_index`, is
+    /// nonzero and real-rooted.
+    pub zero_residue_classes: ZeroResidueClasses,
+}
+
 /// Complete results of the general recurrence theorem checks.
 ///
 /// Every successful attempt proves its stated conclusion for the sequence
@@ -190,9 +203,19 @@ pub struct RecurrenceProofDiscoveryReport {
     /// The smallest index `N` such that a proved attempt shows every row
     /// `P_n`, `n >= N`, nonzero and real-rooted (the record's first index
     /// unless the proof is of a tail or rows are zero); omitted when not
-    /// proved.
+    /// proved, and when the only proofs leave infinitely many zero rows
+    /// (then [`Self::real_rooted_outside_zero_residue_classes`] is set).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub real_rooted_from_index: Option<usize>,
+    /// For a family proved only up to whole residue classes of zero rows
+    /// (a residue-class proof with zero classes,
+    /// [`RealRootednessTheoremConclusion::zero_residue_classes`]): the
+    /// rows `P_n`, `n >= from_index`, in the zero classes are zero and every
+    /// other row `P_n`, `n >= from_index`, is nonzero and real-rooted.  Set
+    /// exactly when the status is `proved` and `real_rooted_from_index` is
+    /// omitted; omitted otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub real_rooted_outside_zero_residue_classes: Option<RealRootedOutsideZeroResidueClasses>,
     /// Why no theorem applies, for the status `not_applicable`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub not_applicable_reason: Option<String>,
@@ -261,6 +284,7 @@ pub fn discover_recurrence_proofs_with_options(
         attempts,
         lean_replay: LIFT_LEAN_REPLAY_NOT_ATTEMPTED.into(),
         real_rooted_from_index: None,
+        real_rooted_outside_zero_residue_classes: None,
         not_applicable_reason: None,
         tail: None,
         alternative_representations: None,
@@ -352,45 +376,81 @@ fn run_theorems(
     Ok(attempts)
 }
 
-/// The first proved index of a list of attempts.
-fn first_proved_index(attempts: &[RealRootednessTheoremReport]) -> Option<usize> {
-    attempts
-        .iter()
-        .filter(|attempt| attempt.is_proved())
-        .filter_map(|attempt| attempt.conclusion.as_ref().map(|c| c.first_index))
-        .min()
+/// What the proved attempts of a list give: the smallest first index of a
+/// conclusion without zero residue classes (every row from there on nonzero
+/// and real-rooted), else the conclusion with zero residue classes of the
+/// smallest first index.
+fn proved_rows(attempts: &[RealRootednessTheoremReport]) -> Option<ProvedRows> {
+    let conclusions = || {
+        attempts
+            .iter()
+            .filter(|attempt| attempt.is_proved())
+            .filter_map(|attempt| attempt.conclusion.as_ref())
+    };
+    let every_row = conclusions()
+        .filter(|c| !c.has_zero_residue_classes())
+        .map(|c| c.first_index)
+        .min();
+    if let Some(from) = every_row {
+        return Some(ProvedRows::EveryRow(from));
+    }
+    conclusions()
+        .filter_map(|c| {
+            c.zero_residue_classes
+                .as_ref()
+                .map(|zero| RealRootedOutsideZeroResidueClasses {
+                    from_index: c.first_index,
+                    zero_residue_classes: zero.clone(),
+                })
+        })
+        .min_by_key(|proved| proved.from_index)
+        .map(ProvedRows::OutsideZeroResidueClasses)
+}
+
+/// The rows a proof covers (see [`proved_rows`]).
+enum ProvedRows {
+    /// Every row from this index on is nonzero and real-rooted.
+    EveryRow(usize),
+    /// Every row from the index on outside the zero classes.
+    OutsideZeroResidueClasses(RealRootedOutsideZeroResidueClasses),
 }
 
 impl RecurrenceProofDiscoveryReport {
-    /// Fill `status`, `statement` and `real_rooted_from_index` from the
-    /// attempts.
+    /// Fill `status`, `statement`, `real_rooted_from_index` and
+    /// `real_rooted_outside_zero_residue_classes` from the attempts.
     fn finish_summary(&mut self, not_applicable: Option<String>) {
-        let mut from = first_proved_index(&self.attempts);
+        let mut proved = proved_rows(&self.attempts);
         let mut route = "the supplied record";
-        if from.is_none() {
+        if proved.is_none() {
             if let Some(tail) = &self.tail {
-                from = first_proved_index(&tail.attempts);
+                proved = proved_rows(&tail.attempts);
                 route = "the tail record";
             }
         }
-        if from.is_none() {
+        if proved.is_none() {
             if let Some(search) = &self.alternative_representations {
-                from = search
+                proved = search
                     .alternatives
                     .iter()
                     .filter(|a| a.proved)
-                    .find_map(|a| first_proved_index(&a.attempts));
+                    .find_map(|a| proved_rows(&a.attempts));
                 route = "a certified alternative representation";
             }
         }
+        let (from, outside_zero_classes) = match proved {
+            Some(ProvedRows::EveryRow(from)) => (Some(from), None),
+            Some(ProvedRows::OutsideZeroResidueClasses(rows)) => (None, Some(rows)),
+            None => (None, None),
+        };
+        let is_proved = from.is_some() || outside_zero_classes.is_some();
         self.real_rooted_from_index = from;
-        self.status = match (from, &not_applicable) {
-            (Some(_), _) => "proved",
-            (None, Some(_)) => "not_applicable",
-            (None, None) => "not_proved",
+        self.status = match (is_proved, &not_applicable) {
+            (true, _) => "proved",
+            (false, Some(_)) => "not_applicable",
+            (false, None) => "not_proved",
         }
         .into();
-        self.not_applicable_reason = if from.is_none() { not_applicable } else { None };
+        self.not_applicable_reason = if is_proved { None } else { not_applicable };
         let mut statement = String::from(FIRST_VERSION_STATEMENT);
         if let Some(from) = from {
             statement.push_str(&format!(
@@ -398,6 +458,16 @@ impl RecurrenceProofDiscoveryReport {
                  real-rooted."
             ));
         }
+        if let Some(rows) = &outside_zero_classes {
+            let zero = &rows.zero_residue_classes;
+            statement.push_str(&format!(
+                " Proved through {route}: every row P_n with n >= {} and n mod {} in {:?} is \
+                 zero (infinitely many zero rows), and every other row P_n with n >= {} is \
+                 nonzero and real-rooted.",
+                rows.from_index, zero.period, zero.residues, rows.from_index
+            ));
+        }
+        self.real_rooted_outside_zero_residue_classes = outside_zero_classes;
         if let Some(tail) = &self.tail {
             statement.push_str(&format!(
                 " Tail: {}; the tail record starts at index {} and its rows are the family's \
@@ -578,6 +648,7 @@ impl RecurrenceProofDiscoveryReport {
         .into();
         legacy.statement = FIRST_VERSION_STATEMENT.into();
         legacy.real_rooted_from_index = None;
+        legacy.real_rooted_outside_zero_residue_classes = None;
         legacy.not_applicable_reason = None;
         if self.tail.is_none() && self.alternative_representations.is_none() && &legacy == self {
             return Ok(());

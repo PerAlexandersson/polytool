@@ -643,6 +643,7 @@ pub(super) fn derivative_lag_report(
     };
     Ok(report.finish(RealRootednessTheoremConclusion {
         first_index: conclusion_first,
+        zero_residue_classes: None,
         interlacing_from: Some(current_index),
         interlacing: Some(if gauge == 0 {
             RowInterlacing::Strict

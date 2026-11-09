@@ -87,7 +87,14 @@
 //!    certified region lies in `(-inf, 0]` (route 8d is run with the
 //!    requested region `(-inf, 0)` and, failing that, without one, since
 //!    its classes may have roots at `0`); each attempt is recorded only when
-//!    the rule has the route's form;
+//!    the rule has the route's form.  Route 8d also accepts a proof with
+//!    zero residue classes
+//!    ([`RealRootednessTheoremConclusion::zero_residue_classes`]: every row
+//!    of a class is zero, infinitely many zero rows, as for
+//!    `P_n = x^2 P_(n-2)` with `P_1 = 0`), because the parent statement
+//!    allows zero rows and every transfer theorem of the lifts maps a zero
+//!    parent row to a zero input row; the attempt's detail names the zero
+//!    classes, and the route claims no interlacing;
 //! 9. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
@@ -110,7 +117,8 @@
 //! root region; route 7 that every parent row is real-rooted with every root
 //! in `[L, U]`, `U <= 0`; route 7b that every parent row is real-rooted with
 //! every root in `(-inf, 0)` or `(-inf, 0]`; route 8 that every parent row is
-//! zero (only seed rows) or real-rooted with every root in `(-inf, 0]`.  All six
+//! zero (only seed rows) or real-rooted with every root in `(-inf, 0]`
+//! (route 8d: zero rows also in whole residue classes).  All six
 //! move their induction start up to three rows past
 //! the parent seeds when the theorem fails at the seeds (the default
 //! [`RealRootednessTheoremOptions::maximum_start_delay`]; the skipped rows

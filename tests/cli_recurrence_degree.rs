@@ -95,12 +95,18 @@ fn a_vanishing_leader_exits_one_and_bad_flags_exit_two() {
         ][..],
         &["recurrence-degree", "--verify", "--rows", "3"][..],
         &["recurrence-degree", "--frobnicate"][..],
-        &["recurrence-degree"][..],
     ] {
         let result = run(args, &input.to_string());
         assert_eq!(result.status.code(), Some(2), "{args:?}");
         assert!(result.stdout.is_empty());
     }
+    // Without --recurrence the record is read from stdin (or --input FILE).
+    let bare = run(&["recurrence-degree"], "invalid JSON");
+    assert_eq!(bare.status.code(), Some(2));
+    assert!(bare.stdout.is_empty());
+    let bare = run(&["recurrence-degree", "--json"], &input.to_string());
+    assert_eq!(bare.status.code(), Some(1));
+    assert_eq!(bare.stdout, result.stdout);
     let help = run(&["recurrence-degree", "--help"], "");
     assert!(help.status.success());
     assert!(String::from_utf8(help.stdout)

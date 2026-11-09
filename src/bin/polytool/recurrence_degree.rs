@@ -66,10 +66,9 @@ fn run(args: &[String]) -> Result<bool, String> {
         maximum_period: period.unwrap_or(LeadingCoefficientOptions::default().maximum_period),
     };
     check_limits(&options)?;
-    let record = read_recurrence_json(
-        path.ok_or("recurrence-degree needs --recurrence <file|->")?,
-        candidate,
-    )?;
+    // Without --recurrence the record is the command input (stdin or
+    // --input FILE).
+    let record = read_recurrence_json(path.unwrap_or("-"), candidate)?;
     let (rule, first_index, seeds) = record.to_recurrence_parts().map_err(error_text)?;
     let certificate =
         certify_leading_coefficient(&rule, first_index, &seeds, &options).map_err(error_text)?;

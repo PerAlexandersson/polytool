@@ -200,13 +200,14 @@ pub(crate) const RECURRENCE_GENERATE: CommandSpec = CommandSpec {
     group: GROUP,
     summary: "Generate coefficient rows from recurrence JSON",
     usage: &[
-        "recurrence-generate --recurrence <FILE|-> --count <N> [OPTIONS]",
-        "recurrence-generate --recurrence <FILE|-> --additional-count <N> [OPTIONS]",
-        "recurrence-generate --recurrence <FILE|-> --format bfile --max-terms <N> [OPTIONS]",
+        "recurrence-generate [--recurrence <FILE|->] --count <N> [OPTIONS]",
+        "recurrence-generate [--recurrence <FILE|->] --additional-count <N> [OPTIONS]",
+        "recurrence-generate [--recurrence <FILE|->] --format bfile --max-terms <N> [OPTIONS]",
     ],
     description: r#"Generate coefficient rows from recurrence JSON emitted by `polytool recurrence
 --json`. The input also accepts theorem wrappers and representation menus (pick
-a menu entry with --candidate, 0-based). `--recurrence -` reads standard input.
+a menu entry with --candidate, 0-based). Without --recurrence (or with
+`--recurrence -`) the record is read from standard input, or from --input FILE.
 
 Row selection: --count N outputs N rows in total, including the initial rows;
 --additional-count N outputs the initial rows plus N generated rows. Use only
@@ -246,7 +247,11 @@ and every coefficient must be an integer. A term cap never splits a row."#,
         default: "text",
     },
     flags: &[
-        option("recurrence", "FILE|-", "Read recurrence JSON from FILE, or stdin with -"),
+        option(
+            "recurrence",
+            "FILE|-",
+            "Read recurrence JSON from FILE (default -: stdin or --input FILE)",
+        ),
         option("candidate", "N", "Select a representation menu entry (0-based)"),
         option(
             "first-index",
@@ -418,7 +423,7 @@ pub(crate) const RECURRENCE_DEGREE: CommandSpec = CommandSpec {
     group: GROUP,
     summary: "Degree law and leading-coefficient signs of a recurrence for all n",
     usage: &[
-        "recurrence-degree --recurrence <FILE|-> [--candidate N] [--count N] [--max-period P]",
+        "recurrence-degree [--recurrence <FILE|->] [--candidate N] [--count N] [--max-period P]",
         "recurrence-degree --verify < certificate.json",
     ],
     description: r#"Decide the degree law deg P_n = D(n) and the sign of the leading coefficient of
@@ -442,7 +447,11 @@ search flags."#,
     input: InputKind::Json,
     output: OutputKind::JsonSwitch,
     flags: &[
-        option("recurrence", "FILE|-", "Read recurrence JSON from FILE, or stdin with -"),
+        option(
+            "recurrence",
+            "FILE|-",
+            "Read recurrence JSON from FILE (default -: stdin or --input FILE)",
+        ),
         option("candidate", "N", "Explicit 0-based menu choice"),
         option("count", "N", "Rows computed to read off the law")
             .default("36")
@@ -467,15 +476,20 @@ pub(crate) const RECURRENCE_PROVE: CommandSpec = CommandSpec {
     group: GROUP,
     summary: "Discover and replay general recurrence proofs",
     usage: &[
-        "recurrence-prove --recurrence <FILE|-> [--candidate N] [--max-start-delay N] \
+        "recurrence-prove [--recurrence <FILE|->] [--candidate N] [--max-start-delay N] \
          [--max-representation-candidates N]",
         "recurrence-prove --verify < proof.json",
     ],
     description: r#"Discover general proofs for a recurrence and seeds; no named-sequence lookup.
 Tries, in the order of the parent cascade, product induction, Favard/three-term,
 Liu-Wang, derivative-lag, Ma-Wang interval, Liu-Wang three-term, iterated
-preserver and hypergeometric-row criteria, with exact all-index hypothesis
-checks. Reports every attempt, its obligations and conclusion. A fit still needs
+preserver and hypergeometric-row criteria, then the RealRooted row routes
+fixed-delay window (variable_delay: f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)
+with a delay L of at least 2) and residue classes (residue_class_subsequences:
+every lag a multiple of a period p of at least 2, each class P_(first + j + p m)
+proved by a criterion above), the last two recorded only when the rule has their
+form; every hypothesis is checked exactly for all indices. Reports every attempt, its obligations and
+conclusion. A fit still needs
 an all-index identity for an independently defined family. Rust certificates can
 be replayed; Lean replay is not attempted.
 
@@ -499,7 +513,11 @@ flags."#,
     input: InputKind::Json,
     output: OutputKind::JsonSwitch,
     flags: &[
-        option("recurrence", "FILE|-", "Read recurrence JSON from FILE, or stdin with -"),
+        option(
+            "recurrence",
+            "FILE|-",
+            "Read recurrence JSON from FILE (default -: stdin or --input FILE)",
+        ),
         option("candidate", "N", "Explicit 0-based menu choice"),
         option(
             "max-start-delay",
@@ -517,8 +535,12 @@ flags."#,
     ],
     details: r#"JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is
 true when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and
-product induction proves it. real_rooted_from_index is the first index of the
-proved rows; tail and alternative_representations hold the later stages, each
+product induction proves it. real_rooted_from_index is the first index N with
+every row P_n, n >= N, proved nonzero and real-rooted. A residue-class proof
+may leave whole residue classes of zero rows (conclusion.zero_residue_classes,
+residues of n modulo the period); real_rooted_from_index is then omitted and
+real_rooted_outside_zero_residue_classes gives from_index and the zero classes
+(status proved). tail and alternative_representations hold the later stages, each
 alternative with its polytool.recurrence-equality.v1 certificate. Reports saved
 before a criterion was added still replay (attempts are additive)."#,
     examples: &[
@@ -535,7 +557,7 @@ pub(crate) const RECURRENCE_THEOREMS: CommandSpec = CommandSpec {
     name: "recurrence-theorems",
     group: GROUP,
     summary: "Conditional interlacing theorem matches for recurrence JSON",
-    usage: &["recurrence-theorems --recurrence <FILE|-> [--candidate N] [--json]"],
+    usage: &["recurrence-theorems [--recurrence <FILE|->] [--candidate N] [--json]"],
     description: r#"Check a supplied recurrence JSON record (polytool.recurrence.v1, e.g. from
 `polytool recurrence --json`) against the supported interlacing theorems and
 report explicit conditional theorem matches. Also accepts theorem wrappers and
@@ -551,7 +573,7 @@ that the recurrence holds for the intended sequence for all n."#,
         option(
             "recurrence",
             "FILE|-",
-            "Read recurrence JSON from FILE, or stdin with -",
+            "Read recurrence JSON from FILE (default -: stdin or --input FILE)",
         ),
         option(
             "candidate",

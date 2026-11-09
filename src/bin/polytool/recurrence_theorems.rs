@@ -127,10 +127,9 @@ pub(crate) fn cmd_recurrence_theorems(args: &[String]) {
         }
         i += 1;
     }
-    let Some(path) = path else {
-        eprintln!("recurrence-theorems needs --recurrence <file|->");
-        std::process::exit(2);
-    };
+    // Without --recurrence the record is the command input (stdin or
+    // --input FILE).
+    let path = path.unwrap_or_else(|| "-".to_string());
     let report = read_recurrence_json(&path, candidate)
         .and_then(|record| RecurrenceTheoremReport::for_supplied(&record).map_err(error_text));
     let report = match report {

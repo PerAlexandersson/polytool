@@ -135,8 +135,9 @@ pub(in crate::recurrence) use parent_theorems::rule_with_x_free_left_hand_factor
 pub use parent_theorems::{
     certify_recurrence_equality, discover_recurrence_proofs_with_options,
     AlternativeRepresentationOptions, AlternativeRepresentationProof,
-    AlternativeRepresentationSearch, RecurrenceEqualityCertificate, RecurrenceProofTail,
-    DISCOVERY_THEOREMS, RECURRENCE_EQUALITY_SCHEMA, ROW_ROUTE_THEOREMS,
+    AlternativeRepresentationSearch, RealRootedOutsideZeroResidueClasses,
+    RecurrenceEqualityCertificate, RecurrenceProofTail, DISCOVERY_THEOREMS,
+    RECURRENCE_EQUALITY_SCHEMA, ROW_ROUTE_THEOREMS,
 };
 pub use parent_theorems::{
     check_hypergeometric_row_theorem, check_iterated_preserver_theorem,
@@ -147,7 +148,7 @@ pub use parent_theorems::{
     IteratedPreserverCertificate, IteratedPreserverCoordinates, LeftHandFactorNormalization,
     RealRootednessTheorem, RealRootednessTheoremConclusion, RealRootednessTheoremOptions,
     RealRootednessTheoremReport, RealRootednessTheoremStatus, RecurrenceProofDiscoveryReport,
-    RowInterlacing, WeylStepPreserverVerdict, REAL_ROOTEDNESS_THEOREM_SCHEMA,
+    RowInterlacing, WeylStepPreserverVerdict, ZeroResidueClasses, REAL_ROOTEDNESS_THEOREM_SCHEMA,
     RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
 // RealRooted row routes `variableDelay` and `subseq`.
