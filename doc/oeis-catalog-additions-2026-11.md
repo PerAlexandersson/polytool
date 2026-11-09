@@ -6,9 +6,9 @@ addition. All pre-existing catalog records are unchanged.
 
 ## Sources and validation
 
-The Lean source snapshot is
-[`sqrt-of-2/real-rooted-oeis-proofs` at `caca416aac4b9dd76e95512da1ef6d9ffd3a39b3`](https://github.com/sqrt-of-2/real-rooted-oeis-proofs/tree/caca416aac4b9dd76e95512da1ef6d9ffd3a39b3).
-The definitions are in `ProofsOeisStretch/<A-number>.lean`. We inspected each
+The `lean_proved` flags come from a snapshot of an external collection of
+Lean proofs of real-rootedness for OEIS sequences, one file per A-number.
+We inspected each
 definition and its repository-local import closure for unfinished proofs;
 there were no executable `sorry` or `admit` declarations in these closures.
 Mentions in comments are not proof holes. No Lean build was performed for this
