@@ -1576,6 +1576,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::MovesStart,
     is_preferred: proof_in_identity_coordinates,
     certificate_name: Some("iterated-preserver"),
+    discovery: DiscoveryPolicy::Always {
+        first_version: false,
+    },
+    in_residue_class_menu: true,
+    in_index_section_menu: true,
 };
 
 /// Replay the certificate of a recomputed iterated-preserver report: the

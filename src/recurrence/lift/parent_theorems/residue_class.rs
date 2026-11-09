@@ -41,19 +41,6 @@ const REFERENCE: &str = "Residue-class subsequences: when every lag of the rule 
      is real-rooted when every class is; RealRooted route subseq \
      (RealRooted/Tactic/Row/Subseq.lean, reassembly by RealRooted.exists_mul_add_lt)";
 
-/// The theorems tried on a residue class, in order.
-const CLASS_MENU: [RealRootednessTheorem; 9] = [
-    RealRootednessTheorem::ProductRecurrence,
-    RealRootednessTheorem::ThreeTermRecurrence,
-    RealRootednessTheorem::LiuWang,
-    RealRootednessTheorem::LiuWangDerivativeLag,
-    RealRootednessTheorem::MaWangInterval,
-    RealRootednessTheorem::LiuWangThreeTerm,
-    RealRootednessTheorem::IteratedPreserver,
-    RealRootednessTheorem::HypergeometricRow,
-    RealRootednessTheorem::VariableDelay,
-];
-
 /// Largest induction-start delay a recorded certificate may ask the class
 /// checks to try (as for the CLI's `--max-start-delay`).
 pub(super) const MAXIMUM_CLASS_START_DELAY: usize = 16;
@@ -286,6 +273,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
     certificate_name: Some("residue-class"),
+    discovery: DiscoveryPolicy::WhenApplicable {
+        tolerated_when_missing: false,
+    },
+    in_residue_class_menu: false,
+    in_index_section_menu: true,
 };
 
 /// Replay the certificate of a recomputed residue-class report: the selected
@@ -419,10 +411,15 @@ fn residue_class_report(
         let mut attempts = Vec::new();
         let mut selected = None;
         let mut fallback = None;
-        for theorem in CLASS_MENU {
-            let Ok(attempt) =
-                check_with_first_proving_start(theorem, &class, 0, &class_seeds, &class_options)
-            else {
+        // The theorems of the residue-class menu, in the route order.
+        for route in ROUTES.iter().filter(|route| route.in_residue_class_menu) {
+            let Ok(attempt) = check_with_first_proving_start(
+                route.theorem,
+                &class,
+                0,
+                &class_seeds,
+                &class_options,
+            ) else {
                 continue;
             };
             if attempt.status == RealRootednessTheoremStatus::NotApplicable {

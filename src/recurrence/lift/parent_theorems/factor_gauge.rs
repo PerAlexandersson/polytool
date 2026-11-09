@@ -964,6 +964,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
     certificate_name: Some("factor-gauge"),
+    discovery: DiscoveryPolicy::WhenApplicable {
+        tolerated_when_missing: true,
+    },
+    in_residue_class_menu: false,
+    in_index_section_menu: false,
 };
 
 /// Replay the certificate of a recomputed factor-gauge report: every

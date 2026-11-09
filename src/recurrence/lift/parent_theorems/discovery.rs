@@ -3,7 +3,9 @@
 //! [`discover_recurrence_proofs`] runs, in this order:
 //!
 //! 1. every general theorem of `parent_theorems` on the supplied record, in
-//!    the order of the parent cascade ([`DISCOVERY_THEOREMS`]);
+//!    the order of the parent cascade (the route registry: [`DISCOVERY_THEOREMS`]
+//!    always, [`ROW_ROUTE_THEOREMS`], the index-section lift and the factor
+//!    gauge where the rule has their form);
 //! 2. **tail**: when no theorem proves the record and one of its first rows
 //!    (the seeds and the rows of the induction-start window) is zero or not
 //!    real-rooted, the same theorems on the *tail* record that starts after
@@ -45,8 +47,10 @@ use crate::recurrence::{AdaptiveSearchBudget, AdaptiveSearchOptions};
 /// Schema for a replayable general recurrence proof search.
 pub const RECURRENCE_PROOF_DISCOVERY_SCHEMA: &str = "polytool.recurrence-proof-discovery.v1";
 
-/// The theorems of the discovery search, in the order of the parent cascade
-/// (`prove_parent_real_rootedness`).
+/// The theorems of the discovery search whose attempt is recorded for every
+/// record, in the order of the parent cascade (`prove_parent_real_rootedness`);
+/// the first six are those of the first version of the schema.  These are
+/// the routes of the registry with an `Always` discovery policy.
 pub const DISCOVERY_THEOREMS: [RealRootednessTheorem; 8] = [
     RealRootednessTheorem::ProductRecurrence,
     RealRootednessTheorem::ThreeTermRecurrence,
@@ -59,15 +63,14 @@ pub const DISCOVERY_THEOREMS: [RealRootednessTheorem; 8] = [
 ];
 
 /// The RealRooted row routes tried after [`DISCOVERY_THEOREMS`]; their
-/// attempts are recorded only when the rule has their form.
+/// attempts are recorded only when the rule has their form.  (The
+/// index-section lift and the factor gauge follow them, recorded in the
+/// same way; saved attempt lists of tails and alternatives may omit those
+/// two.)
 pub const ROW_ROUTE_THEOREMS: [RealRootednessTheorem; 2] = [
     RealRootednessTheorem::VariableDelay,
     RealRootednessTheorem::ResidueClassSubsequences,
 ];
-
-/// The theorems of the first version of the schema; every report records
-/// an attempt of each.
-const FIRST_VERSION_THEOREMS: usize = 6;
 
 /// The statement of a report of the first version of the schema (and the
 /// first sentence of every later statement).
@@ -364,41 +367,15 @@ fn run_theorems(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<Vec<RealRootednessTheoremReport>, RecurrenceError> {
-    let mut attempts = DISCOVERY_THEOREMS
-        .iter()
-        .map(|theorem| check_with_first_proving_start(*theorem, rule, first_index, seeds, options))
-        .collect::<Result<Vec<_>, _>>()?;
-    // RealRooted row routes (`variableDelay`, `subseq`): recorded only where
-    // the rule has their form, so the reports of other rules are unchanged.
-    for theorem in ROW_ROUTE_THEOREMS {
-        let attempt = check_with_first_proving_start(theorem, rule, first_index, seeds, options)?;
-        if attempt.status != RealRootednessTheoremStatus::NotApplicable {
+    // Every route in the registry order; a route recorded only where the
+    // rule has its form leaves the reports of other rules unchanged.
+    let mut attempts = Vec::new();
+    for route in &ROUTES {
+        let attempt =
+            check_with_first_proving_start(route.theorem, rule, first_index, seeds, options)?;
+        if route.discovery.records(&attempt) {
             attempts.push(attempt);
         }
-    }
-    // Index-section lift (RealRooted `pathPower`): recorded only when a
-    // section identity with a parent family is found.
-    let attempt = check_with_first_proving_start(
-        RealRootednessTheorem::IndexSectionLift,
-        rule,
-        first_index,
-        seeds,
-        options,
-    )?;
-    if attempt.status != RealRootednessTheoremStatus::NotApplicable {
-        attempts.push(attempt);
-    }
-    // Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`):
-    // recorded only when the rule has the form and the residual is decided.
-    let attempt = check_with_first_proving_start(
-        RealRootednessTheorem::FactorGauge,
-        rule,
-        first_index,
-        seeds,
-        options,
-    )?;
-    if attempt.status != RealRootednessTheoremStatus::NotApplicable {
-        attempts.push(attempt);
     }
     Ok(attempts)
 }
@@ -742,19 +719,18 @@ fn verify_attempts(
     }
     let recorded: Vec<RealRootednessTheorem> = attempts.iter().map(|a| a.theorem).collect();
     let required: Vec<RealRootednessTheorem> = if require_first_version {
-        DISCOVERY_THEOREMS[..FIRST_VERSION_THEOREMS].to_vec()
+        ROUTES
+            .iter()
+            .filter(|route| route.discovery.in_first_version())
+            .map(|route| route.theorem)
+            .collect()
     } else {
-        // Reports saved before the index-section lift or the factor gauge
-        // existed omit them.
+        // Reports saved before a theorem existed omit it (the index-section
+        // lift, the factor gauge).
         reference
             .iter()
             .map(|a| a.theorem)
-            .filter(|theorem| {
-                !matches!(
-                    theorem,
-                    RealRootednessTheorem::IndexSectionLift | RealRootednessTheorem::FactorGauge
-                )
-            })
+            .filter(|theorem| !route(*theorem).discovery.tolerated_when_missing())
             .collect()
     };
     if required.iter().any(|theorem| !recorded.contains(theorem)) {

@@ -254,6 +254,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
     certificate_name: Some("fixed-delay"),
+    discovery: DiscoveryPolicy::WhenApplicable {
+        tolerated_when_missing: false,
+    },
+    in_residue_class_menu: true,
+    in_index_section_menu: true,
 };
 
 /// Replay the certificate of a recomputed fixed-delay report: the seed steps

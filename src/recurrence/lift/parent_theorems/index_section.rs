@@ -170,20 +170,6 @@ const SELF_CHECK_ROWS: usize = 3;
 /// checks to try.
 pub(super) const MAXIMUM_PARENT_START_DELAY: usize = 16;
 
-/// The theorems tried on the parent, in order.
-const PARENT_MENU: [RealRootednessTheorem; 10] = [
-    RealRootednessTheorem::ProductRecurrence,
-    RealRootednessTheorem::ThreeTermRecurrence,
-    RealRootednessTheorem::LiuWang,
-    RealRootednessTheorem::LiuWangDerivativeLag,
-    RealRootednessTheorem::MaWangInterval,
-    RealRootednessTheorem::LiuWangThreeTerm,
-    RealRootednessTheorem::IteratedPreserver,
-    RealRootednessTheorem::HypergeometricRow,
-    RealRootednessTheorem::VariableDelay,
-    RealRootednessTheorem::ResidueClassSubsequences,
-];
-
 /// The transformation `T` of an [`IndexSectionCertificate`] (module
 /// documentation, "Transformed family").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -337,7 +323,7 @@ impl IndexSectionCertificate {
             };
             if !proves_every_row(proof)
                 || proof.recurrence != self.parent
-                || !PARENT_MENU.contains(&proof.theorem)
+                || !route(proof.theorem).in_index_section_menu
             {
                 return failed("the selected parent attempt is not a proof of the parent".into());
             }
@@ -711,8 +697,10 @@ fn prove_parent(
 ) -> (Vec<RealRootednessTheoremReport>, Option<usize>) {
     let mut attempts = Vec::new();
     let mut fallback = None;
-    for theorem in PARENT_MENU {
-        let Ok(attempt) = check_with_first_proving_start(theorem, rule, 0, seeds, options) else {
+    // The theorems of the index-section menu, in the route order.
+    for route in ROUTES.iter().filter(|route| route.in_index_section_menu) {
+        let Ok(attempt) = check_with_first_proving_start(route.theorem, rule, 0, seeds, options)
+        else {
             continue;
         };
         if attempt.status == RealRootednessTheoremStatus::NotApplicable {
@@ -1009,6 +997,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
     certificate_name: Some("index-section"),
+    discovery: DiscoveryPolicy::WhenApplicable {
+        tolerated_when_missing: true,
+    },
+    in_residue_class_menu: false,
+    in_index_section_menu: false,
 };
 
 /// Replay the certificate of a recomputed index-section report: the

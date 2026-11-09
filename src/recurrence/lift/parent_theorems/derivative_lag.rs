@@ -287,6 +287,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
     certificate_name: None,
+    discovery: DiscoveryPolicy::Always {
+        first_version: true,
+    },
+    in_residue_class_menu: true,
+    in_index_section_menu: true,
 };
 
 /// The check with the induction at the given (normalized) seeds.

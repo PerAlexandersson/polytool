@@ -32,8 +32,62 @@ pub(super) enum StartPolicy {
     OwnStarts,
 }
 
-/// One theorem route: its identity, how it is checked, and how its
-/// induction start moves.
+/// When [`discover_recurrence_proofs`] records the attempt of a theorem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DiscoveryPolicy {
+    /// Recorded for every record ([`DISCOVERY_THEOREMS`]).  With
+    /// `first_version`, the theorem is one of the six of the first version
+    /// of the discovery schema, which every saved report records.
+    Always {
+        /// One of the theorems of the first schema version.
+        first_version: bool,
+    },
+    /// Recorded only when the check applies (its status is not
+    /// `not_applicable`), so that the reports of other rules are unchanged.
+    /// With `tolerated_when_missing`, a saved tail or alternative attempt
+    /// list may omit it (it was saved before the theorem existed); without,
+    /// it is one of [`ROW_ROUTE_THEOREMS`].
+    WhenApplicable {
+        /// A saved attempt list without the theorem still replays.
+        tolerated_when_missing: bool,
+    },
+}
+
+impl DiscoveryPolicy {
+    /// Whether the attempt is recorded.
+    pub(super) fn records(self, attempt: &RealRootednessTheoremReport) -> bool {
+        match self {
+            DiscoveryPolicy::Always { .. } => true,
+            DiscoveryPolicy::WhenApplicable { .. } => {
+                attempt.status != RealRootednessTheoremStatus::NotApplicable
+            }
+        }
+    }
+
+    /// Whether every saved report records the attempt.
+    pub(super) fn in_first_version(self) -> bool {
+        matches!(
+            self,
+            DiscoveryPolicy::Always {
+                first_version: true
+            }
+        )
+    }
+
+    /// Whether a saved tail or alternative attempt list may omit the
+    /// attempt although the current search records it.
+    pub(super) fn tolerated_when_missing(self) -> bool {
+        matches!(
+            self,
+            DiscoveryPolicy::WhenApplicable {
+                tolerated_when_missing: true
+            }
+        )
+    }
+}
+
+/// One theorem route: its identity, how it is checked, how its induction
+/// start moves, when discovery records it and which menus offer it.
 pub(in crate::recurrence) struct TheoremRoute {
     /// The theorem.
     pub(in crate::recurrence) theorem: RealRootednessTheorem,
@@ -48,6 +102,14 @@ pub(in crate::recurrence) struct TheoremRoute {
     /// proved report carries, as named in replay errors (for example
     /// `"fixed-delay"`); `None` for a theorem without one.
     pub(super) certificate_name: Option<&'static str>,
+    /// When [`discover_recurrence_proofs`] records the attempt.
+    pub(super) discovery: DiscoveryPolicy,
+    /// Whether [`check_residue_class_subsequence_theorem`] tries the theorem
+    /// on a residue class.
+    pub(super) in_residue_class_menu: bool,
+    /// Whether [`check_index_section_lift_theorem`] tries the theorem on the
+    /// parent family.
+    pub(super) in_index_section_menu: bool,
 }
 
 /// [`TheoremRoute::is_preferred`] of a route without weaker proofs.
@@ -95,13 +157,68 @@ mod tests {
         }
     }
 
-    #[test]
-    fn the_discovery_lists_follow_the_route_order() {
-        let listed: Vec<RealRootednessTheorem> = DISCOVERY_THEOREMS
+    fn filtered(predicate: impl Fn(&TheoremRoute) -> bool) -> Vec<RealRootednessTheorem> {
+        ROUTES
             .iter()
-            .chain(ROW_ROUTE_THEOREMS.iter())
-            .copied()
-            .collect();
-        assert_eq!(listed, theorems(&ROUTES)[..listed.len()]);
+            .filter(|route| predicate(route))
+            .map(|route| route.theorem)
+            .collect()
+    }
+
+    #[test]
+    fn the_public_discovery_lists_are_the_discovery_policies() {
+        assert_eq!(
+            filtered(|route| matches!(route.discovery, DiscoveryPolicy::Always { .. })),
+            DISCOVERY_THEOREMS
+        );
+        assert_eq!(
+            filtered(|route| route.discovery
+                == DiscoveryPolicy::WhenApplicable {
+                    tolerated_when_missing: false
+                }),
+            ROW_ROUTE_THEOREMS
+        );
+        // The theorems of the first schema version: the first six.
+        assert_eq!(
+            filtered(|route| route.discovery.in_first_version()),
+            DISCOVERY_THEOREMS[..6]
+        );
+        assert_eq!(
+            filtered(|route| route.discovery.tolerated_when_missing()),
+            [
+                RealRootednessTheorem::IndexSectionLift,
+                RealRootednessTheorem::FactorGauge
+            ]
+        );
+    }
+
+    #[test]
+    fn the_menus_are_prefixes_of_the_route_order() {
+        let all = theorems(&ROUTES);
+        // A residue class is not split again; the parent of an index section
+        // may itself be proved by residue classes.
+        assert_eq!(filtered(|route| route.in_residue_class_menu), all[..9]);
+        assert_eq!(filtered(|route| route.in_index_section_menu), all[..10]);
+    }
+
+    #[test]
+    fn the_start_policies_and_certificates_are_those_of_the_routes() {
+        assert_eq!(
+            filtered(|route| route.start_policy == StartPolicy::OwnStarts),
+            [
+                RealRootednessTheorem::ResidueClassSubsequences,
+                RealRootednessTheorem::IndexSectionLift
+            ]
+        );
+        assert_eq!(
+            filtered(|route| route.certificate_name.is_some()),
+            [
+                RealRootednessTheorem::IteratedPreserver,
+                RealRootednessTheorem::VariableDelay,
+                RealRootednessTheorem::ResidueClassSubsequences,
+                RealRootednessTheorem::IndexSectionLift,
+                RealRootednessTheorem::FactorGauge
+            ]
+        );
     }
 }
