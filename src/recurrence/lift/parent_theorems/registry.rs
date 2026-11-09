@@ -86,8 +86,55 @@ impl DiscoveryPolicy {
     }
 }
 
+/// When the parent cascade (`prove_parent_real_rootedness`) runs a theorem
+/// route; within a stage the routes run in the registry order and the first
+/// proof ends the stage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::recurrence) enum ParentStage {
+    /// After the periodic product and before the paper-theorem and
+    /// root-domain routes, while the parent is unproved.  A proof settles
+    /// real-rootedness; a route of [`ParentStage::ReplacesEarly`] may still
+    /// replace it.
+    Early,
+    /// After the root-domain route, while the parent is unproved or proved
+    /// only by an [`ParentStage::Early`] route: a proof here replaces that
+    /// proof (a theorem may conclude the interlacing of consecutive rows).
+    ReplacesEarly,
+    /// After the [`ParentStage::ReplacesEarly`] routes, only while the
+    /// parent is unproved.
+    WhileUnproved,
+}
+
+/// The root region a parent route requests from its theorem.  Whatever the
+/// request, the route proves the parent statement only when the certified
+/// region lies in `(-inf, 0]` (every row then has coefficients of one sign).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::recurrence) enum ParentRegion {
+    /// The open ray `(-inf, 0)`.
+    OpenNonpositiveRay,
+    /// No region: the theorem certifies its own (for example a closed end
+    /// at `0`, or an interval `[L, U]`).
+    Unrestricted,
+    /// The open ray `(-inf, 0)` and, when the theorem applies but is not
+    /// proved with it, no region (sub-proofs may have roots at `0`).
+    OpenNonpositiveRayThenUnrestricted,
+}
+
+/// How the parent cascade runs a theorem route.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::recurrence) struct ParentPolicy {
+    /// When it runs.
+    pub(in crate::recurrence) stage: ParentStage,
+    /// The requested root region.
+    pub(in crate::recurrence) region: ParentRegion,
+    /// Whether the attempt is recorded only when the theorem applies (its
+    /// status is not `not_applicable`).
+    pub(in crate::recurrence) record_only_if_applicable: bool,
+}
+
 /// One theorem route: its identity, how it is checked, how its induction
-/// start moves, when discovery records it and which menus offer it.
+/// start moves, when discovery records it, which menus offer it and how the
+/// parent cascade runs it.
 pub(in crate::recurrence) struct TheoremRoute {
     /// The theorem.
     pub(in crate::recurrence) theorem: RealRootednessTheorem,
@@ -110,6 +157,8 @@ pub(in crate::recurrence) struct TheoremRoute {
     /// Whether [`check_index_section_lift_theorem`] tries the theorem on the
     /// parent family.
     pub(super) in_index_section_menu: bool,
+    /// How the parent cascade runs the route.
+    pub(in crate::recurrence) parent: ParentPolicy,
 }
 
 /// [`TheoremRoute::is_preferred`] of a route without weaker proofs.

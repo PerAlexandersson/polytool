@@ -144,6 +144,15 @@
 //! are checked exactly by the theorem), and the attempt names the delay
 //! used.
 //!
+//! The theorem routes (product induction and routes 4 to 8f) come from the
+//! registry of `parent_theorems`, in its order; each route's `ParentPolicy`
+//! gives its stage (product induction before route 2; routes 4 to 8b while
+//! the parent is unproved or proved only by product induction; routes 8c to
+//! 8f while it is unproved), its requested region (`(-inf, 0)`, none, or
+//! `(-inf, 0)` and then none) and whether an attempt that does not apply is
+//! recorded.  Every theorem route proves the parent only when its certified
+//! region lies in `(-inf, 0]`, and its attempt's variant is the route name.
+//!
 //! A few parent rows are also checked exactly (nonzero rows of one sign and
 //! real-rooted).  A failing row refutes the parent statement; no route can
 //! then succeed and an attestation is not applied.
@@ -395,6 +404,30 @@ impl VeroneseParentProofRoute {
             | VeroneseParentProofRoute::PaperTheorem
             | VeroneseParentProofRoute::RootDomain
             | VeroneseParentProofRoute::Attestation => None,
+        }
+    }
+
+    /// The parent route of a theorem (the inverse of [`Self::theorem`]).
+    pub(in crate::recurrence) const fn of_theorem(theorem: RealRootednessTheorem) -> Self {
+        match theorem {
+            RealRootednessTheorem::ProductRecurrence => VeroneseParentProofRoute::ProductRecurrence,
+            RealRootednessTheorem::ThreeTermRecurrence => {
+                VeroneseParentProofRoute::ThreeTermRecurrence
+            }
+            RealRootednessTheorem::LiuWang => VeroneseParentProofRoute::LiuWang,
+            RealRootednessTheorem::LiuWangDerivativeLag => {
+                VeroneseParentProofRoute::LiuWangDerivativeLag
+            }
+            RealRootednessTheorem::MaWangInterval => VeroneseParentProofRoute::MaWangInterval,
+            RealRootednessTheorem::LiuWangThreeTerm => VeroneseParentProofRoute::LiuWangThreeTerm,
+            RealRootednessTheorem::IteratedPreserver => VeroneseParentProofRoute::IteratedPreserver,
+            RealRootednessTheorem::HypergeometricRow => VeroneseParentProofRoute::HypergeometricRow,
+            RealRootednessTheorem::VariableDelay => VeroneseParentProofRoute::VariableDelay,
+            RealRootednessTheorem::ResidueClassSubsequences => {
+                VeroneseParentProofRoute::ResidueClassSubsequences
+            }
+            RealRootednessTheorem::IndexSectionLift => VeroneseParentProofRoute::IndexSectionLift,
+            RealRootednessTheorem::FactorGauge => VeroneseParentProofRoute::FactorGauge,
         }
     }
 }
@@ -919,22 +952,25 @@ fn root_domain_menu(
     (attempts, false)
 }
 
-/// Routes 4 to 8: a real-rootedness theorem with every root in
-/// `(-inf, 0)` (routes 4 and 5) or, for route 6, in `(-inf, 0]` (every
-/// conclusion of that theorem, so it runs without a requested region); route
-/// 7 (Ma--Wang) runs without a requested region and succeeds when its
-/// interval `[L, U]` has `U <= 0`; route 7b (Liu--Wang three-term) runs
-/// without a requested region and succeeds when it certifies a region in
-/// `(-inf, 0]`; route 8 (iterated preserver) runs without a requested region
-/// and succeeds when its region is `(-inf, 0]`.  The last value is whether
-/// the theorem applies (status other than `not_applicable`); a route-8
-/// attempt that does not apply is not recorded.
+/// A theorem route of the registry ([`TheoremRoute::parent`]): the theorem
+/// with the requested region of its [`ParentRegion`] policy, proved for the
+/// parent only when the certified region lies in `(-inf, 0]` (every parent
+/// row then has coefficients of one sign).  The last value is whether the
+/// theorem applies (status other than `not_applicable`).
 fn theorem_attempt(
     record: &ParentRecurrenceRecord<'_>,
-    route: VeroneseParentProofRoute,
-    variant: &str,
+    route: &TheoremRoute,
 ) -> Result<(VeroneseParentProofAttempt, Option<LiftInterlacing>, bool), RecurrenceError> {
-    let options = RealRootednessTheoremOptions {
+    let check = |options: &RealRootednessTheoremOptions| {
+        check_real_rootedness_theorem(
+            route.theorem,
+            record.rule,
+            record.first_index,
+            record.seeds,
+            options,
+        )
+    };
+    let ray = RealRootednessTheoremOptions {
         root_region: Some(RealInterval {
             lower: None,
             lower_closed: false,
@@ -943,135 +979,27 @@ fn theorem_attempt(
         }),
         ..RealRootednessTheoremOptions::default()
     };
-    let report = match route {
-        VeroneseParentProofRoute::ProductRecurrence => check_product_recurrence_theorem(
-            record.rule,
-            record.first_index,
-            record.seeds,
-            &options,
-        )?,
-        VeroneseParentProofRoute::ThreeTermRecurrence => check_three_term_recurrence_theorem(
-            record.rule,
-            record.first_index,
-            record.seeds,
-            &options,
-        )?,
-        VeroneseParentProofRoute::LiuWangDerivativeLag => check_liu_wang_derivative_lag_theorem(
-            record.rule,
-            record.first_index,
-            record.seeds,
-            &RealRootednessTheoremOptions::default(),
-        )?,
-        VeroneseParentProofRoute::MaWangInterval => check_ma_wang_interval_theorem(
-            record.rule,
-            record.first_index,
-            record.seeds,
-            &RealRootednessTheoremOptions::default(),
-        )?,
-        VeroneseParentProofRoute::LiuWangThreeTerm => check_liu_wang_three_term_theorem(
-            record.rule,
-            record.first_index,
-            record.seeds,
-            &RealRootednessTheoremOptions::default(),
-        )?,
-        VeroneseParentProofRoute::IteratedPreserver => check_iterated_preserver_theorem(
-            record.rule,
-            record.first_index,
-            record.seeds,
-            &RealRootednessTheoremOptions::default(),
-        )?,
-        VeroneseParentProofRoute::HypergeometricRow => check_hypergeometric_row_theorem(
-            record.rule,
-            record.first_index,
-            record.seeds,
-            &RealRootednessTheoremOptions::default(),
-        )?,
-        VeroneseParentProofRoute::VariableDelay => {
-            check_variable_delay_theorem(record.rule, record.first_index, record.seeds, &options)?
-        }
-        VeroneseParentProofRoute::ResidueClassSubsequences => {
-            // Classes with roots at 0 (for example P_n = x^2 P_(n-2)) are
-            // proved only without the open request.
-            let requested = check_residue_class_subsequence_theorem(
-                record.rule,
-                record.first_index,
-                record.seeds,
-                &options,
-            )?;
+    let unrestricted = RealRootednessTheoremOptions::default();
+    let report = match route.parent.region {
+        ParentRegion::OpenNonpositiveRay => check(&ray)?,
+        ParentRegion::Unrestricted => check(&unrestricted)?,
+        ParentRegion::OpenNonpositiveRayThenUnrestricted => {
+            let requested = check(&ray)?;
             if requested.is_proved()
                 || requested.status == RealRootednessTheoremStatus::NotApplicable
             {
                 requested
             } else {
-                check_residue_class_subsequence_theorem(
-                    record.rule,
-                    record.first_index,
-                    record.seeds,
-                    &RealRootednessTheoremOptions::default(),
-                )?
+                check(&unrestricted)?
             }
         }
-        VeroneseParentProofRoute::IndexSectionLift => {
-            // A reversed section certifies a region closed at 0, so the open
-            // request is retried without a region.
-            let requested = check_index_section_lift_theorem(
-                record.rule,
-                record.first_index,
-                record.seeds,
-                &options,
-            )?;
-            if requested.is_proved()
-                || requested.status == RealRootednessTheoremStatus::NotApplicable
-            {
-                requested
-            } else {
-                check_index_section_lift_theorem(
-                    record.rule,
-                    record.first_index,
-                    record.seeds,
-                    &RealRootednessTheoremOptions::default(),
-                )?
-            }
-        }
-        VeroneseParentProofRoute::FactorGauge => {
-            // A gauge factor or common factor with a root at 0 certifies a
-            // region closed at 0, so the open request is retried without a
-            // region.
-            let requested = check_factor_gauge_theorem(
-                record.rule,
-                record.first_index,
-                record.seeds,
-                &options,
-            )?;
-            if requested.is_proved()
-                || requested.status == RealRootednessTheoremStatus::NotApplicable
-            {
-                requested
-            } else {
-                check_factor_gauge_theorem(
-                    record.rule,
-                    record.first_index,
-                    record.seeds,
-                    &RealRootednessTheoremOptions::default(),
-                )?
-            }
-        }
-        _ => check_liu_wang_theorem(record.rule, record.first_index, record.seeds, &options)?,
     };
-    // The Ma--Wang interval settles the parent statement only when it lies
-    // in (-inf, 0], the Liu--Wang three-term theorem only with a certified
-    // region in (-inf, 0], and the iterated preserver only with its region
-    // (-inf, 0].
-    let outside_ray = matches!(
-        route,
-        VeroneseParentProofRoute::MaWangInterval
-            | VeroneseParentProofRoute::LiuWangThreeTerm
-            | VeroneseParentProofRoute::IteratedPreserver
-            | VeroneseParentProofRoute::HypergeometricRow
-            | VeroneseParentProofRoute::ResidueClassSubsequences
-            | VeroneseParentProofRoute::IndexSectionLift
-            | VeroneseParentProofRoute::FactorGauge
-    ) && report.is_proved()
+    let route_name = VeroneseParentProofRoute::of_theorem(route.theorem);
+    let variant = route_name.as_str();
+    // A proof whose certified region is not contained in (-inf, 0] (the
+    // Ma--Wang interval, the Liu--Wang three-term or iterated-preserver
+    // region, ...) gives real-rooted rows but not one-signed coefficients.
+    let outside_ray = report.is_proved()
         && !report
             .conclusion
             .as_ref()
@@ -1116,7 +1044,7 @@ fn theorem_attempt(
     let applicable = report.status != RealRootednessTheoremStatus::NotApplicable;
     Ok((
         VeroneseParentProofAttempt {
-            route,
+            route: route_name,
             variant: variant.into(),
             success,
             detail,
@@ -1593,6 +1521,50 @@ pub(in crate::recurrence) fn prove_parent_by_routes(
     prove_parent_with_routes(record, needed_from, &[], try_root_domain, Some(routes))
 }
 
+/// Run the theorem routes of `stage` in the registry order
+/// ([`TheoremRoute::parent`]): each route runs while the stage allows it
+/// (unproved, or for [`ParentStage::ReplacesEarly`] proved only by an early
+/// route), its attempt is recorded (unless it does not apply and the route
+/// records only applicable attempts), and its proof sets `proved` and the
+/// interlacing.
+fn run_theorem_routes(
+    record: &ParentRecurrenceRecord<'_>,
+    stage: ParentStage,
+    allowed: &dyn Fn(VeroneseParentProofRoute) -> bool,
+    proved: &mut Option<VeroneseParentProofRoute>,
+    interlacing: &mut Option<LiftInterlacing>,
+    attempts: &mut Vec<VeroneseParentProofAttempt>,
+) -> Result<(), RecurrenceError> {
+    for route in ROUTES.iter().filter(|route| route.parent.stage == stage) {
+        let proved_early = proved
+            .and_then(VeroneseParentProofRoute::theorem)
+            .is_some_and(|theorem| {
+                ROUTES.iter().any(|early| {
+                    early.theorem == theorem && early.parent.stage == ParentStage::Early
+                })
+            });
+        let runs = match stage {
+            ParentStage::Early | ParentStage::WhileUnproved => proved.is_none(),
+            ParentStage::ReplacesEarly => proved.is_none() || proved_early,
+        };
+        let route_name = VeroneseParentProofRoute::of_theorem(route.theorem);
+        if !runs || !allowed(route_name) {
+            continue;
+        }
+        let (attempt, theorem_interlacing, applicable) = theorem_attempt(record, route)?;
+        if route.parent.record_only_if_applicable && !applicable {
+            continue;
+        }
+        let success = attempt.success;
+        attempts.push(attempt);
+        if success {
+            *proved = Some(route_name);
+            *interlacing = theorem_interlacing;
+        }
+    }
+    Ok(())
+}
+
 /// The parent provers, restricted to `only` when given (attestation and
 /// catalog-flag routes are then skipped too).
 fn prove_parent_with_routes(
@@ -1670,18 +1642,16 @@ fn prove_parent_with_routes(
     }
     let mut interlacing = None;
 
-    // General product seeds are available directly to all parent transfers.
-    if proved.is_none() && allowed(VeroneseParentProofRoute::ProductRecurrence) {
-        let (attempt, _, _) = theorem_attempt(
-            &normalized,
-            VeroneseParentProofRoute::ProductRecurrence,
-            "product_recurrence",
-        )?;
-        if attempt.success {
-            proved = Some(VeroneseParentProofRoute::ProductRecurrence);
-        }
-        proof.attempts.push(attempt);
-    }
+    // The early theorem routes (product induction): real-rootedness only;
+    // a later theorem route may replace the proof.
+    run_theorem_routes(
+        &normalized,
+        ParentStage::Early,
+        &allowed,
+        &mut proved,
+        &mut interlacing,
+        &mut proof.attempts,
+    )?;
 
     // Route 2.
     if proved.is_none() && allowed(VeroneseParentProofRoute::PaperTheorem) {
@@ -1702,122 +1672,18 @@ fn prove_parent_with_routes(
         proof.attempts.extend(attempts);
     }
 
-    // Routes 4 to 7, 7b and 8. Product induction already settles
-    // real-rootedness, but these routes may supply the stronger interlacing
-    // conclusion.
-    if proved.is_none() || proved == Some(VeroneseParentProofRoute::ProductRecurrence) {
-        for (route, variant) in [
-            (
-                VeroneseParentProofRoute::ThreeTermRecurrence,
-                "three_term_recurrence",
-            ),
-            (VeroneseParentProofRoute::LiuWang, "liu_wang"),
-            (
-                VeroneseParentProofRoute::LiuWangDerivativeLag,
-                "liu_wang_derivative_lag",
-            ),
-            (VeroneseParentProofRoute::MaWangInterval, "ma_wang_interval"),
-            (
-                VeroneseParentProofRoute::LiuWangThreeTerm,
-                "liu_wang_three_term",
-            ),
-            (
-                VeroneseParentProofRoute::IteratedPreserver,
-                "iterated_preserver",
-            ),
-            (
-                VeroneseParentProofRoute::HypergeometricRow,
-                "hypergeometric_row",
-            ),
-        ] {
-            if !allowed(route) {
-                continue;
-            }
-            let (attempt, theorem_interlacing, applicable) =
-                theorem_attempt(&normalized, route, variant)?;
-            // Routes 8 and 8b are recorded only where the rule has their
-            // form (a first-order step recognized as a multiplier after a
-            // menu operator; a fitted row relation of hypergeometric shape),
-            // so that the records of other parents are those of the routes
-            // before them.
-            if matches!(
-                route,
-                VeroneseParentProofRoute::IteratedPreserver
-                    | VeroneseParentProofRoute::HypergeometricRow
-            ) && !applicable
-            {
-                continue;
-            }
-            let success = attempt.success;
-            proof.attempts.push(attempt);
-            if success {
-                proved = Some(route);
-                interlacing = theorem_interlacing;
-                break;
-            }
-        }
-    }
-
-    // Routes 8c and 8d (RealRooted row routes), for a parent left open;
-    // recorded only where the rule has the route's form.
-    if proved.is_none() {
-        for (route, variant) in [
-            (VeroneseParentProofRoute::VariableDelay, "variable_delay"),
-            (
-                VeroneseParentProofRoute::ResidueClassSubsequences,
-                "residue_class_subsequences",
-            ),
-        ] {
-            if !allowed(route) {
-                continue;
-            }
-            let (attempt, theorem_interlacing, applicable) =
-                theorem_attempt(&normalized, route, variant)?;
-            if !applicable {
-                continue;
-            }
-            let success = attempt.success;
-            proof.attempts.push(attempt);
-            if success {
-                proved = Some(route);
-                interlacing = theorem_interlacing;
-                break;
-            }
-        }
-    }
-
-    // Route 8e (index-section lift), for a parent left open; recorded only
-    // where a section identity is found.
-    if proved.is_none() && allowed(VeroneseParentProofRoute::IndexSectionLift) {
-        let (attempt, theorem_interlacing, applicable) = theorem_attempt(
+    // Routes 4 to 8b: product induction already settles real-rootedness,
+    // but these routes may supply the stronger interlacing conclusion.
+    // Then routes 8c to 8f, for a parent left open.
+    for stage in [ParentStage::ReplacesEarly, ParentStage::WhileUnproved] {
+        run_theorem_routes(
             &normalized,
-            VeroneseParentProofRoute::IndexSectionLift,
-            "index_section_lift",
+            stage,
+            &allowed,
+            &mut proved,
+            &mut interlacing,
+            &mut proof.attempts,
         )?;
-        if applicable {
-            if attempt.success {
-                proved = Some(VeroneseParentProofRoute::IndexSectionLift);
-                interlacing = theorem_interlacing;
-            }
-            proof.attempts.push(attempt);
-        }
-    }
-
-    // Route 8f (factor gauge), for a parent left open; recorded only where
-    // the rule has the theorem's form.
-    if proved.is_none() && allowed(VeroneseParentProofRoute::FactorGauge) {
-        let (attempt, theorem_interlacing, applicable) = theorem_attempt(
-            &normalized,
-            VeroneseParentProofRoute::FactorGauge,
-            "factor_gauge",
-        )?;
-        if applicable {
-            if attempt.success {
-                proved = Some(VeroneseParentProofRoute::FactorGauge);
-                interlacing = theorem_interlacing;
-            }
-            proof.attempts.push(attempt);
-        }
     }
 
     if let Some(route) = proved {

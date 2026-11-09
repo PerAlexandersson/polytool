@@ -78,6 +78,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     },
     in_residue_class_menu: true,
     in_index_section_menu: true,
+    parent: ParentPolicy {
+        stage: ParentStage::Early,
+        region: ParentRegion::OpenNonpositiveRay,
+        record_only_if_applicable: false,
+    },
 };
 
 fn product_report(

@@ -156,6 +156,7 @@ pub use parent_theorems::{
     RecurrenceProofDiscoveryReport, RouteCertificate, RowInterlacing, WeylStepPreserverVerdict,
     ZeroResidueClasses, REAL_ROOTEDNESS_THEOREM_SCHEMA, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
+use parent_theorems::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
 // RealRooted row routes `variableDelay` and `subseq`.
 pub use parent_theorems::{
     check_residue_class_subsequence_theorem, check_variable_delay_theorem, ResidueClassCertificate,

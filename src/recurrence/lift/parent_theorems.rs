@@ -199,7 +199,8 @@ mod index_section;
 mod factor_gauge;
 // The registry of the theorem routes.
 mod registry;
-use registry::{any_proof, route, DiscoveryPolicy, StartPolicy, TheoremRoute, ROUTES};
+use registry::{any_proof, route, DiscoveryPolicy, ParentPolicy, StartPolicy};
+pub(in crate::recurrence) use registry::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
 // The route certificates and the JSON form of the reports.
 mod certificate;
 pub use certificate::RouteCertificate;

@@ -278,6 +278,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     },
     in_residue_class_menu: false,
     in_index_section_menu: true,
+    parent: ParentPolicy {
+        stage: ParentStage::WhileUnproved,
+        region: ParentRegion::OpenNonpositiveRayThenUnrestricted,
+        record_only_if_applicable: true,
+    },
 };
 
 /// Replay the certificate of a recomputed residue-class report: the selected

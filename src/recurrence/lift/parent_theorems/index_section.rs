@@ -1002,6 +1002,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     },
     in_residue_class_menu: false,
     in_index_section_menu: false,
+    parent: ParentPolicy {
+        stage: ParentStage::WhileUnproved,
+        region: ParentRegion::OpenNonpositiveRayThenUnrestricted,
+        record_only_if_applicable: true,
+    },
 };
 
 /// Replay the certificate of a recomputed index-section report: the

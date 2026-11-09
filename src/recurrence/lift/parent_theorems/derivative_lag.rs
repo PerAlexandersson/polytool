@@ -292,6 +292,11 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     },
     in_residue_class_menu: true,
     in_index_section_menu: true,
+    parent: ParentPolicy {
+        stage: ParentStage::ReplacesEarly,
+        region: ParentRegion::Unrestricted,
+        record_only_if_applicable: false,
+    },
 };
 
 /// The check with the induction at the given (normalized) seeds.
