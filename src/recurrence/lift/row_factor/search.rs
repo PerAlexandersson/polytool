@@ -7,15 +7,24 @@ use super::super::lift_summary::{
     nonpositive_ray, parent_proof_summary, proved_parent_interlacing, real_line,
     COMMON_FACTOR_INTERLACING_THEOREM,
 };
+use super::super::section_certify::{pseudo_divide_row, x_free_leader};
+use super::super::section_operators::OperatorMatrix;
 use super::super::veronese_algebra::classify_row;
-use super::certify::{divide_operator, substitute, RowFactorCertificate};
+use super::certify::{
+    divide_operator, substitute, RowFactorCertificate, RowFactorDivisionCertificate,
+};
 use crate::factorization::irreducible_factorization_rational_coeffs_with_budget;
+use crate::recurrence::implicit::algebra::DOp;
 use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
 use crate::recurrence::{
     encode_poly, ImplicitRelation, LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus,
     LiftInterlacing, LiftInterlacingClaim, LiftInterlacingJustification, LiftOperation, LiftParent,
     LiftRootTransfer, LiftSummary, Recurrence, RecurrenceError, RecurrenceJson, RowInterlacing,
     VeroneseParentAttestation, VeroneseParentProof,
+};
+use crate::recurrence::{
+    find_recurrence_adaptive_rational_with_budget, AdaptiveSearchBudget, AdaptiveSearchOptions,
+    AdaptiveSearchOutcome,
 };
 use crate::vec_poly;
 use crate::BigRational;
@@ -30,6 +39,12 @@ pub const ROW_FACTOR_LIFTS_SCHEMA: &str = "polytool.recurrence-row-factor-lifts.
 
 /// Largest number of rows factored or compared.
 pub const MAX_ROW_FACTOR_ROWS: usize = 64;
+
+/// Candidate budget of the cofactor-rule search of the division route.
+const COFACTOR_SEARCH_CANDIDATES: usize = 600;
+
+/// Term budget of the division of the division route.
+const MAX_DIVISION_TERMS: usize = 20_000;
 
 /// Bounds of [`find_row_factor_lifts`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +62,14 @@ pub struct RowFactorLiftOptions {
     pub attestations: Vec<VeroneseParentAttestation>,
     /// Try the root-domain parent route.  Default true.
     pub try_root_domain: bool,
+    /// When the rule does not reproduce the rows from the first index, or
+    /// the rows from there give no lift, the largest number of exceptional
+    /// leading rows tried: the factorization is detected and
+    /// certified from `n0 + p` on (`p = 1, 2, ...`) and the rows
+    /// `Q_(n0), ..., Q_(n0 + p - 1)` are decided exactly on their own
+    /// ([`RowFactorExceptionalPrefix`]).  At most [`MAX_ROW_FACTOR_ROWS`];
+    /// `0` disables it.  Default 2.
+    pub max_exceptional_prefix_rows: usize,
 }
 
 impl Default for RowFactorLiftOptions {
@@ -57,8 +80,27 @@ impl Default for RowFactorLiftOptions {
             max_recombination_subsets: 4096,
             attestations: Vec::new(),
             try_root_domain: true,
+            max_exceptional_prefix_rows: 2,
         }
     }
+}
+
+/// Leading input rows outside a row-factor lift: the factorization and its
+/// certificate start at `n0 + p`, and each of the `p` rows before is
+/// decided exactly (module documentation of `row_factor`, "Exceptional
+/// leading rows").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RowFactorExceptionalPrefix {
+    /// The input's first index `n0`.
+    pub input_first_index: usize,
+    /// The rows `Q_(n0), ..., Q_(n0 + p - 1)`, ascending exact coefficients.
+    pub rows: Vec<Vec<String>>,
+    /// Whether every one of them is zero or real-rooted (exact).
+    pub real_rooted: bool,
+    /// Whether every one of them is zero or real-rooted with every root in
+    /// `(-inf, 0]` (exact).
+    pub roots_nonpositive: bool,
 }
 
 /// Status of the identity `Q_n = F^(e(n)) S_n` for every `n >= n0`.
@@ -77,6 +119,12 @@ pub enum RowFactorIdentityStatus {
         rows: usize,
         /// Why.
         reason: String,
+    },
+    /// Proved for every `n >= n0` by the division route (`row_factor`
+    /// module documentation, "The division route").
+    CertifiedByDivision {
+        /// The replayable certificate.
+        certificate: Box<RowFactorDivisionCertificate>,
     },
 }
 
@@ -107,6 +155,10 @@ pub struct RowFactorLift {
     /// The uniform [`LiftSummary`] (always equal to
     /// [`RowFactorLift::recompute_lift_summary`]).
     pub lift_summary: LiftSummary,
+    /// Leading input rows outside the factorization, decided exactly; absent
+    /// when the lift starts at the input's first index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exceptional_prefix: Option<RowFactorExceptionalPrefix>,
 }
 
 /// A detected factor schedule that gave no lift.
@@ -158,6 +210,7 @@ impl RowFactorLift {
             cofactor: &self.cofactor,
             identity: &self.identity,
             parent_proof: &self.parent_proof,
+            prefix: self.exceptional_prefix.as_ref(),
         })
     }
 
@@ -173,6 +226,35 @@ impl RowFactorLift {
             {
                 return Err(RecurrenceError::VerificationFailed(
                     "the certificate does not belong to the lift".into(),
+                ));
+            }
+        }
+        if let RowFactorIdentityStatus::CertifiedByDivision { certificate } = &self.identity {
+            certificate.verify()?;
+            if certificate.factor != self.factor
+                || certificate.exponent_slope != self.exponent_slope
+                || certificate.exponent_offset != self.exponent_offset
+                || certificate.cofactor != self.cofactor
+            {
+                return Err(RecurrenceError::VerificationFailed(
+                    "the certificate does not belong to the lift".into(),
+                ));
+            }
+        }
+        if let Some(prefix) = &self.exceptional_prefix {
+            let rows = prefix
+                .rows
+                .iter()
+                .map(|row| crate::recurrence::decode_poly(row))
+                .collect::<Result<Vec<_>, _>>()?;
+            let (real_rooted, nonpositive) = decide_prefix_rows(&rows);
+            if prefix.rows.is_empty()
+                || real_rooted != prefix.real_rooted
+                || nonpositive != prefix.roots_nonpositive
+                || prefix.input_first_index + prefix.rows.len() != self.cofactor.first_index
+            {
+                return Err(RecurrenceError::VerificationFailed(
+                    "the exceptional prefix decisions do not match the record".into(),
                 ));
             }
         }
@@ -235,6 +317,11 @@ fn validate_options(options: &RowFactorLiftOptions) -> Result<(), RecurrenceErro
     if !(1..=MAX_ROW_FACTOR_ROWS).contains(&options.checked_rows) {
         return Err(RecurrenceError::LimitExceeded(format!(
             "checked_rows must be between 1 and {MAX_ROW_FACTOR_ROWS}"
+        )));
+    }
+    if options.max_exceptional_prefix_rows > MAX_ROW_FACTOR_ROWS {
+        return Err(RecurrenceError::LimitExceeded(format!(
+            "max_exceptional_prefix_rows must be at most {MAX_ROW_FACTOR_ROWS}"
         )));
     }
     Ok(())
@@ -323,8 +410,107 @@ pub fn find_row_factor_lifts(
     options: &RowFactorLiftOptions,
 ) -> Result<RowFactorLiftReport, RecurrenceError> {
     validate_options(options)?;
-    let input = prepare_lift_rule(recurrence, rows, first_index, "input")?;
     let n0 = first_index;
+    // The rule from the first index on; when it does not reproduce the
+    // supplied rows (exceptional leading rows), or gives no lift, the same
+    // rule from n0 + p on.
+    let (input, mut report, first_error) =
+        match prepare_lift_rule(recurrence, rows, first_index, "input") {
+            Ok(input) => {
+                let report = detect_and_certify(&input, None, options)?;
+                (Some(input), report, None)
+            }
+            Err(error) if options.max_exceptional_prefix_rows > 0 => (
+                None,
+                RowFactorLiftReport {
+                    schema: ROW_FACTOR_LIFTS_SCHEMA.into(),
+                    input_first_index: n0,
+                    rows_factored: 0,
+                    lifts: Vec::new(),
+                    rejected: Vec::new(),
+                    notes: vec![format!(
+                        "the rule does not hold from the first index {n0}: {error}"
+                    )],
+                },
+                Some(error),
+            ),
+            Err(error) => return Err(error),
+        };
+    if !report.lifts.is_empty() {
+        return Ok(report);
+    }
+    let mut any_tail = false;
+    for p in 1..=options.max_exceptional_prefix_rows {
+        // The rows from n0 on: generated when the rule holds from n0, else
+        // the supplied rows (the rule then generates the rest).
+        let source_rows = match &input {
+            Some(input) => input.rows(p + input.seeds.len().max(input.leader_shift) + 2)?,
+            None => rows.iter().map(|row| vec_poly::trim(row)).collect(),
+        };
+        if source_rows.len() <= p {
+            break;
+        }
+        // The tail record uses the rule only at the input's targets and
+        // reproduces every supplied tail row (checked by the preparation),
+        // so its rows are the input rows from n0 + p on.
+        let tail = match prepare_lift_rule(recurrence, &source_rows[p..], n0 + p, "input") {
+            Ok(tail) => tail,
+            Err(error) => {
+                report.notes.push(format!(
+                    "the rule from the index {} on is not usable: {error}",
+                    n0 + p
+                ));
+                continue;
+            }
+        };
+        any_tail = true;
+        let prefix_rows = source_rows[..p].to_vec();
+        let (real_rooted, roots_nonpositive) = decide_prefix_rows(&prefix_rows);
+        let prefix = RowFactorExceptionalPrefix {
+            input_first_index: n0,
+            rows: prefix_rows.iter().map(|row| encode_poly(row)).collect(),
+            real_rooted,
+            roots_nonpositive,
+        };
+        let tail_report = detect_and_certify(&tail, Some(&prefix), options)?;
+        report.notes.extend(tail_report.notes);
+        report.rejected.extend(tail_report.rejected);
+        report.rows_factored = report.rows_factored.max(tail_report.rows_factored);
+        if !tail_report.lifts.is_empty() {
+            report.lifts.extend(tail_report.lifts);
+            break;
+        }
+    }
+    match first_error {
+        Some(error) if !any_tail => Err(error),
+        _ => Ok(report),
+    }
+}
+
+/// Whether every row is zero or real-rooted, and whether every row is zero
+/// or real-rooted with every root in `(-inf, 0]` (exact).
+fn decide_prefix_rows(rows: &[Vec<Q>]) -> (bool, bool) {
+    let mut real = true;
+    let mut nonpositive = true;
+    for row in rows {
+        if vec_poly::is_zero(row) {
+            continue;
+        }
+        let shape = classify_row(row);
+        real &= shape.is_real_rooted;
+        nonpositive &= shape.has_nonpositive_real_roots();
+    }
+    (real, nonpositive)
+}
+
+/// Detection and certification for the prepared input (from its first
+/// index on), the lifts carrying `prefix`.
+fn detect_and_certify(
+    input: &PreparedLiftRule,
+    prefix: Option<&RowFactorExceptionalPrefix>,
+    options: &RowFactorLiftOptions,
+) -> Result<RowFactorLiftReport, RecurrenceError> {
+    let n0 = prefix.map_or(input.first_index, |p| p.input_first_index);
     let detection_rows = input.rows(options.detection_rows)?;
     let mut report = RowFactorLiftReport {
         schema: ROW_FACTOR_LIFTS_SCHEMA.into(),
@@ -367,7 +553,7 @@ pub fn find_row_factor_lifts(
             .iter()
             .map(|row| multiplicity(row, &g))
             .collect();
-        if let Some(schedule) = fit_schedule(&multiplicities, n0) {
+        if let Some(schedule) = fit_schedule(&multiplicities, input.first_index) {
             let entry = schedules
                 .entry(schedule)
                 .or_insert_with(|| vec![Q::from_integer(1.into())]);
@@ -375,7 +561,7 @@ pub fn find_row_factor_lifts(
         }
     }
     for ((slope, offset), f) in schedules {
-        match certify_schedule(&input, &f, slope, offset, options)? {
+        match certify_schedule(input, &f, slope, offset, prefix, options)? {
             Ok(lift) => report.lifts.push(*lift),
             Err(rejection) => report.rejected.push(rejection),
         }
@@ -388,6 +574,7 @@ fn certify_schedule(
     f: &[Q],
     slope: usize,
     offset: i64,
+    prefix: Option<&RowFactorExceptionalPrefix>,
     options: &RowFactorLiftOptions,
 ) -> Result<Result<Box<RowFactorLift>, RowFactorRejection>, RecurrenceError> {
     let n0 = input.first_index;
@@ -406,23 +593,23 @@ fn certify_schedule(
     let j = input.relation.max_derivative();
     let substituted = substitute(&input.relation, f, slope, offset);
     let h = slope * r + j;
-    let Some(cofactor_relation) = divide_operator(&substituted, f, h) else {
-        return reject(
-            None,
-            format!(
-                "the substituted relation is not divisible by F^{h}, so the cofactor rule would \
-                 have a leader depending on x"
-            ),
-        );
-    };
-    let leader = cofactor_relation.column(r);
-    if leader.0.len() != 1 || !leader.0.get(&(0, 0)).is_some_and(|c| c.is_variable_free()) {
-        return reject(None, "the cofactor leader depends on x or D".into());
-    }
-    let Some((cofactor_rule, _)) =
-        ImplicitRelation::from_op(&cofactor_relation).to_successor_rule()
-    else {
-        return reject(None, "the cofactor relation is not a successor rule".into());
+    // The substitution route: M_S = F^h M'_S with a leader free of x.
+    let primary: Result<(DOp, Recurrence), String> = match divide_operator(&substituted, f, h) {
+        None => Err(format!(
+            "the substituted relation is not divisible by F^{h}, so the cofactor rule would \
+             have a leader depending on x"
+        )),
+        Some(cofactor_relation) => {
+            let leader = cofactor_relation.column(r);
+            if leader.0.len() != 1 || !leader.0.get(&(0, 0)).is_some_and(|c| c.is_variable_free()) {
+                Err("the cofactor leader depends on x or D".into())
+            } else {
+                match ImplicitRelation::from_op(&cofactor_relation).to_successor_rule() {
+                    Some((rule, _)) => Ok((cofactor_relation, rule)),
+                    None => Err("the cofactor relation is not a successor rule".into()),
+                }
+            }
+        }
     };
     // Compare F^(e(n)) S_n with Q_n on the checked rows.
     let count = options.checked_rows.max(input.seeds.len()).max(r);
@@ -440,6 +627,33 @@ fn certify_schedule(
         }
         cofactor_rows.push(vec_poly::trim(quotient.coeffs()));
     }
+    let (cofactor_relation, cofactor_rule) = match primary {
+        Ok(found) => found,
+        Err(reason) => {
+            // The division route: a cofactor rule fitted to S_n = Q_n /
+            // F^(e(n)) and the identity w(n) M_S = sum H_nu S^nu L_S.
+            return match certify_by_cofactor_division(
+                input,
+                f,
+                (slope, offset),
+                &substituted,
+                &cofactor_rows,
+                options,
+            )? {
+                Ok((cofactor, identity)) => finish_lift(
+                    input,
+                    f,
+                    (slope, offset),
+                    prefix,
+                    &cofactor,
+                    identity,
+                    count,
+                    options,
+                ),
+                Err(detail) => reject(None, format!("{reason}; {detail}")),
+            };
+        }
+    };
     let count_s = cofactor_rule.generation_initial_count(n0, count);
     let cofactor = match prepare_lift_rule(
         &cofactor_rule,
@@ -521,6 +735,32 @@ fn certify_schedule(
             exceptional,
         )?
     };
+    finish_lift(
+        input,
+        f,
+        (slope, offset),
+        prefix,
+        &cofactor,
+        identity,
+        rows_compared,
+        options,
+    )
+}
+
+/// The cofactor statement, the summary and the lift record.
+#[allow(clippy::too_many_arguments)]
+fn finish_lift(
+    input: &PreparedLiftRule,
+    f: &[Q],
+    (slope, offset): (usize, i64),
+    prefix: Option<&RowFactorExceptionalPrefix>,
+    cofactor: &PreparedLiftRule,
+    identity: RowFactorIdentityStatus,
+    rows_compared: usize,
+    options: &RowFactorLiftOptions,
+) -> Result<Result<Box<RowFactorLift>, RowFactorRejection>, RecurrenceError> {
+    let n0 = input.first_index;
+    let factor = encode_poly(f);
     let parent_proof = prove_parent_real_rootedness(
         &ParentRecurrenceRecord {
             rule: &cofactor.rule,
@@ -543,6 +783,7 @@ fn certify_schedule(
         cofactor: &cofactor_json,
         identity: &identity,
         parent_proof: &parent_proof,
+        prefix,
     });
     Ok(Ok(Box::new(RowFactorLift {
         factor,
@@ -555,7 +796,94 @@ fn certify_schedule(
         identity,
         parent_proof,
         lift_summary,
+        exceptional_prefix: prefix.cloned(),
     })))
+}
+
+/// The division route (module documentation): a cofactor rule fitted to
+/// the cofactor rows (leader free of `x`, order and derivative order at
+/// most the input's), and a zero-remainder division of `M_S` by it.  The
+/// inner `Err` names why the route gives no certificate.
+#[allow(clippy::type_complexity)]
+fn certify_by_cofactor_division(
+    input: &PreparedLiftRule,
+    f: &[Q],
+    (slope, offset): (usize, i64),
+    substituted: &DOp,
+    cofactor_rows: &[Vec<Q>],
+    options: &RowFactorLiftOptions,
+) -> Result<Result<(PreparedLiftRule, RowFactorIdentityStatus), String>, RecurrenceError> {
+    let n0 = input.first_index;
+    let search = AdaptiveSearchOptions {
+        max_rec_len: input.leader_shift,
+        max_diff_deg: input.relation.max_derivative(),
+        max_denom_var_deg: 0,
+        ..AdaptiveSearchOptions::default()
+    };
+    let found = match find_recurrence_adaptive_rational_with_budget(
+        cofactor_rows,
+        &search,
+        AdaptiveSearchBudget::limited(COFACTOR_SEARCH_CANDIDATES),
+    ) {
+        AdaptiveSearchOutcome::Found(found) => found,
+        _ => {
+            return Ok(Err(
+                "no cofactor rule with a leader free of x was found".into()
+            ))
+        }
+    };
+    // The search indexes the first row as 1.
+    let rule = found.recurrence.shift_index(1 - n0 as i64);
+    let cofactor = match prepare_lift_rule(&rule, cofactor_rows, n0, "cofactor") {
+        Ok(cofactor) => cofactor,
+        Err(error) => {
+            return Ok(Err(format!(
+                "the fitted cofactor rule is not usable: {error}"
+            )))
+        }
+    };
+    let Ok((k, leader)) = x_free_leader(&cofactor.relation) else {
+        return Ok(Err(
+            "the fitted cofactor rule has a leader depending on x".into()
+        ));
+    };
+    let divisor = OperatorMatrix {
+        entries: vec![vec![cofactor.relation.clone()]],
+    };
+    let division = match pseudo_divide_row(
+        std::slice::from_ref(substituted),
+        &divisor,
+        k,
+        &leader,
+        MAX_DIVISION_TERMS,
+    ) {
+        Ok(division) if division.remainder_is_zero() => division,
+        Ok(_) => {
+            return Ok(Err(
+                "M_S is not a left multiple of the fitted cofactor rule (nonzero remainder)".into(),
+            ))
+        }
+        Err(error) => return Ok(Err(format!("the division failed: {error}"))),
+    };
+    match RowFactorDivisionCertificate::build(
+        input,
+        &cofactor,
+        &encode_poly(f),
+        (slope, offset),
+        &division,
+        MAX_ROW_FACTOR_ROWS.max(options.checked_rows),
+    ) {
+        Ok(certificate) => Ok(Ok((
+            cofactor,
+            RowFactorIdentityStatus::CertifiedByDivision {
+                certificate: Box::new(certificate),
+            },
+        ))),
+        Err(RecurrenceError::VerificationFailed(reason)) => Ok(Err(format!(
+            "the division certificate does not check: {reason}"
+        ))),
+        Err(error) => Err(error),
+    }
 }
 
 fn certified(
@@ -612,10 +940,12 @@ struct RowFactorParts<'a> {
     cofactor: &'a RecurrenceJson,
     identity: &'a RowFactorIdentityStatus,
     parent_proof: &'a VeroneseParentProof,
+    prefix: Option<&'a RowFactorExceptionalPrefix>,
 }
 
 fn row_factor_summary(parts: RowFactorParts<'_>) -> LiftSummary {
-    let n0 = parts.cofactor.first_index;
+    let n1 = parts.cofactor.first_index;
+    let n0 = parts.prefix.map_or(n1, |p| p.input_first_index);
     let f = factor_text(parts.factor);
     let (alpha, beta) = (parts.slope, parts.offset);
     let identity = match parts.identity {
@@ -625,6 +955,9 @@ fn row_factor_summary(parts: RowFactorParts<'_>) -> LiftSummary {
         RowFactorIdentityStatus::SupportedByRows { rows, .. } => {
             LiftIdentityStatus::SupportedByRows { rows: *rows }
         }
+        RowFactorIdentityStatus::CertifiedByDivision { .. } => LiftIdentityStatus::Certified {
+            method: "cofactor_division".into(),
+        },
     };
     let hypothesis = LiftHypothesis {
         name: "factor_real_rooted".into(),
@@ -641,7 +974,32 @@ fn row_factor_summary(parts: RowFactorParts<'_>) -> LiftSummary {
         },
         sign_decision: None,
     };
-    let (input_region, conclusion) = if parts.nonpositive {
+    let mut hypotheses = vec![hypothesis];
+    if let Some(prefix) = parts.prefix {
+        hypotheses.push(LiftHypothesis {
+            name: "exceptional_prefix_rows".into(),
+            statement: format!(
+                "the rows Q_{n0}, ..., Q_{} before the factorization are zero or real-rooted",
+                n1 - 1
+            ),
+            status: if prefix.real_rooted {
+                LiftHypothesisStatus::Verified
+            } else {
+                LiftHypothesisStatus::Failed { witness: None }
+            },
+            evidence: format!(
+                "exact real-root count of each row ({})",
+                if prefix.roots_nonpositive {
+                    "every root <= 0"
+                } else {
+                    "not every root <= 0"
+                }
+            ),
+            sign_decision: None,
+        });
+    }
+    let nonpositive = parts.nonpositive && parts.prefix.is_none_or(|p| p.roots_nonpositive);
+    let (input_region, conclusion) = if nonpositive {
         (
             nonpositive_ray(),
             format!("every Q_n, n >= {n0}, is zero or real-rooted with roots in (-inf, 0]"),
@@ -661,7 +1019,15 @@ fn row_factor_summary(parts: RowFactorParts<'_>) -> LiftSummary {
         n0,
         LiftParent {
             recurrence: parts.cofactor.clone(),
-            relation: format!("Q_n = ({f})^({alpha} n {beta:+}) S_n for every n >= {n0}"),
+            relation: if n1 == n0 {
+                format!("Q_n = ({f})^({alpha} n {beta:+}) S_n for every n >= {n0}")
+            } else {
+                format!(
+                    "Q_n = ({f})^({alpha} n {beta:+}) S_n for every n >= {n1}; the rows Q_{n0}, \
+                     ..., Q_{} are decided exactly",
+                    n1 - 1
+                )
+            },
             gauge: None,
             index_shift: 0,
         },
@@ -677,7 +1043,7 @@ fn row_factor_summary(parts: RowFactorParts<'_>) -> LiftSummary {
             input_root_region: input_region,
             input_conclusion: conclusion,
         },
-        vec![hypothesis],
+        hypotheses,
         parent_proof_summary(parts.parent_proof),
     );
     let interlacing = row_factor_interlacing(&summary, &parts);
@@ -718,8 +1084,10 @@ fn row_factor_interlacing(
         Ok(parent) => parent,
         Err(reason) => return LiftInterlacingClaim::not_proved(reason),
     };
-    let n0 = summary.input_first_index;
-    let from_index = parent.from_index.max(n0 + 1);
+    // With exceptional leading rows the claim starts after the first row of
+    // the factorization.
+    let n1 = parts.cofactor.first_index.max(summary.input_first_index);
+    let from_index = parent.from_index.max(n1 + 1);
     let kind = if exponent == 0 {
         parent.kind
     } else {

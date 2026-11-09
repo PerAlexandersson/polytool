@@ -1270,7 +1270,16 @@ by substitution, and proves the cofactors with the parent provers.  A lift
 seeds, the identity (`RowFactorCertificate`, replayable), the cofactor proof
 and the `lift_summary`; schedules that fail (a row not divisible by
 `F^(e(n))`, a cofactor rule with an `x`-dependent leader) are listed in
-`rejected`.  See [algorithms.md](algorithms.md#row-factor-lifts).
+`rejected`.  When the substitution leaves an `x`-dependent leader, a cofactor
+rule is fitted and the identity is certified by division instead
+(`RowFactorIdentityStatus::CertifiedByDivision`,
+`RowFactorDivisionCertificate`).  When the rule does not hold from the first
+index or gives no lift there, the search restarts from `n0 + p`
+(`RowFactorLiftOptions::max_exceptional_prefix_rows`, default 2) and decides
+the leading rows exactly (`RowFactorLift::exceptional_prefix`,
+`RowFactorExceptionalPrefix`; summary hypothesis `exceptional_prefix_rows`).
+A008518 (`(1 + x)` times the Eulerian polynomials, row 0 exceptional) is
+proved this way.  See [algorithms.md](algorithms.md#row-factor-lifts).
 
 ## Gamma lifts
 
@@ -1408,9 +1417,49 @@ assert_eq!(pf.input_interval.to_string(), "[-1 - sqrt(2), 0]");
 # Ok::<(), RecurrenceError>(())
 ```
 
+Published transformations with index-dependent rules are recognised for
+every index (an all-index recurrence-equality certificate with the RealRooted
+recurrence): `BasisMap::narayana_transformation(m)` (`u^k -> N_(k,m)`, Mao and
+Wang, PF to PF, shape `narayana`), `BasisMap::eulerian_transformation()`
+(`A°`: `1, t A_1, t A_2, ...`, Athanasiadis) and
+`BasisMap::derangement_transformation()` (`u^k -> d_k`, Brändén and Solus; not
+injective, forward only).  The two magic-cone theorems are applied with the
+source `[-1, 0]` (an input with roots there has nonnegative magic
+coordinates), never to inputs that merely have nonpositive roots.  Their lifts
+are certified by the index-side transport, which needs a Riordan coefficient
+family (a rule free of `n` with coefficients of degree at most one in `u`, for
+example `(1 + u)^n`, A026729 or A078812); other coefficient families get the
+identity status `unsupported`.
+
+```rust
+use polytool::recurrence::*;
+
+// A°((1 + u)^n) is A046802 (binomial Eulerian polynomials).
+let binomial = RecurrenceJson::from_recurrence_rational(
+    &Recurrence {
+        terms: vec![RecurrenceTerm::new(1, 0, BivarPoly {
+            coeffs: vec![vec![BigRational::from_integer(1.into()); 2]],
+        })],
+        denominator: None,
+        inhomogeneous: None,
+    },
+    0,
+    &[vec![BigRational::from_integer(1.into())]],
+    None,
+);
+let image = apply_basis_map_to_family(
+    &BasisMap::eulerian_transformation(),
+    &binomial,
+    &BasisMapImageOptions::default(),
+)?;
+assert!(image.is_proved());
+# Ok::<(), RecurrenceError>(())
+```
+
 `find_basis_map_lifts(rule, rows, first_index, &options)` writes the input as
 `Q_n = T_P(R_n)` for a map of a `BasisMapLibrary` (default: the admitted OEIS
-catalog maps; build one with `BasisMapLibrary::oeis_catalog()` or
+catalog maps, then the published Narayana maps `m = 0, 1, 2` and `A°`
+(`BasisMapLibraryOptions::include_published_maps`); build one with `BasisMapLibrary::oeis_catalog()` or
 `BasisMapLibrary::build` and share it): it expands the rows, rejects maps whose
 coefficient rows have a root outside every source interval (exactly), fits a
 derivative-free rule for `R` and certifies the candidate with

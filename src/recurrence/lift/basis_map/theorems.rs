@@ -3,6 +3,7 @@
 //! "Theorems").
 
 use super::map::BasisMap;
+use super::published::{recognize_published_family, PublishedFamily};
 use super::quadratic::{integer, AlgebraicInterval, QuadraticNumber};
 use crate::recurrence::implicit::algebra::{Biv, BivarConversion};
 use crate::recurrence::{
@@ -154,6 +155,18 @@ pub enum BasisMapShape {
         /// Why.
         reason: String,
     },
+    /// The Narayana transformation `P_k = N_(k,m)(t) = sum_j C(k,j)
+    /// C(k+m,j) / C(m+j,j) t^j` (Mao and Wang), recognised for every `k`.
+    Narayana {
+        /// `m >= 0`.
+        parameter: usize,
+    },
+    /// The Eulerian transformation `A°`: `P_0 = 1`, `P_k = t A_k(t)`
+    /// (Athanasiadis), recognised for every `k`.
+    EulerianTransformation,
+    /// The derangement transformation `P_k = d_k(t)` (Brändén and Solus),
+    /// recognised for every `k`.
+    DerangementTransformation,
 }
 
 /// Outcome of [`check_basis_map_preserves_pf`].
@@ -505,6 +518,9 @@ fn analyze(map: &BasisMap, options: &BasisMapTheoremOptions) -> Result<Analysis,
         return Ok(Analysis::not_applicable("the rule has no terms".into()));
     }
     if !map.is_index_independent() {
+        if let Some(analysis) = published(map)? {
+            return Ok(analysis);
+        }
         return scalar_index(map, options);
     }
     let leader = match &map.rule().denominator {
@@ -596,6 +612,135 @@ fn analyze(map: &BasisMap, options: &BasisMapTheoremOptions) -> Result<Analysis,
             "a rule of order {order} (above two)"
         ))),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Published transformations
+// ---------------------------------------------------------------------------
+
+/// The magic-cone lemma used by the Eulerian and derangement
+/// transformations (module documentation of `basis_map`, "Published
+/// transformations").
+const MAGIC_CONE_LEMMA: &str = "an input p of degree d with every root in [-1, 0] and a positive \
+     leading coefficient is a nonnegative combination of u^k (1 + u)^(d - k), 0 <= k <= d: with \
+     p = c prod_i (u - x_i), sum_k c_k s^k = (1 - s)^d p(s / (1 - s)) = c prod_i ((1 + x_i) s - \
+     x_i) has nonnegative coefficients";
+
+/// The analysis of a map recognised as a published family, `None` when the
+/// first rows match none.
+fn published(map: &BasisMap) -> Result<Option<Analysis>, RecurrenceError> {
+    let Some((family, certificate)) = recognize_published_family(map)? else {
+        return Ok(None);
+    };
+    let (shape, theorem, rows, lean): (BasisMapShape, &str, String, Vec<&'static str>) =
+        match family {
+            PublishedFamily::Narayana(m) => (
+                BasisMapShape::Narayana { parameter: m },
+                "Mao and Wang, The Narayana transformation, arXiv:2607.01572, Theorem 1: for \
+                 every integer m >= 0 the map u^k -> N_(k,m)(t) = sum_j C(k,j) C(k+m,j) / \
+                 C(m+j,j) t^j sends every polynomial with nonnegative coefficients and only real \
+                 roots to a polynomial with only real nonpositive roots (PF to PF)",
+                format!("N_(k,{m})(t)"),
+                vec![
+                    "RealRooted.narayanaTransformPreservesPF",
+                    "RealRooted.narayanaPolynomial_deriv_lag_rec",
+                    "RealRooted.narayanaPolynomial_one",
+                ],
+            ),
+            PublishedFamily::EulerianTransformation => (
+                BasisMapShape::EulerianTransformation,
+                "Athanasiadis, On the real-rootedness of the Eulerian transformation, \
+                 arXiv:2302.00754 (J. London Math. Soc. 111 (2025) e70083), Theorem 1: A° \
+                 sends every nonnegative combination of u^k (1 + u)^(d - k), 0 <= k <= d, to a \
+                 real-rooted polynomial with nonnegative coefficients (Brenti's stronger \
+                 conjecture for all inputs with nonpositive roots is false, Brändén and \
+                 Jochemko; it is not used)",
+                "1, t A_1(t), t A_2(t), ... (t A_k(t) = sum over permutations of [k] of \
+                 t^(1 + des))"
+                    .into(),
+                vec![
+                    "RealRooted.EulerianTransform.transform_magicExpansion_isPF",
+                    "RealRooted.EulerianTransform.transform_magicExpansion_interl",
+                    "RealRooted.generalizedEulerian",
+                ],
+            ),
+            PublishedFamily::DerangementTransformation => (
+                BasisMapShape::DerangementTransformation,
+                "Brändén and Solus, arXiv:1808.04141, Corollary 3.7 (as stated by Athanasiadis, \
+                 arXiv:2302.00754, Section 4): the derangement transformation u^k -> d_k(t) \
+                 sends every nonnegative combination of u^k (1 + u)^(d - k), 0 <= k <= d, to \
+                 zero or a real-rooted polynomial with nonnegative coefficients",
+                "the derangement polynomials d_k(t) by excedances (d_0 = 1, d_1 = 0)".into(),
+                vec![
+                    "RealRooted.DerangementTransform.transform_magicExpansion_isPF",
+                    "RealRooted.DerangementTransform.polynomial_succ",
+                ],
+            ),
+        };
+    let mut analysis = Analysis {
+        shape,
+        status: BasisMapTheoremStatus::Proved,
+        theorem: theorem.into(),
+        hypotheses: Vec::new(),
+        conclusions: Vec::new(),
+        counterexample: None,
+        lean,
+    };
+    let identified = certificate.is_certified();
+    analysis.hypotheses.push(hypothesis(
+        "basis_is_published_family",
+        format!(
+            "the basis row of u^k is {rows} for every k >= 0 (P_({} + k))",
+            map.first_index()
+        ),
+        identified,
+        if identified {
+            format!(
+                "all-index recurrence equality with the RealRooted recurrence ({}): {}",
+                certificate.method.as_deref().unwrap_or("certified"),
+                certificate.statement
+            )
+        } else {
+            format!(
+                "the first rows agree but the all-index equality is not certified: {}",
+                certificate.reasons.join("; ")
+            )
+        },
+    ));
+    if !identified {
+        return Ok(Some(analysis));
+    }
+    let nonpositive = AlgebraicInterval::nonpositive_ray();
+    match family {
+        PublishedFamily::Narayana(_) => analysis.push_conclusion(BasisMapConclusion {
+            input_interval: nonpositive.clone(),
+            output_interval: nonpositive,
+            nonnegative_coefficients: true,
+            sharp: false,
+            statement: "every input with all roots in (-inf, 0] (a PF polynomial up to sign) is \
+                        sent to zero or a polynomial with all roots in (-inf, 0], PF for a \
+                        positive leading coefficient"
+                .into(),
+            hypotheses: Vec::new(),
+        }),
+        PublishedFamily::EulerianTransformation | PublishedFamily::DerangementTransformation => {
+            analysis.push_conclusion(BasisMapConclusion {
+                input_interval: AlgebraicInterval::closed(
+                    QuadraticNumber::rational(-Q::one()),
+                    QuadraticNumber::rational(Q::zero()),
+                ),
+                output_interval: nonpositive,
+                nonnegative_coefficients: true,
+                sharp: false,
+                statement: format!(
+                    "every input with all roots in [-1, 0] is sent to zero or a polynomial with \
+                     all roots in (-inf, 0], PF for a positive leading coefficient ({MAGIC_CONE_LEMMA})"
+                ),
+                hypotheses: Vec::new(),
+            })
+        }
+    }
+    Ok(Some(analysis))
 }
 
 // ---------------------------------------------------------------------------

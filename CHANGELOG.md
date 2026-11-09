@@ -47,6 +47,39 @@
   of the parent provers now proves the parent only when its certified region
   lies in `(-inf, 0]` (before, only seven routes checked this; the others
   always certified such a region, so no record changes).
+- Published basis maps with index-dependent rules. New
+  `BasisMap::narayana_transformation(m)` (Mao--Wang, arXiv:2607.01572,
+  Theorem 1: PF to PF; RealRooted `narayanaTransformPreservesPF`),
+  `BasisMap::eulerian_transformation()` (Athanasiadis' `A°`,
+  arXiv:2302.00754, Theorem 1; RealRooted
+  `EulerianTransform.transform_magicExpansion_isPF`) and
+  `BasisMap::derangement_transformation()` (Brändén--Solus, Corollary 3.7;
+  forward only, `d_1 = 0`). `check_basis_map_preserves_pf` recognises them
+  for every index by a recurrence-equality certificate with the RealRooted
+  rule (new `BasisMapShape` variants `narayana`, `eulerian_transformation`,
+  `derangement_transformation`); the magic-cone hypothesis is decided as
+  "every root in `[-1, 0]`" (source `[-1, 0]`), never as nonpositive roots
+  (Brenti's conjecture, refuted by Brändén--Jochemko). Lifts through these
+  maps are certified by a new index-side transport when the coefficient
+  family is Riordan (`g(z)/(1 - u f(z))`): `BasisMapDivisionCertificate`
+  recomputes it on replay (format unchanged). `BasisMapLibrary::oeis_catalog`
+  appends the Narayana maps `m = 0, 1, 2` and `A°` (new option
+  `BasisMapLibraryOptions::include_published_maps`; catalog entries keep the
+  companion-form admission and order). Proves OEIS A046802 (`A°((1 + u)^n)`),
+  A162303 (`N_1` of A026729) and A257142 (`N_1` of A078812) by forward and
+  backward lifts. A318397, A367177 and A095801 have coefficient families
+  with index-dependent rules (not Riordan) and stay open.
+- Row-factor lifts with exceptional leading rows and a division route.
+  `find_row_factor_lifts` retries from `n0 + p`
+  (`RowFactorLiftOptions::max_exceptional_prefix_rows`, default 2) when the
+  rule does not hold from the first index or gives no lift there, and decides
+  the leading rows exactly (`RowFactorLift::exceptional_prefix`, optional,
+  `RowFactorExceptionalPrefix`; summary hypothesis `exceptional_prefix_rows`).
+  When the substituted rule has an `x`-dependent leader, a fitted cofactor
+  rule certifies the identity by division
+  (`RowFactorIdentityStatus::CertifiedByDivision`,
+  `RowFactorDivisionCertificate`). Proves A008518. Existing certificates and
+  reports serialize unchanged.
 
 - Behaviour-preserving refactoring (no output changes). New public API:
   `vec_poly::clear_denominators` and `vec_poly::clear_denominators_with_scale`
