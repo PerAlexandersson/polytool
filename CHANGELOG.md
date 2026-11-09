@@ -47,6 +47,16 @@
   of the parent provers now proves the parent only when its certified region
   lies in `(-inf, 0]` (before, only seven routes checked this; the others
   always certified such a region, so no record changes).
+- Certified rowwise products of two rule-defined polynomial families:
+  `recurrence::{certify_polynomial_family_product, apply_polynomial_family_product}`
+  support ordinary, coefficientwise, factorial-weighted and inverse-factorial
+  products, with explicit parent index shifts. The new independent
+  `PolynomialFamilyProductCertificate` schema records both parent proofs,
+  exact annihilator closure, support and coefficient-anchor checks, and
+  certified equality with the target recurrence. PF sign hypotheses are
+  proved for all indices; ordinary products and Schur's factorial product
+  also admit the appropriate whole-line parent proofs. Replay rejects
+  altered certificates. Existing lift schemas and discovery routes are unchanged.
 - Published basis maps with index-dependent rules. New
   `BasisMap::narayana_transformation(m)` (Mao--Wang, arXiv:2607.01572,
   Theorem 1: PF to PF; RealRooted `narayanaTransformPreservesPF`),
