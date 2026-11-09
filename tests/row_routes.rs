@@ -368,7 +368,8 @@ fn discovery_records_the_row_routes_only_where_they_apply() {
     ] {
         let report = discover_recurrence_proofs(&record(id), &options).unwrap();
         assert_eq!(report.status, "proved", "{id}");
-        assert_eq!(report.attempts.len(), 7, "{id}");
+        // The eight discovery theorems, then the applicable row route.
+        assert_eq!(report.attempts.len(), DISCOVERY_THEOREMS.len() + 1, "{id}");
         let attempt = report.attempts.last().unwrap();
         assert_eq!(attempt.theorem, theorem);
         assert!(attempt.is_proved());
@@ -376,7 +377,7 @@ fn discovery_records_the_row_routes_only_where_they_apply() {
     }
     // Eulerian rows (first order, lag 1): neither route applies.
     let report = discover_recurrence_proofs(&record("A008292"), &options).unwrap();
-    assert_eq!(report.attempts.len(), 6);
+    assert_eq!(report.attempts.len(), DISCOVERY_THEOREMS.len());
 }
 
 fn parent(id: &str) -> VeroneseParentProof {
