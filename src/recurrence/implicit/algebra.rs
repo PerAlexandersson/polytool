@@ -99,11 +99,7 @@ pub(in crate::recurrence) fn nonnegative_integer_roots(p: &[Q]) -> BTreeSet<BigI
         return roots;
     }
     let rest = &p[valuation..=degree];
-    let common = rest.iter().fold(BigInt::one(), |acc, c| acc.lcm(c.denom()));
-    let integers = rest
-        .iter()
-        .map(|c| (c * Q::from_integer(common.clone())).to_integer())
-        .collect::<Vec<_>>();
+    let integers = vec_poly::clear_denominators(rest);
     let chain = SturmChain::from_bigint_coeffs(&integers);
     let half = Q::new(BigInt::one(), BigInt::from(2));
     for (lo, hi) in chain.isolate_roots(&half) {

@@ -501,15 +501,6 @@ fn taylor_shift(p: &[Q], first: &BigInt) -> Vec<Q> {
     ))
 }
 
-/// The positive integer multiple of `p` with coprime integer coefficients
-/// cleared of denominators (same roots, same signs).
-fn integer_multiple(p: &[Q]) -> Vec<BigInt> {
-    let common = p.iter().fold(BigInt::one(), |acc, c| acc.lcm(c.denom()));
-    p.iter()
-        .map(|c| (c * Q::from_integer(common.clone())).to_integer())
-        .collect()
-}
-
 /// An integer `U >= 1` with every real root of the nonconstant polynomial
 /// `p` in the open interval `(-U, U)`: the ceiling of the Cauchy bound
 /// `1 + max_i |p_i / p_d|`.
@@ -531,8 +522,9 @@ struct CountedPolynomial<'a> {
 
 impl<'a> CountedPolynomial<'a> {
     fn new(coefficients: &'a [Q]) -> Self {
-        let chain = (coefficients.len() >= 2)
-            .then(|| SturmChain::from_bigint_coeffs(&integer_multiple(coefficients)));
+        let chain = (coefficients.len() >= 2).then(|| {
+            SturmChain::from_bigint_coeffs(&crate::vec_poly::clear_denominators(coefficients))
+        });
         Self {
             coefficients,
             chain,

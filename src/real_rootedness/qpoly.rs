@@ -126,22 +126,7 @@ pub(super) fn poly_exact_div_q(a: &[Q], b: &[Q]) -> Vec<Q> {
 
 /// Convert a Q polynomial to primitive BigInt coefficients by clearing denominators.
 pub(super) fn q_poly_to_primitive_bigint(p: &[Q]) -> Vec<BigInt> {
-    let zero = Q::from_integer(BigInt::from(0));
-    // LCM of all denominators
-    let lcm = p
-        .iter()
-        .filter(|c| **c != zero)
-        .fold(BigInt::from(1), |acc, c| acc.lcm(c.denom()));
-
-    let lcm_q = Q::from_integer(lcm);
-    let mut result: Vec<BigInt> = p
-        .iter()
-        .map(|c| {
-            let scaled = c * &lcm_q;
-            debug_assert_eq!(scaled.denom(), &BigInt::from(1));
-            scaled.to_integer()
-        })
-        .collect();
+    let mut result = crate::vec_poly::clear_denominators(p);
     while result.last().is_some_and(BigInt::is_zero) {
         result.pop();
     }

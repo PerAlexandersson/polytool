@@ -15,8 +15,6 @@ use crate::recurrence::implicit::algebra::{poly_text, roots_in_domain, Biv, DOp}
 use crate::recurrence::implicit::biv_json;
 use crate::recurrence::*;
 use crate::vec_poly;
-use num_bigint::BigInt;
-use num_integer::Integer;
 use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
 
@@ -446,21 +444,13 @@ pub(super) fn sign_hypotheses(
     ]
 }
 
-/// Positive integer multiple of a rational row (same roots, same signs).
-fn integer_row(p: &[Q]) -> Vec<BigInt> {
-    let denominator = p.iter().fold(BigInt::one(), |acc, c| acc.lcm(c.denom()));
-    p.iter()
-        .map(|c| (c * Q::from_integer(denominator.clone())).to_integer())
-        .collect()
-}
-
 /// `b <= a` in the directed weak-interlacing convention of the preservation
 /// theorem: nonzero rows interlace with `a` holding the rightmost root, which
 /// is `check_weak_interlacing(b, a) == Some(true)`; a zero member is allowed
 /// when the other is real-rooted (and `(0, 0)` holds).
 fn companion_interlaces(b: &[Q], a: &[Q]) -> (bool, String) {
-    let b_int = integer_row(b);
-    let a_int = integer_row(a);
+    let b_int = crate::vec_poly::clear_denominators(b);
+    let a_int = crate::vec_poly::clear_denominators(a);
     match (vec_poly::is_zero(b), vec_poly::is_zero(a)) {
         (true, true) => (true, "both members are zero".into()),
         (true, false) | (false, true) => {

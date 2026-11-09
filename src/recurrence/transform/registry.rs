@@ -123,7 +123,6 @@ use crate::polynomial::Polynomial;
 use crate::real_rootedness::gamma_coefficients_bigint_coeffs;
 use crate::recurrence::implicit::algebra::{Biv, DOp};
 use crate::vec_poly;
-use num_integer::Integer;
 use num_traits::{One, Zero};
 use ore_algebra::{
     pull_back_substitution, MobiusMap, PullbackBounds, Substitution, SubstitutionError,
@@ -1157,13 +1156,8 @@ fn gamma_at_index(index: usize, row: &[Q], d: usize) -> Result<Vec<Q>, Transform
         return Ok(vec![Q::zero()]);
     };
     let valuation = row.iter().position(|c| !c.is_zero()).expect("nonzero row");
-    let common = row[valuation..=degree]
-        .iter()
-        .fold(BigInt::one(), |acc, c| acc.lcm(c.denom()));
-    let integers = row[valuation..=degree]
-        .iter()
-        .map(|c| (c * Q::from_integer(common.clone())).to_integer())
-        .collect::<Vec<_>>();
+    let (common, integers) =
+        crate::vec_poly::clear_denominators_with_scale(&row[valuation..=degree]);
     let gamma =
         gamma_coefficients_bigint_coeffs(&integers).ok_or(TransformError::NotSymmetric {
             index,

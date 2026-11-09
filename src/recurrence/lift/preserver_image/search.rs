@@ -882,13 +882,7 @@ mod tests {
             let p = vec_poly::trim(p);
             !(p.iter().any(Signed::is_positive) && p.iter().any(Signed::is_negative))
         };
-        let common = row.iter().fold(BigInt::one(), |acc, c| {
-            num_integer::Integer::lcm(&acc, c.denom())
-        });
-        let integers: Vec<BigInt> = row
-            .iter()
-            .map(|c| (c * Q::from_integer(common.clone())).to_integer())
-            .collect();
+        let integers = vec_poly::clear_denominators(row);
         if !crate::is_real_rooted_bigint_coeffs(&integers) {
             return false;
         }
