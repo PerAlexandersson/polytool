@@ -401,7 +401,7 @@ impl IndexSectionCertificate {
 /// )
 /// .unwrap();
 /// assert!(report.is_proved());
-/// assert_eq!(report.index_section.as_ref().unwrap().period, 3);
+/// assert_eq!(report.index_section().unwrap().period, 3);
 /// report.verify().unwrap();
 /// ```
 pub fn check_index_section_lift_theorem(
@@ -935,8 +935,7 @@ fn search_section_lifts(
 fn proves_every_row(report: &RealRootednessTheoremReport) -> bool {
     report.is_proved()
         && report
-            .residue_classes
-            .as_ref()
+            .residue_classes()
             .is_none_or(|certificate| certificate.classes.iter().all(|class| !class.zero))
         && report
             .conclusion
@@ -1009,7 +1008,23 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     check_at_supplied_seeds: index_section_report,
     start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
+    certificate_name: Some("index-section"),
 };
+
+/// Replay the certificate of a recomputed index-section report: the
+/// certificate is recomputed on its own
+/// ([`IndexSectionCertificate::verify`]) on the checked rule.
+pub(super) fn verify_certificate_in_report(
+    certificate: &IndexSectionCertificate,
+    report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    let (rule, first_index, seeds) = report.recurrence.to_recurrence_parts()?;
+    let rule = match &report.left_hand_factor_normalization {
+        Some(normalization) => normalization.normalized_recurrence()?,
+        None => rule,
+    };
+    certificate.verify(&rule, first_index, &seeds)
+}
 
 fn index_section_report(
     rule: &Recurrence,
@@ -1154,10 +1169,10 @@ fn index_section_report(
                 let row = vec_poly::trim(row);
                 vec_poly::is_zero(&row) || !is_real_rooted_rational(&row)
             });
-            if region
-                .as_ref()
-                .is_some_and(|r| rows.iter().any(|row| !has_real_roots_in_closed_region(row, r)))
-            {
+            if region.as_ref().is_some_and(|r| {
+                rows.iter()
+                    .any(|row| !has_real_roots_in_closed_region(row, r))
+            }) {
                 region = None;
             }
             let last = first_index + checked_count - 1;
@@ -1210,7 +1225,7 @@ fn index_section_report(
     report.hypotheses = hypotheses;
     let parent_record =
         RecurrenceJson::from_recurrence_rational(&lift.parent_rule, 0, &lift.parent_seeds, None);
-    report.index_section = Some(IndexSectionCertificate {
+    report.certificate = Some(RouteCertificate::IndexSection(IndexSectionCertificate {
         period,
         transform: lift.transform,
         exceptional_rows: lift.exceptional_rows,
@@ -1219,7 +1234,7 @@ fn index_section_report(
         parent_maximum_start_delay: options.maximum_start_delay,
         parent_attempts: lift.attempts.clone(),
         selected: lift.selected,
-    });
+    }));
     let mut statement = format!(
         "every P_n, n >= {first_index}, is nonzero and real-rooted: P_({section_first} + m) = \
          T(Q_({period} m)) for every m >= 0 with {} and the parent psi(w) = {psi_text}",

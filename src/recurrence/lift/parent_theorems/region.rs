@@ -119,7 +119,10 @@ pub(super) fn proved_region(report: &RealRootednessTheoremReport) -> Option<Real
 }
 
 /// Whether the requested (open) region contains `certified`.
-pub(super) fn requested_region_contains(requested: &RealInterval, certified: &RealInterval) -> bool {
+pub(super) fn requested_region_contains(
+    requested: &RealInterval,
+    certified: &RealInterval,
+) -> bool {
     let lower_ok = match (&requested.lower, &certified.lower) {
         (None, _) => true,
         (Some(_), None) => false,

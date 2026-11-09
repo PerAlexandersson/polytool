@@ -490,6 +490,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     check_at_supplied_seeds: ma_wang_interval_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
+    certificate_name: None,
 };
 
 /// The check with the induction at the given (normalized) seeds.

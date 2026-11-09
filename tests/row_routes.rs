@@ -70,7 +70,7 @@ fn a201013_is_a_scaled_fixed_delay_window() {
         report.lean_declarations[0],
         "RealRooted.strictInterl_of_scaled_fixedDelay_recurrence"
     );
-    let certificate = report.variable_delay.as_ref().unwrap();
+    let certificate = report.variable_delay().unwrap();
     assert_eq!(certificate.delay, 3);
     assert!(!certificate.unscaled);
     assert_eq!(certificate.seed_steps.len(), seeds.len() - 1);
@@ -111,7 +111,7 @@ fn unscaled_catalog_windows_name_the_unscaled_declaration() {
     let (rule, seeds, first) = catalog("A102547");
     let report = check_variable_delay_theorem(&rule, first, &seeds, &options()).unwrap();
     assert!(report.is_proved(), "{:?}", report.open_hypotheses());
-    assert!(report.variable_delay.as_ref().unwrap().unscaled);
+    assert!(report.variable_delay().unwrap().unscaled);
     assert_eq!(
         report.lean_declarations[0],
         "RealRooted.strictInterl_of_fixedDelay_recurrence"
@@ -144,7 +144,7 @@ fn variable_delay_rejects_other_shapes_and_failing_hypotheses() {
     ] {
         let report = check(&rule, &seeds);
         assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
-        assert!(report.variable_delay.is_none() && report.hypotheses.is_empty());
+        assert!(report.variable_delay().is_none() && report.hypotheses.is_empty());
     }
     // P_n = P_(n-1) - x P_(n-2): the delayed weight is negative (P_2 = 1 - x
     // is real-rooted, but the window fails).
@@ -195,7 +195,7 @@ fn tampered_variable_delay_certificates_are_rejected() {
         v["lean_declarations"][0] = "RealRooted.strictInterl_of_fixedDelay_recurrence".into();
     }));
     // The certificate alone replays on the seeds, and fails on other seeds.
-    let certificate = report.variable_delay.as_ref().unwrap();
+    let certificate = report.variable_delay().unwrap();
     certificate.verify_seed_steps(first, &seeds).unwrap();
     let mut other = seeds.clone();
     other[2] = vec![q(13)];
@@ -220,7 +220,7 @@ fn catalog_families_are_proved_one_residue_class_at_a_time() {
         assert!(report.is_proved(), "{id}: {:?}", report.open_hypotheses());
         assert_eq!(report.lean_route.as_deref(), Some("subseq"), "{id}");
         assert_eq!(report.lean_declarations[0], "RealRooted.exists_mul_add_lt");
-        let certificate = report.residue_classes.as_ref().unwrap();
+        let certificate = report.residue_classes().unwrap();
         assert_eq!(certificate.period, 2, "{id}");
         assert_eq!(certificate.classes.len(), 2);
         report.verify().unwrap();
@@ -257,7 +257,7 @@ fn zero_classes_are_named_in_the_conclusion() {
     assert_eq!(first, 0);
     let report = check_residue_class_subsequence_theorem(&rule, first, &seeds, &options()).unwrap();
     assert!(report.is_proved());
-    let certificate = report.residue_classes.as_ref().unwrap();
+    let certificate = report.residue_classes().unwrap();
     assert_eq!(
         certificate.classes.iter().filter(|c| c.zero).count(),
         1,
@@ -411,7 +411,7 @@ fn residue_classes_do_not_apply_or_fail_honestly() {
         check_residue_class_subsequence_theorem(&rule, 0, &rows(&[&[1], &[0, 1]]), &options())
             .unwrap();
     assert_eq!(report.status, RealRootednessTheoremStatus::NotApplicable);
-    assert!(report.residue_classes.is_none());
+    assert!(report.residue_classes().is_none());
 
     // P_n = x P_(n-2) + P_(n-4): the classes Q_m = x Q_(m-1) + Q_(m-2) with
     // Q_0 = 1, Q_1 = x give Q_2 = x^2 + 1, which is not real-rooted.
@@ -428,7 +428,7 @@ fn residue_classes_do_not_apply_or_fail_honestly() {
     assert!(!report.is_proved());
     assert!(report.conclusion.is_none());
     report.verify().unwrap();
-    let certificate = report.residue_classes.as_ref().unwrap();
+    let certificate = report.residue_classes().unwrap();
     assert!(certificate.classes.iter().all(|c| c.selected.is_none()));
     assert!(report
         .hypotheses

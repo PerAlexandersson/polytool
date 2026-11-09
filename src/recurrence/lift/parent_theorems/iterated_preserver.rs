@@ -1565,8 +1565,7 @@ fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedReg
 /// identity coordinates.
 fn proof_in_identity_coordinates(report: &RealRootednessTheoremReport) -> bool {
     !report
-        .iterated_preserver
-        .as_ref()
+        .iterated_preserver()
         .is_some_and(|certificate| !certificate.coordinates.is_identity())
 }
 
@@ -1576,7 +1575,22 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     check_at_supplied_seeds: iterated_preserver_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: proof_in_identity_coordinates,
+    certificate_name: Some("iterated-preserver"),
 };
+
+/// Replay the certificate of a recomputed iterated-preserver report: the
+/// operator identity of the step on the checked rule
+/// ([`IteratedPreserverCertificate::verify_operator_identity`]).
+pub(super) fn verify_certificate_in_report(
+    certificate: &IteratedPreserverCertificate,
+    report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    let checked_rule = match &report.left_hand_factor_normalization {
+        Some(normalization) => normalization.normalized_recurrence()?,
+        None => report.recurrence.to_recurrence_parts()?.0,
+    };
+    certificate.verify_operator_identity(&checked_rule)
+}
 
 /// The check with the induction at the given (normalized) seeds.
 fn iterated_preserver_report(
@@ -1752,24 +1766,26 @@ fn finish_report(
     let coordinates_note = family.coordinates.text().map_or(String::new(), |text| {
         format!(" (in the coordinates {text})")
     });
-    report.iterated_preserver = (!lowers_degree).then(|| IteratedPreserverCertificate {
-        induction_start: family.start,
-        start_degree: family.start_degree,
-        degree_step: delta,
-        multiplier_fixed_factor: decomposition
-            .fixed_factor
-            .iter()
-            .map(format_rational_coeff)
-            .collect(),
-        multiplier_index_factor: decomposition.index_factor_functions(false),
-        preserver: decomposition.preserver.clone(),
-        region: region.root_interval(),
-        operator_identity: format!(
-            "f(n) T_n = sum_d c_d(n, x) D^d equals f(n) a_n(x) S_n with a_n(x) = {}{coordinates_note}",
-            decomposition.multiplier_text()
-        ),
-        lag: family.lag,
-        coordinates: family.coordinates.clone(),
+    report.certificate = (!lowers_degree).then(|| {
+        RouteCertificate::IteratedPreserver(IteratedPreserverCertificate {
+            induction_start: family.start,
+            start_degree: family.start_degree,
+            degree_step: delta,
+            multiplier_fixed_factor: decomposition
+                .fixed_factor
+                .iter()
+                .map(format_rational_coeff)
+                .collect(),
+            multiplier_index_factor: decomposition.index_factor_functions(false),
+            preserver: decomposition.preserver.clone(),
+            region: region.root_interval(),
+            operator_identity: format!(
+                "f(n) T_n = sum_d c_d(n, x) D^d equals f(n) a_n(x) S_n with a_n(x) = {}{coordinates_note}",
+                decomposition.multiplier_text()
+            ),
+            lag: family.lag,
+            coordinates: family.coordinates.clone(),
+        })
     });
     let root_region = (region != ClosedRegion::RealLine).then(|| region.root_interval());
     let claim_first = claim_first_index(family.first_index, family.seeds, family.lag);

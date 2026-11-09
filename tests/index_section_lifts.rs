@@ -68,7 +68,7 @@ fn the_path_power_catalog_rows_are_proved() {
     for (id, period, reversed, exceptional) in expected {
         let report = check(id);
         assert!(report.is_proved(), "{id}: {:?}", report.open_hypotheses());
-        let certificate = report.index_section.as_ref().unwrap();
+        let certificate = report.index_section().unwrap();
         assert_eq!(certificate.period, period, "{id}");
         assert_eq!(
             matches!(
@@ -132,7 +132,7 @@ fn a_reversed_section_has_a_region_closed_at_zero() {
 #[test]
 fn the_parent_of_a109955_is_the_fixed_delay_window() {
     let report = check("A109955");
-    let certificate = report.index_section.as_ref().unwrap();
+    let certificate = report.index_section().unwrap();
     let (parent, first, seeds) = certificate.parent.to_recurrence_parts().unwrap();
     assert_eq!(first, 0);
     assert_eq!(seeds, rows(&[&[1], &[1], &[1]]));
@@ -193,7 +193,7 @@ fn the_cubic_parent_rows_have_a_section_identity_but_an_open_parent() {
         let parent = hypothesis(&report, "parent_real_rooted");
         assert_ne!(parent.status, LiftHypothesisStatus::Verified);
         assert!(parent.evidence.starts_with("parent open"), "{id}");
-        let certificate = report.index_section.as_ref().unwrap();
+        let certificate = report.index_section().unwrap();
         assert_eq!(certificate.period, 2);
         assert!(certificate.selected.is_none());
         report.verify().unwrap();
@@ -211,7 +211,7 @@ fn a_parent_with_zero_residue_classes_proves_nothing_here() {
     // "every row nonzero".
     let report = check("A132918");
     assert!(!report.is_proved());
-    let certificate = report.index_section.as_ref().unwrap();
+    let certificate = report.index_section().unwrap();
     assert!(certificate.selected.is_none());
     report.verify().unwrap();
 }
@@ -235,7 +235,7 @@ fn index_dependent_and_derivative_rules_do_not_apply() {
         "{}",
         report.normal_form
     );
-    assert!(report.index_section.is_none());
+    assert!(report.index_section().is_none());
     report.verify().unwrap();
     // P_n = (1 + x) P_(n-1) + x P'_(n-1).
     let rule = Recurrence {
@@ -282,7 +282,7 @@ fn tampered_index_section_certificates_are_rejected() {
     let report = check("A109955");
     report.verify().unwrap();
     let (rule, seeds, first) = catalog("A109955");
-    let certificate = report.index_section.clone().unwrap();
+    let certificate = report.index_section().cloned().unwrap();
     // Another period.
     let mut wrong = certificate.clone();
     wrong.period = 2;

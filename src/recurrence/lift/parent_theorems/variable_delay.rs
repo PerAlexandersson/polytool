@@ -253,7 +253,29 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     check_at_supplied_seeds: variable_delay_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
+    certificate_name: Some("fixed-delay"),
 };
+
+/// Replay the certificate of a recomputed fixed-delay report: the seed steps
+/// of a proved report on the checked (possibly moved) seed rows.
+pub(super) fn verify_certificate_in_report(
+    certificate: &VariableDelayCertificate,
+    report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    if !report.is_proved() {
+        return Ok(());
+    }
+    let (rule, first_index, seeds) = report.recurrence.to_recurrence_parts()?;
+    let seeds = if report.start_delay == 0 {
+        seeds
+    } else {
+        let generated = rule
+            .generate_rows_rational(&seeds, first_index, seeds.len() + report.start_delay)
+            .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
+        normalized_seed_rows(&rule, first_index, &generated)?
+    };
+    certificate.verify_seed_steps(first_index, &seeds)
+}
 
 fn variable_delay_report(
     rule: &Recurrence,
@@ -420,11 +442,13 @@ fn variable_delay_report(
     } else {
         SCALED_DECLARATIONS.iter().map(|s| s.to_string()).collect()
     };
-    report.variable_delay = constant.map(|c| VariableDelayCertificate {
-        delay,
-        first_row: format_rational_coeff(&c),
-        unscaled,
-        seed_steps,
+    report.certificate = constant.map(|c| {
+        RouteCertificate::VariableDelay(VariableDelayCertificate {
+            delay,
+            first_row: format_rational_coeff(&c),
+            unscaled,
+            seed_steps,
+        })
     });
     let negative_axis = RealInterval {
         lower: None,

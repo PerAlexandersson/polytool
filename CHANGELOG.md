@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Route registry for the real-rootedness theorems (behaviour-preserving: the
+  same attempts, proofs, parent records and JSON bytes). New public API:
+  `RealRootednessTheorem::ALL` (every theorem, in the order of the parent
+  cascade and of the discovery attempts) and `RealRootednessTheorem::as_str`,
+  `VeroneseParentProofRoute::as_str` and `VeroneseParentProofRoute::theorem`
+  (the theorem a parent route runs), and
+  `recurrence::check_real_rootedness_theorem` (any theorem by name; the
+  twelve `check_*_theorem` functions are its wrappers).
+  `RealRootednessTheoremReport`'s five optional certificate fields
+  `iterated_preserver`, `variable_delay`, `residue_classes`, `index_section`
+  and `factor_gauge` are replaced by one field
+  `certificate: Option<RouteCertificate>` (the new enum
+  `recurrence::RouteCertificate`, one variant per certificate type) with
+  accessor methods of the old names (`report.factor_gauge()` for
+  `report.factor_gauge.as_ref()`); the JSON keeps the old keys, so saved
+  reports read and write unchanged. A report with two certificate keys, which
+  never replayed, is now a parse error.
+
 - Behaviour-preserving refactoring (no output changes). New public API:
   `vec_poly::clear_denominators` and `vec_poly::clear_denominators_with_scale`
   (integer coefficients of `lcm(denominators) * p`, with the scale), replacing

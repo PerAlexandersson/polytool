@@ -160,7 +160,7 @@ pub struct ResidueClassCertificate {
 /// )
 /// .unwrap();
 /// assert!(report.is_proved());
-/// assert_eq!(report.residue_classes.as_ref().unwrap().period, 2);
+/// assert_eq!(report.residue_classes().unwrap().period, 2);
 /// report.verify().unwrap();
 /// ```
 pub fn check_residue_class_subsequence_theorem(
@@ -285,7 +285,32 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     check_at_supplied_seeds: residue_class_report,
     start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
+    certificate_name: Some("residue-class"),
 };
+
+/// Replay the certificate of a recomputed residue-class report: the selected
+/// proof of every residue class is verified on its own.
+pub(super) fn verify_certificate_in_report(
+    certificate: &ResidueClassCertificate,
+    _report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    for class in &certificate.classes {
+        if let Some(position) = class.selected {
+            let proof = class.attempts.get(position).ok_or_else(|| {
+                RecurrenceError::VerificationFailed(
+                    "a residue class selects a missing attempt".into(),
+                )
+            })?;
+            if !proof.is_proved() || proof.recurrence != class.recurrence {
+                return Err(RecurrenceError::VerificationFailed(
+                    "a residue class selects an attempt that is not its proof".into(),
+                ));
+            }
+            proof.verify()?;
+        }
+    }
+    Ok(())
+}
 
 fn residue_class_report(
     rule: &Recurrence,
@@ -540,11 +565,11 @@ fn residue_class_report(
     }
     report.hypotheses = hypotheses;
     report.lean_declarations = declarations;
-    report.residue_classes = Some(ResidueClassCertificate {
+    report.certificate = Some(RouteCertificate::ResidueClasses(ResidueClassCertificate {
         period,
         class_maximum_start_delay: options.maximum_start_delay,
         classes,
-    });
+    }));
     zero_rows.sort_unstable();
     let conclusion_first = zero_rows.last().map_or(first_index, |last| last + 1);
     let mut statement = format!(

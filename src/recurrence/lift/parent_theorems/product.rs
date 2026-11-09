@@ -72,6 +72,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     check_at_supplied_seeds: product_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
+    certificate_name: None,
 };
 
 fn product_report(

@@ -628,6 +628,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     check_at_supplied_seeds: hypergeometric_row_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
+    certificate_name: None,
 };
 
 /// The theorem at the supplied seeds.

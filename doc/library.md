@@ -885,7 +885,7 @@ region).  `verify()` replays it.
   and `b = B / f >= 0` for every `n >= N` (sign checker), a nonzero constant
   first row, and every later seed row an exact window step `a_m P_(m-1) +
   b_m x P_(max(m-L, first))` with rational `a_m > 0`, `b_m >= 0` (recorded in
-  `RealRootednessTheoremReport::variable_delay` and replayed by
+  `RealRootednessTheoremReport::variable_delay()` and replayed by
   `VariableDelayCertificate::verify_seed_steps`).  It proves every row
   nonzero with nonnegative coefficients (up to the sign of the first row) and
   every root in `(-inf, 0)`, and `P_A << P_B` (weak interlacing, RealRooted
@@ -902,7 +902,7 @@ region).  `verify()` replays it.
   `n = first + j + p m`, lags divided by `p`, the class seed rows),
   proved by the first theorem of the class menu (the checks above and the
   fixed-delay window) that proves it, its report kept in
-  `RealRootednessTheoremReport::residue_classes` and replayed; a class of
+  `RealRootednessTheoremReport::residue_classes()` and replayed; a class of
   zero seed rows is identically zero (homogeneous rule, `f` nonzero on the
   class, decided exactly).  It proves every row zero (named in the
   conclusion) or real-rooted, with the hull of the class regions; no
@@ -937,7 +937,7 @@ region).  `verify()` replays it.
   resultant, so by Cayley--Hamilton `m -> Q_(p m)` follows the transformed
   rule, and it agrees with `S` on the `r` seeds.  The parent is proved by
   the theorems above (the parent menu); its report and the section data are
-  kept in `RealRootednessTheoremReport::index_section`
+  kept in `RealRootednessTheoremReport::index_section()`
   (`IndexSectionCertificate`, recomputed by `IndexSectionCertificate::verify`:
   transform, resultant, divisibility, seed agreement and the parent proof's
   replay).  The exceptional rows and the section rows before the parent's
@@ -995,7 +995,7 @@ region).  `verify()` replays it.
   the seeds and every coefficient of `S_n` (decided signs) have one sign,
   and weak interlacing of consecutive rows only for a constant residual and
   a linear `q` (`P_n = (s(n)/s(n-1)) q P_(n-1)`).  The data are kept in
-  `RealRootednessTheoremReport::factor_gauge` (`FactorGaugeCertificate`;
+  `RealRootednessTheoremReport::factor_gauge()` (`FactorGaugeCertificate`;
   `FactorGaugeCertificate::verify` replays the rule factorization, the
   window identities, the shape, the coefficient identities and the
   dominant-root inequality).  OEIS A124376, A157169 and A157171

@@ -113,7 +113,7 @@ fn the_catalog_targets_are_proved() {
     for (id, shape, gauge, closed) in expected {
         let report = check(id);
         assert!(report.is_proved(), "{id}: {:?}", report.open_hypotheses());
-        let certificate = report.factor_gauge.as_ref().unwrap();
+        let certificate = report.factor_gauge().unwrap();
         assert_eq!(certificate.residual_shape, shape, "{id}");
         assert_eq!(certificate.gauge_factor, gauge, "{id}");
         let conclusion = report.conclusion.as_ref().unwrap();
@@ -152,7 +152,7 @@ fn palindromic_quartics_use_the_u_substitution() {
         report.lean_declarations,
         vec!["RealRooted.splits_palindromic_quartic"]
     );
-    let certificate = report.factor_gauge.as_ref().unwrap();
+    let certificate = report.factor_gauge().unwrap();
     // P_n = (1 + x)^(n - 4) S_n, S_n = a x^4 + b x^3 + c x^2 + b x + a with
     // a = 1, b = 2n + 2, c = (n^2 + 3n + 10)/2.
     assert_eq!(certificate.gauge_index, 4);
@@ -174,7 +174,7 @@ fn exponential_coordinates_prove_nonzero_rows_by_a_dominant_root() {
     // A110200 (catalog first index 0): P_n = (1+x)^(n-2) (1+x) S_n with
     // S_n = (4^(n+1) - 1)/3 + (2^(n+1) - 1)^2 x.
     let report = check("A110200");
-    let certificate = report.factor_gauge.as_ref().unwrap();
+    let certificate = report.factor_gauge().unwrap();
     assert_eq!(certificate.common_factor, vec!["1", "1"]);
     assert!(certificate.residual_coefficients.is_none());
     let dominant = certificate.dominant_root.as_ref().unwrap();
@@ -254,7 +254,7 @@ fn quadratic_and_cubic_pencils_are_decided_by_discriminants() {
     let seeds = rows(&[&a, &p1]);
     let report = check_factor_gauge_theorem(&rule, 0, &seeds, &options()).unwrap();
     assert!(report.is_proved(), "{:?}", report.open_hypotheses());
-    let certificate = report.factor_gauge.as_ref().unwrap();
+    let certificate = report.factor_gauge().unwrap();
     assert_eq!(certificate.residual_shape, FactorGaugeResidualShape::Cubic);
     assert_eq!(certificate.gauge_factor, vec!["1"]);
     assert_eq!(
@@ -330,7 +330,7 @@ fn rules_without_a_common_gauge_are_not_applicable() {
             "{}",
             report.normal_form
         );
-        assert!(report.factor_gauge.is_none());
+        assert!(report.factor_gauge().is_none());
         report.normal_form
     };
     // Chebyshev: 2x P_(n-1) - P_(n-2), q = x from lag 1 but -1 != x^2.
@@ -428,7 +428,7 @@ fn tampered_reports_do_not_replay() {
     }
     // The certificate alone: other seeds do not replay.
     let (rule, mut seeds, first) = catalog("A124376");
-    let certificate = report.factor_gauge.as_ref().unwrap();
+    let certificate = report.factor_gauge().unwrap();
     certificate.verify(&rule, first, &seeds).unwrap();
     seeds[3][1] = q(8);
     assert!(certificate.verify(&rule, first, &seeds).is_err());

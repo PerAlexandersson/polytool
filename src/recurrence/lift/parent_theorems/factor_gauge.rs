@@ -390,7 +390,7 @@ impl FactorGaugeCertificate {
 ///     check_factor_gauge_theorem(&rule, 0, &seeds, &RealRootednessTheoremOptions::default())
 ///         .unwrap();
 /// assert!(report.is_proved());
-/// let certificate = report.factor_gauge.as_ref().unwrap();
+/// let certificate = report.factor_gauge().unwrap();
 /// assert_eq!(certificate.residual_shape, FactorGaugeResidualShape::PalindromicQuartic);
 /// report.verify().unwrap();
 /// ```
@@ -963,7 +963,31 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     check_at_supplied_seeds: factor_gauge_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
+    certificate_name: Some("factor-gauge"),
 };
+
+/// Replay the certificate of a recomputed factor-gauge report: every
+/// identity of the certificate on the checked rule and the (possibly moved)
+/// seed rows ([`FactorGaugeCertificate::verify`]).
+pub(super) fn verify_certificate_in_report(
+    certificate: &FactorGaugeCertificate,
+    report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    let (rule, first_index, seeds) = report.recurrence.to_recurrence_parts()?;
+    let rule = match &report.left_hand_factor_normalization {
+        Some(normalization) => normalization.normalized_recurrence()?,
+        None => rule,
+    };
+    let seeds = if report.start_delay == 0 {
+        seeds
+    } else {
+        let generated = rule
+            .generate_rows_rational(&seeds, first_index, seeds.len() + report.start_delay)
+            .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
+        normalized_seed_rows(&rule, first_index, &generated)?
+    };
+    certificate.verify(&rule, first_index, &seeds)
+}
 
 fn factor_gauge_report(
     rule: &Recurrence,
@@ -1236,7 +1260,7 @@ fn factor_gauge_report(
             .lean_declarations
             .push("RealRooted.eq_pow_mul_of_factoredThreeTerm".into());
     }
-    report.factor_gauge = Some(FactorGaugeCertificate {
+    report.certificate = Some(RouteCertificate::FactorGauge(FactorGaugeCertificate {
         gauge_factor: format_polynomial(&gauged.q),
         left_hand_factor: format_polynomial(&gauged.f),
         scalar_multipliers: gauged
@@ -1256,7 +1280,7 @@ fn factor_gauge_report(
             .as_ref()
             .map(|c| c.iter().map(|pi| format_polynomial(pi)).collect()),
         dominant_root,
-    });
+    }));
 
     let mut statement = format!(
         "every P_n, n >= {first_index}, is nonzero and real-rooted: P_n = q^(n-{gauge_index}) g \

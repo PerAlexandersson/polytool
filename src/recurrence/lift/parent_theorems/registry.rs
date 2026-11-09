@@ -44,6 +44,10 @@ pub(in crate::recurrence) struct TheoremRoute {
     /// Whether a proved report is the preferred proof; a proof that is not
     /// is kept only until a later start gives a preferred one.
     pub(super) is_preferred: fn(&RealRootednessTheoremReport) -> bool,
+    /// The name of the route certificate ([`RouteCertificate`]) that a
+    /// proved report carries, as named in replay errors (for example
+    /// `"fixed-delay"`); `None` for a theorem without one.
+    pub(super) certificate_name: Option<&'static str>,
 }
 
 /// [`TheoremRoute::is_preferred`] of a route without weaker proofs.
