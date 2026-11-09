@@ -57,9 +57,8 @@ type Q = BigRational;
 /// `(i, j, c)`: the monomial `c n^i x^j`.
 type Monomial = (usize, usize, Q);
 
-fn q(value: i64) -> Q {
-    Q::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn rational_rows(rows: Vec<Vec<BigInt>>) -> Vec<Vec<Q>> {
     rows.into_iter()

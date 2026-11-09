@@ -5,7 +5,6 @@
 //! the normalization and replay it; a rule whose division by `x^e` happens
 //! only on the rows is rejected with the reason.
 
-use num_bigint::BigInt;
 use polytool::oeis;
 use polytool::real_rootedness::RealInterval;
 use polytool::recurrence::{
@@ -19,16 +18,8 @@ use polytool::recurrence::{
 
 type Q = BigRational;
 
-fn q(value: i64) -> Q {
-    Q::from_integer(BigInt::from(value))
-}
-
-fn rows(values: &[&[i64]]) -> Vec<Vec<Q>> {
-    values
-        .iter()
-        .map(|row| row.iter().map(|&v| q(v)).collect())
-        .collect()
-}
+mod common;
+use common::{q, rows};
 
 fn bivar(coeffs: &[&[i64]]) -> BivarPoly {
     BivarPoly::from_coefficients_normalized(rows(coeffs))

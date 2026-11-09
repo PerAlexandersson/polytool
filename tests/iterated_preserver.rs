@@ -4,7 +4,6 @@
 //! multipliers decided by the sign checker, menu operators, a multiplier
 //! that is not real-rooted, and replay with tampered certificates.
 
-use num_bigint::BigInt;
 use polytool::oeis;
 use polytool::recurrence::{
     check_iterated_preserver_theorem, prove_parent_real_rootedness, BigRational, BivarPoly,
@@ -14,16 +13,8 @@ use polytool::recurrence::{
     VeroneseParentProofStatus,
 };
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
-
-fn rows(values: &[&[i64]]) -> Vec<Vec<BigRational>> {
-    values
-        .iter()
-        .map(|row| row.iter().map(|&v| q(v)).collect())
-        .collect()
-}
+mod common;
+use common::{q, rows};
 
 /// `coeffs[i][j]` = coefficient of `n^i x^j`.
 fn bivar(coeffs: &[&[i64]]) -> BivarPoly {

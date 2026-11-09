@@ -4,9 +4,8 @@
 use polytool::oeis;
 use polytool::recurrence::*;
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(value.into())
-}
+mod common;
+use common::q;
 
 fn catalog_report(id: &str, options: &HadamardFactorLiftOptions) -> HadamardFactorLiftReport {
     let family = oeis::by_id(id).expect("catalog family");

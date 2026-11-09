@@ -9,9 +9,8 @@ use polytool::{
     IndexSignCertificate, IndexSignCondition, IndexSignDecision, IndexSignMethod, IntegerRange,
 };
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn qr(numerator: i64, denominator: i64) -> BigRational {
     BigRational::new(BigInt::from(numerator), BigInt::from(denominator))

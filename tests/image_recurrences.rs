@@ -13,9 +13,8 @@ type Q = BigRational;
 
 const ROWS: usize = 40;
 
-fn q(value: i64) -> Q {
-    Q::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn parent(name: &str) -> RecurrenceJson {
     PreserverParentLibrary::named_family_records()

@@ -14,9 +14,8 @@ use polytool::sequences::{self, literature};
 
 type Q = BigRational;
 
-fn q(value: i64) -> Q {
-    Q::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn rational_rows(rows: &[Vec<BigInt>]) -> Vec<Vec<Q>> {
     rows.iter()

@@ -5,7 +5,6 @@
 //! the multiplier scheme (not real-rooted, alternating, not hypergeometric);
 //! and replay with tampered reports and parent records.
 
-use num_bigint::BigInt;
 use polytool::oeis;
 use polytool::recurrence::{
     check_hypergeometric_row_theorem, check_recorded_parent_proof,
@@ -15,9 +14,8 @@ use polytool::recurrence::{
     Recurrence, RecurrenceTerm, VeroneseParentProofRoute, VeroneseParentProofStatus,
 };
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn catalog_report(id: &str) -> RealRootednessTheoremReport {
     let family = oeis::by_id(id).expect("catalog family");

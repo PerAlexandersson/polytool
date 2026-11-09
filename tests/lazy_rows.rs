@@ -17,9 +17,8 @@ use polytool::recurrence::{
 };
 use polytool::sequences::{self, literature};
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
+mod common;
+use common::q;
 
 fn row(values: &[i64]) -> Vec<BigRational> {
     values.iter().map(|&value| q(value)).collect()

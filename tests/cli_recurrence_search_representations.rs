@@ -1,23 +1,12 @@
 //! CLI `recurrence-search-representations`: JSON round trip and replay.
 
 use polytool::recurrence::{verify_representation_search, RepresentationSearchReport};
-use std::io::Write;
-use std::process::{Command, Stdio};
+
+mod common;
+use common::run_polytool_subcommand;
 
 fn call(args: &[&str], input: &str) -> std::process::Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .arg("recurrence-search-representations")
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    if let Err(error) = child.stdin.take().unwrap().write_all(input.as_bytes()) {
-        // The CLI may exit before reading its input.
-        assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
-    }
-    child.wait_with_output().unwrap()
+    run_polytool_subcommand("recurrence-search-representations", args, input)
 }
 
 const FACTORIAL_BINOMIAL: &str = r#"{"oeis_id":"A007318","row_count":10,

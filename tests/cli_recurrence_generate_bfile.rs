@@ -2,15 +2,11 @@
 //! and the `oeis generate --format bfile` output through the same formatter.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Output;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn run_polytool(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .output()
-        .expect("spawn polytool")
-}
+mod common;
+use common::run_polytool_without_input as run_polytool;
 
 fn stdout(output: &Output) -> String {
     assert!(

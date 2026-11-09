@@ -5,9 +5,8 @@
 use polytool::oeis;
 use polytool::recurrence::*;
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(value.into())
-}
+mod common;
+use common::q;
 
 fn multiply(a: &[BigRational], b: &[BigRational]) -> Vec<BigRational> {
     let mut out = vec![q(0); a.len() + b.len() - 1];

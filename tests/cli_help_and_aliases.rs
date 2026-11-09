@@ -55,13 +55,8 @@ fn run(args: &[&str], input: &str) -> Output {
     }
 }
 
-fn stdout(output: &Output) -> String {
-    String::from_utf8(output.stdout.clone()).unwrap()
-}
-
-fn stderr(output: &Output) -> String {
-    String::from_utf8(output.stderr.clone()).unwrap()
-}
+mod common;
+use common::{stderr, stdout};
 
 fn input(name: &str) -> String {
     std::fs::read_to_string(inputs().join(name)).unwrap()

@@ -1,13 +1,7 @@
 //! The `polytool oeis` subcommands.
 
-use std::process::{Command, Output};
-
-fn run_polytool(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .output()
-        .expect("spawn polytool")
-}
+mod common;
+use common::run_polytool_without_input as run_polytool;
 
 #[test]
 fn oeis_list_contains_verified_catalog() {

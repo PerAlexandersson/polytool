@@ -1,22 +1,8 @@
 //! CLI degree laws: a periodic law, certificate replay, tampering, a
 //! not-proved family and usage failures.
 
-use std::io::Write;
-use std::process::{Command, Output, Stdio};
-
-fn run(args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    if let Err(error) = child.stdin.take().unwrap().write_all(input.as_bytes()) {
-        assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
-    }
-    child.wait_with_output().unwrap()
-}
+mod common;
+use common::run_polytool as run;
 
 /// `P_n = P_(n-1) + x P_(n-3)`, `P_0 = P_1 = P_2 = 1`: `deg P_n = floor(n/3)`.
 fn input() -> serde_json::Value {

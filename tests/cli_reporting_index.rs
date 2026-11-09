@@ -2,25 +2,10 @@
 
 use polytool::recurrence::RecurrenceJson;
 use serde_json::{json, Value};
-use std::io::Write;
-use std::process::{Command, Output, Stdio};
+use std::process::Output;
 
-fn run(args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(input.as_bytes())
-        .unwrap();
-    child.wait_with_output().unwrap()
-}
+mod common;
+use common::run_polytool as run;
 
 fn output_json(output: Output) -> Value {
     assert!(

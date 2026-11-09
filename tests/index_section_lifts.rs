@@ -6,9 +6,8 @@
 use polytool::recurrence::*;
 use serde_json::json;
 
-fn q(n: i64) -> BigRational {
-    BigRational::from_integer(n.into())
-}
+mod common;
+use common::{q, rows};
 
 fn b(rows: &[&[i64]]) -> BivarPoly {
     BivarPoly::from_coefficients_normalized(
@@ -16,13 +15,6 @@ fn b(rows: &[&[i64]]) -> BivarPoly {
             .map(|r| r.iter().map(|&n| q(n)).collect())
             .collect(),
     )
-}
-
-fn rows(seeds: &[&[i64]]) -> Vec<Vec<BigRational>> {
-    seeds
-        .iter()
-        .map(|r| r.iter().map(|&n| q(n)).collect())
-        .collect()
 }
 
 fn options() -> RealRootednessTheoremOptions {

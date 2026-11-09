@@ -1,23 +1,7 @@
 //! CLI tests for root-domain analysis of recurrences.
 
-use std::io::Write;
-use std::process::{Command, Stdio};
-
-fn call(command: &str, args: &[&str], input: &str) -> std::process::Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_polytool"))
-        .arg(command)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    if let Err(error) = child.stdin.take().unwrap().write_all(input.as_bytes()) {
-        // The CLI may exit before reading its input.
-        assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
-    }
-    child.wait_with_output().unwrap()
-}
+mod common;
+use common::run_polytool_subcommand as call;
 
 const EULERIAN_ROOT_DOMAIN: &str = r#"{"oeis_id":"A008292","row_count":6,"root_domain":{},
   "transformation":{"kind":"f_polynomial","schedule":{"first_index":1,"first_degree":0,"step":1}}}"#;

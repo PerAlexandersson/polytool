@@ -3,24 +3,15 @@
 //! `recurrence::find_bounded_root_region_report` and
 //! `PreserverParentLibrary::add_parent_record`.
 
-use num_bigint::BigInt;
 use polytool::recurrence::{
-    find_bounded_root_region_report, prepare_lift_rule, prove_parent_real_rootedness, BigRational,
-    BivarPoly, ParentRecurrenceRecord, PreserverParentLibrary, PreserverParentLibraryOptions,
+    find_bounded_root_region_report, prepare_lift_rule, prove_parent_real_rootedness, BivarPoly,
+    ParentRecurrenceRecord, PreserverParentLibrary, PreserverParentLibraryOptions,
     PreserverParentRegion, Recurrence, RecurrenceError, RecurrenceJson, RecurrenceTerm,
     VeroneseParentProofStatus,
 };
 
-fn q(value: i64) -> BigRational {
-    BigRational::from_integer(BigInt::from(value))
-}
-
-fn rows(values: &[&[i64]]) -> Vec<Vec<BigRational>> {
-    values
-        .iter()
-        .map(|row| row.iter().map(|&v| q(v)).collect())
-        .collect()
-}
+mod common;
+use common::rows;
 
 /// `coeffs[i][j]` = coefficient of `n^i x^j`.
 fn bivar(coeffs: &[&[i64]]) -> BivarPoly {
