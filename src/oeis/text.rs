@@ -308,6 +308,10 @@ impl OeisRecurrencePresentation {
     }
 
     /// The recurrence with `n` the OEIS row number.
+    #[deprecated(
+        since = "0.6.0",
+        note = "unused; it will be removed (`OeisText` renders the displayed recurrence)"
+    )]
     pub fn displayed_recurrence(&self) -> &Recurrence {
         &self.displayed
     }

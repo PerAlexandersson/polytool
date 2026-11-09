@@ -511,6 +511,7 @@ impl LeadingCoefficientCertificate {
     /// `deg P_n - deg P_(n-1)` over all `n > from` (`from >= holds_from`),
     /// and whether every leading coefficient `lead P_n`, `n >= from`, has
     /// the sign of `lead P_from`.
+    #[deprecated(since = "0.6.0", note = "unused; it will be removed")]
     pub fn degree_steps_from(&self, from: usize) -> Option<(BTreeSet<i64>, bool)> {
         let law = self.degree_law.as_ref()?;
         let sign = self.sign_at(from)?;

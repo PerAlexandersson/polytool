@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Behaviour-preserving refactoring (no output changes). New public API:
+  `vec_poly::clear_denominators` and `vec_poly::clear_denominators_with_scale`
+  (integer coefficients of `lcm(denominators) * p`, with the scale), replacing
+  about a dozen private copies; `oeis::parse_oeis_internal_format` and
+  `oeis::parse_bfile` (with `OeisSourceRecord`, `OeisTermsSource`,
+  `ParsedBFile` and the typed `OeisSourceError`), promoted from the CLI, which
+  keeps its messages. Deprecated, as unused: `OeisRecurrencePresentation::displayed_recurrence`
+  and `LeadingCoefficientCertificate::degree_steps_from`. New evidence gate
+  `tests/discovery_fingerprints.rs` (fingerprints of the discovery report and
+  the parent proof of every bundled catalog family; the full sweep is
+  `#[ignore]`d) and shared integration-test helpers in `tests/common/`.
 - Soundness fix: residue-class proofs with zero classes.
   `check_residue_class_subsequence_theorem` admits classes whose seed rows
   are all zero (infinitely many zero rows, as for OEIS A003982, A132918 and
