@@ -201,7 +201,8 @@ low-degree heuristic and says nothing about a single polynomial, so
 `polytool real-rooted`, which sees only polynomials, has no such flag. The flag
 appears where the recurrence is known: `trivially_real_rooted` in each
 `polytool.recurrence-real-rootedness-theorem.v1` report (true only for a proved
-product theorem), at the top of `polytool.recurrence-proof-discovery.v1`
+product theorem, and omitted there when false so that older reports keep their
+exact serialization), at the top of `polytool.recurrence-proof-discovery.v1`
 (`recurrence-prove`), and in `polytool.recurrence-theorems.v1`
 (`recurrence-theorems`, supplied records only). It is false or absent for a
 record carrying search metadata, because a fit does not establish the
