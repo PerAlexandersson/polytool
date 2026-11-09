@@ -474,33 +474,6 @@ fn hull_with_point(region: RealInterval, point: &Q) -> RealInterval {
     }
 }
 
-/// Whether the nonzero `p` is real-rooted with every root in `region`
-/// (closed or open ends).
-fn has_real_roots_in_region(p: &[Q], region: &RealInterval) -> bool {
-    let p = vec_poly::trim(p);
-    if vec_poly::is_zero(&p) || !is_real_rooted_rational(&p) {
-        return false;
-    }
-    let one_signed =
-        |q: &[Q]| q.iter().all(|c| !c.is_negative()) || q.iter().all(|c| !c.is_positive());
-    let upper_ok = region.upper.as_ref().is_none_or(|upper| {
-        if region.upper_closed {
-            one_signed(&vec_poly::compose(&p, &[upper.clone(), Q::one()]))
-        } else {
-            has_real_roots_below(&p, upper)
-        }
-    });
-    let lower_ok = region.lower.as_ref().is_none_or(|lower| {
-        let reflected = vec_poly::compose(&p, &[Q::zero(), -Q::one()]);
-        if region.lower_closed {
-            one_signed(&vec_poly::compose(&p, &[lower.clone(), -Q::one()]))
-        } else {
-            has_real_roots_below(&reflected, &-lower.clone())
-        }
-    });
-    upper_ok && lower_ok
-}
-
 /// The seed rows before the induction, each zero or real-rooted with every
 /// root in `region`, and the indices of the zero rows.
 fn earlier_rows_in_region(

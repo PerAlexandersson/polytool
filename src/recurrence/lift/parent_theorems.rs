@@ -189,6 +189,12 @@ mod variable_delay;
 mod index_section;
 // Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`).
 mod factor_gauge;
+// Root-region helpers shared by the checks.
+mod region;
+use region::{
+    has_real_roots_below, has_real_roots_in, has_real_roots_in_closed_region,
+    has_real_roots_in_region, open_root_interval, proved_region, requested_region_contains,
+};
 pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
 pub use factor_gauge::{
     check_factor_gauge_theorem, FactorGaugeCertificate, FactorGaugeDominantRoot,
@@ -1154,16 +1160,6 @@ fn status_of(hypotheses: &[LiftHypothesis]) -> RealRootednessTheoremStatus {
     }
 }
 
-/// The interval with the same finite ends, both open.
-fn open_root_interval(interval: &RealInterval) -> RootInterval {
-    RootInterval::from_real(&RealInterval {
-        lower: interval.lower.clone(),
-        lower_closed: false,
-        upper: interval.upper.clone(),
-        upper_closed: false,
-    })
-}
-
 // ---------------------------------------------------------------------------
 // Rational functions of the index
 // ---------------------------------------------------------------------------
@@ -1441,40 +1437,6 @@ fn has_simple_real_roots(p: &[Q]) -> bool {
     !vec_poly::is_zero(&integer)
         && crate::is_real_rooted_bigint_coeffs(&integer)
         && crate::has_simple_roots_bigint_coeffs(&integer)
-}
-
-/// Whether the nonzero `p` is real-rooted with every root `< point`: then
-/// `p(point + z)` has all its coefficients nonzero and of one sign, and
-/// conversely (Descartes' rule of signs).
-fn has_real_roots_below(p: &[Q], point: &Q) -> bool {
-    let p = vec_poly::trim(p);
-    if vec_poly::is_zero(&p) || !is_real_rooted_rational(&p) {
-        return false;
-    }
-    let shifted = vec_poly::compose(&p, &[point.clone(), Q::one()]);
-    shifted.iter().all(Signed::is_positive) || shifted.iter().all(Signed::is_negative)
-}
-
-/// Whether the nonzero real-rooted `p` has every root in the open
-/// `region`.
-fn has_real_roots_in(p: &[Q], region: &RealInterval) -> bool {
-    let p = vec_poly::trim(p);
-    if vec_poly::is_zero(&p) || !is_real_rooted_rational(&p) {
-        return false;
-    }
-    let upper_ok = region
-        .upper
-        .as_ref()
-        .is_none_or(|upper| has_real_roots_below(&p, upper));
-    let lower_ok = region.lower.as_ref().is_none_or(|lower| {
-        let reflected: Vec<Q> = p
-            .iter()
-            .enumerate()
-            .map(|(k, c)| if k % 2 == 1 { -c } else { c.clone() })
-            .collect();
-        has_real_roots_below(&reflected, &-lower)
-    });
-    upper_ok && lower_ok
 }
 
 /// `p / lead(p)`; the zero polynomial stays `[0]`.

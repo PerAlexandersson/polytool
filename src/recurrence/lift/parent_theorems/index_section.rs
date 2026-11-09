@@ -944,15 +944,6 @@ fn proves_every_row(report: &RealRootednessTheoremReport) -> bool {
             .is_some_and(|conclusion| !conclusion.has_zero_residue_classes())
 }
 
-/// The index-independent root region of a proved report, if any.
-fn proved_region(report: &RealRootednessTheoremReport) -> Option<RealInterval> {
-    let region = report.conclusion.as_ref()?.root_region.as_ref()?;
-    if !region.is_index_independent() {
-        return None;
-    }
-    region.at(0).ok()
-}
-
 /// The region of the rows `x^D S(1/x)` from a region of the rows `S`
 /// (module documentation, "Root region").
 fn reversed_region(region: &RealInterval) -> Option<RealInterval> {
@@ -983,41 +974,6 @@ fn reversed_region(region: &RealInterval) -> Option<RealInterval> {
         });
     }
     None
-}
-
-/// Whether the nonzero `p` is real-rooted with every root in `region`,
-/// roots at a closed finite end allowed.
-fn row_in_region(p: &[Q], region: &RealInterval) -> bool {
-    let mut q = vec_poly::trim(p);
-    for (end, closed) in [
-        (&region.lower, region.lower_closed),
-        (&region.upper, region.upper_closed),
-    ] {
-        if let (Some(value), true) = (end, closed) {
-            while q.len() > 1 {
-                match vec_poly::exact_div_by_t_minus(&q, value) {
-                    Some(quotient) => q = vec_poly::trim(&quotient),
-                    None => break,
-                }
-            }
-        }
-    }
-    !vec_poly::is_zero(&q) && (q.len() <= 1 || has_real_roots_in(&q, region))
-}
-
-/// Whether the requested (open) region contains `certified`.
-fn requested_region_contains(requested: &RealInterval, certified: &RealInterval) -> bool {
-    let lower_ok = match (&requested.lower, &certified.lower) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(a), Some(l)) => a < l || (a == l && !certified.lower_closed),
-    };
-    let upper_ok = match (&requested.upper, &certified.upper) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(b), Some(u)) => b > u || (b == u && !certified.upper_closed),
-    };
-    lower_ok && upper_ok
 }
 
 // ---------------------------------------------------------------------------
@@ -1192,7 +1148,7 @@ pub(super) fn index_section_report(
             });
             if region
                 .as_ref()
-                .is_some_and(|r| rows.iter().any(|row| !row_in_region(row, r)))
+                .is_some_and(|r| rows.iter().any(|row| !has_real_roots_in_closed_region(row, r)))
             {
                 region = None;
             }

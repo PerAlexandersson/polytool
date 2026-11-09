@@ -244,15 +244,6 @@ fn class_rule(shape: &RecurrenceShape, first: usize, period: usize) -> Recurrenc
     }
 }
 
-/// The index-independent root region of a proved report, if any.
-fn proved_region(report: &RealRootednessTheoremReport) -> Option<RealInterval> {
-    let region = report.conclusion.as_ref()?.root_region.as_ref()?;
-    if !region.is_index_independent() {
-        return None;
-    }
-    region.at(0).ok()
-}
-
 /// The smallest interval containing `a` and `b`.
 fn hull(a: &RealInterval, b: &RealInterval) -> RealInterval {
     let (lower, lower_closed) = match (&a.lower, &b.lower) {
@@ -273,21 +264,6 @@ fn hull(a: &RealInterval, b: &RealInterval) -> RealInterval {
         upper,
         upper_closed,
     }
-}
-
-/// Whether the requested (open) region contains `certified`.
-fn requested_region_contains(requested: &RealInterval, certified: &RealInterval) -> bool {
-    let lower_ok = match (&requested.lower, &certified.lower) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(a), Some(l)) => a < l || (a == l && !certified.lower_closed),
-    };
-    let upper_ok = match (&requested.upper, &certified.upper) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(b), Some(u)) => b > u || (b == u && !certified.upper_closed),
-    };
-    lower_ok && upper_ok
 }
 
 /// The RealRooted lemma that a class of zero seed rows stays zero, for the
@@ -462,7 +438,7 @@ pub(super) fn residue_class_report(
                         continue;
                     }
                     let holds = match &class_region {
-                        Some(r) => closed_region_contains_roots(&row, r),
+                        Some(r) => has_real_roots_in_closed_region(&row, r),
                         None => is_real_rooted_rational(&row),
                     };
                     if !holds {
@@ -605,25 +581,4 @@ pub(super) fn residue_class_report(
         root_region: region.as_ref().map(RootInterval::from_real),
         statement,
     }))
-}
-
-/// Whether the nonzero `p` is real-rooted with every root in `region`,
-/// roots at a closed finite end allowed (they are divided out, then the open
-/// region is tested).
-fn closed_region_contains_roots(p: &[Q], region: &RealInterval) -> bool {
-    let mut q = vec_poly::trim(p);
-    for (end, closed) in [
-        (&region.lower, region.lower_closed),
-        (&region.upper, region.upper_closed),
-    ] {
-        if let (Some(value), true) = (end, closed) {
-            while q.len() > 1 {
-                match vec_poly::exact_div_by_t_minus(&q, value) {
-                    Some(quotient) => q = vec_poly::trim(&quotient),
-                    None => break,
-                }
-            }
-        }
-    }
-    !vec_poly::is_zero(&q) && (q.len() <= 1 || has_real_roots_in(&q, region))
 }
