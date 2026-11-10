@@ -326,6 +326,43 @@ pub fn find_basis_map_lifts(
             break;
         }
     }
+    // Preserve the existing library's order and proofs. Recovery is a bounded
+    // fallback, with catalog records as parent proposals (never attestations).
+    if report.proved().is_none()
+        && !report.exhausted_budget
+        && library.even_derivative_recovery_enabled()
+    {
+        let remaining = options
+            .max_certifications
+            .unwrap_or(16)
+            .saturating_sub(report.lifts.len())
+            .min(options.max_maps.saturating_sub(report.maps_tried))
+            .min(16);
+        if remaining > 0 {
+            let recovery_rows = input.rows(16)?;
+            for candidate in
+                super::even_derivative::recovered_candidates(&recovery_rows, first_index, remaining)
+            {
+                if !library.accepts_recovered_even_derivative(&candidate.basis) {
+                    continue;
+                }
+                report.maps_tried += 1;
+                let (rule, first, seeds) = candidate.coefficient_family.to_recurrence_parts()?;
+                let parent_rows = rule
+                    .generate_rows_rational(&seeds, first, 16)
+                    .map_err(|e| RecurrenceError::InvalidInput(e.to_string()))?;
+                let coefficient =
+                    prepare_lift_rule(&rule, &parent_rows, first, "coefficient family")?;
+                let certification =
+                    certify_prepared(&input, &coefficient, &candidate, &options.certification)?;
+                let proved = certification.is_proved();
+                report.lifts.push(certification);
+                if proved && options.stop_at_first_proof {
+                    break;
+                }
+            }
+        }
+    }
     report.lifts.sort_by_key(|lift| !lift.is_proved());
     Ok(report)
 }

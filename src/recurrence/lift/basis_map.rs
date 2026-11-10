@@ -342,8 +342,10 @@
 //!
 //! # Limitations
 //!
-//! Only coefficient rules without derivatives in `u` are transported (`T o
-//! D_u` is not an operator image in general); index-dependent basis rules
+//! Coefficient rules without derivatives in `u` are transported (`T o
+//! D_u` is not an operator image in general), with the additional exponential
+//! Riordan transport for even-derivative maps and the Touchard coefficient
+//! family (see [`BasisMap::even_derivative`]); index-dependent basis rules
 //! and exceptional prefixes have no companion form (their theorems are
 //! still checked; the published ones are transported on the index side
 //! from Riordan coefficient families only); the backward lift needs
@@ -353,11 +355,17 @@
 //!
 //! The group is split into `quadratic` (exact `a + b sqrt(d)` and
 //! intervals), `map` (the map, its inverse and intertwining relation),
-//! `theorems` (the shapes and their checks), `published` (the canonical
+//! `theorems` (the shapes and their checks), `even_derivative` (exact
+//! coefficient descriptions, row certificates, recovery and exponential
+//! Riordan transport), `published` (the canonical
 //! published families and their recognition), `transport` (`Phi`),
 //! `riordan` (the index-side transport), `certify` (identity, root
 //! location, summary), `library`, `search` and `forward`.
 
+mod even_derivative;
+pub use even_derivative::{
+    EvenDerivativeCertificate, EvenDerivativeCoefficients, EvenDerivativeSectionCertificate,
+};
 mod map;
 mod quadratic;
 mod theorems;

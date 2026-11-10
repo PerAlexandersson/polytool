@@ -241,6 +241,7 @@ pub fn apply_basis_map_to_family(
     if !matches!(
         certification.identity,
         super::certify::BasisMapIdentityStatus::Certified { .. }
+            | super::certify::BasisMapIdentityStatus::RecurrenceEquality { .. }
     ) {
         return Err(RecurrenceError::VerificationFailed(format!(
             "the image rule is not certified: {:?}",

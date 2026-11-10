@@ -1638,6 +1638,88 @@ assert!(image.is_proved());
 # Ok::<(), RecurrenceError>(())
 ```
 
+`BasisMap::even_derivative(&coefficients)` constructs
+`T_c f = sum_k c_k x^k f^(2k)`, with basis
+`H_N = sum_k c_k (N)_(2k) x^(N-k)`. `EvenDerivativeCoefficients` accepts an
+exact rational ratio `c_(k+1)/c_k` (ascending numerator and denominator
+coefficients, `c_0=1`), or a finite list followed by zeros (at most eight
+entries, `c_0=1`). The theorem shape is `even_derivative`.
+
+The rational-ratio route decides strict positivity on every integer `k>=0`
+with the integer-range sign checker. Terminating ratios can be supplied as
+finite lists. The current triangle adapter requires rational linear factors
+and a recurrence within its bounded search. It certifies the coefficient
+triangle `T(N,j)=c_(N-j) N!/(2j-N)!`, `ceil(N/2)<=j<=N`, from `N=1`;
+`H_0=1` is supplied separately. Proof discovery, with catalog lifts and alternative-representation fitting disabled,
+must prove every `H_N` real-rooted, including the prefix. If that recurrence
+does not close the proof, two separately certified sections
+`J_m(x)=sum_k c_k (2m+epsilon)_(2k) x^k`, `epsilon=0,1`, are proved by the
+same machinery; `H_(2m+epsilon)(x)=x^(2m+epsilon) J_m(1/x)` then transfers
+real-rootedness to every basis row. Nonnegative
+coefficients and the monic leading term then imply PF. Failure to find that
+proof gives no preserver conclusion.
+
+For finite support every listed coefficient must be nonnegative, checked
+exactly. This is necessary because `[x^k] H_(2k) = c_k (2k)!`. The fixed polynomial `C(-w^2)=sum_k (-1)^k c_k w^(2k)`
+must be real-rooted, decided by exact root isolation. Hermite--Poulain then
+proves every test polynomial real-rooted. Conversely, reversals of the test
+polynomials, scaled by `N`, converge coefficientwise in a fixed finite degree
+to the signed symbol. Real-rootedness is closed under this limit, so a symbol
+that is not real-rooted disproves all-degree preservation even without a small
+monomial witness. The finite basis recurrence follows
+from `(S-x)^(2M+1) H=0`, where `M` is the last supported index. An all-index
+equality certificate identifies any supplied basis record with the canonical
+record. `EvenDerivativeCertificate` records these hypotheses inside the shape;
+the theorem report's `verify()` recomputes them. This implements
+[`RealRooted.evenDerivative_preservesPF_tfae`](https://github.com/PerAlexandersson/RealRooted/blob/main/RealRooted/EvenDerivative/Preserver.lean):
+PF inputs map to PF outputs in every degree. Lean replay is `not_attempted`.
+Optional monomial witness searches stop at degree 16. Unproved rational
+families remain unresolved when no witness is found. The example
+`c=(1,1,1)` fails first at degree five:
+`H_5=x^3(x^2+20x+120)` is not real-rooted.
+
+```rust
+use polytool::recurrence::*;
+
+let coefficients = EvenDerivativeCoefficients::RationalRatio {
+    numerator: vec!["1".into()],
+    denominator: vec!["1".into(), "1".into()], // c_k = 1/k!
+};
+let map = BasisMap::even_derivative(&coefficients)?;
+let theorem = check_basis_map_preserves_pf(&map, &BasisMapTheoremOptions::default())?;
+assert!(theorem.pf_conclusion().is_some());
+theorem.verify()?;
+# Ok::<(), RecurrenceError>(())
+```
+
+The backward search also recovers even-derivative candidates from catalog
+parent rows after the existing library search. It checks six rows first and
+generates the full sixteen-row window only for consistent prefixes. It solves `c_k` triangularly,
+checks the full rows, and fits numerator and denominator degrees at most two
+with at least two extra equations. Recovery uses at most sixteen candidate
+certifications and the remaining map/certification budgets. These finite fits
+only propose maps and parents; the map theorem, parent proof and all-index
+image identity are required before any conclusion. Explicit proved maps can
+also be admitted to `BasisMapLibrary`. Catalog libraries recover new coefficient
+families; explicitly selected libraries keep recovery within their admitted
+even-derivative maps.
+
+For `c_k=a^k/k!`, an exponential Riordan transport handles the Touchard
+coefficient family, after certifying its recurrence equality. Its generating
+function is `exp(x*(f+a*f^2))`, `f=exp(z)-1`; with `b=2a-1` and
+`K=S-x-2xD`, the image satisfies
+`[a K^2+(b x+a)K-b^2 x^2 D-a b x]H=0`.
+At `a=1` this is the catalog recurrence of A143395, the image of A048993.
+The ordinary Riordan transport remains available for its existing parent
+class. Other parent/map pairs report `unsupported` when neither transport
+applies. In particular, the map theorems for `c_k=1/k!^2` and
+`c_k=1/(k!(k+1)!)` are proved, while the A318397/A104684 and
+A095801/A126216 identities remain unsupported; reversing A367177 reduces it
+to the same blocked A318397 identity. Their parent rules depend on the index
+and are outside both transports. When a scalar transported rule exists but division fails, the
+shared recurrence-equality engine (including invariant modules) is tried;
+its replayed certificate is recorded with identity status `recurrence_equality`.
+
 `find_basis_map_lifts(rule, rows, first_index, &options)` writes the input as
 `Q_n = T_P(R_n)` for a map of a `BasisMapLibrary` (default: the admitted OEIS
 catalog maps, then the published Narayana maps `m = 0, 1, 2` and `A°`
@@ -1647,7 +1729,8 @@ coefficient rows have a root outside every source interval (exactly), fits a
 derivative-free rule for `R` and certifies the candidate with
 `certify_basis_map_lift`.  The certification (`BasisMapLiftCertification`,
 schema `polytool.recurrence-basis-map-lift.v1`) records the identity (a
-`BasisMapDivisionCertificate`, replayed by `verify()`), the map theorem, the
+`BasisMapDivisionCertificate` or transported recurrence equality, replayed by
+`verify()`), the map theorem, the
 conclusion used, the root proof of `R` (`BasisMapCoefficientRootProof`: the
 parent provers on `R_n(v + U')` and `R_n(L' - v)`) and the `lift_summary`
 (`LiftOperation::BasisMap`).  `apply_basis_map_to_family(&map, &family,

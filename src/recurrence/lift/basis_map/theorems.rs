@@ -29,6 +29,8 @@ pub struct BasisMapTheoremOptions {
     /// theorem guarantees (for example the first monomial `u^n` whose image
     /// has a negative constant term).  The failure is reported from the
     /// theorem when no witness is found within the limit.  Default 2000.
+    /// The even-derivative shape caps this search at degree 16; its finite
+    /// signed-symbol decision does not require a monomial witness.
     pub witness_search_limit: usize,
 }
 
@@ -150,6 +152,11 @@ pub enum BasisMapShape {
         /// `d`.
         slope: String,
     },
+    /// `u^N -> sum_k c_k (N)_(2k) x^(N-k)`, with replayable all-degree hypotheses.
+    EvenDerivative {
+        /// Coefficients, exact sign decision, basis identity and row PF proof.
+        certificate: Box<super::EvenDerivativeCertificate>,
+    },
     /// None of the shapes above.
     Unrecognized {
         /// Why.
@@ -178,8 +185,8 @@ pub enum BasisMapTheoremStatus {
     /// The map provably does not preserve real-rootedness on any interval
     /// of the stated kind (an `iff` theorem or an exact counterexample).
     NotPreserving,
-    /// A hypothesis fails; the theorem gives no conclusion (nothing is
-    /// claimed against the map).
+    /// A hypothesis fails or remains unresolved; the theorem gives no conclusion
+    /// (nothing is claimed against the map).
     HypothesisFailed,
     /// The family has none of the recognized shapes.
     NotApplicable,
@@ -318,7 +325,16 @@ impl BasisMapTheoremReport {
         }
         let (rule, first_index, seeds) = self.basis.to_recurrence_parts()?;
         let map = BasisMap::new(&self.basis_name, rule, first_index, seeds)?;
-        let recomputed = check_basis_map_preserves_pf(&map, &BasisMapTheoremOptions::default())?;
+        // A report need not search for additional witnesses when replaying:
+        // the absence of a recorded counterexample is not a mathematical claim.
+        let options = if matches!(self.shape, BasisMapShape::EvenDerivative { .. }) {
+            BasisMapTheoremOptions {
+                witness_search_limit: self.counterexample.as_ref().map_or(0, |c| c.input.len()),
+            }
+        } else {
+            BasisMapTheoremOptions::default()
+        };
+        let recomputed = check_basis_map_preserves_pf(&map, &options)?;
         let comparable = |r: &Self| {
             (
                 r.shape.clone(),
@@ -327,6 +343,16 @@ impl BasisMapTheoremReport {
                 r.conclusions.clone(),
             )
         };
+        if matches!(self.shape, BasisMapShape::EvenDerivative { .. })
+            && (self.theorem != recomputed.theorem
+                || self.lean_declarations != recomputed.lean_declarations
+                || self.lean_replay != recomputed.lean_replay
+                || self.counterexample != recomputed.counterexample)
+        {
+            return Err(RecurrenceError::VerificationFailed(
+                "even-derivative theorem metadata differs".into(),
+            ));
+        }
         if comparable(&recomputed) != comparable(self) {
             return Err(RecurrenceError::VerificationFailed(
                 "the recorded basis-map theorem report differs from the recomputed one".into(),
@@ -521,7 +547,15 @@ fn analyze(map: &BasisMap, options: &BasisMapTheoremOptions) -> Result<Analysis,
         if let Some(analysis) = published(map)? {
             return Ok(analysis);
         }
+        if let Some(analysis) = even_derivative(map, options)? {
+            return Ok(analysis);
+        }
         return scalar_index(map, options);
+    }
+    if order >= 3 {
+        if let Some(analysis) = even_derivative(map, options)? {
+            return Ok(analysis);
+        }
     }
     let leader = match &map.rule().denominator {
         None => Q::one(),
@@ -625,6 +659,114 @@ const MAGIC_CONE_LEMMA: &str = "an input p of degree d with every root in [-1, 0
      leading coefficient is a nonnegative combination of u^k (1 + u)^(d - k), 0 <= k <= d: with \
      p = c prod_i (u - x_i), sum_k c_k s^k = (1 - s)^d p(s / (1 - s)) = c prod_i ((1 + x_i) s - \
      x_i) has nonnegative coefficients";
+
+/// Recognize an even-derivative family and decide its all-degree hypotheses.
+fn even_derivative(
+    map: &BasisMap,
+    options: &BasisMapTheoremOptions,
+) -> Result<Option<Analysis>, RecurrenceError> {
+    let certificate = match super::even_derivative::recognize(map) {
+        Ok(Some(certificate)) => certificate,
+        Ok(None)
+        | Err(RecurrenceError::BudgetExhausted(_))
+        | Err(RecurrenceError::Unsupported(_)) => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let mut analysis = Analysis {
+        shape: BasisMapShape::EvenDerivative {
+            certificate: Box::new(certificate.clone()),
+        },
+        status: BasisMapTheoremStatus::HypothesisFailed,
+        theorem: "RealRooted.evenDerivative_preservesPF_tfae: c_0=1, c_k>=0 and every monomial \
+                  image H_N real-rooted imply T_c preserves PF in every degree; finite support \
+                  uses Hermite--Poulain (splits_evenDerivativeTest_of_splits_symbol) and \
+                  coefficientwise closure of real-rootedness for the converse"
+            .into(),
+        hypotheses: vec![
+            hypothesis(
+                "even_derivative_basis_identity",
+                "the basis image of u^N is sum_k c_k (N)_(2k) x^(N-k) for every N>=0".into(),
+                certificate.basis_identity.is_certified(),
+                certificate.basis_identity.statement.clone(),
+            ),
+            hypothesis(
+                "even_derivative_nonnegative_coefficients",
+                "c_0=1 and c_k>=0 for every k>=0".into(),
+                certificate.nonnegative_coefficients,
+                "exact integer-range ratio sign decision or finite coefficient list".into(),
+            ),
+            hypothesis(
+                "even_derivative_all_rows_pf",
+                "H_N is PF for every N>=0".into(),
+                certificate.all_rows_pf,
+                "certified hypergeometric row identities and discovery on H_N or its two \
+                 reversed sections, without catalog lifts; or exact real-rootedness of the \
+                 fixed signed symbol C(-w^2)"
+                    .into(),
+            ),
+        ],
+        conclusions: Vec::new(),
+        counterexample: None,
+        lean: vec![
+            "RealRooted.evenDerivative_preservesPF_tfae",
+            "RealRooted.isPFPolynomial_evenDerivativeOperator",
+            "RealRooted.evenDerivativeOperator_X_pow",
+        ],
+    };
+    // Failure of a bounded proof search is not a disproof of a hypothesis.
+    if !certificate.basis_identity.is_certified() {
+        analysis.hypotheses[0].status = LiftHypothesisStatus::Unresolved;
+    }
+    if !certificate.all_rows_pf {
+        analysis.hypotheses[2].status = LiftHypothesisStatus::Unresolved;
+    }
+    if certificate.signed_symbol.is_some() {
+        analysis
+            .lean
+            .push("RealRooted.splits_evenDerivativeTest_of_splits_symbol");
+        if certificate.basis_identity.is_certified() && !certificate.all_rows_pf {
+            // Negative coefficients contradict PF for the corresponding
+            // monomial. Otherwise the signed-symbol converse rules out PF
+            // preservation in all degrees, without needing a small witness.
+            analysis.status = BasisMapTheoremStatus::NotPreserving;
+            analysis.hypotheses[2].status = LiftHypothesisStatus::Failed { witness: None };
+        }
+    }
+    if certificate.basis_identity.is_certified()
+        && certificate.nonnegative_coefficients
+        && certificate.all_rows_pf
+    {
+        analysis.push_conclusion(BasisMapConclusion {
+            input_interval: AlgebraicInterval::nonpositive_ray(),
+            output_interval: AlgebraicInterval::nonpositive_ray(),
+            nonnegative_coefficients: true,
+            sharp: false,
+            statement: "T_c sends every PF polynomial to a PF polynomial in every degree \
+                        (nonzero inputs stay nonzero because c_0=1)"
+                .into(),
+            hypotheses: Vec::new(),
+        });
+    } else if certificate.basis_identity.is_certified() {
+        for n in 0..options.witness_search_limit.min(17) {
+            let image = map.basis_rows(n + 1)?.pop().expect("row");
+            if !AlgebraicInterval::nonpositive_ray().contains_all_roots_of(&image) {
+                let mut input = vec![Q::zero(); n + 1];
+                input[n] = Q::one();
+                analysis.counterexample = Some(counterexample(
+                    &input,
+                    &image,
+                    format!("T_c(u^{n}) is not PF (exact root isolation)"),
+                ));
+                analysis.status = BasisMapTheoremStatus::NotPreserving;
+                analysis.hypotheses[2].status = LiftHypothesisStatus::Failed {
+                    witness: Some(n.into()),
+                };
+                break;
+            }
+        }
+    }
+    Ok(Some(analysis))
+}
 
 /// The analysis of a map recognised as a published family, `None` when the
 /// first rows match none.
