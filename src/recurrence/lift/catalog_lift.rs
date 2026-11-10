@@ -754,11 +754,14 @@ fn identify(
                 .is_ok_and(|region| intervals.iter().any(|w| region.is_subset_of(w)))
         })
     };
-    match crate::recurrence::discover_recurrence_proofs_with_stages(
+    match crate::recurrence::discover_recurrence_proofs_with_stage_options(
         &entry.record,
         options,
-        alternative,
-        &CatalogLiftOptions::disabled(),
+        &crate::recurrence::RecurrenceProofStageOptions {
+            alternative_representations: alternative.clone(),
+            catalog_lifts: CatalogLiftOptions::disabled(),
+            affine_coordinates: crate::recurrence::AffineCoordinateOptions::disabled(),
+        },
     ) {
         Ok(parent) => {
             for claim in proved_claims(&parent) {

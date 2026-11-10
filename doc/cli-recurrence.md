@@ -740,7 +740,10 @@ real-rooted, certified alternative representations
 (`--max-representation-candidates N`, 0 disables them) and catalog lifts to a
 family of the bundled OEIS catalog (`--max-lift-candidates N`, default 6, 0
 disables them; a lift resting only on a catalog flag gives the status
-`conditional_on_attestation`, exit status 1), and emits a replayable
+`conditional_on_attestation`, exit status 1) and, last, the criteria in exact
+affine coordinates `x = a u + b` derived from the rule
+(`--max-affine-coordinates N`, default 8, 0 disables them; the proof is mapped
+back with root region `a R + b`), and emits a replayable
 report with exact hypotheses, conclusions and unresolved obligations. A
 residue-class proof may leave whole residue classes of zero rows: the report
 then omits `real_rooted_from_index` and names them in

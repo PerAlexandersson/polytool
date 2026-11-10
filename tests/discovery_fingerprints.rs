@@ -35,7 +35,7 @@ const FINGERPRINTS: &str = concat!(
 );
 
 /// The quick sample: 48 entries spread over the catalog, chosen among the
-/// cheaper ones (about 4 s in release mode; the full sweep takes about 7 min).
+/// cheaper ones (about 4 s in release mode; the full sweep takes about 10 min).
 const SAMPLE: [&str; 48] = [
     "A001263", "A003982", "A013609", "A013613", "A023531", "A027467", "A029600", "A034870",
     "A038221", "A038255", "A038279", "A038301", "A038319", "A038323", "A038327", "A038331",
@@ -146,7 +146,7 @@ fn sample_of_catalog_entries_matches_recorded_fingerprints() {
     );
 }
 
-/// All catalog entries (about 7 minutes in release mode).
+/// All catalog entries (about 10 minutes in release mode).
 #[test]
 #[ignore = "full catalog sweep; run with --release -- --ignored every_"]
 fn every_catalog_entry_matches_recorded_fingerprints() {

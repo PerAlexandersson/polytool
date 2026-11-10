@@ -149,13 +149,13 @@ names, and that every theorem has its parent route.
 `tests/discovery_fingerprints.rs` is the evidence gate for refactorings of the
 theorem routes. For every bundled OEIS catalog family (919 entries) it hashes
 the complete JSON of `recurrence::discover_recurrence_proofs` (default
-options, so including the catalog-lift stage on the records the other stages
-leave unproved) and of `recurrence::prove_parent_real_rootedness` (first index, no
+options, so including the catalog-lift and affine-coordinate stages on the
+records the other stages leave unproved) and of `recurrence::prove_parent_real_rootedness` (first index, no
 attestations, root-domain route enabled) and compares both with
 `tests/fixtures/discovery-report-fingerprints.tsv`; a behaviour-preserving
 change leaves every line unchanged, and a change of results re-blesses the
 file with every changed entry explained. A sample of 48 cheaper entries
-runs in the normal test suite; the ignored full sweep takes about 7 minutes in
+runs in the normal test suite; the ignored full sweep takes about 10 minutes in
 release mode (each entry has a limit of 120 s, `POLYTOOL_DISCOVERY_ENTRY_SECONDS`):
 
 ```text

@@ -3,9 +3,10 @@
 use crate::input::{error_text, parse_usize_option, read_stdin_or_exit};
 use crate::recurrence_input::read_recurrence_json;
 use polytool::recurrence::{
-    discover_recurrence_proofs_with_stages, AlternativeRepresentationOptions, CatalogLiftOptions,
-    CatalogLiftSearch, RealRootednessTheoremOptions, RealRootednessTheoremReport,
-    RecurrenceProofDiscoveryReport,
+    discover_recurrence_proofs_with_stage_options, AffineCoordinateOptions,
+    AlternativeRepresentationOptions, CatalogLiftOptions, CatalogLiftSearch,
+    RealRootednessTheoremOptions, RealRootednessTheoremReport, RecurrenceProofDiscoveryReport,
+    RecurrenceProofStageOptions,
 };
 
 pub(crate) fn cmd_recurrence_prove(args: &[String]) {
@@ -24,7 +25,7 @@ pub(crate) fn cmd_recurrence_prove(args: &[String]) {
 
 fn run(args: &[String]) -> Result<bool, String> {
     let (mut path, mut candidate, mut delay, mut representations) = (None, None, None, None);
-    let mut lifts = None;
+    let (mut lifts, mut affine) = (None, None);
     let (mut json, mut verify) = (false, false);
     let mut i = 0;
     while i < args.len() {
@@ -51,6 +52,13 @@ fn run(args: &[String]) -> Result<bool, String> {
             "--max-lift-candidates" => {
                 lifts = Some(parse_usize_option(args, &mut i, "--max-lift-candidates")?)
             }
+            "--max-affine-coordinates" => {
+                affine = Some(parse_usize_option(
+                    args,
+                    &mut i,
+                    "--max-affine-coordinates",
+                )?)
+            }
             "--json" => json = true,
             "--verify" => verify = true,
             other => return Err(format!("unknown recurrence-prove option: {other}")),
@@ -63,6 +71,7 @@ fn run(args: &[String]) -> Result<bool, String> {
             || delay.is_some()
             || representations.is_some()
             || lifts.is_some()
+            || affine.is_some()
         {
             return Err("--verify cannot be combined with search flags".into());
         }
@@ -107,14 +116,23 @@ fn run(args: &[String]) -> Result<bool, String> {
     if lift_options.max_candidates > 1000 {
         return Err("--max-lift-candidates must be at most 1000".into());
     }
-    let report = discover_recurrence_proofs_with_stages(
+    let affine_options = AffineCoordinateOptions {
+        max_coordinates: affine.unwrap_or(AffineCoordinateOptions::default().max_coordinates),
+    };
+    if affine_options.max_coordinates > 64 {
+        return Err("--max-affine-coordinates must be at most 64".into());
+    }
+    let report = discover_recurrence_proofs_with_stage_options(
         &record,
         &RealRootednessTheoremOptions {
             maximum_start_delay,
             ..Default::default()
         },
-        &alternative_options,
-        &lift_options,
+        &RecurrenceProofStageOptions {
+            alternative_representations: alternative_options,
+            catalog_lifts: lift_options,
+            affine_coordinates: affine_options,
+        },
     )
     .map_err(error_text)?;
     if json {
@@ -207,6 +225,37 @@ fn print_report_text(report: &RecurrenceProofDiscoveryReport) {
     }
     if let Some(search) = &report.catalog_lifts {
         print_catalog_lifts_text(search);
+    }
+    if let Some(search) = &report.affine_coordinates {
+        println!(
+            "\nAffine coordinates: {} of {} candidate coordinate(s) tried",
+            search.coordinates.len(),
+            search.candidates_available
+        );
+        for candidate in &search.coordinates {
+            let coordinate = &candidate.coordinate;
+            println!(
+                "\n  x = ({}) u + ({}) [{}]: {}",
+                coordinate.slope,
+                coordinate.intercept,
+                coordinate.reason,
+                if candidate.proved {
+                    "proved"
+                } else {
+                    "not proved"
+                }
+            );
+            if candidate.proved {
+                print_attempts_text(&candidate.attempts, "  ");
+                if let Some(tail) = &candidate.tail {
+                    print_attempts_text(&tail.attempts, "    ");
+                }
+            }
+        }
+        match &search.conclusion {
+            Some(conclusion) => println!("  Conclusion: {}", conclusion.statement),
+            None => println!("  No coordinate proves the record."),
+        }
     }
 }
 

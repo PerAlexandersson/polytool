@@ -8,9 +8,11 @@
 
 use polytool::oeis;
 use polytool::recurrence::{
-    discover_recurrence_proofs, discover_recurrence_proofs_with_stages,
+    discover_recurrence_proofs, discover_recurrence_proofs_with_stage_options,
+    discover_recurrence_proofs_with_stages, AffineCoordinateOptions,
     AlternativeRepresentationOptions, CatalogLiftOptions, CatalogLiftRoute, CatalogParentProofKind,
     RealRootednessTheoremOptions, RecurrenceJson, RecurrenceProofDiscoveryReport,
+    RecurrenceProofStageOptions,
 };
 
 /// The displayed record of a catalog entry (prefix rows and initial rows
@@ -123,16 +125,35 @@ fn a067613_is_a_hermite_basis_map_image() {
 
 #[test]
 fn the_stage_can_be_disabled() {
-    let report = discover_recurrence_proofs_with_stages(
+    // The affine-coordinate stage is switched off too: it proves A123125 on
+    // its own (iterated preserver in u = x - 1).
+    let report = discover_recurrence_proofs_with_stage_options(
+        &catalog_record("A123125"),
+        &RealRootednessTheoremOptions::default(),
+        &RecurrenceProofStageOptions {
+            alternative_representations: AlternativeRepresentationOptions::default(),
+            catalog_lifts: CatalogLiftOptions::disabled(),
+            affine_coordinates: AffineCoordinateOptions::disabled(),
+        },
+    )
+    .unwrap();
+    assert_eq!(report.status, "not_proved");
+    assert!(report.catalog_lifts.is_none());
+    report.verify().unwrap();
+    // With only the lifts off, the affine-coordinate stage proves it.
+    let affine = discover_recurrence_proofs_with_stages(
         &catalog_record("A123125"),
         &RealRootednessTheoremOptions::default(),
         &AlternativeRepresentationOptions::default(),
         &CatalogLiftOptions::disabled(),
     )
     .unwrap();
-    assert_eq!(report.status, "not_proved");
-    assert!(report.catalog_lifts.is_none());
-    report.verify().unwrap();
+    assert_eq!(affine.status, "proved");
+    assert!(affine
+        .affine_coordinates
+        .as_ref()
+        .is_some_and(|search| search.is_proved()));
+    affine.verify().unwrap();
 }
 
 #[test]

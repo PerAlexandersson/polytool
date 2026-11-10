@@ -487,7 +487,8 @@ pub(crate) const RECURRENCE_PROVE: CommandSpec = CommandSpec {
     summary: "Discover and replay general recurrence proofs",
     usage: &[
         "recurrence-prove [--recurrence <FILE|->] [--candidate N] [--max-start-delay N] \
-         [--max-representation-candidates N] [--max-lift-candidates N]",
+         [--max-representation-candidates N] [--max-lift-candidates N] \
+         [--max-affine-coordinates N]",
         "recurrence-prove --verify < proof.json",
     ],
     description: r#"Discover general proofs for a recurrence and seeds; no named-sequence lookup.
@@ -544,14 +545,24 @@ When no criterion proves the record:
     made outside polytool), the status is conditional_on_attestation, never
     proved. --max-lift-candidates bounds the catalog families certified
     (deterministic order; 0 disables the stage). Not run when a root region is
-    requested.
+    requested;
+  - affine coordinates: when still nothing proves the record, the criteria run
+    on it in exact coordinates x = a u + b (Q_n(u) = P_n(a u + b): every
+    coefficient substituted, D_u = a D_x on derivative terms, the seeds
+    mapped), with b a rational root of a factor free of n of a coefficient (a
+    = 1, then a = -1) and the reflection x = -u. A proof maps back: same rows
+    nonzero and real-rooted, root region a R + b (ends swapped for a < 0),
+    interlacing kept for a > 0 and mirrored for a < 0. No other stage runs in
+    the new coordinate. --max-affine-coordinates bounds the coordinates tried
+    (deterministic menu; 0 disables the stage).
 A rule with an inhomogeneous term matches no criterion: status not_applicable.
 
 The recurrence input is recurrence.v1 JSON, a theorem wrapper or a
 representation menu; with a menu, --candidate is required unless it has one
 entry. --verify replays the recorded routes of a report from standard input
 (every attempt, the tail, every equality certificate and the catalog-lift
-certificates with their parent reports) and takes no search flags."#,
+certificates with their parent reports, the affine coordinates with their
+transformed records) and takes no search flags."#,
     input: InputKind::Json,
     output: OutputKind::JsonSwitch,
     flags: &[
@@ -579,6 +590,12 @@ certificates with their parent reports) and takes no search flags."#,
             "Catalog families certified by the catalog-lift stage (0: off)",
         )
         .default("6"),
+        option(
+            "max-affine-coordinates",
+            "N",
+            "Coordinates x = a u + b tried by the affine-coordinate stage (0: off)",
+        )
+        .default("8"),
         switch("verify", "Replay the recorded routes of a report from stdin; no search flags"),
     ],
     details: r#"JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is
@@ -597,7 +614,11 @@ backward basis-map search and coefficient identifications) and conclusion
 catalog_attestation, conditional_on, from_index, root_region). Status
 conditional_on_attestation: the only lift rests on a catalog flag;
 real_rooted_from_index is then omitted and the claim is in
-catalog_lifts.conclusion. Replay needs
+catalog_lifts.conclusion. affine_coordinates holds the affine-coordinate stage:
+candidates_available, coordinates (slope, intercept, reason, the transformed
+record and its attempts, a transformed tail) and conclusion (coordinate,
+theorem, from_index, root_region mapped to x, interlacing with
+interlacing_orientation preserved or mirrored). Replay needs
 the attempts of exactly the criteria the current search records; recompute
 reports saved before a criterion was added."#,
     examples: &[

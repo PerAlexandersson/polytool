@@ -1,5 +1,5 @@
 //! General recurrence proof discovery.  The general stages use no catalogue,
-//! sequence IDs or attestations; only the last stage (catalog lifts) consults
+//! sequence IDs or attestations; only the catalog-lift stage (step 4) consults
 //! the bundled OEIS catalog, and it keeps a catalog attestation apart from a
 //! proof.
 //!
@@ -30,7 +30,15 @@
 //!    `conditional_on_attestation`, that the catalog flags as proved
 //!    elsewhere); bounded by [`CatalogLiftOptions`], depth one (a parent is
 //!    proved by the stages above, never by another lift).  See the module
-//!    `catalog_lift` and [`CatalogLiftSearch`].
+//!    `catalog_lift` and [`CatalogLiftSearch`];
+//! 5. **affine coordinates**: when still nothing proves the family with a
+//!    polytool proof, the theorems of step 1 on the record in a bounded
+//!    menu of exact coordinates `x = alpha u + beta` derived from the rule
+//!    (`Q_n(u) = P_n(alpha u + beta)`, the rule transformed by the chain
+//!    rule), depth one; a proof is mapped back (root region
+//!    `alpha R + beta`, interlacing with its orientation).  Bounded by
+//!    [`AffineCoordinateOptions`]; see the module `affine_coordinates` and
+//!    [`AffineCoordinateSearch`].
 //!
 //! A rule with an inhomogeneous term is matched by no theorem: the report
 //! says so with the status `not_applicable` and
@@ -62,6 +70,14 @@ use crate::recurrence::lift::catalog_lift::catalog_lift_search;
 use crate::recurrence::{
     AdaptiveSearchBudget, AdaptiveSearchOptions, CatalogLiftOptions, CatalogLiftSearch,
     CatalogParentProofKind,
+};
+
+mod affine_coordinates;
+use affine_coordinates::affine_coordinate_search;
+pub(super) use affine_coordinates::rational_roots_of_index_free_factor;
+pub use affine_coordinates::{
+    AffineCoordinate, AffineCoordinateAttempt, AffineCoordinateConclusion, AffineCoordinateOptions,
+    AffineCoordinateSearch, AffineCoordinateTail, AffineInterlacingOrientation,
 };
 
 /// Schema for a replayable general recurrence proof search.
@@ -96,6 +112,19 @@ impl Default for AlternativeRepresentationOptions {
             rows: 24,
         }
     }
+}
+
+/// The bounds of every later stage of
+/// [`discover_recurrence_proofs_with_stage_options`] (module documentation,
+/// steps 3 to 5).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RecurrenceProofStageOptions {
+    /// The alternative-representation stage (step 3).
+    pub alternative_representations: AlternativeRepresentationOptions,
+    /// The catalog-lift stage (step 4).
+    pub catalog_lifts: CatalogLiftOptions,
+    /// The affine-coordinate stage (step 5).
+    pub affine_coordinates: AffineCoordinateOptions,
 }
 
 /// The tail of a family whose first rows are not all real-rooted (module
@@ -233,6 +262,11 @@ pub struct RecurrenceProofDiscoveryReport {
     /// `conditional_on_attestation`) when it is a catalog flag.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub catalog_lifts: Option<CatalogLiftSearch>,
+    /// The affine-coordinate stage (module documentation, step 5); omitted
+    /// when not run.  A proved coordinate proves the record (status
+    /// `proved`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub affine_coordinates: Option<AffineCoordinateSearch>,
 }
 
 /// Try all supported general theorem families, independently of sequence names.
@@ -292,7 +326,8 @@ pub fn discover_recurrence_proofs_with_options(
 
 /// [`discover_recurrence_proofs`] with explicit bounds of the
 /// alternative-representation stage and of the catalog-lift stage
-/// ([`CatalogLiftOptions::max_candidates`]` == 0` disables the latter).
+/// ([`CatalogLiftOptions::max_candidates`]` == 0` disables the latter), and
+/// the default [`AffineCoordinateOptions`].
 ///
 /// # Errors
 ///
@@ -303,6 +338,30 @@ pub fn discover_recurrence_proofs_with_stages(
     alternative_options: &AlternativeRepresentationOptions,
     lift_options: &CatalogLiftOptions,
 ) -> Result<RecurrenceProofDiscoveryReport, RecurrenceError> {
+    discover_recurrence_proofs_with_stage_options(
+        record,
+        options,
+        &RecurrenceProofStageOptions {
+            alternative_representations: alternative_options.clone(),
+            catalog_lifts: lift_options.clone(),
+            affine_coordinates: AffineCoordinateOptions::default(),
+        },
+    )
+}
+
+/// [`discover_recurrence_proofs`] with explicit bounds of every later stage
+/// ([`RecurrenceProofStageOptions`]; a zero bound disables a stage).
+///
+/// # Errors
+///
+/// As [`discover_recurrence_proofs`].
+pub fn discover_recurrence_proofs_with_stage_options(
+    record: &RecurrenceJson,
+    options: &RealRootednessTheoremOptions,
+    stages: &RecurrenceProofStageOptions,
+) -> Result<RecurrenceProofDiscoveryReport, RecurrenceError> {
+    let alternative_options = &stages.alternative_representations;
+    let lift_options = &stages.catalog_lifts;
     let (rule, first_index, seeds) = record.to_recurrence_parts()?;
     validate_discovery_input(&rule, first_index, &seeds, options)?;
     let attempts = run_theorems(&rule, first_index, &seeds, options)?;
@@ -323,6 +382,7 @@ pub fn discover_recurrence_proofs_with_stages(
         tail: None,
         alternative_representations: None,
         catalog_lifts: None,
+        affine_coordinates: None,
     };
     let inhomogeneous = rule.inhomogeneous.as_ref().is_some_and(|g| !g.is_zero());
     if !report
@@ -375,6 +435,25 @@ pub fn discover_recurrence_proofs_with_stages(
                 options,
                 alternative_options,
                 lift_options,
+            )
+            .ok();
+        }
+        let lift_proved = report
+            .catalog_lifts
+            .as_ref()
+            .is_some_and(CatalogLiftSearch::is_proved);
+        if !tail_proved
+            && !alternative_proved
+            && !lift_proved
+            && stages.affine_coordinates.is_enabled()
+        {
+            let plain = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
+            // The stage only adds proofs: an error inside it leaves it out.
+            report.affine_coordinates = affine_coordinate_search(
+                &plain,
+                report.tail.as_ref().map(|tail| &tail.recurrence),
+                options,
+                &stages.affine_coordinates,
             )
             .ok();
         }
@@ -510,6 +589,25 @@ impl RecurrenceProofDiscoveryReport {
                 }
             }
         }
+        let affine = self
+            .affine_coordinates
+            .as_ref()
+            .and_then(|search| search.conclusion.as_ref());
+        if proved.is_none() {
+            if let Some(conclusion) = affine {
+                proved = Some(match &conclusion.zero_residue_classes {
+                    None => ProvedRows::EveryRow(conclusion.from_index),
+                    Some(zero) => {
+                        ProvedRows::OutsideZeroResidueClasses(RealRootedOutsideZeroResidueClasses {
+                            from_index: conclusion.from_index,
+                            zero_residue_classes: zero.clone(),
+                        })
+                    }
+                });
+                route = "an affine coordinate";
+                conditional = None;
+            }
+        }
         let (from, outside_zero_classes) = match proved {
             Some(ProvedRows::EveryRow(from)) => (Some(from), None),
             Some(ProvedRows::OutsideZeroResidueClasses(rows)) => (None, Some(rows)),
@@ -557,6 +655,9 @@ impl RecurrenceProofDiscoveryReport {
         }
         if let (Some(conclusion), true) = (lift, from.is_some() && route == "a catalog lift") {
             statement.push_str(&format!(" Catalog lift: {}", conclusion.statement));
+        }
+        if let (Some(conclusion), "an affine coordinate") = (affine, route) {
+            statement.push_str(&format!(" Affine coordinate: {}", conclusion.statement));
         }
         if let Some(conclusion) = conditional {
             statement.push_str(&format!(
@@ -712,6 +813,25 @@ impl RecurrenceProofDiscoveryReport {
                 None => plain.clone(),
             };
             search.verify(&plain, &basis_record, &options)?;
+        }
+        if let Some(search) = &self.affine_coordinates {
+            let alternative_proved = self
+                .alternative_representations
+                .as_ref()
+                .is_some_and(|search| search.alternatives.iter().any(|a| a.proved));
+            let lift_proved = self
+                .catalog_lifts
+                .as_ref()
+                .is_some_and(CatalogLiftSearch::is_proved);
+            if proved_directly || tail_proved || alternative_proved || lift_proved || inhomogeneous
+            {
+                return failed("an affine-coordinate stage is recorded although it is not run");
+            }
+            search.verify(
+                &plain,
+                self.tail.as_ref().map(|tail| &tail.recurrence),
+                &options,
+            )?;
         }
         let mut expected = self.clone();
         expected.trivially_real_rooted = self.recurrence.search.is_none()

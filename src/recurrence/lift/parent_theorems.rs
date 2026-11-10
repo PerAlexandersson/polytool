@@ -179,13 +179,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 mod discovery;
+use discovery::rational_roots_of_index_free_factor;
 pub use discovery::{
     discover_recurrence_proofs, RecurrenceProofDiscoveryReport, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
 pub use discovery::{
-    discover_recurrence_proofs_with_options, discover_recurrence_proofs_with_stages,
-    AlternativeRepresentationOptions, AlternativeRepresentationProof,
-    AlternativeRepresentationSearch, RealRootedOutsideZeroResidueClasses, RecurrenceProofTail,
+    discover_recurrence_proofs_with_options, discover_recurrence_proofs_with_stage_options,
+    discover_recurrence_proofs_with_stages, AffineCoordinate, AffineCoordinateAttempt,
+    AffineCoordinateConclusion, AffineCoordinateOptions, AffineCoordinateSearch,
+    AffineCoordinateTail, AffineInterlacingOrientation, AlternativeRepresentationOptions,
+    AlternativeRepresentationProof, AlternativeRepresentationSearch,
+    RealRootedOutsideZeroResidueClasses, RecurrenceProofStageOptions, RecurrenceProofTail,
 };
 mod recurrence_equality;
 pub use recurrence_equality::{

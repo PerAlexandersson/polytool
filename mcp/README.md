@@ -1081,8 +1081,9 @@ Report issues in the Git repository, or contact Per Alexandersson
 `discover_recurrence_proofs` takes `recurrence_json` and optional
 `max_start_delay` (default 3, at most 16), `max_representation_candidates`
 (default 300, at most 2000, 0 disables the alternative-representation stage)
-and `max_lift_candidates` (default 6, at most 100, 0 disables the catalog-lift
-stage).
+`max_lift_candidates` (default 6, at most 100, 0 disables the catalog-lift
+stage) and `max_affine_coordinates` (default 8, at most 64, 0 disables the
+affine-coordinate stage).
 It tries the eight general theorem families of the parent cascade (product,
 three-term, Liu--Wang, derivative lag, Ma--Wang interval, Liu--Wang
 three-term, iterated preserver, hypergeometric row) without catalogue
@@ -1092,7 +1093,10 @@ all-index equality certificate, and last the catalog lifts: a normalized
 identification with a bundled OEIS catalog family or a backward basis-map
 lift, whose parent polytool proves by the stages above (`catalog_lifts`;
 a parent that is only flagged `lean_proved` gives the status
-`conditional_on_attestation`, never `proved`). `verify_recurrence_proofs` takes
+`conditional_on_attestation`, never `proved`), then the affine coordinates:
+the criteria on the record in exact coordinates `x = a u + b` derived from
+the rule, a proof mapped back to `x` (`affine_coordinates`).
+`verify_recurrence_proofs` takes
 `report_json` and replays the recorded routes (every attempt, the tail and
 every equality certificate; the attempts must be of exactly the criteria
 the current search records, so reports saved before a criterion was added

@@ -293,6 +293,8 @@ answer on every machine (time limits are only used by `oeis evidence`).
                             per alternative-representation pass
   --max-lift-candidates N   recurrence-prove: catalog families certified by
                             the catalog-lift stage
+  --max-affine-coordinates N  recurrence-prove: coordinates x = a u + b tried
+                            by the affine-coordinate stage
   --per-entry-timeout-seconds S  oeis evidence (wall clock)
   limits {...}              JSON requests of recurrence --space,
                             recurrence-search-representations, recurrence-implicit

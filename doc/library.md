@@ -1978,3 +1978,14 @@ standalone `check_product_recurrence_theorem` also produces a replayable
 `prove_parent_real_rootedness` when negative roots are certified. See
 [General recurrence proof discovery](proof-discovery.md) for contracts and
 Lean correspondence. No catalogue fallback occurs in direct discovery.
+`discover_recurrence_proofs_with_stage_options` takes the bounds of the later
+stages in one `RecurrenceProofStageOptions` (alternative representations,
+catalog lifts and the affine-coordinate stage `AffineCoordinateOptions`).
+The last stage reruns the theorems in exact coordinates `x = alpha u + beta`
+derived from the rule (`Q_n(u) = P_n(alpha u + beta)`, the rule transformed
+by the chain rule) and maps a proof back: root region `alpha R + beta`,
+interlacing kept for `alpha > 0` and mirrored for `alpha < 0`
+(`AffineInterlacingOrientation`); the report field `affine_coordinates`
+(`AffineCoordinateSearch`) is replayed by `verify`. For example A118424,
+`P_n = 2 P_(n-1) + (x - 1) P_(n-3)`, is the fixed-delay window in
+`u = x - 1`.

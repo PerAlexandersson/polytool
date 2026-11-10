@@ -4,6 +4,42 @@
 
 ### Added
 
+- Affine-coordinate stage of proof discovery (`recurrence-prove`,
+  `discover_recurrence_proofs`, MCP `discover_recurrence_proofs`, Python
+  `prove_real_rooted`), run last on records no other stage proves with a
+  polytool proof: the theorem routes run on the record in exact coordinates
+  `x = alpha u + beta`, `Q_n(u) = P_n(alpha u + beta)` (every coefficient
+  substituted, `alpha^(-d)` on a derivative term of order `d`, the seeds
+  mapped; also the tail record), depth one. The menu comes from the rule:
+  the nonzero rational roots of the `n`-free factors of the coefficients
+  (`alpha = 1`, then `alpha = -1`), then the reflection `x = -u`;
+  `--max-affine-coordinates N` (default 8, 0 disables; MCP
+  `max_affine_coordinates`, Python `max_affine_coordinates`,
+  `AffineCoordinateOptions`). A proof maps back: the same rows nonzero and
+  real-rooted, root region `alpha R + beta` (ends swapped for `alpha < 0`),
+  interlacing `preserved` for `alpha > 0` and `mirrored` for `alpha < 0`
+  (`AffineInterlacingOrientation`). Reports gain the optional field
+  `affine_coordinates` (`AffineCoordinateSearch`: the coordinates, the
+  transformed records and their attempts, the conclusion), replayed by
+  `verify` (menu, transformed records and attempts recomputed). New
+  `discover_recurrence_proofs_with_stage_options` with
+  `RecurrenceProofStageOptions`; the parents of catalog lifts are proved
+  without the stage. The iterated-preserver translations share its root
+  helper (unchanged results). Python `ProofReport.route` is
+  `"affine_coordinate:<theorem>"` and `ProofReport.affine_coordinate` the
+  conclusion. Catalog sweep (`recurrence-prove`, 60 s per entry, one shard):
+  758 -> 764 of 919 proved, none lost: A118424 and A118884 (fixed-delay
+  window in `u = x - 1`, roots in `(-inf, 1)`), A049061 and A185411
+  (iterated preserver in `u = x - 1`, roots in `(-inf, 1]`), A059340
+  (Liu--Wang in `u = x + 1`, roots in `(-inf, -1)`) and A104558 (iterated
+  preserver in `x = 2 - u`). The stage runs on the 160 records left
+  unproved and costs a median 0.4 s (at most 2.5 s) each; total sweep time
+  395 s -> 487 s. `--max-affine-coordinates 0` restores the earlier
+  reports. Discovery fingerprints re-blessed for exactly the 160 entries
+  whose report gains the stage (the six above newly proved, the rest
+  `not_proved` or `conditional_on_attestation` with the stage recorded); no
+  parent fingerprint changed and no proved report changed.
+
 - All-index recurrence equality by an invariant module
   (`certify_recurrence_equality`, schema `polytool.recurrence-equality.v1`
   unchanged): when neither rule right-divides the other, the remainder of

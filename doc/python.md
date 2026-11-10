@@ -220,7 +220,11 @@ Ma--Wang interval, Liu--Wang three-term, iterated-preserver and
 hypergeometric-row criteria, each hypothesis decided exactly for every `n`,
 then the tail after rows that are zero or not real-rooted, certified
 alternative representations and catalog lifts to a family of the bundled
-OEIS catalog (`max_lift_candidates=6`, `0` disables them).
+OEIS catalog (`max_lift_candidates=6`, `0` disables them), and last the
+criteria in exact affine coordinates `x = a u + b` derived from the rule
+(`max_affine_coordinates=8`, `0` disables them; `report.affine_coordinate` is
+the conclusion mapped back to `x`, and `report.route` is then
+`"affine_coordinate:<theorem>"`).
 
 ```pycon
 >>> report = narayana.prove_real_rooted()

@@ -2,8 +2,8 @@
 
 `recurrence-prove` discovers proofs by matching general theorem hypotheses.
 It uses the recurrence, its starting index and its seeds. There are no
-sequence-name tests or caller attestations in this search; only its last
-stage (catalog lifts, below) consults the bundled OEIS catalog, and it keeps
+sequence-name tests or caller attestations in this search; only one stage
+(catalog lifts, below) consults the bundled OEIS catalog, and it keeps
 a catalog flag apart from a proof.
 `recurrence-theorems` is a different command: the conditional
 renewal/predecessor-window matcher, whose schema is unchanged.
@@ -151,7 +151,7 @@ coefficient-size and work budgets (the invariant-module search stops
 early on large intermediate operators). Finding nothing proves nothing.
 
 **Catalog lifts.** When nothing above proves the record (and no root region
-is requested), the last stage connects it to a family of the bundled OEIS
+is requested), the fourth stage connects it to a family of the bundled OEIS
 catalog (919 entries, no external database) by an identity certified for
 every index, and transfers that family's statement. Two lifts are tried:
 
@@ -227,6 +227,68 @@ or `basis_map`; `parent_proof`: `polytool` or `catalog_attestation`;
 `from_index`, `root_region`, the leading-coefficient certificate and the
 exactly checked rows; `statement`).
 
+**Affine coordinates.** When still nothing gives a polytool proof (a
+conditional catalog lift does not stop the stage), the criteria run on the
+record in exact affine coordinates. For rational `alpha != 0` and `beta`
+put `x = alpha u + beta` and `Q_n(u) = P_n(alpha u + beta)`. By the chain
+rule (`D_u = alpha D_x`) the rule
+
+```text
+f(n, x) P_n = sum_j sign_j(n) c_j(n, x) D_x^(d_j) P_(n - r_j)
+```
+
+becomes, for every index,
+
+```text
+f(n, alpha u + beta) Q_n = sum_j sign_j(n) alpha^(-d_j) c_j(n, alpha u + beta) D_u^(d_j) Q_(n - r_j)
+```
+
+with the seeds `Q_k(u) = P_k(alpha u + beta)`: an identity of the two
+records, not a finite check. `P_n` is zero exactly when `Q_n` is, and the
+roots of `P_n` are `alpha r + beta` for the roots `r` of `Q_n`, so
+
+- nonzero rows, real-rootedness, zero residue classes and simple roots carry
+  over row by row (the summary fields `real_rooted_from_index` and
+  `real_rooted_outside_zero_residue_classes` are those of the inner proof);
+- a root region `R` of the rows `Q_n` gives `alpha R + beta` (ends swapped for
+  `alpha < 0`; an index-dependent end `v + p n` becomes
+  `alpha v + beta + alpha p n`, an exact quadratic end is mapped exactly);
+- interlacing: for `alpha > 0` the relation of the inner theorem holds for
+  `P_(n-1)` and `P_n` (`interlacing_orientation: preserved`). For
+  `alpha < 0` the order of the roots is reversed (`mirrored`): in increasing
+  order the roots of `P_n` and `P_(n-1)` alternate starting with the
+  smallest root of `P_n`. That is `P_(n-1)` interlacing `P_n` when
+  `deg P_n = deg P_(n-1) + 1` and `P_n` interlacing `P_(n-1)` when the
+  degrees are equal; the stage records the orientation and claims nothing
+  more. The inner statement (for example the windows `P_A << P_B` of the
+  fixed-delay route) is about the rows `Q_n`.
+
+The candidate coordinates come from the rule alone, in a deterministic
+order: the nonzero rational roots `beta` of the factor free of `n` of each
+coefficient polynomial (the term coefficients in the order of the rule,
+then the left-hand factor), each with `alpha = 1` and then `alpha = -1`,
+and last the reflection `x = -u`. A coefficient `x - 1` thus suggests
+`u = x - 1`. The iterated-preserver criterion uses the same root helper for
+its translation coordinates. At most `--max-affine-coordinates N`
+coordinates are tried (default 8; 0 disables the stage); a requested root
+region is pulled back to `u`. In each coordinate every criterion runs on
+the transformed record, and on the transformed tail record when discovery
+has a tail; no other stage runs there (depth one), and the parents of
+catalog lifts are proved without this stage. The search stops at the first
+coordinate with a proof. On a record that nothing proves, the stage costs
+about as much as running the criteria once per coordinate.
+
+The report field `affine_coordinates` holds `options`,
+`candidates_available` (the size of the menu), `coordinates` (each with
+`coordinate` = `slope`, `intercept`, `reason`; the transformed `recurrence`
+and its `attempts`; an optional transformed `tail`; `proved`) and the
+`conclusion` (`coordinate`, `theorem`, `on_tail`, `from_index`,
+`zero_residue_classes`, `root_region` mapped to `x`, `simple_roots`,
+`interlacing_from`, `interlacing`, `interlacing_orientation`, `statement`).
+For example A118424 and A118884, `P_n = 2 P_(n-1) + (x - 1) P_(n-L)` with
+`L = 3, 4`, are the fixed-delay window `Q_n = 2 Q_(n-1) + u Q_(n-L)` in
+`u = x - 1`: every row is real-rooted with every root in `(-inf, 1)`.
+
 **Not applicable.** A rule with an inhomogeneous term matches none of the
 criteria (they all need a homogeneous rule); the status is then
 `not_applicable` with `not_applicable_reason`.
@@ -269,7 +331,12 @@ parent report (a depth-one discovery on that record, replayed itself), every
 transfer and its premise (a proved conclusion of the parent report, or the
 catalog flag of the named entry), the basis-map search with every
 certification, and each coefficient identification against its lift; the
-conclusion is then recomputed from the recorded attempts. A
+conclusion is then recomputed from the recorded attempts. The
+affine-coordinate stage is replayed by recomputing the candidate menu (the
+recorded coordinates must be its first ones, in order, up to the bound or
+the first proof), every transformed record and the reference attempts on
+it; the recorded attempts are replayed like those of the record and the
+conclusion is recomputed. A
 recomputation that proves more is fine; a report saved before a criterion
 was added no longer replays and is recomputed. Missing, extra or repeated
 attempts, reordered attempts and attempts flipped to proved are rejected.
@@ -364,7 +431,10 @@ conclusions, missing attempts and mismatched seeds are rejected.
 alternative-representation stage (`AlternativeRepresentationOptions`),
 `discover_recurrence_proofs_with_stages` also those of the catalog-lift
 stage (`CatalogLiftOptions`; the report field `catalog_lifts` is a
-`CatalogLiftSearch`), and
+`CatalogLiftSearch`), `discover_recurrence_proofs_with_stage_options`
+takes the bounds of every later stage (`RecurrenceProofStageOptions`,
+including `AffineCoordinateOptions`; the report field `affine_coordinates`
+is an `AffineCoordinateSearch`), and
 `certify_recurrence_equality` certifies two definitions of one sequence on
 its own. `check_product_recurrence_theorem` is also available independently.
 
@@ -374,7 +444,9 @@ MCP tools:
   `max_start_delay` (default 3, maximum 16),
   `max_representation_candidates` (default 300, maximum 2000, 0 disables the
   alternative-representation stage) and `max_lift_candidates` (default 6,
-  maximum 100, 0 disables the catalog-lift stage);
+  maximum 100, 0 disables the catalog-lift stage) and
+  `max_affine_coordinates` (default 8, maximum 64, 0 disables the
+  affine-coordinate stage);
 - `verify_recurrence_proofs`: `report_json` as JSON text.
 
 Both tools use the same library code as the CLI and retain the MCP input

@@ -617,7 +617,7 @@ pub struct RecurrenceTheoremsRequest {
     pub recurrence_json: String,
 }
 
-/// General proof search for a recurrence-defined sequence; only its last
+/// General proof search for a recurrence-defined sequence; only one
 /// stage (catalog lifts) consults the bundled OEIS catalog.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -636,6 +636,10 @@ pub struct DiscoverRecurrenceProofsRequest {
     /// disables it; at most 100.
     #[serde(default)]
     pub max_lift_candidates: Option<usize>,
+    /// Coordinates x = a u + b tried by the affine-coordinate stage,
+    /// default 8; 0 disables it; at most 64.
+    #[serde(default)]
+    pub max_affine_coordinates: Option<usize>,
 }
 
 /// Replay a complete general recurrence proof-discovery report.

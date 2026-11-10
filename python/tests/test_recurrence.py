@@ -237,7 +237,29 @@ def test_catalog_lift_proof():
     assert lift["parent_proof"] == "polytool"
     assert report.certificate == lift
     assert report.verify()
-    # The stage can be switched off.
-    off = polytool.oeis.recurrence("A123125").prove_real_rooted(max_lift_candidates=0)
+    # The stage can be switched off (with the affine-coordinate stage, which
+    # proves A123125 on its own in u = x - 1).
+    off = polytool.oeis.recurrence("A123125").prove_real_rooted(
+        max_lift_candidates=0, max_affine_coordinates=0
+    )
     assert off.status == "not_proved" and off.catalog_lift is None
     assert "catalog_lifts" not in off.to_dict()
+    affine = polytool.oeis.recurrence("A123125").prove_real_rooted(max_lift_candidates=0)
+    assert affine.route == "affine_coordinate:iterated_preserver"
+
+
+def test_affine_coordinate_proof():
+    # A118424: P_n = 2 P_(n-1) + (x - 1) P_(n-3); in u = x - 1 the fixed-delay
+    # window proves it, and the region (-inf, 0) of u maps to (-inf, 1).
+    report = polytool.oeis.recurrence("A118424").prove_real_rooted()
+    assert report.status == "proved" and report.is_proved
+    assert report.route == "affine_coordinate:variable_delay"
+    affine = report.affine_coordinate
+    assert affine["coordinate"]["slope"] == "1"
+    assert affine["coordinate"]["intercept"] == "1"
+    assert affine["root_region"] == {"upper": {"value": "1", "closed": False}}
+    assert report.certificate == affine
+    assert report.verify()
+    off = polytool.oeis.recurrence("A118424").prove_real_rooted(max_affine_coordinates=0)
+    assert off.status != "proved" and off.affine_coordinate is None
+    assert "affine_coordinates" not in off.to_dict()

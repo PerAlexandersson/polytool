@@ -5,14 +5,14 @@
 use polytool::real_rootedness::RealInterval;
 use polytool::recurrence::{
     certify_leading_coefficient as library_certify_leading_coefficient,
-    discover_recurrence_proofs_with_stages, find_recurrence_adaptive_rational_with_budget,
+    discover_recurrence_proofs_with_stage_options, find_recurrence_adaptive_rational_with_budget,
     AdaptiveSearchBudget, AdaptiveSearchOptions, AdaptiveSearchOutcome, AdaptiveSearchResult,
-    AlternativeRepresentationOptions, BigRational, CatalogLiftOptions, CatalogParentProofKind,
-    LeadingCoefficientCertificate as LibraryLeadingCoefficientCertificate,
+    AffineCoordinateOptions, AlternativeRepresentationOptions, BigRational, CatalogLiftOptions,
+    CatalogParentProofKind, LeadingCoefficientCertificate as LibraryLeadingCoefficientCertificate,
     LeadingCoefficientOptions, LeadingCoefficientSign, RealRootednessTheoremOptions,
     RealRootednessTheoremReport, RealRootednessTheoremStatus, Recurrence as LibraryRecurrence,
     RecurrenceError, RecurrenceJson, RecurrenceJsonSearch, RecurrenceOptionsJson,
-    RecurrenceProofDiscoveryReport, RecurrenceRowIterator,
+    RecurrenceProofDiscoveryReport, RecurrenceProofStageOptions, RecurrenceRowIterator,
 };
 use polytool::renewal::RecurrenceTheoremReport;
 use pyo3::exceptions::{PyStopIteration, PyValueError};
@@ -302,13 +302,17 @@ impl Recurrence {
 
     /// Try the general real-rootedness theorems on this recurrence; see
     /// :func:`polytool.prove_real_rooted`.
-    #[pyo3(signature = (*, maximum_start_delay = 3, root_region = None, max_lift_candidates = 6))]
+    #[pyo3(signature = (
+        *, maximum_start_delay = 3, root_region = None, max_lift_candidates = 6,
+        max_affine_coordinates = 8
+    ))]
     fn prove_real_rooted(
         &self,
         py: Python<'_>,
         maximum_start_delay: usize,
         root_region: Option<&Bound<'_, PyAny>>,
         max_lift_candidates: usize,
+        max_affine_coordinates: usize,
     ) -> PyResult<ProofReport> {
         prove_record(
             py,
@@ -316,6 +320,7 @@ impl Recurrence {
             maximum_start_delay,
             root_region,
             max_lift_candidates,
+            max_affine_coordinates,
         )
     }
 
@@ -656,24 +661,24 @@ fn prove_record(
     maximum_start_delay: usize,
     root_region: Option<&Bound<'_, PyAny>>,
     max_lift_candidates: usize,
+    max_affine_coordinates: usize,
 ) -> PyResult<ProofReport> {
     let options = RealRootednessTheoremOptions {
         root_region: root_region.map(root_region_from_python).transpose()?,
         maximum_start_delay,
     };
-    let lifts = CatalogLiftOptions {
-        max_candidates: max_lift_candidates,
-        ..CatalogLiftOptions::default()
+    let stages = RecurrenceProofStageOptions {
+        alternative_representations: AlternativeRepresentationOptions::default(),
+        catalog_lifts: CatalogLiftOptions {
+            max_candidates: max_lift_candidates,
+            ..CatalogLiftOptions::default()
+        },
+        affine_coordinates: AffineCoordinateOptions {
+            max_coordinates: max_affine_coordinates,
+        },
     };
     let report = py
-        .detach(|| {
-            discover_recurrence_proofs_with_stages(
-                record,
-                &options,
-                &AlternativeRepresentationOptions::default(),
-                &lifts,
-            )
-        })
+        .detach(|| discover_recurrence_proofs_with_stage_options(record, &options, &stages))
         .map_err(polytool_error)?;
     Ok(ProofReport { report })
 }
@@ -720,7 +725,10 @@ fn certify_record(
 /// parent statement polytool proves; at most ``max_lift_candidates``
 /// catalog families are certified (``0`` disables the stage).  A lift
 /// resting only on the catalog's ``lean_proved`` flag gives the status
-/// ``"conditional_on_attestation"``, never ``"proved"``.  When a theorem fails at the
+/// ``"conditional_on_attestation"``, never ``"proved"``.  Last, the
+/// theorems run on the record in exact affine coordinates ``x = a u + b``
+/// derived from the rule (at most ``max_affine_coordinates``, ``0``
+/// disables the stage); a proof is mapped back to ``x``.  When a theorem fails at the
 /// supplied initial rows, its induction may start up to
 /// ``maximum_start_delay`` rows later (the skipped rows are checked
 /// exactly).  ``root_region=(lower, upper)`` (``None`` for an infinite end)
@@ -731,7 +739,8 @@ fn certify_record(
 /// concerns the sequence the recurrence defines.
 #[pyfunction]
 #[pyo3(signature = (
-    recurrence, *, maximum_start_delay = 3, root_region = None, max_lift_candidates = 6
+    recurrence, *, maximum_start_delay = 3, root_region = None, max_lift_candidates = 6,
+    max_affine_coordinates = 8
 ))]
 pub(crate) fn prove_real_rooted(
     py: Python<'_>,
@@ -739,6 +748,7 @@ pub(crate) fn prove_real_rooted(
     maximum_start_delay: usize,
     root_region: Option<&Bound<'_, PyAny>>,
     max_lift_candidates: usize,
+    max_affine_coordinates: usize,
 ) -> PyResult<ProofReport> {
     let record = Recurrence::record_from_python(recurrence)?;
     prove_record(
@@ -747,6 +757,7 @@ pub(crate) fn prove_real_rooted(
         maximum_start_delay,
         root_region,
         max_lift_candidates,
+        max_affine_coordinates,
     )
 }
 
@@ -830,6 +841,16 @@ impl ProofReport {
             .and_then(|search| search.conclusion.as_ref())
             .filter(|conclusion| conclusion.parent_proof == CatalogParentProofKind::Polytool)
     }
+
+    /// The affine-coordinate conclusion when the stage proves the record.
+    fn proved_affine_coordinate(
+        &self,
+    ) -> Option<&polytool::recurrence::AffineCoordinateConclusion> {
+        self.report
+            .affine_coordinates
+            .as_ref()
+            .and_then(|search| search.conclusion.as_ref())
+    }
 }
 
 #[pymethods]
@@ -888,6 +909,18 @@ impl ProofReport {
             .transpose()
     }
 
+    /// The conclusion of the affine-coordinate stage (a ``dict`` with the
+    /// ``coordinate`` ``x = slope u + intercept``, the inner ``theorem``,
+    /// ``from_index``, the ``root_region`` mapped back to ``x``, the
+    /// interlacing with its ``interlacing_orientation`` and ``statement``),
+    /// or ``None``.
+    #[getter]
+    fn affine_coordinate<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        self.proved_affine_coordinate()
+            .map(|conclusion| serialize_to_python(py, conclusion))
+            .transpose()
+    }
+
     /// The first index ``N`` with every row ``P_n``, ``n >= N``, proved
     /// nonzero and real-rooted, or ``None`` (not proved, or proved only
     /// outside residue classes of zero rows).
@@ -917,31 +950,38 @@ impl ProofReport {
     /// ``"three_term_recurrence"``), or ``None``; attempts on the record come
     /// first, then those on its tail and on a certified alternative.  For a
     /// record proved by a catalog lift, ``"catalog_lift:"`` followed by the
-    /// lift's route (for example ``"catalog_lift:normalized_identification"``).
+    /// lift's route (for example ``"catalog_lift:normalized_identification"``),
+    /// and for a record proved in an affine coordinate ``"affine_coordinate:"``
+    /// followed by the theorem (for example ``"affine_coordinate:variable_delay"``).
     #[getter]
     fn route(&self) -> Option<String> {
         if let Some(attempt) = self.first_proved_attempt() {
             return Some(attempt.theorem.as_str().to_owned());
         }
-        self.proved_lift().map(|conclusion| {
+        if let Some(conclusion) = self.proved_lift() {
             let route = serde_json::to_value(conclusion.route)
                 .ok()
                 .and_then(|value| value.as_str().map(str::to_owned))
                 .unwrap_or_default();
-            format!("catalog_lift:{route}")
-        })
+            return Some(format!("catalog_lift:{route}"));
+        }
+        self.proved_affine_coordinate()
+            .map(|conclusion| format!("affine_coordinate:{}", conclusion.theorem.as_str()))
     }
 
     /// The first proved attempt (a ``dict`` of schema
     /// ``polytool.recurrence-real-rootedness-theorem.v1`` with the
     /// hypotheses and the conclusion), the conclusion of a proving catalog
-    /// lift, or ``None``.
+    /// lift or affine coordinate, or ``None``.
     #[getter]
     fn certificate<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
         if let Some(attempt) = self.first_proved_attempt() {
             return serialize_to_python(py, attempt).map(Some);
         }
-        self.proved_lift()
+        if let Some(conclusion) = self.proved_lift() {
+            return serialize_to_python(py, conclusion).map(Some);
+        }
+        self.proved_affine_coordinate()
             .map(|conclusion| serialize_to_python(py, conclusion))
             .transpose()
     }

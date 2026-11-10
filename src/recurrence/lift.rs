@@ -54,7 +54,7 @@
 //! carries a proved root region along it (the `normalized_equality` module
 //! docs).
 //!
-//! Catalog lifts, [`CatalogLiftSearch`]: the last stage of proof discovery
+//! Catalog lifts, [`CatalogLiftSearch`]: the fourth stage of proof discovery
 //! ([`discover_recurrence_proofs_with_stages`]) connects an unproved record to
 //! a family of the bundled OEIS catalog by a normalized identification or a
 //! backward basis-map lift whose parent is proved by the general stages
@@ -160,9 +160,12 @@ mod parent_theorems;
 pub(in crate::recurrence) use parent_theorems::rule_with_x_free_left_hand_factor;
 pub use parent_theorems::{
     certify_recurrence_equality, discover_recurrence_proofs_with_options,
-    discover_recurrence_proofs_with_stages, AlternativeRepresentationOptions,
-    AlternativeRepresentationProof, AlternativeRepresentationSearch,
-    RealRootedOutsideZeroResidueClasses, RecurrenceEqualityCertificate, RecurrenceProofTail,
+    discover_recurrence_proofs_with_stage_options, discover_recurrence_proofs_with_stages,
+    AffineCoordinate, AffineCoordinateAttempt, AffineCoordinateConclusion, AffineCoordinateOptions,
+    AffineCoordinateSearch, AffineCoordinateTail, AffineInterlacingOrientation,
+    AlternativeRepresentationOptions, AlternativeRepresentationProof,
+    AlternativeRepresentationSearch, RealRootedOutsideZeroResidueClasses,
+    RecurrenceEqualityCertificate, RecurrenceProofStageOptions, RecurrenceProofTail,
     RECURRENCE_EQUALITY_SCHEMA,
 };
 pub use parent_theorems::{

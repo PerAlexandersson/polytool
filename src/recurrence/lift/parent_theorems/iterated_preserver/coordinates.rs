@@ -29,7 +29,6 @@
 //! recorded coordinates.
 
 use super::*;
-use crate::factorization::irreducible_factorization_rational_coeffs;
 use crate::recurrence::implicit::algebra::{from_theta, theta_add, ThetaOp};
 
 /// Largest number of translations tried.
@@ -250,31 +249,15 @@ pub(super) fn coordinate_candidates(
             .map(|power| IteratedPreserverCoordinates::PowerGauge { power }),
     );
     if let Some(top) = terms.keys().copied().max().filter(|&top| top >= 1) {
-        let content = Polynomial::new(Vec::new());
-        let content = terms[&top]
-            .iter()
-            .map(|row| vec_poly::trim(row))
-            .filter(|row| !vec_poly::is_zero(row))
-            .fold(content, |g: Polynomial<Q>, row| {
-                g.gcd(&Polynomial::new(row))
-            });
-        if content.coeffs().len() > 1 {
-            if let Ok(factorization) = irreducible_factorization_rational_coeffs(content.coeffs()) {
-                out.extend(
-                    factorization
-                        .factors
-                        .iter()
-                        .filter(|(factor, _)| factor.len() == 2 && !factor[0].is_zero())
-                        .take(MAX_TRANSLATIONS)
-                        .map(|(factor, _)| IteratedPreserverCoordinates::Translation {
-                            shift: format_rational_coeff(&Q::new(
-                                -factor[0].clone(),
-                                factor[1].clone(),
-                            )),
-                        }),
-                );
-            }
-        }
+        out.extend(
+            rational_roots_of_index_free_factor(&terms[&top])
+                .into_iter()
+                .filter(|root| !root.is_zero())
+                .take(MAX_TRANSLATIONS)
+                .map(|root| IteratedPreserverCoordinates::Translation {
+                    shift: format_rational_coeff(&root),
+                }),
+        );
     }
     if let Some(degree) = nominal_previous_degree(terms, lag, n_first, start_rows) {
         out.push(IteratedPreserverCoordinates::Reversal {

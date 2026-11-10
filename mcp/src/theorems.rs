@@ -47,8 +47,9 @@ pub(crate) fn discover_proofs(
     input: &crate::requests::DiscoverRecurrenceProofsRequest,
 ) -> Result<BTreeMap<String, serde_json::Value>, McpError> {
     use polytool::recurrence::{
-        discover_recurrence_proofs_with_stages, AlternativeRepresentationOptions,
-        CatalogLiftOptions, RealRootednessTheoremOptions,
+        discover_recurrence_proofs_with_stage_options, AffineCoordinateOptions,
+        AlternativeRepresentationOptions, CatalogLiftOptions, RealRootednessTheoremOptions,
+        RecurrenceProofStageOptions,
     };
     validate_mcp_text(&input.recurrence_json, "recurrence JSON").map_err(invalid_params)?;
     let record: RecurrenceJson = serde_json::from_str(&input.recurrence_json)
@@ -77,14 +78,24 @@ pub(crate) fn discover_proofs(
         }
         lifts.max_candidates = candidates;
     }
-    let report = discover_recurrence_proofs_with_stages(
+    let mut affine = AffineCoordinateOptions::default();
+    if let Some(coordinates) = input.max_affine_coordinates {
+        if coordinates > 64 {
+            return Err(invalid_params("max_affine_coordinates must be at most 64"));
+        }
+        affine.max_coordinates = coordinates;
+    }
+    let report = discover_recurrence_proofs_with_stage_options(
         &record,
         &RealRootednessTheoremOptions {
             maximum_start_delay,
             ..Default::default()
         },
-        &alternative,
-        &lifts,
+        &RecurrenceProofStageOptions {
+            alternative_representations: alternative,
+            catalog_lifts: lifts,
+            affine_coordinates: affine,
+        },
     )
     .map_err(|e| invalid_params(e.to_string()))?;
     let serde_json::Value::Object(fields) =
@@ -138,6 +149,7 @@ mod tests {
                 maximum_start_delay: Some(0),
                 max_representation_candidates: None,
                 max_lift_candidates: None,
+                max_affine_coordinates: None,
             }))
             .unwrap();
         assert_eq!(report["status"], "proved");
@@ -161,6 +173,7 @@ mod tests {
                 maximum_start_delay: Some(17),
                 max_representation_candidates: None,
                 max_lift_candidates: None,
+                max_affine_coordinates: None,
             }))
             .is_err());
         assert!(server
@@ -169,6 +182,16 @@ mod tests {
                 maximum_start_delay: None,
                 max_representation_candidates: None,
                 max_lift_candidates: Some(101),
+                max_affine_coordinates: None,
+            }))
+            .is_err());
+        assert!(server
+            .discover_recurrence_proofs(Parameters(DiscoverRecurrenceProofsRequest {
+                recurrence_json: record.to_string(),
+                maximum_start_delay: None,
+                max_representation_candidates: None,
+                max_lift_candidates: None,
+                max_affine_coordinates: Some(65),
             }))
             .is_err());
     }
