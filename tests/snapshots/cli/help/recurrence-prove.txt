@@ -23,6 +23,16 @@ of the gauged seed rows; S_n is real-rooted for every n by its degree (<= 1), a
 discriminant (degree 2 or 3) or the palindromic-quartic test (u = x + 1/x),
 signs of polynomials in n decided exactly.
 
+Positive lag-two Euler (lag_two_euler, recorded only when its form matches):
+with theta = x D and m = n - first_index, the operators are [(a+b
+theta)+x(a+b(m-1)-b theta)] P_(n-1) and c x(theta+1)(m-1-theta) P_(n-2). The
+full operator identity is exact; a > 0, b >= a, c >= 0 and a nonzero denominator
+are checked for every index. Positive constant/linear seeds and exact later seed
+steps give simple negative roots, adjacent strict interlacing and auxiliary
+interlacing, with a replayable certificate and RealRooted
+lagTwoEuler_recurrence_certificate correspondence. Negative lag corrections are
+excluded. Tried after the existing routes.
+
 When no criterion proves the record:
   - tail: if one of the first rows is zero or not real-rooted, the criteria run
     on the record starting after the last such row; a proof then says "every

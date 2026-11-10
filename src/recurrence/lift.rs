@@ -93,7 +93,10 @@
 //!   constant-coefficient parent proved by those theorems (also parent route
 //!   8e); [`check_factor_gauge_theorem`] proves rules whose lag-`j`
 //!   multiplier is `kappa_j(n) q(x)^j` through `P_n = q^(n-e) g S_n` with a
-//!   bounded residual `S_n` (also parent route 8f); every theorem is also
+//!   bounded residual `S_n` (also parent route 8f);
+//!   [`check_lag_two_euler_theorem`] proves the positive lag-two Euler
+//!   operator recurrence, with simple negative roots and strict adjacent
+//!   and auxiliary interlacing (also parent route 8g); every theorem is also
 //!   reached by name through [`check_real_rootedness_theorem`] (the list
 //!   [`RealRootednessTheorem::ALL`], one registry entry per theorem), and a
 //!   report carries at most one [`RouteCertificate`];
@@ -175,10 +178,11 @@ pub use parent_theorems::{
     ZeroResidueClasses, REAL_ROOTEDNESS_THEOREM_SCHEMA, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
 use parent_theorems::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
-// RealRooted row routes `variableDelay` and `subseq`.
+// RealRooted row routes `variableDelay`, `subseq` and `lagTwoEuler`.
 pub use parent_theorems::{
-    check_residue_class_subsequence_theorem, check_variable_delay_theorem, ResidueClassCertificate,
-    ResidueClassProof, VariableDelayCertificate, VariableDelaySeedStep,
+    check_lag_two_euler_theorem, check_residue_class_subsequence_theorem,
+    check_variable_delay_theorem, LagTwoEulerCertificate, LagTwoEulerSeedStep,
+    ResidueClassCertificate, ResidueClassProof, VariableDelayCertificate, VariableDelaySeedStep,
 };
 // Index-section lift (RealRooted route `pathPower`).
 pub use parent_theorems::{

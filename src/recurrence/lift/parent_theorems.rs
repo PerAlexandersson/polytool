@@ -71,6 +71,11 @@
 //!   its degree, a discriminant or the palindromic-quartic criterion, each
 //!   decided for every index when the coordinates are polynomial in `n`.
 //!
+//! - [`check_lag_two_euler_theorem`]: the positive lag-two Euler operators,
+//!   `a > 0`, `b >= a`, `c >= 0`, positive constant/linear seeds and exact
+//!   later seed steps, with simple negative roots and strict adjacent and
+//!   auxiliary interlacing (RealRooted `lagTwoEuler`).
+//!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
 //! functions of `n`, the hypotheses as [`LiftHypothesis`] entries (verified,
@@ -196,9 +201,11 @@ mod liu_wang;
 mod liu_wang_three_term;
 mod ma_wang;
 mod three_term;
-// RealRooted row routes (`variableDelay`, `subseq`).
+// RealRooted row routes (`variableDelay`, `subseq`, `lagTwoEuler`).
+mod lag_two_euler;
 mod residue_class;
 mod variable_delay;
+pub use lag_two_euler::{check_lag_two_euler_theorem, LagTwoEulerCertificate, LagTwoEulerSeedStep};
 // Index-section lift (RealRooted `pathPower`).
 mod index_section;
 // Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`).
@@ -282,12 +289,14 @@ pub enum RealRootednessTheorem {
     /// [`check_factor_gauge_theorem`] (RealRooted routes `powerForm`,
     /// `closedForm`, `factorPower`).
     FactorGauge,
+    /// [`check_lag_two_euler_theorem`] (RealRooted positive lag-two Euler recurrence).
+    LagTwoEuler,
 }
 
 impl RealRootednessTheorem {
     /// Every theorem, in the order of the parent cascade and of
     /// [`discover_recurrence_proofs`].
-    pub const ALL: [RealRootednessTheorem; 12] = [
+    pub const ALL: [RealRootednessTheorem; 13] = [
         RealRootednessTheorem::ProductRecurrence,
         RealRootednessTheorem::ThreeTermRecurrence,
         RealRootednessTheorem::LiuWang,
@@ -300,6 +309,7 @@ impl RealRootednessTheorem {
         RealRootednessTheorem::ResidueClassSubsequences,
         RealRootednessTheorem::IndexSectionLift,
         RealRootednessTheorem::FactorGauge,
+        RealRootednessTheorem::LagTwoEuler,
     ];
 
     /// The snake-case name, as serialized (for example
@@ -318,6 +328,7 @@ impl RealRootednessTheorem {
             RealRootednessTheorem::ResidueClassSubsequences => "residue_class_subsequences",
             RealRootednessTheorem::IndexSectionLift => "index_section_lift",
             RealRootednessTheorem::FactorGauge => "factor_gauge",
+            RealRootednessTheorem::LagTwoEuler => "lag_two_euler",
         }
     }
 }

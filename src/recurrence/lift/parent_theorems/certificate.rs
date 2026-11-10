@@ -30,6 +30,8 @@ pub enum RouteCertificate {
     /// multipliers, the common factor, the residual window and its
     /// coefficient polynomials (JSON key `factor_gauge`).
     FactorGauge(FactorGaugeCertificate),
+    /// [`check_lag_two_euler_theorem`]: normalized operators and exact seed steps.
+    LagTwoEuler(LagTwoEulerCertificate),
 }
 
 impl RouteCertificate {
@@ -38,6 +40,7 @@ impl RouteCertificate {
         match self {
             RouteCertificate::IteratedPreserver(_) => RealRootednessTheorem::IteratedPreserver,
             RouteCertificate::VariableDelay(_) => RealRootednessTheorem::VariableDelay,
+            RouteCertificate::LagTwoEuler(_) => RealRootednessTheorem::LagTwoEuler,
             RouteCertificate::ResidueClassSubsequences(_) => {
                 RealRootednessTheorem::ResidueClassSubsequences
             }
@@ -74,6 +77,7 @@ impl RouteCertificate {
                 Ok(Some(certificate.parent_maximum_start_delay))
             }
             RouteCertificate::IteratedPreserver(_)
+            | RouteCertificate::LagTwoEuler(_)
             | RouteCertificate::VariableDelay(_)
             | RouteCertificate::FactorGauge(_) => Ok(None),
         }
@@ -98,6 +102,9 @@ impl RouteCertificate {
             RouteCertificate::IndexSectionLift(certificate) => {
                 index_section::verify_certificate_in_report(certificate, report)
             }
+            RouteCertificate::LagTwoEuler(certificate) => {
+                lag_two_euler::verify_certificate_in_report(certificate, report)
+            }
             RouteCertificate::FactorGauge(certificate) => {
                 factor_gauge::verify_certificate_in_report(certificate, report)
             }
@@ -106,6 +113,14 @@ impl RouteCertificate {
 }
 
 impl RealRootednessTheoremReport {
+    /// The positive lag-two Euler route certificate, if recorded.
+    pub fn lag_two_euler_certificate(&self) -> Option<&LagTwoEulerCertificate> {
+        match &self.certificate {
+            Some(RouteCertificate::LagTwoEuler(certificate)) => Some(certificate),
+            _ => None,
+        }
+    }
+
     /// The route certificate of [`check_iterated_preserver_theorem`], if
     /// recorded.
     pub fn iterated_preserver_certificate(&self) -> Option<&IteratedPreserverCertificate> {

@@ -528,9 +528,40 @@ fn discovery_records_the_row_routes_only_where_they_apply() {
     let report = discover_recurrence_proofs(&record("A099605"), &options).unwrap();
     assert_eq!(report.real_rooted_from_index, Some(0));
     assert!(report.real_rooted_outside_zero_residue_classes.is_none());
-    // Eulerian rows (first order, lag 1): neither route applies.
+    // Eulerian rows (first order, lag 1): neither fixed-delay nor residue
+    // splitting applies, but the lag-two Euler form includes c(n) = 0.
     let report = discover_recurrence_proofs(&record("A008292"), &options).unwrap();
-    assert_eq!(report.attempts.len(), 8);
+    assert_eq!(report.attempts.len(), 9);
+    let attempt = report.attempts.last().unwrap();
+    assert_eq!(attempt.theorem, RealRootednessTheorem::LagTwoEuler);
+    assert_eq!(
+        attempt.status,
+        RealRootednessTheoremStatus::HypothesisFailed
+    );
+    assert_eq!(
+        hypothesis(attempt, "positive_linear_seed").status,
+        LiftHypothesisStatus::Failed {
+            witness: Some(BigInt::from(2))
+        }
+    );
+    report.verify().unwrap();
+    let report = discover_recurrence_proofs(
+        &record("A008292"),
+        &RealRootednessTheoremOptions {
+            maximum_start_delay: 1,
+            ..options
+        },
+    )
+    .unwrap();
+    let attempt = report.attempts.last().unwrap();
+    assert_eq!(attempt.theorem, RealRootednessTheorem::LagTwoEuler);
+    assert!(attempt.is_proved());
+    assert_eq!(attempt.start_delay, 1);
+    assert_eq!(
+        attempt.lag_two_euler_certificate().unwrap().c.numerator,
+        ["0"]
+    );
+    report.verify().unwrap();
 }
 
 fn parent(id: &str) -> VeroneseParentProof {

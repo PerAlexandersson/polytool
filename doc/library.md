@@ -802,8 +802,9 @@ in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 `recurrence::check_hypergeometric_row_theorem`,
 `recurrence::check_variable_delay_theorem`,
 `recurrence::check_residue_class_subsequence_theorem`,
-`recurrence::check_index_section_lift_theorem` and
-`recurrence::check_factor_gauge_theorem` apply a paper theorem to a
+`recurrence::check_index_section_lift_theorem`,
+`recurrence::check_factor_gauge_theorem` and
+`recurrence::check_lag_two_euler_theorem` apply a paper theorem to a
 family given by a rule, a first index and seed rows (the rule applies from
 `first_index + seeds.len()` on), and check every hypothesis exactly for all
 indices.  The result (`RealRootednessTheoremReport`,
@@ -950,6 +951,34 @@ region).  `verify()` replays it.
   (`P_n = (n + 2) P_(n-1) + binom(n + 2, 2) x P_(n-3)`) is proved this way;
   the paper-theorem route `fixed_delay_predecessor_window` covers `a = 1`
   with canonical seeds only.
+- Positive lag-two Euler (`lag_two_euler`): with `theta = x D` and
+  `m = n - first_index`, the normalized operators are
+  `[(a+b theta)+x(a+b(m-1)-b theta)] P_(n-1)` and
+  `c x(theta+1)(m-1-theta) P_(n-2)`. Recognition converts
+  `x^d D^d` to falling factorials in `theta` and checks the complete operator
+  identity. The original scalar denominator is nonzero, `a > 0`,
+  `b-a >= 0`, `c >= 0` on every integer of the rule range, decided by the
+  exact rational-function sign checker. The first two rows are `w` and
+  `u+v x`, `w,u,v > 0`; every additional seed, including moved-start rows,
+  must be an exact step with these scalar inequalities. Their scalars are
+  solved exactly (a two-variable nonnegative linear system after fixing
+  `a` from the constant terms), allowing arbitrary positive seed steps
+  before the rule starts. Every row has `n-first_index` simple negative
+  roots, adjacent strict interlacing and auxiliary interlacing
+  `(theta+1)(m-theta)P_(n-1) StrictInterl P_n`.
+  `lag_two_euler_certificate()` returns a `LagTwoEulerCertificate` with
+  normalized rational functions, the positive seeds and every later seed
+  step. Its `verify_operator_identity` and `verify_seed_steps` replay those
+  identities independently; report replay also verifies all sign certificates.
+  `lean_declarations` names `RealRooted.lagTwoEuler_recurrence_certificate`
+  and `RealRooted.lagTwoEuler_recurrence_simpleNegRooted` from
+  `RealRooted/EulerianTriangles/LagTwoRecurrence.lean`. The triangle
+  specialization `a=1`, `b=m`, `c=m lambda_n` covers A157147–A157151 and
+  A157637. Negative lag corrections (A157152–A157156) fail `c >= 0`;
+  A157152 already has a non-real-rooted row at index 8, while the other
+  negative-sign families remain open. Discovery records this route only
+  when its operator form matches; it follows the existing routes to retain
+  their proof priority and is offered in both parent menus.
 - Residue classes (RealRooted row route `subseq`): when every lag of the
   rule is a multiple of `p >= 2` (the gcd), each class `P_(first + j + p m)`,
   `m >= 0`, is an exactly derived family in `m` (the rule at

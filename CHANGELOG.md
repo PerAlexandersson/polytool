@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- Positive lag-two Euler proof route (`lag_two_euler`,
+  `check_lag_two_euler_theorem`): exact theta-operator recognition,
+  infinite-range rational sign certificates, positive constant/linear seeds
+  and exact nonnegative seed-step decompositions. Reports prove simple
+  negative roots and strict adjacent/auxiliary interlacing, name the
+  RealRooted lag-two recurrence declarations, and carry a replayable
+  `LagTwoEulerCertificate`. Discovery records matching rules only; parent
+  proofs preserve earlier route priority. Covers A157147–A157151 and
+  A157637 and excludes negative lag corrections A157152–A157156.
+
 ### Breaking
 
 - Proof discovery (`recurrence-prove`, `discover_recurrence_proofs`, MCP

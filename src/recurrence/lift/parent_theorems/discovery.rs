@@ -8,7 +8,7 @@
 //! 1. every general theorem of `parent_theorems` on the supplied record, in
 //!    the order of [`RealRootednessTheorem::ALL`]; the attempts of the first
 //!    eight are always recorded, those of the RealRooted row routes, the
-//!    index-section lift and the factor gauge only where the rule has their
+//!    index-section lift, factor gauge and positive lag-two Euler only where the rule has their
 //!    form (status other than `not_applicable`);
 //! 2. **tail**: when no theorem proves the record and one of its first rows
 //!    (the seeds and the rows of the induction-start window) is zero or not

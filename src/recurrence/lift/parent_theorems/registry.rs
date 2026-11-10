@@ -138,7 +138,7 @@ pub(super) fn any_proof(_: &RealRootednessTheoremReport) -> bool {
 }
 
 /// Every theorem route, in the order of [`RealRootednessTheorem::ALL`].
-pub(in crate::recurrence) static ROUTES: [TheoremRoute; 12] = [
+pub(in crate::recurrence) static ROUTES: [TheoremRoute; 13] = [
     product::ROUTE,
     three_term::ROUTE,
     liu_wang::ROUTE,
@@ -151,6 +151,7 @@ pub(in crate::recurrence) static ROUTES: [TheoremRoute; 12] = [
     residue_class::ROUTE,
     index_section::ROUTE,
     factor_gauge::ROUTE,
+    lag_two_euler::ROUTE,
 ];
 
 /// The route of `theorem`.
@@ -217,12 +218,18 @@ mod tests {
     }
 
     #[test]
-    fn the_menus_are_prefixes_of_the_route_order() {
+    fn the_menus_follow_the_route_order() {
         let all = theorems(&ROUTES);
         // A residue class is not split again; the parent of an index section
         // may itself be proved by residue classes.
-        assert_eq!(filtered(|route| route.in_residue_class_menu), all[..9]);
-        assert_eq!(filtered(|route| route.in_index_section_menu), all[..10]);
+        assert_eq!(
+            filtered(|route| route.in_residue_class_menu),
+            [&all[..9], &all[12..]].concat()
+        );
+        assert_eq!(
+            filtered(|route| route.in_index_section_menu),
+            [&all[..10], &all[12..]].concat()
+        );
     }
 
     #[test]
@@ -241,7 +248,8 @@ mod tests {
                 RealRootednessTheorem::VariableDelay,
                 RealRootednessTheorem::ResidueClassSubsequences,
                 RealRootednessTheorem::IndexSectionLift,
-                RealRootednessTheorem::FactorGauge
+                RealRootednessTheorem::FactorGauge,
+                RealRootednessTheorem::LagTwoEuler
             ]
         );
     }

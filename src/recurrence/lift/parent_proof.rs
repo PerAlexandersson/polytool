@@ -96,7 +96,7 @@
 //!    parent row to a zero input row; the attempt's detail names the zero
 //!    classes, and the route claims no interlacing;
 //!
-//!    Route 8e, tried last and only for a parent still open, is the
+//!    Route 8e, tried after route 8d and only for a parent still open, is the
 //!    **index-section lift** ([`check_index_section_lift_theorem`], route
 //!    `pathPower`: `x`-only multipliers, the rows, possibly reversed, are
 //!    every `p`-th row of a constant-coefficient parent proved by a theorem
@@ -114,6 +114,12 @@
 //!    `(-inf, 0]` (run with the requested region `(-inf, 0)` and, failing
 //!    that, without one, since `q` or `g` may have roots at `0`); recorded
 //!    only when the rule has the theorem's form;
+//!    Route 8g, tried after the existing routes and only for a parent still
+//!    open, is **positive lag-two Euler** ([`check_lag_two_euler_theorem`],
+//!    route `lagTwoEuler`): the exact Euler operator form with `a > 0`,
+//!    `b >= a`, `c >= 0` and positive seeds gives simple negative roots and
+//!    strict adjacent and auxiliary interlacing. Recorded only when the
+//!    operator form matches; also offered in both sub-family menus.
 //! 9. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
@@ -337,6 +343,8 @@ pub enum VeroneseParentProofRoute {
     IndexSectionLift,
     /// [`check_factor_gauge_theorem`] with a region in `(-inf, 0]`.
     FactorGauge,
+    /// [`check_lag_two_euler_theorem`] with simple negative roots and strict interlacing.
+    LagTwoEuler,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -360,6 +368,7 @@ impl VeroneseParentProofRoute {
             | VeroneseParentProofRoute::VariableDelay
             | VeroneseParentProofRoute::ResidueClassSubsequences
             | VeroneseParentProofRoute::IndexSectionLift
+            | VeroneseParentProofRoute::LagTwoEuler
             | VeroneseParentProofRoute::FactorGauge => match self.theorem() {
                 Some(theorem) => theorem.as_str(),
                 None => unreachable!(),
@@ -393,6 +402,7 @@ impl VeroneseParentProofRoute {
                 Some(RealRootednessTheorem::HypergeometricRow)
             }
             VeroneseParentProofRoute::VariableDelay => Some(RealRootednessTheorem::VariableDelay),
+            VeroneseParentProofRoute::LagTwoEuler => Some(RealRootednessTheorem::LagTwoEuler),
             VeroneseParentProofRoute::ResidueClassSubsequences => {
                 Some(RealRootednessTheorem::ResidueClassSubsequences)
             }
@@ -423,6 +433,7 @@ impl VeroneseParentProofRoute {
             RealRootednessTheorem::IteratedPreserver => VeroneseParentProofRoute::IteratedPreserver,
             RealRootednessTheorem::HypergeometricRow => VeroneseParentProofRoute::HypergeometricRow,
             RealRootednessTheorem::VariableDelay => VeroneseParentProofRoute::VariableDelay,
+            RealRootednessTheorem::LagTwoEuler => VeroneseParentProofRoute::LagTwoEuler,
             RealRootednessTheorem::ResidueClassSubsequences => {
                 VeroneseParentProofRoute::ResidueClassSubsequences
             }
