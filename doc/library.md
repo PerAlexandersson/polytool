@@ -807,8 +807,9 @@ in [algorithms.md](algorithms.md#certifying-one-candidate-v2).
 `recurrence::check_variable_delay_theorem`,
 `recurrence::check_residue_class_subsequence_theorem`,
 `recurrence::check_index_section_lift_theorem`,
-`recurrence::check_factor_gauge_theorem` and
-`recurrence::check_lag_two_euler_theorem` apply a paper theorem to a
+`recurrence::check_factor_gauge_theorem`,
+`recurrence::check_lag_two_euler_theorem` and
+`recurrence::check_binomial_perturbed_euler_orbit_theorem` apply a theorem to a
 family given by a rule, a first index and seed rows (the rule applies from
 `first_index + seeds.len()` on), and check every hypothesis exactly for all
 indices.  The result (`RealRootednessTheoremReport`,
@@ -983,6 +984,32 @@ region).  `verify()` replays it.
   negative-sign families remain open. Discovery records this route only
   when its operator form matches; it follows the existing routes to retain
   their proof priority and is offered in both parent menus.
+- Binomial-perturbed Euler orbit (`binomial_perturbed_euler_orbit`): the exact
+  lag-two theta recurrence of
+  [RealRooted issue #2513](https://github.com/PerAlexandersson/RealRooted/issues/2513),
+  with `s>=1`, `kappa>=s+4`, `Q_0=1`, `Q_1=1+2u`,
+  `Q_2=1+kappa*u+kappa*u^2`. We recover the integer degree shift from the
+  lag-one coefficient `2+1/(m-2)` and `s` from its theta coefficient,
+  compare every operator coefficient as a rational function of the index,
+  and check every seed against the canonical family. The rule starts at
+  `m>=3`; nonvanishing of its original scalar denominator is decided for
+  every later integer, retaining singularities of common factors. The
+  Eulerian Mobius coordinate is also supported:
+  `Q_m(u)=(1+u)^m P_n(u/(1+u))`, `m=n+offset`, with the exact transported
+  recurrence and an inductive degree cap. The conclusion gives `m` simple
+  roots in `(-1,0)` (Q) or `(-inf,0)` (P), and strict adjacent interlacing
+  with its direction preserved by the increasing coordinate map.
+  `binomial_perturbed_euler_orbit_certificate()` returns a
+  `BinomialPerturbedEulerOrbitCertificate`; its `verify(rule,first,seeds)`
+  independently recomputes transport, operator matching, parameters,
+  seeds, start range and denominator hypotheses. The reduction
+  `q_m(x)=r*p_m(x)+(1-r)*x^m`, `x=2u+1`,
+  `p_(m+1)=(x+(s/2)(x^2-1)D)p_m`, `r=(kappa-4)/(2s)` is checked exactly
+  in tests. Discovery records matching rules only; the parent cascade
+  tries it while unproved. `lean_declarations` names
+  `RealRooted.strictInterl_of_orbitPerturbation_recurrence` (plus
+  `RealRooted.strictInterl_cayleyTransform_succ_of_roots_mem_Icc` after the
+  Mobius transport); Lean replay `not_attempted`.
 - Residue classes (RealRooted row route `subseq`): when every lag of the
   rule is a multiple of `p >= 2` (the gcd), each class `P_(first + j + p m)`,
   `m >= 0`, is an exactly derived family in `m` (the rule at

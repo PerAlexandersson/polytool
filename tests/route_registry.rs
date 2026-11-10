@@ -19,7 +19,7 @@ fn serialized<T: serde::Serialize>(value: T) -> String {
 }
 
 /// Every parent route (the enum has no `ALL`).
-const PARENT_ROUTES: [VeroneseParentProofRoute; 17] = [
+const PARENT_ROUTES: [VeroneseParentProofRoute; 18] = [
     VeroneseParentProofRoute::PeriodicProduct,
     VeroneseParentProofRoute::ProductRecurrence,
     VeroneseParentProofRoute::PaperTheorem,
@@ -36,6 +36,7 @@ const PARENT_ROUTES: [VeroneseParentProofRoute; 17] = [
     VeroneseParentProofRoute::IndexSectionLift,
     VeroneseParentProofRoute::FactorGauge,
     VeroneseParentProofRoute::LagTwoEuler,
+    VeroneseParentProofRoute::BinomialPerturbedEulerOrbit,
     VeroneseParentProofRoute::Attestation,
 ];
 
@@ -60,6 +61,7 @@ fn parent_routes_are_listed(route: VeroneseParentProofRoute) {
         | R::ResidueClassSubsequences
         | R::IndexSectionLift
         | R::LagTwoEuler
+        | R::BinomialPerturbedEulerOrbit
         | R::FactorGauge
         | R::Attestation => {}
     }
@@ -102,6 +104,7 @@ fn the_theorem_order_is_frozen() {
             "index_section_lift",
             "factor_gauge",
             "lag_two_euler",
+            "binomial_perturbed_euler_orbit",
         ]
     );
 }

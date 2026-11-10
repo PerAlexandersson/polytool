@@ -120,6 +120,11 @@
 //!    `b >= a`, `c >= 0` and positive seeds gives simple negative roots and
 //!    strict adjacent and auxiliary interlacing. Recorded only when the
 //!    operator form matches; also offered in both sub-family menus.
+//!    Route 8h, while still open, is the **binomial-perturbed Euler orbit**
+//!    ([`check_binomial_perturbed_euler_orbit_theorem`], RealRooted issue
+//!    #2513): exact theta operators, canonical seeds, `s>=1`, `kappa>=s+4`,
+//!    also after exact Eulerian Mobius transport. Gives simple negative
+//!    roots and strict adjacent interlacing; recorded only when applicable.
 //! 9. **attestation**: a caller-supplied [`VeroneseParentAttestation`] whose
 //!    record equals the parent exactly (same first index, the same relation
 //!    term by term, the same identifying seeds); the verdict is then
@@ -345,6 +350,8 @@ pub enum VeroneseParentProofRoute {
     FactorGauge,
     /// [`check_lag_two_euler_theorem`] with simple negative roots and strict interlacing.
     LagTwoEuler,
+    /// [`check_binomial_perturbed_euler_orbit_theorem`] (RealRooted issue #2513).
+    BinomialPerturbedEulerOrbit,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -369,6 +376,7 @@ impl VeroneseParentProofRoute {
             | VeroneseParentProofRoute::ResidueClassSubsequences
             | VeroneseParentProofRoute::IndexSectionLift
             | VeroneseParentProofRoute::LagTwoEuler
+            | VeroneseParentProofRoute::BinomialPerturbedEulerOrbit
             | VeroneseParentProofRoute::FactorGauge => match self.theorem() {
                 Some(theorem) => theorem.as_str(),
                 None => unreachable!(),
@@ -403,6 +411,9 @@ impl VeroneseParentProofRoute {
             }
             VeroneseParentProofRoute::VariableDelay => Some(RealRootednessTheorem::VariableDelay),
             VeroneseParentProofRoute::LagTwoEuler => Some(RealRootednessTheorem::LagTwoEuler),
+            VeroneseParentProofRoute::BinomialPerturbedEulerOrbit => {
+                Some(RealRootednessTheorem::BinomialPerturbedEulerOrbit)
+            }
             VeroneseParentProofRoute::ResidueClassSubsequences => {
                 Some(RealRootednessTheorem::ResidueClassSubsequences)
             }
@@ -434,6 +445,9 @@ impl VeroneseParentProofRoute {
             RealRootednessTheorem::HypergeometricRow => VeroneseParentProofRoute::HypergeometricRow,
             RealRootednessTheorem::VariableDelay => VeroneseParentProofRoute::VariableDelay,
             RealRootednessTheorem::LagTwoEuler => VeroneseParentProofRoute::LagTwoEuler,
+            RealRootednessTheorem::BinomialPerturbedEulerOrbit => {
+                VeroneseParentProofRoute::BinomialPerturbedEulerOrbit
+            }
             RealRootednessTheorem::ResidueClassSubsequences => {
                 VeroneseParentProofRoute::ResidueClassSubsequences
             }

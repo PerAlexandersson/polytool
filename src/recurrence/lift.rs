@@ -181,10 +181,11 @@ pub use parent_theorems::{
     ZeroResidueClasses, REAL_ROOTEDNESS_THEOREM_SCHEMA, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
 use parent_theorems::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
-// RealRooted row routes `variableDelay`, `subseq` and `lagTwoEuler`.
+// RealRooted row routes, including the Euler-orbit theorem of issue #2513.
 pub use parent_theorems::{
-    check_lag_two_euler_theorem, check_residue_class_subsequence_theorem,
-    check_variable_delay_theorem, LagTwoEulerCertificate, LagTwoEulerSeedStep,
+    check_binomial_perturbed_euler_orbit_theorem, check_lag_two_euler_theorem,
+    check_residue_class_subsequence_theorem, check_variable_delay_theorem,
+    BinomialPerturbedEulerOrbitCertificate, LagTwoEulerCertificate, LagTwoEulerSeedStep,
     ResidueClassCertificate, ResidueClassProof, VariableDelayCertificate, VariableDelaySeedStep,
 };
 // Index-section lift (RealRooted route `pathPower`).

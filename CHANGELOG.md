@@ -4,6 +4,18 @@
 
 ### Added
 
+- Binomial-perturbed Euler-orbit proof route
+  (`binomial_perturbed_euler_orbit`,
+  `check_binomial_perturbed_euler_orbit_theorem`, RealRooted issue #2513):
+  exact theta operators, rational parameters `s>=1`, `kappa>=s+4`, canonical
+  seeds, integer degree shifts, nonzero scalar denominators and exact
+  Eulerian Mobius transport. Proves simple roots in `(-1,0)` or `(-inf,0)`
+  and strict adjacent interlacing for A141689, A141690, A141696, A141697
+  and A147565. `BinomialPerturbedEulerOrbitCertificate::verify` replays the
+  full transport and seed identities. Recorded only for matching operators,
+  after existing routes. Lean: `RealRooted.strictInterl_of_orbitPerturbation_recurrence`
+  (plus `RealRooted.strictInterl_cayleyTransform_succ_of_roots_mem_Icc` for
+  the Eulerian coordinate).
 - Affine-coordinate stage of proof discovery (`recurrence-prove`,
   `discover_recurrence_proofs`, MCP `discover_recurrence_proofs`, Python
   `prove_real_rooted`), run last on records no other stage proves with a

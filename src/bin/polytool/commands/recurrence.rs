@@ -524,6 +524,16 @@ roots, adjacent strict interlacing and auxiliary interlacing, with a replayable
 certificate and RealRooted lagTwoEuler_recurrence_certificate correspondence.
 Negative lag corrections are excluded. Tried after the existing routes.
 
+Binomial-perturbed Euler orbit (binomial_perturbed_euler_orbit, recorded only
+when its operators match): the exact lag-two theta recurrence of RealRooted
+issue #2513, s >= 1, kappa >= s+4, Q_0=1, Q_1=1+2u,
+Q_2=1+kappa*u+kappa*u^2, starting at degree m >= 3. Integer degree shifts,
+every seed and nonzero scalar denominators are checked exactly. Also recognizes
+Q_m(u)=(1+u)^m P_n(u/(1+u)) by exact Mobius transport with an inductive degree
+cap. Gives simple roots in (-1,0) for Q, or (-inf,0) for P, and strict adjacent
+interlacing with the direction preserved. A certificate replays the transformed
+rule and seed identities. Lean: strictInterl_of_orbitPerturbation_recurrence.
+
 When no criterion proves the record:
   - tail: if one of the first rows is zero or not real-rooted, the criteria run
     on the record starting after the last such row; a proof then says "every

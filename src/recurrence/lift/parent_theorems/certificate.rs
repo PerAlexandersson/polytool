@@ -32,6 +32,9 @@ pub enum RouteCertificate {
     FactorGauge(FactorGaugeCertificate),
     /// [`check_lag_two_euler_theorem`]: normalized operators and exact seed steps.
     LagTwoEuler(LagTwoEulerCertificate),
+    /// [`check_binomial_perturbed_euler_orbit_theorem`]: parameters, exact
+    /// coordinate transport and canonical seeds.
+    BinomialPerturbedEulerOrbit(BinomialPerturbedEulerOrbitCertificate),
 }
 
 impl RouteCertificate {
@@ -41,6 +44,9 @@ impl RouteCertificate {
             RouteCertificate::IteratedPreserver(_) => RealRootednessTheorem::IteratedPreserver,
             RouteCertificate::VariableDelay(_) => RealRootednessTheorem::VariableDelay,
             RouteCertificate::LagTwoEuler(_) => RealRootednessTheorem::LagTwoEuler,
+            RouteCertificate::BinomialPerturbedEulerOrbit(_) => {
+                RealRootednessTheorem::BinomialPerturbedEulerOrbit
+            }
             RouteCertificate::ResidueClassSubsequences(_) => {
                 RealRootednessTheorem::ResidueClassSubsequences
             }
@@ -78,6 +84,7 @@ impl RouteCertificate {
             }
             RouteCertificate::IteratedPreserver(_)
             | RouteCertificate::LagTwoEuler(_)
+            | RouteCertificate::BinomialPerturbedEulerOrbit(_)
             | RouteCertificate::VariableDelay(_)
             | RouteCertificate::FactorGauge(_) => Ok(None),
         }
@@ -105,6 +112,9 @@ impl RouteCertificate {
             RouteCertificate::LagTwoEuler(certificate) => {
                 lag_two_euler::verify_certificate_in_report(certificate, report)
             }
+            RouteCertificate::BinomialPerturbedEulerOrbit(certificate) => {
+                binomial_perturbed_euler_orbit::verify_certificate_in_report(certificate, report)
+            }
             RouteCertificate::FactorGauge(certificate) => {
                 factor_gauge::verify_certificate_in_report(certificate, report)
             }
@@ -113,6 +123,16 @@ impl RouteCertificate {
 }
 
 impl RealRootednessTheoremReport {
+    /// The binomial-perturbed Euler-orbit certificate, if recorded.
+    pub fn binomial_perturbed_euler_orbit_certificate(
+        &self,
+    ) -> Option<&BinomialPerturbedEulerOrbitCertificate> {
+        match &self.certificate {
+            Some(RouteCertificate::BinomialPerturbedEulerOrbit(certificate)) => Some(certificate),
+            _ => None,
+        }
+    }
+
     /// The positive lag-two Euler route certificate, if recorded.
     pub fn lag_two_euler_certificate(&self) -> Option<&LagTwoEulerCertificate> {
         match &self.certificate {

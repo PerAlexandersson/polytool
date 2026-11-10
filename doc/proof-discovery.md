@@ -43,6 +43,24 @@ Neither fitting nor held-out checks prove that identity.
 | Index-section lift (RealRooted `pathPower`) | Multipliers depending on `x` only; `P_(first + s + m) = T(Q_(p m))` for every `m`, with `T` the identity or the reversal `x^(d m + e) P(1/x)`, `p <= 5`, `s` exceptional prefix rows, and a parent `Q` with a constant-coefficient rule found by factoring `chi_T(w^p)`: `Res_w(psi(w), z - w^p) = chi_T(z)` and polynomial parent seeds (an equal-order recurrence argument, nothing fitted); the parent proved by one of the rules above | Nonzero real-rooted rows; the parent region (identity) or its reciprocal image closed at `0` (reversal); no interlacing |
 | Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`) | `f(n) P_n = sum_j kappa_j(n) q(x)^j P_(n-j)`, order `L >= 2`, one monic `q` (a constant allowed, found exactly as a root of a lag multiplier); `P_n = q^(n-e) g S_n` (`e` the last seed row, `g` the gcd of the gauged window `q^(e-m) P_m`) with `S_n` in the fixed span of the residual window, its coordinates moved by the scalar recurrence. `S_n` real-rooted for every index: degree at most 1; `B^2 - 4AC >= 0` (degree 2); the formal cubic discriminant `>= 0` (degree 3); palindromic quartics through `u = x + 1/x` (outer coefficient of one sign and one of three sign cases). For degree 2 and more the coefficients of `S_n` must be polynomials in `n` satisfying the scalar recurrence identically (otherwise `not_applicable`); `S_n != 0` by a coefficient polynomial, a dominant rational characteristic root, or the shared leading-coefficient certificate; `q`, `g` and the seeds checked exactly | Nonzero real-rooted rows; `(-inf, 0)` or `(-inf, 0]` when every factor and coefficient sign is certified; weak interlacing only for a constant residual and linear `q` |
 | Positive lag-two Euler (RealRooted `lagTwoEuler`) | `theta=x D`, `m=n-first_index`: `P_n=[(a+b theta)+x(a+b(m-1)-b theta)]P_(n-1)+c x(theta+1)(m-1-theta)P_(n-2)`; full operator identity, nonzero denominator, `a>0`, `b-a>=0`, `c>=0` decided for every integer; positive constant/linear seeds and exact later seed steps | `n-first_index` simple negative roots, adjacent strict interlacing and auxiliary `(theta+1)(m-theta)P_(n-1) StrictInterl P_n`; replayable normalized coefficients and seed steps |
+| Binomial-perturbed Euler orbit (RealRooted issue #2513) | `m=n+offset`, `theta=u D`: `Q_m=[((2m-3)/(m-2))(2u+1)+s(u+1)theta]Q_(m-1)-((m-1)/(m-2))(2u+1)[(2u+1)+s(u+1)theta]Q_(m-2)`; exact rational operator identity, `s>=1`, `kappa>=s+4`, canonical seeds `1`, `1+2u`, `1+kappa*u+kappa*u^2`, rule starts at `m>=3`, all scalar denominators nonzero; also exact Eulerian Mobius transport | `m` simple roots in `(-1,0)` in Q coordinates or `(-inf,0)` in original coordinates; strict directed adjacent interlacing; replayable operator, coordinate and seed certificate |
+
+The binomial-perturbed Euler-orbit route is recorded only when the operators
+match, after the existing routes. Its Eulerian Mobius map is exactly
+`Q_m(u)=(1+u)^m P_n(u/(1+u))`, with inverse
+`P_n(t)=(1-t)^m Q_m(t/(1-t))`. We transport the full rule, check the
+inductive degree cap and compare every supplied seed with the canonical
+family. The increasing map `t=u/(1+u)` sends `(-1,0)` onto `(-inf,0)`;
+degrees, simple roots and directed interlacing are preserved. This proves
+A141689 `(s,kappa)=(1,5)`, A141690 `(1,8)`, A141696 `(1,10)`, A141697
+`(1,18)` and A147565 `(2,6)`. The first three catalog rules have `m=n+1`;
+the last two have `m=n`. Finite exact checks through degree 60 are sanity
+checks, separate from the theorem. The reference is
+[RealRooted issue #2513](https://github.com/PerAlexandersson/RealRooted/issues/2513);
+`lean_declarations` names `RealRooted.strictInterl_of_orbitPerturbation_recurrence`
+and, for rows in the Eulerian coordinate, the Cayley-transform interlacing lemma
+`RealRooted.strictInterl_cayleyTransform_succ_of_roots_mem_Icc`. Lean replay
+remains `not_attempted`.
 
 The positive lag-two Euler route follows the existing routes, preserving
 their proof priority. It proves A157147–A157151 (`a=1`, `b=m>=1`, `c=m`)
