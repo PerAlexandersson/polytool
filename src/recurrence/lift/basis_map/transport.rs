@@ -154,6 +154,12 @@ pub(super) fn transport_coefficient_family(
         Err(RecurrenceError::Unsupported(reason)) => reason,
         Err(error) => return Err(error),
     };
+    if let Some(transport) =
+        super::even_derivative::exponential_riordan_transport(coefficient, map)?
+    {
+        check_term_budget(transport.system.term_count(), max_terms)?;
+        return Ok(transport);
+    }
     let transport = match super::riordan::riordan_transport(coefficient, map) {
         Ok(transport) => transport,
         Err(RecurrenceError::Unsupported(reason)) => {

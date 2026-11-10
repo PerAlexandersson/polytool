@@ -4,6 +4,24 @@
 
 ### Added
 
+- Even-derivative basis maps (`BasisMap::even_derivative`, theorem shape
+  `even_derivative`), with exact rational-ratio or finite-support coefficients,
+  hypergeometric row certificates, all-index PF hypotheses and replay.
+  Implements `RealRooted.evenDerivative_preservesPF_tfae`; finite supports use
+  exact real-rootedness of the signed symbol and Hermite--Poulain. Bounded
+  triangular coefficient recovery adds candidates to backward catalog lifts.
+  An exponential Riordan transport certifies the Touchard image for
+  `c_k=a^k/k!`, including A143395 from A048993. Scalar basis-map identities
+  can also call the existing invariant-module recurrence-equality engine
+  after division fails (identity status `recurrence_equality`).
+  Serial catalog sweep (919 entries, 60 s per entry): 759 -> 760 proved,
+  newly A143395; all 759 earlier proved reports unchanged, no timeouts.
+  Total measured per-entry wall time: 383.7 -> 418.0 seconds (+8.9%).
+  Discovery fingerprints change only for A095801, A143395, A257142,
+  A261318 and A318397 (new recovered attempts, and the A143395 proof);
+  parent fingerprints are unchanged. A257142's displayed-family proof is
+  unchanged; its internal-record fingerprint adds an unsupported attempt.
+
 - All-index recurrence equality by an invariant module
   (`certify_recurrence_equality`, schema `polytool.recurrence-equality.v1`
   unchanged): when neither rule right-divides the other, the remainder of

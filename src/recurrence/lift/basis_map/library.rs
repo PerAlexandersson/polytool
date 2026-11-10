@@ -72,6 +72,9 @@ pub struct BasisMapLibraryOptions {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BasisMapLibrary {
     entries: Vec<BasisMapLibraryEntry>,
+    /// Catalog libraries also recover new even-derivative maps from parents.
+    /// Explicit libraries keep recovery within their admitted map families.
+    recover_from_catalog: bool,
     /// The first [`LIBRARY_FINGERPRINT_ROWS`] basis rows of each entry (the
     /// duplicate test), parallel to `entries`.
     first_rows: Vec<Vec<Vec<crate::BigRational>>>,
@@ -85,7 +88,10 @@ impl BasisMapLibrary {
     /// [`RecurrenceError`] from a theorem check of an explicitly supplied map
     /// (catalog entries that cannot be checked are skipped).
     pub fn build(options: &BasisMapLibraryOptions) -> Result<Self, RecurrenceError> {
-        let mut library = Self::default();
+        let mut library = Self {
+            recover_from_catalog: options.include_oeis_catalog,
+            ..Self::default()
+        };
         for map in &options.maps {
             library.admit(map.clone(), &options.theorem)?;
         }
@@ -129,6 +135,31 @@ impl BasisMapLibrary {
         &self.entries
     }
 
+    /// Whether this library permits coefficient recovery at all.
+    pub(super) fn even_derivative_recovery_enabled(&self) -> bool {
+        self.recover_from_catalog
+            || self
+                .entries
+                .iter()
+                .any(|entry| matches!(entry.theorem.shape, BasisMapShape::EvenDerivative { .. }))
+    }
+
+    /// Keep an explicitly selected library within its admitted map families.
+    pub(super) fn accepts_recovered_even_derivative(&self, map: &BasisMap) -> bool {
+        if self.recover_from_catalog {
+            return true;
+        }
+        let Ok(Some(coefficients)) = super::even_derivative::coefficient_candidate(map) else {
+            return false;
+        };
+        self.entries.iter().any(|entry| match &entry.theorem.shape {
+            BasisMapShape::EvenDerivative { certificate } => {
+                certificate.coefficients == coefficients
+            }
+            _ => false,
+        })
+    }
+
     /// Keep only the entries for which `keep` holds (in order).
     pub(in crate::recurrence) fn retain_entries(
         &mut self,
@@ -163,7 +194,8 @@ impl BasisMapLibrary {
         options: &BasisMapTheoremOptions,
     ) -> Result<bool, RecurrenceError> {
         let companion = map.companion_operators().is_ok();
-        if !companion && fingerprint_candidate(&map)?.is_none() {
+        let even_derivative = !companion && super::even_derivative::recognize(&map)?.is_some();
+        if !companion && !even_derivative && fingerprint_candidate(&map)?.is_none() {
             return Ok(false);
         }
         let rows = map.basis_rows(LIBRARY_FINGERPRINT_ROWS)?;
@@ -194,7 +226,8 @@ impl BasisMapLibrary {
         }
         let published = matches!(
             theorem.shape,
-            BasisMapShape::Narayana { .. }
+            BasisMapShape::EvenDerivative { .. }
+                | BasisMapShape::Narayana { .. }
                 | BasisMapShape::EulerianTransformation
                 | BasisMapShape::DerangementTransformation
         );

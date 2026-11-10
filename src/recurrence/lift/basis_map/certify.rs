@@ -144,6 +144,12 @@ pub enum BasisMapIdentityStatus {
         /// The certificate.
         certificate: Box<BasisMapDivisionCertificate>,
     },
+    /// Equality with an exactly transported scalar recurrence, certified by
+    /// the shared recurrence-equality engine (including invariant modules).
+    RecurrenceEquality {
+        /// The input and transported image recurrence equality.
+        certificate: Box<crate::recurrence::RecurrenceEqualityCertificate>,
+    },
     /// The compared rows agree, but the identity is not proved.
     SupportedByRows {
         /// Rows compared from `n0`.
@@ -259,6 +265,23 @@ impl BasisMapLiftCertification {
                 return fail("the certificate is about another input or candidate");
             }
             certificate.verify()?;
+        }
+        if let BasisMapIdentityStatus::RecurrenceEquality { certificate } = &self.identity {
+            if certificate.defining != self.input || !certificate.is_certified() {
+                return fail("the recurrence equality concerns another input or is not certified");
+            }
+            certificate.verify()?;
+        }
+        let (basis_rule, basis_first, basis_seeds) =
+            self.map_theorem.basis.to_recurrence_parts()?;
+        let theorem_basis = BasisMap::new(
+            &self.map_theorem.basis_name,
+            basis_rule,
+            basis_first,
+            basis_seeds,
+        )?;
+        if theorem_basis != self.candidate.basis {
+            return fail("the map theorem is about another basis");
         }
         self.map_theorem.verify()?;
         let (rule, n0, seeds) = self.input.to_recurrence_parts()?;
@@ -492,6 +515,33 @@ fn certify_identity(
                 Err(RecurrenceError::LimitExceeded(reason))
                 | Err(RecurrenceError::VerificationFailed(reason)) => reasons.push(reason),
                 Err(error) => return Err(error),
+            }
+        }
+    }
+    // A scalar transported relation need not divide either displayed rule.
+    // Certify equality using the existing invariant-module engine instead.
+    // The transported recurrence is exact by construction; its identifying
+    // rows are actual T_P(R_n), never fitted input rows.
+    if system.size() == 1
+        && transport.valid_from_base == coefficient.first_index
+        && super::even_derivative::coefficient_candidate(map)?.is_some()
+    {
+        if let Ok((rule, _)) = super::transport::transported_scalar_rule(system) {
+            let count = transport.identifying_rows.max(rule.max_offset());
+            if count <= MAX_BASIS_MAP_LIFT_CHECKED_ROWS {
+                let seeds = candidate_rows(map, coefficient, count)?;
+                let record = RecurrenceJson::from_recurrence_rational(&rule, n0, &seeds, None);
+                let source =
+                    RecurrenceJson::from_recurrence_rational(&input.rule, n0, &input.seeds, None);
+                let equality = crate::recurrence::certify_recurrence_equality(&source, &record)?;
+                if equality.is_certified() {
+                    return Ok(IdentityOutcome {
+                        status: BasisMapIdentityStatus::RecurrenceEquality {
+                            certificate: Box::new(equality),
+                        },
+                    });
+                }
+                reasons.extend(equality.reasons);
             }
         }
     }
@@ -1144,6 +1194,9 @@ fn summary(
                     "basis_map_division_transported_by_input".into()
                 }
             },
+        },
+        BasisMapIdentityStatus::RecurrenceEquality { .. } => LiftIdentityStatus::Certified {
+            method: "basis_map_transported_recurrence_equality".into(),
         },
         BasisMapIdentityStatus::SupportedByRows { rows, .. } => {
             LiftIdentityStatus::SupportedByRows { rows: *rows }

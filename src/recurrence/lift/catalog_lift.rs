@@ -615,6 +615,7 @@ fn has_open_coefficient_family(certification: &BasisMapLiftCertification) -> boo
     matches!(
         certification.identity,
         BasisMapIdentityStatus::Certified { .. }
+            | BasisMapIdentityStatus::RecurrenceEquality { .. }
     ) && summary
         .hypotheses
         .iter()
