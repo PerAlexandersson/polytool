@@ -505,7 +505,25 @@ fn fit_annihilator(
 
 /// The first annihilator of order `order` that the rows admit, over
 /// derivative orders and degrees in increasing order (derivative order from
-/// one for a shift-free annihilator).
+/// one for a shift-free annihilator), fitted exactly to the rows
+/// (`rows[j]` is `F_(first_index + j)`).
+///
+/// For `order > 0` the top column is `c(n) S^order` (free of `x` and of
+/// derivatives, a runnable rule of that order); for `order = 0` it is a row
+/// annihilator `sum_d a_d(n, x) D^d` with a derivative.  Coefficients have
+/// degree at most `budget.max_degree` in `n` and in `x`.  A fit is
+/// evidence only: it holds on the supplied rows, and a caller that uses it
+/// must prove it (for example by an invariance identity and exact checks of
+/// the base rows).
+pub fn fit_rows_annihilator(
+    rows: &[Vec<Rational>],
+    first_index: usize,
+    order: usize,
+    budget: &AnnihilatorSystemBudget,
+) -> Option<OreOperator> {
+    first_fit(rows, first_index, order, budget)
+}
+
 fn first_fit(
     rows: &[Vec<Rational>],
     first_index: usize,

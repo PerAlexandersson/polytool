@@ -24,7 +24,8 @@
 //!   multipliers) and the transport of annihilators through them;
 //! - [`find_annihilator_system`]: additional annihilators of the rows of a
 //!   recurrence-defined sequence (row annihilators, runnable rules of lower
-//!   order), with joint invariance certificates;
+//!   order), with joint invariance certificates, and
+//!   [`fit_rows_annihilator`], the exact fit of one such candidate;
 //! - [`find_image_annihilator`]: a runnable annihilator of an image
 //!   sequence, pushed forward or found as a common left multiple, with an
 //!   [`ImageAnnihilatorCertificate`] that replays the identity
@@ -108,9 +109,9 @@ pub use kernel::exact_kernel_vectors_by_group;
 pub use laurent::{LaurentBivariatePolynomial, LaurentError, LaurentOreOperator};
 pub use operator::OreOperator;
 pub use row_annihilator::{
-    certify_annihilator_system, find_annihilator_system, reduce_by_row_annihilator,
-    AnnihilatorSystemBudget, AnnihilatorSystemCertificate, AnnihilatorSystemEntry,
-    AnnihilatorSystemError, RowAnnihilatorReduction,
+    certify_annihilator_system, find_annihilator_system, fit_rows_annihilator,
+    reduce_by_row_annihilator, AnnihilatorSystemBudget, AnnihilatorSystemCertificate,
+    AnnihilatorSystemEntry, AnnihilatorSystemError, RowAnnihilatorReduction,
 };
 pub use row_map::{pull_back, push_forward, PullbackBounds, RowMapError, RowMapStep};
 pub use substitution::{

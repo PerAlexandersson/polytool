@@ -119,8 +119,12 @@ record (for example a fitted catalog rule) generates the triangle's rows for
 every index: its rule times `t^J` is checked with the same argument, its
 seeds are compared exactly and its left-hand factor must not vanish at a
 computed row.  This also certifies records whose operator is not a left
-multiple of the derived one, where `certify_recurrence_equality` (Ore
-division) cannot conclude.
+multiple of the derived one.  `certify_recurrence_equality` handles such
+pairs too: when neither rule divides the other it closes the remainder
+under the shift in an invariant module over `Q(n, x)<D>` (seeded with
+relations fitted to the rows and proved with them by induction), which
+certifies, for example, the rules derived for A110205, A110319, A134434 and
+A174148 against their catalog rules.
 
 ## Real-rootedness and interlacing
 

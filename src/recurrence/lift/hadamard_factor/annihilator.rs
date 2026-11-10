@@ -155,7 +155,7 @@ fn bivariate_gcd(a: &Biv, b: &Biv) -> Biv {
 
 /// `p / divisor` when the division is exact (lexicographic division, `n`
 /// before `x`), `None` otherwise.
-fn bivariate_exact_quotient(p: &Biv, divisor: &Biv) -> Option<Biv> {
+pub(in crate::recurrence::lift) fn bivariate_exact_quotient(p: &Biv, divisor: &Biv) -> Option<Biv> {
     let divisor_degree = n_degree(divisor)?;
     let divisor_row = &divisor.rows()[divisor_degree];
     let divisor_x_degree = vec_poly::degree(divisor_row)?;
@@ -183,7 +183,7 @@ fn bivariate_exact_quotient(p: &Biv, divisor: &Biv) -> Option<Biv> {
 /// polynomials in `n` and `x`) and made monic in its leading rational
 /// coefficient.  Only shortens the coefficients; the proof does not depend
 /// on it.
-pub(super) fn primitive_operator(op: &DOp) -> DOp {
+pub(in crate::recurrence::lift) fn primitive_operator(op: &DOp) -> DOp {
     let common = op.0.values().fold(Biv::zero(), |gcd, coefficient| {
         bivariate_gcd(&gcd, coefficient)
     });

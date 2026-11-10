@@ -116,10 +116,23 @@ the family's rows (schema `polytool.recurrence-equality.v1`):
   row annihilator `A(n)` with `nu A(n+1) o T(n) = B(n) o A(n)` and
   `mu R = Z o A` (as for the Hadamard-factor lifts), so that `R` kills
   every row;
+- otherwise (neither rule divides the other, or a left-hand factor depends
+  on `x`), an *invariant module*: the remainder of one rule modulo the
+  other, together with relations of the rows fitted exactly to rows (a
+  first-order rule and a row annihilator, used only as seeds), is closed
+  under the shift in the module of operators of shift below the order of
+  the target rule over `Q(n, x)<D>`, kept in an echelon (Hermite) form.
+  The generators `G_l` may carry derivatives on any row, including the
+  leading one, and the identities `W_i (S o G_i) = Y_i o L + sum_l
+  Z_(i,l) o G_l` and `W E = Y o L + sum_l Z_l o G_l` prove by induction
+  that every generator, and then the rule, holds for every index once the
+  generators kill the rows at a start base and after the bases where a
+  multiplier vanishes (exact row checks, recorded in `checked_bases`; the
+  generators are in `invariant_module`);
 - exact row checks at the integer roots of `w`, at the restart bases of the
   annihilator induction and at the bases before the rule starts, equal seed
-  rows, and left-hand factors that do not vanish where a rule computes a
-  row.
+  rows, and left-hand factors that are not the zero polynomial where a rule
+  computes a row (they may depend on `x`).
 
 Either direction may succeed: the family's rows satisfy the alternative
 rule, or the alternative rows satisfy the defining rule. A candidate not
@@ -133,8 +146,9 @@ P'_(n-1)`, A321966 and A271704 through first-order and derivative-lag
 rules, and A180013 by the product route. The search is bounded:
 `--max-representation-candidates N` (default 300; 0 disables the stage)
 counts finder configurations per pass deterministically, at most four
-fitted rules are certified, and the Ore-algebra arithmetic has a term
-budget. Finding nothing proves nothing.
+fitted rules are certified, and the Ore-algebra arithmetic has term,
+coefficient-size and work budgets (the invariant-module search stops
+early on large intermediate operators). Finding nothing proves nothing.
 
 **Catalog lifts.** When nothing above proves the record (and no root region
 is requested), the last stage connects it to a family of the bundled OEIS

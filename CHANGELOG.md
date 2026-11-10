@@ -4,6 +4,42 @@
 
 ### Added
 
+- All-index recurrence equality by an invariant module
+  (`certify_recurrence_equality`, schema `polytool.recurrence-equality.v1`
+  unchanged): when neither rule right-divides the other, the remainder of
+  one rule modulo the other is closed under the shift in the module of
+  operators of shift below the target's order over `Q(n, x)<D>`, kept in
+  an echelon (Hermite) form, and the generators (derivatives allowed on
+  every row, including the leading one) are proved to kill the rows by
+  induction from exact identities `W_i (S o G_i) = Y_i o L + sum_l Z_(i,l)
+  o G_l`, `W E = Y o L + sum_l Z_l o G_l` and exact row checks at a start
+  base and at the bases where a multiplier vanishes. The module is seeded
+  with a first-order rule and a row annihilator fitted exactly to the rows
+  (new `ore_algebra::fit_rows_annihilator`), proved with the rest; the
+  search has deterministic size and work budgets. Left-hand factors that
+  depend on `x` are now accepted when they are not the zero polynomial at
+  a computed row. The certificate gains the optional field
+  `invariant_module` (the generators and the start base; omitted for a
+  division proof), and not-certified reports list the invariant-module
+  attempts after the division attempts. `certify_normalized_recurrence_equality`,
+  the alternative-representation and catalog-lift stages of proof
+  discovery and the basis-map equality checks use it automatically.
+  Certifies the definition of A394446 against its catalog rule and the rules
+  derived from the hypergeometric terms of A110205, A110319, A134434 and
+  A174148 against theirs; A177040 and A259454 stay beyond the budgets.
+  Catalog sweep (`recurrence-prove`, 60 s per entry): 758 -> 759 of 919
+  proved, none lost; newly proved A122765 (its constant-coefficient lag-4
+  rule is certified equal to a fitted first-order derivative rule, which
+  then proves it). Alternative representations of 20 more entries are now
+  certified (the theorems still fail on them), A271704 certifies its second
+  alternative directly against the family, and total sweep time grows by
+  about 8%.
+  Discovery fingerprints re-blessed for exactly these 22 entries (A067613,
+  A082649, A100898, A109954, A114123, A118424, A122765, A143858, A156308,
+  A158454, A158909, A184366, A190088, A190152, A208513, A210039, A216182,
+  A245963, A271704, A277513, A304429, A334009); no parent fingerprint
+  changed.
+
 - Positive lag-two Euler proof route (`lag_two_euler`,
   `check_lag_two_euler_theorem`): exact theta-operator recognition,
   infinite-range rational sign certificates, positive constant/linear seeds
