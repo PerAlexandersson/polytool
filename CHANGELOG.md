@@ -4,6 +4,13 @@
 
 ### Added
 
+- Add `oeis rows` for local triangle data (#53), including explicit refusal reasons.
+- Add `trivially_real_rooted_if_rule_holds` to recurrence proof discovery and
+  theorem report JSON (#47); the existing flag is unchanged. Text reports show
+  a differing conditional classification.
+- `oeis rows` recognizes more example labels and punctuation, reports typed
+  refusal and b-file rejection reasons, and includes structured row-length rules.
+
 - Factored steps in `iterated_preserver`: bounded exact second-order Ore
   right factorization over `Q(n)[x]`, with each first-order factor certified
   by the existing preserver menu or shared Liu--Wang conditions. Closed-ray

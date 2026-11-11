@@ -6,6 +6,22 @@ use crate::cli::spec::{
 
 const ID_HELP: &str = "OEIS A-number (A followed by six digits)";
 
+const ROWS: CommandSpec = CommandSpec {
+    name: "rows",
+    summary: "Read complete triangle rows from local OEIS data",
+    usage: &["oeis rows <A-NUMBER> --data <DIR> [--json]"],
+    description: "Read local OEIS terms and infer complete rows without a catalog or network.",
+    input: InputKind::None,
+    output: OutputKind::JsonSwitch,
+    positionals: &[positional("A-NUMBER", ID_HELP)],
+    flags: &[option("data", "DIR", "Local OEIS checkout")],
+    details: "For tabf the example table must start at the first term. At least three\nrows are required, with two observed increases for periodic growth. JSON\nincludes a structured row-length rule and b-file rejection details.",
+    examples: &["polytool oeis rows A001263 --data DIR"],
+    exit_codes: EXIT_ANSWERED,
+    see_also: &["recurrence", "real-rooted"],
+    ..COMMAND
+};
+
 const LIST: CommandSpec = CommandSpec {
     name: "list",
     summary: "List the bundled recurrence-backed OEIS families",
@@ -374,7 +390,7 @@ pub(crate) const OEIS: CommandSpec = CommandSpec {
 an exact recurrence. `list`, `info` and `generate` use the bundled catalog;
 `add`, `check` and `evidence` maintain the catalog data file in a source
 checkout."#,
-    subcommands: &[LIST, INFO, GENERATE, ADD, CHECK, EVIDENCE],
+    subcommands: &[LIST, INFO, GENERATE, ADD, CHECK, EVIDENCE, ROWS],
     examples: &[
         "polytool oeis list",
         "polytool oeis generate A008292 --count 6 --format triangle",

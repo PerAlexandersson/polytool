@@ -190,6 +190,14 @@ fn print_report_text(report: &RecurrenceProofDiscoveryReport) {
     if report.trivially_real_rooted {
         println!("Trivially real-rooted: product seed class, proved by product induction.");
     }
+    if let Some(conditional) = report.trivially_real_rooted_if_rule_holds {
+        if conditional != report.trivially_real_rooted {
+            println!(
+                "Trivially real-rooted if the rule holds: {}.",
+                if conditional { "yes" } else { "no" }
+            );
+        }
+    }
     print_attempts_text(&report.attempts, "");
     if let Some(tail) = &report.tail {
         println!("\nTail from index {}: {}", tail.first_index, tail.reason);

@@ -1,0 +1,31 @@
+Read complete triangle rows from local OEIS data.
+
+Read local OEIS terms and infer complete rows without a catalog or network.
+
+Usage: polytool oeis rows <A-NUMBER> --data <DIR> [--json]
+
+Arguments:
+  <A-NUMBER>  OEIS A-number (A followed by six digits)
+
+Options:
+      --data <DIR>  Local OEIS checkout
+  -h, --help        Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Details:
+  For tabf the example table must start at the first term. At least three rows are
+  required, with two observed increases for periodic growth. JSON includes a
+  structured row-length rule and b-file rejection details.
+
+Examples:
+  polytool oeis rows A001263 --data DIR
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+See also:
+  polytool recurrence, polytool real-rooted

@@ -618,7 +618,9 @@ transformed records) and takes no search flags."#,
     ],
     details: r#"JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is
 true when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and
-product induction proves it. real_rooted_from_index is the first index N with
+product induction proves it. trivially_real_rooted_if_rule_holds classifies the
+rule conditional on its holding for all indices, including fitted rules.
+real_rooted_from_index is the first index N with
 every row P_n, n >= N, proved nonzero and real-rooted. A residue-class proof
 may leave whole residue classes of zero rows (conclusion.zero_residue_classes,
 residues of n modulo the period); real_rooted_from_index is then omitted and
@@ -688,7 +690,9 @@ that the recurrence holds for the intended sequence for all n."#,
 
 JSON output is the polytool.recurrence-theorems.v1 report; its
 trivially_real_rooted (supplied, not fitted, records only) is true when the rule
-is B(n) P_n = A(x,n) P_(n-k) and product induction proves it."#,
+is B(n) P_n = A(x,n) P_(n-k) and product induction proves it.
+trivially_real_rooted_if_rule_holds gives the same classification conditional
+on the rule holding for all indices, including fitted rules."#,
     examples: &[
         "polytool recurrence --json < rows.txt | polytool recurrence-theorems --recurrence -",
         "polytool recurrence-theorems --recurrence menu.json --candidate 0 --json",
