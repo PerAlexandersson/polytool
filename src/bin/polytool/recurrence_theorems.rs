@@ -99,6 +99,14 @@ pub(crate) fn print_theorem_report_text(report: &RecurrenceTheoremReport) {
             if trivial { "yes" } else { "no" }
         );
     }
+    if let Some(conditional) = report.trivially_real_rooted_if_rule_holds {
+        if report.trivially_real_rooted != Some(conditional) {
+            println!(
+                "Trivially real-rooted if the rule holds: {}.",
+                if conditional { "yes" } else { "no" }
+            );
+        }
+    }
 }
 
 pub(crate) fn cmd_recurrence_theorems(args: &[String]) {

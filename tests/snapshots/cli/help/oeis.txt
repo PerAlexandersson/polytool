@@ -14,6 +14,7 @@ Commands:
   add       Search a recurrence for OEIS rows and record it in the catalog.
   check     Re-validate catalog entries against a local OEIS copy.
   evidence  Strongest coefficient property on the first rows of each entry.
+  rows      Read complete triangle rows from local OEIS data.
 
 Options:
   -h, --help  Print help

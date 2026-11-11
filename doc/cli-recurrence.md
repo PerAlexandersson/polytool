@@ -860,3 +860,12 @@ multiplier is `kappa_j(n) q(x)^j` for one fixed `q` and the residual shape is
 decided; its `factor_gauge` certificate holds `q`, the scalar multipliers, the
 common factor, the residual window and its coefficient polynomials (and the
 dominant root that proves the rows nonzero, when used).
+
+The `recurrence-prove` and `recurrence-theorems` JSON field `trivially_real_rooted_if_rule_holds`
+classifies the product proof conditional on the supplied rule holding at all
+indices, including when the rule was fitted. The existing
+`trivially_real_rooted` remains false in discovery reports and is omitted from
+theorem reports for fitted records.
+
+When the conditional classification differs from the established flag, the
+text report also prints the classification conditional on the rule holding.

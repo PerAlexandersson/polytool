@@ -5,6 +5,7 @@ mod add;
 mod catalog_file;
 mod check;
 mod evidence;
+mod rows;
 mod sha256;
 mod source;
 mod supplied;
@@ -415,6 +416,7 @@ pub(crate) fn cmd_oeis(args: &[String]) {
         crate::input::usage_error("oeis", "expected an OEIS subcommand");
     };
     match subcommand.as_str() {
+        "rows" => rows::run(rest),
         "list" => cmd_oeis_list(rest),
         "info" => cmd_oeis_info(rest),
         "generate" => cmd_oeis_generate(rest),

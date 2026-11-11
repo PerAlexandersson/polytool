@@ -2,6 +2,21 @@
 
 Part of the [CLI reference](cli.md).
 
+## Read rows from local OEIS data
+
+`polytool oeis rows A001263 --data DIR [--json]` reads local `.seq` and
+matching consecutive b-file terms without the catalog or network. It prints
+complete coefficient rows, or a refusal reason. For `tabf`, the consecutive
+`%e` table must start at the first term: earlier row boundaries cannot be
+inferred safely. At least three example rows are required, with two observed
+increases for periodic growth. JSON includes the existing display string and
+`row_length_rule_details`: `kind` is `constant_step` or `periodic_step`,
+`step` is the increase, `period` counts transitions per increase, and `phase`
+is the zero-based transition index modulo the period. It also includes a
+stable `reason_code`, human `reason`, exact decimal-string rows, term source,
+and `bfile_rejection`, `bfile_rejection_reason` and optional I/O detail when
+a present b-file cannot be used. Text output gives b-file rejection on stderr.
+
 ## Generate recurrence-backed OEIS families
 
 The bundled OEIS catalog exposes one Rust function per A-number, for example
