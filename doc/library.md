@@ -27,6 +27,46 @@ exact-real-roots = { path = "path/to/polytool/crates/exact-real-roots" }
 Both crates use ascending-degree coefficient order and arbitrary-precision
 integer arithmetic. Repeated roots are handled through the square-free part.
 
+## Rational row generating functions
+
+`recurrence::generating_function::rational_generating_function(rule,
+first_index, seeds)` builds the exact rational function
+`sum_(m>=0) P_(first_index+m)(x) z^m` for a homogeneous recurrence free of
+index dependence, derivatives and alternating signs. We include every seed
+correction, even when the numerator degree exceeds the recurrence order,
+cancel the bivariate gcd and normalize the denominator to `D(x,0)=1`.
+A reduced nonconstant left factor at `z=0` cannot have this polynomial
+normalization and gives a typed `RecurrenceError::Unsupported`.
+
+`RationalGeneratingFunction` has stable fields `schema`, `first_index`,
+`numerator`, `denominator`; the schema is `polytool.generating-function.v1`.
+The ragged arrays use `[z_power][x_power]`, ascending rational strings,
+with `[]` for zero. `Display` prints the rational expression.
+`riordan_decomposition(&gf)` returns reduced exact univariate series
+`d`, `h`, `k` when `F=d/(1-x h)` and `h=z d K`; their fields are ascending
+`numerator` and `denominator` rational strings, denominator constant one.
+This does not require an invertible Riordan array.
+
+```rust
+use polytool::oeis;
+use polytool::recurrence::generating_function::{
+    rational_generating_function, riordan_decomposition,
+};
+let entry = oeis::by_id("A216182").unwrap();
+let (rule, seeds) = entry.recurrence_parts().unwrap();
+let gf = rational_generating_function(&rule, entry.recurrence_first_index, &seeds).unwrap();
+let riordan = riordan_decomposition(&gf).unwrap();
+assert_eq!(riordan.k.numerator, ["1", "1"]);
+```
+
+`recurrence::check_rational_polya_frequency` decides the rational PF
+criterion using exact root signs and isolation. The all-index theorem
+`check_rational_pf_riordan_theorem` combines the generating function and PF
+evidence, also in certified reversal coordinates. See
+[proof discovery](proof-discovery.md#rational-pf-riordan-arrays) for its hypotheses
+and replayable certificate. CLI/MCP generating-function output and stored
+catalog generating functions are later phases of [issue #54](https://github.com/PerAlexandersson/polytool/issues/54).
+
 ## Ore algebra and image recurrences
 
 The exact Ore algebra of shifts `S` and derivatives `D` acting on sequences of

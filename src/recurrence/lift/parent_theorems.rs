@@ -212,8 +212,13 @@ mod three_term;
 // RealRooted row routes, including the Euler-orbit theorem of issue #2513.
 mod binomial_perturbed_euler_orbit;
 mod lag_two_euler;
+mod rational_pf_riordan;
 pub use binomial_perturbed_euler_orbit::{
     check_binomial_perturbed_euler_orbit_theorem, BinomialPerturbedEulerOrbitCertificate,
+};
+pub use rational_pf_riordan::{
+    check_rational_pf_riordan_theorem, check_rational_polya_frequency, PolyaFrequencyRootLayer,
+    RationalPfRiordanCertificate, RationalPolyaFrequencyEvidence,
 };
 mod residue_class;
 mod variable_delay;
@@ -305,12 +310,14 @@ pub enum RealRootednessTheorem {
     LagTwoEuler,
     /// [`check_binomial_perturbed_euler_orbit_theorem`] (RealRooted issue #2513).
     BinomialPerturbedEulerOrbit,
+    /// [`check_rational_pf_riordan_theorem`].
+    RationalPfRiordan,
 }
 
 impl RealRootednessTheorem {
     /// Every theorem, in the order of the parent cascade and of
     /// [`discover_recurrence_proofs`].
-    pub const ALL: [RealRootednessTheorem; 14] = [
+    pub const ALL: [RealRootednessTheorem; 15] = [
         RealRootednessTheorem::ProductRecurrence,
         RealRootednessTheorem::ThreeTermRecurrence,
         RealRootednessTheorem::LiuWang,
@@ -325,6 +332,7 @@ impl RealRootednessTheorem {
         RealRootednessTheorem::FactorGauge,
         RealRootednessTheorem::LagTwoEuler,
         RealRootednessTheorem::BinomialPerturbedEulerOrbit,
+        RealRootednessTheorem::RationalPfRiordan,
     ];
 
     /// The snake-case name, as serialized (for example
@@ -345,6 +353,7 @@ impl RealRootednessTheorem {
             RealRootednessTheorem::FactorGauge => "factor_gauge",
             RealRootednessTheorem::LagTwoEuler => "lag_two_euler",
             RealRootednessTheorem::BinomialPerturbedEulerOrbit => "binomial_perturbed_euler_orbit",
+            RealRootednessTheorem::RationalPfRiordan => "rational_pf_riordan",
         }
     }
 }
@@ -410,7 +419,8 @@ const DEFAULT_MAXIMUM_START_DELAY: usize = 3;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ZeroResidueClasses {
-    /// The period `p >= 2` (the gcd of the lags of the rule).
+    /// The period `p >= 2` (the lag gcd for residue classes, or the support
+    /// period for a rational PF Riordan proof).
     pub period: usize,
     /// The residues `r`, `0 <= r < period`, ascending and not every residue:
     /// every row `P_n` with `n mod period = r` (the index `n` itself, not
@@ -438,14 +448,16 @@ pub struct RealRootednessTheoremConclusion {
     /// [`check_iterated_preserver_theorem`] and
     /// [`check_residue_class_subsequence_theorem`] when seed rows are zero:
     /// then it is the index after the last zero seed row (the statement
-    /// names the zero rows) outside the zero residue classes.
+    /// names the zero rows) outside the zero residue classes. For
+    /// [`check_rational_pf_riordan_theorem`] it is after the last isolated
+    /// zero row; its certificate records every such row exactly.
     pub first_index: usize,
     /// Infinitely many zero rows: when present, every row `P_n`,
     /// `n >= first_index`, whose index lies in these residue classes is zero,
     /// and only every *other* row `P_n`, `n >= first_index`, is nonzero and
     /// real-rooted (the root region and the simple roots below concern those
-    /// rows).  Only [`check_residue_class_subsequence_theorem`] concludes
-    /// this, for a class whose seed rows are all zero.  A consumer that reads
+    /// rows). [`check_residue_class_subsequence_theorem`] and
+    /// [`check_rational_pf_riordan_theorem`] can conclude this. A consumer that reads
     /// the conclusion as "every row from `first_index` on is nonzero" must
     /// check [`Self::has_zero_residue_classes`] first.  Omitted when absent
     /// (every row from `first_index` on is nonzero), so earlier reports keep

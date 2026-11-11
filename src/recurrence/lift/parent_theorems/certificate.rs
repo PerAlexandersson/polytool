@@ -17,6 +17,8 @@ pub enum RouteCertificate {
     /// induction start, the degree step and the region (JSON key
     /// `iterated_preserver`).
     IteratedPreserver(IteratedPreserverCertificate),
+    /// [`check_rational_pf_riordan_theorem`]: exact generating functions and PF evidence.
+    RationalPfRiordan(Box<RationalPfRiordanCertificate>),
     /// [`check_variable_delay_theorem`]: the delay and the seed rows as exact
     /// steps of the window (JSON key `variable_delay`).
     VariableDelay(VariableDelayCertificate),
@@ -41,6 +43,7 @@ impl RouteCertificate {
     /// The theorem whose reports carry this certificate.
     pub fn theorem(&self) -> RealRootednessTheorem {
         match self {
+            RouteCertificate::RationalPfRiordan(_) => RealRootednessTheorem::RationalPfRiordan,
             RouteCertificate::IteratedPreserver(_) => RealRootednessTheorem::IteratedPreserver,
             RouteCertificate::VariableDelay(_) => RealRootednessTheorem::VariableDelay,
             RouteCertificate::LagTwoEuler(_) => RealRootednessTheorem::LagTwoEuler,
@@ -86,6 +89,7 @@ impl RouteCertificate {
             | RouteCertificate::LagTwoEuler(_)
             | RouteCertificate::BinomialPerturbedEulerOrbit(_)
             | RouteCertificate::VariableDelay(_)
+            | RouteCertificate::RationalPfRiordan(_)
             | RouteCertificate::FactorGauge(_) => Ok(None),
         }
     }
@@ -118,11 +122,22 @@ impl RouteCertificate {
             RouteCertificate::FactorGauge(certificate) => {
                 factor_gauge::verify_certificate_in_report(certificate, report)
             }
+            RouteCertificate::RationalPfRiordan(certificate) => {
+                rational_pf_riordan::verify_certificate_in_report(certificate, report)
+            }
         }
     }
 }
 
 impl RealRootednessTheoremReport {
+    /// The rational PF Riordan certificate, if recorded.
+    pub fn rational_pf_riordan_certificate(&self) -> Option<&RationalPfRiordanCertificate> {
+        match &self.certificate {
+            Some(RouteCertificate::RationalPfRiordan(certificate)) => Some(certificate),
+            _ => None,
+        }
+    }
+
     /// The binomial-perturbed Euler-orbit certificate, if recorded.
     pub fn binomial_perturbed_euler_orbit_certificate(
         &self,

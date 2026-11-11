@@ -36,10 +36,14 @@ fn record(rule: &Recurrence, seeds: &[&[i64]], first: usize) -> RecurrenceJson {
 fn checked(record: &RecurrenceJson) -> RecurrenceProofDiscoveryReport {
     let report = discover_recurrence_proofs(record, &options()).unwrap();
     report.verify().unwrap();
-    // The first eight theorems are always attempted, in order; the others
-    // do not apply to these rules.
+    // The first eight theorems are always attempted, in order. The rational
+    // PF Riordan route can also apply to the index-free rules in this file.
     let theorems: Vec<RealRootednessTheorem> = report.attempts.iter().map(|a| a.theorem).collect();
-    assert_eq!(theorems, RealRootednessTheorem::ALL[..8]);
+    assert_eq!(&theorems[..8], &RealRootednessTheorem::ALL[..8]);
+    assert!(matches!(
+        &theorems[8..],
+        [] | [RealRootednessTheorem::RationalPfRiordan]
+    ));
     assert_eq!(report.lean_replay, "not_attempted");
     report
 }

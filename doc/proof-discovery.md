@@ -45,6 +45,56 @@ Neither fitting nor held-out checks prove that identity.
 | Positive lag-two Euler (RealRooted `lagTwoEuler`) | `theta=x D`, `m=n-first_index`: `P_n=[(a+b theta)+x(a+b(m-1)-b theta)]P_(n-1)+c x(theta+1)(m-1-theta)P_(n-2)`; full operator identity, nonzero denominator, `a>0`, `b-a>=0`, `c>=0` decided for every integer; positive constant/linear seeds and exact later seed steps | `n-first_index` simple negative roots, adjacent strict interlacing and auxiliary `(theta+1)(m-theta)P_(n-1) StrictInterl P_n`; replayable normalized coefficients and seed steps |
 | Binomial-perturbed Euler orbit (RealRooted issue #2513) | `m=n+offset`, `theta=u D`: `Q_m=[((2m-3)/(m-2))(2u+1)+s(u+1)theta]Q_(m-1)-((m-1)/(m-2))(2u+1)[(2u+1)+s(u+1)theta]Q_(m-2)`; exact rational operator identity, `s>=1`, `kappa>=s+4`, canonical seeds `1`, `1+2u`, `1+kappa*u+kappa*u^2`, rule starts at `m>=3`, all scalar denominators nonzero; also exact Eulerian Mobius transport | `m` simple roots in `(-1,0)` in Q coordinates or `(-inf,0)` in original coordinates; strict directed adjacent interlacing; replayable operator, coordinate and seed certificate |
 
+## Rational PF Riordan arrays
+
+We recognize the reduced generating function
+`F(x,z)=d(z)/(1-x h(z))`, where `h=z d K`, `d(0)>0`, and `d,K` are nonzero
+rational PF series regular at zero. For
+`D(x,z)=D_0(z)-x L(z)` and an `x`-free numerator `N(z)`, we compute
+`d=N/D_0`, `h=L/D_0`, `K=L/(zN)`, cancelling exactly in each quotient.
+The numerator includes every prescribed row, including prefix rows and
+extra seeds beyond the recurrence order. An `x`-dependent reduced numerator
+is outside this route.
+
+The left production matrix is `Q=T(d) diag(1,T(K))`, a product of TNN
+matrices. Its column recurrence generates `[z^n]d h^k`.
+[X. Chen, L. Fu and J. Ruan, arXiv:2512.08369v1](https://arxiv.org/abs/2512.08369v1),
+Theorem 3(3), gives real-rooted row polynomials. Theorem 4 identifies each
+finite row Toeplitz matrix inside products of block embeddings of `Q`,
+giving PF rows, hence nonpositive zeros. The definition preceding Theorem 3
+explicitly includes noninvertible arrays; `K(0)=0` is allowed.
+
+We decide rational PF by the rational case of
+[A. Edrei, Canadian J. Math. 5 (1953), 86--94](https://doi.org/10.4153/CJM-1953-010-3),
+Introduction, formula (4) and assertions A--B on pp. 86--87:
+after cancellation the series is
+`c z^r prod(1+alpha_i z)/prod(1-beta_j z)` with `c>0`, `r>=0` and
+`alpha_i,beta_j>=0`. We test that numerator zeros are real and nonpositive,
+denominator zeros are real and strictly positive, and the initial nonzero
+scalar is positive. Squarefree gcd layers factor each polynomial exactly;
+PRS sign counts and dyadic root isolation cover real algebraic factors and
+all multiplicities. These are finite exact decisions of the theorem's
+hypotheses, rather than finite checks of its conclusion.
+
+The route also tries `x^(a*m+b) P_(first_index+m)(1/x)` for `a=1,2,3`.
+We prove the degree bound by the lag multipliers and every seed, then check
+`x^b F(1/x,x^a z)` exactly. The existing affine-coordinate stage handles
+marker shifts and transports the root region. The parent menus for residue
+classes, index sections and catalog lifts include this route.
+
+`RouteCertificate::RationalPfRiordan` records both generating functions,
+the optional reversal bound, the reduced `d,h,K`, their PF factorizations,
+root signs and isolating intervals, and isolated zero indices. Replay checks
+`N E = M D`, the reversal bound, the Riordan identity and the PF evidence.
+PF supports are intervals; the union of supports of `d h^k` determines
+exactly the isolated zero rows and any periodic zero classes. The conclusion
+starts after the last isolated zero and names periodic zeros in
+`zero_residue_classes`. We assert neither simplicity nor interlacing.
+
+For example, `d=1/(1-z)` and `h=z` gives `K=1-z`, which is rejected:
+the rows `1+x+...+x^n` are not all real-rooted. Conversely
+`F=1/(1-z-xz)` gives `K=1` and the PF rows `(1+x)^n`.
+
 The binomial-perturbed Euler-orbit route is recorded only when the operators
 match, after the existing routes. Its Eulerian Mobius map is exactly
 `Q_m(u)=(1+u)^m P_n(u/(1+u))`, with inverse

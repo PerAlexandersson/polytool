@@ -4,6 +4,20 @@
 
 ### Added
 
+- Public `recurrence::generating_function` module: exact rational row
+  generating functions from an index-free homogeneous rule without derivatives
+  and every prescribed seed, reduced by a bivariate gcd, with `D(x,0)=1`.
+  `rational_generating_function`, `riordan_decomposition`, stable rational-string
+  JSON (`polytool.generating-function.v1`), and text display support future
+  output adapters and catalog indexing.
+- All-index `rational_pf_riordan` theorem route (Chen--Fu--Ruan Theorems 3(3)
+  and 4): `F=d/(1-x z d K)` with nonzero rational PF `d,K` and `d(0)>0`.
+  Exact Edrei decisions, real algebraic factors, repeated roots, `K(0)=0`,
+  certified padded reversals, parent menus and affine marker shifts are
+  supported. Certificates replay the full generating-function identity and
+  PF evidence. Zero rows are described exactly; roots are nonpositive,
+  with no simplicity or interlacing claim.
+
 - Factored steps in `iterated_preserver`: bounded exact second-order Ore
   right factorization over `Q(n)[x]`, with each first-order factor certified
   by the existing preserver menu or shared Liu--Wang conditions. Closed-ray

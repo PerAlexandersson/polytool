@@ -185,8 +185,10 @@ use parent_theorems::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
 // RealRooted row routes, including the Euler-orbit theorem of issue #2513.
 pub use parent_theorems::{
     check_binomial_perturbed_euler_orbit_theorem, check_lag_two_euler_theorem,
+    check_rational_pf_riordan_theorem, check_rational_polya_frequency,
     check_residue_class_subsequence_theorem, check_variable_delay_theorem,
     BinomialPerturbedEulerOrbitCertificate, LagTwoEulerCertificate, LagTwoEulerSeedStep,
+    PolyaFrequencyRootLayer, RationalPfRiordanCertificate, RationalPolyaFrequencyEvidence,
     ResidueClassCertificate, ResidueClassProof, VariableDelayCertificate, VariableDelaySeedStep,
 };
 // Index-section lift (RealRooted route `pathPower`).

@@ -542,6 +542,19 @@ cap. Gives simple roots in (-1,0) for Q, or (-inf,0) for P, and strict adjacent
 interlacing with the direction preserved. A certificate replays the transformed
 rule and seed identities. Lean: strictInterl_of_orbitPerturbation_recurrence.
 
+Rational PF Riordan (rational_pf_riordan, recorded only when it applies):
+for an index-free homogeneous rule without derivatives, build the exact reduced
+row generating function from every prescribed seed. Recognize
+F(x,z)=d(z)/(1-x z d(z) K(z)), with d(0)>0 and nonzero rational PF series d,K.
+The rational Edrei criterion is decided by exact gcd layers, PRS root signs and
+root isolation: numerator zeros nonpositive, denominator poles positive,
+positive initial scalar. Chen--Fu--Ruan Theorems 3(3) and 4 give PF rows for all
+indices, including K(0)=0 and noninvertible arrays. Also tries padded reversal
+x^(a*m+b) P_(first_index+m)(1/x) with a certified degree bound (a=1,2,3).
+Certificates replay the generating-function identity and exact PF evidence.
+Zero rows are reported exactly; no simplicity or interlacing is claimed.
+The route is available to index-section parents and the affine marker shifts.
+
 When no criterion proves the record:
   - tail: if one of the first rows is zero or not real-rooted, the criteria run
     on the record starting after the last such row; a proof then says "every

@@ -176,28 +176,43 @@ fn a_requested_region_is_checked_against_the_transferred_one() {
 }
 
 // ---------------------------------------------------------------------------
-// Open parents
+// Rational PF parents and an open parent
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_cubic_parent_rows_have_a_section_identity_but_an_open_parent() {
-    // The parent 1/(1 - t - x t^2 - x t^3) needs the Tran--Zumba theorem.
-    for id in ["A114123", "A184883", "A216182"] {
+fn rational_pf_riordan_proves_the_cubic_index_section_parents() {
+    for id in ["A114123", "A184883"] {
         let report = check(id);
-        assert!(!report.is_proved(), "{id}");
-        assert_ne!(report.status, RealRootednessTheoremStatus::NotApplicable);
-        assert_eq!(
-            hypothesis(&report, "section_identity").status,
-            LiftHypothesisStatus::Verified
-        );
-        let parent = hypothesis(&report, "parent_real_rooted");
-        assert_ne!(parent.status, LiftHypothesisStatus::Verified);
-        assert!(parent.evidence.starts_with("parent open"), "{id}");
+        assert!(report.is_proved(), "{id}: {:?}", report.open_hypotheses());
         let certificate = report.index_section_certificate().unwrap();
         assert_eq!(certificate.period, 2);
-        assert!(certificate.selected.is_none());
+        let selected = &certificate.parent_attempts[certificate.selected.unwrap()];
+        assert_eq!(selected.theorem, RealRootednessTheorem::RationalPfRiordan);
+        assert!(selected.is_proved());
+        selected.verify().unwrap();
         report.verify().unwrap();
     }
+}
+
+#[test]
+fn an_index_section_parent_with_x_dependent_numerator_stays_open() {
+    // A216182 itself is Riordan PF; this index-section parent has a different
+    // generating function, with an x-dependent numerator.
+    let id = "A216182";
+    let report = check(id);
+    assert!(!report.is_proved(), "{id}");
+    assert_ne!(report.status, RealRootednessTheoremStatus::NotApplicable);
+    assert_eq!(
+        hypothesis(&report, "section_identity").status,
+        LiftHypothesisStatus::Verified
+    );
+    let parent = hypothesis(&report, "parent_real_rooted");
+    assert_ne!(parent.status, LiftHypothesisStatus::Verified);
+    assert!(parent.evidence.starts_with("parent open"), "{id}");
+    let certificate = report.index_section_certificate().unwrap();
+    assert_eq!(certificate.period, 2);
+    assert!(certificate.selected.is_none());
+    report.verify().unwrap();
 }
 
 // ---------------------------------------------------------------------------
@@ -375,13 +390,18 @@ fn discovery_records_the_lift_only_where_a_section_exists() {
     .unwrap();
     assert_eq!(report.status, "proved");
     assert_eq!(report.real_rooted_from_index, Some(0));
-    let attempt = report.attempts.last().unwrap();
+    let position = report
+        .attempts
+        .iter()
+        .position(|a| a.theorem == RealRootednessTheorem::IndexSectionLift)
+        .unwrap();
+    let attempt = &report.attempts[position];
     assert_eq!(attempt.theorem, RealRootednessTheorem::IndexSectionLift);
     assert!(attempt.is_proved());
     report.verify().unwrap();
     // A report without the attempt does not replay.
     let mut older = report.clone();
-    older.attempts.pop();
+    older.attempts.remove(position);
     older.status = "not_proved".into();
     older.real_rooted_from_index = None;
     older.statement = report

@@ -40,6 +40,8 @@
 //!   coefficients: certified annihilating operators of the rows of sums of
 //!   hypergeometric terms ([`derive_hypergeometric_row_recurrence`], with a
 //!   replayable [`HypergeometricRowRecurrenceCertificate`]);
+//! - [`generating_function`]: reduced rational row generating functions from
+//!   index-free rules and every seed, with exact Riordan decomposition;
 //! - `root_domain`: optional root-domain information (theorem adapters, exact
 //!   root enclosures) for transformed results;
 //! - `representation`: the bounded queue search over equivalent
@@ -88,6 +90,8 @@ mod error;
 pub use error::{ParseRationalError, RecurrenceError};
 mod fit;
 pub use fit::*;
+pub mod generating_function;
+pub use generating_function::*;
 mod implicit;
 pub use implicit::*;
 // The `BivarPoly` conversions of the Ore-algebra adapter, for every submodule.

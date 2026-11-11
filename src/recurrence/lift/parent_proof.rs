@@ -352,6 +352,8 @@ pub enum VeroneseParentProofRoute {
     LagTwoEuler,
     /// [`check_binomial_perturbed_euler_orbit_theorem`] (RealRooted issue #2513).
     BinomialPerturbedEulerOrbit,
+    /// [`check_rational_pf_riordan_theorem`] with nonpositive roots.
+    RationalPfRiordan,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -376,6 +378,7 @@ impl VeroneseParentProofRoute {
             | VeroneseParentProofRoute::ResidueClassSubsequences
             | VeroneseParentProofRoute::IndexSectionLift
             | VeroneseParentProofRoute::LagTwoEuler
+            | VeroneseParentProofRoute::RationalPfRiordan
             | VeroneseParentProofRoute::BinomialPerturbedEulerOrbit
             | VeroneseParentProofRoute::FactorGauge => match self.theorem() {
                 Some(theorem) => theorem.as_str(),
@@ -420,6 +423,9 @@ impl VeroneseParentProofRoute {
             VeroneseParentProofRoute::IndexSectionLift => {
                 Some(RealRootednessTheorem::IndexSectionLift)
             }
+            VeroneseParentProofRoute::RationalPfRiordan => {
+                Some(RealRootednessTheorem::RationalPfRiordan)
+            }
             VeroneseParentProofRoute::FactorGauge => Some(RealRootednessTheorem::FactorGauge),
             VeroneseParentProofRoute::PeriodicProduct
             | VeroneseParentProofRoute::PaperTheorem
@@ -452,6 +458,7 @@ impl VeroneseParentProofRoute {
                 VeroneseParentProofRoute::ResidueClassSubsequences
             }
             RealRootednessTheorem::IndexSectionLift => VeroneseParentProofRoute::IndexSectionLift,
+            RealRootednessTheorem::RationalPfRiordan => VeroneseParentProofRoute::RationalPfRiordan,
             RealRootednessTheorem::FactorGauge => VeroneseParentProofRoute::FactorGauge,
         }
     }

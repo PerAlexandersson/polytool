@@ -25,7 +25,9 @@
     `real_rooted_enumeration` enumerates real-rooted integer polynomials with
     a prescribed leading prefix (exact antiderivative-shift kernel);
   - linear algebra, total non-negativity, determinants: `linalg`;
-  - recurrence search and renewal recognition: `recurrence`, `renewal`; the
+  - recurrence search and renewal recognition: `recurrence`, `renewal`;
+    exact reduced rational row generating functions and Riordan decomposition:
+    the public `recurrence::generating_function` group; the
     exact Ore algebra of shifts and derivatives (operators, pseudo-division,
     common left multiples, image annihilators) is the separate `ore-algebra`
     crate (`crates/ore-algebra`), adapted for the recurrence module in
@@ -69,7 +71,7 @@
   `src/linalg/`) are split by concern and re-exported, so public paths stay
   `polytool::recurrence::*` etc. Add new code to the matching submodule and
   re-export it from the facade. `src/recurrence/` is grouped one level deeper
-  (`base`, `closed_form`, `fit`, `transform`, `implicit`, `root_domain`,
+  (`base`, `closed_form`, `fit`, public `generating_function`, `transform`, `implicit`, `root_domain`,
   `representation`, `lift`, and the single module `leading_coefficient` with degree laws and
   leading-coefficient certificates);
   each group has a `<group>.rs` facade that re-exports its members, and a

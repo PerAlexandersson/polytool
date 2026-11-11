@@ -96,7 +96,9 @@
 //!   coordinate transformations with recurrence transport and optional
 //!   root-domain certificates, lazy exact row generation
 //!   (`RecurrenceRowIterator`), and exact image recurrences of operators
-//!   (`image_recurrence_of_operator`, built on the `ore-algebra` crate)
+//!   (`image_recurrence_of_operator`, built on the `ore-algebra` crate), and
+//!   reduced exact rational row generating functions with Riordan decomposition
+//!   ([`recurrence::generating_function`])
 //! - [`renewal`] — Exact recognition of renewal-type recurrences
 //!   `P_n = sum_j r_j t^j P_(n-1-ell*j)` with interlacing consequences,
 //!   symbolic variable-predecessor recurrences `Q_n = Q_(n-1) + w(n) t Q_(p(n))`

@@ -31,6 +31,12 @@
 //! nonnegative (TNN), then `A` and its reversal are TNN and every row is a PF
 //! sequence**, i.e. real-rooted with nonpositive zeros.
 //!
+//! For an **all-index** certificate from a defining recurrence, see
+//! [`crate::recurrence::check_rational_pf_riordan_theorem`]. It recognizes
+//! `F(x,z)=d(z)/(1-x z d(z) K(z))` with rational PF `d,K`, checks them
+//! exactly, and uses `Q=T(d) diag(1,T(K))`. This includes noninvertible
+//! arrays (`K(0)=0`), beyond the finite full-degree input contract here.
+//!
 //! # What a finite certificate proves
 //!
 //! Given rows `P_0, ..., P_N`, [`left_production_matrix`] computes `Q_N`

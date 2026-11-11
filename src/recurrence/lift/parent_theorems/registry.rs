@@ -138,7 +138,7 @@ pub(super) fn any_proof(_: &RealRootednessTheoremReport) -> bool {
 }
 
 /// Every theorem route, in the order of [`RealRootednessTheorem::ALL`].
-pub(in crate::recurrence) static ROUTES: [TheoremRoute; 14] = [
+pub(in crate::recurrence) static ROUTES: [TheoremRoute; 15] = [
     product::ROUTE,
     three_term::ROUTE,
     liu_wang::ROUTE,
@@ -153,6 +153,7 @@ pub(in crate::recurrence) static ROUTES: [TheoremRoute; 14] = [
     factor_gauge::ROUTE,
     lag_two_euler::ROUTE,
     binomial_perturbed_euler_orbit::ROUTE,
+    rational_pf_riordan::ROUTE,
 ];
 
 /// The route of `theorem`.
@@ -251,7 +252,8 @@ mod tests {
                 RealRootednessTheorem::IndexSectionLift,
                 RealRootednessTheorem::FactorGauge,
                 RealRootednessTheorem::LagTwoEuler,
-                RealRootednessTheorem::BinomialPerturbedEulerOrbit
+                RealRootednessTheorem::BinomialPerturbedEulerOrbit,
+                RealRootednessTheorem::RationalPfRiordan
             ]
         );
     }
