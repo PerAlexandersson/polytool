@@ -18,8 +18,9 @@ Output formats: text (default), json (the recurrence JSON with initial
 conditions), latex (every coefficient is factored over Q and the product
 verified by exact re-expansion, e.g. (n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} -
 (n - 1)(1 - t)^{2} P_{n-2}; a coefficient whose factorization exhausts its
-budget stays expanded, noted by a % comment line) and python (exact Python
-code). --latex and --python are shorthands for the matching --format value.
+budget stays expanded, noted by a % comment line), lean (checked real-polynomial
+definition and examples), and python (exact Python code). --latex and --python
+are shorthands for the matching --format value.
 
 --space and --verify-space are separate modes: they read a JSON request (or a
 replayed report) from standard input, emit exact JSON and accept only an
@@ -40,6 +41,7 @@ Options:
       --max-laurent-power <E>  Largest left-hand power x^E (default 2)
       --representations        Return a menu of length/derivative tradeoffs
       --theorem-matches        Also report conditional theorem matches
+      --lean-name <NAME>       Lean definition name (default P; simple ASCII identifier)
       --latex                  Emit LaTeX (same as --format latex)
       --python                 Emit exact Python code (same as --format python)
       --verbose                Print candidate search details
@@ -99,7 +101,7 @@ Recurrence search:
 
 Input and output:
       --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
-      --format <FORMAT>  Output format [default: text] [possible values: text, json, latex, python]
+      --format <FORMAT>  Output format [default: text] [possible values: text, json, latex, python, lean]
       --json             Emit machine-readable JSON (same as --format json)
 
 Input:
@@ -122,7 +124,10 @@ Details:
     Text output is a comparison table and numbered formulas; JSON is the full
     menu. Save the menu with --json and select an entry with --candidate N in
     recurrence-generate or recurrence-theorems. It cannot be combined with
-    --theorem-matches or --format python.
+    --theorem-matches or --format python. Lean menus print a refusal comment for
+    each unsupported candidate, retain all successful definitions and exit 2
+    only when no candidate can be rendered. A renderable incomplete Lean menu
+    exits 0 with a budget comment.
 
   --theorem-matches:
     Also report conditional theorem matches (weighted renewal, fixed-delay

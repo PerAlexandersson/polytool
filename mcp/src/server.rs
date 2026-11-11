@@ -21,8 +21,7 @@ use crate::planar_network::{
     tnn_network_response,
 };
 use crate::recurrence_options::{
-    apply_recurrence_options, recurrence_failure_response, recurrence_json_string,
-    validate_recurrence_for_generation,
+    apply_recurrence_options, recurrence_failure_response, validate_recurrence_for_generation,
 };
 use crate::report_items::{
     bigint_matrix_strings, coefficient_tests_item, cyclic_sequence_item_response,
@@ -444,6 +443,9 @@ impl PolynomialToolsServer {
     ) -> Result<Json<FindRecurrenceResponse>, McpError> {
         let recurrence_options = input.effective_options();
         let include_code = input.include_code.unwrap_or(true);
+        let lean_name = input.lean_name.as_deref().unwrap_or("P");
+        polytool::recurrence::validate_lean_recurrence_name(lean_name)
+            .map_err(|error| invalid_params(error.to_string()))?;
         let batch = parse_recurrence_batch_rational(&input)?;
         let polynomials = match collect_rational_polynomials_or_errors(batch) {
             Ok(polynomials) => polynomials,
@@ -466,41 +468,58 @@ impl PolynomialToolsServer {
         }
         let (search, budget) = apply_recurrence_options(recurrence_options)?;
         match find_recurrence_adaptive_rational_with_budget(&polynomials, &search, budget) {
-            AdaptiveSearchOutcome::Found(result) => Ok(Json(FindRecurrenceResponse {
-                status: RecurrenceSearchStatus::Found,
-                found: true,
-                recurrence: Some(format!("{}", result.recurrence)),
-                latex: Some(result.recurrence.to_latex()),
-                mathematica: include_code.then(|| {
-                    result
-                        .recurrence
-                        .to_mathematica_definition_rational(&polynomials)
-                }),
-                sage: include_code
-                    .then(|| result.recurrence.to_sage_definition_rational(&polynomials)),
-                python: include_code.then(|| {
-                    result
-                        .recurrence
-                        .to_python_definition_rational(&polynomials)
-                }),
-                recurrence_json: include_code.then(|| {
-                    recurrence_json_string(&result, &polynomials, &search, polynomials.len())
-                }),
-                unknowns: Some(result.num_unknowns),
-                weighted_unknowns: Some(result.weighted_unknowns),
-                equations: Some(result.num_equations),
-                fit_polynomials: Some(result.fit_polynomials),
-                verification_polynomials: Some(result.verification_polynomials),
-                candidates_tried: Some(result.candidates_tried),
-                candidates_considered: Some(result.diagnostics.considered_candidates),
-                error: None,
-                parse_errors: Vec::new(),
-                theorem_matches: crate::theorems::search_theorem_matches(
+            AdaptiveSearchOutcome::Found(result) => {
+                let record = crate::recurrence_options::recurrence_json_record(
                     &result,
                     &polynomials,
                     &search,
-                ),
-            })),
+                    polynomials.len(),
+                )
+                .with_lean(lean_name, &polynomials[search.skip_prefix..]);
+                let (_, first, seeds) = record.to_recurrence_parts().map_err(invalid_params)?;
+                let first =
+                    i64::try_from(first).map_err(|_| invalid_params("export index exceeds i64"))?;
+                Ok(Json(FindRecurrenceResponse {
+                    status: RecurrenceSearchStatus::Found,
+                    found: true,
+                    recurrence: Some(result.recurrence.to_string()),
+                    latex: record.latex.clone(),
+                    mathematica: include_code.then(|| {
+                        result
+                            .recurrence
+                            .to_mathematica_definition_rational_indexed(&seeds, first)
+                    }),
+                    sage: include_code.then(|| {
+                        result
+                            .recurrence
+                            .to_sage_definition_rational_indexed(&seeds, first)
+                    }),
+                    python: include_code.then(|| {
+                        result
+                            .recurrence
+                            .to_python_definition_rational_indexed(&seeds, first)
+                    }),
+                    recurrence_json: include_code.then(|| {
+                        serde_json::to_string_pretty(&record).expect("serialize recurrence JSON")
+                    }),
+                    unknowns: Some(result.num_unknowns),
+                    weighted_unknowns: Some(result.weighted_unknowns),
+                    equations: Some(result.num_equations),
+                    fit_polynomials: Some(result.fit_polynomials),
+                    verification_polynomials: Some(result.verification_polynomials),
+                    candidates_tried: Some(result.candidates_tried),
+                    candidates_considered: Some(result.diagnostics.considered_candidates),
+                    error: None,
+                    parse_errors: Vec::new(),
+                    theorem_matches: crate::theorems::search_theorem_matches(
+                        &result,
+                        &polynomials,
+                        &search,
+                    ),
+                    lean: include_code.then(|| record.lean.clone()).flatten(),
+                    lean_reason: include_code.then(|| record.lean_reason.clone()).flatten(),
+                }))
+            }
             AdaptiveSearchOutcome::NoRecurrence(summary) => Ok(Json(recurrence_failure_response(
                 RecurrenceSearchStatus::NotFound,
                 "no recurrence found within the search bounds",
@@ -523,7 +542,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Find several recurrence representations trading lag length against derivative order. Uses the same inputs and bounds as find_recurrence, but keeps one preferred exact fit per length/order bound pair. Returns polytool.recurrence-representations.v1: candidates with reusable recurrence_json objects, actual complexity, checked starting indices, finite-fit evidence, a nondominated frontier, and per-pair coverage. The candidate budget is global; incomplete coverage is explicit. No automatic denominator escalation. These are finite-data candidates, not all-rank certificates, a complete annihilator basis, or nonexistence proofs. include_code is accepted for request compatibility; recurrence_json is always included and language code is not generated."
+        description = "Find several recurrence representations trading lag length against derivative order. Uses the same inputs and bounds as find_recurrence, but keeps one preferred exact fit per length/order bound pair. Returns polytool.recurrence-representations.v1: candidates with reusable recurrence_json objects, actual complexity, checked starting indices, finite-fit evidence, a nondominated frontier, and per-pair coverage. The candidate budget is global; incomplete coverage is explicit. No automatic denominator escalation. These are finite-data candidates, not all-rank certificates, a complete annihilator basis, or nonexistence proofs. include_code is accepted for request compatibility; recurrence_json is always included with exact seed/singularity metadata and checked Lean output or a refusal reason."
     )]
     pub fn find_recurrence_representations(
         &self,
@@ -537,8 +556,30 @@ impl PolynomialToolsServer {
                 parse_error_summary(&errors)
             ))
         })?;
-        let report = find_recurrence_representations_rational(&polynomials, &search, budget)
+        let mut report = find_recurrence_representations_rational(&polynomials, &search, budget)
             .map_err(invalid_params)?;
+        let lean_name = input.lean_name.as_deref().unwrap_or("P");
+        polytool::recurrence::validate_lean_recurrence_name(lean_name)
+            .map_err(|error| invalid_params(error.to_string()))?;
+        for (index, item) in report.representations.iter_mut().enumerate() {
+            item.recurrence_json = item
+                .recurrence_json
+                .clone()
+                .with_checked_presentation(&polynomials[search.skip_prefix..])
+                .and_then(polytool::recurrence::RecurrenceJson::with_latex)
+                .map_err(|error| invalid_params(error.to_string()))?
+                .with_lean(
+                    &format!("{lean_name}_{index}"),
+                    &polynomials[search.skip_prefix..],
+                );
+            let (rule, _, _) = item
+                .recurrence_json
+                .to_recurrence_parts()
+                .map_err(invalid_params)?;
+            let normalized = rule.normalized_presentation().map_err(invalid_params)?;
+            item.recurrence = rule.to_string();
+            item.latex = normalized.to_latex();
+        }
         let serde_json::Value::Object(fields) =
             serde_json::to_value(report).expect("serialize recurrence menu")
         else {

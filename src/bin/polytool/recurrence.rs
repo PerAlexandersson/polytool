@@ -21,6 +21,7 @@ enum RecurrenceOutputFormat {
     Json,
     Python,
     Latex,
+    Lean,
 }
 
 fn print_representations_text(report: &RecurrenceRepresentations) {
@@ -84,6 +85,19 @@ fn print_representations_text(report: &RecurrenceRepresentations) {
             "    Checked n={}..={}.",
             item.first_checked_index, item.last_checked_index
         );
+        if let Some(presentation) = &item.recurrence_json.presentation {
+            if !presentation.left_hand_zeros.is_empty() {
+                println!(
+                    "    Left-hand zeros: [{}].",
+                    presentation.left_hand_zeros.join(", ")
+                );
+            }
+            if let Some(start) = presentation.start_index {
+                println!("    Defining range: n >= {start}.");
+            } else if let Some(reason) = &presentation.reason {
+                println!("    No defining range: {reason}.");
+            }
+        }
         if !item.singular_checked_indices.is_empty() {
             println!(
                 "    Cannot generate at checked singular indices: {:?}.",
@@ -107,10 +121,18 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
     let mut representations = false;
     let mut theorem_matches = false;
     let mut first_index = None;
+    let mut lean_name = String::from("P");
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--lean-name" => {
+                lean_name = next_option_value(args, &mut i, "--lean-name")
+                    .unwrap_or_else(|error| usage_error(&error))
+                    .to_string();
+                validate_lean_recurrence_name(&lean_name)
+                    .unwrap_or_else(|error| usage_error(&error.to_string()));
+            }
             "--first-index" => {
                 first_index = Some(
                     parse_usize_option(args, &mut i, "--first-index")
@@ -138,6 +160,7 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     "json" => RecurrenceOutputFormat::Json,
                     "python" => RecurrenceOutputFormat::Python,
                     "latex" => RecurrenceOutputFormat::Latex,
+                    "lean" => RecurrenceOutputFormat::Lean,
                     other => {
                         eprintln!("unknown recurrence output format: {other}");
                         std::process::exit(2);
@@ -409,12 +432,26 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                 let mut report = report
                     .reindexed(output_first_index)
                     .unwrap_or_else(|error| usage_error(&error.to_string()));
-                for item in &mut report.representations {
+                for (index, item) in report.representations.iter_mut().enumerate() {
                     item.recurrence_json = item
                         .recurrence_json
                         .clone()
-                        .with_latex()
+                        .with_checked_presentation(&polys[search.skip_prefix..])
+                        .and_then(RecurrenceJson::with_latex)
+                        .unwrap_or_else(|error| usage_error(&error.to_string()))
+                        .with_lean(
+                            &format!("{lean_name}_{index}"),
+                            &polys[search.skip_prefix..],
+                        );
+                    let (rule, _, _) = item
+                        .recurrence_json
+                        .to_recurrence_parts()
                         .unwrap_or_else(|error| usage_error(&error.to_string()));
+                    item.recurrence = rule.to_string();
+                    item.latex = rule
+                        .normalized_presentation()
+                        .unwrap_or_else(|error| usage_error(&error.to_string()))
+                        .to_latex();
                 }
                 if matches!(format, RecurrenceOutputFormat::Json) {
                     println!("{}", serde_json::to_string_pretty(&report).unwrap());
@@ -433,11 +470,37 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                                 .expect("LaTeX populated")
                         );
                     }
+                } else if matches!(format, RecurrenceOutputFormat::Lean) {
+                    let mut rendered = 0;
+                    for (index, item) in report.representations.iter().enumerate() {
+                        if let Some(lean) = &item.recurrence_json.lean {
+                            println!("{lean}\n");
+                            rendered += 1;
+                        } else {
+                            println!(
+                                "-- Representation {index}: {}",
+                                item.recurrence_json
+                                    .lean_reason
+                                    .as_deref()
+                                    .unwrap_or("Lean output unavailable")
+                            );
+                        }
+                    }
+                    if rendered == 0 {
+                        eprintln!("no representation can be rendered as Lean");
+                        std::process::exit(2);
+                    }
                 } else {
                     print_representations_text(&report);
                 }
                 if report.status == RepresentationSearchStatus::BudgetExhausted {
-                    std::process::exit(3);
+                    if format == RecurrenceOutputFormat::Lean {
+                        println!(
+                            "-- Representation search budget exhausted; this menu is incomplete."
+                        );
+                    } else {
+                        std::process::exit(3);
+                    }
                 }
             }
             Err(error) => usage_error(&error.to_string()),
@@ -451,8 +514,6 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
     match find_recurrence_adaptive_rational_with_budget(&polys, &search, budget) {
         AdaptiveSearchOutcome::Found(res) => {
             let searched_polys = polys.get(search.skip_prefix..).unwrap_or(&[]);
-            let initial_count = res.export_initial_count(searched_polys.len());
-            let initial_polys = &searched_polys[..initial_count];
             let rule = res.recurrence.shift_index(1 - output_first_index as i64);
             let mut theorem_report =
                 search_theorem_report(&res, &polys, &search, output_first_index);
@@ -461,11 +522,18 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                     metadata.work_units = Some(res.diagnostics.work_units);
                 }
             }
-            let recurrence_json = theorem_report
+            let mut recurrence_json = theorem_report
                 .recurrence_json
                 .clone()
-                .with_latex()
+                .with_checked_presentation(searched_polys)
+                .and_then(RecurrenceJson::with_latex)
                 .unwrap_or_else(|error| usage_error(&error.to_string()));
+            if matches!(
+                format,
+                RecurrenceOutputFormat::Json | RecurrenceOutputFormat::Lean
+            ) {
+                recurrence_json = recurrence_json.with_lean(&lean_name, searched_polys);
+            }
             theorem_report.recurrence_json = recurrence_json.clone();
             match format {
                 RecurrenceOutputFormat::Json if theorem_matches => {
@@ -483,17 +551,46 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         recurrence_json.latex.as_deref().expect("LaTeX populated")
                     );
                 }
+                RecurrenceOutputFormat::Lean => {
+                    let lean = recurrence_json.lean.as_deref().unwrap_or_else(|| {
+                        usage_error(
+                            recurrence_json
+                                .lean_reason
+                                .as_deref()
+                                .unwrap_or("Lean output unavailable"),
+                        )
+                    });
+                    println!("{lean}");
+                }
                 RecurrenceOutputFormat::Python => {
                     println!(
                         "{}",
                         rule.to_python_definition_rational_indexed(
-                            initial_polys,
+                            &searched_polys[..recurrence_json.initial_polynomials.len()],
                             output_first_index as i64
                         )
                     );
                 }
                 RecurrenceOutputFormat::Text => {
                     println!("{rule}");
+                    let presentation = recurrence_json
+                        .presentation
+                        .as_ref()
+                        .expect("presentation populated");
+                    if !presentation.left_hand_zeros.is_empty() {
+                        println!(
+                            "Left-hand zeros (nonnegative integers): [{}]",
+                            presentation.left_hand_zeros.join(", ")
+                        );
+                    }
+                    if let Some(start) = presentation.start_index {
+                        println!("Range: n >= {start}");
+                    } else if let Some(reason) = &presentation.reason {
+                        println!("No defining range: {reason}");
+                    }
+                    for (offset, row) in recurrence_json.initial_polynomials.iter().enumerate() {
+                        println!("P({}) = [{}]", output_first_index + offset, row.join(", "));
+                    }
                     if theorem_matches {
                         print_theorem_report_text(&theorem_report);
                     }
@@ -502,7 +599,9 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
             if !theorem_matches
                 || matches!(
                     format,
-                    RecurrenceOutputFormat::Python | RecurrenceOutputFormat::Latex
+                    RecurrenceOutputFormat::Python
+                        | RecurrenceOutputFormat::Latex
+                        | RecurrenceOutputFormat::Lean
                 )
             {
                 note_theorem_matches(&theorem_report);

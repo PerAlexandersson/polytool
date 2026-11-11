@@ -40,6 +40,7 @@ pub(crate) fn search_theorem_report(
         }),
     )
     .reindexed(first_index)
+    .and_then(|record| record.with_checked_presentation(searched))
     .expect("CLI index shift was validated");
     let mut shifted_result = result.clone();
     shifted_result.recurrence = result.recurrence.shift_index(1 - first_index as i64);

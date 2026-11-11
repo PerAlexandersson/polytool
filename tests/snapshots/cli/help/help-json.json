@@ -1056,8 +1056,8 @@
     {
       "aliases": [],
       "deprecated_aliases": [],
-      "description": "Search adaptively for a linear differential-polynomial recurrence among the input\npolynomial sequence. The recurrence relates P_n to earlier rows P_(n-k) and\ntheir derivatives with coefficients that are polynomials in t and in the index\nn. A recurrence found this way is a finite fit (evidence on the supplied rows),\nnot a proof for all n; held-out rows are used to check it unless\n--no-held-out-rows is given.\n\nInput is read as dense coefficient lists, one polynomial per line, ascending\ndegree, with arbitrary-size integers or exact rationals such as 42, -17 or 3/7.\nThis command expects coefficient lists, not expanded expressions.\n\n--first-index labels the first input row (nonnegative); with --skip-prefix the\ndiscarded rows still count. By default the retained rows are renumbered from 1.\n\nOutput formats: text (default), json (the recurrence JSON with initial\nconditions), latex (every coefficient is factored over Q and the product\nverified by exact re-expansion, e.g.\n(n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2} P_{n-2};\na coefficient whose factorization exhausts its budget stays expanded, noted by\na % comment line) and python (exact Python code). --latex and --python are\nshorthands for the matching --format value.\n\n--space and --verify-space are separate modes: they read a JSON request (or a\nreplayed report) from standard input, emit exact JSON and accept only an\noptional --json; bounds belong in the request. Source-backed positives are\nconditional on the supplied source and seeds, rows-only positives are fits, and\ndual negatives prove absence within the shape. The opt-in request field\n\"coefficient_rescaling\": {\"kind\":\"factorial_power\",\"power\":m} searches\nQ[n] = T(P[n]) with T(X^k) = X^k/(k!)^m, m >= 1, and certifies complete spaces\nfrom r(U+m(A+J)+1) residuals (constant-index source).",
-      "details": "Budgets:\n  --max-work counts deterministic work units over the whole search (modular and\n  exact solves, held-out checks, precomputation) from the dimensions of the\n  systems, never from the clock: the same N gives the same output on every\n  machine. A step runs only if its whole cost fits, so the units used never\n  exceed N. One solve of r equations in c unknowns costs r*c*(min(r,c)+1) units.\n  Reaching --max-work or --max-candidates ends the search as budget_exhausted\n  (exit status 3). JSON reports work_units and max_work (a found record has\n  search.work_units). --max-work is not supported with --representations.\n\n--representations:\n  Text output is a comparison table and numbered formulas; JSON is the full\n  menu. Save the menu with --json and select an entry with --candidate N in\n  recurrence-generate or recurrence-theorems. It cannot be combined with\n  --theorem-matches or --format python.\n\n--theorem-matches:\n  Also report conditional theorem matches (weighted renewal, fixed-delay\n  predecessor), kept separate from the finite fit evidence. With --json the\n  output is polytool.recurrence-theorems.v1 (the usual record is its\n  recurrence_json). Without the flag a match is only noted on stderr.\n\n--space / --verify-space (JSON):\n  The reply is a space report; the JSON output lists structured candidates and\n  coverage. Exit status 3 means some requested shape is not completed.",
+      "description": "Search adaptively for a linear differential-polynomial recurrence among the input\npolynomial sequence. The recurrence relates P_n to earlier rows P_(n-k) and\ntheir derivatives with coefficients that are polynomials in t and in the index\nn. A recurrence found this way is a finite fit (evidence on the supplied rows),\nnot a proof for all n; held-out rows are used to check it unless\n--no-held-out-rows is given.\n\nInput is read as dense coefficient lists, one polynomial per line, ascending\ndegree, with arbitrary-size integers or exact rationals such as 42, -17 or 3/7.\nThis command expects coefficient lists, not expanded expressions.\n\n--first-index labels the first input row (nonnegative); with --skip-prefix the\ndiscarded rows still count. By default the retained rows are renumbered from 1.\n\nOutput formats: text (default), json (the recurrence JSON with initial\nconditions), latex (every coefficient is factored over Q and the product\nverified by exact re-expansion, e.g.\n(n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2} P_{n-2};\na coefficient whose factorization exhausts its budget stays expanded, noted by\na % comment line), lean (checked real-polynomial definition and examples),\nand python (exact Python code). --latex and --python are\nshorthands for the matching --format value.\n\n--space and --verify-space are separate modes: they read a JSON request (or a\nreplayed report) from standard input, emit exact JSON and accept only an\noptional --json; bounds belong in the request. Source-backed positives are\nconditional on the supplied source and seeds, rows-only positives are fits, and\ndual negatives prove absence within the shape. The opt-in request field\n\"coefficient_rescaling\": {\"kind\":\"factorial_power\",\"power\":m} searches\nQ[n] = T(P[n]) with T(X^k) = X^k/(k!)^m, m >= 1, and certifies complete spaces\nfrom r(U+m(A+J)+1) residuals (constant-index source).",
+      "details": "Budgets:\n  --max-work counts deterministic work units over the whole search (modular and\n  exact solves, held-out checks, precomputation) from the dimensions of the\n  systems, never from the clock: the same N gives the same output on every\n  machine. A step runs only if its whole cost fits, so the units used never\n  exceed N. One solve of r equations in c unknowns costs r*c*(min(r,c)+1) units.\n  Reaching --max-work or --max-candidates ends the search as budget_exhausted\n  (exit status 3). JSON reports work_units and max_work (a found record has\n  search.work_units). --max-work is not supported with --representations.\n\n--representations:\n  Text output is a comparison table and numbered formulas; JSON is the full\n  menu. Save the menu with --json and select an entry with --candidate N in\n  recurrence-generate or recurrence-theorems. It cannot be combined with\n  --theorem-matches or --format python. Lean menus print a refusal comment for\n  each unsupported candidate, retain all successful definitions and exit 2\n  only when no candidate can be rendered. A renderable incomplete Lean menu\n  exits 0 with a budget comment.\n\n--theorem-matches:\n  Also report conditional theorem matches (weighted renewal, fixed-delay\n  predecessor), kept separate from the finite fit evidence. With --json the\n  output is polytool.recurrence-theorems.v1 (the usual record is its\n  recurrence_json). Without the flag a match is only noted on stderr.\n\n--space / --verify-space (JSON):\n  The reply is a space report; the JSON output lists structured candidates and\n  coverage. Exit status 3 means some requested shape is not completed.",
       "examples": [
         "printf '1\\n1\\n2\\n3\\n5\\n8\\n' | polytool recurrence",
         "polytool sequence eulerian 8 --format rows | polytool recurrence --json > recurrence.json",
@@ -1163,6 +1163,18 @@
           "long": "--theorem-matches",
           "name": "theorem-matches",
           "value": null
+        },
+        {
+          "arity": 1,
+          "choices": [],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Lean definition name (default P; simple ASCII identifier)",
+          "hidden": false,
+          "long": "--lean-name",
+          "name": "lean-name",
+          "value": "NAME"
         },
         {
           "arity": 0,
@@ -1556,7 +1568,8 @@
             "text",
             "json",
             "latex",
-            "python"
+            "python",
+            "lean"
           ],
           "default": null,
           "deprecated_aliases": [],
@@ -1589,7 +1602,8 @@
           "text",
           "json",
           "latex",
-          "python"
+          "python",
+          "lean"
         ]
       },
       "positionals": [],

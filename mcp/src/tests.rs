@@ -2879,3 +2879,67 @@ fn skipped_response_fields_are_optional_in_the_schema() {
         );
     }
 }
+
+#[test]
+fn recurrence_presentations_share_seeds_normalization_and_checked_lean() {
+    let server = PolynomialToolsServer::new();
+    let request: FindRecurrenceRequest = serde_json::from_value(json!({
+        "coefficients":[[1],[2],[4],[8],[16],[32]],
+        "max_recurrence_length":1, "max_variable_degree":0,
+        "max_index_degree":0, "max_derivative_order":0, "lean_name":"Rows"
+    }))
+    .unwrap();
+    let Json(response) = server.find_recurrence(Parameters(request)).unwrap();
+    let nested: serde_json::Value =
+        serde_json::from_str(response.recurrence_json.as_ref().unwrap()).unwrap();
+    assert_eq!(nested["presentation"]["start_index"], 2);
+    assert_eq!(nested["initial_polynomials"].as_array().unwrap().len(), 1);
+    assert!(nested["normalized_recurrence"].is_object());
+    assert!(response.latex.unwrap().contains("(n \\geq 2)"));
+    assert!(response
+        .lean
+        .as_ref()
+        .unwrap()
+        .contains("def Rows : ℕ → ℝ[X]"));
+    assert_eq!(nested["lean"].as_str().unwrap(), response.lean.unwrap());
+    assert!(response.lean_reason.is_none());
+    let invalid: FindRecurrenceRequest = serde_json::from_value(json!({
+        "coefficients":[[1],[2],[4]], "lean_name":"Bad Name"
+    }))
+    .unwrap();
+    assert!(server.find_recurrence(Parameters(invalid)).is_err());
+}
+
+#[test]
+fn recurrence_code_exports_keep_extended_seeds_and_fitted_scaling() {
+    let server = PolynomialToolsServer::new();
+    let request: FindRecurrenceRequest = serde_json::from_value(json!({
+        "coefficients":[[1],[-1,1],[-1,0,1],[-1,-1,1,1],[-1,-2,0,2,1],
+            [-1,-3,-2,2,3,1],[-1,-4,-5,0,5,4,1],[-1,-5,-9,-5,5,9,5,1]]
+    }))
+    .unwrap();
+    let Json(response) = server.find_recurrence(Parameters(request)).unwrap();
+    let record: serde_json::Value =
+        serde_json::from_str(response.recurrence_json.as_ref().unwrap()).unwrap();
+    assert_eq!(record["initial_polynomials"].as_array().unwrap().len(), 2);
+    let python = response.python.unwrap();
+    assert!(python.contains("    1: [1],"), "{python}");
+    assert!(python.contains("    2: [-1, 1],"), "{python}");
+    assert!(!python.contains("    3: ["));
+    let sage = response.sage.unwrap();
+    assert!(sage.contains("    1: R([1]),"), "{sage}");
+    assert!(sage.contains("    2: R([-1, 1]),"), "{sage}");
+    assert!(!sage.contains("    3: R(["));
+    let mathematica = response.mathematica.unwrap();
+    assert!(mathematica.contains("P[1, t_] := 1;"), "{mathematica}");
+    assert!(mathematica.contains("P[2, t_] := -1 + t;"), "{mathematica}");
+    assert!(!mathematica.contains("P[3, t_] :="));
+    assert!(mathematica.contains("n >= 3"));
+    let request: FindRecurrenceRequest = serde_json::from_value(json!({
+        "coefficients":[["1"],["1/2"],["1/4"],["1/8"],["1/16"],["1/32"]]
+    }))
+    .unwrap();
+    let Json(response) = server.find_recurrence(Parameters(request)).unwrap();
+    assert_eq!(response.recurrence.as_deref(), Some("P(n) = 1/2 P(n-1)"));
+    assert!(response.latex.unwrap().contains("$2 P_{n} = P_{n-1}"));
+}

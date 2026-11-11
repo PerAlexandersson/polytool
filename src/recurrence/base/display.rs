@@ -241,7 +241,16 @@ impl fmt::Display for Recurrence {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // LHS
         if let Some(ref denom) = self.denominator {
-            write!(f, "({denom}) ")?;
+            let scalar = denom.coeffs.iter().enumerate().all(|(i, row)| {
+                row.iter()
+                    .enumerate()
+                    .all(|(j, coefficient)| (i == 0 && j == 0) || coefficient.is_zero())
+            });
+            if scalar {
+                write!(f, "{denom} ")?;
+            } else {
+                write!(f, "({denom}) ")?;
+            }
         }
         write!(f, "P(n) = ")?;
 
