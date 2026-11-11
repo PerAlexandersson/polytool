@@ -75,6 +75,12 @@ use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
 use std::iter::FusedIterator;
 
+mod rows;
+pub use rows::{
+    infer_oeis_rows, OeisBFileRejection, OeisInferredRows, OeisRowLengthRule,
+    OeisRowsRefusalReason, OeisRowsStatus,
+};
+
 mod bfile;
 pub use bfile::{
     bfile_row_terms, flatten_rows_to_bfile, BFileError, BFileOptions, BFileRowOrientation,

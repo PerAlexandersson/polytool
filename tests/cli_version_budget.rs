@@ -86,7 +86,10 @@ fn recurrence_can_succeed_on_the_last_budgeted_candidate() {
     let output = run_polytool(&["recurrence", "--max-candidates", "1"], GEOMETRIC_ROWS);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"P(n) = 2 P(n-1)\n");
+    assert_eq!(
+        output.stdout,
+        b"P(n) = 2 P(n-1)\nRange: n >= 2\nP(1) = [1]\n"
+    );
     assert!(String::from_utf8(output.stderr)
         .expect("stderr is UTF-8")
         .contains("1 candidates tried"));
@@ -97,7 +100,10 @@ fn omitted_candidate_budget_preserves_unbounded_cli_behavior() {
     let output = run_polytool(&["recurrence"], GEOMETRIC_ROWS);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"P(n) = 2 P(n-1)\n");
+    assert_eq!(
+        output.stdout,
+        b"P(n) = 2 P(n-1)\nRange: n >= 2\nP(1) = [1]\n"
+    );
     assert!(!String::from_utf8(output.stderr)
         .expect("stderr is UTF-8")
         .contains("budget"));

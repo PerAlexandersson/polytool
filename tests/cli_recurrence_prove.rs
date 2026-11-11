@@ -27,6 +27,25 @@ fn discover_and_replay_then_reject_tampering() {
     assert_eq!(report["status"], "proved");
     assert_eq!(report["attempts"][0]["theorem"], "product_recurrence");
     assert_eq!(report["lean_replay"], "not_attempted");
+    let mut old_report = report.clone();
+    old_report
+        .as_object_mut()
+        .unwrap()
+        .remove("trivially_real_rooted_if_rule_holds");
+    assert!(run(
+        &["recurrence-prove", "--verify", "--json"],
+        &old_report.to_string()
+    )
+    .status
+    .success());
+    let mut altered = report.clone();
+    altered["trivially_real_rooted_if_rule_holds"] = serde_json::json!(false);
+    assert_eq!(
+        run(&["recurrence-prove", "--verify"], &altered.to_string())
+            .status
+            .code(),
+        Some(2)
+    );
     let verified = run(
         &["recurrence-prove", "--verify", "--json"],
         &report.to_string(),
@@ -156,4 +175,54 @@ fn zero_residue_classes_are_reported_by_the_cli() {
     assert!(
         text.contains("Zero residue classes: every row P_n with n >= 0 and n mod 2 in [1] is zero")
     );
+}
+
+#[test]
+fn conditional_product_classification_is_visible_in_json() {
+    let supplied = run(
+        &["recurrence-prove", "--recurrence", "-", "--json"],
+        &input().to_string(),
+    );
+    let supplied: serde_json::Value = serde_json::from_slice(&supplied.stdout).unwrap();
+    assert_eq!(supplied["trivially_real_rooted"], true);
+    assert_eq!(supplied["trivially_real_rooted_if_rule_holds"], true);
+    let mut nonreal = input();
+    nonreal["recurrence"]["terms"][0]["coeff"]["coeffs"] = serde_json::json!([["1", "0", "1"]]);
+    let result = run(
+        &["recurrence-prove", "--recurrence", "-", "--json"],
+        &nonreal.to_string(),
+    );
+    let result: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(result["trivially_real_rooted"], false);
+    assert_eq!(result["trivially_real_rooted_if_rule_holds"], false);
+    let fit = run(
+        &["recurrence", "--json"],
+        "1\n1 1\n1 2 1\n1 3 3 1\n1 4 6 4 1\n1 5 10 10 5 1\n",
+    );
+    assert!(fit.status.success());
+    let result = run(
+        &["recurrence-prove", "--recurrence", "-", "--json"],
+        std::str::from_utf8(&fit.stdout).unwrap(),
+    );
+    let result: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(result["trivially_real_rooted"], false);
+    assert_eq!(result["trivially_real_rooted_if_rule_holds"], true);
+    for command in ["recurrence-prove", "recurrence-theorems"] {
+        let output = run(
+            &[command, "--recurrence", "-"],
+            std::str::from_utf8(&fit.stdout).unwrap(),
+        );
+        assert!(String::from_utf8_lossy(&output.stdout)
+            .contains("Trivially real-rooted if the rule holds: yes."));
+        let plain = run(&[command, "--recurrence", "-"], &input().to_string());
+        assert!(!String::from_utf8_lossy(&plain.stdout)
+            .contains("Trivially real-rooted if the rule holds:"));
+    }
+    let theorem = run(
+        &["recurrence", "--json", "--theorem-matches"],
+        "1\n1 1\n1 2 1\n1 3 3 1\n1 4 6 4 1\n1 5 10 10 5 1\n",
+    );
+    let theorem: serde_json::Value = serde_json::from_slice(&theorem.stdout).unwrap();
+    assert!(theorem.get("trivially_real_rooted").is_none());
+    assert_eq!(theorem["trivially_real_rooted_if_rule_holds"], true);
 }

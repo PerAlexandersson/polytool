@@ -237,6 +237,12 @@ pub struct FindRecurrenceResponse {
     /// `polytool.recurrence-theorems.v1`); omitted when none match.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub theorem_matches: Option<Vec<serde_json::Value>>,
+    /// Checked Lean definition and examples, when code is requested and supported.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lean: Option<String>,
+    /// Reason Lean output was refused.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lean_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]

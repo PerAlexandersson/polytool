@@ -153,6 +153,8 @@ mod tests {
             }))
             .unwrap();
         assert_eq!(report["status"], "proved");
+        assert_eq!(report["trivially_real_rooted"], true);
+        assert_eq!(report["trivially_real_rooted_if_rule_holds"], true);
         assert_eq!(report["lean_replay"], "not_attempted");
         let Json(verified) = server
             .verify_recurrence_proofs(Parameters(VerifyRecurrenceProofsRequest {

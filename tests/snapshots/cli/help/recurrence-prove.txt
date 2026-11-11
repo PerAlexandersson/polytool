@@ -136,10 +136,12 @@ Input:
 Details:
   JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted
   is true when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and
-  product induction proves it. real_rooted_from_index is the first index N with
-  every row P_n, n >= N, proved nonzero and real-rooted. A residue-class proof may
-  leave whole residue classes of zero rows (conclusion.zero_residue_classes,
-  residues of n modulo the period); real_rooted_from_index is then omitted and
+  product induction proves it. trivially_real_rooted_if_rule_holds classifies the
+  rule conditional on its holding for all indices, including fitted rules.
+  real_rooted_from_index is the first index N with every row P_n, n >= N, proved
+  nonzero and real-rooted. A residue-class proof may leave whole residue classes
+  of zero rows (conclusion.zero_residue_classes, residues of n modulo the period);
+  real_rooted_from_index is then omitted and
   real_rooted_outside_zero_residue_classes gives from_index and the zero classes
   (status proved). tail and alternative_representations hold the later stages,
   each alternative with its polytool.recurrence-equality.v1 certificate.

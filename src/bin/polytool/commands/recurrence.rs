@@ -90,7 +90,8 @@ conditions), latex (every coefficient is factored over Q and the product
 verified by exact re-expansion, e.g.
 (n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2} P_{n-2};
 a coefficient whose factorization exhausts its budget stays expanded, noted by
-a % comment line) and python (exact Python code). --latex and --python are
+a % comment line), lean (checked real-polynomial definition and examples),
+and python (exact Python code). --latex and --python are
 shorthands for the matching --format value.
 
 --space and --verify-space are separate modes: they read a JSON request (or a
@@ -103,7 +104,7 @@ Q[n] = T(P[n]) with T(X^k) = X^k/(k!)^m, m >= 1, and certifies complete spaces
 from r(U+m(A+J)+1) residuals (constant-index source)."#,
     input: InputKind::RationalLists,
     output: OutputKind::Formats {
-        values: &["text", "json", "latex", "python"],
+        values: &["text", "json", "latex", "python", "lean"],
         default: "text",
     },
     flags: &[
@@ -134,6 +135,11 @@ from r(U+m(A+J)+1) residuals (constant-index source)."#,
             "Return a menu of length/derivative tradeoffs",
         ),
         switch("theorem-matches", "Also report conditional theorem matches"),
+        option(
+            "lean-name",
+            "NAME",
+            "Lean definition name (default P; simple ASCII identifier)",
+        ),
         switch("latex", "Emit LaTeX (same as --format latex)"),
         switch("python", "Emit exact Python code (same as --format python)"),
         switch("verbose", "Print candidate search details"),
@@ -166,7 +172,10 @@ from r(U+m(A+J)+1) residuals (constant-index source)."#,
   Text output is a comparison table and numbered formulas; JSON is the full
   menu. Save the menu with --json and select an entry with --candidate N in
   recurrence-generate or recurrence-theorems. It cannot be combined with
-  --theorem-matches or --format python.
+  --theorem-matches or --format python. Lean menus print a refusal comment for
+  each unsupported candidate, retain all successful definitions and exit 2
+  only when no candidate can be rendered. A renderable incomplete Lean menu
+  exits 0 with a budget comment.
 
 --theorem-matches:
   Also report conditional theorem matches (weighted renewal, fixed-delay
@@ -631,7 +640,9 @@ transformed records) and takes no search flags."#,
     ],
     details: r#"JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is
 true when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and
-product induction proves it. real_rooted_from_index is the first index N with
+product induction proves it. trivially_real_rooted_if_rule_holds classifies the
+rule conditional on its holding for all indices, including fitted rules.
+real_rooted_from_index is the first index N with
 every row P_n, n >= N, proved nonzero and real-rooted. A residue-class proof
 may leave whole residue classes of zero rows (conclusion.zero_residue_classes,
 residues of n modulo the period); real_rooted_from_index is then omitted and
@@ -701,7 +712,9 @@ that the recurrence holds for the intended sequence for all n."#,
 
 JSON output is the polytool.recurrence-theorems.v1 report; its
 trivially_real_rooted (supplied, not fitted, records only) is true when the rule
-is B(n) P_n = A(x,n) P_(n-k) and product induction proves it."#,
+is B(n) P_n = A(x,n) P_(n-k) and product induction proves it.
+trivially_real_rooted_if_rule_holds gives the same classification conditional
+on the rule holding for all indices, including fitted rules."#,
     examples: &[
         "polytool recurrence --json < rows.txt | polytool recurrence-theorems --recurrence -",
         "polytool recurrence-theorems --recurrence menu.json --candidate 0 --json",

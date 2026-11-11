@@ -40,6 +40,7 @@ pub(crate) fn search_theorem_report(
         }),
     )
     .reindexed(first_index)
+    .and_then(|record| record.with_checked_presentation(searched))
     .expect("CLI index shift was validated");
     let mut shifted_result = result.clone();
     shifted_result.recurrence = result.recurrence.shift_index(1 - first_index as i64);
@@ -97,6 +98,14 @@ pub(crate) fn print_theorem_report_text(report: &RecurrenceTheoremReport) {
             "Trivially real-rooted (product seed class, product proof): {}",
             if trivial { "yes" } else { "no" }
         );
+    }
+    if let Some(conditional) = report.trivially_real_rooted_if_rule_holds {
+        if report.trivially_real_rooted != Some(conditional) {
+            println!(
+                "Trivially real-rooted if the rule holds: {}.",
+                if conditional { "yes" } else { "no" }
+            );
+        }
     }
 }
 

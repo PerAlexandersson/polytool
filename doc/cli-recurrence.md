@@ -69,7 +69,8 @@ Options:
 --max-candidates <n> Inspect at most n adaptive candidate configurations
 --max-work <n>       Stop after n deterministic work units across the whole search
 --json               Emit recurrence JSON with initial conditions
---latex              Emit LaTeX with subscripts, initial conditions and starting index
+--latex              Emit normalized LaTeX with initial conditions and starting index
+--lean-name NAME     Name the checked Lean definition (default P)
 --python             Emit exact standalone Python code using Fraction arithmetic
 --format json        Alias for --json
 --format latex       Alias for --latex
@@ -570,6 +571,102 @@ with a different starting index. It does not skip rows or evaluate the original
 rule at a different starting point. Rust callers can use
 `RecurrenceJson::reindexed(first_index)` for the same operation.
 
+### Exact seed requirements and normalization
+
+After fitting, the library replays the exact identity at every supplied row with
+available predecessors. The initial rows end immediately before the earliest
+index from which every later supplied identity holds. The search window can be
+larger than this prefix. Rows before a failed identity remain initial rows.
+
+The complete set of nonnegative integer zeros of the left-hand factor is found
+exactly, including zeros beyond the supplied data. For a factor depending on t,
+a zero at n means that every coefficient of t vanishes there; this is decided
+using their gcd as polynomials in n. Every row through the last such zero is
+initial. If any required row is missing, the report states this and omits a
+defining range. A factor identically zero at every index is reported separately.
+
+JSON adds `presentation`, containing `earliest_valid_index`, `left_hand_zeros`
+(exact integer strings), `left_hand_identically_zero`, `start_index` (null when
+unavailable), `status`, and `reason`. Status is `ready`,
+`insufficient_initial_rows`, or `zero_left_hand_factor`. All indices in this
+object use `first_index`, including zeros before the supplied prefix. This is
+finite replay evidence, not a proof at unsupplied indices.
+
+LaTeX uses a shared library normalization: clear rational denominators in the
+whole identity, divide the integer content of both sides, and make the leading
+coefficient of the left factor positive, ordered first by n degree and then by
+t degree. Polynomial factors are retained, since their zeros matter. JSON
+keeps the fitted `recurrence` and adds `normalized_recurrence`; initial row
+coefficients are not rescaled. For example, a fitted scale of -1/2 in
+`(n - 1) P_n = (n + 3)(n + t) P_(n-1)` disappears from the LaTeX identity.
+Plain-text formulas retain the fitted scaling; no normalized-text option is
+provided. Scalar factors are printed without parentheses. Text and LaTeX
+omit the left-hand zero line/comment when its set is empty; nonempty sets
+are unquoted integer lists. JSON always carries `left_hand_zeros`.
+The same checked seeds are used by every seed-stating export, including
+CLI Python and the MCP Python/Mathematica/Sage exports, and by the
+Mathematica/PARI programs from `recurrence-generate`.
+The library entry points are `Recurrence::presentation_for_rows`,
+`Recurrence::left_hand_nonnegative_integer_zeros`,
+`Recurrence::normalized_presentation`, and
+`RecurrenceJson::with_checked_presentation`.
+
+### Lean definitions and semantic read-back
+
+```sh
+polytool recurrence --first-index 0 --format lean --lean-name Rows < polys.txt
+polytool recurrence --json --lean-name Rows < polys.txt
+```
+
+Lean output defines `Rows : ℕ → ℝ[X]`. It numbers the retained input rows from
+zero regardless of `--first-index`; discarded prefix rows are not restored.
+The report's B initial rows become B numeric base cases, followed by one
+`| n + B => ...` case. Coefficients are shifted in every occurrence of the
+index, division by the left-hand factor happens on reals inside `C (...)`,
+and all subtractions in coefficients occur after casting the index to ℝ.
+Integers appear as polynomial numerals; rational and index-dependent scalars
+use `C`. Unit coefficients and division by 1 are omitted; negative terms use
+subtraction. For example, rows print as `1 + 8 * X + 3 * X ^ 2` and coefficients
+as `C (4 + 2 * (n : ℝ))`. References are `Rows n` for offset zero, or
+`Rows (n + j)` with literal `0 < j < B`; derivatives use `(Rows n).derivative`
+or `(Rows (n + j)).derivative`. Alternating signs use
+`C ((-1 : ℝ) ^ (n + B))`. Forcing terms are additional summands.
+
+There are B + 2 expanded examples. Base proofs are `rfl`; the two recursive
+examples use `sorry`. The definition needs Mathlib in the importing file;
+the output encloses `def` in a `noncomputable section` and includes
+`open Polynomial`. Names must be simple ASCII identifiers of at most 60
+characters. Lean keywords/reserved words and names that collide with the
+binder or open polynomial API are rejected with an explanation (for example
+`have`, `Type`, `n`, `derivative`, `coeff`, `Polynomial`, `Nat`, `Real`).
+Namespace paths and quoted identifiers are outside this output subset.
+Lines are at most 100 columns, with two-space case/proof indentation.
+Continuation lines are indented four spaces relative to the `|` (six total),
+and break before a top-level plus/minus, or between summand factors. Atoms
+such as `(n : ℝ)` remain on one line. A coefficient group too long to remain
+an atom is distributed over its monomials; an indivisible atom exceeding the
+line limit gives a refusal reason.
+
+Before output is returned, an independent parser reads the actual printed
+text and evaluates every supplied row and every example using exact rational
+arithmetic. It respects Lean's zero-valued real division by zero, truncated
+natural subtraction and floored natural division. Polynomial division is
+excluded from the grammar. Wrong rows, examples, missing cases, unsupported
+syntax or any unparsed suffix cause refusal. Recursive references such as
+`Rows (n + 1 - 1)` are rejected even if their values agree on the supplied rows. This finite semantic check does
+not replace Lean elaboration or prove the recurrence for all indices.
+
+JSON includes `lean` on success and `lean_reason` on refusal. Lean format
+prints no definition and exits 2 with a reason on refusal, including t-dependent
+leaders, a leader zero at or beyond B, missing seeds and read-back disagreement.
+JSON still returns the fitted record and its other presentations. Representation
+menus use names `NAME_0`, `NAME_1`, ... . Each renderable candidate is printed;
+an unsupported candidate gets a Lean comment giving its reason instead. The
+Lean menu exits 2 only when no candidate can be rendered. A renderable menu
+that exhausted its search budget exits 0 with an incomplete-menu comment;
+other menu formats retain the existing budget-exhaustion exit 3. `RecurrenceJson::to_lean`, `with_lean`, and
+`verify_lean_recurrence_output` expose the same library implementation.
+
 ### LaTeX presentation
 
 ```sh
@@ -615,7 +712,7 @@ subsets) is exhausted, that coefficient stays expanded and a `%` comment line
 names it; an unfinished factorization is never presented as complete.
 
 `--json` includes the same text in the optional `latex` field. Generation
-uses the exact recurrence data and ignores that presentation field. Older
+uses the exact recurrence data and ignores presentation fields. Older
 records without it remain accepted. With `--theorem-matches`, the field is in
 the nested `recurrence_json`; theorem notes go to stderr in LaTeX mode.
 
@@ -763,3 +860,12 @@ multiplier is `kappa_j(n) q(x)^j` for one fixed `q` and the residual shape is
 decided; its `factor_gauge` certificate holds `q`, the scalar multipliers, the
 common factor, the residual window and its coefficient polynomials (and the
 dominant root that proves the rows nonzero, when used).
+
+The `recurrence-prove` and `recurrence-theorems` JSON field `trivially_real_rooted_if_rule_holds`
+classifies the product proof conditional on the supplied rule holding at all
+indices, including when the rule was fitted. The existing
+`trivially_real_rooted` remains false in discovery reports and is omitted from
+theorem reports for fitted records.
+
+When the conditional classification differs from the established flag, the
+text report also prints the classification conditional on the rule holding.

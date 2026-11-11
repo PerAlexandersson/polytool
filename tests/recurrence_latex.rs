@@ -28,9 +28,9 @@ fn complete_definition_groups_signs_fractions_and_derivatives() {
         record.to_latex_expanded().unwrap(),
         concat!(
             "$P_{5} = 1$\n$P_{6} = 1 + t$\n$P_{7} = 0$\n",
-            "$\\bigl(n + 2\\bigr)\\, P_{n} = \\bigl(n + 1\\bigr)\\, P_{n-1}",
-            " - \\frac{1}{2}t^{2}\\, P_{n-2}^{(3)} - (-1)^n P_{n-1}''",
-            " - \\bigl(n - t\\bigr) \\quad (n \\geq 8)$"
+            "$\\bigl(2n + 4\\bigr)\\, P_{n} = \\bigl(2n + 2\\bigr)\\, P_{n-1}",
+            " - t^{2}\\, P_{n-2}^{(3)} - 2\\, (-1)^n P_{n-1}''",
+            " - \\bigl(2n - 2t\\bigr) \\quad (n \\geq 8)$"
         )
     );
     let original = record.to_recurrence_parts().unwrap().0.to_string();

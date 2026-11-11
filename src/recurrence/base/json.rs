@@ -26,6 +26,18 @@ pub struct RecurrenceJson {
     /// [`Self::with_latex`] to refresh it after editing a record.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latex: Option<String>,
+    /// Exact replay boundary and complete leader zero set, when supplied rows were checked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<RecurrencePresentation>,
+    /// Primitive integral identity; `recurrence` retains the original fitted scaling.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normalized_recurrence: Option<RecurrenceJsonData>,
+    /// Checked Lean definition and examples; absent when output is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lean: Option<String>,
+    /// Reason Lean output was refused; omitted when Lean rendering was not requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lean_reason: Option<String>,
 }
 
 impl std::fmt::Debug for RecurrenceJson {
@@ -167,7 +179,8 @@ impl From<&RecurrenceOptions> for RecurrenceOptionsJson {
 
 impl RecurrenceJson {
     /// Render the initial rows and recurrence, one `$...$` formula per line,
-    /// with every recurrence coefficient factored over `Q`.
+    /// after primitive integral normalization, with every recurrence coefficient
+    /// factored over `Q`. The stored fitted coefficients are not changed.
     ///
     /// The recurrence starts immediately after all supplied initial rows.
     /// Search records include a LaTeX comment marking their finite-fit status.
@@ -188,6 +201,7 @@ impl RecurrenceJson {
 
     fn latex_presentation(&self, factored: bool) -> Result<String, RecurrenceError> {
         let (rule, first_index, seeds) = self.to_recurrence_parts()?;
+        let rule = rule.normalized_presentation().unwrap_or(rule);
         if seeds.len() < rule.max_offset() {
             return Err(RecurrenceError::InvalidInput(
                 "not enough initial rows for LaTeX recurrence definition".into(),
@@ -215,8 +229,47 @@ impl RecurrenceJson {
             let polynomial = BivarPoly { coeffs: vec![row] }.to_latex();
             lines.push(format!("$P_{{{}}} = {polynomial}$", first_index + offset));
         }
+        if let Some(presentation) = &self.presentation {
+            if !presentation.left_hand_zeros.is_empty() {
+                lines.push(format!(
+                    "% Left-hand zeros (nonnegative integers): [{}]",
+                    presentation.left_hand_zeros.join(", ")
+                ));
+            }
+            if let Some(reason) = &presentation.reason {
+                lines.push(format!("% {reason}"));
+                lines.push(format!("${formula}$"));
+                return Ok(lines.join("\n"));
+            }
+        }
         lines.push(format!("${formula} \\quad (n \\geq {start})$"));
         Ok(lines.join("\n"))
+    }
+
+    /// Check all supplied rows, minimize the seed prefix, and attach exact
+    /// singularity and normalization metadata. Rows start at `self.first_index`.
+    /// Missing rows through a future singularity are reported without a range.
+    pub fn with_checked_presentation(
+        mut self,
+        rows: &[Vec<BigRational>],
+    ) -> Result<Self, RecurrenceError> {
+        let (rule, first, _) = self.to_recurrence_parts()?;
+        let presentation = rule.presentation_for_rows(rows, first)?;
+        let count = presentation.start_index.map_or(rows.len(), |n| n - first);
+        self.initial_polynomials = rows[..count]
+            .iter()
+            .map(|row| row.iter().map(format_rational_coeff).collect())
+            .collect();
+        self.normalized_recurrence = rule
+            .normalized_presentation()
+            .ok()
+            .as_ref()
+            .map(RecurrenceJsonData::from_recurrence);
+        self.presentation = Some(presentation);
+        self.latex = None;
+        self.lean = None;
+        self.lean_reason = None;
+        Ok(self)
     }
 
     /// Refresh the optional LaTeX presentation from this record's exact data.
@@ -240,7 +293,10 @@ impl RecurrenceJson {
         if let Some(search) = &mut search {
             search.recurrence_text = rule.to_string();
         }
-        let record = Self::from_recurrence_rational(&rule, first_index, &seeds, search);
+        let mut record = Self::from_recurrence_rational(&rule, first_index, &seeds, search);
+        if self.presentation.is_some() {
+            record = record.with_checked_presentation(&seeds)?;
+        }
         if self.latex.is_some() {
             record.with_latex()
         } else {
@@ -265,6 +321,10 @@ impl RecurrenceJson {
             recurrence: RecurrenceJsonData::from_recurrence(recurrence),
             search,
             latex: None,
+            presentation: None,
+            normalized_recurrence: None,
+            lean: None,
+            lean_reason: None,
         }
     }
 

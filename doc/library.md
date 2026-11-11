@@ -66,6 +66,26 @@ evidence, also in certified reversal coordinates. See
 [proof discovery](proof-discovery.md#rational-pf-riordan-arrays) for its hypotheses
 and replayable certificate. CLI/MCP generating-function output and stored
 catalog generating functions are later phases of [issue #54](https://github.com/PerAlexandersson/polytool/issues/54).
+## Recurrence presentation and Lean export
+
+`Recurrence::presentation_for_rows` replays all available identities and
+classifies every nonnegative integer zero of the left-hand factor.
+`Recurrence::normalized_presentation` returns a primitive integral identity
+with positive leading left-hand coefficient, retaining its polynomial factors.
+LaTeX uses this normalization; plain-text formulas retain fitted scaling.
+To export a fitted rule, call `RecurrenceJson::with_checked_presentation` with
+all supplied rows before rendering. It minimizes `initial_polynomials`, adds
+`presentation` and `normalized_recurrence`, and preserves the original fitted
+coefficients. Missing rows through a future singularity get an explicit reason.
+
+`RecurrenceJson::to_lean(name, rows)` renders a definition with zero-based rows
+and examples, and `with_lean` attaches its result or refusal reason to JSON.
+`verify_lean_recurrence_output` independently parses and evaluates the actual
+emitted text against every row and example using Lean's arithmetic conventions.
+It is a finite semantic safeguard, not a Lean elaborator or a proof.
+See [the CLI reference](cli-recurrence.md) for indexing, refusal cases and the
+accepted output subset. A record reindexed after rendering needs Lean output
+refreshed with all original supplied rows.
 
 ## Ore algebra and image recurrences
 

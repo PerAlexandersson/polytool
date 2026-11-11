@@ -367,18 +367,23 @@ fn family_recurrence_response_rational(
     }
 
     match find_recurrence_adaptive_rational_with_budget(polynomials, search, budget) {
-        AdaptiveSearchOutcome::Found(result) => FindRecurrenceResponse {
+        AdaptiveSearchOutcome::Found(result) => {
+            let record = crate::recurrence_options::recurrence_json_record(
+                &result, polynomials, search, polynomials.len());
+            let (_, first, seeds) = record.to_recurrence_parts().expect("validated recurrence record");
+            let first = i64::try_from(first).expect("validated recurrence index");
+            FindRecurrenceResponse {
             status: RecurrenceSearchStatus::Found,
             found: true,
-            recurrence: Some(format!("{}", result.recurrence)),
-            latex: Some(result.recurrence.to_latex()),
+            recurrence: Some(result.recurrence.to_string()),
+            latex: record.latex.clone(),
             mathematica: Some(
                 result
                     .recurrence
-                    .to_mathematica_definition_rational(polynomials),
+                    .to_mathematica_definition_rational_indexed(&seeds, first),
             ),
-            sage: Some(result.recurrence.to_sage_definition_rational(polynomials)),
-            python: Some(result.recurrence.to_python_definition_rational(polynomials)),
+            sage: Some(result.recurrence.to_sage_definition_rational_indexed(&seeds, first)),
+            python: Some(result.recurrence.to_python_definition_rational_indexed(&seeds, first)),
             recurrence_json: Some(recurrence_json_string(
                 &result,
                 polynomials,
@@ -395,6 +400,9 @@ fn family_recurrence_response_rational(
             error: None,
             parse_errors: Vec::new(),
             theorem_matches: crate::theorems::search_theorem_matches(&result, polynomials, search),
+            lean: record.lean,
+            lean_reason: record.lean_reason,
+        }
         },
         AdaptiveSearchOutcome::NoRecurrence(summary) => recurrence_failure_response(
             RecurrenceSearchStatus::NotFound,
@@ -1082,5 +1090,37 @@ mod tests {
         assert_eq!(binomial_capped(3, 5, 10), 0);
         assert_eq!(binomial_capped(200, 100, 250_000), 250_001);
         assert_eq!(binomial_capped(usize::MAX, 3, usize::MAX), usize::MAX);
+    }
+    #[test]
+    fn family_exports_share_the_extended_checked_seeds() {
+        let (search, budget) = apply_recurrence_options(None).unwrap();
+        let rows = [
+            [1].as_slice(),
+            &[-1, 1],
+            &[-1, 0, 1],
+            &[-1, -1, 1, 1],
+            &[-1, -2, 0, 2, 1],
+            &[-1, -3, -2, 2, 3, 1],
+            &[-1, -4, -5, 0, 5, 4, 1],
+            &[-1, -5, -9, -5, 5, 9, 5, 1],
+        ]
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|&c| BigRational::from_integer(BigInt::from(c)))
+                .collect()
+        })
+        .collect::<Vec<Vec<BigRational>>>();
+        let response = family_recurrence_response_rational(&rows, &search, budget);
+        assert!(response.found, "{:?}", response.error);
+        let record: serde_json::Value =
+            serde_json::from_str(response.recurrence_json.as_ref().unwrap()).unwrap();
+        assert_eq!(record["initial_polynomials"].as_array().unwrap().len(), 2);
+        assert!(response.python.unwrap().contains("    2: [-1, 1],"));
+        assert!(response.sage.unwrap().contains("    2: R([-1, 1]),"));
+        assert!(response
+            .mathematica
+            .unwrap()
+            .contains("P[2, t_] := -1 + t;"));
     }
 }

@@ -220,6 +220,10 @@ fn rule_of_json_data(data: &RecurrenceJsonData) -> Result<Recurrence, Recurrence
         recurrence: data.clone(),
         search: None,
         latex: None,
+        presentation: None,
+        normalized_recurrence: None,
+        lean: None,
+        lean_reason: None,
     };
     Ok(record.to_recurrence_parts()?.0)
 }

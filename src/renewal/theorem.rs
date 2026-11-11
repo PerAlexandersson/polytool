@@ -228,6 +228,10 @@ pub struct RecurrenceTheoremReport {
     /// a fit does not establish the defining recurrence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trivially_real_rooted: Option<bool>,
+    /// Product classification conditional on the supplied rule holding for all indices,
+    /// including when the rule was fitted. Absent if the check fails.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trivially_real_rooted_if_rule_holds: Option<bool>,
 }
 
 fn strip(row: &[BigRational]) -> &[BigRational] {
@@ -607,6 +611,12 @@ impl RecurrenceTheoremReport {
             },
             theorem_matches: matches.theorem_matches,
             rejected_theorems: matches.rejected_theorems,
+            trivially_real_rooted_if_rule_holds: crate::recurrence::is_trivially_real_rooted(
+                &recurrence,
+                first_index,
+                &rows,
+            )
+            .ok(),
             trivially_real_rooted: record
                 .search
                 .is_none()
@@ -626,6 +636,13 @@ impl RecurrenceTheoremReport {
     ) -> Self {
         let first_index = recurrence_json.first_index;
         let matches = match_recurrence_theorems(&result.recurrence, first_index, searched_rows);
+        let conditional =
+            recurrence_json
+                .to_recurrence_parts()
+                .ok()
+                .and_then(|(rule, index, seeds)| {
+                    crate::recurrence::is_trivially_real_rooted(&rule, index, &seeds).ok()
+                });
         Self {
             schema: RECURRENCE_THEOREM_SCHEMA.into(),
             recurrence_text: result.recurrence.to_string(),
@@ -644,6 +661,7 @@ impl RecurrenceTheoremReport {
             theorem_matches: matches.theorem_matches,
             rejected_theorems: matches.rejected_theorems,
             trivially_real_rooted: None,
+            trivially_real_rooted_if_rule_holds: conditional,
         }
     }
 }

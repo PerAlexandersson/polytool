@@ -72,5 +72,56 @@
       "alternating_sign": false
     }
   },
-  "latex": "% Candidate fitted to finite rows; validity for all n is unproved.\n$P_{1} = 1$\n$P_{n} = (1 + nt - t) P_{n-1} + t(1 - t) P_{n-1}' \\quad (n \\geq 2)$"
+  "latex": "% Candidate fitted to finite rows; validity for all n is unproved.\n$P_{1} = 1$\n$P_{n} = (1 + nt - t) P_{n-1} + t(1 - t) P_{n-1}' \\quad (n \\geq 2)$",
+  "presentation": {
+    "earliest_valid_index": 2,
+    "left_hand_zeros": [],
+    "left_hand_identically_zero": false,
+    "start_index": 2,
+    "status": "ready",
+    "reason": null
+  },
+  "normalized_recurrence": {
+    "terms": [
+      {
+        "offset": 1,
+        "deriv_order": 0,
+        "sign": "none",
+        "coeff": {
+          "coeffs": [
+            [
+              "1",
+              "-1",
+              "0"
+            ],
+            [
+              "0",
+              "1",
+              "0"
+            ]
+          ]
+        }
+      },
+      {
+        "offset": 1,
+        "deriv_order": 1,
+        "sign": "none",
+        "coeff": {
+          "coeffs": [
+            [
+              "0",
+              "1",
+              "-1"
+            ],
+            [
+              "0",
+              "0",
+              "0"
+            ]
+          ]
+        }
+      }
+    ]
+  },
+  "lean": "-- Requires Mathlib.\nnoncomputable section\nopen Polynomial\n-- Finite fit: validity for all indices is unproved.\ndef P : ℕ → ℝ[X]\n  | 0 => 1\n  | n + 1 => (1 + C (1 + (n : ℝ)) * X) * P n + (X - X ^ 2) * (P n).derivative\n\nexample : P 0 = 1 := by\n  rfl\nexample : P 1 = 1 + X := by\n  sorry\nexample : P 2 = 1 + 4 * X + X ^ 2 := by\n  sorry\n\nend"
 }

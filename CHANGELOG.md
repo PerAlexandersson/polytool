@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Changed
+
+- Recurrence presentation (#49, #50): the seed count and stated range now
+  follow exact replay on all supplied rows and include every row through the
+  last nonnegative integer zero of the left-hand factor. Missing seeds are
+  reported explicitly without a defining range. Text, LaTeX, JSON and generated
+  Python/Mathematica/Sage/PARI programs use the same checked seed prefix;
+  this can remove unnecessary seeds or add seeds before a singularity.
+- Recurrence text now includes initial rows and an explicit range (or a missing
+  seed reason). An extra left-hand zero line is printed only for a nonempty
+  zero set, as unquoted integers; LaTeX likewise includes a zero comment only
+  for a nonempty set. Plain-text formulas and MCP `recurrence` strings retain
+  fitted scaling. Scalar factors are printed without parentheses.
+- Recurrence LaTeX (#48) clears rational denominators, removes the content of
+  the entire identity and chooses a positive leading left-hand coefficient.
+  MCP search/family `latex` now contains the complete normalized presentation,
+  including initial rows and range, instead of only a bare formula. Recurrence
+  help and frozen search outputs change accordingly.
+
 ### Added
 
 - Public `recurrence::generating_function` module: exact rational row
@@ -17,6 +36,30 @@
   supported. Certificates replay the full generating-function identity and
   PF evidence. Zero rows are described exactly; roots are nonpositive,
   with no simplicity or interlacing claim.
+- Recurrence JSON metadata (#49, #50): `presentation` carries the replay
+  boundary, exact leader zero strings, status, reason and starting index.
+  `normalized_recurrence` (#48) adds the primitive integral identity while
+  `recurrence` preserves the original fitted scaling. Catalog data and stored
+  proof certificates are unchanged.
+- Checked Lean recurrence definitions (#51): `--format lean`, `--lean-name`,
+  JSON `lean`/`lean_reason`, zero-based rows, shifted coefficients and signs,
+  scalar real division, derivatives, forcing terms and expanded examples.
+  Plain numerals, subtraction, omitted unit coefficients and divisions,
+  structural references and atom-preserving line breaks keep output readable.
+  An independent parser checks every supplied row and example under Lean
+  arithmetic, restricts recursive references to `NAME n` or `NAME (n + j)`
+  with literal `0 < j < B`, and rejects reserved or conflicting definition
+  names. Unsupported leaders and read-back disagreement give a reason.
+  Lean representation menus retain successful candidates alongside refusal
+  comments and fail only when none can be rendered. A renderable incomplete
+  menu exits successfully with a budget comment. MCP mirrors the checked
+  presentations and accepts `lean_name`; compact responses omit code.
+- Add `oeis rows` for local triangle data (#53), including explicit refusal reasons.
+- Add `trivially_real_rooted_if_rule_holds` to recurrence proof discovery and
+  theorem report JSON (#47); the existing flag is unchanged. Text reports show
+  a differing conditional classification.
+- `oeis rows` recognizes more example labels and punctuation, reports typed
+  refusal and b-file rejection reasons, and includes structured row-length rules.
 
 - Factored steps in `iterated_preserver`: bounded exact second-order Ore
   right factorization over `Q(n)[x]`, with each first-order factor certified

@@ -16,12 +16,12 @@ use polytool::recurrence::{
 };
 use rmcp::ErrorData as McpError;
 
-pub(crate) fn recurrence_json_string(
+pub(crate) fn recurrence_json_record(
     result: &AdaptiveSearchResult,
     polynomials: &[Vec<BigRational>],
     search: &AdaptiveSearchOptions,
     source_rows: usize,
-) -> String {
+) -> RecurrenceJson {
     let searched_polys = polynomials.get(search.skip_prefix..).unwrap_or(&[]);
     let initial_count = result.export_initial_count(searched_polys.len());
     let initial_polys = &searched_polys[..initial_count];
@@ -44,7 +44,26 @@ pub(crate) fn recurrence_json_string(
             options: RecurrenceOptionsJson::from(&result.opts),
         }),
     );
-    serde_json::to_string_pretty(&recurrence_json).expect("serialize recurrence JSON")
+    recurrence_json
+        .with_checked_presentation(searched_polys)
+        .and_then(RecurrenceJson::with_latex)
+        .expect("validated recurrence presentation")
+        .with_lean("P", searched_polys)
+}
+
+pub(crate) fn recurrence_json_string(
+    result: &AdaptiveSearchResult,
+    polynomials: &[Vec<BigRational>],
+    search: &AdaptiveSearchOptions,
+    source_rows: usize,
+) -> String {
+    serde_json::to_string_pretty(&recurrence_json_record(
+        result,
+        polynomials,
+        search,
+        source_rows,
+    ))
+    .expect("serialize recurrence JSON")
 }
 
 pub(crate) fn recurrence_failure_response(
@@ -78,6 +97,8 @@ pub(crate) fn recurrence_failure_response(
         error: Some(error.into()),
         parse_errors,
         theorem_matches: None,
+        lean: None,
+        lean_reason: None,
     }
 }
 

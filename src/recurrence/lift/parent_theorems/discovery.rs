@@ -227,6 +227,11 @@ pub struct RecurrenceProofDiscoveryReport {
     /// recurrence.
     #[serde(default)]
     pub trivially_real_rooted: bool,
+    /// Whether product induction proves real-rootedness conditional on the supplied
+    /// rule holding for all indices, including when it was fitted. Absent only
+    /// in reports serialized before this field was introduced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trivially_real_rooted_if_rule_holds: Option<bool>,
     /// Always `not_attempted`: exact Rust replay is separate from Lean replay.
     pub lean_replay: String,
     /// The smallest index `N` such that a proved attempt shows every row
@@ -374,6 +379,9 @@ pub fn discover_recurrence_proofs_with_stage_options(
         statement: String::new(),
         trivially_real_rooted: record.search.is_none()
             && attempts.iter().any(|attempt| attempt.trivially_real_rooted),
+        trivially_real_rooted_if_rule_holds: Some(
+            attempts.iter().any(|attempt| attempt.trivially_real_rooted),
+        ),
         attempts,
         lean_replay: LIFT_LEAN_REPLAY_NOT_ATTEMPTED.into(),
         real_rooted_from_index: None,
@@ -836,6 +844,9 @@ impl RecurrenceProofDiscoveryReport {
         let mut expected = self.clone();
         expected.trivially_real_rooted = self.recurrence.search.is_none()
             && self.attempts.iter().any(|a| a.trivially_real_rooted);
+        expected.trivially_real_rooted_if_rule_holds = self
+            .trivially_real_rooted_if_rule_holds
+            .map(|_| self.attempts.iter().any(|a| a.trivially_real_rooted));
         expected.finish_summary(inhomogeneous.then(|| {
             "the rule has an inhomogeneous term: every theorem route needs a homogeneous rule \
              (not_applicable: inhomogeneous)"

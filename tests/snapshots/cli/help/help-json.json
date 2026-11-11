@@ -1056,8 +1056,8 @@
     {
       "aliases": [],
       "deprecated_aliases": [],
-      "description": "Search adaptively for a linear differential-polynomial recurrence among the input\npolynomial sequence. The recurrence relates P_n to earlier rows P_(n-k) and\ntheir derivatives with coefficients that are polynomials in t and in the index\nn. A recurrence found this way is a finite fit (evidence on the supplied rows),\nnot a proof for all n; held-out rows are used to check it unless\n--no-held-out-rows is given.\n\nInput is read as dense coefficient lists, one polynomial per line, ascending\ndegree, with arbitrary-size integers or exact rationals such as 42, -17 or 3/7.\nThis command expects coefficient lists, not expanded expressions.\n\n--first-index labels the first input row (nonnegative); with --skip-prefix the\ndiscarded rows still count. By default the retained rows are renumbered from 1.\n\nOutput formats: text (default), json (the recurrence JSON with initial\nconditions), latex (every coefficient is factored over Q and the product\nverified by exact re-expansion, e.g.\n(n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2} P_{n-2};\na coefficient whose factorization exhausts its budget stays expanded, noted by\na % comment line) and python (exact Python code). --latex and --python are\nshorthands for the matching --format value.\n\n--space and --verify-space are separate modes: they read a JSON request (or a\nreplayed report) from standard input, emit exact JSON and accept only an\noptional --json; bounds belong in the request. Source-backed positives are\nconditional on the supplied source and seeds, rows-only positives are fits, and\ndual negatives prove absence within the shape. The opt-in request field\n\"coefficient_rescaling\": {\"kind\":\"factorial_power\",\"power\":m} searches\nQ[n] = T(P[n]) with T(X^k) = X^k/(k!)^m, m >= 1, and certifies complete spaces\nfrom r(U+m(A+J)+1) residuals (constant-index source).",
-      "details": "Budgets:\n  --max-work counts deterministic work units over the whole search (modular and\n  exact solves, held-out checks, precomputation) from the dimensions of the\n  systems, never from the clock: the same N gives the same output on every\n  machine. A step runs only if its whole cost fits, so the units used never\n  exceed N. One solve of r equations in c unknowns costs r*c*(min(r,c)+1) units.\n  Reaching --max-work or --max-candidates ends the search as budget_exhausted\n  (exit status 3). JSON reports work_units and max_work (a found record has\n  search.work_units). --max-work is not supported with --representations.\n\n--representations:\n  Text output is a comparison table and numbered formulas; JSON is the full\n  menu. Save the menu with --json and select an entry with --candidate N in\n  recurrence-generate or recurrence-theorems. It cannot be combined with\n  --theorem-matches or --format python.\n\n--theorem-matches:\n  Also report conditional theorem matches (weighted renewal, fixed-delay\n  predecessor), kept separate from the finite fit evidence. With --json the\n  output is polytool.recurrence-theorems.v1 (the usual record is its\n  recurrence_json). Without the flag a match is only noted on stderr.\n\n--space / --verify-space (JSON):\n  The reply is a space report; the JSON output lists structured candidates and\n  coverage. Exit status 3 means some requested shape is not completed.",
+      "description": "Search adaptively for a linear differential-polynomial recurrence among the input\npolynomial sequence. The recurrence relates P_n to earlier rows P_(n-k) and\ntheir derivatives with coefficients that are polynomials in t and in the index\nn. A recurrence found this way is a finite fit (evidence on the supplied rows),\nnot a proof for all n; held-out rows are used to check it unless\n--no-held-out-rows is given.\n\nInput is read as dense coefficient lists, one polynomial per line, ascending\ndegree, with arbitrary-size integers or exact rationals such as 42, -17 or 3/7.\nThis command expects coefficient lists, not expanded expressions.\n\n--first-index labels the first input row (nonnegative); with --skip-prefix the\ndiscarded rows still count. By default the retained rows are renumbered from 1.\n\nOutput formats: text (default), json (the recurrence JSON with initial\nconditions), latex (every coefficient is factored over Q and the product\nverified by exact re-expansion, e.g.\n(n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2} P_{n-2};\na coefficient whose factorization exhausts its budget stays expanded, noted by\na % comment line), lean (checked real-polynomial definition and examples),\nand python (exact Python code). --latex and --python are\nshorthands for the matching --format value.\n\n--space and --verify-space are separate modes: they read a JSON request (or a\nreplayed report) from standard input, emit exact JSON and accept only an\noptional --json; bounds belong in the request. Source-backed positives are\nconditional on the supplied source and seeds, rows-only positives are fits, and\ndual negatives prove absence within the shape. The opt-in request field\n\"coefficient_rescaling\": {\"kind\":\"factorial_power\",\"power\":m} searches\nQ[n] = T(P[n]) with T(X^k) = X^k/(k!)^m, m >= 1, and certifies complete spaces\nfrom r(U+m(A+J)+1) residuals (constant-index source).",
+      "details": "Budgets:\n  --max-work counts deterministic work units over the whole search (modular and\n  exact solves, held-out checks, precomputation) from the dimensions of the\n  systems, never from the clock: the same N gives the same output on every\n  machine. A step runs only if its whole cost fits, so the units used never\n  exceed N. One solve of r equations in c unknowns costs r*c*(min(r,c)+1) units.\n  Reaching --max-work or --max-candidates ends the search as budget_exhausted\n  (exit status 3). JSON reports work_units and max_work (a found record has\n  search.work_units). --max-work is not supported with --representations.\n\n--representations:\n  Text output is a comparison table and numbered formulas; JSON is the full\n  menu. Save the menu with --json and select an entry with --candidate N in\n  recurrence-generate or recurrence-theorems. It cannot be combined with\n  --theorem-matches or --format python. Lean menus print a refusal comment for\n  each unsupported candidate, retain all successful definitions and exit 2\n  only when no candidate can be rendered. A renderable incomplete Lean menu\n  exits 0 with a budget comment.\n\n--theorem-matches:\n  Also report conditional theorem matches (weighted renewal, fixed-delay\n  predecessor), kept separate from the finite fit evidence. With --json the\n  output is polytool.recurrence-theorems.v1 (the usual record is its\n  recurrence_json). Without the flag a match is only noted on stderr.\n\n--space / --verify-space (JSON):\n  The reply is a space report; the JSON output lists structured candidates and\n  coverage. Exit status 3 means some requested shape is not completed.",
       "examples": [
         "printf '1\\n1\\n2\\n3\\n5\\n8\\n' | polytool recurrence",
         "polytool sequence eulerian 8 --format rows | polytool recurrence --json > recurrence.json",
@@ -1163,6 +1163,18 @@
           "long": "--theorem-matches",
           "name": "theorem-matches",
           "value": null
+        },
+        {
+          "arity": 1,
+          "choices": [],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Lean definition name (default P; simple ASCII identifier)",
+          "hidden": false,
+          "long": "--lean-name",
+          "name": "lean-name",
+          "value": "NAME"
         },
         {
           "arity": 0,
@@ -1556,7 +1568,8 @@
             "text",
             "json",
             "latex",
-            "python"
+            "python",
+            "lean"
           ],
           "default": null,
           "deprecated_aliases": [],
@@ -1589,7 +1602,8 @@
           "text",
           "json",
           "latex",
-          "python"
+          "python",
+          "lean"
         ]
       },
       "positionals": [],
@@ -2129,8 +2143,8 @@
     {
       "aliases": [],
       "deprecated_aliases": [],
-      "description": "Discover general proofs for a recurrence and seeds; no named-sequence lookup.\nTries, in the order of the parent cascade, product induction, Favard/three-term,\nLiu-Wang, derivative-lag, Ma-Wang interval, Liu-Wang three-term, iterated\npreserver and hypergeometric-row criteria, then the RealRooted row routes\nfixed-delay window (variable_delay: f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)\nwith a delay L of at least 2) and residue classes (residue_class_subsequences:\nevery lag a multiple of a period p of at least 2, each class P_(first + j + p m)\nproved by a criterion above), the last two recorded only when the rule has their\nform; every hypothesis is checked exactly for all indices. Reports every attempt, its obligations and\nconclusion. A fit still needs\nan all-index identity for an independently defined family. Rust certificates can\nbe replayed; Lean replay is not attempted.\n\nIterated preserver also searches bounded exact factorizations of lag-one\nsecond-order steps over Q(n)[x]. Each first-order factor uses the existing\npreserver menu or the shared Liu-Wang conditions on its actual input degree.\nThe certificate records application order and replays the full Ore identity;\nintermediate degree and sign conditions hold for every rule index. This can\ncertify a closed ray even when the composite fails a whole-line preserver\ntest. No simplicity or interlacing is inferred from the factorization alone.\n\nIndex-section lift (recorded only when it applies): the rows, possibly\nreversed, are every p-th row (p <= 5) of a constant-coefficient parent found by\nfactoring, an identity for every index; the parent is proved by the criteria.\n\nFactor gauge (recorded only when it applies): every lag-j multiplier is\nkappa_j(n) q(x)^j for one fixed q, so P_n = q^(n-e) g S_n with S_n in the span\nof the gauged seed rows; S_n is real-rooted for every n by its degree (<= 1),\na discriminant (degree 2 or 3) or the palindromic-quartic test (u = x + 1/x),\nsigns of polynomials in n decided exactly.\n\nPositive lag-two Euler (lag_two_euler, recorded only when its form matches):\nwith theta = x D and m = n - first_index, the operators are\n[(a+b theta)+x(a+b(m-1)-b theta)] P_(n-1) and\nc x(theta+1)(m-1-theta) P_(n-2). The full operator identity is exact;\na > 0, b >= a, c >= 0 and a nonzero denominator are checked for every index.\nPositive constant/linear seeds and exact later seed steps give simple negative\nroots, adjacent strict interlacing and auxiliary interlacing, with a replayable\ncertificate and RealRooted lagTwoEuler_recurrence_certificate correspondence.\nNegative lag corrections are excluded. Tried after the existing routes.\n\nBinomial-perturbed Euler orbit (binomial_perturbed_euler_orbit, recorded only\nwhen its operators match): the exact lag-two theta recurrence of RealRooted\nissue #2513, s >= 1, kappa >= s+4, Q_0=1, Q_1=1+2u,\nQ_2=1+kappa*u+kappa*u^2, starting at degree m >= 3. Integer degree shifts,\nevery seed and nonzero scalar denominators are checked exactly. Also recognizes\nQ_m(u)=(1+u)^m P_n(u/(1+u)) by exact Mobius transport with an inductive degree\ncap. Gives simple roots in (-1,0) for Q, or (-inf,0) for P, and strict adjacent\ninterlacing with the direction preserved. A certificate replays the transformed\nrule and seed identities. Lean: strictInterl_of_orbitPerturbation_recurrence.\n\nRational PF Riordan (rational_pf_riordan, recorded only when it applies):\nfor an index-free homogeneous rule without derivatives, build the exact reduced\nrow generating function from every prescribed seed. Recognize\nF(x,z)=d(z)/(1-x z d(z) K(z)), with d(0)>0 and nonzero rational PF series d,K.\nThe rational Edrei criterion is decided by exact gcd layers, PRS root signs and\nroot isolation: numerator zeros nonpositive, denominator poles positive,\npositive initial scalar. Chen--Fu--Ruan Theorems 3(3) and 4 give PF rows for all\nindices, including K(0)=0 and noninvertible arrays. Also tries padded reversal\nx^(a*m+b) P_(first_index+m)(1/x) with a certified degree bound (a=1,2,3).\nCertificates replay the generating-function identity and exact PF evidence.\nZero rows are reported exactly; no simplicity or interlacing is claimed.\nThe route is available to index-section parents and the affine marker shifts.\n\nWhen no criterion proves the record:\n  - tail: if one of the first rows is zero or not real-rooted, the criteria run\n    on the record starting after the last such row; a proof then says \"every\n    row from index N on is real-rooted\" (real_rooted_from_index);\n  - alternative representations: the recurrence finder's menu on generated rows\n    proposes other rules (first-order derivative rules with a factor f(n), lag\n    at most two); a rule is used only after an all-index equality certificate\n    (Ore-algebra division and invariant row annihilators, exact), then the\n    criteria run on it. --max-representation-candidates bounds each finder pass\n    (deterministic count; 0 disables the stage);\n  - catalog lifts: the record is connected to a family of the bundled OEIS\n    catalog by an identity certified for every index: a normalized\n    identification T_n = c(n) x^(a n + b) S_(n+s) (candidates from a\n    fingerprint index of the catalog rows, the scalar proved nonzero), or a\n    backward basis-map lift Q_n = T_P(R_n) whose map theorem carries the roots\n    of R into a target interval. The parent (S, or R) is proved by the stages\n    above (never by another lift); R may also be identified with a catalog\n    family. When the parent is only flagged lean_proved in the catalog (a proof\n    made outside polytool), the status is conditional_on_attestation, never\n    proved. --max-lift-candidates bounds the catalog families certified\n    (deterministic order; 0 disables the stage). Not run when a root region is\n    requested;\n  - affine coordinates: when still nothing proves the record, the criteria run\n    on it in exact coordinates x = a u + b (Q_n(u) = P_n(a u + b): every\n    coefficient substituted, D_u = a D_x on derivative terms, the seeds\n    mapped), with b a rational root of a factor free of n of a coefficient (a\n    = 1, then a = -1) and the reflection x = -u. A proof maps back: same rows\n    nonzero and real-rooted, root region a R + b (ends swapped for a < 0),\n    interlacing kept for a > 0 and mirrored for a < 0. No other stage runs in\n    the new coordinate. --max-affine-coordinates bounds the coordinates tried\n    (deterministic menu; 0 disables the stage).\nA rule with an inhomogeneous term matches no criterion: status not_applicable.\n\nThe recurrence input is recurrence.v1 JSON, a theorem wrapper or a\nrepresentation menu; with a menu, --candidate is required unless it has one\nentry. --verify replays the recorded routes of a report from standard input\n(every attempt, the tail, every equality certificate and the catalog-lift\ncertificates with their parent reports, the affine coordinates with their\ntransformed records) and takes no search flags.",
-      "details": "JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is\ntrue when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and\nproduct induction proves it. real_rooted_from_index is the first index N with\nevery row P_n, n >= N, proved nonzero and real-rooted. A residue-class proof\nmay leave whole residue classes of zero rows (conclusion.zero_residue_classes,\nresidues of n modulo the period); real_rooted_from_index is then omitted and\nreal_rooted_outside_zero_residue_classes gives from_index and the zero classes\n(status proved). tail and alternative_representations hold the later stages, each\nalternative with its polytool.recurrence-equality.v1 certificate. catalog_lifts\nholds the catalog-lift stage: identifications (catalog id, normalized-equality\ncertificate, the parent's own discovery report, the transfer), basis_maps (the\nbackward basis-map search and coefficient identifications) and conclusion\n(route, catalog_family or basis_map, parent_proof polytool or\ncatalog_attestation, conditional_on, from_index, root_region). Status\nconditional_on_attestation: the only lift rests on a catalog flag;\nreal_rooted_from_index is then omitted and the claim is in\ncatalog_lifts.conclusion. affine_coordinates holds the affine-coordinate stage:\ncandidates_available, coordinates (slope, intercept, reason, the transformed\nrecord and its attempts, a transformed tail) and conclusion (coordinate,\ntheorem, from_index, root_region mapped to x, interlacing with\ninterlacing_orientation preserved or mirrored). Replay needs\nthe attempts of exactly the criteria the current search records; recompute\nreports saved before a criterion was added.",
+      "description": "Discover general proofs for a recurrence and seeds; no named-sequence lookup.\nTries, in the order of the parent cascade, product induction, Favard/three-term,\nLiu-Wang, derivative-lag, Ma-Wang interval, Liu-Wang three-term, iterated\npreserver and hypergeometric-row criteria, then the RealRooted row routes\nfixed-delay window (variable_delay: f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)\nwith a delay L of at least 2) and residue classes (residue_class_subsequences:\nevery lag a multiple of a period p of at least 2, each class P_(first + j + p m)\nproved by a criterion above), the last two recorded only when the rule has their\nform; every hypothesis is checked exactly for all indices. Reports every attempt, its obligations and\nconclusion. A fit still needs\nan all-index identity for an independently defined family. Rust certificates can\nbe replayed; Lean replay is not attempted.\n\nIterated preserver also searches bounded exact factorizations of lag-one\nsecond-order steps over Q(n)[x]. Each first-order factor uses the existing\npreserver menu or the shared Liu-Wang conditions on its actual input degree.\nThe certificate records application order and replays the full Ore identity;\nintermediate degree and sign conditions hold for every rule index. This can\ncertify a closed ray even when the composite fails a whole-line preserver\ntest. No simplicity or interlacing is inferred from the factorization alone.\n\nIndex-section lift (recorded only when it applies): the rows, possibly\nreversed, are every p-th row (p <= 5) of a constant-coefficient parent found by\nfactoring, an identity for every index; the parent is proved by the criteria.\n\nFactor gauge (recorded only when it applies): every lag-j multiplier is\nkappa_j(n) q(x)^j for one fixed q, so P_n = q^(n-e) g S_n with S_n in the span\nof the gauged seed rows; S_n is real-rooted for every n by its degree (<= 1),\na discriminant (degree 2 or 3) or the palindromic-quartic test (u = x + 1/x),\nsigns of polynomials in n decided exactly.\n\nPositive lag-two Euler (lag_two_euler, recorded only when its form matches):\nwith theta = x D and m = n - first_index, the operators are\n[(a+b theta)+x(a+b(m-1)-b theta)] P_(n-1) and\nc x(theta+1)(m-1-theta) P_(n-2). The full operator identity is exact;\na > 0, b >= a, c >= 0 and a nonzero denominator are checked for every index.\nPositive constant/linear seeds and exact later seed steps give simple negative\nroots, adjacent strict interlacing and auxiliary interlacing, with a replayable\ncertificate and RealRooted lagTwoEuler_recurrence_certificate correspondence.\nNegative lag corrections are excluded. Tried after the existing routes.\n\nBinomial-perturbed Euler orbit (binomial_perturbed_euler_orbit, recorded only\nwhen its operators match): the exact lag-two theta recurrence of RealRooted\nissue #2513, s >= 1, kappa >= s+4, Q_0=1, Q_1=1+2u,\nQ_2=1+kappa*u+kappa*u^2, starting at degree m >= 3. Integer degree shifts,\nevery seed and nonzero scalar denominators are checked exactly. Also recognizes\nQ_m(u)=(1+u)^m P_n(u/(1+u)) by exact Mobius transport with an inductive degree\ncap. Gives simple roots in (-1,0) for Q, or (-inf,0) for P, and strict adjacent\ninterlacing with the direction preserved. A certificate replays the transformed\nrule and seed identities. Lean: strictInterl_of_orbitPerturbation_recurrence.\n\nWhen no criterion proves the record:\n  - tail: if one of the first rows is zero or not real-rooted, the criteria run\n    on the record starting after the last such row; a proof then says \"every\n    row from index N on is real-rooted\" (real_rooted_from_index);\n  - alternative representations: the recurrence finder's menu on generated rows\n    proposes other rules (first-order derivative rules with a factor f(n), lag\n    at most two); a rule is used only after an all-index equality certificate\n    (Ore-algebra division and invariant row annihilators, exact), then the\n    criteria run on it. --max-representation-candidates bounds each finder pass\n    (deterministic count; 0 disables the stage);\n  - catalog lifts: the record is connected to a family of the bundled OEIS\n    catalog by an identity certified for every index: a normalized\n    identification T_n = c(n) x^(a n + b) S_(n+s) (candidates from a\n    fingerprint index of the catalog rows, the scalar proved nonzero), or a\n    backward basis-map lift Q_n = T_P(R_n) whose map theorem carries the roots\n    of R into a target interval. The parent (S, or R) is proved by the stages\n    above (never by another lift); R may also be identified with a catalog\n    family. When the parent is only flagged lean_proved in the catalog (a proof\n    made outside polytool), the status is conditional_on_attestation, never\n    proved. --max-lift-candidates bounds the catalog families certified\n    (deterministic order; 0 disables the stage). Not run when a root region is\n    requested;\n  - affine coordinates: when still nothing proves the record, the criteria run\n    on it in exact coordinates x = a u + b (Q_n(u) = P_n(a u + b): every\n    coefficient substituted, D_u = a D_x on derivative terms, the seeds\n    mapped), with b a rational root of a factor free of n of a coefficient (a\n    = 1, then a = -1) and the reflection x = -u. A proof maps back: same rows\n    nonzero and real-rooted, root region a R + b (ends swapped for a < 0),\n    interlacing kept for a > 0 and mirrored for a < 0. No other stage runs in\n    the new coordinate. --max-affine-coordinates bounds the coordinates tried\n    (deterministic menu; 0 disables the stage).\nA rule with an inhomogeneous term matches no criterion: status not_applicable.\n\nThe recurrence input is recurrence.v1 JSON, a theorem wrapper or a\nrepresentation menu; with a menu, --candidate is required unless it has one\nentry. --verify replays the recorded routes of a report from standard input\n(every attempt, the tail, every equality certificate and the catalog-lift\ncertificates with their parent reports, the affine coordinates with their\ntransformed records) and takes no search flags.",
+      "details": "JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is\ntrue when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and\nproduct induction proves it. trivially_real_rooted_if_rule_holds classifies the\nrule conditional on its holding for all indices, including fitted rules.\nreal_rooted_from_index is the first index N with\nevery row P_n, n >= N, proved nonzero and real-rooted. A residue-class proof\nmay leave whole residue classes of zero rows (conclusion.zero_residue_classes,\nresidues of n modulo the period); real_rooted_from_index is then omitted and\nreal_rooted_outside_zero_residue_classes gives from_index and the zero classes\n(status proved). tail and alternative_representations hold the later stages, each\nalternative with its polytool.recurrence-equality.v1 certificate. catalog_lifts\nholds the catalog-lift stage: identifications (catalog id, normalized-equality\ncertificate, the parent's own discovery report, the transfer), basis_maps (the\nbackward basis-map search and coefficient identifications) and conclusion\n(route, catalog_family or basis_map, parent_proof polytool or\ncatalog_attestation, conditional_on, from_index, root_region). Status\nconditional_on_attestation: the only lift rests on a catalog flag;\nreal_rooted_from_index is then omitted and the claim is in\ncatalog_lifts.conclusion. affine_coordinates holds the affine-coordinate stage:\ncandidates_available, coordinates (slope, intercept, reason, the transformed\nrecord and its attempts, a transformed tail) and conclusion (coordinate,\ntheorem, from_index, root_region mapped to x, interlacing with\ninterlacing_orientation preserved or mirrored). Replay needs\nthe attempts of exactly the criteria the current search records; recompute\nreports saved before a criterion was added.",
       "examples": [
         "polytool recurrence --json < rows.txt | polytool recurrence-prove --recurrence - --json",
         "polytool recurrence-prove --recurrence rec.json --json > proof.json\npolytool recurrence-prove --verify < proof.json"
@@ -2301,7 +2315,7 @@
       "aliases": [],
       "deprecated_aliases": [],
       "description": "Check a supplied recurrence JSON record (polytool.recurrence.v1, e.g. from\n`polytool recurrence --json`) against the supported interlacing theorems and\nreport explicit conditional theorem matches. Also accepts theorem wrappers and\nrecurrence representation menus (select an entry with --candidate, 0-based).\n\nHypotheses are checked exactly. The record's initial rows are compared with the\ncanonical boundary rows (finite check; `canonical_after_relabel` when the first\nsupplied row plays the role of index 0). A match is conditional: it never shows\nthat the recurrence holds for the intended sequence for all n.",
-      "details": "Theorems (paper proofs, not Lean checked):\n  weighted_renewal_window          P_n = sum_j r_j t^j P_(n-1-ell*j), r_0 = 1,\n                                   r_j >= 0, R(z) = sum r_j z^j real-rooted;\n                                   P_n << P_(n+s) for d*s <= d*ell+1, d = deg R.\n  fixed_delay_predecessor_window   P_n = P_(n-1) + w(n) t P_(n-L), w polynomial in n\n                                   with w(n) >= 0 for all integers n >= 1 (exact\n                                   certificate, not sampling); Q_A << Q_B for\n                                   B - A <= L with Q_(max(0, n-L)) boundary.\n\nJSON output is the polytool.recurrence-theorems.v1 report; its\ntrivially_real_rooted (supplied, not fitted, records only) is true when the rule\nis B(n) P_n = A(x,n) P_(n-k) and product induction proves it.",
+      "details": "Theorems (paper proofs, not Lean checked):\n  weighted_renewal_window          P_n = sum_j r_j t^j P_(n-1-ell*j), r_0 = 1,\n                                   r_j >= 0, R(z) = sum r_j z^j real-rooted;\n                                   P_n << P_(n+s) for d*s <= d*ell+1, d = deg R.\n  fixed_delay_predecessor_window   P_n = P_(n-1) + w(n) t P_(n-L), w polynomial in n\n                                   with w(n) >= 0 for all integers n >= 1 (exact\n                                   certificate, not sampling); Q_A << Q_B for\n                                   B - A <= L with Q_(max(0, n-L)) boundary.\n\nJSON output is the polytool.recurrence-theorems.v1 report; its\ntrivially_real_rooted (supplied, not fitted, records only) is true when the rule\nis B(n) P_n = A(x,n) P_(n-k) and product induction proves it.\ntrivially_real_rooted_if_rule_holds gives the same classification conditional\non the rule holding for all indices, including fitted rules.",
       "examples": [
         "polytool recurrence --json < rows.txt | polytool recurrence-theorems --recurrence -",
         "polytool recurrence-theorems --recurrence menu.json --candidate 0 --json"
@@ -4008,6 +4022,94 @@
           "summary": "Strongest coefficient property on the first rows of each entry",
           "usage": [
             "polytool oeis evidence [A-NUMBER...|--all] --count <N> [OPTIONS]"
+          ]
+        },
+        {
+          "aliases": [],
+          "deprecated_aliases": [],
+          "description": "Read local OEIS terms and infer complete rows without a catalog or network.",
+          "details": "For tabf the example table must start at the first term. At least three\nrows are required, with two observed increases for periodic growth. JSON\nincludes a structured row-length rule and b-file rejection details.",
+          "examples": [
+            "polytool oeis rows A001263 --data DIR"
+          ],
+          "exit_codes": [
+            {
+              "code": 0,
+              "meaning": "answered (also when the mathematical answer is negative)"
+            },
+            {
+              "code": 2,
+              "meaning": "usage error or invalid input"
+            }
+          ],
+          "flags": [
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Local OEIS checkout",
+              "hidden": false,
+              "long": "--data",
+              "name": "data",
+              "value": "DIR"
+            },
+            {
+              "arity": 1,
+              "choices": [
+                "text",
+                "json"
+              ],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Output format [default: text]",
+              "hidden": false,
+              "long": "--format",
+              "name": "format",
+              "value": "FORMAT"
+            },
+            {
+              "arity": 0,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Emit machine-readable JSON (same as --format json)",
+              "hidden": false,
+              "long": "--json",
+              "name": "json",
+              "value": null
+            }
+          ],
+          "group": "",
+          "input": null,
+          "name": "rows",
+          "output": {
+            "default": "text",
+            "formats": [
+              "text",
+              "json"
+            ]
+          },
+          "positionals": [
+            {
+              "choices": [],
+              "help": "OEIS A-number (A followed by six digits)",
+              "multiple": false,
+              "name": "A-NUMBER",
+              "required": true
+            }
+          ],
+          "see_also": [
+            "recurrence",
+            "real-rooted"
+          ],
+          "subcommands": [],
+          "summary": "Read complete triangle rows from local OEIS data",
+          "usage": [
+            "polytool oeis rows <A-NUMBER> --data <DIR> [--json]"
           ]
         }
       ],

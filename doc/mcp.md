@@ -182,3 +182,27 @@ clients keep working; the published tool schemas show the new names only.
 Responses are additive: `first_index` is reported next to `first_row`
 (OEIS tools) and next to `first_row_index` (planar-network tools).
 
+
+
+Recurrence search/family presentation uses the same checked seed prefix as the
+CLI. Every export that states seeds (Python, Mathematica and Sage included)
+uses exactly `recurrence_json.initial_polynomials`, after `skip_prefix` and in
+the record's numbering. Plain `recurrence` strings retain fitted scaling;
+LaTeX is normalized. `recurrence_json` adds `presentation`,
+`normalized_recurrence`, and checked `lean` or `lean_reason`.
+`find_recurrence` accepts `lean_name` (default `P`). Its `latex` field contains
+the complete normalized formula, seed rows and range (or missing-seed reason);
+a left-hand zero comment appears only when the zero set is nonempty. JSON
+always carries the exact zero strings, including an empty array when applicable.
+Scalar factors are printed without parentheses.
+
+The additive `lean` and `lean_reason` response fields mirror the nested record;
+both are omitted with `include_code: false`. Lean uses plain numerals,
+subtraction, no unit multipliers/divisors, `NAME n` or `NAME (n + j)` with
+literal `0 < j < B`, and line breaks between top-level summands/factors,
+never inside casts or parenthesized atoms. Definition names that are Lean
+keywords/reserved words or clash with `open Polynomial` or the binder are
+rejected with a typed invalid-input error explaining the reason.
+Representation menus use `NAME_0`, `NAME_1`, ... and retain checked definitions
+alongside refusal reasons for unsupported candidates. These are finite fits;
+semantic read-back is not Lean compilation or an all-index proof.

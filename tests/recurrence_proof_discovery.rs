@@ -343,6 +343,7 @@ fn trivially_real_rooted_classifies_the_product_seed_class() {
     assert!(is_trivially_real_rooted(&rule, first, &seeds).unwrap());
     let report = checked(&rec);
     assert!(report.trivially_real_rooted);
+    assert_eq!(report.trivially_real_rooted_if_rule_holds, Some(true));
     assert!(report.attempts[0].trivially_real_rooted);
     assert!(report.attempts[1..]
         .iter()
@@ -364,7 +365,12 @@ fn trivially_real_rooted_classifies_the_product_seed_class() {
         options: RecurrenceOptionsJson::from(&RecurrenceOptions::default()),
         work_units: None,
     });
-    assert!(!checked(&fitted).trivially_real_rooted);
+    let fitted_report = checked(&fitted);
+    assert!(!fitted_report.trivially_real_rooted);
+    assert_eq!(
+        fitted_report.trivially_real_rooted_if_rule_holds,
+        Some(true)
+    );
 
     // A product whose multiplier has a non-real root (x^2 + 1) is not proved.
     let bad = product(&[&[1, 0, 1]], None, 1);
@@ -376,6 +382,7 @@ fn trivially_real_rooted_classifies_the_product_seed_class() {
     let report = checked(&record(&three, &[&[1], &[0, 1]], 0));
     assert_eq!(report.status, "proved");
     assert!(!report.trivially_real_rooted);
+    assert_eq!(report.trivially_real_rooted_if_rule_holds, Some(false));
 }
 
 /// Theorem reports serialized before `trivially_real_rooted` existed keep

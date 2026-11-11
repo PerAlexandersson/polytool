@@ -38,6 +38,8 @@ Details:
   JSON output is the polytool.recurrence-theorems.v1 report; its
   trivially_real_rooted (supplied, not fitted, records only) is true when the rule
   is B(n) P_n = A(x,n) P_(n-k) and product induction proves it.
+  trivially_real_rooted_if_rule_holds gives the same classification conditional on
+  the rule holding for all indices, including fitted rules.
 
 Examples:
   polytool recurrence --json < rows.txt | polytool recurrence-theorems --recurrence -
