@@ -4,6 +4,14 @@
 
 ### Added
 
+- Factored steps in `iterated_preserver`: bounded exact second-order Ore
+  right factorization over `Q(n)[x]`, with each first-order factor certified
+  by the existing preserver menu or shared Liu--Wang conditions. Closed-ray
+  root preservation and every intermediate degree are checked for all
+  indices. `IteratedPreserverCertificate::factors` records application order
+  and replays the full operator identity. Proves the Jacobi--Stirling
+  insertion product of Ma--Wang (arXiv:2610.03111); no composite interlacing
+  or simplicity claim. Existing successful proofs retain their certificates.
 - Binomial-perturbed Euler-orbit proof route
   (`binomial_perturbed_euler_orbit`,
   `check_binomial_perturbed_euler_orbit_theorem`, RealRooted issue #2513):

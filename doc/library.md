@@ -913,6 +913,37 @@ region).  `verify()` replays it.
   free of `n` once the first pair of rows it generates is checked to
   interlace (Corollary 2.5: a real-rootedness preserver keeps the
   alternation of two polynomials); otherwise none is claimed.
+  When the existing checks do not prove a lag-one rule of derivative order
+  two, the same route searches for a product of two first-order operators
+  over `Q(n)[x]`, after a real-rooted multiplier obtained from the common
+  coefficient gcd over `Q(n)[x]` (fixed factors are kept separately). The certificate's
+  optional `factors` records `a(n,x)+b(n,x)D` in application order; the
+  full Ore identity is replayed after clearing all index denominators.
+  Each factor uses the existing preserver menu or the shared Liu–Wang
+  conditions: degree grows by one with positive leading ratio,
+  `b(n,0)=0`, `b(n,x)<=0` on `x<0`, and `a(n,0)>0` for every rule index.
+  A constant sign change is allowed; reflection handles `[0,inf)`.
+  The extension to the closed ray follows by continuity at fixed input
+  degree. All intermediate degrees and leading coefficients are checked
+  exactly; no intermediate image vanishes. The composite's degree law is
+  checked independently, and no simplicity or interlacing is claimed.
+  This proves the insertion product `D_(3n-2) D_(3n-3)` defining
+  `A_(n,0)` in [Ma–Wang, arXiv:2610.03111](https://arxiv.org/abs/2610.03111),
+  where `D_L=(1+Lx)+x(1-x)D`.
+  The deterministic search enumerates at most 64 monic divisors of the
+  leading x-polynomial up to index scalars, with derivative coefficients
+  of x-degree at most two, and seeks multiplication coefficients of
+  x-degree at most two. Descending coefficient equations of the exact
+  Riccati remainder are solved over `Q(n)` by bivariate factorization
+  (recombination budget 256); an unconstrained coefficient is set to zero,
+  and systems requiring coupled lower coefficients remain unsearched.
+  Bounds: input x/index degrees 8/4 (x-degree at most 4 after removing
+  the common multiplier), rational search-coefficient numerator/denominator
+  degrees 24 and coefficient sizes 512 bits (before clearing index
+  denominators for Ore identities), 64 coefficient nodes
+  per divisor and degree bound, 128 returned products. Exhausting a bound
+  or finding no candidate is incomplete recognition, never a disproof of
+  real-rootedness or of factorability.
 - Hypergeometric rows: rows whose coefficient ratio `[x^k] P_n /
   [x^(k-1)] P_n` is a product of factors linear in `k` and affine in `n`.
   A row relation `p(n, k) [x^k] P_n + q(n, k) [x^(k-1)] P_n = 0` (total

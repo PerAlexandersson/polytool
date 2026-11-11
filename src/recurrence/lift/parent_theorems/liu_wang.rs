@@ -297,40 +297,7 @@ fn liu_wang_report(
             IndexSignCondition::Positive,
         ));
     }
-    let b_at_zero = x_column(c1, 0);
-    let statement = format!("b_n(0) = 0 for every n >= {n_first}");
-    hypotheses.push(if b_at_zero.is_empty() {
-        exact_hypothesis(
-            "derivative_coefficient_vanishes_at_zero",
-            &statement,
-            Ok("[x^0] c_1(n, x) is the zero polynomial".into()),
-        )
-    } else {
-        // A nonzero polynomial in n has at most deg roots.
-        let witness = (n_first..=n_first + b_at_zero.len()).find(|&n| {
-            !vec_poly::evaluate(&b_at_zero, &Q::from_integer(BigInt::from(n))).is_zero()
-        });
-        exact_hypothesis(
-            "derivative_coefficient_vanishes_at_zero",
-            &statement,
-            Err((
-                witness,
-                format!(
-                    "[x^0] c_1(n, x) = {} is not the zero polynomial",
-                    format_index_polynomial(&b_at_zero, "n")
-                ),
-            )),
-        )
-    });
-    hypotheses.push(derivative_coefficient_hypothesis(c1, f, n_first));
-    hypotheses.push(sign_hypothesis(
-        "constant_term_positive",
-        &format!("a_n(0) > 0 for every n >= {n_first}"),
-        "a_n(0)",
-        &over_f(x_column(c0, 0)),
-        n_first,
-        IndexSignCondition::Positive,
-    ));
+    hypotheses.extend(endpoint_and_derivative_hypotheses(c0, c1, f, n_first));
     if let Some(region) = &options.root_region {
         let contains_negative_axis = region.lower.is_none()
             && region
@@ -366,6 +333,79 @@ fn liu_wang_report(
         ),
         root_region: Some(root_region),
     }))
+}
+
+/// The degree-one Liu--Wang transition with a supplied exact input degree.
+/// Root and region checks belong to the caller; the closed-ray extension is
+/// by continuity at fixed degree, never by allowing a vanishing leading term.
+pub(super) fn step_hypotheses(
+    c0: &Bivariate,
+    c1: &Bivariate,
+    f: &[Q],
+    degree: &[Q],
+    first: usize,
+) -> Vec<LiftHypothesis> {
+    let lambda = IndexFunction::new(
+        vec_poly::add(&x_column(c0, 1), &vec_poly::mul(degree, &x_column(c1, 2))),
+        f.to_vec(),
+    );
+    let mut hypotheses = vec![sign_hypothesis(
+        "degree_step_positive",
+        "the factor raises the actual input degree by one with positive leading ratio",
+        "lambda_n",
+        &lambda,
+        first,
+        IndexSignCondition::Positive,
+    )];
+    hypotheses.extend(endpoint_and_derivative_hypotheses(c0, c1, f, first));
+    hypotheses
+}
+
+/// The endpoint and derivative hypotheses shared by the sequence theorem
+/// and its first-order operator-factor transitions.
+fn endpoint_and_derivative_hypotheses(
+    c0: &Bivariate,
+    c1: &Bivariate,
+    f: &[Q],
+    n_first: usize,
+) -> Vec<LiftHypothesis> {
+    let mut hypotheses = Vec::new();
+    let over_f = |p: Vec<Q>| IndexFunction::new(p, f.to_vec());
+    let b_at_zero = x_column(c1, 0);
+    let statement = format!("b_n(0) = 0 for every n >= {n_first}");
+    hypotheses.push(if b_at_zero.is_empty() {
+        exact_hypothesis(
+            "derivative_coefficient_vanishes_at_zero",
+            &statement,
+            Ok("[x^0] c_1(n, x) is the zero polynomial".into()),
+        )
+    } else {
+        // A nonzero polynomial in n has at most deg roots.
+        let witness = (n_first..=n_first + b_at_zero.len()).find(|&n| {
+            !vec_poly::evaluate(&b_at_zero, &Q::from_integer(BigInt::from(n))).is_zero()
+        });
+        exact_hypothesis(
+            "derivative_coefficient_vanishes_at_zero",
+            &statement,
+            Err((
+                witness,
+                format!(
+                    "[x^0] c_1(n, x) = {} is not the zero polynomial",
+                    format_index_polynomial(&b_at_zero, "n")
+                ),
+            )),
+        )
+    });
+    hypotheses.push(derivative_coefficient_hypothesis(c1, f, n_first));
+    hypotheses.push(sign_hypothesis(
+        "constant_term_positive",
+        &format!("a_n(0) > 0 for every n >= {n_first}"),
+        "a_n(0)",
+        &over_f(x_column(c0, 0)),
+        n_first,
+        IndexSignCondition::Positive,
+    ));
+    hypotheses
 }
 
 /// `b_n(x) <= 0` for every `x < 0` and `n >= first`.

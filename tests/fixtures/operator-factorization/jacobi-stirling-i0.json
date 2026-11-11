@@ -1,0 +1,12 @@
+{
+  "schema": "polytool.recurrence.v1",
+  "first_index": 1,
+  "initial_polynomials": [["1", "1"]],
+  "recurrence": {
+    "terms": [
+      {"offset": 1, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["1", "-8", "9"], ["0", "9", "-18"], ["0", "0", "9"]]}},
+      {"offset": 1, "deriv_order": 1, "sign": "none", "coeff": {"coeffs": [["0", "3", "-10", "7"], ["0", "0", "6", "-6"]]}},
+      {"offset": 1, "deriv_order": 2, "sign": "none", "coeff": {"coeffs": [["0", "0", "1", "-2", "1"]]}}
+    ]
+  }
+}

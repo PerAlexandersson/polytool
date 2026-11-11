@@ -243,7 +243,7 @@ pub use index_section::{
 };
 pub use iterated_preserver::{
     check_iterated_preserver_theorem, check_weyl_step_preserver, IteratedPreserverCertificate,
-    IteratedPreserverCoordinates, WeylStepPreserverVerdict,
+    IteratedPreserverCoordinates, IteratedPreserverFactor, WeylStepPreserverVerdict,
 };
 pub(in crate::recurrence) use left_hand_factor::rule_with_x_free_left_hand_factor;
 pub use left_hand_factor::LeftHandFactorNormalization;

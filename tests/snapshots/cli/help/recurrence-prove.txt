@@ -13,6 +13,14 @@ attempt, its obligations and conclusion. A fit still needs an all-index identity
 for an independently defined family. Rust certificates can be replayed; Lean
 replay is not attempted.
 
+Iterated preserver also searches bounded exact factorizations of lag-one
+second-order steps over Q(n)[x]. Each first-order factor uses the existing
+preserver menu or the shared Liu-Wang conditions on its actual input degree. The
+certificate records application order and replays the full Ore identity;
+intermediate degree and sign conditions hold for every rule index. This can
+certify a closed ray even when the composite fails a whole-line preserver test.
+No simplicity or interlacing is inferred from the factorization alone.
+
 Index-section lift (recorded only when it applies): the rows, possibly reversed,
 are every p-th row (p <= 5) of a constant-coefficient parent found by factoring,
 an identity for every index; the parent is proved by the criteria.

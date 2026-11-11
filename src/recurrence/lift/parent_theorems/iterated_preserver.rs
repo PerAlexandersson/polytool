@@ -64,6 +64,20 @@
 //!   `f(n) T_n(x^e)`), `Lambda(n, deg P_m + delta (n - 1 - m)) != 0` for every
 //!   `n >= N` by the sign checker; then `deg P_n = deg P_(n-1) + delta` and no
 //!   row vanishes.
+//! - **Factored steps.** If the existing checks do not prove a lag-one
+//!   second-order rule, a bounded exact search over `Q(n)[x]` tries a
+//!   product of two first-order factors after their common multiplier. The
+//!   certificate records the factors in application order. Each uses the
+//!   existing menu or the shared Liu--Wang degree-one conditions, with the
+//!   actual intermediate degree, on a common closed region. Continuity
+//!   extends the negative-root step to the closed ray, and reflection gives
+//!   the positive ray. The intermediate leading coefficients and degrees
+//!   are certified separately, so every intermediate image is nonzero.
+//!   Search bounds and the quadratic Riccati remainder are documented in
+//!   `doc/library.md`; failure to find a factorization is not a disproof.
+//!   Here hypothesis 1 is needed only on polynomials of the prescribed
+//!   induction degree: the Liu--Wang step is degree-local, and the degree
+//!   of each factor's input is certified before invoking its theorem.
 //! - The rows `P_first, ..., P_m` are nonzero and real-rooted with every root
 //!   in `R` (exact).
 //!
@@ -133,8 +147,10 @@ use crate::recurrence::lift::veronese_algebra::classify_row;
 use crate::recurrence::{IndexRationalFunction, OperatorTermJson, PreserverOperator};
 
 mod coordinates;
+mod factorization;
 mod weyl_step;
 pub use coordinates::IteratedPreserverCoordinates;
+pub use factorization::IteratedPreserverFactor;
 pub use weyl_step::{check_weyl_step_preserver, WeylStepPreserverVerdict};
 use weyl_step::{
     weyl_step_hypotheses, weyl_step_parts, weyl_step_region_hypotheses, weyl_step_text,
@@ -174,9 +190,15 @@ pub struct IteratedPreserverCertificate {
     /// The multiplier factor `h(n, x) = sum_j h_j(n) x^j` (coefficient `j`
     /// at position `j`); the multiplier is `a_n(x) = g(x) h(n, x)`.
     pub multiplier_index_factor: Vec<IndexRationalFunction>,
-    /// The menu operator `S_n`; omitted for the identity.
+    /// The menu operator `S_n`; omitted for the identity or when `factors`
+    /// records the first-order product instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preserver: Option<PreserverOperator>,
+    /// First-order factors in application order (rightmost first). Empty
+    /// for the original single-menu-operator certificate. Their product
+    /// replaces `preserver`, which must then be absent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub factors: Vec<IteratedPreserverFactor>,
     /// The closed region `R` containing every root of every row (`lower`
     /// and `upper` omitted for the whole line).
     pub region: RootInterval,
@@ -271,6 +293,13 @@ impl IteratedPreserverCertificate {
 /// `P_n`, `n >= first_index`, is nonzero and real-rooted with every root in
 /// `R`.  The induction start is moved past the seeds as for the other
 /// theorem checks ([`RealRootednessTheoremOptions::maximum_start_delay`]).
+/// If those checks do not prove a lag-one second-order step, a bounded
+/// exact right factorization over `Q(n)[x]` tries two first-order factors.
+/// Each uses the existing menu or the shared Liu--Wang degree-one
+/// conditions at its certified input degree, on a common closed region.
+/// [`IteratedPreserverCertificate::factors`] records the application order;
+/// intermediate images are certified nonzero. See `doc/library.md` for
+/// the deterministic search bounds and remaining unsearched forms.
 ///
 /// The report carries the recognized step in
 /// [`RealRootednessTheoremReport::iterated_preserver_certificate`];
@@ -477,6 +506,7 @@ struct Decomposition {
     index_factor: Vec<IndexFraction>,
     /// `S_n`; `None` for the identity.
     preserver: Option<PreserverOperator>,
+    factors: Vec<IteratedPreserverFactor>,
 }
 
 impl Decomposition {
@@ -505,11 +535,18 @@ impl Decomposition {
             fixed_factor,
             index_factor,
             preserver: certificate.preserver.clone(),
+            factors: certificate.factors.clone(),
         })
     }
 
     /// `S_n = numerator / denominator(n)`.
     fn preserver_parts(&self) -> Option<(DOp, Vec<Q>)> {
+        if !self.factors.is_empty() {
+            if self.preserver.is_some() {
+                return None;
+            }
+            return factorization::product_parts(&self.factors);
+        }
         match &self.preserver {
             None => Some((DOp::identity(), vec![Q::one()])),
             Some(operator) => operator.weyl_parts(),
@@ -798,6 +835,7 @@ fn decompositions(terms: &StepCoefficients, f: &[Q]) -> Vec<Decomposition> {
             fixed_factor: g.clone(),
             index_factor,
             preserver: None,
+            factors: Vec::new(),
         });
     } else {
         let valuation = g.iter().take_while(|c| c.is_zero()).count();
@@ -812,6 +850,7 @@ fn decompositions(terms: &StepCoefficients, f: &[Q]) -> Vec<Decomposition> {
                     fixed_factor: fixed_factor.clone(),
                     index_factor,
                     preserver: Some(preserver),
+                    factors: Vec::new(),
                 });
             }
         }
@@ -1200,6 +1239,19 @@ fn multiplier_hypotheses(
     n_first: usize,
 ) -> Vec<LiftHypothesis> {
     let mut out = Vec::new();
+    if !decomposition.factors.is_empty() {
+        let denominators: BTreeSet<_> = decomposition.index_factor.iter().map(|(_, q)| q).collect();
+        for (i, q) in denominators.into_iter().enumerate() {
+            out.push(sign_hypothesis(
+                &format!("multiplier_coefficients_defined_{i}"),
+                "the common multiplier coefficients are defined for every rule index",
+                "multiplier coefficient denominator",
+                &IndexFunction::polynomial(q.clone()),
+                n_first,
+                IndexSignCondition::Nonzero,
+            ));
+        }
+    }
     let g = &decomposition.fixed_factor;
     if vec_poly::degree(g).is_some_and(|d| d >= 1) {
         let text = format_index_polynomial(g, "x");
@@ -1447,6 +1499,9 @@ impl Attempt {
 
 /// The text of `S_n` in the normal form.
 fn preserver_text(decomposition: &Decomposition) -> String {
+    if !decomposition.factors.is_empty() {
+        return format!("the exact product of {} first-order factors (application order recorded in the certificate)", decomposition.factors.len());
+    }
     match &decomposition.preserver {
         None => "the identity".to_string(),
         Some(operator) => match weyl_step_of(operator) {
@@ -1487,8 +1542,25 @@ fn attempt(family: &Family<'_>, decomposition: &Decomposition, region: ClosedReg
     hypotheses.extend(multiplier_hypotheses(decomposition, region, family.n_first));
     let mut reference = REFERENCE.to_string();
     let mut lean_declarations = Vec::new();
+    if !decomposition.factors.is_empty() {
+        reference = reference.replace(
+            "maps every polynomial that is zero or real-rooted with",
+            "maps every polynomial of the certified input degree that is zero or real-rooted with",
+        );
+        let (conditions, theorem) = factorization::factor_hypotheses(
+            &decomposition.factors,
+            region,
+            family.n_first,
+            family.previous_degree.as_deref(),
+        );
+        hypotheses.extend(conditions);
+        reference.push_str(&theorem);
+    }
     match &decomposition.preserver {
-        None => reference.push_str("; here S_n is the identity"),
+        None if decomposition.factors.is_empty() => {
+            reference.push_str("; here S_n is the identity")
+        }
+        None => {}
         Some(operator) => {
             let (side_conditions, theorem, declarations) = preserver_hypotheses(
                 operator,
@@ -1685,6 +1757,28 @@ fn iterated_preserver_report(
             break 'coordinates;
         }
     }
+    if !best.as_ref().is_some_and(|(a, _)| a.open_count() == 0) && lag == 1 {
+        if let Some(family) = Family::new(
+            &terms,
+            &f,
+            lag,
+            IteratedPreserverCoordinates::Identity,
+            first_index,
+            seeds,
+            requested.as_ref(),
+        ) {
+            let candidates = factorization::decompositions(&family.terms, &f);
+            'factored: for region in ClosedRegion::ALL {
+                for candidate in &candidates {
+                    let factored = attempt(&family, candidate, region);
+                    if factored.open_count() == 0 {
+                        best = Some((factored, family));
+                        break 'factored;
+                    }
+                }
+            }
+        }
+    }
     let Some((attempt, family)) = best else {
         return Ok(report.not_applicable(
             "the step T_n is not a multiplier a_n(x) after the identity or an operator of the \
@@ -1740,6 +1834,7 @@ fn finish_report(
     let delta = family.delta.unwrap_or(0).max(0) as usize;
     let proved = status_of(&attempt.hypotheses) == RealRootednessTheoremStatus::Proved;
     let pure_linear = attempt.decomposition.preserver.is_none()
+        && attempt.decomposition.factors.is_empty()
         && delta == 1
         && family.lag == 1
         && family.coordinates.is_identity()
@@ -1786,6 +1881,7 @@ fn finish_report(
                 .collect(),
             multiplier_index_factor: decomposition.index_factor_functions(false),
             preserver: decomposition.preserver.clone(),
+            factors: decomposition.factors.clone(),
             region: region.root_interval(),
             operator_identity: format!(
                 "f(n) T_n = sum_d c_d(n, x) D^d equals f(n) a_n(x) S_n with a_n(x) = {}{coordinates_note}",

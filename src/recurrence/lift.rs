@@ -175,10 +175,11 @@ pub use parent_theorems::{
     check_product_recurrence_theorem, check_real_rootedness_theorem,
     check_three_term_recurrence_theorem, check_weyl_step_preserver, discover_recurrence_proofs,
     is_trivially_real_rooted, IteratedPreserverCertificate, IteratedPreserverCoordinates,
-    LeftHandFactorNormalization, RealRootednessTheorem, RealRootednessTheoremConclusion,
-    RealRootednessTheoremOptions, RealRootednessTheoremReport, RealRootednessTheoremStatus,
-    RecurrenceProofDiscoveryReport, RouteCertificate, RowInterlacing, WeylStepPreserverVerdict,
-    ZeroResidueClasses, REAL_ROOTEDNESS_THEOREM_SCHEMA, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
+    IteratedPreserverFactor, LeftHandFactorNormalization, RealRootednessTheorem,
+    RealRootednessTheoremConclusion, RealRootednessTheoremOptions, RealRootednessTheoremReport,
+    RealRootednessTheoremStatus, RecurrenceProofDiscoveryReport, RouteCertificate, RowInterlacing,
+    WeylStepPreserverVerdict, ZeroResidueClasses, REAL_ROOTEDNESS_THEOREM_SCHEMA,
+    RECURRENCE_PROOF_DISCOVERY_SCHEMA,
 };
 use parent_theorems::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
 // RealRooted row routes, including the Euler-orbit theorem of issue #2513.
