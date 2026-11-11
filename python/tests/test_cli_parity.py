@@ -25,7 +25,7 @@ def run(*args, stdin=""):
 
 
 def rows_text(rows):
-    return "".join(",".join(str(c) for c in row) + "\n" for row in rows)
+    return "".join((",".join(str(c) for c in row) or "[]") + "\n" for row in rows)
 
 
 def as_ints(values):
@@ -55,10 +55,117 @@ def test_real_rooted(eulerian_rows):
     [((), {}), (("--first-index", "0", "--skip-prefix", "1"),
                 {"first_index": 0, "skip_prefix": 1})],
 )
-def test_recurrence_record(eulerian_rows, cli_args, options):
+@pytest.mark.parametrize("lean_name", [None, "Rows"])
+def test_recurrence_record(eulerian_rows, cli_args, options, lean_name):
+    if lean_name is not None:
+        cli_args = (*cli_args, "--lean-name", lean_name)
     expected = run("recurrence", "--json", *cli_args, stdin=rows_text(eulerian_rows))
-    found = polytool.find_recurrence(eulerian_rows, **options)
+    found = polytool.find_recurrence(eulerian_rows, **options, lean_name=lean_name)
     assert found.to_json(indent=2) == expected.rstrip("\n")
+    record = found.to_dict()
+    assert "presentation" in record and "normalized_recurrence" in record
+    assert ("lean" in record) == (lean_name is not None)
+    assert "lean_reason" not in record
+    assert polytool.Recurrence.from_json(found.to_json()).to_dict() == record
+
+
+@pytest.mark.parametrize("sequence", ["A065826", "A216118"])
+@pytest.mark.parametrize("first_index", [0, 7])
+@pytest.mark.parametrize("lean_name", [None, "Rows"])
+def test_recurrence_checked_seeds(sequence, first_index, lean_name):
+    rows = polytool.oeis.generate(sequence, 12)
+    args = ["--first-index", str(first_index)]
+    if lean_name is not None:
+        args += ["--lean-name", lean_name]
+    expected = run("recurrence", "--json", *args, stdin=rows_text(rows))
+    found = polytool.find_recurrence(rows, first_index=first_index, lean_name=lean_name)
+    assert found.to_json(indent=2) == expected.rstrip("\n")
+    assert len(found.initial_polynomials) == 2
+    assert found.to_dict()["presentation"]["start_index"] == first_index + 2
+    assert found.generate(12) == [polytool.Polynomial(row) for row in rows]
+
+
+@pytest.mark.parametrize("lean_name", [None, "Rows"])
+def test_recurrence_padded_coefficients_and_work_metadata(eulerian_rows, lean_name):
+    rows = [row + [0, 0] for row in eulerian_rows]
+    args = ["--first-index", "0", "--skip-prefix", "1", "--max-work", "1000000000"]
+    if lean_name is not None:
+        args += ["--lean-name", lean_name]
+    expected = run("recurrence", "--json", *args, stdin=rows_text(rows))
+    found = polytool.find_recurrence(
+        rows, first_index=0, skip_prefix=1, max_work=10**9, lean_name=lean_name
+    )
+    assert found.to_json(indent=2) == expected.rstrip("\n")
+    assert found.to_dict()["initial_polynomials"][0] == [str(c) for c in rows[1]]
+    assert found.search["work_units"] > 0
+
+
+@pytest.mark.parametrize("lean_name", [None, "Rows"])
+def test_recurrence_lean_refusal(lean_name):
+    source = {
+        "schema": "polytool.recurrence.v1", "first_index": 0,
+        "initial_polynomials": [["0", "1"]],
+        "recurrence": {
+            "denominator": {"coeffs": [["-1", "1"], ["1"]]},
+            "terms": [{"offset": 1, "deriv_order": 0, "sign": "none",
+                       "coeff": {"coeffs": [["0", "1"], ["1"]]}}]},
+    }
+    rows = [row.coefficients for row in polytool.Recurrence.from_json(source).generate(12)]
+    options = {
+        "first_index": 0, "laurent": False, "denominator": True,
+        "max_recurrence_length": 1, "max_variable_degree": 1,
+        "max_index_degree": 1, "max_derivative_order": 0,
+        "max_denominator_variable_degree": 1, "max_denominator_index_degree": 1,
+    }
+    args = ["--first-index", "0", "--no-laurent", "--try-denominator"]
+    for name in options:
+        if name.startswith("max_"):
+            args += ["--" + name.replace("_", "-"), str(options[name])]
+    if lean_name is not None:
+        args += ["--lean-name", lean_name]
+    expected = run("recurrence", "--json", *args, stdin=rows_text(rows))
+    found = polytool.find_recurrence(rows, **options, lean_name=lean_name)
+    assert found.to_json(indent=2) == expected.rstrip("\n")
+    record = found.to_dict()
+    assert "lean" not in record
+    assert ("lean_reason" in record) == (lean_name is not None)
+    if lean_name is not None:
+        assert "depends on t" in record["lean_reason"]
+
+
+@pytest.mark.parametrize("lean_name", [None, "Rows"])
+def test_recurrence_future_singularity_preserves_all_available_seeds(lean_name):
+    source = {
+        "schema": "polytool.recurrence.v1", "first_index": 0,
+        "initial_polynomials": [["1"]],
+        "recurrence": {
+            "denominator": {"coeffs": [["-20"], ["1"]]},
+            "terms": [{"offset": 1, "deriv_order": 0, "sign": "none",
+                       "coeff": {"coeffs": [["1"], ["1"]]}}]},
+    }
+    rows = [row.coefficients for row in polytool.Recurrence.from_json(source).generate(12)]
+    options = {
+        "first_index": 0, "laurent": False, "denominator": True,
+        "max_recurrence_length": 1, "max_variable_degree": 0,
+        "max_index_degree": 1, "max_derivative_order": 0,
+        "max_denominator_variable_degree": 0, "max_denominator_index_degree": 1,
+    }
+    args = ["--first-index", "0", "--no-laurent", "--try-denominator"]
+    for name in options:
+        if name.startswith("max_"):
+            args += ["--" + name.replace("_", "-"), str(options[name])]
+    if lean_name is not None:
+        args += ["--lean-name", lean_name]
+    expected = run("recurrence", "--json", *args, stdin=rows_text(rows))
+    found = polytool.find_recurrence(rows, **options, lean_name=lean_name)
+    assert found.to_json(indent=2) == expected.rstrip("\n")
+    record = found.to_dict()
+    assert len(found.initial_polynomials) == len(rows)
+    assert record["presentation"]["status"] == "insufficient_initial_rows"
+    assert record["presentation"]["left_hand_zeros"] == ["20"]
+    assert record["presentation"]["start_index"] is None
+    assert "lean" not in record
+    assert ("lean_reason" in record) == (lean_name is not None)
 
 
 def test_proof_and_degree_reports(eulerian_rows, legendre_record, tmp_path):

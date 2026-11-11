@@ -347,7 +347,8 @@ impl JsonSchema for RationalCoefficientInput {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FindRecurrenceRequest {
-    /// Simple ASCII name for the checked Lean definition (default P).
+    /// Request checked Lean metadata with this simple ASCII definition name.
+    /// Without a name, both `lean` and `lean_reason` are omitted.
     pub lean_name: Option<String>,
     /// Polynomial objects (integer coefficients, as numbers or exact decimal
     /// strings, or an expression); provide exactly one polynomial input form.

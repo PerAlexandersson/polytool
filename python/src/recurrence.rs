@@ -6,9 +6,10 @@ use polytool::real_rootedness::RealInterval;
 use polytool::recurrence::{
     certify_leading_coefficient as library_certify_leading_coefficient,
     discover_recurrence_proofs_with_stage_options, find_recurrence_adaptive_rational_with_budget,
-    AdaptiveSearchBudget, AdaptiveSearchOptions, AdaptiveSearchOutcome, AdaptiveSearchResult,
-    AffineCoordinateOptions, AlternativeRepresentationOptions, BigRational, CatalogLiftOptions,
-    CatalogParentProofKind, LeadingCoefficientCertificate as LibraryLeadingCoefficientCertificate,
+    validate_lean_recurrence_name, AdaptiveSearchBudget, AdaptiveSearchOptions,
+    AdaptiveSearchOutcome, AdaptiveSearchResult, AffineCoordinateOptions,
+    AlternativeRepresentationOptions, BigRational, CatalogLiftOptions, CatalogParentProofKind,
+    LeadingCoefficientCertificate as LibraryLeadingCoefficientCertificate,
     LeadingCoefficientOptions, LeadingCoefficientSign, RealRootednessTheoremOptions,
     RealRootednessTheoremReport, RealRootednessTheoremStatus, Recurrence as LibraryRecurrence,
     RecurrenceError, RecurrenceJson, RecurrenceJsonSearch, RecurrenceOptionsJson,
@@ -20,7 +21,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
 use crate::convert::{
-    json_text_from_python, polynomial_rows_from_python, polytool_error, rational_from_python,
+    coefficient_rows_from_python, json_text_from_python, polytool_error, rational_from_python,
     rational_to_python, serialize_to_python, to_json_text,
 };
 use crate::errors::{BudgetExhaustedError, VerificationError};
@@ -395,13 +396,14 @@ impl RecurrenceRows {
 /// The `polytool.recurrence.v1` record of a search result, as
 /// `polytool recurrence --json` prints it: rows after `skip_prefix` labelled
 /// from `output_first_index`, with search metadata and the LaTeX
-/// presentation.
+/// presentation. Lean metadata is attached only for an explicit name.
 fn search_record(
     result: &AdaptiveSearchResult,
     rows: &[Vec<BigRational>],
     search: &AdaptiveSearchOptions,
     output_first_index: usize,
     work_units: Option<u64>,
+    lean_name: Option<&str>,
 ) -> Result<RecurrenceJson, RecurrenceError> {
     let searched = rows.get(search.skip_prefix..).unwrap_or(&[]);
     let initial_count = result.export_initial_count(searched.len());
@@ -428,7 +430,12 @@ fn search_record(
     if let Some(search) = record.search.as_mut() {
         search.work_units = work_units;
     }
-    record.with_latex()
+    let record = record.with_checked_presentation(searched)?.with_latex()?;
+    Ok(if let Some(name) = lean_name {
+        record.with_lean(name, searched)
+    } else {
+        record
+    })
 }
 
 /// Search for a linear recurrence satisfied by a sequence of polynomials.
@@ -464,6 +471,9 @@ fn search_record(
 /// - ``max_candidates`` and ``max_work``: deterministic budgets.  When one
 ///   is reached, :class:`BudgetExhaustedError` is raised (attributes
 ///   ``candidates_tried``, ``candidates_considered``, ``work_units``).
+/// - ``lean_name`` (default ``None``): request checked Lean text or a refusal
+///   reason in the JSON record. Neither Lean field is present by default;
+///   invalid names raise :class:`ValueError`.
 ///
 /// The search releases the GIL; it cannot be interrupted with Ctrl-C, so use
 /// ``max_work`` for a bounded run.
@@ -506,6 +516,7 @@ fn search_record(
     modular_prefilter = None,
     max_candidates = None,
     max_work = None,
+    lean_name = None,
 ))]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn find_recurrence(
@@ -538,8 +549,13 @@ pub(crate) fn find_recurrence(
     modular_prefilter: Option<bool>,
     max_candidates: Option<usize>,
     max_work: Option<u64>,
+    lean_name: Option<String>,
 ) -> PyResult<Option<Recurrence>> {
-    let rows = polynomial_rows_from_python(rows)?;
+    if let Some(name) = lean_name.as_deref() {
+        validate_lean_recurrence_name(name)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    }
+    let rows = coefficient_rows_from_python(rows)?;
     let mut search = AdaptiveSearchOptions::default().with_laurent(laurent);
     search.skip_prefix = skip_prefix;
     let set = |target: &mut usize, value: Option<usize>| {
@@ -613,7 +629,16 @@ pub(crate) fn find_recurrence(
         AdaptiveSearchOutcome::Found(result) => {
             let work_units = max_work.map(|_| result.diagnostics.work_units);
             let record = py
-                .detach(|| search_record(&result, &rows, &search, output_first_index, work_units))
+                .detach(|| {
+                    search_record(
+                        &result,
+                        &rows,
+                        &search,
+                        output_first_index,
+                        work_units,
+                        lean_name.as_deref(),
+                    )
+                })
                 .map_err(polytool_error)?;
             Ok(Some(Recurrence::from_record(record)?))
         }

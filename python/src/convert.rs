@@ -118,22 +118,25 @@ pub(crate) fn rationals_to_python<'py>(
 ///
 /// Trailing zero coefficients are dropped; the zero polynomial is empty.
 pub(crate) fn coefficients_from_python(value: &Bound<'_, PyAny>) -> PyResult<Vec<BigRational>> {
+    untrimmed_coefficients_from_python(value).map(trimmed)
+}
+
+/// Read coefficients while retaining supplied padding for recurrence records.
+fn untrimmed_coefficients_from_python(value: &Bound<'_, PyAny>) -> PyResult<Vec<BigRational>> {
     if let Ok(polynomial) = value.cast::<Polynomial>() {
         return Ok(polynomial.get().coefficients().to_vec());
     }
     if let Ok(text) = value.cast::<PyString>() {
         let coefficients =
             polytool::parse_polynomial_bigint(&text.to_cow()?).map_err(polytool_error)?;
-        return Ok(trimmed(
-            coefficients
-                .into_iter()
-                .map(BigRational::from_integer)
-                .collect(),
-        ));
+        return Ok(coefficients
+            .into_iter()
+            .map(BigRational::from_integer)
+            .collect());
     }
     if value.is_instance_of::<PyFloat>() || is_exact_scalar(value)? {
         // A bare number is the constant polynomial.
-        return Ok(trimmed(vec![rational_from_python(value)?]));
+        return Ok(vec![rational_from_python(value)?]);
     }
     let iterator = value.try_iter().map_err(|_| {
         PyTypeError::new_err(format!(
@@ -146,14 +149,18 @@ pub(crate) fn coefficients_from_python(value: &Bound<'_, PyAny>) -> PyResult<Vec
                 .unwrap_or_default()
         ))
     })?;
-    let coefficients = iterator
-        .map(|item| rational_from_python(&item?))
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(trimmed(coefficients))
+    iterator.map(|item| rational_from_python(&item?)).collect()
 }
 
 /// Read a sequence of polynomials (see [`coefficients_from_python`]).
 pub(crate) fn polynomial_rows_from_python(
+    value: &Bound<'_, PyAny>,
+) -> PyResult<Vec<Vec<BigRational>>> {
+    coefficient_rows_from_python(value).map(|rows| rows.into_iter().map(trimmed).collect())
+}
+
+/// Read coefficient rows without discarding padding, as CLI recurrence input does.
+pub(crate) fn coefficient_rows_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<Vec<Vec<BigRational>>> {
     if value.is_instance_of::<PyString>() {
@@ -164,7 +171,7 @@ pub(crate) fn polynomial_rows_from_python(
     value
         .try_iter()
         .map_err(|_| PyTypeError::new_err("expected a sequence of polynomials"))?
-        .map(|row| coefficients_from_python(&row?))
+        .map(|row| untrimmed_coefficients_from_python(&row?))
         .collect()
 }
 

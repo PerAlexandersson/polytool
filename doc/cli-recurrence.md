@@ -70,7 +70,7 @@ Options:
 --max-work <n>       Stop after n deterministic work units across the whole search
 --json               Emit recurrence JSON with initial conditions
 --latex              Emit normalized LaTeX with initial conditions and starting index
---lean-name NAME     Name the checked Lean definition (default P)
+--lean-name NAME     Request Lean metadata in JSON; name the definition (Lean format default P)
 --python             Emit exact standalone Python code using Fraction arithmetic
 --format json        Alias for --json
 --format latex       Alias for --latex
@@ -656,7 +656,10 @@ syntax or any unparsed suffix cause refusal. Recursive references such as
 `Rows (n + 1 - 1)` are rejected even if their values agree on the supplied rows. This finite semantic check does
 not replace Lean elaboration or prove the recurrence for all indices.
 
-JSON includes `lean` on success and `lean_reason` on refusal. Lean format
+JSON includes `lean` on success and `lean_reason` on refusal only when
+`--lean-name NAME` is supplied. Without this option neither field is present,
+including in representation menus. `--format lean` requests a definition
+directly and uses the name `P` when `--lean-name` is omitted. Lean format
 prints no definition and exits 2 with a reason on refusal, including t-dependent
 leaders, a leader zero at or beyond B, missing seeds and read-back disagreement.
 JSON still returns the fitted record and its other presentations. Representation

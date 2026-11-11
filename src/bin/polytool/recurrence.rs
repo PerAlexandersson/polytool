@@ -121,17 +121,17 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
     let mut representations = false;
     let mut theorem_matches = false;
     let mut first_index = None;
-    let mut lean_name = String::from("P");
+    let mut lean_name = None;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--lean-name" => {
-                lean_name = next_option_value(args, &mut i, "--lean-name")
-                    .unwrap_or_else(|error| usage_error(&error))
-                    .to_string();
-                validate_lean_recurrence_name(&lean_name)
+                let name = next_option_value(args, &mut i, "--lean-name")
+                    .unwrap_or_else(|error| usage_error(&error));
+                validate_lean_recurrence_name(name)
                     .unwrap_or_else(|error| usage_error(&error.to_string()));
+                lean_name = Some(name.to_string());
             }
             "--first-index" => {
                 first_index = Some(
@@ -438,11 +438,13 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                         .clone()
                         .with_checked_presentation(&polys[search.skip_prefix..])
                         .and_then(RecurrenceJson::with_latex)
-                        .unwrap_or_else(|error| usage_error(&error.to_string()))
-                        .with_lean(
-                            &format!("{lean_name}_{index}"),
+                        .unwrap_or_else(|error| usage_error(&error.to_string()));
+                    if lean_name.is_some() || matches!(format, RecurrenceOutputFormat::Lean) {
+                        item.recurrence_json = item.recurrence_json.clone().with_lean(
+                            &format!("{}_{index}", lean_name.as_deref().unwrap_or("P")),
                             &polys[search.skip_prefix..],
                         );
+                    }
                     let (rule, _, _) = item
                         .recurrence_json
                         .to_recurrence_parts()
@@ -528,11 +530,11 @@ pub(crate) fn cmd_recurrence(args: &[String]) {
                 .with_checked_presentation(searched_polys)
                 .and_then(RecurrenceJson::with_latex)
                 .unwrap_or_else(|error| usage_error(&error.to_string()));
-            if matches!(
-                format,
-                RecurrenceOutputFormat::Json | RecurrenceOutputFormat::Lean
-            ) {
-                recurrence_json = recurrence_json.with_lean(&lean_name, searched_polys);
+            if matches!(format, RecurrenceOutputFormat::Lean)
+                || (matches!(format, RecurrenceOutputFormat::Json) && lean_name.is_some())
+            {
+                recurrence_json =
+                    recurrence_json.with_lean(lean_name.as_deref().unwrap_or("P"), searched_polys);
             }
             theorem_report.recurrence_json = recurrence_json.clone();
             match format {

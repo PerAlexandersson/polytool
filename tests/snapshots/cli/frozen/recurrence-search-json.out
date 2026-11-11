@@ -122,6 +122,5 @@
         }
       }
     ]
-  },
-  "lean": "-- Requires Mathlib.\nnoncomputable section\nopen Polynomial\n-- Finite fit: validity for all indices is unproved.\ndef P : ℕ → ℝ[X]\n  | 0 => 1\n  | n + 1 => (1 + C (1 + (n : ℝ)) * X) * P n + (X - X ^ 2) * (P n).derivative\n\nexample : P 0 = 1 := by\n  rfl\nexample : P 1 = 1 + X := by\n  sorry\nexample : P 2 = 1 + 4 * X + X ^ 2 := by\n  sorry\n\nend"
+  }
 }

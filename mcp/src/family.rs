@@ -1080,6 +1080,11 @@ mod tests {
         assert_eq!(response.unknowns, Some(expected.num_unknowns));
         assert_eq!(response.equations, Some(expected.num_equations));
         assert_eq!(response.candidates_tried, Some(expected.candidates_tried));
+        let record: serde_json::Value =
+            serde_json::from_str(response.recurrence_json.as_ref().unwrap()).unwrap();
+        assert!(record.get("lean").is_none());
+        assert!(record.get("lean_reason").is_none());
+        assert!(response.lean.is_none() && response.lean_reason.is_none());
     }
     #[test]
     fn binomial_capped_saturates_at_cap_plus_one() {
