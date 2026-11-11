@@ -66,7 +66,7 @@ explicitly includes noninvertible arrays; `K(0)=0` is allowed.
 
 We decide rational PF by the rational case of
 [A. Edrei, Canadian J. Math. 5 (1953), 86--94](https://doi.org/10.4153/CJM-1953-010-3),
-Introduction, formula (4) and assertions A--B on pp. 86--87:
+the Edrei generating-function theorem, specialized to rational series:
 after cancellation the series is
 `c z^r prod(1+alpha_i z)/prod(1-beta_j z)` with `c>0`, `r>=0` and
 `alpha_i,beta_j>=0`. We test that numerator zeros are real and nonpositive,
@@ -76,16 +76,42 @@ PRS sign counts and dyadic root isolation cover real algebraic factors and
 all multiplicities. These are finite exact decisions of the theorem's
 hypotheses, rather than finite checks of its conclusion.
 
-The route also tries `x^(a*m+b) P_(first_index+m)(1/x)` for `a=1,2,3`.
-We prove the degree bound by the lag multipliers and every seed, then check
-`x^b F(1/x,x^a z)` exactly. The existing affine-coordinate stage handles
-marker shifts and transports the root region. The parent menus for residue
-classes, index sections and catalog lifts include this route.
+The shared `degree_law_reversal` closure tries
+`x^(a*m+b) P_(first_index+m)(1/x)` while the direct theorem menu is unproved.
+Its documented search bound is positive slopes at most
+`MAXIMUM_REVERSAL_DEGREE_SLOPE` (3), starting at the smallest slope allowed
+by the lag multipliers, with the smallest offset allowed by every seed.
+The transformed rule and every seed are exact. Each nonrecursive theorem
+route can prove the transformed family, with its usual induction-start
+retries; section and reversal searches are not nested in that menu.
+`DegreeLawTransform` is also the index-section transform (the public alias
+`IndexSectionTransform` retains its JSON shape). Both certificates replay
+the same inductive degree bound and rule/seed reversal. Index sections keep
+their existing smallest-slope search, including zero. The closure theorem
+itself has no slope limit. It preserves zero rows and real-rootedness and
+transports one-sided root regions by reciprocation, allowing extra zeros at
+0; it does not transport simplicity or interlacing. The existing
+affine-coordinate stage handles marker shifts and transports the root region.
+The parent menus for residue classes, index sections and catalog lifts
+include the Riordan route.
 
-`RouteCertificate::RationalPfRiordan` records both generating functions,
-the optional reversal bound, the reduced `d,h,K`, their PF factorizations,
-root signs and isolating intervals, and isolated zero indices. Replay checks
-`N E = M D`, the reversal bound, the Riordan identity and the PF evidence.
+`RouteCertificate::RationalPfRiordan` records the full generating function,
+reduced `d,h,K`, their PF factorizations, root signs and isolating intervals,
+and isolated zero indices. The six separately recorded and replayed steps are:
+
+1. The formal generating-function identity from the rule and all seeds,
+   checked by exact cross multiplication `N E = M D`.
+2. The reduced Riordan identity `F=d/(1-x z d K)`.
+3. The rational Edrei criterion for `d`, with `d(0)>0`.
+4. The rational Edrei criterion for `K`, including positive valuation.
+5. The PF Toeplitz characterization and finite Cauchy--Binet:
+   `Q=T(d) diag(1,T(K))` is TNN, and `A=Q diag(1,A)`.
+6. Chen--Fu--Ruan Theorems 3(3), 4 give PF rows; the
+   Aissen--Schoenberg--Whitney theorem gives real nonpositive zeros.
+
+The text report prints this chain and each used closure separately:
+polynomial reversal, affine coordinate change, or the Cayley--Hamilton
+index section. Other theorem routes keep their JSON fields.
 PF supports are intervals; the union of supports of `d h^k` determines
 exactly the isolated zero rows and any periodic zero classes. The conclusion
 starts after the last isolated zero and names periodic zeros in

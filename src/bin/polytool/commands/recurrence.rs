@@ -558,11 +558,19 @@ F(x,z)=d(z)/(1-x z d(z) K(z)), with d(0)>0 and nonzero rational PF series d,K.
 The rational Edrei criterion is decided by exact gcd layers, PRS root signs and
 root isolation: numerator zeros nonpositive, denominator poles positive,
 positive initial scalar. Chen--Fu--Ruan Theorems 3(3) and 4 give PF rows for all
-indices, including K(0)=0 and noninvertible arrays. Also tries padded reversal
-x^(a*m+b) P_(first_index+m)(1/x) with a certified degree bound (a=1,2,3).
-Certificates replay the generating-function identity and exact PF evidence.
+indices, including K(0)=0 and noninvertible arrays. Certificates separately
+replay the full generating-function identity, Riordan identity, Edrei criterion
+for d and for K, TNN product (Cauchy--Binet), and Chen--Fu--Ruan row theorem.
 Zero rows are reported exactly; no simplicity or interlacing is claimed.
 The route is available to index-section parents and the affine marker shifts.
+
+Shared reversal closure (degree_law_reversal, while the direct menu is unproved):
+x^(a*m+b) P_(first_index+m)(1/x), with an inductive degree bound from the lag
+multipliers and every seed. Search bound: positive slopes at most 3, minimal
+seed offset; run the nonrecursive theorem menu in the reversed coordinate.
+The transform, certificate shape and replay are shared with index sections.
+Reciprocal nonzero roots and possible extra roots at 0; zero rows preserved.
+The text report prints the named theorem chain and each closure separately.
 
 When no criterion proves the record:
   - tail: if one of the first rows is zero or not real-rooted, the criteria run

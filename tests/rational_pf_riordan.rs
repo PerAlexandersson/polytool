@@ -216,6 +216,144 @@ fn tampered_identity_factorization_and_zero_claims_are_rejected() {
 }
 
 #[test]
+fn every_conclusion_field_and_each_named_proof_step_is_replayed() {
+    let (rule, seeds) = family(&[1, 1], &[1, -2, 1], &[1, 1], &[1]);
+    let report = check(&rule, &seeds);
+    report.verify().unwrap();
+    for field in [
+        "first_index",
+        "zero_residue_classes",
+        "interlacing_from",
+        "interlacing",
+        "simple_roots",
+        "root_region",
+        "statement",
+    ] {
+        let mut forged = report.clone();
+        let conclusion = forged.conclusion.as_mut().unwrap();
+        match field {
+            "first_index" => conclusion.first_index += 1,
+            "zero_residue_classes" => {
+                conclusion.zero_residue_classes = Some(ZeroResidueClasses {
+                    period: 3,
+                    residues: vec![1],
+                })
+            }
+            "interlacing_from" => conclusion.interlacing_from = Some(1),
+            "interlacing" => conclusion.interlacing = Some(RowInterlacing::Weak),
+            "simple_roots" => conclusion.simple_roots = true,
+            "root_region" => conclusion.root_region = None,
+            "statement" => conclusion.statement.push_str(" forged"),
+            _ => unreachable!(),
+        }
+        assert!(forged.verify().is_err(), "accepted altered {field}");
+    }
+    assert_eq!(report.hypotheses.len(), 6);
+    for index in 0..6 {
+        let mut forged = report.clone();
+        forged.hypotheses[index].evidence.push_str(" forged");
+        assert!(forged.verify().is_err(), "accepted altered step {index}");
+    }
+}
+
+#[test]
+fn shared_reversal_is_a_general_closure_and_replays_every_seed() {
+    // Product induction is independent of Riordan recognition.
+    let rule = Recurrence {
+        terms: vec![RecurrenceTerm::new(
+            1,
+            0,
+            BivarPoly::from_coefficients_normalized(vec![p(&[1, 2])]),
+        )],
+        denominator: None,
+        inhomogeneous: None,
+    };
+    let seeds = vec![p(&[1]), p(&[1, 2]), p(&[1, 4, 4])];
+    let report = check_degree_law_reversal_theorem(&rule, 7, &seeds, &Default::default()).unwrap();
+    assert!(report.is_proved());
+    let certificate = report.degree_law_reversal_certificate().unwrap();
+    assert_eq!(
+        certificate.transformed_proof.theorem,
+        RealRootednessTheorem::ProductRecurrence
+    );
+    certificate.verify(&rule, 7, &seeds).unwrap();
+    report.verify().unwrap();
+    let transform = certificate.transform;
+    let transformed = transform.apply(&rule, 7, &seeds).unwrap();
+    let (r, first, rows) = transformed.to_recurrence_parts().unwrap();
+    let recovered = transform.apply(&r, first, &rows).unwrap();
+    assert_eq!(
+        recovered,
+        RecurrenceJson::from_recurrence_rational(&rule, 7, &seeds, None)
+    );
+    let mut forged = report.clone();
+    if let Some(RouteCertificate::DegreeLawReversal(c)) = &mut forged.certificate {
+        c.transform = DegreeLawTransform::Reversal {
+            degree_slope: 0,
+            degree_offset: 0,
+        };
+    }
+    assert!(forged.verify().is_err());
+    let mut bad_seeds = seeds;
+    bad_seeds[2].push(q(1));
+    assert!(transform.apply(&rule, 7, &bad_seeds).is_err());
+    // The transform theorem accepts larger slopes; discovery's bound is 3.
+    let larger = DegreeLawTransform::Reversal {
+        degree_slope: 4,
+        degree_offset: 0,
+    };
+    assert!(larger.apply(&rule, 7, &bad_seeds).is_ok());
+    assert_eq!(MAXIMUM_REVERSAL_DEGREE_SLOPE, 3);
+}
+
+#[test]
+fn shared_reversal_keeps_exact_periodic_and_isolated_zero_rows() {
+    for (kn, expected_first, finite, periodic) in [
+        (
+            &[0, 0, 1][..],
+            2,
+            vec![],
+            Some(ZeroResidueClasses {
+                period: 3,
+                residues: vec![0, 1],
+            }),
+        ),
+        (&[0, 0, 1, 1][..], 8, vec![3, 4, 7], None),
+    ] {
+        let (rule, seeds) = family(&[1], &[1], kn, &[1]);
+        let transform = DegreeLawTransform::Reversal {
+            degree_slope: 1,
+            degree_offset: 0,
+        };
+        let source = transform.apply(&rule, 2, &seeds).unwrap();
+        let (source_rule, first, source_seeds) = source.to_recurrence_parts().unwrap();
+        let proof = check_degree_law_reversal_theorem(
+            &source_rule,
+            first,
+            &source_seeds,
+            &Default::default(),
+        )
+        .unwrap();
+        assert!(proof.is_proved(), "{proof:?}");
+        let conclusion = proof.conclusion.as_ref().unwrap();
+        assert_eq!(conclusion.first_index, expected_first);
+        assert_eq!(conclusion.zero_residue_classes, periodic);
+        let inner = &proof
+            .degree_law_reversal_certificate()
+            .unwrap()
+            .transformed_proof;
+        assert_eq!(
+            inner
+                .rational_pf_riordan_certificate()
+                .unwrap()
+                .finite_zero_indices,
+            finite
+        );
+        proof.verify().unwrap();
+    }
+}
+
+#[test]
 fn target_routes_reversals_sections_and_marker_shift_compose() {
     for id in [
         "A098172", "A098173", "A114123", "A118424", "A118884", "A184883", "A190088", "A190152",

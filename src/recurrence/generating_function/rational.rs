@@ -141,12 +141,41 @@ fn primitive(p: &B) -> B {
     }
 }
 
+// Exact coprimality certificate over Q[x][z]. A specialization preserving
+// both z-degrees preserves the z-degree of every common divisor. Thus a
+// coprime specialized pair excludes every divisor of positive z-degree.
+// The gcd of all coefficient rows separately excludes divisors in Q[x].
+// Degree preservation is essential: at x=0, 1+xz would become a unit.
+fn certified_coprime(a: &B, b: &B) -> bool {
+    let coefficient_content = a
+        .rows()
+        .iter()
+        .chain(b.rows())
+        .fold(Polynomial::zero(), |g, row| {
+            g.gcd(&Polynomial::new(row.clone()))
+        });
+    if coefficient_content.degree() != Some(0) {
+        return false;
+    }
+    [0, 1, -1, 2].into_iter().any(|point| {
+        let point = Q::from_integer(point.into());
+        let specialized_a = Polynomial::new(a.evaluate_variable(&point));
+        let specialized_b = Polynomial::new(b.evaluate_variable(&point));
+        specialized_a.degree() == a.index_degree()
+            && specialized_b.degree() == b.index_degree()
+            && specialized_a.gcd(&specialized_b).degree() == Some(0)
+    })
+}
+
 fn gcd_bivariate(a: &B, b: &B) -> B {
     if a.is_zero() {
         return b.monic().1;
     }
     if b.is_zero() {
         return a.monic().1;
+    }
+    if certified_coprime(a, b) {
+        return B::one();
     }
     let c = content(a).gcd(&content(b));
     let mut a = primitive(a);
@@ -373,5 +402,27 @@ impl fmt::Display for RationalGeneratingSeries {
             ),
             Err(_) => f.write_str("invalid rational series"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn coprimality_specialization_checks_degrees_and_coefficient_content() {
+        let q = |n: i64| Q::from_integer(n.into());
+        let common = B::new(vec![vec![q(1)], vec![q(0), q(1)]]); // 1+xz
+        assert!(!certified_coprime(&common, &common.multiply(&common)));
+        let x = B::from_variable_polynomial(&[q(0), q(1)]);
+        assert!(!certified_coprime(&x, &x.multiply(&common)));
+        let a = B::new(vec![vec![q(1)], vec![q(0), q(0), q(1)]]);
+        let b = B::new(vec![vec![q(1)], vec![q(0), q(0), q(2)]]);
+        assert!(certified_coprime(&a, &b));
+        assert_eq!(gcd_bivariate(&a, &b), B::one());
+        assert_eq!(
+            gcd_bivariate(&common, &common.multiply(&common)),
+            common.monic().1
+        );
     }
 }

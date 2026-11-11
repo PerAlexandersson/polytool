@@ -10,6 +10,9 @@
 //!    eight are always recorded, those of the RealRooted row routes, the
 //!    index-section lift, factor gauge and positive lag-two Euler only where the rule has their
 //!    form (status other than `not_applicable`);
+//!    then the shared degree-law reversal closure of the nonrecursive
+//!    theorem menu, only while the record is unproved (positive slopes at
+//!    most [`MAXIMUM_REVERSAL_DEGREE_SLOPE`]);
 //! 2. **tail**: when no theorem proves the record and one of its first rows
 //!    (the seeds and the rows of the induction-start window) is zero or not
 //!    real-rooted, the same theorems on the *tail* record that starts after
@@ -511,6 +514,12 @@ fn run_theorems(
     // rule has its form leaves the reports of other rules unchanged.
     let mut attempts = Vec::new();
     for route in &ROUTES {
+        // A shared closure is needed only while the direct menu is unproved.
+        if route.theorem == RealRootednessTheorem::DegreeLawReversal
+            && attempts.iter().any(RealRootednessTheoremReport::is_proved)
+        {
+            continue;
+        }
         let attempt =
             check_with_first_proving_start(route.theorem, rule, first_index, seeds, options)?;
         if route.discovery.records(&attempt) {

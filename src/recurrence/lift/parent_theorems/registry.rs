@@ -138,7 +138,7 @@ pub(super) fn any_proof(_: &RealRootednessTheoremReport) -> bool {
 }
 
 /// Every theorem route, in the order of [`RealRootednessTheorem::ALL`].
-pub(in crate::recurrence) static ROUTES: [TheoremRoute; 15] = [
+pub(in crate::recurrence) static ROUTES: [TheoremRoute; 16] = [
     product::ROUTE,
     three_term::ROUTE,
     liu_wang::ROUTE,
@@ -154,6 +154,7 @@ pub(in crate::recurrence) static ROUTES: [TheoremRoute; 15] = [
     lag_two_euler::ROUTE,
     binomial_perturbed_euler_orbit::ROUTE,
     rational_pf_riordan::ROUTE,
+    degree_law_reversal::ROUTE,
 ];
 
 /// The route of `theorem`.
@@ -226,11 +227,11 @@ mod tests {
         // may itself be proved by residue classes.
         assert_eq!(
             filtered(|route| route.in_residue_class_menu),
-            [&all[..9], &all[12..]].concat()
+            [&all[..9], &all[12..15]].concat()
         );
         assert_eq!(
             filtered(|route| route.in_index_section_menu),
-            [&all[..10], &all[12..]].concat()
+            [&all[..10], &all[12..15]].concat()
         );
     }
 
@@ -240,7 +241,8 @@ mod tests {
             filtered(|route| route.start_policy == StartPolicy::OwnStarts),
             [
                 RealRootednessTheorem::ResidueClassSubsequences,
-                RealRootednessTheorem::IndexSectionLift
+                RealRootednessTheorem::IndexSectionLift,
+                RealRootednessTheorem::DegreeLawReversal
             ]
         );
         assert_eq!(
@@ -253,7 +255,8 @@ mod tests {
                 RealRootednessTheorem::FactorGauge,
                 RealRootednessTheorem::LagTwoEuler,
                 RealRootednessTheorem::BinomialPerturbedEulerOrbit,
-                RealRootednessTheorem::RationalPfRiordan
+                RealRootednessTheorem::RationalPfRiordan,
+                RealRootednessTheorem::DegreeLawReversal
             ]
         );
     }

@@ -79,6 +79,14 @@
 //!   Euler orbit of RealRooted issue #2513, `s >= 1`, `kappa >= s+4`, with
 //!   exact seeds and theta operators, also after the Eulerian Mobius map;
 //!   simple roots in `(-1,0)` or `(-inf,0)` and strict adjacent interlacing.
+//! - [`check_rational_pf_riordan_theorem`]: exact rational generating
+//!   functions `F=d/(1-x z d K)`, nonzero rational PF `d,K`, `d(0)>0`;
+//!   the six-step Edrei, Cauchy--Binet and Chen--Fu--Ruan proof chain,
+//!   including noninvertible arrays and exact zero-row descriptions.
+//! - [`check_degree_law_reversal_theorem`]: the shared degree-law reversal
+//!   closure of the nonrecursive theorem menu, while no direct theorem
+//!   proves the family; the same [`DegreeLawTransform`] and replay as index
+//!   sections. Discovery tries positive slopes at most 3.
 //!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
@@ -211,10 +219,15 @@ mod ma_wang;
 mod three_term;
 // RealRooted row routes, including the Euler-orbit theorem of issue #2513.
 mod binomial_perturbed_euler_orbit;
+mod degree_law_reversal;
 mod lag_two_euler;
 mod rational_pf_riordan;
 pub use binomial_perturbed_euler_orbit::{
     check_binomial_perturbed_euler_orbit_theorem, BinomialPerturbedEulerOrbitCertificate,
+};
+pub use degree_law_reversal::{
+    check_degree_law_reversal_theorem, DegreeLawReversalCertificate, DegreeLawTransform,
+    MAXIMUM_REVERSAL_DEGREE_SLOPE,
 };
 pub use rational_pf_riordan::{
     check_rational_pf_riordan_theorem, check_rational_polya_frequency, PolyaFrequencyRootLayer,
@@ -312,12 +325,14 @@ pub enum RealRootednessTheorem {
     BinomialPerturbedEulerOrbit,
     /// [`check_rational_pf_riordan_theorem`].
     RationalPfRiordan,
+    /// [`check_degree_law_reversal_theorem`], a shared closure of the theorem menu.
+    DegreeLawReversal,
 }
 
 impl RealRootednessTheorem {
     /// Every theorem, in the order of the parent cascade and of
     /// [`discover_recurrence_proofs`].
-    pub const ALL: [RealRootednessTheorem; 15] = [
+    pub const ALL: [RealRootednessTheorem; 16] = [
         RealRootednessTheorem::ProductRecurrence,
         RealRootednessTheorem::ThreeTermRecurrence,
         RealRootednessTheorem::LiuWang,
@@ -333,6 +348,7 @@ impl RealRootednessTheorem {
         RealRootednessTheorem::LagTwoEuler,
         RealRootednessTheorem::BinomialPerturbedEulerOrbit,
         RealRootednessTheorem::RationalPfRiordan,
+        RealRootednessTheorem::DegreeLawReversal,
     ];
 
     /// The snake-case name, as serialized (for example
@@ -354,6 +370,7 @@ impl RealRootednessTheorem {
             RealRootednessTheorem::LagTwoEuler => "lag_two_euler",
             RealRootednessTheorem::BinomialPerturbedEulerOrbit => "binomial_perturbed_euler_orbit",
             RealRootednessTheorem::RationalPfRiordan => "rational_pf_riordan",
+            RealRootednessTheorem::DegreeLawReversal => "degree_law_reversal",
         }
     }
 }

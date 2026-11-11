@@ -19,6 +19,8 @@ pub enum RouteCertificate {
     IteratedPreserver(IteratedPreserverCertificate),
     /// [`check_rational_pf_riordan_theorem`]: exact generating functions and PF evidence.
     RationalPfRiordan(Box<RationalPfRiordanCertificate>),
+    /// Shared reversal transform and a proved theorem on the transformed family.
+    DegreeLawReversal(Box<DegreeLawReversalCertificate>),
     /// [`check_variable_delay_theorem`]: the delay and the seed rows as exact
     /// steps of the window (JSON key `variable_delay`).
     VariableDelay(VariableDelayCertificate),
@@ -43,6 +45,7 @@ impl RouteCertificate {
     /// The theorem whose reports carry this certificate.
     pub fn theorem(&self) -> RealRootednessTheorem {
         match self {
+            RouteCertificate::DegreeLawReversal(_) => RealRootednessTheorem::DegreeLawReversal,
             RouteCertificate::RationalPfRiordan(_) => RealRootednessTheorem::RationalPfRiordan,
             RouteCertificate::IteratedPreserver(_) => RealRootednessTheorem::IteratedPreserver,
             RouteCertificate::VariableDelay(_) => RealRootednessTheorem::VariableDelay,
@@ -64,6 +67,14 @@ impl RouteCertificate {
     /// other certificates.
     pub(super) fn sub_check_start_delay_bound(&self) -> Result<Option<usize>, RecurrenceError> {
         match self {
+            RouteCertificate::DegreeLawReversal(c) => {
+                if c.maximum_start_delay > index_section::MAXIMUM_PARENT_START_DELAY {
+                    return Err(RecurrenceError::VerificationFailed(
+                        "reversal start-delay bound exceeds 16".into(),
+                    ));
+                }
+                Ok(Some(c.maximum_start_delay))
+            }
             RouteCertificate::ResidueClassSubsequences(certificate) => {
                 if certificate.class_maximum_start_delay > residue_class::MAXIMUM_CLASS_START_DELAY
                 {
@@ -101,6 +112,9 @@ impl RouteCertificate {
         report: &RealRootednessTheoremReport,
     ) -> Result<(), RecurrenceError> {
         match self {
+            RouteCertificate::DegreeLawReversal(certificate) => {
+                degree_law_reversal::verify_certificate_in_report(certificate, report)
+            }
             RouteCertificate::IteratedPreserver(certificate) => {
                 iterated_preserver::verify_certificate_in_report(certificate, report)
             }
@@ -130,6 +144,14 @@ impl RouteCertificate {
 }
 
 impl RealRootednessTheoremReport {
+    /// The shared degree-law reversal certificate, when recorded.
+    pub fn degree_law_reversal_certificate(&self) -> Option<&DegreeLawReversalCertificate> {
+        match &self.certificate {
+            Some(RouteCertificate::DegreeLawReversal(c)) => Some(c),
+            _ => None,
+        }
+    }
+
     /// The rational PF Riordan certificate, if recorded.
     pub fn rational_pf_riordan_certificate(&self) -> Option<&RationalPfRiordanCertificate> {
         match &self.certificate {

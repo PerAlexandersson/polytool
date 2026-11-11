@@ -167,6 +167,28 @@ fn print_attempts_text(attempts: &[RealRootednessTheoremReport], indent: &str) {
                 attempt.lean_declarations.join(", ")
             );
         }
+        if let Some(certificate) = attempt.degree_law_reversal_certificate() {
+            println!(
+                "{indent}  Closure: polynomial reversal, {:?}",
+                certificate.transform
+            );
+            print_attempts_text(
+                std::slice::from_ref(certificate.transformed_proof.as_ref()),
+                &format!("{indent}    "),
+            );
+        }
+        if let Some(certificate) = attempt.index_section_certificate() {
+            if let Some(proof) = certificate
+                .selected
+                .and_then(|i| certificate.parent_attempts.get(i))
+            {
+                println!(
+                    "{indent}  Closure: Cayley--Hamilton index section, period {}; {:?}",
+                    certificate.period, certificate.transform
+                );
+                print_attempts_text(std::slice::from_ref(proof), &format!("{indent}    "));
+            }
+        }
     }
 }
 

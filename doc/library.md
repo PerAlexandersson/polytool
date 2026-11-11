@@ -62,10 +62,15 @@ assert_eq!(riordan.k.numerator, ["1", "1"]);
 `recurrence::check_rational_polya_frequency` decides the rational PF
 criterion using exact root signs and isolation. The all-index theorem
 `check_rational_pf_riordan_theorem` combines the generating function and PF
-evidence, also in certified reversal coordinates. See
+evidence as six named, separately replayed proof steps. The shared
+`check_degree_law_reversal_theorem` closure tries any nonrecursive theorem
+route behind `DegreeLawTransform`, also used by index-section lifts. Its
+discovery search uses positive slopes at most 3; the exact degree-bound
+closure has no slope limit. See
 [proof discovery](proof-discovery.md#rational-pf-riordan-arrays) for its hypotheses
 and replayable certificate. CLI/MCP generating-function output and stored
 catalog generating functions are later phases of [issue #54](https://github.com/PerAlexandersson/polytool/issues/54).
+
 ## Recurrence presentation and Lean export
 
 `Recurrence::presentation_for_rows` replays all available identities and

@@ -25,9 +25,8 @@
 //! *Proof of a conjecture of Schoenberg on the generating function of a totally
 //! positive sequence*, Canadian J. Math. **5** (1953), 86--94,
 //! [doi:10.4153/CJM-1953-010-3](https://doi.org/10.4153/CJM-1953-010-3),
-//! Introduction, formula (4) and assertions A--B, pp. 86--87 (the normalized
-//! case); an initial power of `z` and a positive
-//! scalar restore the general case. After cancellation it is exactly
+//! the Edrei generating-function theorem; an initial power of `z` and a
+//! positive scalar restore the general case. After cancellation it is exactly
 //! `c z^r prod(1+alpha z)/prod(1-beta z)`, `c>0`, `alpha,beta>=0`.
 //! In the rational case the exponential and infinite products disappear.
 //! The finite numerator case is the Aissen--Schoenberg--Whitney theorem,
@@ -37,12 +36,12 @@
 //! real algebraic factors, arbitrary multiplicities and a zero constant of K.
 //!
 //! Discovery already composes this route with tails, residue classes, index
-//! sections, catalog lifts and affine marker shifts. Padded reversal is tried
-//! here with a certified linear degree bound and the exact generating-function
-//! substitution `x^b F(1/x,x^a z)`; it preserves zero rows and nonpositive roots.
+//! sections, catalog lifts and affine marker shifts. Reversal is the shared
+//! [`check_degree_law_reversal_theorem`] closure, also used by index sections;
+//! this route contains no coordinate-change search.
 
 use super::*;
-use crate::recurrence::generating_function::{decode_bivariate, encode_bivariate};
+use crate::recurrence::generating_function::decode_bivariate;
 use crate::root_count;
 use crate::Polynomial;
 use ore_algebra::BivariatePolynomial as B;
@@ -160,10 +159,6 @@ pub fn check_rational_polya_frequency(
 pub struct RationalPfRiordanCertificate {
     /// Source generating function, encoding every prescribed row.
     pub generating_function: RationalGeneratingFunction,
-    /// After reversal, if used; otherwise identical to `generating_function`.
-    pub riordan_generating_function: RationalGeneratingFunction,
-    /// Degree bound `a m+b` for row `m` relative to the first index, when reversed.
-    pub reversal_degree_bound: Option<[usize; 2]>,
     /// Exact reduced `d,h,K` with `h=z d K`.
     pub decomposition: RiordanDecomposition,
     /// Exact PF factorization/root evidence for `d`.
@@ -176,12 +171,13 @@ pub struct RationalPfRiordanCertificate {
 }
 
 impl RationalPfRiordanCertificate {
-    /// Replay the generating-function identity `N E = M D`, reversal degree
-    /// bound, Riordan identity and exact PF evidence, using the rule and all seeds.
+    /// Replay each named step separately: the full generating-function
+    /// identity, Riordan form, PF criterion for each factor, the TNN product
+    /// and the Chen--Fu--Ruan row theorem. All prescribed seeds enter step 1.
     ///
     /// # Errors
     ///
-    /// [`RecurrenceError::VerificationFailed`] for a changed identity or evidence;
+    /// [`RecurrenceError::VerificationFailed`] for a changed step or evidence;
     /// construction errors of the supplied rule are passed through.
     pub fn verify_identity(
         &self,
@@ -189,32 +185,61 @@ impl RationalPfRiordanCertificate {
         first: usize,
         seeds: &[Vec<Q>],
     ) -> Result<(), RecurrenceError> {
+        self.replay_steps(rule, first, seeds).map(|_| ())
+    }
+
+    fn replay_steps(
+        &self,
+        rule: &Recurrence,
+        first: usize,
+        seeds: &[Vec<Q>],
+    ) -> Result<Vec<LiftHypothesis>, RecurrenceError> {
+        let failed = |what: &str| RecurrenceError::VerificationFailed(what.into());
+        // Step 1: recurrence/seed identity, independently of the Riordan shape.
         let gf = rational_generating_function(rule, first, seeds)?;
         let (n, d) = gf_polynomials(&gf)?;
         let (m, e) = gf_polynomials(&self.generating_function)?;
         if gf.first_index != self.generating_function.first_index
             || n.multiply(&e) != m.multiply(&d)
         {
-            return Err(RecurrenceError::VerificationFailed(
-                "generating-function identity N E = M D failed".into(),
-            ));
+            return Err(failed("generating-function identity N E = M D failed"));
         }
-        let transformed = match self.reversal_degree_bound {
-            None => gf,
-            Some([a, b]) => reversed_gf(&gf, rule, seeds, a, b).ok_or_else(|| {
-                RecurrenceError::VerificationFailed("invalid reversal degree bound".into())
-            })?,
-        };
-        if transformed != self.riordan_generating_function
-            || riordan_decomposition(&transformed).as_ref() != Some(&self.decomposition)
-            || check_rational_polya_frequency(&self.decomposition.d)? != self.d_evidence
-            || check_rational_polya_frequency(&self.decomposition.k)? != self.k_evidence
+        // Step 2: the reduced Riordan identity (including h = z d K).
+        if riordan_decomposition(&self.generating_function).as_ref() != Some(&self.decomposition) {
+            return Err(failed("reduced Riordan identity changed"));
+        }
+        // Steps 3 and 4: separately replay the exact rational PF criteria.
+        if check_rational_polya_frequency(&self.decomposition.d)? != self.d_evidence
+            || !self.d_evidence.is_polya_frequency
+            || self.d_evidence.valuation != Some(0)
         {
-            return Err(RecurrenceError::VerificationFailed(
-                "Riordan identity or PF evidence changed".into(),
-            ));
+            return Err(failed("Edrei criterion for d or d(0)>0 failed"));
         }
-        Ok(())
+        if check_rational_polya_frequency(&self.decomposition.k)? != self.k_evidence
+            || !self.k_evidence.is_polya_frequency
+        {
+            return Err(failed("Edrei criterion for K failed"));
+        }
+        // The final two steps are the fixed theorems below, with these exact
+        // prerequisites. No finite matrix truncation is used as proof.
+        if zero_rows(&self.decomposition, first).0 != self.finite_zero_indices {
+            return Err(failed("exact zero-row support changed"));
+        }
+        let step = |name, theorem, evidence| exact_hypothesis(name, theorem, Ok(evidence));
+        Ok(vec![
+            step("generating_function_identity", "Formal generating-function identity from the rule and every seed",
+                format!("Formal series identity: F = {}; N E = M D checked with all {} seeds", self.generating_function, seeds.len())),
+            step("riordan_identity", "Riordan coefficient identity A[n,k]=[z^n]d(z)(z d(z)K(z))^k",
+                format!("Riordan identity: F=d/(1-x z d K); reduced d = {}; K = {}", self.decomposition.d, self.decomposition.k)),
+            step("d_polya_frequency", "Edrei generating-function theorem, rational specialization (1953)",
+                "Edrei rational PF criterion: d is PF and d(0)>0; exact numerator/denominator root evidence replayed".into()),
+            step("k_polya_frequency", "Edrei generating-function theorem, rational specialization (1953)",
+                "Edrei rational PF criterion: K is nonzero PF; exact numerator/denominator root evidence replayed (K(0)=0 allowed)".into()),
+            step("left_production_totally_nonnegative", "PF Toeplitz characterization and finite Cauchy--Binet",
+                "PF Toeplitz characterization + Cauchy--Binet: Q=T(d) diag(1,T(K)) is TNN; A=Q diag(1,A)".into()),
+            step("rows_polya_frequency", "Chen--Fu--Ruan Theorems 3(3), 4 and Aissen--Schoenberg--Whitney",
+                "Chen--Fu--Ruan Theorems 3(3), 4: every row is PF (noninvertible arrays allowed); Aissen--Schoenberg--Whitney: nonzero rows have only real nonpositive roots".into()),
+        ])
     }
 }
 
@@ -228,64 +253,6 @@ fn gf_polynomials(gf: &RationalGeneratingFunction) -> Result<(B, B), RecurrenceE
         decode_bivariate(&gf.numerator)?,
         decode_bivariate(&gf.denominator)?,
     ))
-}
-
-// This is a bound for all rows by induction, not a degree fit. Only scalar
-// left factors are supported for this closure; the shared GF API is broader.
-fn reversal_bound(rule: &Recurrence, seeds: &[Vec<Q>], a: usize, b: usize) -> bool {
-    let scalar_lhs = rule.denominator.as_ref().is_none_or(|p| {
-        B::new(p.coeffs.clone())
-            .as_constant()
-            .is_some_and(|c| !c.is_zero())
-    });
-    scalar_lhs
-        && rule.terms.iter().all(|t| {
-            t.deriv_order == 0
-                && B::new(t.coeff.coeffs.clone())
-                    .variable_degree()
-                    .is_none_or(|j| a.checked_mul(t.offset).is_some_and(|d| j <= d))
-        })
-        && seeds.iter().enumerate().all(|(m, p)| {
-            a.checked_mul(m)
-                .and_then(|d| d.checked_add(b))
-                .is_some_and(|d| Polynomial::new(p.clone()).coeffs().len().saturating_sub(1) <= d)
-        })
-}
-
-fn reversed_gf(
-    gf: &RationalGeneratingFunction,
-    rule: &Recurrence,
-    seeds: &[Vec<Q>],
-    a: usize,
-    b: usize,
-) -> Option<RationalGeneratingFunction> {
-    if !reversal_bound(rule, seeds, a, b) {
-        return None;
-    }
-    let substitute = |p: &B, extra: usize| -> Option<B> {
-        let mut out = B::zero();
-        for (i, row) in p.rows().iter().enumerate() {
-            for (j, c) in row.iter().enumerate().filter(|(_, c)| !c.is_zero()) {
-                let power = a.checked_mul(i)?.checked_add(extra)?.checked_sub(j)?;
-                out = out.add(&B::monomial(i, power, c.clone()));
-            }
-        }
-        Some(out)
-    };
-    let (n, d) = gf_polynomials(gf).ok()?;
-    // The source is reduced. Substitution is an automorphism of
-    // Q[x,x^-1,z], so any new common polynomial factor would be a power
-    // of x. But D(x,0)=1 rules that out. Both substitutions are polynomial
-    // by the induction bound, and the denominator still has D(x,0)=1.
-    // Thus this pair is already reduced; a second bivariate PRS would be
-    // redundant and can cause severe coefficient growth at larger slopes.
-    let (n, d) = (substitute(&n, b)?, substitute(&d, 0)?);
-    Some(RationalGeneratingFunction {
-        schema: RATIONAL_GENERATING_FUNCTION_SCHEMA.into(),
-        first_index: gf.first_index,
-        numerator: encode_bivariate(&n),
-        denominator: encode_bivariate(&d),
-    })
 }
 
 // PF series have interval support: [valuation,degree] for polynomials,
@@ -327,7 +294,7 @@ fn zero_rows(
 }
 
 /// Prove all nonzero rows real-rooted with nonpositive zeros by rational PF
-/// Riordan recognition (module documentation), also trying padded reversals.
+/// Riordan recognition (module documentation), without coordinate changes.
 ///
 /// # Errors
 ///
@@ -372,7 +339,13 @@ pub(super) fn verify_certificate_in_report(
         .generate_rows_rational(&seeds, first, seeds.len() + report.start_delay)
         .map_err(|e| RecurrenceError::VerificationFailed(e.to_string()))?;
     let (rule, _) = rule_with_x_free_left_hand_factor(&rule)?;
-    certificate.verify_identity(&rule, first, &rows)
+    let steps = certificate.replay_steps(&rule, first, &rows)?;
+    if report.hypotheses.get(..steps.len()) != Some(steps.as_slice()) {
+        return Err(RecurrenceError::VerificationFailed(
+            "Riordan proof chain changed".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn rational_pf_riordan_report(
@@ -396,123 +369,99 @@ fn rational_pf_riordan_report(
         }
         Err(e) => return Err(e),
     };
-    let mut candidates = vec![(gf.clone(), None)];
-    for a in 1usize..=3 {
-        let b = seeds
-            .iter()
-            .enumerate()
-            .map(|(m, p)| {
-                Polynomial::new(p.clone())
-                    .coeffs()
-                    .len()
-                    .saturating_sub(1)
-                    .saturating_sub(a * m)
-            })
-            .max()
-            .unwrap_or(0);
-        if let Some(reversed) = reversed_gf(&gf, rule, seeds, a, b) {
-            candidates.push((reversed, Some([a, b])));
-        }
+    let (n, d) = gf_polynomials(&gf)?;
+    if !n.is_variable_free() || d.variable_degree().is_none_or(|degree| degree > 1) {
+        return Ok(report.not_applicable("no reduced Riordan generating function"));
     }
-    let mut first_failure = None;
-    for (candidate, reversal) in candidates {
-        // These candidates were constructed reduced. Reject their shape
-        // before invoking the public recognizer, which also accepts and
-        // reduces noncanonical caller-supplied pairs.
-        let (n, d) = gf_polynomials(&candidate)?;
-        if !n.is_variable_free() || d.variable_degree().is_none_or(|degree| degree > 1) {
-            continue;
-        }
-        let Some(decomposition) = riordan_decomposition(&candidate) else {
-            continue;
-        };
-        let d_evidence = check_rational_polya_frequency(&decomposition.d)?;
-        let k_evidence = check_rational_polya_frequency(&decomposition.k)?;
-        let positive_d0 = d_evidence.valuation == Some(0);
-        let pf = positive_d0 && d_evidence.is_polya_frequency && k_evidence.is_polya_frequency;
-        let evidence = format!(
-            "d = {}; K = {}; d(0)>0 and PF: {}; K PF: {}",
-            decomposition.d,
-            decomposition.k,
-            positive_d0 && d_evidence.is_polya_frequency,
-            k_evidence.is_polya_frequency
-        );
-        if !pf {
-            first_failure.get_or_insert(evidence);
-            continue;
-        }
-        let (finite_zero_indices, zero_residue_classes) = zero_rows(&decomposition, first);
-        let conclusion_first = finite_zero_indices.last().map_or(first, |n| n + 1);
-        report.normal_form =
-            format!("F = d/(1-x z d K); {evidence}; reversal degree bound {reversal:?}");
-        report.hypotheses.push(exact_hypothesis(
-            "rational_pf_factors",
-            "the exact generating function (including every seed) is Riordan with \
-             d(0)>0 and nonzero rational PF d,K",
-            Ok(evidence),
-        ));
-        if let Some(region) = &options.root_region {
-            let contains =
-                region.lower.is_none() && region.upper.as_ref().is_none_or(Signed::is_positive);
-            report.hypotheses.push(if contains {
-                exact_hypothesis(
-                    "requested_root_region",
-                    "the requested region contains (-inf,0]",
-                    Ok("exact endpoint comparison".into()),
-                )
-            } else {
-                unresolved_hypothesis(
-                    "requested_root_region",
-                    "the requested region contains (-inf,0]",
-                    "this theorem certifies only the closed nonpositive ray".into(),
-                )
-            });
-        }
-        let zero_text = format!(
-            "isolated zero indices {finite_zero_indices:?}; \
-             periodic zero classes {zero_residue_classes:?}"
-        );
-        report.certificate = Some(RouteCertificate::RationalPfRiordan(Box::new(
-            RationalPfRiordanCertificate {
-                generating_function: gf,
-                riordan_generating_function: candidate,
-                reversal_degree_bound: reversal,
-                decomposition,
-                d_evidence,
-                k_evidence,
-                finite_zero_indices,
-            },
-        )));
-        return Ok(report.finish(RealRootednessTheoremConclusion {
-            first_index: conclusion_first,
-            zero_residue_classes,
-            interlacing_from: None,
-            interlacing: None,
-            simple_roots: false,
-            root_region: Some(RootInterval::from_real(&RealInterval {
-                lower: None,
-                lower_closed: false,
-                upper: Some(Q::zero()),
-                upper_closed: true,
-            })),
-            statement: format!(
-                "every nonzero P_n, n >= {first}, has only real nonpositive zeros; \
-                 {zero_text}; no simplicity or interlacing asserted"
-            ),
-        }));
-    }
-    if let Some(evidence) = first_failure {
+    let Some(decomposition) = riordan_decomposition(&gf) else {
+        return Ok(report.not_applicable("no reduced Riordan generating function"));
+    };
+    let d_evidence = check_rational_polya_frequency(&decomposition.d)?;
+    let k_evidence = check_rational_polya_frequency(&decomposition.k)?;
+    let positive_d0 = d_evidence.valuation == Some(0);
+    let pf = positive_d0 && d_evidence.is_polya_frequency && k_evidence.is_polya_frequency;
+    let evidence = format!(
+        "d = {}; K = {}; d(0)>0 and PF: {}; K PF: {}",
+        decomposition.d,
+        decomposition.k,
+        positive_d0 && d_evidence.is_polya_frequency,
+        k_evidence.is_polya_frequency
+    );
+    if !pf {
         report.normal_form = "Riordan shape, but rational PF hypotheses fail".into();
-        report.hypotheses.push(exact_hypothesis(
-            "rational_pf_factors",
-            "d(0)>0 and d,K are nonzero rational PF series",
-            Err((None, evidence)),
-        ));
+        for (name, ok, detail) in [
+            (
+                "d_polya_frequency",
+                positive_d0 && d_evidence.is_polya_frequency,
+                "d is nonzero PF and d(0)>0",
+            ),
+            (
+                "k_polya_frequency",
+                k_evidence.is_polya_frequency,
+                "K is nonzero PF",
+            ),
+        ] {
+            report.hypotheses.push(exact_hypothesis(
+                name,
+                "Edrei generating-function theorem, rational specialization (1953)",
+                if ok {
+                    Ok(format!("{detail}: {evidence}"))
+                } else {
+                    Err((None, format!("{detail} fails: {evidence}")))
+                },
+            ));
+        }
         report.status = RealRootednessTheoremStatus::HypothesisFailed;
-        Ok(report)
-    } else {
-        Ok(report.not_applicable(
-            "no reduced Riordan generating function, directly or after a certified reversal",
-        ))
+        return Ok(report);
     }
+    let (finite_zero_indices, zero_residue_classes) = zero_rows(&decomposition, first);
+    let conclusion_first = finite_zero_indices.last().map_or(first, |n| n + 1);
+    report.normal_form = format!("F = d/(1-x z d K); {evidence}");
+    let certificate = RationalPfRiordanCertificate {
+        generating_function: gf,
+        decomposition,
+        d_evidence,
+        k_evidence,
+        finite_zero_indices: finite_zero_indices.clone(),
+    };
+    report.hypotheses = certificate.replay_steps(rule, first, seeds)?;
+    if let Some(region) = &options.root_region {
+        let contains =
+            region.lower.is_none() && region.upper.as_ref().is_none_or(Signed::is_positive);
+        report.hypotheses.push(if contains {
+            exact_hypothesis(
+                "requested_root_region",
+                "the requested region contains (-inf,0]",
+                Ok("exact endpoint comparison".into()),
+            )
+        } else {
+            unresolved_hypothesis(
+                "requested_root_region",
+                "the requested region contains (-inf,0]",
+                "this theorem certifies only the closed nonpositive ray".into(),
+            )
+        });
+    }
+    let zero_text = format!(
+        "isolated zero indices {finite_zero_indices:?}; \
+             periodic zero classes {zero_residue_classes:?}"
+    );
+    report.certificate = Some(RouteCertificate::RationalPfRiordan(Box::new(certificate)));
+    Ok(report.finish(RealRootednessTheoremConclusion {
+        first_index: conclusion_first,
+        zero_residue_classes,
+        interlacing_from: None,
+        interlacing: None,
+        simple_roots: false,
+        root_region: Some(RootInterval::from_real(&RealInterval {
+            lower: None,
+            lower_closed: false,
+            upper: Some(Q::zero()),
+            upper_closed: true,
+        })),
+        statement: format!(
+            "every nonzero P_n, n >= {first}, has only real nonpositive zeros; \
+                 {zero_text}; no simplicity or interlacing asserted"
+        ),
+    }))
 }

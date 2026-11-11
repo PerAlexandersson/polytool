@@ -43,6 +43,11 @@ fn checked(record: &RecurrenceJson) -> RecurrenceProofDiscoveryReport {
     assert!(matches!(
         &theorems[8..],
         [] | [RealRootednessTheorem::RationalPfRiordan]
+            | [RealRootednessTheorem::DegreeLawReversal]
+            | [
+                RealRootednessTheorem::RationalPfRiordan,
+                RealRootednessTheorem::DegreeLawReversal
+            ]
     ));
     assert_eq!(report.lean_replay, "not_attempted");
     report

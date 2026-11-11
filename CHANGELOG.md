@@ -32,10 +32,16 @@
 - All-index `rational_pf_riordan` theorem route (Chen--Fu--Ruan Theorems 3(3)
   and 4): `F=d/(1-x z d K)` with nonzero rational PF `d,K` and `d(0)>0`.
   Exact Edrei decisions, real algebraic factors, repeated roots, `K(0)=0`,
-  certified padded reversals, parent menus and affine marker shifts are
-  supported. Certificates replay the full generating-function identity and
-  PF evidence. Zero rows are described exactly; roots are nonpositive,
+  parent menus and affine marker shifts are supported. Certificates separately
+  replay the full generating-function identity, Riordan form, each rational
+  PF criterion, the TNN product and the named row theorem. Text output shows
+  this chain and its closure steps. Zero rows are described exactly; roots are nonpositive,
   with no simplicity or interlacing claim.
+- Shared degree-law reversal closure (`degree_law_reversal`): exact inductive
+  degree bounds, rule and seed reversal, and root-region transport use the
+  same `DegreeLawTransform` and replay as index-section lifts. Discovery tries
+  positive slopes at most 3 and the nonrecursive theorem menu; the closure
+  theorem has no slope limit. No simplicity or interlacing is transferred.
 - Recurrence JSON metadata (#49, #50): `presentation` carries the replay
   boundary, exact leader zero strings, status, reason and starting index.
   `normalized_recurrence` (#48) adds the primitive integral identity while

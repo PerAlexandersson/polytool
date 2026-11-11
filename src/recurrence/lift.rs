@@ -193,6 +193,10 @@ pub use parent_theorems::{
 };
 // Index-section lift (RealRooted route `pathPower`).
 pub use parent_theorems::{
+    check_degree_law_reversal_theorem, DegreeLawReversalCertificate, DegreeLawTransform,
+    MAXIMUM_REVERSAL_DEGREE_SLOPE,
+};
+pub use parent_theorems::{
     check_index_section_lift_theorem, IndexSectionCertificate, IndexSectionTransform,
     MAX_INDEX_SECTION_PERIOD,
 };

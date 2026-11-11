@@ -354,6 +354,8 @@ pub enum VeroneseParentProofRoute {
     BinomialPerturbedEulerOrbit,
     /// [`check_rational_pf_riordan_theorem`] with nonpositive roots.
     RationalPfRiordan,
+    /// Shared degree-law reversal followed by a theorem of the parent menu.
+    DegreeLawReversal,
     /// A caller-supplied attestation.
     Attestation,
 }
@@ -379,6 +381,7 @@ impl VeroneseParentProofRoute {
             | VeroneseParentProofRoute::IndexSectionLift
             | VeroneseParentProofRoute::LagTwoEuler
             | VeroneseParentProofRoute::RationalPfRiordan
+            | VeroneseParentProofRoute::DegreeLawReversal
             | VeroneseParentProofRoute::BinomialPerturbedEulerOrbit
             | VeroneseParentProofRoute::FactorGauge => match self.theorem() {
                 Some(theorem) => theorem.as_str(),
@@ -423,6 +426,9 @@ impl VeroneseParentProofRoute {
             VeroneseParentProofRoute::IndexSectionLift => {
                 Some(RealRootednessTheorem::IndexSectionLift)
             }
+            VeroneseParentProofRoute::DegreeLawReversal => {
+                Some(RealRootednessTheorem::DegreeLawReversal)
+            }
             VeroneseParentProofRoute::RationalPfRiordan => {
                 Some(RealRootednessTheorem::RationalPfRiordan)
             }
@@ -459,6 +465,7 @@ impl VeroneseParentProofRoute {
             }
             RealRootednessTheorem::IndexSectionLift => VeroneseParentProofRoute::IndexSectionLift,
             RealRootednessTheorem::RationalPfRiordan => VeroneseParentProofRoute::RationalPfRiordan,
+            RealRootednessTheorem::DegreeLawReversal => VeroneseParentProofRoute::DegreeLawReversal,
             RealRootednessTheorem::FactorGauge => VeroneseParentProofRoute::FactorGauge,
         }
     }

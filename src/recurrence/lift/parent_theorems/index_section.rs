@@ -136,6 +136,10 @@ use super::super::veronese_search::{
     collect_exponent_vectors, parent_recurrence_from_characteristic, polynomial_row,
     solve_section_system, SeedSolve,
 };
+use super::degree_law_reversal::{
+    constant_coefficient_multipliers, degree_offset, degree_slope, reversed_multipliers,
+    reversed_region, transformed_rows,
+};
 use super::*;
 use crate::factorization::irreducible_factorization_monic_bivariate_with_budget;
 use crate::polynomial::Polynomial;
@@ -170,21 +174,9 @@ const SELF_CHECK_ROWS: usize = 3;
 /// checks to try.
 pub(super) const MAXIMUM_PARENT_START_DELAY: usize = 16;
 
-/// The transformation `T` of an [`IndexSectionCertificate`] (module
-/// documentation, "Transformed family").
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum IndexSectionTransform {
-    /// `S_m = P_(n_0 + s + m)`.
-    Identity,
-    /// `S_m(x) = x^(d m + e) P_(n_0 + s + m)(1/x)`.
-    Reversal {
-        /// `d`: every multiplier satisfies `deg a_k <= d k`.
-        degree_slope: usize,
-        /// `e`: `deg P_(n_0 + s + m) <= d m + e` for the seeds `m < r`.
-        degree_offset: usize,
-    },
-}
+/// The shared degree-law transformation of an index-section family.
+/// Its JSON shape is unchanged; all reversal checks use [`DegreeLawTransform`].
+pub type IndexSectionTransform = DegreeLawTransform;
 
 /// The exact data of a [`check_index_section_lift_theorem`] report: the
 /// section identity `P_(n_0 + s + m) = T(Q_(p m))` and the parent's
@@ -259,15 +251,17 @@ impl IndexSectionCertificate {
                 base + 1
             ));
         }
-        let transformed = match self.transform {
-            IndexSectionTransform::Identity => Some(multipliers.clone()),
-            IndexSectionTransform::Reversal { degree_slope, .. } => {
-                reversed_multipliers(&multipliers, degree_slope)
-            }
-        };
-        let Some(transformed) = transformed else {
-            return failed("a multiplier has degree above the recorded degree slope".into());
-        };
+        let rows = rule
+            .generate_rows_rational(seeds, first_index, self.exceptional_rows + order)
+            .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
+        let transformed_record = self.transform.apply(
+            rule,
+            first_index + self.exceptional_rows,
+            &rows[self.exceptional_rows..],
+        )?;
+        let (transformed_rule, _, transformed_seeds) = transformed_record.to_recurrence_parts()?;
+        let transformed = constant_coefficient_multipliers(&transformed_rule)
+            .map_err(RecurrenceError::VerificationFailed)?;
         let chi = characteristic_polynomial(&transformed);
         let (parent_rule, parent_first, parent_seeds) = self.parent.to_recurrence_parts()?;
         if parent_first != 0 || parent_seeds.len() != order {
@@ -292,19 +286,7 @@ impl IndexSectionCertificate {
         if !divides {
             return failed("psi(w) does not divide chi_T(w^p)".into());
         }
-        let rows = rule
-            .generate_rows_rational(seeds, first_index, self.exceptional_rows + order)
-            .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
-        let offset = match self.transform {
-            IndexSectionTransform::Identity => None,
-            IndexSectionTransform::Reversal {
-                degree_slope,
-                degree_offset,
-            } => Some((degree_slope, degree_offset)),
-        };
-        let Some(targets) = transformed_rows(&rows[self.exceptional_rows..], offset) else {
-            return failed("a transformed seed row is not a polynomial".into());
-        };
+        let targets: Vec<_> = transformed_seeds.into_iter().map(Polynomial::new).collect();
         let parent_rows = parent_rule
             .generate_rows_rational(&parent_seeds, 0, self.period * (order - 1) + 1)
             .map_err(|error| RecurrenceError::VerificationFailed(error.to_string()))?;
@@ -408,43 +390,6 @@ pub fn check_index_section_lift_theorem(
 // ---------------------------------------------------------------------------
 // Exact algebra
 // ---------------------------------------------------------------------------
-
-/// The multipliers `a_1, ..., a_r` of a rule `P_n = sum_k a_k(x) P_(n-k)`
-/// (lags without a term give `0`), or why the rule has another form.
-fn constant_coefficient_multipliers(
-    rule: &Recurrence,
-) -> Result<Vec<UnivariatePolynomial>, String> {
-    let shape = recurrence_shape(rule)?;
-    if shape.denominator.len() > 1 {
-        return Err("the left-hand factor depends on n".into());
-    }
-    let leading = shape.denominator[0].clone();
-    let order = shape.terms.keys().map(|&(lag, _)| lag).max().unwrap_or(0);
-    if order == 0 {
-        return Err("the rule has no term of positive lag".into());
-    }
-    let mut multipliers = vec![UnivariatePolynomial::zero(); order];
-    for (&(lag, derivative), coefficient) in &shape.terms {
-        if lag == 0 {
-            return Err("the rule has a term of lag 0".into());
-        }
-        if derivative != 0 {
-            return Err(format!(
-                "the rule has a derivative term (lag {lag}, derivative order {derivative})"
-            ));
-        }
-        if coefficient
-            .iter()
-            .skip(1)
-            .any(|row| row.iter().any(|c| !c.is_zero()))
-        {
-            return Err(format!("the multiplier of lag {lag} depends on n"));
-        }
-        let row = coefficient.first().cloned().unwrap_or_default();
-        multipliers[lag - 1] = Polynomial::new(vec_poly::scale(&row, &leading.recip()));
-    }
-    Ok(multipliers)
-}
 
 /// `z^r - sum_k b_k z^(r-k)` for `b = (b_1, ..., b_r)`.
 fn characteristic_polynomial(multipliers: &[UnivariatePolynomial]) -> BivariatePolynomial {
@@ -561,67 +506,6 @@ fn rational_root(value: &Q, power: usize) -> Option<Q> {
     let denominator = root_of(value.denom())?;
     let root = Q::new(numerator, denominator);
     Some(if value.is_negative() { -root } else { root })
-}
-
-/// The smallest `d` with `deg a_k <= d k` for every `k`.
-fn degree_slope(multipliers: &[UnivariatePolynomial]) -> usize {
-    multipliers
-        .iter()
-        .enumerate()
-        .filter_map(|(lag, a)| a.degree().map(|degree| degree.div_ceil(lag + 1)))
-        .max()
-        .unwrap_or(0)
-}
-
-/// `b_k(x) = x^(d k) a_k(1/x)`, or `None` when some `deg a_k > d k`.
-fn reversed_multipliers(
-    multipliers: &[UnivariatePolynomial],
-    slope: usize,
-) -> Option<Vec<UnivariatePolynomial>> {
-    multipliers
-        .iter()
-        .enumerate()
-        .map(|(lag, a)| {
-            if a.is_zero() {
-                Some(UnivariatePolynomial::zero())
-            } else {
-                a.reverse_with_degree(slope * (lag + 1))
-            }
-        })
-        .collect()
-}
-
-/// The transformed rows `S_m` of `rows[m] = P_(n_0 + s + m)`: unchanged,
-/// or `x^(d m + e) P(1/x)` for `Some((d, e))`; `None` when a reversed row is
-/// not a polynomial.
-fn transformed_rows(
-    rows: &[Vec<Q>],
-    reversal: Option<(usize, usize)>,
-) -> Option<Vec<UnivariatePolynomial>> {
-    rows.iter()
-        .enumerate()
-        .map(|(m, row)| {
-            let row = Polynomial::new(row.clone());
-            match reversal {
-                None => Some(row),
-                Some(_) if row.is_zero() => Some(row),
-                Some((slope, offset)) => row.reverse_with_degree(slope * m + offset),
-            }
-        })
-        .collect()
-}
-
-/// The smallest `e >= 0` with `deg rows[m] <= d m + e`.
-fn degree_offset(rows: &[Vec<Q>], slope: usize) -> usize {
-    rows.iter()
-        .enumerate()
-        .filter_map(|(m, row)| {
-            Polynomial::new(row.clone())
-                .degree()
-                .map(|degree| degree.saturating_sub(slope * m))
-        })
-        .max()
-        .unwrap_or(0)
 }
 
 /// The parent seeds `v` with `Q_(p m) = targets[m]`, `m < r`, when the
@@ -929,38 +813,6 @@ fn proves_every_row(report: &RealRootednessTheoremReport) -> bool {
             .conclusion
             .as_ref()
             .is_some_and(|conclusion| !conclusion.has_zero_residue_classes())
-}
-
-/// The region of the rows `x^D S(1/x)` from a region of the rows `S`
-/// (module documentation, "Root region").
-fn reversed_region(region: &RealInterval) -> Option<RealInterval> {
-    if let Some(upper) = region.upper.as_ref().filter(|u| !u.is_positive()) {
-        let (lower, lower_closed) = if upper.is_zero() {
-            (None, false)
-        } else {
-            (Some(upper.recip()), region.upper_closed)
-        };
-        return Some(RealInterval {
-            lower,
-            lower_closed,
-            upper: Some(Q::zero()),
-            upper_closed: true,
-        });
-    }
-    if let Some(lower) = region.lower.as_ref().filter(|l| !l.is_negative()) {
-        let (upper, upper_closed) = if lower.is_zero() {
-            (None, false)
-        } else {
-            (Some(lower.recip()), region.lower_closed)
-        };
-        return Some(RealInterval {
-            lower: Some(Q::zero()),
-            lower_closed: true,
-            upper,
-            upper_closed,
-        });
-    }
-    None
 }
 
 // ---------------------------------------------------------------------------
