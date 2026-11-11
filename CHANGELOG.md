@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Degree-law reversal now runs after direct routes and lifts, tries only the
+  minimal admissible slope (guarded by 3), and skips identical records and
+  invariant shape failures. All-seed Riordan GF checks avoid start retries
+  and reuse their constructed GF. Replay errors name the failing chain step.
+
 - Recurrence presentation (#49, #50): the seed count and stated range now
   follow exact replay on all supplied rows and include every row through the
   last nonnegative integer zero of the left-hand factor. Missing seeds are
@@ -40,7 +45,7 @@
 - Shared degree-law reversal closure (`degree_law_reversal`): exact inductive
   degree bounds, rule and seed reversal, and root-region transport use the
   same `DegreeLawTransform` and replay as index-section lifts. Discovery tries
-  positive slopes at most 3 and the nonrecursive theorem menu; the closure
+  only the minimal slope, guarded by 3, and the nonrecursive theorem menu; the closure
   theorem has no slope limit. No simplicity or interlacing is transferred.
 - Recurrence JSON metadata (#49, #50): `presentation` carries the replay
   boundary, exact leader zero strings, status, reason and starting index.

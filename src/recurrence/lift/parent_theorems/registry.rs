@@ -29,9 +29,9 @@ pub(super) enum StartPolicy {
     /// not apply, retry with the start moved `1, ..., maximum_start_delay`
     /// rows later.
     MovesStart,
-    /// The report at the supplied seeds is final: the check passes the
-    /// start-delay bound to its sub-checks (the residue classes, the parent
-    /// family of an index section), which move their own starts.
+    /// The report at the supplied seeds is final: either it proves an
+    /// all-index identity unaffected by extending the seed prefix, or it
+    /// passes the start-delay bound to sub-checks that move their own starts.
     OwnStarts,
 }
 
@@ -242,6 +242,7 @@ mod tests {
             [
                 RealRootednessTheorem::ResidueClassSubsequences,
                 RealRootednessTheorem::IndexSectionLift,
+                RealRootednessTheorem::RationalPfRiordan,
                 RealRootednessTheorem::DegreeLawReversal
             ]
         );

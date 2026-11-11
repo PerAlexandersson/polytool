@@ -194,41 +194,65 @@ impl RationalPfRiordanCertificate {
         first: usize,
         seeds: &[Vec<Q>],
     ) -> Result<Vec<LiftHypothesis>, RecurrenceError> {
+        let gf = rational_generating_function(rule, first, seeds).map_err(|e| {
+            RecurrenceError::VerificationFailed(format!(
+                "chain step `generating_function_identity`: {e}"
+            ))
+        })?;
+        self.steps_against_generating_function(&gf, seeds.len())
+    }
+
+    fn steps_against_generating_function(
+        &self,
+        gf: &RationalGeneratingFunction,
+        seed_count: usize,
+    ) -> Result<Vec<LiftHypothesis>, RecurrenceError> {
         let failed = |what: &str| RecurrenceError::VerificationFailed(what.into());
+        let first = gf.first_index;
         // Step 1: recurrence/seed identity, independently of the Riordan shape.
-        let gf = rational_generating_function(rule, first, seeds)?;
-        let (n, d) = gf_polynomials(&gf)?;
-        let (m, e) = gf_polynomials(&self.generating_function)?;
+        let (n, d) = gf_polynomials(gf)?;
+        let (m, e) = gf_polynomials(&self.generating_function)
+            .map_err(|e| failed(&format!("chain step `generating_function_identity`: {e}")))?;
         if gf.first_index != self.generating_function.first_index
             || n.multiply(&e) != m.multiply(&d)
         {
-            return Err(failed("generating-function identity N E = M D failed"));
+            return Err(failed(
+                "chain step `generating_function_identity`: N E = M D failed",
+            ));
         }
         // Step 2: the reduced Riordan identity (including h = z d K).
         if riordan_decomposition(&self.generating_function).as_ref() != Some(&self.decomposition) {
-            return Err(failed("reduced Riordan identity changed"));
+            return Err(failed(
+                "chain step `riordan_identity`: reduced Riordan identity changed",
+            ));
         }
         // Steps 3 and 4: separately replay the exact rational PF criteria.
         if check_rational_polya_frequency(&self.decomposition.d)? != self.d_evidence
             || !self.d_evidence.is_polya_frequency
             || self.d_evidence.valuation != Some(0)
         {
-            return Err(failed("Edrei criterion for d or d(0)>0 failed"));
+            return Err(failed(
+                "chain step `d_polya_frequency`: Edrei criterion or d(0)>0 failed",
+            ));
         }
         if check_rational_polya_frequency(&self.decomposition.k)? != self.k_evidence
             || !self.k_evidence.is_polya_frequency
         {
-            return Err(failed("Edrei criterion for K failed"));
+            return Err(failed(
+                "chain step `k_polya_frequency`: Edrei criterion failed",
+            ));
         }
         // The final two steps are the fixed theorems below, with these exact
         // prerequisites. No finite matrix truncation is used as proof.
         if zero_rows(&self.decomposition, first).0 != self.finite_zero_indices {
-            return Err(failed("exact zero-row support changed"));
+            return Err(failed(
+                "chain step `rows_polya_frequency`: exact zero-row support changed",
+            ));
         }
         let step = |name, theorem, evidence| exact_hypothesis(name, theorem, Ok(evidence));
         Ok(vec![
             step("generating_function_identity", "Formal generating-function identity from the rule and every seed",
-                format!("Formal series identity: F = {}; N E = M D checked with all {} seeds", self.generating_function, seeds.len())),
+                format!("Formal series identity: F = {}; N E = M D checked with all {} seeds", self.generating_function, seed_count)),
             step("riordan_identity", "Riordan coefficient identity A[n,k]=[z^n]d(z)(z d(z)K(z))^k",
                 format!("Riordan identity: F=d/(1-x z d K); reduced d = {}; K = {}", self.decomposition.d, self.decomposition.k)),
             step("d_polya_frequency", "Edrei generating-function theorem, rational specialization (1953)",
@@ -317,7 +341,9 @@ pub fn check_rational_pf_riordan_theorem(
 pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     theorem: RealRootednessTheorem::RationalPfRiordan,
     check_at_supplied_seeds: rational_pf_riordan_report,
-    start_policy: StartPolicy::MovesStart,
+    // Adding generated seed rows leaves the all-seed rational GF unchanged.
+    // There is no new induction start to search for this all-index theorem.
+    start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
     certificate_name: Some("rational PF Riordan"),
     discovery: DiscoveryPolicy::WhenApplicable,
@@ -340,10 +366,13 @@ pub(super) fn verify_certificate_in_report(
         .map_err(|e| RecurrenceError::VerificationFailed(e.to_string()))?;
     let (rule, _) = rule_with_x_free_left_hand_factor(&rule)?;
     let steps = certificate.replay_steps(&rule, first, &rows)?;
-    if report.hypotheses.get(..steps.len()) != Some(steps.as_slice()) {
-        return Err(RecurrenceError::VerificationFailed(
-            "Riordan proof chain changed".into(),
-        ));
+    if let Some(step) = mismatched_hypothesis(
+        &report.hypotheses[..report.hypotheses.len().min(steps.len())],
+        &steps,
+    ) {
+        return Err(RecurrenceError::VerificationFailed(format!(
+            "chain step `{step}`: Riordan proof chain changed"
+        )));
     }
     Ok(())
 }
@@ -424,7 +453,10 @@ fn rational_pf_riordan_report(
         k_evidence,
         finite_zero_indices: finite_zero_indices.clone(),
     };
-    report.hypotheses = certificate.replay_steps(rule, first, seeds)?;
+    // The builder has just established this GF from the rule and all seeds;
+    // reuse it here. Independent replay reconstructs it afresh.
+    report.hypotheses = certificate
+        .steps_against_generating_function(&certificate.generating_function, seeds.len())?;
     if let Some(region) = &options.root_region {
         let contains =
             region.lower.is_none() && region.upper.as_ref().is_none_or(Signed::is_positive);

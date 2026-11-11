@@ -77,13 +77,19 @@ all multiplicities. These are finite exact decisions of the theorem's
 hypotheses, rather than finite checks of its conclusion.
 
 The shared `degree_law_reversal` closure tries
-`x^(a*m+b) P_(first_index+m)(1/x)` while the direct theorem menu is unproved.
-Its documented search bound is positive slopes at most
-`MAXIMUM_REVERSAL_DEGREE_SLOPE` (3), starting at the smallest slope allowed
-by the lag multipliers, with the smallest offset allowed by every seed.
-The transformed rule and every seed are exact. Each nonrecursive theorem
-route can prove the transformed family, with its usual induction-start
-retries; section and reversal searches are not nested in that menu.
+`x^(a*m+b) P_(first_index+m)(1/x)` after every direct route and direct lift,
+including affine coordinates, has failed. We use only the canonical reversal:
+the least integer slope allowed by the lag multipliers and the least offset
+allowed by every seed. The slope can be zero; `MAXIMUM_REVERSAL_DEGREE_SLOPE`
+(3) is a guard on this minimum, not a loop over padded reversals.
+We skip identities with direct records, including already tried index shifts,
+and theorem shapes that reversal cannot enable. The exact transformed rule
+and every seed go to the eligible nonrecursive theorem routes, with their
+usual start retries. The Riordan theorem needs no such retries: extending the
+prescribed prefix by generated rows leaves its all-seed rational GF unchanged.
+We reuse that constructed GF when recording its identity step; independent
+certificate replay reconstructs it afresh. Section and reversal searches
+are not nested in that menu.
 `DegreeLawTransform` is also the index-section transform (the public alias
 `IndexSectionTransform` retains its JSON shape). Both certificates replay
 the same inductive degree bound and rule/seed reversal. Index sections keep

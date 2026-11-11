@@ -10,9 +10,6 @@
 //!    eight are always recorded, those of the RealRooted row routes, the
 //!    index-section lift, factor gauge and positive lag-two Euler only where the rule has their
 //!    form (status other than `not_applicable`);
-//!    then the shared degree-law reversal closure of the nonrecursive
-//!    theorem menu, only while the record is unproved (positive slopes at
-//!    most [`MAXIMUM_REVERSAL_DEGREE_SLOPE`]);
 //! 2. **tail**: when no theorem proves the record and one of its first rows
 //!    (the seeds and the rows of the induction-start window) is zero or not
 //!    real-rooted, the same theorems on the *tail* record that starts after
@@ -41,7 +38,11 @@
 //!    rule), depth one; a proof is mapped back (root region
 //!    `alpha R + beta`, interlacing with its orientation).  Bounded by
 //!    [`AffineCoordinateOptions`]; see the module `affine_coordinates` and
-//!    [`AffineCoordinateSearch`].
+//!    [`AffineCoordinateSearch`];
+//! 6. **canonical reversal**: after every direct stage above fails, the
+//!    nonrecursive theorem menu on the minimal degree-law reversal, guarded
+//!    by [`MAXIMUM_REVERSAL_DEGREE_SLOPE`]. Identical records already tried
+//!    directly, including index shifts, are skipped.
 //!
 //! A rule with an inhomogeneous term is matched by no theorem: the report
 //! says so with the status `not_applicable` and
@@ -474,6 +475,39 @@ pub fn discover_recurrence_proofs_with_stage_options(
          (not_applicable: inhomogeneous)"
             .to_string()
     }));
+    // Reversal is a final closure, after all direct routes and direct lifts.
+    if report.status != "proved" && degree_law_reversal::eligible_rule(&rule) {
+        let mut tried = vec![&report.recurrence];
+        if let Some(tail) = &report.tail {
+            tried.push(&tail.recurrence);
+        }
+        if let Some(search) = &report.alternative_representations {
+            tried.extend(
+                search
+                    .alternatives
+                    .iter()
+                    .filter(|a| a.equality.is_certified())
+                    .map(|a| &a.equality.alternative),
+            );
+        }
+        if let Some(search) = &report.affine_coordinates {
+            tried.extend(search.coordinates.iter().map(|c| &c.recurrence));
+            tried.extend(
+                search
+                    .coordinates
+                    .iter()
+                    .filter_map(|c| c.tail.as_ref().map(|t| &t.recurrence)),
+            );
+        }
+        if degree_law_reversal::already_tried(&rule, first_index, &seeds, &tried)? {
+            return Ok(report);
+        }
+        let attempt = check_degree_law_reversal_theorem(&rule, first_index, &seeds, options)?;
+        if degree_law_reversal::ROUTE.discovery.records(&attempt) {
+            report.attempts.push(attempt);
+            report.finish_summary(None);
+        }
+    }
     Ok(report)
 }
 
@@ -514,10 +548,7 @@ fn run_theorems(
     // rule has its form leaves the reports of other rules unchanged.
     let mut attempts = Vec::new();
     for route in &ROUTES {
-        // A shared closure is needed only while the direct menu is unproved.
-        if route.theorem == RealRootednessTheorem::DegreeLawReversal
-            && attempts.iter().any(RealRootednessTheoremReport::is_proved)
-        {
+        if route.theorem == RealRootednessTheorem::DegreeLawReversal {
             continue;
         }
         let attempt =
@@ -734,9 +765,17 @@ impl RecurrenceProofDiscoveryReport {
         // reference: the recorded attempts must be of their theorems (a
         // recomputation that proves more is fine).
         let reference = run_theorems(&rule, first_index, &seeds, &options)?;
-        verify_attempts(&self.attempts, &reference, &plain, &options)?;
+        let mut direct = self.attempts.clone();
+        let closure = direct
+            .last()
+            .filter(|a| a.theorem == RealRootednessTheorem::DegreeLawReversal)
+            .cloned();
+        if closure.is_some() {
+            direct.pop();
+        }
+        verify_attempts(&direct, &reference, &plain, &options)?;
         let inhomogeneous = rule.inhomogeneous.as_ref().is_some_and(|g| !g.is_zero());
-        let proved_directly = self.attempts.iter().any(|a| a.is_proved());
+        let proved_directly = direct.iter().any(|a| a.is_proved());
         match &self.tail {
             None => {}
             Some(_) if proved_directly || inhomogeneous => {
@@ -847,6 +886,22 @@ impl RecurrenceProofDiscoveryReport {
             search.verify(
                 &plain,
                 self.tail.as_ref().map(|tail| &tail.recurrence),
+                &options,
+            )?;
+        }
+        if let Some(closure) = &closure {
+            let mut before_closure = self.clone();
+            before_closure.attempts = direct;
+            before_closure.finish_summary(None);
+            if before_closure.status == "proved" || inhomogeneous {
+                return failed("reversal is recorded before a direct proof or lift");
+            }
+            let reference =
+                check_degree_law_reversal_theorem(&rule, first_index, &seeds, &options)?;
+            verify_attempts(
+                std::slice::from_ref(closure),
+                std::slice::from_ref(&reference),
+                &plain,
                 &options,
             )?;
         }

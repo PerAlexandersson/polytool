@@ -564,10 +564,13 @@ for d and for K, TNN product (Cauchy--Binet), and Chen--Fu--Ruan row theorem.
 Zero rows are reported exactly; no simplicity or interlacing is claimed.
 The route is available to index-section parents and the affine marker shifts.
 
-Shared reversal closure (degree_law_reversal, while the direct menu is unproved):
+Shared reversal closure (degree_law_reversal, after direct routes and lifts):
 x^(a*m+b) P_(first_index+m)(1/x), with an inductive degree bound from the lag
-multipliers and every seed. Search bound: positive slopes at most 3, minimal
-seed offset; run the nonrecursive theorem menu in the reversed coordinate.
+multipliers and every seed. Try only the minimal admissible slope (zero
+allowed), guarded by 3, and minimal seed offset. Skip already tried records
+(up to index shift) and invariant shape failures; run eligible nonrecursive
+theorems in the reversed coordinate. The Riordan GF is computed once; extending
+the seed prefix with generated rows cannot change it.
 The transform, certificate shape and replay are shared with index sections.
 Reciprocal nonzero roots and possible extra roots at 0; zero rows preserved.
 The text report prints the named theorem chain and each closure separately.

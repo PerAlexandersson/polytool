@@ -6,18 +6,20 @@
 //! Reversal is an involution, preserves zero rows and real-rootedness, and
 //! can add roots only at zero. It need not preserve simplicity or interlacing.
 //!
-//! Discovery tries slopes from the smallest admissible positive slope through
-//! [`MAXIMUM_REVERSAL_DEGREE_SLOPE`] (3), with the smallest seed offset.
-//! This is a search bound, not a restriction of the closure theorem. Each
-//! transformed record is sent to the nonrecursive theorem routes, in registry
+//! Discovery tries only the minimal admissible slope (zero is allowed), with
+//! the smallest seed offset, after direct routes and direct lifts fail.
+//! [`MAXIMUM_REVERSAL_DEGREE_SLOPE`] (3) guards that minimal slope; it is a
+//! search bound, not a restriction of the closure theorem. The transformed
+//! record is sent to eligible nonrecursive theorem routes, in registry
 //! order, with their usual start retries. No section or reversal search is
-//! nested inside that menu. Index sections use the same transform and replay,
-//! with their existing smallest-slope search (including slope zero).
+//! nested inside that menu. Identical direct records, also up to an already
+//! tried index shift, are skipped. Index sections use the same transform and
+//! replay, with their existing smallest-slope search (including slope zero).
 
 use super::*;
 use crate::Polynomial;
 
-/// Largest slope tried by the shared reversal discovery closure.
+/// Guard on the minimal slope of the shared reversal discovery closure.
 pub const MAXIMUM_REVERSAL_DEGREE_SLOPE: usize = 3;
 
 /// A degree-law coordinate change; indices `m` are relative to the first row.
@@ -143,8 +145,88 @@ impl DegreeLawReversalCertificate {
 }
 
 fn eligible_inner_route(route: &TheoremRoute) -> bool {
-    route.start_policy == StartPolicy::MovesStart
-        && route.theorem != RealRootednessTheorem::DegreeLawReversal
+    !matches!(
+        route.theorem,
+        RealRootednessTheorem::ResidueClassSubsequences
+            | RealRootednessTheorem::IndexSectionLift
+            | RealRootednessTheorem::DegreeLawReversal
+    )
+}
+
+/// Cheap eligibility gate before any transformed record or GF is built.
+pub(super) fn eligible_rule(rule: &Recurrence) -> bool {
+    rule.inhomogeneous.is_none()
+        && !rule.terms.is_empty()
+        && rule.terms.iter().all(|t| {
+            t.offset > 0
+                && t.deriv_order == 0
+                && !t.is_alternating()
+                && t.coeff
+                    .coeffs
+                    .iter()
+                    .skip(1)
+                    .all(|r| r.iter().all(Zero::is_zero))
+        })
+        && rule
+            .denominator
+            .as_ref()
+            .is_none_or(|p| p.coeffs.iter().skip(1).all(|r| r.iter().all(Zero::is_zero)))
+}
+
+// An exact equal-order recurrence check, allowing different first indices
+// and prescribed prefix lengths. All rows through both rule starts agree;
+// the common index-free rule then proves every later equality by induction.
+fn same_family_up_to_index_shift(
+    left: &RecurrenceJson,
+    right: &RecurrenceJson,
+) -> Result<bool, RecurrenceError> {
+    let (r, first, seeds) = right.to_recurrence_parts()?;
+    let Ok((r, _)) = rule_with_x_free_left_hand_factor(&r) else {
+        return Ok(false);
+    };
+    if !eligible_rule(&r) {
+        return Ok(false);
+    }
+    let right = DegreeLawTransform::Identity.apply(&r, first, &seeds)?;
+    if left.recurrence != right.recurrence {
+        return Ok(false);
+    }
+    let (l, lf, ls) = left.to_recurrence_parts()?;
+    let count = ls.len().max(seeds.len());
+    let a = l.generate_rows_rational(&ls, lf, count);
+    let b = r.generate_rows_rational(&seeds, first, count);
+    Ok(matches!((a,b), (Ok(a),Ok(b)) if a==b))
+}
+
+/// Skip a canonical reversal already covered by a direct coordinate or tail.
+pub(super) fn already_tried(
+    rule: &Recurrence,
+    first: usize,
+    seeds: &[Vec<Q>],
+    tried: &[&RecurrenceJson],
+) -> Result<bool, RecurrenceError> {
+    let Ok((rule, _)) = rule_with_x_free_left_hand_factor(rule) else {
+        return Ok(true);
+    };
+    if !eligible_rule(&rule) {
+        return Ok(true);
+    }
+    let m = constant_coefficient_multipliers(&rule).map_err(RecurrenceError::Unsupported)?;
+    let slope = degree_slope(&m);
+    if slope > MAXIMUM_REVERSAL_DEGREE_SLOPE {
+        return Ok(true);
+    }
+    let reversed = DegreeLawTransform::Reversal {
+        degree_slope: slope,
+        degree_offset: degree_offset(seeds, slope),
+    }
+    .apply(&rule, first, seeds)?;
+    for record in tried {
+        if same_family_up_to_index_shift(&reversed, record)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Prove a family by a theorem on its degree-law reversal (module documentation).
@@ -197,77 +279,97 @@ fn reversal_report(
         seeds,
         options,
     );
+    if !eligible_rule(rule) {
+        return Ok(report.not_applicable("reversal needs an index-free rule without derivatives"));
+    }
     let multipliers = match constant_coefficient_multipliers(rule) {
         Ok(m) => m,
         Err(reason) => return Ok(report.not_applicable(reason)),
     };
-    for degree_slope in degree_slope(&multipliers).max(1)..=MAXIMUM_REVERSAL_DEGREE_SLOPE {
-        let transform = DegreeLawTransform::Reversal {
-            degree_slope,
-            degree_offset: degree_offset(seeds, degree_slope),
-        };
-        let Ok(transformed) = transform.apply(rule, first, seeds) else {
-            continue;
-        };
-        let (inner_rule, inner_first, inner_seeds) = transformed.to_recurrence_parts()?;
-        let inner_options = RealRootednessTheoremOptions {
-            root_region: None,
-            ..options.clone()
-        };
-        for candidate in ROUTES.iter().filter(|r| eligible_inner_route(r)) {
-            let proof = check_with_first_proving_start(
-                candidate.theorem,
-                &inner_rule,
-                inner_first,
-                &inner_seeds,
-                &inner_options,
-            )?;
-            if !proof.is_proved() {
-                continue;
-            }
-            let inner = proof.conclusion.as_ref().unwrap();
-            let region = inner
-                .root_region
-                .as_ref()
-                .and_then(|r| r.at(0).ok().filter(|_| r.is_index_independent()))
-                .and_then(|r| reversed_region(&r));
-            if options.root_region.as_ref().is_some_and(|requested| {
-                region
-                    .as_ref()
-                    .is_none_or(|certified| !requested_region_contains(requested, certified))
-            }) {
-                continue;
-            }
-            let mut conclusion = inner.clone();
-            conclusion.root_region = region.as_ref().map(RootInterval::from_real);
-            conclusion.simple_roots = false;
-            conclusion.interlacing = None;
-            conclusion.interlacing_from = None;
-            conclusion.statement = format!("degree-law reversal S_m=x^({degree_slope} m+{}) P_({first}+m)(1/x); reciprocal nonzero roots and possible roots at 0; {}", degree_offset(seeds, degree_slope), inner.statement);
-            let mut report = report;
-            report.normal_form = conclusion.statement.clone();
-            report.hypotheses.push(exact_hypothesis(
-                "degree_law_reversal",
-                "polynomial reversal preserves real-rootedness and zero rows",
-                Ok(report.normal_form.clone()),
-            ));
-            report.hypotheses.push(exact_hypothesis(
-                "transformed_theorem",
-                "a named theorem proves the reversed family",
-                Ok(format!("{}: {}", proof.theorem.as_str(), proof.reference)),
-            ));
-            report.certificate = Some(RouteCertificate::DegreeLawReversal(Box::new(
-                DegreeLawReversalCertificate {
-                    transform,
-                    transformed_proof: Box::new(proof),
-                    maximum_start_delay: options.maximum_start_delay,
-                },
-            )));
-            return Ok(report.finish(conclusion));
-        }
+    let degree_slope = degree_slope(&multipliers);
+    if degree_slope > MAXIMUM_REVERSAL_DEGREE_SLOPE {
+        return Ok(report.not_applicable("minimal reversal slope exceeds the shared search guard"));
     }
-    Ok(report
-        .not_applicable("no theorem proves a degree-law reversal within the shared slope bound"))
+    let transform = DegreeLawTransform::Reversal {
+        degree_slope,
+        degree_offset: degree_offset(seeds, degree_slope),
+    };
+    let transformed = transform.apply(rule, first, seeds)?;
+    let original = DegreeLawTransform::Identity.apply(rule, first, seeds)?;
+    if transformed == original {
+        return Ok(report.not_applicable("canonical reversal is identical to the direct record"));
+    }
+    let (inner_rule, inner_first, inner_seeds) = transformed.to_recurrence_parts()?;
+    let inner_options = RealRootednessTheoremOptions {
+        root_region: None,
+        ..options.clone()
+    };
+    let order = multipliers.len();
+    let single_lag = multipliers.iter().filter(|p| !p.is_zero()).count() == 1;
+    for candidate in ROUTES.iter().filter(|r| eligible_inner_route(r)) {
+        use RealRootednessTheorem as T;
+        let possible = match candidate.theorem {
+            T::ProductRecurrence | T::IteratedPreserver => single_lag,
+            T::LiuWang | T::MaWangInterval => order == 1,
+            T::ThreeTermRecurrence | T::LiuWangDerivativeLag | T::LiuWangThreeTerm => order <= 2,
+            // These shapes require nonzero derivative operators.
+            T::LagTwoEuler | T::BinomialPerturbedEulerOrbit => false,
+            _ => true,
+        };
+        if !possible {
+            continue;
+        }
+        let proof = check_with_first_proving_start(
+            candidate.theorem,
+            &inner_rule,
+            inner_first,
+            &inner_seeds,
+            &inner_options,
+        )?;
+        if !proof.is_proved() {
+            continue;
+        }
+        let inner = proof.conclusion.as_ref().unwrap();
+        let region = inner
+            .root_region
+            .as_ref()
+            .and_then(|r| r.at(0).ok().filter(|_| r.is_index_independent()))
+            .and_then(|r| reversed_region(&r));
+        if options.root_region.as_ref().is_some_and(|requested| {
+            region
+                .as_ref()
+                .is_none_or(|certified| !requested_region_contains(requested, certified))
+        }) {
+            continue;
+        }
+        let mut conclusion = inner.clone();
+        conclusion.root_region = region.as_ref().map(RootInterval::from_real);
+        conclusion.simple_roots = false;
+        conclusion.interlacing = None;
+        conclusion.interlacing_from = None;
+        conclusion.statement = format!("degree-law reversal S_m=x^({degree_slope} m+{}) P_({first}+m)(1/x); reciprocal nonzero roots and possible roots at 0; {}", degree_offset(seeds, degree_slope), inner.statement);
+        let mut report = report;
+        report.normal_form = conclusion.statement.clone();
+        report.hypotheses.push(exact_hypothesis(
+            "degree_law_reversal",
+            "polynomial reversal preserves real-rootedness and zero rows",
+            Ok(report.normal_form.clone()),
+        ));
+        report.hypotheses.push(exact_hypothesis(
+            "transformed_theorem",
+            "a named theorem proves the reversed family",
+            Ok(format!("{}: {}", proof.theorem.as_str(), proof.reference)),
+        ));
+        report.certificate = Some(RouteCertificate::DegreeLawReversal(Box::new(
+            DegreeLawReversalCertificate {
+                transform,
+                transformed_proof: Box::new(proof),
+                maximum_start_delay: options.maximum_start_delay,
+            },
+        )));
+        return Ok(report.finish(conclusion));
+    }
+    Ok(report.not_applicable("no theorem proves the canonical degree-law reversal"))
 }
 
 pub(super) fn verify_certificate_in_report(
@@ -408,4 +510,40 @@ pub(super) fn reversed_region(region: &RealInterval) -> Option<RealInterval> {
         });
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn already_tried_recognizes_index_shifts_and_extended_seed_prefixes() {
+        let q = |n: i64| Q::from_integer(n.into());
+        let rule = Recurrence {
+            terms: vec![RecurrenceTerm::new(
+                1,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(1), q(2)]]),
+            )],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let seeds = vec![vec![q(1)]];
+        let transform = DegreeLawTransform::Reversal {
+            degree_slope: 1,
+            degree_offset: 0,
+        };
+        let reversed = transform.apply(&rule, 0, &seeds).unwrap();
+        let (r, _, s) = reversed.to_recurrence_parts().unwrap();
+        let extended = r.generate_rows_rational(&s, 9, 3).unwrap();
+        let shifted = RecurrenceJson::from_recurrence_rational(&r, 9, &extended, None);
+        assert!(already_tried(&rule, 0, &seeds, &[&shifted]).unwrap());
+        let mut changed = extended;
+        changed[2][0] += q(1);
+        let different = RecurrenceJson::from_recurrence_rational(&r, 9, &changed, None);
+        assert!(!already_tried(&rule, 0, &seeds, &[&different]).unwrap());
+        let mut derivative = rule;
+        derivative.terms[0].deriv_order = 1;
+        assert!(!eligible_rule(&derivative));
+    }
 }

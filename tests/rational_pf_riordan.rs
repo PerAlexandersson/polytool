@@ -252,8 +252,78 @@ fn every_conclusion_field_and_each_named_proof_step_is_replayed() {
     for index in 0..6 {
         let mut forged = report.clone();
         forged.hypotheses[index].evidence.push_str(" forged");
-        assert!(forged.verify().is_err(), "accepted altered step {index}");
+        let error = forged.verify().unwrap_err().to_string();
+        assert!(error.contains(&report.hypotheses[index].name), "{error}");
     }
+}
+
+#[test]
+fn certificate_replay_errors_name_the_failing_chain_step() {
+    let (rule, seeds) = family(&[1, 1], &[1, -2, 1], &[1, 1], &[1]);
+    let report = check(&rule, &seeds);
+    let original = serde_json::to_value(&report).unwrap();
+    for (pointer, step) in [
+        (
+            "/certificate/rational_pf_riordan/generating_function/numerator/0/0",
+            "generating_function_identity",
+        ),
+        (
+            "/certificate/rational_pf_riordan/decomposition/k/numerator/0",
+            "riordan_identity",
+        ),
+        (
+            "/certificate/rational_pf_riordan/d_evidence/numerator_layers/0/polynomial/0",
+            "d_polya_frequency",
+        ),
+        (
+            "/certificate/rational_pf_riordan/k_evidence/numerator_layers/0/polynomial/0",
+            "k_polya_frequency",
+        ),
+    ] {
+        let mut value = original.clone();
+        *value.pointer_mut(pointer).unwrap() = serde_json::json!("99");
+        let forged: RealRootednessTheoremReport = serde_json::from_value(value).unwrap();
+        let error = forged.verify().unwrap_err().to_string();
+        assert!(error.contains(step), "{step}: {error}");
+    }
+}
+
+#[test]
+fn canonical_reversal_skips_identical_families_and_uses_the_minimal_slope() {
+    let r = Recurrence {
+        terms: vec![RecurrenceTerm::new(
+            1,
+            0,
+            BivarPoly::from_coefficients_normalized(vec![p(&[1, 1])]),
+        )],
+        denominator: None,
+        inhomogeneous: None,
+    };
+    let same = check_degree_law_reversal_theorem(&r, 0, &[p(&[1])], &Default::default()).unwrap();
+    assert_eq!(same.status, RealRootednessTheoremStatus::NotApplicable);
+    assert!(same.normal_form.contains("identical"));
+    // Constant multipliers have canonical slope zero, rather than a padded
+    // positive slope; this transform exchanges a nonsymmetric seed's roots.
+    let r = Recurrence {
+        terms: vec![RecurrenceTerm::new(
+            1,
+            0,
+            BivarPoly::from_coefficients_normalized(vec![p(&[2])]),
+        )],
+        denominator: None,
+        inhomogeneous: None,
+    };
+    let report =
+        check_degree_law_reversal_theorem(&r, 0, &[p(&[1, 2])], &Default::default()).unwrap();
+    assert!(report.is_proved());
+    assert_eq!(
+        report.degree_law_reversal_certificate().unwrap().transform,
+        DegreeLawTransform::Reversal {
+            degree_slope: 0,
+            degree_offset: 1
+        }
+    );
+    report.verify().unwrap();
 }
 
 #[test]
@@ -375,6 +445,15 @@ fn target_routes_reversals_sections_and_marker_shift_compose() {
             "{id}: {}",
             serde_json::to_string(&report).unwrap()
         );
+        if id == "A098172" {
+            assert!(report.alternative_representations.is_some());
+            assert!(report.catalog_lifts.is_some());
+            assert!(report.affine_coordinates.is_some());
+            assert_eq!(
+                report.attempts.last().unwrap().theorem,
+                RealRootednessTheorem::DegreeLawReversal
+            );
+        }
         report.verify().unwrap();
     }
 }

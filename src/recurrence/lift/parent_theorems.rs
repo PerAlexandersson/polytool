@@ -84,9 +84,9 @@
 //!   the six-step Edrei, Cauchy--Binet and Chen--Fu--Ruan proof chain,
 //!   including noninvertible arrays and exact zero-row descriptions.
 //! - [`check_degree_law_reversal_theorem`]: the shared degree-law reversal
-//!   closure of the nonrecursive theorem menu, while no direct theorem
-//!   proves the family; the same [`DegreeLawTransform`] and replay as index
-//!   sections. Discovery tries positive slopes at most 3.
+//!   closure of the nonrecursive theorem menu, after direct routes and lifts
+//!   fail; the same [`DegreeLawTransform`] and replay as index
+//!   sections. Discovery tries the minimal slope, guarded by 3.
 //!
 //! Each returns a [`RealRootednessTheoremReport`]: the theorem and its
 //! reference, the matched normal form with its coefficients as exact rational
@@ -741,6 +741,19 @@ impl RealRootednessTheoremReport {
             self.start_delay,
         )?;
         if &recomputed != self {
+            if self.certificate != recomputed.certificate {
+                self.verify_route_certificate()?;
+            }
+            if let Some(step) = mismatched_hypothesis(&self.hypotheses, &recomputed.hypotheses) {
+                return Err(RecurrenceError::VerificationFailed(format!(
+                    "chain step `{step}` differs from its recomputation"
+                )));
+            }
+            if self.conclusion != recomputed.conclusion {
+                return Err(RecurrenceError::VerificationFailed(
+                    "conclusion differs from its recomputation".into(),
+                ));
+            }
             return Err(RecurrenceError::VerificationFailed(
                 "the report differs from its recomputation".into(),
             ));
@@ -766,6 +779,22 @@ impl RealRootednessTheoremReport {
         }
         Ok(())
     }
+}
+
+fn mismatched_hypothesis<'a>(
+    recorded: &'a [LiftHypothesis],
+    expected: &'a [LiftHypothesis],
+) -> Option<&'a str> {
+    (0..recorded.len().max(expected.len())).find_map(|i| {
+        (recorded.get(i) != expected.get(i)).then(|| {
+            expected
+                .get(i)
+                .or_else(|| recorded.get(i))
+                .unwrap()
+                .name
+                .as_str()
+        })
+    })
 }
 
 impl RealRootednessTheoremReport {

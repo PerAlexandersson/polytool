@@ -65,7 +65,8 @@ criterion using exact root signs and isolation. The all-index theorem
 evidence as six named, separately replayed proof steps. The shared
 `check_degree_law_reversal_theorem` closure tries any nonrecursive theorem
 route behind `DegreeLawTransform`, also used by index-section lifts. Its
-discovery search uses positive slopes at most 3; the exact degree-bound
+discovery uses only the minimal admissible slope (including zero), guarded
+by 3, after direct routes and lifts; the exact degree-bound
 closure has no slope limit. See
 [proof discovery](proof-discovery.md#rational-pf-riordan-arrays) for its hypotheses
 and replayable certificate. CLI/MCP generating-function output and stored
