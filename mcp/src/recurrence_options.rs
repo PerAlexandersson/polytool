@@ -48,7 +48,6 @@ pub(crate) fn recurrence_json_record(
         .with_checked_presentation(searched_polys)
         .and_then(RecurrenceJson::with_latex)
         .expect("validated recurrence presentation")
-        .with_lean("P", searched_polys)
 }
 
 pub(crate) fn recurrence_json_string(

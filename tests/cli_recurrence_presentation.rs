@@ -5,6 +5,63 @@ use serde_json::Value;
 mod common;
 use common::{run_polytool as run, stderr, stdout};
 
+#[test]
+fn lean_json_fields_require_an_explicit_name_in_records_and_menus() {
+    let input = "1\n2\n4\n8\n16\n32\n64\n128";
+    for mode in [None, Some("--representations"), Some("--theorem-matches")] {
+        for name in [None, Some("Rows")] {
+            let mut args = vec![
+                "recurrence",
+                "--json",
+                "--no-laurent",
+                "--max-recurrence-length",
+                "1",
+                "--max-variable-degree",
+                "0",
+                "--max-index-degree",
+                "0",
+                "--max-derivative-order",
+                "0",
+            ];
+            if let Some(mode) = mode {
+                args.push(mode);
+            }
+            if let Some(name) = name {
+                args.extend(["--lean-name", name]);
+            }
+            let output = run(&args, input);
+            assert!(output.status.success(), "{}", stderr(&output));
+            let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+            let record = match mode {
+                Some("--representations") => {
+                    assert!(!report["representations"].as_array().unwrap().is_empty());
+                    &report["representations"][0]["recurrence_json"]
+                }
+                Some("--theorem-matches") => &report["recurrence_json"],
+                _ => &report,
+            };
+            assert!(record["presentation"].is_object());
+            assert!(record["normalized_recurrence"].is_object());
+            assert_eq!(record.get("lean").is_some(), name.is_some());
+            assert!(record.get("lean_reason").is_none());
+            if let Some(name) = name {
+                let name = if mode == Some("--representations") {
+                    format!("{name}_0")
+                } else {
+                    name.to_string()
+                };
+                assert!(record["lean"]
+                    .as_str()
+                    .unwrap()
+                    .contains(&format!("def {name} :")));
+            }
+        }
+    }
+    let output = run(&["recurrence", "--format", "lean"], input);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).contains("def P : ℕ → ℝ[X]"));
+}
+
 fn catalog_rows(id: &str, count: usize) -> String {
     polytool::oeis::by_id(id)
         .unwrap()
@@ -169,6 +226,16 @@ fn future_singularity_has_an_explicit_reason_and_no_defining_range() {
     ];
     let mut json_args = args.to_vec();
     json_args.push("--json");
+    let default_output = run(&json_args, &input);
+    assert!(
+        default_output.status.success(),
+        "{}",
+        stderr(&default_output)
+    );
+    let default_record: Value = serde_json::from_slice(&default_output.stdout).unwrap();
+    assert!(default_record.get("lean").is_none());
+    assert!(default_record.get("lean_reason").is_none());
+    json_args.extend(["--lean-name", "P"]);
     let output = run(&json_args, &input);
     assert!(output.status.success(), "{}", stderr(&output));
     let value: Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -226,6 +293,16 @@ fn t_dependent_leader_refuses_lean_but_preserves_the_json_report() {
     ];
     let mut json_args = args.to_vec();
     json_args.push("--json");
+    let default_output = run(&json_args, &input);
+    assert!(
+        default_output.status.success(),
+        "{}",
+        stderr(&default_output)
+    );
+    let default_record: Value = serde_json::from_slice(&default_output.stdout).unwrap();
+    assert!(default_record.get("lean").is_none());
+    assert!(default_record.get("lean_reason").is_none());
+    json_args.extend(["--lean-name", "P"]);
     let output = run(&json_args, &input);
     assert!(output.status.success(), "{}", stderr(&output));
     let value: Value = serde_json::from_slice(&output.stdout).unwrap();

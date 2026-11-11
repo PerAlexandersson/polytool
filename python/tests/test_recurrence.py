@@ -85,6 +85,23 @@ def test_json_round_trips(legendre_record):
         Recurrence.from_json("not json")
 
 
+@pytest.mark.parametrize("name", ["", "Bad Name", "have", "n", "Polynomial"])
+def test_lean_names_are_validated(eulerian_rows, name):
+    with pytest.raises(ValueError, match="Lean recurrence name"):
+        polytool.find_recurrence(eulerian_rows, lean_name=name)
+
+
+def test_requested_lean_metadata_round_trips_and_reindexing_clears_it(eulerian_rows):
+    recurrence = polytool.find_recurrence(eulerian_rows, lean_name="Rows")
+    record = recurrence.to_dict()
+    assert "def Rows : ℕ → ℝ[X]" in record["lean"]
+    assert "lean_reason" not in record
+    assert Recurrence.from_json(record).to_dict() == record
+    assert pickle.loads(pickle.dumps(recurrence)).to_dict() == record
+    shifted = recurrence.reindexed(7).to_dict()
+    assert "lean" not in shifted and "lean_reason" not in shifted
+
+
 def test_latex_presentation(eulerian_rows, legendre_record):
     fitted = polytool.find_recurrence(eulerian_rows)
     assert fitted.latex().startswith("% Candidate fitted to finite rows")

@@ -443,9 +443,11 @@ impl PolynomialToolsServer {
     ) -> Result<Json<FindRecurrenceResponse>, McpError> {
         let recurrence_options = input.effective_options();
         let include_code = input.include_code.unwrap_or(true);
-        let lean_name = input.lean_name.as_deref().unwrap_or("P");
-        polytool::recurrence::validate_lean_recurrence_name(lean_name)
-            .map_err(|error| invalid_params(error.to_string()))?;
+        let lean_name = input.lean_name.as_deref();
+        if let Some(name) = lean_name {
+            polytool::recurrence::validate_lean_recurrence_name(name)
+                .map_err(|error| invalid_params(error.to_string()))?;
+        }
         let batch = parse_recurrence_batch_rational(&input)?;
         let polynomials = match collect_rational_polynomials_or_errors(batch) {
             Ok(polynomials) => polynomials,
@@ -469,13 +471,15 @@ impl PolynomialToolsServer {
         let (search, budget) = apply_recurrence_options(recurrence_options)?;
         match find_recurrence_adaptive_rational_with_budget(&polynomials, &search, budget) {
             AdaptiveSearchOutcome::Found(result) => {
-                let record = crate::recurrence_options::recurrence_json_record(
+                let mut record = crate::recurrence_options::recurrence_json_record(
                     &result,
                     &polynomials,
                     &search,
                     polynomials.len(),
-                )
-                .with_lean(lean_name, &polynomials[search.skip_prefix..]);
+                );
+                if let Some(name) = lean_name {
+                    record = record.with_lean(name, &polynomials[search.skip_prefix..]);
+                }
                 let (_, first, seeds) = record.to_recurrence_parts().map_err(invalid_params)?;
                 let first =
                     i64::try_from(first).map_err(|_| invalid_params("export index exceeds i64"))?;
@@ -542,7 +546,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Find several recurrence representations trading lag length against derivative order. Uses the same inputs and bounds as find_recurrence, but keeps one preferred exact fit per length/order bound pair. Returns polytool.recurrence-representations.v1: candidates with reusable recurrence_json objects, actual complexity, checked starting indices, finite-fit evidence, a nondominated frontier, and per-pair coverage. The candidate budget is global; incomplete coverage is explicit. No automatic denominator escalation. These are finite-data candidates, not all-rank certificates, a complete annihilator basis, or nonexistence proofs. include_code is accepted for request compatibility; recurrence_json is always included with exact seed/singularity metadata and checked Lean output or a refusal reason."
+        description = "Find several recurrence representations trading lag length against derivative order. Uses the same inputs and bounds as find_recurrence, but keeps one preferred exact fit per length/order bound pair. Returns polytool.recurrence-representations.v1: candidates with reusable recurrence_json objects, actual complexity, checked starting indices, finite-fit evidence, a nondominated frontier, and per-pair coverage. The candidate budget is global; incomplete coverage is explicit. No automatic denominator escalation. These are finite-data candidates, not all-rank certificates, a complete annihilator basis, or nonexistence proofs. include_code is accepted for request compatibility; recurrence_json is always included with exact seed/singularity metadata. Supplying lean_name requests checked Lean output or a refusal reason; without it neither Lean field is present."
     )]
     pub fn find_recurrence_representations(
         &self,
@@ -558,20 +562,24 @@ impl PolynomialToolsServer {
         })?;
         let mut report = find_recurrence_representations_rational(&polynomials, &search, budget)
             .map_err(invalid_params)?;
-        let lean_name = input.lean_name.as_deref().unwrap_or("P");
-        polytool::recurrence::validate_lean_recurrence_name(lean_name)
-            .map_err(|error| invalid_params(error.to_string()))?;
+        let lean_name = input.lean_name.as_deref();
+        if let Some(name) = lean_name {
+            polytool::recurrence::validate_lean_recurrence_name(name)
+                .map_err(|error| invalid_params(error.to_string()))?;
+        }
         for (index, item) in report.representations.iter_mut().enumerate() {
             item.recurrence_json = item
                 .recurrence_json
                 .clone()
                 .with_checked_presentation(&polynomials[search.skip_prefix..])
                 .and_then(polytool::recurrence::RecurrenceJson::with_latex)
-                .map_err(|error| invalid_params(error.to_string()))?
-                .with_lean(
-                    &format!("{lean_name}_{index}"),
+                .map_err(|error| invalid_params(error.to_string()))?;
+            if let Some(name) = lean_name {
+                item.recurrence_json = item.recurrence_json.clone().with_lean(
+                    &format!("{name}_{index}"),
                     &polynomials[search.skip_prefix..],
                 );
+            }
             let (rule, _, _) = item
                 .recurrence_json
                 .to_recurrence_parts()

@@ -92,7 +92,9 @@ verified by exact re-expansion, e.g.
 a coefficient whose factorization exhausts its budget stays expanded, noted by
 a % comment line), lean (checked real-polynomial definition and examples),
 and python (exact Python code). --latex and --python are
-shorthands for the matching --format value.
+shorthands for the matching --format value. JSON includes Lean text or a
+refusal reason only when --lean-name NAME is supplied; without it neither
+Lean field is present. --format lean uses P when no name is supplied.
 
 --space and --verify-space are separate modes: they read a JSON request (or a
 replayed report) from standard input, emit exact JSON and accept only an
@@ -138,7 +140,7 @@ from r(U+m(A+J)+1) residuals (constant-index source)."#,
         option(
             "lean-name",
             "NAME",
-            "Lean definition name (default P; simple ASCII identifier)",
+            "Request Lean metadata in JSON; name the definition (Lean format default P)",
         ),
         switch("latex", "Emit LaTeX (same as --format latex)"),
         switch("python", "Emit exact Python code (same as --format python)"),

@@ -9,6 +9,13 @@
   invariant shape failures. All-seed Riordan GF checks avoid start retries
   and reuse their constructed GF. Replay errors name the failing chain step.
 
+- Recurrence JSON includes `lean` or `lean_reason` only on request:
+  `--lean-name NAME` in the CLI, or `lean_name` in MCP and Python search.
+  Without a name, neither field is present. Python `find_recurrence` now
+  returns the same checked presentation, normalized identity and minimal or
+  extended initial-row prefix as the CLI, preserving supplied coefficient
+  padding (including zero rows); `to_json(indent=2)` matches it
+  byte for byte, including requested Lean output or refusal reasons.
 - Recurrence presentation (#49, #50): the seed count and stated range now
   follow exact replay on all supplied rows and include every row through the
   last nonnegative integer zero of the left-hand factor. Missing seeds are
@@ -53,7 +60,7 @@
   `recurrence` preserves the original fitted scaling. Catalog data and stored
   proof certificates are unchanged.
 - Checked Lean recurrence definitions (#51): `--format lean`, `--lean-name`,
-  JSON `lean`/`lean_reason`, zero-based rows, shifted coefficients and signs,
+  opt-in JSON `lean`/`lean_reason`, zero-based rows, shifted coefficients and signs,
   scalar real division, derivatives, forcing terms and expanded examples.
   Plain numerals, subtraction, omitted unit coefficients and divisions,
   structural references and atom-preserving line breaks keep output readable.

@@ -169,6 +169,7 @@ The keyword options are the CLI search flags with spelled-out names:
 | `laurent` (default `True`), `max_laurent_power` | `--no-laurent`, `--max-laurent-power` |
 | `min_margin`, `fit_extra_rows`, `verify` (default `True`), `modular_prefilter` | `--min-equation-margin`, `--fit-extra-rows`, `--no-held-out-rows`, `--(no-)modular-prefilter` |
 | `max_candidates`, `max_work` | `--max-candidates`, `--max-work` |
+| `lean_name` (default `None`) | `--lean-name` |
 
 A budget that runs out raises `polytool.BudgetExhaustedError` (with the
 attributes `candidates_tried`, `candidates_considered` and `work_units`).
@@ -183,7 +184,30 @@ its initial polynomials define.
 
 A `Recurrence` is one record of the schema `polytool.recurrence.v1`, the
 output of `polytool recurrence --json`; `to_json(indent=2)` reproduces that
-output byte for byte.
+output byte for byte when the search options match. Fitted records include
+the checked `presentation`, `normalized_recurrence` and the minimal initial-row
+prefix, extended through any left-hand singularity. All supplied rows are used
+to check the boundary, including retained rows before the fitting window.
+Supplied coefficient lists retain their zero padding in the JSON seed rows,
+matching CLI input; `Polynomial` objects already have trimmed coefficients.
+
+Lean metadata is opt-in: `find_recurrence(rows, lean_name="Rows")` adds `lean`
+on success or `lean_reason` when the rule cannot be rendered. With the default
+`lean_name=None`, neither field is present. This matches CLI JSON with and
+without `--lean-name Rows`, respectively. Invalid names raise `ValueError`.
+Lean output is checked by exact semantic read-back; it is not a proof that a
+finite fit holds for every index. JSON/dictionary round trips preserve all
+requested metadata; reindexing clears Lean output because its coefficients
+and index shifts must be rendered again.
+
+```pycon
+>>> named = polytool.find_recurrence(rows, lean_name="Rows")
+>>> "def Rows : ℕ → ℝ[X]" in named.to_dict()["lean"]
+True
+>>> "lean" in narayana.to_dict(), "lean_reason" in narayana.to_dict()
+(False, False)
+
+```
 
 ```pycon
 >>> record = narayana.to_dict()

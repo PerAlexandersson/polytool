@@ -2911,6 +2911,98 @@ fn recurrence_presentations_share_seeds_normalization_and_checked_lean() {
 }
 
 #[test]
+fn recurrence_lean_fields_are_opt_in_in_responses_records_and_menus() {
+    let server = PolynomialToolsServer::new();
+    for name in [None, Some("Rows")] {
+        let mut source = json!({
+            "coefficients":[[1],[2],[4],[8],[16],[32],[64],[128]],
+            "max_recurrence_length":1, "max_variable_degree":0,
+            "max_index_degree":0, "max_derivative_order":0
+        });
+        if let Some(name) = name {
+            source["lean_name"] = json!(name);
+        }
+        let request: FindRecurrenceRequest = serde_json::from_value(source.clone()).unwrap();
+        let Json(response) = server.find_recurrence(Parameters(request)).unwrap();
+        let record: serde_json::Value =
+            serde_json::from_str(response.recurrence_json.as_ref().unwrap()).unwrap();
+        assert!(record["presentation"].is_object());
+        assert!(record["normalized_recurrence"].is_object());
+        assert_eq!(record.get("lean").is_some(), name.is_some());
+        assert!(record.get("lean_reason").is_none());
+        let response = serde_json::to_value(response).unwrap();
+        assert_eq!(response.get("lean").is_some(), name.is_some());
+        assert!(response.get("lean_reason").is_none());
+
+        let request: FindRecurrenceRequest = serde_json::from_value(source.clone()).unwrap();
+        let Json(menu) = server
+            .find_recurrence_representations(Parameters(request))
+            .unwrap();
+        let entries = menu["representations"].as_array().unwrap();
+        assert!(!entries.is_empty());
+        for (index, entry) in entries.iter().enumerate() {
+            let record = &entry["recurrence_json"];
+            assert_eq!(record.get("lean").is_some(), name.is_some());
+            assert!(record.get("lean_reason").is_none());
+            if let Some(name) = name {
+                assert!(record["lean"]
+                    .as_str()
+                    .unwrap()
+                    .contains(&format!("def {name}_{index} :")));
+            }
+        }
+        source["include_code"] = json!(false);
+        let request: FindRecurrenceRequest = serde_json::from_value(source).unwrap();
+        let Json(compact) = server.find_recurrence(Parameters(request)).unwrap();
+        let compact = serde_json::to_value(compact).unwrap();
+        assert!(compact.get("lean").is_none());
+        assert!(compact.get("lean_reason").is_none());
+    }
+}
+
+#[test]
+fn recurrence_lean_refusal_requires_an_explicit_name() {
+    let record: polytool::recurrence::RecurrenceJson = serde_json::from_value(json!({
+        "schema":"polytool.recurrence.v1", "first_index":0,
+        "initial_polynomials":[["0","1"]],
+        "recurrence":{"denominator":{"coeffs":[["-1","1"],["1"]]},
+            "terms":[{"offset":1,"deriv_order":0,"sign":"none",
+                "coeff":{"coeffs":[["0","1"],["1"]]}}]}
+    }))
+    .unwrap();
+    let (rule, first, seeds) = record.to_recurrence_parts().unwrap();
+    let rows: Vec<Vec<String>> = rule
+        .generate_rows_rational(&seeds, first, 12)
+        .unwrap()
+        .iter()
+        .map(|row| row.iter().map(ToString::to_string).collect())
+        .collect();
+    let server = PolynomialToolsServer::new();
+    for name in [None, Some("Rows")] {
+        let mut source = json!({
+            "coefficients":rows, "max_recurrence_length":1,
+            "max_variable_degree":1, "max_index_degree":1, "max_derivative_order":0,
+            "try_denominator":true, "max_denominator_variable_degree":1,
+            "max_denominator_index_degree":1
+        });
+        if let Some(name) = name {
+            source["lean_name"] = json!(name);
+        }
+        let request: FindRecurrenceRequest = serde_json::from_value(source).unwrap();
+        let Json(response) = server.find_recurrence(Parameters(request)).unwrap();
+        let record: serde_json::Value =
+            serde_json::from_str(response.recurrence_json.as_ref().unwrap()).unwrap();
+        assert!(record.get("lean").is_none());
+        assert_eq!(record.get("lean_reason").is_some(), name.is_some());
+        assert!(response.lean.is_none());
+        assert_eq!(response.lean_reason.is_some(), name.is_some());
+        if name.is_some() {
+            assert!(response.lean_reason.unwrap().contains("depends on t"));
+        }
+    }
+}
+
+#[test]
 fn recurrence_code_exports_keep_extended_seeds_and_fitted_scaling() {
     let server = PolynomialToolsServer::new();
     let request: FindRecurrenceRequest = serde_json::from_value(json!({
