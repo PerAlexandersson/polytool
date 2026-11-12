@@ -2,8 +2,8 @@
 //! `ServerHandler` metadata.
 
 use crate::family::{
-    check_family_lace, family_consecutive_pairs, family_markdown, family_recurrence_response,
-    family_report, family_source_and_polynomials, first_family_failure,
+    check_family_lace, family_consecutive_pairs, family_failure_message, family_markdown,
+    family_recurrence_response, family_report, family_source_and_polynomials,
     generated_sequence_polynomials_bigint,
 };
 use crate::limits::{
@@ -173,7 +173,7 @@ impl PolynomialToolsServer {
             .as_ref()
             .map(|(search, budget)| family_recurrence_response(&polynomials, search, *budget));
 
-        let first_failure = first_family_failure(
+        let first_failure = family_failure_message(
             &items,
             &consecutive_pairs,
             lace.as_ref(),

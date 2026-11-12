@@ -11,6 +11,24 @@ See the [README](../README.md#using-as-a-crate) for a short quick start.  This p
 collects the longer library examples; the command-line interface is described in
 [cli.md](cli.md).
 
+## Finite family requirements and OEIS source text
+
+`family_check::first_family_failure` selects a typed `FamilyFailure` from
+already computed `FamilyPolynomialProperties`, consecutive interlacing
+verdicts, and optional finite Lace and recurrence results.
+`FamilyRequirements` defaults to no required properties. Members are checked
+in input order, then pairs, Lace, and recurrence; adapters choose their own
+defaults and format failures to suit their existing reports.
+
+`oeis::source` exposes the typed, filesystem-independent OEIS parsers,
+also re-exported from `oeis`. `parse_bfile` requires consecutive indices.
+`parse_oeis_internal_format` requires a title and offset, converts terms
+to exact integers and skips malformed term tokens.
+`parse_oeis_internal_terms` serves text-preserving indexes: it keeps term
+spelling, rejects malformed terms (including a leading plus), requires no
+title, defaults missing or invalid offsets to zero, and keeps the last
+keyword line. These are distinct parsing policies.
+
 ## Standalone exact root counting
 
 The low-level integer root-counting engine is the independent

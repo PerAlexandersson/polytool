@@ -2,10 +2,13 @@
 //! recurrence search in one pass.
 
 use crate::input::{read_poly_parse_results_bigint, strip_trailing_zeros_bigint, OutputFormat};
-use crate::interlacing::{interlacing_report, interlacing_report_json, InterlacingReport};
+use crate::interlacing::{interlacing_report, interlacing_report_json};
 use crate::json_out::{json_bool_option, json_string};
-use crate::properties::{property_labels, property_report, property_report_json, PropertyReport};
+use crate::properties::{property_labels, property_report, property_report_json};
 use num_bigint::BigInt;
+use polytool::family_check::{
+    first_family_failure, FamilyFailure, FamilyPolynomialProperties, FamilyRequirements,
+};
 use polytool::recurrence::*;
 
 #[derive(Clone, Debug)]
@@ -73,60 +76,6 @@ fn parse_family_check_args(args: &[String]) -> Result<FamilyCheckOptions, String
         }
     }
     Ok(options)
-}
-
-fn first_family_failure(
-    reports: &[PropertyReport],
-    pairs: &[InterlacingReport],
-    recurrence: Option<&RecurrenceSummary>,
-    options: &FamilyCheckOptions,
-) -> Option<String> {
-    for report in reports {
-        if options.require_real_rooted && !report.real_rooted {
-            return Some(format!("polynomial {} is not real-rooted", report.index));
-        }
-        if options.require_palindromic && !report.palindromic {
-            return Some(format!("polynomial {} is not palindromic", report.index));
-        }
-        if options.require_gamma_positive && !report.gamma_positive {
-            return Some(format!("polynomial {} is not gamma-positive", report.index));
-        }
-        if options.require_unimodal && !report.unimodal {
-            return Some(format!("polynomial {} is not unimodal", report.index));
-        }
-        if options.require_log_concave && !report.log_concave {
-            return Some(format!("polynomial {} is not log-concave", report.index));
-        }
-        if options.require_ultra_log_concave && !report.ultra_log_concave {
-            return Some(format!(
-                "polynomial {} is not ultra-log-concave",
-                report.index
-            ));
-        }
-    }
-    if options.require_weak_interlacing {
-        for pair in pairs {
-            if pair.weak != Some(true) {
-                return Some(format!(
-                    "polynomials {} and {} do not weakly interlace",
-                    pair.left_index, pair.right_index
-                ));
-            }
-        }
-    }
-    if options.recurrence {
-        if let Some(summary) = recurrence {
-            if !summary.found {
-                return Some(
-                    summary
-                        .error
-                        .clone()
-                        .unwrap_or_else(|| "no recurrence found".to_string()),
-                );
-            }
-        }
-    }
-    None
 }
 
 fn find_family_recurrence(polys: &[Vec<BigInt>]) -> RecurrenceSummary {
@@ -296,7 +245,45 @@ pub(crate) fn cmd_family_check(args: &[String]) {
             error.index, error.error
         ))
     } else {
-        first_family_failure(&reports, &pairs, recurrence.as_ref(), &options)
+        let requirements = FamilyRequirements {
+            real_rooted: options.require_real_rooted,
+            palindromic: options.require_palindromic,
+            gamma_positive: options.require_gamma_positive,
+            unimodal: options.require_unimodal,
+            log_concave: options.require_log_concave,
+            ultra_log_concave: options.require_ultra_log_concave,
+            consecutive_weak_interlacing: options.require_weak_interlacing,
+            ..Default::default()
+        };
+        first_family_failure(
+            &requirements,
+            reports.iter().map(|report| FamilyPolynomialProperties {
+                index: report.index,
+                real_rooted: report.real_rooted,
+                palindromic: report.palindromic,
+                gamma_positive: report.gamma_positive,
+                unimodal: report.unimodal,
+                log_concave: report.log_concave,
+                ultra_log_concave: report.ultra_log_concave,
+                ..Default::default()
+            }),
+            pairs
+                .iter()
+                .map(|pair| (pair.left_index, pair.right_index, pair.weak)),
+            None,
+            recurrence.as_ref().map(|summary| summary.found),
+        )
+        .map(|failure| match failure {
+            FamilyFailure::WeakInterlacing {
+                left_index,
+                right_index,
+            } => format!("polynomials {left_index} and {right_index} do not weakly interlace"),
+            FamilyFailure::Recurrence => recurrence
+                .as_ref()
+                .and_then(|summary| summary.error.clone())
+                .unwrap_or_else(|| "no recurrence found".to_string()),
+            other => other.to_string(),
+        })
     };
     let passed = first_failure.is_none();
 

@@ -36,6 +36,8 @@
     `$OUT_DIR` by `build.rs`; record schema in `src/oeis_catalog_schema.rs`);
   - structured diagnostics: `coefficient_tests`, `hstar_inequalities`,
     `cyclic_sieving`, `decomposition`, `basis`, `bkw`;
+    `family_check` selects the first failed finite-family requirement from
+    supplied verdicts; `oeis::source` owns the typed OEIS text parsers;
   - planar-network and TNN certificates: `tnn_network`, `brenti_sequence`,
     `brenti_recognition`, `interlacing_matrix`; Pólya frequency certificates
     for rows: `pf_network` (height-invariant networks), `left_production`

@@ -113,6 +113,8 @@
 //!   of the recurrence-defined families
 //! - [`parse`] — Flexible polynomial parsing (comma/space-separated, bracketed,
 //!   expanded polynomial notation)
+//! - [`family_check`] — First failed requirement of supplied finite polynomial
+//!   property, interlacing, Lace and recurrence verdicts
 //! - [`basis`] — Exact expansion of polynomials in prescribed bases, including
 //!   the magic basis `{t^i (1+t)^{d-i}}`
 //! - [`bkw`] — Beraha--Kahane--Weiss scout tools for characteristic symbols of
@@ -154,6 +156,7 @@ pub mod coefficient_tests;
 pub mod cyclic_sieving;
 pub mod decomposition;
 pub mod factorization;
+pub mod family_check;
 pub mod hstar_inequalities;
 pub mod hurwitz;
 pub mod integer_range_sign;

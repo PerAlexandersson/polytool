@@ -5,6 +5,8 @@
 //! [`parse_bfile`] reads a b-file (`n a(n)` lines).  Both are independent of
 //! the bundled catalog and of the file system; they back
 //! `polytool oeis add` and `polytool oeis check`.
+//! [`parse_oeis_internal_terms`] preserves term spelling for sequence indexes
+//! and uses the separate strict-term, optional-metadata policy documented there.
 //!
 //! ```
 //! use polytool::oeis::{parse_bfile, parse_oeis_internal_format};
@@ -87,11 +89,32 @@ pub struct ParsedBFile {
     pub terms: Vec<BigInt>,
 }
 
-/// Error of [`parse_oeis_internal_format`] and [`parse_bfile`].
+/// Internal-format terms and metadata for a text-preserving sequence index.
+///
+/// Unlike [`OeisSourceRecord`], this needs neither a title nor an offset.
+/// Terms retain their spelling (including leading zeros and `-0`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OeisInternalTerms {
+    /// First value of the last `%O` line, or zero if missing or invalid.
+    pub offset: i64,
+    /// Comma-separated keywords from the last `%K` line, trimmed.
+    pub keywords: Vec<String>,
+    /// Nonempty, trimmed `%S/%T/%U` tokens in their input order.
+    pub terms: Vec<String>,
+}
+
+/// Error of the internal-format and b-file parsers in this module.
 ///
 /// Line numbers are 1-based.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OeisSourceError {
+    /// An internal-format term is not ASCII digits with an optional minus.
+    InvalidInternalTerm {
+        /// The trimmed token.
+        term: String,
+    },
+    /// The internal-format record contains no nonempty terms.
+    EmptyInternalTerms,
     /// The first value of a `%O` line is not an integer.
     InvalidOffsetLine {
         /// The sequence identifier given to the parser.
@@ -142,6 +165,10 @@ pub enum OeisSourceError {
 impl fmt::Display for OeisSourceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidInternalTerm { term } => {
+                write!(f, "invalid internal-format term `{term}`")
+            }
+            Self::EmptyInternalTerms => f.write_str("internal-format record has no terms"),
             Self::InvalidOffsetLine { id, line } => {
                 write!(f, "{id}: invalid offset line `{line}`")
             }
@@ -177,6 +204,62 @@ fn parse_term(token: &str) -> Option<BigInt> {
     token.parse().ok()
 }
 
+fn internal_format_fields(text: &str) -> impl Iterator<Item = (&str, &str, &str)> {
+    text.lines().filter_map(|line| {
+        let mut parts = line.splitn(3, ' ');
+        let (Some(tag), Some(_), Some(rest)) = (parts.next(), parts.next(), parts.next()) else {
+            return None;
+        };
+        Some((line, tag, rest))
+    })
+}
+
+/// Parse internal-format terms for a text-preserving sequence index.
+///
+/// This stricter term policy rejects the entire record if a nonempty term is
+/// not ASCII digits with an optional leading minus; a leading plus is rejected.
+/// Empty tokens are skipped. Missing or invalid offsets become zero, the last
+/// `%K` line supplies the keywords, and a `%N` title is not required.
+/// Use [`parse_oeis_internal_format`] for a titled record with a required offset,
+/// numeric terms, and invalid term tokens skipped instead.
+///
+/// # Errors
+///
+/// [`OeisSourceError::InvalidInternalTerm`] for an invalid nonempty term, or
+/// [`OeisSourceError::EmptyInternalTerms`] if there are no terms.
+pub fn parse_oeis_internal_terms(text: &str) -> Result<OeisInternalTerms, OeisSourceError> {
+    let mut offset = None;
+    let mut keywords = Vec::new();
+    let mut terms = Vec::new();
+    for (_, tag, rest) in internal_format_fields(text) {
+        match tag {
+            "%S" | "%T" | "%U" => terms.extend(
+                rest.split(',')
+                    .map(str::trim)
+                    .filter(|term| !term.is_empty())
+                    .map(str::to_string),
+            ),
+            "%O" => offset = rest.split(',').next().and_then(|v| v.trim().parse().ok()),
+            "%K" => keywords = rest.split(',').map(|k| k.trim().to_string()).collect(),
+            _ => {}
+        }
+    }
+    for term in &terms {
+        let digits = term.strip_prefix('-').unwrap_or(term);
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(OeisSourceError::InvalidInternalTerm { term: term.clone() });
+        }
+    }
+    if terms.is_empty() {
+        return Err(OeisSourceError::EmptyInternalTerms);
+    }
+    Ok(OeisInternalTerms {
+        offset: offset.unwrap_or(0),
+        keywords,
+        terms,
+    })
+}
+
 /// Parse one record in the OEIS internal format.
 ///
 /// The `%N` line gives the name, the first value of `%O` the offset, `%K` the
@@ -196,11 +279,7 @@ pub fn parse_oeis_internal_format(
     let mut offset = None;
     let mut keywords = Vec::new();
     let mut terms = Vec::new();
-    for line in text.lines() {
-        let mut parts = line.splitn(3, ' ');
-        let (Some(tag), Some(_), Some(rest)) = (parts.next(), parts.next(), parts.next()) else {
-            continue;
-        };
+    for (line, tag, rest) in internal_format_fields(text) {
         match tag {
             "%N" => name = rest.trim().to_string(),
             "%O" => {
@@ -294,6 +373,44 @@ mod tests {
         %N A000001 Example triangle.\n\
         %K A000001 nonn,tabl\n\
         %O A000001 1,5\n";
+
+    #[test]
+    fn indexed_terms_preserve_spelling_and_optional_metadata() {
+        let record = parse_oeis_internal_terms(
+            "%S A1 001, -0,, -0002,\n%T A1 3,\n%U A1 4\n\
+             %O A1 -2,5\n%O A1 bad\n%K A1 old\n%K A1 nonn, tabl,\n",
+        )
+        .unwrap();
+        assert_eq!(record.offset, 0);
+        assert_eq!(record.keywords, ["nonn", "tabl", ""]);
+        assert_eq!(record.terms, ["001", "-0", "-0002", "3", "4"]);
+        assert_eq!(parse_oeis_internal_terms("%S A1 1\n").unwrap().offset, 0);
+        assert_eq!(parse_oeis_internal_terms(RECORD).unwrap().offset, 1);
+        for invalid in ["+", "+1", "-", "--1", "1 2", "x", "١"] {
+            assert_eq!(
+                parse_oeis_internal_terms(&format!("%S A1 1,{invalid},2\n")),
+                Err(OeisSourceError::InvalidInternalTerm {
+                    term: invalid.into()
+                }),
+            );
+        }
+        assert_eq!(
+            parse_oeis_internal_terms("%S A1 , ,\n%N A1 title\n"),
+            Err(OeisSourceError::EmptyInternalTerms),
+        );
+    }
+
+    #[test]
+    fn titled_records_keep_their_distinct_term_and_metadata_policy() {
+        let record = parse_oeis_internal_format(
+            "%N A1 title\n%O A1 2\n%K A1 one\n%K A1 two\n%S A1 001,+2,x,-0\n",
+            "A1",
+        )
+        .unwrap();
+        assert_eq!(record.offset, 2);
+        assert_eq!(record.keywords, ["one", "two"]);
+        assert_eq!(record.terms, [1, 2, 0].map(BigInt::from));
+    }
 
     #[test]
     fn internal_format_record_is_parsed() {

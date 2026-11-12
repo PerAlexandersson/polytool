@@ -443,87 +443,58 @@ pub(crate) fn family_recurrence_response(
     family_recurrence_response_rational(&rows, search, budget)
 }
 
-pub(crate) fn first_family_failure(
+/// Map adapter report fields to the shared requirement selector; wording is unchanged.
+pub(crate) fn family_failure_message(
     items: &[FamilyPolynomialReport],
     pairs: &[InterlacingPairItem],
     lace: Option<&LaceCheckResponse>,
     recurrence: Option<&FindRecurrenceResponse>,
     options: Option<&FamilyCheckOptions>,
 ) -> Option<String> {
-    let require_real_rooted = options.and_then(|o| o.require_real_rooted).unwrap_or(true);
-    let require_simple_roots = options
-        .and_then(|o| o.require_simple_roots)
-        .unwrap_or(false);
-    let require_palindromic = options.and_then(|o| o.require_palindromic).unwrap_or(false);
-    let require_gamma_positive = options
-        .and_then(|o| o.require_gamma_positive)
-        .unwrap_or(false);
-    let require_unimodal = options.and_then(|o| o.require_unimodal).unwrap_or(false);
-    let require_log_concave = options.and_then(|o| o.require_log_concave).unwrap_or(false);
-    let require_ultra_log_concave = options
-        .and_then(|o| o.require_ultra_log_concave)
-        .unwrap_or(false);
-    let require_interlacing = options
-        .and_then(|o| o.require_consecutive_weak_interlacing)
-        .unwrap_or(false);
-
-    for item in items {
-        if require_real_rooted && !item.real_rooted {
-            return Some(format!("polynomial {} is not real-rooted", item.index));
-        }
-        if require_simple_roots && !item.simple_roots {
-            return Some(format!(
-                "polynomial {} does not have simple roots",
-                item.index
-            ));
-        }
-        if require_palindromic && !item.palindromic {
-            return Some(format!("polynomial {} is not palindromic", item.index));
-        }
-        if require_gamma_positive && !item.gamma_positive {
-            return Some(format!("polynomial {} is not gamma-positive", item.index));
-        }
-        if require_unimodal && !item.unimodal {
-            return Some(format!("polynomial {} is not unimodal", item.index));
-        }
-        if require_log_concave && !item.log_concave {
-            return Some(format!("polynomial {} is not log-concave", item.index));
-        }
-        if require_ultra_log_concave && !item.ultra_log_concave {
-            return Some(format!(
-                "polynomial {} is not ultra-log-concave",
-                item.index
-            ));
-        }
-    }
-
-    if require_interlacing {
-        for pair in pairs {
-            if pair.result.as_ref().and_then(|r| r.weak) != Some(true) {
-                return Some(format!(
-                    "consecutive pair {}-{} is not weakly interlacing",
-                    pair.left_index, pair.right_index
-                ));
-            }
-        }
-    }
-
-    if let Some(lace) = lace {
-        if !lace.totally_nonnegative {
-            return Some(format!(
-                "finite Lace truncation is not TNN up to minors of size {}",
-                lace.max_minor_size
-            ));
-        }
-    }
-
-    if let Some(recurrence) = recurrence {
-        if !recurrence.found {
-            return Some("recurrence search did not find a recurrence".to_string());
-        }
-    }
-
-    None
+    use polytool::family_check::{
+        first_family_failure, FamilyPolynomialProperties, FamilyRequirements,
+    };
+    let requirements = FamilyRequirements {
+        real_rooted: options.and_then(|o| o.require_real_rooted).unwrap_or(true),
+        simple_roots: options
+            .and_then(|o| o.require_simple_roots)
+            .unwrap_or(false),
+        palindromic: options.and_then(|o| o.require_palindromic).unwrap_or(false),
+        gamma_positive: options
+            .and_then(|o| o.require_gamma_positive)
+            .unwrap_or(false),
+        unimodal: options.and_then(|o| o.require_unimodal).unwrap_or(false),
+        log_concave: options.and_then(|o| o.require_log_concave).unwrap_or(false),
+        ultra_log_concave: options
+            .and_then(|o| o.require_ultra_log_concave)
+            .unwrap_or(false),
+        consecutive_weak_interlacing: options
+            .and_then(|o| o.require_consecutive_weak_interlacing)
+            .unwrap_or(false),
+    };
+    first_family_failure(
+        &requirements,
+        items.iter().map(|item| FamilyPolynomialProperties {
+            index: item.index,
+            real_rooted: item.real_rooted,
+            simple_roots: item.simple_roots,
+            palindromic: item.palindromic,
+            gamma_positive: item.gamma_positive,
+            unimodal: item.unimodal,
+            log_concave: item.log_concave,
+            ultra_log_concave: item.ultra_log_concave,
+        }),
+        pairs.iter().map(|pair| {
+            (
+                pair.left_index,
+                pair.right_index,
+                pair.result.as_ref().and_then(|r| r.weak),
+            )
+        }),
+        lace.map(|lace| (lace.totally_nonnegative, lace.max_minor_size)),
+        recurrence.map(|recurrence| recurrence.found),
+    )
+    .map(|failure| failure.to_string())
 }
 
 fn yes_no(value: bool) -> &'static str {

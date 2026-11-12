@@ -86,10 +86,10 @@ pub use bfile::{
     bfile_row_terms, flatten_rows_to_bfile, BFileError, BFileOptions, BFileRowOrientation,
     BFileStoppingRule, BFileText, BFileZeroPolicy,
 };
-mod source;
+pub mod source;
 pub use source::{
-    parse_bfile, parse_oeis_internal_format, OeisSourceError, OeisSourceRecord, OeisTermsSource,
-    ParsedBFile,
+    parse_bfile, parse_oeis_internal_format, parse_oeis_internal_terms, OeisInternalTerms,
+    OeisSourceError, OeisSourceRecord, OeisTermsSource, ParsedBFile,
 };
 mod text;
 pub use text::{

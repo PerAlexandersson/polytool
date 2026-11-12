@@ -35,6 +35,11 @@
 
 ### Added
 
+- Shared finite-family requirement selection in `family_check`, with typed
+  failures and adapter-specific presentation. Public `oeis::source` exposes
+  the existing typed parsers and a text-preserving internal-terms parser
+  for indexes; CLI and MCP output conventions are unchanged.
+
 - Final structural closure discovery after the earlier routes fail: exact
   weight quotients, row factors, inverse gamma expansions, and inverses of
   fixed differential/Euler preservers. Computed parents use the theorem
