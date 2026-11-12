@@ -430,7 +430,7 @@ default (`case family kind degree coeff_bits expected verdict status repeat
 min_us median_us`, plus `ratio_vs_baseline` with `--baseline`) or JSON
 (`polytool.bench.real-rootedness.v1`).  The suite is deterministic; only the
 timings vary.  The `--quick` mode is exercised by
-`tests/cli_bench_real_rootedness.rs`, so `cargo test` catches verdict
+`tests/integration/cli_bench_real_rootedness.rs`, so `cargo test --features full-tests` catches verdict
 regressions.  Saved timing runs are not checked in; keep them next to the
 other results under `bench-results/`.
 

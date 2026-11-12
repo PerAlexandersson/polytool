@@ -980,6 +980,10 @@ fn assert_same_transport(rule: &Recurrence, transformation: &RecurrenceTransform
 /// rule of the bundled OEIS catalog, for every coordinate map (increasing,
 /// constant and decreasing schedules; Möbius maps with and without a pole).
 #[test]
+#[cfg_attr(
+    not(feature = "full-tests"),
+    ignore = "full test tier: cargo test -p polytool --features full-tests"
+)]
 fn substitution_transport_equals_the_chain_rule_transport() {
     let mut rules = vec![
         (eulerian_rule(), 1),

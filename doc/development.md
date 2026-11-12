@@ -83,11 +83,19 @@ application.
 
 ## Checks
 
-Run the core tests:
+Run the everyday core tests (focused regressions on small inputs):
 
 ```sh
 cargo test -p polytool
 ```
+
+Use `cargo test -p polytool --features full-tests` for the full catalog,
+workload-fingerprint and expensive-regression tier. Existing explicitly
+ignored audits and timing runs are still selected with `--ignored`.
+Integration tests are modules of one `tests/integration/main.rs` binary;
+`cargo test -p polytool --test integration module_name::` selects one module.
+Worker checkouts reuse an external `CARGO_TARGET_DIR` and serialize builds
+with their build lock, including final checks.
 
 Run the MCP server tests:
 
@@ -140,13 +148,13 @@ private registry `src/recurrence/lift/parent_theorems/registry.rs`
    re-blessed fingerprint file whose changed entries are those the route now
    proves or records.
 
-The registry's unit tests and `tests/route_registry.rs` check that every
+The registry's unit tests and `tests/integration/route_registry.rs` check that every
 theorem has one route in the frozen order, that the names are the serialized
 names, and that every theorem has its parent route.
 
 ## Proof-discovery fingerprints
 
-`tests/discovery_fingerprints.rs` is the evidence gate for refactorings of the
+`tests/integration/discovery_fingerprints.rs` is the evidence gate for refactorings of the
 theorem routes. For every bundled OEIS catalog family (919 entries) it hashes
 the complete JSON of `recurrence::discover_recurrence_proofs` (default
 options, so including the catalog-lift and affine-coordinate stages on the
@@ -155,43 +163,44 @@ attestations, root-domain route enabled) and compares both with
 `tests/fixtures/discovery-report-fingerprints.tsv`; a behaviour-preserving
 change leaves every line unchanged, and a change of results re-blesses the
 file with every changed entry explained. A sample of 48 cheaper entries
-runs in the normal test suite; the ignored full sweep takes about 10 minutes in
+runs with `full-tests`; the ignored full sweep takes about 10 minutes in
 release mode (each entry has a limit of 120 s, `POLYTOOL_DISCOVERY_ENTRY_SECONDS`):
 
 ```text
-cargo test --release --test discovery_fingerprints -- --ignored every_
+cargo test --release --test integration discovery_fingerprints::every_ -- --ignored
 ```
 
 Re-bless only for an intentional change of results:
 `POLYTOOL_BLESS_DISCOVERY_FINGERPRINTS=1 cargo test --release --test
-discovery_fingerprints -- --ignored every_`.
+integration discovery_fingerprints::every_ -- --ignored`.
 
-Integration tests share the helpers in `tests/common/mod.rs` (running the
+Integration tests share the helpers in `tests/integration/common/mod.rs` (running the
 `polytool` binary with standard input, reading its output, exact-rational
-constructors); include them with `mod common;`.
+constructors); import them from `crate::common`.
 
 ## Ore-algebra workloads
 
-`tests/ore_algebra_workloads.rs` runs a fixed set of real workloads of the
+`tests/integration/ore_algebra_workloads.rs` runs a fixed set of real workloads of the
 `ore-algebra` crate (image recurrences of the preserver menu shapes,
 basis-map elimination, annihilator systems, difference and substitution
 image annihilators, right pseudo-division of large dividends) and compares
 a fingerprint of each complete output with
 `tests/fixtures/ore-algebra-workload-fingerprints.tsv`.  The Hadamard-factor
-workloads are compared only by the ignored full test.  Timings (median and
+workloads are compared only by the ignored full test; the smaller workload
+fingerprint test runs with `full-tests`. Timings (median and
 minimum of `ORE_WORKLOAD_REPEAT` runs, filtered by `ORE_WORKLOAD_ONLY`):
 
 ```text
-cargo test --release --test ore_algebra_workloads -- --ignored --nocapture time_
+cargo test --release --test integration ore_algebra_workloads::time_ -- --ignored --nocapture
 ```
 
 Re-bless the fingerprints only for an intentional change of results:
 `POLYTOOL_BLESS_ORE_WORKLOADS=1 cargo test --release --test
-ore_algebra_workloads -- --ignored every_`.
+integration ore_algebra_workloads::every_ -- --ignored`.
 
 ## Linear-algebra workloads
 
-`tests/linalg_workloads.rs` runs a fixed set of real workloads of the exact
+`tests/integration/linalg_workloads.rs` runs a fixed set of real workloads of the exact
 linear algebra (`linalg`) and of the recurrence fit built on it: adaptive
 searches on catalog families (Eulerian, Narayana, type-B Eulerian, shifted
 Legendre with `try_laurent`, Hermite with denominators, a sequence without a
@@ -205,16 +214,17 @@ result.  The test compares a fingerprint of each complete output (every rule,
 counter and certificate, no timings) with
 `tests/fixtures/linalg-workload-fingerprints.tsv`; the slower items (the
 default-option searches and the lifts) are compared only by the ignored full
-test.  Timings (median and minimum of `LINALG_WORKLOAD_REPEAT` runs, filtered
+test; the smaller workload fingerprint test runs with `full-tests`.
+Timings (median and minimum of `LINALG_WORKLOAD_REPEAT` runs, filtered
 by `LINALG_WORKLOAD_ONLY`):
 
 ```text
-cargo test --release --test linalg_workloads -- --ignored --nocapture time_
+cargo test --release --test integration linalg_workloads::time_ -- --ignored --nocapture
 ```
 
 Re-bless the fingerprints only for an intentional change of results:
-`POLYTOOL_BLESS_LINALG_WORKLOADS=1 cargo test --release --test linalg_workloads
--- --ignored every_`.
+`POLYTOOL_BLESS_LINALG_WORKLOADS=1 cargo test --release --test integration
+linalg_workloads::every_ -- --ignored`.
 
 To profile, `valgrind --tool=callgrind` on the test binary (with
 `LINALG_WORKLOAD_ONLY` set to one workload) works where `perf` does not.  The

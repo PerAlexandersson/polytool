@@ -1490,6 +1490,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        not(feature = "full-tests"),
+        ignore = "full test tier: cargo test -p polytool --features full-tests"
+    )]
     fn every_oeis_export_reproduces_displayed_rows_past_its_initial_prefix() {
         for sequence in catalog() {
             let (recurrence, initial_rows, first_index) = sequence
@@ -1527,6 +1531,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        not(feature = "full-tests"),
+        ignore = "full test tier: cargo test -p polytool --features full-tests"
+    )]
     fn every_sparse_definition_reproduces_its_fixture_rows() {
         let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("fixtures/recurrence-benchmarks/rows");
@@ -1592,6 +1600,10 @@ mod tests {
     /// `POLYTOOL_BLESS_OEIS_FINGERPRINTS=1` to rewrite the fixture after an
     /// intentional change to an existing entry.
     #[test]
+    #[cfg_attr(
+        not(feature = "full-tests"),
+        ignore = "full test tier: cargo test -p polytool --features full-tests"
+    )]
     fn catalog_entries_match_recorded_fingerprints() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/oeis-catalog-fingerprints.tsv");
@@ -1617,6 +1629,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        not(feature = "full-tests"),
+        ignore = "full test tier: cargo test -p polytool --features full-tests"
+    )]
     fn every_imported_lean_definition_reproduces_its_validation_row() {
         for (id, row_index, expected) in OEIS_IMPORTED_VALIDATION_ROWS {
             let generated = by_id(id)

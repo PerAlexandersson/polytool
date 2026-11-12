@@ -404,7 +404,7 @@
   `ParsedBFile` and the typed `OeisSourceError`), promoted from the CLI, which
   keeps its messages. Deprecated, as unused: `OeisRecurrencePresentation::displayed_recurrence`
   and `LeadingCoefficientCertificate::degree_steps_from`. New evidence gate
-  `tests/discovery_fingerprints.rs` (fingerprints of the discovery report and
+  `tests/integration/discovery_fingerprints.rs` (fingerprints of the discovery report and
   the parent proof of every bundled catalog family; the full sweep is
   `#[ignore]`d) and shared integration-test helpers in `tests/common/`.
 - Factor gauge with a bounded residual (RealRooted row routes `powerForm`,
@@ -592,8 +592,8 @@
   - Tests: golden snapshots of every help page and topic
     (`tests/snapshots/cli/help`, re-bless with `POLYTOOL_BLESS_CLI_HELP=1`),
     frozen external invocations whose stdout and exit status must not change
-    (`tests/cli_compatibility.rs`), and an old-versus-new spelling table,
-    universal-option and flag-coverage tests (`tests/cli_help_and_aliases.rs`).
+    (`tests/integration/cli_compatibility.rs`), and an old-versus-new spelling table,
+    universal-option and flag-coverage tests (`tests/integration/cli_help_and_aliases.rs`).
   - Dependencies: `clap` and `clap_complete` 4.5 (MSRV 1.74, compatible with
     the crate's 1.82).
 
@@ -1196,7 +1196,7 @@ Performance:
   rational products, and the modular kernel caches its primes, reduces
   residues from the machine digits and eliminates only over the support of
   each pivot row.  Every result is unchanged (the new
-  `tests/ore_algebra_workloads.rs` compares fingerprints of the complete
+  `tests/integration/ore_algebra_workloads.rs` compares fingerprints of the complete
   outputs of a fixed workload set with recorded ones).  Release timings on
   that set (fastest of five runs): image recurrences of the preserver menu
   shapes 16 to 29 times faster on Eulerian, Narayana and Delannoy rows
@@ -1218,7 +1218,7 @@ Performance:
   (operation count and coefficient bits, checked on the reduced rational
   values) are exactly those of the rational elimination.  The recurrence fit
   builds its equations without rational products for integer entries.
-  Every result is unchanged (the new `tests/linalg_workloads.rs` compares
+  Every result is unchanged (the new `tests/integration/linalg_workloads.rs` compares
   fingerprints of the complete outputs of 24 workloads with recorded ones
   from the previous implementation, and unit tests compare against the
   rational reference).  Release timings on that set (best of two runs of
@@ -1304,7 +1304,7 @@ Additions:
   parent with the recorded statement and interlacing (also for the
   coefficient family of a basis-map lift).  Recorded Veronese and basis-map
   certificates are kept as regression fixtures
-  (`tests/recorded_certifications.rs`).
+  (`tests/integration/recorded_certifications.rs`).
 - Exact quadratic endpoints of root regions: `recurrence::ExactQuadraticEndpoint`
   (`a + b sqrt(d)` as rational strings, with `to_quadratic_number`,
   `from_quadratic_number` and the plain-ASCII `to_plain_text`, e.g.
@@ -1828,7 +1828,7 @@ Additions:
   `sequences::literature::{delannoy_polynomials_iter,
   delannoy_square_polynomials_iter}` (`sequences::PolynomialFamilyRowIterator`).
   The batch generators are unchanged.
-- Example `lazy_rows`, and the integration tests in `tests/lazy_rows.rs`.
+- Example `lazy_rows`, and the integration tests in `tests/integration/lazy_rows.rs`.
 
 - `Display` and `std::error::Error` for `linalg::RationalKernelError`.
 - New error types `ParsePolynomialError` and `CyclicSievingError` (see above).
@@ -2098,7 +2098,7 @@ real-rootedness or interlacing verdict changed):
   the documented convention of `check_interlacing`; both docs state it.
 - `approximate_real_roots` docs: only a root `0` and the root of a linear
   input are exact.
-- `tests/real_rootedness_differential.rs` compares every exact method against
+- `tests/integration/real_rootedness_differential.rs` compares every exact method against
   ground truth on about 84,000 cases (ignored by default; run with
   `--ignored`).
 
