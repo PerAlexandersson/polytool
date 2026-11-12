@@ -706,11 +706,19 @@ pub fn clear_denominators(p: &[BigRational]) -> Vec<BigInt> {
 /// assert_eq!(integers, vec![BigInt::from(3), BigInt::from(-2)]);
 /// ```
 pub fn clear_denominators_with_scale(p: &[BigRational]) -> (BigInt, Vec<BigInt>) {
-    let scale = p.iter().fold(BigInt::from(1), |accumulator, coefficient| {
-        accumulator.lcm(coefficient.denom())
-    });
-    let integers = p
-        .iter()
+    clear_denominators_with_scale_iter(p.iter())
+}
+
+/// The same scaling for coefficients of a matrix, sparse row or operator.
+pub(crate) fn clear_denominators_with_scale_iter<'a>(
+    coefficients: impl Iterator<Item = &'a BigRational> + Clone,
+) -> (BigInt, Vec<BigInt>) {
+    let scale = coefficients
+        .clone()
+        .fold(BigInt::from(1), |accumulator, coefficient| {
+            accumulator.lcm(coefficient.denom())
+        });
+    let integers = coefficients
         .map(|coefficient| coefficient.numer() * (&scale / coefficient.denom()))
         .collect();
     (scale, integers)
@@ -733,6 +741,18 @@ mod tests {
             (BigInt::from(1), Vec::new())
         );
         assert_eq!(clear_denominators(&[q(0, 1)]), vec![BigInt::from(0)]);
+        assert_eq!(
+            clear_denominators_with_scale(&[BigRational::new_raw(1.into(), (-1).into())]),
+            (BigInt::from(1), vec![BigInt::from(-1)])
+        );
+        assert_eq!(
+            clear_denominators_with_scale(&[
+                BigRational::new_raw(2.into(), 4.into()),
+                BigRational::new_raw(1.into(), (-2).into()),
+                BigRational::new_raw(0.into(), (-2).into()),
+            ]),
+            (BigInt::from(4), [2, -2, 0].map(BigInt::from).to_vec())
+        );
     }
 
     #[test]

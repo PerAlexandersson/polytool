@@ -184,6 +184,7 @@ use crate::integer_range_sign::{
 };
 use crate::real_rootedness::RealInterval;
 use crate::vec_poly;
+use crate::vec_poly::clear_denominators as integer_coefficients;
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
@@ -1424,16 +1425,6 @@ fn separate(b: &Bivariate) -> Option<(Vec<Q>, Vec<Q>)> {
 // ---------------------------------------------------------------------------
 // Exact row checks
 // ---------------------------------------------------------------------------
-
-/// The integer polynomial with the same roots (denominators cleared).
-fn integer_coefficients(p: &[Q]) -> Vec<BigInt> {
-    let common = p
-        .iter()
-        .fold(BigInt::one(), |accumulator, c| accumulator.lcm(c.denom()));
-    p.iter()
-        .map(|c| c.numer() * (&common / c.denom()))
-        .collect()
-}
 
 fn is_real_rooted_rational(p: &[Q]) -> bool {
     crate::is_real_rooted_bigint_coeffs(&integer_coefficients(p))

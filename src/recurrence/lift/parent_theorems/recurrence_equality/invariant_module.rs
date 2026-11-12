@@ -463,12 +463,16 @@ fn normalized_operator(op: &DOp, factors: &[Biv]) -> DOp {
         }
     }
     // Rational content: lcm of denominators over gcd of numerators.
-    let mut denominator_lcm = BigInt::one();
+    let (denominator_lcm, _) = vec_poly::clear_denominators_with_scale_iter(
+        out.0
+            .values()
+            .flat_map(|c| c.rows().iter().flatten())
+            .filter(|value| !value.is_zero()),
+    );
     let mut numerator_gcd = BigInt::zero();
     for c in out.0.values() {
         for value in c.rows().iter().flatten() {
             if !value.is_zero() {
-                denominator_lcm = denominator_lcm.lcm(value.denom());
                 numerator_gcd = numerator_gcd.gcd(value.numer());
             }
         }

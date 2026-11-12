@@ -77,7 +77,6 @@ use crate::tnn_network::{
 };
 use crate::{check_totally_nonnegative_neville_bigint, Polynomial};
 use num_bigint::BigInt;
-use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
 use std::fmt;
 
@@ -360,18 +359,14 @@ pub struct RationalNegativeMinor {
 /// positive lcm of its denominators.
 fn scaled_square(production: &[Vec<Q>]) -> (BigInt, Vec<Vec<BigInt>>) {
     let size = production.len();
-    let scale = production
-        .iter()
-        .flatten()
-        .fold(BigInt::one(), |acc, v| acc.lcm(v.denom()));
+    let (scale, integers) =
+        crate::vec_poly::clear_denominators_with_scale_iter(production.iter().flatten());
+    let mut entries = integers.into_iter();
     let matrix = (0..size)
         .map(|n| {
+            let row: Vec<_> = entries.by_ref().take(production[n].len()).collect();
             (0..size)
-                .map(|k| {
-                    production[n].get(k).map_or_else(BigInt::zero, |v| {
-                        (v * Q::from_integer(scale.clone())).to_integer()
-                    })
-                })
+                .map(|k| row.get(k).cloned().unwrap_or_else(BigInt::zero))
                 .collect()
         })
         .collect();

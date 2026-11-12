@@ -272,11 +272,7 @@ fn reference_multiples(
     hi: &BigRational,
 ) -> Option<InclusiveIntegerRange> {
     let p = antiderivative_rational_bigint(q);
-    let denominator = p.iter().fold(BigInt::one(), |acc, c| acc.lcm(c.denom()));
-    let scaled: Vec<BigInt> = p
-        .iter()
-        .map(|c| (c * BigRational::from_integer(denominator.clone())).to_integer())
-        .collect();
+    let (denominator, scaled) = crate::vec_poly::clear_denominators_with_scale(&p);
     let mut found: Vec<BigInt> = Vec::new();
     let mut k = ceil_div_rational(lo, modulus);
     let k_last = floor_div_rational(hi, modulus);

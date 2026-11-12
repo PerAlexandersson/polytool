@@ -30,7 +30,7 @@ use crate::vec_poly;
 use crate::BigRational;
 use num_bigint::BigInt;
 use num_integer::Integer;
-use num_traits::{One, Zero};
+use num_traits::Zero;
 use ore_algebra::exact_kernel_vectors_by_group;
 
 type Q = BigRational;
@@ -309,9 +309,7 @@ fn guess_pivots(
             .map(|vector| {
                 vector.map(|vector| {
                     // Integer coefficients without a common factor.
-                    let denominator = vector
-                        .iter()
-                        .fold(BigInt::one(), |acc, value| acc.lcm(value.denom()));
+                    let (denominator, _) = vec_poly::clear_denominators_with_scale(&vector);
                     let content = vector
                         .iter()
                         .fold(BigInt::zero(), |acc, value| acc.gcd(value.numer()));

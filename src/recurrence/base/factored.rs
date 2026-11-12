@@ -221,15 +221,9 @@ fn scale_dense(dense: &mut Dense, scalar: &BigRational) {
 /// Return `(scalar, primitive)` with `dense = scalar * primitive`, where
 /// `primitive` has coprime integer entries and a positive first displayed term.
 fn primitive_normalization(dense: &Dense) -> (BigRational, Dense) {
-    let mut denominator_lcm = BigInt::one();
-    for entry in dense.iter().flatten() {
-        denominator_lcm = denominator_lcm.lcm(entry.denom());
-    }
-    let mut numerator_gcd = BigInt::zero();
-    for entry in dense.iter().flatten() {
-        let scaled = entry * BigRational::from_integer(denominator_lcm.clone());
-        numerator_gcd = numerator_gcd.gcd(scaled.numer());
-    }
+    let (denominator_lcm, integers) =
+        crate::vec_poly::clear_denominators_with_scale_iter(dense.iter().flatten());
+    let numerator_gcd = integers.iter().fold(BigInt::zero(), |acc, c| acc.gcd(c));
     let mut divisor = BigRational::new(numerator_gcd, denominator_lcm);
     let mut primitive = dense.clone();
     if first_displayed_entry(dense).is_some_and(Signed::is_negative) {

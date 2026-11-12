@@ -325,17 +325,7 @@ pub(in crate::recurrence) fn region_contains(outer: &RootInterval, inner: &RootI
     let (Some(outer), Some(inner)) = (concrete(outer), concrete(inner)) else {
         return false;
     };
-    let lower_ok = match (&outer.lower, &inner.lower) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(o), Some(i)) => o < i || (o == i && (outer.lower_closed || !inner.lower_closed)),
-    };
-    let upper_ok = match (&outer.upper, &inner.upper) {
-        (None, _) => true,
-        (Some(_), None) => false,
-        (Some(o), Some(i)) => o > i || (o == i && (outer.upper_closed || !inner.upper_closed)),
-    };
-    lower_ok && upper_ok
+    outer.contains_interval_bounds(&inner)
 }
 
 #[cfg(test)]

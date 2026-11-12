@@ -8,8 +8,7 @@
 //! their stable JSON schemas (`json.loads` of the library's serialization).
 
 use num_bigint::BigInt;
-use num_integer::Integer;
-use num_traits::{One, Zero};
+use num_traits::Zero;
 use polytool::BigRational;
 use pyo3::exceptions::{PyTypeError, PyValueError, PyZeroDivisionError};
 use pyo3::prelude::*;
@@ -191,13 +190,7 @@ pub(crate) fn trimmed(mut coefficients: Vec<BigRational>) -> Vec<BigRational> {
 /// multiplication by a positive constant, so rational input is decided on
 /// this integer multiple.
 pub(crate) fn integer_multiple(coefficients: &[BigRational]) -> (Vec<BigInt>, BigInt) {
-    let scale = coefficients
-        .iter()
-        .fold(BigInt::one(), |lcm, c| lcm.lcm(c.denom()));
-    let integers = coefficients
-        .iter()
-        .map(|c| (c * BigRational::from_integer(scale.clone())).to_integer())
-        .collect();
+    let (scale, integers) = polytool::vec_poly::clear_denominators_with_scale(coefficients);
     (integers, scale)
 }
 
@@ -268,6 +261,7 @@ pub(crate) fn to_json_text<T: serde::Serialize>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_traits::One;
 
     fn q(numerator: i64, denominator: i64) -> BigRational {
         BigRational::new(numerator.into(), denominator.into())

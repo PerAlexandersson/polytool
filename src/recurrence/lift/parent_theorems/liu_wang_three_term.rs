@@ -2171,21 +2171,15 @@ fn decided(
 
 /// Whether the nonzero real-rooted `p` has every root in the closed window.
 fn has_roots_in_window(p: &[Q], window: &RootWindow) -> bool {
-    let p = vec_poly::trim(p);
-    if vec_poly::is_zero(&p) || !is_real_rooted_rational(&p) {
-        return false;
-    }
-    let one_signed =
-        |q: &[Q]| q.iter().all(|c| !c.is_negative()) || q.iter().all(|c| !c.is_positive());
-    let upper_ok = window
-        .upper
-        .as_ref()
-        .is_none_or(|u| one_signed(&vec_poly::compose(&p, &[u.clone(), Q::one()])));
-    let lower_ok = window
-        .lower
-        .as_ref()
-        .is_none_or(|l| one_signed(&vec_poly::compose(&p, &[l.clone(), -Q::one()])));
-    upper_ok && lower_ok
+    has_real_roots_in_region(
+        p,
+        &RealInterval {
+            lower: window.lower.clone(),
+            lower_closed: true,
+            upper: window.upper.clone(),
+            upper_closed: true,
+        },
+    )
 }
 
 /// The hypotheses of the window version for `window` (module documentation,

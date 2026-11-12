@@ -385,9 +385,9 @@ impl Bound {
                 "support bound `{text}` must not depend on k"
             )));
         }
-        let d = form.index.denom().lcm(form.constant.denom());
-        let a = form.index.numer() * (&d / form.index.denom());
-        let b = form.constant.numer() * (&d / form.constant.denom());
+        let (d, integers) =
+            vec_poly::clear_denominators_with_scale_iter([&form.index, &form.constant].into_iter());
+        let [a, b]: [BigInt; 2] = integers.try_into().expect("two coefficients");
         if a.is_negative() {
             return Err(RecurrenceError::Unsupported(format!(
                 "support bound `{text}` decreases in n"
@@ -691,15 +691,12 @@ fn nonzero_on_region(
     }
     // No integer zero at all: A modulus m + B k + (A r + C) with
     // gcd(A modulus, B) not dividing A r + C.
-    let scale = phi
-        .index
-        .denom()
-        .lcm(phi.column.denom())
-        .lcm(phi.constant.denom());
-    let integer = |c: &Q| c.numer() * (&scale / c.denom());
-    let a = integer(&phi.index) * BigInt::from(modulus);
-    let b = integer(&phi.column);
-    let c = integer(&phi.index) * BigInt::from(residue) + integer(&phi.constant);
+    let (_, integers) = vec_poly::clear_denominators_with_scale_iter(
+        [&phi.index, &phi.column, &phi.constant].into_iter(),
+    );
+    let [index, b, constant]: [BigInt; 3] = integers.try_into().expect("three coefficients");
+    let a = &index * BigInt::from(modulus);
+    let c = index * BigInt::from(residue) + constant;
     let g = a.gcd(&b);
     !g.is_zero() && !c.is_multiple_of(&g)
 }
@@ -1461,12 +1458,11 @@ fn solve(
     let matrix: Vec<Vec<BigInt>> = equations
         .values()
         .map(|entries| {
-            let scale = entries
-                .iter()
-                .fold(BigInt::one(), |acc, (_, c)| acc.lcm(c.denom()));
+            let (_, integers) =
+                vec_poly::clear_denominators_with_scale_iter(entries.iter().map(|(_, c)| c));
             let mut row = vec![BigInt::zero(); width];
-            for (column, c) in entries {
-                row[*column] += c.numer() * (&scale / c.denom());
+            for ((column, _), integer) in entries.iter().zip(integers) {
+                row[*column] += integer;
             }
             row
         })
@@ -1508,13 +1504,8 @@ fn primitive(mut operator: EulerMap) -> EulerMap {
         }
     }
     let all: Vec<Q> = operator.values().flatten().cloned().collect();
-    let denominator = all.iter().fold(BigInt::one(), |acc, c| acc.lcm(c.denom()));
-    let numerator = all
-        .iter()
-        .filter(|c| !c.is_zero())
-        .fold(BigInt::zero(), |acc, c| {
-            acc.gcd(&(c.numer() * (&denominator / c.denom())))
-        });
+    let (denominator, integers) = vec_poly::clear_denominators_with_scale(&all);
+    let numerator = integers.iter().fold(BigInt::zero(), |acc, c| acc.gcd(c));
     let leader_sign = operator
         .iter()
         .next_back()

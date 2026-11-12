@@ -1322,11 +1322,7 @@ fn row_fingerprint(row: &[Q]) -> Option<Vec<BigInt>> {
     if row.len() < 2 {
         return None;
     }
-    let denominator = row.iter().fold(BigInt::one(), |l, c| l.lcm(c.denom()));
-    let integers: Vec<BigInt> = row
-        .iter()
-        .map(|c| (c * Q::from_integer(denominator.clone())).to_integer())
-        .collect();
+    let integers = vec_poly::clear_denominators(row);
     let content = integers.iter().fold(BigInt::zero(), |g, c| g.gcd(c));
     let sign = if integers.last().is_some_and(|c| c.is_negative()) {
         -BigInt::one()

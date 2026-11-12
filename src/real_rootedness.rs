@@ -107,6 +107,7 @@ mod formatting;
 mod interlacing;
 mod qpoly;
 mod real_rooted;
+mod region;
 mod resultants;
 mod sturm_fallback;
 
@@ -152,6 +153,8 @@ pub use real_rooted::{
     is_strictly_real_rooted_bezout_bigint_coeffs, is_strictly_real_rooted_hermite,
     is_strictly_real_rooted_hermite_bigint_coeffs, squarefree_part_bigint_coeffs,
 };
+pub use region::polynomial_has_all_real_roots_in;
+pub(crate) use region::{has_real_roots_below, has_real_roots_in, has_real_roots_in_closed_region};
 pub use resultants::{
     discriminant, discriminant_bigint_coeffs, resultant, resultant_bigint_coeffs, sylvester_matrix,
 };

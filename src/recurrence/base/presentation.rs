@@ -56,12 +56,9 @@ impl Recurrence {
         let coefficients: Vec<_> = polynomials
             .flat_map(|p| p.coeffs.iter().flatten())
             .collect();
-        let denominator = coefficients
-            .iter()
-            .fold(BigInt::one(), |a, c| a.lcm(c.denom()));
-        let content = coefficients.iter().fold(BigInt::zero(), |a, c| {
-            a.gcd(&(c.numer() * (&denominator / c.denom())))
-        });
+        let (denominator, integers) =
+            crate::vec_poly::clear_denominators_with_scale_iter(coefficients.iter().copied());
+        let content = integers.iter().fold(BigInt::zero(), |a, c| a.gcd(c));
         let mut scale = BigRational::new(denominator, content);
         if leading.is_negative() {
             scale = -scale;

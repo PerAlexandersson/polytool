@@ -347,15 +347,7 @@ fn fit_row_relation(rows: &[Vec<Q>], first: usize, from: usize) -> Option<(Biv, 
         }
         let integral: Vec<Vec<BigInt>> = equations
             .iter()
-            .map(|equation| {
-                let denominator = equation
-                    .iter()
-                    .fold(BigInt::one(), |acc, value| acc.lcm(value.denom()));
-                equation
-                    .iter()
-                    .map(|value| value.numer() * (&denominator / value.denom()))
-                    .collect()
-            })
+            .map(|equation| vec_poly::clear_denominators(equation))
             .collect();
         let Some(vector) = exact_kernel_vectors_by_group(&integral, &vec![0; width], 1)
             .into_iter()
@@ -1588,15 +1580,7 @@ fn first_coefficient_hypothesis(
             .collect();
         let integral: Vec<Vec<BigInt>> = equations
             .iter()
-            .map(|equation| {
-                let denominator = equation
-                    .iter()
-                    .fold(BigInt::one(), |acc, value| acc.lcm(value.denom()));
-                equation
-                    .iter()
-                    .map(|value| value.numer() * (&denominator / value.denom()))
-                    .collect()
-            })
+            .map(|equation| vec_poly::clear_denominators(equation))
             .collect();
         let Some(vector) = exact_kernel_vectors_by_group(&integral, &vec![0; width], 1)
             .into_iter()

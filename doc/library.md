@@ -254,7 +254,13 @@ Root-location helpers are named for what they return.  `approximate_real_roots`
 accurate to below `1e-6`, and `None` when the polynomial is not real-rooted;
 `real_rootedness::isolate_real_roots_rational_coeffs` (formerly
 `isolate_real_roots_exact`) returns certified enclosures with multiplicities for
-rational coefficients.  Total nonnegativity is tested by
+rational coefficients.
+`real_rootedness::polynomial_has_all_real_roots_in(&coefficients, &interval)`
+tests a rational polynomial against a `RealInterval` without isolating its
+roots, respecting each finite end's open or closed flag. It excludes the
+zero polynomial; a nonzero constant passes vacuously.
+`RealInterval::is_subset_of` compares intervals and includes an empty interval
+in every interval. Total nonnegativity is tested by
 `linalg::is_totally_nonnegative_neville` (all minors, Neville elimination) and
 `linalg::is_totally_nonnegative_by_minors` (brute force up to a minor size).
 Failures of the diagnostic `check_*`, parsing and report functions are typed

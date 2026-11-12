@@ -85,21 +85,11 @@ pub fn hermite_matrix_bigint_coeffs(coeffs: &[BigInt]) -> Option<Vec<Vec<BigInt>
     }
 
     let sums = newton_sums_rational_bigint_coeffs(coeffs, 2 * degree - 2)?;
-    let zero = Q::from_integer(BigInt::zero());
-    let denominator_lcm = sums
-        .iter()
-        .take(2 * degree - 1)
-        .filter(|s| **s != zero)
-        .fold(BigInt::from(1), |acc, s| acc.lcm(s.denom()));
-    let scale = Q::from_integer(denominator_lcm);
+    let integers = vec_poly::clear_denominators(&sums);
 
     let mut matrix = vec![vec![BigInt::zero(); degree]; degree];
-    for i in 0..degree {
-        for j in 0..degree {
-            let scaled = sums[i + j].clone() * scale.clone();
-            debug_assert_eq!(scaled.denom(), &BigInt::from(1));
-            matrix[i][j] = scaled.to_integer();
-        }
+    for (i, row) in matrix.iter_mut().enumerate() {
+        row.clone_from_slice(&integers[i..i + degree]);
     }
     Some(matrix)
 }

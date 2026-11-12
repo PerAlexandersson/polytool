@@ -145,18 +145,21 @@ impl RealInterval {
     /// Whether the interval is contained in `other` (an empty interval is
     /// contained in everything).
     pub fn is_subset_of(&self, other: &Self) -> bool {
-        if self.is_empty() {
-            return true;
-        }
-        let lower_ok = match (&other.lower, &self.lower) {
+        self.is_empty() || other.contains_interval_bounds(self)
+    }
+
+    /// Endpoint containment without the empty-interval special case, for
+    /// certificate checks that compare recorded bounds literally.
+    pub(crate) fn contains_interval_bounds(&self, inner: &Self) -> bool {
+        let lower_ok = match (&self.lower, &inner.lower) {
             (None, _) => true,
             (Some(_), None) => false,
-            (Some(b), Some(a)) => a > b || (a == b && (other.lower_closed || !self.lower_closed)),
+            (Some(b), Some(a)) => a > b || (a == b && (self.lower_closed || !inner.lower_closed)),
         };
-        let upper_ok = match (&other.upper, &self.upper) {
+        let upper_ok = match (&self.upper, &inner.upper) {
             (None, _) => true,
             (Some(_), None) => false,
-            (Some(b), Some(a)) => a < b || (a == b && (other.upper_closed || !self.upper_closed)),
+            (Some(b), Some(a)) => a < b || (a == b && (self.upper_closed || !inner.upper_closed)),
         };
         lower_ok && upper_ok
     }
