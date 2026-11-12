@@ -621,7 +621,8 @@ pub struct RecurrenceTheoremsRequest {
 }
 
 /// General proof search for a recurrence-defined sequence; only one
-/// stage (catalog lifts) consults the bundled OEIS catalog.
+/// stage (catalog lifts) consults the bundled OEIS catalog. Final structural
+/// closures compute preimages and prove them without lookup or attestations.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DiscoverRecurrenceProofsRequest {
@@ -636,7 +637,8 @@ pub struct DiscoverRecurrenceProofsRequest {
     #[serde(default)]
     pub max_representation_candidates: Option<usize>,
     /// Catalog families certified by the catalog-lift stage, default 6; 0
-    /// disables it; at most 100.
+    /// disables it; at most 100. Also bounds each final structural closure
+    /// stage, where the bound is capped at six.
     #[serde(default)]
     pub max_lift_candidates: Option<usize>,
     /// Coordinates x = a u + b tried by the affine-coordinate stage,

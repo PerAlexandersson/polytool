@@ -608,6 +608,13 @@ When no criterion proves the record:
     interlacing kept for a > 0 and mirrored for a < 0. No other stage runs in
     the new coordinate. --max-affine-coordinates bounds the coordinates tried
     (deterministic menu; 0 disables the stage).
+  - structural closures: after all earlier routes fail, compute coefficient
+    weight quotients, row-factor cofactors, inverse gamma expansions, and
+    preimages under 1 +/- D or theta + a (a = 1, 2). Prove computed parents
+    through the registry, closure depth two, with no parent catalog lookup or
+    attestations. Exact Ore identities and named closure chains are required.
+    --max-lift-candidates bounds retained candidates per structural stage
+    (capped at 6; 0 disables). A requested root region skips this stage.
 A rule with an inhomogeneous term matches no criterion: status not_applicable.
 
 The recurrence input is recurrence.v1 JSON, a theorem wrapper or a
@@ -615,7 +622,7 @@ representation menu; with a menu, --candidate is required unless it has one
 entry. --verify replays the recorded routes of a report from standard input
 (every attempt, the tail, every equality certificate and the catalog-lift
 certificates with their parent reports, the affine coordinates with their
-transformed records) and takes no search flags."#,
+transformed records), and structural closure chains; takes no search flags."#,
     input: InputKind::Json,
     output: OutputKind::JsonSwitch,
     flags: &[
@@ -640,7 +647,7 @@ transformed records) and takes no search flags."#,
         option(
             "max-lift-candidates",
             "N",
-            "Catalog families certified by the catalog-lift stage (0: off)",
+            "Catalog/structural lift candidates (0: off; structural cap 6)",
         )
         .default("6"),
         option(
@@ -673,7 +680,9 @@ catalog_lifts.conclusion. affine_coordinates holds the affine-coordinate stage:
 candidates_available, coordinates (slope, intercept, reason, the transformed
 record and its attempts, a transformed tail) and conclusion (coordinate,
 theorem, from_index, root_region mapped to x, interlacing with
-interlacing_orientation preserved or mirrored). Replay needs
+interlacing_orientation preserved or mirrored). closure_lifts holds structural
+inverse operations, all-index certificates, computed parent proofs (registry
+or recursive closure), named steps and the nonzero-row conclusion. Replay needs
 the attempts of exactly the criteria the current search records; recompute
 reports saved before a criterion was added."#,
     examples: &[

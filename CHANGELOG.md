@@ -35,6 +35,13 @@
 
 ### Added
 
+- Final structural closure discovery after the earlier routes fail: exact
+  weight quotients, row factors, inverse gamma expansions, and inverses of
+  fixed differential/Euler preservers. Computed parents use the theorem
+  registry with attestations disabled and closure depth two. All-index Ore
+  identities, parent proofs, named theorem chains and nonzero certificates
+  replay through the additive `closure_lifts` JSON field.
+
 - Public `recurrence::generating_function` module: exact rational row
   generating functions from an index-free homogeneous rule without derivatives
   and every prescribed seed, reduced by a bivariate gcd, with `D(x,0)=1`.

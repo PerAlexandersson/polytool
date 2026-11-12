@@ -21,7 +21,7 @@ use crate::recurrence::lift::hadamard_factor::prepare::{
     prepare_lift_rule, shift_free_from_json, shift_free_json, PreparedLiftRule,
 };
 use crate::recurrence::lift::hadamard_factor::search::{certify_candidate, remove_remainder};
-use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
+use crate::recurrence::lift::parent_proof::{prove_parent_with_policy, ParentRecurrenceRecord};
 use crate::recurrence::lift::section_certify::{
     n_coefficients, n_polynomial, pseudo_divide_scalar, x_free_leader, RatioGauge,
 };
@@ -188,6 +188,8 @@ pub struct PreserverImageOptions {
     pub attestations: Vec<VeroneseParentAttestation>,
     /// Try the root-domain parent route.  Default true.
     pub try_root_domain: bool,
+    /// Permit caller and bundled-catalog attestations. Default true; structural discovery disables both.
+    pub allow_attestations: bool,
     /// When set, a certified identity also gets the computed runnable rule
     /// of the image ([`PreserverImageCertification::image_rule`]) with these
     /// options.  Default `None`.
@@ -201,6 +203,7 @@ impl Default for PreserverImageOptions {
             max_operator_terms: MAX_PRESERVER_IMAGE_OPERATOR_TERMS,
             attestations: Vec::new(),
             try_root_domain: true,
+            allow_attestations: true,
             image_rule: None,
         }
     }
@@ -1385,7 +1388,7 @@ fn certify_identity(
     })
 }
 
-/// The parent provers: `prove_parent_real_rootedness` (rows zero or real-rooted with
+/// The parent provers: `prove_parent_with_policy` (rows zero or real-rooted with
 /// coefficients of one sign) and, when that is not proved and the
 /// operator's theorem needs only real-rootedness, the three-term theorem
 /// without a root region.
@@ -1395,7 +1398,7 @@ fn prove_parents(
     options: &PreserverImageOptions,
     whole_line_suffices: bool,
 ) -> Result<(VeroneseParentProof, Option<RealRootednessTheoremReport>), RecurrenceError> {
-    let proof = prove_parent_real_rootedness(
+    let proof = prove_parent_with_policy(
         &ParentRecurrenceRecord {
             rule: &parent.rule,
             seeds: &parent.seeds,
@@ -1404,6 +1407,7 @@ fn prove_parents(
         needed_from,
         &options.attestations,
         options.try_root_domain,
+        options.allow_attestations,
     )?;
     if proof.status == VeroneseParentProofStatus::Proved || !whole_line_suffices {
         return Ok((proof, None));

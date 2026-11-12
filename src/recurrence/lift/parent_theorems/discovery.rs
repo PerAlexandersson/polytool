@@ -42,7 +42,11 @@
 //! 6. **canonical reversal**: after every direct stage above fails, the
 //!    nonrecursive theorem menu on the minimal degree-law reversal, guarded
 //!    by [`MAXIMUM_REVERSAL_DEGREE_SLOPE`]. Identical records already tried
-//!    directly, including index shifts, are skipped.
+//!    directly, including index shifts, are skipped;
+//! 7. **structural closures**: inverse coefficient weights, row factors, gamma
+//!    expansion and fixed differential/Euler preservers compute their parents
+//!    from the input. The registry proves them with attestations disabled,
+//!    recursively to closure depth two. Identities need exact Ore certificates.
 //!
 //! A rule with an inhomogeneous term is matched by no theorem: the report
 //! says so with the status `not_applicable` and
@@ -72,8 +76,8 @@ use super::recurrence_equality::{certify_recurrence_equality, RecurrenceEquality
 use super::*;
 use crate::recurrence::lift::catalog_lift::catalog_lift_search;
 use crate::recurrence::{
-    AdaptiveSearchBudget, AdaptiveSearchOptions, CatalogLiftOptions, CatalogLiftSearch,
-    CatalogParentProofKind,
+    find_discovery_closure_lifts, AdaptiveSearchBudget, AdaptiveSearchOptions, CatalogLiftOptions,
+    CatalogLiftSearch, CatalogParentProofKind, DiscoveryClosureSearch,
 };
 
 mod affine_coordinates;
@@ -276,6 +280,10 @@ pub struct RecurrenceProofDiscoveryReport {
     /// `proved`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub affine_coordinates: Option<AffineCoordinateSearch>,
+    /// Final general closures, tried only after every earlier route fails.
+    /// Identities, parent proofs and named closure steps replay independently.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closure_lifts: Option<DiscoveryClosureSearch>,
 }
 
 /// Try all supported general theorem families, independently of sequence names.
@@ -395,6 +403,7 @@ pub fn discover_recurrence_proofs_with_stage_options(
         alternative_representations: None,
         catalog_lifts: None,
         affine_coordinates: None,
+        closure_lifts: None,
     };
     let inhomogeneous = rule.inhomogeneous.as_ref().is_some_and(|g| !g.is_zero());
     if !report
@@ -499,14 +508,23 @@ pub fn discover_recurrence_proofs_with_stage_options(
                     .filter_map(|c| c.tail.as_ref().map(|t| &t.recurrence)),
             );
         }
-        if degree_law_reversal::already_tried(&rule, first_index, &seeds, &tried)? {
-            return Ok(report);
+        if !degree_law_reversal::already_tried(&rule, first_index, &seeds, &tried)? {
+            let attempt = check_degree_law_reversal_theorem(&rule, first_index, &seeds, options)?;
+            if degree_law_reversal::ROUTE.discovery.records(&attempt) {
+                report.attempts.push(attempt);
+                report.finish_summary(None);
+            }
         }
-        let attempt = check_degree_law_reversal_theorem(&rule, first_index, &seeds, options)?;
-        if degree_law_reversal::ROUTE.discovery.records(&attempt) {
-            report.attempts.push(attempt);
-            report.finish_summary(None);
-        }
+    }
+    if report.status != "proved"
+        && !inhomogeneous
+        && lift_options.is_enabled()
+        && options.root_region.is_none()
+    {
+        let plain = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
+        let subject = report.tail.as_ref().map_or(&plain, |tail| &tail.recurrence);
+        report.closure_lifts = find_discovery_closure_lifts(subject, options, lift_options).ok();
+        report.finish_summary(None);
     }
     Ok(report)
 }
@@ -656,6 +674,17 @@ impl RecurrenceProofDiscoveryReport {
                 conditional = None;
             }
         }
+        let closure = self
+            .closure_lifts
+            .as_ref()
+            .and_then(|s| s.conclusion.as_ref());
+        if proved.is_none() {
+            if let Some(conclusion) = closure {
+                proved = Some(ProvedRows::EveryRow(conclusion.from_index));
+                route = "a general closure";
+                conditional = None;
+            }
+        }
         let (from, outside_zero_classes) = match proved {
             Some(ProvedRows::EveryRow(from)) => (Some(from), None),
             Some(ProvedRows::OutsideZeroResidueClasses(rows)) => (None, Some(rows)),
@@ -706,6 +735,9 @@ impl RecurrenceProofDiscoveryReport {
         }
         if let (Some(conclusion), "an affine coordinate") = (affine, route) {
             statement.push_str(&format!(" Affine coordinate: {}", conclusion.statement));
+        }
+        if let (Some(conclusion), "a general closure") = (closure, route) {
+            statement.push_str(&format!(" Closure chain: {}", conclusion.statement));
         }
         if let Some(conclusion) = conditional {
             statement.push_str(&format!(
@@ -892,6 +924,7 @@ impl RecurrenceProofDiscoveryReport {
         if let Some(closure) = &closure {
             let mut before_closure = self.clone();
             before_closure.attempts = direct;
+            before_closure.closure_lifts = None;
             before_closure.finish_summary(None);
             if before_closure.status == "proved" || inhomogeneous {
                 return failed("reversal is recorded before a direct proof or lift");
@@ -904,6 +937,22 @@ impl RecurrenceProofDiscoveryReport {
                 &plain,
                 &options,
             )?;
+        }
+        if let Some(search) = &self.closure_lifts {
+            let mut earlier = self.clone();
+            earlier.closure_lifts = None;
+            earlier.finish_summary(None);
+            let subject = self.tail.as_ref().map_or(&plain, |tail| &tail.recurrence);
+            if earlier.status == "proved"
+                || inhomogeneous
+                || options.root_region.is_some()
+                || &search.recurrence != subject
+            {
+                return failed(
+                    "closure stage recorded after an earlier proof or for another target",
+                );
+            }
+            search.verify(&options)?;
         }
         let mut expected = self.clone();
         expected.trivially_real_rooted = self.recurrence.search.is_none()

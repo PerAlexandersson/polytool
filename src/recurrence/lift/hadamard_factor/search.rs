@@ -15,7 +15,7 @@ use super::prepare::{prepare_lift_rule, PreparedLiftRule, MAX_LIFT_IDENTIFYING_R
 use super::report::*;
 use crate::linalg::{rational_kernel_with_certificate, RationalKernelLimits};
 use crate::recurrence::implicit::algebra::{content_and_primitive, q, roots_in_domain, DOp};
-use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
+use crate::recurrence::lift::parent_proof::{prove_parent_with_policy, ParentRecurrenceRecord};
 use crate::recurrence::lift::section_certify::n_coefficients;
 use crate::recurrence::{
     find_recurrence_adaptive_rational_with_budget, format_rational_coeff, AdaptiveSearchBudget,
@@ -74,6 +74,8 @@ pub struct HadamardFactorLiftOptions {
     pub attestations: Vec<VeroneseParentAttestation>,
     /// Try the root-domain parent route.  Default true.
     pub try_root_domain: bool,
+    /// Permit caller and bundled-catalog attestations. Default true; structural discovery disables both.
+    pub allow_attestations: bool,
 }
 
 impl Default for HadamardFactorLiftOptions {
@@ -93,6 +95,7 @@ impl Default for HadamardFactorLiftOptions {
             max_operator_terms: MAX_HADAMARD_OPERATOR_TERMS,
             attestations: Vec::new(),
             try_root_domain: true,
+            allow_attestations: true,
         }
     }
 }
@@ -859,6 +862,25 @@ pub fn find_hadamard_factor_lifts(
     first_index: usize,
     options: &HadamardFactorLiftOptions,
 ) -> Result<HadamardFactorLiftReport, RecurrenceError> {
+    find_lifts(recurrence, rows, first_index, options, false)
+}
+
+pub(in crate::recurrence::lift) fn find_structural_hadamard_factor_lifts(
+    recurrence: &Recurrence,
+    rows: &[Vec<BigRational>],
+    first_index: usize,
+    options: &HadamardFactorLiftOptions,
+) -> Result<HadamardFactorLiftReport, RecurrenceError> {
+    find_lifts(recurrence, rows, first_index, options, true)
+}
+
+fn find_lifts(
+    recurrence: &Recurrence,
+    rows: &[Vec<BigRational>],
+    first_index: usize,
+    options: &HadamardFactorLiftOptions,
+    structural: bool,
+) -> Result<HadamardFactorLiftReport, RecurrenceError> {
     validate_options(options)?;
     let input = prepare_lift_rule(recurrence, rows, first_index, "input")?;
     let n0 = first_index;
@@ -930,6 +952,11 @@ pub fn find_hadamard_factor_lifts(
                 gauges.push(normalized);
             }
             for (gauge, parent_rows) in gauges {
+                // A necessary PF condition only rejects proposals. The Ore identity
+                // and registry proof below remain the all-index proof.
+                if structural && !super::super::structural_closure::plausibly_pf(&parent_rows) {
+                    continue;
+                }
                 let parent = match search_parent(&parent_rows, n0, input_size, options)? {
                     ParentSearch::Found(parent) => parent,
                     ParentSearch::NotSmaller(reason) => {
@@ -946,6 +973,9 @@ pub fn find_hadamard_factor_lifts(
                 found_any = true;
                 let proved = lift.lift_summary.is_proved();
                 report.lifts.push(lift);
+                if proved && structural {
+                    return Ok(report);
+                }
                 if proved {
                     break 'variants;
                 }
@@ -985,7 +1015,7 @@ fn build_lift(
     options: &HadamardFactorLiftOptions,
 ) -> Result<HadamardFactorLift, RecurrenceError> {
     let (identity, rows_compared) = certify_candidate(input, parent, factor, gauge, options)?;
-    let parent_proof = prove_parent_real_rootedness(
+    let parent_proof = prove_parent_with_policy(
         &ParentRecurrenceRecord {
             rule: &parent.rule,
             seeds: &parent.seeds,
@@ -994,6 +1024,7 @@ fn build_lift(
         parent.first_index,
         &options.attestations,
         options.try_root_domain,
+        options.allow_attestations,
     )?;
     let parent_json = RecurrenceJson::from_recurrence_rational(
         &parent.rule,

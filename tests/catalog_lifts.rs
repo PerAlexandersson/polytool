@@ -168,12 +168,12 @@ fn a_proved_record_runs_no_lift_stage() {
 }
 
 #[test]
-fn a_lift_resting_on_a_catalog_flag_is_only_conditional() {
-    // A008303 is normalized-equal to A263789 (peak polynomials), which
-    // polytool does not prove but the catalog flags lean_proved.
+fn catalog_flag_stays_conditional_when_a_structural_chain_proves_input() {
+    // The old normalized lift rests on a flag. An independent inverse-gamma
+    // chain now proves the input, without upgrading that flagged premise.
     let report = discover("A008303");
-    assert_eq!(report.status, "conditional_on_attestation");
-    assert_eq!(report.real_rooted_from_index, None);
+    assert_eq!(report.status, "proved");
+    assert!(report.closure_lifts.as_ref().is_some_and(|s| s.is_proved()));
     let conclusion = report
         .catalog_lifts
         .as_ref()
@@ -188,12 +188,12 @@ fn a_lift_resting_on_a_catalog_flag_is_only_conditional() {
         conclusion.conditional_on,
         ["oeis_catalog:A263789:lean_proved".to_string()]
     );
-    assert!(report.statement.contains("Not proved by polytool"));
+    assert!(report.statement.contains("Closure chain"));
     report.verify().unwrap();
-    // Claiming a polytool proof is rejected, in the summary or in the lift.
+    // Altering the summary or upgrading the old flagged lift is rejected.
     let mut tampered = report.clone();
     tampered.status = "proved".into();
-    tampered.real_rooted_from_index = Some(conclusion.from_index);
+    tampered.real_rooted_from_index = Some(conclusion.from_index + 1);
     assert!(tampered.verify().is_err());
     let mut tampered = report.clone();
     let lifts = tampered.catalog_lifts.as_mut().unwrap();

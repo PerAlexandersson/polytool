@@ -563,3 +563,60 @@ and compositions of preserving transformations. Several of these already
 have specialized library adapters; composing their certificates into this
 direct search and formal Lean replay are further work. This command does not
 yet dispatch every theorem or transformation in RealRooted.
+
+## Structural inverse closures
+
+After the earlier routes, including canonical reversal, fail, we try a bounded
+structural closure search. Every parent is computed from the supplied rows or
+recurrence coefficients. This stage reads neither the catalog nor named-family
+generators, and disables caller and catalog attestations in the parent prover.
+The existing catalog stage keeps its earlier behavior and priority.
+
+| Stage | Input class and computed parent | Closure theorem |
+| --- | --- | --- |
+| Weight removal | Coefficients divisible by a fixed-menu binomial, factorial or rising-factorial weight, with a smaller recurrence for the quotient | Pólya–Schur multiplier-sequence theorem; only weights with a verified multiplier justification transfer roots |
+| Row factor | Rows with a fixed polynomial factor to an affine nonnegative power; exact factorization and substitution derive the cofactor recurrence | Roots of a product are the union of the factors' roots, with multiplicities |
+| Gamma | Rows admitting an affine-degree inverse gamma expansion whose parent recurrence is symmetric at that degree | For symmetric PF `Q`, `Q(x)=(1+x)^d G(x/(1+x)^2)` implies that `G` has nonpositive real roots |
+| Preserver image | Rows whose exact preimages under `1+D`, `1-D`, `theta+1` or `theta+2` satisfy a provable recurrence | Hermite–Poulain for constant differential operators; Pólya–Schur for the Euler multipliers |
+
+Here `theta=xD`. For gamma proposals we use the minimal affine majorant of
+twice the observed degrees, and the scales 1 and 1/4 (the latter normalizes the
+branch point of `x/(1+x)^2`). Neither the observed degree schedule nor a fitted
+parent recurrence is a proof. The existing gamma certifier must prove symmetry
+and transport for all indices.
+
+We use twelve detection rows (records needing more identifying seeds are
+skipped), and degree at most 24. Weight, gamma and preserver preimage fits
+use at most 32 recurrence-finder configurations; row-factor extraction uses
+its existing factorization and cofactor bounds. The existing
+`max_lift_candidates` option bounds retained identity candidates per stage,
+capped at six for structural discovery; zero disables it. Closure recursion
+has depth two. We reuse each identity certifier's direct registry proof;
+root-domain transformation retries are disabled for these parents. Necessary
+finite PF tests only reject proposals. Exact
+coefficient division computes the weight preimages; terminating polynomial
+back-substitution computes `(1+/-D)^(-1)`, and division of coefficient `k` by
+`k+a` computes `(theta+a)^(-1)`.
+
+An accepted attempt carries a chain: an all-index Ore identity, the computed
+parent's own registry or recursive closure proof, the named closure theorem,
+and a leading-coefficient certificate settling nonzero rows, directly or
+through an injective fixed operator. A nonzero Ore
+remainder, an open parent or an unchecked theorem hypothesis gives no proof.
+The additive `closure_lifts` field records the search and its certificates.
+Replay recomputes the bounded structural search and every named chain and
+rejects altered identities, parent records, summaries or text.
+
+The multiplier justification is the classical Pólya–Schur characterization
+(G. Pólya and I. Schur, *J. Reine Angew. Math.* **144** (1914), 89–113).
+Hermite–Poulain states that a constant-coefficient differential operator with
+a real-rooted symbol preserves real-rootedness or gives zero. The gamma
+criterion follows by pairing reciprocal negative roots of the symmetric
+parent; each pair contributes a linear factor with a nonpositive root in the
+gamma variable. These are the same statements used by the explicit lift APIs.
+
+Ordinary products are included through row-factor extraction. We do not search
+for arbitrary pairs of growing families, or Schur–Szegő factors: no structural
+factorization into two recurrence-defined parents is implemented here.
+Positive factorial or rising-factorial coefficients alone do not establish a
+multiplier sequence; unresolved menu weights remain proposals only.

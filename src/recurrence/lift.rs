@@ -249,3 +249,6 @@ mod veronese_tests;
 
 mod symmetric_companion;
 pub use symmetric_companion::*;
+
+mod structural_closure;
+pub use structural_closure::*;

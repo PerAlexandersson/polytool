@@ -226,3 +226,47 @@ fn conditional_product_classification_is_visible_in_json() {
     assert!(theorem.get("trivially_real_rooted").is_none());
     assert_eq!(theorem["trivially_real_rooted_if_rule_holds"], true);
 }
+
+#[test]
+fn structural_gamma_chain_text_json_and_replay() {
+    let entry = polytool::oeis::by_id("A008303").unwrap();
+    let (rule, seeds) = entry.recurrence_parts().unwrap();
+    let record = polytool::recurrence::RecurrenceJson::from_recurrence_rational(
+        &rule,
+        entry.recurrence_first_index,
+        &seeds,
+        None,
+    );
+    let input = serde_json::to_string(&record).unwrap();
+    let output = run(&["recurrence-prove", "--recurrence", "-", "--json"], &input);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["closure_lifts"]["attempts"][0]["stage"], "gamma");
+    assert!(run(
+        &["recurrence-prove", "--verify", "--json"],
+        &report.to_string()
+    )
+    .status
+    .success());
+    let text = run(&["recurrence-prove", "--recurrence", "-"], &input);
+    let text = String::from_utf8(text.stdout).unwrap();
+    for step in [
+        "All-index identity",
+        "Computed parent proof",
+        "Closure theorem",
+        "Nonzero rows",
+    ] {
+        assert!(text.contains(step), "{text}");
+    }
+    report["closure_lifts"]["attempts"][0]["steps"][0]["statement"] = "finite rows only".into();
+    assert_eq!(
+        run(&["recurrence-prove", "--verify"], &report.to_string())
+            .status
+            .code(),
+        Some(2)
+    );
+}

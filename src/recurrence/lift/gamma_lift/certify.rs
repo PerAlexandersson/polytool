@@ -7,7 +7,7 @@ use crate::recurrence::lift::hadamard_factor::prepare::{
     prepare_lift_rule, shift_free_from_json, shift_free_json, PreparedLiftRule,
 };
 use crate::recurrence::lift::lift_summary::{gamma_lift_summary, GammaLiftSummaryParts};
-use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
+use crate::recurrence::lift::parent_proof::{prove_parent_with_policy, ParentRecurrenceRecord};
 use crate::recurrence::lift::section_certify::{
     gauge_parent_relation, n_coefficients, n_polynomial, pseudo_divide_row, x_free_leader,
     RatioGauge,
@@ -96,6 +96,8 @@ pub struct GammaLiftOptions {
     pub attestations: Vec<VeroneseParentAttestation>,
     /// Try the root-domain parent route.  Default true.
     pub try_root_domain: bool,
+    /// Permit caller and bundled-catalog attestations. Default true; structural discovery disables both.
+    pub allow_attestations: bool,
 }
 
 impl Default for GammaLiftOptions {
@@ -105,6 +107,7 @@ impl Default for GammaLiftOptions {
             max_operator_terms: MAX_GAMMA_LIFT_OPERATOR_TERMS,
             attestations: Vec::new(),
             try_root_domain: true,
+            allow_attestations: true,
         }
     }
 }
@@ -1141,7 +1144,7 @@ fn finish(
     let candidate = context.candidate;
     let n0 = context.n0;
     let needed_from = (n0 as i64 + candidate.index_shift) as usize;
-    let parent_proof = prove_parent_real_rootedness(
+    let parent_proof = prove_parent_with_policy(
         &ParentRecurrenceRecord {
             rule: &context.parent.rule,
             seeds: &context.parent.seeds,
@@ -1150,6 +1153,7 @@ fn finish(
         needed_from,
         &context.options.attestations,
         context.options.try_root_domain,
+        context.options.allow_attestations,
     )?;
     let lift_summary = gamma_lift_summary(GammaLiftSummaryParts {
         candidate,

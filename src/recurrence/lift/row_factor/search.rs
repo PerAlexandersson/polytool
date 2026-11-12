@@ -15,7 +15,7 @@ use super::certify::{
 };
 use crate::factorization::irreducible_factorization_rational_coeffs_with_budget;
 use crate::recurrence::implicit::algebra::DOp;
-use crate::recurrence::lift::parent_proof::{prove_parent_real_rootedness, ParentRecurrenceRecord};
+use crate::recurrence::lift::parent_proof::{prove_parent_with_policy, ParentRecurrenceRecord};
 use crate::recurrence::{
     encode_poly, ImplicitRelation, LiftHypothesis, LiftHypothesisStatus, LiftIdentityStatus,
     LiftInterlacing, LiftInterlacingClaim, LiftInterlacingJustification, LiftOperation, LiftParent,
@@ -62,6 +62,8 @@ pub struct RowFactorLiftOptions {
     pub attestations: Vec<VeroneseParentAttestation>,
     /// Try the root-domain parent route.  Default true.
     pub try_root_domain: bool,
+    /// Permit caller and bundled-catalog attestations. Default true; structural discovery disables both.
+    pub allow_attestations: bool,
     /// When the rule does not reproduce the rows from the first index, or
     /// the rows from there give no lift, the largest number of exceptional
     /// leading rows tried: the factorization is detected and
@@ -80,6 +82,7 @@ impl Default for RowFactorLiftOptions {
             max_recombination_subsets: 4096,
             attestations: Vec::new(),
             try_root_domain: true,
+            allow_attestations: true,
             max_exceptional_prefix_rows: 2,
         }
     }
@@ -761,7 +764,7 @@ fn finish_lift(
 ) -> Result<Result<Box<RowFactorLift>, RowFactorRejection>, RecurrenceError> {
     let n0 = input.first_index;
     let factor = encode_poly(f);
-    let parent_proof = prove_parent_real_rootedness(
+    let parent_proof = prove_parent_with_policy(
         &ParentRecurrenceRecord {
             rule: &cofactor.rule,
             seeds: &cofactor.seeds,
@@ -770,6 +773,7 @@ fn finish_lift(
         n0,
         &options.attestations,
         options.try_root_domain,
+        options.allow_attestations,
     )?;
     let shape = classify_row(f);
     let cofactor_json =

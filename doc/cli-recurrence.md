@@ -872,3 +872,10 @@ theorem reports for fitted records.
 
 When the conditional classification differs from the established flag, the
 text report also prints the classification conditional on the rule holding.
+
+The final `closure_lifts` stage computes structural preimages (coefficient
+weight removal, row factors, gamma expansion, and fixed differential/Euler
+preservers) and proves their parents through the registry, with closure depth
+two and no parent catalog lookup or attestations. `--max-lift-candidates 0`
+also disables this stage. Text output lists the identity, parent certificate,
+closure theorem and nonzero-row certificate; `--verify` replays the chain.

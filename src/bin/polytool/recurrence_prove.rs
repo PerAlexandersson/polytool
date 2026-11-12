@@ -287,6 +287,20 @@ fn print_report_text(report: &RecurrenceProofDiscoveryReport) {
             None => println!("  No coordinate proves the record."),
         }
     }
+    if let Some(search) = &report.closure_lifts {
+        println!(
+            "\nGeneral closures: {} candidate(s) certified",
+            search.candidates_tried
+        );
+        for attempt in &search.attempts {
+            println!("  {} from {}", attempt.stage, attempt.parents.join(", "));
+            for (i, step) in attempt.steps.iter().enumerate() {
+                println!("  {}. {}: {}", i + 1, step.name, step.statement);
+                println!("     Certificate: {}", step.certificate);
+            }
+            println!("  {}", attempt.conclusion.statement);
+        }
+    }
 }
 
 fn print_catalog_lifts_text(search: &CatalogLiftSearch) {

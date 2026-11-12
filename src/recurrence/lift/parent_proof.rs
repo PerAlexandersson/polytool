@@ -1545,6 +1545,32 @@ pub fn prove_parent_real_rootedness(
     prove_parent_with_routes(record, needed_from, attestations, try_root_domain, None)
 }
 
+/// Internal closure policy: the structural mode never enters either attestation route.
+pub(in crate::recurrence) fn prove_parent_with_policy(
+    record: &ParentRecurrenceRecord<'_>,
+    needed_from: usize,
+    attestations: &[VeroneseParentAttestation],
+    try_root_domain: bool,
+    allow_attestations: bool,
+) -> Result<VeroneseParentProof, RecurrenceError> {
+    if allow_attestations {
+        return prove_parent_real_rootedness(record, needed_from, attestations, try_root_domain);
+    }
+    let mut routes: Vec<_> = RealRootednessTheorem::ALL
+        .iter()
+        .copied()
+        .map(VeroneseParentProofRoute::of_theorem)
+        .collect();
+    routes.extend([
+        VeroneseParentProofRoute::PeriodicProduct,
+        VeroneseParentProofRoute::PaperTheorem,
+    ]);
+    if try_root_domain {
+        routes.push(VeroneseParentProofRoute::RootDomain);
+    }
+    prove_parent_by_routes(record, needed_from, &routes)
+}
+
 /// Replay of the routes `routes` alone (module documentation, "Replaying
 /// recorded proofs"): the provers with every other route skipped (no
 /// attempt recorded for it), the root-domain route enabled when it is
