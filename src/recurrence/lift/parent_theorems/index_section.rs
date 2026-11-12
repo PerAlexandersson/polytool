@@ -305,7 +305,7 @@ impl IndexSectionCertificate {
             };
             if !proves_every_row(proof)
                 || proof.recurrence != self.parent
-                || !route(proof.theorem).in_index_section_menu
+                || !route(proof.theorem).policy.in_index_section_menu
             {
                 return failed("the selected parent attempt is not a proof of the parent".into());
             }
@@ -582,7 +582,10 @@ fn prove_parent(
     let mut attempts = Vec::new();
     let mut fallback = None;
     // The theorems of the index-section menu, in the route order.
-    for route in ROUTES.iter().filter(|route| route.in_index_section_menu) {
+    for route in ROUTES
+        .iter()
+        .filter(|route| route.policy.in_index_section_menu)
+    {
         let Ok(attempt) = check_with_first_proving_start(route.theorem, rule, 0, seeds, options)
         else {
             continue;
@@ -843,8 +846,12 @@ fn polynomial_text(p: &UnivariatePolynomial) -> String {
 }
 
 /// The registry entry of the index-section lift ([`super::registry::ROUTES`]).
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::IndexSectionLift,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: REFERENCE,
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: index_section_report,
     start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
@@ -852,6 +859,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: false,
     in_index_section_menu: false,
+    in_degree_law_reversal_menu: false,
     parent: ParentPolicy {
         stage: ParentStage::WhileUnproved,
         region: ParentRegion::OpenNonpositiveRayThenUnrestricted,
@@ -882,7 +890,6 @@ fn index_section_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::IndexSectionLift,
-        REFERENCE,
         rule,
         first_index,
         seeds,

@@ -1,16 +1,134 @@
 //! The registry of the theorem routes: [`ROUTES`] holds one [`TheoremRoute`]
-//! per [`RealRootednessTheorem`], declared by the route's own module (its
-//! `ROUTE` constant), in the order of [`RealRootednessTheorem::ALL`].
+//! per [`RealRootednessTheorem`]. The shared `theorem_routes!` table supplies
+//! identity, names, summaries and exports; each module's `ROUTE` supplies
+//! its implementation, base reference and policies.
 //!
 //! The order is policy: it is the order of the theorem stages of the parent
 //! cascade (`parent_proof`), of the attempts of [`discover_recurrence_proofs`]
 //! and of the residue-class and index-section menus.  Every dispatch on a
 //! theorem goes through [`route`] or iterates [`ROUTES`].  Adding a route:
-//! one module with its `ROUTE` entry, one line in [`ROUTES`], and the enum
-//! variants (`doc/development.md`, "Adding a real-rootedness theorem
-//! route").
+//! one module with its `ROUTE` policy, one table row, and one typed
+//! certificate row when needed (see `doc/development.md`).
 
 use super::*;
+
+// One row enrolls a route in both public enums and their mappings, the
+// ordered registry, its module declaration and its public exports.
+macro_rules! theorem_routes {
+    ($consumer:ident) => {
+        $consumer! {
+            /// Product induction with uniformly real-rooted multipliers.
+            ProductRecurrence, product, "product_recurrence",
+            "Product induction with uniformly real-rooted multipliers.", {
+                check_product_recurrence_theorem,
+                is_trivially_real_rooted,
+            };
+            /// [`check_three_term_recurrence_theorem`].
+            ThreeTermRecurrence, three_term, "three_term_recurrence",
+            "Three-term recurrence with strict interlacing and a certified root region.", {
+                check_three_term_recurrence_theorem,
+            };
+            /// [`check_liu_wang_theorem`].
+            LiuWang, liu_wang, "liu_wang",
+            "Liu--Wang first-order derivative recurrence.", {
+                check_liu_wang_theorem,
+            };
+            /// [`check_liu_wang_derivative_lag_theorem`].
+            LiuWangDerivativeLag, derivative_lag, "liu_wang_derivative_lag",
+            "Liu--Wang derivative-lag recurrence.", {
+                check_liu_wang_derivative_lag_theorem,
+            };
+            /// [`check_ma_wang_interval_theorem`].
+            MaWangInterval, ma_wang, "ma_wang_interval",
+            "Ma--Wang derivative recurrence on a certified interval.", {
+                check_ma_wang_interval_theorem,
+            };
+            /// [`check_liu_wang_three_term_theorem`].
+            LiuWangThreeTerm, liu_wang_three_term, "liu_wang_three_term",
+            "Liu--Wang three-term recurrence with polynomial coefficients.", {
+                check_liu_wang_three_term_theorem,
+            };
+            /// [`check_iterated_preserver_theorem`].
+            IteratedPreserver, iterated_preserver, "iterated_preserver",
+            "Induction by iterated real-rootedness preservers.", {
+                check_iterated_preserver_theorem,
+                check_weyl_step_preserver,
+                IteratedPreserverCertificate,
+                IteratedPreserverCoordinates,
+                IteratedPreserverFactor,
+                WeylStepPreserverVerdict,
+            };
+            /// [`check_hypergeometric_row_theorem`].
+            HypergeometricRow, hypergeometric_row, "hypergeometric_row",
+            "Exact row-hypergeometric real-rootedness criterion.", {
+                check_hypergeometric_row_theorem,
+            };
+            /// [`check_variable_delay_theorem`] (RealRooted route `variableDelay`).
+            VariableDelay, variable_delay, "variable_delay",
+            "Fixed-delay recurrence with a certified interlacing window.", {
+                check_variable_delay_theorem,
+                VariableDelayCertificate,
+                VariableDelaySeedStep,
+            };
+            /// [`check_residue_class_subsequence_theorem`] (RealRooted route
+            /// `subseq`).
+            ResidueClassSubsequences, residue_class, "residue_class_subsequences",
+            "Proof by independent residue-class subsequences.", {
+                check_residue_class_subsequence_theorem,
+                ResidueClassCertificate,
+                ResidueClassProof,
+            };
+            /// [`check_index_section_lift_theorem`] (RealRooted route `pathPower`).
+            IndexSectionLift, index_section, "index_section_lift",
+            "Proof by an index section of a certified parent family.", {
+                check_index_section_lift_theorem,
+                IndexSectionCertificate,
+                IndexSectionTransform,
+                MAX_INDEX_SECTION_PERIOD,
+            };
+            /// [`check_factor_gauge_theorem`] (RealRooted routes `powerForm`,
+            /// `closedForm`, `factorPower`).
+            FactorGauge, factor_gauge, "factor_gauge",
+            "Factor gauge with a bounded residual family.", {
+                check_factor_gauge_theorem,
+                FactorGaugeCertificate,
+                FactorGaugeDominantRoot,
+                FactorGaugeResidualShape,
+            };
+            /// [`check_lag_two_euler_theorem`] (RealRooted positive lag-two Euler recurrence).
+            LagTwoEuler, lag_two_euler, "lag_two_euler",
+            "Positive lag-two Euler recurrence with strict interlacing.", {
+                check_lag_two_euler_theorem,
+                LagTwoEulerCertificate,
+                LagTwoEulerSeedStep,
+            };
+            /// [`check_binomial_perturbed_euler_orbit_theorem`] (RealRooted issue #2513).
+            BinomialPerturbedEulerOrbit, binomial_perturbed_euler_orbit, "binomial_perturbed_euler_orbit",
+            "Binomial perturbation of an Euler-operator orbit.", {
+                check_binomial_perturbed_euler_orbit_theorem,
+                BinomialPerturbedEulerOrbitCertificate,
+            };
+            /// [`check_rational_pf_riordan_theorem`].
+            RationalPfRiordan, rational_pf_riordan, "rational_pf_riordan",
+            "Exact rational PF Riordan certificate for all rows.", {
+                check_rational_pf_riordan_theorem,
+                check_rational_polya_frequency,
+                PolyaFrequencyRootLayer,
+                RationalPfRiordanCertificate,
+                RationalPolyaFrequencyEvidence,
+            };
+            /// [`check_degree_law_reversal_theorem`], a shared closure of the theorem menu.
+            DegreeLawReversal, degree_law_reversal, "degree_law_reversal",
+            "Degree-law reversal followed by a theorem on the transformed family.", {
+                check_degree_law_reversal_theorem,
+                DegreeLawReversalCertificate,
+                DegreeLawTransform,
+                MAXIMUM_REVERSAL_DEGREE_SLOPE,
+            };
+        }
+    };
+}
+pub(in crate::recurrence) use theorem_routes;
 
 /// A theorem check with the induction start at the supplied seeds (module
 /// documentation of `parent_theorems`, "Moving the induction start").
@@ -103,12 +221,71 @@ pub(in crate::recurrence) struct ParentPolicy {
     pub(in crate::recurrence) record_only_if_applicable: bool,
 }
 
+/// When discovery runs a theorem check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DiscoveryPhase {
+    /// On the supplied family, its tails and direct representations.
+    Direct,
+    /// After all direct routes, lifts and affine coordinates fail.
+    AfterDirectLifts,
+}
+
+/// Membership in the existing discovery replay protocol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DiscoveryReplayPolicy {
+    /// Required in exactly the current direct-attempt membership and order.
+    Direct,
+    /// Replayed separately when recorded as the last attempt. The message
+    /// preserves the route's rejection after an earlier direct proof or lift.
+    TrailingClosure { premature_error: &'static str },
+}
+
+impl DiscoveryReplayPolicy {
+    /// The rejection message of a trailing closure, absent for direct routes.
+    pub(super) fn premature_closure_error(self) -> Option<&'static str> {
+        match self {
+            Self::Direct => None,
+            Self::TrailingClosure { premature_error } => Some(premature_error),
+        }
+    }
+}
+
+/// Replay membership of the parent theorem routes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::recurrence) enum ParentReplayPolicy {
+    /// Replay the recorded route alone, even if another route now wins.
+    RecordedRoute,
+}
+
+/// A late route's eligibility check against records already tried directly.
+type AfterDirectEligibility =
+    fn(&Recurrence, usize, &[Vec<Q>], &[&RecurrenceJson]) -> Result<bool, RecurrenceError>;
+
 /// One theorem route: its identity, how it is checked, how its induction
 /// start moves, when discovery records it, which menus offer it and how the
 /// parent cascade runs it.
 pub(in crate::recurrence) struct TheoremRoute {
-    /// The theorem.
+    /// The identity generated by the shared route table.
     pub(in crate::recurrence) theorem: RealRootednessTheorem,
+    /// The route-owned implementation and policies.
+    pub(in crate::recurrence) policy: RoutePolicy,
+    /// The declarations provided by the route's matched report, including
+    /// branch-specific and supporting declarations of composed checks.
+    pub(super) lean_declarations: fn(&RealRootednessTheoremReport) -> &[String],
+}
+
+/// The route implementation and policies, supplied by its owning module.
+pub(in crate::recurrence) struct RoutePolicy {
+    /// The base reference used to initialize a theorem report.
+    pub(super) reference: &'static str,
+    /// The discovery stage that runs this route.
+    pub(super) phase: DiscoveryPhase,
+    /// Optional eligibility check after direct lifts (including duplicate detection).
+    pub(super) after_direct_eligible: Option<AfterDirectEligibility>,
+    /// How a recorded parent proof is replayed.
+    pub(in crate::recurrence) replay: ParentReplayPolicy,
+    /// How discovery includes this route in replay membership.
+    pub(super) discovery_replay: DiscoveryReplayPolicy,
     /// The check at the supplied seeds.
     pub(super) check_at_supplied_seeds: TheoremCheck,
     /// Whether the induction start may move.
@@ -128,34 +305,16 @@ pub(in crate::recurrence) struct TheoremRoute {
     /// Whether [`check_index_section_lift_theorem`] tries the theorem on the
     /// parent family.
     pub(super) in_index_section_menu: bool,
+    /// Whether degree-law reversal may use the theorem on its transformed family.
+    pub(super) in_degree_law_reversal_menu: bool,
     /// How the parent cascade runs the route.
     pub(in crate::recurrence) parent: ParentPolicy,
 }
 
-/// [`TheoremRoute::is_preferred`] of a route without weaker proofs.
+/// [`RoutePolicy::is_preferred`] of a route without weaker proofs.
 pub(super) fn any_proof(_: &RealRootednessTheoremReport) -> bool {
     true
 }
-
-/// Every theorem route, in the order of [`RealRootednessTheorem::ALL`].
-pub(in crate::recurrence) static ROUTES: [TheoremRoute; 16] = [
-    product::ROUTE,
-    three_term::ROUTE,
-    liu_wang::ROUTE,
-    derivative_lag::ROUTE,
-    ma_wang::ROUTE,
-    liu_wang_three_term::ROUTE,
-    iterated_preserver::ROUTE,
-    hypergeometric_row::ROUTE,
-    variable_delay::ROUTE,
-    residue_class::ROUTE,
-    index_section::ROUTE,
-    factor_gauge::ROUTE,
-    lag_two_euler::ROUTE,
-    binomial_perturbed_euler_orbit::ROUTE,
-    rational_pf_riordan::ROUTE,
-    degree_law_reversal::ROUTE,
-];
 
 /// The route of `theorem`.
 pub(in crate::recurrence) fn route(theorem: RealRootednessTheorem) -> &'static TheoremRoute {
@@ -168,6 +327,211 @@ pub(in crate::recurrence) fn route(theorem: RealRootednessTheorem) -> &'static T
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn late_discovery_and_recorded_route_replay_membership_are_explicit() {
+        assert_eq!(
+            filtered(|route| route.policy.phase == DiscoveryPhase::AfterDirectLifts),
+            [RealRootednessTheorem::DegreeLawReversal]
+        );
+        assert_eq!(
+            filtered(|route| route.policy.after_direct_eligible.is_some()),
+            [RealRootednessTheorem::DegreeLawReversal]
+        );
+        assert_eq!(
+            filtered(|route| route
+                .policy
+                .discovery_replay
+                .premature_closure_error()
+                .is_some()),
+            [RealRootednessTheorem::DegreeLawReversal]
+        );
+        for route in &ROUTES {
+            assert_eq!(route.policy.replay, ParentReplayPolicy::RecordedRoute);
+        }
+    }
+
+    #[test]
+    fn parent_region_recording_stage_and_menu_policies_are_frozen() {
+        use DiscoveryPolicy::{Always, WhenApplicable};
+        use ParentRegion::{
+            OpenNonpositiveRay as Ray, OpenNonpositiveRayThenUnrestricted as Fallback, Unrestricted,
+        };
+        use ParentStage::{Early, ReplacesEarly, WhileUnproved};
+        use RealRootednessTheorem::*;
+        // Independent expectations: never derive these from ALL or table slices.
+        let expected = [
+            (ProductRecurrence, Early, Ray, false, Always, true, true),
+            (
+                ThreeTermRecurrence,
+                ReplacesEarly,
+                Ray,
+                false,
+                Always,
+                true,
+                true,
+            ),
+            (LiuWang, ReplacesEarly, Ray, false, Always, true, true),
+            (
+                LiuWangDerivativeLag,
+                ReplacesEarly,
+                Unrestricted,
+                false,
+                Always,
+                true,
+                true,
+            ),
+            (
+                MaWangInterval,
+                ReplacesEarly,
+                Unrestricted,
+                false,
+                Always,
+                true,
+                true,
+            ),
+            (
+                LiuWangThreeTerm,
+                ReplacesEarly,
+                Unrestricted,
+                false,
+                Always,
+                true,
+                true,
+            ),
+            (
+                IteratedPreserver,
+                ReplacesEarly,
+                Unrestricted,
+                true,
+                Always,
+                true,
+                true,
+            ),
+            (
+                HypergeometricRow,
+                ReplacesEarly,
+                Unrestricted,
+                true,
+                Always,
+                true,
+                true,
+            ),
+            (
+                VariableDelay,
+                WhileUnproved,
+                Ray,
+                true,
+                WhenApplicable,
+                true,
+                true,
+            ),
+            (
+                ResidueClassSubsequences,
+                WhileUnproved,
+                Fallback,
+                true,
+                WhenApplicable,
+                false,
+                true,
+            ),
+            (
+                IndexSectionLift,
+                WhileUnproved,
+                Fallback,
+                true,
+                WhenApplicable,
+                false,
+                false,
+            ),
+            (
+                FactorGauge,
+                WhileUnproved,
+                Fallback,
+                true,
+                WhenApplicable,
+                false,
+                false,
+            ),
+            (
+                LagTwoEuler,
+                WhileUnproved,
+                Ray,
+                true,
+                WhenApplicable,
+                true,
+                true,
+            ),
+            (
+                BinomialPerturbedEulerOrbit,
+                WhileUnproved,
+                Unrestricted,
+                true,
+                WhenApplicable,
+                true,
+                true,
+            ),
+            (
+                RationalPfRiordan,
+                WhileUnproved,
+                Unrestricted,
+                true,
+                WhenApplicable,
+                true,
+                true,
+            ),
+            (
+                DegreeLawReversal,
+                WhileUnproved,
+                Unrestricted,
+                true,
+                WhenApplicable,
+                false,
+                false,
+            ),
+        ];
+        let actual: Vec<_> = ROUTES
+            .iter()
+            .map(|r| {
+                (
+                    r.theorem,
+                    r.policy.parent.stage,
+                    r.policy.parent.region,
+                    r.policy.parent.record_only_if_applicable,
+                    r.policy.discovery,
+                    r.policy.in_residue_class_menu,
+                    r.policy.in_index_section_menu,
+                )
+            })
+            .collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn recording_distinguishes_not_applicable_from_all_other_outcomes() {
+        let entry = crate::oeis::by_id("A008292").unwrap();
+        let (rule, rows) = entry.recurrence_parts().unwrap();
+        let mut report = check_liu_wang_theorem(
+            &rule,
+            entry.recurrence_first_index,
+            &rows[..1],
+            &Default::default(),
+        )
+        .unwrap();
+        for status in [
+            RealRootednessTheoremStatus::Proved,
+            RealRootednessTheoremStatus::HypothesisFailed,
+            RealRootednessTheoremStatus::Unresolved,
+            RealRootednessTheoremStatus::NotApplicable,
+        ] {
+            report.status = status;
+            assert!(DiscoveryPolicy::Always.records(&report));
+            assert_eq!(
+                DiscoveryPolicy::WhenApplicable.records(&report),
+                status != RealRootednessTheoremStatus::NotApplicable
+            );
+        }
+    }
 
     fn theorems(routes: &[TheoremRoute]) -> Vec<RealRootednessTheorem> {
         routes.iter().map(|route| route.theorem).collect()
@@ -193,7 +557,7 @@ mod tests {
     fn the_discovery_policies_record_the_first_eight_always() {
         let all = theorems(&ROUTES);
         assert_eq!(
-            filtered(|route| route.discovery == DiscoveryPolicy::Always),
+            filtered(|route| route.policy.discovery == DiscoveryPolicy::Always),
             all[..8]
         );
     }
@@ -205,7 +569,10 @@ mod tests {
             assert_eq!(parent_route.theorem(), Some(route.theorem));
             assert_eq!(parent_route.as_str(), route.theorem.as_str());
         }
-        let stages: Vec<ParentStage> = ROUTES.iter().map(|route| route.parent.stage).collect();
+        let stages: Vec<ParentStage> = ROUTES
+            .iter()
+            .map(|route| route.policy.parent.stage)
+            .collect();
         let rank = |stage: &ParentStage| match stage {
             ParentStage::Early => 0,
             ParentStage::ReplacesEarly => 1,
@@ -215,7 +582,7 @@ mod tests {
             .windows(2)
             .all(|pair| rank(&pair[0]) <= rank(&pair[1])));
         assert_eq!(
-            filtered(|route| route.parent.stage == ParentStage::Early),
+            filtered(|route| route.policy.parent.stage == ParentStage::Early),
             [RealRootednessTheorem::ProductRecurrence]
         );
     }
@@ -226,11 +593,11 @@ mod tests {
         // A residue class is not split again; the parent of an index section
         // may itself be proved by residue classes.
         assert_eq!(
-            filtered(|route| route.in_residue_class_menu),
+            filtered(|route| route.policy.in_residue_class_menu),
             [&all[..9], &all[12..15]].concat()
         );
         assert_eq!(
-            filtered(|route| route.in_index_section_menu),
+            filtered(|route| route.policy.in_index_section_menu),
             [&all[..10], &all[12..15]].concat()
         );
     }
@@ -238,7 +605,7 @@ mod tests {
     #[test]
     fn the_start_policies_and_certificates_are_those_of_the_routes() {
         assert_eq!(
-            filtered(|route| route.start_policy == StartPolicy::OwnStarts),
+            filtered(|route| route.policy.start_policy == StartPolicy::OwnStarts),
             [
                 RealRootednessTheorem::ResidueClassSubsequences,
                 RealRootednessTheorem::IndexSectionLift,
@@ -247,7 +614,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            filtered(|route| route.certificate_name.is_some()),
+            filtered(|route| route.policy.certificate_name.is_some()),
             [
                 RealRootednessTheorem::IteratedPreserver,
                 RealRootednessTheorem::VariableDelay,

@@ -158,54 +158,8 @@ pub use parent_proof::{
 };
 mod parent_theorems;
 pub(in crate::recurrence) use parent_theorems::rule_with_x_free_left_hand_factor;
-pub use parent_theorems::{
-    certify_recurrence_equality, discover_recurrence_proofs_with_options,
-    discover_recurrence_proofs_with_stage_options, discover_recurrence_proofs_with_stages,
-    AffineCoordinate, AffineCoordinateAttempt, AffineCoordinateConclusion, AffineCoordinateOptions,
-    AffineCoordinateSearch, AffineCoordinateTail, AffineInterlacingOrientation,
-    AlternativeRepresentationOptions, AlternativeRepresentationProof,
-    AlternativeRepresentationSearch, RealRootedOutsideZeroResidueClasses,
-    RecurrenceEqualityCertificate, RecurrenceProofStageOptions, RecurrenceProofTail,
-    RECURRENCE_EQUALITY_SCHEMA,
-};
-pub use parent_theorems::{
-    check_hypergeometric_row_theorem, check_iterated_preserver_theorem,
-    check_liu_wang_derivative_lag_theorem, check_liu_wang_theorem,
-    check_liu_wang_three_term_theorem, check_ma_wang_interval_theorem,
-    check_product_recurrence_theorem, check_real_rootedness_theorem,
-    check_three_term_recurrence_theorem, check_weyl_step_preserver, discover_recurrence_proofs,
-    is_trivially_real_rooted, IteratedPreserverCertificate, IteratedPreserverCoordinates,
-    IteratedPreserverFactor, LeftHandFactorNormalization, RealRootednessTheorem,
-    RealRootednessTheoremConclusion, RealRootednessTheoremOptions, RealRootednessTheoremReport,
-    RealRootednessTheoremStatus, RecurrenceProofDiscoveryReport, RouteCertificate, RowInterlacing,
-    WeylStepPreserverVerdict, ZeroResidueClasses, REAL_ROOTEDNESS_THEOREM_SCHEMA,
-    RECURRENCE_PROOF_DISCOVERY_SCHEMA,
-};
-use parent_theorems::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
-// RealRooted row routes, including the Euler-orbit theorem of issue #2513.
-pub use parent_theorems::{
-    check_binomial_perturbed_euler_orbit_theorem, check_lag_two_euler_theorem,
-    check_rational_pf_riordan_theorem, check_rational_polya_frequency,
-    check_residue_class_subsequence_theorem, check_variable_delay_theorem,
-    BinomialPerturbedEulerOrbitCertificate, LagTwoEulerCertificate, LagTwoEulerSeedStep,
-    PolyaFrequencyRootLayer, RationalPfRiordanCertificate, RationalPolyaFrequencyEvidence,
-    ResidueClassCertificate, ResidueClassProof, VariableDelayCertificate, VariableDelaySeedStep,
-};
-// Index-section lift (RealRooted route `pathPower`).
-pub use parent_theorems::{
-    check_degree_law_reversal_theorem, DegreeLawReversalCertificate, DegreeLawTransform,
-    MAXIMUM_REVERSAL_DEGREE_SLOPE,
-};
-pub use parent_theorems::{
-    check_index_section_lift_theorem, IndexSectionCertificate, IndexSectionTransform,
-    MAX_INDEX_SECTION_PERIOD,
-};
-// Factor gauge with a bounded residual (RealRooted `powerForm`, `closedForm`,
-// `factorPower`).
-pub use parent_theorems::{
-    check_factor_gauge_theorem, FactorGaugeCertificate, FactorGaugeDominantRoot,
-    FactorGaugeResidualShape,
-};
+pub use parent_theorems::*;
+use parent_theorems::{ParentRegion, ParentReplayPolicy, ParentStage, TheoremRoute, ROUTES};
 mod normalized_equality;
 pub use normalized_equality::{
     certify_normalized_recurrence_equality, certify_recurrence_normalization,

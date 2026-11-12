@@ -5,220 +5,118 @@
 
 use super::*;
 
-/// The certificate of the theorem routes whose conclusion rests on more
-/// than the hypotheses of the report, replayed by
-/// [`RealRootednessTheoremReport::verify`].  Each variant is named after its
-/// theorem; in JSON the certificate is an object with that theorem's name as
-/// its single key, for example `{"factor_gauge": {...}}`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RouteCertificate {
+// Keep the typed certificate, its theorem, its replay, its delay bound and
+// its existing public accessor together. Adding a certificate needs one row.
+macro_rules! route_certificates {
+    ($( $(#[$doc:meta])* $variant:ident($payload:ty) => $module:ident,
+        $accessor:ident: $view:ty, $bound:expr; )*) => {
+        /// A route certificate, tagged in JSON by its theorem's snake-case name.
+        /// Each report carries at most one; replay checks that it is its own theorem.
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        pub enum RouteCertificate {
+            $($(#[$doc])* $variant($payload),)*
+        }
+
+        impl RouteCertificate {
+            /// The theorem whose reports carry this certificate.
+            pub fn theorem(&self) -> RealRootednessTheorem {
+                match self { $(Self::$variant(_) => RealRootednessTheorem::$variant,)* }
+            }
+
+            /// The bound passed to sub-checks, checked against its route's limit.
+            pub(super) fn sub_check_start_delay_bound(&self) -> Result<Option<usize>, RecurrenceError> {
+                match self { $(Self::$variant(certificate) => ($bound)(certificate),)* }
+            }
+
+            /// Replay a certificate on a recomputed report of its own theorem.
+            pub(super) fn verify_in_report(&self, report: &RealRootednessTheoremReport)
+                -> Result<(), RecurrenceError> {
+                match self {
+                    $(Self::$variant(certificate) =>
+                        $module::verify_certificate_in_report(certificate, report),)*
+                }
+            }
+        }
+
+        impl RealRootednessTheoremReport {
+            $(#[doc = concat!("The [`", stringify!($view), "`] of this route, when recorded.")]
+            pub fn $accessor(&self) -> Option<&$view> {
+                match &self.certificate {
+                    Some(RouteCertificate::$variant(certificate)) => Some(certificate),
+                    _ => None,
+                }
+            })*
+        }
+    };
+}
+
+route_certificates! {
     /// [`check_iterated_preserver_theorem`]: the recognized step, the
     /// induction start, the degree step and the region (JSON key
     /// `iterated_preserver`).
-    IteratedPreserver(IteratedPreserverCertificate),
+    IteratedPreserver(IteratedPreserverCertificate) => iterated_preserver,
+        iterated_preserver_certificate: IteratedPreserverCertificate,
+    |_: &IteratedPreserverCertificate| Ok(None);
     /// [`check_rational_pf_riordan_theorem`]: exact generating functions and PF evidence.
-    RationalPfRiordan(Box<RationalPfRiordanCertificate>),
+    RationalPfRiordan(Box<RationalPfRiordanCertificate>) => rational_pf_riordan,
+        rational_pf_riordan_certificate: RationalPfRiordanCertificate,
+    |_: &RationalPfRiordanCertificate| Ok(None);
     /// Shared reversal transform and a proved theorem on the transformed family.
-    DegreeLawReversal(Box<DegreeLawReversalCertificate>),
+    DegreeLawReversal(Box<DegreeLawReversalCertificate>) => degree_law_reversal,
+        degree_law_reversal_certificate: DegreeLawReversalCertificate,
+    |c: &DegreeLawReversalCertificate| {
+        if c.maximum_start_delay > index_section::MAXIMUM_PARENT_START_DELAY {
+            return Err(RecurrenceError::VerificationFailed(
+                "reversal start-delay bound exceeds 16".into(),
+            ));
+        }
+        Ok(Some(c.maximum_start_delay))
+    };
     /// [`check_variable_delay_theorem`]: the delay and the seed rows as exact
     /// steps of the window (JSON key `variable_delay`).
-    VariableDelay(VariableDelayCertificate),
+    VariableDelay(VariableDelayCertificate) => variable_delay,
+        variable_delay_certificate: VariableDelayCertificate,
+    |_: &VariableDelayCertificate| Ok(None);
     /// [`check_residue_class_subsequence_theorem`]: the period and the class
     /// families with their theorem reports (JSON key `residue_class_subsequences`).
-    ResidueClassSubsequences(ResidueClassCertificate),
+    ResidueClassSubsequences(ResidueClassCertificate) => residue_class,
+        residue_class_certificate: ResidueClassCertificate,
+    |c: &ResidueClassCertificate| {
+        if c.class_maximum_start_delay > residue_class::MAXIMUM_CLASS_START_DELAY {
+            return Err(RecurrenceError::VerificationFailed(format!(
+                "the class start-delay bound exceeds {}",
+                residue_class::MAXIMUM_CLASS_START_DELAY
+            )));
+        }
+        Ok(Some(c.class_maximum_start_delay))
+    };
     /// [`check_index_section_lift_theorem`]: the period, the transform, the
     /// parent family and its theorem reports (JSON key `index_section_lift`).
-    IndexSectionLift(IndexSectionCertificate),
+    IndexSectionLift(IndexSectionCertificate) => index_section,
+        index_section_certificate: IndexSectionCertificate,
+    |c: &IndexSectionCertificate| {
+        if c.parent_maximum_start_delay > index_section::MAXIMUM_PARENT_START_DELAY {
+            return Err(RecurrenceError::VerificationFailed(format!(
+                "the parent start-delay bound exceeds {}",
+                index_section::MAXIMUM_PARENT_START_DELAY
+            )));
+        }
+        Ok(Some(c.parent_maximum_start_delay))
+    };
     /// [`check_factor_gauge_theorem`]: the gauge factor, the scalar
     /// multipliers, the common factor, the residual window and its
     /// coefficient polynomials (JSON key `factor_gauge`).
-    FactorGauge(FactorGaugeCertificate),
+    FactorGauge(FactorGaugeCertificate) => factor_gauge,
+        factor_gauge_certificate: FactorGaugeCertificate,
+    |_: &FactorGaugeCertificate| Ok(None);
     /// [`check_lag_two_euler_theorem`]: normalized operators and exact seed steps.
-    LagTwoEuler(LagTwoEulerCertificate),
+    LagTwoEuler(LagTwoEulerCertificate) => lag_two_euler,
+        lag_two_euler_certificate: LagTwoEulerCertificate,
+    |_: &LagTwoEulerCertificate| Ok(None);
     /// [`check_binomial_perturbed_euler_orbit_theorem`]: parameters, exact
     /// coordinate transport and canonical seeds.
-    BinomialPerturbedEulerOrbit(BinomialPerturbedEulerOrbitCertificate),
-}
-
-impl RouteCertificate {
-    /// The theorem whose reports carry this certificate.
-    pub fn theorem(&self) -> RealRootednessTheorem {
-        match self {
-            RouteCertificate::DegreeLawReversal(_) => RealRootednessTheorem::DegreeLawReversal,
-            RouteCertificate::RationalPfRiordan(_) => RealRootednessTheorem::RationalPfRiordan,
-            RouteCertificate::IteratedPreserver(_) => RealRootednessTheorem::IteratedPreserver,
-            RouteCertificate::VariableDelay(_) => RealRootednessTheorem::VariableDelay,
-            RouteCertificate::LagTwoEuler(_) => RealRootednessTheorem::LagTwoEuler,
-            RouteCertificate::BinomialPerturbedEulerOrbit(_) => {
-                RealRootednessTheorem::BinomialPerturbedEulerOrbit
-            }
-            RouteCertificate::ResidueClassSubsequences(_) => {
-                RealRootednessTheorem::ResidueClassSubsequences
-            }
-            RouteCertificate::IndexSectionLift(_) => RealRootednessTheorem::IndexSectionLift,
-            RouteCertificate::FactorGauge(_) => RealRootednessTheorem::FactorGauge,
-        }
-    }
-
-    /// The start-delay bound that a check keeping its own start passed to
-    /// its sub-checks (the residue classes, the parent family of an index
-    /// section), checked against the largest allowed bound; `None` for the
-    /// other certificates.
-    pub(super) fn sub_check_start_delay_bound(&self) -> Result<Option<usize>, RecurrenceError> {
-        match self {
-            RouteCertificate::DegreeLawReversal(c) => {
-                if c.maximum_start_delay > index_section::MAXIMUM_PARENT_START_DELAY {
-                    return Err(RecurrenceError::VerificationFailed(
-                        "reversal start-delay bound exceeds 16".into(),
-                    ));
-                }
-                Ok(Some(c.maximum_start_delay))
-            }
-            RouteCertificate::ResidueClassSubsequences(certificate) => {
-                if certificate.class_maximum_start_delay > residue_class::MAXIMUM_CLASS_START_DELAY
-                {
-                    return Err(RecurrenceError::VerificationFailed(format!(
-                        "the class start-delay bound exceeds {}",
-                        residue_class::MAXIMUM_CLASS_START_DELAY
-                    )));
-                }
-                Ok(Some(certificate.class_maximum_start_delay))
-            }
-            RouteCertificate::IndexSectionLift(certificate) => {
-                if certificate.parent_maximum_start_delay
-                    > index_section::MAXIMUM_PARENT_START_DELAY
-                {
-                    return Err(RecurrenceError::VerificationFailed(format!(
-                        "the parent start-delay bound exceeds {}",
-                        index_section::MAXIMUM_PARENT_START_DELAY
-                    )));
-                }
-                Ok(Some(certificate.parent_maximum_start_delay))
-            }
-            RouteCertificate::IteratedPreserver(_)
-            | RouteCertificate::LagTwoEuler(_)
-            | RouteCertificate::BinomialPerturbedEulerOrbit(_)
-            | RouteCertificate::VariableDelay(_)
-            | RouteCertificate::RationalPfRiordan(_)
-            | RouteCertificate::FactorGauge(_) => Ok(None),
-        }
-    }
-
-    /// Replay the certificate on `report`, a report of its own theorem that
-    /// equals its recomputation.
-    pub(super) fn verify_in_report(
-        &self,
-        report: &RealRootednessTheoremReport,
-    ) -> Result<(), RecurrenceError> {
-        match self {
-            RouteCertificate::DegreeLawReversal(certificate) => {
-                degree_law_reversal::verify_certificate_in_report(certificate, report)
-            }
-            RouteCertificate::IteratedPreserver(certificate) => {
-                iterated_preserver::verify_certificate_in_report(certificate, report)
-            }
-            RouteCertificate::VariableDelay(certificate) => {
-                variable_delay::verify_certificate_in_report(certificate, report)
-            }
-            RouteCertificate::ResidueClassSubsequences(certificate) => {
-                residue_class::verify_certificate_in_report(certificate, report)
-            }
-            RouteCertificate::IndexSectionLift(certificate) => {
-                index_section::verify_certificate_in_report(certificate, report)
-            }
-            RouteCertificate::LagTwoEuler(certificate) => {
-                lag_two_euler::verify_certificate_in_report(certificate, report)
-            }
-            RouteCertificate::BinomialPerturbedEulerOrbit(certificate) => {
-                binomial_perturbed_euler_orbit::verify_certificate_in_report(certificate, report)
-            }
-            RouteCertificate::FactorGauge(certificate) => {
-                factor_gauge::verify_certificate_in_report(certificate, report)
-            }
-            RouteCertificate::RationalPfRiordan(certificate) => {
-                rational_pf_riordan::verify_certificate_in_report(certificate, report)
-            }
-        }
-    }
-}
-
-impl RealRootednessTheoremReport {
-    /// The shared degree-law reversal certificate, when recorded.
-    pub fn degree_law_reversal_certificate(&self) -> Option<&DegreeLawReversalCertificate> {
-        match &self.certificate {
-            Some(RouteCertificate::DegreeLawReversal(c)) => Some(c),
-            _ => None,
-        }
-    }
-
-    /// The rational PF Riordan certificate, if recorded.
-    pub fn rational_pf_riordan_certificate(&self) -> Option<&RationalPfRiordanCertificate> {
-        match &self.certificate {
-            Some(RouteCertificate::RationalPfRiordan(certificate)) => Some(certificate),
-            _ => None,
-        }
-    }
-
-    /// The binomial-perturbed Euler-orbit certificate, if recorded.
-    pub fn binomial_perturbed_euler_orbit_certificate(
-        &self,
-    ) -> Option<&BinomialPerturbedEulerOrbitCertificate> {
-        match &self.certificate {
-            Some(RouteCertificate::BinomialPerturbedEulerOrbit(certificate)) => Some(certificate),
-            _ => None,
-        }
-    }
-
-    /// The positive lag-two Euler route certificate, if recorded.
-    pub fn lag_two_euler_certificate(&self) -> Option<&LagTwoEulerCertificate> {
-        match &self.certificate {
-            Some(RouteCertificate::LagTwoEuler(certificate)) => Some(certificate),
-            _ => None,
-        }
-    }
-
-    /// The route certificate of [`check_iterated_preserver_theorem`], if
-    /// recorded.
-    pub fn iterated_preserver_certificate(&self) -> Option<&IteratedPreserverCertificate> {
-        match &self.certificate {
-            Some(RouteCertificate::IteratedPreserver(certificate)) => Some(certificate),
-            _ => None,
-        }
-    }
-
-    /// The route certificate of [`check_variable_delay_theorem`], if
-    /// recorded.
-    pub fn variable_delay_certificate(&self) -> Option<&VariableDelayCertificate> {
-        match &self.certificate {
-            Some(RouteCertificate::VariableDelay(certificate)) => Some(certificate),
-            _ => None,
-        }
-    }
-
-    /// The route certificate of [`check_residue_class_subsequence_theorem`],
-    /// if recorded.
-    pub fn residue_class_certificate(&self) -> Option<&ResidueClassCertificate> {
-        match &self.certificate {
-            Some(RouteCertificate::ResidueClassSubsequences(certificate)) => Some(certificate),
-            _ => None,
-        }
-    }
-
-    /// The route certificate of [`check_index_section_lift_theorem`], if
-    /// recorded.
-    pub fn index_section_certificate(&self) -> Option<&IndexSectionCertificate> {
-        match &self.certificate {
-            Some(RouteCertificate::IndexSectionLift(certificate)) => Some(certificate),
-            _ => None,
-        }
-    }
-
-    /// The route certificate of [`check_factor_gauge_theorem`], if recorded.
-    pub fn factor_gauge_certificate(&self) -> Option<&FactorGaugeCertificate> {
-        match &self.certificate {
-            Some(RouteCertificate::FactorGauge(certificate)) => Some(certificate),
-            _ => None,
-        }
-    }
+    BinomialPerturbedEulerOrbit(BinomialPerturbedEulerOrbitCertificate) => binomial_perturbed_euler_orbit,
+        binomial_perturbed_euler_orbit_certificate: BinomialPerturbedEulerOrbitCertificate,
+    |_: &BinomialPerturbedEulerOrbitCertificate| Ok(None);
 }

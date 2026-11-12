@@ -958,8 +958,12 @@ fn palindromic_hypotheses(
 type PalindromicCondition<'a> = (&'static str, &'static str, &'a Vec<Q>, IndexSignCondition);
 
 /// The registry entry of the factor gauge ([`super::registry::ROUTES`]).
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::FactorGauge,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: REFERENCE,
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: factor_gauge_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
@@ -967,6 +971,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: false,
     in_index_section_menu: false,
+    in_degree_law_reversal_menu: true,
     parent: ParentPolicy {
         stage: ParentStage::WhileUnproved,
         region: ParentRegion::OpenNonpositiveRayThenUnrestricted,
@@ -1005,7 +1010,6 @@ fn factor_gauge_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::FactorGauge,
-        REFERENCE,
         rule,
         first_index,
         seeds,

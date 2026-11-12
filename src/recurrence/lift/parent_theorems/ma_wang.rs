@@ -485,8 +485,12 @@ fn endpoint_threshold(
 }
 
 /// The registry entry of the Ma--Wang interval theorem ([`super::registry::ROUTES`]).
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::MaWangInterval,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: REFERENCE,
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: ma_wang_interval_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
@@ -494,6 +498,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::Always,
     in_residue_class_menu: true,
     in_index_section_menu: true,
+    in_degree_law_reversal_menu: true,
     parent: ParentPolicy {
         stage: ParentStage::ReplacesEarly,
         region: ParentRegion::Unrestricted,
@@ -510,7 +515,6 @@ fn ma_wang_interval_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::MaWangInterval,
-        REFERENCE,
         rule,
         first_index,
         seeds,

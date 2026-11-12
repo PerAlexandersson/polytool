@@ -125,32 +125,61 @@ other's reports.
 The theorem routes of `recurrence::check_real_rootedness_theorem`, of the
 proof discovery (`recurrence::discover_recurrence_proofs`) and of the parent
 cascade (`recurrence::prove_parent_real_rootedness`) are listed once, in the
-private registry `src/recurrence/lift/parent_theorems/registry.rs`
-(`ROUTES`, in the order of `RealRootednessTheorem::ALL`).  A new route needs:
+private registry `src/recurrence/lift/parent_theorems/registry.rs`.
+Its `theorem_routes!` table generates `ROUTES`, in the order of
+`RealRootednessTheorem::ALL`. A new route has these implementation touch points:
 
 1. one module under `src/recurrence/lift/parent_theorems/` with the check at
    the supplied seeds, its public wrapper `check_..._theorem` (a call of
    `check_real_rootedness_theorem`) and its registry entry `ROUTE`: the
-   theorem, the check, the start policy (`MovesStart` or `OwnStarts`), the
-   preference among proofs at different starts, the certificate name, the
-   discovery policy (`Always` or `WhenApplicable`), the residue-class and
-   index-section menu flags, and the `ParentPolicy` (stage, requested region,
-   whether an attempt that does not apply is recorded);
-2. one line in `ROUTES` (the position is the order of the discovery attempts,
-   the menus and the cascade stage);
-3. the enum variants: `RealRootednessTheorem` (with `ALL` and `as_str`),
-   `VeroneseParentProofRoute` (with `theorem` and `of_theorem`) and, when its
-   reports carry a certificate, `RouteCertificate` (with `theorem`, the
-   replay dispatch and an accessor); the compiler points at every match;
-4. the exports in `src/recurrence/lift.rs`, the prose lists (the module
+   base reference, the check, the start policy (`MovesStart` or `OwnStarts`),
+   the preference among proofs at different starts, the certificate name, the
+   discovery policy (`Always` or `WhenApplicable`), the residue-class,
+   index-section and degree-law-reversal menu flags, and the `ParentPolicy` (stage, requested region,
+   whether an attempt that does not apply is recorded). Set the discovery
+   phase (`Direct` or `AfterDirectLifts`), any late-stage eligibility check,
+   parent replay policy (`RecordedRoute`), and discovery replay membership
+   (`Direct` or `TrailingClosure`, with its existing rejection message).
+   Branch-specific references
+   and Lean declarations remain in the check's report;
+2. one row in `theorem_routes!`: variant, module, stable serialized name,
+   summary, public exports, and variant documentation. The position determines
+   discovery, menu and within-stage cascade order. Module declarations,
+   exports through `recurrence`, both public enums, `ALL`, names and both
+   parent mappings are generated. `RealRootednessTheorem::reference` reads
+   the route's base reference; `lean_declarations_in` provides the declarations
+   of its matched report, including supporting declarations of composed checks;
+3. when the route carries a certificate, one row in `route_certificates!` in
+   `src/recurrence/lift/parent_theorems/certificate.rs`: typed variant, replay module, existing-style
+   public accessor, and sub-check delay-bound validation. The enum and every
+   dispatch are generated from that row; the replay implementation stays in
+   the route module;
+4. documentation: the prose lists (the module
    documentation of `parent_theorems` and `parent_proof`, `doc/library.md`,
    `doc/proof-discovery.md`, the CLI and MCP help), a CHANGELOG entry, and a
-   re-blessed fingerprint file whose changed entries are those the route now
-   proves or records.
+   checked example when useful. CLI/MCP descriptions are handwritten prose;
+   the registry does not rewrite them.
+
+Add mathematical regression tests with the route. Extend the independent
+policy expectations and deliberately update output fixtures only for an
+intentional behavior change. A mechanical registry change must pass existing
+fingerprints and description snapshots without blessing. Direct discovery
+replay requires the exact current attempt membership and order. The optional
+trailing closure is replayed separately when recorded; its existing omission
+policy is unchanged. Parent replay uses the recorded route alone when a newer
+cascade chooses another route.
 
 The registry's unit tests and `tests/integration/route_registry.rs` check that every
 theorem has one route in the frozen order, that the names are the serialized
-names, and that every theorem has its parent route.
+names, and that every theorem has its parent route. They also freeze the
+region, recording, phase, replay and menu policies. Consumer menus such as
+the atlas seeding menu remain explicit consumer choices; a new table row
+does not enroll a route in those menus automatically.
+
+The table generates module declarations, so rustfmt does not discover those
+modules through `cargo fmt`. Format them explicitly with
+`rustfmt --edition 2021 src/recurrence/lift/parent_theorems/*.rs` from the
+Polytool directory. The workspace check runs the matching formatting check.
 
 ## Proof-discovery fingerprints
 

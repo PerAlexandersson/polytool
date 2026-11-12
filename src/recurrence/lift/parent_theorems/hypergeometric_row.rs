@@ -615,8 +615,12 @@ pub fn check_hypergeometric_row_theorem(
 }
 
 /// The registry entry of the row-hypergeometric theorem ([`super::registry::ROUTES`]).
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::HypergeometricRow,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: REFERENCE,
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: hypergeometric_row_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
@@ -624,6 +628,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::Always,
     in_residue_class_menu: true,
     in_index_section_menu: true,
+    in_degree_law_reversal_menu: true,
     parent: ParentPolicy {
         stage: ParentStage::ReplacesEarly,
         region: ParentRegion::Unrestricted,
@@ -640,7 +645,6 @@ fn hypergeometric_row_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::HypergeometricRow,
-        REFERENCE,
         rule,
         first_index,
         seeds,

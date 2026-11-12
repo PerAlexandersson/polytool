@@ -176,6 +176,8 @@
   verification under that lock to avoid linking another checkout's artifacts.
 - Run focused library and CLI tests before broader checks.
 - Before finishing a change run `cargo fmt --all -- --check`,
+  `rustfmt --edition 2021 --check src/recurrence/lift/parent_theorems/*.rs`
+  from this directory (route modules are declared by a macro),
   `cargo clippy --locked -p polytool -p exact-real-roots -p ore-algebra --all-targets -- -D warnings`,
   `cargo test --locked -p polytool -p exact-real-roots -p ore-algebra --doc`,
   `RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p polytool -p exact-real-roots -p ore-algebra`

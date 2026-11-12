@@ -311,165 +311,61 @@ pub enum VeroneseParentProofStatus {
     Refuted,
 }
 
-/// The route that settled the parent statement.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum VeroneseParentProofRoute {
-    /// `P_(n+k) = c(x) P_n` with `c` and the seeds real-rooted of one sign.
-    PeriodicProduct,
-    /// General product induction, with all roots strictly negative.
-    ProductRecurrence,
-    /// A matched paper theorem (`match_recurrence_theorems`).
-    PaperTheorem,
-    /// A root-domain claim of `transform_recurrence`.
-    RootDomain,
-    /// [`check_three_term_recurrence_theorem`] with roots in `(-inf, 0)`.
-    ThreeTermRecurrence,
-    /// [`check_liu_wang_theorem`].
-    LiuWang,
-    /// [`check_liu_wang_derivative_lag_theorem`].
-    LiuWangDerivativeLag,
-    /// [`check_ma_wang_interval_theorem`] with an interval `[L, U]`,
-    /// `U <= 0`.
-    MaWangInterval,
-    /// [`check_liu_wang_three_term_theorem`] with a root region in
-    /// `(-inf, 0]`.
-    LiuWangThreeTerm,
-    /// [`check_iterated_preserver_theorem`] with the region `(-inf, 0]`.
-    IteratedPreserver,
-    /// [`check_hypergeometric_row_theorem`] with a region in `(-inf, 0]`.
-    HypergeometricRow,
-    /// [`check_variable_delay_theorem`] (region `(-inf, 0)`).
-    VariableDelay,
-    /// [`check_residue_class_subsequence_theorem`] with a region in
-    /// `(-inf, 0]`.
-    ResidueClassSubsequences,
-    /// [`check_index_section_lift_theorem`] with a region in `(-inf, 0]`.
-    IndexSectionLift,
-    /// [`check_factor_gauge_theorem`] with a region in `(-inf, 0]`.
-    FactorGauge,
-    /// [`check_lag_two_euler_theorem`] with simple negative roots and strict interlacing.
-    LagTwoEuler,
-    /// [`check_binomial_perturbed_euler_orbit_theorem`] (RealRooted issue #2513).
-    BinomialPerturbedEulerOrbit,
-    /// [`check_rational_pf_riordan_theorem`] with nonpositive roots.
-    RationalPfRiordan,
-    /// Shared degree-law reversal followed by a theorem of the parent menu.
-    DegreeLawReversal,
-    /// A caller-supplied attestation.
-    Attestation,
+macro_rules! define_parent_routes {
+    ($(#[$first_doc:meta])* $first:ident, $first_module:ident, $first_name:literal,
+        $first_summary:literal, { $($first_export:ident),* $(,)? };
+     $( $(#[$doc:meta])* $variant:ident, $module:ident, $name:literal,
+        $summary:literal, { $($export:ident),* $(,)? }; )*) => {
+        /// The route that settled the parent statement.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        pub enum VeroneseParentProofRoute {
+            /// An index-independent periodic product with one-signed real-rooted seeds.
+            PeriodicProduct,
+            $(#[$first_doc])* #[serde(rename = $first_name)] $first,
+            /// A matched paper theorem.
+            PaperTheorem,
+            /// A certified root-domain claim.
+            RootDomain,
+            $($(#[$doc])* #[serde(rename = $name)] $variant,)*
+            /// A caller-supplied attestation.
+            Attestation,
+        }
+
+        impl VeroneseParentProofRoute {
+            /// The stable snake-case name used by Serde.
+            pub const fn as_str(self) -> &'static str {
+                match self {
+                    Self::PeriodicProduct => "periodic_product",
+                    Self::PaperTheorem => "paper_theorem",
+                    Self::RootDomain => "root_domain",
+                    Self::Attestation => "attestation",
+                    Self::$first => $first_name,
+                    $(Self::$variant => $name,)*
+                }
+            }
+
+            /// The theorem behind this route, if it is a theorem route.
+            pub const fn theorem(self) -> Option<RealRootednessTheorem> {
+                match self {
+                    Self::$first => Some(RealRootednessTheorem::$first),
+                    $(Self::$variant => Some(RealRootednessTheorem::$variant),)*
+                    Self::PeriodicProduct | Self::PaperTheorem | Self::RootDomain
+                        | Self::Attestation => None,
+                }
+            }
+
+            /// The parent route of a theorem (the inverse of [`Self::theorem`]).
+            pub(in crate::recurrence) const fn of_theorem(theorem: RealRootednessTheorem) -> Self {
+                match theorem {
+                    RealRootednessTheorem::$first => Self::$first,
+                    $(RealRootednessTheorem::$variant => Self::$variant,)*
+                }
+            }
+        }
+    };
 }
-
-impl VeroneseParentProofRoute {
-    /// The snake-case name, as serialized (for example `"liu_wang"`).
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            VeroneseParentProofRoute::PeriodicProduct => "periodic_product",
-            VeroneseParentProofRoute::PaperTheorem => "paper_theorem",
-            VeroneseParentProofRoute::RootDomain => "root_domain",
-            VeroneseParentProofRoute::Attestation => "attestation",
-            VeroneseParentProofRoute::ProductRecurrence
-            | VeroneseParentProofRoute::ThreeTermRecurrence
-            | VeroneseParentProofRoute::LiuWang
-            | VeroneseParentProofRoute::LiuWangDerivativeLag
-            | VeroneseParentProofRoute::MaWangInterval
-            | VeroneseParentProofRoute::LiuWangThreeTerm
-            | VeroneseParentProofRoute::IteratedPreserver
-            | VeroneseParentProofRoute::HypergeometricRow
-            | VeroneseParentProofRoute::VariableDelay
-            | VeroneseParentProofRoute::ResidueClassSubsequences
-            | VeroneseParentProofRoute::IndexSectionLift
-            | VeroneseParentProofRoute::LagTwoEuler
-            | VeroneseParentProofRoute::RationalPfRiordan
-            | VeroneseParentProofRoute::DegreeLawReversal
-            | VeroneseParentProofRoute::BinomialPerturbedEulerOrbit
-            | VeroneseParentProofRoute::FactorGauge => match self.theorem() {
-                Some(theorem) => theorem.as_str(),
-                None => unreachable!(),
-            },
-        }
-    }
-
-    /// The [`RealRootednessTheorem`] behind a theorem route (the route and
-    /// the theorem have the same name); `None` for the periodic-product,
-    /// paper-theorem, root-domain and attestation routes.
-    pub const fn theorem(self) -> Option<RealRootednessTheorem> {
-        match self {
-            VeroneseParentProofRoute::ProductRecurrence => {
-                Some(RealRootednessTheorem::ProductRecurrence)
-            }
-            VeroneseParentProofRoute::ThreeTermRecurrence => {
-                Some(RealRootednessTheorem::ThreeTermRecurrence)
-            }
-            VeroneseParentProofRoute::LiuWang => Some(RealRootednessTheorem::LiuWang),
-            VeroneseParentProofRoute::LiuWangDerivativeLag => {
-                Some(RealRootednessTheorem::LiuWangDerivativeLag)
-            }
-            VeroneseParentProofRoute::MaWangInterval => Some(RealRootednessTheorem::MaWangInterval),
-            VeroneseParentProofRoute::LiuWangThreeTerm => {
-                Some(RealRootednessTheorem::LiuWangThreeTerm)
-            }
-            VeroneseParentProofRoute::IteratedPreserver => {
-                Some(RealRootednessTheorem::IteratedPreserver)
-            }
-            VeroneseParentProofRoute::HypergeometricRow => {
-                Some(RealRootednessTheorem::HypergeometricRow)
-            }
-            VeroneseParentProofRoute::VariableDelay => Some(RealRootednessTheorem::VariableDelay),
-            VeroneseParentProofRoute::LagTwoEuler => Some(RealRootednessTheorem::LagTwoEuler),
-            VeroneseParentProofRoute::BinomialPerturbedEulerOrbit => {
-                Some(RealRootednessTheorem::BinomialPerturbedEulerOrbit)
-            }
-            VeroneseParentProofRoute::ResidueClassSubsequences => {
-                Some(RealRootednessTheorem::ResidueClassSubsequences)
-            }
-            VeroneseParentProofRoute::IndexSectionLift => {
-                Some(RealRootednessTheorem::IndexSectionLift)
-            }
-            VeroneseParentProofRoute::DegreeLawReversal => {
-                Some(RealRootednessTheorem::DegreeLawReversal)
-            }
-            VeroneseParentProofRoute::RationalPfRiordan => {
-                Some(RealRootednessTheorem::RationalPfRiordan)
-            }
-            VeroneseParentProofRoute::FactorGauge => Some(RealRootednessTheorem::FactorGauge),
-            VeroneseParentProofRoute::PeriodicProduct
-            | VeroneseParentProofRoute::PaperTheorem
-            | VeroneseParentProofRoute::RootDomain
-            | VeroneseParentProofRoute::Attestation => None,
-        }
-    }
-
-    /// The parent route of a theorem (the inverse of [`Self::theorem`]).
-    pub(in crate::recurrence) const fn of_theorem(theorem: RealRootednessTheorem) -> Self {
-        match theorem {
-            RealRootednessTheorem::ProductRecurrence => VeroneseParentProofRoute::ProductRecurrence,
-            RealRootednessTheorem::ThreeTermRecurrence => {
-                VeroneseParentProofRoute::ThreeTermRecurrence
-            }
-            RealRootednessTheorem::LiuWang => VeroneseParentProofRoute::LiuWang,
-            RealRootednessTheorem::LiuWangDerivativeLag => {
-                VeroneseParentProofRoute::LiuWangDerivativeLag
-            }
-            RealRootednessTheorem::MaWangInterval => VeroneseParentProofRoute::MaWangInterval,
-            RealRootednessTheorem::LiuWangThreeTerm => VeroneseParentProofRoute::LiuWangThreeTerm,
-            RealRootednessTheorem::IteratedPreserver => VeroneseParentProofRoute::IteratedPreserver,
-            RealRootednessTheorem::HypergeometricRow => VeroneseParentProofRoute::HypergeometricRow,
-            RealRootednessTheorem::VariableDelay => VeroneseParentProofRoute::VariableDelay,
-            RealRootednessTheorem::LagTwoEuler => VeroneseParentProofRoute::LagTwoEuler,
-            RealRootednessTheorem::BinomialPerturbedEulerOrbit => {
-                VeroneseParentProofRoute::BinomialPerturbedEulerOrbit
-            }
-            RealRootednessTheorem::ResidueClassSubsequences => {
-                VeroneseParentProofRoute::ResidueClassSubsequences
-            }
-            RealRootednessTheorem::IndexSectionLift => VeroneseParentProofRoute::IndexSectionLift,
-            RealRootednessTheorem::RationalPfRiordan => VeroneseParentProofRoute::RationalPfRiordan,
-            RealRootednessTheorem::DegreeLawReversal => VeroneseParentProofRoute::DegreeLawReversal,
-            RealRootednessTheorem::FactorGauge => VeroneseParentProofRoute::FactorGauge,
-        }
-    }
-}
+parent_theorems::theorem_routes!(define_parent_routes);
 
 /// One tried route.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -640,7 +536,20 @@ pub(in crate::recurrence) fn recorded_route_replays(
         }
         _ => return Ok(false),
     };
-    let replay = prove_parent_by_routes(record, needed_from, &[route])?;
+    let replay = match route.theorem() {
+        Some(theorem) => {
+            let theorem_route = ROUTES
+                .iter()
+                .find(|r| r.theorem == theorem)
+                .expect("every theorem has a route");
+            match theorem_route.policy.replay {
+                ParentReplayPolicy::RecordedRoute => {
+                    prove_parent_by_routes(record, needed_from, &[route])?
+                }
+            }
+        }
+        None => prove_parent_by_routes(record, needed_from, &[route])?,
+    };
     Ok(replay.route == Some(route) && recorded.is_supported_by(&replay))
 }
 
@@ -991,7 +900,7 @@ fn root_domain_menu(
     (attempts, false)
 }
 
-/// A theorem route of the registry ([`TheoremRoute::parent`]): the theorem
+/// A theorem route of the registry ([`TheoremRoute::policy`]): the theorem
 /// with the requested region of its [`ParentRegion`] policy, proved for the
 /// parent only when the certified region lies in `(-inf, 0]` (every parent
 /// row then has coefficients of one sign).  The last value is whether the
@@ -1019,7 +928,7 @@ fn theorem_attempt(
         ..RealRootednessTheoremOptions::default()
     };
     let unrestricted = RealRootednessTheoremOptions::default();
-    let report = match route.parent.region {
+    let report = match route.policy.parent.region {
         ParentRegion::OpenNonpositiveRay => check(&ray)?,
         ParentRegion::Unrestricted => check(&unrestricted)?,
         ParentRegion::OpenNonpositiveRayThenUnrestricted => {
@@ -1587,7 +1496,7 @@ pub(in crate::recurrence) fn prove_parent_by_routes(
 }
 
 /// Run the theorem routes of `stage` in the registry order
-/// ([`TheoremRoute::parent`]): each route runs while the stage allows it
+/// ([`TheoremRoute::policy`]): each route runs while the stage allows it
 /// (unproved, or for [`ParentStage::ReplacesEarly`] proved only by an early
 /// route), its attempt is recorded (unless it does not apply and the route
 /// records only applicable attempts), and its proof sets `proved` and the
@@ -1600,12 +1509,15 @@ fn run_theorem_routes(
     interlacing: &mut Option<LiftInterlacing>,
     attempts: &mut Vec<VeroneseParentProofAttempt>,
 ) -> Result<(), RecurrenceError> {
-    for route in ROUTES.iter().filter(|route| route.parent.stage == stage) {
+    for route in ROUTES
+        .iter()
+        .filter(|route| route.policy.parent.stage == stage)
+    {
         let proved_early = proved
             .and_then(VeroneseParentProofRoute::theorem)
             .is_some_and(|theorem| {
                 ROUTES.iter().any(|early| {
-                    early.theorem == theorem && early.parent.stage == ParentStage::Early
+                    early.theorem == theorem && early.policy.parent.stage == ParentStage::Early
                 })
             });
         let runs = match stage {
@@ -1617,7 +1529,7 @@ fn run_theorem_routes(
             continue;
         }
         let (attempt, theorem_interlacing, applicable) = theorem_attempt(record, route)?;
-        if route.parent.record_only_if_applicable && !applicable {
+        if route.policy.parent.record_only_if_applicable && !applicable {
             continue;
         }
         let success = attempt.success;
@@ -2323,5 +2235,126 @@ mod left_hand_factor_tests {
             "{}",
             liu_wang.detail
         );
+    }
+}
+
+#[cfg(test)]
+mod registry_policy_tests {
+    use super::*;
+
+    #[test]
+    fn only_product_proofs_can_be_replaced_by_later_theorems() {
+        let entry = crate::oeis::by_id("A026386").unwrap();
+        let (rule, rows) = entry.recurrence_parts().unwrap();
+        let count = rule.generation_initial_count(entry.recurrence_first_index, rows.len());
+        let record = ParentRecurrenceRecord {
+            rule: &rule,
+            seeds: &rows[..count],
+            first_index: entry.recurrence_first_index,
+        };
+        for (initial, expected) in [
+            (
+                VeroneseParentProofRoute::ProductRecurrence,
+                VeroneseParentProofRoute::IteratedPreserver,
+            ),
+            (
+                VeroneseParentProofRoute::PeriodicProduct,
+                VeroneseParentProofRoute::PeriodicProduct,
+            ),
+            (
+                VeroneseParentProofRoute::PaperTheorem,
+                VeroneseParentProofRoute::PaperTheorem,
+            ),
+            (
+                VeroneseParentProofRoute::RootDomain,
+                VeroneseParentProofRoute::RootDomain,
+            ),
+        ] {
+            let mut proved = Some(initial);
+            let mut interlacing = None;
+            let mut attempts = Vec::new();
+            run_theorem_routes(
+                &record,
+                ParentStage::ReplacesEarly,
+                &|_| true,
+                &mut proved,
+                &mut interlacing,
+                &mut attempts,
+            )
+            .unwrap();
+            assert_eq!(proved, Some(expected));
+            assert_eq!(
+                attempts.is_empty(),
+                initial != VeroneseParentProofRoute::ProductRecurrence
+            );
+        }
+    }
+
+    #[test]
+    fn parent_region_fallback_matches_the_requested_then_unrestricted_checks() {
+        for id in ["A008292", "A099605", "A201013"] {
+            let entry = crate::oeis::by_id(id).unwrap();
+            let (rule, rows) = entry.recurrence_parts().unwrap();
+            let count = rule.generation_initial_count(entry.recurrence_first_index, rows.len());
+            let record = ParentRecurrenceRecord {
+                rule: &rule,
+                seeds: &rows[..count],
+                first_index: entry.recurrence_first_index,
+            };
+            for theorem in [
+                RealRootednessTheorem::ResidueClassSubsequences,
+                RealRootednessTheorem::IndexSectionLift,
+                RealRootednessTheorem::FactorGauge,
+            ] {
+                let requested = RealRootednessTheoremOptions {
+                    root_region: Some(RealInterval {
+                        lower: None,
+                        lower_closed: false,
+                        upper: Some(Q::zero()),
+                        upper_closed: false,
+                    }),
+                    ..Default::default()
+                };
+                let ray = check_real_rootedness_theorem(
+                    theorem,
+                    &rule,
+                    record.first_index,
+                    record.seeds,
+                    &requested,
+                )
+                .unwrap();
+                let expected = if ray.is_proved()
+                    || ray.status == RealRootednessTheoremStatus::NotApplicable
+                {
+                    ray
+                } else {
+                    check_real_rootedness_theorem(
+                        theorem,
+                        &rule,
+                        record.first_index,
+                        record.seeds,
+                        &Default::default(),
+                    )
+                    .unwrap()
+                };
+                let route = ROUTES.iter().find(|r| r.theorem == theorem).unwrap();
+                let (actual, _, applicable) = theorem_attempt(&record, route).unwrap();
+                assert_eq!(
+                    applicable,
+                    expected.status != RealRootednessTheoremStatus::NotApplicable
+                );
+                let upper = expected
+                    .conclusion
+                    .as_ref()
+                    .and_then(|c| c.root_region.as_ref())
+                    .and_then(|region| region.at(0).ok())
+                    .and_then(|region| region.upper);
+                assert_eq!(
+                    actual.success,
+                    expected.is_proved() && upper.is_some_and(|u| !u.is_positive())
+                );
+                assert!(actual.detail.contains(&expected.normal_form));
+            }
+        }
     }
 }

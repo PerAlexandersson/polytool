@@ -338,8 +338,12 @@ pub fn check_rational_pf_riordan_theorem(
     )
 }
 
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::RationalPfRiordan,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: REFERENCE,
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: rational_pf_riordan_report,
     // Adding generated seed rows leaves the all-seed rational GF unchanged.
     // There is no new induction start to search for this all-index theorem.
@@ -349,6 +353,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: true,
     in_index_section_menu: true,
+    in_degree_law_reversal_menu: true,
     parent: ParentPolicy {
         stage: ParentStage::WhileUnproved,
         region: ParentRegion::Unrestricted,
@@ -385,7 +390,6 @@ fn rational_pf_riordan_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::RationalPfRiordan,
-        REFERENCE,
         rule,
         first,
         seeds,

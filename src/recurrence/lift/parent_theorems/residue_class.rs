@@ -267,8 +267,12 @@ fn zero_class_declaration(class: &Recurrence) -> Option<&'static str> {
 }
 
 /// The registry entry of the residue-class theorem ([`super::registry::ROUTES`]).
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::ResidueClassSubsequences,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: REFERENCE,
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: residue_class_report,
     start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
@@ -276,6 +280,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: false,
     in_index_section_menu: true,
+    in_degree_law_reversal_menu: false,
     parent: ParentPolicy {
         stage: ParentStage::WhileUnproved,
         region: ParentRegion::OpenNonpositiveRayThenUnrestricted,
@@ -315,7 +320,6 @@ fn residue_class_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::ResidueClassSubsequences,
-        REFERENCE,
         rule,
         first_index,
         seeds,
@@ -415,7 +419,10 @@ fn residue_class_report(
         let mut selected = None;
         let mut fallback = None;
         // The theorems of the residue-class menu, in the route order.
-        for route in ROUTES.iter().filter(|route| route.in_residue_class_menu) {
+        for route in ROUTES
+            .iter()
+            .filter(|route| route.policy.in_residue_class_menu)
+        {
             let Ok(attempt) = check_with_first_proving_start(
                 route.theorem,
                 &class,

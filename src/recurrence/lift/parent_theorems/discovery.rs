@@ -484,33 +484,42 @@ pub fn discover_recurrence_proofs_with_stage_options(
          (not_applicable: inhomogeneous)"
             .to_string()
     }));
-    // Reversal is a final closure, after all direct routes and direct lifts.
-    if report.status != "proved" && degree_law_reversal::eligible_rule(&rule) {
-        let mut tried = vec![&report.recurrence];
-        if let Some(tail) = &report.tail {
-            tried.push(&tail.recurrence);
-        }
-        if let Some(search) = &report.alternative_representations {
-            tried.extend(
-                search
-                    .alternatives
-                    .iter()
-                    .filter(|a| a.equality.is_certified())
-                    .map(|a| &a.equality.alternative),
-            );
-        }
-        if let Some(search) = &report.affine_coordinates {
-            tried.extend(search.coordinates.iter().map(|c| &c.recurrence));
-            tried.extend(
-                search
-                    .coordinates
-                    .iter()
-                    .filter_map(|c| c.tail.as_ref().map(|t| &t.recurrence)),
-            );
-        }
-        if !degree_law_reversal::already_tried(&rule, first_index, &seeds, &tried)? {
-            let attempt = check_degree_law_reversal_theorem(&rule, first_index, &seeds, options)?;
-            if degree_law_reversal::ROUTE.discovery.records(&attempt) {
+    // Late theorem routes run after all direct routes and direct lifts.
+    if report.status != "proved" {
+        for route in ROUTES
+            .iter()
+            .filter(|route| route.policy.phase == DiscoveryPhase::AfterDirectLifts)
+        {
+            let mut tried = vec![&report.recurrence];
+            if let Some(tail) = &report.tail {
+                tried.push(&tail.recurrence);
+            }
+            if let Some(search) = &report.alternative_representations {
+                tried.extend(
+                    search
+                        .alternatives
+                        .iter()
+                        .filter(|a| a.equality.is_certified())
+                        .map(|a| &a.equality.alternative),
+                );
+            }
+            if let Some(search) = &report.affine_coordinates {
+                tried.extend(search.coordinates.iter().map(|c| &c.recurrence));
+                tried.extend(
+                    search
+                        .coordinates
+                        .iter()
+                        .filter_map(|c| c.tail.as_ref().map(|t| &t.recurrence)),
+                );
+            }
+            if let Some(eligible) = route.policy.after_direct_eligible {
+                if !eligible(&rule, first_index, &seeds, &tried)? {
+                    continue;
+                }
+            }
+            let attempt =
+                check_real_rootedness_theorem(route.theorem, &rule, first_index, &seeds, options)?;
+            if route.policy.discovery.records(&attempt) {
                 report.attempts.push(attempt);
                 report.finish_summary(None);
             }
@@ -565,13 +574,13 @@ fn run_theorems(
     // Every route in the registry order; a route recorded only where the
     // rule has its form leaves the reports of other rules unchanged.
     let mut attempts = Vec::new();
-    for route in &ROUTES {
-        if route.theorem == RealRootednessTheorem::DegreeLawReversal {
-            continue;
-        }
+    for route in ROUTES
+        .iter()
+        .filter(|route| route.policy.phase == DiscoveryPhase::Direct)
+    {
         let attempt =
             check_with_first_proving_start(route.theorem, rule, first_index, seeds, options)?;
-        if route.discovery.records(&attempt) {
+        if route.policy.discovery.records(&attempt) {
             attempts.push(attempt);
         }
     }
@@ -800,7 +809,13 @@ impl RecurrenceProofDiscoveryReport {
         let mut direct = self.attempts.clone();
         let closure = direct
             .last()
-            .filter(|a| a.theorem == RealRootednessTheorem::DegreeLawReversal)
+            .filter(|a| {
+                route(a.theorem)
+                    .policy
+                    .discovery_replay
+                    .premature_closure_error()
+                    .is_some()
+            })
             .cloned();
         if closure.is_some() {
             direct.pop();
@@ -927,10 +942,21 @@ impl RecurrenceProofDiscoveryReport {
             before_closure.closure_lifts = None;
             before_closure.finish_summary(None);
             if before_closure.status == "proved" || inhomogeneous {
-                return failed("reversal is recorded before a direct proof or lift");
+                return failed(
+                    route(closure.theorem)
+                        .policy
+                        .discovery_replay
+                        .premature_closure_error()
+                        .expect("a trailing closure has a replay policy"),
+                );
             }
-            let reference =
-                check_degree_law_reversal_theorem(&rule, first_index, &seeds, &options)?;
+            let reference = check_real_rootedness_theorem(
+                closure.theorem,
+                &rule,
+                first_index,
+                &seeds,
+                &options,
+            )?;
             verify_attempts(
                 std::slice::from_ref(closure),
                 std::slice::from_ref(&reference),
@@ -1316,4 +1342,56 @@ fn without_common_index_factor(rule: &Recurrence) -> (Recurrence, Vec<Q>) {
         inhomogeneous: None,
     };
     (reduced, content.coeffs().to_vec())
+}
+#[cfg(test)]
+mod replay_policy_tests {
+    use super::*;
+
+    fn discover(id: &str) -> RecurrenceProofDiscoveryReport {
+        let entry = crate::oeis::by_id(id).unwrap();
+        let (rule, rows) = entry.recurrence_parts().unwrap();
+        let count = rule.generation_initial_count(entry.recurrence_first_index, rows.len());
+        let record = RecurrenceJson::from_recurrence_rational(
+            &rule,
+            entry.recurrence_first_index,
+            &rows[..count],
+            None,
+        );
+        discover_recurrence_proofs(&record, &Default::default()).unwrap()
+    }
+
+    #[test]
+    fn trailing_closure_replay_preserves_membership_and_its_existing_omission_policy() {
+        let report = discover("A098172");
+        let closure = report.attempts.last().unwrap().clone();
+        assert_eq!(closure.theorem, RealRootednessTheorem::DegreeLawReversal);
+        report.verify().unwrap();
+
+        let mut omitted = report.clone();
+        omitted.attempts.pop();
+        omitted.finish_summary(None);
+        omitted.verify().unwrap();
+
+        let mut duplicated = report.clone();
+        duplicated.attempts.push(closure.clone());
+        assert_eq!(
+            duplicated.verify().unwrap_err().to_string(),
+            "the theorem attempts differ from those of the search"
+        );
+
+        let mut moved = report.clone();
+        moved.attempts.pop();
+        moved.attempts.insert(0, closure.clone());
+        assert_eq!(
+            moved.verify().unwrap_err().to_string(),
+            "the theorem attempts differ from those of the search"
+        );
+
+        let mut after_direct_proof = discover("A008292");
+        after_direct_proof.attempts.push(closure);
+        assert_eq!(
+            after_direct_proof.verify().unwrap_err().to_string(),
+            "reversal is recorded before a direct proof or lift"
+        );
+    }
 }

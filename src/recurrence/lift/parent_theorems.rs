@@ -208,77 +208,26 @@ mod recurrence_equality;
 pub use recurrence_equality::{
     certify_recurrence_equality, RecurrenceEqualityCertificate, RECURRENCE_EQUALITY_SCHEMA,
 };
-mod product;
-pub use product::{check_product_recurrence_theorem, is_trivially_real_rooted};
-mod derivative_lag;
-mod hypergeometric_row;
-mod iterated_preserver;
 mod left_hand_factor;
-mod liu_wang;
-mod liu_wang_three_term;
-mod ma_wang;
-mod three_term;
-// RealRooted row routes, including the Euler-orbit theorem of issue #2513.
-mod binomial_perturbed_euler_orbit;
-mod degree_law_reversal;
-mod lag_two_euler;
-mod rational_pf_riordan;
-pub use binomial_perturbed_euler_orbit::{
-    check_binomial_perturbed_euler_orbit_theorem, BinomialPerturbedEulerOrbitCertificate,
-};
-pub use degree_law_reversal::{
-    check_degree_law_reversal_theorem, DegreeLawReversalCertificate, DegreeLawTransform,
-    MAXIMUM_REVERSAL_DEGREE_SLOPE,
-};
-pub use rational_pf_riordan::{
-    check_rational_pf_riordan_theorem, check_rational_polya_frequency, PolyaFrequencyRootLayer,
-    RationalPfRiordanCertificate, RationalPolyaFrequencyEvidence,
-};
-mod residue_class;
-mod variable_delay;
-pub use lag_two_euler::{check_lag_two_euler_theorem, LagTwoEulerCertificate, LagTwoEulerSeedStep};
-// Index-section lift (RealRooted `pathPower`).
-mod index_section;
-// Factor gauge (RealRooted `powerForm`, `closedForm`, `factorPower`).
-mod factor_gauge;
 // The registry of the theorem routes.
 mod registry;
-use registry::{any_proof, route, DiscoveryPolicy, ParentPolicy, StartPolicy};
-pub(in crate::recurrence) use registry::{ParentRegion, ParentStage, TheoremRoute, ROUTES};
+use registry::{
+    any_proof, route, DiscoveryPhase, DiscoveryPolicy, DiscoveryReplayPolicy, ParentPolicy,
+    RoutePolicy, StartPolicy,
+};
+pub(in crate::recurrence) use registry::{
+    ParentRegion, ParentReplayPolicy, ParentStage, TheoremRoute,
+};
 // The route certificates and the JSON form of the reports.
 mod certificate;
 pub use certificate::RouteCertificate;
 // Root-region helpers shared by the checks.
 mod region;
-pub use derivative_lag::check_liu_wang_derivative_lag_theorem;
-pub use factor_gauge::{
-    check_factor_gauge_theorem, FactorGaugeCertificate, FactorGaugeDominantRoot,
-    FactorGaugeResidualShape,
-};
-pub use hypergeometric_row::check_hypergeometric_row_theorem;
-pub use index_section::{
-    check_index_section_lift_theorem, IndexSectionCertificate, IndexSectionTransform,
-    MAX_INDEX_SECTION_PERIOD,
-};
-pub use iterated_preserver::{
-    check_iterated_preserver_theorem, check_weyl_step_preserver, IteratedPreserverCertificate,
-    IteratedPreserverCoordinates, IteratedPreserverFactor, WeylStepPreserverVerdict,
-};
 pub(in crate::recurrence) use left_hand_factor::rule_with_x_free_left_hand_factor;
 pub use left_hand_factor::LeftHandFactorNormalization;
-pub use liu_wang::check_liu_wang_theorem;
-pub use liu_wang_three_term::check_liu_wang_three_term_theorem;
-pub use ma_wang::check_ma_wang_interval_theorem;
 use region::{
     has_real_roots_below, has_real_roots_in, has_real_roots_in_closed_region,
     has_real_roots_in_region, open_root_interval, proved_region, requested_region_contains,
-};
-pub use residue_class::{
-    check_residue_class_subsequence_theorem, ResidueClassCertificate, ResidueClassProof,
-};
-pub use three_term::check_three_term_recurrence_theorem;
-pub use variable_delay::{
-    check_variable_delay_theorem, VariableDelayCertificate, VariableDelaySeedStep,
 };
 
 type Q = BigRational;
@@ -290,91 +239,55 @@ pub const REAL_ROOTEDNESS_THEOREM_SCHEMA: &str = "polytool.recurrence-real-roote
 /// exact row checks that refute a root region.
 const GENERATED_ROWS: usize = 12;
 
-/// The theorem a [`RealRootednessTheoremReport`] applies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RealRootednessTheorem {
-    /// Product induction with uniformly real-rooted multipliers.
-    ProductRecurrence,
-    /// [`check_three_term_recurrence_theorem`].
-    ThreeTermRecurrence,
-    /// [`check_liu_wang_theorem`].
-    LiuWang,
-    /// [`check_liu_wang_derivative_lag_theorem`].
-    LiuWangDerivativeLag,
-    /// [`check_ma_wang_interval_theorem`].
-    MaWangInterval,
-    /// [`check_liu_wang_three_term_theorem`].
-    LiuWangThreeTerm,
-    /// [`check_iterated_preserver_theorem`].
-    IteratedPreserver,
-    /// [`check_hypergeometric_row_theorem`].
-    HypergeometricRow,
-    /// [`check_variable_delay_theorem`] (RealRooted route `variableDelay`).
-    VariableDelay,
-    /// [`check_residue_class_subsequence_theorem`] (RealRooted route
-    /// `subseq`).
-    ResidueClassSubsequences,
-    /// [`check_index_section_lift_theorem`] (RealRooted route `pathPower`).
-    IndexSectionLift,
-    /// [`check_factor_gauge_theorem`] (RealRooted routes `powerForm`,
-    /// `closedForm`, `factorPower`).
-    FactorGauge,
-    /// [`check_lag_two_euler_theorem`] (RealRooted positive lag-two Euler recurrence).
-    LagTwoEuler,
-    /// [`check_binomial_perturbed_euler_orbit_theorem`] (RealRooted issue #2513).
-    BinomialPerturbedEulerOrbit,
-    /// [`check_rational_pf_riordan_theorem`].
-    RationalPfRiordan,
-    /// [`check_degree_law_reversal_theorem`], a shared closure of the theorem menu.
-    DegreeLawReversal,
-}
+macro_rules! define_theorem_routes {
+    ($( $(#[$doc:meta])* $variant:ident, $module:ident, $name:literal,
+        $summary:literal, { $($export:ident),* $(,)? }; )*) => {
+        $(mod $module;
+        pub use $module::{$($export),*};)*
 
-impl RealRootednessTheorem {
-    /// Every theorem, in the order of the parent cascade and of
-    /// [`discover_recurrence_proofs`].
-    pub const ALL: [RealRootednessTheorem; 16] = [
-        RealRootednessTheorem::ProductRecurrence,
-        RealRootednessTheorem::ThreeTermRecurrence,
-        RealRootednessTheorem::LiuWang,
-        RealRootednessTheorem::LiuWangDerivativeLag,
-        RealRootednessTheorem::MaWangInterval,
-        RealRootednessTheorem::LiuWangThreeTerm,
-        RealRootednessTheorem::IteratedPreserver,
-        RealRootednessTheorem::HypergeometricRow,
-        RealRootednessTheorem::VariableDelay,
-        RealRootednessTheorem::ResidueClassSubsequences,
-        RealRootednessTheorem::IndexSectionLift,
-        RealRootednessTheorem::FactorGauge,
-        RealRootednessTheorem::LagTwoEuler,
-        RealRootednessTheorem::BinomialPerturbedEulerOrbit,
-        RealRootednessTheorem::RationalPfRiordan,
-        RealRootednessTheorem::DegreeLawReversal,
-    ];
-
-    /// The snake-case name, as serialized (for example
-    /// `"three_term_recurrence"`).
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            RealRootednessTheorem::ProductRecurrence => "product_recurrence",
-            RealRootednessTheorem::ThreeTermRecurrence => "three_term_recurrence",
-            RealRootednessTheorem::LiuWang => "liu_wang",
-            RealRootednessTheorem::LiuWangDerivativeLag => "liu_wang_derivative_lag",
-            RealRootednessTheorem::MaWangInterval => "ma_wang_interval",
-            RealRootednessTheorem::LiuWangThreeTerm => "liu_wang_three_term",
-            RealRootednessTheorem::IteratedPreserver => "iterated_preserver",
-            RealRootednessTheorem::HypergeometricRow => "hypergeometric_row",
-            RealRootednessTheorem::VariableDelay => "variable_delay",
-            RealRootednessTheorem::ResidueClassSubsequences => "residue_class_subsequences",
-            RealRootednessTheorem::IndexSectionLift => "index_section_lift",
-            RealRootednessTheorem::FactorGauge => "factor_gauge",
-            RealRootednessTheorem::LagTwoEuler => "lag_two_euler",
-            RealRootednessTheorem::BinomialPerturbedEulerOrbit => "binomial_perturbed_euler_orbit",
-            RealRootednessTheorem::RationalPfRiordan => "rational_pf_riordan",
-            RealRootednessTheorem::DegreeLawReversal => "degree_law_reversal",
+        /// The theorem a [`RealRootednessTheoremReport`] applies.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+        pub enum RealRootednessTheorem {
+            $($(#[$doc])* #[serde(rename = $name)] $variant,)*
         }
-    }
+
+        impl RealRootednessTheorem {
+            /// Every theorem, in the parent cascade and discovery order.
+            pub const ALL: [Self; [$($name),*].len()] = [$(Self::$variant),*];
+
+            /// The stable snake-case name used by Serde.
+            pub const fn as_str(self) -> &'static str {
+                match self { $(Self::$variant => $name,)* }
+            }
+
+            /// A short description of the theorem route.
+            pub const fn summary(self) -> &'static str {
+                match self { $(Self::$variant => $summary,)* }
+            }
+
+            /// The base reference; a report may refine it for its matched form.
+            pub fn reference(self) -> &'static str {
+                route(self).policy.reference
+            }
+
+            /// The Lean declarations recorded for this theorem's matched form.
+            /// Returns `None` when the report belongs to another theorem.
+            /// An empty slice means that this check recorded no declarations.
+            pub fn lean_declarations_in(self, report: &RealRootednessTheoremReport)
+                -> Option<&[String]> {
+                (report.theorem == self).then(|| (route(self).lean_declarations)(report))
+            }
+        }
+
+        pub(in crate::recurrence) static ROUTES: [TheoremRoute; [$($name),*].len()] = [
+            $(TheoremRoute { theorem: RealRootednessTheorem::$variant,
+                policy: $module::ROUTE,
+                lean_declarations: |report| &report.lean_declarations },)*
+        ];
+    };
 }
+registry::theorem_routes!(define_theorem_routes);
+pub(super) use registry::theorem_routes;
 
 /// Outcome of a theorem check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -614,7 +527,6 @@ pub struct RealRootednessTheoremReport {
 impl RealRootednessTheoremReport {
     fn new(
         theorem: RealRootednessTheorem,
-        reference: &str,
         rule: &Recurrence,
         first_index: usize,
         seeds: &[Vec<Q>],
@@ -623,7 +535,7 @@ impl RealRootednessTheoremReport {
         Self {
             schema: REAL_ROOTEDNESS_THEOREM_SCHEMA.into(),
             theorem,
-            reference: reference.into(),
+            reference: theorem.reference().into(),
             recurrence: RecurrenceJson::from_recurrence_rational(rule, first_index, seeds, None),
             start_delay: 0,
             requested_root_region: options.root_region.as_ref().map(open_root_interval),
@@ -808,6 +720,7 @@ impl RealRootednessTheoremReport {
         match &self.certificate {
             Some(certificate) if certificate.theorem() != self.theorem => {
                 let name = route(certificate.theorem())
+                    .policy
                     .certificate_name
                     .unwrap_or_default();
                 let article = if name.starts_with(|c: char| "aeiou".contains(c)) {
@@ -820,7 +733,7 @@ impl RealRootednessTheoremReport {
                 ))
             }
             Some(certificate) => certificate.verify_in_report(self),
-            None => match route(self.theorem).certificate_name {
+            None => match route(self.theorem).policy.certificate_name {
                 Some(name) if self.is_proved() => {
                     failed(format!("a proved {name} report needs its certificate"))
                 }
@@ -846,7 +759,7 @@ fn check_at_supplied_seeds(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
-    (route(theorem).check_at_supplied_seeds)(rule, first_index, seeds, options)
+    (route(theorem).policy.check_at_supplied_seeds)(rule, first_index, seeds, options)
 }
 
 /// The theorem check with the induction start moved `delay` rows past the
@@ -999,13 +912,14 @@ fn check_with_first_proving_start(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let route = route(theorem);
     let report = check_with_start_delay(theorem, rule, first_index, seeds, options, 0)?;
-    if route.start_policy == StartPolicy::OwnStarts {
+    if route.policy.start_policy == StartPolicy::OwnStarts {
         return Ok(report);
     }
     // A weaker proof is kept as a fallback while a later start may give the
     // preferred one (so that a preferred proof, at any start, comes first).
-    let preferred_proof =
-        |report: &RealRootednessTheoremReport| report.is_proved() && (route.is_preferred)(report);
+    let preferred_proof = |report: &RealRootednessTheoremReport| {
+        report.is_proved() && (route.policy.is_preferred)(report)
+    };
     if preferred_proof(&report) || report.status == RealRootednessTheoremStatus::NotApplicable {
         return Ok(report);
     }

@@ -248,8 +248,12 @@ fn window_step(seed: &[Q], previous: &[Q], delayed: &[Q]) -> Option<(Q, Q)> {
 }
 
 /// The registry entry of the fixed-delay theorem ([`super::registry::ROUTES`]).
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::VariableDelay,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: REFERENCE,
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: variable_delay_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
@@ -257,6 +261,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: true,
     in_index_section_menu: true,
+    in_degree_law_reversal_menu: true,
     parent: ParentPolicy {
         stage: ParentStage::WhileUnproved,
         region: ParentRegion::OpenNonpositiveRay,
@@ -293,7 +298,6 @@ fn variable_delay_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::VariableDelay,
-        REFERENCE,
         rule,
         first_index,
         seeds,

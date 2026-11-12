@@ -44,7 +44,6 @@ const PARENT_ROUTES: [VeroneseParentProofRoute; 20] = [
 
 /// Fails to compile when a parent route is added without extending
 /// [`PARENT_ROUTES`].
-#[allow(dead_code)]
 fn parent_routes_are_listed(route: VeroneseParentProofRoute) {
     use VeroneseParentProofRoute as R;
     match route {
@@ -80,7 +79,38 @@ fn theorem_names_are_their_serialized_names() {
         assert_eq!(parsed, theorem);
     }
     for route in PARENT_ROUTES {
+        parent_routes_are_listed(route);
         assert_eq!(route.as_str(), serialized(route));
+    }
+}
+
+#[test]
+fn metadata_providers_preserve_matched_lean_declarations() {
+    let (rule, seeds, first) = catalog("A008292");
+    for theorem in RealRootednessTheorem::ALL {
+        assert!(!theorem.summary().is_empty());
+        assert!(!theorem.reference().is_empty());
+        let report = check_real_rootedness_theorem(
+            theorem,
+            &rule,
+            first,
+            &seeds,
+            &RealRootednessTheoremOptions {
+                maximum_start_delay: 0,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            theorem.lean_declarations_in(&report),
+            Some(report.lean_declarations.as_slice())
+        );
+        let other = if theorem == RealRootednessTheorem::LiuWang {
+            RealRootednessTheorem::ProductRecurrence
+        } else {
+            RealRootednessTheorem::LiuWang
+        };
+        assert!(other.lean_declarations_in(&report).is_none());
     }
 }
 

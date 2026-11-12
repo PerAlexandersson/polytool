@@ -4,6 +4,12 @@
 
 ### Changed
 
+- The theorem route table generates identities, public exports and parent
+  mappings, with explicit discovery phases and recorded-route replay policy.
+  Route metadata includes base references, summaries and matched Lean
+  declarations. Discovery/cascade order, menus and serialized reports are
+  unchanged.
+
 - Degree-law reversal now runs after direct routes and lifts, tries only the
   minimal admissible slope (guarded by 3), and skips identical records and
   invariant shape failures. All-seed Riordan GF checks avoid start retries

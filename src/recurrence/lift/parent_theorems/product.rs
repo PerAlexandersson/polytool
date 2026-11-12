@@ -67,8 +67,13 @@ pub fn is_trivially_real_rooted(
 }
 
 /// The registry entry of the product theorem ([`super::registry::ROUTES`]).
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::ProductRecurrence,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: "Product induction: products of real-rooted polynomials are real-rooted; \
+         RealRooted.productSequence_splits (scalar normalization and residue classes)",
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: product_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
@@ -76,6 +81,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::Always,
     in_residue_class_menu: true,
     in_index_section_menu: true,
+    in_degree_law_reversal_menu: true,
     parent: ParentPolicy {
         stage: ParentStage::Early,
         region: ParentRegion::OpenNonpositiveRay,
@@ -91,8 +97,6 @@ fn product_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::ProductRecurrence,
-        "Product induction: products of real-rooted polynomials are real-rooted; \
-         RealRooted.productSequence_splits (scalar normalization and residue classes)",
         rule,
         first_index,
         seeds,

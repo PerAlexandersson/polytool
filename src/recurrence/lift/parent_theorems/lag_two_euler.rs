@@ -178,8 +178,12 @@ pub fn check_lag_two_euler_theorem(
     )
 }
 
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::LagTwoEuler,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: REFERENCE,
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: lag_two_euler_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: any_proof,
@@ -187,6 +191,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: true,
     in_index_section_menu: true,
+    in_degree_law_reversal_menu: true,
     parent: ParentPolicy {
         stage: ParentStage::WhileUnproved,
         region: ParentRegion::OpenNonpositiveRay,
@@ -345,7 +350,6 @@ fn lag_two_euler_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::LagTwoEuler,
-        REFERENCE,
         rule,
         first,
         seeds,

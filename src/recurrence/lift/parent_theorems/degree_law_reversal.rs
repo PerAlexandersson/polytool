@@ -145,12 +145,7 @@ impl DegreeLawReversalCertificate {
 }
 
 fn eligible_inner_route(route: &TheoremRoute) -> bool {
-    !matches!(
-        route.theorem,
-        RealRootednessTheorem::ResidueClassSubsequences
-            | RealRootednessTheorem::IndexSectionLift
-            | RealRootednessTheorem::DegreeLawReversal
-    )
+    route.policy.in_degree_law_reversal_menu
 }
 
 /// Cheap eligibility gate before any transformed record or GF is built.
@@ -249,8 +244,14 @@ pub fn check_degree_law_reversal_theorem(
     )
 }
 
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::DegreeLawReversal,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: "Polynomial reversal: reciprocal nonzero roots, with possible additional zeros at 0",
+    phase: DiscoveryPhase::AfterDirectLifts,
+    after_direct_eligible: Some(should_try_after_direct),
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::TrailingClosure {
+        premature_error: "reversal is recorded before a direct proof or lift",
+    },
     check_at_supplied_seeds: reversal_report,
     start_policy: StartPolicy::OwnStarts,
     is_preferred: any_proof,
@@ -258,6 +259,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::WhenApplicable,
     in_residue_class_menu: false,
     in_index_section_menu: false,
+    in_degree_law_reversal_menu: false,
     parent: ParentPolicy {
         stage: ParentStage::WhileUnproved,
         region: ParentRegion::Unrestricted,
@@ -273,7 +275,6 @@ fn reversal_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::DegreeLawReversal,
-        "Polynomial reversal: reciprocal nonzero roots, with possible additional zeros at 0",
         rule,
         first,
         seeds,
@@ -512,9 +513,47 @@ pub(super) fn reversed_region(region: &RealInterval) -> Option<RealInterval> {
     None
 }
 
+/// Preserve the reversal guard and the exact already-tried comparison.
+pub(super) fn should_try_after_direct(
+    rule: &Recurrence,
+    first: usize,
+    seeds: &[Vec<Q>],
+    tried: &[&RecurrenceJson],
+) -> Result<bool, RecurrenceError> {
+    Ok(eligible_rule(rule) && !already_tried(rule, first, seeds, tried)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reversal_menu_membership_is_frozen() {
+        use RealRootednessTheorem::*;
+        let actual: Vec<_> = ROUTES
+            .iter()
+            .filter(|r| eligible_inner_route(r))
+            .map(|r| r.theorem)
+            .collect();
+        assert_eq!(
+            actual,
+            [
+                ProductRecurrence,
+                ThreeTermRecurrence,
+                LiuWang,
+                LiuWangDerivativeLag,
+                MaWangInterval,
+                LiuWangThreeTerm,
+                IteratedPreserver,
+                HypergeometricRow,
+                VariableDelay,
+                FactorGauge,
+                LagTwoEuler,
+                BinomialPerturbedEulerOrbit,
+                RationalPfRiordan
+            ]
+        );
+    }
 
     #[test]
     fn already_tried_recognizes_index_shifts_and_extended_seed_prefixes() {

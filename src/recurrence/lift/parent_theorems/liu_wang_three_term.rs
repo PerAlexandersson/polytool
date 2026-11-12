@@ -606,8 +606,12 @@ fn proof_with_root_region(report: &RealRootednessTheoremReport) -> bool {
 }
 
 /// The registry entry of the Liu--Wang three-term theorem ([`super::registry::ROUTES`]).
-pub(super) const ROUTE: TheoremRoute = TheoremRoute {
-    theorem: RealRootednessTheorem::LiuWangThreeTerm,
+pub(super) const ROUTE: RoutePolicy = RoutePolicy {
+    reference: REFERENCE,
+    phase: DiscoveryPhase::Direct,
+    after_direct_eligible: None,
+    replay: ParentReplayPolicy::RecordedRoute,
+    discovery_replay: DiscoveryReplayPolicy::Direct,
     check_at_supplied_seeds: liu_wang_three_term_report,
     start_policy: StartPolicy::MovesStart,
     is_preferred: proof_with_root_region,
@@ -615,6 +619,7 @@ pub(super) const ROUTE: TheoremRoute = TheoremRoute {
     discovery: DiscoveryPolicy::Always,
     in_residue_class_menu: true,
     in_index_section_menu: true,
+    in_degree_law_reversal_menu: true,
     parent: ParentPolicy {
         stage: ParentStage::ReplacesEarly,
         region: ParentRegion::Unrestricted,
@@ -636,7 +641,6 @@ fn liu_wang_three_term_report(
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::LiuWangThreeTerm,
-        REFERENCE,
         rule,
         first_index,
         seeds,
