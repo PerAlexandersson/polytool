@@ -1,6 +1,6 @@
 // Schema of the bundled OEIS catalog data, `data/oeis-catalog.jsonl`.
 //
-// This file is shared verbatim: `src/oeis.rs` includes it into the public
+// This file is shared verbatim: `src/oeis/mod.rs` includes it into the public
 // `oeis` module, and `build.rs` includes it to turn the data file into the
 // static catalog.  It therefore has no inner attributes or `use` items; the
 // including scope provides `serde::{Deserialize, Serialize}`.

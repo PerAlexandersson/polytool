@@ -5,7 +5,7 @@
 //! - Generates the static OEIS catalog (`OEIS_CATALOG`, one accessor function
 //!   per A-number and the test-only validation rows) from the tracked data
 //!   file `data/oeis-catalog.jsonl` into `$OUT_DIR/oeis_catalog_generated.rs`,
-//!   which `src/oeis.rs` includes.  The record schema is shared with the
+//!   which `src/oeis/mod.rs` includes.  The record schema is shared with the
 //!   library through `src/oeis_catalog_schema.rs`; an invalid data file fails
 //!   the build with the offending line or A-number.
 
