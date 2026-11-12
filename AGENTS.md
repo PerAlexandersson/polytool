@@ -74,9 +74,9 @@
   `polytool::recurrence::*` etc. Add new code to the matching submodule and
   re-export it from the facade. `src/recurrence/` is grouped one level deeper
   (`base`, `closed_form`, `fit`, public `generating_function`, `transform`, `implicit`, `root_domain`,
-  `representation`, `lift`, and the single module `leading_coefficient` with degree laws and
+  `representation`, `lift`, and `leading_coefficient` with degree laws and
   leading-coefficient certificates);
-  each group has a `<group>.rs` facade that re-exports its members, and a
+  each group has a `<group>.rs` or `<group>/mod.rs` facade that re-exports its members, and a
   cross-group helper is `pub(in crate::recurrence)`. The MCP crate (`mcp/src/`)
   is split the same way (requests, responses, parsing, server, tests).
 - Reuse before adding: look for an existing helper in `vec_poly`, `numeric` and
@@ -89,7 +89,7 @@
   recurrence without a reason recorded in its provenance, and re-bless
   `tests/fixtures/oeis-catalog-fingerprints.tsv` only for intentional changes
   (`POLYTOOL_BLESS_OEIS_FINGERPRINTS=1`).  `src/oeis_catalog_schema.rs` is
-  included by both `build.rs` and `src/oeis.rs`, so it has no inner
+  included by both `build.rs` and `src/oeis/mod.rs`, so it has no inner
   attributes or `use` items.
 
 ## Mathematical and API conventions
@@ -176,7 +176,7 @@
   verification under that lock to avoid linking another checkout's artifacts.
 - Run focused library and CLI tests before broader checks.
 - Before finishing a change run `cargo fmt --all -- --check`,
-  `rustfmt --edition 2021 --check src/recurrence/lift/parent_theorems/*.rs`
+  `rustfmt --edition 2021 --check src/recurrence/lift/parent_theorems/*.rs src/recurrence/lift/parent_theorems/*/mod.rs`
   from this directory (route modules are declared by a macro),
   `cargo clippy --locked -p polytool -p exact-real-roots -p ore-algebra --all-targets -- -D warnings`,
   `cargo test --locked -p polytool -p exact-real-roots -p ore-algebra --doc`,

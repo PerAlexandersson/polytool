@@ -177,8 +177,8 @@ the atlas seeding menu remain explicit consumer choices; a new table row
 does not enroll a route in those menus automatically.
 
 The table generates module declarations, so rustfmt does not discover those
-modules through `cargo fmt`. Format them explicitly with
-`rustfmt --edition 2021 src/recurrence/lift/parent_theorems/*.rs` from the
+modules through `cargo fmt`. Format the file and directory modules explicitly with
+`rustfmt --edition 2021 src/recurrence/lift/parent_theorems/*.rs src/recurrence/lift/parent_theorems/*/mod.rs` from the
 Polytool directory. The workspace check runs the matching formatting check.
 
 The theorem report's Serde contract lives in the private
