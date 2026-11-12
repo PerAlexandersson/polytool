@@ -85,6 +85,7 @@ mod route_registry;
 mod row_factor_lifts;
 mod row_routes;
 mod symmetric_companion_lifts;
+mod theorem_report_wire;
 mod tnn_chain_polynomials;
 mod veronese_section_lifts;
 mod veronese_section_lifts_v2;

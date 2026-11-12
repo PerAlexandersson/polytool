@@ -181,6 +181,15 @@ modules through `cargo fmt`. Format them explicitly with
 `rustfmt --edition 2021 src/recurrence/lift/parent_theorems/*.rs` from the
 Polytool directory. The workspace check runs the matching formatting check.
 
+The theorem report's Serde contract lives in the private
+`src/recurrence/lift/parent_theorems/wire.rs`: `ReportWire` owns the typed
+input fields, and `ReportWireRef` borrows the public report for serialization.
+Keep their field order, defaults, skip rules and diagnostic name synchronized.
+Parsing checks the structure; replay checks the theorem/certificate agreement.
+The raw corpus in `tests/fixtures/theorem-report-wire.jsonl` was captured with
+the original derives. It freezes compact and pretty bytes, parse errors and
+verification errors, including duplicate raw keys and omitted/null fields.
+
 ## Proof-discovery fingerprints
 
 `tests/integration/discovery_fingerprints.rs` is the evidence gate for refactorings of the

@@ -4,6 +4,10 @@
 
 ### Changed
 
+- The theorem report uses a private typed wire format and borrowed
+  serialization. Its JSON bytes and structural parsing rules are unchanged;
+  theorem/certificate agreement is still checked during verification.
+
 - The theorem route table generates identities, public exports and parent
   mappings, with explicit discovery phases and recorded-route replay policy.
   Route metadata includes base references, summaries and matched Lean
