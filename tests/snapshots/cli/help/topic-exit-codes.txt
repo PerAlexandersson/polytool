@@ -173,6 +173,12 @@ Per command:
   bkw-scout
       0 answered (also when the mathematical answer is negative)
       2 usage error or invalid input
+  bkw
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  bkw certify
+      0 exact report or successful replay
+      2 invalid input or failed replay
   pf-pencil
       0 answered (also when the mathematical answer is negative)
       2 usage error or invalid input

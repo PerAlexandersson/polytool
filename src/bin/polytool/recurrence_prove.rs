@@ -122,7 +122,7 @@ fn run(args: &[String]) -> Result<bool, String> {
     if affine_options.max_coordinates > 64 {
         return Err("--max-affine-coordinates must be at most 64".into());
     }
-    let report = discover_recurrence_proofs_with_stage_options(
+    let mut report = discover_recurrence_proofs_with_stage_options(
         &record,
         &RealRootednessTheoremOptions {
             maximum_start_delay,
@@ -135,6 +135,7 @@ fn run(args: &[String]) -> Result<bool, String> {
         },
     )
     .map_err(error_text)?;
+    report.refute_if_possible().map_err(error_text)?;
     if json {
         println!(
             "{}",

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Added
+
+- `bkw::certified` and `polytool bkw certify`: exact sparse BKW pencils,
+  reduced seed-dependent generating functions, separate first failing rows,
+  standard quadratic product proofs and Hessenberg Toeplitz circle proofs.
+  The circle route gives `proved`, with simplicity and strict interlacing,
+  citing "circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)"
+  in its provenance. Public quadratic proofs take priority.
+  Certificates contain rational witnesses and root counts and support replay.
+  General-order limit sets remain inconclusive; numerical scouting is evidence.
+  `recurrence-prove` tries an exact refutation after every proof route fails,
+  recording an optional `bkw_refutation` and the new `refuted` status.
+  Proof-only library discovery retains its existing behavior and offers
+  `RecurrenceProofDiscoveryReport::refute_if_possible` as an explicit last stage.
+- MCP `bkw_certify` exposes the same exact library certificate.
+- `bkw::certified::certify_toeplitz_regions` evaluates versioned exact
+  Schmidt-Spitzer regions for rational Hessenberg tails of bandwidth at most
+  three, with normalization, polynomial-sign evidence and input/output hashes.
+  A certified real limit spectrum can give `conditional` under the explicitly
+  named `hessenberg_real_limit_spectrum` assumption. This remains conditional
+  and separate from the circle theorem.
+
 ### Changed
 
 - `oeis rows --bfile-dir DIR` reads a separate local b-file cache before the

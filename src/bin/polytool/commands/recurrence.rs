@@ -658,7 +658,13 @@ transformed records), and structural closure chains; takes no search flags."#,
         .default("8"),
         switch("verify", "Replay the recorded routes of a report from stdin; no search flags"),
     ],
-    details: r#"JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is
+    details: r#"After every proof route fails, stationary recurrences receive a separate exact
+BKW/row refutation stage. Status refuted carries bkw_refutation with a replayable
+certificate. A real limit set alone never supplies a proof; a refutation never
+replaces a successful proof. See bkw certify for public proofs and explicitly
+named conditional all-row claims.
+
+JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is
 true when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and
 product induction proves it. trivially_real_rooted_if_rule_holds classifies the
 rule conditional on its holding for all indices, including fitted rules.

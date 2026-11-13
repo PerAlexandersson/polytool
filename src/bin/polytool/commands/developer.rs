@@ -6,6 +6,37 @@ use crate::cli::spec::{
 
 const GROUP: &str = "Developer tools";
 
+pub(crate) const BKW: CommandSpec = CommandSpec {
+    name: "bkw",
+    group: GROUP,
+    summary: "Exact BKW certificates, theorem proofs and named conditional claims",
+    description: "Certify stationary recurrences with rational polynomial coefficients and supplied seeds. Use bkw certify; the numerical bkw-scout remains evidence only.",
+    subcommands: &[BKW_CERTIFY],
+    examples: &["polytool bkw certify --recurrence recurrence.json --json"],
+    run: Some(crate::bkw_certify::cmd_bkw),
+    ..COMMAND
+};
+
+const BKW_CERTIFY: CommandSpec = CommandSpec {
+    name: "certify",
+    summary: "Decide sparse tie pencils, check the circle criterion, and search exact rows",
+    description: "Read existing recurrence JSON with seeds. Reduce its generating function before BKW checks. Public standard quadratic product proofs run first. Exact Toeplitz circle nonnegativity gives proved: every row has simple real zeros and consecutive rows strictly interlace. The theorem source is circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript), recorded in circle.provenance. Versioned Schmidt-Spitzer regions for standard Hessenberg tails of bandwidth at most 3 certify limit-spectrum geometry exactly; a real limit spectrum can give a separate conditional all-row claim under hessenberg_real_limit_spectrum, recorded in conditional_on. Outside the region bandwidth range no conditional verdict is made; the circle theorem can still give proved. --verify replays an embedded certificate exactly.",
+    input: InputKind::Json,
+    output: OutputKind::JsonSwitch,
+    flags: &[
+        option("recurrence","FILE","Recurrence JSON, theorem report or representation menu; - reads stdin"),
+        option("candidate","N","Zero-based representation-menu candidate"),
+        option("max-row-index","N","Largest absolute row index searched, inclusive").default("200"),
+        option("max-pencil-degree","N","Degree cap for exact symbolic elimination").default("24"),
+        option("radius","R","Positive rational circle radius to try first"),
+        switch("verify","Replay a certification report from stdin"),
+    ],
+    examples: &["polytool bkw certify --recurrence recurrence.json --json", "polytool bkw certify --verify --json < certificate.json"],
+    exit_codes: &[(0,"exact report or successful replay"),(2,"invalid input or failed replay")],
+    see_also: &["bkw-scout","recurrence-prove"],
+    ..COMMAND
+};
+
 const BENCH_FORMATS: OutputKind = OutputKind::Formats {
     values: &["tsv", "json", "text"],
     default: "tsv",

@@ -1,0 +1,740 @@
+{
+  "schema": "polytool.bkw-region-cells.v1",
+  "provenance": {
+    "s2plus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "908e233ea2767d495c221f82979b4db0c04f48c0c8dbc3eb5e290b3d45d88646",
+      "output_sha256": "b961e773570e28fc865f3fda357d1c40b0ec35af3c4730a8eb1734f92078993c"
+    },
+    "s2minus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "f7aaa40cf3e6e5e90fd72d4f784f0e66efcbe31f2ece3176f48de00a09b02a95",
+      "output_sha256": "55125cbc2dd3bbda389b9ec35d3aa871759bdfe4accdcd73e4d35ab5f0809b0f"
+    },
+    "s2zero": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "8891968d4692610410841b8e6e9a144cf5e060f3de1d96f48c419c8ebe44c6f9",
+      "output_sha256": "d9264b45e1c10d8142ee8cc3db46290e7ff04a3b044f4488d2b6ea90af5c6624"
+    },
+    "s3plus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "0910c9881e5c6725583a9f6f826f442c1a4936a3a07e52bedb3fcb039796e49b",
+      "output_sha256": "cee774c191b3219a2fc274bf5d4bb8e1996ad44dece968dc33b6ce19a3ec9457"
+    },
+    "s3minus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "dd5fb5f63cd34d4b59c9cbc26d313645af5592a31eb2fa53c6c343d34dcc20ce",
+      "output_sha256": "3206648b61e16d5268b2bac2db24f3492f17e3946168198e6ada5296431de7a4"
+    },
+    "s3zero": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "43114039285f4b55b3b30728bd4804d030e1011156501dd4f52042850f49f6ae",
+      "output_sha256": "2d943e4c3e90dfae9eb08a8a7e673a616258b7217438ebfa8f0c598d91abedc9"
+    },
+    "s3zeroplus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "3c72785e4fa2b14caa03c30591d2e037c01c1d92248b903d67acd402ed9ccc88",
+      "output_sha256": "dd5fe045caf35a877dcc5c81caf3011a4e1b354768ad6eeaf2024627c3d85dcf"
+    },
+    "s3zerominus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "27824f9d4d0b9e7ea494af5e34565407c1c02cf0feb796536cc3514de327cc5d",
+      "output_sha256": "404c7acc93fba3eb807df0d032a0a8f4139f1f2626bd28e31cdb36e4e798da40"
+    },
+    "s3zerozero": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "e289c90b8544a51a82692c643fc4a301fdb2baae584b2ddea71b6adcb800c5f3",
+      "output_sha256": "9aa1e5ca893c26a9de83e7a35924ea8e7d9e4b916223c65773b02174def222a5"
+    },
+    "circle2plus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "abc6a5e64720dfc11baaadf9c51acf617d6746d8475d7c0a5c377e0f6dbc2bc3",
+      "output_sha256": "fd45f230141cd272e17618b76bef5cc9dbc1953511ad6eba7df9c300fefc53b4"
+    },
+    "circle2minus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "9b79d85c0ed12918b1a04e5fc438b613a1f80167a5e110f5ccfbc9b4e739c11d",
+      "output_sha256": "f2b0f83b527dba2f0796c390ed12b7d3397a2558c75f6f6c04e1b7617588d461"
+    },
+    "circle2zero": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "10fb596dd39fd636dccfe84686f7a845205e8b668b992c2615fbb5e3c524afde",
+      "output_sha256": "37e0fb120ac2bd8107655acade6be58ac86363bceebf90acd81d1ace74defab2"
+    },
+    "circle3plus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "37b325b2973a2c6350c6f620266ddd0c02da6e94f2cb34e017a8f6b7caca4faf",
+      "output_sha256": "c9a8348624ff0f8d8770c2fb700d8358a2f45579f3addaf6e56bcc8103b2b5c1"
+    },
+    "circle3minus": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "e52a059d7b55348f7b0f3c20b12d4fc9f9ae41a2f5beed073d96460cdd73555c",
+      "output_sha256": "890ce88215f6e6987f6acf461c16b1f64e1a632d1c41ad5e8943c64597647758"
+    },
+    "circle3zero": {
+      "sampler": "sample-regions.wls",
+      "sampler_sha256": "197b9ea50eb176f0196138ad71f786f77f444f52e3a271071906f7711f472194",
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "18f7057515363eb28373fd03589b93b34ff9c8fb65992f5fda2e3a8a71bc7f5c",
+      "output_sha256": "ea9d73311fdddd98891a206456f618f45459c3cfa17083ece98ac7bc917e9d18"
+    }
+  },
+  "samples": [
+    {
+      "mode": "s2plus",
+      "predicate": true,
+      "cell": "c > 1/27",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "c"
+      ],
+      "point": [
+        "27"
+      ]
+    },
+    {
+      "mode": "s2plus",
+      "predicate": false,
+      "cell": "Inequality[0, Less, c, LessEqual, 1/27]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "c"
+      ],
+      "point": [
+        "27/2728"
+      ]
+    },
+    {
+      "mode": "s2minus",
+      "predicate": true,
+      "cell": "c > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "c"
+      ],
+      "point": [
+        "27"
+      ]
+    },
+    {
+      "mode": "s2zero",
+      "predicate": true,
+      "cell": "c > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "c"
+      ],
+      "point": [
+        "1/36"
+      ]
+    },
+    {
+      "mode": "s3plus",
+      "predicate": true,
+      "cell": "Inequality[-1/12, Less, d, Less, 0] && c > (1 + 108*d)/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]/54",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-75/1213",
+        "46"
+      ]
+    },
+    {
+      "mode": "s3plus",
+      "predicate": true,
+      "cell": "Inequality[0, Less, d, LessEqual, 1/36] && c > (1 + 108*d)/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]/54",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "27/3637",
+        "33"
+      ]
+    },
+    {
+      "mode": "s3plus",
+      "predicate": true,
+      "cell": "Inequality[1/36, Less, d, LessEqual, 1/4] && c > 4*d - 8*Sqrt[d^3]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "3/35",
+        "33"
+      ]
+    },
+    {
+      "mode": "s3plus",
+      "predicate": true,
+      "cell": "c > 0 && d <= -1/12",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-56",
+        "27"
+      ]
+    },
+    {
+      "mode": "s3plus",
+      "predicate": true,
+      "cell": "c > 0 && d > 1/4",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "46",
+        "27"
+      ]
+    },
+    {
+      "mode": "s3plus",
+      "predicate": false,
+      "cell": "Inequality[-1/12, Less, d, Less, 0] && Inequality[0, Less, c, LessEqual, (1 + 108*d)/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]/54]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-75/1213",
+        "23/23453"
+      ]
+    },
+    {
+      "mode": "s3plus",
+      "predicate": false,
+      "cell": "Inequality[0, Less, c, LessEqual, 4*d - 8*Sqrt[d^3]] && Inequality[1/36, Less, d, Less, 1/4]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "1/8",
+        "5/128"
+      ]
+    },
+    {
+      "mode": "s3plus",
+      "predicate": false,
+      "cell": "Inequality[0, Less, c, LessEqual, (1 + 108*d)/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]/54] && Inequality[0, Less, d, LessEqual, 1/36]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "7/512",
+        "5/256"
+      ]
+    },
+    {
+      "mode": "s3minus",
+      "predicate": true,
+      "cell": "d < 0 && c > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-75",
+        "46"
+      ]
+    },
+    {
+      "mode": "s3minus",
+      "predicate": true,
+      "cell": "c > 0 && d > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "46",
+        "27"
+      ]
+    },
+    {
+      "mode": "s3zero",
+      "predicate": true,
+      "cell": "d < 0 && c > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-1",
+        "1"
+      ]
+    },
+    {
+      "mode": "s3zero",
+      "predicate": true,
+      "cell": "c > 0 && d > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "1",
+        "1"
+      ]
+    },
+    {
+      "mode": "s3zeroplus",
+      "predicate": true,
+      "cell": "d < -1/12",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d"
+      ],
+      "point": [
+        "-75"
+      ]
+    },
+    {
+      "mode": "s3zeroplus",
+      "predicate": true,
+      "cell": "d > 1/4",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d"
+      ],
+      "point": [
+        "27"
+      ]
+    },
+    {
+      "mode": "s3zeroplus",
+      "predicate": false,
+      "cell": "Inequality[-1/12, LessEqual, d, Less, 0]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d"
+      ],
+      "point": [
+        "-1/12"
+      ]
+    },
+    {
+      "mode": "s3zeroplus",
+      "predicate": false,
+      "cell": "Inequality[0, Less, d, LessEqual, 1/4]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d"
+      ],
+      "point": [
+        "1/15"
+      ]
+    },
+    {
+      "mode": "s3zerominus",
+      "predicate": true,
+      "cell": "d < 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d"
+      ],
+      "point": [
+        "-75"
+      ]
+    },
+    {
+      "mode": "s3zerominus",
+      "predicate": true,
+      "cell": "d > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d"
+      ],
+      "point": [
+        "27"
+      ]
+    },
+    {
+      "mode": "s3zerozero",
+      "predicate": true,
+      "cell": "d < 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d"
+      ],
+      "point": [
+        "-75"
+      ]
+    },
+    {
+      "mode": "s3zerozero",
+      "predicate": true,
+      "cell": "d > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d"
+      ],
+      "point": [
+        "27"
+      ]
+    },
+    {
+      "mode": "circle2plus",
+      "predicate": true,
+      "cell": "Inequality[0, Less, c, LessEqual, 1/27]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "c"
+      ],
+      "point": [
+        "27/2728"
+      ]
+    },
+    {
+      "mode": "circle2plus",
+      "predicate": false,
+      "cell": "c > 1/27",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "c"
+      ],
+      "point": [
+        "27"
+      ]
+    },
+    {
+      "mode": "circle2minus",
+      "predicate": false,
+      "cell": "c > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "c"
+      ],
+      "point": [
+        "27"
+      ]
+    },
+    {
+      "mode": "circle2zero",
+      "predicate": false,
+      "cell": "c > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "c"
+      ],
+      "point": [
+        "1/36"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": true,
+      "cell": "c == 0 && d == -1/12",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-1/12",
+        "0"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": true,
+      "cell": "c == 0 && d == 1/4",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "1/4",
+        "0"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": true,
+      "cell": "Inequality[-1/12, Less, d, Less, 0] && Inequality[0, LessEqual, c, LessEqual, (1 + 108*d)/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]/54]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-75/1213",
+        "23/23453"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": true,
+      "cell": "Inequality[0, Less, d, LessEqual, 1/36] && Inequality[0, LessEqual, c, LessEqual, (1 + 108*d)/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]/54]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "1/36",
+        "0"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": true,
+      "cell": "Inequality[0, LessEqual, c, LessEqual, 4*d - 8*Sqrt[d^3]] && Inequality[1/36, Less, d, Less, 1/4]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "1/8",
+        "5/128"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": false,
+      "cell": "d == -1/12 && c > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-1/12",
+        "27"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": false,
+      "cell": "d == 1/36 && c > 2/27",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "1/36",
+        "27"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": false,
+      "cell": "Inequality[-1/12, Less, d, Less, 0] && c > (1 + 108*d)/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]/54",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-75/1213",
+        "46"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": false,
+      "cell": "Inequality[0, Less, d, Less, 1/36] && c > (1 + 108*d)/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]/54",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "27/3637",
+        "46"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": false,
+      "cell": "Inequality[1/36, Less, d, LessEqual, 1/4] && c > 4*d - 8*Sqrt[d^3]",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "3/35",
+        "33"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": false,
+      "cell": "c >= 0 && d < -1/12",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-69",
+        "27"
+      ]
+    },
+    {
+      "mode": "circle3plus",
+      "predicate": false,
+      "cell": "c >= 0 && d > 1/4",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "33",
+        "27"
+      ]
+    },
+    {
+      "mode": "circle3minus",
+      "predicate": false,
+      "cell": "c >= 0 && d < 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-69",
+        "27"
+      ]
+    },
+    {
+      "mode": "circle3minus",
+      "predicate": false,
+      "cell": "c >= 0 && d > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "33",
+        "27"
+      ]
+    },
+    {
+      "mode": "circle3zero",
+      "predicate": false,
+      "cell": "c >= 0 && d < 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "-1",
+        "1"
+      ]
+    },
+    {
+      "mode": "circle3zero",
+      "predicate": false,
+      "cell": "c >= 0 && d > 0",
+      "rational": true,
+      "sample_verified": true,
+      "variables": [
+        "d",
+        "c"
+      ],
+      "point": [
+        "1",
+        "1"
+      ]
+    }
+  ]
+}

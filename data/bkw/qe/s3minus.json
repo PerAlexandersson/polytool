@@ -1,0 +1,10 @@
+{
+	"schema":"polytool.bkw-region-qe.v1",
+	"mode":"s3minus",
+	"version":"14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+	"seconds":5.4335107e1,
+	"input":"Exists[{a, k}, c > 0 && d != 0 && a > 0 && k > a && a*(1 + 4*a - 2*k)^2 <= c && k^4 > d^2 && d + k*(-1 - 4*a + k) != 0 && -4*d*a*(1 + 4*a - 2*k)^2 + c*(d + k*(-1 - 4*a + k)) == 0 && c*k + (1 + 4*a - 2*k)*(d*(4*a - k) + k^3) != 0 && 4*d*a*(1 + 4*a - 2*k)^2*(d - k^2)^2*(-d + k + 4*a*k - k^2)^2*(4*d*a - d*k + k^2 + 4*a*k^2 - k^3)*(d + d*k + k^3) <= 0]",
+	"output":"(d < 0 && c > 0) || (d > 0 && c > 0)",
+	"resolved":true,
+	"script_sha256":"3cfc9118df3c2348a0a00c1691e40d19ca40912291de1cba8a0c8933bd31107e"
+}

@@ -189,6 +189,9 @@ order. The exceptions are explicit in their names:
       lists the coefficients of z^0, z^1, ... (ascending in z); each is a
       polynomial in x.
 
+  bkw certify --recurrence recurrence.json --json
+      uses ascending rational coefficient rows in the seeded recurrence JSON.
+
 Triangles (oeis generate --format triangle, b-files) list row n, then row n+1, \
 each row in ascending order.";
 
@@ -244,6 +247,8 @@ schema key.
                                            recurrence-theorems
   polytool.recurrence-leading-coefficient.v1  recurrence-degree
   polytool.recurrence-proof-discovery.v1   recurrence-prove
+  polytool.bkw-certification.v1           bkw certify (exact, replayable)
+  polytool.toeplitz-region-certificate.v1 bkw certify: exact limit geometry
   polytool.recurrence-real-rootedness-theorem.v1  recurrence-prove reports
   polytool.recurrence-veronese-lifts.v1    recurrence-veronese-lifts
   polytool.recurrence-veronese-certificate.v1  recurrence-veronese-lifts
@@ -263,7 +268,13 @@ schema key.
   polytool.left-production.v1              left-production --json
   polytool.tnn-network.v1                  tnn-network --json
   polytool.pf-pencil.v1                    pf-pencil --json
-  polytool.bench.real-rootedness.v1        bench real-rootedness --json";
+  polytool.bench.real-rootedness.v1        bench real-rootedness --json
+
+In polytool.bkw-certification.v1, the circle criterion gives result proved with
+empty conditional_on. Its circle.provenance is exactly:
+  circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)
+A real limit spectrum alone remains conditional under
+hessenberg_real_limit_spectrum, recorded in conditional_on.";
 
 const EXIT_CODES: &str = "\
 General rule:

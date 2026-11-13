@@ -1,0 +1,10 @@
+{
+	"schema":"polytool.bkw-region-qe.v1",
+	"mode":"circle3zero",
+	"version":"14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+	"seconds":5.8796e-2,
+	"input":"Exists[v, v > 0 && (((d <= 0 || c >= 16*d^2*v) && -1 + 3*d*v^2 >= 0 && (-1 + 3*d*v^2)^2 >= 4*c*v^3) || (d > 0 && c <= 16*d^2*v && -4*d - c*v - 4*d^2*v^2 >= 0))]",
+	"output":"d > 0 && c <= -8*Sqrt[d^3]",
+	"resolved":true,
+	"script_sha256":"c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54"
+}

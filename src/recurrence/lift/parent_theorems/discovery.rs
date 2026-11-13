@@ -221,7 +221,8 @@ pub struct RecurrenceProofDiscoveryReport {
     /// [`Self::catalog_lifts`]): not a polytool proof; `not_applicable` when
     /// the rule has a form no theorem matches (an inhomogeneous term, see
     /// `not_applicable_reason`); `not_proved` otherwise.  None of the latter
-    /// three disproves real-rootedness.
+    /// three disproves real-rootedness. The opt-in late BKW stage gives
+    /// `refuted` with a separate replayable certificate of an all-row failure.
     pub status: String,
     /// What is, and is not, established by a successful search.
     pub statement: String,
@@ -284,6 +285,11 @@ pub struct RecurrenceProofDiscoveryReport {
     /// Identities, parent proofs and named closure steps replay independently.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub closure_lifts: Option<DiscoveryClosureSearch>,
+    /// Optional late exact refutation of the all-row claim for a stationary
+    /// rule. Absent in proof-only searches and whenever a proof succeeded.
+    /// A finite counterexample does not assert a nonreal BKW limit set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bkw_refutation: Option<Box<crate::bkw::certified::CertificationReport>>,
 }
 
 /// Try all supported general theorem families, independently of sequence names.
@@ -404,6 +410,7 @@ pub fn discover_recurrence_proofs_with_stage_options(
         catalog_lifts: None,
         affine_coordinates: None,
         closure_lifts: None,
+        bkw_refutation: None,
     };
     let inhomogeneous = rule.inhomogeneous.as_ref().is_some_and(|g| !g.is_zero());
     if !report
@@ -627,6 +634,27 @@ enum ProvedRows {
 }
 
 impl RecurrenceProofDiscoveryReport {
+    /// Run the separate exact refutation stage after every proof route fails.
+    ///
+    /// This opt-in stage preserves saved proof-only searches. The CLI runs it
+    /// automatically. A real limit set never promotes a discovery to proved.
+    ///
+    /// # Errors
+    /// Invalid recurrence data or exact certification failure.
+    pub fn refute_if_possible(&mut self) -> Result<(), RecurrenceError> {
+        if self.status == "proved" || self.bkw_refutation.is_some() {
+            return Ok(());
+        }
+        let certificate = crate::bkw::certified::certify_recurrence(
+            &self.recurrence,
+            &crate::bkw::certified::CertificationOptions::default(),
+        )?;
+        if certificate.result == "refuted" {
+            self.bkw_refutation = Some(Box::new(certificate));
+            self.finish_summary(self.not_applicable_reason.clone());
+        }
+        Ok(())
+    }
     /// Fill `status`, `statement`, `real_rooted_from_index` and
     /// `real_rooted_outside_zero_residue_classes` from the attempts.
     fn finish_summary(&mut self, not_applicable: Option<String>) {
@@ -708,8 +736,20 @@ impl RecurrenceProofDiscoveryReport {
             (false, false, None) => "not_proved",
         }
         .into();
+        if !is_proved && self.bkw_refutation.is_some() {
+            self.status = "refuted".into();
+        }
         self.not_applicable_reason = if is_proved { None } else { not_applicable };
+        if self.status == "refuted" {
+            conditional = None;
+        }
         let mut statement = String::from(STATEMENT_PREAMBLE);
+        if let Some(certificate) = &self.bkw_refutation {
+            statement.push_str(" Refuted the claim that every row is real-rooted, by a separate exact BKW/row certificate.");
+            if let Some(row) = &certificate.first_failing_row {
+                statement.push_str(&format!(" First failing row: P_{}.", row.index));
+            }
+        }
         if let Some(from) = from {
             statement.push_str(&format!(
                 " Proved through {route}: every row P_n with n >= {from} is nonzero and \
@@ -792,6 +832,18 @@ impl RecurrenceProofDiscoveryReport {
     /// recurrence/checker error. Verifying `not_proved` is not a proof.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
         let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
+        if let Some(certificate) = &self.bkw_refutation {
+            if certificate.recurrence != self.recurrence || certificate.result != "refuted" {
+                return failed("BKW refutation must refute the same recurrence and seeds");
+            }
+            certificate.verify()?;
+            let mut proof_only = self.clone();
+            proof_only.bkw_refutation = None;
+            proof_only.finish_summary(self.not_applicable_reason.clone());
+            if proof_only.status == "proved" {
+                return failed("a BKW refutation cannot replace a proof");
+            }
+        }
         if self.schema != RECURRENCE_PROOF_DISCOVERY_SCHEMA {
             return failed("unsupported discovery schema");
         }

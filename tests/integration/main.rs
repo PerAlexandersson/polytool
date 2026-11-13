@@ -5,6 +5,8 @@ mod basis_map_even_derivative;
 mod basis_map_lifts;
 mod basis_map_published;
 mod binomial_perturbed_euler_orbit;
+mod bkw_certification;
+mod bkw_regions;
 mod brenti_recognition;
 mod catalog_lifts;
 mod cli_bench_real_rootedness;

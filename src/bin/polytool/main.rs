@@ -10,6 +10,7 @@
 mod bench;
 mod bench_real_rootedness;
 mod bicyclic_sieving;
+mod bkw_certify;
 mod bkw_scout;
 mod brenti_recognize;
 mod cli;

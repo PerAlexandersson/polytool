@@ -1,0 +1,10 @@
+{
+	"schema":"polytool.bkw-region-qe.v1",
+	"mode":"circle3plus",
+	"version":"14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+	"seconds":0.135913,
+	"input":"Exists[v, v > 0 && (((d <= 0 || c >= 16*d^2*v) && -1 + v + 3*d*v^2 >= 0 && (-1 + v + 3*d*v^2)^2 >= 4*c*v^3) || (d > 0 && c <= 16*d^2*v && -4*d + (-c + 4*d)*v - 4*d^2*v^2 >= 0))]",
+	"output":"(Inequality[-1\/12, LessEqual, d, LessEqual, 0] && c <= (1 + 108*d)\/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]\/54) || (Inequality[0, Less, d, LessEqual, 1\/36] && c <= (8*d)\/5 + (8*Sqrt[d^2 - 20*d^3])\/5) || (d > 1\/36 && c <= 4*d - 8*Sqrt[d^3]) || (d == -1\/44 && c == 2\/121) || (Inequality[-1\/44, Less, d, LessEqual, -7\/324] && Inequality[(-8*d)\/11 - (8*Sqrt[d^2 + 44*d^3])\/11, LessEqual, c, LessEqual, (-8*d)\/11 + (8*Sqrt[d^2 + 44*d^3])\/11]) || (Inequality[-7\/324, Less, d, LessEqual, 0] && Inequality[(-8*d)\/11 - (8*Sqrt[d^2 + 44*d^3])\/11, LessEqual, c, LessEqual, (1 + 108*d)\/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]\/54]) || (Inequality[0, Less, d, LessEqual, 1\/36] && Inequality[(8*d)\/5 - (8*Sqrt[d^2 - 20*d^3])\/5, LessEqual, c, LessEqual, (1 + 108*d)\/54 + Sqrt[1 - 108*d + 3888*d^2 - 46656*d^3]\/54]) || (Inequality[1\/36, Less, d, Less, 1\/20] && Inequality[(8*d)\/5 - (8*Sqrt[d^2 - 20*d^3])\/5, LessEqual, c, LessEqual, (8*d)\/5 + (8*Sqrt[d^2 - 20*d^3])\/5]) || (d == 1\/20 && c == 2\/25)",
+	"resolved":true,
+	"script_sha256":"c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54"
+}

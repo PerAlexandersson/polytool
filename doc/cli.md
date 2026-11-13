@@ -300,6 +300,97 @@ polytool family-check \
   --json < polys.txt
 ```
 
+## Exact BKW certification
+
+```sh
+polytool bkw certify --recurrence recurrence.json --max-row-index 200 --json
+polytool bkw certify --verify --json < certificate.json
+```
+
+Input accepts the same seeded recurrence JSON, theorem reports and
+representation menus as `recurrence-prove` (`--candidate` selects a menu entry).
+Coefficients are rational polynomials independent of the row index. Every
+prescribed seed contributes to the reduced rational generating function.
+
+The `polytool.bkw-certification.v1` report separates `limit_set_status`
+(`real_limit_set`, `nonreal_limit_set`, `degenerate`, `inconclusive`) from
+the all-row `result` (`proved`, `conditional`, `refuted`, `inconclusive`). A real limit set
+alone never proves all rows real-rooted. A fitted recurrence defines a family;
+applying the result to another definition requires an all-index identity.
+
+For order two, the pencil is A_1^2+s*A_2, 0<=s<=4. For the sparse recurrence
+P_n=A*P_(n-1)+B*P_(n-r), it is A^r+s*B,
+0<=s<=r^r/(r-1)^(r-1). These intervals follow from Tran (2014, Theorems 1
+and 3; 2015, Theorem 1). Exact resultants and Sturm isolation separate
+discriminant and degree-drop parameters. Every open cell and both rational
+endpoints have exact root counts; algebraic boundaries follow by closure.
+Fixed repeated factors are removed for the discriminant and retained in the
+root counts. The rational interior `pencil.witness` is an asymptotic
+refutation only after the active-branch and amplitude checks.
+
+Cancellation, inactive branches, repeated poles, constant phase ratios,
+periodic support and scalar-monomial collapses are checked before a BKW
+verdict. Cases requiring periodic splitting return `degenerate` with the
+period. General orders and undecided isolated amplitude zeros remain
+`inconclusive`, except for standard Hessenberg Toeplitz shapes covered by the
+versioned region data described below. Symbolic elimination is capped by `--max-pencil-degree`
+(default 24); exceeding the cap does not give a mathematical verdict.
+
+`proved` uses the standard quadratic-seed product formula with the exact pencil
+decision, the existing product-induction route, or the circle theorem below.
+Public quadratic proofs run before checking the Toeplitz circle condition.
+`--radius R` supplies a positive rational candidate; automatic search uses exact
+critical-radius isolation. The circle polynomial is checked nonnegative on
+[-1,1] by its exact sign cells.
+
+**Circle criterion.** Let b(z)=z^-1+b_0+sum_(j=1)^s b_j*z^j have real
+coefficients, with P_0=1, P_m=0 for m<0 and
+P_n(t)=(t-b_0)*P_(n-1)(t)-sum_(j=1)^s b_j*P_(n-j-1)(t).
+If some R>0 satisfies Im b(R exp(i theta))>=0 for 0<theta<pi,
+every standard row has simple real zeros and consecutive rows strictly
+interlace. Source: "circle criterion for Hessenberg Toeplitz symbols
+(unpublished manuscript)". The route gives `proved`, records this exact source
+in `circle.provenance`, and leaves `conditional_on` empty. Only `circle`
+appears in the extensible list `TOEPLITZ_CRITERIA` of proved Toeplitz criteria.
+
+For standard Hessenberg Toeplitz rows with tail bandwidth s<=3, the
+`toeplitz_region` certificate evaluates precomputed Schmidt-Spitzer regions
+by exact integer-polynomial signs. These regions use the two smallest
+denominator roots with their modulus ordering encoded. A real spectral shift
+removes b_0. For b_1!=0 the sign chart is b_1/abs(b_1), and the rational
+coordinates are c=b_2^2/abs(b_1)^3 and d=b_3/abs(b_1)^2. For b_1=0 we use
+c=b_2^2 and d=b_3. Trailing zero tails reduce bandwidth. The certificate
+records the variable order, rational point, region result and exact input/output
+SHA-256 hashes. The data, normalization and generating Wolfram scripts are
+in `data/bkw/`.
+
+If the limit region is real and no all-row theorem proof or explicit circle
+certificate applies, the result is `conditional` on
+`hessenberg_real_limit_spectrum`: for a real Hessenberg Toeplitz symbol b,
+Lambda(b) subset R implies that every standard row is real-rooted. This is
+the Hessenberg restriction of the unproved implication discussed in
+[Shapiro–Štampach's correction](https://doi.org/10.1007/s00365-022-09614-0).
+This assumption remains conditional and is separate from the circle theorem.
+Outside the precomputed bandwidth range the result
+remains inconclusive unless an exact theorem proof or refutation is available;
+no conditional all-row verdict is made there.
+The circle theorem can give `proved` beyond that region bandwidth range.
+Single standard active branches (including diagonal Toeplitz families) reuse
+the existing product-induction route and retain its report in `product_proof`.
+
+For unproved families, exact row search runs through `--max-row-index`
+(default 200), stopping at the first nonzero row with nonreal zeros. Its
+coefficients and counts are in `first_failing_row`. Zero rows are recorded
+separately. A completed all-row proof makes this finite search unnecessary.
+No failed row search proves anything about later rows.
+
+After its proof routes fail, `recurrence-prove` tries this refutation stage
+and records `refuted` with `bkw_refutation` when successful. This stage
+never replaces a proof, and a real limit set is never promoted to a proof.
+Certification exits 0 when it produces a report (including inconclusive);
+bad input or failed replay exits 2. `recurrence-prove` retains exit 1 for
+every outcome other than `proved`.
+
 ## Scout BKW equal-modulus loci
 
 For a polynomial recurrence with characteristic symbol

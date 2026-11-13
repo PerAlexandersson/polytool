@@ -1,0 +1,10 @@
+{
+	"schema":"polytool.bkw-region-qe.v1",
+	"mode":"s3zeroplus",
+	"version":"14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+	"seconds":6.3562e-2,
+	"input":"Exists[{a, k, h}, a >= 0 && k > a && Inequality[0, Less, h, LessEqual, 1] && -2*a + 8*a^2 + k - 8*a*k + k^2 + d*(1 - 4*h) == 0 && (a == 0 || 2*(2*a - k) == 1) && d*(4*a - k) + k^3 != 0 && ((k^4 > d^2 && 4*d^2*(d^2 + k^4 - 2*d*(8*a^2 - 8*a*k + k^2))*h <= (-d^2 + k^4)^2) || (k^4 == d^2 && 4*d^2*(d^2 + k^4 - 2*d*(8*a^2 - 8*a*k + k^2))*h == 0 && 4*d^2*h <= 4*k^4))]",
+	"output":"d > 1\/4 || d < -1\/12",
+	"resolved":true,
+	"script_sha256":"282031c036702f948aad6b7064a09aa50217a0daa6e654dda73a7c31108a6f17"
+}

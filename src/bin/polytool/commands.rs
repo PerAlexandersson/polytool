@@ -72,6 +72,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     networks::LEFT_PRODUCTION,
     developer::BENCH,
     developer::BKW_SCOUT,
+    developer::BKW,
     developer::PF_PENCIL,
     COMPLETIONS,
 ];

@@ -65,6 +65,7 @@ Planar networks:
 Developer tools:
   bench                              Run built-in timing suites
   bkw-scout                          Scout BKW equal-modulus loci for a recurrence symbol
+  bkw                                Exact BKW certificates, theorem proofs and named conditional claims
   pf-pencil                          Check built-in PF/Jensen endpoint pencils
 
 Shell support:

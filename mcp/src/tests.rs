@@ -20,6 +20,54 @@ use num_bigint::BigInt;
 use rmcp::{handler::server::wrapper::Parameters, Json};
 use serde_json::json;
 
+#[test]
+fn bkw_certificate_tool_uses_exact_library_and_limits() {
+    let recurrence = json!({"schema":"polytool.recurrence.v1","first_index":0,"initial_polynomials":[["1"],["0","1"]],"recurrence":{"terms":[
+        {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","1"]]}},
+        {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["1"]]}}
+    ]}});
+    let server = PolynomialToolsServer::new();
+    let request = crate::requests::BkwCertificationToolRequest {
+        recurrence_json: recurrence,
+        maximum_row_index: Some(10),
+        circle_radius: None,
+    };
+    let Json(report) = server.bkw_certify(Parameters(request.clone())).unwrap();
+    assert_eq!(report["result"], "refuted");
+    assert_eq!(report["first_failing_row"]["index"], 2);
+    let certificate: polytool::bkw::certified::CertificationReport =
+        serde_json::from_value(report).unwrap();
+    certificate.verify().unwrap();
+    assert!(server
+        .bkw_certify(Parameters(crate::requests::BkwCertificationToolRequest {
+            maximum_row_index: Some(201),
+            ..request
+        }))
+        .is_err());
+    let Json(report) = server
+        .bkw_certify(Parameters(crate::requests::BkwCertificationToolRequest {
+            recurrence_json: json!({"schema":"polytool.recurrence.v1","first_index":0,
+            "initial_polynomials":[["1"],["-3","1"],["6","-6","1"]],
+            "recurrence":{"terms":[
+                {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-3","1"]]}},
+                {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-3"]]}},
+                {"offset":3,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1"]]}}
+            ]}}),
+            maximum_row_index: Some(48),
+            circle_radius: Some("1".into()),
+        }))
+        .unwrap();
+    assert_eq!(report["result"], "proved");
+    assert_eq!(report["conditional_on"], json!([]));
+    assert_eq!(
+        report["circle"]["provenance"],
+        "circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)"
+    );
+    let certificate: polytool::bkw::certified::CertificationReport =
+        serde_json::from_value(report).unwrap();
+    certificate.verify().unwrap();
+}
+
 fn coeffs(values: &[i64]) -> BigIntPolynomialInput {
     BigIntPolynomialInput {
         coefficients: Some(

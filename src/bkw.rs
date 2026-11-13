@@ -1,6 +1,6 @@
 //! Beraha--Kahane--Weiss scout tools for polynomial recurrences.
 //!
-//! This module is deliberately a scout layer, not a proof layer.  It evaluates a
+//! The original scout entry points evaluate a
 //! characteristic symbol
 //!
 //! ```text
@@ -19,9 +19,14 @@
 //! Conventions: symbol coefficients are exact `i64` polynomials in `x`
 //! (ascending degree, entry `i` is the coefficient of `x^i`) and are indexed by
 //! ascending power of `z`.  All root computations are floating point
-//! (Durand--Kerner iteration in `f64`); nothing here is exact or certified.  Use
+//! (Durand--Kerner iteration in `f64`); their results are evidence only. Use
 //! [`BkwSymbol::mathematica_equal_modulus_query`] to produce an exact follow-up
 //! query.  For the recurrences that produce such symbols see `crate::recurrence`.
+//!
+//! [`certified`] is a separate exact layer: rational discriminant pencils,
+//! seed-dependent generating functions, finite refutations, all-row theorem
+//! proofs and explicitly named conditional claims. Its certificates never rely
+//! on floating-point root computations.
 
 use crate::parse::parse_polynomial;
 use crate::real_rootedness::format_poly_var;
@@ -30,6 +35,8 @@ use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt;
 use std::ops::{Add, Div, Mul, Neg, Sub};
+
+pub mod certified;
 
 /// Small complex-number type used to keep `polytool` dependency-light.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

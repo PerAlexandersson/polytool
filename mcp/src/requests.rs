@@ -8,6 +8,17 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use std::borrow::Cow;
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BkwCertificationToolRequest {
+    /// A polytool.recurrence.v1 record, including every seed row.
+    pub recurrence_json: serde_json::Value,
+    /// Inclusive absolute row-search bound (default 200, at most 200).
+    pub maximum_row_index: Option<usize>,
+    /// Optional positive exact rational circle radius.
+    pub circle_radius: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum BigIntCoefficientInput {

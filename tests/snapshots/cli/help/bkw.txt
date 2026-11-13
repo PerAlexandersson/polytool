@@ -1,0 +1,19 @@
+Exact BKW certificates, theorem proofs and named conditional claims.
+
+Certify stationary recurrences with rational polynomial coefficients and
+supplied seeds. Use bkw certify; the numerical bkw-scout remains evidence only.
+
+Usage: polytool bkw <COMMAND>
+
+Commands:
+  certify  Decide sparse tie pencils, check the circle criterion, and search exact rows.
+
+Options:
+  -h, --help  Print help
+
+Examples:
+  polytool bkw certify --recurrence recurrence.json --json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input

@@ -4,6 +4,25 @@
 `polytool`. It exposes exact univariate polynomial computations to MCP
 clients over stdio.
 
+`bkw_certify` accepts a `polytool.recurrence.v1` object with seeds,
+`maximum_row_index` (optional, default and maximum 200), and `circle_radius`
+(optional rational string). It returns `polytool.bkw-certification.v1`:
+exact sparse BKW decisions, separate finite refutations, and public
+quadratic-product proofs or Toeplitz circle proofs. The circle route gives
+`proved`, with simple real zeros and consecutive rows strictly interlacing;
+its exact provenance is "circle criterion for Hessenberg Toeplitz symbols
+(unpublished manuscript)".
+A real limit set alone is never
+an all-row proof. Replay through the library or `polytool bkw certify --verify`.
+
+For standard Hessenberg tails through bandwidth three, `toeplitz_region`
+records exact Schmidt-Spitzer region membership in rational normalized
+coordinates and the generating input/output hashes. The separate
+`hessenberg_real_limit_spectrum` assumption may support `conditional` when
+geometry is certified real. This assumption remains distinct from the circle
+theorem; there is no conditional verdict outside the precomputed range.
+The circle theorem can give `proved` beyond that range.
+
 The server is intentionally small:
 
 - stdio transport only

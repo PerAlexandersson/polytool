@@ -12,5 +12,8 @@ order. The exceptions are explicit in their names:
       lists the coefficients of z^0, z^1, ... (ascending in z); each is a
       polynomial in x.
 
+  bkw certify --recurrence recurrence.json --json
+      uses ascending rational coefficient rows in the seeded recurrence JSON.
+
 Triangles (oeis generate --format triangle, b-files) list row n, then row n+1,
 each row in ascending order.

@@ -10,6 +10,21 @@ conventions are documented in [`../mcp/README.md`](../mcp/README.md) (sections
 
 Available MCP tools:
 
+- `bkw_certify`: exact stationary-recurrence limit-set certificates, separate
+  finite row refutations, public quadratic-product proofs and Toeplitz circle
+  proofs. Circle nonnegativity is checked exactly; the circle route gives
+  `proved`, with simple real zeros and consecutive rows strictly interlacing.
+  Its exact provenance is "circle criterion for Hessenberg Toeplitz symbols
+  (unpublished manuscript)".
+  Versioned Schmidt-Spitzer regions certify standard Hessenberg limit spectra
+  through tail bandwidth three. A real limit spectrum can instead support
+  `conditional` under `hessenberg_real_limit_spectrum`, a separate all-row
+  assumption. Region evaluations include rational coordinates and input/output
+  SHA-256 hashes. No conditional verdict is made outside that bandwidth range.
+  Takes a seeded recurrence object, optional `maximum_row_index` (at most
+  200) and optional rational `circle_radius`. The report embeds its input for
+  exact library or CLI replay; no Lean replay is claimed.
+
 - `parse_polynomials`
 - `check_polynomial_family`
 - `polynomial_properties`

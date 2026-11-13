@@ -1,0 +1,43 @@
+Decide sparse tie pencils, check the circle criterion, and search exact rows.
+
+Read existing recurrence JSON with seeds. Reduce its generating function before
+BKW checks. Public standard quadratic product proofs run first. Exact Toeplitz
+circle nonnegativity gives proved: every row has simple real zeros and
+consecutive rows strictly interlace. The theorem source is circle criterion for
+Hessenberg Toeplitz symbols (unpublished manuscript), recorded in
+circle.provenance. Versioned Schmidt-Spitzer regions for standard Hessenberg
+tails of bandwidth at most 3 certify limit-spectrum geometry exactly; a real
+limit spectrum can give a separate conditional all-row claim under
+hessenberg_real_limit_spectrum, recorded in conditional_on. Outside the region
+bandwidth range no conditional verdict is made; the circle theorem can still
+give proved. --verify replays an embedded certificate exactly.
+
+Usage: polytool bkw certify [OPTIONS]
+
+Options:
+      --recurrence <FILE>      Recurrence JSON, theorem report or representation menu; - reads stdin
+      --candidate <N>          Zero-based representation-menu candidate
+      --max-row-index <N>      Largest absolute row index searched, inclusive [default: 200]
+      --max-pencil-degree <N>  Degree cap for exact symbolic elimination [default: 24]
+      --radius <R>             Positive rational circle radius to try first
+      --verify                 Replay a certification report from stdin
+  -h, --help                   Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Examples:
+  polytool bkw certify --recurrence recurrence.json --json
+  polytool bkw certify --verify --json < certificate.json
+
+Exit status:
+  0  exact report or successful replay
+  2  invalid input or failed replay
+
+See also:
+  polytool bkw-scout, polytool recurrence-prove

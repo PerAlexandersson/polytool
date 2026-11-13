@@ -57,7 +57,7 @@ fn discover_and_replay_then_reject_tampering() {
 }
 
 #[test]
-fn explicit_menu_selection_and_no_proof_status() {
+fn explicit_menu_selection_and_refutation_status() {
     let mut bad = input();
     bad["recurrence"]["terms"][0]["coeff"]["coeffs"] = serde_json::json!([["1", "0", "1"]]);
     let menu = serde_json::json!({"schema": "polytool.recurrence-representations.v1",
@@ -86,7 +86,13 @@ fn explicit_menu_selection_and_no_proof_status() {
     );
     assert_eq!(no.status.code(), Some(1));
     let report: serde_json::Value = serde_json::from_slice(&no.stdout).unwrap();
-    assert_eq!(report["status"], "not_proved");
+    // P_n=(1+x^2)P_(n-1), P_0=1 now has an exact finite refutation.
+    assert_eq!(report["status"], "refuted");
+    assert_eq!(report["bkw_refutation"]["first_failing_row"]["index"], 1);
+    assert_eq!(
+        report["bkw_refutation"]["first_failing_row"]["coefficients"],
+        serde_json::json!(["1", "0", "1"])
+    );
     assert!(run(&["recurrence-prove", "--verify"], &report.to_string())
         .status
         .success());

@@ -1,0 +1,10 @@
+{
+	"schema":"polytool.bkw-region-qe.v1",
+	"mode":"s2minus",
+	"version":"14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+	"seconds":0.120099,
+	"input":"Exists[{u, k, h}, c > 0 && k > 0 && k^2 > u^2 && 0 <= h <= 4 && 1 + 2*u + 2*u^2 - k^2 - c*(4*u^3 - 3*u*k^2)*h == 0 && 2 + 2*u - c*(4*u^2 - k^2)*h == 0 && c*k^3 <= 1 && -2*u - k^2 - c*k^4 != 0]",
+	"output":"c == (1 + Sqrt[3])\/16 || c > (1 + Sqrt[3])\/16 || Inequality[0, Less, c, Less, (5 + 3*Sqrt[3])\/4] || Inequality[(1 + Sqrt[3])\/16, LessEqual, c, LessEqual, (7 + 3*Sqrt[3])\/16] || Inequality[(7 + 3*Sqrt[3])\/16, LessEqual, c, Less, (5 + 3*Sqrt[3])\/4]",
+	"resolved":true,
+	"script_sha256":"c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54"
+}

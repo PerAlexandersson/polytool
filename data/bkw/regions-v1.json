@@ -1,0 +1,3253 @@
+{
+  "schema": "polytool.bkw-regions.v1",
+  "version": 1,
+  "normalization": "b0=0; sigma=sign(b1); c=b2^2/abs(b1)^3,d=b3/abs(b1)^2; b1=0 uses c=b2^2,d=b3",
+  "maximum_bandwidth": 3,
+  "arithmetic": "integer polynomial signs at exact rational invariants",
+  "entries": {
+    "s2plus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "s2plus",
+      "variables": [
+        "c"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "bac6aa2dc79d355f84b5417ef6b9635d66db6994385ed623a28d1c1bd3783b3b",
+      "output_sha256": "908e233ea2767d495c221f82979b4db0c04f48c0c8dbc3eb5e290b3d45d88646",
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "or",
+        "args": [
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Equal",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2
+                    ],
+                    "coefficient": "16384"
+                  },
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "2048"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-128"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "-4096"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-256"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "-4"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "2"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "1"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "256"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "16"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2
+                    ],
+                    "coefficient": "16384"
+                  },
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "2048"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-128"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "1"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "256"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "16"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2
+                    ],
+                    "coefficient": "16384"
+                  },
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "2048"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-128"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "-16"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "-20"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2
+                        ],
+                        "coefficient": "-64"
+                      },
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "-160"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "8"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "-729"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "27"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "-16"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "-20"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2
+                        ],
+                        "coefficient": "-64"
+                      },
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "-160"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "8"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "Greater",
+            "polynomial": [
+              {
+                "powers": [
+                  1
+                ],
+                "coefficient": "4"
+              },
+              {
+                "powers": [
+                  0
+                ],
+                "coefficient": "-2"
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "(-128 + 2048*c + 16384*c^2 == 0 && -256 - 4096*c <= 0) || (2 - 4*c <= 0 && -1 + c < 0) || (16 + 256*c > 0 && -128 + 2048*c + 16384*c^2 > 0 && -1 + c < 0) || (16 + 256*c >= 0 && -128 + 2048*c + 16384*c^2 >= 0 && (-20 - 16*c > 0 || 8 - 160*c - 64*c^2 > 0)) || (27 - 729*c < 0 && (-20 - 16*c > 0 || 8 - 160*c - 64*c^2 > 0)) || -2 + 4*c > 0"
+    },
+    "s2minus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "s2minus",
+      "variables": [
+        "c"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "6d30f4163435be0a530f46b07c2a047423145b13442687083c0c7c24201168c1",
+      "output_sha256": "f7aaa40cf3e6e5e90fd72d4f784f0e66efcbe31f2ece3176f48de00a09b02a95",
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "or",
+        "args": [
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Equal",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2
+                    ],
+                    "coefficient": "16384"
+                  },
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "-2048"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-128"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "-4096"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "256"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "256"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-16"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2
+                    ],
+                    "coefficient": "16384"
+                  },
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "-2048"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-128"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "-1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "-16"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "20"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2
+                        ],
+                        "coefficient": "-64"
+                      },
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "160"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "8"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "256"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-16"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2
+                    ],
+                    "coefficient": "16384"
+                  },
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "-2048"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-128"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "-256"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "112"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2
+                        ],
+                        "coefficient": "-16384"
+                      },
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "14336"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "-1408"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "256"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "-112"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2
+                    ],
+                    "coefficient": "16384"
+                  },
+                  {
+                    "powers": [
+                      1
+                    ],
+                    "coefficient": "-14336"
+                  },
+                  {
+                    "powers": [
+                      0
+                    ],
+                    "coefficient": "1408"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "-16"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "20"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2
+                        ],
+                        "coefficient": "-64"
+                      },
+                      {
+                        "powers": [
+                          1
+                        ],
+                        "coefficient": "160"
+                      },
+                      {
+                        "powers": [
+                          0
+                        ],
+                        "coefficient": "8"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "(-128 - 2048*c + 16384*c^2 == 0 && 256 - 4096*c <= 0) || (-16 + 256*c > 0 && -128 - 2048*c + 16384*c^2 > 0) || (-c < 0 && (20 - 16*c > 0 || 8 + 160*c - 64*c^2 > 0)) || (-16 + 256*c >= 0 && -128 - 2048*c + 16384*c^2 >= 0 && (112 - 256*c >= 0 || -1408 + 14336*c - 16384*c^2 >= 0)) || (-112 + 256*c >= 0 && 1408 - 14336*c + 16384*c^2 >= 0 && (20 - 16*c > 0 || 8 + 160*c - 64*c^2 > 0))"
+    },
+    "s2zero": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "s2zero",
+      "variables": [
+        "c"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "f921c2eb3fa8f190227c8e2521c6900774840d1c953deec4f1d1290fb72d1dce",
+      "output_sha256": "8891968d4692610410841b8e6e9a144cf5e060f3de1d96f48c419c8ebe44c6f9",
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "sign",
+        "relation": "Greater",
+        "polynomial": [
+          {
+            "powers": [
+              1
+            ],
+            "coefficient": "1"
+          }
+        ]
+      },
+      "polynomial_formula": "c > 0"
+    },
+    "s3plus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "s3plus",
+      "variables": [
+        "c",
+        "d"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "1d71d8304a584b19465b8697ed033f4abd0a50c8588476e47ae81fe222c23064",
+      "output_sha256": "0910c9881e5c6725583a9f6f826f442c1a4936a3a07e52bedb3fcb039796e49b",
+      "generator_sha256": "3cfc9118df3c2348a0a00c1691e40d19ca40912291de1cba8a0c8933bd31107e",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "or",
+        "args": [
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "144"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "12"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-144"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-12"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-46656"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "3888"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-108"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "2916"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-5832"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-54"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2,
+                      0
+                    ],
+                    "coefficient": "729"
+                  },
+                  {
+                    "powers": [
+                      1,
+                      1
+                    ],
+                    "coefficient": "-2916"
+                  },
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "-27"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "11664"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "1944"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "81"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1296"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-36"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-46656"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "3888"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-108"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "2916"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-5832"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-54"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2,
+                      0
+                    ],
+                    "coefficient": "729"
+                  },
+                  {
+                    "powers": [
+                      1,
+                      1
+                    ],
+                    "coefficient": "-2916"
+                  },
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "-27"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "11664"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "1944"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "81"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-1296"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "36"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "16"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-4"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "1"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "-4"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "Greater",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-1"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "8"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "64"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          2
+                        ],
+                        "coefficient": "-16"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "16"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-4"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "(12 + 144*d <= 0 && c > 0) || (-12 - 144*d < 0 && d < 0 && 1 - 108*d + 3888*d^2 - 46656*d^3 >= 0 && -54 + 2916*c - 5832*d > 0 && -27*c + 729*c^2 + 81*d - 2916*c*d + 1944*d^2 + 11664*d^3 > 0) || (-d < 0 && -36 + 1296*d <= 0 && 1 - 108*d + 3888*d^2 - 46656*d^3 >= 0 && -54 + 2916*c - 5832*d > 0 && -27*c + 729*c^2 + 81*d - 2916*c*d + 1944*d^2 + 11664*d^3 > 0) || (36 - 1296*d < 0 && -4 + 16*d <= 0 && d^3 >= 0 && (c - 4*d > 0 || -c^2 + 8*c*d - 16*d^2 + 64*d^3 > 0)) || (-4 + 16*d > 0 && c > 0)"
+    },
+    "s3minus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "s3minus",
+      "variables": [
+        "c",
+        "d"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "9d3a03c2967198c03858cb0eba7fbd6c73306dc9177863cee5a9ed46a2c91a95",
+      "output_sha256": "dd5fb5f63cd34d4b59c9cbc26d313645af5592a31eb2fa53c6c343d34dcc20ce",
+      "generator_sha256": "3cfc9118df3c2348a0a00c1691e40d19ca40912291de1cba8a0c8933bd31107e",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "or",
+        "args": [
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "(d < 0 && c > 0) || (d > 0 && c > 0)"
+    },
+    "s3zero": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "s3zero",
+      "variables": [
+        "c",
+        "d"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "248bce49b4dee4ff832e095a491da2f8f226c889e4e05c53a91a0acefddf266b",
+      "output_sha256": "43114039285f4b55b3b30728bd4804d030e1011156501dd4f52042850f49f6ae",
+      "generator_sha256": "3cfc9118df3c2348a0a00c1691e40d19ca40912291de1cba8a0c8933bd31107e",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "or",
+        "args": [
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "(d < 0 && c > 0) || (d > 0 && c > 0)"
+    },
+    "s3zeroplus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "s3zeroplus",
+      "variables": [
+        "d"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "3d5a8c2c7f294102669de4c522995bb79ce154d87db96a6c5e8f4efe56b86046",
+      "output_sha256": "3c72785e4fa2b14caa03c30591d2e037c01c1d92248b903d67acd402ed9ccc88",
+      "generator_sha256": "282031c036702f948aad6b7064a09aa50217a0daa6e654dda73a7c31108a6f17",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "or",
+        "args": [
+          {
+            "op": "sign",
+            "relation": "Greater",
+            "polynomial": [
+              {
+                "powers": [
+                  1
+                ],
+                "coefficient": "16"
+              },
+              {
+                "powers": [
+                  0
+                ],
+                "coefficient": "-4"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "Less",
+            "polynomial": [
+              {
+                "powers": [
+                  1
+                ],
+                "coefficient": "144"
+              },
+              {
+                "powers": [
+                  0
+                ],
+                "coefficient": "12"
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "-4 + 16*d > 0 || 12 + 144*d < 0"
+    },
+    "s3zerominus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "s3zerominus",
+      "variables": [
+        "d"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "758b45a78ae263ab223a678495d55f61dc0908b01563e8dbdfbc65d06a8171d9",
+      "output_sha256": "27824f9d4d0b9e7ea494af5e34565407c1c02cf0feb796536cc3514de327cc5d",
+      "generator_sha256": "282031c036702f948aad6b7064a09aa50217a0daa6e654dda73a7c31108a6f17",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "or",
+        "args": [
+          {
+            "op": "sign",
+            "relation": "Equal",
+            "polynomial": [
+              {
+                "powers": [
+                  1
+                ],
+                "coefficient": "1"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "Greater",
+            "polynomial": [
+              {
+                "powers": [
+                  1
+                ],
+                "coefficient": "1"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "Less",
+            "polynomial": [
+              {
+                "powers": [
+                  1
+                ],
+                "coefficient": "1"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "LessEqual",
+            "polynomial": [
+              {
+                "powers": [
+                  1
+                ],
+                "coefficient": "144"
+              },
+              {
+                "powers": [
+                  0
+                ],
+                "coefficient": "12"
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "d == 0 || d > 0 || d < 0 || 12 + 144*d <= 0"
+    },
+    "s3zerozero": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "s3zerozero",
+      "variables": [
+        "d"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "f430bebe2c979e9b8961b4f6770e31f0827c1360bd20164677f675224674a7bc",
+      "output_sha256": "e289c90b8544a51a82692c643fc4a301fdb2baae584b2ddea71b6adcb800c5f3",
+      "generator_sha256": "282031c036702f948aad6b7064a09aa50217a0daa6e654dda73a7c31108a6f17",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "or",
+        "args": [
+          {
+            "op": "sign",
+            "relation": "Greater",
+            "polynomial": [
+              {
+                "powers": [
+                  1
+                ],
+                "coefficient": "1"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "Less",
+            "polynomial": [
+              {
+                "powers": [
+                  1
+                ],
+                "coefficient": "1"
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "d > 0 || d < 0"
+    },
+    "circle2plus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "circle2plus",
+      "variables": [
+        "c"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "27c537ad62cdaee7f92743dcdf2b0eb8fee984fa3a978618e9d5f0026ed1b8bb",
+      "output_sha256": "abc6a5e64720dfc11baaadf9c51acf617d6746d8475d7c0a5c377e0f6dbc2bc3",
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "sign",
+        "relation": "LessEqual",
+        "polynomial": [
+          {
+            "powers": [
+              1
+            ],
+            "coefficient": "729"
+          },
+          {
+            "powers": [
+              0
+            ],
+            "coefficient": "-27"
+          }
+        ]
+      },
+      "polynomial_formula": "-27 + 729*c <= 0"
+    },
+    "circle2minus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "circle2minus",
+      "variables": [
+        "c"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "ad873cc3f9d1b4af34855bbfef369e5a4d0f546dc3d49a42e75d20f4611edc2d",
+      "output_sha256": "9b79d85c0ed12918b1a04e5fc438b613a1f80167a5e110f5ccfbc9b4e739c11d",
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "false"
+      },
+      "polynomial_formula": "False"
+    },
+    "circle2zero": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "circle2zero",
+      "variables": [
+        "c"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "60a33e6cf5151f2d52eddae9685cfa270426aa89d8dbc7dfb854606f1d1a40fe",
+      "output_sha256": "10fb596dd39fd636dccfe84686f7a845205e8b668b992c2615fbb5e3c524afde",
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "false"
+      },
+      "polynomial_formula": "False"
+    },
+    "circle3plus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "circle3plus",
+      "variables": [
+        "c",
+        "d"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "866d5b4a59658e2e14c91368531c306ca0132103e1f8b8f7633a2f337aa584f5",
+      "output_sha256": "37b325b2973a2c6350c6f620266ddd0c02da6e94f2cb34e017a8f6b7caca4faf",
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "or",
+        "args": [
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-144"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-12"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-46656"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "3888"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-108"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "-2916"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "5832"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          0
+                        ],
+                        "coefficient": "54"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-729"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "2916"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "27"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "-11664"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          2
+                        ],
+                        "coefficient": "-1944"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "-81"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1296"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-36"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-20"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "-25"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "40"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-25"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "80"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "-1280"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Greater",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1296"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-36"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "-1"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "4"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      2,
+                      0
+                    ],
+                    "coefficient": "1"
+                  },
+                  {
+                    "powers": [
+                      1,
+                      1
+                    ],
+                    "coefficient": "-8"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-64"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "16"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Equal",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1936"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "44"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Equal",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "14641"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-242"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-1936"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-44"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "104976"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "2268"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "44"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "121"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "88"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-121"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "-176"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "2816"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "44"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "-121"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "-88"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-121"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "-176"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "2816"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-104976"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-2268"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "44"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "121"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "88"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-121"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "-176"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "2816"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-46656"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "3888"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-108"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "-2916"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "5832"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          0
+                        ],
+                        "coefficient": "54"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-729"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "2916"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "27"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "-11664"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          2
+                        ],
+                        "coefficient": "-1944"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "-81"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-1"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "LessEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "1296"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-36"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-20"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "25"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "-40"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-25"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "80"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "-1280"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-46656"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "3888"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-108"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "-2916"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "5832"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          0
+                        ],
+                        "coefficient": "54"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-729"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "2916"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "27"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "-11664"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          2
+                        ],
+                        "coefficient": "-1944"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "-81"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "-1296"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "36"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Less",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "400"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-20"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-20"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "25"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "-40"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-25"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "80"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "-1280"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "GreaterEqual",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      3
+                    ],
+                    "coefficient": "-20"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      2
+                    ],
+                    "coefficient": "1"
+                  }
+                ]
+              },
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          1,
+                          0
+                        ],
+                        "coefficient": "-25"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          1
+                        ],
+                        "coefficient": "40"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sign",
+                    "relation": "GreaterEqual",
+                    "polynomial": [
+                      {
+                        "powers": [
+                          2,
+                          0
+                        ],
+                        "coefficient": "-25"
+                      },
+                      {
+                        "powers": [
+                          1,
+                          1
+                        ],
+                        "coefficient": "80"
+                      },
+                      {
+                        "powers": [
+                          0,
+                          3
+                        ],
+                        "coefficient": "-1280"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "args": [
+              {
+                "op": "sign",
+                "relation": "Equal",
+                "polynomial": [
+                  {
+                    "powers": [
+                      0,
+                      1
+                    ],
+                    "coefficient": "400"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-20"
+                  }
+                ]
+              },
+              {
+                "op": "sign",
+                "relation": "Equal",
+                "polynomial": [
+                  {
+                    "powers": [
+                      1,
+                      0
+                    ],
+                    "coefficient": "625"
+                  },
+                  {
+                    "powers": [
+                      0,
+                      0
+                    ],
+                    "coefficient": "-50"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "(-12 - 144*d <= 0 && d <= 0 && 1 - 108*d + 3888*d^2 - 46656*d^3 >= 0 && (54 - 2916*c + 5832*d >= 0 || 27*c - 729*c^2 - 81*d + 2916*c*d - 1944*d^2 - 11664*d^3 >= 0)) || (-d < 0 && -36 + 1296*d <= 0 && d^2 - 20*d^3 >= 0 && (-25*c + 40*d >= 0 || -25*c^2 + 80*c*d - 1280*d^3 >= 0)) || (-36 + 1296*d > 0 && d^3 >= 0 && -c + 4*d >= 0 && c^2 - 8*c*d + 16*d^2 - 64*d^3 >= 0) || (44 + 1936*d == 0 && -242 + 14641*c == 0) || (-44 - 1936*d < 0 && 2268 + 104976*d <= 0 && d^2 + 44*d^3 >= 0 && (121*c + 88*d >= 0 || -121*c^2 - 176*c*d + 2816*d^3 >= 0) && d^2 + 44*d^3 >= 0 && (-121*c - 88*d >= 0 || -121*c^2 - 176*c*d + 2816*d^3 >= 0)) || (-2268 - 104976*d < 0 && d <= 0 && d^2 + 44*d^3 >= 0 && (121*c + 88*d >= 0 || -121*c^2 - 176*c*d + 2816*d^3 >= 0) && 1 - 108*d + 3888*d^2 - 46656*d^3 >= 0 && (54 - 2916*c + 5832*d >= 0 || 27*c - 729*c^2 - 81*d + 2916*c*d - 1944*d^2 - 11664*d^3 >= 0)) || (-d < 0 && -36 + 1296*d <= 0 && d^2 - 20*d^3 >= 0 && (25*c - 40*d >= 0 || -25*c^2 + 80*c*d - 1280*d^3 >= 0) && 1 - 108*d + 3888*d^2 - 46656*d^3 >= 0 && (54 - 2916*c + 5832*d >= 0 || 27*c - 729*c^2 - 81*d + 2916*c*d - 1944*d^2 - 11664*d^3 >= 0)) || (36 - 1296*d < 0 && -20 + 400*d < 0 && d^2 - 20*d^3 >= 0 && (25*c - 40*d >= 0 || -25*c^2 + 80*c*d - 1280*d^3 >= 0) && d^2 - 20*d^3 >= 0 && (-25*c + 40*d >= 0 || -25*c^2 + 80*c*d - 1280*d^3 >= 0)) || (-20 + 400*d == 0 && -50 + 625*c == 0)"
+    },
+    "circle3minus": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "circle3minus",
+      "variables": [
+        "c",
+        "d"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "124673fd25ba7bcb623ce02e1cf57f2ffadb4d38db6039df126ff83bdd872260",
+      "output_sha256": "e52a059d7b55348f7b0f3c20b12d4fc9f9ae41a2f5beed073d96460cdd73555c",
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "and",
+        "args": [
+          {
+            "op": "sign",
+            "relation": "Greater",
+            "polynomial": [
+              {
+                "powers": [
+                  0,
+                  1
+                ],
+                "coefficient": "1"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "GreaterEqual",
+            "polynomial": [
+              {
+                "powers": [
+                  0,
+                  3
+                ],
+                "coefficient": "1"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "GreaterEqual",
+            "polynomial": [
+              {
+                "powers": [
+                  1,
+                  0
+                ],
+                "coefficient": "-1"
+              },
+              {
+                "powers": [
+                  0,
+                  1
+                ],
+                "coefficient": "-4"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "GreaterEqual",
+            "polynomial": [
+              {
+                "powers": [
+                  2,
+                  0
+                ],
+                "coefficient": "1"
+              },
+              {
+                "powers": [
+                  1,
+                  1
+                ],
+                "coefficient": "8"
+              },
+              {
+                "powers": [
+                  0,
+                  3
+                ],
+                "coefficient": "-64"
+              },
+              {
+                "powers": [
+                  0,
+                  2
+                ],
+                "coefficient": "16"
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "d > 0 && d^3 >= 0 && -c - 4*d >= 0 && c^2 + 8*c*d + 16*d^2 - 64*d^3 >= 0"
+    },
+    "circle3zero": {
+      "schema": "polytool.bkw-region-polynomials.v1",
+      "mode": "circle3zero",
+      "variables": [
+        "c",
+        "d"
+      ],
+      "version": "14.3.0 for Linux x86 (64-bit) (July 8, 2025)",
+      "input_sha256": "d3ba69214f7cb039b7af6e7bcc6946d7f9808b8a7a3d47cd16b59509a568ca3a",
+      "output_sha256": "18f7057515363eb28373fd03589b93b34ff9c8fb65992f5fda2e3a8a71bc7f5c",
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b",
+      "equivalence_verified": true,
+      "formula": {
+        "op": "and",
+        "args": [
+          {
+            "op": "sign",
+            "relation": "Greater",
+            "polynomial": [
+              {
+                "powers": [
+                  0,
+                  1
+                ],
+                "coefficient": "1"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "GreaterEqual",
+            "polynomial": [
+              {
+                "powers": [
+                  0,
+                  3
+                ],
+                "coefficient": "1"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "GreaterEqual",
+            "polynomial": [
+              {
+                "powers": [
+                  1,
+                  0
+                ],
+                "coefficient": "-1"
+              }
+            ]
+          },
+          {
+            "op": "sign",
+            "relation": "GreaterEqual",
+            "polynomial": [
+              {
+                "powers": [
+                  2,
+                  0
+                ],
+                "coefficient": "1"
+              },
+              {
+                "powers": [
+                  0,
+                  3
+                ],
+                "coefficient": "-64"
+              }
+            ]
+          }
+        ]
+      },
+      "polynomial_formula": "d > 0 && d^3 >= 0 && -c >= 0 && c^2 - 64*d^3 >= 0"
+    }
+  },
+  "provenance": {
+    "s2plus": {
+      "raw_output": "qe/s2plus.json",
+      "generator": "regions.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.129105,
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "s2minus": {
+      "raw_output": "qe/s2minus.json",
+      "generator": "regions.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.120099,
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "s2zero": {
+      "raw_output": "qe/s2zero.json",
+      "generator": "regions.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.036095,
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "s3plus": {
+      "raw_output": "qe/s3plus.json",
+      "generator": "strict-pair.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 111.502663,
+      "generator_sha256": "3cfc9118df3c2348a0a00c1691e40d19ca40912291de1cba8a0c8933bd31107e",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "s3minus": {
+      "raw_output": "qe/s3minus.json",
+      "generator": "strict-pair.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 54.335107,
+      "generator_sha256": "3cfc9118df3c2348a0a00c1691e40d19ca40912291de1cba8a0c8933bd31107e",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "s3zero": {
+      "raw_output": "qe/s3zero.json",
+      "generator": "strict-pair.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.11466,
+      "generator_sha256": "3cfc9118df3c2348a0a00c1691e40d19ca40912291de1cba8a0c8933bd31107e",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "s3zeroplus": {
+      "raw_output": "qe/s3zeroplus.json",
+      "generator": "dominant-pair.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.063562,
+      "generator_sha256": "282031c036702f948aad6b7064a09aa50217a0daa6e654dda73a7c31108a6f17",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "s3zerominus": {
+      "raw_output": "qe/s3zerominus.json",
+      "generator": "dominant-pair.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.067504,
+      "generator_sha256": "282031c036702f948aad6b7064a09aa50217a0daa6e654dda73a7c31108a6f17",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "s3zerozero": {
+      "raw_output": "qe/s3zerozero.json",
+      "generator": "dominant-pair.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.062496,
+      "generator_sha256": "282031c036702f948aad6b7064a09aa50217a0daa6e654dda73a7c31108a6f17",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "circle2plus": {
+      "raw_output": "qe/circle2plus.json",
+      "generator": "regions.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.02954,
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "circle2minus": {
+      "raw_output": "qe/circle2minus.json",
+      "generator": "regions.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.027478,
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "circle2zero": {
+      "raw_output": "qe/circle2zero.json",
+      "generator": "regions.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.005669,
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "circle3plus": {
+      "raw_output": "qe/circle3plus.json",
+      "generator": "regions.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.135913,
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "circle3minus": {
+      "raw_output": "qe/circle3minus.json",
+      "generator": "regions.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.106049,
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    },
+    "circle3zero": {
+      "raw_output": "qe/circle3zero.json",
+      "generator": "regions.wls",
+      "exporter": "export-regions.wls",
+      "qe_seconds": 0.058796,
+      "generator_sha256": "c013b473d4e5a43f0d3282f7705d3dd722f8f608d3679cbc3cee72ef44a85b54",
+      "exporter_sha256": "d9b9fad1f9e52d591ee6fdd61b5776aa0ec31cba67217601f302e232a44c189b"
+    }
+  }
+}
