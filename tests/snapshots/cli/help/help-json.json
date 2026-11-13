@@ -4057,6 +4057,18 @@
             },
             {
               "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Look for b-files here before DATA/files",
+              "hidden": false,
+              "long": "--bfile-dir",
+              "name": "bfile-dir",
+              "value": "DIR"
+            },
+            {
+              "arity": 1,
               "choices": [
                 "text",
                 "json"
@@ -4109,7 +4121,7 @@
           "subcommands": [],
           "summary": "Read complete triangle rows from local OEIS data",
           "usage": [
-            "polytool oeis rows <A-NUMBER> --data <DIR> [--json]"
+            "polytool oeis rows <A-NUMBER> --data <DIR> [--bfile-dir <DIR>] [--json]"
           ]
         }
       ],

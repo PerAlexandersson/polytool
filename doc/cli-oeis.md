@@ -4,7 +4,7 @@ Part of the [CLI reference](cli.md).
 
 ## Read rows from local OEIS data
 
-`polytool oeis rows A001263 --data DIR [--json]` reads local `.seq` and
+`polytool oeis rows A001263 --data DIR [--bfile-dir BFILES] [--json]` reads local `.seq` and
 matching consecutive b-file terms without the catalog or network. It prints
 complete coefficient rows, or a refusal reason. For `tabf`, the consecutive
 `%e` table must start at the first term: earlier row boundaries cannot be
@@ -16,6 +16,17 @@ is the zero-based transition index modulo the period. It also includes a
 stable `reason_code`, human `reason`, exact decimal-string rows, term source,
 and `bfile_rejection`, `bfile_rejection_reason` and optional I/O detail when
 a present b-file cannot be used. Text output gives b-file rejection on stderr.
+
+`--bfile-dir BFILES` first looks for `BFILES/A001/b001263.txt`, falling back
+to `DIR/files/A001/b001263.txt` only when the override is absent. A present
+override must satisfy the usual consecutive-index and term-prefix agreement
+checks; rejection keeps the internal-format terms. An unreadable override is
+reported as such. If neither file is present, or the fallback is a Git LFS
+pointer, behavior is unchanged. This supports a separate downloaded b-file
+cache without copying or modifying the OEIS checkout. The library entry point
+is `polytool::oeis::read_oeis_bfile`; `oeis generate` and MCP
+`generate_oeis_rows` use the bundled recurrence catalog and do not read local
+b-files.
 
 ## Generate recurrence-backed OEIS families
 

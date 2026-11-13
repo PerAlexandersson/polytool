@@ -2,14 +2,15 @@ Read complete triangle rows from local OEIS data.
 
 Read local OEIS terms and infer complete rows without a catalog or network.
 
-Usage: polytool oeis rows <A-NUMBER> --data <DIR> [--json]
+Usage: polytool oeis rows <A-NUMBER> --data <DIR> [--bfile-dir <DIR>] [--json]
 
 Arguments:
   <A-NUMBER>  OEIS A-number (A followed by six digits)
 
 Options:
-      --data <DIR>  Local OEIS checkout
-  -h, --help        Print help
+      --data <DIR>       Local OEIS checkout
+      --bfile-dir <DIR>  Look for b-files here before DATA/files
+  -h, --help             Print help
 
 Input and output:
       --format <FORMAT>  Output format [default: text] [possible values: text, json]

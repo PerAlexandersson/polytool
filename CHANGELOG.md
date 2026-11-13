@@ -4,6 +4,10 @@
 
 ### Changed
 
+- `oeis rows --bfile-dir DIR` reads a separate local b-file cache before the
+  OEIS checkout's `files` directory, with unchanged term validation. The
+  library exposes the same lookup as `oeis::read_oeis_bfile`.
+
 - The theorem report uses a private typed wire format and borrowed
   serialization. Its JSON bytes and structural parsing rules are unchanged;
   theorem/certificate agreement is still checked during verification.

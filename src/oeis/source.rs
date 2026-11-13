@@ -30,6 +30,46 @@
 
 use num_bigint::BigInt;
 use std::fmt;
+use std::path::Path;
+
+/// Read a local b-file, optionally preferring a separate b-file directory.
+///
+/// For an A-number such as `A123456`, look first in
+/// `bfile_dir/A123/b123456.txt`, then in `data_dir/files/A123/b123456.txt`.
+/// Only an absent file falls back; an unreadable override returns its I/O
+/// error. `Ok(None)` means neither file exists. Contents are returned unchanged,
+/// including Git LFS pointers; callers still apply their usual parsing and
+/// term-agreement rules (for example, [`super::infer_oeis_rows`]).
+///
+/// # Errors
+///
+/// Returns `InvalidInput` for an identifier other than `A` and six ASCII digits,
+/// or the I/O error if an existing file cannot be read as UTF-8.
+pub fn read_oeis_bfile(
+    data_dir: &Path,
+    id: &str,
+    bfile_dir: Option<&Path>,
+) -> std::io::Result<Option<String>> {
+    if id.len() != 7 || !id.starts_with('A') || !id[1..].bytes().all(|b| b.is_ascii_digit()) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "expected an A-number with six digits",
+        ));
+    }
+    let relative = Path::new(&id[..4]).join(format!("b{}.txt", &id[1..]));
+    let fallback = data_dir.join("files");
+    for directory in bfile_dir
+        .into_iter()
+        .chain(std::iter::once(fallback.as_path()))
+    {
+        match std::fs::read_to_string(directory.join(&relative)) {
+            Ok(text) => return Ok(Some(text)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(None)
+}
 
 /// Where the terms of an [`OeisSourceRecord`] come from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

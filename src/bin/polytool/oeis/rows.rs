@@ -1,6 +1,6 @@
 //! Read triangle rows from a local OEIS checkout.
 
-use polytool::oeis::{infer_oeis_rows, OeisBFileRejection, OeisRowLengthRule};
+use polytool::oeis::{infer_oeis_rows, read_oeis_bfile, OeisBFileRejection, OeisRowLengthRule};
 use serde_json::json;
 use std::path::Path;
 
@@ -27,12 +27,14 @@ impl std::error::Error for LocalRowReadError {}
 pub(super) fn run(args: &[String]) {
     let mut id = None;
     let mut data = None;
+    let mut bfile_dir = None;
     let mut json_output = false;
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--json" => json_output = true,
             "--data" => data = iter.next(),
+            "--bfile-dir" => bfile_dir = iter.next(),
             value if !value.starts_with('-') && id.is_none() => id = Some(value),
             _ => crate::input::usage_error("oeis rows", "invalid argument"),
         }
@@ -64,13 +66,8 @@ pub(super) fn run(args: &[String]) {
             eprintln!("{error}");
             std::process::exit(2)
         });
-    let bpath = root
-        .join("files")
-        .join(&id[..4])
-        .join(format!("b{}.txt", &id[1..]));
-    let (bfile, unreadable) = match std::fs::read_to_string(&bpath) {
-        Ok(text) => (Some(text), None),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (None, None),
+    let (bfile, unreadable) = match read_oeis_bfile(root, id, bfile_dir.map(Path::new)) {
+        Ok(text) => (text, None),
         Err(error) => (None, Some(error.to_string())),
     };
     let mut report = infer_oeis_rows(&text, id, bfile.as_deref()).unwrap_or_else(|error| {

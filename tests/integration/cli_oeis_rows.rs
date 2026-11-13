@@ -1,6 +1,100 @@
 //! Local OEIS row extraction.
 
 #[test]
+fn separate_bfile_directory_extends_rows_and_preserves_validation() {
+    use polytool::oeis::{read_oeis_bfile, OeisSourceError};
+
+    let root = std::env::temp_dir().join(format!("polytool-rows-bfile-dir-{}", std::process::id()));
+    let cache = root.join("bfiles");
+    std::fs::create_dir_all(root.join("seq/A000")).unwrap();
+    std::fs::create_dir_all(root.join("files/A000")).unwrap();
+    std::fs::create_dir_all(cache.join("A000")).unwrap();
+    std::fs::write(
+        root.join("seq/A000/A000001.seq"),
+        "%N A000001 Example\n%O A000001 0,1\n%K A000001 tabl\n%S A000001 1,2,3\n",
+    )
+    .unwrap();
+    let fallback = root.join("files/A000/b000001.txt");
+    let override_file = cache.join("A000/b000001.txt");
+    let pointer = "version https://git-lfs.github.com/spec/v1\noid sha256:0000000000000000000000000000000000000000000000000000000000000000\nsize 24\n";
+    std::fs::write(&fallback, pointer).unwrap();
+    let run = |with_cache: bool| {
+        let mut command = crate::common::polytool_command();
+        command.args([
+            "oeis",
+            "rows",
+            "A000001",
+            "--data",
+            root.to_str().unwrap(),
+            "--json",
+        ]);
+        if with_cache {
+            command.args(["--bfile-dir", cache.to_str().unwrap()]);
+        }
+        let output = command.output().unwrap();
+        assert!(output.status.success(), "{:?}", output);
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()
+    };
+    let baseline = run(false);
+    assert_eq!(run(true), baseline);
+    assert_eq!(baseline["bfile_rejection"], "invalid_bfile");
+    assert!(matches!(
+        polytool::oeis::parse_bfile(
+            &read_oeis_bfile(&root, "A000001", Some(&cache))
+                .unwrap()
+                .unwrap()
+        ),
+        Err(OeisSourceError::GitLfsPointer)
+    ));
+    let extension = "0 1\n1 2\n2 3\n3 4\n4 5\n5 6\n";
+    std::fs::write(&override_file, extension).unwrap();
+    assert_eq!(
+        read_oeis_bfile(&root, "A000001", Some(&cache))
+            .unwrap()
+            .as_deref(),
+        Some(extension)
+    );
+    assert_eq!(
+        run(true)["rows"],
+        serde_json::json!([["1"], ["2", "3"], ["4", "5", "6"]])
+    );
+    assert_eq!(run(true)["term_source"], "bfile");
+    assert!(run(true)["bfile_rejection"].is_null());
+    // A present override wins even when the fallback is usable. Rejection
+    // retains the internal terms instead of silently trying another source.
+    std::fs::write(&fallback, extension).unwrap();
+    for (text, reason) in [
+        ("0 9\n1 2\n2 3\n", "prefix_mismatch"),
+        ("0 1\n2 2\n3 3\n", "non_consecutive_indices"),
+    ] {
+        std::fs::write(&override_file, text).unwrap();
+        let report = run(true);
+        assert_eq!(report["bfile_rejection"], reason);
+        assert_eq!(report["term_source"], "oeis_internal_format");
+        assert_eq!(report["rows"].as_array().unwrap().len(), 2);
+    }
+    std::fs::write(&override_file, [0xff]).unwrap();
+    let report = run(true);
+    assert_eq!(report["bfile_rejection"], "unreadable");
+    assert!(report["bfile_rejection_detail"].is_string());
+    std::fs::remove_file(&override_file).unwrap();
+    assert_eq!(run(true)["term_source"], "bfile");
+    assert_eq!(run(true)["rows"].as_array().unwrap().len(), 3);
+    std::fs::remove_file(&fallback).unwrap();
+    assert!(read_oeis_bfile(&root, "A000001", Some(&cache))
+        .unwrap()
+        .is_none());
+    assert_eq!(run(true), run(false));
+    for id in ["", "A12", "A00000/", "a000001", "é00000"] {
+        assert_eq!(
+            read_oeis_bfile(&root, id, Some(&cache)).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidInput
+        );
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn local_rows_and_refusal() {
     let root = std::env::temp_dir().join(format!("polytool-rows-{}", std::process::id()));
     std::fs::create_dir_all(root.join("seq/A000")).unwrap();
