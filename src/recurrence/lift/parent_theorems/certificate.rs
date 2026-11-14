@@ -52,6 +52,18 @@ macro_rules! route_certificates {
 }
 
 route_certificates! {
+    /// Linear Ma--Wang half-line induction with exact endpoint multiplicity.
+    MaWangInterval(MaWangEndpointCertificate) => ma_wang,
+        ma_wang_endpoint_certificate: MaWangEndpointCertificate,
+    |c: &MaWangEndpointCertificate| {
+        if c.maximum_endpoint_hits != ma_wang::MAXIMUM_ENDPOINT_HITS
+            || c.maximum_hit_scan != ma_wang::MAXIMUM_HIT_SCAN {
+            return Err(RecurrenceError::VerificationFailed(
+                "Ma--Wang endpoint search bounds changed".into(),
+            ));
+        }
+        Ok(None)
+    };
     /// [`check_iterated_preserver_theorem`]: the recognized step, the
     /// induction start, the degree step and the region (JSON key
     /// `iterated_preserver`).

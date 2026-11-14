@@ -88,6 +88,14 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[non_exhaustive]
 pub enum LiftOperation {
+    /// Expansion from gamma rows to palindromic input rows, with an
+    /// optional common factor x^removed_power restored afterwards.
+    GammaExpansion {
+        /// Symmetry indices of the input after power removal.
+        symmetry_schedule: DegreeSchedule,
+        /// Common nonnegative power of x removed before gamma transport.
+        removed_power: usize,
+    },
     /// The coefficient section `V_(r, j)(P)(y) = sum_k [x^(r k + j)] P(x) y^k`.
     VeroneseSection {
         /// The modulus `r >= 2`.

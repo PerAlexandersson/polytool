@@ -413,6 +413,23 @@ pub fn discover_recurrence_proofs_with_stage_options(
         bkw_refutation: None,
     };
     let inhomogeneous = rule.inhomogeneous.as_ref().is_some_and(|g| !g.is_zero());
+    if !inhomogeneous
+        && !report
+            .attempts
+            .iter()
+            .any(RealRootednessTheoremReport::is_proved)
+    {
+        let plain = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
+        if let Some(search) = super::super::structural_closure::find_forward_gamma_closure(
+            &plain,
+            options,
+            lift_options,
+        ) {
+            report.closure_lifts = Some(search);
+            report.finish_summary(None);
+            return Ok(report);
+        }
+    }
     if !report
         .attempts
         .iter()

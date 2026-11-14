@@ -34,7 +34,7 @@ Neither fitting nor held-out checks prove that identity.
 | Three-term/Favard | Affine preceding-row coefficient and scalar lag-two coefficient, also supported reciprocal coordinates; positive normalized recurrence coefficients and interlacing seeds | Real-rootedness, simple roots and strict interlacing; optional root region |
 | Liu–Wang first order | `P_n = A_n P_(n-1) + V_n P'_(n-1)`; degree, sign, seed and root-location induction | Real-rootedness, negative roots and weak interlacing |
 | Derivative-lag | An additional `W_n P_(n-2)` term; degree/sign conditions, including supported half-growth patterns | Real-rootedness and the reported interlacing/root domain |
-| Ma–Wang interval | Derivative coefficient `kappa_n (x-L)(x-U)`; endpoint conditions with multiplicities | Real-rootedness in a fixed interval and weak interlacing |
+| Ma–Wang interval | Derivative coefficient `kappa_n (x-L)(x-U)` or `K_n(x-U)`; exact degree, leading sign and endpoint conditions with multiplicities | Real-rootedness in a fixed interval or closed half-line and weak interlacing |
 | Liu–Wang three-term | Polynomial lag coefficient, optionally a derivative; degree growth zero or one, appropriate sign and root-location checks; also the degenerate case `A_n = a_n g(x)`, `B_n = b_n g(x)^2` with proportional seeds, where every row is `c_n g^(n-N+2) P_(N-2)` and the check proves `c_n != 0` (a positive sequence, or a hypergeometric closed form `c_n / c_(n-1) = r(n)`, which allows `a_n` to vanish at isolated indices) | Real-rootedness and weak interlacing; root domain when certified |
 | Iterated preserver | First-order or single-lag rules `P_n = a_n(x) S_n(P_(n-L))`: a real-rooted multiplier after the identity or a preserver of the menu (Laguerre, Pólya–Schur, Rolle, Euler step, Brändén's Weyl step), also in gauge, translation and reversal coordinates; lag-one second-order steps can also be factored into first-order menu or Liu–Wang steps; earlier seed rows checked exactly | Real-rootedness with roots in `(-inf, 0]`, `[0, inf)` or on the line |
 | Hypergeometric row | Rows whose coefficient ratio is a product of factors linear in `k` (a row relation proved for every `n`), the image of `(1 + x)^M(n)` under nonnegative multiplier sequences | Real-rootedness with roots in `(-inf, 0]` |
@@ -566,14 +566,17 @@ yet dispatch every theorem or transformation in RealRooted.
 
 ## Structural inverse closures
 
-After the earlier routes, including canonical reversal, fail, we try a bounded
-structural closure search. Every parent is computed from the supplied rows or
+The bounded structural closure search computes every parent from supplied rows or
 recurrence coefficients. This stage reads neither the catalog nor named-family
 generators, and disables caller and catalog attestations in the parent prover.
-The existing catalog stage keeps its earlier behavior and priority.
+Before the expensive alternative and lift searches, a forward gamma attempt
+screens the seeds for palindromicity after removing powers of x. It uses the
+same bounded closure chain and records only successful attempts. The other
+structural operations run after the earlier routes, including canonical reversal, fail.
 
 | Stage | Input class and computed parent | Closure theorem |
 | --- | --- | --- |
+| Forward gamma | Palindromic input, optional common power of x removed, certified all-index symmetry and transported gamma recurrence | Prove nonnegative gamma rows with real roots `<=0`, then expand back by the gamma factorization |
 | Weight removal | Coefficients divisible by a fixed-menu binomial, factorial or rising-factorial weight, with a smaller recurrence for the quotient | Pólya–Schur multiplier-sequence theorem; only weights with a verified multiplier justification transfer roots |
 | Row factor | Rows with a fixed polynomial factor to an affine nonnegative power; exact factorization and substitution derive the cofactor recurrence | Roots of a product are the union of the factors' roots, with multiplicities |
 | Gamma | Rows admitting an affine-degree inverse gamma expansion whose parent recurrence is symmetric at that degree | For symmetric PF `Q`, `Q(x)=(1+x)^d G(x/(1+x)^2)` implies that `G` has nonpositive real roots |
@@ -585,6 +588,31 @@ branch point of `x/(1+x)^2`). Neither the observed degree schedule nor a fitted
 parent recurrence is a proof. The existing gamma certifier must prove symmetry
 and transport for all indices.
 
+Forward gamma uses `recurrence-transform` transport, with no gamma recurrence
+fit. The observed affine symmetry indices only propose a schedule; reversal
+invariance of the source recurrence, nonvanishing leaders and symmetric seeds
+must certify it for all indices. Its certificate embeds the transport and
+the gamma registry proof, or references a nested structural proof in
+`parent_proof`. Nonzero rows and positive leading signs are certified by
+the registry theorem, a nested structural chain, or a gamma discovery proof
+with certified alternative representations. Gamma discovery disables catalog
+and structural lifts and affine-coordinate searches, and uses the existing
+alternative bounds (300 configurations, four alternatives, 24 generated rows).
+These bounds are replayed along with the proof. Nonzero rows also follow from
+the recorded leading-coefficient or injectivity chain. Together with gamma
+roots `<=0`, this establishes nonnegative gamma coefficients. Equivalently,
+all-index symmetry and a positive input leading sign make the lowest nonzero
+gamma coefficient positive. Replay recomputes all these obligations.
+For `G(z)=g product_i(z-zeta_i)`, `zeta_i<=0`, `r=deg G<=d/2`, we use
+`P(x)=x^power g(1+x)^(d-2r) product_i(x-zeta_i(1+x)^2)`.
+Each nonconstant quadratic has discriminant `1-4zeta_i>0` and nonpositive
+roots; `zeta_i=0` contributes `x`. We claim no simplicity or interlacing.
+The seed screen runs before row generation. Forward transport retains the
+twelve-row/degree-24 bounds, admits at most 32 source terms of derivative
+order at most two and index degree at most three, and consumes one of the
+two closure levels. A nested gamma proof cannot invoke forward expansion
+again. The existing zero lift budget disables it.
+
 We use twelve detection rows (records needing more identifying seeds are
 skipped), and degree at most 24. Weight, gamma and preserver preimage fits
 use at most 32 recurrence-finder configurations; row-factor extraction uses
@@ -592,7 +620,8 @@ its existing factorization and cofactor bounds. The existing
 `max_lift_candidates` option bounds retained identity candidates per stage,
 capped at six for structural discovery; zero disables it. Closure recursion
 has depth two. We reuse each identity certifier's direct registry proof;
-root-domain transformation retries are disabled for these parents. Necessary
+root-domain transformation retries are disabled for inverse-closure parents;
+forward gamma may use the existing root-domain parent route. Necessary
 finite PF tests only reject proposals. Exact
 coefficient division computes the weight preimages; terminating polynomial
 back-substitution computes `(1+/-D)^(-1)`, and division of coefficient `k` by

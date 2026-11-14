@@ -4,6 +4,18 @@
 
 ### Added
 
+- The `ma_wang_interval` route also proves first-order derivative recurrences
+  on `(-inf,U]` with linear derivative multiplier `K_n(x-U)`. Exact degree,
+  leading-sign and endpoint-multiplicity checks implement Ma--Wang Theorem 2,
+  including endpoint zeros of unbounded multiplicity. The optional
+  `MaWangEndpointCertificate` replays through the route registry.
+- Forward gamma discovery (`forward_gamma` in `closure_lifts`): certify
+  all-index palindromicity and gamma recurrence transport, prove the gamma
+  family through the existing registry or a bounded structural chain, then
+  expand back to the input. Certificates include the gamma proof, nonzero
+  and positivity evidence, and any removed common power of x. A cheap seed
+  palindromicity screen precedes transport; zero lift budget disables it.
+
 - `bkw::certified` and `polytool bkw certify`: exact sparse BKW pencils,
   reduced seed-dependent generating functions, separate first failing rows,
   standard quadratic product proofs and Hessenberg Toeplitz circle proofs.

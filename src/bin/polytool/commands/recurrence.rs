@@ -504,7 +504,7 @@ pub(crate) const RECURRENCE_PROVE: CommandSpec = CommandSpec {
     ],
     description: r#"Discover general proofs for a recurrence and seeds; no named-sequence lookup.
 Tries, in the order of the parent cascade, product induction, Favard/three-term,
-Liu-Wang, derivative-lag, Ma-Wang interval, Liu-Wang three-term, iterated
+Liu-Wang, derivative-lag, Ma-Wang interval/closed half-line, Liu-Wang three-term, iterated
 preserver and hypergeometric-row criteria, then the RealRooted row routes
 fixed-delay window (variable_delay: f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)
 with a delay L of at least 2) and residue classes (residue_class_subsequences:
@@ -578,6 +578,13 @@ Reciprocal nonzero roots and possible extra roots at 0; zero rows preserved.
 The text report prints the named theorem chain and each closure separately.
 
 When no criterion proves the record:
+  - forward gamma: cheaply screen palindromic seeds after removing powers of
+    x, certify all-index symmetry and transport the recurrence to gamma rows,
+    prove those rows through the registry or a bounded structural chain, then
+    expand back. Nonnegative gamma coefficients, roots <= 0 and nonzero rows
+    require certificates. Tried before expensive alternative/lift searches;
+    twelve detection rows, degree <= 24, one closure level. The gamma proof
+    and transport replay inside closure_lifts; --max-lift-candidates 0 disables it;
   - tail: if one of the first rows is zero or not real-rooted, the criteria run
     on the record starting after the last such row; a proof then says "every
     row from index N on is real-rooted" (real_rooted_from_index);
@@ -687,8 +694,9 @@ candidates_available, coordinates (slope, intercept, reason, the transformed
 record and its attempts, a transformed tail) and conclusion (coordinate,
 theorem, from_index, root_region mapped to x, interlacing with
 interlacing_orientation preserved or mirrored). closure_lifts holds structural
-inverse operations, all-index certificates, computed parent proofs (registry
-or recursive closure), named steps and the nonzero-row conclusion. Replay needs
+inverse operations or forward gamma expansion, all-index certificates, computed
+parent proofs (registry, bounded gamma discovery or recursive closure), named
+steps and the nonzero-row conclusion. Replay needs
 the attempts of exactly the criteria the current search records; recompute
 reports saved before a criterion was added."#,
     examples: &[

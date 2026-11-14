@@ -34,7 +34,8 @@
 //!   with fixed rational `L < U`, with every root in the closed interval
 //!   `[L, U]` and weak interlacing of consecutive rows, by the exact
 //!   two-endpoint criterion with the endpoint multiplicities tracked through
-//!   the induction;
+//!   the induction; also `K_n(x-U) P'_(n-1)` on the half-line `(-inf,U]`,
+//!   with exact degree/leading-sign checks and the same endpoint counter;
 //! - [`check_iterated_preserver_theorem`]: first-order rules, and rules
 //!   with a single lag, `P_n = T_n(P_(n-L))`, whose step is a real-rooted multiplier
 //!   `a_n(x)` after the identity or an operator of the preserver menu

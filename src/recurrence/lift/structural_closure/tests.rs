@@ -26,7 +26,7 @@ fn inverse_operators_are_exact() {
 }
 
 #[test]
-fn fixed_weight_preimage_replays_and_rejects_tampering() {
+fn forward_gamma_preimage_replays_and_rejects_tampering() {
     let input = record("A001263");
     let search =
         find_discovery_closure_lifts(&input, &Default::default(), &Default::default()).unwrap();
@@ -39,12 +39,18 @@ fn fixed_weight_preimage_replays_and_rejects_tampering() {
     changed.conclusion.as_mut().unwrap().from_index += 1;
     assert!(changed.verify(&Default::default()).is_err());
     let mut changed = search;
-    if let DiscoveryClosureCertificate::HadamardFactor { certification } =
+    if let DiscoveryClosureCertificate::ForwardGamma { certification } =
         &mut changed.attempts[0].certificate
     {
-        certification.parent.initial_polynomials[0] = vec!["999".into()];
+        certification
+            .gamma_transport
+            .request
+            .source_recurrence
+            .as_mut()
+            .unwrap()
+            .initial_polynomials[0] = vec!["999".into()];
     } else {
-        panic!("expected weight removal");
+        panic!("expected forward gamma expansion");
     }
     assert!(changed.verify(&Default::default()).is_err());
 }

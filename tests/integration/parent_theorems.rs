@@ -1046,8 +1046,14 @@ mod ma_wang_interval {
             failure(&report, "lower_endpoint_threshold"),
             Some(BigInt::from(1))
         );
+        // Linear derivative multipliers are covered by the closed half-line branch.
+        let linear = rule(&[(1, 0, &[&[0, 1]]), (1, 1, &[&[0, 1]])], None);
+        let report = ma_wang(&linear, 0, &[&[1]], &no_region());
+        assert!(report.is_proved());
+        assert!(report.ma_wang_endpoint_certificate().is_some());
+        report.verify().unwrap();
         // Shapes outside the theorem.
-        for c1 in [&[1, 0, 1][..], &[0, 0, 1], &[-2, 0, 1], &[0, 1]] {
+        for c1 in [&[1, 0, 1][..], &[0, 0, 1], &[-2, 0, 1]] {
             let shape = rule(&[(1, 0, &[&[0, 1]]), (1, 1, &[c1])], None);
             let report = ma_wang(&shape, 0, &[&[1]], &no_region());
             assert_eq!(

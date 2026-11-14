@@ -967,6 +967,24 @@ region).  `verify()` replays it.
   and the Stirling--Frobenius rows (A225472, A225473, A225476) are proved
   this way; a failing threshold names the row that leaves the interval.
   `lean_declarations` lists the RealRooted step theorems (no row route).
+  The same route supports a linear derivative multiplier on a half-line:
+  `P_n=(A_n(x-U)+B_n)P_(n-1)+K_n(x-U)P'_(n-1)`, with fixed rational `U`,
+  `K_n>0`, nonzero real-rooted seeds with roots `<=U`, and either `A_n>0`
+  (degree increases by one) or `A_n=0` and
+  `B_n+K_n deg(P_last_seed)>0` (degree stays fixed). These are exact
+  all-index checks, including nonvanishing denominators. The counter proves
+  `B_n/K_n+m(n)>=0`; it raises the endpoint multiplicity after equality.
+  We apply Ma--Wang, Theorem 2, including (b), (c) and (A)
+  ([arXiv:math/0611826v2](https://arxiv.org/abs/math/0611826v2)).
+  In `y=x-U` the coefficient recurrence has diagonal `B_n+K_n k>=0`
+  for `k>=m(n)` and subdiagonal `A_n>=0`, so nonnegative coefficients
+  are preserved after choosing positive leading sign. The result includes
+  weak adjacent interlacing and permits endpoint zeros of unbounded
+  multiplicity. `MaWangEndpointCertificate` records the endpoint, initial
+  multiplicity, degree step and counter bounds; replay rechecks the symbolic
+  induction. The counter follows at most 64 hits and searches at most
+  100000 indices per hit, with an exact affine lattice shortcut for periodic
+  hits. An unclosed half-line attempt leaves the previous route result intact.
 - Iterated preserver: a first-order rule `f(n) P_n = sum_d c_d(n, x) D^d
   P_(n-1)` whose step is recognized exactly (an identity of Ore operators,
   replayed by `IteratedPreserverCertificate::verify_operator_identity`) as
@@ -2223,14 +2241,17 @@ interlacing kept for `alpha > 0` and mirrored for `alpha < 0`
 
 ## Structural inverse closures
 
-After the earlier routes, including canonical reversal, fail, we try a bounded
-structural closure search. Every parent is computed from the supplied rows or
+The bounded structural closure search computes every parent from supplied rows or
 recurrence coefficients. This stage reads neither the catalog nor named-family
 generators, and disables caller and catalog attestations in the parent prover.
-The existing catalog stage keeps its earlier behavior and priority.
+Before the expensive alternative and lift searches, a forward gamma attempt
+screens the seeds for palindromicity after removing powers of x. It uses the
+same bounded closure chain and records only successful attempts. The other
+structural operations run after the earlier routes, including canonical reversal, fail.
 
 | Stage | Input class and computed parent | Closure theorem |
 | --- | --- | --- |
+| Forward gamma | Palindromic input, optional common power of x removed, certified all-index symmetry and transported gamma recurrence | Prove nonnegative gamma rows with real roots `<=0`, then expand back by the gamma factorization |
 | Weight removal | Coefficients divisible by a fixed-menu binomial, factorial or rising-factorial weight, with a smaller recurrence for the quotient | Pólya–Schur multiplier-sequence theorem; only weights with a verified multiplier justification transfer roots |
 | Row factor | Rows with a fixed polynomial factor to an affine nonnegative power; exact factorization and substitution derive the cofactor recurrence | Roots of a product are the union of the factors' roots, with multiplicities |
 | Gamma | Rows admitting an affine-degree inverse gamma expansion whose parent recurrence is symmetric at that degree | For symmetric PF `Q`, `Q(x)=(1+x)^d G(x/(1+x)^2)` implies that `G` has nonpositive real roots |
@@ -2242,6 +2263,29 @@ branch point of `x/(1+x)^2`). Neither the observed degree schedule nor a fitted
 parent recurrence is a proof. The existing gamma certifier must prove symmetry
 and transport for all indices.
 
+Forward gamma uses `recurrence-transform` transport, with no gamma recurrence
+fit. The observed affine symmetry indices only propose a schedule; reversal
+invariance of the source recurrence, nonvanishing leaders and symmetric seeds
+must certify it for all indices. `ForwardGammaCertification` embeds the
+transport and initial registry proof; the enclosing `parent_proof` may
+strengthen it by a nested structural chain or a gamma discovery proof with
+certified alternative representations. Inside gamma discovery, catalog and
+structural lifts and affine-coordinate searches are disabled; the existing
+alternative-representation bounds apply (300 configurations, four alternatives,
+24 generated rows). Nonzero rows and positive leading
+signs follow from the recorded leading-coefficient or injectivity chain;
+combined with gamma roots `<=0`, this proves nonnegative gamma coefficients.
+All-index input symmetry and positive leading sign can alternatively certify
+the sign of the lowest nonzero gamma coefficient. Replay recomputes the chain.
+For `G(z)=g product_i(z-zeta_i)`, `zeta_i<=0`, `r=deg G<=d/2`, we use
+`P(x)=x^power g(1+x)^(d-2r) product_i(x-zeta_i(1+x)^2)`.
+Each quadratic with `zeta_i<0` has discriminant `1-4zeta_i>0` and negative
+roots; `zeta_i=0` contributes `x`. No simplicity or interlacing is claimed.
+The seed screen runs before row generation. The twelve-row/degree-24 bounds
+apply, with at most 32 source terms, derivative order at most two and index
+degree at most three. Forward expansion consumes one closure level; the
+gamma proof cannot invoke forward expansion again. Zero lift budget disables it.
+
 We use twelve detection rows (records needing more identifying seeds are
 skipped), and degree at most 24. Weight, gamma and preserver preimage fits
 use at most 32 recurrence-finder configurations; row-factor extraction uses
@@ -2249,7 +2293,8 @@ its existing factorization and cofactor bounds. The existing
 `max_lift_candidates` option bounds retained identity candidates per stage,
 capped at six for structural discovery; zero disables it. Closure recursion
 has depth two. We reuse each identity certifier's direct registry proof;
-root-domain transformation retries are disabled for these parents. Necessary
+root-domain transformation retries are disabled for inverse-closure parents;
+forward gamma may use the existing root-domain parent route. Necessary
 finite PF tests only reject proposals. Exact
 coefficient division computes the weight preimages; terminating polynomial
 back-substitution computes `(1+/-D)^(-1)`, and division of coefficient `k` by

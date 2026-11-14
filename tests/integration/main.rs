@@ -83,6 +83,7 @@ mod recurrence_representations;
 mod recurrence_rescaled_spaces;
 mod recurrence_spaces;
 mod recurrence_work_budget;
+mod route_extensions;
 mod route_registry;
 mod row_factor_lifts;
 mod row_routes;

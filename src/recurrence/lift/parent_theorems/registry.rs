@@ -42,6 +42,7 @@ macro_rules! theorem_routes {
             MaWangInterval, ma_wang, "ma_wang_interval",
             "Ma--Wang derivative recurrence on a certified interval.", {
                 check_ma_wang_interval_theorem,
+                MaWangEndpointCertificate,
             };
             /// [`check_liu_wang_three_term_theorem`].
             LiuWangThreeTerm, liu_wang_three_term, "liu_wang_three_term",

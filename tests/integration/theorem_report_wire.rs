@@ -1,4 +1,5 @@
 //! Raw JSON acceptance and serialization corpus, captured before the wire refactor.
+//! Intentional certificate additions extend the unknown-tag diagnostic.
 
 use polytool::recurrence::{RealRootednessTheoremReport, RecurrenceError};
 use serde::{Deserialize, Serialize};

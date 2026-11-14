@@ -1,4 +1,4 @@
-//! Structural inverse closures. Rows propose preimages; exact Ore identities
+//! Structural closures. Rows propose preimages; exact Ore identities
 //! and registry proofs certify them. No sequence library is consulted.
 //!
 //! Weight and Euler multipliers use the Pólya--Schur multiplier-sequence
@@ -8,6 +8,9 @@
 //! union of roots of a product. Gamma transfer uses the reciprocal-pair
 //! factorization explained in the `gamma_lift` module documentation.
 //! The existing certifiers decide every side condition for all indices.
+//! Forward gamma expansion instead transports a palindromic input to its
+//! gamma recurrence and proves those rows before expanding back. It may
+//! succeed before the expensive discovery lift searches, after direct checks.
 
 use super::*;
 use crate::vec_poly;
@@ -18,6 +21,9 @@ use serde::{Deserialize, Serialize};
 const ROWS: usize = 12;
 const MAX_DEPTH: usize = 2;
 const MAX_DEGREE: usize = 24;
+
+mod forward_gamma;
+pub use forward_gamma::ForwardGammaCertification;
 
 /// A named link in a structural closure proof; paths refer to this attempt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,6 +41,11 @@ pub struct ClosureProofStep {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum DiscoveryClosureCertificate {
+    /// Prove the transported gamma family and expand back to the input.
+    ForwardGamma {
+        /// All-index symmetry, transport and root-transfer certificate.
+        certification: Box<ForwardGammaCertification>,
+    },
     /// Coefficientwise removal of a fixed-menu weight.
     HadamardFactor {
         /// All-index conjugation certificate and side conditions.
@@ -59,6 +70,7 @@ pub enum DiscoveryClosureCertificate {
 impl DiscoveryClosureCertificate {
     fn summary(&self) -> &LiftSummary {
         match self {
+            Self::ForwardGamma { certification } => &certification.lift_summary,
             Self::HadamardFactor { certification } => &certification.lift_summary,
             Self::RowFactor { certification } => &certification.lift_summary,
             Self::Gamma { certification } => &certification.lift_summary,
@@ -67,6 +79,7 @@ impl DiscoveryClosureCertificate {
     }
     fn parent_proof(&self) -> &VeroneseParentProof {
         match self {
+            Self::ForwardGamma { certification } => &certification.parent_proof,
             Self::HadamardFactor { certification } => &certification.parent_proof,
             Self::RowFactor { certification } => &certification.parent_proof,
             Self::Gamma { certification } => &certification.parent_proof,
@@ -75,6 +88,7 @@ impl DiscoveryClosureCertificate {
     }
     fn stage(&self) -> &'static str {
         match self {
+            Self::ForwardGamma { .. } => "forward_gamma",
             Self::HadamardFactor { .. } => "hadamard_factor",
             Self::RowFactor { .. } => "row_factor",
             Self::Gamma { .. } => "gamma",
@@ -87,6 +101,12 @@ impl DiscoveryClosureCertificate {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum StructuralClosureParentProof {
+    /// Proof discovery on transported gamma rows, including certified
+    /// alternative representations. Lift recursion is disabled inside it.
+    Discovery {
+        /// Replayed all-index gamma proof and its exact identities.
+        proof: Box<RecurrenceProofDiscoveryReport>,
+    },
     /// General theorem registry (including product induction and root domains).
     Registry {
         /// Replayed theorem attempts and conclusion.
@@ -115,6 +135,20 @@ pub struct StructuralClosureConclusion {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum StructuralClosureNonzero {
+    /// Gamma expansion is injective and takes a nonzero gamma row to a
+    /// nonzero row. Its positivity also follows from the positive gamma row.
+    GammaExpansion {
+        /// Gamma leading-sign certificate when the parent proof is a
+        /// registry proof. A nested closure carries its own nonzero proof.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        gamma_leading: Option<Box<LeadingCoefficientCertificate>>,
+        /// A direct theorem that also certifies nonzero, nonnegative gamma
+        /// rows when the separate leading-coefficient menu cannot close.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        gamma_theorem: Option<Box<RealRootednessTheoremReport>>,
+        /// Exact injectivity and positivity argument, replayed with the chain.
+        reason: String,
+    },
     /// The supplied recurrence has an all-index nonzero leading coefficient.
     InputLeading {
         /// Replayed leading-coefficient induction.
@@ -204,7 +238,7 @@ impl DiscoveryClosureSearch {
 
 /// Compute inverse closures and prove their parents through the registry.
 /// The menu consists of coefficient weights, input-derived row factors,
-/// inverse gamma expansions, and inverses of `1 +/- D` and `theta + a`
+/// forward gamma transport, inverse gamma expansions, and inverses of `1 +/- D` and `theta + a`
 /// (`a=1,2`). Recursion has depth two; no catalog or named generator is read.
 /// The existing lift candidate bound also bounds each inverse stage; zero
 /// disables it. A requested root region skips this whole-line discovery stage.
@@ -225,6 +259,97 @@ pub fn find_discovery_closure_lifts(
         MAX_DEPTH,
         None,
     )
+}
+
+/// A successful cheap forward gamma attempt may precede expensive lift
+/// searches. Failed attempts leave no serialized search or changed budget.
+pub(super) fn find_forward_gamma_closure(
+    record: &RecurrenceJson,
+    options: &RealRootednessTheoremOptions,
+    bounds: &CatalogLiftOptions,
+) -> Option<DiscoveryClosureSearch> {
+    if !forward_gamma::eligible(record) || options.root_region.is_some() || !bounds.is_enabled() {
+        return None;
+    }
+    let found = search(
+        record,
+        options,
+        bounds
+            .max_candidates
+            .min(CatalogLiftOptions::default().max_candidates),
+        MAX_DEPTH,
+        Some("forward_gamma"),
+    )
+    .ok()?;
+    found.is_proved().then_some(found)
+}
+
+fn positive_leading(c: &LeadingCoefficientCertificate) -> bool {
+    c.is_proved()
+        && c.initial_rows
+            .iter()
+            .all(|r| r.sign == Some(LeadingCoefficientSign::Positive))
+        && c.degree_law.as_ref().is_some_and(|law| {
+            law.leading_coefficient_signs
+                .iter()
+                .all(|s| *s == LeadingCoefficientSign::Positive)
+        })
+}
+
+fn positive_closure(search: &DiscoveryClosureSearch) -> bool {
+    search.attempts.last().is_some_and(|a| match &a.nonzero {
+        StructuralClosureNonzero::InputLeading { certificate } => positive_leading(certificate),
+        // The fixed operators used here have positive leading diagonal:
+        // 1 +/- D leaves the leading coefficient, theta+a multiplies by k+a>0.
+        StructuralClosureNonzero::InjectiveImage { parent_leading, .. } => {
+            positive_leading(parent_leading)
+        }
+        StructuralClosureNonzero::GammaExpansion { .. } => true,
+    })
+}
+
+// These two routes carry a stronger sign conclusion than the general parent
+// interface: PF Riordan gives nonnegative rows, and Liu--Wang three-term
+// proves positive leading signs after the sign normalization determined by
+// its two induction seeds. Positive seeds make that normalization trivial.
+// Its auxiliary coordinate maps are monic gauges or reversal; on rows with
+// nonpositive roots they preserve the coefficient sign. Do not infer this
+// extra conclusion from an arbitrary registry route's proved status.
+fn positive_gamma_theorem(
+    record: &RecurrenceJson,
+    known: &VeroneseParentProof,
+) -> Option<RealRootednessTheoremReport> {
+    let theorem = known.route?.theorem()?;
+    if !matches!(
+        theorem,
+        RealRootednessTheorem::LiuWangThreeTerm | RealRootednessTheorem::RationalPfRiordan
+    ) {
+        return None;
+    }
+    let (rule, first, seeds) = record.to_recurrence_parts().ok()?;
+    let report =
+        check_real_rootedness_theorem(theorem, &rule, first, &seeds, &Default::default()).ok()?;
+    let conclusion = report.conclusion.as_ref()?;
+    if !report.is_proved()
+        || conclusion.first_index > first
+        || conclusion.zero_residue_classes.is_some()
+        || !super::preserver_image::region_contains(
+            &super::lift_summary::nonpositive_ray(),
+            conclusion.root_region.as_ref()?,
+        )
+    {
+        return None;
+    }
+    let prefix = rule
+        .generate_rows_rational(&seeds, first, seeds.len() + report.start_delay)
+        .ok()?;
+    if prefix
+        .iter()
+        .any(|r| vec_poly::is_zero(r) || r.iter().any(Signed::is_negative))
+    {
+        return None;
+    }
+    Some(report)
 }
 
 // Necessary finite PF tests reject proposals only. They never establish a
@@ -336,21 +461,39 @@ fn add(
         return false;
     }
     search.candidates_tried += 1;
-    let Some(parent_proof) = parent_proof(
-        &summary.parent.recurrence,
-        certificate.parent_proof(),
-        options,
-        search.max_candidates,
-        search.depth,
-    ) else {
-        return false;
+    let parent_proof = match &certificate {
+        DiscoveryClosureCertificate::ForwardGamma { certification }
+            if certification.gamma_discovery.as_ref().is_some_and(|p| {
+                forward_gamma::accepted_discovery(p, summary.parent.recurrence.first_index)
+            }) =>
+        {
+            StructuralClosureParentProof::Discovery {
+                proof: certification.gamma_discovery.as_ref().unwrap().clone(),
+            }
+        }
+        _ => {
+            let Some(proof) = parent_proof(
+                &summary.parent.recurrence,
+                certificate.parent_proof(),
+                options,
+                search.max_candidates,
+                search.depth,
+            ) else {
+                return false;
+            };
+            proof
+        }
     };
     let Ok((rule, first, seeds)) = search.recurrence.to_recurrence_parts() else {
         return false;
     };
     let leading = certify_leading_coefficient(&rule, first, &seeds, &Default::default()).ok();
-    let (from, nonzero) = if let Some(leading) =
-        leading.filter(|c| c.is_proved() && c.holds_from.is_some())
+    let forward = matches!(
+        certificate,
+        DiscoveryClosureCertificate::ForwardGamma { .. }
+    );
+    let (from, nonzero) = if let Some(leading) = leading
+        .filter(|c| c.is_proved() && c.holds_from.is_some() && (!forward || positive_leading(c)))
     {
         (
             first.max(leading.holds_from.unwrap()),
@@ -358,6 +501,44 @@ fn add(
                 certificate: Box::new(leading),
             },
         )
+    } else if forward {
+        let (from, gamma_leading, gamma_theorem) = match &parent_proof {
+            StructuralClosureParentProof::Closure { search: nested }
+                if positive_closure(nested) =>
+            {
+                (nested.conclusion.as_ref().unwrap().from_index, None, None)
+            }
+            StructuralClosureParentProof::Registry { .. } => {
+                let Ok((r, p0, s)) = summary.parent.recurrence.to_recurrence_parts() else {
+                    return false;
+                };
+                let Ok(c) = certify_leading_coefficient(&r, p0, &s, &Default::default()) else {
+                    return false;
+                };
+                if positive_leading(&c) {
+                    let Some(from) = c.holds_from else {
+                        return false;
+                    };
+                    (from, Some(Box::new(c)), None)
+                } else if let Some(proof) =
+                    positive_gamma_theorem(&summary.parent.recurrence, certificate.parent_proof())
+                {
+                    (
+                        proof.conclusion.as_ref().unwrap().first_index,
+                        None,
+                        Some(Box::new(proof)),
+                    )
+                } else {
+                    return false;
+                }
+            }
+            _ => return false,
+        };
+        (first.max(from), StructuralClosureNonzero::GammaExpansion {
+            gamma_leading,
+                gamma_theorem,
+            reason: "the gamma proof and its leading-sign/injectivity certificate give nonzero gamma rows with positive leading coefficients; roots <=0 imply nonnegative coefficients; gamma expansion is injective and its basis polynomials have nonnegative coefficients".into(),
+        })
     } else if let DiscoveryClosureCertificate::PreserverImage { certification } = &certificate {
         // Only the fixed invertible operators constructed by this search reach
         // this branch: 1 +/- D has unchanged leading coefficient, and theta+a
@@ -391,12 +572,13 @@ fn add(
         statement,
     };
     let parent_statement = match &parent_proof {
+        StructuralClosureParentProof::Discovery { proof } => proof.statement.clone(),
         StructuralClosureParentProof::Registry { proof } => proof.statement.clone(),
         StructuralClosureParentProof::Closure { search } => {
             search.conclusion.as_ref().unwrap().statement.clone()
         }
     };
-    let steps = vec![
+    let mut steps = vec![
         ClosureProofStep {
             name: "All-index identity".into(),
             statement: summary.parent.relation.clone(),
@@ -421,6 +603,15 @@ fn add(
             certificate: "nonzero".into(),
         },
     ];
+    if forward {
+        steps[0].certificate = "certificate.certification.gamma_transport".into();
+        steps[3].statement = format!("rows are nonzero for every n >= {from} by the recorded leading-coefficient or injective gamma expansion argument");
+        steps.push(ClosureProofStep {
+            name: "Gamma coefficients nonnegative".into(),
+            statement: "the gamma proof puts all roots <=0; positive gamma leading sign follows from its nonzero chain, or from the input's positive leading sign and all-index symmetry (the lowest nonzero gamma coefficient equals the lowest input coefficient); hence every gamma coefficient is nonnegative".into(),
+            certificate: "parent_proof and nonzero".into(),
+        });
+    }
     search.attempts.push(DiscoveryClosureAttempt {
         stage: certificate.stage().into(),
         parents: vec!["computed preimage".into()],
@@ -475,6 +666,22 @@ fn search(
         return Ok(out);
     }
     let enabled = |s| only.is_none_or(|v| v == s);
+    // Forward expansion consumes one depth level. Inner parent searches do
+    // not try another forward expansion, so it cannot recursively re-enter.
+    if depth == MAX_DEPTH && enabled("forward_gamma") && forward_gamma::eligible(record) {
+        if let Some(c) = forward_gamma::certify(record, &rows) {
+            let mut trial = out.clone();
+            if add(
+                &mut trial,
+                DiscoveryClosureCertificate::ForwardGamma {
+                    certification: Box::new(c),
+                },
+                options,
+            ) {
+                return Ok(trial);
+            }
+        }
+    }
     if enabled("hadamard_factor") {
         let settings = HadamardFactorLiftOptions {
             allow_attestations: false,

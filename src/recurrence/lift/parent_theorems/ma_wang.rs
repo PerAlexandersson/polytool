@@ -4,6 +4,11 @@
 //! in the closed interval `[L, U]`, by the exact two-endpoint criterion with
 //! endpoint multiplicities tracked through the induction.
 //!
+//! The linear derivative multiplier `K_n (x-U)` is also supported on
+//! `(-inf,U]`, using Theorem 2 directly. The degree and leading sign are
+//! checked separately and the same exact counter tracks the endpoint.
+//! See the `linear_endpoint` module for the coefficient induction.
+//!
 //! # The step
 //!
 //! S.-M. Ma and Y. Wang, *q-Eulerian polynomials and polynomials with only
@@ -126,6 +131,9 @@
 use super::*;
 use num_traits::ToPrimitive;
 
+mod linear_endpoint;
+pub use linear_endpoint::MaWangEndpointCertificate;
+
 const REFERENCE: &str = "S.-M. Ma and Y. Wang, q-Eulerian polynomials and polynomials with only \
      real zeros, Electron. J. Combin. 15 (2008) R17, Theorem 2 and Corollary 3 \
      (arXiv:math/0611826), in the closed two-endpoint form of the RealRooted library \
@@ -135,11 +143,11 @@ const REFERENCE: &str = "S.-M. Ma and Y. Wang, q-Eulerian polynomials and polyno
 
 /// Largest number of endpoint hits (indices where a threshold vanishes)
 /// followed before a threshold is reported unresolved.
-const MAXIMUM_ENDPOINT_HITS: usize = 64;
+pub(super) const MAXIMUM_ENDPOINT_HITS: usize = 64;
 
 /// Largest number of consecutive indices searched for the next endpoint hit
 /// before a threshold is reported unresolved.
-const MAXIMUM_HIT_SCAN: usize = 100_000;
+pub(super) const MAXIMUM_HIT_SCAN: usize = 100_000;
 
 /// RealRooted declarations behind the check (the theorem a replay applies
 /// first, then its supporting lemmas).
@@ -539,6 +547,15 @@ fn ma_wang_interval_report(
     let empty = Bivariate::new();
     let c0 = shape.terms.get(&(1, 0)).unwrap_or(&empty);
     let c1 = &shape.terms[&(1, 1)];
+    if x_degree(c0).is_none_or(|d| d <= 1) && x_degree(c1) == Some(1) {
+        let endpoint =
+            linear_endpoint::report(report.clone(), &shape, c0, c1, first_index, seeds, options)?;
+        // Keep existing negative diagnostics unchanged when the extension
+        // cannot close its sufficient induction. Only a new proof is adopted.
+        if endpoint.is_proved() {
+            return Ok(endpoint);
+        }
+    }
     if x_degree(c0).is_some_and(|d| d > 1) || x_degree(c1) != Some(2) {
         return Ok(report.not_applicable(format!("{form}: deg_x c_0 > 1 or deg_x c_1 != 2")));
     }
@@ -716,4 +733,33 @@ fn ma_wang_interval_report(
         ),
         root_region: Some(root_region),
     }))
+}
+
+pub(super) fn verify_certificate_in_report(
+    certificate: &MaWangEndpointCertificate,
+    report: &RealRootednessTheoremReport,
+) -> Result<(), RecurrenceError> {
+    let (rule, first, seeds) = report.recurrence.to_recurrence_parts()?;
+    let options = RealRootednessTheoremOptions {
+        root_region: report
+            .requested_root_region
+            .as_ref()
+            .map(|r| r.at(0))
+            .transpose()?,
+        maximum_start_delay: report.start_delay,
+    };
+    let expected = check_with_start_delay(
+        RealRootednessTheorem::MaWangInterval,
+        &rule,
+        first,
+        &seeds,
+        &options,
+        report.start_delay,
+    )?;
+    if expected.ma_wang_endpoint_certificate() != Some(certificate) {
+        return Err(RecurrenceError::VerificationFailed(
+            "Ma--Wang endpoint certificate differs from its exact induction".into(),
+        ));
+    }
+    Ok(())
 }
