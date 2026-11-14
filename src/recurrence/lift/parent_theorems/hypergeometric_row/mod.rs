@@ -249,9 +249,20 @@ fn hypergeometric_row_report(
     // with a fitted relation of hypergeometric shape whose reduced form
     // kills every generated row from there on.
     let mut shape_failure = None;
-    let attempt = |from: usize| -> Option<(LinearFactors, LinearFactors, DOp)> {
-        let (p, q) = fit_row_relation(&rows, first_index, from)?;
-        let (mut p, mut q) = (linear_factors(&p).ok()?, linear_factors(&q).ok()?);
+    let mut found = None;
+    for from in base..=base + MAX_STRUCTURE_DELAY {
+        let Some((p, q)) = fit_row_relation(&rows, first_index, from) else {
+            continue;
+        };
+        let (mut p, mut q) =
+            match linear_factors(&p).and_then(|p| linear_factors(&q).map(|q| (p, q))) {
+                Ok(factors) => factors,
+                Err(reason) => {
+                    // Keep the first shape diagnostic without fitting the same rows again.
+                    shape_failure.get_or_insert(reason);
+                    continue;
+                }
+            };
         // Cancel the linear factors common to p and q.
         let mut kept = Vec::new();
         for root in std::mem::take(&mut p.roots) {
@@ -263,25 +274,15 @@ fn hypergeometric_row_report(
         }
         p.roots = kept;
         let operator = relation_operator(&p.biv(), &q.biv());
-        rows.iter()
+        if rows
+            .iter()
             .enumerate()
             .map(|(i, row)| (first_index + i, row))
             .filter(|(n, _)| *n >= from)
             .all(|(n, row)| operator.apply_row(row, n).iter().all(Zero::is_zero))
-            .then_some((p, q, operator))
-    };
-    let mut found = None;
-    for from in base..=base + MAX_STRUCTURE_DELAY {
-        if let Some(result) = attempt(from) {
-            found = Some((from, result));
+        {
+            found = Some((from, (p, q, operator)));
             break;
-        }
-        if shape_failure.is_none() {
-            if let Some((p, q)) = fit_row_relation(&rows, first_index, from) {
-                if let Err(reason) = linear_factors(&p).and_then(|_| linear_factors(&q)) {
-                    shape_failure = Some(reason);
-                }
-            }
         }
     }
     let Some((from, (p, q, operator))) = found else {
