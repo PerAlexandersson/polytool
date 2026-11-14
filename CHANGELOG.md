@@ -26,6 +26,13 @@
 
 ### Changed
 
+- Toeplitz circle certificates record their formal references in
+  `circle.lean_declarations`:
+  `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg` and
+  `RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg`.
+  The mathematical source remains "circle criterion for Hessenberg Toeplitz
+  symbols (unpublished manuscript)"; no Lean replay is claimed.
+
 - `oeis rows --bfile-dir DIR` reads a separate local b-file cache before the
   OEIS checkout's `files` directory, with unchanged term validation. The
   library exposes the same lookup as `oeis::read_oeis_bfile`.

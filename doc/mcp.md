@@ -16,6 +16,10 @@ Available MCP tools:
   `proved`, with simple real zeros and consecutive rows strictly interlacing.
   Its exact provenance is "circle criterion for Hessenberg Toeplitz symbols
   (unpublished manuscript)".
+  `circle.lean_declarations` records
+  `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg` and
+  `RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg`, from
+  `RealRooted/Toeplitz/CircleCriterion.lean`.
   Versioned Schmidt-Spitzer regions certify standard Hessenberg limit spectra
   through tail bandwidth three. A real limit spectrum can instead support
   `conditional` under `hessenberg_real_limit_spectrum`, a separate all-row

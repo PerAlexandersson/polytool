@@ -7,6 +7,9 @@
 //! 0<theta<pi, every standard Hessenberg Toeplitz row has simple real zeros
 //! and consecutive rows strictly interlace.
 //! Source: circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript).
+//! Formal references: `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg`
+//! and `RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg` in
+//! `RealRooted/Toeplitz/CircleCriterion.lean`.
 //! We check nonnegativity of Q_R exactly and apply this theorem.
 
 use super::*;
@@ -104,6 +107,10 @@ pub(super) fn recognize_and_certify(
                 polynomial: encode(&polynomial),
                 root_counts: counts(&polynomial),
                 provenance: CIRCLE_THEOREM_SOURCE.into(),
+                lean_declarations: vec![
+                    "RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg".into(),
+                    "RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg".into(),
+                ],
                 conclusion:
                     "every row has simple real zeros and consecutive rows strictly interlace".into(),
             }));

@@ -96,7 +96,38 @@ fn circle_theorem_includes_boundary_and_public_proofs_take_priority() {
         circle.conclusion,
         "every row has simple real zeros and consecutive rows strictly interlace"
     );
+    assert_eq!(
+        circle.lean_declarations,
+        [
+            "RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg",
+            "RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg",
+        ]
+    );
+    let wire = serde_json::to_value(&report).unwrap();
+    assert_eq!(
+        wire["circle"]["lean_declarations"],
+        json!(circle.lean_declarations)
+    );
+    let round_trip: polytool::bkw::certified::CertificationReport =
+        serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(round_trip, report);
+    round_trip.verify().unwrap();
+    let mut legacy = wire;
+    legacy["circle"]
+        .as_object_mut()
+        .unwrap()
+        .remove("lean_declarations");
+    let legacy: polytool::bkw::certified::CertificationReport =
+        serde_json::from_value(legacy).unwrap();
+    assert!(legacy.circle.as_ref().unwrap().lean_declarations.is_empty());
+    assert!(serde_json::to_value(&legacy).unwrap()["circle"]
+        .get("lean_declarations")
+        .is_none());
+    assert!(legacy.verify().is_err());
     report.verify().unwrap();
+    let mut altered = report.clone();
+    altered.circle.as_mut().unwrap().lean_declarations[0] = "RealRooted.forged".into();
+    assert!(altered.verify().is_err());
     let mut altered = report.clone();
     altered.result = "conditional".into();
     assert!(altered.verify().is_err());

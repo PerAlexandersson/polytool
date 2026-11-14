@@ -353,6 +353,18 @@ interlace. Source: "circle criterion for Hessenberg Toeplitz symbols
 in `circle.provenance`, and leaves `conditional_on` empty. Only `circle`
 appears in the extensible list `TOEPLITZ_CRITERIA` of proved Toeplitz criteria.
 
+`circle.lean_declarations` records the formal references
+`RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg` and
+`RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg`, from
+`RealRooted/Toeplitz/CircleCriterion.lean`. With `b_j = tails[j-1]` for
+`j >= 1`, both implementations use
+`Q_R(u) = -1/R + sum_(j=1)^s b_j R^j U_(j-1)(u)` and require `R > 0`.
+Lean's `CircleNonneg` includes both endpoints of `[-1,1]`; weak
+nonnegativity suffices for the strict interlacing conclusion. The certificate's
+nonzero affine change of the spectral variable preserves simple real roots
+and strict interlacing. These declarations are formal references; individual
+reports are replayed by Polytool, with no Lean replay claimed.
+
 For standard Hessenberg Toeplitz rows with tail bandwidth s<=3, the
 `toeplitz_region` certificate evaluates precomputed Schmidt-Spitzer regions
 by exact integer-polynomial signs. These regions use the two smallest

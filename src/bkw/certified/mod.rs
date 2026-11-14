@@ -3,7 +3,9 @@
 //! [`certify_recurrence`] reduces the seed-dependent generating function before
 //! deciding sparse pencils. A real limit set alone proves no all-row claim.
 //! Standard quadratic seeds admit a public product proof; Toeplitz circle
-//! certificates apply a theorem from an unpublished manuscript. Every
+//! certificates apply a theorem from an unpublished manuscript, formalized in
+//! `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg` and
+//! `RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg`. Every
 //! verdict uses rational arithmetic and exact Sturm counts. Report replay
 //! recomputes the decision from the embedded recurrence and options.
 //!
@@ -163,6 +165,10 @@ pub struct CircleCertificate {
     pub root_counts: RootCounts,
     /// Theorem source, explicitly identified as an unpublished manuscript.
     pub provenance: String,
+    /// Fully qualified RealRooted declarations for the circle criterion.
+    /// These are formal references; individual certificates are not replayed in Lean.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lean_declarations: Vec<String>,
     /// Proved conclusion, including simplicity and strict interlacing.
     pub conclusion: String,
 }
