@@ -445,6 +445,8 @@ pub fn certify_recurrence(
                         report.result = "conditional".into();
                         report.conditional_on = vec![LIMIT_SPECTRUM_HYPOTHESIS.into()];
                         report.reason="Schmidt-Spitzer region membership certifies a real limit spectrum exactly; the all-row conclusion assumes hessenberg_real_limit_spectrum".into();
+                    } else if !real {
+                        report.reason="Schmidt-Spitzer region membership certifies a nonreal limit spectrum exactly (off-real smallest-root tie); the all-row claim is refuted".into();
                     }
                 }
             } else if report.result == "conditional" {
@@ -498,7 +500,14 @@ pub fn certify_recurrence(
         report.conditional_on.clear();
     }
     if report.reason.is_empty() {
-        report.reason="general-order or unsupported amplitude geometry: exact limit-set decision inconclusive; finite rows are separate evidence; use the floating scout only as evidence".into();
+        if let Some(failure) = &report.first_failing_row {
+            report.reason = format!(
+                "finite row {} has nonreal zeros and refutes the all-row claim; the exact limit-set decision is not made",
+                failure.index
+            );
+        } else {
+            report.reason="general-order or unsupported amplitude geometry: exact limit-set decision inconclusive; finite rows are separate evidence; use the floating scout only as evidence".into();
+        }
     }
     Ok(report)
 }

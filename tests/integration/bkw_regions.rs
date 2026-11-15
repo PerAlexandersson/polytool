@@ -129,3 +129,41 @@ fn quartic_boundary_geometry_uses_the_limit_hypothesis_when_no_rational_radius_i
     assert!(report.conditional_on[0].starts_with("hessenberg_real_limit_spectrum:"));
     report.verify().unwrap();
 }
+
+#[test]
+fn nonreal_region_refutation_explains_exact_limit_spectrum() {
+    let record: RecurrenceJson = serde_json::from_value(json!({
+        "schema": "polytool.recurrence.v1",
+        "first_index": 0,
+        "initial_polynomials": [
+            ["1"],
+            ["-1", "1"],
+            ["4/9", "-2", "1"],
+            ["-2/9", "17/9", "-3", "1"],
+            ["19/81", "-4/3", "13/3", "-4", "1"]
+        ],
+        "recurrence": {"terms": [
+            {"offset": 1, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["-1", "1"]]}},
+            {"offset": 2, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["-5/9"]]}},
+            {"offset": 3, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["-1/3"]]}},
+            {"offset": 4, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["-2/27"]]}}
+        ]}
+    }))
+    .unwrap();
+    let report = certify_recurrence(
+        &record,
+        &CertificationOptions {
+            maximum_row_index: 8,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(report.limit_set_status, LimitSetStatus::NonrealLimitSet);
+    assert_eq!(report.result, "refuted");
+    assert!(report.toeplitz_region.is_some());
+    assert_eq!(
+        report.reason,
+        "Schmidt-Spitzer region membership certifies a nonreal limit spectrum exactly (off-real smallest-root tie); the all-row claim is refuted"
+    );
+    report.verify().unwrap();
+}

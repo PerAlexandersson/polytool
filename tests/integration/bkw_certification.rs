@@ -216,6 +216,11 @@ fn exact_first_failures_at_eleven_and_seventeen() {
     );
     let report = certify_recurrence(&quartic, &options()).unwrap();
     assert_eq!(report.limit_set_status, LimitSetStatus::Inconclusive);
+    assert_eq!(report.result, "refuted");
+    assert_eq!(
+        report.reason,
+        "finite row 11 has nonreal zeros and refutes the all-row claim; the exact limit-set decision is not made"
+    );
     let failure = report.first_failing_row.unwrap();
     assert_eq!(failure.index, 11);
     assert_eq!(
