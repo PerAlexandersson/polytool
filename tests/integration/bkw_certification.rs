@@ -1,9 +1,14 @@
 //! Exact BKW pencils, theorem proofs, degeneracies and finite counterexamples.
 
+use num_bigint::BigInt;
+use num_traits::One;
 use polytool::bkw::certified::{
+    certify_hessenberg_limit_screens, certify_hessenberg_limit_screens_with_centers,
     certify_real_rooted_pencil, certify_recurrence, CertificationOptions, LimitSetStatus,
+    ScreenSide, ScreenVerdict,
 };
 use polytool::recurrence::RecurrenceJson;
+use polytool::{vec_poly, BigRational};
 use serde_json::json;
 
 fn record(terms: &[(usize, &[i64])], seeds: &[&[i64]]) -> RecurrenceJson {
@@ -20,6 +25,44 @@ fn options() -> CertificationOptions {
 }
 fn strings(p: &[i64]) -> Vec<String> {
     p.iter().map(ToString::to_string).collect()
+}
+
+fn product(mut left: Vec<BigRational>, right: &[BigRational]) -> Vec<BigRational> {
+    left = vec_poly::mul(&left, right);
+    left
+}
+
+fn decimal(value: &str) -> BigRational {
+    let negative = value.starts_with('-');
+    let digits = value.trim_start_matches('-');
+    let places = digits
+        .split_once('.')
+        .map_or(0, |(_, fraction)| fraction.len());
+    let integer = digits.replace('.', "").parse::<BigInt>().unwrap();
+    let integer = if negative { -integer } else { integer };
+    BigRational::new(integer, BigInt::from(10).pow(places as u32))
+}
+
+fn factored_symbol(
+    bulk: &str,
+    bulk_power: usize,
+    linear: &str,
+    quadratics: &[(&str, &str)],
+) -> (String, Vec<String>) {
+    let bulk = decimal(bulk);
+    let linear = decimal(linear);
+    let mut f = vec![BigRational::one()];
+    let bulk_factor = vec![BigRational::one(), BigRational::one() / bulk];
+    for _ in 0..bulk_power {
+        f = product(f, &bulk_factor);
+    }
+    f = product(f, &[BigRational::one(), linear]);
+    for (p, q) in quadratics {
+        f = product(f, &[BigRational::one(), decimal(p), decimal(q)]);
+    }
+    let b0 = f[1].to_string();
+    let tails = f[2..].iter().map(ToString::to_string).collect();
+    (b0, tails)
 }
 
 #[test]
@@ -399,4 +442,75 @@ fn discovery_refutation_is_late_replayable_and_never_replaces_a_proof() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn endpoint_screen_refutes_the_degree_eight_symbol() {
+    let (b0, tails) = factored_symbol(
+        "2.00000000000000000",
+        1,
+        "0.948931745208430377",
+        &[
+            ("1.67440806870911274", "0.900321702592255413"),
+            ("1.67411804104765838", "0.900009836460660795"),
+            ("1.67428153148431980", "0.900185630738453035"),
+        ],
+    );
+    let report = certify_hessenberg_limit_screens(&b0, &tails)
+        .unwrap()
+        .unwrap();
+    let left = report
+        .sides
+        .iter()
+        .find(|side| side.side == ScreenSide::Left)
+        .unwrap();
+    assert_eq!(left.endpoint.verdict, ScreenVerdict::Refuted);
+    assert!(report.is_refuted());
+    report.verify().unwrap();
+}
+
+#[test]
+#[ignore = "degree-40 exact fibre certificate is a full-tests workload"]
+fn degree_forty_fibre_screen_refutes_after_endpoint_bound_passes() {
+    let (b0, tails) = factored_symbol(
+        "1.96377230193306174",
+        33,
+        "0.977472619675488374",
+        &[
+            ("1.95101066670501733", "0.952165439625460519"),
+            ("1.91229621793415672", "0.939445853231145489"),
+            ("1.91923981768769614", "0.952191650939854028"),
+        ],
+    );
+    let centers = vec![("-1.0075".into(), "0.0247".into())];
+    let report = certify_hessenberg_limit_screens_with_centers(&b0, &tails, &centers)
+        .unwrap()
+        .unwrap();
+    let left = report
+        .sides
+        .iter()
+        .find(|side| side.side == ScreenSide::Left)
+        .unwrap();
+    assert_eq!(left.endpoint.verdict, ScreenVerdict::Passes);
+    assert_eq!(left.fiber.verdict, ScreenVerdict::Refuted);
+    report.verify().unwrap();
+}
+
+#[test]
+fn generic_real_limit_controls_are_not_refuted() {
+    let tails = [
+        BigRational::from_integer(10.into()),
+        BigRational::from_integer(10.into()),
+        BigRational::new(101.into(), 20.into()),
+        BigRational::one(),
+    ];
+    let tail_strings: Vec<_> = tails.iter().map(ToString::to_string).collect();
+    let report = certify_hessenberg_limit_screens("5", &tail_strings)
+        .unwrap()
+        .unwrap();
+    assert!(!report.is_refuted());
+    let tridiagonal = certify_hessenberg_limit_screens("0", &["1".into()])
+        .unwrap()
+        .unwrap();
+    assert!(!tridiagonal.is_refuted());
 }

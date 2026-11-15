@@ -119,6 +119,8 @@
 //!   the magic basis `{t^i (1+t)^{d-i}}`
 //! - [`bkw`] — Beraha--Kahane--Weiss scout tools for characteristic symbols of
 //!   polynomial recurrences
+//! - [`complex_roots`] — exact Rouche certificates for roots in
+//!   Gaussian-rational discs
 //! - [`decomposition`] — `I_d` / `R_d` symmetric decompositions, `f`-polynomials,
 //!   alternatingly increasing checks, and Brandén--Solus-style magic-basis analysis
 //! - [`factorization`] — Exact irreducible factorization over `Q` for univariate
@@ -153,6 +155,7 @@ pub mod bkw;
 pub mod brenti_recognition;
 pub mod brenti_sequence;
 pub mod coefficient_tests;
+pub mod complex_roots;
 pub mod cyclic_sieving;
 pub mod decomposition;
 pub mod factorization;

@@ -19,10 +19,16 @@
 //! [Sokal 2004, Theorem 1.5](https://arxiv.org/abs/cond-mat/0012369).
 
 mod algebra;
+mod endpoint;
 mod pencil;
 mod regions;
 mod toeplitz;
 
+pub use endpoint::{
+    certify_hessenberg_limit_screens, certify_hessenberg_limit_screens_with_centers,
+    EndpointScreen, FiberScreen, HessenbergLimitSetScreenReport, HessenbergScreenSideReport,
+    HessenbergScreenWitness, ScreenSide, ScreenVerdict, HESSENBERG_SCREEN_PROVENANCE,
+};
 pub use pencil::certify_real_rooted_pencil;
 pub use regions::{
     certify_toeplitz_regions, RegionEvaluation, ToeplitzRegionCertificate,
@@ -217,6 +223,9 @@ pub struct CertificationReport {
     pub toeplitz_region: Option<ToeplitzRegionCertificate>,
     /// Existing product-induction route, reused for a single standard branch.
     pub product_proof: Option<Box<crate::recurrence::RealRootednessTheoremReport>>,
+    /// Optional exact endpoint/fibre refutation screen for a Hessenberg symbol.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hessenberg_screen: Option<endpoint::HessenbergLimitSetScreenReport>,
     /// Proof route used, independent of the limit-set status; see its provenance.
     pub proof_route: Option<String>,
     /// Exact resultant Res_t(N,D), bounding amplitude-zero candidates.
@@ -236,7 +245,14 @@ impl CertificationReport {
     /// Invalid embedded input or a mismatch in any certificate field.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
         let expected = certify_recurrence(&self.recurrence, &self.options)?;
-        if expected != *self {
+        let mut comparable = expected;
+        // The endpoint/fibre field was added after the v1 wire format.  A
+        // legacy report without it remains replayable; new reports carrying
+        // the field are compared byte-for-byte through their exact witness.
+        if self.hessenberg_screen.is_none() {
+            comparable.hessenberg_screen = None;
+        }
+        if comparable != *self {
             return Err(RecurrenceError::VerificationFailed(
                 "BKW certificate does not replay".into(),
             ));
@@ -281,6 +297,7 @@ pub fn certify_recurrence(
         circle: None,
         toeplitz_region: None,
         product_proof: None,
+        hessenberg_screen: None,
         proof_route: None,
         amplitude_resultant: None,
         first_failing_row: None,
@@ -486,6 +503,31 @@ pub fn certify_recurrence(
                         root_counts: counts(&p),
                     });
                     break;
+                }
+            }
+        }
+        if let Some(screen) = endpoint::certify_from_denominator(&d)? {
+            if screen.is_refuted() {
+                let chart_verdict = report
+                    .toeplitz_region
+                    .as_ref()
+                    .and_then(|geometry| geometry.limit_real);
+                if chart_verdict == Some(true) || report.result == "proved" {
+                    return Err(RecurrenceError::VerificationFailed(
+                        "Hessenberg screen contradicts an existing real-limit or all-row proof"
+                            .into(),
+                    ));
+                }
+                report.hessenberg_screen = Some(screen.clone());
+                if chart_verdict.is_none() {
+                    report.limit_set_status = LimitSetStatus::NonrealLimitSet;
+                    report.result = "refuted".into();
+                    report.reason = format!(
+                        "{} refutes a real Hessenberg limit set; the all-row claim is refuted",
+                        screen
+                            .refutation_name()
+                            .unwrap_or("Hessenberg limit-spectrum screen")
+                    );
                 }
             }
         }
