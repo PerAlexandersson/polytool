@@ -4,6 +4,8 @@
 
 ### Added
 
+- `sequences::literature`: the big-descent polynomials of 132- and 321-avoiding
+  permutations (arXiv:2408.15111) with their order-five holonomic recurrences.
 - `recurrence-prove` can certify stationary cubic families by the new
   `parity_product` route: exact characteristic factorization, bounded gcd
   divisor allocation, seed/Casoratian identities and two existing factor

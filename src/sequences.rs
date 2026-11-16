@@ -25,6 +25,7 @@
 //! | [`s_eulerian_polynomial_bigint`] | (one polynomial, not a row family) | n/a |
 //! | [`literature`]: Delannoy, Delannoy-square, Eulerian-square | row 0 (paper normalization) | `max_n + 1` |
 //! | [`literature::peak_polynomials_bigint`] (peak = valley polynomials, A008303) | `W_0 = 1` | `max_n + 1` |
+//! | [`literature::big_descent_132_polynomials_bigint`], [`literature::big_descent_321_polynomials_bigint`] | `A_0 = B_0 = 1` | `max_n + 1` |
 //! | [`literature::hoggatt_polynomials_bigint`] | `H_0 = 0` (the paper's rows start at `H_1`; use `rows[1..]`) | `max_n + 1` |
 //! | [`deco::joint_histograms_bigint`] and the deco layer generators | size `N = 1` | `max_size` |
 //! | [`deco::deco_polynomials_bigint`] | `P_0` | `max_index + 1` |
@@ -35,8 +36,10 @@
 //! [`hermite_polynomials_iter`], and in [`literature`] the Delannoy families):
 //! item `n` is member `n`, they are driven by the shared
 //! [`crate::recurrence::RecurrenceRowIterator`], and they keep only the last few
-//! members.  Closed-form generators (Narayana, shifted Legendre, Hoggatt) and
-//! matrix- or array-valued recurrences have no lazy counterpart.
+//! members.  Closed-form generators (Narayana, shifted Legendre, Hoggatt), the
+//! matrix- or array-valued recurrences, and the denominator-bearing order-five
+//! big-descent recurrences have no lazy counterpart: the public convenience
+//! constructor for [`PolynomialFamilyRowIterator`] supports only unit leaders.
 //!
 //! The Eulerian row `A_0 = 1` equals `A_1 = 1`; callers that need a family
 //! without repeated rows (for example a consecutive-interlacing check) should
