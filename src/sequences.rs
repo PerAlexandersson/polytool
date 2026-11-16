@@ -33,13 +33,12 @@
 //! Recurrence-defined families also have endless lazy counterparts
 //! ([`eulerian_polynomials_iter`], [`type_b_eulerian_polynomials_iter`],
 //! [`chebyshev_polynomials_t_iter`], [`chebyshev_polynomials_u_iter`],
-//! [`hermite_polynomials_iter`], and in [`literature`] the Delannoy families):
+//! [`hermite_polynomials_iter`], and in [`literature`] the Delannoy and
+//! big-descent families):
 //! item `n` is member `n`, they are driven by the shared
 //! [`crate::recurrence::RecurrenceRowIterator`], and they keep only the last few
-//! members.  Closed-form generators (Narayana, shifted Legendre, Hoggatt), the
-//! matrix- or array-valued recurrences, and the denominator-bearing order-five
-//! big-descent recurrences have no lazy counterpart: the public convenience
-//! constructor for [`PolynomialFamilyRowIterator`] supports only unit leaders.
+//! members.  Closed-form generators (Narayana, shifted Legendre, Hoggatt) and
+//! matrix- or array-valued recurrences have no lazy counterpart.
 //!
 //! The Eulerian row `A_0 = 1` equals `A_1 = 1`; callers that need a family
 //! without repeated rows (for example a consecutive-interlacing check) should
@@ -115,6 +114,22 @@ impl PolynomialFamilyRowIterator {
             .collect();
         Self {
             rows: RecurrenceRowIterator::new(recurrence, seed_rows, 0),
+        }
+    }
+
+    /// Build from a complete recurrence with seeds for the members `0, 1, ...`
+    /// (first index 0).  The recurrence may have a leading denominator; the
+    /// kernel divides each step exactly.
+    ///
+    /// # Panics
+    ///
+    /// If the first index is not 0, since item `n` must be member `n`.
+    pub(crate) fn from_recurrence(
+        (recurrence, seeds, first_index): (Recurrence, Vec<Vec<BigRational>>, usize),
+    ) -> Self {
+        assert_eq!(first_index, 0, "named families start at member 0");
+        Self {
+            rows: RecurrenceRowIterator::new(recurrence, seeds, 0),
         }
     }
 

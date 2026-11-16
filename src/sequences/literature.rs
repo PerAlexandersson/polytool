@@ -353,6 +353,15 @@ pub fn big_descent_321_polynomials_bigint(max_n: usize) -> Vec<Vec<BigInt>> {
     rows
 }
 
+/// Lazily generate `A_0, A_1, ...`; item `n` equals
+/// `big_descent_132_polynomials_bigint(max_n)[n]`.  Driven by the order-five
+/// recurrence of [`big_descent_132_polynomials_recurrence`] (leader `n + 1`,
+/// divided exactly at every step) with its seeds `A_0, ..., A_4`; see
+/// [`PolynomialFamilyRowIterator`].
+pub fn big_descent_132_polynomials_iter() -> PolynomialFamilyRowIterator {
+    PolynomialFamilyRowIterator::from_recurrence(big_descent_132_polynomials_recurrence())
+}
+
 /// The order-five holonomic recurrence for
 /// [`big_descent_132_polynomials_bigint`], valid for `n >= 5`, with seed rows
 /// `A_0, ..., A_4` and first index 0.
@@ -437,6 +446,15 @@ pub fn big_descent_132_polynomials_recurrence() -> RecurrenceWithSeeds {
         rational_rows(&big_descent_132_polynomials_bigint(4)),
         0,
     )
+}
+
+/// Lazily generate `B_0, B_1, ...`; item `n` equals
+/// `big_descent_321_polynomials_bigint(max_n)[n]`.  Driven by the order-five
+/// recurrence of [`big_descent_321_polynomials_recurrence`] (leader `n + 1`,
+/// divided exactly at every step) with its seeds `B_0, ..., B_4`; see
+/// [`PolynomialFamilyRowIterator`].
+pub fn big_descent_321_polynomials_iter() -> PolynomialFamilyRowIterator {
+    PolynomialFamilyRowIterator::from_recurrence(big_descent_321_polynomials_recurrence())
 }
 
 /// The order-five holonomic recurrence for
@@ -1177,6 +1195,18 @@ mod tests {
                 assert_eq!(degree, expected_degree, "{name}, degree at n={n}");
             }
         }
+        assert_eq!(
+            big_descent_132_polynomials_iter()
+                .take(41)
+                .collect::<Vec<_>>(),
+            rows_132
+        );
+        assert_eq!(
+            big_descent_321_polynomials_iter()
+                .take(41)
+                .collect::<Vec<_>>(),
+            rows_321
+        );
         assert_eq!(rows_132[3], big(&[3, 2]));
         assert_eq!(rows_132[6], big(&[6, 55, 64, 7]));
         assert_eq!(rows_321[4], big(&[5, 8, 1]));
