@@ -1096,6 +1096,16 @@ region).  `verify()` replays it.
   A110608, A119308, A123160, A124860, A128540, A253283, A286785, A357613,
   A359363, A376827.  Families such as A318397 (`binom(n, k)^2 binom(2(n -
   k), n - k)`, a double Narayana transform) stay `unresolved`.
+  The row-hypergeometric theorem also recognizes terminating three-over-two rows
+  in the exact weak parameter range of arXiv:2208.03539v2, Theorem 8.4, with
+  coefficientwise closure at the boundary. The typed
+  `recurrence::HypergeometricThreeFTwoCertificate` is available through
+  `RealRootednessTheoremReport::hypergeometric_three_f_two_certificate` and the
+  `RouteCertificate::HypergeometricRow` variant. Report verification recomputes
+  both parity identities, the invariant row-annihilator proof, support and the
+  nonzero boundary coefficient. See the
+  [CLI ratio and normalization conventions](cli-recurrence.md#terminating-three-over-two-row-proofs)
+  for parameter ordering, scaling, reversal and the precise strictness claims.
 - Fixed-delay window (RealRooted row route `variableDelay`,
   `RealRooted/Interlacing/VariableDelay.lean`, after Fisk, Example 16.10):
   `f(n) P_n = A(n) P_(n-1) + B(n) x P_(n-L)`, `L >= 2`, with `a = A / f > 0`

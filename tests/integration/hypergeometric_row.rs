@@ -119,10 +119,9 @@ fn reversed_and_shifted_families_are_proved() {
 
 #[test]
 fn families_outside_the_scheme_are_not_proved() {
-    // binom(n, k)^2 binom(2(n - k), n - k) (a double Narayana transform) and
-    // binom(n, k) (n + 2k + 3)! ... : hypergeometric rows whose factors do
-    // not match the multiplier menu.
-    for id in ["A318397", "A087727"] {
+    // Double Narayana transforms require a different theorem; their factors
+    // match neither the multiplier menu nor the terminating 3F2 range.
+    for id in ["A318397", "A367177"] {
         let report = catalog_report(id);
         assert_eq!(
             report.status,
@@ -219,4 +218,142 @@ fn tampered_reports_and_records_are_rejected() {
         check_recorded_parent_proof(&record, family.recurrence_first_index, &[], true, &proof)
             .is_err()
     );
+}
+
+#[test]
+fn terminating_three_f_two_catalog_families_replay() {
+    use polytool::recurrence::RowInterlacing;
+    for (id, strict, reversed, closed) in [
+        ("A087727", false, false, false),
+        ("A109955", true, false, false),
+        ("A127893", true, false, false),
+        ("A193636", true, true, false),
+        ("A206294", true, false, true),
+        ("A318107", false, true, false),
+    ] {
+        let report = assert_proved(id, closed);
+        let certificate = report.hypergeometric_three_f_two_certificate().unwrap();
+        assert_eq!(certificate.strict_parameters, strict, "{id}");
+        assert_eq!(certificate.reversed, reversed, "{id}");
+        let conclusion = report.conclusion.as_ref().unwrap();
+        assert_eq!(
+            conclusion.interlacing,
+            Some(if strict && !closed {
+                RowInterlacing::Strict
+            } else {
+                RowInterlacing::Weak
+            }),
+            "{id}"
+        );
+        assert_eq!(conclusion.simple_roots, strict, "{id}");
+        let mut tampered = serde_json::to_value(&report).unwrap();
+        tampered["certificate"]["hypergeometric_row"]["scale"] = "-1".into();
+        let tampered: RealRootednessTheoremReport = serde_json::from_value(tampered).unwrap();
+        assert!(tampered.verify().is_err(), "{id}");
+    }
+}
+
+#[test]
+fn terminating_three_f_two_positive_roots_and_region_requests() {
+    use polytool::recurrence::RowInterlacing;
+    // Characteristic rows of a three-banded positive production matrix.
+    let rule = Recurrence {
+        terms: vec![
+            RecurrenceTerm::new(
+                1,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(-3), q(1)]]),
+            ),
+            RecurrenceTerm::new(
+                2,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(-3)]]),
+            ),
+            RecurrenceTerm::new(
+                3,
+                0,
+                BivarPoly::from_coefficients_normalized(vec![vec![q(-1)]]),
+            ),
+        ],
+        denominator: None,
+        inhomogeneous: None,
+    };
+    let seeds = vec![vec![q(1)], vec![q(-2), q(1)], vec![q(3), q(-5), q(1)]];
+    let options = RealRootednessTheoremOptions::default();
+    let report = check_hypergeometric_row_theorem(&rule, 0, &seeds, &options).unwrap();
+    assert!(report.is_proved(), "{:?}", report.open_hypotheses());
+    report.verify().unwrap();
+    let conclusion = report.conclusion.as_ref().unwrap();
+    assert_eq!(conclusion.interlacing, Some(RowInterlacing::Strict));
+    assert!(conclusion.simple_roots);
+    let region = conclusion.root_region.as_ref().unwrap().at(0).unwrap();
+    assert_eq!(region.lower, Some(q(0)));
+    assert!(region.upper.is_none() && !region.lower_closed);
+    for (requested, expected) in [
+        (region, true),
+        (
+            polytool::real_rootedness::RealInterval {
+                lower: None,
+                lower_closed: false,
+                upper: Some(q(0)),
+                upper_closed: false,
+            },
+            false,
+        ),
+    ] {
+        let report = check_hypergeometric_row_theorem(
+            &rule,
+            0,
+            &seeds,
+            &RealRootednessTheoremOptions {
+                root_region: Some(requested),
+                ..options.clone()
+            },
+        )
+        .unwrap();
+        assert_eq!(report.is_proved(), expected);
+        report.verify().unwrap();
+    }
+}
+
+#[test]
+fn terminating_three_f_two_cli_proof_and_tampered_replay() {
+    use crate::common::run_polytool;
+    let family = oeis::by_id("A087727").unwrap();
+    let (rule, seeds) = family.recurrence_parts().unwrap();
+    let record = polytool::recurrence::RecurrenceJson::from_recurrence_rational(
+        &rule,
+        family.recurrence_first_index,
+        &seeds,
+        None,
+    );
+    let result = run_polytool(
+        &["recurrence-prove", "--json"],
+        &serde_json::to_string(&record).unwrap(),
+    );
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let mut report: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(report["status"], "proved");
+    let replay = run_polytool(
+        &["recurrence-prove", "--verify", "--json"],
+        &report.to_string(),
+    );
+    assert!(
+        replay.status.success(),
+        "{}",
+        String::from_utf8_lossy(&replay.stderr)
+    );
+    let attempt = report["attempts"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|a| a["theorem"] == "hypergeometric_row")
+        .unwrap();
+    attempt["certificate"]["hypergeometric_row"]["upper_parameters"][0] = "0".into();
+    let replay = run_polytool(&["recurrence-prove", "--verify"], &report.to_string());
+    assert_eq!(replay.status.code(), Some(2));
 }

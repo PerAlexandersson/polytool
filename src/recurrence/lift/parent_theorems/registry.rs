@@ -64,6 +64,7 @@ macro_rules! theorem_routes {
             HypergeometricRow, hypergeometric_row, "hypergeometric_row",
             "Exact row-hypergeometric real-rootedness criterion.", {
                 check_hypergeometric_row_theorem,
+                HypergeometricThreeFTwoCertificate,
             };
             /// [`check_variable_delay_theorem`] (RealRooted route `variableDelay`).
             VariableDelay, variable_delay, "variable_delay",

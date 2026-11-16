@@ -4,6 +4,15 @@
 
 ### Added
 
+- `hypergeometric_row` recognizes terminating 3F2 rows after its existing
+  multiplier matcher. Exact rational parameters, both upper-parameter parity
+  assignments, argument scaling and degree reversal are checked. The weak
+  parameter range gives real roots and consecutive weak interlacing; strict
+  parameters give simplicity and strict interlacing when monomial factors
+  permit them. New proofs carry a replayable `hypergeometric_row` certificate
+  and references to the general three-over-two theorems (#55). Unknown
+  certificate-tag errors also list the new `hypergeometric_row` tag.
+
 - The in-tree `exact-algebra` crate provides validated word-size primes,
   modular arithmetic, batched BigInt CRT with certified signed/nonnegative
   reconstruction, bounded rational reconstruction and row denominator clearing.

@@ -624,3 +624,121 @@ pub(super) fn first_coefficient_hypothesis(
     );
     hypothesis
 }
+
+/// Prove that the chosen boundary coefficient never vanishes, using its
+/// scalar recurrence and the shared leading-coefficient certificates.
+pub(super) fn row_first_coefficient_hypothesis(
+    shape: &RecurrenceShape,
+    ratio: &Ratio,
+    coordinates: Coordinates,
+    anchor: &Affine,
+    (rows, first_index, rule_start): (&[Vec<Q>], usize, usize),
+    s: usize,
+    alternating_sign: bool,
+) -> (LiftHypothesis, usize, usize) {
+    let as_q = |value: usize| Q::from_integer(BigInt::from(value));
+    let slope = match coordinates {
+        Coordinates::Identity => anchor.1.clone(),
+        Coordinates::Reversal => -anchor.1.clone(),
+    };
+    let mut lag_coefficients: BTreeMap<usize, IndexFunction> = BTreeMap::new();
+    for (&(lag, order), coefficient) in &shape.terms {
+        for power in 0..x_width(coefficient) {
+            let c = x_column(coefficient, power);
+            if c.is_empty() {
+                continue;
+            }
+            // [x^kappa] (x^power D^order P_(n - lag)) is the falling factorial
+            // of kappa - power + order of length order times
+            // [x^(kappa - power + order)] P_(n - lag), whose index in the
+            // coordinates of row n - lag is j below.
+            let offset = order as i64 - power as i64;
+            let source = affine_add(anchor, &affine_constant(offset));
+            let sign = if coordinates == Coordinates::Identity {
+                1
+            } else {
+                -1
+            };
+            let Some(j) = (&slope * as_q(lag))
+                .to_integer()
+                .to_i64()
+                .map(|shift| shift + sign * offset)
+                .filter(|j| *j >= 0)
+            else {
+                continue;
+            };
+            let mut product = IndexFunction::polynomial(c);
+            for t in 0..order {
+                product = times(
+                    &product,
+                    &affine_function(&affine_add(&source, &affine_constant(-(t as i64)))),
+                );
+            }
+            for t in 1..=j as usize {
+                product = times(&product, &ratio.at(t).shifted(-(lag as i64)));
+            }
+            let entry = lag_coefficients
+                .entry(lag)
+                .or_insert_with(|| IndexFunction::constant(Q::zero()));
+            *entry = entry.add(&product);
+        }
+    }
+    lag_coefficients.retain(|_, f| !vec_poly::is_zero(&f.numerator));
+    // Every lag of the rule: a skipped term (zero by the support) also needs
+    // the support facts at its row.
+    let max_lag = shape.terms.keys().map(|(lag, _)| *lag).max().unwrap_or(1);
+    let start = rule_start.max(s + max_lag);
+    let mut values: Vec<(usize, Q)> = (start - max_lag..first_index + rows.len())
+        .map(|n| {
+            let row = &rows[n - first_index];
+            let index = &anchor.0 + &anchor.1 * as_q(n);
+            let value = index
+                .to_integer()
+                .to_usize()
+                .and_then(|k| row.get(k).cloned())
+                .unwrap_or_else(Q::zero);
+            (n, value)
+        })
+        .collect();
+    if alternating_sign {
+        for (&lag, coefficient) in &mut lag_coefficients {
+            if lag % 2 == 1 {
+                *coefficient = coefficient.negated();
+            }
+        }
+        for (n, value) in &mut values {
+            if *n % 2 == 1 {
+                *value = -value.clone();
+            }
+        }
+    }
+    let mut first_coefficient = first_coefficient_hypothesis(
+        &lag_coefficients,
+        &IndexFunction::polynomial(shape.denominator.clone()),
+        &values,
+        start,
+        max_lag,
+    );
+    // Otherwise the shared leading-coefficient module, applied to U_0 as a
+    // family of constants: its scalar recurrence with seeds U_0(n),
+    // start - max_lag <= n < start.
+    if first_coefficient.status != LiftHypothesisStatus::Verified {
+        if let Some(hypothesis) = shared_first_coefficient_hypothesis(
+            &lag_coefficients,
+            &shape.denominator,
+            &values,
+            start,
+            max_lag,
+        ) {
+            first_coefficient = hypothesis;
+        }
+    }
+    if alternating_sign {
+        first_coefficient.statement = first_coefficient
+            .statement
+            .replace("U_0(n)", "(-1)^n U_0(n)");
+        first_coefficient.evidence.insert_str(0,
+            "Apply the scalar recurrence to V_0(n)=(-1)^n U_0(n), with lag-r coefficients multiplied by (-1)^r; ");
+    }
+    (first_coefficient, start, max_lag)
+}

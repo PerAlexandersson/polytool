@@ -52,6 +52,10 @@ macro_rules! route_certificates {
 }
 
 route_certificates! {
+    /// Terminating three-over-two recognition within the row-hypergeometric route.
+    HypergeometricRow(HypergeometricThreeFTwoCertificate) => hypergeometric_row,
+        hypergeometric_three_f_two_certificate: HypergeometricThreeFTwoCertificate,
+    |_: &HypergeometricThreeFTwoCertificate| Ok(None);
     /// Linear Ma--Wang half-line induction with exact endpoint multiplicity.
     MaWangInterval(MaWangEndpointCertificate) => ma_wang,
         ma_wang_endpoint_certificate: MaWangEndpointCertificate,

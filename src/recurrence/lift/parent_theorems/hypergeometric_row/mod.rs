@@ -96,7 +96,18 @@
 //!
 //! The conclusion: every `P_n` is nonzero and real-rooted with every root in
 //! `(-inf, 0)`, or in `(-inf, 0]` when the rows are divisible by `x` (or the
-//! reversal does not show `[x^v] P_n != 0`).  No interlacing is claimed.
+//! reversal does not show `[x^v] P_n != 0`).  The multiplier branch claims no
+//! interlacing.
+//!
+//! When multiplier matching fails, a terminating three-over-two branch checks
+//! exact positive rational parameters in the weak range of arXiv:2208.03539v2,
+//! Theorem 8.4, with coefficientwise closure at its boundary. Both upper-parameter
+//! parity assignments must agree symbolically. Its nonzero roots have the sign
+//! of the constant argument scale; reversal preserves their sign. Consecutive
+//! interlacing requires unit terminating-degree growth and a constant valuation.
+//! Strict parameters give strict interlacing without a common monomial factor;
+//! simplicity also requires simple earlier rows and at most one factor of `x`.
+//! See [`HypergeometricThreeFTwoCertificate`] for replay and normalization.
 
 use super::*;
 use crate::factorization::irreducible_factorization_monic_bivariate_with_budget;
@@ -159,6 +170,13 @@ const FACTORIZATION_BUDGET: usize = 256;
 /// `sum_k binom(n, k) (2n + 1)_k / (n + 2)_k x^k` (OEIS A330798) and
 /// `sum_k binom(n, k) (k + 1)(k + 2)(k + 3) x^k` (A124848).  A failed
 /// hypothesis says nothing against real-rootedness.
+///
+/// When multiplier matching fails, also recognizes terminating three-over-two
+/// rows in the exact weak positive parameter range, with symbolic parity
+/// matching and constant argument scaling. This branch can certify positive
+/// or negative roots, consecutive interlacing and simplicity under the
+/// restrictions documented in [`HypergeometricThreeFTwoCertificate`] and the
+/// module documentation. Its certificate is replayed with the report.
 ///
 /// # Errors
 ///
@@ -356,28 +374,9 @@ fn hypergeometric_row_report(
     let mut chosen = None;
     let mut fallback = None;
     'search: for coordinates in [Coordinates::Identity, Coordinates::Reversal] {
-        let ratio = match (coordinates, &degree) {
-            (Coordinates::Identity, _) => Ratio {
-                scale: IndexFunction::new(vec_poly::neg(&q.scalar), p.scalar.clone()),
-                numerators: q.roots.iter().map(|w| affine_add(w, &valuation)).collect(),
-                denominators: p.roots.iter().map(|u| affine_add(u, &valuation)).collect(),
-            },
-            (Coordinates::Reversal, Some(degree)) => {
-                let shifted = |r: &Affine| {
-                    affine_neg(&affine_add(&affine_add(degree, &affine_constant(1)), r))
-                };
-                let sign = if (p.roots.len() + q.roots.len()) % 2 == 0 {
-                    -Q::one()
-                } else {
-                    Q::one()
-                };
-                Ratio {
-                    scale: IndexFunction::new(vec_poly::scale(&p.scalar, &sign), q.scalar.clone()),
-                    numerators: p.roots.iter().map(shifted).collect(),
-                    denominators: q.roots.iter().map(shifted).collect(),
-                }
-            }
-            (Coordinates::Reversal, None) => continue,
+        let Some(ratio) = ratio_in_coordinates(&p, &q, &valuation, degree.as_ref(), coordinates)
+        else {
+            continue;
         };
         let upper = (coordinates == Coordinates::Reversal)
             .then(|| {
@@ -421,6 +420,24 @@ fn hypergeometric_row_report(
         }
     }
     let Some((coordinates, ratio, matching, upper, s, support)) = chosen.or(fallback) else {
+        if let Some(outcome) = three_f_two::try_report(
+            report.clone(),
+            three_f_two::RowContext {
+                shape: &shape,
+                p: &p,
+                q: &q,
+                valuation: &valuation,
+                degree: degree.as_ref(),
+                rows: &rows,
+                first_index,
+                rule_start,
+                from,
+                shape_from,
+            },
+            options,
+        ) {
+            return Ok(outcome);
+        }
         report.hypotheses.push(unresolved_hypothesis(
             "multiplier_matching",
             "the ratio factors match a product of multiplier sequences applied to (1 + x)^M",
@@ -458,90 +475,15 @@ fn hypergeometric_row_report(
         (Coordinates::Reversal, Some(degree)) => degree.clone(),
         _ => valuation.clone(),
     };
-    let slope = match coordinates {
-        Coordinates::Identity => valuation.1.clone(),
-        Coordinates::Reversal => -anchor.1.clone(),
-    };
-    let mut lag_coefficients: BTreeMap<usize, IndexFunction> = BTreeMap::new();
-    for (&(lag, order), coefficient) in &shape.terms {
-        for power in 0..x_width(coefficient) {
-            let c = x_column(coefficient, power);
-            if c.is_empty() {
-                continue;
-            }
-            // [x^kappa] (x^power D^order P_(n - lag)) is the falling factorial
-            // of kappa - power + order of length order times
-            // [x^(kappa - power + order)] P_(n - lag), whose index in the
-            // coordinates of row n - lag is j below.
-            let offset = order as i64 - power as i64;
-            let source = affine_add(&anchor, &affine_constant(offset));
-            let sign = if coordinates == Coordinates::Identity {
-                1
-            } else {
-                -1
-            };
-            let Some(j) = (&slope * as_q(lag))
-                .to_integer()
-                .to_i64()
-                .map(|shift| shift + sign * offset)
-                .filter(|j| *j >= 0)
-            else {
-                continue;
-            };
-            let mut product = IndexFunction::polynomial(c);
-            for t in 0..order {
-                product = times(
-                    &product,
-                    &affine_function(&affine_add(&source, &affine_constant(-(t as i64)))),
-                );
-            }
-            for t in 1..=j as usize {
-                product = times(&product, &ratio.at(t).shifted(-(lag as i64)));
-            }
-            let entry = lag_coefficients
-                .entry(lag)
-                .or_insert_with(|| IndexFunction::constant(Q::zero()));
-            *entry = entry.add(&product);
-        }
-    }
-    lag_coefficients.retain(|_, f| !vec_poly::is_zero(&f.numerator));
-    // Every lag of the rule: a skipped term (zero by the support) also needs
-    // the support facts at its row.
-    let max_lag = shape.terms.keys().map(|(lag, _)| *lag).max().unwrap_or(1);
-    let start = rule_start.max(s + max_lag);
-    let values: Vec<(usize, Q)> = (start - max_lag..first_index + rows.len())
-        .map(|n| {
-            let row = &rows[n - first_index];
-            let index = &anchor.0 + &anchor.1 * as_q(n);
-            let value = index
-                .to_integer()
-                .to_usize()
-                .and_then(|k| row.get(k).cloned())
-                .unwrap_or_else(Q::zero);
-            (n, value)
-        })
-        .collect();
-    let mut first_coefficient = first_coefficient_hypothesis(
-        &lag_coefficients,
-        &IndexFunction::polynomial(shape.denominator.clone()),
-        &values,
-        start,
-        max_lag,
+    let (first_coefficient, start, max_lag) = row_first_coefficient_hypothesis(
+        &shape,
+        &ratio,
+        coordinates,
+        &anchor,
+        (&rows, first_index, rule_start),
+        s,
+        false,
     );
-    // Otherwise the shared leading-coefficient module, applied to U_0 as a
-    // family of constants: its scalar recurrence with seeds U_0(n),
-    // start - max_lag <= n < start.
-    if first_coefficient.status != LiftHypothesisStatus::Verified {
-        if let Some(hypothesis) = shared_first_coefficient_hypothesis(
-            &lag_coefficients,
-            &shape.denominator,
-            &values,
-            start,
-            max_lag,
-        ) {
-            first_coefficient = hypothesis;
-        }
-    }
     report.hypotheses.push(first_coefficient);
 
     // The region and the rows before the induction start.
@@ -638,3 +580,7 @@ mod matching;
 use matching::*;
 mod hypotheses;
 use hypotheses::*;
+
+mod three_f_two;
+pub(super) use three_f_two::verify_certificate_in_report;
+pub use three_f_two::HypergeometricThreeFTwoCertificate;

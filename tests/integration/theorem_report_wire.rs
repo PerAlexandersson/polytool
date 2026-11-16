@@ -48,7 +48,14 @@ fn raw_report_bytes_and_rejection_stages_match_the_pre_wire_corpus() {
     let corpus = include_str!("../fixtures/theorem-report-wire.jsonl");
     let mut count = 0;
     for line in corpus.lines() {
-        let expected: Case = serde_json::from_str(line).unwrap();
+        let mut expected: Case = serde_json::from_str(line).unwrap();
+        if expected.name == "unknown-certificate" {
+            // Keep the recorded certificates and report bytes frozen; the
+            // intentional new tag extends only this rejection diagnostic.
+            let diagnostic = expected.parse_error.as_mut().unwrap();
+            *diagnostic =
+                diagnostic.replace("expected one of ", "expected one of `hypergeometric_row`, ");
+        }
         let actual = outcome(expected.name.clone(), expected.input.clone());
         assert_eq!(actual, expected, "{}", expected.name);
         count += 1;

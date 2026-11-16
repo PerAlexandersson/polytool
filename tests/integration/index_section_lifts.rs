@@ -376,7 +376,7 @@ fn tampered_index_section_certificates_are_rejected() {
 
 #[test]
 fn discovery_records_the_lift_only_where_a_section_exists() {
-    let (rule, seeds, first) = catalog("A109955");
+    let (rule, seeds, first) = catalog("A109960");
     let record = RecurrenceJson::from_recurrence_rational(&rule, first, &seeds, None);
     let report = discover_recurrence_proofs_with_options(
         &record,
@@ -430,7 +430,7 @@ fn discovery_records_the_lift_only_where_a_section_exists() {
 
 #[test]
 fn the_parent_provers_use_the_lift_for_an_open_parent() {
-    let (rule, seeds, first) = catalog("A109955");
+    let (rule, seeds, first) = catalog("A109960");
     let record = ParentRecurrenceRecord {
         rule: &rule,
         seeds: &seeds,

@@ -441,3 +441,35 @@ pub(super) fn find_matching(
     }
     None
 }
+
+/// The same row relation in either of the route's supported coordinates.
+pub(super) fn ratio_in_coordinates(
+    p: &LinearFactors,
+    q: &LinearFactors,
+    valuation: &Affine,
+    degree: Option<&Affine>,
+    coordinates: Coordinates,
+) -> Option<Ratio> {
+    Some(match (coordinates, degree) {
+        (Coordinates::Identity, _) => Ratio {
+            scale: IndexFunction::new(vec_poly::neg(&q.scalar), p.scalar.clone()),
+            numerators: q.roots.iter().map(|w| affine_add(w, valuation)).collect(),
+            denominators: p.roots.iter().map(|u| affine_add(u, valuation)).collect(),
+        },
+        (Coordinates::Reversal, Some(degree)) => {
+            let shifted =
+                |r: &Affine| affine_neg(&affine_add(&affine_add(degree, &affine_constant(1)), r));
+            let sign = if (p.roots.len() + q.roots.len()) % 2 == 0 {
+                -Q::one()
+            } else {
+                Q::one()
+            };
+            Ratio {
+                scale: IndexFunction::new(vec_poly::scale(&p.scalar, &sign), q.scalar.clone()),
+                numerators: p.roots.iter().map(shifted).collect(),
+                denominators: q.roots.iter().map(shifted).collect(),
+            }
+        }
+        (Coordinates::Reversal, None) => return None,
+    })
+}

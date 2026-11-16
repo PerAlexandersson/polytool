@@ -901,3 +901,51 @@ preservers) and proves their parents through the registry, with closure depth
 two and no parent catalog lookup or attestations. `--max-lift-candidates 0`
 also disables this stage. Text output lists the identity, parent certificate,
 closure theorem and nonzero-row certificate; `--verify` replays the chain.
+
+
+### Terminating three-over-two row proofs
+
+`recurrence-prove` also recognizes the terminating 3F2 coefficient ratio in
+`hypergeometric_row`, after the existing multiplier matcher. For the normalized
+row `U`, it checks the identity
+
+```text
+U[j] / U[j-1] = s (j-M-1)(j+B1-1)(j+B2-1) / (j(j+a1-1)(j+a2-1)),
+B1 = b1 + floor(M/2), B2 = b2 + floor((M-1)/2).
+```
+
+The scale `s` is a nonzero rational constant and `M` is an integer affine
+function of the absolute row index. The unordered upper pair is compared
+symbolically on both index parities; the two factors can exchange roles.
+The route's existing affine factorization, valuation normalization and degree
+reversal are used. Exact all-index annihilator, support and nonzero boundary
+coefficient proofs remain required; a fit alone does not prove the identity.
+
+All four parameters must be positive, with `a1<=b1`, `a2-1<=b1`, `a1<=b2`,
+`a2<=b2`. The normalized polynomial is `U[0] threeFTwo(...,M)(s*x)`, so its
+nonzero roots are **positive for `s>0` and negative for `s<0`**. Reversal keeps
+that sign. An original monomial factor can add zeros at zero. Consecutive
+interlacing is reported when `M` increases by one and the monomial exponent is
+constant. Strict parameters imply strict interlacing only without the common
+monomial factor; simplicity is reported only when that factor and the exact
+earlier rows also allow it. Weak boundary parameters imply neither simplicity
+nor strict interlacing.
+
+The existing JSON schema and keys retain their order. New 3F2 outcomes add
+`certificate.hypergeometric_row`, with `lower_parameters`, `upper_parameters`,
+`termination`, `scale`, `reversed`, `valuation`, `degree`, `structure_start` and
+`strict_parameters`. Rational and integer entries are strings; affine pairs
+are `[constant,slope]`. `reference` cites arXiv:2208.03539v2, (8.1), (8.9),
+Theorem 8.4 and the weak closure. `lean_declarations` names
+`RealRooted.Hypergeometric.threeFTwo_splits`, `threeFTwo_interlaces`,
+`threeFTwo_interlaces_and_isCoprime` and `isRoot_threeFTwo_pos` in that namespace.
+`recurrence-prove --verify --json` replays these outcomes; Lean replay remains
+`not_attempted`. Existing multiplier proofs keep their previous reports. Invalid certificate-tag
+diagnostics include the new `hypergeometric_row` tag.
+
+For example:
+
+```sh
+polytool oeis info A087727 --json | jq .recurrence_data | polytool recurrence-prove --json
+polytool oeis info A318107 --json | jq .recurrence_data | polytool recurrence-prove --json
+```
