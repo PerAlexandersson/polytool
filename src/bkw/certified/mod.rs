@@ -32,7 +32,7 @@ pub use endpoint::{
 pub use pencil::certify_real_rooted_pencil;
 pub use regions::{
     certify_toeplitz_regions, RegionEvaluation, ToeplitzRegionCertificate,
-    LIMIT_SPECTRUM_HYPOTHESIS, MAXIMUM_PRECOMPUTED_TOEPLITZ_BANDWIDTH,
+    MAXIMUM_PRECOMPUTED_TOEPLITZ_BANDWIDTH,
 };
 pub use toeplitz::{CIRCLE_THEOREM_SOURCE, TOEPLITZ_CRITERIA};
 
@@ -203,10 +203,9 @@ pub struct CertificationReport {
     pub options: CertificationOptions,
     /// Exact limit-set status; never inferred from a numerical scout.
     pub limit_set_status: LimitSetStatus,
-    /// `proved`, `conditional`, `refuted`, or `inconclusive` for the all-row claim.
+    /// `proved`, `refuted`, or `inconclusive` for the all-row claim.
     pub result: String,
-    /// Explicit named mathematical hypotheses, present only for `conditional`.
-    /// These are assumptions, never unconditional proofs or attestations.
+    /// Reserved for schema compatibility; always empty in generated reports.
     #[serde(default)]
     pub conditional_on: Vec<String>,
     /// Explanation of hypotheses, degeneracies or coverage limits.
@@ -242,7 +241,8 @@ impl CertificationReport {
     /// Recompute the embedded exact decision and reject any changed field.
     ///
     /// # Errors
-    /// Invalid embedded input or a mismatch in any certificate field.
+    /// Invalid embedded input or a mismatch in any certificate field, including
+    /// a stale `conditional` verdict or a nonempty `conditional_on` field.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
         let expected = certify_recurrence(&self.recurrence, &self.options)?;
         let mut comparable = expected;
@@ -459,17 +459,12 @@ pub fn certify_recurrence(
                         LimitSetStatus::NonrealLimitSet
                     };
                     if real && report.result != "proved" && report.circle.is_none() {
-                        report.result = "conditional".into();
-                        report.conditional_on = vec![LIMIT_SPECTRUM_HYPOTHESIS.into()];
-                        report.reason="Schmidt-Spitzer region membership certifies a real limit spectrum exactly; the all-row conclusion assumes hessenberg_real_limit_spectrum".into();
+                        report.result = "inconclusive".into();
+                        report.reason="Schmidt-Spitzer region membership certifies a real limit spectrum exactly; this does not imply real-rootedness of every row".into();
                     } else if !real {
                         report.reason="Schmidt-Spitzer region membership certifies a nonreal limit spectrum exactly (off-real smallest-root tie); the all-row claim is refuted".into();
                     }
                 }
-            } else if report.result == "conditional" {
-                report.result = "inconclusive".into();
-                report.conditional_on.clear();
-                report.reason="Toeplitz bandwidth is outside the precomputed range; no conditional all-row verdict is made".into();
             }
         }
     }

@@ -25,7 +25,7 @@
 //!
 //! [`certified`] is a separate exact layer: rational discriminant pencils,
 //! seed-dependent generating functions, finite refutations, all-row theorem
-//! proofs and explicitly named conditional claims. Its certificates never rely
+//! proofs and exact limit-set decisions. Its certificates never rely
 //! on floating-point root computations.
 
 use crate::parse::parse_polynomial;

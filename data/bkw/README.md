@@ -9,7 +9,9 @@ circle nonnegativity. An explicit circle certificate applies the theorem
 "circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)":
 for a real symbol b, if some R>0 satisfies Im b(R exp(i theta))>=0 for
 0<theta<pi, every standard row has simple real zeros and consecutive rows
-strictly interlace. The standard rows are defined by P_0=1, P_m=0 for m<0 and
+strictly interlace. A real limit spectrum alone does not imply real-rootedness
+of every row and gives `inconclusive` without a proof or refutation.
+The standard rows are defined by P_0=1, P_m=0 for m<0 and
 P_n(t)=(t-b_0)*P_(n-1)(t)-sum_(j=1)^s b_j*P_(n-j-1)(t).
 
 We remove \(b_0\) by a real spectral shift. For \(b_1\ne0\), we choose
@@ -47,14 +49,11 @@ The geometric definition is due to P. Schmidt and F. Spitzer,
 *The Toeplitz Matrices of an Arbitrary Laurent Polynomial*,
 Mathematica Scandinavica 8 (1960), 15–38,
 [doi:10.7146/math.scand.a-10588](https://doi.org/10.7146/math.scand.a-10588).
-For the real-limit-spectrum all-row assumption, we use the explicit
-Hessenberg restriction of the unproved implication discussed in
-B. Shapiro and F. Štampach,
-[Correction (2023)](https://doi.org/10.1007/s00365-022-09614-0),
+For the published discussion of Toeplitz limit sets, see the
+[Correction (2023)](https://doi.org/10.1007/s00365-022-09614-0)
 to *Non-Self-Adjoint Toeplitz Matrices Whose Principal Submatrices Have Real
-Spectrum*. A region calculation establishes geometry; the separately named
-`hessenberg_real_limit_spectrum` hypothesis supplies its conditional all-row
-conclusion.
+Spectrum*. A region calculation establishes limit-set geometry; an all-row
+proof requires a separate theorem certificate.
 
 `sample-regions.wls` obtains rational representatives from every returned
 CAD disjunct on both sides of each predicate. `cells-v1.json` retains these

@@ -3,8 +3,8 @@
 //! Only the two-smallest-root definition determines the limit-spectrum region.
 //! Circle nonnegativity is an independent algebraic predicate. An explicit
 //! circle certificate applies the unpublished manuscript theorem; limit
-//! geometry alone uses a separate conditional hypothesis. We use rational invariants
-//! c=b_2^2/|b_1|^3 and d=b_3/|b_1|^2, so no irrational square root is rounded.
+//! geometry alone does not imply real-rootedness of every row. We use rational
+//! invariants c=b_2^2/|b_1|^3 and d=b_3/|b_1|^2, so no irrational square root is rounded.
 
 use super::*;
 use std::collections::BTreeMap;
@@ -12,9 +12,6 @@ use std::sync::OnceLock;
 
 /// Highest nontrivial tail bandwidth supported by the bundled region charts.
 pub const MAXIMUM_PRECOMPUTED_TOEPLITZ_BANDWIDTH: usize = 3;
-
-/// Explicit all-row assumption for an exactly real Hessenberg limit spectrum.
-pub const LIMIT_SPECTRUM_HYPOTHESIS: &str = "hessenberg_real_limit_spectrum: for a real Hessenberg Toeplitz symbol b, Lambda(b) subset R implies that every standard row is real-rooted";
 
 /// Exact evaluation of one versioned integer-polynomial Boolean expression.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

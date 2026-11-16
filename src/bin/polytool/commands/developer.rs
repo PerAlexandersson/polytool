@@ -9,7 +9,7 @@ const GROUP: &str = "Developer tools";
 pub(crate) const BKW: CommandSpec = CommandSpec {
     name: "bkw",
     group: GROUP,
-    summary: "Exact BKW certificates, theorem proofs and named conditional claims",
+    summary: "Exact BKW certificates, theorem proofs and limit-set decisions",
     description: "Certify stationary recurrences with rational polynomial coefficients and supplied seeds. Use bkw certify; the numerical bkw-scout remains evidence only.",
     subcommands: &[BKW_CERTIFY],
     examples: &["polytool bkw certify --recurrence recurrence.json --json"],
@@ -20,7 +20,7 @@ pub(crate) const BKW: CommandSpec = CommandSpec {
 const BKW_CERTIFY: CommandSpec = CommandSpec {
     name: "certify",
     summary: "Decide sparse tie pencils, check the circle criterion, and search exact rows",
-    description: "Read existing recurrence JSON with seeds. Reduce its generating function before BKW checks. Public standard quadratic product proofs run first. Exact Toeplitz circle nonnegativity gives proved: every row has simple real zeros and consecutive rows strictly interlace. The theorem source is circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript), recorded in circle.provenance. Versioned Schmidt-Spitzer regions for standard Hessenberg tails of bandwidth at most 3 certify limit-spectrum geometry exactly; a real limit spectrum can give a separate conditional all-row claim under hessenberg_real_limit_spectrum, recorded in conditional_on. Outside the region bandwidth range no conditional verdict is made; the circle theorem can still give proved. --verify replays an embedded certificate exactly.",
+    description: "Read existing recurrence JSON with seeds. Reduce its generating function before BKW checks. Public standard quadratic product proofs run first. Exact Toeplitz circle nonnegativity gives proved: every row has simple real zeros and consecutive rows strictly interlace. The theorem source is circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript), recorded in circle.provenance. Versioned Schmidt-Spitzer regions for standard Hessenberg tails of bandwidth at most 3 certify limit-spectrum geometry exactly; a real limit spectrum alone gives inconclusive because it does not imply real-rootedness of every row. conditional_on is reserved and always empty. The circle theorem can still give proved beyond the region bandwidth range. --verify replays an embedded certificate exactly and rejects stale verdicts.",
     input: InputKind::Json,
     output: OutputKind::JsonSwitch,
     flags: &[

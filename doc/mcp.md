@@ -21,10 +21,10 @@ Available MCP tools:
   `RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg`, from
   `RealRooted/Toeplitz/CircleCriterion.lean`.
   Versioned Schmidt-Spitzer regions certify standard Hessenberg limit spectra
-  through tail bandwidth three. A real limit spectrum can instead support
-  `conditional` under `hessenberg_real_limit_spectrum`, a separate all-row
-  assumption. Region evaluations include rational coordinates and input/output
-  SHA-256 hashes. No conditional verdict is made outside that bandwidth range.
+  through tail bandwidth three. A real limit spectrum alone gives
+  `inconclusive`: it does not imply real-rootedness of every row. The stable
+  `conditional_on` field is reserved and always empty. Region evaluations
+  include rational coordinates and input/output SHA-256 hashes.
   Takes a seeded recurrence object, optional `maximum_row_index` (at most
   200) and optional rational `circle_radius`. The report embeds its input for
   exact library or CLI replay; no Lean replay is claimed.

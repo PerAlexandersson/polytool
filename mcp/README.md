@@ -17,10 +17,9 @@ an all-row proof. Replay through the library or `polytool bkw certify --verify`.
 
 For standard Hessenberg tails through bandwidth three, `toeplitz_region`
 records exact Schmidt-Spitzer region membership in rational normalized
-coordinates and the generating input/output hashes. The separate
-`hessenberg_real_limit_spectrum` assumption may support `conditional` when
-geometry is certified real. This assumption remains distinct from the circle
-theorem; there is no conditional verdict outside the precomputed range.
+coordinates and the generating input/output hashes. A certified real limit
+spectrum alone gives `inconclusive` because it does not imply real-rootedness
+of every row. The stable `conditional_on` field is reserved and always empty.
 The circle theorem can give `proved` beyond that range.
 
 The server is intentionally small:

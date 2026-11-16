@@ -7,10 +7,10 @@ consecutive rows strictly interlace. The theorem source is circle criterion for
 Hessenberg Toeplitz symbols (unpublished manuscript), recorded in
 circle.provenance. Versioned Schmidt-Spitzer regions for standard Hessenberg
 tails of bandwidth at most 3 certify limit-spectrum geometry exactly; a real
-limit spectrum can give a separate conditional all-row claim under
-hessenberg_real_limit_spectrum, recorded in conditional_on. Outside the region
-bandwidth range no conditional verdict is made; the circle theorem can still
-give proved. --verify replays an embedded certificate exactly.
+limit spectrum alone gives inconclusive because it does not imply
+real-rootedness of every row. conditional_on is reserved and always empty. The
+circle theorem can still give proved beyond the region bandwidth range. --verify
+replays an embedded certificate exactly and rejects stale verdicts.
 
 Usage: polytool bkw certify [OPTIONS]
 

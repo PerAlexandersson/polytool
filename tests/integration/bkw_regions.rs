@@ -1,4 +1,4 @@
-//! Exact Toeplitz region normalization, conditional status and replay.
+//! Exact Toeplitz region normalization, inconclusive all-row claims and replay.
 
 use polytool::bkw::certified::{
     certify_recurrence, certify_toeplitz_regions, CertificationOptions, LimitSetStatus,
@@ -105,7 +105,7 @@ fn circle_theorem_proves_beyond_the_precomputed_geometry_range() {
 }
 
 #[test]
-fn quartic_boundary_geometry_uses_the_limit_hypothesis_when_no_rational_radius_is_found() {
+fn quartic_boundary_real_limit_spectrum_alone_is_inconclusive() {
     let record: RecurrenceJson =
         serde_json::from_value(json!({"schema":"polytool.recurrence.v1","first_index":0,
         "initial_polynomials":[["1"],["0","1"],["-1","0","1"],["0","-2","0","1"]],
@@ -118,16 +118,75 @@ fn quartic_boundary_geometry_uses_the_limit_hypothesis_when_no_rational_radius_i
     let report = certify_recurrence(
         &record,
         &CertificationOptions {
-            maximum_row_index: 48,
+            maximum_row_index: 8,
             ..Default::default()
         },
     )
     .unwrap();
-    assert_eq!(report.result, "conditional");
+    assert_eq!(report.result, "inconclusive");
     assert_eq!(report.limit_set_status, LimitSetStatus::RealLimitSet);
+    assert_eq!(
+        report.toeplitz_region.as_ref().unwrap().limit_real,
+        Some(true)
+    );
     assert!(report.circle.is_none());
-    assert!(report.conditional_on[0].starts_with("hessenberg_real_limit_spectrum:"));
+    assert!(report.proof_route.is_none());
+    assert!(report.product_proof.is_none());
+    assert!(report.first_failing_row.is_none());
+    assert!(report.conditional_on.is_empty());
+    assert_eq!(report.reason, "Schmidt-Spitzer region membership certifies a real limit spectrum exactly; this does not imply real-rootedness of every row");
     report.verify().unwrap();
+    let mut stale = report.clone();
+    stale.result = "conditional".into();
+    assert!(stale.verify().is_err());
+    let mut stale = report;
+    stale
+        .conditional_on
+        .push("obsolete all-row assumption".into());
+    assert!(stale.verify().is_err());
+}
+
+#[test]
+fn cli_real_limit_spectrum_is_inconclusive_and_stale_reports_are_rejected() {
+    use crate::common::run_polytool;
+
+    let input = json!({"schema":"polytool.recurrence.v1","first_index":0,
+    "initial_polynomials":[["1"],["0","1"],["-1","0","1"],["0","-2","0","1"]],
+    "recurrence":{"terms":[
+        {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","1"]]}},
+        {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1"]]}},
+        {"offset":4,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["1/12"]]}}
+    ]}})
+    .to_string();
+    let arguments = ["bkw", "certify", "--max-row-index", "8", "--json"];
+    let output = run_polytool(&arguments, &input);
+    assert!(output.status.success(), "{:?}", output);
+    let mut report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["result"], "inconclusive");
+    assert_eq!(report["limit_set_status"], "real_limit_set");
+    assert_eq!(report["conditional_on"], json!([]));
+    let verify = ["bkw", "certify", "--verify", "--json"];
+    let output = run_polytool(&verify, &report.to_string());
+    assert!(output.status.success());
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
+        json!({"verified":true,"result":"inconclusive"})
+    );
+    let output = run_polytool(&arguments[..4], &input);
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.starts_with("inconclusive; limit set: RealLimitSet\n"));
+    assert!(text.contains("does not imply real-rootedness of every row"));
+    report["result"] = json!("conditional");
+    let output = run_polytool(&verify, &report.to_string());
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8(output.stderr)
+        .unwrap()
+        .contains("BKW certificate does not replay"));
+    report["result"] = json!("inconclusive");
+    report["conditional_on"] = json!(["obsolete all-row assumption"]);
+    let output = run_polytool(&verify, &report.to_string());
+    assert_eq!(output.status.code(), Some(2));
 }
 
 #[test]

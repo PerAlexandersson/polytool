@@ -53,9 +53,14 @@
 - `bkw::certified::certify_toeplitz_regions` evaluates versioned exact
   Schmidt-Spitzer regions for rational Hessenberg tails of bandwidth at most
   three, with normalization, polynomial-sign evidence and input/output hashes.
-  A certified real limit spectrum can give `conditional` under the explicitly
-  named `hessenberg_real_limit_spectrum` assumption. This remains conditional
-  and separate from the circle theorem.
+  A certified real limit spectrum alone is inconclusive for the all-row claim.
+
+### Removed
+
+- The conditional verdict under the real limit spectrum hypothesis; a real limit
+  spectrum alone is inconclusive. `conditional_on` remains reserved and always
+  empty. Replay rejects stale conditional reports; proof and refutation routes
+  are unchanged. The `LIMIT_SPECTRUM_HYPOTHESIS` constant is removed.
 
 ### Changed
 

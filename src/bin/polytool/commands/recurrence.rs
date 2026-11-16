@@ -669,8 +669,8 @@ transformed records), and structural closure chains; takes no search flags."#,
     details: r#"After every proof route fails, stationary recurrences receive a separate exact
 BKW/row refutation stage. Status refuted carries bkw_refutation with a replayable
 certificate. A real limit set alone never supplies a proof; a refutation never
-replaces a successful proof. See bkw certify for public proofs and explicitly
-named conditional all-row claims.
+replaces a successful proof. See bkw certify for all-row theorem proofs and exact
+limit-set decisions.
 
 JSON output is polytool.recurrence-proof-discovery.v1. Its trivially_real_rooted is
 true when the supplied (not fitted) rule is B(n) P_n = A(x,n) P_(n-k) and

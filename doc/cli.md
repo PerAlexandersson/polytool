@@ -314,9 +314,10 @@ prescribed seed contributes to the reduced rational generating function.
 
 The `polytool.bkw-certification.v1` report separates `limit_set_status`
 (`real_limit_set`, `nonreal_limit_set`, `degenerate`, `inconclusive`) from
-the all-row `result` (`proved`, `conditional`, `refuted`, `inconclusive`). A real limit set
-alone never proves all rows real-rooted. A fitted recurrence defines a family;
-applying the result to another definition requires an all-index identity.
+the all-row `result` (`proved`, `refuted`, `inconclusive`). The stable
+`conditional_on` field is reserved and always empty. A real limit set
+alone does not imply real-rootedness of every row. A fitted recurrence defines
+a family; applying the result to another definition requires an all-index identity.
 
 For order two, the pencil is A_1^2+s*A_2, 0<=s<=4. For the sparse recurrence
 P_n=A*P_(n-1)+B*P_(n-r), it is A^r+s*B,
@@ -376,16 +377,14 @@ records the variable order, rational point, region result and exact input/output
 SHA-256 hashes. The data, normalization and generating Wolfram scripts are
 in `data/bkw/`.
 
-If the limit region is real and no all-row theorem proof or explicit circle
-certificate applies, the result is `conditional` on
-`hessenberg_real_limit_spectrum`: for a real Hessenberg Toeplitz symbol b,
-Lambda(b) subset R implies that every standard row is real-rooted. This is
-the Hessenberg restriction of the unproved implication discussed in
-[Shapiro–Štampach's correction](https://doi.org/10.1007/s00365-022-09614-0).
-This assumption remains conditional and is separate from the circle theorem.
-Outside the precomputed bandwidth range the result
-remains inconclusive unless an exact theorem proof or refutation is available;
-no conditional all-row verdict is made there.
+If the limit region is real and no all-row theorem proof or refutation applies,
+the result is `inconclusive`: certifying a real limit spectrum does not imply
+real-rootedness of every row. For the published discussion of Toeplitz limit
+sets, see the [published correction](https://doi.org/10.1007/s00365-022-09614-0).
+Outside the precomputed bandwidth range the result remains inconclusive unless
+an exact theorem proof or refutation is available.
+Replay rejects stale `conditional` reports, consistently with other mismatched
+reports; recompute them from their embedded recurrence and options.
 The circle theorem can give `proved` beyond that region bandwidth range.
 Single standard active branches (including diagonal Toeplitz families) reuse
 the existing product-induction route and retain its report in `product_proof`.

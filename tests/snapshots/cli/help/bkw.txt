@@ -1,4 +1,4 @@
-Exact BKW certificates, theorem proofs and named conditional claims.
+Exact BKW certificates, theorem proofs and limit-set decisions.
 
 Certify stationary recurrences with rational polynomial coefficients and
 supplied seeds. Use bkw certify; the numerical bkw-scout remains evidence only.
