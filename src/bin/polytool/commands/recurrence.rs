@@ -567,6 +567,16 @@ for d and for K, TNN product (Cauchy--Binet), and Chen--Fu--Ruan row theorem.
 Zero rows are reported exactly; no simplicity or interlacing is claimed.
 The route is available to index-section parents and the affine marker shifts.
 
+Parity product (parity_product, recorded when it adds a proved conclusion):
+for stationary order-three rules P_n=a P_(n-1)+b P_(n-2)+c P_(n-3), check
+c=mu^3, b=-a*mu and beta=a-mu exactly over Q[x]. Enumerate at most 4096
+monic divisors of gcd(P0,P1), check polynomial factor seeds and Casoratian
+compatibility, then prove both factors f_(m+2)=beta*f_(m+1)-mu^2*f_m
+through existing nonrecursive routes (proof depth one). Reports the chosen
+divisor and both replayable proofs. Splitting for all rows; weak consecutive
+interlacing only when both factors certify it, with no simplicity or strict
+interlacing claim. Constant row scaling and shared reversal are supported.
+
 Shared reversal closure (degree_law_reversal, after direct routes and lifts):
 x^(a*m+b) P_(first_index+m)(1/x), with an inductive degree bound from the lag
 multipliers and every seed. Try only the minimal admissible slope (zero

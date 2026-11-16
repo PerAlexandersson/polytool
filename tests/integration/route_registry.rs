@@ -19,7 +19,7 @@ fn serialized<T: serde::Serialize>(value: T) -> String {
 }
 
 /// Every parent route (the enum has no `ALL`).
-const PARENT_ROUTES: [VeroneseParentProofRoute; 20] = [
+const PARENT_ROUTES: [VeroneseParentProofRoute; 21] = [
     VeroneseParentProofRoute::PeriodicProduct,
     VeroneseParentProofRoute::ProductRecurrence,
     VeroneseParentProofRoute::PaperTheorem,
@@ -38,6 +38,7 @@ const PARENT_ROUTES: [VeroneseParentProofRoute; 20] = [
     VeroneseParentProofRoute::LagTwoEuler,
     VeroneseParentProofRoute::BinomialPerturbedEulerOrbit,
     VeroneseParentProofRoute::RationalPfRiordan,
+    VeroneseParentProofRoute::ParityProduct,
     VeroneseParentProofRoute::DegreeLawReversal,
     VeroneseParentProofRoute::Attestation,
 ];
@@ -64,6 +65,7 @@ fn parent_routes_are_listed(route: VeroneseParentProofRoute) {
         | R::LagTwoEuler
         | R::BinomialPerturbedEulerOrbit
         | R::RationalPfRiordan
+        | R::ParityProduct
         | R::DegreeLawReversal
         | R::FactorGauge
         | R::Attestation => {}
@@ -140,6 +142,7 @@ fn the_theorem_order_is_frozen() {
             "lag_two_euler",
             "binomial_perturbed_euler_orbit",
             "rational_pf_riordan",
+            "parity_product",
             "degree_law_reversal",
         ]
     );

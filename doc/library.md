@@ -2350,3 +2350,13 @@ for arbitrary pairs of growing families, or Schur–Szegő factors: no structura
 factorization into two recurrence-defined parents is implemented here.
 Positive factorial or rising-factorial coefficients alone do not establish a
 multiplier sequence; unresolved menu weights remain proposals only.
+
+The recurrence theorem menu includes `check_parity_product_theorem` and
+`ParityProductCertificate` for stationary cubic shared-factor parity products.
+The exact gcd divisor lattice is bounded by
+`MAXIMUM_PARITY_PRODUCT_DIVISORS` (4096), and the factor proof depth by
+`MAXIMUM_PARITY_PRODUCT_PROOF_DEPTH` (one). Product rows can have repeated
+roots; only weak adjacent interlacing is transferred.
+`certify_constant_coefficient_index_subsequence` constructs and replays a
+stationary index-section identity without a root assertion through
+`ConstantCoefficientIndexSubsequenceCertificate`.

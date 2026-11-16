@@ -53,8 +53,17 @@ fn raw_report_bytes_and_rejection_stages_match_the_pre_wire_corpus() {
             // Keep the recorded certificates and report bytes frozen; the
             // intentional new tag extends only this rejection diagnostic.
             let diagnostic = expected.parse_error.as_mut().unwrap();
-            *diagnostic =
-                diagnostic.replace("expected one of ", "expected one of `hypergeometric_row`, ");
+            *diagnostic = diagnostic.replace(
+                "expected one of ",
+                "expected one of `parity_product`, `hypergeometric_row`, ",
+            );
+        }
+        if expected.name == "unknown-theorem" {
+            let diagnostic = expected.parse_error.as_mut().unwrap();
+            *diagnostic = diagnostic.replace(
+                "`degree_law_reversal`",
+                "`parity_product`, `degree_law_reversal`",
+            );
         }
         let actual = outcome(expected.name.clone(), expected.input.clone());
         assert_eq!(actual, expected, "{}", expected.name);

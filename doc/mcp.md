@@ -227,3 +227,13 @@ rejected with a typed invalid-input error explaining the reason.
 Representation menus use `NAME_0`, `NAME_1`, ... and retain checked definitions
 alongside refusal reasons for unsupported candidates. These are finite fits;
 semantic read-back is not Lean compilation or an all-index proof.
+
+The existing `discover_recurrence_proofs` and `verify_recurrence_proofs`
+tools also handle `parity_product` through the shared library: exact
+stationary cubic recognition, a gcd divisor lattice bounded by 4096,
+Casoratian seed compatibility and two nonrecursive factor proofs. The
+additive `certificate.parity_product` payload retains those proofs for replay.
+Weak adjacent interlacing is transferred only when both factors certify it;
+no simplicity or strictness is asserted. No new tool or request flag is added.
+The library-only `certify_constant_coefficient_index_subsequence` construction
+has no separate MCP endpoint.

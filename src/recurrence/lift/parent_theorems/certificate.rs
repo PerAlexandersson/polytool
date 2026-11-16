@@ -52,6 +52,19 @@ macro_rules! route_certificates {
 }
 
 route_certificates! {
+    /// Exact cubic factorization, polynomial seeds and two factor proofs.
+    ParityProduct(Box<ParityProductCertificate>) => parity_product,
+        parity_product_certificate: ParityProductCertificate,
+    |c: &ParityProductCertificate| {
+        if c.maximum_start_delay > index_section::MAXIMUM_PARENT_START_DELAY
+            || c.proof_depth != MAXIMUM_PARITY_PRODUCT_PROOF_DEPTH {
+            return Err(RecurrenceError::VerificationFailed(
+                "invalid parity-product proof bounds".into(),
+            ));
+        }
+        Ok(Some(c.maximum_start_delay))
+    };
+
     /// Terminating three-over-two recognition within the row-hypergeometric route.
     HypergeometricRow(HypergeometricThreeFTwoCertificate) => hypergeometric_row,
         hypergeometric_three_f_two_certificate: HypergeometricThreeFTwoCertificate,

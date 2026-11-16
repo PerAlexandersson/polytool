@@ -949,3 +949,57 @@ For example:
 polytool oeis info A087727 --json | jq .recurrence_data | polytool recurrence-prove --json
 polytool oeis info A318107 --json | jq .recurrence_data | polytool recurrence-prove --json
 ```
+
+### Shared-factor parity products
+
+`recurrence-prove` also checks `parity_product` for stationary rules
+`P_(n+3)=a(x)P_(n+2)+b(x)P_(n+1)+c(x)P_n` of order three. It requires
+`c=mu^3`, `b=-a*mu`, `beta=a-mu` in `Q[x]`, equivalently characteristic
+polynomial `(z-mu)(z^2-beta*z+mu^2)`. For `a!=0`, `mu=-b/a` must be a
+polynomial and its cube is checked exactly; otherwise `b=0` and the unique
+rational polynomial cube root is used. Constant row scaling is divided out;
+the existing degree-law reversal and affine-coordinate searches can also
+reach the route. No special sequence names are used.
+
+For each monic divisor `t0` of `gcd(P0,P1)`, set `s0=P0/t0`, `s1=P1/t0`,
+require polynomial `t1=P2/s1`, and check
+`s1*t1-(beta*s1-mu^2*s0)*t0=mu*(s1*t0-s0*t1)`. The entire divisor lattice
+must have at most 4096 elements; nonzero rational scalar allocations only
+rescale the factor families inversely. Both derived recurrences
+`f_(m+2)=beta*f_(m+1)-mu^2*f_m` must be proved by the existing nonrecursive
+residue-class theorem menu, at proof depth one. Each factor starts at zero.
+The search examines the last three seeds and up to `--max-start-delay`
+later windows; every preceding row is checked exactly.
+
+A successful attempt that adds a conclusion beyond earlier direct proofs is
+recorded with `certificate.parity_product` containing ascending
+rational-string coefficient lists `mu`, `beta`, `initial_common_divisor`,
+`exceptional_rows`, `divisors_examined`, `divisor_lattice_size`, the two
+`factor_proofs`, `maximum_start_delay` and `proof_depth`. Existing fields and
+their order are unchanged. `recurrence-prove --verify` replays the identities
+and both selected factor proofs. Text output prints the factor proof chain.
+Unknown-certificate diagnostics now include `parity_product`.
+
+Every row is nonzero and real-rooted when proved. Weak consecutive
+interlacing is claimed only when both factors certify consecutive interlacing;
+the first claimed index is computed from both factor starts. No strictness
+or simplicity is inferred, because consecutive product rows share a factor.
+Related Lean declarations are `RealRooted.eq_parityProduct_of_thirdOrderRecurrence`,
+`RealRooted.splits_of_parityProduct` and, when applicable,
+`RealRooted.interlaces_of_parityProduct`. Lean replay remains `not_attempted`.
+
+```sh
+polytool oeis info A158909 --json | jq .recurrence_data | polytool recurrence-prove --json
+polytool recurrence-prove --verify --json < proof.json
+```
+
+The library also exposes `certify_constant_coefficient_index_subsequence`:
+for a stationary order-`r` source with `K` prescribed seeds, it constructs
+`Q_m=P_(first_index+K-r+residue+stride*m)` with characteristic polynomial
+`prod_i(z-alpha_i^stride)`. It reuses exact Newton sums and the
+Cayley--Hamilton identity for the companion matrix power, supports strides
+1 through 16 and order at most 24, and carries the source, anchor, section
+recurrence, characteristic polynomial and replay method in
+`ConstantCoefficientIndexSubsequenceCertificate`. This operation does not
+prove real-rootedness or minimality and does not add a CLI command. Index-
+dependent or differential parity decoupling requires additional identities.

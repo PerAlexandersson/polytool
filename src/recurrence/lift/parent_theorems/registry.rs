@@ -88,6 +88,8 @@ macro_rules! theorem_routes {
                 IndexSectionCertificate,
                 IndexSectionTransform,
                 MAX_INDEX_SECTION_PERIOD,
+                certify_constant_coefficient_index_subsequence,
+                ConstantCoefficientIndexSubsequenceCertificate,
             };
             /// [`check_factor_gauge_theorem`] (RealRooted routes `powerForm`,
             /// `closedForm`, `factorPower`).
@@ -119,6 +121,14 @@ macro_rules! theorem_routes {
                 PolyaFrequencyRootLayer,
                 RationalPfRiordanCertificate,
                 RationalPolyaFrequencyEvidence,
+            };
+            /// [`check_parity_product_theorem`].
+            ParityProduct, parity_product, "parity_product",
+            "Parity products of two certified second-order families.", {
+                check_parity_product_theorem,
+                ParityProductCertificate,
+                MAXIMUM_PARITY_PRODUCT_DIVISORS,
+                MAXIMUM_PARITY_PRODUCT_PROOF_DEPTH,
             };
             /// [`check_degree_law_reversal_theorem`], a shared closure of the theorem menu.
             DegreeLawReversal, degree_law_reversal, "degree_law_reversal",
@@ -164,6 +174,9 @@ pub(super) enum DiscoveryPolicy {
     /// Recorded only when the check applies (its status is not
     /// `not_applicable`), so that the reports of other rules are unchanged.
     WhenApplicable,
+    /// Record a proof only when earlier attempts do not already cover its
+    /// nonzero-row, root-region, simplicity and interlacing conclusions.
+    WhenStronger,
 }
 
 impl DiscoveryPolicy {
@@ -174,7 +187,40 @@ impl DiscoveryPolicy {
             DiscoveryPolicy::WhenApplicable => {
                 attempt.status != RealRootednessTheoremStatus::NotApplicable
             }
+            DiscoveryPolicy::WhenStronger => attempt.is_proved(),
         }
+    }
+
+    /// Context-aware recording, preserving an existing report when a new
+    /// route adds no conclusion to it.
+    pub(super) fn records_after(
+        self,
+        attempt: &RealRootednessTheoremReport,
+        earlier: &[RealRootednessTheoremReport],
+    ) -> bool {
+        if !self.records(attempt) {
+            return false;
+        }
+        if self != Self::WhenStronger {
+            return true;
+        }
+        let Some(new) = &attempt.conclusion else {
+            return false;
+        };
+        !earlier
+            .iter()
+            .filter_map(|a| a.conclusion.as_ref().filter(|_| a.is_proved()))
+            .any(|old| {
+                old.first_index <= new.first_index
+                    && !old.has_zero_residue_classes()
+                    && (!new.simple_roots || old.simple_roots)
+                    && (new.root_region.is_none() || old.root_region == new.root_region)
+                    && (new.interlacing.is_none()
+                        || (old.interlacing.is_some()
+                            && old.interlacing_from <= new.interlacing_from
+                            && (new.interlacing == Some(RowInterlacing::Weak)
+                                || old.interlacing == Some(RowInterlacing::Strict))))
+            })
     }
 }
 
@@ -356,7 +402,7 @@ mod tests {
 
     #[test]
     fn parent_region_recording_stage_and_menu_policies_are_frozen() {
-        use DiscoveryPolicy::{Always, WhenApplicable};
+        use DiscoveryPolicy::{Always, WhenApplicable, WhenStronger};
         use ParentRegion::{
             OpenNonpositiveRay as Ray, OpenNonpositiveRayThenUnrestricted as Fallback, Unrestricted,
         };
@@ -482,6 +528,15 @@ mod tests {
                 WhenApplicable,
                 true,
                 true,
+            ),
+            (
+                ParityProduct,
+                WhileUnproved,
+                Fallback,
+                true,
+                WhenStronger,
+                false,
+                false,
             ),
             (
                 DegreeLawReversal,
@@ -613,6 +668,7 @@ mod tests {
                 RealRootednessTheorem::ResidueClassSubsequences,
                 RealRootednessTheorem::IndexSectionLift,
                 RealRootednessTheorem::RationalPfRiordan,
+                RealRootednessTheorem::ParityProduct,
                 RealRootednessTheorem::DegreeLawReversal
             ]
         );
@@ -627,6 +683,7 @@ mod tests {
                 RealRootednessTheorem::LagTwoEuler,
                 RealRootednessTheorem::BinomialPerturbedEulerOrbit,
                 RealRootednessTheorem::RationalPfRiordan,
+                RealRootednessTheorem::ParityProduct,
                 RealRootednessTheorem::DegreeLawReversal
             ]
         );

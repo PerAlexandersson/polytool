@@ -4,6 +4,19 @@
 
 ### Added
 
+- `recurrence-prove` can certify stationary cubic families by the new
+  `parity_product` route: exact characteristic factorization, bounded gcd
+  divisor allocation, seed/Casoratian identities and two existing factor
+  proofs. JSON adds `certificate.parity_product`; weak adjacent interlacing
+  is claimed only when both factors certify it, with no simplicity claim.
+  Rust exports `check_parity_product_theorem`, `ParityProductCertificate`
+  and the divisor/depth bounds. Unknown certificate diagnostics include the
+  new tag. No Lean replay is asserted (#55).
+- `certify_constant_coefficient_index_subsequence` and its replayable
+  `ConstantCoefficientIndexSubsequenceCertificate` construct exact index
+  subsequences through the shared Newton-sum/Cayley--Hamilton kernel.
+  This library operation asserts an all-index identity, not real-rootedness.
+
 - `hypergeometric_row` recognizes terminating 3F2 rows after its existing
   multiplier matcher. Exact rational parameters, both upper-parameter parity
   assignments, argument scaling and degree reversal are checked. The weak

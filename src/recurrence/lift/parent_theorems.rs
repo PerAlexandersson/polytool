@@ -84,6 +84,12 @@
 //!   functions `F=d/(1-x z d K)`, nonzero rational PF `d,K`, `d(0)>0`;
 //!   the six-step Edrei, Cauchy--Binet and Chen--Fu--Ruan proof chain,
 //!   including noninvertible arrays and exact zero-row descriptions.
+//! - [`check_parity_product_theorem`]: constant-coefficient cubic families
+//!   recognized as shared-factor parity products, with exact gcd seed
+//!   allocations, Casoratian identity and two nonrecursive factor proofs;
+//!   weak consecutive interlacing only when both factors certify it.
+//! - [`certify_constant_coefficient_index_subsequence`]: exact index-section
+//!   identities from the shared Newton-sum/companion-matrix kernel.
 //! - [`check_degree_law_reversal_theorem`]: the shared degree-law reversal
 //!   closure of the nonrecursive theorem menu, after direct routes and lifts
 //!   fail; the same [`DegreeLawTransform`] and replay as index

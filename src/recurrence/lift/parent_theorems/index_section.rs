@@ -387,12 +387,19 @@ pub fn check_index_section_lift_theorem(
     )
 }
 
+mod subsequence;
+pub use subsequence::{
+    certify_constant_coefficient_index_subsequence, ConstantCoefficientIndexSubsequenceCertificate,
+};
+
 // ---------------------------------------------------------------------------
 // Exact algebra
 // ---------------------------------------------------------------------------
 
 /// `z^r - sum_k b_k z^(r-k)` for `b = (b_1, ..., b_r)`.
-fn characteristic_polynomial(multipliers: &[UnivariatePolynomial]) -> BivariatePolynomial {
+pub(super) fn characteristic_polynomial(
+    multipliers: &[UnivariatePolynomial],
+) -> BivariatePolynomial {
     let order = multipliers.len();
     let mut coefficients = vec![UnivariatePolynomial::zero(); order + 1];
     coefficients[order] = UnivariatePolynomial::one();
@@ -415,7 +422,7 @@ fn substitute_shift_power(chi: &BivariatePolynomial, period: usize) -> Bivariate
 /// `Res_w(psi(w), z - w^period) = prod_i (z - alpha_i^period)` for a monic
 /// `psi` with roots `alpha_i`, from the power sums of the roots (Newton's
 /// identities over `Q[x]`).
-fn power_characteristic_polynomial(
+pub(super) fn power_characteristic_polynomial(
     psi: &BivariatePolynomial,
     period: usize,
 ) -> BivariatePolynomial {
@@ -460,17 +467,23 @@ fn negative_parent_coefficients(psi: &BivariatePolynomial) -> usize {
 /// Whether `f` is `g^power` for some `g` in `Q[x]` (exact: the candidate
 /// root is built coefficient by coefficient and its power compared).
 fn is_perfect_power(f: &UnivariatePolynomial, power: usize) -> bool {
+    polynomial_power_root(f, power).is_some()
+}
+
+/// Exact polynomial root, shared with cubic parity-product recognition.
+pub(super) fn polynomial_power_root(
+    f: &UnivariatePolynomial,
+    power: usize,
+) -> Option<UnivariatePolynomial> {
     let Some(degree) = f.degree() else {
-        return true;
+        return Some(UnivariatePolynomial::zero());
     };
     let valuation = f.coeffs().iter().position(|c| !c.is_zero()).unwrap_or(0);
     if degree % power != 0 || valuation % power != 0 {
-        return false;
+        return None;
     }
     let shifted: Vec<Q> = f.coeffs()[valuation..].to_vec();
-    let Some(lowest) = rational_root(&shifted[0], power) else {
-        return false;
-    };
+    let lowest = rational_root(&shifted[0], power)?;
     let length = (degree - valuation) / power + 1;
     let mut root = vec![lowest];
     let scale = Q::from_integer(BigInt::from(power)) * root[0].pow(power as i32 - 1);
@@ -490,7 +503,12 @@ fn is_perfect_power(f: &UnivariatePolynomial, power: usize) -> bool {
     for _ in 0..power {
         product = vec_poly::mul(&product, &root);
     }
-    vec_poly::trim(&product) == vec_poly::trim(&shifted)
+    if vec_poly::trim(&product) != vec_poly::trim(&shifted) {
+        return None;
+    }
+    let mut coefficients = vec![Q::zero(); valuation / power];
+    coefficients.extend(root);
+    Some(UnivariatePolynomial::new(coefficients))
 }
 
 /// The rational `power`-th root of `value`, when it is one.

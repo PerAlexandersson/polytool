@@ -275,3 +275,78 @@ fn structural_gamma_chain_text_json_and_replay() {
         Some(2)
     );
 }
+
+#[test]
+fn parity_product_json_text_replay_and_negative_seeds() {
+    let record = serde_json::json!({"schema":"polytool.recurrence.v1","first_index":0,
+    "initial_polynomials":[["1"],["1","1"],["2","3","1"]],
+    "recurrence":{"terms":[
+        {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["1","1"]]}},
+        {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["1","1"]]}},
+        {"offset":3,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1"]]}}
+    ]}});
+    let output = run(&["recurrence-prove", "--json"], &record.to_string());
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let attempt = report["attempts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["theorem"] == "parity_product")
+        .unwrap();
+    assert_eq!(attempt["status"], "proved");
+    assert_eq!(attempt["conclusion"]["interlacing"], "weak");
+    assert_eq!(attempt["conclusion"]["interlacing_from"], 1);
+    assert_eq!(attempt["conclusion"]["simple_roots"], false);
+    assert_eq!(
+        attempt["certificate"]["parity_product"]["factor_proofs"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(run(&["recurrence-prove", "--verify"], &report.to_string())
+        .status
+        .success());
+    let mut altered = report;
+    let a = altered["attempts"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|a| a["theorem"] == "parity_product")
+        .unwrap();
+    a["certificate"]["parity_product"]["proof_depth"] = serde_json::json!(2);
+    assert_eq!(
+        run(&["recurrence-prove", "--verify"], &altered.to_string())
+            .status
+            .code(),
+        Some(2)
+    );
+    let text = run(&["recurrence-prove"], &record.to_string());
+    assert!(String::from_utf8_lossy(&text.stdout).contains("Closure: parity product"));
+    let mut bad = record;
+    bad["initial_polynomials"][2] = serde_json::json!(["3", "3", "1"]);
+    let output = run(
+        &[
+            "recurrence-prove",
+            "--json",
+            "--max-lift-candidates",
+            "0",
+            "--max-representation-candidates",
+            "0",
+            "--max-affine-coordinates",
+            "0",
+        ],
+        &bad.to_string(),
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(!report["attempts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|a| a["theorem"] == "parity_product" && a["status"] == "proved"));
+}

@@ -543,7 +543,11 @@ pub fn discover_recurrence_proofs_with_stage_options(
             }
             let attempt =
                 check_real_rootedness_theorem(route.theorem, &rule, first_index, &seeds, options)?;
-            if route.policy.discovery.records(&attempt) {
+            if route
+                .policy
+                .discovery
+                .records_after(&attempt, &report.attempts)
+            {
                 report.attempts.push(attempt);
                 report.finish_summary(None);
             }
@@ -604,7 +608,7 @@ fn run_theorems(
     {
         let attempt =
             check_with_first_proving_start(route.theorem, rule, first_index, seeds, options)?;
-        if route.policy.discovery.records(&attempt) {
+        if route.policy.discovery.records_after(&attempt, &attempts) {
             attempts.push(attempt);
         }
     }

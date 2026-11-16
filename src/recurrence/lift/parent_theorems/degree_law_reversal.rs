@@ -550,7 +550,8 @@ mod tests {
                 FactorGauge,
                 LagTwoEuler,
                 BinomialPerturbedEulerOrbit,
-                RationalPfRiordan
+                RationalPfRiordan,
+                ParityProduct
             ]
         );
     }
