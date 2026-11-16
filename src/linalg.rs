@@ -22,7 +22,6 @@
 mod definiteness;
 mod determinants;
 #[cfg(test)]
-mod differential_tests;
 mod integer_elimination;
 mod linear_systems;
 mod modular;
@@ -41,11 +40,13 @@ pub use determinants::{
     characteristic_polynomial_bigint, closed_walk_counts_bigint, determinant,
 };
 pub(crate) use linear_systems::solve_integer_fit_system;
+#[doc(inline)]
 pub use linear_systems::{
     rational_kernel_with_certificate, solve_full_rank_square_linear_system, solve_linear_system,
     solve_linear_system_with_rank, LinearSystemSolution, RationalKernel, RationalKernelError,
     RationalKernelLimits,
 };
+#[doc(inline)]
 pub use modular::modular_leading_principal_minors_bigint;
 #[allow(deprecated)]
 pub use sparse_modular::sparse_modular_linear_system_consistent;
@@ -69,4 +70,25 @@ pub use total_positivity::{
     is_totally_nonnegative_neville, TotalPositivityError,
 };
 
+/// Thread-local control for exercising the extracted rational fallback paths.
+#[cfg(feature = "test-hooks")]
+#[doc(inline)]
+pub use exact_algebra::integer_elimination::ForcedFallback;
+
 type Q = crate::BigRational;
+
+#[cfg(all(test, feature = "test-hooks"))]
+mod extracted_test_hooks {
+    use super::{solve_linear_system, ForcedFallback, Q};
+
+    #[test]
+    fn fallback_hook_reexport_preserves_exact_solutions() {
+        let a = vec![vec![Q::from_integer(3.into())]];
+        let b = vec![Q::from_integer(2.into())];
+        let _guard = ForcedFallback::engage();
+        assert_eq!(
+            solve_linear_system(&a, &b),
+            Some(vec![Q::new(2.into(), 3.into())])
+        );
+    }
+}

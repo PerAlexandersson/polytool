@@ -46,17 +46,22 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Run tests
-        run: cargo test --features full-tests --all-targets
+        run: cargo test --features full-tests,test-hooks --all-targets
 
-      # A full `cargo package` of polytool resolves `exact-real-roots` and
-      # `ore-algebra` from crates.io, where they are not published yet; until
-      # they are, check the polytool file list and package the path
-      # dependencies on their own.
+      # A full `cargo package` resolves the internal math dependencies from
+      # crates.io, where some are not published yet. Check the polytool file
+      # list and package the publishable path dependencies on their own.
+      # The in-tree exact-algebra crate has its own tests and MSRV check.
       - name: Verify package
         run: |
           cargo package --list | grep -x 'data/oeis-catalog.jsonl' > /dev/null
           cargo package --manifest-path crates/exact-real-roots/Cargo.toml
           cargo package --manifest-path crates/ore-algebra/Cargo.toml
+
+      - name: Check and test the exact-algebra crate
+        run: |
+          cargo clippy --manifest-path crates/exact-algebra/Cargo.toml --all-targets --features test-hooks -- -D warnings
+          cargo test --manifest-path crates/exact-algebra/Cargo.toml --features test-hooks
 
       - name: Test the ore-algebra crate
         run: cargo test --manifest-path crates/ore-algebra/Cargo.toml --all-targets
@@ -104,6 +109,8 @@ jobs:
             manifest: crates/ore-algebra/Cargo.toml
           - package: exact-real-roots
             manifest: crates/exact-real-roots/Cargo.toml
+          - package: exact-algebra
+            manifest: crates/exact-algebra/Cargo.toml
           - package: mcp
             manifest: mcp/Cargo.toml
           - package: web

@@ -45,6 +45,24 @@ exact-real-roots = { path = "path/to/polytool/crates/exact-real-roots" }
 Both crates use ascending-degree coefficient order and arbitrary-precision
 integer arithmetic. Repeated roots are handled through the square-free part.
 
+## Shared exact arithmetic
+
+The standalone [exact-algebra crate](../crates/exact-algebra/README.md) owns
+word-size primality validation and modular arithmetic, BigInt Chinese
+remaindering, bounded rational reconstruction, row denominator clearing,
+fraction-free rational solving and modular leading principal minors.
+It requires Rust 1.82 and depends only on `num-*` crates.
+
+The existing `polytool::linalg` solving and kernel paths re-export these
+implementations with the same signatures. CRT reconstruction accepts explicit
+bounds: signed values require `modulus > 2 * bound`, and inclusive nonnegative
+bounds require `modulus > bound`. These certify uniqueness under the supplied
+bound and modular congruences. Callers must justify those mathematical premises.
+The rational reconstruction API checks its bounds, coprimality and congruence.
+
+The optional `test-hooks` feature exposes `linalg::ForcedFallback`, a
+thread-local guard for exercising rational fallback paths in consumer tests.
+
 ## Rational row generating functions
 
 `recurrence::generating_function::rational_generating_function(rule,

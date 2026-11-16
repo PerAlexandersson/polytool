@@ -4,6 +4,13 @@
 
 ### Added
 
+- The in-tree `exact-algebra` crate provides validated word-size primes,
+  modular arithmetic, batched BigInt CRT with certified signed/nonnegative
+  reconstruction, bounded rational reconstruction and row denominator clearing.
+  Dense exact solving and modular leading principal minors share this core;
+  existing `polytool::linalg` paths and output contracts are preserved.
+  The optional `test-hooks` feature exposes `linalg::ForcedFallback`.
+
 - `oeis rows` accepts a nonregular initial prefix when the later row-length
   rule holds throughout a suffix spanning two periods and longer than the
   prefix; JSON adds `prefix_lengths`. Later numeric examples must obey the

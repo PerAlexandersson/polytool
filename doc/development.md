@@ -39,8 +39,8 @@ reference. If the JSON only lists names and summaries (or the binary has no
 `help --json`), it falls back to scraping each command's `--help`. Every
 `doc/*.md` guide is included automatically (the Python guide also gets a
 navigation entry); guides not named on the front page are listed under "More
-guides". Rustdoc for `polytool`, `ore-algebra` and
-`exact-real-roots` is published under `/api/`.
+guides". Rustdoc for `polytool`, `ore-algebra`, `exact-real-roots` and
+`exact-algebra` is published under `/api/`.
 
 ## Continuous integration
 
@@ -51,9 +51,10 @@ only when the bindings, the library sources or its own files change.
 `ci.yml`:
 
 - `core`: formatting, OEIS catalog data tests, clippy, tests, package check,
-  `ore-algebra` tests.
+  `ore-algebra` tests, and the `exact-algebra` unit, fallback-hook and doctests.
 - `companions`: MCP formatting, clippy and tests; `cargo check` of the web crate.
-- `msrv`: matrix over `polytool`, `ore-algebra`, `exact-real-roots`, `mcp` and
+- `msrv`: matrix over `polytool`, `ore-algebra`, `exact-real-roots`,
+  `exact-algebra`, `mcp` and
   `web`; each job reads the package's declared `rust-version` (currently 1.82,
   and 1.89 for `mcp`) and runs `cargo check --lib --bins` on that toolchain.
   A package without a committed `Cargo.lock` (`web`, `mcp`) is first resolved
@@ -74,7 +75,7 @@ example the web job is `wasm-pack build --release --target no-modules
 
 `docs.yml` builds the site with `scripts/build-docs.py` (which fails on broken
 local links, unresolved guide links and symbolic links), checks that the front
-page, command reference and the three rustdoc entry points exist, and uploads
+page, command reference and the four rustdoc entry points exist, and uploads
 the Pages artifact. Pull requests only build. A push to `main`, or a manual run
 on `main` with `publish` left enabled, deploys to GitHub Pages through the
 `github-pages` environment. One-time setup: in the repository settings set
@@ -96,6 +97,16 @@ Integration tests are modules of one `tests/integration/main.rs` binary;
 `cargo test -p polytool --test integration module_name::` selects one module.
 Worker checkouts reuse an external `CARGO_TARGET_DIR` and serialize builds
 with their build lock, including final checks.
+
+The dense rational solver and its independent differential tests live in
+`exact-algebra`. Run its tests, including the optional fallback hook, explicitly:
+
+```sh
+cargo test --manifest-path crates/exact-algebra/Cargo.toml --features test-hooks
+```
+
+The `polytool/test-hooks` feature re-exports that guard as
+`polytool::linalg::ForcedFallback` for consumer tests. Default builds omit it.
 
 Run the MCP server tests:
 

@@ -242,10 +242,10 @@ def main():
                 "--bin", "polytool", env=env)
         shutil.rmtree(target / "doc", ignore_errors=True)
         # Fresh target directory prevents unrelated workspace API pages leaking
-        # into the site. --no-deps retains only these three public libraries.
+        # into the site. --no-deps retains only these four public libraries.
         run("cargo", "doc", "--locked", "--no-deps", "--lib",
             "--manifest-path", manifest, "-p", "polytool", "-p", "exact-real-roots",
-            "-p", "ore-algebra", env=env)
+            "-p", "ore-algebra", "-p", "exact-algebra", env=env)
         shutil.copytree(target / "doc", output / "api")
         binary = str(args.binary.resolve() if args.binary else target / "debug/polytool")
         metadata = load_help_metadata(binary)
