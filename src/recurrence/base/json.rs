@@ -38,6 +38,10 @@ pub struct RecurrenceJson {
     /// Reason Lean output was refused; omitted when Lean rendering was not requested.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lean_reason: Option<String>,
+    /// Whether attached LaTeX was parsed back and checked symbolically against
+    /// the normalized identity, initial rows and starting index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latex_checked: Option<bool>,
 }
 
 impl std::fmt::Debug for RecurrenceJson {
@@ -189,7 +193,9 @@ impl RecurrenceJson {
     /// factorization does not finish within the default budget stays expanded
     /// and a `%` comment line says so.  The stored `latex` field is ignored.
     /// Invalid records, insufficient initial rows and index overflow return
-    /// an error.  [`Self::to_latex_expanded`] never factors.
+    /// an error. The complete emitted definition is parsed back and checked
+    /// symbolically against the normalized identity, seeds and index range;
+    /// any mismatch is an error. [`Self::to_latex_expanded`] never factors.
     pub fn to_latex(&self) -> Result<String, RecurrenceError> {
         self.latex_presentation(true)
     }
@@ -225,7 +231,7 @@ impl RecurrenceJson {
         for note in notes {
             lines.push(format!("% {note}"));
         }
-        for (offset, row) in seeds.into_iter().enumerate() {
+        for (offset, row) in seeds.iter().cloned().enumerate() {
             let polynomial = BivarPoly { coeffs: vec![row] }.to_latex();
             lines.push(format!("$P_{{{}}} = {polynomial}$", first_index + offset));
         }
@@ -239,11 +245,15 @@ impl RecurrenceJson {
             if let Some(reason) = &presentation.reason {
                 lines.push(format!("% {reason}"));
                 lines.push(format!("${formula}$"));
-                return Ok(lines.join("\n"));
+                let text = lines.join("\n");
+                verify_latex_recurrence_output(&text, self)?;
+                return Ok(text);
             }
         }
         lines.push(format!("${formula} \\quad (n \\geq {start})$"));
-        Ok(lines.join("\n"))
+        let text = lines.join("\n");
+        verify_latex_recurrence_output(&text, self)?;
+        Ok(text)
     }
 
     /// Check all supplied rows, minimize the seed prefix, and attach exact
@@ -267,6 +277,7 @@ impl RecurrenceJson {
             .map(RecurrenceJsonData::from_recurrence);
         self.presentation = Some(presentation);
         self.latex = None;
+        self.latex_checked = None;
         self.lean = None;
         self.lean_reason = None;
         Ok(self)
@@ -275,6 +286,7 @@ impl RecurrenceJson {
     /// Refresh the optional LaTeX presentation from this record's exact data.
     pub fn with_latex(mut self) -> Result<Self, RecurrenceError> {
         self.latex = Some(self.to_latex()?);
+        self.latex_checked = Some(true);
         Ok(self)
     }
 
@@ -325,6 +337,7 @@ impl RecurrenceJson {
             normalized_recurrence: None,
             lean: None,
             lean_reason: None,
+            latex_checked: None,
         }
     }
 

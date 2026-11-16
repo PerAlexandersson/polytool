@@ -10,3 +10,6 @@ use super::*;
 
 mod hypergeometric_triangle;
 pub use hypergeometric_triangle::*;
+
+// Shared exact expression parser; LaTeX converts only its emitted syntax.
+pub(in crate::recurrence) use hypergeometric_triangle::parse_polynomial_with_exponent_limit;

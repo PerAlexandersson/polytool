@@ -161,7 +161,8 @@
               }
             }
           ]
-        }
+        },
+        "latex_checked": true
       },
       "complexity": {
         "rec_len": 1,

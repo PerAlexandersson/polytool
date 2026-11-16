@@ -17,6 +17,8 @@ mod factored;
 pub use factored::*;
 mod iterate;
 pub use iterate::*;
+mod latex;
+pub use latex::*;
 mod lean;
 pub use lean::*;
 mod json;

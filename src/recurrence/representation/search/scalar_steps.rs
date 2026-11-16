@@ -366,6 +366,7 @@ impl Search<'_> {
                     normalized_recurrence: None,
                     lean: None,
                     lean_reason: None,
+                    latex_checked: None,
                     schema: RECURRENCE_JSON_SCHEMA.to_string(),
                     first_index: self.origin,
                     initial_polynomials: bound.initial_rows.clone(),

@@ -18,7 +18,9 @@ Input and output:
 
 Details:
   For tabf the example table must start at the first term. At least three rows are
-  required, with two observed increases for periodic growth. JSON includes a
+  required, with two observed increases for periodic growth. A prefix may precede
+  a regular suffix spanning two periods and longer than the prefix. Terminal
+  ellipsis rows are excluded from the evidence. JSON includes prefix_lengths, a
   structured row-length rule and b-file rejection details.
 
 Examples:

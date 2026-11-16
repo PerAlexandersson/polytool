@@ -86,3 +86,82 @@ fn recurrence_theorems_exit_status() {
     let invalid = run(&["recurrence-theorems", "--recurrence", "-"], b"{}");
     assert_eq!(invalid.status.code(), Some(2));
 }
+
+#[test]
+fn product_zero_seeds_use_the_shared_tail_and_residue_proofs() {
+    use polytool::recurrence::{
+        discover_recurrence_proofs, RealRootednessTheoremOptions, RecurrenceJson,
+    };
+    let cases = [
+        serde_json::json!({"schema":"polytool.recurrence.v1","first_index":0,
+            "initial_polynomials":[["1"],["0"]],"recurrence":{"terms":[
+                {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","1"]]}}]}}),
+        serde_json::json!({"schema":"polytool.recurrence.v1","first_index":0,
+            "initial_polynomials":[["0"],["1","1"]],"recurrence":{
+                "denominator":{"coeffs":[["-1"],["1"]]},"terms":[
+                {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","2"],["2","1"],["1","0"]]}}]}}),
+    ];
+    for record in cases {
+        let record: RecurrenceJson = serde_json::from_value(record).unwrap();
+        let proof =
+            discover_recurrence_proofs(&record, &RealRootednessTheoremOptions::default()).unwrap();
+        let input = serde_json::to_vec(&record).unwrap();
+        let output = run(&["recurrence-theorems", "--json"], &input);
+        assert_eq!(output.status.code(), Some(1)); // Existing match-based exit convention.
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["trivially_real_rooted_if_rule_holds"], true);
+        assert_eq!(report["trivially_real_rooted"], true);
+        assert_eq!(
+            report.get("real_rooted_from_index").cloned(),
+            proof.real_rooted_from_index.map(|n| serde_json::json!(n))
+        );
+        if let Some(from) = proof.real_rooted_from_index {
+            assert_eq!(report["real_rooted_from_index"], from);
+        }
+        assert_eq!(
+            report
+                .get("real_rooted_outside_zero_residue_classes")
+                .cloned(),
+            proof
+                .real_rooted_outside_zero_residue_classes
+                .map(|r| serde_json::to_value(r).unwrap())
+        );
+        let text = run(&["recurrence-theorems"], &input);
+        assert!(String::from_utf8(text.stdout)
+            .unwrap()
+            .contains("Product proof if the rule holds:"));
+        let mut fitted = serde_json::to_value(&record).unwrap();
+        // Reuse a valid fitted record's search metadata; the conditional flag is
+        // still available while the supplied-rule flag is absent.
+        let fitted_record = run(&["recurrence", "--json"], b"1\n2\n4\n8\n16\n32\n64\n");
+        let search: serde_json::Value = serde_json::from_slice(&fitted_record.stdout).unwrap();
+        fitted["search"] = search["search"].clone();
+        let fitted = run(
+            &["recurrence-theorems", "--json"],
+            &serde_json::to_vec(&fitted).unwrap(),
+        );
+        let fitted: serde_json::Value = serde_json::from_slice(&fitted.stdout).unwrap();
+        assert!(fitted.get("trivially_real_rooted").is_none());
+        assert_eq!(fitted["trivially_real_rooted_if_rule_holds"], true);
+    }
+}
+
+#[test]
+fn product_zero_seeds_do_not_make_invalid_live_rows_trivial() {
+    for live in [serde_json::json!(["0"]), serde_json::json!(["1", "0", "1"])] {
+        let record = serde_json::json!({"schema":"polytool.recurrence.v1", "first_index":0,
+            "initial_polynomials":[live,["0"]],"recurrence":{"terms":[
+                {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","1"]]}}]}});
+        let output = run(
+            &["recurrence-theorems", "--json"],
+            &serde_json::to_vec(&record).unwrap(),
+        );
+        assert_eq!(output.status.code(), Some(1));
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["trivially_real_rooted_if_rule_holds"], false);
+        assert!(report.get("real_rooted_from_index").is_none());
+        assert!(report
+            .get("real_rooted_outside_zero_residue_classes")
+            .is_none());
+    }
+}

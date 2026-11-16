@@ -4,6 +4,27 @@
 
 ### Added
 
+- `oeis rows` accepts a nonregular initial prefix when the later row-length
+  rule holds throughout a suffix spanning two periods and longer than the
+  prefix; JSON adds `prefix_lengths`. Later numeric examples must obey the
+  rule even when they extend beyond the available term prefix (#56).
+- `oeis entries --data DIR [--keyword tabl,tabf] [--json]` lists local A-numbers
+  using the shared `%K` reader; library helpers `list_local_oeis_entries` and
+  `parse_oeis_keywords` expose listing and keyword parsing (#61).
+- LaTeX definitions are parsed back and checked symbolically against the
+  normalized recurrence, initial conditions and range before output;
+  `latex_checked: true` accompanies attached LaTeX. Public
+  `verify_latex_recurrence_output` also checks supplied writer-subset text (#59).
+- Product classification in `recurrence-theorems` reuses proof discovery's
+  tail and residue-class handling for zero initial rows. JSON and text report
+  `real_rooted_from_index` or `real_rooted_outside_zero_residue_classes` with
+  the flag; `classify_product_recurrence` exposes the proved range (#60).
+- Lean output wraps overlong parenthesized factors at internal `+`, `-` and `/`
+  operators with deeper indentation, retaining exact read-back checks (#58).
+- Final example rows marked with `...` or `…` and lacking a following numeric
+  row no longer count as complete row-length evidence; dropping one can leave
+  insufficient evidence and change a previously accepted entry to a refusal (#57).
+
 - The `ma_wang_interval` route also proves first-order derivative recurrences
   on `(-inf,U]` with linear derivative multiplier `K_n(x-U)`. Exact degree,
   leading-sign and endpoint-multiplicity checks implement Ma--Wang Theorem 2,

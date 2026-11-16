@@ -12,7 +12,16 @@ inferred safely. At least three example rows are required, with two observed
 increases for periodic growth. JSON includes the existing display string and
 `row_length_rule_details`: `kind` is `constant_step` or `periodic_step`,
 `step` is the increase, `period` counts transitions per increase, and `phase`
-is the zero-based transition index modulo the period. It also includes a
+is the zero-based transition index modulo the period. `prefix_lengths` lists
+initial row lengths preceding the rule (empty when it applies throughout).
+The phase starts at the first regular row. A prefix is accepted only when
+every later example row obeys the rule, the regular suffix spans at least
+two full periods of transitions and has more rows than the prefix. The earliest
+qualifying suffix is used. Later numeric examples beyond the available term prefix must
+also obey the rule. A final example row ending in `...` or `…` without a following
+numeric row is excluded from the evidence; term rows are emitted only when
+complete. Dropping a truncated example can leave too few rows to establish a
+rule and therefore produce a refusal. It also includes a
 stable `reason_code`, human `reason`, exact decimal-string rows, term source,
 and `bfile_rejection`, `bfile_rejection_reason` and optional I/O detail when
 a present b-file cannot be used. Text output gives b-file rejection on stderr.
@@ -27,6 +36,23 @@ cache without copying or modifying the OEIS checkout. The library entry point
 is `polytool::oeis::read_oeis_bfile`; `oeis generate` and MCP
 `generate_oeis_rows` use the bundled recurrence catalog and do not read local
 b-files.
+
+## List entries in local data
+
+```sh
+polytool oeis entries --data DIR
+polytool oeis entries --data DIR --keyword tabl,tabf --json
+```
+
+`entries` lists canonical `seq/Annn/Annnnnn.seq` A-numbers in increasing order,
+one per line, or a JSON list of strings. `--keyword` matches any comma-separated
+keyword; without it every entry is listed. Matching uses the exact same `%K`
+reader as `oeis rows`, including whitespace trimming and multiple keyword lines.
+An empty keyword is a usage error. Missing or unreadable input returns exit 2;
+no matches is a successful empty list. Noncanonical paths and symbolic links
+are ignored. This reads local data without network access or catalog lookup.
+Library entry points: `oeis::list_local_oeis_entries`, `oeis::parse_oeis_keywords`.
+Local row extraction is not an MCP tool, so local entry listing is CLI-only too.
 
 ## Generate recurrence-backed OEIS families
 

@@ -88,8 +88,9 @@ pub use bfile::{
 };
 pub mod source;
 pub use source::{
-    parse_bfile, parse_oeis_internal_format, parse_oeis_internal_terms, read_oeis_bfile,
-    OeisInternalTerms, OeisSourceError, OeisSourceRecord, OeisTermsSource, ParsedBFile,
+    list_local_oeis_entries, parse_bfile, parse_oeis_internal_format, parse_oeis_internal_terms,
+    parse_oeis_keywords, read_oeis_bfile, OeisInternalTerms, OeisSourceError, OeisSourceRecord,
+    OeisTermsSource, ParsedBFile,
 };
 mod text;
 pub use text::{

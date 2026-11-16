@@ -103,6 +103,9 @@ Per command:
   oeis rows
       0 answered (also when the mathematical answer is negative)
       2 usage error or invalid input
+  oeis entries
+      0 entries listed (possibly empty)
+      2 usage error or unreadable data
   gamma-expansion
       0 every row has a gamma expansion
       1 some row is not palindromic

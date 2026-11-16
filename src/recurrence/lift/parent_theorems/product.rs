@@ -43,11 +43,14 @@ pub fn check_product_recurrence_theorem(
 
 /// Whether the sequence defined by `rule` and `seeds` is *trivially*
 /// real-rooted: the rule has the product form `B(n) P_n = A(x,n) P_(n-k)` and
-/// [`check_product_recurrence_theorem`] proves it (no root region requested).
+/// [`classify_product_recurrence`] certifies its real-rooted range or zero
+/// residue classes (no root region requested).
 ///
 /// This classifies the proof of a recursively defined sequence; it is never
 /// a property read off a single polynomial or a fitted recurrence.  The same
-/// flag is [`RealRootednessTheoremReport::trivially_real_rooted`].
+/// direct flag is [`RealRootednessTheoremReport::trivially_real_rooted`];
+/// [`classify_product_recurrence`] also covers zero seeds through the shared
+/// tail and residue-class proofs.
 ///
 /// # Errors
 ///
@@ -57,13 +60,65 @@ pub fn is_trivially_real_rooted(
     first_index: usize,
     seeds: &[Vec<Q>],
 ) -> Result<bool, RecurrenceError> {
-    Ok(check_product_recurrence_theorem(
-        rule,
-        first_index,
-        seeds,
-        &RealRootednessTheoremOptions::default(),
-    )?
-    .trivially_real_rooted)
+    Ok(classify_product_recurrence(rule, first_index, seeds)?.is_some())
+}
+
+/// Classify a product recurrence, including zero initial rows.
+///
+/// Returns the proved nonzero real-rooted range or its zero residue classes.
+/// The direct product check runs first. For zero seeds, the same residue-class
+/// check and tail construction used by proof discovery are reused; nonzero
+/// initial rows must themselves be real-rooted. This does not prove that a
+/// fitted rule holds for an independently defined family.
+///
+/// # Errors
+/// Returns errors parsing or normalizing the recurrence and seeds.
+pub fn classify_product_recurrence(
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<Q>],
+) -> Result<Option<RealRootednessTheoremConclusion>, RecurrenceError> {
+    let options = RealRootednessTheoremOptions::default();
+    first_index
+        .checked_add(seeds.len())
+        .and_then(|n| n.checked_add(options.maximum_start_delay))
+        .and_then(|n| n.checked_add(GENERATED_ROWS))
+        .filter(|n| *n <= i64::MAX as usize)
+        .ok_or_else(|| {
+            RecurrenceError::InvalidInput("product classification index range overflows".into())
+        })?;
+    let direct = check_product_recurrence_theorem(rule, first_index, seeds, &options)?;
+    if direct.is_proved() {
+        return Ok(direct.conclusion);
+    }
+    let Ok(shape) = recurrence_shape(rule) else {
+        return Ok(None);
+    };
+    if shape.terms.len() != 1
+        || !shape
+            .terms
+            .keys()
+            .all(|&(lag, derivative)| lag > 0 && derivative == 0)
+        || !seeds.iter().any(|row| vec_poly::is_zero(row))
+        || seeds
+            .iter()
+            .any(|row| !vec_poly::is_zero(row) && !is_real_rooted_rational(row))
+    {
+        return Ok(None);
+    }
+    let classes = check_residue_class_subsequence_theorem(rule, first_index, seeds, &options)?;
+    if classes.is_proved() {
+        return Ok(classes.conclusion);
+    }
+    if let Some((from, _)) = discovery::tail_start(rule, first_index, seeds, &options) {
+        let tail = discovery::tail_record(rule, first_index, seeds, from)?;
+        let (rule, first, seeds) = tail.to_recurrence_parts()?;
+        let tail = check_product_recurrence_theorem(&rule, first, &seeds, &options)?;
+        if tail.is_proved() {
+            return Ok(tail.conclusion);
+        }
+    }
+    Ok(None)
 }
 
 /// The registry entry of the product theorem ([`super::registry::ROUTES`]).
@@ -312,4 +367,41 @@ fn multiplier_hypotheses(
         }
     }
     hypotheses.push(unresolved_hypothesis(label, "every multiplier is real-rooted", "supported certificates: separable factors, linear/quadratic factors, or bounded factorization with constant leading coefficient".into()));
+}
+
+#[cfg(test)]
+mod classification_tests {
+    use super::*;
+
+    #[test]
+    fn zero_seed_classification_does_not_hide_invalid_live_seeds_or_multipliers() {
+        let q = |n: i64| Q::from_integer(n.into());
+        let rule = |coefficient| Recurrence {
+            terms: vec![RecurrenceTerm::new(
+                2,
+                0,
+                BivarPoly {
+                    coeffs: vec![coefficient],
+                },
+            )],
+            denominator: None,
+            inhomogeneous: None,
+        };
+        let good = rule(vec![q(0), q(1)]);
+        assert!(classify_product_recurrence(&good, usize::MAX, &[vec![q(1)]]).is_err());
+        let seeds = vec![vec![q(1)], vec![q(0)]];
+        let conclusion = classify_product_recurrence(&good, 0, &seeds)
+            .unwrap()
+            .unwrap();
+        assert_eq!(conclusion.first_index, 0);
+        assert_eq!(conclusion.zero_residue_classes.unwrap().residues, [1]);
+        assert!(!is_trivially_real_rooted(&rule(vec![q(1), q(0), q(1)]), 0, &seeds).unwrap());
+        assert!(!is_trivially_real_rooted(&good, 0, &[vec![q(0)], vec![q(0)]]).unwrap());
+        assert!(
+            !is_trivially_real_rooted(&good, 0, &[vec![q(1), q(0), q(1)], vec![q(0)]]).unwrap()
+        );
+        let mut derivative = good.clone();
+        derivative.terms[0].deriv_order = 1;
+        assert!(!is_trivially_real_rooted(&derivative, 0, &seeds).unwrap());
+    }
 }

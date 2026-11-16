@@ -345,7 +345,7 @@ fn append_recurrence_products(
         return;
     }
     // Keep a short polynomial coefficient together; distribute a longer one
-    // so every C(...) and every cast remains an unbroken atom.
+    // before wrapping any long parenthesized factors below.
     let negative = coefficients[0].negative;
     let mut positive = coefficients.clone();
     if negative {
@@ -370,6 +370,41 @@ fn append_recurrence_products(
         coefficient.factors.push(reference.clone());
         output.push(coefficient);
     }
+}
+
+// Keep casts and powers intact; break only at infix operators inside a factor.
+fn wrap_factor(text: &str, reserve: usize) -> Result<Vec<String>, RecurrenceError> {
+    let mut lines = Vec::new();
+    let mut remaining = text.to_string();
+    let mut inherited_depth = 0usize;
+    while remaining.chars().count() + reserve > 100 {
+        let mut depth = inherited_depth;
+        let mut split = None;
+        for (index, character) in remaining.char_indices() {
+            match character {
+                '(' => depth += 1,
+                ')' => depth = depth.saturating_sub(1),
+                '+' | '-' | '/'
+                    if depth > 0
+                        && index > 0
+                        && remaining[..index].chars().count() <= 100
+                        && remaining.as_bytes()[index - 1] == b' '
+                        && remaining.as_bytes().get(index + 1) == Some(&b' ') =>
+                {
+                    split = Some((index, depth));
+                }
+                _ => {}
+            }
+        }
+        let Some((index, depth)) = split else {
+            return Err(invalid("Lean atom exceeds the 100-column output subset"));
+        };
+        inherited_depth = depth;
+        lines.push(remaining[..index].trim_end().to_string());
+        remaining = format!("          {}", &remaining[index..]);
+    }
+    lines.push(remaining);
+    Ok(lines)
 }
 
 fn render_line(
@@ -416,17 +451,18 @@ fn render_line(
             };
             if current.chars().count() + separator.len() + factor.chars().count() + reserve > 100 {
                 if factor_index == 0 {
-                    return Err(invalid("Lean atom exceeds the 100-column output subset"));
+                    current.push_str(factor);
+                } else {
+                    lines.push(current);
+                    current = format!("      * {factor}");
                 }
-                lines.push(current);
-                current = format!("      * {factor}");
             } else {
                 current.push_str(separator);
                 current.push_str(factor);
             }
-            if current.chars().count() + reserve > 100 {
-                return Err(invalid("Lean atom exceeds the 100-column output subset"));
-            }
+            let mut wrapped = wrap_factor(&current, reserve)?;
+            current = wrapped.pop().expect("wrapped factor has a final line");
+            lines.extend(wrapped);
         }
     }
     current.push_str(suffix);
@@ -567,5 +603,28 @@ impl RecurrenceJson {
             }
         }
         self
+    }
+}
+
+#[cfg(test)]
+mod wrapping_tests {
+    use super::*;
+
+    #[test]
+    fn long_parenthesized_factors_wrap_at_internal_operators() {
+        let factor = "C ((150 + 110 * (n : ℝ) + 26 * (n : ℝ) ^ 2 + 2 * (n : ℝ) ^ 3) / (54 + 27 * (n : ℝ) + 3 * (n : ℝ) ^ 2))";
+        let terms = [SignedProduct {
+            negative: false,
+            factors: vec![factor.into(), "Rows n".into()],
+        }];
+        let wrapped = render_line("  | n + 1 => ", &terms, "").unwrap();
+        assert!(wrapped.lines().all(|line| line.chars().count() <= 100));
+        assert!(wrapped
+            .lines()
+            .any(|line| line.starts_with("          +") || line.starts_with("          /")));
+        assert!(wrap_factor(&"9".repeat(101), 0).is_err());
+        // Multiple continuations retain the enclosing parenthesis depth.
+        let text = format!("C ({} - 1)", vec!["123456789 * (n : ℝ)"; 20].join(" + "));
+        assert!(wrap_factor(&text, 0).unwrap().len() > 3);
     }
 }

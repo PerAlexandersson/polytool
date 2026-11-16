@@ -22,6 +22,7 @@ macro_rules! theorem_routes {
             "Product induction with uniformly real-rooted multipliers.", {
                 check_product_recurrence_theorem,
                 is_trivially_real_rooted,
+                classify_product_recurrence,
             };
             /// [`check_three_term_recurrence_theorem`].
             ThreeTermRecurrence, three_term, "three_term_recurrence",

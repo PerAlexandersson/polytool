@@ -91,7 +91,8 @@ verified by exact re-expansion, e.g.
 (n + 2) P_{n} = (2n + 1)(1 + t) P_{n-1} - (n - 1)(1 - t)^{2} P_{n-2};
 a coefficient whose factorization exhausts its budget stays expanded, noted by
 a % comment line), lean (checked real-polynomial definition and examples),
-and python (exact Python code). --latex and --python are
+and python (exact Python code). LaTeX definitions are parsed back symbolically;
+JSON includes latex_checked: true with attached LaTeX. --latex and --python are
 shorthands for the matching --format value. JSON includes Lean text or a
 refusal reason only when --lean-name NAME is supplied; without it neither
 Lean field is present. --format lean uses P when no name is supplied.

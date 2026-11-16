@@ -587,3 +587,97 @@ fn lean_examples_cover_alternation_forcing_rational_constants_and_order_three() 
         assert!(text.lines().all(|line| line.chars().count() <= 100));
     }
 }
+
+#[test]
+fn long_rational_factor_wraps_and_keeps_the_lean_readback() {
+    let record: RecurrenceJson = serde_json::from_value(serde_json::json!({
+        "schema":"polytool.recurrence.v1", "first_index":0,
+        "initial_polynomials":[["1"]], "recurrence":{
+            "denominator":{"coeffs":[["54"],["27"],["3"]]},
+            "terms":[{"offset":1,"deriv_order":0,"sign":"none",
+                "coeff":{"coeffs":[["151"],["110"],["26"],["2"]]}}]}
+    }))
+    .unwrap();
+    let (rule, first, seeds) = record.to_recurrence_parts().unwrap();
+    let rows = rule.generate_rows_rational(&seeds, first, 12).unwrap();
+    let input = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let output = run(
+        &[
+            "recurrence",
+            "--first-index",
+            "0",
+            "--no-laurent",
+            "--format",
+            "lean",
+            "--lean-name",
+            "Rows",
+            "--max-recurrence-length",
+            "1",
+            "--max-variable-degree",
+            "0",
+            "--max-index-degree",
+            "3",
+            "--max-derivative-order",
+            "0",
+            "--try-denominator",
+            "--max-denominator-index-degree",
+            "2",
+        ],
+        &input,
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let lean = stdout(&output);
+    assert!(lean.lines().all(|line| line.chars().count() <= 100));
+    assert!(
+        lean.lines()
+            .any(|line| line.starts_with("          +") || line.starts_with("          /")),
+        "{lean}"
+    );
+    polytool::recurrence::verify_lean_recurrence_output(&lean, "Rows", &rows).unwrap();
+    assert!(polytool::recurrence::verify_lean_recurrence_output(
+        &lean.replace("C (", "C (1 + "),
+        "Rows",
+        &rows
+    )
+    .is_err());
+}
+
+#[test]
+fn cli_latex_is_checked_symbolically_in_json_and_text() {
+    use polytool::recurrence::verify_latex_recurrence_output;
+    let input = "1\n1,1\n2,3,1\n6,11,6,1\n24,50,35,10,1\n120,274,225,85,15,1\n";
+    let output = run(
+        &["recurrence", "--first-index", "0", "--json", "--no-laurent"],
+        input,
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let record: RecurrenceJson = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(record.latex_checked, Some(true));
+    verify_latex_recurrence_output(record.latex.as_ref().unwrap(), &record).unwrap();
+    assert!(verify_latex_recurrence_output(
+        &record.latex.as_ref().unwrap().replace("P_{0}", "P_{99}"),
+        &record
+    )
+    .is_err());
+    let text = run(
+        &[
+            "recurrence",
+            "--first-index",
+            "0",
+            "--latex",
+            "--no-laurent",
+        ],
+        input,
+    );
+    assert!(text.status.success(), "{}", stderr(&text));
+    assert_eq!(stdout(&text).trim(), record.latex.unwrap());
+}

@@ -12,7 +12,8 @@ pub enum OeisRowLengthRule {
     PeriodicIncrease {
         /// Number of transitions per increase.
         period: usize,
-        /// Transition index (from zero) modulo `period` where increases occur.
+        /// Transition index modulo `period` where increases occur, counting
+        /// from the first regular row after any `prefix_lengths`.
         phase: usize,
     },
 }
@@ -134,6 +135,8 @@ pub struct OeisInferredRows {
     pub reason: Option<OeisRowsRefusalReason>,
     /// Why a supplied b-file was not used, if any.
     pub bfile_rejection: Option<OeisBFileRejection>,
+    /// Lengths of initial rows preceding the regular rule. Its phase starts after these rows.
+    pub prefix_lengths: Vec<usize>,
 }
 
 impl OeisInferredRows {
@@ -171,7 +174,7 @@ fn table_row(line: &str) -> Option<Vec<BigInt>> {
         label.trim().parse::<i64>().ok()?;
         text = rest.trim_start();
     }
-    let text = text.trim_end_matches(['.', ';', ',', ' ']);
+    let text = text.trim_end_matches(['.', '…', ';', ',', ' ']);
     let tokens: Vec<_> = text
         .split(|c: char| c == ',' || c.is_ascii_whitespace())
         .filter(|s| !s.is_empty())
@@ -222,11 +225,47 @@ fn regular_rule(lengths: &[usize]) -> Option<OeisRowLengthRule> {
     })
 }
 
+fn rule_with_prefix(lengths: &[usize]) -> Option<(usize, OeisRowLengthRule)> {
+    if let Some(rule) = regular_rule(lengths) {
+        return Some((0, rule));
+    }
+    // Prefer the earliest regular suffix. Every later example row must obey it.
+    for prefix in 1..lengths.len() {
+        let suffix = &lengths[prefix..];
+        if suffix.len() <= prefix {
+            break;
+        }
+        if let Some(rule) = regular_rule(suffix) {
+            let period = match rule {
+                OeisRowLengthRule::ConstantIncrease(_) => 1,
+                OeisRowLengthRule::PeriodicIncrease { period, .. } => period,
+            };
+            if suffix.len().saturating_sub(1) / period >= 2 {
+                return Some((prefix, rule));
+            }
+        }
+    }
+    None
+}
+
+fn terminal_truncated_row(lines: &[&str], index: usize) -> bool {
+    let text = lines[index].trim_end().trim_end_matches([';', ',', ' ']);
+    (text.ends_with("...") || text.ends_with('…'))
+        && lines
+            .get(index + 1)
+            .and_then(|line| table_row(line))
+            .is_none()
+}
+
 /// Infer complete rows from internal-format text and an optional b-file.
 ///
 /// For `tabf`, only a run of consecutive example lines matching the beginning
 /// of the terms is used; at least three rows and two periodic increases are
-/// required to infer a rule. Incomplete final rows are discarded.
+/// required to infer a rule. A nonregular prefix is accepted when the regular
+/// suffix spans at least two periods and has more rows than the prefix. The
+/// rule phase is relative to the first regular row. A terminal example row
+/// ending in an ellipsis is excluded from the evidence. Incomplete term rows
+/// are discarded.
 ///
 /// # Errors
 /// Returns the internal-format parser error if the record is invalid.
@@ -267,6 +306,7 @@ pub fn infer_oeis_rows(
         rows: Vec::new(),
         reason: None,
         bfile_rejection,
+        prefix_lengths: Vec::new(),
     };
     let (first, rule) = if record.has_keyword("tabl") {
         (1, OeisRowLengthRule::ConstantIncrease(1))
@@ -277,7 +317,11 @@ pub fn infer_oeis_rows(
         let mut starts_later = false;
         let mut disagreement = false;
         let mut best_mismatch = false;
+        let mut best_table_lengths = Vec::new();
         for start in 0..lines.len() {
+            if terminal_truncated_row(&lines, start) {
+                continue;
+            }
             let Some(first_row) = table_row(lines[start]) else {
                 continue;
             };
@@ -296,7 +340,10 @@ pub fn infer_oeis_rows(
             let mut candidate = Vec::new();
             let mut offset = 0;
             let mut mismatch = false;
-            for line in &lines[start..] {
+            for (index, line) in lines.iter().enumerate().skip(start) {
+                if terminal_truncated_row(&lines, index) {
+                    break;
+                }
                 let Some(row) = table_row(line) else {
                     break;
                 };
@@ -321,6 +368,13 @@ pub fn infer_oeis_rows(
             {
                 best = candidate;
                 best_mismatch = mismatch;
+                best_table_lengths = lines
+                    .iter()
+                    .enumerate()
+                    .skip(start)
+                    .take_while(|(index, _)| !terminal_truncated_row(&lines, *index))
+                    .map_while(|(_, line)| table_row(line).map(|row| row.len()))
+                    .collect();
             }
         }
         if best_mismatch {
@@ -344,7 +398,7 @@ pub fn infer_oeis_rows(
             result.reason = Some(OeisRowsRefusalReason::TooFewExampleRows);
             return Ok(result);
         }
-        let Some(rule) = regular_rule(&lengths) else {
+        let Some((prefix, rule)) = rule_with_prefix(&lengths) else {
             let differences: Vec<_> = lengths.windows(2).map(|w| w[1].checked_sub(w[0])).collect();
             let periodic_candidate = differences.iter().all(|d| matches!(d, Some(0 | 1)))
                 && differences.iter().filter(|d| **d == Some(1)).count() < 2;
@@ -355,15 +409,41 @@ pub fn infer_oeis_rows(
             });
             return Ok(result);
         };
-        (lengths[0], rule)
+        // Even examples beyond the available terms must obey the rule. They
+        // cannot supply missing terms or justify a longer inferred prefix.
+        let later_obeys =
+            best_table_lengths[prefix..]
+                .windows(2)
+                .enumerate()
+                .all(|(transition, pair)| {
+                    let increase = match rule {
+                        OeisRowLengthRule::ConstantIncrease(step) => step,
+                        OeisRowLengthRule::PeriodicIncrease { period, phase } => {
+                            usize::from(transition % period == phase)
+                        }
+                    };
+                    pair[0].checked_add(increase) == Some(pair[1])
+                });
+        if !later_obeys {
+            result.reason = Some(OeisRowsRefusalReason::IrregularLengths);
+            return Ok(result);
+        }
+        result.prefix_lengths = lengths[..prefix].to_vec();
+        (lengths[prefix], rule)
     } else {
         result.reason = Some(OeisRowsRefusalReason::NotTriangleKeyword);
         return Ok(result);
     };
     let mut width = first;
     let mut offset = 0usize;
+    for &length in &result.prefix_lengths {
+        result
+            .rows
+            .push(record.terms[offset..offset + length].to_vec());
+        offset += length;
+    }
     let mut transition = 0usize;
-    while width <= record.terms.len().saturating_sub(offset) {
+    while width > 0 && width <= record.terms.len().saturating_sub(offset) {
         result
             .rows
             .push(record.terms[offset..offset + width].to_vec());
@@ -393,6 +473,99 @@ mod tests {
     fn record(keyword: &str, terms: &str, examples: &str) -> String {
         format!("%N A000001 Example\n%O A000001 0,1\n%K A000001 {keyword}\n%S A000001 {terms}\n{examples}")
     }
+    fn lengths_record(lengths: &[usize], ending: &str) -> String {
+        let terms = vec!["1"; lengths.iter().sum()].join(",");
+        let mut examples = lengths
+            .iter()
+            .map(|&length| format!("%e A000001 {}", vec!["1"; length].join(",")))
+            .collect::<Vec<_>>();
+        if let Some(last) = examples.last_mut() {
+            last.push_str(ending);
+        }
+        record("tabf", &terms, &examples.join("\n"))
+    }
+
+    #[test]
+    fn prefixes_require_a_longer_regular_suffix_and_two_periods() {
+        for (lengths, prefix, rule) in [
+            (
+                vec![1, 1, 2, 3, 4],
+                vec![1],
+                OeisRowLengthRule::ConstantIncrease(1),
+            ),
+            (
+                vec![1, 1, 1, 2, 2, 3, 3, 4],
+                vec![1],
+                OeisRowLengthRule::PeriodicIncrease {
+                    period: 2,
+                    phase: 1,
+                },
+            ),
+            (
+                vec![3, 1, 2, 3],
+                vec![3],
+                OeisRowLengthRule::ConstantIncrease(1),
+            ),
+        ] {
+            let inferred = infer_oeis_rows(&lengths_record(&lengths, ""), "A000001", None).unwrap();
+            assert_eq!(inferred.reason, None);
+            assert_eq!(inferred.prefix_lengths, prefix);
+            assert_eq!(inferred.row_length_rule, Some(rule));
+            assert_eq!(
+                inferred.rows.iter().map(Vec::len).collect::<Vec<_>>(),
+                lengths
+            );
+        }
+        for lengths in [
+            vec![9, 8, 7, 1, 2, 3],
+            vec![9, 1, 1, 1, 2],
+            vec![9, 1, 2, 2, 3],
+            vec![1, 2, 3, 9, 2],
+        ] {
+            assert!(rule_with_prefix(&lengths).is_none(), "{lengths:?}");
+        }
+        let text = record("tabf", "1,1,1,1,1,1,1,1,1,1,1",
+            "%e A000001 1\n%e A000001 1\n%e A000001 1,1\n%e A000001 1,1,1\n%e A000001 1,1,1,1\n%e A000001 1,1,1,1,1,1,1\n");
+        assert_eq!(
+            infer_oeis_rows(&text, "A000001", None).unwrap().reason,
+            Some(OeisRowsRefusalReason::IrregularLengths)
+        );
+        // A period inferred near the beginning must also hold at the end.
+        assert!(rule_with_prefix(&[9, 1, 2, 2, 3, 3, 4, 9]).is_none());
+    }
+
+    #[test]
+    fn terminal_ellipsis_is_not_a_complete_example_row() {
+        for ending in [" ...", "…", "...,;"] {
+            let inferred =
+                infer_oeis_rows(&lengths_record(&[1, 2, 3, 4, 1], ending), "A000001", None)
+                    .unwrap();
+            assert_eq!(
+                inferred.row_length_rule,
+                Some(OeisRowLengthRule::ConstantIncrease(1))
+            );
+            assert_eq!(inferred.rows.len(), 4);
+        }
+        let text = lengths_record(&[1, 2, 3], " ...") + "\n%e A000001 1,1,1,1\n";
+        assert!(!terminal_truncated_row(
+            &text.lines().collect::<Vec<_>>(),
+            6
+        ));
+        assert_eq!(
+            infer_oeis_rows(&lengths_record(&[1, 2, 3], "."), "A000001", None)
+                .unwrap()
+                .rows
+                .len(),
+            3
+        );
+        assert!(
+            infer_oeis_rows(&lengths_record(&[1, 2, 3], " ..."), "A000001", None)
+                .unwrap()
+                .reason
+                .is_some()
+        );
+    }
+
     #[test]
     fn sources_and_triangle() {
         let text = record("tabl", "1,2,3,4,5,6", "");

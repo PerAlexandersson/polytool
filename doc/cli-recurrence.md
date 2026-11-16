@@ -641,6 +641,9 @@ binder or open polynomial API are rejected with an explanation (for example
 `have`, `Type`, `n`, `derivative`, `coeff`, `Polynomial`, `Nat`, `Real`).
 Namespace paths and quoted identifiers are outside this output subset.
 Lines are at most 100 columns, with two-space case/proof indentation.
+Long parenthesized factors break at internal `+`, `-` or `/` operators with
+a deeper continuation indent. The exact Lean read-back check also checks
+these multiline factors before output.
 Continuation lines are indented four spaces relative to the `|` (six total),
 and break before a top-level plus/minus, or between summand factors. Atoms
 such as `(n : ℝ)` remain on one line. A coefficient group too long to remain
@@ -714,7 +717,14 @@ coefficient before it is printed.  If the factorization budget (recombination
 subsets) is exhausted, that coefficient stays expanded and a `%` comment line
 names it; an unfinished factorization is never presented as complete.
 
-`--json` includes the same text in the optional `latex` field. Generation
+`--json` includes the same text in the optional `latex` field, together with
+`latex_checked: true`. Before printing either factored or expanded definitions,
+the emitted LaTeX is parsed back and checked symbolically against the normalized
+recurrence, initial row labels and coefficients, and starting index. A mismatch
+returns an error. If the leader is identically zero, normalization is unavailable:
+the original algebraic relation is checked, preserving its explicit reason and
+absence of a defining range. The reader accepts only the writer's subset, including powers,
+rational constants, derivatives, alternating signs and inhomogeneous terms. Generation
 uses the exact recurrence data and ignores presentation fields. Older
 records without it remain accepted. With `--theorem-matches`, the field is in
 the nested `recurrence_json`; theorem notes go to stderr in LaTeX mode.
@@ -727,7 +737,8 @@ Rust callers can use `Recurrence::to_latex()` for a bare expanded formula,
 `Recurrence::to_latex_factored()` for the factored one, or
 `RecurrenceJson::to_latex()` (factored) and `RecurrenceJson::to_latex_expanded()`
 for the complete presentation. The latter checks
-seed availability and index overflow. `RecurrenceJson::with_latex()` refreshes
+seed availability, index overflow and the symbolic read-back.
+`verify_latex_recurrence_output(text, record)` exposes the same check. `RecurrenceJson::with_latex()` refreshes
 the optional stored presentation; `reindexed()` refreshes it when present.
 
 ### B-files from a recurrence
@@ -869,6 +880,17 @@ classifies the product proof conditional on the supplied rule holding at all
 indices, including when the rule was fitted. The existing
 `trivially_real_rooted` remains false in discovery reports and is omitted from
 theorem reports for fitted records.
+
+`recurrence-theorems` also classifies product rules with zero initial rows,
+using proof discovery's exact tail and residue-class logic. Alongside the flag,
+`real_rooted_from_index` gives the start of nonzero real-rooted rows, or
+`real_rooted_outside_zero_residue_classes` gives `from_index` and
+`zero_residue_classes: {period, residues}`. These are conditional on the rule
+holding. Text reports print the same range. All-zero families and non-real-rooted
+nonzero seeds do not receive a positive product classification. The exit status
+still depends on the existing conditional theorem matches. The library helper
+`classify_product_recurrence` returns the corresponding proved conclusion;
+`is_trivially_real_rooted` includes these zero-seed cases.
 
 When the conditional classification differs from the established flag, the
 text report also prints the classification conditional on the rule holding.

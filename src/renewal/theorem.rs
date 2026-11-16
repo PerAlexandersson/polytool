@@ -232,6 +232,15 @@ pub struct RecurrenceTheoremReport {
     /// including when the rule was fitted. Absent if the check fails.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trivially_real_rooted_if_rule_holds: Option<bool>,
+    /// First index of nonzero real-rooted rows certified by the conditional
+    /// product classification. Absent when there are zero residue classes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub real_rooted_from_index: Option<usize>,
+    /// Conditional product classification with explicitly zero residue classes,
+    /// in the same indexing and format as recurrence proof discovery.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub real_rooted_outside_zero_residue_classes:
+        Option<crate::recurrence::RealRootedOutsideZeroResidueClasses>,
 }
 
 fn strip(row: &[BigRational]) -> &[BigRational] {
@@ -587,12 +596,36 @@ impl RecurrenceTheoremMatch {
     }
 }
 
+fn product_range(
+    conclusion: Option<&crate::recurrence::RealRootednessTheoremConclusion>,
+) -> (
+    Option<usize>,
+    Option<crate::recurrence::RealRootedOutsideZeroResidueClasses>,
+) {
+    match conclusion {
+        Some(c) => match &c.zero_residue_classes {
+            None => (Some(c.first_index), None),
+            Some(zero) => (
+                None,
+                Some(crate::recurrence::RealRootedOutsideZeroResidueClasses {
+                    from_index: c.first_index,
+                    zero_residue_classes: zero.clone(),
+                }),
+            ),
+        },
+        None => (None, None),
+    }
+}
+
 impl RecurrenceTheoremReport {
     /// Report for a caller-supplied recurrence record; its initial rows are
     /// compared with the canonical boundary rows.
     pub fn for_supplied(record: &RecurrenceJson) -> Result<Self, RenewalError> {
         let (recurrence, first_index, rows) = record.to_recurrence_parts()?;
         let matches = match_recurrence_theorems(&recurrence, first_index, &rows);
+        let product =
+            crate::recurrence::classify_product_recurrence(&recurrence, first_index, &rows).ok();
+        let (from, outside) = product_range(product.as_ref().and_then(|p| p.as_ref()));
         Ok(Self {
             schema: RECURRENCE_THEOREM_SCHEMA.into(),
             recurrence_text: recurrence.to_string(),
@@ -611,19 +644,13 @@ impl RecurrenceTheoremReport {
             },
             theorem_matches: matches.theorem_matches,
             rejected_theorems: matches.rejected_theorems,
-            trivially_real_rooted_if_rule_holds: crate::recurrence::is_trivially_real_rooted(
-                &recurrence,
-                first_index,
-                &rows,
-            )
-            .ok(),
-            trivially_real_rooted: record
-                .search
-                .is_none()
-                .then(|| {
-                    crate::recurrence::is_trivially_real_rooted(&recurrence, first_index, &rows)
-                })
-                .and_then(Result::ok),
+            trivially_real_rooted_if_rule_holds: product.as_ref().map(Option::is_some),
+            trivially_real_rooted: product
+                .as_ref()
+                .filter(|_| record.search.is_none())
+                .map(Option::is_some),
+            real_rooted_from_index: from,
+            real_rooted_outside_zero_residue_classes: outside,
         })
     }
 
@@ -636,13 +663,14 @@ impl RecurrenceTheoremReport {
     ) -> Self {
         let first_index = recurrence_json.first_index;
         let matches = match_recurrence_theorems(&result.recurrence, first_index, searched_rows);
-        let conditional =
+        let product =
             recurrence_json
                 .to_recurrence_parts()
                 .ok()
                 .and_then(|(rule, index, seeds)| {
-                    crate::recurrence::is_trivially_real_rooted(&rule, index, &seeds).ok()
+                    crate::recurrence::classify_product_recurrence(&rule, index, &seeds).ok()
                 });
+        let (from, outside) = product_range(product.as_ref().and_then(|p| p.as_ref()));
         Self {
             schema: RECURRENCE_THEOREM_SCHEMA.into(),
             recurrence_text: result.recurrence.to_string(),
@@ -661,7 +689,9 @@ impl RecurrenceTheoremReport {
             theorem_matches: matches.theorem_matches,
             rejected_theorems: matches.rejected_theorems,
             trivially_real_rooted: None,
-            trivially_real_rooted_if_rule_holds: conditional,
+            trivially_real_rooted_if_rule_holds: product.as_ref().map(Option::is_some),
+            real_rooted_from_index: from,
+            real_rooted_outside_zero_residue_classes: outside,
         }
     }
 }

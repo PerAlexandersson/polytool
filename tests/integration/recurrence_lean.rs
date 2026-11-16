@@ -296,3 +296,22 @@ fn scalar_coefficients_are_reduced_before_choosing_constant_embedding() {
     );
     assert!(!text.contains("C ("), "{text}");
 }
+
+#[test]
+fn catalog_definitions_with_long_coefficients_keep_exact_readback() {
+    for id in ["A177970", "A352880"] {
+        let entry = polytool::oeis::by_id(id).unwrap();
+        let (rule, seeds) = entry.recurrence_parts().unwrap();
+        let first = entry.recurrence_first_index;
+        let record = RecurrenceJson::from_recurrence_rational(&rule, first, &seeds, None);
+        let rows = rule.generate_rows_rational(&seeds, first, 16).unwrap();
+        let text = record
+            .with_checked_presentation(&rows)
+            .unwrap()
+            .to_lean(id, &rows)
+            .unwrap();
+        assert!(text.lines().all(|line| line.chars().count() <= 100));
+        verify_lean_recurrence_output(&text, id, &rows).unwrap();
+        println!("{id}:\n{text}\n");
+    }
+}

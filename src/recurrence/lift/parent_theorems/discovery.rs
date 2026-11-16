@@ -1133,7 +1133,7 @@ fn tail_record_seeds(tail: &RecurrenceProofTail) -> Result<Vec<Vec<Q>>, Recurren
 /// later row up to `GENERATED_ROWS` rows past the seeds is nonzero and
 /// real-rooted.  `None` when there is no such row, or the rows cannot be
 /// generated.
-fn tail_start(
+pub(super) fn tail_start(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],
@@ -1172,7 +1172,7 @@ fn tail_start(
 /// The tail record starting at `tail_first`: the rule, and as seeds the
 /// family's rows from `tail_first` up to the rule start of the supplied
 /// record and at least one row per lag (generated exactly).
-fn tail_record(
+pub(super) fn tail_record(
     rule: &Recurrence,
     first_index: usize,
     seeds: &[Vec<Q>],

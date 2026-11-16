@@ -538,6 +538,7 @@ pub(super) fn parse_linear(text: &str) -> Result<Linear, RecurrenceError> {
 // ---------------------------------------------------------------------------
 
 struct PolynomialParser<'a> {
+    exponent_limit: usize,
     text: &'a str,
     bytes: &'a [u8],
     position: usize,
@@ -641,7 +642,7 @@ impl PolynomialParser<'_> {
             let exponent = self
                 .integer()?
                 .to_usize()
-                .filter(|e| *e <= 64)
+                .filter(|e| *e <= self.exponent_limit)
                 .ok_or_else(|| self.error("exponent out of range"))?;
             return Ok(base.power(exponent));
         }
@@ -652,7 +653,15 @@ impl PolynomialParser<'_> {
 /// Parse a polynomial in `n` and `k` with rational coefficients (integer
 /// divisors only), for example `2n*k + n - 2k^2`.
 pub(super) fn parse_polynomial(text: &str) -> Result<Biv, RecurrenceError> {
+    parse_polynomial_with_exponent_limit(text, 64)
+}
+
+pub(in crate::recurrence) fn parse_polynomial_with_exponent_limit(
+    text: &str,
+    exponent_limit: usize,
+) -> Result<Biv, RecurrenceError> {
     let mut parser = PolynomialParser {
+        exponent_limit,
         text,
         bytes: text.as_bytes(),
         position: 0,

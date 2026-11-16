@@ -107,6 +107,13 @@ pub(crate) fn print_theorem_report_text(report: &RecurrenceTheoremReport) {
             );
         }
     }
+    if let Some(from) = report.real_rooted_from_index {
+        println!("Product proof if the rule holds: nonzero real-rooted rows from index {from}.");
+    }
+    if let Some(outside) = &report.real_rooted_outside_zero_residue_classes {
+        println!("Product proof if the rule holds: from index {}, zero residues {:?} modulo {}; all other rows nonzero and real-rooted.",
+            outside.from_index, outside.zero_residue_classes.residues, outside.zero_residue_classes.period);
+    }
 }
 
 pub(crate) fn cmd_recurrence_theorems(args: &[String]) {

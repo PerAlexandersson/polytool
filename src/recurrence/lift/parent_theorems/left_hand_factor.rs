@@ -224,6 +224,7 @@ fn rule_of_json_data(data: &RecurrenceJsonData) -> Result<Recurrence, Recurrence
         normalized_recurrence: None,
         lean: None,
         lean_reason: None,
+        latex_checked: None,
     };
     Ok(record.to_recurrence_parts()?.0)
 }

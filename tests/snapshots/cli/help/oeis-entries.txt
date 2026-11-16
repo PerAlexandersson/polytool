@@ -1,0 +1,28 @@
+List A-numbers in local OEIS data, optionally by keyword.
+
+List local seq/Annn/Annnnnn.seq entries in increasing A-number order.
+
+Usage: polytool oeis entries --data <DIR> [--keyword <KEYWORDS>] [--json]
+
+Options:
+      --data <DIR>          Local OEIS checkout (required)
+      --keyword <KEYWORDS>  Comma-separated keywords; match any (default: all entries)
+  -h, --help                Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Details:
+  Uses the same %K reader as oeis rows. Text has one A-number per line; JSON is a
+  list of A-number strings. Missing data or unreadable input is an error.
+
+Examples:
+  polytool oeis entries --data DIR --keyword tabl,tabf --json
+
+Exit status:
+  0  entries listed (possibly empty)
+  2  usage error or unreadable data
+
+See also:
+  polytool oeis rows, polytool oeis list

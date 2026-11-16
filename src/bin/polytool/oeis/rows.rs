@@ -97,7 +97,7 @@ pub(super) fn run(args: &[String]) {
             .iter()
             .map(|row| row.iter().map(ToString::to_string).collect())
             .collect();
-        println!("{}", serde_json::to_string_pretty(&json!({"id": id, "name": report.name, "keywords": report.keywords, "term_source": report.term_source.as_str(), "row_length_rule": rule, "row_length_rule_details": rule_details, "rows": rows, "status": if report.reason.is_some() { "refused" } else { "ok" }, "reason": report.reason.map(|r| r.message()), "reason_code": report.reason.map(|r| r.as_str()), "bfile_rejection": report.bfile_rejection.map(|r| r.as_str()), "bfile_rejection_reason": report.bfile_rejection.map(|r| r.message()), "bfile_rejection_detail": unreadable})).unwrap());
+        println!("{}", serde_json::to_string_pretty(&json!({"id": id, "name": report.name, "keywords": report.keywords, "term_source": report.term_source.as_str(), "row_length_rule": rule, "row_length_rule_details": rule_details, "rows": rows, "status": if report.reason.is_some() { "refused" } else { "ok" }, "reason": report.reason.map(|r| r.message()), "reason_code": report.reason.map(|r| r.as_str()), "bfile_rejection": report.bfile_rejection.map(|r| r.as_str()), "bfile_rejection_reason": report.bfile_rejection.map(|r| r.message()), "bfile_rejection_detail": unreadable, "prefix_lengths": report.prefix_lengths})).unwrap());
     } else if let Some(reason) = report.reason {
         if let Some(rejection) = report.bfile_rejection {
             eprintln!(

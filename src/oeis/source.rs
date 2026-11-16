@@ -5,6 +5,8 @@
 //! [`parse_bfile`] reads a b-file (`n a(n)` lines).  Both are independent of
 //! the bundled catalog and of the file system; they back
 //! `polytool oeis add` and `polytool oeis check`.
+//! [`list_local_oeis_entries`] lists local A-numbers with an optional keyword
+//! filter. It shares [`parse_oeis_keywords`] with the row-inference record parser.
 //! [`parse_oeis_internal_terms`] preserves term spelling for sequence indexes
 //! and uses the separate strict-term, optional-metadata policy documented there.
 //!
@@ -254,6 +256,76 @@ fn internal_format_fields(text: &str) -> impl Iterator<Item = (&str, &str, &str)
     })
 }
 
+/// Read keywords exactly as [`parse_oeis_internal_format`] does.
+///
+/// Every `%K` line contributes comma-separated, trimmed keywords in source
+/// order. No name, offset or terms are required; other fields are ignored.
+#[must_use]
+pub fn parse_oeis_keywords(text: &str) -> Vec<String> {
+    internal_format_fields(text)
+        .filter(|(_, tag, _)| *tag == "%K")
+        .flat_map(|(_, _, rest)| rest.split(',').map(|keyword| keyword.trim().to_string()))
+        .collect()
+}
+
+/// List canonical A-numbers in `data_dir/seq/Annn/Annnnnn.seq`, sorted.
+///
+/// An entry matches any supplied keyword, using [`parse_oeis_keywords`]. An
+/// empty filter lists every entry. Noncanonical paths and symbolic links are
+/// ignored. The data is read only; no network or bundled catalog is used.
+///
+/// # Errors
+/// Returns any I/O error while scanning directories or reading filtered
+/// records, including invalid UTF-8. No partial list is returned.
+pub fn list_local_oeis_entries(
+    data_dir: &Path,
+    keywords: &[String],
+) -> std::io::Result<Vec<String>> {
+    let mut ids = Vec::new();
+    for directory in std::fs::read_dir(data_dir.join("seq"))? {
+        let directory = directory?;
+        let name = directory.file_name();
+        let Some(name) = name.to_str().filter(|name| {
+            name.len() == 4
+                && name.starts_with('A')
+                && name[1..].bytes().all(|b| b.is_ascii_digit())
+        }) else {
+            continue;
+        };
+        if !directory.file_type()?.is_dir() {
+            continue;
+        }
+        for file in std::fs::read_dir(directory.path())? {
+            let file = file?;
+            if !file.file_type()?.is_file() {
+                continue;
+            }
+            let filename = file.file_name();
+            let Some(id) = filename
+                .to_str()
+                .and_then(|s| s.strip_suffix(".seq"))
+                .filter(|id| {
+                    id.len() == 7
+                        && id.starts_with(name)
+                        && id[1..].bytes().all(|b| b.is_ascii_digit())
+                })
+            else {
+                continue;
+            };
+            if keywords.is_empty()
+                || parse_oeis_keywords(&std::fs::read_to_string(file.path())?)
+                    .iter()
+                    .any(|keyword| keywords.contains(keyword))
+            {
+                ids.push(id.to_string());
+            }
+        }
+    }
+    ids.sort();
+    ids.dedup();
+    Ok(ids)
+}
+
 /// Parse internal-format terms for a text-preserving sequence index.
 ///
 /// This stricter term policy rejects the entire record if a nonempty term is
@@ -317,7 +389,7 @@ pub fn parse_oeis_internal_format(
 ) -> Result<OeisSourceRecord, OeisSourceError> {
     let mut name = String::new();
     let mut offset = None;
-    let mut keywords = Vec::new();
+    let keywords = parse_oeis_keywords(text);
     let mut terms = Vec::new();
     for (line, tag, rest) in internal_format_fields(text) {
         match tag {
@@ -334,7 +406,6 @@ pub fn parse_oeis_internal_format(
                             })?,
                     );
             }
-            "%K" => keywords.extend(rest.split(',').map(|keyword| keyword.trim().to_string())),
             "%S" | "%T" | "%U" => terms.extend(rest.split(',').filter_map(parse_term)),
             _ => {}
         }
@@ -413,6 +484,16 @@ mod tests {
         %N A000001 Example triangle.\n\
         %K A000001 nonn,tabl\n\
         %O A000001 1,5\n";
+
+    #[test]
+    fn keyword_reader_preserves_the_rows_policy_without_other_metadata() {
+        let text = "%K A000001 nonn, tabl,\n%N A000001 Example\n%K A000001 tabf,other\n";
+        assert_eq!(
+            parse_oeis_keywords(text),
+            ["nonn", "tabl", "", "tabf", "other"]
+        );
+        assert!(parse_oeis_keywords("%N A000001 No keywords").is_empty());
+    }
 
     #[test]
     fn indexed_terms_preserve_spelling_and_optional_metadata() {

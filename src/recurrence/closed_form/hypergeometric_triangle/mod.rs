@@ -112,6 +112,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 mod factored;
+pub(in crate::recurrence) use factored::parse_polynomial_with_exponent_limit;
 #[cfg(test)]
 mod tests;
 
