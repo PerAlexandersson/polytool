@@ -1,3 +1,5 @@
+//! Finite-field polynomial factorization and Hensel lifting.
+
 use num_bigint::BigInt;
 use num_traits::{One, ToPrimitive, Zero};
 
@@ -100,16 +102,8 @@ fn derivative(p: &[u64], prime: u64) -> Fp {
 
 fn inverse_scalar(value: u64, prime: u64) -> u64 {
     assert!(value != 0 && value < prime);
-    let mut old_r = value as i128;
-    let mut r = prime as i128;
-    let mut old_s = 1i128;
-    let mut s = 0i128;
-    while r != 0 {
-        let quotient = old_r / r;
-        (old_r, r) = (r, old_r - quotient * r);
-        (old_s, s) = (s, old_s - quotient * s);
-    }
-    (old_s.rem_euclid(prime as i128)) as u64
+    exact_algebra::modular_arithmetic::inverse_modulo_assumed_prime(value, prime)
+        .expect("nonzero prime-field scalar")
 }
 
 fn pow_mod(base: &[u64], mut exponent: u64, modulus: &[u64], prime: u64) -> Fp {
@@ -159,48 +153,24 @@ fn inverse_mod(value: &[u64], modulus: &[u64], prime: u64) -> Fp {
     div_rem(&coefficient, modulus, prime).1
 }
 
-fn nullspace(mut matrix: Vec<Vec<u64>>, prime: u64) -> Vec<Fp> {
-    let rows = matrix.len();
+fn nullspace(matrix: Vec<Vec<u64>>, prime: u64) -> Vec<Fp> {
+    use exact_algebra::{dense_modular::reduced_row_echelon_modulo_prime, primes::ValidatedPrime};
     let columns = matrix.first().map_or(0, Vec::len);
-    let mut pivot_columns = Vec::new();
-    let mut pivot_row = 0;
-    for column in 0..columns {
-        let Some(source_row) = (pivot_row..rows).find(|row| matrix[*row][column] != 0) else {
-            continue;
-        };
-        matrix.swap(pivot_row, source_row);
-        let inverse = inverse_scalar(matrix[pivot_row][column], prime);
-        for value in &mut matrix[pivot_row] {
-            *value = *value * inverse % prime;
-        }
-        for row in 0..rows {
-            if row == pivot_row || matrix[row][column] == 0 {
-                continue;
-            }
-            let multiple = matrix[row][column];
-            let pivot_tail = matrix[pivot_row][column..].to_vec();
-            for (offset, value) in matrix[row][column..].iter_mut().enumerate() {
-                *value = (*value + prime - multiple * pivot_tail[offset] % prime) % prime;
-            }
-        }
-        pivot_columns.push(column);
-        pivot_row += 1;
-        if pivot_row == rows {
-            break;
-        }
-    }
-    let is_pivot = (0..columns)
-        .map(|column| pivot_columns.contains(&column))
-        .collect::<Vec<_>>();
+    let reduced = reduced_row_echelon_modulo_prime(
+        matrix,
+        columns,
+        ValidatedPrime::new(prime).expect("factorization uses prime moduli"),
+    )
+    .expect("rectangular finite-field matrix");
     let mut result = Vec::new();
     for free_column in 0..columns {
-        if is_pivot[free_column] {
+        if reduced.pivot_columns.contains(&free_column) {
             continue;
         }
         let mut vector = vec![0; columns];
         vector[free_column] = 1;
-        for (row, pivot_column) in pivot_columns.iter().copied().enumerate() {
-            vector[pivot_column] = (prime - matrix[row][free_column]) % prime;
+        for (row, &pivot_column) in reduced.rows.iter().zip(&reduced.pivot_columns) {
+            vector[pivot_column] = (prime - row[free_column]) % prime;
         }
         result.push(trim(vector));
     }
@@ -375,23 +345,7 @@ pub(super) fn candidate_primes() -> impl Iterator<Item = u64> {
 }
 
 fn is_prime(candidate: u64) -> bool {
-    if candidate < 2 {
-        return false;
-    }
-    if candidate == 2 {
-        return true;
-    }
-    if candidate % 2 == 0 {
-        return false;
-    }
-    let mut divisor = 3u64;
-    while divisor <= candidate / divisor {
-        if candidate % divisor == 0 {
-            return false;
-        }
-        divisor += 2;
-    }
-    true
+    exact_algebra::primes::is_prime_u64(candidate)
 }
 
 #[cfg(test)]
@@ -469,3 +423,6 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod differential_tests;

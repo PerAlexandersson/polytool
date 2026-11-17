@@ -7,6 +7,11 @@
 //! reported as `None`, never guessed.
 
 use crate::Rational;
+use exact_algebra::{
+    chinese_remainder::ChineseRemainderAccumulator,
+    dense_modular::reduced_row_echelon_modulo_prime,
+    primes::{DescendingPrimes, ValidatedPrime},
+};
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, Signed, Zero};
@@ -19,20 +24,12 @@ type Q = Rational;
 const MAX_PRIMES: usize = 16;
 
 /// The [`MAX_PRIMES`] largest primes below `2^31` in descending order,
-/// found once by trial division.
-fn primes() -> impl Iterator<Item = u64> {
-    static PRIMES: OnceLock<Vec<u64>> = OnceLock::new();
+/// validated once by deterministic primality testing.
+fn validated_primes() -> impl Iterator<Item = ValidatedPrime> {
+    static PRIMES: OnceLock<Vec<ValidatedPrime>> = OnceLock::new();
     PRIMES
         .get_or_init(|| {
-            (1u64 << 30..1u64 << 31)
-                .rev()
-                .filter(|&candidate| {
-                    candidate % 2 == 1
-                        && (3..)
-                            .step_by(2)
-                            .take_while(|d| d * d <= candidate)
-                            .all(|d| candidate % d != 0)
-                })
+            DescendingPrimes::new((1u64 << 31) - 1)
                 .take(MAX_PRIMES)
                 .collect()
         })
@@ -40,25 +37,15 @@ fn primes() -> impl Iterator<Item = u64> {
         .copied()
 }
 
+#[cfg(test)]
+fn primes() -> impl Iterator<Item = u64> {
+    validated_primes().map(ValidatedPrime::get)
+}
+
 /// `value mod prime` in `[0, prime)` (the floor residue), from the 64-bit
 /// digits of the magnitude.
 fn residue(value: &BigInt, prime: u64) -> u64 {
-    if value.is_zero() {
-        return 0;
-    }
-    let modulus = u128::from(prime);
-    let magnitude = value
-        .magnitude()
-        .iter_u64_digits()
-        .rev()
-        .fold(0u128, |acc, digit| {
-            ((acc << 64) | u128::from(digit)) % modulus
-        }) as u64;
-    if value.is_negative() && magnitude != 0 {
-        prime - magnitude
-    } else {
-        magnitude
-    }
+    exact_algebra::modular_arithmetic::bigint_residue_u64(value, prime)
 }
 
 /// The integer row `L v` of a sparse rational equation `v` (`L` the least
@@ -86,58 +73,24 @@ pub(crate) fn integer_equation_row(entries: &BTreeMap<usize, Q>, columns: usize)
     row
 }
 
-fn inverse(value: u64, prime: u64) -> u64 {
-    let (mut base, mut exponent, mut acc) = (value % prime, prime - 2, 1u64);
-    while exponent > 0 {
-        if exponent & 1 == 1 {
-            acc = acc * base % prime;
-        }
-        base = base * base % prime;
-        exponent >>= 1;
-    }
-    acc
-}
-
-/// The reduced row-echelon form modulo `prime`: pivot columns and the
-/// reduced pivot rows.
+/// Reduced row-echelon form over a validated prime field.
 fn reduced_echelon(
     rows: &[Vec<BigInt>],
     columns: usize,
-    prime: u64,
+    prime: ValidatedPrime,
 ) -> (Vec<usize>, Vec<Vec<u64>>) {
-    let mut matrix: Vec<Vec<u64>> = rows
+    let matrix = rows
         .iter()
-        .map(|row| row.iter().map(|value| residue(value, prime)).collect())
+        .map(|row| {
+            row.iter()
+                .take(columns)
+                .map(|value| residue(value, prime.get()))
+                .collect()
+        })
         .collect();
-    let mut pivots = Vec::new();
-    for column in 0..columns {
-        let rank = pivots.len();
-        let Some(found) = (rank..matrix.len()).find(|&r| matrix[r][column] != 0) else {
-            continue;
-        };
-        matrix.swap(rank, found);
-        let scale = inverse(matrix[rank][column], prime);
-        for value in &mut matrix[rank][column..] {
-            *value = *value * scale % prime;
-        }
-        let pivot_row = matrix[rank].clone();
-        // Only the nonzero entries of the pivot row change other rows.
-        let support: Vec<usize> = (column..pivot_row.len())
-            .filter(|&c| pivot_row[c] != 0)
-            .collect();
-        for (r, row) in matrix.iter_mut().enumerate() {
-            if r == rank || row[column] == 0 {
-                continue;
-            }
-            let factor = prime - row[column];
-            for &c in &support {
-                row[c] = (row[c] + factor * pivot_row[c]) % prime;
-            }
-        }
-        pivots.push(column);
-    }
-    matrix.truncate(pivots.len());
-    (pivots, matrix)
+    let reduced = reduced_row_echelon_modulo_prime(matrix, columns, prime)
+        .expect("kernel rows have the requested width");
+    (reduced.pivot_columns, reduced.rows)
 }
 
 /// `p / q` with `|p|, q <= sqrt(modulus / 2)` congruent to `value`, if any.
@@ -180,6 +133,12 @@ fn kills_every_row(rows: &[Vec<BigInt>], vector: &[Q]) -> bool {
 /// smallest non-pivot column of that group (modulo the first prime), with
 /// one there and zero in every other non-pivot column; `None` for a group
 /// without one or when no exact vector was reconstructed.
+/// Entries beyond `group.len()` in each row are ignored.
+///
+/// # Panics
+///
+/// Panics if a row has fewer than `group.len()` entries. May panic if a group
+/// index is outside `0..groups`.
 pub fn exact_kernel_vectors_by_group(
     rows: &[Vec<BigInt>],
     group: &[usize],
@@ -189,10 +148,10 @@ pub fn exact_kernel_vectors_by_group(
     let mut out = vec![None; groups];
     let mut pivots: Option<Vec<usize>> = None;
     let mut targets: Vec<Option<usize>> = vec![None; groups];
-    let mut modulus = BigInt::one();
-    let mut combined = vec![vec![BigInt::zero(); columns]; groups];
-    for prime in primes().take(MAX_PRIMES) {
-        let (prime_pivots, reduced) = reduced_echelon(rows, columns, prime);
+    let mut combined = vec![ChineseRemainderAccumulator::new(columns); groups];
+    for validated in validated_primes().take(MAX_PRIMES) {
+        let prime = validated.get();
+        let (prime_pivots, reduced) = reduced_echelon(rows, columns, validated);
         match &pivots {
             None => {
                 for column in (0..columns).rev() {
@@ -206,8 +165,6 @@ pub fn exact_kernel_vectors_by_group(
             Some(expected) if *expected != prime_pivots => continue,
             Some(_) => {}
         }
-        let prime_big = BigInt::from(prime);
-        let lift = BigInt::from(inverse(residue(&modulus, prime), prime));
         let mut open = false;
         for (slot, target) in targets.iter().enumerate() {
             let Some(free) = *target else {
@@ -222,22 +179,19 @@ pub fn exact_kernel_vectors_by_group(
             for (row, &column) in reduced.iter().zip(pivots.iter().flatten()) {
                 residues[column] = (prime - row[free]) % prime;
             }
-            // value' = value + modulus ((residue - value) / modulus mod prime).
-            for (value, residue) in combined[slot].iter_mut().zip(&residues) {
-                let difference = (BigInt::from(*residue) - &*value).mod_floor(&prime_big);
-                *value += &modulus * (difference * &lift % &prime_big);
-            }
-            let next_modulus = &modulus * &prime_big;
+            combined[slot]
+                .combine_prime(&residues, validated)
+                .expect("distinct kernel primes");
             let vector: Option<Vec<Q>> = combined[slot]
+                .residues()
                 .iter()
-                .map(|value| reconstruct(value, &next_modulus))
+                .map(|value| reconstruct(value, combined[slot].modulus()))
                 .collect();
             match vector {
                 Some(vector) if kills_every_row(rows, &vector) => out[slot] = Some(vector),
                 _ => open = true,
             }
         }
-        modulus *= &prime_big;
         if !open {
             break;
         }
@@ -327,3 +281,6 @@ mod tests {
         assert_eq!(vector[0], Q::new(BigInt::from(3), big));
     }
 }
+
+#[cfg(test)]
+mod differential_tests;

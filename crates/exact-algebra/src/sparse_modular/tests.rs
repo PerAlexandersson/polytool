@@ -1,5 +1,7 @@
+//! Sparse modular arithmetic and solver regression tests.
+
 use super::*;
-use crate::linalg::modular::mod_inverse_prime;
+use crate::modular_arithmetic::inverse_modulo_assumed_prime as mod_inverse_prime;
 
 // -----------------------------------------------------------------------
 // Sparse modular linear systems

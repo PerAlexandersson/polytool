@@ -6,6 +6,11 @@
 //! certify the reconstruction. Residue operations live in
 //! [`crate::modular_arithmetic`].
 
+mod row_echelon;
+pub use row_echelon::{
+    reduced_row_echelon_modulo_prime, ModularMatrixDimensionsError, ModularRowEchelon,
+};
+
 use crate::chinese_remainder::ChineseRemainderAccumulator;
 use crate::modular_arithmetic::{
     bigint_residue_u64 as bigint_mod_u64, inverse_modulo_assumed_prime as mod_inverse_prime,

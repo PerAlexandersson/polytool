@@ -39,6 +39,7 @@ mod cli_workflows;
 mod common;
 mod deprecated_aliases;
 mod discovery_fingerprints;
+mod exact_algebra_adapters;
 mod exact_root_regions;
 mod factor_gauge;
 mod factorization;

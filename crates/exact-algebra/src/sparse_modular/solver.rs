@@ -1,5 +1,10 @@
-use super::super::modular::{is_prime_u64, mul_mod_u64, sub_mod_u64};
+//! Sparse modular elimination with selectable row orders and solution modes.
+
 use super::SparseModRow;
+use crate::modular_arithmetic::{
+    multiply_modulo_u64 as mul_mod_u64, subtract_modulo_u64 as sub_mod_u64,
+};
+use crate::primes::is_prime_u64;
 
 /// Row ordering strategy for sparse modular elimination.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -47,9 +52,14 @@ impl Default for SparseModEliminationOptions {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SparseModSolutionMode {
+/// Select whether sparse elimination constructs a solution.
+#[doc(hidden)]
+pub enum SparseModSolutionMode {
+    /// Compute consistency and rank only.
     None,
+    /// Return a solution for every consistent system.
     AnyConsistent,
+    /// Return a solution only when the column rank is full.
     FullRank,
 }
 
@@ -561,7 +571,16 @@ where
     )
 }
 
-pub(crate) fn sparse_modular_linear_system_consistency_prime_unchecked_with_solution_mode<I>(
+/// Eliminate rows modulo an assumed prime using the requested solution policy.
+///
+/// The caller must supply rows reduced modulo the same prime and `prime >= 2` prime.
+/// Use the checked consistency entry points for untrusted moduli.
+///
+/// # Panics
+///
+/// May panic for a composite modulus or rows reduced modulo a different prime.
+#[doc(hidden)]
+pub fn sparse_modular_linear_system_consistency_prime_unchecked_with_solution_mode<I>(
     rows: I,
     num_vars: usize,
     prime: u64,

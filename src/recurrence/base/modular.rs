@@ -3,7 +3,6 @@
 
 use super::*;
 use num_traits::One;
-use num_traits::ToPrimitive;
 
 use crate::linalg;
 
@@ -28,23 +27,19 @@ fn mod_neg(value: i64, modulus: i64) -> i64 {
 }
 
 fn mod_mul(lhs: i64, rhs: i64, modulus: i64) -> i64 {
-    if (0..modulus).contains(&lhs) && (0..modulus).contains(&rhs) && modulus <= 3_000_000_000 {
-        return (lhs * rhs) % modulus;
-    }
-    ((lhs as i128 * rhs as i128).rem_euclid(modulus as i128)) as i64
-}
-
-fn mod_pow(mut base: i64, mut exp: i64, modulus: i64) -> i64 {
-    let mut acc = 1;
-    base = mod_norm(base, modulus);
-    while exp > 0 {
-        if exp & 1 == 1 {
-            acc = mod_mul(acc, base, modulus);
-        }
-        base = mod_mul(base, base, modulus);
-        exp >>= 1;
-    }
-    acc
+    use exact_algebra::modular_arithmetic::{multiply_modulo_u64, signed_residue_u64};
+    let p = modulus as u64;
+    let lhs = if (0..modulus).contains(&lhs) {
+        lhs as u64
+    } else {
+        signed_residue_u64(lhs, p)
+    };
+    let rhs = if (0..modulus).contains(&rhs) {
+        rhs as u64
+    } else {
+        signed_residue_u64(rhs, p)
+    };
+    multiply_modulo_u64(lhs, rhs, p) as i64
 }
 
 fn mod_index_powers(n: usize, max_power: usize, modulus: i64) -> Vec<i64> {
@@ -70,16 +65,13 @@ pub(in crate::recurrence) fn rational_index_powers(n: usize, max_power: usize) -
 }
 
 fn mod_inv(value: i64, modulus: i64) -> Option<i64> {
-    let value = mod_norm(value, modulus);
-    (value != 0).then(|| mod_pow(value, modulus - 2, modulus))
+    use exact_algebra::modular_arithmetic::{inverse_modulo_assumed_prime, signed_residue_u64};
+    inverse_modulo_assumed_prime(signed_residue_u64(value, modulus as u64), modulus as u64)
+        .map(|value| value as i64)
 }
 
 fn bigint_mod_i64(value: &BigInt, modulus: i64) -> i64 {
-    let modulus_big = BigInt::from(modulus);
-    let residue = ((value % &modulus_big) + &modulus_big) % &modulus_big;
-    residue
-        .to_i64()
-        .expect("residue modulo i64 prime fits in i64")
+    exact_algebra::modular_arithmetic::bigint_residue_u64(value, modulus as u64) as i64
 }
 
 fn rational_mod_prime(value: &BigRational, modulus: i64) -> Option<i64> {
@@ -409,11 +401,13 @@ fn recurrence_system_consistent_mod_supports(
         let current_idx = nn - 1;
         for l in 0..=max_t_deg {
             let cur_l = poly_coeff_mod(images.polys, current_idx, l);
-            raw_rows.push(linalg::SparseModRow::with_capacity(
-                mod_neg(cur_l, modulus) as u64,
-                prime,
-                row_capacity_hint,
-            ));
+            raw_rows.push(
+                exact_algebra::sparse_modular::sparse_modular_row_with_capacity(
+                    mod_neg(cur_l, modulus) as u64,
+                    prime,
+                    row_capacity_hint,
+                ),
+            );
         }
     }
     let row_index = |eq_idx: usize, l: usize| -> usize { eq_idx * eqs_per_nn + l };
@@ -440,7 +434,8 @@ fn recurrence_system_consistent_mod_supports(
                         |k, pc| {
                             let l = k + j;
                             if l <= max_t_deg {
-                                raw_rows[row_index(eq_idx, l)].add_reduced_entry_sorted(
+                                exact_algebra::sparse_modular::add_reduced_entry_sorted(
+                                    &mut raw_rows[row_index(eq_idx, l)],
                                     col,
                                     mod_mul(pc, n_power, modulus) as u64,
                                     prime,
@@ -479,7 +474,8 @@ fn recurrence_system_consistent_mod_supports(
                                 |k, rc| {
                                     let l = k + j;
                                     if l <= max_t_deg {
-                                        raw_rows[row_index(eq_idx, l)].add_reduced_entry_sorted(
+                                        exact_algebra::sparse_modular::add_reduced_entry_sorted(
+                                            &mut raw_rows[row_index(eq_idx, l)],
                                             col,
                                             mod_neg(mod_mul(rc, n_factor, modulus), modulus) as u64,
                                             prime,
@@ -504,7 +500,8 @@ fn recurrence_system_consistent_mod_supports(
                 for (eq_idx, n_powers) in n_power_table.iter().enumerate() {
                     let n_power = n_powers[i];
                     if n_power != 0 {
-                        raw_rows[row_index(eq_idx, j)].add_reduced_entry_sorted(
+                        exact_algebra::sparse_modular::add_reduced_entry_sorted(
+                            &mut raw_rows[row_index(eq_idx, j)],
                             col,
                             mod_neg(n_power, modulus) as u64,
                             prime,
@@ -1334,3 +1331,6 @@ mod tests {
         assert_eq!(format!("{rec}"), "P(n) = 1/2 P(n-1) + 1");
     }
 }
+
+#[cfg(test)]
+mod differential_tests;

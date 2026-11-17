@@ -12,8 +12,10 @@ pub mod dense_modular;
 pub mod integer_elimination;
 pub mod linear_systems;
 pub mod modular_arithmetic;
+pub mod multimodular;
 pub mod primes;
 pub mod rational_reconstruction;
+pub mod sparse_modular;
 
 pub use dense_modular::modular_leading_principal_minors_bigint;
 pub use linear_systems::{

@@ -4,8 +4,7 @@
 //! modulus. Prime-specific inversion uses a validated prime at public boundaries.
 
 use crate::primes::ValidatedPrime;
-use num_bigint::BigInt;
-use num_traits::{Signed, ToPrimitive};
+use num_bigint::{BigInt, Sign};
 
 /// Multiply canonical residues modulo a nonzero modulus, widening when needed.
 ///
@@ -97,12 +96,20 @@ pub fn signed_residue_u64(value: i64, modulus: u64) -> u64 {
 /// Panics if `modulus` is zero.
 #[inline]
 pub fn bigint_residue_u64(value: &BigInt, modulus: u64) -> u64 {
-    let modulus_big = BigInt::from(modulus);
-    let mut reduced = value % &modulus_big;
-    if reduced.is_negative() {
-        reduced += &modulus_big;
+    assert_ne!(modulus, 0, "modulus must be nonzero");
+    let wide_modulus = u128::from(modulus);
+    let magnitude = value
+        .magnitude()
+        .iter_u64_digits()
+        .rev()
+        .fold(0u128, |acc, digit| {
+            ((acc << 64) | u128::from(digit)) % wide_modulus
+        }) as u64;
+    if value.sign() == Sign::Minus && magnitude != 0 {
+        modulus - magnitude
+    } else {
+        magnitude
     }
-    reduced.to_u64().expect("reduced residue should fit in u64")
 }
 
 /// Invert a residue using a validated prime; inputs are reduced first.
@@ -114,6 +121,36 @@ pub fn inverse_modulo_prime(value: u64, prime: ValidatedPrime) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_integer::Integer;
+    use num_traits::ToPrimitive;
+
+    #[test]
+    fn digit_reduction_matches_bigint_floor_remainders() {
+        let mut seed = 0x63af_9814_28bc_aa31u64;
+        for modulus in [
+            1,
+            2,
+            101,
+            1_000_000_007,
+            1u64 << 63,
+            u64::MAX - 58,
+            u64::MAX,
+        ] {
+            for words in 0..=12 {
+                let mut value = BigInt::from(0);
+                for _ in 0..words {
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                    value = (value << 64usize) + BigInt::from(seed);
+                }
+                for value in [value.clone(), -value] {
+                    assert_eq!(
+                        bigint_residue_u64(&value, modulus),
+                        value.mod_floor(&BigInt::from(modulus)).to_u64().unwrap()
+                    );
+                }
+            }
+        }
+    }
     #[test]
     fn arithmetic_near_word_limit() {
         assert_eq!(power_modulo_u64(0, 0, 1), 0);

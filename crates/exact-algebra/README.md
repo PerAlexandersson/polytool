@@ -12,13 +12,15 @@ It is available in-tree and is not currently published to crates.io.
 | `rational_reconstruction` | Bounded BigInt rational reconstruction with congruence and uniqueness checks |
 | `denominators` | Row-wise denominator clearing and positive row scales |
 | `integer_elimination` | Internal fraction-free engine; optional `test-hooks` fallback guard |
-| `linear_systems` | Exact solves, rank/nullity and certified rational kernels |
-| `dense_modular` | CRT reconstruction of all leading principal minors |
+| `linear_systems` | Exact solves, fraction-free inverse, rank/nullity and certified rational kernels |
+| `sparse_modular` | Sparse consistency, rank and solution with selectable fill-reducing row orders |
+| `multimodular` | Two-profile agreement, bounded CRT and independent spare-prime verification |
+| `dense_modular` | Prime-field row reduction and CRT reconstruction of leading principal minors |
 
 Matrices are row-major `Vec<Vec<_>>`; kernel basis vectors are stored separately.
 All indices are zero-based. Reconstruction requires a justified bound on the true
 integer or rational target; a modulus threshold alone cannot validate modular input.
-Sparse elimination and higher-level quotient adapters remain separate consumers.
+Higher-level quotient adapters remain separate consumers.
 
 ```rust
 use exact_algebra::chinese_remainder::ChineseRemainderAccumulator;
@@ -33,3 +35,5 @@ assert_eq!(reconstruction.reconstruct_symmetric(&[2.into()])?, vec![num_bigint::
 
 The optional `test-hooks` feature exposes a thread-local `ForcedFallback` guard
 for exercising rational fallback paths. It is absent from normal builds.
+
+The checked `examples/sparse_consistency.rs` constructs and solves a sparse system.

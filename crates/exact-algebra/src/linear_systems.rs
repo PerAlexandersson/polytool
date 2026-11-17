@@ -118,6 +118,65 @@ fn gauss_jordan(
     })
 }
 
+/// Failure to invert a rational square matrix.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MatrixInverseError {
+    /// The matrix is ragged or not square.
+    InvalidDimensions,
+    /// The matrix has deficient rank.
+    Singular,
+}
+
+impl std::fmt::Display for MatrixInverseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::InvalidDimensions => "matrix inversion requires a square matrix",
+            Self::Singular => "matrix is singular",
+        })
+    }
+}
+
+impl std::error::Error for MatrixInverseError {}
+
+/// Invert a rational square matrix with one fraction-free elimination.
+///
+/// Denominators are cleared once per augmented row. All identity columns are
+/// carried through the same elimination; the rational reference is retained as
+/// an exact fallback. The inverse of the empty `0 x 0` matrix is empty.
+pub fn invert_rational_matrix(
+    matrix: &[Vec<BigRational>],
+) -> Result<Vec<Vec<BigRational>>, MatrixInverseError> {
+    let n = matrix.len();
+    if matrix.iter().any(|row| row.len() != n) {
+        return Err(MatrixInverseError::InvalidDimensions);
+    }
+    let augmented: Vec<Vec<Q>> = matrix
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let mut row = row.clone();
+            row.extend((0..n).map(|j| if i == j { Q::one() } else { Q::zero() }));
+            row
+        })
+        .collect();
+    let reduced =
+        gauss_jordan(&augmented, n, None).map_err(|_| MatrixInverseError::InvalidDimensions)?;
+    if reduced.pivots.len() != n {
+        return Err(MatrixInverseError::Singular);
+    }
+    Ok(reduced
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            row[n..]
+                .iter()
+                .map(|value| Q::new(value.clone(), row[i].clone()))
+                .collect()
+        })
+        .collect())
+}
+
 // The elimination on rational entries, with a gcd reduction after every operation.
 // It is the reference of `gauss_jordan` and its fallback.
 fn rational_rref(
