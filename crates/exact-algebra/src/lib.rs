@@ -13,6 +13,7 @@ pub mod integer_elimination;
 pub mod linear_systems;
 pub mod modular_arithmetic;
 pub mod multimodular;
+pub mod nonnegative_matrix_product;
 pub mod primes;
 pub mod rational_reconstruction;
 pub mod sparse_modular;

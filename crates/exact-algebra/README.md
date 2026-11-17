@@ -15,6 +15,7 @@ It is available in-tree and is not currently published to crates.io.
 | `linear_systems` | Exact solves, fraction-free inverse, rank/nullity and certified rational kernels |
 | `sparse_modular` | Sparse consistency, rank and solution with selectable fill-reducing row orders |
 | `multimodular` | Two-profile agreement, bounded CRT and independent spare-prime verification |
+| `nonnegative_matrix_product` | Division-free products with inclusive column bounds, nonnegative CRT and an unused verification prime |
 | `dense_modular` | Prime-field row reduction and CRT reconstruction of leading principal minors |
 
 Matrices are row-major `Vec<Vec<_>>`; kernel basis vectors are stored separately.
@@ -37,3 +38,7 @@ The optional `test-hooks` feature exposes a thread-local `ForcedFallback` guard
 for exercising rational fallback paths. It is absent from normal builds.
 
 The checked `examples/sparse_consistency.rs` constructs and solves a sparse system.
+
+The checked `examples/nonnegative_matrix_product.rs` multiplies signed inputs
+with proved nonnegative output bounds. Bounds must be mathematical upper bounds;
+modular agreement alone does not supply them.
