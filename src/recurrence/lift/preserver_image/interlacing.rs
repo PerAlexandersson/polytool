@@ -34,19 +34,19 @@
 //! zeros.  With `m = n + s` this holds for every `n` with
 //! `n - 1 >= n0` and `n + s >= m0`.
 //!
-//! **Kind and orientation.**  The converse gives weak interlacing and no
-//! direction: the claim is `weak` with the orientation `unordered` (the
-//! zeros of `Q_(n-1)` and `Q_n` alternate weakly; which one carries the
-//! largest zero is not determined).  An index-dependent `T_n` gets no
-//! claim: that would need a proved relation such as
-//! `T_(n+1) = U_n o T_n` with `U_n` preserving interlacing, which is not
-//! implemented.
+//! **Kind and orientation.** The original HKO claim is weak and unordered.
+//! Replayed nonzero successor image degrees fix the order. Positive fixed
+//! diagonals and eligible degree-dependent reciprocal-factorial diagonals
+//! use their dedicated multiplier theorems, with exact degree alignment
+//! and nonzero constant terms in the cross-rank case. Other index-dependent
+//! maps retain the existing conclusion.
 
 use super::certify::{PreserverImageCandidate, PreserverImageIdentityStatus};
 use super::operator::PreserverOperator;
 use super::transfer::operator_transfer;
 use crate::recurrence::{
-    HadamardFactorTerm, LiftHypothesisStatus, RealRootednessTheoremReport, RowInterlacing,
+    HadamardFactorTerm, LiftHypothesisStatus, LiftInterlacingTransfer, RealRootednessTheoremReport,
+    RowInterlacing, VeroneseParentProof,
 };
 use serde::{Deserialize, Serialize};
 
@@ -73,6 +73,9 @@ pub enum PreserverInterlacingClaim {
         from_index: usize,
         /// The argument, with the parent's interlacing it starts from.
         justification: String,
+        /// Exact all-index evidence and Lean names for a stronger transfer.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        transfer: Option<Box<LiftInterlacingTransfer>>,
     },
 }
 
@@ -91,7 +94,10 @@ impl PreserverInterlacingClaim {
 
 /// Why `operator` is not an `n`-independent preserver of every real-rooted
 /// polynomial, or `None` when it is (its side conditions verified).
-fn independent_preserver(operator: &PreserverOperator, n0: usize) -> Option<String> {
+pub(in crate::recurrence::lift) fn independent_preserver(
+    operator: &PreserverOperator,
+    n0: usize,
+) -> Option<String> {
     let constant = |coefficients: &[super::operator::IndexRationalFunction]| {
         coefficients.iter().all(|c| {
             c.parse().is_ok_and(|(p, q)| {
@@ -149,7 +155,7 @@ fn independent_preserver(operator: &PreserverOperator, n0: usize) -> Option<Stri
 }
 
 /// The interlacing claim of a certification (module documentation).
-pub(super) fn interlacing_claim(
+pub(super) fn legacy_interlacing_claim(
     candidate: &PreserverImageCandidate,
     input_first_index: usize,
     identity: &PreserverImageIdentityStatus,
@@ -202,5 +208,137 @@ pub(super) fn interlacing_claim(
             report.theorem,
             candidate.operator.text()
         ),
+        transfer: None,
     }
+}
+
+/// Strengthen the existing claim only when an exact transfer theorem applies.
+pub(super) fn interlacing_claim(
+    candidate: &PreserverImageCandidate,
+    input_first_index: usize,
+    identity: &PreserverImageIdentityStatus,
+    parent_report: Option<&RealRootednessTheoremReport>,
+    parent_proof: &VeroneseParentProof,
+) -> PreserverInterlacingClaim {
+    use super::certify::PreserverImageCertificate;
+    use crate::recurrence::lift::interlacing_transfer::{metadata, successor_degrees};
+    let mut legacy =
+        legacy_interlacing_claim(candidate, input_first_index, identity, parent_report);
+    if let (
+        PreserverInterlacingClaim::Claimed {
+            orientation,
+            from_index,
+            transfer,
+            ..
+        },
+        PreserverImageIdentityStatus::Certified { certificate },
+    ) = (&mut legacy, identity)
+    {
+        let input = match certificate.as_ref() {
+            PreserverImageCertificate::OperatorDivision(c) => &c.input,
+            PreserverImageCertificate::HadamardConjugation(c) => &c.input,
+        };
+        let degree_evidence = successor_degrees(input, *from_index)
+            .map(|c| {
+                (
+                    c,
+                    "the image recurrence has certified nonzero successor degrees".to_string(),
+                )
+            })
+            .or_else(|| source_successor_degrees(candidate, *from_index));
+        if let Some((degrees, explanation)) = degree_evidence {
+            *orientation = "previous_interlaces_next".into();
+            *transfer = Some(metadata(
+                &[
+                    "RealRooted.PreservesRealRootedOrZero.interlaces",
+                    "RealRooted.interlaces_map_of_pencil",
+                ],
+                vec![degrees],
+                None,
+                vec![explanation],
+            ));
+        }
+    }
+    let PreserverOperator::HadamardMultiplier { factor } = &candidate.operator else {
+        return legacy;
+    };
+    let summary =
+        super::summary::preserver_image_summary(super::summary::PreserverImageSummaryParts {
+            candidate,
+            input_first_index,
+            identity,
+            parent_proof,
+            whole_line_parent_proof: None,
+            interval_parent_proof: None,
+            interlacing: &legacy,
+        });
+    let fallback = super::summary::preserver_input_interlacing(&legacy);
+    let report_pair = parent_report.and_then(|report| {
+        crate::recurrence::lift::parent_proof::theorem_report_interlacing(
+            report,
+            report.theorem.as_str(),
+        )
+    });
+    let parent_pair =
+        crate::recurrence::lift::lift_summary::proved_parent_interlacing(parent_proof)
+            .or_else(|reason| report_pair.as_ref().ok_or(reason));
+    let claim = crate::recurrence::lift::hadamard_factor::interlacing::diagonal_interlacing(
+        &summary,
+        factor,
+        parent_pair,
+        fallback,
+    );
+    if let crate::recurrence::LiftInterlacingClaim::Proved { interlacing } = claim {
+        if interlacing.justification.transfer.is_some() {
+            return PreserverInterlacingClaim::Claimed {
+                kind: interlacing.kind,
+                orientation: "previous_interlaces_next".into(),
+                from_index: interlacing.from_index,
+                justification: interlacing.justification.theorem,
+                transfer: interlacing.justification.transfer,
+            };
+        }
+    }
+    legacy
+}
+
+/// An operator's triangular leading action can prove image degrees even when
+/// the computed image recurrence has a less accessible leading recurrence.
+fn source_successor_degrees(
+    candidate: &PreserverImageCandidate,
+    from: usize,
+) -> Option<(crate::recurrence::LeadingCoefficientCertificate, String)> {
+    use crate::recurrence::lift::interlacing_transfer::successor_degrees;
+    use num_traits::Zero;
+    let parent_from =
+        usize::try_from((from as i128).checked_add(i128::from(candidate.index_shift))?).ok()?;
+    let certificate = successor_degrees(&candidate.parent, parent_from)?;
+    let minimum_degree = certificate.degree_at(parent_from.checked_sub(1)?)?;
+    let reason = match &candidate.operator {
+        PreserverOperator::DerivativePolynomial { coefficients } => {
+            let order = coefficients.iter().position(|c| c.parse().is_ok_and(|(p, _)| !crate::vec_poly::is_zero(&p)))?;
+            if minimum_degree < order { return None; }
+            format!("the fixed differential polynomial has least nonzero derivative order {order}; parent degrees start at {minimum_degree} and increase by one, so every image degree is the parent degree minus {order}")
+        }
+        PreserverOperator::EulerPolynomial { coefficients } => {
+            let constant_nonzero = coefficients.first()?.parse().is_ok_and(|(p, _)| !crate::vec_poly::is_zero(&p));
+            if minimum_degree == 0 && !constant_nonzero { return None; }
+            "the fixed nonzero Euler polynomial has roots <=0 by the verified preserver hypothesis, so its value on each positive parent degree is nonzero; degree zero is used only when its constant term is nonzero".into()
+        }
+        PreserverOperator::DerivativeOfPowerMultiple { power, derivative_order } => {
+            if minimum_degree.checked_add(*power)? < *derivative_order { return None; }
+            format!("D^{derivative_order}(x^{power} P) has degree deg(P)+{power}-{derivative_order}; the lowest degree before differentiation is at least {derivative_order}")
+        }
+        PreserverOperator::PowerTimesDerivative { power, derivative_order } => {
+            if minimum_degree < *derivative_order { return None; }
+            format!("x^{power} D^{derivative_order}(P) has degree deg(P)+{power}-{derivative_order}; all parent degrees are at least {derivative_order}")
+        }
+        PreserverOperator::Affine { slope, .. } if crate::recurrence::parse_rational_coeff(slope).is_ok_and(|c| !c.is_zero()) =>
+            "a fixed affine substitution with nonzero slope preserves every degree and nonzero polynomial".into(),
+        PreserverOperator::HadamardMultiplier { factor } if factor.terms.iter().all(|t| matches!(t,
+            HadamardFactorTerm::InverseFactorial | HadamardFactorTerm::InverseRisingFactorial { .. })) =>
+            "the fixed multiplier has strictly positive weights by the verified preserver hypotheses, so every parent degree is preserved".into(),
+        _ => return None,
+    };
+    Some((certificate, reason))
 }

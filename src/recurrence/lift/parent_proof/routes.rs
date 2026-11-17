@@ -101,6 +101,7 @@ fn paper_theorem_interlacing(
                 theorem_match.conclusion
             ),
             premises,
+            transfer: None,
         },
     })
 }
@@ -415,6 +416,7 @@ pub(in crate::recurrence::lift) fn theorem_report_interlacing(
         justification: LiftInterlacingJustification {
             theorem: format!("{variant}: {}", report.reference),
             premises,
+            transfer: None,
         },
     })
 }

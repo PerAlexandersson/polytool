@@ -11,7 +11,8 @@
 //!
 //! The bounded recognizer can return `Unsupported`; it makes no claim about
 //! families outside these exactly decidable classes. In particular a zero of
-//! a coefficient-relation leader cannot be ignored. No interlacing is claimed.
+//! a coefficient-relation leader cannot be ignored. PF Hadamard products also
+//! retain weak interlacing when both parent pairs have the same proved order.
 
 use super::hadamard_factor::prepare::{prepare_lift_rule, PreparedLiftRule};
 use crate::recurrence::implicit::algebra::{Biv, DOp};
@@ -141,6 +142,10 @@ pub struct PolynomialFamilyProductCertificate {
     pub lean_declarations: Vec<String>,
     /// `not_attempted`: no formal proof was generated or checked.
     pub lean_replay: String,
+    /// Weak consecutive interlacing when both PF factor pairs interlace.
+    /// Absent when a simultaneous interlacing theorem does not apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interlacing: Option<LiftInterlacing>,
 }
 
 /// The algebraic proof of the forward image identity.
@@ -509,6 +514,7 @@ pub fn certify_polynomial_family_product(
             "the target and product image rules were not certified equal",
         ));
     }
+    let interlacing = product_interlacing(candidate.operation, &left_proof, &right_proof, &image);
     Ok(PolynomialFamilyProductCertificate {
         schema: POLYNOMIAL_FAMILY_PRODUCT_SCHEMA.into(),
         candidate: candidate.clone(),
@@ -523,6 +529,60 @@ pub fn certify_polynomial_family_product(
         conclusion,
         lean_declarations,
         lean_replay: "not_attempted".into(),
+        interlacing,
+    })
+}
+
+fn product_interlacing(
+    operation: PolynomialFamilyProductOperation,
+    left: &PolynomialFamilyProductParentProof,
+    right: &PolynomialFamilyProductParentProof,
+    image: &RecurrenceJson,
+) -> Option<LiftInterlacing> {
+    use super::interlacing_transfer::{metadata, successor_degrees};
+    if !matches!(
+        operation,
+        PolynomialFamilyProductOperation::Hadamard
+            | PolynomialFamilyProductOperation::InverseFactorialHadamard
+    ) || !left.is_pf()
+        || !right.is_pf()
+    {
+        return None;
+    }
+    let left = super::lift_summary::proved_parent_interlacing(&left.nonpositive).ok()?;
+    let right = super::lift_summary::proved_parent_interlacing(&right.nonpositive).ok()?;
+    if left.orientation != right.orientation
+        || left.orientation == InterlacingOrientation::Unordered
+    {
+        return None;
+    }
+    let from_index = left
+        .from_index
+        .max(right.from_index)
+        .max(image.first_index.checked_add(1)?);
+    let degrees = successor_degrees(image, from_index);
+    let mut declarations = vec!["RealRooted.StrictInterl.interl_hadamardProduct_of_isPFPolynomial"];
+    if operation == PolynomialFamilyProductOperation::InverseFactorialHadamard {
+        declarations.push("RealRooted.IsMultiplierSequence.strictInterl_diagonalOperator_of_pos");
+    }
+    let hypotheses = vec![
+        "both aligned parent pairs have the same certified directed interlacing order for every covered index; both parents are PF with positive constant coefficients".into(),
+        "Garloff-Wagner transports simultaneous PF Hadamard interlacing; optional division by k! is one fixed positive multiplier".into(),
+    ];
+    Some(LiftInterlacing {
+        kind: RowInterlacing::Weak,
+        orientation: left.orientation,
+        from_index,
+        justification: LiftInterlacingJustification {
+            theorem: declarations.join("; "),
+            premises: hypotheses.clone(),
+            transfer: Some(metadata(
+                &declarations,
+                degrees.into_iter().collect(),
+                None,
+                hypotheses,
+            )),
+        },
     })
 }
 
@@ -565,8 +625,12 @@ impl PolynomialFamilyProductCertificate {
                 "unknown product certificate schema".into(),
             ));
         }
-        let recomputed =
+        let mut recomputed =
             certify_polynomial_family_product(&self.target, &self.candidate, &self.options)?;
+        // Omitting the additional pair property leaves the original root proof intact.
+        if self.interlacing.is_none() {
+            recomputed.interlacing = None;
+        }
         if &recomputed != self {
             return Err(RecurrenceError::VerificationFailed(
                 "the product certificate differs from exact replay".into(),

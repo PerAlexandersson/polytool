@@ -359,7 +359,7 @@ fn row_factors_with_a_constant_exponent_keep_the_interlacing() {
 /// The Hermite map `T(u^k) = H_k` (`H_(k+1) = 2t H_k - H_k'`) preserves
 /// real-rootedness on the whole line and does not depend on `n`: the
 /// interlacing of the Laguerre rows `R_n = n! L_n(-u)` (three-term theorem,
-/// root-domain route off) transfers to `Q_n = T(R_n)`, weakly and unordered.
+/// root-domain route off) transfers weakly to `Q_n = T(R_n)`.
 /// The power family `(u + 1)^n` (a periodic product) gives no claim.
 #[test]
 fn a_whole_line_basis_map_transfers_interlacing() {
@@ -389,7 +389,11 @@ fn a_whole_line_basis_map_transfers_interlacing() {
     assert!(image.is_proved(), "{summary:#?}");
     let claim = proved(&summary.input_interlacing);
     assert_eq!(claim.kind, RowInterlacing::Weak);
-    assert_eq!(claim.orientation, InterlacingOrientation::Unordered);
+    assert_eq!(
+        claim.orientation,
+        InterlacingOrientation::PreviousInterlacesNext
+    );
+    assert!(claim.justification.transfer.is_some());
     assert!(claim
         .justification
         .theorem

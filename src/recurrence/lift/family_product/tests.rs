@@ -25,7 +25,39 @@ fn narayana_hadamard_a350512_proves_a174148() {
         certify_polynomial_family_product(&catalog("A174148"), &candidate, &Default::default())
             .unwrap();
     assert_eq!(proof.conclusion, "pf");
+    let pair = proof
+        .interlacing
+        .as_ref()
+        .expect("both PF parents interlace");
+    assert_eq!(pair.kind, RowInterlacing::Weak);
+    assert_eq!(
+        pair.orientation,
+        InterlacingOrientation::PreviousInterlacesNext
+    );
+    assert!(pair
+        .justification
+        .transfer
+        .as_ref()
+        .unwrap()
+        .lean_declarations[0]
+        .contains("interl_hadamardProduct"));
     proof.verify().unwrap();
+    let mut old_json = serde_json::to_value(&proof).unwrap();
+    old_json.as_object_mut().unwrap().remove("interlacing");
+    let old: PolynomialFamilyProductCertificate = serde_json::from_value(old_json).unwrap();
+    old.verify().unwrap();
+    let mut forged = proof.clone();
+    forged
+        .interlacing
+        .as_mut()
+        .unwrap()
+        .justification
+        .transfer
+        .as_mut()
+        .unwrap()
+        .lean_declarations[0]
+        .push('!');
+    assert!(forged.verify().is_err());
     let mut tampered = proof;
     let PolynomialFamilyProductClosure::CoefficientMultiplier { certificate, .. } =
         &mut tampered.closure
@@ -270,4 +302,55 @@ fn pf_hypothesis_cannot_be_inferred_from_a_long_positive_prefix() {
         operation: PolynomialFamilyProductOperation::Hadamard,
     };
     assert!(apply_polynomial_family_product(&candidate, 0, &Default::default()).is_err());
+}
+
+#[test]
+fn simultaneous_pf_pair_transfer_needs_both_pairs() {
+    let source = named("narayana");
+    let prepared = prepare_record(&source, "parent").unwrap();
+    let left = parent_proof(&prepared).unwrap();
+    assert!(left.is_pf());
+    assert!(left.nonpositive.interlacing.is_some());
+    let result = product_interlacing(
+        PolynomialFamilyProductOperation::Hadamard,
+        &left,
+        &left,
+        &source,
+    )
+    .expect("simultaneous PF interlacing");
+    assert_eq!(result.kind, RowInterlacing::Weak);
+    assert!(result.justification.transfer.unwrap().lean_declarations[0]
+        .contains("interl_hadamardProduct"));
+    let mut right = left.clone();
+    right.nonpositive.interlacing = None;
+    assert!(product_interlacing(
+        PolynomialFamilyProductOperation::Hadamard,
+        &left,
+        &right,
+        &source
+    )
+    .is_none());
+    right = left.clone();
+    right.positive_constant_coefficient = None;
+    assert!(product_interlacing(
+        PolynomialFamilyProductOperation::Hadamard,
+        &left,
+        &right,
+        &source
+    )
+    .is_none());
+    assert!(product_interlacing(
+        PolynomialFamilyProductOperation::Ordinary,
+        &left,
+        &left,
+        &source
+    )
+    .is_none());
+    assert!(product_interlacing(
+        PolynomialFamilyProductOperation::FactorialHadamard,
+        &left,
+        &left,
+        &source
+    )
+    .is_none());
 }

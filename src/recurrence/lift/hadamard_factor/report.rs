@@ -158,6 +158,25 @@ impl HadamardFactorLift {
     /// Replay the certificate (when certified), check that it belongs to
     /// this lift, and that the recorded summary equals the recomputed one.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
+        if self
+            .lift_summary
+            .input_interlacing
+            .proved()
+            .is_some_and(|claim| claim.justification.transfer.is_some())
+        {
+            let (rule, first, seeds) = self.parent.to_recurrence_parts()?;
+            crate::recurrence::check_recorded_parent_proof(
+                &crate::recurrence::ParentRecurrenceRecord {
+                    rule: &rule,
+                    seeds: &seeds,
+                    first_index: first,
+                },
+                first,
+                &[],
+                true,
+                &self.parent_proof,
+            )?;
+        }
         if let HadamardFactorIdentityStatus::Certified { certificate } = &self.identity {
             certificate.verify()?;
             if certificate.factor != self.factor
@@ -169,8 +188,16 @@ impl HadamardFactorLift {
                 ));
             }
         }
+        let current = self.recompute_lift_summary();
+        let mut legacy = current.clone();
+        legacy.input_interlacing = hadamard_interlacing(
+            &legacy,
+            &self.factor,
+            self.multiplier_sequence.as_deref(),
+            &self.parent_proof,
+        );
         if self.factor_text != self.factor.text()
-            || self.lift_summary != self.recompute_lift_summary()
+            || (self.lift_summary != current && self.lift_summary != legacy)
             || !self.lift_summary.is_consistent()
         {
             return Err(RecurrenceError::VerificationFailed(
@@ -303,7 +330,13 @@ pub(super) fn hadamard_lift_summary(
         hypotheses,
         parent_proof_summary(parent_proof),
     );
-    let interlacing = hadamard_interlacing(&summary, factor, multiplier_sequence, parent_proof);
+    let fallback = hadamard_interlacing(&summary, factor, multiplier_sequence, parent_proof);
+    let interlacing = super::interlacing::diagonal_interlacing(
+        &summary,
+        factor,
+        proved_parent_interlacing(parent_proof),
+        fallback,
+    );
     summary.with_input_interlacing(interlacing)
 }
 

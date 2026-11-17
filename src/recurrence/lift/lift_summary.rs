@@ -47,8 +47,11 @@
 //!   the preserver-image lifts (their `PreserverInterlacingClaim`), the
 //!   Hadamard-factor lifts with a multiplier sequence free of `n` (`1/k!`,
 //!   `1/(alpha)_k` and their products; Polya--Schur) and the basis-map lifts
-//!   whose map theorem covers the whole line.  An `n`-dependent operator
-//!   (`binom(n, k)`, an `n`-dependent schedule) gets no claim.
+//!   whose map theorem covers the whole line. Nonzero successor image
+//!   degrees fix the order. Positive fixed multipliers and eligible
+//!   cross-rank diagonals have dedicated directed transfer certificates;
+//!   reverse-Hermite basis maps use their PF pair theorem. Other
+//!   index-dependent operators retain their existing claims.
 //! - **Veronese sections** (Athanasiadis--Wagner, arXiv:2404.12989,
 //!   Corollary 5.6(b)): if `P << Q` are real-rooted with nonnegative
 //!   coefficients, every section `V_(r,j)(P) << V_(r,j)(Q)`.  The parent rows
@@ -370,6 +373,26 @@ pub struct LiftInterlacingJustification {
     /// The premises as checked, in words (each established for every index
     /// it is used at).
     pub premises: Vec<String>,
+    /// Extra all-index hypotheses and Lean correspondence for a stronger transfer.
+    /// Absent on legacy claims; the enclosing lift verifier recomputes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transfer: Option<Box<LiftInterlacingTransfer>>,
+}
+
+/// Exact evidence for a directed interlacing transfer, replayed with its lift.
+/// Lean names describe theorem correspondence; they do not assert a Lean replay.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LiftInterlacingTransfer {
+    /// Fully qualified Lean declarations used by the transfer.
+    pub lean_declarations: Vec<String>,
+    /// Replayed degree laws, including nonzero rows, for the source or image.
+    pub degree_certificates: Vec<LeadingCoefficientCertificate>,
+    /// A scalar recurrence for the parent's constant coefficients, when needed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub constant_coefficient_certificate: Option<Box<LeadingCoefficientCertificate>>,
+    /// Additional hypotheses checked symbolically for every index.
+    pub hypotheses: Vec<String>,
 }
 
 /// A proved interlacing of consecutive rows of a family: for every index
@@ -602,8 +625,29 @@ impl LiftSummary {
             (recorded, now) => recorded == now,
         };
         let interlacing_supported = match &self.input_interlacing {
-            LiftInterlacingClaim::Proved { .. } => {
+            LiftInterlacingClaim::Proved { interlacing } => {
+                let mut legacy = recomputed.input_interlacing.clone();
+                if let LiftInterlacingClaim::Proved {
+                    interlacing: stronger,
+                } = &mut legacy
+                {
+                    if interlacing.justification.transfer.is_none()
+                        && interlacing.orientation == InterlacingOrientation::Unordered
+                        && stronger.justification.transfer.is_some()
+                        && stronger.orientation == InterlacingOrientation::PreviousInterlacesNext
+                        && stronger.justification.theorem == interlacing.justification.theorem
+                    {
+                        stronger.orientation = InterlacingOrientation::Unordered;
+                        stronger.justification.transfer = None;
+                        if stronger.justification.premises.last().is_some_and(|p| {
+                            p.starts_with("successor output degrees fix the orientation:")
+                        }) {
+                            stronger.justification.premises.pop();
+                        }
+                    }
+                }
                 self.input_interlacing == recomputed.input_interlacing
+                    || self.input_interlacing == legacy
             }
             LiftInterlacingClaim::NotProved { .. } => true,
         };
@@ -760,7 +804,7 @@ fn interlacing_obstruction(summary: &LiftSummary) -> Option<String> {
 /// The first input index `n` such that `Q_(n-1)` and `Q_n` come from parent
 /// rows `P_(n-1+s)`, `P_(n+s)` that interlace (`n + s >= parent_from`) and
 /// `n - 1 >= n0`.
-fn input_from_index(parent_from: usize, index_shift: i64, n0: usize) -> Option<usize> {
+pub(super) fn input_from_index(parent_from: usize, index_shift: i64, n0: usize) -> Option<usize> {
     let parent_from = i64::try_from(parent_from).ok()?;
     let n0 = i64::try_from(n0).ok()?;
     usize::try_from(
@@ -801,7 +845,7 @@ fn parent_interlacing_premise(parent: &LiftInterlacing) -> String {
 
 /// The claim with the shared premises (identity, hypotheses, parent proof
 /// and interlacing) followed by `extra` premises.
-fn proved_claim(
+pub(super) fn proved_claim(
     summary: &LiftSummary,
     parent: &LiftInterlacing,
     kind: RowInterlacing,
@@ -846,6 +890,7 @@ fn proved_claim(
             justification: LiftInterlacingJustification {
                 theorem: theorem.into(),
                 premises,
+                transfer: None,
             },
         },
     }

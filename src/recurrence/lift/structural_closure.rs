@@ -129,6 +129,9 @@ pub struct StructuralClosureConclusion {
     pub root_region: RootInterval,
     /// Human-readable conclusion.
     pub statement: String,
+    /// Consecutive interlacing from the exact parent and closure theorem.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interlacing: Option<LiftInterlacing>,
 }
 
 /// Exact nonvanishing argument for a closure image.
@@ -220,19 +223,67 @@ impl DiscoveryClosureSearch {
                 "invalid structural search bounds".into(),
             ));
         }
-        let expected = search(
+        let mut expected = search(
             &self.recurrence,
             options,
             self.max_candidates,
             self.depth,
             None,
         )?;
+        support_recorded_interlacing(self, &mut expected);
         if *self != expected {
             return Err(RecurrenceError::VerificationFailed(
                 "structural closure chain changed".into(),
             ));
         }
         Ok(())
+    }
+}
+
+/// Retain older, weaker pair records while comparing every other field exactly.
+fn support_recorded_interlacing(
+    recorded: &DiscoveryClosureSearch,
+    current: &mut DiscoveryClosureSearch,
+) {
+    if recorded
+        .conclusion
+        .as_ref()
+        .is_some_and(|c| c.interlacing.is_none())
+    {
+        if let Some(conclusion) = &mut current.conclusion {
+            conclusion.interlacing = None;
+        }
+    }
+    for (old, new) in recorded.attempts.iter().zip(&mut current.attempts) {
+        if old.conclusion.interlacing.is_none() {
+            new.conclusion.interlacing = None;
+        }
+        match (&old.certificate, &mut new.certificate) {
+            (
+                DiscoveryClosureCertificate::PreserverImage { certification: old },
+                DiscoveryClosureCertificate::PreserverImage { certification: new },
+            ) if old.as_ref() != new.as_ref()
+                && old.lift_summary.is_supported_by(&new.lift_summary)
+                && old.verify().is_ok() =>
+            {
+                new.interlacing = old.interlacing.clone();
+                new.lift_summary = old.lift_summary.clone();
+            }
+            (
+                DiscoveryClosureCertificate::HadamardFactor { certification: old },
+                DiscoveryClosureCertificate::HadamardFactor { certification: new },
+            ) if old.as_ref() != new.as_ref() && old.verify().is_ok() => {
+                new.lift_summary = old.lift_summary.clone();
+            }
+            _ => {}
+        }
+        if let (
+            StructuralClosureParentProof::Closure { search: old },
+            StructuralClosureParentProof::Closure { search: new },
+        ) = (&old.parent_proof, &mut new.parent_proof)
+        {
+            support_recorded_interlacing(old, new);
+        }
     }
 }
 
@@ -570,6 +621,7 @@ fn add(
         from_index: from,
         root_region: summary.root_transfer.input_root_region.clone(),
         statement,
+        interlacing: closure_interlacing(&certificate, &parent_proof, &search.recurrence),
     };
     let parent_statement = match &parent_proof {
         StructuralClosureParentProof::Discovery { proof } => proof.statement.clone(),
@@ -623,6 +675,61 @@ fn add(
     });
     search.conclusion = Some(conclusion);
     true
+}
+
+/// Compose the actual parent chain's pair theorem with this closure.
+fn closure_interlacing(
+    certificate: &DiscoveryClosureCertificate,
+    parent_proof: &StructuralClosureParentProof,
+    input: &RecurrenceJson,
+) -> Option<LiftInterlacing> {
+    use super::interlacing_transfer::{discovery_interlacing, fixed_preserver};
+    if let Some(claim) = certificate.summary().input_interlacing.proved() {
+        return Some(claim.clone());
+    }
+    let parent = match parent_proof {
+        StructuralClosureParentProof::Registry { proof } => {
+            super::lift_summary::proved_parent_interlacing(proof)
+                .ok()?
+                .clone()
+        }
+        StructuralClosureParentProof::Closure { search } => {
+            search.conclusion.as_ref()?.interlacing.clone()?
+        }
+        StructuralClosureParentProof::Discovery { proof } => discovery_interlacing(proof)?,
+    };
+    let mut summary = certificate.summary().clone();
+    // This proof comes from the recorded structural chain, even if the
+    // registry alone could not prove its parent.
+    summary.parent_proof = LiftParentProof::Proved {
+        route: "structural_parent_chain".into(),
+        statement: "the independently replayed parent chain proves all used parent rows".into(),
+    };
+    let claim = match certificate {
+        DiscoveryClosureCertificate::HadamardFactor { certification } => {
+            super::hadamard_factor::interlacing::diagonal_interlacing(
+                &summary,
+                &certification.factor,
+                Ok(&parent),
+                summary.input_interlacing.clone(),
+            )
+        }
+        DiscoveryClosureCertificate::PreserverImage { certification } => {
+            if super::preserver_image::independent_preserver_for_interlacing(
+                &certification.candidate.operator,
+                summary.input_first_index,
+            )
+            .is_some()
+            {
+                return None;
+            }
+            fixed_preserver(&summary, Ok(&parent),
+                "the same globally real-rootedness-preserving linear operator acts on every parent row; its hypotheses are verified".into(), input)
+        }
+        DiscoveryClosureCertificate::RowFactor { .. } => summary.input_interlacing.clone(),
+        _ => return None,
+    };
+    claim.proved().cloned()
 }
 
 fn inverse_derivative(row: &[Q], c: i64) -> Vec<Q> {

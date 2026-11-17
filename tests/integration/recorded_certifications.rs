@@ -132,6 +132,7 @@ fn weaker_recorded_parent_verdicts_keep_replaying() {
                 justification: polytool::recurrence::LiftInterlacingJustification {
                     theorem: "none".into(),
                     premises: Vec::new(),
+                    transfer: None,
                 },
             })
         });
@@ -331,6 +332,7 @@ fn a_parent_proof_by_the_paper_theorem_replays_by_its_route() {
                 justification: polytool::recurrence::LiftInterlacingJustification {
                     theorem: "none".into(),
                     premises: Vec::new(),
+                    transfer: None,
                 },
             })),
     };

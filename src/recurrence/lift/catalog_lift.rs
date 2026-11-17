@@ -310,6 +310,9 @@ pub struct CatalogLiftConclusion {
     pub checked_rows: Vec<usize>,
     /// The conclusion and the parent, in words.
     pub statement: String,
+    /// Consecutive interlacing transferred by the recorded lift, when proved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interlacing: Option<LiftInterlacing>,
 }
 
 /// The catalog-lift stage (module documentation).
@@ -389,7 +392,16 @@ impl CatalogLiftSearch {
             }
             verify_basis_map_stage(stage, basis_record, &self.options, options)?;
         }
-        let expected = conclude(record, basis_record, self)?;
+        let mut expected = conclude(record, basis_record, self)?;
+        if self
+            .conclusion
+            .as_ref()
+            .is_some_and(|c| c.interlacing.is_none())
+        {
+            if let Some(conclusion) = &mut expected {
+                conclusion.interlacing = None;
+            }
+        }
         if expected != self.conclusion {
             return failed("the catalog-lift conclusion does not follow from its attempts");
         }
@@ -989,6 +1001,7 @@ struct Claim {
     /// Whether the claim is about the basis-map record (else the record).
     on_basis_record: bool,
     description: String,
+    interlacing: Option<LiftInterlacing>,
 }
 
 /// The statement of an identification, when one was transferred.
@@ -1041,6 +1054,7 @@ fn identification_claim(identification: &CatalogIdentification) -> Option<Claim>
     };
     Some(Claim {
         route: CatalogLiftRoute::NormalizedIdentification,
+        interlacing: identification_interlacing(identification),
         catalog_family: Some(id.clone()),
         basis_map: None,
         parent_proof: kind,
@@ -1070,6 +1084,7 @@ fn basis_map_claim(certification: &BasisMapLiftCertification) -> Option<Claim> {
     let name = certification.candidate.basis.name().to_string();
     Some(Claim {
         route: CatalogLiftRoute::BasisMap,
+        interlacing: summary.input_interlacing.proved().cloned(),
         catalog_family: None,
         basis_map: Some(name.clone()),
         parent_proof: kind,
@@ -1097,6 +1112,7 @@ fn coefficient_claim(
     let name = certification.candidate.basis.name().to_string();
     Some(Claim {
         route: CatalogLiftRoute::BasisMapWithIdentifiedCoefficients,
+        interlacing: identified_coefficient_interlacing(certification, coefficient, &inner),
         catalog_family: inner.catalog_family,
         basis_map: Some(name.clone()),
         parent_proof: inner.parent_proof,
@@ -1118,6 +1134,42 @@ fn coefficient_claim(
             conclusion.statement
         ),
     })
+}
+
+fn identified_coefficient_interlacing(
+    certification: &BasisMapLiftCertification,
+    coefficient: &CatalogCoefficientIdentification,
+    inner: &Claim,
+) -> Option<LiftInterlacing> {
+    let parent = inner.interlacing.as_ref()?;
+    let conclusion = coefficient.map_conclusion.as_ref()?;
+    if inner.parent_proof != CatalogParentProofKind::Polytool
+        || !certification.map_theorem.is_proved()
+    {
+        return None;
+    }
+    let mut summary = certification.lift_summary.clone();
+    summary.parent_proof = LiftParentProof::Proved {
+        route: "identified_coefficient_family".into(),
+        statement: inner.description.clone(),
+    };
+    if conclusion.input_interval != AlgebraicInterval::whole_line() {
+        return super::basis_map::reverse_hermite_from_parent(
+            &summary,
+            &certification.map_theorem,
+            parent,
+            &inner.region,
+        )?
+        .proved()
+        .cloned();
+    }
+    let claim = super::interlacing_transfer::fixed_preserver(
+        &summary,
+        Ok(parent),
+        "the certified fixed basis map preserves real-rootedness on the whole line".into(),
+        &certification.input,
+    );
+    claim.proved().cloned()
 }
 
 /// The conclusion of the recorded attempts: the first claim with a
@@ -1270,7 +1322,49 @@ fn settle_nonzero_rows(
         leading_coefficient: certificate,
         checked_rows,
         statement,
+        interlacing: claim.interlacing,
     }))
+}
+
+/// A certified scalar/index normalization transports pairs when no variable
+/// power changes their relative zeros. Attestations supply no pair theorem.
+fn identification_interlacing(identification: &CatalogIdentification) -> Option<LiftInterlacing> {
+    use super::interlacing_transfer::{discovery_interlacing, metadata, successor_degrees};
+    if identification.parent_proof != Some(CatalogParentProofKind::Polytool)
+        || !identification.equality.is_certified()
+    {
+        return None;
+    }
+    let normalization = identification.equality.normalization.as_ref()?;
+    if !normalization.has_trivial_x_power() {
+        return None;
+    }
+    let mut claim = discovery_interlacing(identification.parent.as_ref()?)?;
+    let start = identification
+        .transfer
+        .as_ref()?
+        .conclusion_from_index
+        .checked_add(1)?;
+    let shifted = i128::try_from(claim.from_index)
+        .ok()?
+        .checked_sub(i128::from(normalization.index_shift))?;
+    claim.from_index = usize::try_from(shifted.max(start as i128)).ok()?;
+    // The successor-degree scalar lemma gives explicit metadata whenever
+    // its exact degree side condition is available.
+    if let Some(degrees) = successor_degrees(&identification.equality.target, claim.from_index) {
+        claim.orientation = InterlacingOrientation::PreviousInterlacesNext;
+        claim.justification.transfer = Some(metadata(
+            &["RealRooted.Interlaces.C_mul_both"], vec![degrees], None,
+            vec!["the certified normalization is an index shift and independent finite nonzero row scalars; no variable power is inserted or removed".into()],
+        ));
+    } else {
+        claim.justification.transfer = Some(metadata(
+            &["RealRooted.strictInterl_C_mul_both_sequence"], vec![], None,
+            vec!["the certified index shift aligns consecutive pairs and both scalar gauges are nonzero at every index".into()],
+        ));
+    }
+    claim.justification.premises.push(normalization.describe());
+    Some(claim)
 }
 
 // ---------------------------------------------------------------------------

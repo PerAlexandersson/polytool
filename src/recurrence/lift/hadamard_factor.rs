@@ -232,6 +232,7 @@ pub(super) mod annihilator;
 pub(super) mod annihilator_system;
 pub(super) mod certify;
 pub(super) mod factor;
+pub(in crate::recurrence::lift) mod interlacing;
 pub(super) mod prepare;
 mod report;
 pub(super) mod search;

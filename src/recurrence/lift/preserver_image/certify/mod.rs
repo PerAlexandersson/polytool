@@ -403,8 +403,9 @@ pub struct PreserverImageCertification {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_interlacing_report: Option<RealRootednessTheoremReport>,
     /// Whether consecutive input rows interlace (the `preserver_image`
-    /// interlacing rule): claimed only for an operator independent of `n`
-    /// from the parent's proved interlacing, never from finitely many rows.
+    /// interlacing rule): transferred from the parent's proof by a fixed
+    /// preserver or an eligible cross-rank diagonal theorem, with every
+    /// extra hypothesis checked for all indices.
     pub interlacing: PreserverInterlacingClaim,
     /// The row route of the Lean library RealRooted
     /// (<https://github.com/PerAlexandersson/RealRooted>) matching the
@@ -722,6 +723,7 @@ pub fn certify_preserver_image_lift(
         n0,
         &outcome.identity,
         parent_interlacing_report.as_ref(),
+        &parent_proof,
     );
     let lift_summary = preserver_image_summary(PreserverImageSummaryParts {
         candidate,

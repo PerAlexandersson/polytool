@@ -350,3 +350,52 @@ fn parity_product_json_text_replay_and_negative_seeds() {
         .iter()
         .any(|a| a["theorem"] == "parity_product" && a["status"] == "proved"));
 }
+
+#[test]
+fn reverse_hermite_lift_exports_interlacing_metadata_and_rejects_forgery() {
+    let entry = polytool::oeis::by_id("A143395").unwrap();
+    let (rule, seeds) = entry.recurrence_parts().unwrap();
+    let record = polytool::recurrence::RecurrenceJson::from_recurrence_rational(
+        &rule,
+        entry.recurrence_first_index,
+        &seeds,
+        None,
+    );
+    let output = run(
+        &["recurrence-prove", "--recurrence", "-", "--json"],
+        &serde_json::to_string(&record).unwrap(),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let pair = &report["catalog_lifts"]["conclusion"]["interlacing"];
+    assert_eq!(pair["kind"], "weak");
+    assert!(pair["justification"]["transfer"]["lean_declarations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|v| v == "RealRooted.Interl.reverseHermiteTransform"));
+    let replay = run(
+        &["recurrence-prove", "--verify", "--json"],
+        &report.to_string(),
+    );
+    assert!(
+        replay.status.success(),
+        "{}",
+        String::from_utf8_lossy(&replay.stderr)
+    );
+    report["catalog_lifts"]["conclusion"]["interlacing"]["justification"]["transfer"]
+        ["lean_declarations"][0] = serde_json::json!("forged");
+    assert_eq!(
+        run(
+            &["recurrence-prove", "--verify", "--json"],
+            &report.to_string()
+        )
+        .status
+        .code(),
+        Some(2)
+    );
+}

@@ -6,7 +6,10 @@
 use super::super::hadamard_factor::prepare::{
     prepare_lift_rule, shift_free_from_json, shift_free_json, PreparedLiftRule,
 };
-use super::super::lift_summary::{fixed_preserver_interlacing, proved_parent_interlacing};
+use super::super::interlacing_transfer::{
+    fixed_preserver, metadata, successor_degrees, transferred_claim,
+};
+use super::super::lift_summary::proved_parent_interlacing;
 use super::super::parent_proof::{
     prove_parent_by_routes, prove_parent_real_rootedness, ParentRecurrenceRecord,
 };
@@ -1254,7 +1257,14 @@ fn summary(
         hypotheses,
         parent_proof,
     );
-    let interlacing = basis_map_interlacing(&summary, map, report, coefficient_roots);
+    let input_record = RecurrenceJson::from_recurrence_rational(
+        &input.rule,
+        input.first_index,
+        &input.seeds,
+        None,
+    );
+    let interlacing =
+        basis_map_interlacing(&summary, map, report, coefficient_roots, &input_record);
     summary.with_input_interlacing(interlacing)
 }
 
@@ -1272,6 +1282,7 @@ fn basis_map_interlacing(
     map: &BasisMap,
     report: &BasisMapTheoremReport,
     coefficient_roots: Option<&BasisMapCoefficientRootProof>,
+    input: &RecurrenceJson,
 ) -> LiftInterlacingClaim {
     let whole_line = report.is_proved()
         && report.conclusions.iter().any(|c| {
@@ -1284,6 +1295,9 @@ fn basis_map_interlacing(
                 })
         });
     if !whole_line {
+        if let Some(claim) = reverse_hermite_interlacing(summary, report, coefficient_roots) {
+            return claim;
+        }
         return LiftInterlacingClaim::not_proved(
             "the map theorem does not prove that T_P preserves real-rootedness on the whole \
              line",
@@ -1305,7 +1319,7 @@ fn basis_map_interlacing(
         ));
         interlacing
     });
-    fixed_preserver_interlacing(
+    fixed_preserver(
         summary,
         translated.as_ref().map_err(Clone::clone),
         format!(
@@ -1315,5 +1329,77 @@ fn basis_map_interlacing(
             map.name(),
             report.theorem
         ),
+        input,
     )
+}
+
+/// The even-derivative identity supplies the scaled reverse-Hermite adapter.
+fn reverse_hermite_interlacing(
+    summary: &LiftSummary,
+    report: &BasisMapTheoremReport,
+    roots: Option<&BasisMapCoefficientRootProof>,
+) -> Option<LiftInterlacingClaim> {
+    let roots = roots?;
+    let parent = proved_parent_interlacing(&roots.upper_bound).ok()?;
+    reverse_hermite_from_parent(summary, report, parent, &roots.target_interval)
+}
+
+/// Transfer a pair proved by a separately replayed coefficient-family identity.
+pub(in crate::recurrence::lift) fn reverse_hermite_from_parent(
+    summary: &LiftSummary,
+    report: &BasisMapTheoremReport,
+    parent: &LiftInterlacing,
+    region: &RootInterval,
+) -> Option<LiftInterlacingClaim> {
+    use super::even_derivative::EvenDerivativeCoefficients;
+    use super::theorems::BasisMapShape;
+    let BasisMapShape::EvenDerivative { certificate } = &report.shape else {
+        return None;
+    };
+    if !report.is_proved() || !certificate.basis_identity.is_certified() {
+        return None;
+    }
+    let EvenDerivativeCoefficients::RationalRatio {
+        numerator,
+        denominator,
+    } = &certificate.coefficients
+    else {
+        return None;
+    };
+    let numerator = numerator
+        .iter()
+        .map(|s| parse_rational_coeff(s))
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    let denominator = denominator
+        .iter()
+        .map(|s| parse_rational_coeff(s))
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    let t = vec_poly::coeff(&numerator, 0) / denominator.first().filter(|v| !v.is_zero())?;
+    if t <= Q::zero()
+        || vec_poly::degree(&numerator) != Some(0)
+        || vec_poly::trim(&denominator) != vec![denominator[0].clone(), denominator[0].clone()]
+    {
+        return None;
+    }
+    let upper = region.upper.as_ref()?;
+    if upper.per_index.is_some() || parse_rational_coeff(&upper.value).ok()? > Q::zero() {
+        return None;
+    }
+    let from = parent
+        .from_index
+        .max(summary.input_first_index.checked_add(1)?);
+    let degrees = successor_degrees(&summary.parent.recurrence, from);
+    // This dedicated PF theorem also preserves the existing equal-degree order.
+    let orientation = if degrees.is_some() {
+        crate::recurrence::InterlacingOrientation::PreviousInterlacesNext
+    } else {
+        parent.orientation
+    };
+    let claim = transferred_claim(summary, parent, orientation,
+        metadata(&["RealRooted.Interl.reverseHermiteTransform"], degrees.into_iter().collect(), None,
+            vec![format!("the all-degree basis identity has c_k=t^k/k! with t={}; T(f)(x)=reverseHermiteTransform(f(2t u))(x/(2t)); both substitutions have positive slope", format_rational_coeff(&t)),
+                "the coefficient proof puts every parent root at most zero; row signs can be normalized to PF; its translation preserves root order".into()]));
+    claim.is_proved().then_some(claim)
 }

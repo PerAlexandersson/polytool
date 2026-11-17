@@ -32,8 +32,10 @@ pub(super) struct PreserverImageSummaryParts<'a> {
 
 /// The input interlacing of a preserver-image lift: its
 /// [`PreserverInterlacingClaim`] (the Hermite--Kakeya--Obreschkoff rule of
-/// the `interlacing` module), weak and unordered.
-fn preserver_input_interlacing(claim: &PreserverInterlacingClaim) -> LiftInterlacingClaim {
+/// the `interlacing` module), weak with the certified orientation.
+pub(super) fn preserver_input_interlacing(
+    claim: &PreserverInterlacingClaim,
+) -> LiftInterlacingClaim {
     match claim {
         PreserverInterlacingClaim::None { reason } => LiftInterlacingClaim::not_proved(reason),
         PreserverInterlacingClaim::Claimed {
@@ -41,8 +43,9 @@ fn preserver_input_interlacing(claim: &PreserverInterlacingClaim) -> LiftInterla
             orientation,
             from_index,
             justification,
+            transfer,
         } => {
-            if orientation != "unordered" {
+            if orientation != "unordered" && orientation != "previous_interlaces_next" {
                 return LiftInterlacingClaim::not_proved(format!(
                     "unknown orientation `{orientation}` of the preserver interlacing claim"
                 ));
@@ -50,11 +53,16 @@ fn preserver_input_interlacing(claim: &PreserverInterlacingClaim) -> LiftInterla
             LiftInterlacingClaim::Proved {
                 interlacing: LiftInterlacing {
                     kind: *kind,
-                    orientation: InterlacingOrientation::Unordered,
+                    orientation: if orientation == "previous_interlaces_next" {
+                        InterlacingOrientation::PreviousInterlacesNext
+                    } else {
+                        InterlacingOrientation::Unordered
+                    },
                     from_index: *from_index,
                     justification: LiftInterlacingJustification {
                         theorem: HERMITE_KAKEYA_OBRESCHKOFF_THEOREM.into(),
                         premises: vec![justification.clone()],
+                        transfer: transfer.clone(),
                     },
                 },
             }

@@ -4,6 +4,10 @@
 
 ### Added
 
+- Preserver-image, Hadamard-factor, basis-map, family-product, catalog and structural-closure lifts keep
+  consecutive interlacing when the matching theorem's hypotheses hold for every index (fixed preservers,
+  positive multiplier sequences, cross-rank and shifted-binomial diagonal operators, PF Hadamard pairs,
+  scaled reverse-Hermite); justifications carry an optional `transfer` record and replay checks it.
 - `recurrence-prove` route `matrix_orbit` and command `polytool matrix-orbit`: rows that are projections of a
   constant transfer-matrix orbit are real-rooted when the matrix maps interlacing sequences with nonnegative
   coefficients to such sequences (Brändén, *Unimodality, log-concavity, real-rootedness and beyond*,

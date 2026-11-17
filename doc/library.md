@@ -1393,14 +1393,36 @@ when the identity is certified and every transfer hypothesis is verified:
 - operations independent of `n` that preserve real-rootedness on the whole
   line (the preserver-image claim, Hadamard multiplier sequences such as
   `1/k!` and `1/(alpha)_k`, basis maps whose theorem covers the whole line):
-  the Hermite--Kakeya--Obreschkoff theorem, weak and `unordered`;
+  the Hermite--Kakeya--Obreschkoff theorem, weak and `unordered`; exact
+  nonzero successor image degrees strengthen the orientation to
+  `previous_interlaces_next` (`PreservesRealRootedOrZero.interlaces`);
 - Veronese sections (`VeroneseSectionCertification`): Athanasiadis and
   Wagner, arXiv:2404.12989, Corollary 5.6(b), weak, in the parent's
   orientation;
 - row factors with a constant exponent: a common real-rooted factor keeps
   the cofactor's interlacing and orientation;
-- `n`-dependent operators (`binom(n, k)`, `F^(n)`), gamma lifts and
-  symmetric companions: `not_proved`.
+- a fixed positive multiplier preserves successor-degree interlacing
+  (`Interlaces.diagonalOperator_of_pos`);
+- cross-rank weights `gamma(k) delta(d-k)` preserve successor-degree
+  interlacing of PF parents with nonzero constant terms. The supported
+  factors are positive reciprocal factorial/rising-factorial sequences,
+  reciprocal complement factorials, and shifted binomials whose two
+  factorial shifts are nonnegative. An exact affine degree law aligns
+  the factor's row index with the parent's degree. The scalar recurrence
+  obtained by evaluation at zero must prove every constant term nonzero;
+- scaled reverse-Hermite basis maps with `c_k=t^k/k!`, `t>0`, use
+  `Interl.reverseHermiteTransform` on PF parents and preserve weak order;
+- general index-dependent operators, variable row-factor powers, gamma
+  lifts and symmetric companions retain their previous conclusions.
+
+Stronger claims append `justification.transfer` (`LiftInterlacingTransfer`):
+`lean_declarations`, exact `degree_certificates`, an optional
+`constant_coefficient_certificate`, and the all-index `hypotheses`.
+These are recomputed by the enclosing certificate verifier. Lean replay
+remains `not_attempted`. Failed or unresolved hypotheses retain the existing
+claim. Catalog and structural closure conclusions append `interlacing`
+only when the recorded parent and transfer prove it; proof routes and
+real-rootedness verdicts are unchanged.
 
 ### Parent provers and prepared rules
 
@@ -1585,8 +1607,13 @@ shared all-index nonpositive-root parent proof with a fixed positive constant
 coefficient proved by induction on the rule. A finite prefix of positive
 coefficients is insufficient. Whole-line parents are checked by the
 three-term theorem when the nonpositive-root parent proof does not apply.
-The output conclusion is `pf` or `zero_or_real_rooted`; no interlacing or
-strictness follows from this interface. Missing hypotheses make the lift
+The output conclusion is `pf` or `zero_or_real_rooted`. An optional
+`interlacing` field records weak consecutive interlacing for ordinary PF
+Hadamard products (also followed by division by `k!`) when both aligned
+factor pairs have the same proved directed order. Garloff--Wagner supplies
+the simultaneous pair theorem; a single interlacing factor is insufficient.
+No interlacing is inferred for ordinary row multiplication or factorial
+Hadamard products. No strictness follows from this interface. Missing hypotheses make the lift
 unsupported, rather than conditional on an attestation.
 
 For Hadamard closure, invariant row-annihilator systems prove coefficient
@@ -1771,10 +1798,12 @@ declarations of the operator's theorem, and the `lift_summary` (new
 the theorem, decided exactly for every `n` (fixed polynomials exactly,
 index-dependent coefficients of degree `<= 2` by the sign checker; anything
 else stays open).  It also records a `PreserverInterlacingClaim`: consecutive
-input rows interlace (weakly, orientation not determined) only for an operator
-independent of `n` that preserves every real-rooted polynomial, from the
-parent's interlacing proved by a replayed theorem report
-(Hermite--Kakeya--Obreschkoff); otherwise `none`.  See [algorithms.md](algorithms.md#preserver-image-lifts).
+input rows inherit weak interlacing from a replayed parent pair theorem.
+A fixed global preserver gives an unordered pair, strengthened to
+`previous_interlaces_next` when certified successor image degrees fix the
+order. Positive fixed multipliers and eligible cross-rank factors also use
+the dedicated transfers described in the common lift summary above;
+other operators retain their previous claim.  See [algorithms.md](algorithms.md#preserver-image-lifts).
 
 A candidate is also an image specification of `image_recurrence_of_operator`
 (`PreserverImageCandidate::image_operator_specification`; operators convert

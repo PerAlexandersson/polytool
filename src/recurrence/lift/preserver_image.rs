@@ -174,11 +174,12 @@
 //! # Interlacing
 //!
 //! Every certification carries a [`PreserverInterlacingClaim`]: consecutive
-//! input rows interlace (weakly, orientation not determined) only when the
-//! operator is independent of `n` and preserves real-rootedness of every
-//! polynomial, and a replayed parent theorem report proves the parent rows
-//! interlacing; the Hermite--Kakeya--Obreschkoff argument transfers it (the
-//! `interlacing` module documentation).  Otherwise the claim is `none`.
+//! input rows inherit weak interlacing from a replayed parent pair theorem.
+//! Fixed global preservers give an unordered pair by the pencil argument;
+//! certified nonzero successor image degrees fix its order. Positive fixed
+//! multipliers and eligible cross-rank diagonals use dedicated transfer
+//! theorems with exact all-index hypotheses (the `interlacing` module).
+//! Other operators retain their existing claim.
 //!
 //! # Image rules
 //!
@@ -229,3 +230,5 @@ pub use search::{
     find_preserver_image_lifts, PreserverImageReport, PreserverImageSearchOptions,
     PreserverOperatorShape, PRESERVER_IMAGE_LIFTS_SCHEMA,
 };
+
+pub(in crate::recurrence::lift) use interlacing::independent_preserver as independent_preserver_for_interlacing;

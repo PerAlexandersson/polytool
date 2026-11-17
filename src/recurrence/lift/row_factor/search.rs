@@ -1129,6 +1129,7 @@ fn row_factor_interlacing(
                         }
                     ),
                 ],
+                transfer: None,
             },
         },
     }

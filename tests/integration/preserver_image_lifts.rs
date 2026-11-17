@@ -854,7 +854,7 @@ fn the_named_library_is_proved() {
 
 /// `He_n + He_n'` and `A_n + A_n'`: a fixed Laguerre operator transfers the
 /// parent's proved interlacing (Hermite--Kakeya--Obreschkoff), weakly and
-/// without an orientation.
+/// with successor output degrees fixing the orientation.
 #[test]
 fn a_fixed_preserver_transfers_the_parent_interlacing() {
     let rows: Vec<_> = hermite().iter().map(|p| plus_derivative(p, 1)).collect();
@@ -876,7 +876,7 @@ fn a_fixed_preserver_transfers_the_parent_interlacing() {
         panic!("{:?}", certification.interlacing)
     };
     assert_eq!(*kind, RowInterlacing::Weak);
-    assert_eq!(orientation, "unordered");
+    assert_eq!(orientation, "previous_interlaces_next");
     assert_eq!(*from_index, 1);
     // The summary carries the same claim.
     let summary_claim = certification
@@ -885,7 +885,10 @@ fn a_fixed_preserver_transfers_the_parent_interlacing() {
         .proved()
         .expect("the summary claim");
     assert_eq!(summary_claim.kind, RowInterlacing::Weak);
-    assert_eq!(summary_claim.orientation, InterlacingOrientation::Unordered);
+    assert_eq!(
+        summary_claim.orientation,
+        InterlacingOrientation::PreviousInterlacesNext
+    );
     assert_eq!(summary_claim.from_index, 1);
     // A tampered claim is rejected.
     let mut tampered = certification.clone();
@@ -1220,4 +1223,64 @@ mod euler_step {
             }
         );
     }
+}
+
+#[test]
+fn cross_rank_interlacing_is_certified_and_metadata_replays() {
+    // L_n(-x) / (n-k)! gives the type-B Narayana row divided by n!.
+    let source: RecurrenceJson = serde_json::from_str(
+        r#"{
+        "schema":"polytool.recurrence.v1", "first_index":0,
+        "initial_polynomials":[["1"],["1","1"]],
+        "recurrence":{"terms":[
+            {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","1"],["2"]]}},
+            {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["1"],["-1"]]}}
+        ],"denominator":{"coeffs":[["0"],["1"]]}}}
+    "#,
+    )
+    .unwrap();
+    let input: RecurrenceJson = serde_json::from_str(
+        r#"{
+        "schema":"polytool.recurrence.v1", "first_index":0,
+        "initial_polynomials":[["1"],["1","1"]],
+        "recurrence":{"terms":[
+            {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","-1"],["2","2"]]}},
+            {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","2","-1"]]}}
+        ],"denominator":{"coeffs":[["0"],["0"],["1"]]}}}
+    "#,
+    )
+    .unwrap();
+    let (rule, first, seeds) = input.to_recurrence_parts().unwrap();
+    let rows = rule.generate_rows_rational(&seeds, first, 12).unwrap();
+    let candidate = PreserverImageCandidate {
+        parent_name: "Laguerre".into(),
+        parent: source,
+        index_shift: 0,
+        gauge: VeroneseSectionGauge::None,
+        operator: PreserverOperator::HadamardMultiplier {
+            factor: HadamardFactor::single(HadamardFactorTerm::InverseComplementFactorial),
+        },
+    };
+    let certification = certify(&rule, &rows, first, &candidate);
+    assert!(certification.is_proved());
+    let pair = certification
+        .lift_summary
+        .input_interlacing
+        .proved()
+        .expect("cross-rank pair theorem");
+    assert_eq!(
+        pair.orientation,
+        InterlacingOrientation::PreviousInterlacesNext
+    );
+    let transfer = pair.justification.transfer.as_ref().unwrap();
+    assert!(transfer.constant_coefficient_certificate.is_some());
+    let mut tampered = certification.clone();
+    if let PreserverInterlacingClaim::Claimed {
+        transfer: Some(transfer),
+        ..
+    } = &mut tampered.interlacing
+    {
+        transfer.degree_certificates[0].degree_is_exact = false;
+    }
+    assert!(tampered.verify().is_err());
 }

@@ -277,3 +277,55 @@ fn row_factor_then_gamma_needs_two_closure_levels() {
         .unwrap();
     full.verify(&Default::default()).unwrap();
 }
+
+#[test]
+fn structural_conclusion_keeps_the_native_interlacing_direction() {
+    let input = record("A065826");
+    let search =
+        find_discovery_closure_lifts(&input, &Default::default(), &Default::default()).unwrap();
+    let attempt = search.attempts.first().expect("a structural proof");
+    let native = attempt
+        .certificate
+        .summary()
+        .input_interlacing
+        .proved()
+        .expect("native pair theorem");
+    assert_eq!(
+        native.orientation,
+        InterlacingOrientation::PreviousInterlacesNext
+    );
+    assert_eq!(attempt.conclusion.interlacing.as_ref(), Some(native));
+    assert_eq!(
+        search.conclusion.as_ref().unwrap().interlacing.as_ref(),
+        Some(native)
+    );
+    search.verify(&Default::default()).unwrap();
+    let mut legacy = search.clone();
+    legacy.conclusion.as_mut().unwrap().interlacing = None;
+    legacy.attempts[0].conclusion.interlacing = None;
+    if let DiscoveryClosureCertificate::PreserverImage { certification } =
+        &mut legacy.attempts[0].certificate
+    {
+        if let PreserverInterlacingClaim::Claimed {
+            orientation,
+            transfer,
+            ..
+        } = &mut certification.interlacing
+        {
+            *orientation = "unordered".into();
+            *transfer = None;
+        }
+        certification.lift_summary = certification.recompute_lift_summary();
+    }
+    legacy.verify(&Default::default()).unwrap();
+    let mut tampered = search;
+    tampered
+        .conclusion
+        .as_mut()
+        .unwrap()
+        .interlacing
+        .as_mut()
+        .unwrap()
+        .orientation = InterlacingOrientation::Unordered;
+    assert!(tampered.verify(&Default::default()).is_err());
+}

@@ -118,7 +118,34 @@ fn even_derivative_stirling_image_and_replay() {
     )
     .unwrap();
     assert!(result.is_proved(), "{result:#?}");
+    let interlacing = result
+        .lift_summary
+        .input_interlacing
+        .proved()
+        .expect("reverse-Hermite transfer");
+    assert_eq!(interlacing.kind, RowInterlacing::Weak);
+    assert!(interlacing
+        .justification
+        .transfer
+        .as_ref()
+        .unwrap()
+        .lean_declarations
+        .iter()
+        .any(|name| name == "RealRooted.Interl.reverseHermiteTransform"));
     result.verify().unwrap();
+    let mut bad_interlacing = result.clone();
+    if let LiftInterlacingClaim::Proved { interlacing } =
+        &mut bad_interlacing.lift_summary.input_interlacing
+    {
+        interlacing
+            .justification
+            .transfer
+            .as_mut()
+            .unwrap()
+            .lean_declarations[0]
+            .push('!');
+    }
+    assert!(bad_interlacing.verify().is_err());
     let mut unrelated = result.clone();
     let other_map = BasisMap::even_derivative(&ratio(&["2"], &["1", "1"])).unwrap();
     unrelated.map_theorem =
@@ -138,6 +165,7 @@ fn even_derivative_catalog_lift_discovers_a143395() {
     assert_eq!(result.status, "proved", "{result:#?}");
     let stage = result.catalog_lifts.as_ref().unwrap();
     assert!(stage.is_proved());
+    assert!(stage.conclusion.as_ref().unwrap().interlacing.is_some());
     result.verify().unwrap();
 }
 
@@ -399,4 +427,34 @@ fn even_derivative_finite_symbol_disproves_without_a_small_witness() {
     assert_eq!(report.status, BasisMapTheoremStatus::NotPreserving);
     assert!(report.counterexample.is_none());
     report.verify().unwrap();
+}
+
+#[test]
+fn reverse_hermite_transfer_requires_its_identity_and_parent_pair() {
+    let (rule, first, seeds) = catalog("A048993");
+    let family = RecurrenceJson::from_recurrence_rational(&rule, first, &seeds, None);
+    let general_pf_map = BasisMap::even_derivative(&ratio(&["1"], &["1", "2", "1"])).unwrap();
+    assert!(
+        check_basis_map_preserves_pf(&general_pf_map, &Default::default())
+            .unwrap()
+            .is_proved()
+    );
+    assert!(matches!(
+        apply_basis_map_to_family(&general_pf_map, &family, &Default::default()),
+        Err(RecurrenceError::Unsupported(_))
+    ));
+    let geometric = PreserverParentLibrary::named_family_records()
+        .into_iter()
+        .find(|(name, _)| name == "binomial")
+        .unwrap()
+        .1;
+    let reverse_hermite = BasisMap::even_derivative(&ratio(&["1"], &["1", "1"])).unwrap();
+    let image =
+        apply_basis_map_to_family(&reverse_hermite, &geometric, &Default::default()).unwrap();
+    // This parent's selected proof certifies no consecutive pair property.
+    assert!(!image
+        .certification
+        .lift_summary
+        .input_interlacing
+        .is_proved());
 }

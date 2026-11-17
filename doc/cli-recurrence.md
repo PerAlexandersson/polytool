@@ -842,6 +842,27 @@ polytool recurrence-degree --verify < degree.json
 
 ## General proof discovery
 
+Lift proofs retain consecutive interlacing when their exact transfer theorem
+applies. Fixed global preservers gain `previous_interlaces_next` when a
+replayed degree certificate proves nonzero successor image degrees. Positive
+fixed multipliers and eligible cross-rank reciprocal-factorial or shifted
+binomial factors also retain weak directed interlacing. Cross-rank transfer
+requires PF parents, nonzero constant terms and an exact degree alignment.
+Scaled reverse-Hermite basis maps retain weak PF interlacing.
+
+The optional JSON `justification.transfer` records Lean theorem names,
+degree certificates, an optional scalar constant-coefficient certificate,
+and all-index hypotheses. Catalog and structural closure conclusions append
+`interlacing` when supported. `recurrence-prove --verify` recomputes these
+claims and rejects altered metadata. This strengthens conclusions without
+changing selected proof routes or real-rootedness verdicts; a finite row
+check does not supply a missing hypothesis. No new command or flag is needed.
+
+```sh
+polytool oeis info A143395 --json | jq .recurrence_data | polytool recurrence-prove --json
+polytool recurrence-prove --verify --json < proof.json
+```
+
 The `matrix_orbit` route automatically realizes stationary scalar rules as
 bounded threshold, separated-characteristic or companion state systems. It
 checks the scalar identity, every prescribed seed, the ordered nonnegative

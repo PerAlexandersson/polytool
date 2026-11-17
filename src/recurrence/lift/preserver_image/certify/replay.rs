@@ -382,13 +382,47 @@ impl PreserverImageCertification {
             }
         }
         self.verify_image_rule()?;
+        if matches!(
+            self.candidate.operator,
+            PreserverOperator::HadamardMultiplier { .. }
+        ) && self
+            .lift_summary
+            .input_interlacing
+            .proved()
+            .is_some_and(|claim| claim.justification.transfer.is_some())
+        {
+            let parent = prepare_record(&self.candidate.parent, "parent")?;
+            let needed_from = parent_start(
+                self.input_first_index,
+                self.candidate.index_shift,
+                parent.first_index,
+            )?;
+            crate::recurrence::check_recorded_parent_proof(
+                &crate::recurrence::ParentRecurrenceRecord {
+                    rule: &parent.rule,
+                    seeds: &parent.seeds,
+                    first_index: parent.first_index,
+                },
+                needed_from,
+                &[],
+                true,
+                &self.parent_proof,
+            )?;
+        }
         let claim = interlacing_claim(
             &self.candidate,
             self.input_first_index,
             &self.identity,
             self.parent_interlacing_report.as_ref(),
+            &self.parent_proof,
         );
-        if claim != self.interlacing {
+        let legacy = super::super::interlacing::legacy_interlacing_claim(
+            &self.candidate,
+            self.input_first_index,
+            &self.identity,
+            self.parent_interlacing_report.as_ref(),
+        );
+        if claim != self.interlacing && legacy != self.interlacing {
             return failed("the interlacing claim does not match the one recomputed");
         }
         let summary = self.recompute_lift_summary();

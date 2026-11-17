@@ -350,8 +350,9 @@
 //! still checked; the published ones are transported on the index side
 //! from Riordan coefficient families only); the backward lift needs
 //! triangular basis rows (so not the constant-current maps, whose degrees
-//! repeat, nor the derangement transformation); interlacing of consecutive
-//! image rows is not claimed.
+//! repeat, nor the derangement transformation). Consecutive interlacing
+//! transfers for fixed global preservers and scaled reverse-Hermite maps
+//! with a proved parent pair property; PF preservation alone is insufficient.
 //!
 //! The group is split into `quadratic` (exact `a + b sqrt(d)` and
 //! intervals), `map` (the map, its inverse and intertwining relation),
@@ -400,3 +401,5 @@ pub use search::{
     find_basis_map_lifts, BasisMapLiftRejection, BasisMapLiftReport, BasisMapLiftSearchOptions,
     BASIS_MAP_LIFTS_SCHEMA,
 };
+
+pub(in crate::recurrence::lift) use certify::reverse_hermite_from_parent;

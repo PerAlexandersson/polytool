@@ -611,6 +611,7 @@ pub(super) fn periodic_product_parent(rule: &Recurrence, seeds: &[Vec<Q>]) -> Re
 }
 
 mod routes;
+pub(in crate::recurrence::lift) use routes::theorem_report_interlacing;
 use routes::*;
 mod coefficient_signs;
 use coefficient_signs::*;
