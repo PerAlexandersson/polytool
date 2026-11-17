@@ -21,6 +21,47 @@ use rmcp::{handler::server::wrapper::Parameters, Json};
 use serde_json::json;
 
 #[test]
+fn matrix_orbit_tool_checks_and_replays() {
+    let entry = polytool::oeis::by_id("A245963").unwrap();
+    let (rule, seeds) = entry.recurrence_parts().unwrap();
+    let recurrence = polytool::recurrence::RecurrenceJson::from_recurrence_rational(
+        &rule,
+        entry.recurrence_first_index,
+        &seeds,
+        None,
+    );
+    let server = PolynomialToolsServer::new();
+    let Json(report) = server
+        .matrix_orbit(Parameters(crate::requests::MatrixOrbitToolRequest {
+            request: json!({"recurrence":recurrence}),
+            verify: false,
+        }))
+        .unwrap();
+    assert_eq!(report["status"], "proved");
+    let Json(replayed) = server
+        .matrix_orbit(Parameters(crate::requests::MatrixOrbitToolRequest {
+            request: json!(report),
+            verify: true,
+        }))
+        .unwrap();
+    assert_eq!(replayed["verified"], true);
+    let mut changed = json!(report);
+    changed["certificate"]["nonzero_supports"] = json!([]);
+    assert!(server
+        .matrix_orbit(Parameters(crate::requests::MatrixOrbitToolRequest {
+            request: changed,
+            verify: true
+        }))
+        .is_err());
+    assert!(server
+        .matrix_orbit(Parameters(crate::requests::MatrixOrbitToolRequest {
+            request: json!({"recurrence":{},"unknown":1}),
+            verify: false
+        }))
+        .is_err());
+}
+
+#[test]
 fn bkw_certificate_tool_uses_exact_library_and_limits() {
     let recurrence = json!({"schema":"polytool.recurrence.v1","first_index":0,"initial_polynomials":[["1"],["0","1"]],"recurrence":{"terms":[
         {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","1"]]}},

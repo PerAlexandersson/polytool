@@ -752,6 +752,15 @@ pub struct RootEnclosuresToolRequest {
     pub request: serde_json::Value,
 }
 
+/// A matrix-orbit request or, with verify=true, a saved matrix-orbit report.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MatrixOrbitToolRequest {
+    pub request: serde_json::Value,
+    #[serde(default)]
+    pub verify: bool,
+}
+
 /// Structured implicit-transport request
 /// (`polytool::recurrence::ImplicitTransformRequest`); the library validates
 /// the strict schema.

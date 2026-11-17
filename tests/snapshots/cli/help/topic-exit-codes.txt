@@ -63,6 +63,10 @@ Per command:
       0 proved by polytool (or the replayed report is valid)
       1 not proved by polytool (also conditional_on_attestation)
       2 usage error, invalid input or a failed replay
+  matrix-orbit
+      0 proved or replay verified
+      1 no proof within the search bounds
+      2 invalid input or certificate
   recurrence-theorems
       0 at least one theorem matches
       1 no theorem matches

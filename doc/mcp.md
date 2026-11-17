@@ -237,3 +237,14 @@ Weak adjacent interlacing is transferred only when both factors certify it;
 no simplicity or strictness is asserted. No new tool or request flag is added.
 The library-only `certify_constant_coefficient_index_subsequence` construction
 has no separate MCP endpoint.
+
+`matrix_orbit` accepts `{request: {recurrence, state_system?}, verify?: false}`
+and returns the library's `polytool.matrix-orbit.v1` report. A supplied system
+has a polynomial `matrix`, polynomial `start_vector`, and constant
+`projection`, all with exact rational-string coefficients. Without a system,
+the library searches bounded companion, threshold and separated-characteristic
+realizations. With `verify: true`, `request` is a saved report instead.
+The standard `discover_recurrence_proofs` and `verify_recurrence_proofs`
+tools also handle automatic `matrix_orbit` attempts and their additive
+certificate payload. Only nonzero real-rootedness is concluded; no temporal
+interlacing is asserted. See [matrix-orbit bounds and algorithms](matrix-orbits.md).

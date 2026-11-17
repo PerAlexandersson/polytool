@@ -52,6 +52,10 @@ macro_rules! route_certificates {
 }
 
 route_certificates! {
+    /// Stationary affine state realization and all quantified pencil checks.
+    MatrixOrbit(Box<MatrixOrbitReport>) => matrix_orbit,
+        matrix_orbit_certificate: MatrixOrbitReport,
+    |_: &MatrixOrbitReport| Ok(None);
     /// Exact cubic factorization, polynomial seeds and two factor proofs.
     ParityProduct(Box<ParityProductCertificate>) => parity_product,
         parity_product_certificate: ParityProductCertificate,

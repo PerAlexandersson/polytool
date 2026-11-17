@@ -88,6 +88,12 @@
 //!   recognized as shared-factor parity products, with exact gcd seed
 //!   allocations, Casoratian identity and two nonrecursive factor proofs;
 //!   weak consecutive interlacing only when both factors certify it.
+//! - [`check_matrix_orbit_theorem`]: bounded automatic stationary state
+//!   realizations with nonnegative affine entries satisfying every quantified
+//!   interlacing pencil, ordered nonnegative seed and projection, exact matrix
+//!   annihilation and nonvanishing; only real-rooted projected rows are claimed.
+//!   [`check_matrix_orbit`] also accepts a supplied state system, and
+//!   [`verify_matrix_orbit`] replays its exact certificate.
 //! - [`certify_constant_coefficient_index_subsequence`]: exact index-section
 //!   identities from the shared Newton-sum/companion-matrix kernel.
 //! - [`check_degree_law_reversal_theorem`]: the shared degree-law reversal

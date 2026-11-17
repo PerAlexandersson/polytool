@@ -1096,6 +1096,15 @@ Report issues in the Git repository, or contact Per Alexandersson
 
 ## General recurrence proof discovery
 
+`matrix_orbit` takes a structured `request` with `recurrence` and optional
+`state_system` (`matrix`, `start_vector`, `projection`). It uses bounded
+automatic realization or a supplied stationary polynomial state system,
+checks the exact universal affine interlacing pencils and scalar identity,
+and returns `polytool.matrix-orbit.v1`. Set `verify: true` and pass a saved
+report as `request` to replay it. The conclusion is nonzero real-rootedness,
+without consecutive interlacing. See
+[matrix-orbit algorithms and bounds](../doc/matrix-orbits.md).
+
 `discover_recurrence_proofs` takes `recurrence_json` and optional
 `max_start_delay` (default 3, at most 16), `max_representation_candidates`
 (default 300, at most 2000, 0 disables the alternative-representation stage)

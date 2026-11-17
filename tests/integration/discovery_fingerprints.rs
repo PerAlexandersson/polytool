@@ -26,6 +26,7 @@ use polytool::recurrence::{
     RealRootednessTheoremOptions, RecurrenceJson,
 };
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -60,10 +61,10 @@ fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<(String, String)
     let (rule, seeds) = entry.recurrence_parts().ok()?;
     let first_index = entry.recurrence_first_index;
     let record = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
-    let discovery =
+    let (discovery, status) =
         match discover_recurrence_proofs(&record, &RealRootednessTheoremOptions::default()) {
-            Ok(report) => serde_json::to_string(&report).unwrap(),
-            Err(error) => format!("error: {error}"),
+            Ok(report) => (serde_json::to_string(&report).unwrap(), report.status),
+            Err(error) => (format!("error: {error}"), "error".into()),
         };
     let parent_record = ParentRecurrenceRecord {
         rule: &rule,
@@ -74,7 +75,17 @@ fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<(String, String)
         Ok(proof) => serde_json::to_string(&proof).unwrap(),
         Err(error) => format!("error: {error}"),
     };
-    Some((fingerprint(&discovery), fingerprint(&parent)))
+    let fingerprints = (fingerprint(&discovery), fingerprint(&parent));
+    // Optional audit output keeps intentional proof additions reviewable by ID.
+    if let Some(path) = std::env::var_os("POLYTOOL_DISCOVERY_AUDIT_PATH") {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .unwrap();
+        writeln!(file,"{}",serde_json::json!({"id":entry.id,"status":status,"discovery":fingerprints.0,"parent":fingerprints.1})).unwrap();
+    }
+    Some(fingerprints)
 }
 
 /// `entry_fingerprints` on a worker thread, failing after the per-entry limit.

@@ -4,6 +4,12 @@
 
 ### Added
 
+- `recurrence-prove` route `matrix_orbit` and command `polytool matrix-orbit`: rows that are projections of a
+  constant transfer-matrix orbit are real-rooted when the matrix maps interlacing sequences with nonnegative
+  coefficients to such sequences (Brändén, *Unimodality, log-concavity, real-rootedness and beyond*,
+  Thm 8.5), decided exactly for affine entries; automatic state realization (companion, threshold and
+  separated-characteristic shapes, orderings, small triangular bases); certificate `certificate.matrix_orbit`
+  with replay; MCP tool `matrix_orbit`. Claims real-rootedness of the projected rows only.
 - `exact-algebra::groebner`: budgeted reduced lex bases (`reduced_lexicographic_groebner_basis_with_budget`,
   `GroebnerBudget`, `GroebnerError`), now used by the symmetric-companion lift, and certified modular bases
   (`certified_modular_groebner_basis`, `check_rational_groebner_basis`): two agreeing primes, CRT and rational

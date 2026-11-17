@@ -26,6 +26,7 @@ mod input;
 mod interlacing;
 mod json_out;
 mod left_production;
+mod matrix_orbit;
 mod oeis;
 mod pf_network;
 mod pf_pencil;

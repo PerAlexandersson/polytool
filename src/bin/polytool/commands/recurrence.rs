@@ -4,6 +4,42 @@ use crate::cli::spec::{option, positional, switch, CommandSpec, InputKind, Outpu
 
 const GROUP: &str = "Sequences and recurrences";
 
+pub(crate) const MATRIX_ORBIT: CommandSpec = CommandSpec {
+    name: "matrix-orbit",
+    group: GROUP,
+    summary: "Certify stationary interlacing-matrix orbits exactly",
+    description: "Read a JSON object with recurrence (a recurrence.v1 record with seeds) and optional state_system. \
+Without a state system, search companion forms of orders 1..4 and threshold and separated-characteristic \
+shapes of orders 1..3, with constant/affine state seeds solved exactly. A supplied state system has matrix \
+(square ascending rational-string polynomial entries), start_vector (ascending rational-string polynomials) \
+and projection (constant rational-string weights), dimension 1..5 and entry/seed degrees at most 24. \
+The certified transformed matrix must have degree at most one. Check the scalar recurrence as a matrix \
+polynomial identity and every prescribed seed, all positive-parameter Branden pencils, an ordered \
+nonnegative interlacing seed, nonnegative transformed projection weights, and exact nonvanishing. \
+The conclusion is nonzero real-rooted projected rows for every index; no consecutive interlacing or \
+simplicity is asserted. Failure means no certificate within the bounds.",
+    input: InputKind::Json,
+    output: OutputKind::JsonOnly,
+    flags: &[
+        switch("verify", "Replay a saved matrix-orbit report from input"),
+        switch("compact", "Print compact (single-line) JSON").heading("Input and output"),
+    ],
+    details: "JSON schema polytool.matrix-orbit.v1. Search tries every state ordering and nonnegative unit \
+triangular bases: elementary shears with coefficients 1/2, 1, 2 and 0/1 triangular patterns (at most two \
+off-diagonal entries in dimension 5), with at most 4096 basis candidates per request. Shape parameters \
+are a in {0,1,2}, b in {0,-1,-2}; thresholds range from 0 to the state dimension, with markers 0, 1, 1+x. \
+The defining recurrence must be stationary, homogeneous, without derivatives, order <=8 with <=32 seeds. \
+Certificates replay exact rational pencil, basis, identity and support data. Rust replay is not Lean replay.",
+    examples: &[
+        "polytool matrix-orbit --input request.json > certificate.json",
+        "polytool matrix-orbit --verify --input certificate.json",
+    ],
+    exit_codes: &[(0,"proved or replay verified"),(1,"no proof within the search bounds"),(2,"invalid input or certificate")],
+    see_also: &["recurrence-prove", "interlacing"],
+    run: Some(crate::matrix_orbit::cmd_matrix_orbit),
+    ..COMMAND
+};
+
 /// Exit statuses of the commands that prove or replay a statement.
 const EXIT_PROVED: &[(i32, &str)] = &[
     (0, "proved (or the replayed certificate is valid)"),
@@ -576,6 +612,17 @@ through existing nonrecursive routes (proof depth one). Reports the chosen
 divisor and both replayable proofs. Splitting for all rows; weak consecutive
 interlacing only when both factors certify it, with no simplicity or strict
 interlacing claim. Constant row scaling and shared reversal are supported.
+
+Matrix orbits (matrix_orbit, recorded only when adding a proof): stationary
+homogeneous rules without derivatives are realized by bounded companion,
+threshold and separated-characteristic shape searches, with exact state seed
+reconstruction, orderings and nonnegative triangular basis changes. Checks the
+matrix annihilating identity and every prescribed scalar seed, an ordered
+nonnegative interlacing start vector, nonnegative projection weights, every
+positive-parameter affine Branden pencil and all-index nonvanishing. The
+certificate concludes nonzero real-rootedness only, without consecutive
+interlacing or simplicity. The matrix-orbit command also accepts a supplied
+state system and replays the exact basis, identity, pencil and support data.
 
 Shared reversal closure (degree_law_reversal, after direct routes and lifts):
 x^(a*m+b) P_(first_index+m)(1/x), with an inductive degree bound from the lag

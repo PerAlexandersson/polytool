@@ -842,6 +842,51 @@ polytool recurrence-degree --verify < degree.json
 
 ## General proof discovery
 
+The `matrix_orbit` route automatically realizes stationary scalar rules as
+bounded threshold, separated-characteristic or companion state systems. It
+checks the scalar identity, every prescribed seed, the ordered nonnegative
+interlacing start vector, nonnegative projection weights, all quantified
+affine Brändén pencils and all-index nonvanishing. A successful attempt adds
+`certificate.matrix_orbit` and concludes nonzero real-rootedness only.
+Consecutive interlacing and simplicity are not inferred. An earlier direct
+proof covering the same conclusion retains its output.
+
+`matrix-orbit` also accepts an optional supplied state system:
+
+```sh
+polytool matrix-orbit --input request.json > certificate.json
+polytool matrix-orbit --verify --input certificate.json
+```
+
+The JSON request contains `recurrence` (a `polytool.recurrence.v1` record) and
+optional `state_system` with `matrix`, `start_vector`, `projection`.
+Matrix entries and vector entries are ascending rational-string coefficient
+lists; projection entries are constant rational strings. The report schema
+is `polytool.matrix-orbit.v1`; exits are 0 for a proof or verified replay,
+1 for no proof within the bounds, and 2 for invalid input or replay failure.
+See [matrix-orbit algorithms and limits](matrix-orbits.md).
+
+For example, this supplied one-state system proves `P_n=(1+x)^n`:
+
+```json
+{
+  "recurrence": {
+    "schema": "polytool.recurrence.v1",
+    "first_index": 0,
+    "initial_polynomials": [["1"]],
+    "recurrence": {
+      "terms": [{"offset": 1, "deriv_order": 0, "sign": "none",
+                 "coeff": {"coeffs": [["1", "1"]]}}]
+    }
+  },
+  "state_system": {
+    "matrix": [[["1", "1"]]],
+    "start_vector": [["1"]],
+    "projection": ["1"]
+  }
+}
+```
+
 `polytool recurrence-prove --recurrence recurrence.json --json` checks eight
 general theorem families (the parent cascade, including the iterated-preserver
 and hypergeometric-row criteria) and the RealRooted row routes fixed-delay

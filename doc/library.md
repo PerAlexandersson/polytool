@@ -11,6 +11,19 @@ See the [README](../README.md#using-as-a-crate) for a short quick start.  This p
 collects the longer library examples; the command-line interface is described in
 [cli.md](cli.md).
 
+## Stationary interlacing-matrix orbits
+
+For stationary state systems, `recurrence::{check_matrix_orbit,
+verify_matrix_orbit}` use `MatrixOrbitRequest` with a defining recurrence and
+optional `MatrixOrbitStateSystem`. Successful `MatrixOrbitReport` values
+contain exact basis, identity, universal affine-pencil and nonvanishing
+certificates. `check_matrix_orbit_theorem` is the automatic scalar-recognition
+entry point used by the recurrence theorem registry. Errors use the shared
+`RecurrenceError` type. See [matrix orbits](matrix-orbits.md) for coefficient
+conventions, bounds, the exact decision procedure and the conclusion.
+The checked [matrix-orbit example](../examples/matrix_orbit.rs) supplies a
+two-coordinate system and replays its certificate.
+
 ## Finite family requirements and OEIS source text
 
 `family_check::first_family_failure` selects a typed `FamilyFailure` from

@@ -138,6 +138,20 @@ macro_rules! theorem_routes {
                 DegreeLawTransform,
                 MAXIMUM_REVERSAL_DEGREE_SLOPE,
             };
+            /// [`check_matrix_orbit_theorem`].
+            MatrixOrbit, matrix_orbit, "matrix_orbit",
+            "Stationary affine matrices preserving ordered interlacing vectors.", {
+                check_matrix_orbit_theorem,
+                check_matrix_orbit,
+                verify_matrix_orbit,
+                MatrixOrbitRequest,
+                MatrixOrbitStateSystem,
+                MatrixOrbitReport,
+                MatrixOrbitCertificate,
+                MatrixOrbitPencilCheck,
+                MatrixOrbitCopositivityCheck,
+                MATRIX_ORBIT_SCHEMA,
+            };
         }
     };
 }
@@ -547,6 +561,15 @@ mod tests {
                 false,
                 false,
             ),
+            (
+                MatrixOrbit,
+                WhileUnproved,
+                Ray,
+                true,
+                WhenStronger,
+                false,
+                false,
+            ),
         ];
         let actual: Vec<_> = ROUTES
             .iter()
@@ -669,7 +692,8 @@ mod tests {
                 RealRootednessTheorem::IndexSectionLift,
                 RealRootednessTheorem::RationalPfRiordan,
                 RealRootednessTheorem::ParityProduct,
-                RealRootednessTheorem::DegreeLawReversal
+                RealRootednessTheorem::DegreeLawReversal,
+                RealRootednessTheorem::MatrixOrbit
             ]
         );
         assert_eq!(
@@ -684,7 +708,8 @@ mod tests {
                 RealRootednessTheorem::BinomialPerturbedEulerOrbit,
                 RealRootednessTheorem::RationalPfRiordan,
                 RealRootednessTheorem::ParityProduct,
-                RealRootednessTheorem::DegreeLawReversal
+                RealRootednessTheorem::DegreeLawReversal,
+                RealRootednessTheorem::MatrixOrbit
             ]
         );
     }

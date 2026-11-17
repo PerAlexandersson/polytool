@@ -74,6 +74,17 @@ Splitting for all rows; weak consecutive interlacing only when both factors
 certify it, with no simplicity or strict interlacing claim. Constant row scaling
 and shared reversal are supported.
 
+Matrix orbits (matrix_orbit, recorded only when adding a proof): stationary
+homogeneous rules without derivatives are realized by bounded companion,
+threshold and separated-characteristic shape searches, with exact state seed
+reconstruction, orderings and nonnegative triangular basis changes. Checks the
+matrix annihilating identity and every prescribed scalar seed, an ordered
+nonnegative interlacing start vector, nonnegative projection weights, every
+positive-parameter affine Branden pencil and all-index nonvanishing. The
+certificate concludes nonzero real-rootedness only, without consecutive
+interlacing or simplicity. The matrix-orbit command also accepts a supplied
+state system and replays the exact basis, identity, pencil and support data.
+
 Shared reversal closure (degree_law_reversal, after direct routes and lifts):
 x^(a*m+b) P_(first_index+m)(1/x), with an inductive degree bound from the lag
 multipliers and every seed. Try only the minimal admissible slope (zero

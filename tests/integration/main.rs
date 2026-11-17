@@ -59,6 +59,7 @@ mod lift_building_blocks;
 mod lift_interlacing;
 mod linalg_workloads;
 mod liu_wang_three_term;
+mod matrix_orbit;
 mod named_family_real_rootedness_proofs;
 mod normalized_equality;
 mod oeis_text_mathematica;
