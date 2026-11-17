@@ -289,6 +289,10 @@ fn exact_first_failures_at_eleven_and_seventeen() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "full-tests"),
+    ignore = "expensive BKW regression; run with --features full-tests"
+)]
 fn sparse_cubic_uses_the_tran_interval_without_claiming_a_proof() {
     let good = record(
         &[(1, &[0, 1]), (3, &[0, 0, -1])],
@@ -470,7 +474,7 @@ fn endpoint_screen_refutes_the_degree_eight_symbol() {
 }
 
 #[test]
-#[ignore = "degree-40 exact fibre certificate is a full-tests workload"]
+#[ignore = "opt-in degree-40 exact fibre audit; run with --release -- --ignored, even with full-tests"]
 fn degree_forty_fibre_screen_refutes_after_endpoint_bound_passes() {
     let (b0, tails) = factored_symbol(
         "1.96377230193306174",

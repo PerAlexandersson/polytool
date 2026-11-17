@@ -11,7 +11,7 @@ Usage:
 Options:
   --prefix DIR      Install under DIR. Default: $PREFIX or $HOME/.local
   --bin-dir DIR     Install binary directly into DIR. Default: PREFIX/bin
-  --build-dir DIR   Cargo target directory. Default: ../target from this script
+  --build-dir DIR   Cargo target directory. Default: external cache (see below)
   --cargo PATH      Cargo executable. Default: $CARGO or cargo
   --skip-build      Copy an already-built binary from BUILD_DIR/release
   -h, --help        Show this help
@@ -20,7 +20,8 @@ Environment:
   PREFIX            Default install prefix
   BIN_DIR           Default binary directory
   CARGO             Default cargo executable
-  CARGO_TARGET_DIR  Default build directory
+  CARGO_TARGET_DIR  Default build directory, otherwise XDG_CACHE_HOME/polytool/target
+  XDG_CACHE_HOME    Cache root. Default: $HOME/.cache
   RUSTC/RUSTDOC     Passed through to cargo when set
 
 Examples:
@@ -39,8 +40,7 @@ json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-script_dir="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repo_dir="$(CDPATH= cd -- "$script_dir/.." && pwd)"
+script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 prefix="${PREFIX:-${HOME:-}/.local}"
 if [[ -z "${BIN_DIR:-}" ]]; then
@@ -50,7 +50,7 @@ else
   bin_dir="$BIN_DIR"
   bin_dir_explicit=1
 fi
-build_dir="${CARGO_TARGET_DIR:-$repo_dir/target}"
+build_dir="${CARGO_TARGET_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/polytool/target}"
 cargo_bin="${CARGO:-cargo}"
 skip_build=0
 

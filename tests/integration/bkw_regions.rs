@@ -105,6 +105,10 @@ fn circle_theorem_proves_beyond_the_precomputed_geometry_range() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "full-tests"),
+    ignore = "expensive BKW regression; run with --features full-tests"
+)]
 fn quartic_boundary_real_limit_spectrum_alone_is_inconclusive() {
     let record: RecurrenceJson =
         serde_json::from_value(json!({"schema":"polytool.recurrence.v1","first_index":0,
@@ -147,6 +151,10 @@ fn quartic_boundary_real_limit_spectrum_alone_is_inconclusive() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "full-tests"),
+    ignore = "expensive BKW regression; run with --features full-tests"
+)]
 fn cli_real_limit_spectrum_is_inconclusive_and_stale_reports_are_rejected() {
     use crate::common::run_polytool;
 
@@ -225,4 +233,82 @@ fn nonreal_region_refutation_explains_exact_limit_spectrum() {
         "Schmidt-Spitzer region membership certifies a nonreal limit spectrum exactly (off-real smallest-root tie); the all-row claim is refuted"
     );
     report.verify().unwrap();
+}
+
+// The repeated factor makes the sparse tie pencil small at every parameter.
+// It certifies a real limit set without supplying an all-row theorem.
+fn small_real_limit_recurrence() -> RecurrenceJson {
+    serde_json::from_value(json!({
+        "schema": "polytool.recurrence.v1", "first_index": 0,
+        "initial_polynomials": [["1"], ["0", "1"], ["0", "0", "1"]],
+        "recurrence": {"terms": [
+            {"offset": 1, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["0", "1"]]}},
+            {"offset": 3, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["0", "0", "-1"]]}}
+        ]}
+    }))
+    .unwrap()
+}
+
+#[test]
+fn small_real_limit_certificate_replays_and_rejects_stale_claims() {
+    let report = certify_recurrence(
+        &small_real_limit_recurrence(),
+        &CertificationOptions {
+            maximum_row_index: 3,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(report.result, "inconclusive");
+    assert_eq!(report.limit_set_status, LimitSetStatus::RealLimitSet);
+    assert_eq!(report.pencil.as_ref().unwrap().interval, ["0", "27/4"]);
+    assert!(report.proof_route.is_none());
+    assert!(report.first_failing_row.is_none());
+    assert!(report.conditional_on.is_empty());
+    report.verify().unwrap();
+    let mut stale = report.clone();
+    stale.result = "conditional".into();
+    assert!(stale.verify().is_err());
+    let mut stale = report;
+    stale
+        .conditional_on
+        .push("obsolete all-row assumption".into());
+    assert!(stale.verify().is_err());
+}
+
+#[test]
+fn cli_small_real_limit_certificate_replays_and_rejects_stale_claims() {
+    use crate::common::run_polytool;
+
+    let input = serde_json::to_string(&small_real_limit_recurrence()).unwrap();
+    let arguments = ["bkw", "certify", "--max-row-index", "3", "--json"];
+    let output = run_polytool(&arguments, &input);
+    assert!(output.status.success(), "{:?}", output);
+    let mut report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["result"], "inconclusive");
+    assert_eq!(report["limit_set_status"], "real_limit_set");
+    assert_eq!(report["conditional_on"], json!([]));
+    let verify = ["bkw", "certify", "--verify", "--json"];
+    let output = run_polytool(&verify, &report.to_string());
+    assert!(output.status.success());
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
+        json!({"verified": true, "result": "inconclusive"})
+    );
+    let output = run_polytool(&arguments[..4], &input);
+    assert!(output.status.success());
+    assert!(String::from_utf8(output.stdout)
+        .unwrap()
+        .starts_with("inconclusive; limit set: RealLimitSet\n"));
+    report["result"] = json!("conditional");
+    assert_eq!(
+        run_polytool(&verify, &report.to_string()).status.code(),
+        Some(2)
+    );
+    report["result"] = json!("inconclusive");
+    report["conditional_on"] = json!(["obsolete all-row assumption"]);
+    assert_eq!(
+        run_polytool(&verify, &report.to_string()).status.code(),
+        Some(2)
+    );
 }

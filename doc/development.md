@@ -50,9 +50,9 @@ only when the bindings, the library sources or its own files change.
 
 `ci.yml`:
 
-- `core`: formatting, OEIS catalog data tests, clippy, tests, package check,
+- `core`: formatting, OEIS catalog data tests, clippy, tests with `full-tests`, package check,
   `ore-algebra` tests, and the `exact-algebra` unit, fallback-hook and doctests.
-- `companions`: MCP formatting, clippy and tests; `cargo check` of the web crate.
+- `companions`: MCP formatting, clippy and tests with `full-tests`; `cargo check` of the web crate.
 - `msrv`: matrix over `polytool`, `ore-algebra`, `exact-real-roots`,
   `exact-algebra`, `mcp` and
   `web`; each job reads the package's declared `rust-version` (currently 1.82,
@@ -92,7 +92,16 @@ cargo test -p polytool
 
 Use `cargo test -p polytool --features full-tests` for the full catalog,
 workload-fingerprint and expensive-regression tier. Existing explicitly
-ignored audits and timing runs are still selected with `--ignored`.
+ignored audits and timing runs are still selected with `--ignored`. The BKW
+sparse-cubic row-48 regression, quartic boundary certification and CLI replay
+regression belong to `full-tests`. Small real-limit examples still check the
+inconclusive verdict, replay and stale-report rejection in the default tier.
+The degree-40 fibre screen stays explicitly ignored even with `full-tests`;
+run it separately when investigating that screen:
+
+```sh
+cargo test --release --test integration degree_forty_fibre_screen -- --ignored
+```
 Integration tests are modules of one `tests/integration/main.rs` binary;
 `cargo test -p polytool --test integration module_name::` selects one module.
 Worker checkouts reuse an external `CARGO_TARGET_DIR` and serialize builds
@@ -112,6 +121,24 @@ Run the MCP server tests:
 
 ```sh
 cargo test --manifest-path mcp/Cargo.toml
+cargo test --manifest-path mcp/Cargo.toml --features full-tests
+```
+
+The MCP quartic real-limit regression is enabled by its `full-tests` feature;
+the default tier keeps a small inconclusive certificate and stale-report checks.
+
+The build scripts keep generated output in an external cache. Both accept
+`CARGO_TARGET_DIR`, defaulting to
+`${XDG_CACHE_HOME:-$HOME/.cache}/polytool/target`. `web/build.sh` finds `wasm-pack`
+on `PATH` (override with `WASM_PACK`) and writes its release no-modules bundle
+to `POLYTOOL_WASM_DIR`, defaulting to `$CARGO_TARGET_DIR/web-pkg`. Stage that
+bundle as `pkg/` beside the page when serving the app. The MCP installer also
+accepts `--build-dir`; its install destination is still configured by `--prefix`
+or `--bin-dir`. For example:
+
+```sh
+POLYTOOL_WASM_DIR="$HOME/.cache/polytool/web-pkg" bash web/build.sh
+CARGO_TARGET_DIR="$HOME/.cache/polytool/target" bash mcp/install.sh
 ```
 
 Run the web wrapper tests:

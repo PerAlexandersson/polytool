@@ -20,6 +20,10 @@ path = "src/main.rs"
 rust_2018_idioms = { level = "warn", priority = -1 }
 unsafe_code = "forbid"
 
+[features]
+# Expensive exact BKW certification regressions; small tool checks stay default.
+full-tests = []
+
 [dependencies]
 polytool = { path = ".." }
 num-bigint = "0.4"

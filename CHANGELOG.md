@@ -151,6 +151,12 @@
   MCP search/family `latex` now contains the complete normalized presentation,
   including initial rows and range, instead of only a bare formula. Recurrence
   help and frozen search outputs change accordingly.
+- The expensive BKW sparse-cubic, quartic-boundary and CLI replay regressions run with `full-tests`;
+  the MCP crate has its own `full-tests` feature. Small verdict, replay and stale-report checks stay in
+  the default tier.
+- Web bundles and MCP installer build output default to an external cache (`CARGO_TARGET_DIR`,
+  `POLYTOOL_WASM_DIR` or the installer's `--build-dir` choose another); the web script finds
+  `wasm-pack` on `PATH` or uses `WASM_PACK`.
 
 ### Added
 

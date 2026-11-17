@@ -165,23 +165,31 @@
   module_name::`.
 - `cargo test -p polytool --features full-tests` also runs the catalog sweeps,
   workload fingerprints and expensive regressions that the default tier
-  ignores. The full pre-merge check enables this feature automatically;
+  ignores, including the expensive BKW regressions. MCP has its own
+  `full-tests` feature for the corresponding tool regression. The full
+  pre-merge check enables both features automatically;
   `--quick` skips tests and MSRV checks. Pre-existing explicitly ignored
-  audits, differential tests and timing runs remain opt-in. For the complete
+  audits, differential tests and timing runs remain opt-in, including the
+  degree-40 fibre screen even with `full-tests`. For the complete
   discovery fingerprint gate use `cargo test -p polytool --release --test
   integration discovery_fingerprints::every_ -- --ignored` without blessing.
 - Worker checkouts share one external `CARGO_TARGET_DIR`, with builds
   serialized by the build lock. Use the enclosing workspace's documented
-  target location; do not create a fresh cache for each lane. Run final
+  target location; do not create a fresh cache for each lane. Standalone web
+  and MCP scripts default to `${XDG_CACHE_HOME:-$HOME/.cache}/polytool/target`;
+  configure `CARGO_TARGET_DIR`, `POLYTOOL_WASM_DIR` or installer `--build-dir`
+  to choose another external destination. Run final
   verification under that lock to avoid linking another checkout's artifacts.
-- Run focused library and CLI tests before broader checks.
+- Run focused library and CLI tests before broader checks. Include
+  `cargo test --manifest-path crates/exact-algebra/Cargo.toml --features test-hooks`
+  when changing the shared exact kernels.
 - Before finishing a change run `cargo fmt --all -- --check`,
   `rustfmt --edition 2021 --check src/recurrence/lift/parent_theorems/*.rs src/recurrence/lift/parent_theorems/*/mod.rs`
   from this directory (route modules are declared by a macro),
-  `cargo clippy --locked -p polytool -p exact-real-roots -p ore-algebra --all-targets -- -D warnings`,
-  `cargo test --locked -p polytool -p exact-real-roots -p ore-algebra --doc`,
-  `RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p polytool -p exact-real-roots -p ore-algebra`
-  and `cargo +1.82 check --locked -p polytool -p exact-real-roots -p ore-algebra`.
+  `cargo clippy --locked -p polytool -p exact-real-roots -p exact-algebra -p ore-algebra --all-targets -- -D warnings`,
+  `cargo test --locked -p polytool -p exact-real-roots -p exact-algebra -p ore-algebra --doc`,
+  `RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p polytool -p exact-real-roots -p exact-algebra -p ore-algebra`
+  and `cargo +1.82 check --locked -p polytool -p exact-real-roots -p exact-algebra -p ore-algebra`.
 - `cargo test --features full-tests --lib oeis::tests` checks the catalog data file (canonical lines,
   provenance tiers, recorded fingerprints) without external data.  With a
   local OEIS copy, `polytool oeis check --oeis-data DIR` re-validates every

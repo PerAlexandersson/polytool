@@ -69,6 +69,10 @@ fn bkw_certificate_tool_uses_exact_library_and_limits() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "full-tests"),
+    ignore = "expensive BKW regression; run with --features full-tests"
+)]
 fn bkw_certificate_tool_real_limit_spectrum_alone_is_inconclusive() {
     let recurrence = json!({"schema":"polytool.recurrence.v1","first_index":0,
     "initial_polynomials":[["1"],["0","1"],["-1","0","1"],["0","-2","0","1"]],
@@ -93,6 +97,40 @@ fn bkw_certificate_tool_real_limit_spectrum_alone_is_inconclusive() {
     let certificate: polytool::bkw::certified::CertificationReport =
         serde_json::from_value(report).unwrap();
     certificate.verify().unwrap();
+}
+
+#[test]
+fn bkw_certificate_tool_small_real_limit_replays_and_rejects_stale_claims() {
+    let recurrence = json!({
+        "schema": "polytool.recurrence.v1", "first_index": 0,
+        "initial_polynomials": [["1"], ["0", "1"], ["0", "0", "1"]],
+        "recurrence": {"terms": [
+            {"offset": 1, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["0", "1"]]}},
+            {"offset": 3, "deriv_order": 0, "sign": "none", "coeff": {"coeffs": [["0", "0", "-1"]]}}
+        ]}
+    });
+    let Json(report) = PolynomialToolsServer::new()
+        .bkw_certify(Parameters(crate::requests::BkwCertificationToolRequest {
+            recurrence_json: recurrence,
+            maximum_row_index: Some(3),
+            circle_radius: None,
+        }))
+        .unwrap();
+    assert_eq!(report["result"], "inconclusive");
+    assert_eq!(report["limit_set_status"], "real_limit_set");
+    assert_eq!(report["conditional_on"], json!([]));
+    assert!(report["proof_route"].is_null());
+    let certificate: polytool::bkw::certified::CertificationReport =
+        serde_json::from_value(report).unwrap();
+    certificate.verify().unwrap();
+    let mut stale = certificate.clone();
+    stale.result = "conditional".into();
+    assert!(stale.verify().is_err());
+    let mut stale = certificate;
+    stale
+        .conditional_on
+        .push("obsolete all-row assumption".into());
+    assert!(stale.verify().is_err());
 }
 
 fn coeffs(values: &[i64]) -> BigIntPolynomialInput {
