@@ -7,7 +7,7 @@
 - `exact-algebra`: sparse prime-field elimination (moved from `polytool::linalg`, paths unchanged),
   `dense_modular::reduced_row_echelon_modulo_prime`, `linear_systems::invert_rational_matrix` and
   `multimodular::ProfiledChineseRemainder`; recurrence fitting, finite-field factorization and the
-  Ore kernel share its residues, primality checks, row reduction and CRT (rust-workspace#36 phase 1b).
+  Ore kernel share its residues, primality checks, row reduction and CRT.
   No CLI, JSON, catalog or certificate changes.
 - `sequences::literature`: the big-descent polynomials of 132- and 321-avoiding
   permutations (arXiv:2408.15111) with their order-five holonomic recurrences.
