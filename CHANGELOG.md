@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- `hstar-inequalities` no longer rejects valid h*-vectors such as `[1,6,1]` of the square
+  `[-1,1]^2`: the tail-sum inequality `h*_{d-1}+...+h*_{d-i} <= h*_2+...+h*_{i+1}` (Stapledon 2009,
+  eq. (6)) now uses its range `1 <= i <= floor(d/2)-1`, so it is empty for `d <= 3`. Hibi's inequality
+  `h*_d+...+h*_{d-i} <= h*_0+...+h*_{i+1}` (Hibi 1990) is checked as a separate family entry, and the
+  Hibi, Stanley and Stapledon references cite the original sources.
+
 ### Added
 
 - Preserver-image, Hadamard-factor, basis-map, family-product, catalog and structural-closure lifts keep

@@ -858,7 +858,7 @@ Example arguments:
 ### `hstar_inequalities`
 
 Check named Ehrhart h*-vector inequalities.  The report includes basic
-conditions, Stanley and Hibi inequalities, the Balletti-Higashitani universal
+conditions, Stanley, Hibi and Stapledon inequalities, the Balletti-Higashitani universal
 Scott inequality when applicable, and Stapledon-derived nonnegativity checks.
 Failures include the named inequality and reference text.  `dimension` is at
 most 4096 (larger values are rejected as invalid parameters).

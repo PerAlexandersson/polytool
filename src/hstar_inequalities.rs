@@ -2,7 +2,7 @@
 //!
 //! The entry point is [`hstar_inequality_report_bigint`], which evaluates the
 //! standard necessary conditions for the h*-vector `(h*_0, ..., h*_d)` of a
-//! `d`-dimensional lattice polytope (nonnegativity, `h*_0 = 1`, Hibi and Stanley
+//! `d`-dimensional lattice polytope (nonnegativity, `h*_0 = 1`, Hibi, Stanley and Stapledon
 //! inequalities, the Balletti--Higashitani universal Scott inequality and
 //! Stapledon's shifted decomposition) and returns one
 //! [`HStarInequalityCheck`] per instance, so a failing check can be located
@@ -295,24 +295,44 @@ fn add_known_inequalities(
         checks.push(c);
     }
 
-    if dimension >= 2 {
-        for i in 1..=dimension / 2 {
-            let lhs = sum_range(hstar, dimension - i, dimension - 1);
-            let rhs = sum_range(hstar, 2, i + 1);
-            let mut c = check(
-                "Hibi",
-                "tail-sum inequality",
-                "h*_{d-1}+...+h*_{d-i} <= h*_2+...+h*_{i+1}",
-                "Balletti-Higashitani, §2.1, citing Hibi",
-                Some("https://arxiv.org/pdf/1703.09600"),
-                true,
-                lhs <= rhs,
-            );
-            c.index = Some(i);
-            c.lhs = Some(lhs);
-            c.rhs = Some(rhs);
-            checks.push(c);
-        }
+    // Stapledon, *Inequalities and Ehrhart δ-vectors*, Trans. Amer. Math. Soc. 361 (2009),
+    // eqs. (2) and (6): for 0 <= i <= floor(d/2) - 1,
+    //   h*_d + ... + h*_{d-i} <= h*_0 + h*_1 + ... + h*_{i+1}   (Hibi 1990),
+    //   h*_{d-1} + ... + h*_{d-i} <= h*_2 + ... + h*_{i+1}      (Stapledon, suggested by Hibi).
+    // Both are empty for d <= 3 except Hibi's i = 0 instance h*_d <= h*_0 + h*_1.
+    for i in 0..(dimension / 2) {
+        let lhs = sum_range(hstar, dimension - i, dimension);
+        let rhs = sum_range(hstar, 0, i + 1);
+        let mut c = check(
+            "Hibi",
+            "partial-sum inequality",
+            "h*_d+...+h*_{d-i} <= h*_0+...+h*_{i+1} (0 <= i <= d/2-1)",
+            "Hibi, Discrete Math. 83 (1990); Stapledon, Trans. AMS 361 (2009), eq. (2)",
+            Some("https://arxiv.org/abs/0801.0873"),
+            true,
+            lhs <= rhs,
+        );
+        c.index = Some(i);
+        c.lhs = Some(lhs);
+        c.rhs = Some(rhs);
+        checks.push(c);
+    }
+    for i in 1..(dimension / 2) {
+        let lhs = sum_range(hstar, dimension - i, dimension - 1);
+        let rhs = sum_range(hstar, 2, i + 1);
+        let mut c = check(
+            "Stapledon",
+            "tail-sum inequality",
+            "h*_{d-1}+...+h*_{d-i} <= h*_2+...+h*_{i+1} (1 <= i <= d/2-1)",
+            "Stapledon, Trans. AMS 361 (2009), eq. (6), suggested by Hibi (1994)",
+            Some("https://arxiv.org/abs/0801.0873"),
+            true,
+            lhs <= rhs,
+        );
+        c.index = Some(i);
+        c.lhs = Some(lhs);
+        c.rhs = Some(rhs);
+        checks.push(c);
     }
 
     for i in 0..=degree / 2 {
@@ -322,8 +342,8 @@ fn add_known_inequalities(
             "Stanley",
             "partial-sum inequality",
             "h*_0+...+h*_i <= h*_s+...+h*_{s-i}",
-            "Balletti-Higashitani, §2.1, citing Stanley [Sta93]",
-            Some("https://arxiv.org/pdf/1703.09600"),
+            "Stanley, J. Pure Appl. Algebra 73 (1991); Stapledon, Trans. AMS 361 (2009), eq. (3)",
+            Some("https://arxiv.org/abs/0801.0873"),
             true,
             lhs <= rhs,
         );
@@ -342,8 +362,8 @@ fn add_known_inequalities(
                 "Hibi",
                 "interior-point inequality",
                 "if h*_d > 0, then h*_1 <= h*_i",
-                "Balletti-Higashitani, §2.1, citing Hibi",
-                Some("https://arxiv.org/pdf/1703.09600"),
+                "Hibi, Adv. Math. 105 (1994); Stapledon, Trans. AMS 361 (2009), eq. (4)",
+                Some("https://arxiv.org/abs/0801.0873"),
                 true,
                 lhs <= rhs,
             );
@@ -357,8 +377,8 @@ fn add_known_inequalities(
             "Hibi",
             "interior-point inequality",
             "if h*_d > 0, then h*_1 <= h*_i",
-            "Balletti-Higashitani, §2.1, citing Hibi",
-            Some("https://arxiv.org/pdf/1703.09600"),
+            "Hibi, Adv. Math. 105 (1994); Stapledon, Trans. AMS 361 (2009), eq. (4)",
+            Some("https://arxiv.org/abs/0801.0873"),
             false,
             true,
         );
@@ -566,6 +586,60 @@ mod tests {
     fn eulerian_square_hstar_passes() {
         let report = hstar_inequality_report_bigint(&b(&[1, 4, 1]), Some(3));
         assert!(report.all_applicable_hold);
+    }
+
+    #[test]
+    fn lattice_square_and_polygons_pass_in_dimension_two() {
+        // [-1,1]^2 has Ehrhart polynomial (2m+1)^2, so h* = [1, 6, 1]; [1, 7, 1] is the
+        // h*-vector of conv{(0,0), (3,0), (0,3)}.
+        for hstar in [[1, 6, 1], [1, 7, 1], [1, 4, 1]] {
+            for dimension in [Some(2), None] {
+                let report = hstar_inequality_report_bigint(&b(&hstar), dimension);
+                let failing: Vec<_> = report
+                    .checks
+                    .iter()
+                    .filter(|check| check.applicable && !check.holds)
+                    .map(|check| (check.family.clone(), check.name.clone(), check.index))
+                    .collect();
+                assert!(
+                    report.all_applicable_hold,
+                    "{hstar:?}, {dimension:?}: {failing:?}"
+                );
+                assert!(!report
+                    .checks
+                    .iter()
+                    .any(|check| check.name == "tail-sum inequality"));
+            }
+        }
+    }
+
+    #[test]
+    fn unit_four_cube_passes() {
+        let report = hstar_inequality_report_bigint(&b(&[1, 11, 11, 1, 0]), Some(4));
+        assert!(report.all_applicable_hold);
+        assert!(report.checks.iter().any(|check| check.family == "Stapledon"
+            && check.name == "tail-sum inequality"
+            && check.index == Some(1)));
+    }
+
+    #[test]
+    fn reports_stapledon_tail_sum_failure() {
+        // d = 4, i = 1: h*_3 <= h*_2 fails.
+        let report = hstar_inequality_report_bigint(&b(&[1, 1, 1, 5, 0]), Some(4));
+        assert!(report.checks.iter().any(|check| check.family == "Stapledon"
+            && check.name == "tail-sum inequality"
+            && check.index == Some(1)
+            && !check.holds));
+    }
+
+    #[test]
+    fn reports_hibi_partial_sum_failure() {
+        // d = 4, i = 0: h*_4 <= h*_0 + h*_1 fails.
+        let report = hstar_inequality_report_bigint(&b(&[1, 0, 0, 0, 2]), Some(4));
+        assert!(report.checks.iter().any(|check| check.family == "Hibi"
+            && check.name == "partial-sum inequality"
+            && check.index == Some(0)
+            && !check.holds));
     }
 
     #[test]

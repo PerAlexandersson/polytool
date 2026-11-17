@@ -23,7 +23,7 @@ echo "1, 4, 1, 0" | polytool hstar-inequalities --dimension 3
 echo "1, 20, 1, 0" | polytool hstar-inequalities --dimension 3 --json
 ```
 
-The report includes basic Ehrhart h\*-conditions, Stanley and Hibi inequalities,
+The report includes basic Ehrhart h\*-conditions, Stanley, Hibi and Stapledon inequalities,
 the Balletti--Higashitani universal Scott inequality when applicable, and
 Stapledon-derived nonnegativity checks.  Failures include the named inequality
 and a reference.  `--dimension` is at most 4096; a longer h\*-vector with the
