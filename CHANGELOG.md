@@ -4,6 +4,10 @@
 
 ### Added
 
+- `exact-algebra::groebner`: budgeted reduced lex bases (`reduced_lexicographic_groebner_basis_with_budget`,
+  `GroebnerBudget`, `GroebnerError`), now used by the symmetric-companion lift, and certified modular bases
+  (`certified_modular_groebner_basis`, `check_rational_groebner_basis`): two agreeing primes, CRT and rational
+  reconstruction, an unused verification prime, and exact S-pair and ideal-containment checks.
 - `exact-algebra::groebner`: a generic commutative Gröbner engine (monomial orders, scalar/cached/matrix
   division, Buchberger with product and chain criteria, reduced bases, statistics) over exact fields.
 - `exact-algebra::nonnegative_matrix_product`: exact integer matrix products by division-free modular

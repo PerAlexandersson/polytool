@@ -146,6 +146,26 @@ pub fn normal_form_with_leading_terms<P: SparsePolynomial<Field: ExactField>>(
     divisor_leading_terms: &[LeadingTerm<Coefficient<P>>],
     order: MonomialOrder,
 ) -> P {
+    normal_form_observed(
+        polynomial,
+        divisors,
+        divisor_leading_terms,
+        order,
+        &mut super::budget::Unlimited,
+    )
+    .unwrap_or_else(|never| match never {})
+}
+
+pub(super) fn normal_form_observed<
+    P: SparsePolynomial<Field: ExactField>,
+    O: super::budget::ReductionObserver<P>,
+>(
+    polynomial: &P,
+    divisors: &[P],
+    divisor_leading_terms: &[LeadingTerm<Coefficient<P>>],
+    order: MonomialOrder,
+    observer: &mut O,
+) -> Result<P, O::Error> {
     assert_eq!(
         divisors.len(),
         divisor_leading_terms.len(),
@@ -176,6 +196,7 @@ pub fn normal_form_with_leading_terms<P: SparsePolynomial<Field: ExactField>>(
                 divisor_lt.coefficient.clone(),
             );
             current = current - multiply_by_monomial(divisor, &exp_quotient, coeff_quotient);
+            observer.after_subtraction(&current)?;
             reduced = true;
             break;
         }
@@ -188,7 +209,7 @@ pub fn normal_form_with_leading_terms<P: SparsePolynomial<Field: ExactField>>(
         }
     }
 
-    remainder
+    Ok(remainder)
 }
 
 /// Compute several normal forms using one F4-style symbolic preprocessing and

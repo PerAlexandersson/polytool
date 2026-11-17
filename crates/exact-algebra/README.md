@@ -50,8 +50,27 @@ allow a consumer to use its existing sparse representation without copying
 maps into a second polynomial type. Legacy consumer paths may re-export the
 order and option types and wrap the generic computation results.
 
-Gröbner operations are unbounded; use only small systems. Coefficient
-providers must satisfy the exact field laws. Bounded rational types can
-still overflow. The generic core does not yet expose a bounded scheduler or
-certified modular reconstruction; finite-prime agreement alone does not
+The rational entry point
+`groebner::reduced_lexicographic_groebner_basis_with_budget` uses ordered input
+reduction, minimal degree/lex-lcm pair scheduling and tail interreduction in
+insertion order. `GroebnerBudget` shares subtraction steps across calls and
+checks coefficient bits after each debit; the basis-size check applies only
+after appending an S-pair remainder. Exhaustion returns typed `GroebnerError`
+variants. The checked `examples/bounded_groebner.rs` demonstrates the exact
+last-step boundary. Other Gröbner entry points remain unbounded. Use only small systems;
+coefficient providers must satisfy the exact field laws and bounded rational
+coefficient types can still overflow. Finite-prime agreement alone does not
 certify a rational ideal.
+
+`groebner::certified_modular_groebner_basis` groups word-prime computations by
+ordered leading profile, requires two matching profiles, aligns supports by
+union for arbitrary-precision CRT and rational reconstruction, and verifies
+the full result at a distinct unused prime. It then checks every rational
+S-pair and both ideal containments. `check_rational_groebner_basis` replays
+these exact checks independently of the modular evidence; `[1]` fails for a
+proper input ideal. Reverse containment currently recomputes a rational basis,
+so certification may cost more than solving directly. A caller-supplied finite
+prime list bounds retries; each individual basis computation remains unbounded.
+The checked `examples/certified_modular_groebner.rs` demonstrates vanishing
+support at one reconstruction prime. Legacy fixed-width consumer pair lifts
+remain uncertified and retain their support/error contracts.

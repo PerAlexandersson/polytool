@@ -2,6 +2,8 @@
 
 use std::collections::{BTreeMap, HashSet};
 
+use super::budget::{ReductionObserver, Unlimited};
+use super::division::normal_form_observed;
 use super::{Coefficient, CoefficientRing, ExactField, SparsePolynomial};
 
 use super::division::{
@@ -250,11 +252,41 @@ pub fn buchberger_basis_with_stats<P: SparsePolynomial<Field: ExactField>>(
     order: MonomialOrder,
     options: GroebnerOptions,
 ) -> GroebnerComputation<P> {
+    let mut computation = buchberger_observed(
+        generators,
+        order,
+        options,
+        Strategy::DegreeIndex,
+        &mut Unlimited,
+    )
+    .unwrap_or_else(|never| match never {});
+    if options.batch_reduce_same_lcm_degree && !is_groebner_basis(&computation.basis, order) {
+        let mut fallback_options = options;
+        fallback_options.batch_reduce_same_lcm_degree = false;
+        computation = buchberger_basis_with_stats(generators, order, fallback_options);
+        computation.stats.batch_fallbacks += 1;
+    }
+    computation
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Strategy {
+    DegreeIndex,
+    OrderedLexicographic,
+}
+
+fn buchberger_observed<P: SparsePolynomial<Field: ExactField>, O: ReductionObserver<P>>(
+    generators: &[P],
+    order: MonomialOrder,
+    options: GroebnerOptions,
+    strategy: Strategy,
+    observer: &mut O,
+) -> Result<GroebnerComputation<P>, O::Error> {
     if generators.is_empty() {
-        return GroebnerComputation {
+        return Ok(GroebnerComputation {
             basis: Vec::new(),
             stats: BuchbergerStats::default(),
-        };
+        });
     }
     let num_vars = generators[0].num_vars();
     assert!(
@@ -264,16 +296,21 @@ pub fn buchberger_basis_with_stats<P: SparsePolynomial<Field: ExactField>>(
         "all generators must have the same number of variables"
     );
 
-    let mut basis: Vec<_> = generators
-        .iter()
-        .filter(|polynomial| !polynomial.is_zero())
-        .map(|polynomial| make_monic(polynomial, order))
-        .collect();
-    let mut basis_lts = basis
-        .iter()
-        .map(|polynomial| leading_term(polynomial, order).expect("nonzero polynomial"))
-        .collect::<Vec<_>>();
-    let mut pairs = CriticalPairQueue::new(&basis_lts);
+    let mut basis = Vec::new();
+    let mut basis_lts = Vec::new();
+    for generator in generators.iter().filter(|p| !p.is_zero()) {
+        let remainder = if strategy == Strategy::OrderedLexicographic {
+            normal_form_observed(generator, &basis, &basis_lts, order, observer)?
+        } else {
+            generator.clone()
+        };
+        if !remainder.is_zero() {
+            let monic = make_monic(&remainder, order);
+            basis_lts.push(leading_term(&monic, order).expect("nonzero polynomial"));
+            basis.push(monic);
+        }
+    }
+    let mut pairs = PairScheduler::new(&basis_lts, strategy);
     let mut handled_pairs = HashSet::new();
     let mut stats = BuchbergerStats {
         input_generators: generators.len(),
@@ -282,7 +319,10 @@ pub fn buchberger_basis_with_stats<P: SparsePolynomial<Field: ExactField>>(
     };
 
     while !pairs.is_empty() {
-        let pair_batch = pairs.take_next_batch(options.batch_reduce_same_lcm_degree);
+        if strategy == Strategy::OrderedLexicographic && basis.iter().any(is_constant) {
+            break;
+        }
+        let pair_batch = pairs.take_next_batch(options.batch_reduce_same_lcm_degree, &basis_lts);
         let mut active_pairs = Vec::new();
         let mut s_polynomials = Vec::new();
 
@@ -320,8 +360,8 @@ pub fn buchberger_basis_with_stats<P: SparsePolynomial<Field: ExactField>>(
         let remainders = if s_polynomials.len() == 1 || !options.batch_reduce_same_lcm_degree {
             s_polynomials
                 .iter()
-                .map(|s| normal_form_with_leading_terms(s, &basis, &basis_lts, order))
-                .collect()
+                .map(|s| normal_form_observed(s, &basis, &basis_lts, order, observer))
+                .collect::<Result<Vec<_>, _>>()?
         } else {
             stats.matrix_reduction_batches += 1;
             stats.matrix_reduction_polynomials += s_polynomials.len();
@@ -353,21 +393,14 @@ pub fn buchberger_basis_with_stats<P: SparsePolynomial<Field: ExactField>>(
             let new_lt = leading_term(&new_polynomial, order).expect("nonzero polynomial");
             basis.push(new_polynomial);
             basis_lts.push(new_lt);
+            observer.after_basis_append(basis.len())?;
             for i in 0..new_index {
                 pairs.insert(i, new_index, &basis_lts);
             }
         }
     }
 
-    if options.batch_reduce_same_lcm_degree && !is_groebner_basis(&basis, order) {
-        let mut fallback_options = options;
-        fallback_options.batch_reduce_same_lcm_degree = false;
-        let mut fallback = buchberger_basis_with_stats(generators, order, fallback_options);
-        fallback.stats.batch_fallbacks += 1;
-        return fallback;
-    }
-
-    GroebnerComputation { basis, stats }
+    Ok(GroebnerComputation { basis, stats })
 }
 
 /// The reduced Gröbner basis (monic, each element fully reduced by the others,
@@ -409,27 +442,13 @@ pub fn reduced_groebner_basis_with_stats<P: SparsePolynomial<Field: ExactField>>
     options: GroebnerOptions,
 ) -> GroebnerComputation<P> {
     let computation = buchberger_basis_with_stats(generators, order, options);
-    let mut basis = computation.basis;
-    minimize_leading_monomials(&mut basis, order);
-    let mut reduced = Vec::new();
-
-    for i in 0..basis.len() {
-        let others: Vec<_> = basis
-            .iter()
-            .enumerate()
-            .filter_map(|(j, polynomial)| (i != j).then_some(polynomial.clone()))
-            .collect();
-        let remainder = normal_form(&basis[i], &others, order);
-        if !remainder.is_zero() {
-            reduced.push(make_monic(&remainder, order));
-        }
-    }
-
-    reduced.sort_by(|a, b| {
-        let a_lt = leading_term(a, order).expect("nonzero polynomial");
-        let b_lt = leading_term(b, order).expect("nonzero polynomial");
-        order.compare(&b_lt.exponents, &a_lt.exponents)
-    });
+    let reduced = interreduce_observed(
+        computation.basis,
+        order,
+        Strategy::DegreeIndex,
+        &mut Unlimited,
+    )
+    .unwrap_or_else(|never| match never {});
     if options.batch_reduce_same_lcm_degree
         && (!is_groebner_basis(&reduced, order)
             || !generators_reduce_to_zero(generators, &reduced, order))
@@ -444,6 +463,106 @@ pub fn reduced_groebner_basis_with_stats<P: SparsePolynomial<Field: ExactField>>
         basis: reduced,
         stats: computation.stats,
     }
+}
+
+fn is_constant<P: SparsePolynomial>(polynomial: &P) -> bool {
+    !polynomial.is_zero() && polynomial.terms().keys().all(|m| m.iter().all(|&e| e == 0))
+}
+
+fn interreduce_observed<P: SparsePolynomial<Field: ExactField>, O: ReductionObserver<P>>(
+    mut basis: Vec<P>,
+    order: MonomialOrder,
+    strategy: Strategy,
+    observer: &mut O,
+) -> Result<Vec<P>, O::Error> {
+    if strategy == Strategy::OrderedLexicographic {
+        if let Some(constant) = basis.iter().find(|p| is_constant(*p)) {
+            return Ok(vec![make_monic(constant, order)]);
+        }
+    }
+    minimize_leading_monomials(&mut basis, order);
+    let mut reduced = Vec::new();
+    for i in 0..basis.len() {
+        let others: Vec<_> = basis
+            .iter()
+            .enumerate()
+            .filter_map(|(j, p)| (i != j).then_some(p.clone()))
+            .collect();
+        let leading: Vec<_> = others
+            .iter()
+            .map(|p| leading_term(p, order).expect("nonzero divisor"))
+            .collect();
+        let lead = leading_term(&basis[i], order).expect("nonzero polynomial");
+        let leading_polynomial = P::monomial(basis[i].num_vars(), lead.exponents, lead.coefficient);
+        let dividend = if strategy == Strategy::OrderedLexicographic {
+            basis[i].clone() - leading_polynomial.clone()
+        } else {
+            basis[i].clone()
+        };
+        let mut remainder = normal_form_observed(&dividend, &others, &leading, order, observer)?;
+        if strategy == Strategy::OrderedLexicographic {
+            remainder = remainder + leading_polynomial;
+        }
+        if !remainder.is_zero() {
+            reduced.push(make_monic(&remainder, order));
+        }
+    }
+    if strategy == Strategy::DegreeIndex {
+        reduced.sort_by(|a, b| {
+            order.compare(
+                &leading_term(b, order)
+                    .expect("nonzero polynomial")
+                    .exponents,
+                &leading_term(a, order)
+                    .expect("nonzero polynomial")
+                    .exponents,
+            )
+        });
+    }
+    Ok(reduced)
+}
+
+/// Reduced rational lexicographic basis with a reusable subtraction budget.
+///
+/// This policy reduces inputs in order, schedules minimal `(lcm degree, lex lcm)`
+/// pairs using first-vector ties and swap removal, skips coprime leading terms,
+/// exits pair processing on a constant, and interreduces tails in insertion order.
+/// It uses neither matrix batches nor chain criteria or unbudgeted postchecks.
+/// See [`super::GroebnerBudget`] for the exact debit and size-check boundaries.
+/// Variable-count errors leave the budget unchanged.
+///
+/// # Panics
+///
+/// Panics if a monomial exponent or total lcm degree overflows `u32`.
+pub fn reduced_lexicographic_groebner_basis_with_budget<
+    P: SparsePolynomial<Field = super::RationalField>,
+>(
+    generators: &[P],
+    budget: &mut super::GroebnerBudget,
+) -> Result<Vec<P>, super::GroebnerError> {
+    if let Some(first) = generators.first() {
+        if generators.iter().any(|p| p.num_vars() != first.num_vars()) {
+            return Err(super::GroebnerError::IncompatibleVariableCounts);
+        }
+    }
+    let options = GroebnerOptions {
+        skip_relatively_prime_leading_terms: true,
+        skip_chain_criterion_pairs: false,
+        batch_reduce_same_lcm_degree: false,
+    };
+    let computation = buchberger_observed(
+        generators,
+        MonomialOrder::Lex,
+        options,
+        Strategy::OrderedLexicographic,
+        budget,
+    )?;
+    interreduce_observed(
+        computation.basis,
+        MonomialOrder::Lex,
+        Strategy::OrderedLexicographic,
+        budget,
+    )
 }
 
 /// Whether `basis` is a Gröbner basis for `order`: every S-polynomial of a pair
@@ -538,6 +657,55 @@ fn pair_lcm_total_degree<C>(i: usize, j: usize, leading_terms: &[LeadingTerm<C>]
         .zip(leading_terms[j].exponents.iter())
         .map(|(&a, &b)| a.max(b))
         .sum()
+}
+
+enum PairScheduler {
+    DegreeIndex(CriticalPairQueue),
+    Lexicographic(Vec<(usize, usize)>),
+}
+impl PairScheduler {
+    fn new<C>(leading: &[LeadingTerm<C>], strategy: Strategy) -> Self {
+        if strategy == Strategy::DegreeIndex {
+            Self::DegreeIndex(CriticalPairQueue::new(leading))
+        } else {
+            Self::Lexicographic(
+                (0..leading.len())
+                    .flat_map(|j| (0..j).map(move |i| (i, j)))
+                    .collect(),
+            )
+        }
+    }
+    fn is_empty(&self) -> bool {
+        match self {
+            Self::DegreeIndex(q) => q.is_empty(),
+            Self::Lexicographic(q) => q.is_empty(),
+        }
+    }
+    fn insert<C>(&mut self, i: usize, j: usize, leading: &[LeadingTerm<C>]) {
+        match self {
+            Self::DegreeIndex(q) => q.insert(i, j, leading),
+            Self::Lexicographic(q) => q.push((i, j)),
+        }
+    }
+    fn take_next_batch<C>(
+        &mut self,
+        batch: bool,
+        leading: &[LeadingTerm<C>],
+    ) -> Vec<(usize, usize)> {
+        match self {
+            Self::DegreeIndex(q) => q.take_next_batch(batch),
+            Self::Lexicographic(q) => {
+                let position = (0..q.len())
+                    .min_by_key(|&index| {
+                        let (i, j) = q[index];
+                        let lcm = monomial_lcm(&leading[i].exponents, &leading[j].exponents);
+                        (lcm.iter().sum::<u32>(), lcm)
+                    })
+                    .expect("critical pair queue is nonempty");
+                vec![q.swap_remove(position)]
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

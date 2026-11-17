@@ -1477,6 +1477,12 @@ hypothesis means only that this route fails.  The report serializes as
 `polytool.recurrence-symmetric-companion.v1` (exact rationals as strings).
 The algorithm and the soundness argument are in
 [algorithms.md](algorithms.md#symmetric-companion-lifts).
+The bounded rational solver uses the shared `exact-algebra` sparse engine,
+including ordered input reduction and lex-lcm pair scheduling. One shared
+step budget counts divisor subtractions across recursive substitutions;
+coefficient-bit and basis-size limits retain their existing diagnostics.
+The report schema and rational-point traversal order are unchanged.
+
 
 ## Hadamard-factor lifts
 

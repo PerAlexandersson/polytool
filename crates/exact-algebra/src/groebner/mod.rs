@@ -5,7 +5,8 @@
 //! [`RationalField`] supplies arbitrary-precision rational coefficients.
 //! Variables are zero-indexed; exponent vectors have fixed length and terms
 //! are sparse. [`reduced_groebner_basis`] returns descending leading terms.
-//! Computation is unbounded and intended for small systems. Matrix reduction
+//! Computation is intended for small systems. The bounded rational lex policy
+//! shares a mutable subtraction budget across calls. Matrix reduction
 //! uses shared symbolic reducer rows, followed by scalar verification/fallback;
 //! it is not a full F4 implementation.
 
@@ -16,10 +17,14 @@ use std::fmt::Debug;
 use std::ops::{Add, Mul, Sub};
 
 mod buchberger;
+mod budget;
+mod certified_modular;
 mod division;
 mod monomial_order;
 
 pub use buchberger::*;
+pub use budget::{GroebnerBudget, GroebnerError};
+pub use certified_modular::*;
 pub use division::*;
 pub use monomial_order::*;
 
@@ -134,6 +139,27 @@ pub struct Polynomial<F: CoefficientRing> {
     num_vars: usize,
     terms: BTreeMap<Vec<u32>, F::Element>,
 }
+impl<F: CoefficientRing> Polynomial<F> {
+    /// Add one term, removing its entry if coefficients cancel.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the exponent vector has the wrong length or bounded coefficients overflow.
+    pub fn add_term(&mut self, monomial: Vec<u32>, coefficient: &F::Element) {
+        assert_eq!(
+            monomial.len(),
+            self.num_vars,
+            "monomial has wrong number of variables"
+        );
+        let value =
+            self.terms.get(&monomial).cloned().unwrap_or_else(F::zero) + coefficient.clone();
+        if F::is_zero(&value) {
+            self.terms.remove(&monomial);
+        } else {
+            self.terms.insert(monomial, value);
+        }
+    }
+}
 impl<F: CoefficientRing> SparsePolynomial for Polynomial<F> {
     type Field = F;
     fn num_vars(&self) -> usize {
@@ -196,3 +222,6 @@ impl<F: CoefficientRing> Sub for Polynomial<F> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod bounded_tests;
