@@ -32,6 +32,14 @@ open interval with dyadic endpoints that are not roots, sorted increasingly.
 `polytool` re-exports this API from `polytool::root_count` (and the most-used
 items from its crate root).
 
+## Source layout
+
+The crate-root facade keeps all public paths unchanged. Private modules separate
+integer arithmetic (`arithmetic`), signed remainder sequences and Sturm--Tarski
+counts (`prs`), the independent Descartes path (`uspensky`), coefficient filters
+and adaptive tests (`coefficient_tests`), and dyadic root isolation (`isolation`).
+Independent regression oracles live in `tests`.
+
 ## Algorithm lineage
 
 The subresultant scaling is a clean Rust implementation of the classical
