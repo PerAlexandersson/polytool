@@ -1016,7 +1016,7 @@ polytool oeis info A087727 --json | jq .recurrence_data | polytool recurrence-pr
 polytool oeis info A318107 --json | jq .recurrence_data | polytool recurrence-prove --json
 ```
 
-### Shared-factor parity products
+### Shared and independent parity products
 
 `recurrence-prove` also checks `parity_product` for stationary rules
 `P_(n+3)=a(x)P_(n+2)+b(x)P_(n+1)+c(x)P_n` of order three. It requires
@@ -1054,8 +1054,54 @@ Related Lean declarations are `RealRooted.eq_parityProduct_of_thirdOrderRecurren
 `RealRooted.splits_of_parityProduct` and, when applicable,
 `RealRooted.interlaces_of_parityProduct`. Lean replay remains `not_attempted`.
 
+When the Casoratian start condition fails, the same route tries independent
+products for the two parity sections. For each section `C_m`, enumerate monic
+divisors `u0 | C0`, `u1 | C1`, with at most 4096 divisor pairs. The left
+factor seeds are `u0`, `t*u1`, and the right factor seeds are `C0/u0`,
+`C1/(t*u1)`. The nonzero rational scalar `t` is solved exactly: every
+coefficient of `x` in the third-seed product identity must vanish. This is
+a common polynomial equation of degree at most two in `t`, not a finite
+scalar sampling menu. Each section can move its start by at most the
+requested start-delay bound; preceding rows are checked separately.
+
+All four factors satisfy `f_(m+2)=beta*f_(m+1)-mu^2*f_m`. They use the existing
+residue-class theorem menu, including `liu_wang_three_term`, and the existing
+index-section lift when needed for polynomial marker substitutions. Neither
+parent menu recurses into parity products. The parity-product proof depth
+remains one. Here `beta` and `mu` are polynomials in `x`, constant in the
+row index; scalar `mu` and constant `beta` with polynomial seeds are included.
+Fully scalar rules with scalar seeds are left to the existing routes.
+
+Both stride-two sections and products of these factors have characteristic
+polynomial
+`z^3-(beta^2-mu^2)*z^2+mu^2*(beta^2-mu^2)*z-mu^6`.
+Cayley--Hamilton for the stride-two companion and the symmetric-square
+companion, together with three exact seed products, proves the identities
+for every index, including repeated characteristic roots.
+
+`certificate.parity_product.independent_sections` is an optional additive
+field, omitted for shared-factor proofs. It contains two certificates in
+even/odd order, each with `subsequence` (the existing all-index index-section
+certificate), `skipped_rows`, three `seed_products`, two monic
+`initial_divisors`, `initial_scalar_ratio`, two `divisor_lattice_sizes`,
+`allocations_examined`, and `product_characteristic_polynomial`.
+The existing `factor_proofs` list then contains four reports in order
+even-left, even-right, odd-left, odd-right; `initial_common_divisor` is empty.
+The existing lattice and examination counts are sums across the two sections.
+All pre-existing field positions are unchanged. Replay checks each section,
+every scalar allocation, the characteristic identities and all factor proofs.
+
+Independent products prove nonzero real-rootedness, with the requested root
+region when certified. They make no claim about consecutive interlacing or
+simplicity: no factor is assumed to be shared across the parity boundary.
+The shared-factor path retains its previous interlacing conditions and output.
+Low-level negative parity reports with zero seeds also replay independently
+of the start-delay budget: the intrinsic Casoratian failure is checked before
+skipping a zero seed window.
+
 ```sh
 polytool oeis info A158909 --json | jq .recurrence_data | polytool recurrence-prove --json
+polytool oeis info A156308 --json | jq .recurrence_data | polytool recurrence-prove --json
 polytool recurrence-prove --verify --json < proof.json
 ```
 

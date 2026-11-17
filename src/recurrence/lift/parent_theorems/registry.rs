@@ -124,9 +124,10 @@ macro_rules! theorem_routes {
             };
             /// [`check_parity_product_theorem`].
             ParityProduct, parity_product, "parity_product",
-            "Parity products of two certified second-order families.", {
+            "Shared and independent parity products of certified second-order families.", {
                 check_parity_product_theorem,
                 ParityProductCertificate,
+                IndependentParitySectionProductCertificate,
                 MAXIMUM_PARITY_PRODUCT_DIVISORS,
                 MAXIMUM_PARITY_PRODUCT_PROOF_DEPTH,
             };

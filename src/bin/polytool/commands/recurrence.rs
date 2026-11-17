@@ -612,6 +612,15 @@ through existing nonrecursive routes (proof depth one). Reports the chosen
 divisor and both replayable proofs. Splitting for all rows; weak consecutive
 interlacing only when both factors certify it, with no simplicity or strict
 interlacing claim. Constant row scaling and shared reversal are supported.
+If the Casoratian fails, independently allocate both parity sections as
+products of two such families: at most 4096 monic divisor pairs per section,
+with exact rational relative seed scalars. Existing residue-class/Liu-Wang
+and index-section parent checks prove all four factors from zero. Stride-two
+and symmetric-square Cayley-Hamilton identities, plus three seed products per
+section, certify equality for every index. The additive independent_sections
+field records both section identities; factor_proofs contains four reports. Independent sections
+claim real-rootedness only, with no consecutive interlacing or simplicity. Fully scalar rules with
+scalar seeds use the existing routes.
 
 Matrix orbits (matrix_orbit, recorded only when adding a proof): stationary
 homogeneous rules without derivatives are realized by bounded companion,

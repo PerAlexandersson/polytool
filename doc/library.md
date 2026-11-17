@@ -2401,10 +2401,22 @@ multiplier sequence; unresolved menu weights remain proposals only.
 
 The recurrence theorem menu includes `check_parity_product_theorem` and
 `ParityProductCertificate` for stationary cubic shared-factor parity products.
+When the shared-factor Casoratian fails, the same entry point also tries
+independent parity-section products. The optional `independent_sections`
+field contains two `IndependentParitySectionProductCertificate` values,
+each with an exact index-subsequence certificate, three seed products and
+a rational scalar allocation; `factor_proofs` then contains four reports.
+Existing residue-class criteria and index-section lifts prove the factors.
+Stride-two and symmetric-square Cayley--Hamilton identities plus recurrence
+uniqueness prove the products at every index. Independent sections transfer
+real-rootedness and certified requested root regions, with no consecutive
+interlacing or simplicity claim. Shared-factor certificates omit the new
+field and retain their previous conclusions. Fully scalar rules with scalar
+seeds are left to the existing routes.
 The exact gcd divisor lattice is bounded by
 `MAXIMUM_PARITY_PRODUCT_DIVISORS` (4096), and the factor proof depth by
 `MAXIMUM_PARITY_PRODUCT_PROOF_DEPTH` (one). Product rows can have repeated
-roots; only weak adjacent interlacing is transferred.
+roots; shared-factor products transfer only weak adjacent interlacing.
 `certify_constant_coefficient_index_subsequence` constructs and replays a
 stationary index-section identity without a root assertion through
 `ConstantCoefficientIndexSubsequenceCertificate`.

@@ -233,7 +233,16 @@ tools also handle `parity_product` through the shared library: exact
 stationary cubic recognition, a gcd divisor lattice bounded by 4096,
 Casoratian seed compatibility and two nonrecursive factor proofs. The
 additive `certificate.parity_product` payload retains those proofs for replay.
-Weak adjacent interlacing is transferred only when both factors certify it;
+If that Casoratian fails, the route can certify independent products on
+the two parity sections. The additive `independent_sections` field records
+both exact index-section identities, three identifying products per section,
+and rational seed scalars; the existing `factor_proofs` list has four entries.
+All factors use existing residue-class/Liu-Wang or index-section checks.
+These independent products transfer real-rootedness only, without consecutive
+interlacing or simplicity. Fully scalar rules with scalar seeds use existing
+routes. Shared-factor output is unchanged.
+For shared-factor products, weak adjacent interlacing is transferred only
+when both factors certify it;
 no simplicity or strictness is asserted. No new tool or request flag is added.
 The library-only `certify_constant_coefficient_index_subsequence` construction
 has no separate MCP endpoint.

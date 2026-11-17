@@ -169,10 +169,14 @@ fn print_attempts_text(attempts: &[RealRootednessTheoremReport], indent: &str) {
             );
         }
         if let Some(certificate) = attempt.parity_product_certificate() {
-            println!(
-                "{indent}  Closure: parity product; monic gcd divisor {:?}",
-                certificate.initial_common_divisor
-            );
+            if certificate.independent_sections.is_some() {
+                println!("{indent}  Closure: independent parity-section products; four certified factors; no consecutive interlacing transfer");
+            } else {
+                println!(
+                    "{indent}  Closure: parity product; monic gcd divisor {:?}",
+                    certificate.initial_common_divisor
+                );
+            }
             print_attempts_text(&certificate.factor_proofs, &format!("{indent}    "));
         }
         if let Some(certificate) = attempt.degree_law_reversal_certificate() {

@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Fix replay of negative parity-product reports with zero seeds by checking
+  the intrinsic Casoratian identity before skipping a zero seed window.
 - `hstar-inequalities` no longer rejects valid h*-vectors such as `[1,6,1]` of the square
   `[-1,1]^2`: the tail-sum inequality `h*_{d-1}+...+h*_{d-i} <= h*_2+...+h*_{i+1}` (Stapledon 2009,
   eq. (6)) now uses its range `1 <= i <= floor(d/2)-1`, so it is empty for `d <= 3`. Hibi's inequality
@@ -12,6 +14,14 @@
 
 ### Added
 
+- Extend `parity_product` with independent products for the two parity
+  sections when the shared-factor Casoratian identity fails. Exact divisor
+  allocations, rational relative seed scalars, stride-two and symmetric-square
+  identities, and four existing factor proofs give replayable all-index
+  real-rootedness certificates. The additive `independent_sections` payload
+  records both identities. Independent sections make no consecutive
+  interlacing or simplicity claim; shared-factor output is unchanged. Fully
+  scalar rules with scalar seeds remain with the existing routes.
 - Preserver-image, Hadamard-factor, basis-map, family-product, catalog and structural-closure lifts keep
   consecutive interlacing when the matching theorem's hypotheses hold for every index (fixed preservers,
   positive multiplier sequences, cross-rank and shifted-binomial diagonal operators, PF Hadamard pairs,

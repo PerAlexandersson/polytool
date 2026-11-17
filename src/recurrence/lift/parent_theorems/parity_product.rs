@@ -1,4 +1,4 @@
-//! Shared-factor parity products of constant-coefficient second-order families.
+//! Shared-factor and independent parity products of stationary second-order families.
 //!
 //! For `P_(n+3)=a P_(n+2)+b P_(n+1)+c P_n`, match exactly
 //! `c=mu^3`, `b=-a mu`, `beta=a-mu` in `Q[x]`. When `a!=0`, `mu=-b/a`
@@ -12,6 +12,12 @@
 //! The factors use the existing nonrecursive residue-class menu at depth one;
 //! this route is excluded from that menu. No simplicity or strict interlacing
 //! is inferred, since consecutive parity products share a factor.
+//!
+//! If the Casoratian fails, each parity section can instead be an independent
+//! product of two families with the same second-order rule. Cayley--Hamilton
+//! for the symmetric-square companion matrix and three seed products prove
+//! each identity for every index. Independent sections imply real-rootedness,
+//! with no transfer of consecutive interlacing or simplicity.
 
 use super::degree_law_reversal::constant_coefficient_multipliers;
 use super::*;
@@ -23,10 +29,13 @@ const REFERENCE: &str = "RealRooted.ThreeTermRecurrence.ParityProduct: \
     eq_parityProduct_of_thirdOrderRecurrence, splits_of_parityProduct, \
     interlaces_of_parityProduct; exact polynomial identities and factor proofs";
 
-/// Maximum number of monic gcd divisors in each seed window.
+/// Maximum monic gcd divisors or independent divisor pairs per seed window.
 pub const MAXIMUM_PARITY_PRODUCT_DIVISORS: usize = 4096;
 /// Maximum nesting depth: factors use only existing nonrecursive routes.
 pub const MAXIMUM_PARITY_PRODUCT_PROOF_DEPTH: usize = 1;
+
+mod independent;
+pub use independent::IndependentParitySectionProductCertificate;
 
 /// Exact parity-product data. Polynomial coefficients are ascending rational strings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,18 +47,24 @@ pub struct ParityProductCertificate {
     pub beta: Vec<String>,
     /// Index relative to the supplied first row of the parity-product start.
     pub exceptional_rows: usize,
-    /// Selected monic divisor `t0` of the initial two rows' gcd.
+    /// Selected monic gcd divisor `t0`; empty for independent sections.
     pub initial_common_divisor: Vec<String>,
-    /// Divisors tested up to and including the selected allocation.
+    /// Divisors tested, or the sum of tested divisor pairs for independent sections.
     pub divisors_examined: usize,
-    /// Total number of monic gcd divisors in the selected window, at most 4096.
+    /// Gcd lattice size, or the sum of both section divisor-pair lattice sizes.
     pub divisor_lattice_size: usize,
-    /// Two proved theorem reports, in order `s`, `t`, both starting at zero.
+    /// Proved factors starting at zero: `s,t` for shared products, or four
+    /// reports ordered even-left, even-right, odd-left, odd-right, relative to
+    /// the certified section anchor.
     pub factor_proofs: Vec<RealRootednessTheoremReport>,
     /// Induction-start retry bound passed to the factors, at most 16.
     pub maximum_start_delay: usize,
     /// Fixed maximum proof depth, one.
     pub proof_depth: usize,
+    /// Independent even and odd section identities, absent for shared products.
+    /// Each section records its own seed allocation and index-subsequence proof.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub independent_sections: Option<Vec<IndependentParitySectionProductCertificate>>,
 }
 
 impl ParityProductCertificate {
@@ -69,7 +84,7 @@ impl ParityProductCertificate {
     }
 }
 
-/// Prove a stationary cubic family by shared-factor parity products.
+/// Prove a stationary cubic family by shared or independent parity products.
 ///
 /// Uses every monic gcd divisor within the 4096-element lattice bound and
 /// existing nonrecursive factor routes at depth one. Requested root regions
@@ -77,6 +92,10 @@ impl ParityProductCertificate {
 /// three seeds and up to `maximum_start_delay` later windows are examined.
 /// A successful proof requires every supplied and generated prefix row nonzero.
 /// Reversal is available through the shared degree-law reversal closure.
+/// When the Casoratian fails, independent sections enumerate at most 4096
+/// divisor pairs each, including exact rational relative seed scalars. Their
+/// conclusion does not include consecutive interlacing or simplicity. Fully
+/// scalar rules with scalar seeds are left to the existing routes.
 ///
 /// # Errors
 /// Returns [`RecurrenceError`] for invalid records or failed exact arithmetic.
@@ -256,16 +275,18 @@ fn parity_product_report(
         }
         let prefix = rows.len() - 3;
         let p: Vec<Poly> = rows[prefix..].iter().cloned().map(Poly::new).collect();
-        if p.iter().any(Poly::is_zero) {
-            continue;
-        }
         let residual = p[1].clone()
             * (p[2].clone() - beta.clone() * p[1].clone() + mu.pow(2) * p[0].clone())
             - mu.clone() * (p[1].pow(2) - p[0].clone() * p[2].clone());
         if !residual.is_zero() {
             // The residual at the next window is mu^2 times this one.
             // Since order three implies mu != 0, later windows cannot repair it.
-            return Ok(report.not_applicable("the seed Casoratian compatibility identity fails"));
+            return independent::independent_sections_report(
+                report, rule, first, seeds, options, &mu, &beta,
+            );
+        }
+        if p.iter().any(Poly::is_zero) {
+            continue;
         }
         let Some(divisors) = divisors(&p[0].gcd(&p[1])) else {
             reason = "gcd factorization or divisor lattice exceeds the 4096 bound";
@@ -363,6 +384,7 @@ fn parity_product_report(
                     factor_proofs: vec![s, t],
                     maximum_start_delay: options.maximum_start_delay,
                     proof_depth: 1,
+                    independent_sections: None,
                 },
             )));
             return Ok(report.finish(RealRootednessTheoremConclusion {
@@ -389,10 +411,12 @@ pub(super) fn verify_certificate_in_report(
     c: &ParityProductCertificate,
     report: &RealRootednessTheoremReport,
 ) -> Result<(), RecurrenceError> {
-    if c.factor_proofs.len() != 2
+    let independent = c.independent_sections.is_some();
+    if c.factor_proofs.len() != if independent { 4 } else { 2 }
         || c.proof_depth != 1
         || c.maximum_start_delay > index_section::MAXIMUM_PARENT_START_DELAY
-        || c.divisor_lattice_size > MAXIMUM_PARITY_PRODUCT_DIVISORS
+        || c.divisor_lattice_size
+            > MAXIMUM_PARITY_PRODUCT_DIVISORS * if independent { 2 } else { 1 }
         || c.divisors_examined == 0
         || c.divisors_examined > c.divisor_lattice_size
     {
@@ -401,12 +425,18 @@ pub(super) fn verify_certificate_in_report(
         ));
     }
     for proof in &c.factor_proofs {
-        if !route(proof.theorem).policy.in_residue_class_menu || !proof.is_proved() {
+        if !(route(proof.theorem).policy.in_residue_class_menu
+            || independent && proof.theorem == RealRootednessTheorem::IndexSectionLift)
+            || !proof.is_proved()
+        {
             return Err(RecurrenceError::VerificationFailed(
                 "invalid parity-product factor route".into(),
             ));
         }
         proof.verify()?;
+    }
+    if independent {
+        independent::verify_sections(c)?;
     }
     // The owning report's verifier re-derives the identities and exact records.
     if report.parity_product_certificate() != Some(c) {
