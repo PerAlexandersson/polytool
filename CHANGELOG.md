@@ -4,6 +4,8 @@
 
 ### Added
 
+- `exact-algebra::groebner`: a generic commutative Gröbner engine (monomial orders, scalar/cached/matrix
+  division, Buchberger with product and chain criteria, reduced bases, statistics) over exact fields.
 - `exact-algebra::nonnegative_matrix_product`: exact integer matrix products by division-free modular
   arithmetic, reconstruction from proved inclusive column bounds, and verification with an unused prime.
 - `exact-algebra`: sparse prime-field elimination (moved from `polytool::linalg`, paths unchanged),
