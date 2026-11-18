@@ -86,6 +86,8 @@
 //!   endpoints), and the antiderivative-shift kernel behind it
 //! - [`root_count`] — adaptive exact real-rootedness using primitive integer
 //!   PRS and Uspensky/Descartes root counting
+//! - [`stability`] — exact Gaussian-rational root counts in half-planes,
+//!   disks, exteriors and Möbius images, including boundary multiplicities
 //! - [`sturm`] — Sturm chains for exact root counting and isolation (the slower
 //!   alternative to the default real-rootedness path)
 //! - [`sturm_cf`] — signed Euclidean/Sturm continued-fraction certificates
@@ -170,6 +172,7 @@ pub mod numeric;
 pub mod oeis;
 pub mod pf_network;
 pub mod polynomial;
+pub mod stability;
 pub mod sturm;
 pub mod sturm_cf;
 pub mod tnn_network;

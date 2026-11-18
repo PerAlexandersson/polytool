@@ -58,12 +58,34 @@ exact-real-roots = { path = "path/to/polytool/crates/exact-real-roots" }
 Both crates use ascending-degree coefficient order and arbitrary-precision
 integer arithmetic. Repeated roots are handled through the square-free part.
 
+## Exact stability in circular regions
+
+`polytool::stability` re-exports the standalone `exact-stability` crate.
+`check_univariate_stability(&coefficients, &region)` accepts ascending
+`GaussianRational` coefficients and returns exact root counts with
+multiplicity: inside the open region, on its boundary, and outside.
+Regions include upper/lower and left/right half-planes, the unit disk and
+its exterior, rational-radius disks with Gaussian-rational centers, and
+arbitrary nonsingular Gaussian-rational Möbius images of the upper half-plane.
+
+Upper/lower verdicts mean avoidance; left/right and disk/exterior verdicts
+mean all roots strictly inside. Use
+`check_univariate_stability_with_convention` to select either meaning.
+The zero polynomial has `degree: None`, `counts: None`, passes avoidance
+by convention and fails all-inside. Nonzero constants pass both.
+`StabilityReport::verify` replays the exact calculation, including its
+Möbius degree drop, Sturm multiplicities and block LDLᵀ certificate.
+See [stability.md](stability.md) for the algorithm, API and examples.
+
 ## Shared exact arithmetic
 
 The standalone [exact-algebra crate](../crates/exact-algebra/README.md) owns
 word-size primality validation and modular arithmetic, BigInt Chinese
 remaindering, bounded rational reconstruction, row denominator clearing,
 fraction-free rational solving and modular leading principal minors.
+Its `inertia::{symmetric_ldlt, symmetric_inertia}` functions handle exact
+symmetric rational matrices, including singular matrices and zero diagonals.
+`SymmetricLdlt::verify` checks the pivot permutation and block factorization.
 It requires Rust 1.82 and depends only on `num-*` crates.
 
 The existing `polytool::linalg` solving and kernel paths re-export these

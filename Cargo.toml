@@ -31,6 +31,7 @@ test-hooks = ["exact-algebra/test-hooks"]
 
 [dependencies]
 exact-algebra = { version = "0.1.0", path = "crates/exact-algebra" }
+exact-stability = { version = "0.1.0", path = "crates/exact-stability" }
 # clap 4.6 needs Rust 1.85; the library keeps rust-version 1.82.
 clap = { version = "~4.5.40", default-features = false, features = ["std", "help", "usage", "error-context", "suggestions"] }
 clap_complete = "~4.5.40"

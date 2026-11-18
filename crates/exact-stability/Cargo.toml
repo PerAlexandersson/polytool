@@ -1,0 +1,22 @@
+[package]
+name = "exact-stability"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Exact Gaussian-rational univariate root counts in circular regions"
+repository = "https://github.com/PerAlexandersson/polytool"
+keywords = ["polynomials", "stability", "exact-arithmetic", "hurwitz", "schur"]
+categories = ["mathematics", "science"]
+
+[lints.rust]
+missing_docs = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unsafe_code = "forbid"
+
+[dependencies]
+exact-algebra = { version = "0.1.0", path = "../exact-algebra" }
+exact-real-roots = { version = "0.2.0", path = "../exact-real-roots" }
+num-bigint = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"

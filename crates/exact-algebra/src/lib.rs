@@ -11,6 +11,7 @@ pub mod chinese_remainder;
 pub mod denominators;
 pub mod dense_modular;
 pub mod groebner;
+pub mod inertia;
 pub mod integer_elimination;
 pub mod linear_systems;
 pub mod modular_arithmetic;
