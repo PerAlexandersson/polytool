@@ -246,6 +246,15 @@ release mode (each entry has a limit of 120 s, `POLYTOOL_DISCOVERY_ENTRY_SECONDS
 cargo test --release --test integration discovery_fingerprints::every_ -- --ignored
 ```
 
+The same sample and sweep check the library summary's status, first-index and
+zero-class scope and its 2 KiB budget. Optional audit output also records
+`summary_bytes`; the fingerprint fixture columns remain unchanged.
+The MCP response budgets live in [`../mcp/src/tests_budgets.rs`](../mcp/src/tests_budgets.rs).
+Stored compact report bytes are checked against the frozen discovery
+fingerprints. The stdio smoke test checks handle-based discovery, inspection
+and replay and ratchets tools/list description and input-schema sizes using
+[`../mcp/tests/fixtures/tool-list-budget.tsv`](../mcp/tests/fixtures/tool-list-budget.tsv).
+
 Re-bless only for an intentional change of results:
 `POLYTOOL_BLESS_DISCOVERY_FINGERPRINTS=1 cargo test --release --test
 integration discovery_fingerprints::every_ -- --ignored`.

@@ -207,7 +207,8 @@ use std::collections::{BTreeMap, BTreeSet};
 mod discovery;
 use discovery::rational_roots_of_index_free_factor;
 pub use discovery::{
-    discover_recurrence_proofs, RecurrenceProofDiscoveryReport, RECURRENCE_PROOF_DISCOVERY_SCHEMA,
+    discover_recurrence_proofs, ProofNearMiss, RecurrenceProofDiscoveryReport,
+    RecurrenceProofSummary, RECURRENCE_PROOF_DISCOVERY_SCHEMA, RECURRENCE_PROOF_SUMMARY_SCHEMA,
 };
 pub use discovery::{
     discover_recurrence_proofs_with_options, discover_recurrence_proofs_with_stage_options,

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (unreleased)
 
 ### Fixed
 
@@ -13,6 +13,11 @@
   Hibi, Stanley and Stapledon references cite the original sources.
 
 ### Added
+
+- `RecurrenceProofDiscoveryReport::summary()` and the
+  `polytool.recurrence-proof-summary.v1` view preserve proof status, route,
+  first index, zero residue classes and conditional-attestation scope.
+- Shared `digest::sha256_hex` for provenance and content-addressed reports.
 
 - Extend `parity_product` with independent products for the two parity
   sections when the shared-factor Casoratian identity fails. Exact divisor
@@ -136,6 +141,18 @@
 
 ### Changed
 
+- MCP proof discovery now returns a compact library summary by default;
+  `detail: "full"` restores the unchanged complete report. Configure a report
+  directory to retain deterministic handles, inspect evidence with `read_report`
+  and replay with `verify_recurrence_proofs {report_id}`. Discovery accepts
+  `oeis_id` directly; exact BKW refutation remains opt-in with `refute: true`.
+- MCP catalog listings are paged (50 entries by default) and support query,
+  status, layout and field filters. Follow `next_offset` for later pages;
+  `fields: ["*"]` returns all metadata fields.
+- MCP `find_recurrence` and `get_oeis_sequence` omit generated code by default;
+  `include_code: true` restores it. `get_oeis_sequence` always includes the
+  complete `recurrence_json` record. CLI output and existing report schemas
+  are unchanged.
 - Toeplitz circle certificates record their formal references in
   `circle.lean_declarations`:
   `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg` and

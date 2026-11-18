@@ -1378,6 +1378,7 @@ fn oeis_tools_reject_unknown_and_experimental_requests() {
         server
             .get_oeis_sequence(Parameters(GetOeisSequenceRequest {
                 id: "A000000".to_string(),
+                include_code: Some(true),
             }))
             .err()
             .expect("expected an error"),
@@ -1415,19 +1416,25 @@ fn oeis_tools_reject_unknown_and_experimental_requests() {
     let Json(listing) = server
         .list_oeis_sequences(Parameters(ListOeisSequencesRequest {
             include_experimental: Some(true),
+            limit: Some(1000),
+            fields: Some(vec!["*".into()]),
+            ..Default::default()
         }))
         .unwrap();
     let Json(stable) = server
-        .list_oeis_sequences(Parameters(ListOeisSequencesRequest::default()))
+        .list_oeis_sequences(Parameters(ListOeisSequencesRequest {
+            limit: Some(1000),
+            ..Default::default()
+        }))
         .unwrap();
     assert_eq!(listing.count, listing.sequences.len());
     assert!(stable.count <= listing.count);
     if let Some(experimental) = listing
         .sequences
         .iter()
-        .find(|sequence| !stable.sequences.iter().any(|s| s.id == sequence.id))
+        .find(|sequence| !stable.sequences.iter().any(|s| s["id"] == sequence["id"]))
     {
-        let id = experimental.id.clone();
+        let id = experimental["id"].as_str().unwrap().to_string();
         assert!(message(
             generate(&id, 1, None, None)
                 .err()
@@ -1606,6 +1613,7 @@ fn recurrence_row_generation_and_search_reject_invalid_requests() {
     // P(n) = P(n-1) + P(n-2) on constants, seeds 1, 1 (Fibonacci, OEIS A000045).
     let Json(found) = server
         .find_recurrence(Parameters(FindRecurrenceRequest {
+            include_code: Some(true),
             coefficients: Some(
                 [1, 1, 2, 3, 5, 8, 13]
                     .iter()

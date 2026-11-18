@@ -25,7 +25,7 @@ The circle theorem can give `proved` beyond that range.
 The server is intentionally small:
 
 - stdio transport only
-- tools only; no resources, prompts, sampling, HTTP server, or filesystem access
+- tools only; no resources, prompts, sampling or HTTP server; optional report storage
 - structured JSON results for agent-friendly use
 - exact arithmetic inherited from `polytool`
 
@@ -276,6 +276,39 @@ Blank lines and lines beginning with `#` are ignored in text batches.
 Every tool returns structured MCP output. `rmcp` also includes the same compact
 JSON in a text content block for compatibility with clients that do not read
 `structuredContent`.
+
+In 0.7.0, `discover_recurrence_proofs` defaults to a compact library summary.
+Pass exactly one of `oeis_id` and `recurrence_json`. `detail: "full"` restores
+the complete report unchanged. With a store configured, summaries include
+`report: {id, uri, path, bytes}`. Use `verify_recurrence_proofs {report_id}`
+for exact replay and `read_report {report_id, select?, max_bytes?}` for
+evidence. Without selection it returns an outline of at most 2 KiB; selection
+uses RFC 6901 pointers with one optional `*` segment (expanded to concrete
+pointers), defaulting to 8 KiB and capped at 64 KiB. Values that do not fit
+are omitted and `truncated` is true. Discovery also accepts `select` beside
+its summary. Attestations remain conditional; `refute: true` enables the
+separate exact BKW refutation stage.
+
+Configure storage with `--report-dir DIR` or `POLYTOOL_MCP_REPORT_DIR`
+(the flag wins). No implicit directory is used. `--no-report-store` disables
+it. The store writes regular files only, with deterministic SHA-256 ids,
+atomic writes and hash-checked reads. Reads refresh modification times.
+At startup and every 64 writes, the oldest files are evicted after 14 days or
+above 512 MiB. Override these defaults with `--report-max-age-seconds N` and
+`--report-max-bytes N`, or `POLYTOOL_MCP_REPORT_MAX_AGE_SECONDS` and
+`POLYTOOL_MCP_REPORT_MAX_BYTES`. A failed write gives `report.stored: false`
+without failing discovery; disabled storage omits the report block. Missing
+handles can be restored by rerunning discovery. Read tools accept report ids
+only and never arbitrary filesystem paths. The URI is an identifier;
+resource links and resource reads are reserved for a later release.
+
+`list_oeis_sequences` defaults to 50 entries and fields `id,name,status`.
+Use `query` (case-insensitive id/name substring), `status`, `layout`, `limit`
+(1–1000), `offset` and `fields` (`["*"]` for all metadata). `count` is this
+page's count, `total` is the filtered count and `next_offset` is null at the
+end. Experimental entries still need `include_experimental: true`.
+`get_oeis_sequence` always includes canonical `recurrence_json` as JSON text;
+generated code requires `include_code: true`.
 
 Integer values that may exceed machine size are serialized as strings. Rational
 values are serialized as strings such as `"3/2"` or `"1"`.
@@ -614,8 +647,8 @@ When a recurrence is found, the response includes:
 - search metadata such as `unknowns`, `equations`, `fit_polynomials`,
   `verification_polynomials`, `candidates_tried`, and `candidates_considered`
 
-The default `include_code: true` preserves this full response. Set
-`include_code: false` to omit `mathematica`, `sage`, `python`, and
+Set `include_code: true` to request this full response. The default
+`include_code: false` omits `mathematica`, `sage`, `python`, and
 `recurrence_json`; `recurrence`, `latex`, status, and all search statistics
 remain present.
 

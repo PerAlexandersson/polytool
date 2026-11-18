@@ -80,6 +80,8 @@ use crate::recurrence::{
     CatalogLiftSearch, CatalogParentProofKind, DiscoveryClosureSearch,
 };
 
+mod summary;
+pub use summary::{ProofNearMiss, RecurrenceProofSummary, RECURRENCE_PROOF_SUMMARY_SCHEMA};
 mod affine_coordinates;
 use affine_coordinates::affine_coordinate_search;
 pub(super) use affine_coordinates::rational_roots_of_index_free_factor;
@@ -679,70 +681,29 @@ impl RecurrenceProofDiscoveryReport {
     /// Fill `status`, `statement`, `real_rooted_from_index` and
     /// `real_rooted_outside_zero_residue_classes` from the attempts.
     fn finish_summary(&mut self, not_applicable: Option<String>) {
-        let mut proved = proved_rows(&self.attempts);
-        let mut route = "the supplied record";
-        if proved.is_none() {
-            if let Some(tail) = &self.tail {
-                proved = proved_rows(&tail.attempts);
-                route = "the tail record";
-            }
-        }
-        if proved.is_none() {
-            if let Some(search) = &self.alternative_representations {
-                proved = search
-                    .alternatives
-                    .iter()
-                    .filter(|a| a.proved)
-                    .find_map(|a| proved_rows(&a.attempts));
-                route = "a certified alternative representation";
-            }
-        }
+        let source = self.proof_source();
+        let proved = source.as_ref().and_then(summary::ProofSource::rows);
+        let route = source
+            .as_ref()
+            .map(summary::ProofSource::narrative)
+            .unwrap_or("the supplied record");
         let lift = self
             .catalog_lifts
             .as_ref()
-            .and_then(|search| search.conclusion.as_ref());
-        let mut conditional = None;
-        if proved.is_none() {
-            if let Some(conclusion) = lift {
-                match conclusion.parent_proof {
-                    CatalogParentProofKind::Polytool => {
-                        proved = Some(ProvedRows::EveryRow(conclusion.from_index));
-                        route = "a catalog lift";
-                    }
-                    CatalogParentProofKind::CatalogAttestation => conditional = Some(conclusion),
-                }
-            }
-        }
+            .and_then(|s| s.conclusion.as_ref());
         let affine = self
             .affine_coordinates
             .as_ref()
-            .and_then(|search| search.conclusion.as_ref());
-        if proved.is_none() {
-            if let Some(conclusion) = affine {
-                proved = Some(match &conclusion.zero_residue_classes {
-                    None => ProvedRows::EveryRow(conclusion.from_index),
-                    Some(zero) => {
-                        ProvedRows::OutsideZeroResidueClasses(RealRootedOutsideZeroResidueClasses {
-                            from_index: conclusion.from_index,
-                            zero_residue_classes: zero.clone(),
-                        })
-                    }
-                });
-                route = "an affine coordinate";
-                conditional = None;
-            }
-        }
+            .and_then(|s| s.conclusion.as_ref());
         let closure = self
             .closure_lifts
             .as_ref()
             .and_then(|s| s.conclusion.as_ref());
-        if proved.is_none() {
-            if let Some(conclusion) = closure {
-                proved = Some(ProvedRows::EveryRow(conclusion.from_index));
-                route = "a general closure";
-                conditional = None;
-            }
-        }
+        let mut conditional = if proved.is_none() {
+            lift.filter(|c| c.parent_proof == CatalogParentProofKind::CatalogAttestation)
+        } else {
+            None
+        };
         let (from, outside_zero_classes) = match proved {
             Some(ProvedRows::EveryRow(from)) => (Some(from), None),
             Some(ProvedRows::OutsideZeroResidueClasses(rows)) => (None, Some(rows)),

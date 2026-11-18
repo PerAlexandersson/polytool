@@ -10,6 +10,8 @@ conventions are documented in [`../mcp/README.md`](../mcp/README.md) (sections
 
 Available MCP tools:
 
+- `read_report`: bounded outlines or selected evidence from a stored report id.
+
 - `bkw_certify`: exact stationary-recurrence limit-set certificates, separate
   finite row refutations, public quadratic-product proofs and Toeplitz circle
   proofs. Circle nonnegativity is checked exactly; the circle route gives
@@ -141,15 +143,16 @@ arguments. For example, a compact exact search can use:
 ```
 
 The legacy nested `options` object remains accepted, with top-level values
-taking precedence. Omitting `include_code` preserves the full generated-code
-response.
+taking precedence. Generated code is omitted by default in 0.7.0;
+`include_code: true` restores it.
 
 See [`mcp/README.md`](../mcp/README.md) for request schemas, examples, and
 development notes.
 
 ## General recurrence proof discovery
 
-`discover_recurrence_proofs` takes `recurrence_json` and optional
+`discover_recurrence_proofs` takes exactly one of `recurrence_json` and
+`oeis_id` and optional
 `max_start_delay` (default 3, at most 16), `max_representation_candidates`
 (default 300, at most 2000, 0 disables the alternative-representation stage)
 `max_lift_candidates` (default 6, at most 100, 0 disables the catalog-lift
@@ -167,14 +170,51 @@ a parent that is only flagged `lean_proved` gives the status
 `conditional_on_attestation`, never `proved`), then the affine coordinates:
 the criteria on the record in exact coordinates `x = a u + b` derived from
 the rule, a proof mapped back to `x` (`affine_coordinates`).
-`verify_recurrence_proofs` takes
-`report_json` and replays the recorded routes (every attempt, the tail and
+The default response is `polytool.recurrence-proof-summary.v1`, computed by
+the library, with a persistent `report` handle when a store is configured.
+`detail: "full"` returns the complete report unchanged. Optional `select`
+returns selected full-report fields beside the summary (RFC 6901 pointers,
+one `*` segment permitted per pointer, selected data capped at 8 KiB).
+`refute: true` enables the separate exact BKW refutation stage; it is off
+by default. Attestations remain conditional, never proved.
+
+`verify_recurrence_proofs` takes exactly one of
+`report_json` and `report_id` and replays the recorded routes (every attempt, the tail and
 every equality certificate; the attempts must be of exactly the criteria
 the current search records, so reports saved before a criterion was added
 are recomputed). A proved
 result concerns the recurrence-defined sequence; finite fits require a
 separate all-index identity. Lean replay is not attempted. See
 [the proof-discovery guide](proof-discovery.md).
+
+`read_report {report_id, select?, max_bytes?}` returns a bounded outline
+(at most 2 KiB) without `select`, or a mapping of concrete JSON pointers to
+their values. A wildcard expands array elements or object values; `~0` and
+`~1` escape tilde and slash. The selected response budget defaults to 8 KiB
+and is at most 64 KiB. Values that do not fit are omitted and `truncated`
+is true; no invalid partial JSON is returned.
+
+Enable storage with `--report-dir DIR` or `POLYTOOL_MCP_REPORT_DIR`; the flag
+takes precedence. No implicit directory is used. `--no-report-store` disables
+it even when configured. Full reports are regular files with ids formed from
+the first 32 SHA-256 hex digits of their compact library serialization.
+Reads validate ids and hashes and refresh modification times. The store
+evicts oldest reports at startup and every 64 writes, with defaults of 14 days
+and 512 MiB. Flags `--report-max-age-seconds` and `--report-max-bytes` override
+`POLYTOOL_MCP_REPORT_MAX_AGE_SECONDS` and `POLYTOOL_MCP_REPORT_MAX_BYTES`.
+Failed writes leave the summary available with `report.stored: false`.
+An evicted or unknown handle can be restored by rerunning the deterministic
+computation. Hash checking detects corruption; verification still replays
+the mathematical evidence. Resources and resource links are not yet exposed.
+
+`list_oeis_sequences` defaults to 50 entries with fields `id,name,status`.
+Use `query` for a case-insensitive substring of id/name, `status` for
+`verified`, `validated` or `experimental`, `layout` for `regular_triangle` or `table`,
+`offset`, `limit` (1–1000), and `fields` (`["*"]` for all metadata).
+`count` is this page's count, `total` is the filtered count, and `next_offset`
+is null at the last page. Experimental entries still require
+`include_experimental: true`. `get_oeis_sequence` always includes the canonical
+`recurrence_json` as JSON text and includes code only with `include_code: true`.
 
 ## Renamed request fields
 

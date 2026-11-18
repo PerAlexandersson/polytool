@@ -1,4 +1,4 @@
-use polytool_mcp::PolynomialToolsServer;
+use polytool_mcp::{PolynomialToolsServer, ReportStoreConfig};
 use rmcp::{transport::stdio, ServiceExt};
 
 const BIN_NAME: &str = "polytool-mcp";
@@ -6,20 +6,63 @@ const CONTACT: &str = "Per Alexandersson (@PerAlexandersson, <per.w.alexandersso
 
 #[derive(Debug, Eq, PartialEq)]
 enum StartupMode {
-    Serve,
+    Serve(ReportStoreConfig),
     Help,
     Version,
 }
 
 fn parse_args(args: &[String]) -> Result<StartupMode, String> {
-    match args {
-        [_program] => Ok(StartupMode::Serve),
-        [_program, flag] if flag == "--help" || flag == "-h" => Ok(StartupMode::Help),
-        [_program, flag] if flag == "--version" || flag == "-V" => Ok(StartupMode::Version),
-        [_program, flag] => Err(format!("unknown option: {flag}")),
-        [_program, flag, ..] => Err(format!("unexpected extra arguments after: {flag}")),
-        [] => Ok(StartupMode::Serve),
+    if args.len() == 2 {
+        match args[1].as_str() {
+            "--help" | "-h" => return Ok(StartupMode::Help),
+            "--version" | "-V" => return Ok(StartupMode::Version),
+            _ => {}
+        }
     }
+    let mut config = ReportStoreConfig::from_env()?;
+    let mut no_store = false;
+    let mut arguments = args.iter().skip(1);
+    while let Some(flag) = arguments.next() {
+        if flag == "--no-report-store" {
+            no_store = true;
+            continue;
+        }
+        if ![
+            "--report-dir",
+            "--report-max-bytes",
+            "--report-max-age-seconds",
+        ]
+        .contains(&flag.as_str())
+        {
+            return Err(format!("unknown option: {flag}"));
+        }
+        let value = arguments
+            .next()
+            .ok_or_else(|| format!("missing value for {flag}"))?;
+        match flag.as_str() {
+            "--report-dir" if value.is_empty() => {
+                return Err("report directory must not be empty".into())
+            }
+            "--report-dir" => config.directory = Some(value.into()),
+            "--report-max-bytes" => {
+                config.max_bytes = value
+                    .parse()
+                    .map_err(|_| format!("invalid value for {flag}"))?
+            }
+            "--report-max-age-seconds" => {
+                config.max_age = std::time::Duration::from_secs(
+                    value
+                        .parse()
+                        .map_err(|_| format!("invalid value for {flag}"))?,
+                )
+            }
+            _ => unreachable!(),
+        }
+    }
+    if no_store {
+        config.directory = None;
+    }
+    Ok(StartupMode::Serve(config))
 }
 
 fn version_text() -> String {
@@ -33,18 +76,27 @@ fn help_text() -> String {
 {description}
 
 Usage:
-  {name}
+  {name} [--report-dir DIR] [--no-report-store]
   {name} --help
   {name} --version
 
 Options:
   -h, --help       Print this help text and exit
   -V, --version    Print version information and exit
+  --report-dir DIR              Store full reports in DIR (overrides environment)
+  --no-report-store             Disable storage, even with a configured directory
+  --report-max-bytes N          Store capacity in bytes (default 536870912)
+  --report-max-age-seconds N    Report lifetime in seconds (default 1209600)
+
+Environment:
+  POLYTOOL_MCP_REPORT_DIR, POLYTOOL_MCP_REPORT_MAX_BYTES,
+  POLYTOOL_MCP_REPORT_MAX_AGE_SECONDS. No directory is chosen implicitly.
 
 MCP usage:
   Run without arguments from an MCP client. The server uses stdio transport and
   exposes tools only; it does not provide resources, prompts, sampling, HTTP, or
-  filesystem access.
+  arbitrary filesystem access. With a report directory configured it stores
+  full reports and accepts only content-addressed report ids for reads.
 
 find_recurrence arguments:
   Provide exactly one of polynomials, coefficients, expressions, or text.
@@ -59,8 +111,8 @@ find_recurrence arguments:
   fit_extra_rows; modular_prefilter; and max_candidates. The names used up to 0.6.0
   (min_rec_len, max_var_deg, max_idx_deg, ...) are accepted as aliases.
   Legacy nested options remain accepted; top-level values take precedence.
-  Set include_code=false to omit Mathematica, Python, Sage, and recurrence JSON.
-  Omitting include_code preserves the full response.
+  Set include_code=true to include Mathematica, Python, Sage, and recurrence JSON.
+  Omitting include_code returns the compact response.
 
 Contact:
   Report issues in the Git repository, or contact {contact}.
@@ -75,7 +127,7 @@ Contact:
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
-    match parse_args(&args) {
+    let config = match parse_args(&args) {
         Ok(StartupMode::Help) => {
             print!("{}", help_text());
             return Ok(());
@@ -84,15 +136,17 @@ async fn main() -> anyhow::Result<()> {
             println!("{}", version_text());
             return Ok(());
         }
-        Ok(StartupMode::Serve) => {}
+        Ok(StartupMode::Serve(config)) => config,
         Err(message) => {
             eprintln!("error: {message}");
             eprintln!("Try '{BIN_NAME} --help' for usage.");
             std::process::exit(2);
         }
-    }
+    };
 
-    let service = PolynomialToolsServer::new().serve(stdio()).await?;
+    let service = PolynomialToolsServer::with_report_store(config)
+        .serve(stdio())
+        .await?;
     service.waiting().await?;
     Ok(())
 }
@@ -107,7 +161,10 @@ mod tests {
 
     #[test]
     fn parses_cli_flags() {
-        assert_eq!(parse_args(&args(&["polytool-mcp"])), Ok(StartupMode::Serve));
+        assert!(matches!(
+            parse_args(&args(&["polytool-mcp"])),
+            Ok(StartupMode::Serve(_))
+        ));
         assert_eq!(
             parse_args(&args(&["polytool-mcp", "--help"])),
             Ok(StartupMode::Help)
@@ -130,7 +187,44 @@ mod tests {
         assert!(help.contains("stdio transport"));
         assert!(help.contains("Search controls are top-level"));
         assert!(help.contains("max_candidates"));
-        assert!(help.contains("include_code=false"));
+        assert!(help.contains("include_code=true"));
         assert!(help.contains(CONTACT));
+    }
+
+    #[test]
+    fn report_flags_override_defaults_and_no_store_wins() {
+        let Ok(StartupMode::Serve(config)) = parse_args(&args(&[
+            "polytool-mcp",
+            "--report-dir",
+            "reports",
+            "--report-max-bytes",
+            "1024",
+            "--report-max-age-seconds",
+            "60",
+        ])) else {
+            panic!("valid report flags");
+        };
+        assert_eq!(config.directory, Some("reports".into()));
+        assert_eq!(config.max_bytes, 1024);
+        assert_eq!(config.max_age, std::time::Duration::from_secs(60));
+        let Ok(StartupMode::Serve(config)) = parse_args(&args(&[
+            "polytool-mcp",
+            "--no-report-store",
+            "--report-dir",
+            "reports",
+        ])) else {
+            panic!("valid disable flag");
+        };
+        assert!(config.directory.is_none());
+        for flags in [
+            vec!["--report-dir"],
+            vec!["--report-dir", ""],
+            vec!["--report-max-bytes", "bad"],
+            vec!["--report-max-age-seconds", "-1"],
+        ] {
+            let mut values = vec!["polytool-mcp"];
+            values.extend(flags);
+            assert!(parse_args(&args(&values)).is_err());
+        }
     }
 }
