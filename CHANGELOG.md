@@ -14,6 +14,12 @@
 
 ### Added
 
+- New crate `exact-stability` and the `polytool::stability` facade: exact
+  Gaussian-rational univariate root counts in half-planes, disks, exteriors and
+  Möbius images. Reports distinguish roots inside, on and outside the region,
+  with multiplicities, under explicit avoidance or all-inside conventions.
+  `exact-algebra` gains exact symmetric inertia with pivoted block LDLᵀ
+  certificates. The existing Hurwitz and real-rootedness APIs are unchanged.
 - `RecurrenceProofDiscoveryReport::summary()` and the
   `polytool.recurrence-proof-summary.v1` view preserve proof status, route,
   first index, zero residue classes and conditional-attestation scope.
