@@ -103,6 +103,21 @@ fn lists_tools_and_calls_properties() {
     assert!(tool_names.contains(&"find_recurrence"));
     assert!(tool_names.contains(&"enumerate_real_rooted"));
     assert!(tool_names.contains(&"read_report"));
+    assert!(tool_names.contains(&"stability_univariate"));
+    assert!(tool_names.contains(&"tool_help"));
+    let stability_tool = tools_array
+        .iter()
+        .find(|t| t["name"] == "stability_univariate")
+        .unwrap();
+    assert!(stability_tool["description"].as_str().unwrap().len() <= 600);
+    assert_eq!(
+        stability_tool["inputSchema"]["properties"]["polynomials"]["maxItems"],
+        512
+    );
+    assert_eq!(
+        stability_tool["inputSchema"]["$defs"]["gaussian"]["oneOf"][0]["type"],
+        "integer"
+    );
     let description_bytes: usize = tools_array
         .iter()
         .map(|t| t["description"].as_str().unwrap_or("").len())
@@ -380,6 +395,44 @@ fn lists_tools_and_calls_properties() {
     );
     let verified = read_response(&mut stdout, 11);
     assert_eq!(verified["result"]["structuredContent"]["verified"], true);
+
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"stability_univariate","arguments":{"polynomials":["(t+1)^3","t-I","0"],"region":"left"}}}),
+    );
+    let stability = read_response(&mut stdout, 12);
+    let summary = &stability["result"]["structuredContent"];
+    assert_eq!(
+        summary["items"][0]["counts"],
+        json!({"inside":3,"boundary":0,"outside":0})
+    );
+    assert_eq!(summary["items"][2]["counts"], Value::Null);
+    assert!(summary["items"][0].get("certificate").is_none());
+    assert!(serde_json::to_vec(summary).unwrap().len() <= 1100);
+    assert!(serde_json::to_vec(&stability).unwrap().len() <= 2500);
+    let id = &summary["report_id"];
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"read_report","arguments":{"report_id":id,"select":["/schema","/items/0/certificate/real_part"]}}}),
+    );
+    let read = read_response(&mut stdout, 13);
+    assert_eq!(
+        read["result"]["structuredContent"]["selected"]["/schema"],
+        "polytool.stability.v1"
+    );
+    assert!(
+        read["result"]["structuredContent"]["selected"]["/items/0/certificate/real_part"]
+            .is_array()
+    );
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"tool_help","arguments":{"tool":"stability_univariate"}}}),
+    );
+    let help = read_response(&mut stdout, 14);
+    assert!(help["result"]["structuredContent"]["help"]
+        .as_str()
+        .unwrap()
+        .contains("50-second"));
 
     drop(stdin);
     let _ = child.kill();

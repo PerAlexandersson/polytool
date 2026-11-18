@@ -43,6 +43,7 @@ mod recurrence_veronese_lifts;
 mod resultant;
 mod root_enclosures;
 mod sequence;
+mod stability;
 mod stapledon;
 mod tnn_network;
 

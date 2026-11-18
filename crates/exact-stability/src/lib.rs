@@ -11,6 +11,7 @@
 //! finite root counts (`counts: None`) and fails the all-inside convention.
 
 pub mod gaussian;
+pub mod parse;
 pub mod univariate;
 
 pub use exact_algebra::BigRational;

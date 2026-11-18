@@ -3,7 +3,8 @@
 //! [`certify_recurrence`] reduces the seed-dependent generating function before
 //! deciding sparse pencils. A real limit set alone proves no all-row claim.
 //! Standard quadratic seeds admit a public product proof; Toeplitz circle
-//! certificates apply a theorem from an unpublished manuscript, formalized in
+//! certificates apply the criterion due to Per Alexandersson and sqrt-of-2,
+//! building on Shapiro–Štampach (arXiv:1702.00741), formalized in
 //! `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg` and
 //! `RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg`. Every
 //! verdict uses rational arithmetic and exact Sturm counts. Report replay
@@ -169,7 +170,7 @@ pub struct CircleCertificate {
     pub polynomial: Vec<String>,
     /// Exact counts for Q_R; nonnegativity is checked on its sign cells.
     pub root_counts: RootCounts,
-    /// Theorem source, explicitly identified as an unpublished manuscript.
+    /// Circle criterion attribution to Alexandersson and sqrt-of-2, building on Shapiro–Štampach.
     pub provenance: String,
     /// Fully qualified RealRooted declarations for the circle criterion.
     /// These are formal references; individual certificates are not replayed in Lean.
@@ -216,7 +217,7 @@ pub struct CertificationReport {
     pub pencil: Option<PencilCertificate>,
     /// Certified nonreal tie, with exceptional roots excluded explicitly.
     pub nonreal_tie: Option<NonrealTieWitness>,
-    /// Exact circle certificate applying the unpublished manuscript theorem.
+    /// Exact circle certificate applying the Alexandersson and sqrt-of-2 criterion.
     pub circle: Option<CircleCertificate>,
     /// Independent exact limit-spectrum and circle-region membership.
     pub toeplitz_region: Option<ToeplitzRegionCertificate>,

@@ -40,6 +40,6 @@ schema key.
 
 In polytool.bkw-certification.v1, the circle criterion gives result proved with
 empty conditional_on. Its circle.provenance is exactly:
-  circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)
+  circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)
 A real limit spectrum alone gives inconclusive: it does not imply
 real-rootedness of every row. conditional_on is reserved and always empty.

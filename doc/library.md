@@ -60,6 +60,11 @@ integer arithmetic. Repeated roots are handled through the square-free part.
 
 ## Exact stability in circular regions
 
+`stability::parse` supplies the bounded Gaussian/univariate parser shared by
+the CLI and MCP. `stability::wire` supplies compact summaries, canonical
+`polytool.stability.v1` evidence and bounded exact `verify_report` replay.
+Use `polytool stability` or MCP `stability_univariate` for these adapters.
+
 `polytool::stability` re-exports the standalone `exact-stability` crate.
 `check_univariate_stability(&coefficients, &region)` accepts ascending
 `GaussianRational` coefficients and returns exact root counts with
@@ -1935,7 +1940,7 @@ from `(S-x)^(2M+1) H=0`, where `M` is the last supported index. An all-index
 equality certificate identifies any supplied basis record with the canonical
 record. `EvenDerivativeCertificate` records these hypotheses inside the shape;
 the theorem report's `verify()` recomputes them. This implements
-[`RealRooted.evenDerivative_preservesPF_tfae`](https://github.com/PerAlexandersson/RealRooted/blob/main/RealRooted/EvenDerivative/Preserver.lean):
+[`RealRooted.EvenDerivative.isPFPolynomial_tfae`](https://github.com/PerAlexandersson/RealRooted/blob/main/RealRooted/EvenDerivative/Preserver.lean):
 PF inputs map to PF outputs in every degree. Lean replay is `not_attempted`.
 Optional monomial witness searches stop at degree 16. Unproved rational
 families remain unresolved when no witness is found. The example

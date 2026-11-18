@@ -133,7 +133,7 @@ fn circle_theorem_includes_boundary_and_public_proofs_take_priority() {
     assert_eq!(circle.polynomial, strings(&[2, 2]));
     assert_eq!(
         circle.provenance,
-        "circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)"
+        "circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)"
     );
     assert_eq!(
         circle.conclusion,

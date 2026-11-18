@@ -12,6 +12,7 @@ mod oeis;
 mod recurrence;
 pub(crate) mod search;
 mod sieving;
+mod stability;
 
 use crate::cli::spec::{positional, CommandSpec, OutputKind, COMMAND};
 
@@ -37,6 +38,7 @@ names, nested subcommands, every flag, flag values with a fixed set of choices, 
 
 pub(crate) const COMMANDS: &[CommandSpec] = &[
     inspect::REAL_ROOTED,
+    stability::STABILITY,
     inspect::INTERLACING,
     inspect::INTERLACING_PROFILE,
     inspect::PROPERTIES,

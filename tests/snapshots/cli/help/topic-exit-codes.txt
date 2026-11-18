@@ -13,6 +13,13 @@ Per command:
   real-rooted
       0 answered (also when the mathematical answer is negative)
       2 usage error or invalid input
+  stability
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  stability verify
+      0 report verified
+      1 report does not verify
+      2 invalid input
   interlacing
       0 answered (also when the mathematical answer is negative)
       2 usage error or invalid input

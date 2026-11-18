@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Correct four renamed RealRooted declarations used by basis-map routes and
+  guard cited declaration spellings with a standalone source inventory.
+- Attribute the Hessenberg Toeplitz circle criterion to Per Alexandersson and
+  sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741).
+
 - Fix replay of negative parity-product reports with zero seeds by checking
   the intrinsic Casoratian identity before skipping a zero seed window.
 - `hstar-inequalities` no longer rejects valid h*-vectors such as `[1,6,1]` of the square
@@ -13,6 +18,13 @@
   Hibi, Stanley and Stapledon references cite the original sources.
 
 ### Added
+
+- `polytool stability` and MCP `stability_univariate`: shared exact Gaussian
+  parsing, circular-region counts, compact summaries, canonical replayable
+  `polytool.stability.v1` reports, certificate files and `stability verify`.
+  CLI degree/part-bit caps are 2000/1000000; MCP degree is capped at 500.
+  MCP returns stored report handles when configured; `detail:full` opts into
+  certificates, and `tool_help` documents syntax, conventions and limits.
 
 - New crate `exact-stability` and the `polytool::stability` facade: exact
   Gaussian-rational univariate root counts in half-planes, disks, exteriors and
@@ -124,7 +136,7 @@
   reduced seed-dependent generating functions, separate first failing rows,
   standard quadratic product proofs and Hessenberg Toeplitz circle proofs.
   The circle route gives `proved`, with simplicity and strict interlacing,
-  citing "circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)"
+  citing "circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)"
   in its provenance. Public quadratic proofs take priority.
   Certificates contain rational witnesses and root counts and support replay.
   General-order limit sets remain inconclusive; numerical scouting is evidence.
@@ -164,7 +176,8 @@
   `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg` and
   `RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg`.
   The mathematical source remains "circle criterion for Hessenberg Toeplitz
-  symbols (unpublished manuscript)"; no Lean replay is claimed.
+  symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach
+  (arXiv:1702.00741)"; no Lean replay is claimed.
 
 - `oeis rows --bfile-dir DIR` reads a separate local b-file cache before the
   OEIS checkout's `files` directory, with unchanged term validation. The
@@ -331,7 +344,7 @@
 - Even-derivative basis maps (`BasisMap::even_derivative`, theorem shape
   `even_derivative`), with exact rational-ratio or finite-support coefficients,
   hypergeometric row certificates, all-index PF hypotheses and replay.
-  Implements `RealRooted.evenDerivative_preservesPF_tfae`; finite supports use
+  Implements `RealRooted.EvenDerivative.isPFPolynomial_tfae`; finite supports use
   exact real-rootedness of the signed symbol and Hermite--Poulain. Bounded
   triangular coefficient recovery adds candidates to backward catalog lifts.
   An exponential Riordan transport certifies the Touchard image for

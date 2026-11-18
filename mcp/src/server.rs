@@ -107,6 +107,31 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
+        description = "Count roots exactly in half-planes, disks, exteriors or Gaussian Möbius images. Accepts exact expressions with I or ascending Gaussian coefficient arrays. Returns compact counts/verdict/meaning; detail:full includes replay certificates. Configured report storage returns report_id for read_report. Degree <=500, batch <=512; floats rejected. See tool_help for syntax, conventions and limits."
+    )]
+    pub fn stability_univariate(
+        &self,
+        Parameters(input): Parameters<crate::stability::StabilityUnivariateRequest>,
+    ) -> Result<Json<serde_json::Value>, McpError> {
+        crate::stability::response(input, &self.report_store).map(Json)
+    }
+
+    #[tool(description = "Read extended tool syntax and limits.")]
+    pub fn tool_help(
+        &self,
+        Parameters(input): Parameters<crate::requests::ToolHelpRequest>,
+    ) -> Result<Json<serde_json::Value>, McpError> {
+        match input.tool.as_str() {
+            "stability_univariate" => Ok(Json(
+                json!({"tool":input.tool,"help":crate::stability::HELP}),
+            )),
+            _ => Err(invalid_params(
+                "extended help is available for stability_univariate",
+            )),
+        }
+    }
+
+    #[tool(
         description = "Check a polynomial family in one exact batch: properties, consecutive interlacing, optional finite Lace TNN, and optional recurrence search."
     )]
     pub fn check_polynomial_family(
@@ -903,7 +928,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Certify a stationary rational-polynomial recurrence with seeds exactly: reduced generating function, sparse BKW pencils, public quadratic-product proofs first, versioned exact Schmidt-Spitzer limit regions for standard Hessenberg tails of bandwidth at most 3, and separate finite row refutations. Exact circle nonnegativity gives proved: every standard row has simple real zeros and consecutive rows strictly interlace. Its exact provenance is circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript). A real limit spectrum alone gives inconclusive because it does not imply real-rootedness of every row. conditional_on is reserved and always empty. The circle theorem can still give proved beyond the precomputed bandwidth range. Returns replayable polytool.bkw-certification.v1 with rational points and region input/output hashes; no numerical or Lean replay claims."
+        description = "Certify stationary recurrences exactly with sparse BKW, quadratic products, Toeplitz circles and finite row refutations. The circle criterion for Hessenberg Toeplitz symbols is due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741); it proves simple real roots and strict consecutive interlacing. A real limit spectrum alone is inconclusive. Returns replayable polytool.bkw-certification.v1; no Lean replay."
     )]
     pub fn bkw_certify(
         &self,

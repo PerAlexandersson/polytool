@@ -15,6 +15,8 @@ mod report_store;
 mod requests;
 mod responses;
 mod server;
+mod stability;
+pub use stability::StabilityUnivariateRequest;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

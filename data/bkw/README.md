@@ -6,7 +6,7 @@ b(z)=z^{-1}+b_0+b_1z+b_2z^2+b_3z^3.
 We distinguish two predicates: reality of the limit spectrum, defined by the
 two smallest roots of \(z(b(z)-t)\), and existence of a radius satisfying
 circle nonnegativity. An explicit circle certificate applies the theorem
-"circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)":
+"circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)":
 for a real symbol b, if some R>0 satisfies Im b(R exp(i theta))>=0 for
 0<theta<pi, every standard row has simple real zeros and consecutive rows
 strictly interlace. A real limit spectrum alone does not imply real-rootedness

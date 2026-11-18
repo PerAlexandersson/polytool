@@ -31,7 +31,7 @@ pub(super) fn even_derivative(
             certificate: Box::new(certificate.clone()),
         },
         status: BasisMapTheoremStatus::HypothesisFailed,
-        theorem: "RealRooted.evenDerivative_preservesPF_tfae: c_0=1, c_k>=0 and every monomial \
+        theorem: "RealRooted.EvenDerivative.isPFPolynomial_tfae (at every degree N): c_0=1, c_k>=0 and every monomial \
                   image H_N real-rooted imply T_c preserves PF in every degree; finite support \
                   uses Hermite--Poulain (splits_evenDerivativeTest_of_splits_symbol) and \
                   coefficientwise closure of real-rootedness for the converse"
@@ -62,7 +62,7 @@ pub(super) fn even_derivative(
         conclusions: Vec::new(),
         counterexample: None,
         lean: vec![
-            "RealRooted.evenDerivative_preservesPF_tfae",
+            "RealRooted.EvenDerivative.isPFPolynomial_tfae",
             "RealRooted.isPFPolynomial_evenDerivativeOperator",
             "RealRooted.evenDerivativeOperator_X_pow",
         ],
@@ -353,7 +353,7 @@ pub(super) fn geometric(g: &[Q], y: &[Q]) -> Result<Analysis, RecurrenceError> {
 
 /// An eventually geometric family with a nonzero prefix discrepancy:
 /// no positive-length source interval (RealRooted
-/// `exists_not_splits_linearMap_shiftedPower_of_eventually_geometric`).
+/// `exists_not_splits_shiftedPower_of_eventually_geometric`).
 pub(super) fn eventually_geometric(map: &BasisMap, y: &[Q]) -> Result<Analysis, RecurrenceError> {
     let a = vec_poly::coeff(y, 0);
     let d = vec_poly::coeff(y, 1);
@@ -375,7 +375,7 @@ pub(super) fn eventually_geometric(map: &BasisMap, y: &[Q]) -> Result<Analysis, 
         hypotheses: Vec::new(),
         conclusions: Vec::new(),
         counterexample: None,
-        lean: vec!["RealRooted.exists_not_splits_linearMap_shiftedPower_of_eventually_geometric"],
+        lean: vec!["RealRooted.exists_not_splits_shiftedPower_of_eventually_geometric"],
     };
     let pk = &seeds[k];
     let slope_nonzero = !d.is_zero();

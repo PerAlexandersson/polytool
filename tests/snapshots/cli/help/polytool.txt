@@ -16,6 +16,7 @@ Start here:
 
 Check polynomials:
   real-rooted                        Check real-rootedness of each polynomial
+  stability                          Count roots exactly in an open circular region
   interlacing                        Check interlacing of consecutive polynomial pairs
   interlacing-profile                Count consecutive previous interlacings until first fail
   properties                         Show real-rootedness, unimodality, and related properties

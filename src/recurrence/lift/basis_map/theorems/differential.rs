@@ -375,9 +375,11 @@ pub(super) fn scalar_index(
         theorem: "index-dependent scalar term: P_(k+1) = (L + k s) P_k with L f = (a + b t) f + \
                   kappa (t - h) f' gives T = U_g o R_s (RealRooted \
                   basisMap_factorization_of_scalarIndex_recurrence), where R_s(u^k) = u (u + s) \
-                  ... (u + (k-1) s) keeps every root <= 0 for s >= 0 (Su, Yang and Zhang, \
+                  ... (u + (k-1) s) preserves real-rootedness on nonpositive-rooted inputs \
+                  for s >= 0; at c_0=0 its coefficients keep the input's common sign, so \
+                  the output roots remain <= 0 (Su, Yang and Zhang, \
                   Australas. J. Combin. 56 (2013), Theorem 4; Brenti, Mem. AMS 413 (1989), \
-                  Theorem 2.4.3; RealRooted NewtonParametersAffine.preservesNonposRooted) and \
+                  Theorem 2.4.3; RealRooted NewtonPreservesNonposRooted.of_parametersAffine) and \
                   U_g(u^k) = L^k g sends (-inf, a + b h + kappa m] into (-inf, h] (RealRooted \
                   rayBasisMap_maps_realRootedIn_iff)"
             .into(),
@@ -386,7 +388,7 @@ pub(super) fn scalar_index(
         counterexample: None,
         lean: vec![
             "RealRooted.basisMap_factorization_of_scalarIndex_recurrence",
-            "RealRooted.NewtonParametersAffine.preservesNonposRooted",
+            "RealRooted.NewtonPreservesNonposRooted.of_parametersAffine",
             "RealRooted.rayBasisMap_maps_realRootedIn_iff",
         ],
     };
@@ -567,8 +569,7 @@ fn constant_current(
                   real-rooted image with roots <= -c/b; PF inputs (also those with roots in \
                   any [-R, 0]) have PF images if and only if every P_k(0) >= 0, if and only if \
                   a^2 + 4c >= 0 and (2s >= a or c >= s^2 - a s) (RealRooted \
-                  orderTwoBasis_pf_equivalences, basisTransform_orderTwoBasis_preserves_bounded_\
-                  pf_iff)"
+                  orderTwoBasis_pf_equivalences, OrderTwoBasis.forall_isPFPolynomial_iff_of_root_bounds)"
             .into(),
         hypotheses: Vec::new(),
         conclusions: Vec::new(),
@@ -577,7 +578,7 @@ fn constant_current(
             "RealRooted.basisTransform_orderTwoBasis_eq_comp",
             "RealRooted.orderTwoZeroTransform_isPFPolynomial",
             "RealRooted.orderTwoBasis_pf_equivalences",
-            "RealRooted.basisTransform_orderTwoBasis_preserves_bounded_pf_iff",
+            "RealRooted.OrderTwoBasis.forall_isPFPolynomial_iff_of_root_bounds",
         ],
     };
     for (name, statement, holds) in [

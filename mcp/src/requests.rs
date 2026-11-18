@@ -8,6 +8,13 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use std::borrow::Cow;
 
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ToolHelpRequest {
+    /// Tool name for extended help.
+    pub tool: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BkwCertificationToolRequest {

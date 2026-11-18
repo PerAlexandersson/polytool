@@ -1,5 +1,11 @@
 # CLI usage
 
+`polytool stability [POLYNOMIAL ...]` counts roots exactly in half-planes,
+disks, exteriors and Gaussian Möbius images. Use `--format json` for compact
+summaries, `--format full` or `--certificate FILE` for evidence, and
+`polytool stability verify --input FILE` for replay.
+See [stability.md](stability.md) for exact syntax, selectors and caps.
+
 For complete examples see [CLI workflows](workflows.md). `polytool --help`
 lists the commands grouped by task with a "Start here" block, and
 `polytool help <command> [<subcommand>]` (or `<command> --help`) prints the
@@ -349,8 +355,8 @@ coefficients, with P_0=1, P_m=0 for m<0 and
 P_n(t)=(t-b_0)*P_(n-1)(t)-sum_(j=1)^s b_j*P_(n-j-1)(t).
 If some R>0 satisfies Im b(R exp(i theta))>=0 for 0<theta<pi,
 every standard row has simple real zeros and consecutive rows strictly
-interlace. Source: "circle criterion for Hessenberg Toeplitz symbols
-(unpublished manuscript)". The route gives `proved`, records this exact source
+interlace. Source: "circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and
+sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)". The route gives `proved`, records this exact source
 in `circle.provenance`, and leaves `conditional_on` empty. Only `circle`
 appears in the extensible list `TOEPLITZ_CRITERIA` of proved Toeplitz criteria.
 

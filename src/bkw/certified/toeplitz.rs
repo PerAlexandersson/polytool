@@ -1,4 +1,4 @@
-//! Exact Toeplitz circle certificates for an unpublished manuscript theorem.
+//! Exact Toeplitz circle certificates for the Alexandersson and sqrt-of-2 criterion.
 //!
 //! Circle criterion: let b(z)=z^-1+b_0+sum_(j=1)^s b_j*z^j have real
 //! coefficients, with standard rows P_0=1, P_m=0 for m<0 and
@@ -6,7 +6,7 @@
 //! If some R>0 satisfies Im b(R*exp(i*theta))>=0 for
 //! 0<theta<pi, every standard Hessenberg Toeplitz row has simple real zeros
 //! and consecutive rows strictly interlace.
-//! Source: circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript).
+//! Source: circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741).
 //! Formal references: `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg`
 //! and `RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg` in
 //! `RealRooted/Toeplitz/CircleCriterion.lean`.
@@ -22,7 +22,7 @@ pub const TOEPLITZ_CRITERIA: &[&str] = &["circle"];
 
 /// Theorem source for circle certificates, distinguished from published sources.
 pub const CIRCLE_THEOREM_SOURCE: &str =
-    "circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)";
+    "circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)";
 
 pub(super) fn hessenberg_tails(d: &[P]) -> Option<Vec<String>> {
     if d.len() < 2

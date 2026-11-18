@@ -19,6 +19,7 @@
 //! ```
 
 pub use exact_stability::*;
+pub mod wire;
 
 #[cfg(test)]
 mod tests {

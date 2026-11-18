@@ -1,0 +1,26 @@
+Replay every exact stability certificate.
+
+Read a full polytool.stability.v1 report from --input FILE or stdin and
+recompute every field exactly. Altered or malformed reports fail. Uses degree
+2000 and coefficient-part 1000000-bit caps.
+
+Usage: polytool stability verify [OPTIONS]
+
+Options:
+  -h, --help  Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: json] [possible values: json]
+      --json             Emit JSON (the default; accepted for uniformity)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Examples:
+  polytool stability verify --input report.json
+
+Exit status:
+  0  report verified
+  1  report does not verify
+  2  invalid input

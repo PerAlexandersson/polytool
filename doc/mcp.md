@@ -10,14 +10,19 @@ conventions are documented in [`../mcp/README.md`](../mcp/README.md) (sections
 
 Available MCP tools:
 
+- `stability_univariate`: exact circular-region root counts over the Gaussian
+  rationals. Compact summaries by default; `detail:"full"` includes evidence.
+  Configured storage returns `report_id` for `read_report`. `tool_help`
+  documents syntax and limits. See [stability.md](stability.md).
+
 - `read_report`: bounded outlines or selected evidence from a stored report id.
 
 - `bkw_certify`: exact stationary-recurrence limit-set certificates, separate
   finite row refutations, public quadratic-product proofs and Toeplitz circle
   proofs. Circle nonnegativity is checked exactly; the circle route gives
   `proved`, with simple real zeros and consecutive rows strictly interlacing.
-  Its exact provenance is "circle criterion for Hessenberg Toeplitz symbols
-  (unpublished manuscript)".
+  Its exact provenance is "circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and
+  sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)".
   `circle.lean_declarations` records
   `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg` and
   `RealRooted.Toeplitz.Circle.roots_card_of_circleNonneg`, from

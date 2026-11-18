@@ -5,6 +5,62 @@ of a polynomial over the Gaussian rationals, ℚ(i), in circular regions.
 Coefficients are in ascending degree order. All decisions are exact;
 root approximations and numerical tolerances are unnecessary.
 
+## CLI and MCP
+
+```sh
+polytool stability '(1+t)^3' --region left
+polytool stability 't^2+(1+2I)t-I' --region upper --json
+polytool stability 't-I' --mobius '1,0,0,1' --convention inside
+polytool stability 't-I' --disk-center I --radius 1 --certificate report.json
+polytool stability verify --input report.json
+```
+
+Positional arguments form a batch; otherwise read one polynomial per line
+from stdin or `--input FILE`. Blank/comment (`#`) lines are ignored.
+Both adapters use `exact_stability::parse`: expressions or ascending lists
+such as `[-I,1+2I,1]`, with integer/rational parts, `I`, parentheses, implicit
+products and natural powers. Floating/scientific literals, nonconstant
+denominators and multivariate expressions fail. Use `--` before negative
+positional expressions. Expression nesting is bounded by 64.
+
+`--region upper|lower|left|right|disk|exterior` defaults to upper. It is
+exclusive with `--mobius A,B,C,D` (image of the upper half-plane under
+`(Az+B)/(Cz+D)`) and paired `--disk-center CENTER --radius R` selectors.
+Maps must be nonsingular and radii positive exact rationals.
+`--convention avoid|inside` overrides the region default.
+
+`--format summary|json|full` defaults to readable summaries. `--json` aliases
+`--format json`, emitting `{items:[...]}` with zero-based index, degree,
+counts, verdict, meaning and method. Zero explicitly has null degree/counts,
+passes avoidance by convention and fails inside. Constants pass both.
+`full` and `--certificate FILE` include canonical ascending input/options and
+all certificate entries under schema `polytool.stability.v1`. Exact integers
+and rational parts are strings. `stability verify` recomputes every field;
+exit statuses are 0 verified, 1 mismatch, 2 malformed input.
+
+`--max-degree N` and `--max-coefficient-bits N` can lower the CLI
+defaults/maxima 2000 and 1000000. Bits apply to each part's numerator and
+denominator, including intermediate parser results. CLI text is capped at
+16 MiB. Dense exact arithmetic can
+be expensive below these admission bounds.
+
+MCP `stability_univariate` accepts `polynomials` (1–512 expressions or
+ascending arrays), optional `region`, `mobius` (four Gaussian values), paired
+`disk_center`/`radius`, `convention`, and `detail:summary|full`. Gaussian
+values are JSON integers, exact strings or objects such as
+`{"real":"1/2","imaginary":"-3/4"}`. JSON floats fail; object parts and
+radius are rational strings. Degree is capped at 500, part bits at 1000000,
+total coefficients at 65536, request text at 1 MiB and coefficient literals
+at 16384 bytes. A 50-second elapsed-time guard rejects the whole response at
+computation checkpoints; it does not interrupt an individual arithmetic
+operation. Expiry never returns partial counts or a verdict.
+
+Default items are about 150–200 bytes with no certificate. `detail:"full"`
+includes evidence. Configured storage adds `report_id` and `report` metadata;
+the stored canonical report always contains full evidence and can be replayed
+by the CLI. `read_report` selects evidence by JSON pointer; `tool_help` with
+`{"tool":"stability_univariate"}` explains the complete contract.
+
 ## API and conventions
 
 ```rust

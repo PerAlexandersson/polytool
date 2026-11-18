@@ -372,7 +372,10 @@ fn build_command(spec: &'static CommandSpec) -> Command {
         command = command.arg(arg);
     }
     if !spec.subcommands.is_empty() {
-        command = command.subcommand_required(true);
+        command = command.subcommand_required(spec.positionals.is_empty());
+        if !spec.positionals.is_empty() {
+            command = command.subcommand_precedence_over_arg(true);
+        }
         for sub in spec.subcommands {
             command = command.subcommand(build_command(sub));
         }

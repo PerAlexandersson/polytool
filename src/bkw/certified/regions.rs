@@ -2,7 +2,7 @@
 //!
 //! Only the two-smallest-root definition determines the limit-spectrum region.
 //! Circle nonnegativity is an independent algebraic predicate. An explicit
-//! circle certificate applies the unpublished manuscript theorem; limit
+//! circle certificate applies the Alexandersson and sqrt-of-2 criterion; limit
 //! geometry alone does not imply real-rootedness of every row. We use rational
 //! invariants c=b_2^2/|b_1|^3 and d=b_3/|b_1|^2, so no irrational square root is rounded.
 

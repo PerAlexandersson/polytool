@@ -1,5 +1,12 @@
 # polytool MCP server
 
+`stability_univariate` accepts exact Gaussian-rational expressions with `I`
+or ascending coefficient arrays. It returns compact circular-region root
+counts by default; `detail:"full"` includes replay certificates. With report
+storage configured, `report_id` retrieves full evidence through `read_report`.
+Use `tool_help` with `{"tool":"stability_univariate"}` for syntax and limits,
+or see [the stability guide](../doc/stability.md).
+
 `polytool-mcp` is a local Model Context Protocol server for
 `polytool`. It exposes exact univariate polynomial computations to MCP
 clients over stdio.
@@ -10,8 +17,8 @@ clients over stdio.
 exact sparse BKW decisions, separate finite refutations, and public
 quadratic-product proofs or Toeplitz circle proofs. The circle route gives
 `proved`, with simple real zeros and consecutive rows strictly interlacing;
-its exact provenance is "circle criterion for Hessenberg Toeplitz symbols
-(unpublished manuscript)".
+its exact provenance is "circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and
+sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)".
 A real limit set alone is never
 an all-row proof. Replay through the library or `polytool bkw certify --verify`.
 

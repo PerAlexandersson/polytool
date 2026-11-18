@@ -1,0 +1,53 @@
+Count roots exactly in an open circular region.
+
+Read Gaussian-rational univariate expressions or ascending comma-separated
+coefficient lists, from positional arguments or one per line on stdin/--input
+FILE. Use I for the imaginary unit; floating inputs and nonconstant denominators
+fail. Counts include multiplicities and distinguish inside, boundary and
+outside. Upper/lower default to avoidance; left/right/disk/exterior default to
+all-inside. Zero has null degree/counts, passes avoidance by convention and
+fails all-inside. Constants pass both.
+
+Usage: polytool stability [OPTIONS] [POLYNOMIAL]... [COMMAND]
+
+Commands:
+  verify  Replay every exact stability certificate.
+
+Arguments:
+  [POLYNOMIAL]...  Exact univariate polynomial (repeat for a batch)
+
+Options:
+      --region <REGION>           Named open region; exclusive with mobius and centered disk [default: upper] [possible values: upper, lower, left, right, disk, exterior]
+      --mobius <A,B,C,D>          Image of the upper half-plane under (Az+B)/(Cz+D)
+      --disk-center <CENTER>      Exact Gaussian center; requires --radius
+      --radius <R>                Positive rational radius; requires --disk-center
+      --convention <CONVENTION>   Override the region's default verdict meaning [possible values: avoid, inside]
+      --certificate <FILE>        Write the full replayable polytool.stability.v1 report
+      --max-degree <N>            Degree cap, at most 2000 [default: 2000]
+      --max-coefficient-bits <N>  Numerator/denominator bit cap, at most 1000000 [default: 1000000]
+  -h, --help                      Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: summary] [possible values: summary, json, full]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  Text on stdin (or --input FILE); see the description above.
+
+Details:
+  --format json (or --json) returns compact items; full includes canonical input,
+  options and exact certificate entries as strings. --certificate writes the same
+  full report. Selectors are exclusive; disk center/radius are required together.
+  Möbius maps must be nonsingular. Use -- before a positional expression beginning
+  with a minus sign.
+
+Examples:
+  polytool stability '(1+t)^3' --region left
+  polytool stability 't^2+(1+2I)t-I' --region upper --json
+  polytool stability 't-I' --disk-center I --radius 1 --certificate report.json
+  polytool stability verify --input report.json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input

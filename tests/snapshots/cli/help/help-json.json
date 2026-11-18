@@ -84,6 +84,278 @@
     {
       "aliases": [],
       "deprecated_aliases": [],
+      "description": "Read Gaussian-rational univariate expressions or ascending comma-separated coefficient lists, from positional arguments or one per line on stdin/--input FILE. Use I for the imaginary unit; floating inputs and nonconstant denominators fail. Counts include multiplicities and distinguish inside, boundary and outside. Upper/lower default to avoidance; left/right/disk/exterior default to all-inside. Zero has null degree/counts, passes avoidance by convention and fails all-inside. Constants pass both.",
+      "details": "--format json (or --json) returns compact items; full includes canonical input, options and exact certificate entries as strings. --certificate writes the same full report. Selectors are exclusive; disk center/radius are required together. Möbius maps must be nonsingular. Use -- before a positional expression beginning with a minus sign.",
+      "examples": [
+        "polytool stability '(1+t)^3' --region left",
+        "polytool stability 't^2+(1+2I)t-I' --region upper --json",
+        "polytool stability 't-I' --disk-center I --radius 1 --certificate report.json",
+        "polytool stability verify --input report.json"
+      ],
+      "exit_codes": [
+        {
+          "code": 0,
+          "meaning": "answered (also when the mathematical answer is negative)"
+        },
+        {
+          "code": 2,
+          "meaning": "usage error or invalid input"
+        }
+      ],
+      "flags": [
+        {
+          "arity": 1,
+          "choices": [
+            "upper",
+            "lower",
+            "left",
+            "right",
+            "disk",
+            "exterior"
+          ],
+          "default": "upper",
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Named open region; exclusive with mobius and centered disk",
+          "hidden": false,
+          "long": "--region",
+          "name": "region",
+          "value": "REGION"
+        },
+        {
+          "arity": 1,
+          "choices": [],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Image of the upper half-plane under (Az+B)/(Cz+D)",
+          "hidden": false,
+          "long": "--mobius",
+          "name": "mobius",
+          "value": "A,B,C,D"
+        },
+        {
+          "arity": 1,
+          "choices": [],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Exact Gaussian center; requires --radius",
+          "hidden": false,
+          "long": "--disk-center",
+          "name": "disk-center",
+          "value": "CENTER"
+        },
+        {
+          "arity": 1,
+          "choices": [],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Positive rational radius; requires --disk-center",
+          "hidden": false,
+          "long": "--radius",
+          "name": "radius",
+          "value": "R"
+        },
+        {
+          "arity": 1,
+          "choices": [
+            "avoid",
+            "inside"
+          ],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Override the region's default verdict meaning",
+          "hidden": false,
+          "long": "--convention",
+          "name": "convention",
+          "value": "CONVENTION"
+        },
+        {
+          "arity": 1,
+          "choices": [],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Write the full replayable polytool.stability.v1 report",
+          "hidden": false,
+          "long": "--certificate",
+          "name": "certificate",
+          "value": "FILE"
+        },
+        {
+          "arity": 1,
+          "choices": [],
+          "default": "2000",
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Degree cap, at most 2000",
+          "hidden": false,
+          "long": "--max-degree",
+          "name": "max-degree",
+          "value": "N"
+        },
+        {
+          "arity": 1,
+          "choices": [],
+          "default": "1000000",
+          "deprecated_aliases": [],
+          "heading": "Options",
+          "help": "Numerator/denominator bit cap, at most 1000000",
+          "hidden": false,
+          "long": "--max-coefficient-bits",
+          "name": "max-coefficient-bits",
+          "value": "N"
+        },
+        {
+          "arity": 1,
+          "choices": [],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Input and output",
+          "help": "Read the input from FILE instead of stdin (`-` is stdin)",
+          "hidden": false,
+          "long": "--input",
+          "name": "input",
+          "value": "FILE"
+        },
+        {
+          "arity": 1,
+          "choices": [
+            "summary",
+            "json",
+            "full"
+          ],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Input and output",
+          "help": "Output format [default: summary]",
+          "hidden": false,
+          "long": "--format",
+          "name": "format",
+          "value": "FORMAT"
+        },
+        {
+          "arity": 0,
+          "choices": [],
+          "default": null,
+          "deprecated_aliases": [],
+          "heading": "Input and output",
+          "help": "Emit machine-readable JSON (same as --format json)",
+          "hidden": false,
+          "long": "--json",
+          "name": "json",
+          "value": null
+        }
+      ],
+      "group": "Check polynomials",
+      "input": "text",
+      "name": "stability",
+      "output": {
+        "default": "summary",
+        "formats": [
+          "summary",
+          "json",
+          "full"
+        ]
+      },
+      "positionals": [
+        {
+          "choices": [],
+          "help": "Exact univariate polynomial (repeat for a batch)",
+          "multiple": true,
+          "name": "POLYNOMIAL",
+          "required": false
+        }
+      ],
+      "see_also": [],
+      "subcommands": [
+        {
+          "aliases": [],
+          "deprecated_aliases": [],
+          "description": "Read a full polytool.stability.v1 report from --input FILE or stdin and recompute every field exactly. Altered or malformed reports fail. Uses degree 2000 and coefficient-part 1000000-bit caps.",
+          "details": "",
+          "examples": [
+            "polytool stability verify --input report.json"
+          ],
+          "exit_codes": [
+            {
+              "code": 0,
+              "meaning": "report verified"
+            },
+            {
+              "code": 1,
+              "meaning": "report does not verify"
+            },
+            {
+              "code": 2,
+              "meaning": "invalid input"
+            }
+          ],
+          "flags": [
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Read the input from FILE instead of stdin (`-` is stdin)",
+              "hidden": false,
+              "long": "--input",
+              "name": "input",
+              "value": "FILE"
+            },
+            {
+              "arity": 1,
+              "choices": [
+                "json"
+              ],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Output format [default: json]",
+              "hidden": false,
+              "long": "--format",
+              "name": "format",
+              "value": "FORMAT"
+            },
+            {
+              "arity": 0,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Emit JSON (the default; accepted for uniformity)",
+              "hidden": false,
+              "long": "--json",
+              "name": "json",
+              "value": null
+            }
+          ],
+          "group": "",
+          "input": "json",
+          "name": "verify",
+          "output": {
+            "default": "json",
+            "formats": [
+              "json"
+            ]
+          },
+          "positionals": [],
+          "see_also": [],
+          "subcommands": [],
+          "summary": "Replay every exact stability certificate",
+          "usage": []
+        }
+      ],
+      "summary": "Count roots exactly in an open circular region",
+      "usage": []
+    },
+    {
+      "aliases": [],
+      "deprecated_aliases": [],
       "description": "Check strict and weak interlacing for each consecutive pair of input polynomials (rows 0-1, 1-2, ...). Coefficients are arbitrary-size integers.",
       "details": "",
       "examples": [
@@ -6479,7 +6751,7 @@
         {
           "aliases": [],
           "deprecated_aliases": [],
-          "description": "Read existing recurrence JSON with seeds. Reduce its generating function before BKW checks. Public standard quadratic product proofs run first. Exact Toeplitz circle nonnegativity gives proved: every row has simple real zeros and consecutive rows strictly interlace. The theorem source is circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript), recorded in circle.provenance. Versioned Schmidt-Spitzer regions for standard Hessenberg tails of bandwidth at most 3 certify limit-spectrum geometry exactly; a real limit spectrum alone gives inconclusive because it does not imply real-rootedness of every row. conditional_on is reserved and always empty. The circle theorem can still give proved beyond the region bandwidth range. --verify replays an embedded certificate exactly and rejects stale verdicts.",
+          "description": "Read existing recurrence JSON with seeds. Reduce its generating function before BKW checks. Public standard quadratic product proofs run first. Exact Toeplitz circle nonnegativity gives proved: every row has simple real zeros and consecutive rows strictly interlace. The theorem source is circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741), recorded in circle.provenance. Versioned Schmidt-Spitzer regions for standard Hessenberg tails of bandwidth at most 3 certify limit-spectrum geometry exactly; a real limit spectrum alone gives inconclusive because it does not imply real-rootedness of every row. conditional_on is reserved and always empty. The circle theorem can still give proved beyond the region bandwidth range. --verify replays an embedded certificate exactly and rejects stale verdicts.",
           "details": "",
           "examples": [
             "polytool bkw certify --recurrence recurrence.json --json",
@@ -6856,7 +7128,7 @@
       "title": "Output: --format, --json, --compact, stdout and stderr"
     },
     {
-      "body": "Machine-readable reports carry a `schema` key `polytool.<name>.v<N>`. Within a version, keys are only added, never removed or renamed; a renamed key keeps being emitted under its old name next to the new one. A breaking change bumps the version. Simple per-polynomial reports (real-rooted, interlacing, properties, gamma-expansion, ...) have the shape {\"items\": [...]} without a schema key.\n\n  polytool.commands.v1                     polytool help --json\n  polytool.recurrence.v1                   recurrence --json (a found recurrence)\n  polytool.recurrence-representations.v1   recurrence --representations --json\n  polytool.recurrence-spaces.v1            recurrence --space / --verify-space\n  polytool.recurrence-theorems.v1          recurrence --theorem-matches --json,\n                                           recurrence-theorems\n  polytool.recurrence-leading-coefficient.v1  recurrence-degree\n  polytool.recurrence-proof-discovery.v1   recurrence-prove\n  polytool.bkw-certification.v1           bkw certify (exact, replayable)\n  polytool.toeplitz-region-certificate.v1 bkw certify: exact limit geometry\n  polytool.recurrence-real-rootedness-theorem.v1  recurrence-prove reports\n  polytool.recurrence-veronese-lifts.v1    recurrence-veronese-lifts\n  polytool.recurrence-veronese-certificate.v1  recurrence-veronese-lifts\n  polytool.recurrence-transform.v1         recurrence-transform\n  polytool.recurrence-implicit.v1          recurrence-implicit\n  polytool.recurrence-implicit-search.v1   recurrence-implicit --search\n  polytool.recurrence-representation-search.v1  recurrence-search-representations\n  polytool.image_recurrence.v1             implicit image rules\n  polytool.recurrence-*-lift(s).v1         lift searches and certificates\n  polytool.root-enclosures.v1              root-enclosures\n  polytool.oeis-catalog.v1                 oeis list --json, oeis info --json\n  polytool.oeis-rows.v1                    oeis generate --json\n  polytool.oeis-text.v1                    recurrence-generate --format oeis-json\n  polytool.oeis-add.v1, oeis-check.v1, oeis-evidence.v1  oeis add/check/evidence\n  polytool.brenti-recognize.v1             brenti-recognize --json\n  polytool.pf-network.v1                   pf-network --json\n  polytool.left-production.v1              left-production --json\n  polytool.tnn-network.v1                  tnn-network --json\n  polytool.pf-pencil.v1                    pf-pencil --json\n  polytool.bench.real-rootedness.v1        bench real-rootedness --json\n\nIn polytool.bkw-certification.v1, the circle criterion gives result proved with\nempty conditional_on. Its circle.provenance is exactly:\n  circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)\nA real limit spectrum alone gives inconclusive: it does not imply\nreal-rootedness of every row. conditional_on is reserved and always empty.",
+      "body": "Machine-readable reports carry a `schema` key `polytool.<name>.v<N>`. Within a version, keys are only added, never removed or renamed; a renamed key keeps being emitted under its old name next to the new one. A breaking change bumps the version. Simple per-polynomial reports (real-rooted, interlacing, properties, gamma-expansion, ...) have the shape {\"items\": [...]} without a schema key.\n\n  polytool.commands.v1                     polytool help --json\n  polytool.recurrence.v1                   recurrence --json (a found recurrence)\n  polytool.recurrence-representations.v1   recurrence --representations --json\n  polytool.recurrence-spaces.v1            recurrence --space / --verify-space\n  polytool.recurrence-theorems.v1          recurrence --theorem-matches --json,\n                                           recurrence-theorems\n  polytool.recurrence-leading-coefficient.v1  recurrence-degree\n  polytool.recurrence-proof-discovery.v1   recurrence-prove\n  polytool.bkw-certification.v1           bkw certify (exact, replayable)\n  polytool.toeplitz-region-certificate.v1 bkw certify: exact limit geometry\n  polytool.recurrence-real-rootedness-theorem.v1  recurrence-prove reports\n  polytool.recurrence-veronese-lifts.v1    recurrence-veronese-lifts\n  polytool.recurrence-veronese-certificate.v1  recurrence-veronese-lifts\n  polytool.recurrence-transform.v1         recurrence-transform\n  polytool.recurrence-implicit.v1          recurrence-implicit\n  polytool.recurrence-implicit-search.v1   recurrence-implicit --search\n  polytool.recurrence-representation-search.v1  recurrence-search-representations\n  polytool.image_recurrence.v1             implicit image rules\n  polytool.recurrence-*-lift(s).v1         lift searches and certificates\n  polytool.root-enclosures.v1              root-enclosures\n  polytool.oeis-catalog.v1                 oeis list --json, oeis info --json\n  polytool.oeis-rows.v1                    oeis generate --json\n  polytool.oeis-text.v1                    recurrence-generate --format oeis-json\n  polytool.oeis-add.v1, oeis-check.v1, oeis-evidence.v1  oeis add/check/evidence\n  polytool.brenti-recognize.v1             brenti-recognize --json\n  polytool.pf-network.v1                   pf-network --json\n  polytool.left-production.v1              left-production --json\n  polytool.tnn-network.v1                  tnn-network --json\n  polytool.pf-pencil.v1                    pf-pencil --json\n  polytool.bench.real-rootedness.v1        bench real-rootedness --json\n\nIn polytool.bkw-certification.v1, the circle criterion gives result proved with\nempty conditional_on. Its circle.provenance is exactly:\n  circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)\nA real limit spectrum alone gives inconclusive: it does not imply\nreal-rootedness of every row. conditional_on is reserved and always empty.",
       "name": "json-schemas",
       "title": "JSON schema identifiers and their versioning policy"
     },

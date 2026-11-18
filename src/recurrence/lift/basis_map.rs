@@ -63,7 +63,7 @@
 //!   `d != 0`, `P_K != 0`, with a nonzero prefix discrepancy: for every
 //!   `r != 0` some `T((u + r)^N)` in an explicit window is not real-rooted,
 //!   so no source interval of positive length works (RealRooted
-//!   `exists_not_splits_linearMap_shiftedPower_of_eventually_geometric`);
+//!   `exists_not_splits_shiftedPower_of_eventually_geometric`);
 //!   the window is searched exactly for `r = 1` and the failing input is
 //!   reported.
 //! - **Constant current** `P_0 = 1, P_1 = s, P_(k+2) = a P_(k+1) + (b t +
@@ -76,7 +76,7 @@
 //!   in any `[-R, 0]`) have PF images if and only if `a^2 + 4c >= 0` and
 //!   (`2s >= a` or `c >= s^2 - a s`) (RealRooted
 //!   `orderTwoBasis_pf_equivalences`,
-//!   `basisTransform_orderTwoBasis_preserves_bounded_pf_iff`).  When the
+//!   `OrderTwoBasis.forall_isPFPolynomial_iff_of_root_bounds`).  When the
 //!   criterion fails, the first monomial `u^n` with `P_n(0) < 0` is
 //!   reported.
 //! - **Affine current** (below).
@@ -103,7 +103,7 @@
 //!   b t) f + kappa (t - h) f'`, `s >= 0`: `T = U_g o R_s` (RealRooted
 //!   `basisMap_factorization_of_scalarIndex_recurrence`) with `R_s(u^k) =
 //!   u (u + s) ... (u + (k - 1) s)`, which keeps real-rootedness of inputs
-//!   with roots `<= 0` (RealRooted `NewtonParametersAffine.preservesNonposRooted`;
+//!   with roots `<= 0` (RealRooted `NewtonPreservesNonposRooted.of_parametersAffine`;
 //!   Su, Yang and Zhang, Australas. J. Combin. 56 (2013), Theorem 4; Brenti,
 //!   Mem. AMS 413 (1989), Theorem 2.4.3) and nonnegative coefficients, hence
 //!   roots `<= 0`; then the ray theorem for `U_g(u^k) = L^k g` needs `a + b

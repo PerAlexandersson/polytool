@@ -1031,8 +1031,8 @@ companion form: the state `V(p) = (T(p), ..., T(u^(R-1) p))` satisfies
 | Shape | Statement | Reference |
 |---|---|---|
 | `P_k = g (a + d t)^k` | `T(p) = g p(a + d t)`; `(-inf, a] -> (-inf, 0]` for `d > 0`, `g` with roots `<= 0` | elementary |
-| eventually geometric, prefix discrepancy | no source interval of positive length; a failing `T((u + 1)^N)` is reported | RealRooted `exists_not_splits_linearMap_shiftedPower_of_eventually_geometric` |
-| `P_(k+2) = a P_(k+1) + (b t + c) P_k`, `P_1 = s` | PF inputs give real-rooted images with roots `<= -c/b`; PF images iff `a^2 + 4c >= 0` and (`2s >= a` or `c >= s^2 - a s`) | RealRooted `orderTwoBasis_pf_equivalences`, `basisTransform_orderTwoBasis_preserves_bounded_pf_iff`; Brändén arXiv:1410.6601 Thm 8.5 |
+| eventually geometric, prefix discrepancy | no source interval of positive length; a failing `T((u + 1)^N)` is reported | RealRooted `exists_not_splits_shiftedPower_of_eventually_geometric` |
+| `P_(k+2) = a P_(k+1) + (b t + c) P_k`, `P_1 = s` | PF inputs give real-rooted images with roots `<= -c/b`; PF images iff `a^2 + 4c >= 0` and (`2s >= a` or `c >= s^2 - a s`) | RealRooted `orderTwoBasis_pf_equivalences`, `OrderTwoBasis.forall_isPFPolynomial_iff_of_root_bounds`; Brändén arXiv:1410.6601 Thm 8.5 |
 | `P_(k+2) = (a + d t) P_(k+1) + (b t + c) P_k`, `P_1 = l + m t` | `E = [-beta - sqrt(K), -beta + sqrt(K)] -> R`; target `I` under `|s - e beta| <= e sqrt(K)`; PF on `[-beta - sqrt(K), 0]` | common-interlacer proof (module docs); Iserles--Saff 1989 Thm 1 (Chebyshev case); RealRooted `orderTwoConstants_nonneg_iff` |
 | `(a + b t) f + kappa (t - h) f'` | `(-inf, a + b h + kappa m] -> (-inf, h]`, iff | RealRooted `rayBasisMap_maps_realRootedIn_iff`; Ma--Wang 2008 Thm 2 |
 | `(a + b t) f + kappa (t - l)(t - h) f'` | `[a + b l - kappa (h-l) m_l, a + b h + kappa (h-l) m_h] -> [l, h]`, iff | RealRooted `intervalBasisMap_maps_realRootedIn_iff` |

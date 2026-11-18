@@ -1,5 +1,13 @@
 # Development
 
+The standalone regression fixture `tests/fixtures/realrooted-declarations.txt`
+records all `RealRooted.*` citations in `src/`, including comments. After
+checking a citation against the current public Lean declaration and its
+statement, run `python3 scripts/realrooted-declarations.py` to regenerate it
+(`--check` compares without writing). The Rust integration test checks this
+inventory without requiring a Lean checkout. This guards citation spelling;
+it does not claim Lean replay or independently verify the cited statements.
+
 ## Documentation site
 
 Source API documentation uses Rust's `//!` and `///` comments. Build it with

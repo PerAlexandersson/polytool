@@ -102,7 +102,7 @@ fn bkw_certificate_tool_uses_exact_library_and_limits() {
     assert_eq!(report["conditional_on"], json!([]));
     assert_eq!(
         report["circle"]["provenance"],
-        "circle criterion for Hessenberg Toeplitz symbols (unpublished manuscript)"
+        "circle criterion for Hessenberg Toeplitz symbols due to Per Alexandersson and sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741)"
     );
     let certificate: polytool::bkw::certified::CertificationReport =
         serde_json::from_value(report).unwrap();
