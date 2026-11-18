@@ -61,10 +61,31 @@ fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<(String, String)
     let (rule, seeds) = entry.recurrence_parts().ok()?;
     let first_index = entry.recurrence_first_index;
     let record = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
-    let (discovery, status) =
+    let (discovery, status, summary_bytes) =
         match discover_recurrence_proofs(&record, &RealRootednessTheoremOptions::default()) {
-            Ok(report) => (serde_json::to_string(&report).unwrap(), report.status),
-            Err(error) => (format!("error: {error}"), "error".into()),
+            Ok(report) => {
+                let summary = report.summary();
+                assert_eq!(summary.status, report.status, "{}", entry.id);
+                assert_eq!(
+                    summary.real_rooted_from_index, report.real_rooted_from_index,
+                    "{}",
+                    entry.id
+                );
+                assert_eq!(
+                    summary.real_rooted_outside_zero_residue_classes,
+                    report.real_rooted_outside_zero_residue_classes,
+                    "{}",
+                    entry.id
+                );
+                let bytes = serde_json::to_vec(&summary).unwrap().len();
+                assert!(bytes <= 2048, "{} summary: {bytes} bytes", entry.id);
+                (
+                    serde_json::to_string(&report).unwrap(),
+                    report.status,
+                    Some(bytes),
+                )
+            }
+            Err(error) => (format!("error: {error}"), "error".into(), None),
         };
     let parent_record = ParentRecurrenceRecord {
         rule: &rule,
@@ -83,7 +104,7 @@ fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<(String, String)
             .append(true)
             .open(path)
             .unwrap();
-        writeln!(file,"{}",serde_json::json!({"id":entry.id,"status":status,"discovery":fingerprints.0,"parent":fingerprints.1})).unwrap();
+        writeln!(file,"{}",serde_json::json!({"id":entry.id,"status":status,"discovery":fingerprints.0,"parent":fingerprints.1,"summary_bytes":summary_bytes})).unwrap();
     }
     Some(fingerprints)
 }

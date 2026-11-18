@@ -1,9 +1,15 @@
+//! Stdio tool discovery, schema budgets and handle-based proof workflow.
+
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 
-fn start_server() -> (Child, ChildStdin, BufReader<std::process::ChildStdout>) {
+fn start_server(
+    directory: &std::path::Path,
+) -> (Child, ChildStdin, BufReader<std::process::ChildStdout>) {
     let mut child = Command::new(env!("CARGO_BIN_EXE_polytool-mcp"))
+        .arg("--report-dir")
+        .arg(directory)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -34,7 +40,16 @@ fn read_response(stdout: &mut BufReader<std::process::ChildStdout>, id: i64) -> 
 
 #[test]
 fn lists_tools_and_calls_properties() {
-    let (mut child, mut stdin, mut stdout) = start_server();
+    let directory = std::env::temp_dir().join(format!(
+        "polytool-stdio-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&directory).unwrap();
+    let (mut child, mut stdin, mut stdout) = start_server(&directory);
 
     send(
         &mut stdin,
@@ -51,6 +66,9 @@ fn lists_tools_and_calls_properties() {
     );
     let init = read_response(&mut stdout, 1);
     assert!(init.get("result").is_some(), "initialize failed: {init}");
+    let instructions = init["result"]["instructions"].as_str().unwrap();
+    assert!(instructions.len() <= 400);
+    assert!(instructions.contains("report_id"));
 
     send(
         &mut stdin,
@@ -84,6 +102,41 @@ fn lists_tools_and_calls_properties() {
     assert!(tool_names.contains(&"check_polynomial_family"));
     assert!(tool_names.contains(&"find_recurrence"));
     assert!(tool_names.contains(&"enumerate_real_rooted"));
+    assert!(tool_names.contains(&"read_report"));
+    let description_bytes: usize = tools_array
+        .iter()
+        .map(|t| t["description"].as_str().unwrap_or("").len())
+        .sum();
+    let input_bytes: usize = tools_array
+        .iter()
+        .map(|t| serde_json::to_vec(&t["inputSchema"]).unwrap().len())
+        .sum();
+    let largest = tools_array
+        .iter()
+        .map(|t| t["description"].as_str().unwrap_or("").len())
+        .max()
+        .unwrap();
+    for (name, actual) in [
+        ("description_bytes", description_bytes),
+        ("input_schema_bytes", input_bytes),
+        ("largest_description_bytes", largest),
+    ] {
+        let limit: usize = include_str!("fixtures/tool-list-budget.tsv")
+            .lines()
+            .find_map(|line| {
+                let (key, value) = line.split_once('\t')?;
+                (key == name).then(|| value.parse().unwrap())
+            })
+            .unwrap();
+        assert!(actual <= limit, "{name}: {actual} > {limit}");
+    }
+    let proof_description = tools_array
+        .iter()
+        .find(|t| t["name"] == "discover_recurrence_proofs")
+        .unwrap()["description"]
+        .as_str()
+        .unwrap();
+    assert!(proof_description.len() <= 600);
     for name in ["check_tnn_network", "recognize_brenti_strip_digraph"] {
         let tool = tools_array
             .iter()
@@ -240,6 +293,7 @@ fn lists_tools_and_calls_properties() {
                 "name": "find_recurrence",
                 "arguments": {
                     "coefficients": [[1], [2], [4], [8], [16]],
+                    "include_code": true,
                     "options": {
                         "min_rec_len": 1,
                         "max_rec_len": 1,
@@ -301,7 +355,34 @@ fn lists_tools_and_calls_properties() {
     );
     assert_eq!(report["representations"][0]["evidence"], "exact_fit");
 
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"discover_recurrence_proofs","arguments":{"oeis_id":"A001263"}}}),
+    );
+    let proof = read_response(&mut stdout, 9);
+    let summary = &proof["result"]["structuredContent"];
+    assert_eq!(summary["schema"], "polytool.recurrence-proof-summary.v1");
+    assert!(serde_json::to_vec(summary).unwrap().len() <= 2048);
+    let id = &summary["report"]["id"];
+    assert!(id.is_string());
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"read_report","arguments":{"report_id":id,"select":["/status","/attempts/*/theorem"]}}}),
+    );
+    let read = read_response(&mut stdout, 10);
+    assert_eq!(
+        read["result"]["structuredContent"]["selected"]["/status"],
+        "proved"
+    );
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"verify_recurrence_proofs","arguments":{"report_id":id}}}),
+    );
+    let verified = read_response(&mut stdout, 11);
+    assert_eq!(verified["result"]["structuredContent"]["verified"], true);
+
     drop(stdin);
     let _ = child.kill();
     let _ = child.wait();
+    std::fs::remove_dir_all(directory).unwrap();
 }

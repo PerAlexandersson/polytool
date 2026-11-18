@@ -30,7 +30,9 @@ pub struct OeisSequenceSummary {
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct ListOeisSequencesResponse {
     pub count: usize,
-    pub sequences: Vec<OeisSequenceSummary>,
+    pub sequences: Vec<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub total: usize,
+    pub next_offset: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]
@@ -38,9 +40,14 @@ pub struct GetOeisSequenceResponse {
     pub sequence: OeisSequenceSummary,
     pub recurrence: String,
     pub latex: String,
-    pub mathematica: String,
-    pub sage: String,
-    pub python: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mathematica: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sage: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub python: Option<String>,
+    /// Complete polytool.recurrence.v1 record, including canonical seeds.
+    pub recurrence_json: String,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema, PartialEq, Eq)]

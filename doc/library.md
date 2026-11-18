@@ -2295,6 +2295,16 @@ deterministic counters; no wall-clock times are recorded.  The MCP tool
 
 ## Direct general recurrence proofs
 
+`RecurrenceProofDiscoveryReport::summary()` returns a compact
+`RecurrenceProofSummary` (`polytool.recurrence-proof-summary.v1`) without
+rerunning the search. It shares the full report's stage selection, keeps
+conditional attestations separate from proofs, and preserves first-index
+and zero-residue-class scope. It records the winning route, simplicity,
+interlacing and root region only when established, counts theorem attempts
+and includes up to three short near misses. Full report serialization and
+replay remain unchanged. Storage handles belong to the MCP adapter.
+`digest::sha256_hex` is the shared lowercase SHA-256 content fingerprint.
+
 `recurrence::discover_recurrence_proofs` runs the general product, three-term,
 Liu–Wang, derivative-lag and Ma–Wang theorem checks on a `RecurrenceJson`.
 `RecurrenceProofDiscoveryReport::verify` replays the complete search; the

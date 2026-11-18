@@ -583,14 +583,17 @@ fn generate_sequence_returns_bigint_coefficients() {
 fn lists_and_generates_oeis_catalog_rows() {
     let server = PolynomialToolsServer::new();
     let Json(list) = server
-        .list_oeis_sequences(Parameters(ListOeisSequencesRequest::default()))
+        .list_oeis_sequences(Parameters(ListOeisSequencesRequest {
+            limit: Some(1000),
+            ..Default::default()
+        }))
         .unwrap();
     assert_eq!(list.count, 919);
-    assert!(list.sequences.iter().any(|entry| entry.id == "A008292"));
+    assert!(list.sequences.iter().any(|entry| entry["id"] == "A008292"));
     assert!(list
         .sequences
         .iter()
-        .any(|entry| entry.id == "A390883" && entry.status == "validated"));
+        .any(|entry| entry["id"] == "A390883" && entry["status"] == "validated"));
 
     let Json(response) = server
         .generate_oeis_rows(Parameters(GenerateOeisRowsRequest {
@@ -607,13 +610,14 @@ fn lists_and_generates_oeis_catalog_rows() {
     let Json(export) = server
         .get_oeis_sequence(Parameters(GetOeisSequenceRequest {
             id: "A166345".to_string(),
+            include_code: Some(true),
         }))
         .unwrap();
     assert_eq!(
         export.recurrence,
         "P(n) = (1 - t + nt) P(n-1) + (t - t^2) P'(n-1)"
     );
-    assert!(export.python.contains("    3: [1, 2, 1],"));
+    assert!(export.python.unwrap().contains("    3: [1, 2, 1],"));
 }
 
 #[test]
@@ -794,7 +798,7 @@ fn flat_and_legacy_recurrence_controls_work_with_top_level_precedence() {
 }
 
 #[test]
-fn compact_recurrence_result_omits_code_and_default_result_remains_full() {
+fn compact_recurrence_is_default_and_explicit_code_restores_exports() {
     let server = PolynomialToolsServer::new();
     let request = || {
         json!({
@@ -806,7 +810,9 @@ fn compact_recurrence_result_omits_code_and_default_result_remains_full() {
         })
     };
 
-    let full: FindRecurrenceRequest = serde_json::from_value(request()).unwrap();
+    let mut full_request = request();
+    full_request["include_code"] = json!(true);
+    let full: FindRecurrenceRequest = serde_json::from_value(full_request).unwrap();
     let Json(full) = server.find_recurrence(Parameters(full)).unwrap();
     assert!(full.recurrence.is_some());
     assert!(full.latex.is_some());
@@ -816,7 +822,10 @@ fn compact_recurrence_result_omits_code_and_default_result_remains_full() {
     assert!(full.recurrence_json.is_some());
 
     let mut compact_request = request();
-    compact_request["include_code"] = json!(false);
+    compact_request
+        .as_object_mut()
+        .unwrap()
+        .remove("include_code");
     let compact: FindRecurrenceRequest = serde_json::from_value(compact_request).unwrap();
     let Json(compact) = server.find_recurrence(Parameters(compact)).unwrap();
     assert!(compact.recurrence.is_some());
@@ -979,6 +988,7 @@ fn recurrence_search_examples() {
     let server = PolynomialToolsServer::new();
     let Json(geometric) = server
         .find_recurrence(Parameters(FindRecurrenceRequest {
+            include_code: Some(true),
             polynomials: Some(vec![
                 coeffs(&[1]),
                 coeffs(&[2]),
@@ -1023,6 +1033,7 @@ fn recurrence_search_examples() {
 
     let Json(fibonacci) = server
         .find_recurrence(Parameters(FindRecurrenceRequest {
+            include_code: Some(true),
             polynomials: None,
             coefficients: Some(vec![
                 vec![1.into()],
@@ -1045,6 +1056,7 @@ fn recurrence_search_examples() {
 
     let Json(expression_geometric) = server
         .find_recurrence(Parameters(FindRecurrenceRequest {
+            include_code: Some(true),
             polynomials: None,
             coefficients: None,
             expressions: Some(vec![
@@ -1066,6 +1078,7 @@ fn recurrence_search_examples() {
 
     let Json(rational_geometric) = server
         .find_recurrence(Parameters(FindRecurrenceRequest {
+            include_code: Some(true),
             polynomials: None,
             coefficients: Some(vec![
                 vec![RationalCoefficientInput::Text("1/2".to_string())],
@@ -1089,6 +1102,7 @@ fn recurrence_search_examples() {
     let double_large = "2535301200456458802993406410752";
     let Json(large_geometric) = server
         .find_recurrence(Parameters(FindRecurrenceRequest {
+            include_code: Some(true),
             polynomials: None,
             coefficients: Some(vec![
                 vec![RationalCoefficientInput::Text(large.to_string())],
@@ -1120,6 +1134,7 @@ fn recurrence_search_examples() {
 
     let Json(alternating) = server
         .find_recurrence(Parameters(FindRecurrenceRequest {
+            include_code: Some(true),
             polynomials: None,
             coefficients: Some(vec![
                 vec![1.into()],
@@ -1165,6 +1180,7 @@ fn recurrence_search_examples() {
     ];
     let Json(eulerian_result) = server
         .find_recurrence(Parameters(FindRecurrenceRequest {
+            include_code: Some(true),
             polynomials: Some(eulerian),
             coefficients: None,
             expressions: None,
@@ -1176,6 +1192,7 @@ fn recurrence_search_examples() {
     assert!(eulerian_result.found);
 
     let conflict = parse_recurrence_batch_rational(&FindRecurrenceRequest {
+        include_code: Some(true),
         polynomials: Some(vec![coeffs(&[1]), coeffs(&[2]), coeffs(&[4])]),
         coefficients: Some(vec![vec![1.into()], vec![2.into()], vec![4.into()]]),
         expressions: None,
@@ -1447,6 +1464,7 @@ fn mcp_bounds_generation_and_reports_exact_conversion_errors() {
 
     let Json(found) = server
         .find_recurrence(Parameters(FindRecurrenceRequest {
+            include_code: Some(true),
             polynomials: Some(vec![coeffs(&[1]), coeffs(&[2]), coeffs(&[4]), coeffs(&[8])]),
             coefficients: None,
             expressions: None,
@@ -3038,7 +3056,7 @@ fn skipped_response_fields_are_optional_in_the_schema() {
 fn recurrence_presentations_share_seeds_normalization_and_checked_lean() {
     let server = PolynomialToolsServer::new();
     let request: FindRecurrenceRequest = serde_json::from_value(json!({
-        "coefficients":[[1],[2],[4],[8],[16],[32]],
+        "include_code":true, "coefficients":[[1],[2],[4],[8],[16],[32]],
         "max_recurrence_length":1, "max_variable_degree":0,
         "max_index_degree":0, "max_derivative_order":0, "lean_name":"Rows"
     }))
@@ -3058,7 +3076,7 @@ fn recurrence_presentations_share_seeds_normalization_and_checked_lean() {
     assert_eq!(nested["lean"].as_str().unwrap(), response.lean.unwrap());
     assert!(response.lean_reason.is_none());
     let invalid: FindRecurrenceRequest = serde_json::from_value(json!({
-        "coefficients":[[1],[2],[4]], "lean_name":"Bad Name"
+        "include_code":true, "coefficients":[[1],[2],[4]], "lean_name":"Bad Name"
     }))
     .unwrap();
     assert!(server.find_recurrence(Parameters(invalid)).is_err());
@@ -3069,7 +3087,7 @@ fn recurrence_lean_fields_are_opt_in_in_responses_records_and_menus() {
     let server = PolynomialToolsServer::new();
     for name in [None, Some("Rows")] {
         let mut source = json!({
-            "coefficients":[[1],[2],[4],[8],[16],[32],[64],[128]],
+            "include_code":true, "coefficients":[[1],[2],[4],[8],[16],[32],[64],[128]],
             "max_recurrence_length":1, "max_variable_degree":0,
             "max_index_degree":0, "max_derivative_order":0
         });
@@ -3134,7 +3152,7 @@ fn recurrence_lean_refusal_requires_an_explicit_name() {
     let server = PolynomialToolsServer::new();
     for name in [None, Some("Rows")] {
         let mut source = json!({
-            "coefficients":rows, "max_recurrence_length":1,
+            "include_code":true, "coefficients":rows, "max_recurrence_length":1,
             "max_variable_degree":1, "max_index_degree":1, "max_derivative_order":0,
             "try_denominator":true, "max_denominator_variable_degree":1,
             "max_denominator_index_degree":1
@@ -3160,7 +3178,7 @@ fn recurrence_lean_refusal_requires_an_explicit_name() {
 fn recurrence_code_exports_keep_extended_seeds_and_fitted_scaling() {
     let server = PolynomialToolsServer::new();
     let request: FindRecurrenceRequest = serde_json::from_value(json!({
-        "coefficients":[[1],[-1,1],[-1,0,1],[-1,-1,1,1],[-1,-2,0,2,1],
+        "include_code":true, "coefficients":[[1],[-1,1],[-1,0,1],[-1,-1,1,1],[-1,-2,0,2,1],
             [-1,-3,-2,2,3,1],[-1,-4,-5,0,5,4,1],[-1,-5,-9,-5,5,9,5,1]]
     }))
     .unwrap();
@@ -3182,7 +3200,7 @@ fn recurrence_code_exports_keep_extended_seeds_and_fitted_scaling() {
     assert!(!mathematica.contains("P[3, t_] :="));
     assert!(mathematica.contains("n >= 3"));
     let request: FindRecurrenceRequest = serde_json::from_value(json!({
-        "coefficients":[["1"],["1/2"],["1/4"],["1/8"],["1/16"],["1/32"]]
+        "include_code":true, "coefficients":[["1"],["1/2"],["1/4"],["1/8"],["1/16"],["1/32"]]
     }))
     .unwrap();
     let Json(response) = server.find_recurrence(Parameters(request)).unwrap();

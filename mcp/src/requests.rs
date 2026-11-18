@@ -373,7 +373,7 @@ pub struct FindRecurrenceRequest {
     /// Legacy nested search controls. Top-level controls take precedence.
     pub options: Option<RecurrenceSearchOptionsInput>,
     /// Omit generated Mathematica, Python, Sage, and recurrence JSON when false.
-    /// Defaults to true for backward compatibility.
+    /// Defaults to false; set true to restore generated exports.
     pub include_code: Option<bool>,
     /// Ignore this many leading polynomial rows before searching.
     pub skip_prefix: Option<usize>,
@@ -583,12 +583,23 @@ pub struct GenerateSequenceRequest {
 #[serde(deny_unknown_fields)]
 pub struct ListOeisSequencesRequest {
     pub include_experimental: Option<bool>,
+    /// Case-insensitive substring of the catalog id or name.
+    pub query: Option<String>,
+    pub status: Option<String>,
+    pub layout: Option<String>,
+    /// Page size: default 50, at most 1000.
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+    /// Fields to return; default id, name, status. Use ["*"] for all metadata.
+    pub fields: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GetOeisSequenceRequest {
     pub id: String,
+    /// Include Mathematica, Python and Sage exports (default false).
+    pub include_code: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -634,11 +645,20 @@ pub struct RecurrenceTheoremsRequest {
 /// General proof search for a recurrence-defined sequence; only one
 /// stage (catalog lifts) consults the bundled OEIS catalog. Final structural
 /// closures compute preimages and prove them without lookup or attestations.
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DiscoverRecurrenceProofsRequest {
-    /// A polytool.recurrence.v1 record, including seeds.
-    pub recurrence_json: String,
+    /// A polytool.recurrence.v1 record, including seeds; exactly one source.
+    pub recurrence_json: Option<String>,
+    /// Bundled catalog id, using its recurrence indices and seeds.
+    pub oeis_id: Option<String>,
+    /// Summary by default; full restores the complete report unchanged.
+    #[serde(default)]
+    pub detail: Detail,
+    /// RFC 6901 pointers into the full report, with one optional * segment.
+    pub select: Option<Vec<String>>,
+    /// Run the separate exact BKW refutation stage (default false).
+    pub refute: Option<bool>,
     /// Induction-start retries, default 3; at most 16.
     #[serde(rename = "max_start_delay", alias = "maximum_start_delay")]
     pub maximum_start_delay: Option<usize>,
@@ -663,7 +683,28 @@ pub struct DiscoverRecurrenceProofsRequest {
 #[serde(deny_unknown_fields)]
 pub struct VerifyRecurrenceProofsRequest {
     /// A polytool.recurrence-proof-discovery.v1 report as JSON text.
-    pub report_json: String,
+    pub report_json: Option<String>,
+    /// Stored report id; exactly one of report_json and report_id is required.
+    pub report_id: Option<String>,
+}
+
+/// Report detail level; the full report's serialized fields remain unchanged.
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Detail {
+    #[default]
+    Summary,
+    Full,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReadReportRequest {
+    pub report_id: String,
+    /// RFC 6901 pointers; one * segment expands array elements or object values.
+    pub select: Option<Vec<String>>,
+    /// Selected output budget, default 8192 bytes; between 128 and 65536.
+    pub max_bytes: Option<usize>,
 }
 
 /// A supplied `polytool.recurrence.v1` record for the sequence `Q_n(y)` and

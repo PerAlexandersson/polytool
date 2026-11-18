@@ -1,5 +1,8 @@
 //! Dense univariate polynomial toolkit for combinatorial research.
 //!
+//! [`digest`] provides content fingerprints. Discovery reports expose a compact
+//! [`recurrence::RecurrenceProofDiscoveryReport::summary`] alongside full evidence.
+//!
 //! Provides [`Polynomial<C>`] with generic coefficients, plus specialized routines
 //! for real-rootedness, interlacing, gamma-positivity, Stapledon decomposition, resultants, Ehrhart theory,
 //! recurrence search, and standard polynomial sequences — all with exact arithmetic.
@@ -62,6 +65,7 @@
 //!
 //! # Modules
 //!
+//! - [`digest`] — shared SHA-256 content and provenance fingerprints
 //! - [`polynomial`] — `Polynomial<C>` with `CoeffRing`/`FieldRing` traits, arithmetic,
 //!   derivative, evaluate, shift, reverse, dilate, GCD, division, Lagrange interpolation
 //! - [`vec_poly`] — Arithmetic on plain coefficient vectors `&[C]`, generic
@@ -158,6 +162,7 @@ pub mod coefficient_tests;
 pub mod complex_roots;
 pub mod cyclic_sieving;
 pub mod decomposition;
+pub mod digest;
 pub mod factorization;
 pub mod family_check;
 pub mod hstar_inequalities;

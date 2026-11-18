@@ -11,15 +11,19 @@ mod parsing;
 mod planar_network;
 mod recurrence_options;
 mod report_items;
+mod report_store;
 mod requests;
 mod responses;
 mod server;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_budgets;
+#[cfg(test)]
 mod tests_validation;
 mod theorems;
 
+pub use report_store::ReportStoreConfig;
 pub use requests::EnumerateRealRootedRequest;
 pub use requests::RecurrenceTheoremsRequest;
 pub use requests::{
@@ -37,7 +41,9 @@ pub use requests::{
     RecurrenceSearchOptionsInput, RecurrenceSpacesToolRequest, SequenceKind,
     TotallyNonnegativeNetworkRequest, VerifyRecurrenceSpacesToolRequest,
 };
-pub use requests::{DiscoverRecurrenceProofsRequest, VerifyRecurrenceProofsRequest};
+pub use requests::{
+    Detail, DiscoverRecurrenceProofsRequest, ReadReportRequest, VerifyRecurrenceProofsRequest,
+};
 pub use requests::{LeftProductionRequest, PfNetworkRequest};
 pub use requests::{
     RecurrenceRepresentationSearchToolRequest, VerifyRecurrenceRepresentationSearchToolRequest,

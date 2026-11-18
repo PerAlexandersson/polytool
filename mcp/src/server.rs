@@ -79,13 +79,19 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone)]
 pub struct PolynomialToolsServer {
     tool_router: ToolRouter<Self>,
+    report_store: crate::report_store::ReportStore,
 }
 
 #[tool_router(router = tool_router)]
 impl PolynomialToolsServer {
     pub fn new() -> Self {
+        Self::with_report_store(crate::ReportStoreConfig::from_env().unwrap_or_default())
+    }
+
+    pub fn with_report_store(config: crate::ReportStoreConfig) -> Self {
         Self {
             tool_router: Self::tool_router(),
+            report_store: crate::report_store::ReportStore::new(config),
         }
     }
 
@@ -442,7 +448,7 @@ impl PolynomialToolsServer {
         Parameters(input): Parameters<FindRecurrenceRequest>,
     ) -> Result<Json<FindRecurrenceResponse>, McpError> {
         let recurrence_options = input.effective_options();
-        let include_code = input.include_code.unwrap_or(true);
+        let include_code = input.include_code.unwrap_or(false);
         let lean_name = input.lean_name.as_deref();
         if let Some(name) = lean_name {
             polytool::recurrence::validate_lean_recurrence_name(name)
@@ -926,13 +932,13 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Discover general all-index proofs for a supplied recurrence and seeds. Forward gamma screens palindromic seeds cheaply, certifies all-index symmetry and gamma recurrence transport, proves nonnegative gamma rows with roots <=0 through registry or bounded structural proofs, then expands back; closure_lifts embeds transport and gamma proof for replay, with nonzero/positive-sign certificates, twelve detection rows, degree <=24 and one closure level; zero lift budget disables it. The direct checks retain the order of the parent cascade: product induction, Favard/three-term, Liu-Wang, derivative-lag, Ma-Wang interval or closed half-line (linear derivative multiplier with exact endpoint multiplicity), Liu-Wang three-term, iterated preserver and hypergeometric row, then (only where the rule has their form) the RealRooted row routes fixed-delay window (variable_delay) and residue classes (residue_class_subsequences), index-section lift, factor gauge and positive lag-two Euler (lag_two_euler: theta=x D, positive constant/linear seeds, a>0, b>=a, c>=0 on the full integer rule range; simple negative roots and strict adjacent/auxiliary interlacing, exact operator and seed-step certificates; negative lag corrections excluded), then binomial-perturbed Euler orbit (binomial_perturbed_euler_orbit, RealRooted issue #2513: exact lag-two theta operators, s>=1, kappa>=s+4, canonical seeds, integer degree shifts, rule starts at degree >=3 and nonzero denominators; exact Eulerian Mobius transport Q_m(u)=(1+u)^m P_n(u/(1+u)); simple roots in (-1,0) or (-inf,0), strict directed adjacent interlacing; replayable coordinate and seed certificate, RealRooted strictInterl_of_orbitPerturbation_recurrence). Rational PF Riordan (rational_pf_riordan) builds the reduced exact row generating function from an index-free homogeneous rule without derivatives and every seed; recognizes F=d/(1-x z d K), d(0)>0, nonzero rational PF d,K by exact gcd layers, PRS root signs and dyadic isolation (numerator zeros nonpositive, denominator poles positive, positive initial scalar). Chen--Fu--Ruan Theorems 3(3) and 4 include K(0)=0 and noninvertible arrays. Composes with index-section parents and affine marker shifts; separately replayed GF identity, Riordan identity, Edrei criterion for each of d and K, TNN product by Cauchy--Binet and Chen--Fu--Ruan row theorem, with exact zero rows and no simplicity or interlacing. Shared degree-law reversal closure (degree_law_reversal), after direct routes and direct lifts: only the minimal admissible slope (including zero), guarded by 3, and the minimal seed offset, with an inductive bound from every multiplier and seed; identical already tried records (up to index shift) and invariant shape failures are skipped; the all-seed Riordan GF is not retried after extending the prefix with generated rows; transform, certificate shape and replay shared with index sections; any nonrecursive theorem route can prove the transformed family, with reciprocal root-region transfer and possible extra zeros at 0. Iterated preserver also searches bounded exact second-order factorizations over Q(n)[x] into first-order menu or Liu-Wang steps on a common closed region, with actual intermediate degrees and full Ore-identity replay; factorization alone makes no simplicity or interlacing claim. Checks hypotheses exactly and returns replayable certificates (with RealRooted declarations where recorded) and failed/unresolved obligations. When none proves the record: (tail) if one of the first rows is zero or not real-rooted, the criteria run on the record after the last such row, and real_rooted_from_index states 'every row from index N on is real-rooted'; (alternative representations) the recurrence finder proposes other rules on generated rows (bounded by max_representation_candidates per pass, default 300, 0 disables), each used only after an all-index equality certificate (polytool.recurrence-equality.v1, exact Ore-algebra identity), then the criteria run on it. A residue-class proof may leave whole residue classes of zero rows (conclusion.zero_residue_classes, residues of n modulo the period): real_rooted_from_index is then omitted and real_rooted_outside_zero_residue_classes gives from_index and the zero classes (every other row from that index on is nonzero and real-rooted). (catalog lifts, last) the record is connected to a family of the bundled OEIS catalog by an identity certified for every index: a normalized identification T_n = c(n) x^(a n + b) S_(n+s) (candidates from a fingerprint index of the catalog rows) or a backward basis-map lift Q_n = T_P(R_n); the parent is proved by the stages above (depth one), and its report, the identity and the transfer are recorded in catalog_lifts (bounded by max_lift_candidates, default 6, 0 disables; not run with a requested root region). A lift whose parent is only flagged lean_proved in the catalog (a proof outside polytool) gives status conditional_on_attestation, never proved. (affine coordinates, after the lifts) when still nothing proves the record, the criteria run on it in exact coordinates x = a u + b (Q_n(u) = P_n(a u + b), every coefficient substituted, D_u = a D_x on derivative terms, seeds mapped; b a rational root of an n-free factor of a coefficient with a = 1 and a = -1, then the reflection x = -u; depth one); a proof maps back with root region a R + b and interlacing kept (a > 0) or mirrored (a < 0), recorded in affine_coordinates (bounded by max_affine_coordinates, default 8, 0 disables). Final structural closures compute weight quotients, row-factor cofactors, inverse gamma expansions and preimages under 1 +/- D or theta+a (a=1,2); registry parent proofs exclude attestations, closure depth is two, and every identity has an all-index Ore certificate. No parent lookup is used in this stage. The additive closure_lifts field contains named chains with parent proof references; max_lift_candidates bounds each stage, capped at six (0 disables). Parity products (parity_product) check a stationary cubic factorization (z-mu)(z^2-beta*z+mu^2), polynomial gcd seed allocation (at most 4096 divisors), the Casoratian start identity and two nonrecursive factor proofs at depth one. The certificate records both factors; splitting and weak consecutive interlacing transfer when certified, with no simplicity or strict-interlacing claim. If the Casoratian fails, independently allocate each parity section as a product of two same-rule families, using at most 4096 divisor pairs per section and exact rational relative seed scalars. Existing residue-class/Liu-Wang and index-section factor checks prove four factors. Stride-two and symmetric-square Cayley-Hamilton identities plus three seed products per section certify every index; the additive independent_sections field records both identities, and factor_proofs contains four reports. Independent sections claim real-rootedness only, without consecutive interlacing or simplicity. Fully scalar rules with scalar seeds use existing routes. Recorded only when adding a proved conclusion. An inhomogeneous rule gives status not_applicable. Stationary affine matrix orbits (matrix_orbit) search bounded companion, threshold and separated-characteristic realizations, decide every positive-parameter pencil exactly, and check the nonnegative interlacing start, projection, scalar identity and nonvanishing. Their additive certificate.matrix_orbit payload proves real-rootedness only, without consecutive interlacing. No named-sequence algorithms. A proved result concerns the recurrence-defined sequence; a finite fit still needs an all-index identity for another family. Lean replay is not attempted."
+        description = "Prove real-rootedness from exactly one of recurrence_json or oeis_id. Defaults to a compact library summary and stored report handle; detail:full restores complete evidence. select accepts JSON pointers into the report. Replay with verify_recurrence_proofs using report_id; inspect with read_report. Tries general theorems, tails, certified alternatives, catalog lifts, affine coordinates and closures. Attestations stay conditional. BKW refutation is opt-in (refute:true). Finite fits need an all-index identity; Lean replay is not attempted."
     )]
     pub fn discover_recurrence_proofs(
         &self,
         Parameters(input): Parameters<crate::requests::DiscoverRecurrenceProofsRequest>,
     ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
-        crate::theorems::discover_proofs(&input).map(Json)
+        crate::theorems::discover_proofs(&input, &self.report_store).map(Json)
     }
 
     #[tool(
@@ -942,7 +948,65 @@ impl PolynomialToolsServer {
         &self,
         Parameters(input): Parameters<crate::requests::VerifyRecurrenceProofsRequest>,
     ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
-        crate::theorems::verify_proofs(&input.report_json).map(Json)
+        match (input.report_json, input.report_id) {
+            (Some(text), None) => crate::theorems::verify_proofs(&text).map(Json),
+            (None, Some(id)) => {
+                let bytes = self
+                    .report_store
+                    .read(&id)
+                    .map_err(|e| invalid_params(e.to_string()))?;
+                let text = std::str::from_utf8(&bytes)
+                    .map_err(|_| invalid_params("stored report is not UTF-8"))?;
+                crate::theorems::verify_stored_proofs(text).map(Json)
+            }
+            _ => Err(invalid_params(
+                "expected exactly one of report_json or report_id",
+            )),
+        }
+    }
+
+    #[tool(
+        description = "Read a stored report by id. Without select, returns a bounded outline (2 KiB). Select RFC 6901 pointers into full evidence; one * segment expands elements. max_bytes defaults to 8192, at most 65536. Missing handles can be restored by rerunning the deterministic computation."
+    )]
+    pub fn read_report(
+        &self,
+        Parameters(input): Parameters<crate::requests::ReadReportRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        let limit =
+            crate::report_store::validate_selection(input.select.as_deref(), input.max_bytes)
+                .map_err(invalid_params)?;
+        let bytes = self
+            .report_store
+            .read(&input.report_id)
+            .map_err(|e| invalid_params(e.to_string()))?;
+        let value: serde_json::Value = serde_json::from_slice(&bytes)
+            .map_err(|_| invalid_params("stored report is not JSON"))?;
+        let mut response = json!({"report_id":input.report_id,"schema":value.get("schema"),"bytes":bytes.len(),"truncated":false});
+        let (view, truncated) = if let Some(pointers) = input.select {
+            let envelope_bytes = serde_json::to_vec(&response).unwrap().len() + 16;
+            if limit < envelope_bytes + 2 {
+                return Err(invalid_params(
+                    "max_bytes is too small to include report metadata",
+                ));
+            }
+            let (view, truncated) = crate::report_store::selected(
+                &value,
+                &pointers,
+                limit.saturating_sub(envelope_bytes),
+            );
+            response["selected"] = view;
+            (None, truncated)
+        } else {
+            let (view, truncated) = crate::report_store::outline(&value);
+            (Some(view), truncated)
+        };
+        if let Some(view) = view {
+            response["outline"] = view;
+        }
+        response["truncated"] = json!(truncated);
+        Ok(Json(
+            response.as_object().unwrap().clone().into_iter().collect(),
+        ))
     }
 
     #[tool(
@@ -1513,28 +1577,103 @@ impl PolynomialToolsServer {
         Ok(Json(DecompositionResponse { items }))
     }
 
-    #[tool(description = "List bundled recurrence-backed OEIS polynomial families.")]
+    #[tool(
+        description = "List bundled OEIS families, filtered by query (id/name substring), status or layout. Pages default to 50 (limit at most 1000); use next_offset for the next page. Default fields: id, name, status; fields:[\"*\"] restores all metadata."
+    )]
     pub fn list_oeis_sequences(
         &self,
         Parameters(input): Parameters<ListOeisSequencesRequest>,
     ) -> Result<Json<ListOeisSequencesResponse>, McpError> {
         let include_experimental = input.include_experimental.unwrap_or(false);
+        let limit = input.limit.unwrap_or(50);
+        if limit == 0 || limit > 1000 {
+            return Err(invalid_params("limit must be between 1 and 1000"));
+        }
+        let offset = input.offset.unwrap_or(0);
+        let fields = input
+            .fields
+            .unwrap_or_else(|| vec!["id".into(), "name".into(), "status".into()]);
+        const FIELDS: &[&str] = &[
+            "id",
+            "name",
+            "status",
+            "layout",
+            "first_row",
+            "first_index",
+            "flattened_offset",
+            "bfile_available",
+            "source_rows",
+            "verification_rows",
+        ];
+        if fields.is_empty()
+            || fields
+                .iter()
+                .any(|s| s != "*" && !FIELDS.contains(&s.as_str()))
+        {
+            return Err(invalid_params(
+                "fields must contain catalog metadata names or *",
+            ));
+        }
+        let query = input.query.as_deref().unwrap_or("").to_lowercase();
+        validate_mcp_text(&query, "catalog query").map_err(invalid_params)?;
+        if input
+            .status
+            .as_ref()
+            .is_some_and(|s| !["verified", "validated", "experimental"].contains(&s.as_str()))
+        {
+            return Err(invalid_params("unknown catalog status"));
+        }
+        if input
+            .layout
+            .as_ref()
+            .is_some_and(|s| !["regular_triangle", "table"].contains(&s.as_str()))
+        {
+            return Err(invalid_params("unknown catalog layout"));
+        }
         let sequences = polytool::oeis::catalog()
             .iter()
             .filter(|entry| {
                 include_experimental
                     || entry.status != polytool::oeis::OeisSequenceStatus::Experimental
             })
+            .filter(|entry| {
+                query.is_empty()
+                    || entry.id.to_lowercase().contains(&query)
+                    || entry.name.to_lowercase().contains(&query)
+            })
             .map(oeis_sequence_summary)
+            .filter(|entry| {
+                input.status.as_ref().is_none_or(|s| &entry.status == s)
+                    && input.layout.as_ref().is_none_or(|s| &entry.layout == s)
+            })
             .collect::<Vec<_>>();
+        let total = sequences.len();
+        let sequences = sequences
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|entry| {
+                let value = serde_json::to_value(entry).unwrap();
+                value
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .filter(|(key, _)| fields.iter().any(|s| s == "*" || s == *key))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect()
+            })
+            .collect::<Vec<_>>();
+        let end = offset.saturating_add(sequences.len());
         Ok(Json(ListOeisSequencesResponse {
             count: sequences.len(),
             sequences,
+            total,
+            next_offset: (end < total).then_some(end),
         }))
     }
 
     #[tool(
-        description = "Get metadata and exact recurrence exports for one bundled OEIS polynomial family."
+        description = "Get metadata and the complete recurrence_json record for one bundled OEIS family. Generated Mathematica, Python and Sage code is omitted by default; include_code:true restores it. For a proof alone, pass oeis_id directly to discover_recurrence_proofs."
     )]
     pub fn get_oeis_sequence(
         &self,
@@ -1546,14 +1685,22 @@ impl PolynomialToolsServer {
         let (recurrence, initial_rows, first_index) = entry
             .recurrence_export_parts()
             .map_err(|error| invalid_params(error.to_string()))?;
+        let include_code = input.include_code.unwrap_or(false);
+        let record = crate::theorems::catalog_record(&input.id)?;
         Ok(Json(GetOeisSequenceResponse {
             sequence: oeis_sequence_summary(entry),
             recurrence: recurrence.to_string(),
             latex: recurrence.to_latex(),
-            mathematica: recurrence
-                .to_mathematica_definition_rational_indexed(&initial_rows, first_index),
-            sage: recurrence.to_sage_definition_rational_indexed(&initial_rows, first_index),
-            python: recurrence.to_python_definition_rational_indexed(&initial_rows, first_index),
+            mathematica: include_code.then(|| {
+                recurrence.to_mathematica_definition_rational_indexed(&initial_rows, first_index)
+            }),
+            sage: include_code.then(|| {
+                recurrence.to_sage_definition_rational_indexed(&initial_rows, first_index)
+            }),
+            python: include_code.then(|| {
+                recurrence.to_python_definition_rational_indexed(&initial_rows, first_index)
+            }),
+            recurrence_json: serde_json::to_string(&record).unwrap(),
         }))
     }
 
@@ -1801,7 +1948,7 @@ impl ServerHandler for PolynomialToolsServer {
                     .with_title("polytool")
                     .with_description("Exact univariate polytool for combinatorial research."),
             )
-            .with_instructions("Exact univariate polytool for combinatorial research.")
+            .with_instructions("Exact univariate polytool for combinatorial research. Proof discovery defaults to a compact summary: pass oeis_id directly, then verify_recurrence_proofs with report_id. Use read_report with select JSON pointers for evidence; detail:full restores the complete report. Catalog listings are paged (next_offset). Generated code is opt-in: include_code:true. Rust replay is not Lean replay.")
     }
 }
 
