@@ -10,7 +10,6 @@ use super::Q;
 use crate::sturm::SturmChain;
 use crate::vec_poly;
 use crate::BigRational;
-use crate::Polynomial;
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
 
@@ -64,21 +63,23 @@ pub fn is_real_rooted_sturm_bigint_coeffs(coeffs: &[BigInt]) -> bool {
 ///
 /// Returns `false` for the zero polynomial and `true` for nonzero constants.
 pub fn has_simple_roots(coeffs: &[i64]) -> bool {
-    let p = Polynomial::<Q>::new(
-        coeffs
-            .iter()
-            .map(|&c| Q::from_integer(BigInt::from(c)))
-            .collect(),
-    );
-    p.has_simple_roots()
+    let coeffs: Vec<BigInt> = coeffs.iter().map(|&c| BigInt::from(c)).collect();
+    has_simple_roots_bigint_coeffs(&coeffs)
 }
 
 /// Check whether a BigInt-coefficient polynomial has only simple roots.
 ///
 /// Returns `false` for the zero polynomial and `true` for nonzero constants.
+/// The square-free degree comes from the integer subresultant sequence of `p`
+/// and `p'`; a rational Euclidean gcd would suffer exponential coefficient
+/// growth at high degree.
 pub fn has_simple_roots_bigint_coeffs(coeffs: &[BigInt]) -> bool {
-    let p = Polynomial::<Q>::new(coeffs.iter().map(|c| Q::from_integer(c.clone())).collect());
-    p.has_simple_roots()
+    match vec_poly::degree(coeffs) {
+        None => false,
+        Some(degree) => {
+            crate::root_count::squarefree_degree_bigint_coeffs(&coeffs[..=degree]) == degree
+        }
+    }
 }
 
 /// Find all real roots of a polynomial as rational interval midpoints
@@ -234,6 +235,7 @@ pub fn check_interlacing_sturm(f: &[i64], g: &[i64]) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Polynomial;
 
     #[test]
     fn zero_first_argument_follows_the_check_interlacing_convention() {
@@ -350,6 +352,45 @@ mod tests {
 
         let simple: Vec<BigInt> = [1_i64, 0, -1].into_iter().map(BigInt::from).collect();
         assert!(has_simple_roots_bigint_coeffs(&simple));
+    }
+
+    #[test]
+    fn simple_roots_helper_agrees_with_rational_gcd() {
+        // Every polynomial of degree at most four with coefficients in -2..=2.
+        for code in 0..5_i64.pow(5) {
+            let mut rest = code;
+            let coeffs: Vec<i64> = (0..5)
+                .map(|_| {
+                    let c = rest % 5 - 2;
+                    rest /= 5;
+                    c
+                })
+                .collect();
+            let rational = Polynomial::<Q>::new(
+                coeffs
+                    .iter()
+                    .map(|&c| Q::from_integer(BigInt::from(c)))
+                    .collect(),
+            );
+            assert_eq!(
+                has_simple_roots(&coeffs),
+                rational.has_simple_roots(),
+                "{coeffs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn simple_roots_helper_is_fast_at_high_degree() {
+        // prod_{k=1}^{60} (t + k) has simple roots; one more factor t + 1 does not.
+        // The rational Euclidean gcd takes minutes here.
+        let mut product = vec![BigInt::one()];
+        for k in 1..=60_i64 {
+            product = vec_poly::mul(&product, &[BigInt::from(k), BigInt::one()]);
+        }
+        assert!(has_simple_roots_bigint_coeffs(&product));
+        let repeated = vec_poly::mul(&product, &[BigInt::one(), BigInt::one()]);
+        assert!(!has_simple_roots_bigint_coeffs(&repeated));
     }
 
     #[test]

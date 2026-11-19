@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- `family-check` and the simple-root helpers (`has_simple_roots`,
+  `has_simple_roots_bigint_coeffs`) use the integer subresultant square-free
+  degree instead of a rational Euclidean gcd, whose coefficients grow
+  exponentially: 40 rows of degree up to 40 drop from 70 s to 0.2 s, and
+  degree-60 families finish in seconds instead of timing out.
 - Correct four renamed RealRooted declarations used by basis-map routes and
   guard cited declaration spellings with a standalone source inventory.
 - Attribute the Hessenberg Toeplitz circle criterion to Per Alexandersson and
