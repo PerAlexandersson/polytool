@@ -754,6 +754,21 @@ fn binomial_edge_dilation_uses_general_bezout_exponents() {
 }
 
 #[test]
+fn newton_budget_rejects_a_vanishing_residue_class_quickly() {
+    // P_0 = 1 + 2t, P_1 = 0, P_n = (2t^2 - t - 1) P_(n-2): every odd row is zero.
+    // The layer search would never find an odd positive layer; reject at once.
+    let numerator = B::new(vec![vec![q(1), q(2)]]);
+    let denominator = B::new(vec![vec![q(1)], vec![], vec![q(1), q(1), q(-2)]]);
+    let started = std::time::Instant::now();
+    let error = degree::newton_budget(&numerator, &denominator)
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("vanish"), "{error}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+}
+
+#[test]
 fn local_newton_unit_check_and_branch_denominator_guards() {
     let numerator = B::one();
     let denominator = B::new(vec![vec![q(1), q(1)], vec![q(-1)], vec![q(0), q(-1)]]);

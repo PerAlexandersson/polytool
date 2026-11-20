@@ -92,6 +92,39 @@ pub(super) fn newton_budget(n: &B, d: &B) -> Result<DegreeBudget, RecurrenceErro
         ));
     }
     let period = support.iter().copied().fold(0, gcd);
+    // A residue class of rows that is identically zero never reaches a
+    // positive Newton layer, and the layer search below would then run to its
+    // guard with rapidly growing exact arithmetic. Rejection needs no proof, so
+    // an exact expansion of an initial range of rows suffices here.
+    let checked_rows = 8 * period + n.rows().len() + d.rows().len();
+    let mut rows: Vec<P> = Vec::with_capacity(checked_rows);
+    for j in 0..checked_rows {
+        let mut value = n
+            .rows()
+            .get(j)
+            .map_or_else(|| P::new(Vec::new()), |r| P::new(r.clone()));
+        for (i, row) in d
+            .rows()
+            .iter()
+            .enumerate()
+            .skip(1)
+            .take_while(|(i, _)| *i <= j)
+        {
+            value = value - P::new(row.clone()) * rows[j - i].clone();
+        }
+        rows.push(value);
+    }
+    for r in 0..period {
+        if (n.rows().len()..checked_rows)
+            .filter(|j| j % period == r)
+            .all(|j| rows[j].is_zero())
+        {
+            return Err(failure(format!(
+                "rows in residue class {r} modulo {period} vanish on the checked range; \
+                 no positive Newton layer"
+            )));
+        }
+    }
     let mut first = vec![None; period];
     let mut start = 0;
     let mut numerators: Vec<P> = Vec::new();
