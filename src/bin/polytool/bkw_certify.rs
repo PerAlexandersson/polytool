@@ -5,8 +5,11 @@ use crate::recurrence_input::read_recurrence_json;
 use polytool::bkw::certified::{certify_recurrence, CertificationOptions, CertificationReport};
 
 pub(crate) fn cmd_bkw(args: &[String]) {
+    if args.first().map(String::as_str) == Some("effective") {
+        return crate::bkw_effective::cmd_bkw_effective(&args[1..]);
+    }
     if args.first().map(String::as_str) != Some("certify") {
-        crate::input::usage_error("bkw", "expected certify");
+        crate::input::usage_error("bkw", "expected certify or effective");
     }
     match run(&args[1..]) {
         Ok(()) => {}

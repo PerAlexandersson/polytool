@@ -45,6 +45,16 @@ Neither fitting nor held-out checks prove that identity.
 | Positive lag-two Euler (RealRooted `lagTwoEuler`) | `theta=x D`, `m=n-first_index`: `P_n=[(a+b theta)+x(a+b(m-1)-b theta)]P_(n-1)+c x(theta+1)(m-1-theta)P_(n-2)`; full operator identity, nonzero denominator, `a>0`, `b-a>=0`, `c>=0` decided for every integer; positive constant/linear seeds and exact later seed steps | `n-first_index` simple negative roots, adjacent strict interlacing and auxiliary `(theta+1)(m-theta)P_(n-1) StrictInterl P_n`; replayable normalized coefficients and seed steps |
 | Binomial-perturbed Euler orbit (RealRooted issue #2513) | `m=n+offset`, `theta=u D`: `Q_m=[((2m-3)/(m-2))(2u+1)+s(u+1)theta]Q_(m-1)-((m-1)/(m-2))(2u+1)[(2u+1)+s(u+1)theta]Q_(m-2)`; exact rational operator identity, `s>=1`, `kappa>=s+4`, canonical seeds `1`, `1+2u`, `1+kappa*u+kappa*u^2`, rule starts at `m>=3`, all scalar denominators nonzero; also exact Eulerian Mobius transport | `m` simple roots in `(-1,0)` in Q coordinates or `(-inf,0)` in original coordinates; strict directed adjacent interlacing; replayable operator, coordinate and seed certificate |
 
+The `effective_bkw` route additionally checks rational generating functions
+by an exact dominant-pair sign grid. It supports quadratic no-remainder
+expansions, cubic amplitude domination on rays (with exact infinity-edge
+limits), and compact quartic bounds. It proves simplicity and splitting
+after closing the symbolic degree budget and checking the finite prefix.
+Discovery records it only when it strengthens earlier conclusions; a direct
+`bkw effective` request also accepts supplied higher-order pair factors.
+See [effective-BKW certificates](effective-bkw.md) for the input, replay
+evidence and unsupported shapes.
+
 ## Rational PF Riordan arrays
 
 We recognize the reduced generating function

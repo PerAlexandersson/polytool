@@ -408,6 +408,54 @@ Certification exits 0 when it produces a report (including inconclusive);
 bad input or failed replay exits 2. `recurrence-prove` retains exit 1 for
 every outcome other than `proved`.
 
+## Effective BKW all-index proofs
+
+```sh
+polytool bkw effective --request request.json --json > certificate.json
+polytool bkw effective --verify --json < certificate.json
+polytool bkw effective --recurrence recurrence.json --json
+```
+
+The request contains `generating_function` (the existing
+`polytool.generating-function.v1` format), optional `interval`, optional
+`target_zero_count`, optional `uniform_constants` and optional
+`pair_factorization`. All coefficients and constants are rational strings.
+Both variables use ascending coefficients: GF entry `[j][k]` multiplies
+`z^j t^k`. The local index `n=0` is the GF's `first_index`.
+
+For example, the Chebyshev request is:
+
+```json
+{
+  "generating_function": {
+    "schema": "polytool.generating-function.v1",
+    "first_index": 0,
+    "numerator": [["1"]],
+    "denominator": [["1"], ["0", "-2"], ["1"]]
+  },
+  "interval": {
+    "lower": {"kind": "rational", "value": "-1"},
+    "upper": {"kind": "rational", "value": "1"}
+  },
+  "target_zero_count": {"slope": 1, "offsets": [0]}
+}
+```
+
+An interval endpoint is `negative_infinity`, `positive_infinity`, `rational`
+or `algebraic`. Algebraic endpoints carry ascending `polynomial` coefficients
+and a closed rational `enclosure` isolating exactly one real root. Omitting
+the interval selects a discriminant component. The zero count is
+`slope*n + offsets[n % offsets.length]`; it must match the symbolic degree
+budget. A finite prefix does not establish this budget.
+
+`polytool.effective-bkw.v1` reports contain `request`, `status`, `reason`
+and an optional `certificate`. `proved` asserts nonzero rows with simple
+real zeros at every index from `first_index`; `not_proved` names a failed
+sufficient hypothesis or unsupported shape, and is not a refutation.
+Exit status 0 covers either report; invalid input/replay returns 2.
+See [the exact certificate contract](effective-bkw.md) for the supported
+geometry, uniform constants, algebraic witnesses and limitations.
+
 ## Scout BKW equal-modulus loci
 
 For a polynomial recurrence with characteristic symbol

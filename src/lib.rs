@@ -123,8 +123,8 @@
 //!   property, interlacing, Lace and recurrence verdicts
 //! - [`basis`] — Exact expansion of polynomials in prescribed bases, including
 //!   the magic basis `{t^i (1+t)^{d-i}}`
-//! - [`bkw`] — Beraha--Kahane--Weiss scout tools for characteristic symbols of
-//!   polynomial recurrences
+//! - [`bkw`] — Beraha--Kahane--Weiss scouts, exact limit-set checks and
+//!   effective dominant-pair all-index certificates for polynomial recurrences
 //! - [`complex_roots`] — exact Rouche certificates for roots in
 //!   Gaussian-rational discs
 //! - [`decomposition`] — `I_d` / `R_d` symmetric decompositions, `f`-polynomials,

@@ -2322,6 +2322,11 @@ deterministic counters; no wall-clock times are recorded.  The MCP tool
 
 ## Direct general recurrence proofs
 
+The exact [`bkw::effective` certificate API](effective-bkw.md) supplies the
+`effective_bkw` theorem route: dominant pair expansion, remainder domination,
+phase count, degree/exterior signs and a finite exact prefix. Both direct
+`EffectiveBkwReport::verify` and the recurrence proof report replay it.
+
 `RecurrenceProofDiscoveryReport::summary()` returns a compact
 `RecurrenceProofSummary` (`polytool.recurrence-proof-summary.v1`) without
 rerunning the search. It shares the full report's stage selection, keeps

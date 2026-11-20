@@ -19,7 +19,7 @@
 //! [Tran 2015, Theorem 1](https://arxiv.org/abs/1601.04383), and
 //! [Sokal 2004, Theorem 1.5](https://arxiv.org/abs/cond-mat/0012369).
 
-mod algebra;
+pub(super) mod algebra;
 mod endpoint;
 mod pencil;
 mod regions;

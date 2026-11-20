@@ -17,7 +17,7 @@ pub(super) fn counts(p: &P) -> RootCounts {
 }
 
 /// Sylvester determinant over Q[x], using fraction-free elimination.
-pub(super) fn resultant(f: &[P], g: &[P]) -> P {
+pub(in crate::bkw) fn resultant(f: &[P], g: &[P]) -> P {
     let mut f = f.to_vec();
     let mut g = g.to_vec();
     while f.last().is_some_and(P::is_zero) {

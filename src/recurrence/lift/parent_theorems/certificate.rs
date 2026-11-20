@@ -52,6 +52,10 @@ macro_rules! route_certificates {
 }
 
 route_certificates! {
+    /// Exact expansion, domination, phase, exterior and finite-row evidence.
+    EffectiveBkw(Box<crate::bkw::effective::EffectiveBkwReport>) => effective_bkw,
+        effective_bkw_certificate: crate::bkw::effective::EffectiveBkwReport,
+    |_: &crate::bkw::effective::EffectiveBkwReport| Ok(None);
     /// Stationary affine state realization and all quantified pencil checks.
     MatrixOrbit(Box<MatrixOrbitReport>) => matrix_orbit,
         matrix_orbit_certificate: MatrixOrbitReport,

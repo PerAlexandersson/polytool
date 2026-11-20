@@ -11,9 +11,26 @@ pub(crate) const BKW: CommandSpec = CommandSpec {
     group: GROUP,
     summary: "Exact BKW certificates, theorem proofs and limit-set decisions",
     description: "Certify stationary recurrences with rational polynomial coefficients and supplied seeds. Use bkw certify; the numerical bkw-scout remains evidence only.",
-    subcommands: &[BKW_CERTIFY],
+    subcommands: &[BKW_CERTIFY,BKW_EFFECTIVE],
     examples: &["polytool bkw certify --recurrence recurrence.json --json"],
     run: Some(crate::bkw_certify::cmd_bkw),
+    ..COMMAND
+};
+
+const BKW_EFFECTIVE:CommandSpec=CommandSpec{
+    name:"effective",
+    summary:"Prove all-index real-rootedness by an exact dominant-pair sign grid",
+    description:"Check a rational generating function N(t,z)/D(t,z), an optional exact open interval and target zero count. Automatic suppliers cover quadratic pairs, cubic single remainders with amplitude dominance on a negative ray, and compact quartics with supplied rational constants. Higher orders through eight accept a checked polynomial pair factorization and Cauchy cofactor bounds. Every proof checks the complete interval by resultants, Sturm isolation and off-branch boxes, phase endpoints, the symbolic degree budget, exterior signs and every finite row below the cutoff. A failed sufficient condition returns not_proved with its reason. --verify recomputes all evidence from the embedded request; Lean replay is not attempted.",
+    input:InputKind::Json,output:OutputKind::JsonSwitch,
+    flags:&[
+        option("request","FILE","EffectiveBkwRequest JSON; - or omission reads stdin"),
+        option("recurrence","FILE","Recurrence JSON with all seeds; choose this or --request"),
+        option("candidate","N","Zero-based recurrence menu candidate; requires --recurrence"),
+        switch("verify","Replay an EffectiveBkwReport from stdin"),
+    ],
+    examples:&["polytool bkw effective --request request.json --json","polytool bkw effective --recurrence recurrence.json --json","polytool bkw effective --verify --json < certificate.json"],
+    exit_codes:&[(0,"proved/not_proved report or successful replay"),(2,"invalid input or failed replay")],
+    see_also:&["bkw certify","recurrence-prove"],
     ..COMMAND
 };
 

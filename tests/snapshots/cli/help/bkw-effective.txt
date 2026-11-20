@@ -1,0 +1,41 @@
+Prove all-index real-rootedness by an exact dominant-pair sign grid.
+
+Check a rational generating function N(t,z)/D(t,z), an optional exact open
+interval and target zero count. Automatic suppliers cover quadratic pairs, cubic
+single remainders with amplitude dominance on a negative ray, and compact
+quartics with supplied rational constants. Higher orders through eight accept a
+checked polynomial pair factorization and Cauchy cofactor bounds. Every proof
+checks the complete interval by resultants, Sturm isolation and off-branch
+boxes, phase endpoints, the symbolic degree budget, exterior signs and every
+finite row below the cutoff. A failed sufficient condition returns not_proved
+with its reason. --verify recomputes all evidence from the embedded request;
+Lean replay is not attempted.
+
+Usage: polytool bkw effective [OPTIONS]
+
+Options:
+      --request <FILE>     EffectiveBkwRequest JSON; - or omission reads stdin
+      --recurrence <FILE>  Recurrence JSON with all seeds; choose this or --request
+      --candidate <N>      Zero-based recurrence menu candidate; requires --recurrence
+      --verify             Replay an EffectiveBkwReport from stdin
+  -h, --help               Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Examples:
+  polytool bkw effective --request request.json --json
+  polytool bkw effective --recurrence recurrence.json --json
+  polytool bkw effective --verify --json < certificate.json
+
+Exit status:
+  0  proved/not_proved report or successful replay
+  2  invalid input or failed replay
+
+See also:
+  polytool bkw certify, polytool recurrence-prove

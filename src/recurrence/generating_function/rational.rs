@@ -167,7 +167,7 @@ fn certified_coprime(a: &B, b: &B) -> bool {
     })
 }
 
-fn gcd_bivariate(a: &B, b: &B) -> B {
+pub(crate) fn gcd_bivariate(a: &B, b: &B) -> B {
     if a.is_zero() {
         return b.monic().1;
     }
@@ -196,7 +196,7 @@ fn gcd_bivariate(a: &B, b: &B) -> B {
     a.multiply(&B::from_index_polynomial(c.coeffs())).monic().1
 }
 
-fn exact_divide(a: &B, b: &B) -> Result<B, RecurrenceError> {
+pub(crate) fn exact_divide(a: &B, b: &B) -> Result<B, RecurrenceError> {
     let mut remainder = a.clone();
     let mut result = B::zero();
     let degree = b

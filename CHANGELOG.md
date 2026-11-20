@@ -24,6 +24,16 @@
 
 ### Added
 
+- Exact `bkw::effective` certificates and `polytool bkw effective`: rational
+  generating functions, no-remainder quadratic pairs, cubic single remainders
+  on negative rays (including a checked edge at infinity), compact quartic
+  bounds with an exact rational-grid search, and supplied polynomial pair
+  factorizations through order eight.
+  Replay checks resultants, Sturm counts, off-branch boxes, phase limits,
+  degree/exterior signs and every row below the cutoff. The `effective_bkw`
+  theorem route participates in recurrence proof discovery and replay;
+  certified open root rays also feed the existing parent-prover cascade.
+
 - `polytool stability` and MCP `stability_univariate`: shared exact Gaussian
   parsing, circular-region counts, compact summaries, canonical replayable
   `polytool.stability.v1` reports, certificate files and `stability verify`.

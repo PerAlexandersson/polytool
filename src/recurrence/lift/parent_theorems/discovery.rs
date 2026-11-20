@@ -9,7 +9,8 @@
 //!    the order of [`RealRootednessTheorem::ALL`]; the attempts of the first
 //!    eight are always recorded, those of the RealRooted row routes, the
 //!    index-section lift, factor gauge and positive lag-two Euler only where the rule has their
-//!    form (status other than `not_applicable`);
+//!    form (status other than `not_applicable`); effective BKW is recorded only
+//!    when it strengthens an earlier conclusion;
 //! 2. **tail**: when no theorem proves the record and one of its first rows
 //!    (the seeds and the rows of the induction-start window) is zero or not
 //!    real-rooted, the same theorems on the *tail* record that starts after
@@ -69,8 +70,9 @@
 //! ([`CatalogLiftSearch`]: every equality, parent report, transfer and
 //! basis-map certification) and its conclusion is recomputed from them.
 //! A recomputation that proves more is fine; a report saved before a theorem
-//! was added (or before a check started to apply to the rule) no longer
-//! replays and is recomputed.
+//! was added (or before a check started to apply to the rule) generally needs
+//! recomputation. Older v1 reports may omit the added effective-BKW route;
+//! their conclusions are still checked against their recorded attempts alone.
 
 use super::recurrence_equality::{certify_recurrence_equality, RecurrenceEqualityCertificate};
 use super::*;
@@ -1046,6 +1048,16 @@ fn verify_attempts(
     options: &RealRootednessTheoremOptions,
 ) -> Result<(), RecurrenceError> {
     let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
+    // Older v1 reports can omit this subsequently added strengthening route.
+    // Their recorded conclusions are still recomputed from their own attempts
+    // below; omitting the only proof cannot preserve a `proved` verdict.
+    let includes_effective = attempts
+        .iter()
+        .any(|a| a.theorem == RealRootednessTheorem::EffectiveBkw);
+    let reference: Vec<_> = reference
+        .iter()
+        .filter(|a| includes_effective || a.theorem != RealRootednessTheorem::EffectiveBkw)
+        .collect();
     let recorded = attempts.iter().map(|attempt| attempt.theorem);
     if !recorded.eq(reference.iter().map(|attempt| attempt.theorem)) {
         return failed("the theorem attempts differ from those of the search");
@@ -1380,6 +1392,41 @@ fn without_common_index_factor(rule: &Recurrence) -> (Recurrence, Vec<Q>) {
 #[cfg(test)]
 mod replay_policy_tests {
     use super::*;
+
+    #[test]
+    fn older_reports_may_omit_effective_bkw_without_inheriting_its_proof() {
+        let record: RecurrenceJson = serde_json::from_value(serde_json::json!({
+            "schema":"polytool.recurrence.v1","first_index":0,
+            "initial_polynomials":[["1"],["1"],["1","3","1"]],
+            "recurrence":{"terms":[
+                {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["1","1"]]}},
+                {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","2","1"]]}},
+                {"offset":3,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","0","-1","-1"]]}}
+            ]}
+        }))
+        .unwrap();
+        let report = discover_recurrence_proofs(
+            &record,
+            &RealRootednessTheoremOptions {
+                maximum_start_delay: 0,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(report
+            .attempts
+            .iter()
+            .any(|a| a.theorem == RealRootednessTheorem::EffectiveBkw && a.is_proved()));
+        let mut legacy = report.clone();
+        legacy
+            .attempts
+            .retain(|a| a.theorem != RealRootednessTheorem::EffectiveBkw);
+        let stale = legacy.clone();
+        legacy.finish_summary(None);
+        assert_eq!(legacy.status, "not_proved");
+        legacy.verify().unwrap();
+        assert!(stale.verify().is_err());
+    }
 
     fn discover(id: &str) -> RecurrenceProofDiscoveryReport {
         let entry = crate::oeis::by_id(id).unwrap();

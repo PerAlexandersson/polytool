@@ -27,6 +27,10 @@
 //! seed-dependent generating functions, finite refutations, all-row theorem
 //! proofs and exact limit-set decisions. Its certificates never rely
 //! on floating-point root computations.
+//!
+//! [`effective`] checks dominant-pair expansions, exact remainder domination,
+//! phase limits, degree/exterior signs and a finite prefix for all-index
+//! simple real-rootedness; its certificates replay independently.
 
 use crate::parse::parse_polynomial;
 use crate::real_rootedness::format_poly_var;
@@ -37,6 +41,7 @@ use std::fmt;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 pub mod certified;
+pub mod effective;
 
 /// Small complex-number type used to keep `polytool` dependency-light.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

@@ -153,6 +153,11 @@ macro_rules! theorem_routes {
                 MatrixOrbitCopositivityCheck,
                 MATRIX_ORBIT_SCHEMA,
             };
+            /// Exact dominant-pair sign-grid certificate with finite prefix.
+            EffectiveBkw, effective_bkw, "effective_bkw",
+            "Effective dominant-pair sign-grid proof from a rational generating function.", {
+                check_effective_bkw_theorem,
+            };
         }
     };
 }
@@ -571,6 +576,15 @@ mod tests {
                 false,
                 false,
             ),
+            (
+                EffectiveBkw,
+                WhileUnproved,
+                Ray,
+                true,
+                WhenStronger,
+                false,
+                false,
+            ),
         ];
         let actual: Vec<_> = ROUTES
             .iter()
@@ -694,7 +708,8 @@ mod tests {
                 RealRootednessTheorem::RationalPfRiordan,
                 RealRootednessTheorem::ParityProduct,
                 RealRootednessTheorem::DegreeLawReversal,
-                RealRootednessTheorem::MatrixOrbit
+                RealRootednessTheorem::MatrixOrbit,
+                RealRootednessTheorem::EffectiveBkw
             ]
         );
         assert_eq!(
@@ -710,7 +725,8 @@ mod tests {
                 RealRootednessTheorem::RationalPfRiordan,
                 RealRootednessTheorem::ParityProduct,
                 RealRootednessTheorem::DegreeLawReversal,
-                RealRootednessTheorem::MatrixOrbit
+                RealRootednessTheorem::MatrixOrbit,
+                RealRootednessTheorem::EffectiveBkw
             ]
         );
     }

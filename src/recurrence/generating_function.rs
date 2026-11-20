@@ -11,6 +11,7 @@
 
 mod rational;
 pub(in crate::recurrence) use rational::decode_bivariate;
+pub(crate) use rational::{exact_divide, gcd_bivariate};
 pub use rational::{
     rational_generating_function, riordan_decomposition, RationalGeneratingFunction,
     RationalGeneratingSeries, RiordanDecomposition, RATIONAL_GENERATING_FUNCTION_SCHEMA,

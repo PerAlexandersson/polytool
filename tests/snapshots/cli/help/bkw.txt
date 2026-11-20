@@ -6,7 +6,8 @@ supplied seeds. Use bkw certify; the numerical bkw-scout remains evidence only.
 Usage: polytool bkw <COMMAND>
 
 Commands:
-  certify  Decide sparse tie pencils, check the circle criterion, and search exact rows.
+  certify    Decide sparse tie pencils, check the circle criterion, and search exact rows.
+  effective  Prove all-index real-rootedness by an exact dominant-pair sign grid.
 
 Options:
   -h, --help  Print help

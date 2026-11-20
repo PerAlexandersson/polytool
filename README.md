@@ -183,7 +183,9 @@ Report issues in the Git repository, or contact Per Alexandersson
 
 For general recurrence proofs, use `polytool recurrence-prove --recurrence
 recurrence.json`. The [proof-discovery guide](doc/proof-discovery.md) explains
-the exact theorem checks, certificates and Lean correspondence.  For the
+the exact theorem checks, certificates and Lean correspondence. Rational
+generating functions also have [effective dominant-pair certificates](doc/effective-bkw.md)
+through `polytool bkw effective`. For the
 degree law and the leading-coefficient signs of every row, use `polytool
 recurrence-degree --recurrence recurrence.json` (see
 [doc/cli-recurrence.md](doc/cli-recurrence.md#degree-laws-and-leading-coefficients)).

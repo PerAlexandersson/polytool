@@ -6898,6 +6898,134 @@
           "subcommands": [],
           "summary": "Decide sparse tie pencils, check the circle criterion, and search exact rows",
           "usage": []
+        },
+        {
+          "aliases": [],
+          "deprecated_aliases": [],
+          "description": "Check a rational generating function N(t,z)/D(t,z), an optional exact open interval and target zero count. Automatic suppliers cover quadratic pairs, cubic single remainders with amplitude dominance on a negative ray, and compact quartics with supplied rational constants. Higher orders through eight accept a checked polynomial pair factorization and Cauchy cofactor bounds. Every proof checks the complete interval by resultants, Sturm isolation and off-branch boxes, phase endpoints, the symbolic degree budget, exterior signs and every finite row below the cutoff. A failed sufficient condition returns not_proved with its reason. --verify recomputes all evidence from the embedded request; Lean replay is not attempted.",
+          "details": "",
+          "examples": [
+            "polytool bkw effective --request request.json --json",
+            "polytool bkw effective --recurrence recurrence.json --json",
+            "polytool bkw effective --verify --json < certificate.json"
+          ],
+          "exit_codes": [
+            {
+              "code": 0,
+              "meaning": "proved/not_proved report or successful replay"
+            },
+            {
+              "code": 2,
+              "meaning": "invalid input or failed replay"
+            }
+          ],
+          "flags": [
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "EffectiveBkwRequest JSON; - or omission reads stdin",
+              "hidden": false,
+              "long": "--request",
+              "name": "request",
+              "value": "FILE"
+            },
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Recurrence JSON with all seeds; choose this or --request",
+              "hidden": false,
+              "long": "--recurrence",
+              "name": "recurrence",
+              "value": "FILE"
+            },
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Zero-based recurrence menu candidate; requires --recurrence",
+              "hidden": false,
+              "long": "--candidate",
+              "name": "candidate",
+              "value": "N"
+            },
+            {
+              "arity": 0,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Replay an EffectiveBkwReport from stdin",
+              "hidden": false,
+              "long": "--verify",
+              "name": "verify",
+              "value": null
+            },
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Read the input from FILE instead of stdin (`-` is stdin)",
+              "hidden": false,
+              "long": "--input",
+              "name": "input",
+              "value": "FILE"
+            },
+            {
+              "arity": 1,
+              "choices": [
+                "text",
+                "json"
+              ],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Output format [default: text]",
+              "hidden": false,
+              "long": "--format",
+              "name": "format",
+              "value": "FORMAT"
+            },
+            {
+              "arity": 0,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Emit machine-readable JSON (same as --format json)",
+              "hidden": false,
+              "long": "--json",
+              "name": "json",
+              "value": null
+            }
+          ],
+          "group": "",
+          "input": "json",
+          "name": "effective",
+          "output": {
+            "default": "text",
+            "formats": [
+              "text",
+              "json"
+            ]
+          },
+          "positionals": [],
+          "see_also": [
+            "bkw certify",
+            "recurrence-prove"
+          ],
+          "subcommands": [],
+          "summary": "Prove all-index real-rootedness by an exact dominant-pair sign grid",
+          "usage": []
         }
       ],
       "summary": "Exact BKW certificates, theorem proofs and limit-set decisions",
