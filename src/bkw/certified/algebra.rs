@@ -48,30 +48,80 @@ pub(in crate::bkw) fn resultant(f: &[P], g: &[P]) -> P {
             matrix[m + i][i + j] = g[m - j].clone();
         }
     }
-    let mut previous = P::one();
-    let mut sign = Q::one();
+    fraction_free_determinant(matrix)
+}
+
+/// Coefficients for the shared univariate/bivariate Bareiss elimination.
+pub(in crate::bkw) trait ExactDeterminantCoefficient: Clone {
+    fn zero() -> Self;
+    fn one() -> Self;
+    fn is_zero(&self) -> bool;
+    fn multiply(&self, other: &Self) -> Self;
+    fn subtract(&self, other: &Self) -> Self;
+    fn divide_exact(&self, other: &Self) -> Self;
+    fn negative(&self) -> Self;
+}
+impl ExactDeterminantCoefficient for P {
+    fn zero() -> Self {
+        P::zero()
+    }
+    fn one() -> Self {
+        P::one()
+    }
+    fn is_zero(&self) -> bool {
+        self.is_zero()
+    }
+    fn multiply(&self, other: &Self) -> Self {
+        self.clone() * other.clone()
+    }
+    fn subtract(&self, other: &Self) -> Self {
+        self.clone() - other.clone()
+    }
+    fn divide_exact(&self, other: &Self) -> Self {
+        self.exact_div(other)
+    }
+    fn negative(&self) -> Self {
+        -self.clone()
+    }
+}
+
+pub(in crate::bkw) fn fraction_free_determinant<T: ExactDeterminantCoefficient>(
+    mut matrix: Vec<Vec<T>>,
+) -> T {
+    let size = matrix.len();
+    if size == 0 {
+        return T::one();
+    }
+    let mut previous = T::one();
+    let mut negative = false;
     for k in 0..size - 1 {
         let Some(pivot_row) = (k..size).find(|&i| !matrix[i][k].is_zero()) else {
-            return P::zero();
+            return T::zero();
         };
         if pivot_row != k {
             matrix.swap(k, pivot_row);
-            sign = -sign;
+            negative = !negative;
         }
         let pivot = matrix[k][k].clone();
         for i in k + 1..size {
             for j in k + 1..size {
-                let numerator = matrix[i][j].clone() * pivot.clone()
-                    - matrix[i][k].clone() * matrix[k][j].clone();
-                matrix[i][j] = numerator.exact_div(&previous);
+                let numerator = matrix[i][j]
+                    .multiply(&pivot)
+                    .subtract(&matrix[i][k].multiply(&matrix[k][j]));
+                matrix[i][j] = numerator.divide_exact(&previous);
             }
         }
         for row in matrix.iter_mut().skip(k + 1) {
-            row[k] = P::zero();
+            row[k] = T::zero();
         }
         previous = pivot;
     }
-    matrix[size - 1][size - 1].scale(&sign)
+    let determinant = matrix[size - 1][size - 1].clone();
+    if negative {
+        determinant.negative()
+    } else {
+        determinant
+    }
 }
 
 pub(super) fn derivative_in_outer(p: &[P]) -> Vec<P> {

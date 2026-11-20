@@ -58,6 +58,9 @@ pub(super) fn certify(
         ("amplitude imaginary part", im.clone(), -1),
         ("single remainder amplitude dominance 4|A|^2-C^2", k, 0),
     ] {
+        if degree.data.newton.is_some() && name == "amplitude imaginary part" {
+            continue;
+        }
         out.signs
             .push(check_sign(name, &p, &f, &domain, Branch::UniqueReal, want)?);
     }
@@ -89,16 +92,35 @@ pub(super) fn certify(
     let simple = R::of(t(&(-d[1].clone()))).sub(&x.scale(&q(2)));
     let ie = substitute(&im, &simple);
     let pe = substitute(&pr, &simple);
-    if endpoint_rational_sign(&domain, &ie, false)? != -1
+    let edge_imaginary_sign = endpoint_rational_sign(&domain, &ie, false)?;
+    if (degree.data.newton.is_none() && edge_imaginary_sign != -1)
         || endpoint_rational_sign(&domain, &pe, false)? != 1
     {
         return Err(failure("finite-edge amplitude limit is not certified in quadrant IV").into());
     }
-    out.phase.push(format!("right collision: x=({:?})/(2*{:?})>0; p'(r)>0; Im A -> -infinity, Re A bounded; phase -> -pi/2",encode(&xn),encode(&delta)));
-    let edge = infinity_edge(&p, &a, &re, &im, &y)?;
-    out.phase.extend(edge);
-    out.phase.push("arg A in (-pi/2,0); theta in (0,pi); first crossings of j*pi, j=0,...,n-1, give n-1 alternating sign changes".into());
-    out.exterior.push("at the leftmost sample the sign is (-1)^(n-1). For positive geometric top coefficients, sign P_n(-infinity)=(-1)^n supplies one extra zero. For the parity top GF it supplies one extra exactly when n is even. Odd degree <= n-1 closes without it".into());
+    if let Some(newton) = &degree.data.newton {
+        out.phase_limits.right_amplitude_argument =
+            (q(edge_imaginary_sign.into()) / q(2)).to_string();
+        let (theta, alpha, evidence) = newton_infinity_edge(
+            &p,
+            &a,
+            &re,
+            &im,
+            &y,
+            newton.weight_numerator,
+            newton.weight_denominator,
+        )?;
+        out.phase_limits.left_eigenvalue_argument = theta.to_string();
+        out.phase_limits.left_amplitude_argument = alpha.to_string();
+        out.phase.extend(evidence);
+        out.phase.push(format!("Re A>0 fixes the lift in (-pi/2,pi/2); finite positive simple collision has arg A -> {edge_imaginary_sign}*pi/2"));
+    } else {
+        out.phase.push(format!("right collision: x=({:?})/(2*{:?})>0; p'(r)>0; Im A -> -infinity, Re A bounded; phase -> -pi/2",encode(&xn),encode(&delta)));
+        let edge = infinity_edge(&p, &a, &re, &im, &y)?;
+        out.phase.extend(edge);
+        out.phase.push("arg A in (-pi/2,0); theta in (0,pi); first crossings of j*pi, j=0,...,n-1, give n-1 alternating sign changes".into());
+        out.exterior.push("at the leftmost sample the sign is (-1)^(n-1). For positive geometric top coefficients, sign P_n(-infinity)=(-1)^n supplies one extra zero. For the parity top GF it supplies one extra exactly when n is even. Odd degree <= n-1 closes without it".into());
+    }
     out.domination="single_real_remainder: 4|A|^2>=C^2 and |r|<|lambda| give strict domination for n>=1, also when C=0; no uniform modulus gap is needed at infinity".into();
     out.lean_declarations
         .push("RealRooted.EffectiveBKW.PairExpansion.dom_of_single_mode".into());
@@ -107,7 +129,171 @@ pub(super) fn certify(
     );
     out.lean_declarations
         .push("RealRooted.EffectiveBKW.eventually_phase_gt_atBot".into());
+    if degree.data.newton.is_some() {
+        super::degree::close_phase(&mut out)?;
+    }
     Ok(out)
+}
+
+fn newton_scaled(
+    f: &B,
+    growth: usize,
+    weight: usize,
+    eigen_scale: &Q,
+    parameter_scale: &Q,
+) -> (B, usize) {
+    let m = f
+        .rows()
+        .iter()
+        .enumerate()
+        .flat_map(|(i, row)| {
+            row.iter()
+                .enumerate()
+                .filter(|(_, c)| !c.is_zero())
+                .map(move |(j, _)| growth * i + weight * j)
+        })
+        .max()
+        .unwrap_or(0);
+    let mut out = B::zero();
+    for (i, row) in f.rows().iter().enumerate() {
+        for (j, c) in row.iter().enumerate() {
+            if !c.is_zero() {
+                out = out.add(&B::monomial(
+                    i,
+                    m - growth * i - weight * j,
+                    c * eigen_scale.pow(i as i32)
+                        * parameter_scale.pow(j as i32)
+                        * q(if j % 2 == 0 { 1 } else { -1 }),
+                ));
+            }
+        }
+    }
+    (out, m)
+}
+
+fn truncated_evaluate(f: &B, u: &P) -> P {
+    f.rows().iter().rev().fold(P::zero(), |v, row| {
+        let value = v * u.clone() + P::new(row.clone());
+        P::new(value.coeffs().iter().take(17).cloned().collect())
+    })
+}
+
+/// Normalize any monic binomial edge u^d-c with c>0 and coprime (d,k),
+/// where k=d*growth/weight. Choose 0<=beta<d with 1+k*beta=d*alpha;
+/// then r=c^alpha*u*s^-growth, t=-c^beta*s^-weight gives u^d-1.
+/// This is Bezout's identity for arbitrary d,k, not a cubic-only formula.
+/// If gcd(d,k)>1 there is no such integer-power dilation. Keep the original
+/// scaling and let exact factorization find a rational root if one exists.
+/// In the current cubic caller this remaining case has 3|k; any rational
+/// normalization would make c=(eigen_scale/parameter_scale^(k/3))^3, so it
+/// exists iff c is already a rational cube. Higher-degree noncoprime edges
+/// would need a separate perfect-power normalization.
+pub(super) fn binomial_newton_dilation(p: &B, growth: usize, weight: usize) -> (Q, Q) {
+    if weight == 0 {
+        return (q(1), q(1));
+    }
+    let (initial, _) = newton_scaled(p, growth, weight, &q(1), &q(1));
+    let limit = P::new(initial.evaluate_variable(&Q::zero()));
+    let Some(degree) = limit.degree().filter(|d| *d >= 2) else {
+        return (q(1), q(1));
+    };
+    if !limit.coeff(0).is_negative()
+        || !limit.coeff(degree).is_positive()
+        || (1..degree).any(|j| !limit.coeff(j).is_zero())
+        || degree * growth % weight != 0
+    {
+        return (q(1), q(1));
+    }
+    let k = degree * growth / weight;
+    let Some(beta) = (0..degree).find(|beta| (1 + k * beta) % degree == 0) else {
+        return (q(1), q(1));
+    };
+    let alpha = (1 + k * beta) / degree;
+    let scale = -limit.coeff(0) / limit.coeff(degree);
+    (scale.pow(alpha as i32), scale.pow(beta as i32))
+}
+
+fn newton_infinity_edge(
+    p: &B,
+    a: &B,
+    re: &B,
+    im: &B,
+    y: &B,
+    growth: usize,
+    weight: usize,
+) -> Result<(Q, Q, Vec<String>), RecurrenceError> {
+    let (eigen_scale, parameter_scale) = binomial_newton_dilation(p, growth, weight);
+    let (scaled_p, _) = newton_scaled(p, growth, weight, &eigen_scale, &parameter_scale);
+    let limit = P::new(scaled_p.evaluate_variable(&Q::zero()));
+    let factors = crate::factorization::irreducible_factorization_rational_coeffs(limit.coeffs())
+        .map_err(|e| failure(format!("infinite-edge factorization: {e}")))?;
+    let r0 = factors
+        .factors
+        .iter()
+        .filter(|(_, m)| *m == 1)
+        .find_map(|(f, _)| {
+            if f.len() == 2 {
+                Some(-Q::new(f[0].clone(), f[1].clone()))
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| failure("Newton infinite-edge simple real root is not rational"))?;
+    let derivative = limit.derivative().evaluate(&r0);
+    if derivative.is_zero() {
+        return Err(failure("Newton infinite-edge root is not simple"));
+    }
+    let mut u = P::new(vec![r0.clone()]);
+    for j in 1..=16 {
+        let coefficient = -truncated_evaluate(&scaled_p, &u).coeff(j) / &derivative;
+        let mut row = u.coeffs().to_vec();
+        row.resize(j + 1, Q::zero());
+        row[j] = coefficient;
+        u = P::new(row);
+    }
+    let leading = |f: &B| -> Result<(i64, Q), RecurrenceError> {
+        let (scaled, m) = newton_scaled(f, growth, weight, &eigen_scale, &parameter_scale);
+        let series = truncated_evaluate(&scaled, &u);
+        let order = series
+            .coeffs()
+            .iter()
+            .position(|c| !c.is_zero())
+            .ok_or_else(|| failure("Newton infinity leading order exceeds sixteen Taylor terms"))?;
+        Ok((order as i64 - m as i64, series.coeff(order)))
+    };
+    let (oa, ca) = leading(a)?;
+    let (oy, cy) = leading(y)?;
+    let (or, cr) = leading(re)?;
+    let (oi, ci) = leading(im)?;
+    if !cy.is_positive() || !cr.is_positive() {
+        return Err(failure(
+            "Newton infinity signs disagree with the positive branch",
+        ));
+    }
+    let cosine_squared = if 2 * oa > oy {
+        q(0)
+    } else if 2 * oa == oy {
+        &ca * &ca / (&ca * &ca + &cy)
+    } else {
+        q(1)
+    };
+    let theta = super::quadratic::angle_from_cosine_squared(
+        &cosine_squared,
+        if ca.is_positive() { 1 } else { -1 },
+    )?;
+    let exponent = 2 * oi - oy - 2 * or;
+    let alpha = if exponent > 0 {
+        q(0)
+    } else if exponent < 0 {
+        q(if ci.is_positive() { 1 } else { -1 }) / q(2)
+    } else {
+        super::quadratic::angle_from_tangent_squared(
+            &(&ci * &ci / (&cy * &cr * &cr)),
+            if ci.is_positive() { 1 } else { -1 },
+        )?
+    };
+    Ok((theta.clone(),alpha.clone(),vec![format!(
+        "t=-{parameter_scale}*s^(-{weight}), r={eigen_scale}*u*s^(-{growth}); scaled characteristic {:?}; simple limit root {r0}, derivative {derivative}; implicit Taylor coefficients {:?}; leading orders a={oa},Y={oy},Re numerator={or},Im numerator={oi}; exact limits theta={theta}*pi, arg A={alpha}*pi",encode_b(&scaled_p),encode(&u))]))
 }
 
 pub(super) fn substitute(f: &B, x: &R) -> R {

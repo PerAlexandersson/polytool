@@ -5,6 +5,10 @@ rational generating function `N(t,z)/D(t,z)`, with `D(t,0)=1`. It returns a
 replayable `EffectiveBkwReport`; `EffectiveBkwReport::verify` reconstructs
 all arithmetic and compares the complete report. Recurrence inputs reuse
 `recurrence::rational_generating_function`, including every supplied seed.
+Zero prefixes and polynomial parts of recurrence GFs can be removed by exact
+series shifting. `source_recurrence` retains the complete original record,
+`skipped_prefix` records every removed row, and replay recomputes the shift.
+The nonzero simple-root conclusion starts at the shifted `first_index`.
 No finite sample, limit-set hypothesis or floating computation is a proof.
 
 We factor `D=(1-lambda*z)(1-conj(lambda)*z)H`, choosing the continuous
@@ -22,7 +26,7 @@ samples even when the phase is not monotone.
   at negative and positive eigenvalues. The remainder is zero. A real
   nonzero amplitude or a lift in the lower half-plane certifies the winding.
 - Order three: one real root `r` and one conjugate pair on a negative ray.
-  Exact inequalities check `|r|<|lambda|`, `Re A>0`, `Im A<0` and
+  The original degree-one/parity chart checks `|r|<|lambda|`, `Re A>0`, `Im A<0` and
   `4|A|^2>=C^2`. They give strict domination for `n>=1`, even when the
   modulus ratio tends to one at negative infinity. A rational positive
   double root and negative simple root of the rescaled characteristic,
@@ -31,6 +35,8 @@ samples even when the phase is not monotone.
   simple pair collision with phase limit `-pi/2`.
   Positive-infinity rays use the exact reflection
   `Q_n(u)=(-1)^n P_n(-u)`, recorded in `coordinate_transport`.
+  Newton charts below instead fix the lift by `Re A>0` and calculate both
+  endpoint arguments from exact weighted expansions.
 - Order four: negative characteristic discriminant and negative constant
   coefficient give a unique positive pair-product branch `b=|lambda|^2`.
   The cofactor roots are real and have opposite signs. Two exact Jury
@@ -40,6 +46,20 @@ samples even when the phase is not monotone.
   `D=(1-2a z+b z^2)H` is checked identically. Rational-polynomial `a,b` and
   coefficient bounds for `H` supply a compact template even when the
   automatic pair-product parametrization is unavailable.
+- Automatic orders five through eight reuse exact characteristic factorization
+  over `Q[t]`. Every quadratic candidate is tried against the compact/Cauchy
+  supplier, including when the cofactor contains another nonreal pair.
+  If no polynomial pair is certified,
+  Newton identities construct the pair-product resultant
+  `prod_(i<j)(b-lambda_i*lambda_j)`. A quadratic subresultant recovers the
+  pair and cofactor. Nonvanishing resultant discriminant and constant term
+  fix the continuous largest positive branch; full-interval pair and Cauchy
+  inequalities must still hold. The stored real-part and cofactor
+  denominators are checked strictly nonzero before quotient arithmetic can
+  cancel any of their factors. At each endpoint, the cofactor obtained by
+  deflating the double root must satisfy the Cauchy bounds there as well.
+  This binds the collision to the dominant pair rather than to two cofactor
+  roots. Branch collisions produce `not_proved`.
 
 For the compact supplier, `uniform_constants` has `modulus_ratio=q` in
 `(0,1)`, `amplitude_lower_bound=m>0`, and `numerator_weights=beta`, including
@@ -61,6 +81,12 @@ each `H_j`, `j>=1`. The checker proves
 `|H_j|/|lambda|^j <= gamma_j` and `sum gamma_j/q^j<1`; the triangle inequality
 then puts every cofactor eigenvalue strictly inside `q|lambda|`. This
 Cauchy supplier is conservative and permits complex cofactor roots.
+When constants are omitted for a polynomial higher-order pair, each cofactor
+weight is searched in `{0} union {2^k : -16<=k<=16}`, then the ratio grid
+is checked against the strict Cauchy budget. The accepted constants are stored
+in `automatic_uniform_constants` for replay and inspection.
+An identically zero cofactor coefficient receives `gamma=0` with an exact
+zero-identity certificate; the Cauchy coefficient inequality is weak.
 
 ## Replay evidence
 
@@ -103,10 +129,54 @@ points. A negative cell rejects the proposed inequality.
 Endpoint collision formulas are checked at exact algebraic roots. Cubic
 infinity evidence records `s=1/t`, the scaled characteristic, the simple
 root's implicit Taylor coefficients, and the orders used in the phase limit.
-The degree proof checks `deg_t D_j<=j`, `deg_t N_j<=j` and the leading
-coefficient GF after rescaling. Current top-coefficient templates are a
-positive geometric sequence or `1/(1-z^2)`. The latter gives the parity
-degree law needed for the 4-by-n tiling example.
+The degree proof retains the positive-geometric and parity certificates and
+otherwise uses the top Newton edge of the denominator. For slope `g/p` in
+lowest terms, substitute `t=u^(-p), z=z*u^g` and multiply the numerator by
+`u^h` to remove its negative powers. Exact rational coefficient layers in
+`u` identify the first eventual nonzero layer `e_r` in each index residue.
+Earlier layers are zero in that residue or have exactly checked finite
+polynomial support, giving
+`deg P_n=(g*n+h-e_r)/p` once the selected layer is positive. Positivity
+comes from a nonnegative renewal expansion, a checked binomial power of the
+Newton face, or nonnegative layer numerators
+after cancelling Newton-face powers. Binomial faces additionally use an
+exact polynomial formula for each coefficient residue, with a replayable
+integer-index sign certificate. A finite support seed in each residue
+modulo a positive face step proves positivity for every later index.
+
+`degree_certificate.newton` stores the weights, layers, support seeds, law
+start and exact earlier degrees. For Newton certificates,
+`leading_numerator/leading_denominator` is the GF of the actual leading
+coefficients, including its exactly computed finite correction. Legacy
+certificates retain their original diagonal top-coefficient GF.
+`zero_count.divisor` defaults to one; the general count is
+`(slope*n+offsets[n % period])/divisor`.
+
+Quadratic rays and cubic single-remainder rays support fractional Newton
+scaling at infinity. An implicit Taylor expansion at a rational simple
+scaled root supplies exact phase limits. For a binomial edge `u^d-c`, put
+`k=d*g/p`. When `gcd(d,k)=1`, choose nonnegative `beta<d` and positive
+`alpha` with `d*alpha-k*beta=1`. The rational dilations
+`r=c^alpha*u*s^(-g)`, `t=-c^beta*s^(-p)` normalize the limit to `u^d-1`.
+This algebraic normalizer works for any coprime `d,k`; the ray supplier
+currently calls it only for cubics. For cubics with `3|k`, rational
+normalization is possible exactly when `c` is a rational cube: any rational
+scales would imply `c=(eigen_scale/parameter_scale^(k/3))^3`.
+The existing linear-factor search already handles this rational-root case;
+otherwise an algebraic coefficient field is required.
+
+Rational squared cosine/tangent limits are recognized by exact cyclotomic
+divisibility, without value tables. For `v=cos(theta)^2`, the unit-circle
+root `exp(2 i theta)` satisfies `x^2-2*(2v-1)*x+1`. A rational multiple of
+pi is equivalent to a cyclotomic factor. Its degree is at most two, and
+`phi(m)^2>=m/2` bounds its order by eight. Thus the finite order search is
+complete for every rational `v`, rather than an angle-denominator guard.
+Tangent squares use `cos(theta)^2=1/(1+tan(theta)^2)`; signs fix the lift.
+Algebraic squared trigonometric inputs require a different coefficient type.
+The crossing count
+uses strictly interior integer phase levels. On a common residue period,
+their count and both exterior signs must equal the exact degree, and their
+affine increments must agree. Finite rows cover all earlier indices.
 
 The certificate is shaped for the RealRooted `EffectiveBKW` API:
 `PairExpansion`, its `Dom` suppliers, phase crossings, `EdgeLimits`,
@@ -157,25 +227,42 @@ theorem reports whose region is the whole real line through their existing
 theorem-report ingestion.
 Older v1 reports may omit this added route; replay checks their own recorded
 conclusions and does not inherit the new proof.
+A118424 now stops at its direct Newton certificate. Its older affine proof
+is retained explicitly in the affine-coordinate regression: transport by
+`P_n(u+1)`, replay the fixed-delay theorem on `(-infinity,0)`, and transport
+the roots back to `(-infinity,1)`. This auxiliary evidence is available even
+though the default discovery report no longer runs that later stage.
+For a recorded open basis-map parent, replay can restrict the parent routes
+to none to retain the original conditional root-bound requirement. It still
+recomputes the identity, transfer and hypotheses and never promotes an open
+parent to a proved one.
 
 ## Limits
 
-The numerator must be nonzero and proper. Polynomial parts, general winding
+Direct GF input requires a nonzero proper numerator. General winding
 across multiple half-planes, multiple pair intervals, finite exterior
-amplitude-zero counts, triple collisions and
-general algebraic higher-order factorization discovery are unsupported.
-The degree templates and endpoint orientations are deliberately narrow.
-Automatic inputs have order at most four; supplied polynomial factorizations
-have order at most eight. Parameter degree is capped at eight, branch box
+amplitude-zero counts and triple collisions are unsupported.
+Higher-order automatic suppliers require compact geometry; higher-order ray
+edges with a degenerating gap remain unsupported.
+Compact charts with eigenvalue arguments pi and zero require degree slope
+one; a sublinear Newton cap is rejected before elimination. Newton layers whose
+positivity cannot be certified are rejected. Newton search has 64 layers,
+1024 support coefficients and phase period at most 1024; cubic Taylor limits
+use sixteen terms. General algebraic scaled edge roots and algebraic squared
+trigonometric inputs are unsupported. All inputs have order at most eight.
+Parameter degree is capped at eight, branch box
 refinement at 128 bits/steps and cutoff search at 4096. Failure of any
 sufficient condition is reported with its obligation. Simplicity is proved;
 consecutive interlacing is not claimed.
+Before exact GF construction, the registry also caps seed `j` at degree
+`8*(j+1)`. This is a deliberately generous resource guard tied to the
+coefficient-degree cap, not a necessary real-rootedness condition or the
+Newton degree law. An oversized seed gives `not_applicable`; accepted inputs
+still require the complete exact degree proof.
 
-Recurrence records with more prescribed seeds than their order can produce
-an improper numerator and are then unsupported. The route does not silently
-discard these seeds or advance its claimed starting index. Supporting a
-shifted tail also requires separate prefix evidence and replay binding to
-the original complete seed record.
+Removed prefix rows must be zero or simple real-rooted. Their removal never
+asserts that a zero row is nonzero. Nonzero prefix rows with repeated roots
+remain unsupported by this simple-root route.
 
 The quartic proof and its two exact negative controls use the existing
 `full-tests` tier because elimination is costly in debug builds. Run their

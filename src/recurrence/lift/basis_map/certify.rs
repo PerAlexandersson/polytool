@@ -318,9 +318,11 @@ impl BasisMapLiftCertification {
         if supported(recomputed) {
             return Ok(());
         }
-        // A coefficient family recorded as proved by routes the current
-        // cascade no longer reaches first: replay those routes alone
-        // (`parent_proof` module documentation, "Replaying recorded proofs").
+        // Replay recorded proving routes alone. An open coefficient parent
+        // instead keeps its original requirement without invoking a proving
+        // route: a new proof may otherwise select a different target bound.
+        // The identity, transfer, hypotheses and weaker summary still have
+        // to match; this does not turn an open parent into a proof.
         if let Some(routes) = recorded_coefficient_routes(&self.lift_summary.parent_proof) {
             let replay = certify_basis_map_lift_with_parent_routes(
                 &rule,
@@ -340,7 +342,11 @@ impl BasisMapLiftCertification {
 
 /// The parent routes of a recorded `basis_map_coefficient_roots(R, ...)`
 /// proof, when every name is a polytool route (not an attestation).
+/// An open parent uses no proving routes to reconstruct its requirement.
 fn recorded_coefficient_routes(parent: &LiftParentProof) -> Option<Vec<VeroneseParentProofRoute>> {
+    if matches!(parent, LiftParentProof::Open { .. }) {
+        return Some(Vec::new());
+    }
     let LiftParentProof::Proved { route, .. } = parent else {
         return None;
     };
@@ -1402,4 +1408,72 @@ pub(in crate::recurrence::lift) fn reverse_hermite_from_parent(
             vec![format!("the all-degree basis identity has c_k=t^k/k! with t={}; T(f)(x)=reverseHermiteTransform(f(2t u))(x/(2t)); both substitutions have positive slope", format_rational_coeff(&t)),
                 "the coefficient proof puts every parent root at most zero; row signs can be normalized to PF; its translation preserves root order".into()]));
     claim.is_proved().then_some(claim)
+}
+
+#[cfg(test)]
+mod replay_tests {
+    use super::*;
+
+    #[test]
+    fn open_parent_replays_after_a_new_route_proves_a_stronger_bound() {
+        // The binomial basis sends R_n(u) to Q_n(t)=R_n(1+t), where
+        // R_n=2R_(n-1)+(u-2)R_(n-3), initially 1,2,4.
+        let coefficient: RecurrenceJson = serde_json::from_str(
+            r#"{"schema":"polytool.recurrence.v1","first_index":0,
+            "initial_polynomials":[["1"],["2"],["4"]],"recurrence":{"terms":[
+            {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["2"]]}},
+            {"offset":3,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-2","1"]]}}
+            ]}}"#,
+        )
+        .unwrap();
+        let input: RecurrenceJson = serde_json::from_str(
+            r#"{"schema":"polytool.recurrence.v1","first_index":0,
+            "initial_polynomials":[["1"],["2"],["4"]],"recurrence":{"terms":[
+            {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["2"]]}},
+            {"offset":3,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1","1"]]}}
+            ]}}"#,
+        )
+        .unwrap();
+        let basis_record: RecurrenceJson = serde_json::from_str(
+            r#"{"schema":"polytool.recurrence.v1","first_index":0,
+            "initial_polynomials":[["1"]],"recurrence":{"terms":[
+            {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["1","1"]]}}
+            ]}}"#,
+        )
+        .unwrap();
+        let (basis_rule, basis_first, basis_seeds) = basis_record.to_recurrence_parts().unwrap();
+        let candidate = BasisMapLiftCandidate {
+            basis: BasisMap::new("binomial basis", basis_rule, basis_first, basis_seeds).unwrap(),
+            coefficient_family: coefficient,
+        };
+        let (rule, first, seeds) = input.to_recurrence_parts().unwrap();
+        let rows = rule.generate_rows_rational(&seeds, first, 5).unwrap();
+        let options = BasisMapLiftOptions::default();
+        let recorded = certify_basis_map_lift_with_parent_routes(
+            &rule,
+            &rows,
+            first,
+            &candidate,
+            &options,
+            Some(&[]),
+        )
+        .unwrap();
+        assert!(matches!(
+            recorded.lift_summary.parent_proof,
+            LiftParentProof::Open { .. }
+        ));
+        assert!(
+            certify_basis_map_lift(&rule, &rows, first, &candidate, &options)
+                .unwrap()
+                .is_proved()
+        );
+        recorded.verify().unwrap();
+
+        // An open parent does not permit a false conditional root transfer.
+        let mut tampered = recorded;
+        tampered.lift_summary.root_transfer.input_root_region.upper = Some(
+            crate::recurrence::RootEndpoint::rational(&Q::from_integer((-100).into()), false),
+        );
+        assert!(tampered.verify().is_err());
+    }
 }

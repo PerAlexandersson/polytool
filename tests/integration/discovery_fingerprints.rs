@@ -97,6 +97,17 @@ fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<(String, String)
         Err(error) => format!("error: {error}"),
     };
     let fingerprints = (fingerprint(&discovery), fingerprint(&parent));
+    // Optional complete reports make intentional fingerprint changes reviewable.
+    if let Some(directory) = std::env::var_os("POLYTOOL_DISCOVERY_REPORT_DIR") {
+        let directory = std::path::PathBuf::from(directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join(format!("{}-discovery.json", entry.id)),
+            &discovery,
+        )
+        .unwrap();
+        std::fs::write(directory.join(format!("{}-parent.json", entry.id)), &parent).unwrap();
+    }
     // Optional audit output keeps intentional proof additions reviewable by ID.
     if let Some(path) = std::env::var_os("POLYTOOL_DISCOVERY_AUDIT_PATH") {
         let mut file = std::fs::OpenOptions::new()

@@ -80,11 +80,14 @@ fn theorem_report(
             "effective BKW requires a homogeneous index-free rule without derivatives or alternating signs",
         ));
     }
-    // Both degree templates imply deg P_(first+j) <= j, including all seeds.
+    // Resource guard, not a necessary degree law: coefficient degree is
+    // capped at eight by this supplier, so 8*(j+1) is a deliberately generous
+    // linear seed budget before exact GF construction/root checks. The
+    // Newton supplier separately proves the actual slope and intercept.
     if seeds
         .iter()
         .enumerate()
-        .any(|(j, row)| vec_poly::degree(row).is_some_and(|degree| degree > j))
+        .any(|(j, row)| vec_poly::degree(row).is_some_and(|degree| degree > 8 * (j + 1)))
     {
         return Ok(
             report.not_applicable("prescribed seed degree exceeds the local-index degree budget")
@@ -93,9 +96,9 @@ fn theorem_report(
     // The finite check is an early rejection only; the all-index claim always
     // comes from the full symbolic certificate and its own finite prefix.
     if seeds.iter().any(|s| {
-        vec_poly::is_zero(s) || !crate::is_real_rooted_bigint_coeffs(&integer_coefficients(s))
+        !vec_poly::is_zero(s) && !crate::is_real_rooted_bigint_coeffs(&integer_coefficients(s))
     }) {
-        return Ok(report.not_applicable("a prescribed seed is zero or not real-rooted"));
+        return Ok(report.not_applicable("a prescribed nonzero seed is not real-rooted"));
     }
     let checked = match certify_effective_bkw_recurrence(&report.recurrence) {
         Ok(c) => c,
@@ -164,9 +167,10 @@ fn theorem_report(
             .hypotheses
             .push(exact_hypothesis(name, statement, Ok(detail)));
     }
+    let tail_first = checked.request.generating_function.first_index;
     report.certificate = Some(RouteCertificate::EffectiveBkw(Box::new(checked)));
-    Ok(report.finish(RealRootednessTheoremConclusion{first_index:first,zero_residue_classes:None,interlacing_from:None,interlacing:None,simple_roots:true,root_region:root_region.as_ref().map(open_root_interval),
-        statement:format!("every P_n, n >= {first}, is nonzero and has only simple real zeros by an exact effective-BKW sign-grid certificate")}))
+    Ok(report.finish(RealRootednessTheoremConclusion{first_index:tail_first,zero_residue_classes:None,interlacing_from:None,interlacing:None,simple_roots:true,root_region:root_region.as_ref().map(open_root_interval),
+        statement:format!("every P_n, n >= {tail_first}, is nonzero and has only simple real zeros by an exact effective-BKW sign-grid certificate")}))
 }
 pub(super) fn verify_certificate_in_report(
     c: &EffectiveBkwReport,
@@ -177,8 +181,14 @@ pub(super) fn verify_certificate_in_report(
         normalization.verify()?;
         rule = normalization.normalized_recurrence()?;
     }
-    let gf = rational_generating_function(&rule, first, &seeds)?;
-    if c.status != "proved" || c.request.generating_function != gf {
+    let bound = if let Some(source) = &c.source_recurrence {
+        let (source_rule, source_first, source_seeds) = source.to_recurrence_parts()?;
+        rational_generating_function(&source_rule, source_first, &source_seeds)?
+            == rational_generating_function(&rule, first, &seeds)?
+    } else {
+        c.request.generating_function == rational_generating_function(&rule, first, &seeds)?
+    };
+    if c.status != "proved" || !bound {
         return Err(RecurrenceError::VerificationFailed(
             "effective-BKW certificate belongs to another family".into(),
         ));

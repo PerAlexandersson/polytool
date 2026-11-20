@@ -81,12 +81,18 @@ fn run(args: &[String]) -> Result<(), String> {
     } else {
         println!("{}: {}", report.status, report.reason);
         if let Some(c) = report.certificate {
+            let divisor = if c.zero_count.divisor == 1 {
+                String::new()
+            } else {
+                format!(" (divide by {})", c.zero_count.divisor)
+            };
             println!(
-                "Local cutoff: {}; finite rows: {}; zero count: {}*n + {:?}",
+                "Local cutoff: {}; finite rows: {}; zero count: {}*n + {:?}{}",
                 c.cutoff,
                 c.finite_rows.len(),
                 c.zero_count.slope,
-                c.zero_count.offsets
+                c.zero_count.offsets,
+                divisor
             );
         }
     }

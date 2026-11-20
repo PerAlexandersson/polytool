@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- Effective-BKW ray angles use complete cyclotomic divisibility tests on
+  rational squared trigonometric inputs. Binomial edge dilations use general
+  Bezout exponents; quotient denominators and local GF units are checked
+  explicitly, and identically zero cofactor coefficients admit zero Cauchy weights.
+
+- Keep legacy open basis-map parent requirements replayable when a new
+  parent route selects a stronger root bound; identities, transfers and
+  hypotheses are still recomputed exactly.
+
 - `family-check` and the simple-root helpers (`has_simple_roots`,
   `has_simple_roots_bigint_coeffs`) use the integer subresultant square-free
   degree instead of a rational Euclidean gcd, whose coefficients grow
@@ -23,6 +32,12 @@
   Hibi, Stanley and Stapledon references cite the original sources.
 
 ### Added
+
+- Effective-BKW Newton degree laws and rational leading-coefficient GFs,
+  residue-class phase/exterior closure, fractional quadratic/cubic ray limits,
+  replay-bound finite prefix shifts, and automatic compact pair construction
+  through order eight using exact factorization and pair-product subresultants.
+  New optional certificate fields preserve decoding of earlier v1 reports.
 
 - Exact `bkw::effective` certificates and `polytool bkw effective`: rational
   generating functions, no-remainder quadratic pairs, cubic single remainders

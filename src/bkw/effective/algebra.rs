@@ -3,6 +3,30 @@
 use super::*;
 use crate::recurrence::generating_function::{exact_divide, gcd_bivariate};
 
+impl super::super::certified::algebra::ExactDeterminantCoefficient for B {
+    fn zero() -> Self {
+        B::zero()
+    }
+    fn one() -> Self {
+        B::one()
+    }
+    fn is_zero(&self) -> bool {
+        self.is_zero()
+    }
+    fn multiply(&self, other: &Self) -> Self {
+        self.multiply(other)
+    }
+    fn subtract(&self, other: &Self) -> Self {
+        self.subtract(other)
+    }
+    fn divide_exact(&self, other: &Self) -> Self {
+        exact_divide(self, other).expect("Bareiss division is exact over Q[t,b]")
+    }
+    fn negative(&self) -> Self {
+        self.scale(&q(-1))
+    }
+}
+
 pub(super) fn t(p: &P) -> B {
     B::from_variable_polynomial(p.coeffs())
 }
@@ -53,6 +77,7 @@ pub(super) fn discriminant(p: &B) -> P {
 pub(super) struct R {
     pub n: B,
     pub d: B,
+    relation: Option<std::sync::Arc<B>>,
 }
 impl R {
     pub fn wire(&self) -> EffectiveBkwBranchRational {
@@ -67,37 +92,76 @@ impl R {
         Self {
             n: exact_divide(&n, &g).expect("gcd divides"),
             d: exact_divide(&d, &g).expect("gcd divides"),
+            relation: None,
         }
     }
     pub fn of(n: B) -> Self {
-        Self { n, d: B::one() }
+        Self {
+            n,
+            d: B::one(),
+            relation: None,
+        }
+    }
+    pub fn modulo(mut self, p: &B) -> Self {
+        self.relation = Some(std::sync::Arc::new(p.clone()));
+        self.combine(self.n.clone(), self.d.clone(), None)
+    }
+    fn combine(&self, mut n: B, mut d: B, other: Option<&Self>) -> Self {
+        let relation = self
+            .relation
+            .clone()
+            .or_else(|| other.and_then(|r| r.relation.clone()));
+        if let Some(p) = &relation {
+            let reduced_d = rem(&d, p);
+            if !reduced_d.is_zero() {
+                n = rem(&n, p);
+                d = reduced_d;
+            }
+            // Quotient reduction keeps the branch degree bounded. A full
+            // bivariate gcd here can dominate the entire higher-order
+            // calculation. The compact supplier explicitly checks the stored
+            // pair/cofactor denominators with check_pair_denominators before
+            // using compound expressions that could cancel their factors.
+            if n.is_zero() {
+                d = B::one();
+            }
+            if n == d {
+                n = B::one();
+                d = B::one();
+            }
+            return Self { n, d, relation };
+        }
+        let mut value = Self::new(n, d);
+        value.relation = relation;
+        value
     }
     pub fn add(&self, r: &Self) -> Self {
-        Self::new(
+        self.combine(
             self.n.multiply(&r.d).add(&r.n.multiply(&self.d)),
             self.d.multiply(&r.d),
+            Some(r),
         )
     }
     pub fn neg(&self) -> Self {
-        Self::new(self.n.scale(&q(-1)), self.d.clone())
+        self.combine(self.n.scale(&q(-1)), self.d.clone(), None)
     }
     pub fn sub(&self, r: &Self) -> Self {
         self.add(&r.neg())
     }
     pub fn mul(&self, r: &Self) -> Self {
-        Self::new(self.n.multiply(&r.n), self.d.multiply(&r.d))
+        self.combine(self.n.multiply(&r.n), self.d.multiply(&r.d), Some(r))
     }
     pub fn div(&self, r: &Self) -> Self {
-        Self::new(self.n.multiply(&r.d), self.d.multiply(&r.n))
+        self.combine(self.n.multiply(&r.d), self.d.multiply(&r.n), Some(r))
     }
     pub fn scale(&self, q: &Q) -> Self {
-        Self::new(self.n.scale(q), self.d.clone())
+        self.combine(self.n.scale(q), self.d.clone(), None)
     }
     pub fn square(&self) -> Self {
         self.mul(self)
     }
     pub fn pow(&self, n: usize) -> Self {
-        Self::new(self.n.power(n), self.d.power(n))
+        self.combine(self.n.power(n), self.d.power(n), None)
     }
     pub fn signed_polynomial(&self, branch: &B) -> B {
         rem(&self.n.multiply(&self.d), branch)
@@ -113,9 +177,7 @@ pub(super) fn degree_budget(n: &B, d: &B) -> Result<DegreeBudget, RecurrenceErro
     // s^n P_n(1/s) is polynomial iff deg_t D_j <= j and deg_t N_j <= j.
     for a in [n, d] {
         if a.rows().iter().enumerate().any(|(j, r)| r.len() > j + 1) {
-            return Err(failure(
-                "degree budget requires deg_t D_j <= j and deg_t N_j <= j",
-            ));
+            return super::degree::newton_budget(n, d);
         }
     }
     let top = |p: &B| {
@@ -145,17 +207,20 @@ pub(super) fn degree_budget(n: &B, d: &B) -> Result<DegreeBudget, RecurrenceErro
                     .into(),
             )
         } else {
-            return Err(failure(
-                "leading-coefficient GF is outside the positive-geometric/parity degree templates",
-            ));
+            return super::degree::newton_budget(n, d);
         };
-    let count = EffectiveBkwZeroCount { slope: 1, offsets };
+    let count = EffectiveBkwZeroCount {
+        slope: 1,
+        offsets,
+        divisor: 1,
+    };
     Ok(DegreeBudget {
         data: EffectiveBkwDegreeCertificate {
             upper_bound: count.clone(),
             leading_numerator: encode(&nt),
             leading_denominator: encode(&dt),
             positive_top_residues: vec![0],
+            newton: None,
         },
         count,
         explanation: vec![
@@ -195,6 +260,7 @@ pub(super) fn empty_certificate(
         domination: String::new(),
         cutoff: 1,
         tail_at_cutoff: "0".into(),
+        automatic_uniform_constants: None,
         phase: vec![],
         phase_limits: EffectiveBkwPhaseLimits {
             left_eigenvalue_argument: "1".into(),

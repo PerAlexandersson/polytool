@@ -64,68 +64,125 @@ fn rows_in_region(record: &RecurrenceJson, region: &RootInterval, count: usize) 
 }
 
 #[test]
-fn a118424_and_a118884_are_fixed_delay_windows_in_u_equal_x_minus_1() {
-    for id in ["A118424", "A118884"] {
-        let original = catalog_record(id);
-        let report = discover_quickly(&original);
-        assert_eq!(report.status, "proved", "{id}");
-        assert_eq!(report.real_rooted_from_index, Some(0), "{id}");
-        let search = report.affine_coordinates.as_ref().expect("the stage ran");
-        let conclusion = search.conclusion.as_ref().expect("a coordinate proves");
-        assert_eq!(conclusion.coordinate.slope, "1");
-        assert_eq!(conclusion.coordinate.intercept, "1");
-        assert_eq!(conclusion.theorem, RealRootednessTheorem::VariableDelay);
-        assert_eq!(
-            conclusion.root_region,
-            Some(RootInterval {
-                lower: None,
-                upper: Some(polytool::recurrence::RootEndpoint::rational(
-                    &rational("1"),
-                    false
-                )),
-            })
-        );
-        assert_eq!(
-            conclusion.interlacing_orientation,
-            Some(AffineInterlacingOrientation::Preserved)
-        );
-        assert!(
-            report.statement.contains("Affine coordinate"),
-            "{}",
-            report.statement
-        );
-        rows_in_region(&original, conclusion.root_region.as_ref().unwrap(), 14);
-        // The transformed record is u = x - 1: P_n(u + 1) = 2 P_(n-1)(u + 1)
-        // + u P_(n-L)(u + 1).
-        let proved = search.coordinates.last().unwrap();
-        let (rule, _, seeds) = proved.recurrence.to_recurrence_parts().unwrap();
-        assert_eq!(
-            rule.terms[1].coeff.coeffs,
-            vec![vec![rational("0"), rational("1")]]
-        );
-        // Constant seeds are unchanged.
-        assert_eq!(seeds, original.to_recurrence_parts().unwrap().2);
-        report.verify().unwrap();
-        let json = serde_json::to_string(&report).unwrap();
-        let back: RecurrenceProofDiscoveryReport = serde_json::from_str(&json).unwrap();
-        back.verify().unwrap();
-    }
+fn a118884_is_a_fixed_delay_window_in_u_equal_x_minus_1() {
+    let id = "A118884";
+    let original = catalog_record(id);
+    let report = discover_quickly(&original);
+    assert_eq!(report.status, "proved", "{id}");
+    assert_eq!(report.real_rooted_from_index, Some(0), "{id}");
+    let search = report.affine_coordinates.as_ref().expect("the stage ran");
+    let conclusion = search.conclusion.as_ref().expect("a coordinate proves");
+    assert_eq!(conclusion.coordinate.slope, "1");
+    assert_eq!(conclusion.coordinate.intercept, "1");
+    assert_eq!(conclusion.theorem, RealRootednessTheorem::VariableDelay);
+    assert_eq!(
+        conclusion.root_region,
+        Some(RootInterval {
+            lower: None,
+            upper: Some(polytool::recurrence::RootEndpoint::rational(
+                &rational("1"),
+                false
+            )),
+        })
+    );
+    assert_eq!(
+        conclusion.interlacing_orientation,
+        Some(AffineInterlacingOrientation::Preserved)
+    );
+    assert!(
+        report.statement.contains("Affine coordinate"),
+        "{}",
+        report.statement
+    );
+    rows_in_region(&original, conclusion.root_region.as_ref().unwrap(), 14);
+    // The transformed record is u = x - 1: P_n(u + 1) = 2 P_(n-1)(u + 1)
+    // + u P_(n-L)(u + 1).
+    let proved = search.coordinates.last().unwrap();
+    let (rule, _, seeds) = proved.recurrence.to_recurrence_parts().unwrap();
+    assert_eq!(
+        rule.terms[1].coeff.coeffs,
+        vec![vec![rational("0"), rational("1")]]
+    );
+    // Constant seeds are unchanged.
+    assert_eq!(seeds, original.to_recurrence_parts().unwrap().2);
+    report.verify().unwrap();
+    let json = serde_json::to_string(&report).unwrap();
+    let back: RecurrenceProofDiscoveryReport = serde_json::from_str(&json).unwrap();
+    back.verify().unwrap();
 }
 
 #[test]
-fn a118424_is_proved_with_the_default_stages() {
+fn a118424_is_proved_directly_by_the_newton_pair_route() {
     let report = discover_recurrence_proofs(
         &catalog_record("A118424"),
         &RealRootednessTheoremOptions::default(),
     )
     .unwrap();
     assert_eq!(report.status, "proved");
-    assert!(report.catalog_lifts.is_some(), "the lifts ran first");
-    assert!(report
-        .affine_coordinates
-        .as_ref()
-        .is_some_and(|search| search.is_proved()));
+    assert_eq!(report.real_rooted_from_index, Some(0));
+    assert!(report.attempts.iter().any(|attempt| attempt.theorem
+        == RealRootednessTheorem::EffectiveBkw
+        && attempt.is_proved()));
+    assert!(report.affine_coordinates.is_none());
     report.verify().unwrap();
+
+    // Keep the older affine proof available explicitly: Q_n(u)=P_n(u+1)
+    // satisfies the fixed-delay theorem on (-inf,0), hence P_n has roots
+    // in (-inf,1). Default discovery stops at the stronger direct proof.
+    use polytool::recurrence::{
+        check_variable_delay_theorem, transform_recurrence, RecurrenceTransformRequest,
+        RecurrenceTransformation,
+    };
+    let transformed = transform_recurrence(&RecurrenceTransformRequest::from_source(
+        RecurrenceTransformation::Affine {
+            a: "1".into(),
+            b: "1".into(),
+        },
+        catalog_record("A118424"),
+        14,
+    ))
+    .unwrap();
+    polytool::recurrence::verify_recurrence_transform(&transformed).unwrap();
+    let scalar = transformed
+        .transported
+        .as_ref()
+        .unwrap()
+        .scalar
+        .as_ref()
+        .unwrap();
+    let (rule, first, seeds) = scalar.to_recurrence_parts().unwrap();
+    let affine_proof = check_variable_delay_theorem(
+        &rule,
+        first,
+        &seeds,
+        &RealRootednessTheoremOptions::default(),
+    )
+    .unwrap();
+    assert!(affine_proof.is_proved());
+    let upper = affine_proof
+        .conclusion
+        .as_ref()
+        .unwrap()
+        .root_region
+        .as_ref()
+        .unwrap()
+        .upper
+        .as_ref()
+        .unwrap();
+    assert_eq!(upper.value, "0");
+    assert!(!upper.closed);
+    affine_proof.verify().unwrap();
+    rows_in_region(
+        &catalog_record("A118424"),
+        &RootInterval {
+            lower: None,
+            upper: Some(polytool::recurrence::RootEndpoint::rational(
+                &rational("1"),
+                false,
+            )),
+        },
+        14,
+    );
 }
 
 /// The Eulerian polynomials `A_n(x) = (1 + (n-1) x) A_(n-1) + x(1-x)
@@ -281,9 +338,9 @@ fn a_family_no_coordinate_proves_and_the_disabled_stage() {
     tampered.affine_coordinates.as_mut().unwrap().coordinates[0].proved = true;
     assert!(tampered.verify().is_err());
 
-    // Switched off, the report has no stage and A118424 stays unproved.
+    // Switched off, the report has no stage and A118884 stays unproved.
     let off = discover_recurrence_proofs_with_stage_options(
-        &catalog_record("A118424"),
+        &catalog_record("A118884"),
         &RealRootednessTheoremOptions::default(),
         &RecurrenceProofStageOptions {
             alternative_representations: AlternativeRepresentationOptions {
@@ -302,7 +359,7 @@ fn a_family_no_coordinate_proves_and_the_disabled_stage() {
 
 #[test]
 fn a_requested_region_is_pulled_back_to_the_new_coordinate() {
-    let original = catalog_record("A118424");
+    let original = catalog_record("A118884");
     let options = RealRootednessTheoremOptions {
         root_region: Some(RealInterval {
             lower: None,

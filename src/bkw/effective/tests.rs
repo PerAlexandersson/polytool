@@ -180,11 +180,19 @@ fn rejects_nonreal_rows_and_incorrect_targets() {
     wrong.target_zero_count = Some(EffectiveBkwZeroCount {
         slope: 1,
         offsets: vec![-1],
+        divisor: 1,
     });
     assert!(certify_effective_bkw(&wrong)
         .unwrap()
         .reason
         .contains("degree budget"));
+    // A compact pi-to-zero pair phase grows by one crossing per row;
+    // this recurrence has the incompatible degree cap floor(n/5).
+    let sublinear = request(&[&[1]], &[&[1], &[-1], &[], &[], &[], &[0, -1]]);
+    let report = certify_effective_bkw(&sublinear).unwrap();
+    assert_eq!(report.status, "not_proved");
+    assert!(report.reason.contains("degree cap is sublinear"));
+    report.verify().unwrap();
 }
 #[test]
 fn invalid_compact_constants_are_rejected() {
@@ -340,6 +348,12 @@ fn supplied_higher_order_pair_factorization() {
     let report = certify_effective_bkw(&input).unwrap();
     assert_eq!(report.status, "proved", "{}", report.reason);
     report.verify().unwrap();
+    let mut automatic = input.clone();
+    automatic.pair_factorization = None;
+    automatic.uniform_constants = None;
+    let report = certify_effective_bkw(&automatic).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    report.verify().unwrap();
     input.pair_factorization.as_mut().unwrap().norm_squared[0] = "2".into();
     assert_eq!(certify_effective_bkw(&input).unwrap().status, "not_proved");
 
@@ -359,4 +373,455 @@ fn supplied_higher_order_pair_factorization() {
     let report = certify_effective_bkw(&canceled).unwrap();
     assert_eq!(report.status, "not_proved");
     assert!(report.reason.contains("endpoint pair cofactor"));
+}
+
+#[test]
+fn newton_degrees_and_quadratic_ray_replay() {
+    // Fibonacci polynomials: deg P_n=floor(n/2), including both residues.
+    let input = request(&[&[1]], &[&[1], &[-1], &[0, -1]]);
+    let report = certify_effective_bkw(&input).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    let certificate = report.certificate.as_ref().unwrap();
+    assert_eq!(certificate.zero_count.divisor, 2);
+    assert_eq!(certificate.zero_count.offsets, [0, -1]);
+    assert_eq!(certificate.phase_limits.left_eigenvalue_argument, "1/2");
+    assert_eq!(certificate.root_region, EffectiveBkwRootRegion::NegativeRay);
+    assert_eq!(
+        certificate.degree_certificate.leading_numerator,
+        ["1", "1", "-1"]
+    );
+    assert_eq!(
+        certificate.degree_certificate.leading_denominator,
+        ["1", "0", "-2", "0", "1"]
+    );
+    report.verify().unwrap();
+    let mut tampered = report.clone();
+    tampered.certificate.as_mut().unwrap().zero_count.divisor = 1;
+    assert!(tampered.verify().is_err());
+    let mut tampered = report;
+    tampered
+        .certificate
+        .as_mut()
+        .unwrap()
+        .degree_certificate
+        .newton
+        .as_mut()
+        .unwrap()
+        .first_layers[1] += 1;
+    assert!(tampered.verify().is_err());
+
+    // A second Newton slope; degree evidence alone is not a root proof.
+    let input = request(&[&[1]], &[&[1], &[-1], &[], &[0, 0, -1]]);
+    let budget = degree_budget(
+        &decode_b(&input.generating_function.numerator).unwrap(),
+        &decode_b(&input.generating_function.denominator).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(budget.count.slope, 2);
+    assert_eq!(budget.count.divisor, 3);
+    for n in 0..30 {
+        assert_eq!(degree::value(&budget.count, n).unwrap(), 2 * (n / 3));
+    }
+    let input = request(&[&[1]], &[&[1], &[-1], &[0, -1], &[0, 0, -1]]);
+    let budget = degree_budget(
+        &decode_b(&input.generating_function.numerator).unwrap(),
+        &decode_b(&input.generating_function.denominator).unwrap(),
+    )
+    .unwrap();
+    for n in 0..30 {
+        assert_eq!(degree::value(&budget.count, n).unwrap(), 2 * n / 3);
+    }
+    let input = request(&[&[1], &[0, 1]], &[&[1], &[-1], &[0, -1]]);
+    let report = certify_effective_bkw(&input).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    report.verify().unwrap();
+}
+
+#[test]
+fn general_leading_coefficients_and_quadratic_chart_selection() {
+    for input in [
+        request(&[&[2]], &[&[1], &[0, -2], &[1]]),
+        request(&[&[10, 1]], &[&[1], &[0, -2], &[1]]),
+        request(&[&[-4, 0, 1]], &[&[1], &[0, -2], &[1]]),
+        request(&[&[1]], &[&[1], &[-4, -2], &[3, 3, 1]]),
+    ] {
+        let report = certify_effective_bkw(&input).unwrap();
+        assert_eq!(report.status, "proved", "{}", report.reason);
+        report.verify().unwrap();
+    }
+    // A fixed nonreal factor cannot be absorbed by exterior sign counts.
+    let bad = request(&[&[1, 0, 1]], &[&[1], &[0, -2], &[1]]);
+    assert_eq!(certify_effective_bkw(&bad).unwrap().status, "not_proved");
+    // The diagonal top layer is the polynomial -1. After that finite
+    // exception, the degree is n-1 and the leading coefficient is positive.
+    let input = request(&[&[-1], &[3, 2]], &[&[1], &[0, -2], &[1]]);
+    let report = certify_effective_bkw(&input).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    let certificate = report.certificate.as_ref().unwrap();
+    assert_eq!(certificate.zero_count.offsets, [-1]);
+    assert_eq!(
+        certificate.degree_certificate.leading_numerator,
+        ["-1", "5"]
+    );
+    assert_eq!(
+        certificate.degree_certificate.leading_denominator,
+        ["1", "-2"]
+    );
+    report.verify().unwrap();
+}
+
+#[test]
+fn recurrence_zero_prefix_is_shifted_and_bound_to_original() {
+    let input: crate::recurrence::RecurrenceJson = serde_json::from_str(
+        r#"{
+        "schema":"polytool.recurrence.v1","first_index":7,
+        "initial_polynomials":[["0"],["1"]],"recurrence":{"terms":[
+        {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["1"]]}},
+        {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","1"]]}}
+    ]}}"#,
+    )
+    .unwrap();
+    let report = certify_effective_bkw_recurrence(&input).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    assert_eq!(report.request.generating_function.first_index, 8);
+    assert_eq!(report.skipped_prefix.len(), 1);
+    assert_eq!(report.skipped_prefix[0].degree, None);
+    report.verify().unwrap();
+    let mut tampered = report.clone();
+    tampered
+        .source_recurrence
+        .as_mut()
+        .unwrap()
+        .initial_polynomials[0] = vec!["1".into()];
+    assert!(tampered.verify().is_err());
+    let mut tampered = report;
+    tampered.skipped_prefix[0].index += 1;
+    assert!(tampered.verify().is_err());
+
+    // The order-two rule starts only after all three prescribed seeds.
+    // Keeping that exception gives P_2=1 and the Chebyshev tail from there.
+    let extra: crate::recurrence::RecurrenceJson = serde_json::from_str(
+        r#"{
+        "schema":"polytool.recurrence.v1","first_index":0,
+        "initial_polynomials":[["2"],["0"],["1"]],"recurrence":{"terms":[
+        {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","2"]]}},
+        {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1"]]}}
+    ]}}"#,
+    )
+    .unwrap();
+    let report = certify_effective_bkw_recurrence(&extra).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    assert_eq!(report.request.generating_function.first_index, 2);
+    assert_eq!(report.skipped_prefix.len(), 2);
+    report.verify().unwrap();
+}
+
+#[test]
+fn newton_cubic_ray_with_a_small_real_remainder() {
+    let mut input = request(&[&[1]], &[&[1], &[-1], &[0, -1]]);
+    let pair = decode_b(&input.generating_function.denominator).unwrap();
+    let h = B::new(vec![vec![q(1)], vec![q(-1) / q(10)]]);
+    input.generating_function.denominator = encode_b(&pair.multiply(&h));
+    let report = certify_effective_bkw(&input).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    assert_eq!(report.certificate.as_ref().unwrap().zero_count.divisor, 2);
+    report.verify().unwrap();
+}
+
+#[test]
+#[cfg_attr(
+    not(feature = "full-tests"),
+    ignore = "automatic factorizations through order eight"
+)]
+fn automatic_polynomial_pairs_through_order_eight() {
+    for order in 5..=8 {
+        let mut input = chebyshev();
+        let mut h = B::one();
+        for j in 1..=order - 2 {
+            h = h.multiply(&B::new(vec![
+                vec![q(1)],
+                vec![-Q::new(1.into(), (100 * j).into())],
+            ]));
+        }
+        input.generating_function.denominator = encode_b(
+            &decode_b(&input.generating_function.denominator)
+                .unwrap()
+                .multiply(&h),
+        );
+        let report = certify_effective_bkw(&input).unwrap();
+        assert_eq!(report.status, "proved", "order {order}: {}", report.reason);
+        report.verify().unwrap();
+    }
+    // Two nonreal pairs: the constant quadratic cofactor is not dominant.
+    // Automatic search must continue to the other quadratic factor.
+    let mut input = chebyshev();
+    let mut h = B::new(vec![vec![q(1)], vec![], vec![q(1) / q(10000)]]);
+    for j in [1, 2] {
+        h = h.multiply(&B::new(vec![vec![q(1)], vec![-q(j) / q(100)]]));
+    }
+    input.generating_function.denominator = encode_b(
+        &decode_b(&input.generating_function.denominator)
+            .unwrap()
+            .multiply(&h),
+    );
+    let report = certify_effective_bkw(&input).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    report.verify().unwrap();
+}
+
+#[test]
+#[ignore = "bounded diagnostic for the higher-order algebraic subresultant"]
+fn algebraic_pair_subresultant_factorization_identity() {
+    let mut input = chebyshev();
+    let mut h = B::one();
+    for j in [1, 3, 7] {
+        h = h.multiply(&B::new(vec![
+            vec![q(1)],
+            vec![-Q::new(j.into(), 100.into())],
+        ]));
+    }
+    let mut d = decode_b(&input.generating_function.denominator)
+        .unwrap()
+        .multiply(&h);
+    d = d.add(&B::monomial(5, 0, q(1) / q(100000000)));
+    input.generating_function.denominator = encode_b(&d);
+    let d: Vec<_> = d.rows().iter().map(|row| P::new(row.clone())).collect();
+    // A primitive polynomial of degree one in t is irreducible in Q[t,lambda].
+    let constant = P::new(d.iter().rev().map(|p| p.coeff(0)).collect());
+    let coefficient = P::new(d.iter().rev().map(|p| p.coeff(1)).collect());
+    assert!(d.iter().all(|p| p.degree().unwrap_or(0) <= 1));
+    assert_eq!(constant.gcd(&coefficient).degree(), Some(0));
+    let (p, a, b, h, _) = higher::algebraic_pair(&d).unwrap();
+    let pair = [R::of(c(1)), a.scale(&q(-2)), b];
+    let mut product = vec![R::of(c(0)); 6];
+    for (i, u) in pair.iter().enumerate() {
+        for (j, v) in h.iter().enumerate() {
+            product[i + j] = product[i + j].add(&u.mul(v));
+        }
+    }
+    for (i, v) in product.iter().enumerate() {
+        assert!(
+            rem(&v.sub(&R::of(t(&d[i]))).n, &p).is_zero(),
+            "coefficient {i}"
+        );
+    }
+}
+
+#[test]
+fn a_cofactor_collision_cannot_supply_a_pair_phase_endpoint() {
+    let interval = EffectiveBkwInterval {
+        lower: EffectiveBkwEndpoint::Rational { value: "-2".into() },
+        upper: EffectiveBkwEndpoint::Rational {
+            value: "1/2".into(),
+        },
+    };
+    let domain = Domain::select(&P::new(vec![q(-1)]), 5, &Some(interval)).unwrap();
+    // The dominant pair has |lambda|=2, Re(lambda)=t. Two small positive
+    // cofactor roots collide at t=1/2, x=2/5; that collision is not the pair.
+    let pair = B::new(vec![vec![q(1)], vec![q(0), q(-2)], vec![q(4)]]);
+    let real = B::new(vec![vec![q(1)], vec![-q(1) / q(100)]]);
+    let small = B::new(vec![
+        vec![q(1)],
+        vec![-q(4) / q(5)],
+        vec![q(31) / q(200), q(1) / q(100)],
+    ]);
+    let actual = real.multiply(&small);
+    let wrong = real.multiply(&pair);
+    let h = |p: &B| {
+        p.rows()
+            .iter()
+            .map(|row| R::of(t(&P::new(row.clone()))))
+            .collect::<Vec<_>>()
+    };
+    let gamma = [q(1) / q(2), q(1) / q(16), q(1) / q(4096)];
+    let ratio = q(3) / q(4);
+    assert!(
+        gamma
+            .iter()
+            .enumerate()
+            .map(|(j, g)| g / ratio.pow((j + 1) as i32))
+            .sum::<Q>()
+            < q(1)
+    );
+    let actual_h = h(&actual);
+    for (j, (coefficient, weight)) in actual_h.iter().skip(1).zip(&gamma).enumerate() {
+        let bound = R::of(c(4))
+            .pow(j + 1)
+            .scale(&(weight * weight))
+            .sub(&coefficient.square());
+        check_sign(
+            "actual cofactor Cauchy bound",
+            &variable(),
+            &bound.signed_polynomial(&variable()),
+            &domain,
+            Branch::Zero,
+            0,
+        )
+        .unwrap();
+    }
+    compact::check_collision_cofactor(&domain, &R::of(c(-2)), &actual_h, &gamma, true).unwrap();
+    let parameter = q(1) / q(2);
+    let d = P::new(pair.multiply(&actual).evaluate_variable(&parameter));
+    let collision = P::new(vec![q(1), -q(4) / q(5), q(4) / q(25)]);
+    assert_eq!(d, collision * P::new(wrong.evaluate_variable(&parameter)));
+    let rejected = compact::check_collision_cofactor(
+        &domain,
+        &R::of(c(2)).scale(&(q(1) / q(5))),
+        &h(&wrong),
+        &gamma,
+        false,
+    );
+    assert!(
+        rejected.is_err(),
+        "a cofactor double root must not fix the pair phase limit"
+    );
+    // Equality in an endpoint weight is allowed; the ratio budget is strict.
+    compact::check_collision_cofactor(
+        &domain,
+        &R::of(c(-2)),
+        &[R::of(c(1)), R::of(c(1))],
+        &[q(1) / q(2)],
+        true,
+    )
+    .unwrap();
+}
+
+#[test]
+fn rational_pi_angles_use_complete_cyclotomic_tests() {
+    for (square, angle) in [
+        (q(0), q(1) / q(2)),
+        (q(1) / q(4), q(1) / q(3)),
+        (q(1) / q(2), q(1) / q(4)),
+        (q(3) / q(4), q(1) / q(6)),
+        (q(1), q(0)),
+    ] {
+        assert_eq!(
+            quadratic::angle_from_cosine_squared(&square, 1).unwrap(),
+            angle
+        );
+        assert_eq!(
+            quadratic::angle_from_cosine_squared(&square, -1).unwrap(),
+            q(1) - angle
+        );
+    }
+    for (square, angle) in [
+        (q(0), q(0)),
+        (q(1) / q(3), q(1) / q(6)),
+        (q(1), q(1) / q(4)),
+        (q(3), q(1) / q(3)),
+    ] {
+        assert_eq!(
+            quadratic::angle_from_tangent_squared(&square, -1).unwrap(),
+            -angle
+        );
+    }
+    for denominator in 2..=24 {
+        for numerator in 0..=denominator {
+            let value = q(numerator) / q(denominator);
+            let twice_cosine = q(4) * &value - q(2);
+            // Roots of unity are algebraic integers. A rational trace is
+            // integral; conversely this quadratic with integral trace and
+            // all roots on the unit circle is cyclotomic here.
+            let expected = twice_cosine.denom() == &num_bigint::BigInt::one();
+            assert_eq!(
+                quadratic::angle_from_cosine_squared(&value, 1).is_ok(),
+                expected
+            );
+        }
+    }
+    assert!(quadratic::angle_from_cosine_squared(&q(-1), 1).is_err());
+    assert!(quadratic::angle_from_cosine_squared(&q(2), 1).is_err());
+    assert!(quadratic::angle_from_tangent_squared(&q(2), 1).is_err());
+    assert!(quadratic::angle_from_tangent_squared(&q(-1), 1).is_err());
+}
+
+#[test]
+fn binomial_edge_dilation_uses_general_bezout_exponents() {
+    for (degree, k) in [(3, 1), (3, 2), (3, 4), (3, 5), (4, 3), (5, 2), (7, 3)] {
+        let p = B::monomial(degree, 0, q(1)).add(&B::monomial(
+            0,
+            k,
+            q(if k % 2 == 0 { -2 } else { 2 }),
+        ));
+        let (eigen, parameter) = cubic::binomial_newton_dilation(&p, k, degree);
+        assert_eq!(eigen.pow(degree as i32), q(2) * parameter.pow(k as i32));
+        assert_ne!((eigen, parameter), (q(1), q(1)));
+    }
+    // For the cubic integer-slope edge, rational dilation exists only when
+    // c is already a cube; the original exact linear-factor search handles it.
+    let p = B::monomial(3, 0, q(1)).add(&B::monomial(0, 3, q(2)));
+    assert_eq!(cubic::binomial_newton_dilation(&p, 1, 1), (q(1), q(1)));
+}
+
+#[test]
+fn local_newton_unit_check_and_branch_denominator_guards() {
+    let numerator = B::one();
+    let denominator = B::new(vec![vec![q(1), q(1)], vec![q(-1)], vec![q(0), q(-1)]]);
+    assert!(degree::newton_budget(&numerator, &denominator)
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("D(t,0)=1"));
+    let interval = EffectiveBkwInterval {
+        lower: EffectiveBkwEndpoint::Rational { value: "-1".into() },
+        upper: EffectiveBkwEndpoint::Rational { value: "1".into() },
+    };
+    let domain = Domain::select(&P::new(vec![q(-1)]), 2, &Some(interval)).unwrap();
+    // This pole is away from the sample. Later zero-numerator arithmetic
+    // could erase it, so the fractions are checked before that arithmetic.
+    let mut fraction = R::of(c(0));
+    fraction.d = t(&P::new(vec![-q(1) / q(2), q(1)]));
+    assert!(
+        compact::check_pair_denominators(&variable(), &fraction, &[], &domain, Branch::Zero)
+            .is_err()
+    );
+    assert!(compact::check_pair_denominators(
+        &variable(),
+        &R::of(c(0)),
+        &[fraction],
+        &domain,
+        Branch::Zero
+    )
+    .is_err());
+    let mut regular = R::of(c(0));
+    regular.d = t(&P::new(vec![q(1), q(0), q(1)]));
+    assert_eq!(
+        compact::check_pair_denominators(&variable(), &regular, &[], &domain, Branch::Zero)
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn automatic_cauchy_weights_allow_identically_zero_coefficients() {
+    let mut input = chebyshev();
+    let small_pair = B::new(vec![vec![q(1)], vec![], vec![q(1) / q(10000)]]);
+    let h = small_pair.power(2);
+    // N=H makes F=N/H identically one, isolating the Cauchy supplier
+    // from the separate restricted amplitude-winding test.
+    input.generating_function.numerator = encode_b(&h);
+    input.pair_factorization = Some(EffectiveBkwPairFactorization {
+        real_part: vec!["0".into(), "1".into()],
+        norm_squared: vec!["1".into()],
+        cofactor: encode_b(&h),
+    });
+    input.generating_function.denominator = encode_b(
+        &decode_b(&input.generating_function.denominator)
+            .unwrap()
+            .multiply(&h),
+    );
+    let report = certify_effective_bkw(&input).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    let constants = report
+        .certificate
+        .as_ref()
+        .unwrap()
+        .automatic_uniform_constants
+        .as_ref()
+        .unwrap();
+    let gamma = constants.cofactor_weights.as_ref().unwrap();
+    assert_eq!(gamma[0], "0");
+    assert_eq!(gamma[2], "0");
+    report.verify().unwrap();
 }

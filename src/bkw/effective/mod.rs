@@ -15,6 +15,9 @@ use serde::{Deserialize, Serialize};
 mod algebra;
 mod compact;
 mod cubic;
+mod degree;
+mod higher;
+mod quadratic;
 mod signs;
 #[cfg(test)]
 mod tests;
@@ -59,14 +62,24 @@ pub struct EffectiveBkwInterval {
     pub upper: EffectiveBkwEndpoint,
 }
 
-/// The count `slope*n + offsets[n % offsets.len()]`, for the local GF index n.
+/// The count `(slope*n + offsets[n % offsets.len()])/divisor`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EffectiveBkwZeroCount {
-    /// Linear growth per local row index.
+    /// Numerator of the linear growth per local row index, divided by `divisor`.
     pub slope: usize,
     /// Periodic offsets. A proof checks the complete period symbolically.
     pub offsets: Vec<i64>,
+    /// Positive denominator of a quasi-linear count; omitted means one.
+    #[serde(default = "one_usize", skip_serializing_if = "is_one")]
+    pub divisor: usize,
+}
+
+fn one_usize() -> usize {
+    1
+}
+fn is_one(value: &usize) -> bool {
+    *value == 1
 }
 
 /// Uniform compact-interval tail constants (all exact rational strings).
@@ -108,14 +121,14 @@ pub struct EffectiveBkwRequest {
     /// Requested pair interval; omitted selects a discriminant component.
     #[serde(default)]
     pub interval: Option<EffectiveBkwInterval>,
-    /// Requested total real-zero count; omitted uses the certified degree budget.
+    /// Requested real-zero count law from the cutoff; omitted uses the
+    /// certified degree budget, with earlier rows checked individually.
     #[serde(default)]
     pub target_zero_count: Option<EffectiveBkwZeroCount>,
-    /// Compact template constants; omitted quartic bounds use an exact grid
-    /// search. Required with a supplied higher-order factorization.
+    /// Compact template constants; omitted bounds use exact rational grids.
     #[serde(default)]
     pub uniform_constants: Option<EffectiveBkwUniformConstants>,
-    /// Optional exact pair factorization; required beyond automatic order four.
+    /// Optional exact pair factorization, bypassing automatic discovery.
     #[serde(default)]
     pub pair_factorization: Option<EffectiveBkwPairFactorization>,
 }
@@ -164,7 +177,7 @@ pub struct EffectiveBkwExpansionData {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EffectiveBkwPhaseLimits {
-    /// Left eigenvalue argument limit, 1 for the supported orientation.
+    /// Left eigenvalue argument limit in units of pi, possibly fractional.
     pub left_eigenvalue_argument: String,
     /// Right eigenvalue argument limit, 0 for the supported orientation.
     pub right_eigenvalue_argument: String,
@@ -178,15 +191,50 @@ pub struct EffectiveBkwPhaseLimits {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EffectiveBkwDegreeCertificate {
-    /// All-index upper bound, with the same local indexing as the zero count.
+    /// Degree law in local GF indices; a Newton law starts at `newton.start`,
+    /// with every earlier degree in `newton.prefix_degrees`.
     pub upper_bound: EffectiveBkwZeroCount,
-    /// Reduced GF for `[t^n]P_n`, ascending rational coefficients in z.
+    /// Reduced leading-coefficient GF for Newton laws; legacy diagonal
+    /// templates store the GF for `[t^n]P_n`. Ascending coefficients in z.
     pub leading_numerator: Vec<String>,
     /// Denominator of that GF, normalized to constant coefficient one.
     pub leading_denominator: Vec<String>,
-    /// The top coefficient is positive exactly in these residue classes
-    /// modulo `upper_bound.offsets.len()`; elsewhere it is zero.
+    /// Positive leading-coefficient classes from the Newton law's start.
+    /// For legacy diagonal templates, these are the positive diagonal top
+    /// classes and the remaining classes have zero diagonal coefficient.
     pub positive_top_residues: Vec<usize>,
+    /// Newton weight and exact coefficient layers for a quasi-linear law.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub newton: Option<EffectiveBkwNewtonDegree>,
+}
+
+/// Weighted generating-function proof of the exact eventual degree law.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EffectiveBkwNewtonDegree {
+    /// Substitution `t=u^(-weight_denominator), z=z*u^weight_numerator`.
+    pub weight_numerator: usize,
+    /// Denominator of the Newton slope, relatively prime to the numerator.
+    pub weight_denominator: usize,
+    /// Multiply the substituted numerator by this power of u.
+    pub numerator_shift: usize,
+    /// Local start of the exact degree law; earlier rows are checked finitely.
+    pub start: usize,
+    /// Coefficient of each u power as a reduced rational function in z.
+    pub layers: Vec<crate::recurrence::RationalGeneratingSeries>,
+    /// First eventual nonzero layer for each index residue. Earlier layers
+    /// can have finite support, covered by `prefix_degrees`.
+    pub first_layers: Vec<usize>,
+    /// Local degrees before `start`, absent for zero rows.
+    pub prefix_degrees: Vec<Option<usize>>,
+    /// Positive support seeds modulo the smallest Newton-face step, grouped
+    /// by degree-law residue. Adding that step preserves strict positivity.
+    pub reachability_seeds: Vec<Vec<usize>>,
+    /// Exact sufficient positivity argument used for the coefficient layers.
+    pub positivity_supplier: String,
+    /// Optional all-index signs of polynomial coefficient formulas for a
+    /// binomial Newton face, in the residue index k.
+    pub leading_sign_certificates: Vec<crate::integer_range_sign::IndexSignCertificate>,
 }
 
 /// Exact coordinate transport applied before the displayed certificate.
@@ -226,7 +274,7 @@ pub struct EffectiveBkwCertificate {
     /// Ascending characteristic coefficients in lambda, each ascending in t.
     pub characteristic: Vec<Vec<String>>,
     /// Algebraic branch equation, outer variable the real root (cubic) or
-    /// pair product (quartic); a constant branch is used for order two.
+    /// pair product (higher orders); rational pair charts use a constant branch.
     pub branch_equation: Vec<Vec<String>>,
     /// How the continuous branch is selected on the whole open interval.
     pub branch_selection: String,
@@ -242,6 +290,9 @@ pub struct EffectiveBkwCertificate {
     pub cutoff: usize,
     /// Exact tail bound at cutoff; zero for the no-remainder supplier.
     pub tail_at_cutoff: String,
+    /// Automatically found compact/Cauchy constants for higher-order pairs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub automatic_uniform_constants: Option<EffectiveBkwUniformConstants>,
     /// Certified endpoint and argument-lift data, in multiples of pi.
     pub phase: Vec<String>,
     /// Exact phase-limit constants for later emission.
@@ -273,6 +324,26 @@ pub struct EffectiveBkwReport {
     pub reason: String,
     /// Present exactly when every proof obligation passed.
     pub certificate: Option<EffectiveBkwCertificate>,
+    /// Original complete recurrence when a finite prefix was removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_recurrence: Option<crate::recurrence::RecurrenceJson>,
+    /// Exactly checked prefix omitted from the nonzero simple-root conclusion.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_prefix: Vec<EffectiveBkwPrefixRow>,
+}
+
+/// A removed zero or simple real-rooted row, bound to the original recurrence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EffectiveBkwPrefixRow {
+    /// Absolute index in the original record.
+    pub index: usize,
+    /// Ascending exact rational coefficients; the zero row is empty.
+    pub coefficients: Vec<String>,
+    /// Degree, absent exactly for the zero polynomial.
+    pub degree: Option<usize>,
+    /// Distinct real roots, equal to degree for every nonzero prefix row.
+    pub distinct_real_roots: usize,
 }
 
 impl EffectiveBkwReport {
@@ -281,7 +352,11 @@ impl EffectiveBkwReport {
     /// # Errors
     /// Returns [`RecurrenceError::VerificationFailed`] on any mismatch.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
-        let expected = certify_effective_bkw(&self.request)?;
+        let expected = if let Some(source) = &self.source_recurrence {
+            certify_effective_bkw_recurrence(source)?
+        } else {
+            certify_effective_bkw(&self.request)?
+        };
         if self != &expected {
             return Err(RecurrenceError::VerificationFailed(
                 "effective-BKW replay mismatch".into(),
@@ -296,8 +371,8 @@ impl EffectiveBkwReport {
 /// The quartic supplier searches a bounded grid of simple rationals for
 /// modulus, amplitude and numerator bounds, checking each over the interval.
 /// Use [`certify_effective_bkw`] to supply other constants or a factorization.
-/// Extra prescribed seeds are retained; an improper numerator is unsupported
-/// rather than silently shifting the claimed starting index.
+/// A zero prefix or an improper numerator is removed exactly when possible;
+/// the report binds the shifted GF and checked prefix to the original record.
 ///
 /// # Errors
 /// Returns [`RecurrenceError`] when the recurrence cannot be converted to
@@ -306,14 +381,74 @@ pub fn certify_effective_bkw_recurrence(
     record: &crate::recurrence::RecurrenceJson,
 ) -> Result<EffectiveBkwReport, RecurrenceError> {
     let (rule, first, seeds) = record.to_recurrence_parts()?;
-    let gf = crate::recurrence::rational_generating_function(&rule, first, &seeds)?;
-    certify_effective_bkw(&EffectiveBkwRequest {
+    let mut gf = crate::recurrence::rational_generating_function(&rule, first, &seeds)?;
+    let mut numerator = decode_b(&gf.numerator)?;
+    let denominator = decode_b(&gf.denominator)?;
+    let order = denominator.index_degree().unwrap_or(0);
+    let mut skipped = Vec::new();
+    // The complete seed-dependent GF is shifted, never rebuilt from a
+    // truncated seed list. This retains all prescribed exceptions to the rule.
+    while skipped.len() <= seeds.len()
+        && (numerator
+            .rows()
+            .first()
+            .is_none_or(|r| vec_poly::is_zero(r))
+            || numerator.index_degree().is_some_and(|d| d >= order))
+    {
+        if denominator.rows().first() != Some(&vec![Q::one()]) {
+            return Err(failure("prefix shifting requires D(t,0)=1"));
+        }
+        if numerator.is_zero() || order < 2 {
+            break;
+        }
+        let row = P::new(numerator.rows().first().cloned().unwrap_or_default());
+        let degree = row.degree();
+        let roots = crate::root_count::count_real_roots_prs_bigint_coeffs(
+            &vec_poly::clear_denominators(row.coeffs()),
+        );
+        if degree.is_some_and(|d| d != roots) {
+            return Err(failure(
+                "removed finite prefix contains a row that is not simple real-rooted",
+            ));
+        }
+        skipped.push(EffectiveBkwPrefixRow {
+            index: gf.first_index,
+            coefficients: encode(&row),
+            degree,
+            distinct_real_roots: roots,
+        });
+        numerator = numerator.subtract(&denominator.multiply(&t(&row)));
+        if numerator
+            .rows()
+            .first()
+            .is_some_and(|r| !vec_poly::is_zero(r))
+        {
+            return Err(failure(
+                "prefix subtraction did not cancel its constant row",
+            ));
+        }
+        numerator = B::new(numerator.rows().iter().skip(1).cloned().collect());
+        gf.first_index = gf
+            .first_index
+            .checked_add(1)
+            .ok_or_else(|| failure("shift index overflow"))?;
+    }
+    gf.numerator = encode_b(&numerator);
+    let mut report = certify_effective_bkw(&EffectiveBkwRequest {
         generating_function: gf,
         interval: None,
         target_zero_count: None,
         uniform_constants: None,
         pair_factorization: None,
-    })
+    })?;
+    if !skipped.is_empty() {
+        report.source_recurrence = Some(record.clone());
+        report.skipped_prefix = skipped;
+        if report.status == "proved" {
+            report.reason = format!("every row from index {} is nonzero and has only simple real zeros; removed prefix checked exactly and bound to the original recurrence", report.request.generating_function.first_index);
+        }
+    }
+    Ok(report)
 }
 
 fn failure(message: impl Into<String>) -> RecurrenceError {
@@ -404,6 +539,8 @@ pub fn certify_effective_bkw(
         status: "not_proved".into(),
         reason: String::new(),
         certificate: None,
+        source_recurrence: None,
+        skipped_prefix: Vec::new(),
     };
     match certify(request) {
         Ok(certificate) => {
@@ -543,8 +680,8 @@ fn certify_in_chart(request: &EffectiveBkwRequest) -> Result<EffectiveBkwCertifi
         return Err(RecurrenceError::InvalidInput("effective BKW requires D(t,0)=1".into()).into());
     }
     let order = d.len() - 1;
-    if !(2..=8).contains(&order) || (order > 4 && request.pair_factorization.is_none()) {
-        return Err(failure("automatic pair factorization supports orders two, three and four; orders up to eight accept a supplied rational-polynomial pair factorization").into());
+    if !(2..=8).contains(&order) {
+        return Err(failure("effective pair suppliers support orders two through eight").into());
     }
     if numerator.is_zero() || numerator.index_degree().unwrap_or(0) >= order {
         return Err(failure(
@@ -554,6 +691,20 @@ fn certify_in_chart(request: &EffectiveBkwRequest) -> Result<EffectiveBkwCertifi
     }
     if d.iter().any(|p| p.degree().unwrap_or(0) > 8) {
         return Err(failure("parameter degree exceeds the phase-A elimination guard (8)").into());
+    }
+    // Two finite collisions with theta limits pi,0 supply n+O(1) roots.
+    // A sublinear Newton cap cannot close that count, regardless of the
+    // numerator's fixed intercept. Reject before any expensive elimination.
+    if (order >= 4 || request.pair_factorization.is_some())
+        && d.iter()
+            .enumerate()
+            .skip(1)
+            .all(|(j, p)| p.degree().is_none_or(|degree| degree < j))
+    {
+        return Err(failure(
+            "compact pair phase has slope one but the Newton degree cap is sublinear",
+        )
+        .into());
     }
     let degree = degree_budget(&numerator, &denominator)?;
     if request
@@ -566,11 +717,20 @@ fn certify_in_chart(request: &EffectiveBkwRequest) -> Result<EffectiveBkwCertifi
         )
         .into());
     }
-    let mut certificate = if order == 3 && request.pair_factorization.is_none() {
-        cubic::certify(&numerator, &d, request, &degree)?
-    } else {
-        compact::certify(&numerator, &d, request, &degree)?
-    };
+    let mut certificate =
+        if order == 2 && degree.data.newton.is_some() && request.pair_factorization.is_none() {
+            match compact::certify(&numerator, &d, request, &degree) {
+                Ok(certificate) => certificate,
+                Err(RecurrenceError::Unsupported(_)) => {
+                    quadratic::certify(&numerator, &d, request, &degree)?
+                }
+                Err(error) => return Err(error.into()),
+            }
+        } else if order == 3 && request.pair_factorization.is_none() {
+            cubic::certify(&numerator, &d, request, &degree)?
+        } else {
+            compact::certify(&numerator, &d, request, &degree)?
+        };
     let mut rows: Vec<P> = Vec::new();
     let mut negative_prefix = certificate.root_region == EffectiveBkwRootRegion::NegativeRay;
     for n in 0..certificate.cutoff {

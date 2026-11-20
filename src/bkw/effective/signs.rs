@@ -411,6 +411,7 @@ impl Domain {
 pub(super) enum Branch {
     UniqueReal,
     UniquePositive,
+    LargestPositive,
     Zero,
 }
 pub(super) fn branch_box(p: &B, t: &Q, which: Branch, epsilon: &Q) -> Result<I, RecurrenceError> {
@@ -420,8 +421,16 @@ pub(super) fn branch_box(p: &B, t: &Q, which: Branch, epsilon: &Q) -> Result<I, 
     let p = P::new(p.evaluate_variable(t));
     let selected: Vec<_> = roots(&p, epsilon)
         .into_iter()
-        .filter(|i| !matches!(which, Branch::UniquePositive) || i.lo.is_positive())
+        .filter(|i| {
+            !matches!(which, Branch::UniquePositive | Branch::LargestPositive) || i.lo.is_positive()
+        })
         .collect();
+    if matches!(which, Branch::LargestPositive) {
+        return selected
+            .last()
+            .cloned()
+            .ok_or_else(|| failure("pair-product polynomial has no positive root"));
+    }
     if selected.len() != 1 {
         return Err(failure(
             "algebraic branch is not uniquely isolated at the rational sample",
@@ -442,15 +451,10 @@ pub(super) fn check_sign(
         eprintln!("effective BKW sign: {name}");
     }
     let f = rem(f, p);
-    let k = resultant(p, &f);
-    #[cfg(test)]
-    if std::env::var_os("POLYTOOL_EFFECTIVE_BKW_TRACE").is_some() {
-        eprintln!("effective BKW resultant: {name}, degree {:?}", k.degree());
-    }
     let mut cert = EffectiveBkwSignCertificate {
         name: name.into(),
         polynomial: encode_b(&f),
-        resultant: encode(&k),
+        resultant: vec![],
         sample_parameter: domain.sample.to_string(),
         sample_branch: ["0".into(), "0".into()],
         sign: 0,
@@ -462,11 +466,6 @@ pub(super) fn check_sign(
             return Ok(cert);
         }
         return Err(failure(format!("{name}: condition vanishes identically")));
-    }
-    if k.is_zero() {
-        return Err(failure(format!(
-            "{name}: resultant vanishes identically; no branch-specific elimination available"
-        )));
     }
     let mut sample = None;
     for bits in (8..=128).step_by(8) {
@@ -482,25 +481,40 @@ pub(super) fn check_sign(
             break;
         }
     }
+    // An exact sample only rejects; every acceptance still computes and
+    // checks the full resultant and all its critical parameter cells.
+    if let Some((_, sign)) = &sample {
+        if (want != 0 && *sign != want) || (want == 0 && *sign < 0) {
+            return Err(failure(format!(
+                "{name}: exact branch sign at t={} is {sign}, expected {}",
+                domain.sample,
+                if want == 0 {
+                    "nonnegative"
+                } else if want > 0 {
+                    "positive"
+                } else {
+                    "negative"
+                }
+            )));
+        }
+    }
+    let k = resultant(p, &f);
+    cert.resultant = encode(&k);
+    #[cfg(test)]
+    if std::env::var_os("POLYTOOL_EFFECTIVE_BKW_TRACE").is_some() {
+        eprintln!("effective BKW resultant: {name}, degree {:?}", k.degree());
+    }
+    if k.is_zero() {
+        return Err(failure(format!(
+            "{name}: resultant vanishes identically; no branch-specific elimination available"
+        )));
+    }
     let Some((root, sign)) = sample else {
         if want == 0 {
             return certify_nonnegative_cells(cert, p, &f, &k, domain, which);
         }
         return Err(failure(format!("{name}: sample sign unresolved")));
     };
-    if (want != 0 && sign != want) || (want == 0 && sign < 0) {
-        return Err(failure(format!(
-            "{name}: exact branch sign at t={} is {sign}, expected {}",
-            domain.sample,
-            if want == 0 {
-                "nonnegative"
-            } else if want > 0 {
-                "positive"
-            } else {
-                "negative"
-            }
-        )));
-    }
     cert.sample_branch = root.wire();
     cert.sign = sign;
     let critical_polynomial = squarefree(&k);
@@ -515,7 +529,9 @@ pub(super) fn check_sign(
             // motion for every finite derivative, without assuming |r'|<=16.
             let padding = Q::new(1.into(), num_bigint::BigInt::one() << (bits / 2));
             let rb = I::new(rb.lo - &padding, rb.hi + &padding);
-            if matches!(which, Branch::UniquePositive) && !rb.lo.is_positive() {
+            if matches!(which, Branch::UniquePositive | Branch::LargestPositive)
+                && !rb.lo.is_positive()
+            {
                 continue;
             }
             let ws = [

@@ -445,13 +445,17 @@ An interval endpoint is `negative_infinity`, `positive_infinity`, `rational`
 or `algebraic`. Algebraic endpoints carry ascending `polynomial` coefficients
 and a closed rational `enclosure` isolating exactly one real root. Omitting
 the interval selects a discriminant component. The zero count is
-`slope*n + offsets[n % offsets.length]`; it must match the symbolic degree
+`(slope*n + offsets[n % offsets.length])/divisor`, with `divisor` defaulting
+to one; it must match the symbolic degree
 budget. A finite prefix does not establish this budget.
 
 `polytool.effective-bkw.v1` reports contain `request`, `status`, `reason`
 and an optional `certificate`. `proved` asserts nonzero rows with simple
 real zeros at every index from `first_index`; `not_proved` names a failed
 sufficient hypothesis or unsupported shape, and is not a refutation.
+When recurrence input needs a finite shift, `source_recurrence` and
+`skipped_prefix` bind the shifted GF to every original prescribed row.
+The conclusion starts at the shifted GF's `first_index`.
 Exit status 0 covers either report; invalid input/replay returns 2.
 See [the exact certificate contract](effective-bkw.md) for the supported
 geometry, uniform constants, algebraic witnesses and limitations.
