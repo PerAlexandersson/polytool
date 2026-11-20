@@ -266,9 +266,10 @@ def test_catalog_lift_proof():
 
 
 def test_affine_coordinate_proof():
-    # A118424: P_n = 2 P_(n-1) + (x - 1) P_(n-3); in u = x - 1 the fixed-delay
+    # A118884: P_n = 2 P_(n-1) + (x - 1) P_(n-4); in u = x - 1 the fixed-delay
     # window proves it, and the region (-inf, 0) of u maps to (-inf, 1).
-    report = polytool.oeis.recurrence("A118424").prove_real_rooted()
+    # (A118424, the delay-3 sibling, is now proved directly by effective BKW.)
+    report = polytool.oeis.recurrence("A118884").prove_real_rooted()
     assert report.status == "proved" and report.is_proved
     assert report.route == "affine_coordinate:variable_delay"
     affine = report.affine_coordinate
@@ -277,6 +278,6 @@ def test_affine_coordinate_proof():
     assert affine["root_region"] == {"upper": {"value": "1", "closed": False}}
     assert report.certificate == affine
     assert report.verify()
-    off = polytool.oeis.recurrence("A118424").prove_real_rooted(max_affine_coordinates=0)
+    off = polytool.oeis.recurrence("A118884").prove_real_rooted(max_affine_coordinates=0)
     assert off.status != "proved" and off.affine_coordinate is None
     assert "affine_coordinates" not in off.to_dict()
