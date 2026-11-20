@@ -21,7 +21,8 @@ Both adapters use `exact_stability::parse`: expressions or ascending lists
 such as `[-I,1+2I,1]`, with integer/rational parts, `I`, parentheses, implicit
 products and natural powers. Floating/scientific literals, nonconstant
 denominators and multivariate expressions fail. Use `--` before negative
-positional expressions. Expression nesting is bounded by 64.
+positional expressions. Lowercase `i` and `j` are reserved: use `I` for the
+imaginary unit and another name for the variable. Expression nesting is bounded by 64.
 
 `--region upper|lower|left|right|disk|exterior` defaults to upper. It is
 exclusive with `--mobius A,B,C,D` (image of the upper half-plane under
@@ -38,6 +39,13 @@ all certificate entries under schema `polytool.stability.v1`. Exact integers
 and rational parts are strings. `stability verify` recomputes every field;
 exit statuses are 0 verified, 1 mismatch, 2 malformed input.
 
+The schema identifier selects the replay contract. The `version` field is a
+nonempty producer-version string for provenance and may differ from the
+verifier's package version. Replay still compares every mathematical field and
+rejects extra fields. Incompatible changes to the wire structure or canonical
+certificate computation require a new schema identifier; unsupported schemas
+are rejected rather than interpreted using the current contract.
+
 `--max-degree N` and `--max-coefficient-bits N` can lower the CLI
 defaults/maxima 2000 and 1000000. Bits apply to each part's numerator and
 denominator, including intermediate parser results. CLI text is capped at
@@ -49,14 +57,17 @@ ascending arrays), optional `region`, `mobius` (four Gaussian values), paired
 `disk_center`/`radius`, `convention`, and `detail:summary|full`. Gaussian
 values are JSON integers, exact strings or objects such as
 `{"real":"1/2","imaginary":"-3/4"}`. JSON floats fail; object parts and
-radius are rational strings. Degree is capped at 500, part bits at 1000000,
+radius are rational strings. Degree is capped at 32, part bits at 256,
 total coefficients at 65536, request text at 1 MiB and coefficient literals
 at 16384 bytes. A 50-second elapsed-time guard rejects the whole response at
-computation checkpoints; it does not interrupt an individual arithmetic
-operation. Expiry never returns partial counts or a verdict.
+checkpoints within each item: Möbius substitution, gcd reductions, repeated-root
+layers and between counting stages, including before and after inertia. It does
+not interrupt individual arithmetic, Sturm or inertia operations. Expiry never
+returns partial counts or a verdict.
 
 Default items are about 150–200 bytes with no certificate. `detail:"full"`
-includes evidence. Configured storage adds `report_id` and `report` metadata;
+includes evidence. Summary mode constructs no full JSON report and stores no
+evidence. With `detail:"full"`, configured storage adds `report_id` and `report` metadata;
 the stored canonical report always contains full evidence and can be replayed
 by the CLI. `read_report` selects evidence by JSON pointer; `tool_help` with
 `{"tool":"stability_univariate"}` explains the complete contract.
@@ -83,6 +94,9 @@ check_univariate_stability(&[GaussianRational], &StabilityRegion)
     -> Result<StabilityReport, StabilityError>
 check_univariate_stability_with_convention(
     &[GaussianRational], &StabilityRegion, StabilityConvention
+) -> Result<StabilityReport, StabilityError>
+check_univariate_stability_with_checkpoint(
+    &[GaussianRational], &StabilityRegion, StabilityConvention, &impl Fn() -> bool
 ) -> Result<StabilityReport, StabilityError>
 StabilityReport::verify(&self, &[GaussianRational]) -> bool
 ```

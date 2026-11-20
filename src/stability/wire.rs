@@ -132,9 +132,12 @@ fn options(report: &StabilityReport) -> Value {
         StabilityRegion::Mobius(m) => {
             json!({"mobius":m.coefficients().into_iter().map(gaussian_json).collect::<Vec<_>>()})
         }
-        r => {
-            json!({"region":match r { StabilityRegion::Upper=>"upper", StabilityRegion::Lower=>"lower", StabilityRegion::Left=>"left", StabilityRegion::Right=>"right", StabilityRegion::Disk=>"disk", _=>"exterior" }})
-        }
+        StabilityRegion::Upper => json!({"region":"upper"}),
+        StabilityRegion::Lower => json!({"region":"lower"}),
+        StabilityRegion::Left => json!({"region":"left"}),
+        StabilityRegion::Right => json!({"region":"right"}),
+        StabilityRegion::Disk => json!({"region":"disk"}),
+        StabilityRegion::Exterior => json!({"region":"exterior"}),
     };
     value["convention"] = json!(match report.convention {
         StabilityConvention::Avoid => "avoid",
@@ -177,13 +180,19 @@ pub fn full_report(items: Vec<Value>) -> Value {
     json!({"schema":SCHEMA,"version":env!("CARGO_PKG_VERSION"),"items":items})
 }
 
-/// Recompute a bounded untrusted full report and compare every field.
+/// Recompute a bounded untrusted full report and compare all mathematical fields.
+/// The schema selects the replay contract. `version` is a nonempty producer
+/// version string, not a compatibility gate; it need not match this executable.
 /// Malformed input, extra fields and altered evidence are rejected.
 pub fn verify_report(value: &Value, limits: ParseLimits) -> Result<bool, ParseError> {
     let bad = || ParseError("malformed stability report".into());
     if value["schema"] != SCHEMA {
         return Err(bad());
     }
+    let version = value["version"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(bad)?;
     let items = value["items"].as_array().ok_or_else(bad)?;
     if items.is_empty() {
         return Err(bad());
@@ -229,5 +238,7 @@ pub fn verify_report(value: &Value, limits: ParseLimits) -> Result<bool, ParseEr
             .map_err(|e| ParseError(e.to_string()))?;
         expected.push(full_item(index, &coefficients, &report));
     }
-    Ok(full_report(expected) == *value)
+    let mut expected = full_report(expected);
+    expected["version"] = json!(version);
+    Ok(expected == *value)
 }

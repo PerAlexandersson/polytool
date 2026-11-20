@@ -143,26 +143,29 @@ pub struct HadamardFactorLiftReport {
 }
 
 impl HadamardFactorLift {
-    /// The [`LiftSummary`] of this lift, computed from the record.
+    /// The [`LiftSummary`] of this lift, using the factor's derived multiplier
+    /// justification. This projection does not replay the recorded parent proof;
+    /// use [`Self::verify`] before trusting a deserialized lift.
     pub fn recompute_lift_summary(&self) -> LiftSummary {
         hadamard_lift_summary(
             &self.factor,
             &self.gauge,
             &self.parent,
             &self.identity,
-            self.multiplier_sequence.as_deref(),
+            self.factor.multiplier_justification().as_deref(),
             &self.parent_proof,
         )
     }
 
     /// Replay the certificate (when certified), check that it belongs to
-    /// this lift, and that the recorded summary equals the recomputed one.
+    /// this lift, re-derive its multiplier justification, replay its parent proof,
+    /// and check that the recorded summary equals the recomputed one.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
-        if self
-            .lift_summary
-            .input_interlacing
-            .proved()
-            .is_some_and(|claim| claim.justification.transfer.is_some())
+        if self.multiplier_sequence != self.factor.multiplier_justification() {
+            return Err(RecurrenceError::VerificationFailed(
+                "the multiplier justification does not match the factor".into(),
+            ));
+        }
         {
             let (rule, first, seeds) = self.parent.to_recurrence_parts()?;
             crate::recurrence::check_recorded_parent_proof(

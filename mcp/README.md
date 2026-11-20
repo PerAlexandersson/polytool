@@ -3,7 +3,7 @@
 `stability_univariate` accepts exact Gaussian-rational expressions with `I`
 or ascending coefficient arrays. It returns compact circular-region root
 counts by default; `detail:"full"` includes replay certificates. With report
-storage configured, `report_id` retrieves full evidence through `read_report`.
+storage configured and `detail:full`, `report_id` retrieves evidence through `read_report`.
 Use `tool_help` with `{"tool":"stability_univariate"}` for syntax and limits,
 or see [the stability guide](../doc/stability.md).
 

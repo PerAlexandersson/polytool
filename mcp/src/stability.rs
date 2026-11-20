@@ -2,7 +2,7 @@
 
 use crate::{limits::*, parsing::invalid_params, report_store::ReportStore, requests::Detail};
 use polytool::stability::{
-    check_univariate_stability_with_convention,
+    check_univariate_stability_with_checkpoint,
     parse::{parse_univariate, ParseLimits},
     wire,
 };
@@ -56,7 +56,7 @@ impl JsonSchema for StabilityUnivariateRequest {
     }
 }
 
-pub(crate) const HELP: &str = "stability_univariate accepts expressions with integer/rational parts and I, or ascending Gaussian coefficient arrays. Gaussian values are JSON integers, exact strings, or {real,imaginary} rational strings; JSON floats fail. Choose region (upper default), mobius [a,b,c,d], or disk_center and positive rational radius, exclusively. Upper/lower/mobius default to avoid; other regions default to inside. Counts include multiplicities. Zero has null degree/counts and passes only avoid; constants pass both. Limits: 512 polynomials, degree 500, 1000000 bits per numerator/denominator, existing 1 MiB text, 16384 bytes per coefficient literal, 65536 total coefficients. A 50-second elapsed-time guard rejects the whole response at computation checkpoints; it does not interrupt an individual exact arithmetic operation. No partial counts are returned. detail:full includes canonical input/options and certificates in polytool.stability.v1. If configured, reports are stored; use report_id with read_report to inspect evidence. CLI: polytool stability verify --input report.json replays the complete report.";
+pub(crate) const HELP: &str = "stability_univariate accepts expressions with integer/rational parts and I, or ascending Gaussian coefficient arrays. Use I for the imaginary unit; i/j are reserved. Gaussian values are JSON integers, exact strings, or {real,imaginary} rational strings; JSON floats fail. Choose region (upper default), mobius [a,b,c,d], or disk_center and positive rational radius, exclusively. Upper/lower/mobius default to avoid; other regions default to inside. Counts include multiplicities. Zero has null degree/counts and passes only avoid; constants pass both. Limits: 512 polynomials, degree 32, 256 bits per numerator/denominator, 1 MiB text, 16384 bytes per coefficient literal, 65536 total coefficients. A 50-second elapsed-time guard checks within each item (substitution, gcd, repeated-root layers and counting stages); individual arithmetic, Sturm and inertia operations are not interrupted. No partial counts are returned. Summary mode constructs no full JSON report and stores no evidence. detail:full includes canonical input/options and certificates in polytool.stability.v1 and stores reports if configured; use report_id with read_report to inspect evidence. CLI: polytool stability verify --input report.json replays the complete report.";
 
 pub(crate) fn response(
     input: StabilityUnivariateRequest,
@@ -125,7 +125,7 @@ fn compute(
             Value::String(s) => parse_univariate(s, limits).map_err(invalid)?,
             Value::Array(a) => {
                 if a.len() > limits.max_degree + 1 {
-                    return Err(invalid_params("coefficient array exceeds degree 500"));
+                    return Err(invalid_params("coefficient array exceeds degree 32"));
                 }
                 for c in a {
                     if c.to_string().len() > MCP_MAX_COEFFICIENT_TEXT_BYTES {
@@ -160,29 +160,35 @@ fn compute(
                 "stability time guard exceeded; no exact result returned",
             ));
         }
-        let report = check_univariate_stability_with_convention(coefficients, &region, convention)
-            .map_err(|e| invalid_params(e.to_string()))?;
+        let report =
+            check_univariate_stability_with_checkpoint(coefficients, &region, convention, &expired)
+                .map_err(|e| invalid_params(e.to_string()))?;
         if expired() {
             return Err(invalid_params(
                 "stability time guard exceeded; no exact result returned",
             ));
         }
         items.push(wire::summary(index, &report));
-        full.push(wire::full_item(index, coefficients, &report));
+        if input.detail == Detail::Full {
+            full.push(wire::full_item(index, coefficients, &report));
+        }
     }
-    let full = wire::full_report(full);
-    let bytes = serde_json::to_vec(&full).expect("JSON report");
+    if expired() {
+        return Err(invalid_params(
+            "stability time guard exceeded; no exact result returned",
+        ));
+    }
+    if input.detail != Detail::Full {
+        return Ok(json!({"items":items}));
+    }
+    let mut result = wire::full_report(full);
+    let bytes = serde_json::to_vec(&result).expect("JSON report");
     if expired() {
         return Err(invalid_params(
             "stability time guard exceeded; no exact result returned",
         ));
     }
     let handle = store.store(&bytes);
-    let mut result = if input.detail == Detail::Full {
-        full
-    } else {
-        json!({"items":items})
-    };
     if let Some(handle) = handle {
         if let Some(id) = handle.get("id") {
             result["report_id"] = id.clone();
@@ -222,9 +228,9 @@ mod tests {
         )
         .unwrap();
         let limits = ParseLimits {
-            max_degree: 500,
-            max_coefficient_bits: 1_000_000,
-            max_literal_bytes: 16384,
+            max_degree: MCP_MAX_STABILITY_DEGREE,
+            max_coefficient_bits: MCP_MAX_STABILITY_COEFFICIENT_BITS,
+            max_literal_bytes: MCP_MAX_COEFFICIENT_TEXT_BYTES,
         };
         assert!(wire::verify_report(&full, limits).unwrap());
         let many = response(request(json!({"polynomials":vec!["t+1";512]})), &store).unwrap();
@@ -238,6 +244,11 @@ mod tests {
             json!({"polynomials":vec!["1";513]}),
             json!({"polynomials":[[1.0]]}),
             json!({"polynomials":["t^501"]}),
+            json!({"polynomials":["t^33"]}),
+            json!({"polynomials":[vec![1;34]]}),
+            json!({"polynomials":[["1".repeat(79)]]}),
+            json!({"polynomials":["1+i"]}),
+            json!({"polynomials":["1+j"]}),
             json!({"polynomials":["x+y"]}),
             json!({"polynomials":["1/(t+1)"]}),
             json!({"polynomials":["1.1"]}),
@@ -260,7 +271,7 @@ mod tests {
         assert!(compute(request(json!({"polynomials":["t"]})), &store, || true).is_err());
     }
     #[test]
-    fn expiry_after_a_completed_item_leaves_no_partial_report() {
+    fn expiry_leaves_no_partial_batch_report() {
         let temp = crate::report_store::tests::TempDirectory::new();
         let store = ReportStore::new(temp.config());
         let checkpoints = std::cell::Cell::new(0);
@@ -276,18 +287,45 @@ mod tests {
         assert_eq!(std::fs::read_dir(&temp.0).unwrap().count(), 0);
     }
     #[test]
+    fn expiry_within_one_item_leaves_no_report() {
+        let temp = crate::report_store::tests::TempDirectory::new();
+        let store = ReportStore::new(temp.config());
+        let calls = std::cell::Cell::new(0);
+        let result = compute(
+            request(json!({"polynomials":["(t+I)^12"],"detail":"full"})),
+            &store,
+            || {
+                calls.set(calls.get() + 1);
+                calls.get() >= 8
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(calls.get(), 8);
+        assert_eq!(std::fs::read_dir(&temp.0).unwrap().count(), 0);
+    }
+    #[test]
+    fn summary_does_not_store_full_evidence() {
+        let temp = crate::report_store::tests::TempDirectory::new();
+        let store = ReportStore::new(temp.config());
+        let r = response(request(json!({"polynomials":["t-I"]})), &store).unwrap();
+        assert!(r.get("schema").is_none());
+        assert!(r.get("report_id").is_none());
+        assert!(r["items"][0].get("certificate").is_none());
+        assert_eq!(std::fs::read_dir(&temp.0).unwrap().count(), 0);
+    }
+    #[test]
     fn stored_report_and_schema() {
         let temp = crate::report_store::tests::TempDirectory::new();
         let store = ReportStore::new(temp.config());
         let r = response(
-            request(json!({"polynomials":["t-I"],"mobius":[1,0,0,1]})),
+            request(json!({"polynomials":["t-I"],"mobius":[1,0,0,1],"detail":"full"})),
             &store,
         )
         .unwrap();
         let bytes = store.read(r["report_id"].as_str().unwrap()).unwrap();
         let full: Value = serde_json::from_slice(&bytes).unwrap();
         assert!(full["items"][0].get("certificate").is_some());
-        assert!(serde_json::to_vec(&r).unwrap().len() < 700);
+        assert!(r["items"][0].get("certificate").is_some());
         let schema =
             serde_json::to_value(schemars::schema_for!(StabilityUnivariateRequest)).unwrap();
         assert_eq!(schema["additionalProperties"], false);

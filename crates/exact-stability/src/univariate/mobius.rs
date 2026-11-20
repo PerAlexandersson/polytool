@@ -86,18 +86,29 @@ impl MobiusTransform {
     /// Homogeneous Horner evaluation costs O(n²) field operations and O(n)
     /// working storage; no division by `c*w+d` occurs.
     pub fn transform_polynomial(&self, coefficients: &[G]) -> TransformedPolynomial {
+        self.transform_polynomial_with_checkpoint(coefficients, &|| false)
+            .expect("unlimited substitution")
+    }
+
+    pub(super) fn transform_polynomial_with_checkpoint(
+        &self,
+        coefficients: &[G],
+        expired: &impl Fn() -> bool,
+    ) -> Result<TransformedPolynomial, StabilityError> {
+        super::checkpoint(expired)?;
         let mut p = coefficients.to_vec();
         trim_gaussian(&mut p);
         let Some(n) = p.len().checked_sub(1) else {
-            return TransformedPolynomial {
+            return Ok(TransformedPolynomial {
                 coefficients: p,
                 original_degree: None,
                 boundary_at_infinity: 0,
-            };
+            });
         };
         let mut q = vec![p[n].clone()];
         let mut denominator_power = vec![G::one()];
         for coefficient in p[..n].iter().rev() {
+            super::checkpoint(expired)?;
             q = multiply_linear(&q, &self.a, &self.b);
             denominator_power = multiply_linear(&denominator_power, &self.c, &self.d);
             q.resize(denominator_power.len(), G::zero());
@@ -108,11 +119,11 @@ impl MobiusTransform {
         trim_gaussian(&mut q);
         // Nonsingular changes of homogeneous coordinates preserve nonzeroness.
         let degree = q.len() - 1;
-        TransformedPolynomial {
+        Ok(TransformedPolynomial {
             coefficients: q,
             original_degree: Some(n),
             boundary_at_infinity: n - degree,
-        }
+        })
     }
 }
 

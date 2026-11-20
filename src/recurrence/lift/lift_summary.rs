@@ -1204,6 +1204,8 @@ impl VeroneseSectionCertification {
 
 /// The [`LiftParentProof`] of a parent-prover record: a proved status counts
 /// only with a non-attestation route (as for the Veronese certification).
+/// This is a projection, not a verifier: standalone lift verifiers must replay
+/// the parent record with `check_recorded_parent_proof` before accepting it.
 pub(super) fn parent_proof_summary(proof: &VeroneseParentProof) -> LiftParentProof {
     let statement = proof.statement.clone();
     match proof.status {

@@ -731,6 +731,12 @@ fn tampered_certificates_and_records_are_rejected() {
     );
     let certificate = division_certificate(&certification).clone();
     certificate.verify().unwrap();
+    let mut fake = certification.clone();
+    fake.parent_proof.status = polytool::recurrence::VeroneseParentProofStatus::Proved;
+    fake.parent_proof.statement = "a fabricated proved parent".into();
+    fake.lift_summary = fake.recompute_lift_summary();
+    assert!(fake.lift_summary.is_consistent());
+    assert!(fake.verify().is_err());
     let mut tampered = certificate.clone();
     tampered.multiplier = vec!["2".into()];
     assert!(tampered.verify().is_err());

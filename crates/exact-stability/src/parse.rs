@@ -343,6 +343,9 @@ impl<'a> Parser<'a> {
             if name == "I" {
                 return Ok(vec![G::imaginary_unit()]);
             }
+            if matches!(name, "i" | "j") {
+                return Err(error("i and j are reserved; use I for the imaginary unit"));
+            }
             if self.variable.as_deref().is_some_and(|v| v != name) {
                 return Err(error("multivariate expressions are not supported"));
             }
@@ -368,6 +371,11 @@ mod tests {
     };
     #[test]
     fn exact_syntax_and_rejections() {
+        for text in ["i", "j", "1+i", "1+j", "i^2+1", "j+I"] {
+            let error = parse_univariate(text, LIMITS).unwrap_err();
+            assert!(error.to_string().contains("use I"), "{text}: {error}");
+        }
+        assert_eq!(parse_univariate("1+I", LIMITS).unwrap().len(), 1);
         let p = parse_univariate("t^2 + (1+2I) t - I", LIMITS).unwrap();
         assert_eq!(p, parse_univariate("[-I, 1+2I, 1]", LIMITS).unwrap());
         assert_eq!(

@@ -1,8 +1,8 @@
 //! Input-size limits enforced by the MCP tools before any exact computation.
 
 pub(crate) const MCP_MAX_TEXT_BYTES: usize = 1_048_576;
-pub(crate) const MCP_MAX_STABILITY_DEGREE: usize = 500;
-pub(crate) const MCP_MAX_STABILITY_COEFFICIENT_BITS: u64 = 1_000_000;
+pub(crate) const MCP_MAX_STABILITY_DEGREE: usize = 32;
+pub(crate) const MCP_MAX_STABILITY_COEFFICIENT_BITS: u64 = 256;
 pub(crate) const MCP_MAX_BATCH_POLYNOMIALS: usize = 512;
 pub(crate) const MCP_MAX_COEFFICIENTS_PER_POLYNOMIAL: usize = 4_096;
 pub(crate) const MCP_MAX_TOTAL_COEFFICIENTS: usize = 65_536;

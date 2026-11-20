@@ -121,6 +121,21 @@ fn tampered_certificates_are_rejected() {
     let lift = report.proved_lifts().next().unwrap().clone();
     let original = certificate(&lift).clone();
 
+    let mut fake = lift.clone();
+    fake.multiplier_sequence = Some("a fabricated multiplier theorem".into());
+    fake.lift_summary = fake.recompute_lift_summary();
+    assert!(fake.lift_summary.is_consistent());
+    assert!(fake.verify().is_err());
+
+    let mut fake = lift.clone();
+    fake.parent_proof.status = VeroneseParentProofStatus::Proved;
+    fake.parent_proof.statement = "a fabricated proved parent".into();
+    fake.parent_proof.interlacing = None;
+    fake.lift_summary = fake.recompute_lift_summary();
+    assert!(fake.lift_summary.is_consistent());
+    assert!(fake.lift_summary.input_interlacing.proved().is_none());
+    assert!(fake.verify().is_err());
+
     let mut wrong_multiplier = original.clone();
     wrong_multiplier.multiplier.push("1".into());
     assert!(wrong_multiplier.verify().is_err());

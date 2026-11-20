@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- Standalone Hadamard-factor and preserver-image replay always checks the
+  recorded parent proof. Hadamard-factor replay derives its multiplier
+  justification from the factor. Forged claims are rejected even without an
+  interlacing transfer.
+- Stability parsing rejects lowercase `i`/`j` with a hint to use `I`. Stability
+  replay uses the schema contract independently of the producer package version.
+  Named regions are mapped exhaustively, and `exact-stability` participates in
+  public CI and the MSRV matrix.
+- `Polynomial<BigRational>::has_simple_roots` clears denominators and uses the
+  integer subresultant kernel; other fields retain their gcd backend.
+
 - Effective-BKW ray angles use complete cyclotomic divisibility tests on
   rational squared trigonometric inputs. Binomial edge dilations use general
   Bezout exponents; quotient denominators and local GF units are checked
@@ -52,8 +63,8 @@
 - `polytool stability` and MCP `stability_univariate`: shared exact Gaussian
   parsing, circular-region counts, compact summaries, canonical replayable
   `polytool.stability.v1` reports, certificate files and `stability verify`.
-  CLI degree/part-bit caps are 2000/1000000; MCP degree is capped at 500.
-  MCP returns stored report handles when configured; `detail:full` opts into
+  CLI degree/part-bit caps are 2000/1000000; MCP caps are 32/256.
+  MCP returns stored report handles for `detail:full` when configured; it opts into
   certificates, and `tool_help` documents syntax, conventions and limits.
 
 - New crate `exact-stability` and the `polytool::stability` facade: exact
@@ -187,7 +198,12 @@
   empty. Replay rejects stale conditional reports; proof and refutation routes
   are unchanged. The `LIMIT_SPECTRUM_HYPOTHESIS` constant is removed.
 
-### Changed
+### Breaking
+
+- MCP `stability_univariate` caps degree at 32 and numerator/denominator bits
+  at 256. Cooperative time checks run within a single item. Summary mode
+  constructs no full JSON report and returns no stored report handle;
+  request `detail:full` to store and retrieve evidence.
 
 - MCP proof discovery now returns a compact library summary by default;
   `detail: "full"` restores the unchanged complete report. Configure a report
@@ -201,6 +217,9 @@
   `include_code: true` restores it. `get_oeis_sequence` always includes the
   complete `recurrence_json` record. CLI output and existing report schemas
   are unchanged.
+
+### Changed
+
 - Toeplitz circle certificates record their formal references in
   `circle.lean_declarations`:
   `RealRooted.Toeplitz.Circle.strictInterl_of_circleNonneg` and

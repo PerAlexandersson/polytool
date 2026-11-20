@@ -4,7 +4,7 @@
 //! internal two-polynomial gcd is not public, so the split uses a primitive
 //! pseudo-remainder gcd here, without depending on the consumer polynomial type.
 
-use super::RealRootLayer;
+use super::{checkpoint, RealRootLayer, StabilityError};
 use crate::BigRational as Q;
 use num_bigint::BigInt;
 use num_integer::Integer;
@@ -32,11 +32,16 @@ fn primitive(mut p: Vec<BigInt>) -> Vec<BigInt> {
     p
 }
 
-pub(super) fn gcd(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
+pub(super) fn gcd(
+    a: &[BigInt],
+    b: &[BigInt],
+    expired: &impl Fn() -> bool,
+) -> Result<Vec<BigInt>, StabilityError> {
     let mut a = primitive(a.to_vec());
     let mut b = primitive(b.to_vec());
     while !b.is_empty() {
         while a.len() >= b.len() {
+            checkpoint(expired)?;
             let shift = a.len() - b.len();
             let leading = a.last().expect("nonzero remainder").clone();
             let multiplier = b.last().expect("nonzero divisor");
@@ -50,7 +55,7 @@ pub(super) fn gcd(a: &[BigInt], b: &[BigInt]) -> Vec<BigInt> {
         }
         (a, b) = (b, a);
     }
-    a
+    Ok(a)
 }
 
 pub(super) fn clear_pair(a: &[Q], b: &[Q]) -> (Vec<BigInt>, Vec<BigInt>) {
@@ -92,7 +97,10 @@ pub(super) fn divide_exact(a: &[BigInt], b: &[BigInt]) -> Vec<Q> {
     quotient
 }
 
-pub(super) fn count_real_roots_with_multiplicity(p: &[BigInt]) -> (usize, Vec<RealRootLayer>) {
+pub(super) fn count_real_roots_with_multiplicity(
+    p: &[BigInt],
+    expired: &impl Fn() -> bool,
+) -> Result<(usize, Vec<RealRootLayer>), StabilityError> {
     let mut p = primitive(p.to_vec());
     let mut count = 0;
     let mut layers = Vec::new();
@@ -100,9 +108,11 @@ pub(super) fn count_real_roots_with_multiplicity(p: &[BigInt]) -> (usize, Vec<Re
     // Dividing by the existing primitive squarefree part lowers every
     // remaining multiplicity by one, so summing distinct counts is exact.
     while p.len() > 1 {
+        checkpoint(expired)?;
         let distinct_real_roots = exact_real_roots::count_real_roots_prs_bigint_coeffs(&p);
         count += distinct_real_roots;
         let squarefree = exact_real_roots::squarefree_part_primitive_bigint_coeffs(&p);
+        checkpoint(expired)?;
         let quotient = divide_exact(&p, &squarefree);
         layers.push(RealRootLayer {
             polynomial: p,
@@ -110,5 +120,5 @@ pub(super) fn count_real_roots_with_multiplicity(p: &[BigInt]) -> (usize, Vec<Re
         });
         p = primitive(clear_pair(&quotient, &[]).0);
     }
-    (count, layers)
+    Ok((count, layers))
 }

@@ -12,7 +12,7 @@ Available MCP tools:
 
 - `stability_univariate`: exact circular-region root counts over the Gaussian
   rationals. Compact summaries by default; `detail:"full"` includes evidence.
-  Configured storage returns `report_id` for `read_report`. `tool_help`
+  With `detail:full`, configured storage returns `report_id` for `read_report`. `tool_help`
   documents syntax and limits. See [stability.md](stability.md).
 
 - `read_report`: bounded outlines or selected evidence from a stored report id.

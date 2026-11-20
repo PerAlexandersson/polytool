@@ -410,7 +410,14 @@ fn lists_tools_and_calls_properties() {
     assert!(summary["items"][0].get("certificate").is_none());
     assert!(serde_json::to_vec(summary).unwrap().len() <= 1100);
     assert!(serde_json::to_vec(&stability).unwrap().len() <= 2500);
-    let id = &summary["report_id"];
+    assert!(summary.get("report_id").is_none());
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"stability_univariate","arguments":{"polynomials":["(t+1)^3","t-I","0"],"region":"left","detail":"full"}}}),
+    );
+    let full = read_response(&mut stdout, 15);
+    let id = &full["result"]["structuredContent"]["report_id"];
+    assert!(id.is_string());
     send(
         &mut stdin,
         json!({"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"read_report","arguments":{"report_id":id,"select":["/schema","/items/0/certificate/real_part"]}}}),

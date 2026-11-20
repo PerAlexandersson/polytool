@@ -33,6 +33,42 @@ fn counts(p: &[G], region: &R) -> RootCounts {
 }
 
 #[test]
+fn cooperative_expiry_within_one_polynomial() {
+    use exact_stability::check_univariate_stability_with_checkpoint;
+    let p = from_roots(&[g(1, 2), g(-1, 0), g(-1, 0), g(0, -1)]);
+    let expected = check(&p, &R::Disk).unwrap();
+    let calls = std::cell::Cell::new(0);
+    let report = check_univariate_stability_with_checkpoint(
+        &p,
+        &R::Disk,
+        StabilityConvention::Inside,
+        &|| {
+            calls.set(calls.get() + 1);
+            false
+        },
+    )
+    .unwrap();
+    assert_eq!(report, expected);
+    let checkpoints = calls.get();
+    assert!(checkpoints > p.len());
+    for stop in 1..=checkpoints {
+        calls.set(0);
+        assert_eq!(
+            check_univariate_stability_with_checkpoint(
+                &p,
+                &R::Disk,
+                StabilityConvention::Inside,
+                &|| {
+                    calls.set(calls.get() + 1);
+                    calls.get() >= stop
+                }
+            ),
+            Err(StabilityError::TimeLimitExceeded)
+        );
+    }
+}
+
+#[test]
 fn gaussian_field_arithmetic() {
     let a = G::new(q(2, 3), q(-5, 7));
     let b = G::new(q(-3, 11), q(4, 5));

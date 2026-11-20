@@ -1469,6 +1469,25 @@ mod replay_tests {
         );
         recorded.verify().unwrap();
 
+        // A self-consistent proved summary cannot promote the open requirement
+        // by inventing a route. Replay must actually prove that route.
+        let mut forged = recorded.clone();
+        let s = &recorded.lift_summary;
+        forged.lift_summary = LiftSummary::new(
+            s.operation.clone(),
+            s.input_first_index,
+            s.parent.clone(),
+            s.identity.clone(),
+            s.root_transfer.clone(),
+            s.hypotheses.clone(),
+            LiftParentProof::Proved {
+                route: "basis_map_coefficient_roots(periodic_product)".into(),
+                statement: s.parent_proof.statement().into(),
+            },
+        );
+        assert!(forged.lift_summary.is_consistent());
+        assert!(forged.verify().is_err());
+
         // An open parent does not permit a false conditional root transfer.
         let mut tampered = recorded;
         tampered.lift_summary.root_transfer.input_root_region.upper = Some(

@@ -374,7 +374,7 @@ mod tests {
             );
             assert_eq!(
                 has_simple_roots(&coeffs),
-                rational.has_simple_roots(),
+                !rational.is_zero() && rational.gcd(&rational.derivative()).degree() == Some(0),
                 "{coeffs:?}"
             );
         }
@@ -389,6 +389,20 @@ mod tests {
             product = vec_poly::mul(&product, &[BigInt::from(k), BigInt::one()]);
         }
         assert!(has_simple_roots_bigint_coeffs(&product));
+        // p(t/7)/7 has distinct roots -7, -14, ..., -420 and varying denominators.
+        let product_rational = Polynomial::<Q>::new(
+            product
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(i, c)| Q::new(c, BigInt::from(7).pow((i + 1) as u32)))
+                .collect(),
+        );
+        assert!(product_rational.has_simple_roots());
+        assert!(
+            !(product_rational * Polynomial::new(vec![Q::from_integer(7.into()), Q::one()]))
+                .has_simple_roots()
+        );
         let repeated = vec_poly::mul(&product, &[BigInt::one(), BigInt::one()]);
         assert!(!has_simple_roots_bigint_coeffs(&repeated));
     }

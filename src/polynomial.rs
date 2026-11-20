@@ -251,11 +251,29 @@ pub trait FieldRing: CoeffRing {
     ///
     /// Panics if `other` is zero.
     fn field_div(self, other: Self) -> Self;
+
+    /// Test simple roots of ascending coefficients, with a field-specific backend.
+    /// Zero returns false; nonzero constants return true. The default uses
+    /// a Euclidean gcd; arbitrary-precision rationals use integer subresultants.
+    fn polynomial_has_simple_roots(coefficients: &[Self]) -> bool {
+        let p = Polynomial::new(coefficients.to_vec());
+        if p.is_zero() {
+            return false;
+        }
+        let derivative = p.derivative();
+        derivative.is_zero() || p.gcd(&derivative).degree() == Some(0)
+    }
 }
 
 impl FieldRing for num_rational::Ratio<num_bigint::BigInt> {
     fn field_div(self, other: Self) -> Self {
         self / other
+    }
+
+    fn polynomial_has_simple_roots(coefficients: &[Self]) -> bool {
+        crate::real_rootedness::has_simple_roots_bigint_coeffs(
+            &crate::vec_poly::clear_denominators(coefficients),
+        )
     }
 }
 
@@ -740,14 +758,7 @@ impl<C: FieldRing> Polynomial<C> {
     ///
     /// Returns `false` for the zero polynomial, and `true` for nonzero constants.
     pub fn has_simple_roots(&self) -> bool {
-        if self.is_zero() {
-            return false;
-        }
-        let dp = self.derivative();
-        if dp.is_zero() {
-            return true;
-        }
-        self.gcd(&dp).degree() == Some(0)
+        C::polynomial_has_simple_roots(&self.coeffs)
     }
 
     /// Check whether the polynomial has a repeated root.

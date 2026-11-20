@@ -66,6 +66,11 @@ jobs:
       - name: Test the ore-algebra crate
         run: cargo test --manifest-path crates/ore-algebra/Cargo.toml --all-targets
 
+      - name: Check and test the exact-stability crate
+        run: |
+          cargo clippy --manifest-path crates/exact-stability/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path crates/exact-stability/Cargo.toml
+
   companions:
     name: Companion packages
     runs-on: ubuntu-latest
@@ -111,6 +116,8 @@ jobs:
             manifest: crates/exact-real-roots/Cargo.toml
           - package: exact-algebra
             manifest: crates/exact-algebra/Cargo.toml
+          - package: exact-stability
+            manifest: crates/exact-stability/Cargo.toml
           - package: mcp
             manifest: mcp/Cargo.toml
           - package: web

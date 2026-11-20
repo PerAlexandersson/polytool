@@ -77,6 +77,34 @@ fn replay_and_tampering() {
         true
     );
     let mut altered = r.clone();
+    altered["version"] = json!("0.6.0");
+    assert_eq!(
+        value(&["stability", "verify"], &altered.to_string())["verified"],
+        true
+    );
+    altered["version"] = json!("99.0.0");
+    assert_eq!(
+        value(&["stability", "verify"], &altered.to_string())["verified"],
+        true
+    );
+    altered["schema"] = json!("polytool.stability.v2");
+    assert_eq!(
+        run(&["stability", "verify"], &altered.to_string())
+            .status
+            .code(),
+        Some(2)
+    );
+    for version in [Value::Null, json!(1), json!("")] {
+        let mut malformed = r.clone();
+        malformed["version"] = version;
+        assert_eq!(
+            run(&["stability", "verify"], &malformed.to_string())
+                .status
+                .code(),
+            Some(2)
+        );
+    }
+    let mut altered = r.clone();
     altered["items"][0]["counts"]["inside"] = json!(99);
     let output = run(&["stability", "verify"], &altered.to_string());
     assert_eq!(output.status.code(), Some(1));
@@ -106,6 +134,8 @@ fn invalid_inputs_are_atomic_usage_errors() {
         vec!["stability", "8", "--max-coefficient-bits", "3"],
         vec!["stability", "t", "--max-coefficient-bits", "1000001"],
         vec!["stability", "x+y"],
+        vec!["stability", "1+i"],
+        vec!["stability", "1+j"],
         vec!["stability", "1.2"],
         vec!["stability", "1/(t+1)"],
         vec!["stability", "t+1", "1/0"],

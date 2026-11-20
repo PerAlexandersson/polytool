@@ -119,13 +119,15 @@ impl StabilityReport {
     }
 }
 
-/// Invalid region data for an exact stability computation.
+/// Invalid region data or an expired checkpoint in an exact stability computation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StabilityError {
     /// A fractional linear map has zero determinant.
     SingularMobiusTransform,
     /// A centered disk has radius zero or a negative radius.
     NonpositiveRadius,
+    /// A caller-supplied cooperative computation checkpoint expired.
+    TimeLimitExceeded,
 }
 
 impl fmt::Display for StabilityError {
@@ -133,6 +135,7 @@ impl fmt::Display for StabilityError {
         f.write_str(match self {
             Self::SingularMobiusTransform => "Möbius transform must have nonzero determinant",
             Self::NonpositiveRadius => "disk radius must be strictly positive",
+            Self::TimeLimitExceeded => "stability time guard exceeded; no exact result returned",
         })
     }
 }
@@ -168,9 +171,27 @@ pub fn check_univariate_stability_with_convention(
     region: &StabilityRegion,
     convention: StabilityConvention,
 ) -> Result<StabilityReport, StabilityError> {
+    check_univariate_stability_with_checkpoint(coefficients, region, convention, &|| false)
+}
+
+/// Count roots with a cooperative cancellation checkpoint.
+///
+/// `expired` is checked during Möbius substitution, gcd reduction and repeated
+/// root layers, and between exact counting stages, including before and after
+/// inertia. A true result returns [`StabilityError::TimeLimitExceeded`] without
+/// partial counts. Individual arithmetic, Sturm and inertia operations are not
+/// interrupted; adapters should also bound input sizes.
+pub fn check_univariate_stability_with_checkpoint(
+    coefficients: &[G],
+    region: &StabilityRegion,
+    convention: StabilityConvention,
+    expired: &impl Fn() -> bool,
+) -> Result<StabilityReport, StabilityError> {
+    checkpoint(expired)?;
     let transformed = region
         .mobius_transform()?
-        .transform_polynomial(coefficients);
+        .transform_polynomial_with_checkpoint(coefficients, expired)?;
+    checkpoint(expired)?;
     let degree = transformed.original_degree;
     if degree.is_none() {
         return Ok(StabilityReport {
@@ -196,19 +217,24 @@ pub fn check_univariate_stability_with_convention(
     let real: Vec<Q> = rotated.iter().map(|x| x.real.clone()).collect();
     let imaginary: Vec<Q> = rotated.iter().map(|x| x.imaginary.clone()).collect();
     let (real_part, imaginary_part) = polynomial::clear_pair(&real, &imaginary);
-    let common_factor = polynomial::gcd(&real_part, &imaginary_part);
+    checkpoint(expired)?;
+    let common_factor = polynomial::gcd(&real_part, &imaginary_part, expired)?;
     let (real_roots, real_root_layers) =
-        polynomial::count_real_roots_with_multiplicity(&common_factor);
+        polynomial::count_real_roots_with_multiplicity(&common_factor, expired)?;
+    checkpoint(expired)?;
     let conjugate_pairs = (common_factor.len() - 1 - real_roots) / 2;
     let real_quotient = polynomial::divide_exact(&real_part, &common_factor);
     let imaginary_quotient = polynomial::divide_exact(&imaginary_part, &common_factor);
     let (g, h) = polynomial::clear_pair(&real_quotient, &imaginary_quotient);
+    checkpoint(expired)?;
     let bezoutian = bezoutian::bezoutian_bigint_coeffs(&g, &h);
+    checkpoint(expired)?;
     let matrix: Vec<Vec<Q>> = bezoutian
         .iter()
         .map(|row| row.iter().cloned().map(Q::from_integer).collect())
         .collect();
     let decomposition = symmetric_ldlt(&matrix).expect("symmetric Bézoutian");
+    checkpoint(expired)?;
     let inertia = decomposition.inertia();
     assert_eq!(inertia.zero, 0, "coprime Bézoutian is nonsingular");
     let counts = RootCounts {
@@ -246,4 +272,12 @@ pub fn check_univariate_stability_with_convention(
             decomposition,
         }),
     })
+}
+
+pub(super) fn checkpoint(expired: &impl Fn() -> bool) -> Result<(), StabilityError> {
+    if expired() {
+        Err(StabilityError::TimeLimitExceeded)
+    } else {
+        Ok(())
+    }
 }

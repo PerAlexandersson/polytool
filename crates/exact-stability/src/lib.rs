@@ -19,6 +19,7 @@ pub use gaussian::GaussianRational;
 pub use univariate::mobius::{MobiusTransform, TransformedPolynomial};
 pub use univariate::region::StabilityRegion;
 pub use univariate::{
-    check_univariate_stability, check_univariate_stability_with_convention, RootCounts,
-    StabilityCertificate, StabilityConvention, StabilityError, StabilityMethod, StabilityReport,
+    check_univariate_stability, check_univariate_stability_with_checkpoint,
+    check_univariate_stability_with_convention, RootCounts, StabilityCertificate,
+    StabilityConvention, StabilityError, StabilityMethod, StabilityReport,
 };

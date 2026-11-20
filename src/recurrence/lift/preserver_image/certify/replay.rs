@@ -318,7 +318,8 @@ impl PreserverImageCertification {
         self.lift_summary.is_proved()
     }
 
-    /// The [`LiftSummary`] computed from the record.
+    /// The [`LiftSummary`] computed from the record. Use [`Self::verify`] to
+    /// replay the parent proof before trusting a deserialized certification.
     pub fn recompute_lift_summary(&self) -> LiftSummary {
         preserver_image_summary(PreserverImageSummaryParts {
             candidate: &self.candidate,
@@ -332,7 +333,7 @@ impl PreserverImageCertification {
     }
 
     /// Replay the certificate (when certified), check that it belongs to the
-    /// candidate, replay the whole-line parent theorem report (when present),
+    /// candidate, always replay the recorded parent proof and any whole-line report,
     /// and check that the summary equals the recomputed one.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
         let failed = |what: &str| Err(RecurrenceError::VerificationFailed(what.to_string()));
@@ -382,14 +383,6 @@ impl PreserverImageCertification {
             }
         }
         self.verify_image_rule()?;
-        if matches!(
-            self.candidate.operator,
-            PreserverOperator::HadamardMultiplier { .. }
-        ) && self
-            .lift_summary
-            .input_interlacing
-            .proved()
-            .is_some_and(|claim| claim.justification.transfer.is_some())
         {
             let parent = prepare_record(&self.candidate.parent, "parent")?;
             let needed_from = parent_start(
