@@ -235,6 +235,17 @@ pub(super) fn degree_budget(n: &B, d: &B) -> Result<DegreeBudget, RecurrenceErro
     })
 }
 
+/// Domination and phase have independent starts. Degree-zero rows need no
+/// sign samples: the exact positive leading-coefficient law proves that
+/// they are nonzero constants. This includes n=0 in the classical charts.
+pub(super) fn set_domination_cutoff(out: &mut EffectiveBkwCertificate, cutoff: usize) {
+    out.domination_cutoff = Some(cutoff);
+    out.cutoff = cutoff;
+    if cutoff == 0 {
+        out.phase.push("rows of exact degree zero are nonzero constants by the positive leading-coefficient certificate; they require no alternating samples".into());
+    }
+}
+
 pub(super) fn empty_certificate(
     d: &[P],
     branch: &B,
@@ -258,6 +269,7 @@ pub(super) fn empty_certificate(
         },
         signs: vec![],
         domination: String::new(),
+        domination_cutoff: None,
         cutoff: 1,
         tail_at_cutoff: "0".into(),
         automatic_uniform_constants: None,

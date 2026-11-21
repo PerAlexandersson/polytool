@@ -651,13 +651,20 @@ impl RealRootednessTheoremReport {
             root_region,
             maximum_start_delay,
         };
-        let recomputed = check_with_start_delay(
+        let legacy_effective_bkw = self.theorem == RealRootednessTheorem::EffectiveBkw
+            && self.effective_bkw_certificate().is_some_and(|c| {
+                c.certificate
+                    .as_ref()
+                    .is_some_and(|w| w.domination_cutoff.is_none())
+            });
+        let recomputed = check_with_start_delay_mode(
             self.theorem,
             &rule,
             first_index,
             &seeds,
             &options,
             self.start_delay,
+            legacy_effective_bkw,
         )?;
         if &recomputed != self {
             if self.certificate != recomputed.certificate {
@@ -783,6 +790,21 @@ fn check_with_start_delay(
     options: &RealRootednessTheoremOptions,
     delay: usize,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    check_with_start_delay_mode(theorem, rule, first_index, seeds, options, delay, false)
+}
+
+// Replay selects the original conservative BKW supplier when its certificate
+// predates the independent domination cutoff. All report fields still compare
+// exactly, including normalization, moved seeds and the embedded witnesses.
+fn check_with_start_delay_mode(
+    theorem: RealRootednessTheorem,
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<Q>],
+    options: &RealRootednessTheoremOptions,
+    delay: usize,
+    legacy_effective_bkw: bool,
+) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let supplied = rule;
     let seeds = normalized_seed_rows(supplied, first_index, seeds)?;
     let (rule, normalization) = match rule_with_x_free_left_hand_factor(supplied) {
@@ -792,12 +814,26 @@ fn check_with_start_delay(
                 RecurrenceError::Unsupported(reason) => reason,
                 other => other.to_string(),
             };
-            let report = check_at_supplied_seeds(theorem, supplied, first_index, &seeds, options)?;
+            let report = check_at_supplied_seeds_mode(
+                theorem,
+                supplied,
+                first_index,
+                &seeds,
+                options,
+                legacy_effective_bkw,
+            )?;
             return Ok(report.not_applicable(reason).without_hypotheses());
         }
     };
-    let mut report =
-        check_with_start_delay_on_rule(theorem, &rule, first_index, &seeds, options, delay)?;
+    let mut report = check_with_start_delay_on_rule(
+        theorem,
+        &rule,
+        first_index,
+        &seeds,
+        options,
+        delay,
+        legacy_effective_bkw,
+    )?;
     if let Some(normalization) = normalization {
         report.recurrence =
             RecurrenceJson::from_recurrence_rational(supplied, first_index, &seeds, None);
@@ -812,6 +848,21 @@ fn check_with_start_delay(
     Ok(report)
 }
 
+fn check_at_supplied_seeds_mode(
+    theorem: RealRootednessTheorem,
+    rule: &Recurrence,
+    first_index: usize,
+    seeds: &[Vec<Q>],
+    options: &RealRootednessTheoremOptions,
+    legacy_effective_bkw: bool,
+) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    if legacy_effective_bkw {
+        effective_bkw::theorem_report_with_mode(rule, first_index, seeds, options, true)
+    } else {
+        check_at_supplied_seeds(theorem, rule, first_index, seeds, options)
+    }
+}
+
 /// [`check_with_start_delay`] for a rule used as it is (`seeds` already in
 /// their record normal form).
 fn check_with_start_delay_on_rule(
@@ -821,10 +872,18 @@ fn check_with_start_delay_on_rule(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
     delay: usize,
+    legacy_effective_bkw: bool,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let seeds = seeds.to_vec();
     if delay == 0 {
-        return check_at_supplied_seeds(theorem, rule, first_index, &seeds, options);
+        return check_at_supplied_seeds_mode(
+            theorem,
+            rule,
+            first_index,
+            &seeds,
+            options,
+            legacy_effective_bkw,
+        );
     }
     let generated = rule
         .generate_rows_rational(&seeds, first_index, seeds.len() + delay)
@@ -834,7 +893,14 @@ fn check_with_start_delay_on_rule(
             ))
         })?;
     let moved = normalized_seed_rows(rule, first_index, &generated)?;
-    let mut report = check_at_supplied_seeds(theorem, rule, first_index, &moved, options)?;
+    let mut report = check_at_supplied_seeds_mode(
+        theorem,
+        rule,
+        first_index,
+        &moved,
+        options,
+        legacy_effective_bkw,
+    )?;
     report.recurrence = RecurrenceJson::from_recurrence_rational(rule, first_index, &seeds, None);
     report.start_delay = delay;
     let rule_start = first_index + moved.len();

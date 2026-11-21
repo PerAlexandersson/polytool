@@ -123,6 +123,37 @@ fn squarefree(p: &P) -> P {
         .collect(),
     )
 }
+// Resultants contain large powers of the characteristic-collision factors.
+// Strip their multiplicities using gcds with the small, already squarefree
+// endpoint polynomials, before invoking the integer PRS on the remaining
+// factor. Keep one copy of every removed root. The product has exactly the
+// original real zero set, so certificates still store the full resultant.
+pub(super) fn critical_polynomial(k: &P, domain: &Domain) -> P {
+    let mut remaining = k.clone();
+    let mut removed = P::one();
+    for end in [domain.lower.as_ref(), domain.upper.as_ref()]
+        .into_iter()
+        .flatten()
+    {
+        if end.polynomial.degree().unwrap_or(0) > 16 {
+            continue;
+        }
+        let common = remaining.gcd(&end.polynomial);
+        if common.degree().unwrap_or(0) == 0 {
+            continue;
+        }
+        removed = removed * common.clone();
+        loop {
+            let repeated = remaining.gcd(&common);
+            if repeated.degree().unwrap_or(0) == 0 {
+                break;
+            }
+            remaining = remaining.exact_div(&repeated);
+        }
+    }
+    squarefree(&remaining) * removed
+}
+
 fn refine_integer_root(integers: &[num_bigint::BigInt], bounds: &I, epsilon: &Q) -> I {
     if &bounds.hi - &bounds.lo <= *epsilon {
         return bounds.clone();
@@ -287,8 +318,11 @@ impl Domain {
             if order == 3 {
                 let e = rs
                     .into_iter()
-                    .find(|i| i.hi.is_negative())
+                    .find(|i| i.hi <= Q::zero())
                     .ok_or(ChartError::NoNegativeCubicCollision)?;
+                if !disc.evaluate(&(e.lo.floor() - q(1))).is_negative() {
+                    return Err(ChartError::NoNegativeCubicCollision);
+                }
                 (
                     None,
                     Some(End {
@@ -446,6 +480,36 @@ pub(super) fn check_sign(
     which: Branch,
     want: i8,
 ) -> Result<EffectiveBkwSignCertificate, RecurrenceError> {
+    check_sign_with_resultant(name, p, f, domain, which, want, |f| resultant(p, f))
+}
+
+// Suppliers may derive the same exact Sylvester determinant by
+// multiplicativity. The condition, strict sign and every critical cell are
+// still checked and stored exactly as in check_sign.
+pub(super) fn check_sign_with_resultant(
+    name: &str,
+    p: &B,
+    f: &B,
+    domain: &Domain,
+    which: Branch,
+    want: i8,
+    eliminate: impl FnOnce(&B) -> P,
+) -> Result<EffectiveBkwSignCertificate, RecurrenceError> {
+    check_sign_with_resultant_cover(name, p, f, domain, which, want, |f| {
+        let k = eliminate(f);
+        (k.clone(), k)
+    })
+}
+
+pub(super) fn check_sign_with_resultant_cover(
+    name: &str,
+    p: &B,
+    f: &B,
+    domain: &Domain,
+    which: Branch,
+    want: i8,
+    eliminate: impl FnOnce(&B) -> (P, P),
+) -> Result<EffectiveBkwSignCertificate, RecurrenceError> {
     #[cfg(test)]
     if std::env::var_os("POLYTOOL_EFFECTIVE_BKW_TRACE").is_some() {
         eprintln!("effective BKW sign: {name}");
@@ -498,7 +562,7 @@ pub(super) fn check_sign(
             )));
         }
     }
-    let k = resultant(p, &f);
+    let (k, cover) = eliminate(&f);
     cert.resultant = encode(&k);
     #[cfg(test)]
     if std::env::var_os("POLYTOOL_EFFECTIVE_BKW_TRACE").is_some() {
@@ -511,13 +575,13 @@ pub(super) fn check_sign(
     }
     let Some((root, sign)) = sample else {
         if want == 0 {
-            return certify_nonnegative_cells(cert, p, &f, &k, domain, which);
+            return certify_nonnegative_cells(cert, p, &f, &cover, domain, which);
         }
         return Err(failure(format!("{name}: sample sign unresolved")));
     };
     cert.sample_branch = root.wire();
     cert.sign = sign;
-    let critical_polynomial = squarefree(&k);
+    let critical_polynomial = critical_polynomial(&cover, domain);
     for critical in domain.critical_roots(&critical_polynomial)? {
         let mut covered = None;
         for bits in (16..=128).step_by(8) {
@@ -570,7 +634,7 @@ fn certify_nonnegative_cells(
     domain: &Domain,
     which: Branch,
 ) -> Result<EffectiveBkwSignCertificate, RecurrenceError> {
-    let critical = domain.critical_roots(&squarefree(k))?;
+    let critical = domain.critical_roots(&critical_polynomial(k, domain))?;
     let mut samples = Vec::new();
     if critical.is_empty() {
         samples.push(domain.sample.clone());

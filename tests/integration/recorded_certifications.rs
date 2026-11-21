@@ -191,6 +191,39 @@ fn a_basis_map_lift_with_a_weaker_recorded_parent_keeps_replaying() {
     assert!(tampered.verify().is_err());
 }
 
+#[test]
+fn stored_effective_bkw_supplier_modes_replay_without_drift() {
+    for (source, legacy) in [
+        (
+            include_str!("../fixtures/recorded-certifications/effective-bkw-legacy-tiling.json"),
+            true,
+        ),
+        (
+            include_str!("../fixtures/recorded-certifications/effective-bkw-pointwise-tiling.json"),
+            false,
+        ),
+    ] {
+        let report: polytool::bkw::effective::EffectiveBkwReport =
+            serde_json::from_str(source).unwrap();
+        assert_eq!(
+            report
+                .certificate
+                .as_ref()
+                .unwrap()
+                .domination_cutoff
+                .is_none(),
+            legacy
+        );
+        report.verify().unwrap();
+        let mut altered = report.clone();
+        altered.certificate.as_mut().unwrap().cutoff += 1;
+        assert!(altered.verify().is_err());
+        let mut altered = report;
+        altered.schema.push_str("-forged");
+        assert!(altered.verify().is_err());
+    }
+}
+
 fn basis_map_fixture(name: &str) -> polytool::recurrence::BasisMapLiftCertification {
     let path = format!(
         "{}/tests/fixtures/recorded-certifications/{name}",

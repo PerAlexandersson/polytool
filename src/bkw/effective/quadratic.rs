@@ -64,6 +64,7 @@ pub(super) fn certify(
     d: &[P],
     request: &EffectiveBkwRequest,
     degree: &DegreeBudget,
+    legacy: bool,
 ) -> Result<EffectiveBkwCertificate, ChartError> {
     let a = d[1].scale(&(q(-1) / q(2)));
     let b = d[2].clone();
@@ -77,6 +78,9 @@ pub(super) fn certify(
         .into());
     }
     let mut out = empty_certificate(d, &variable(), &domain, degree);
+    if !legacy {
+        set_domination_cutoff(&mut out, 0);
+    }
     if domain.upper_is_nonpositive() {
         out.root_region = EffectiveBkwRootRegion::NegativeRay;
     }

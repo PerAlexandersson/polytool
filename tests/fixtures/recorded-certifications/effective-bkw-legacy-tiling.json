@@ -1,0 +1,534 @@
+{
+  "schema": "polytool.effective-bkw.v1",
+  "request": {
+    "generating_function": {
+      "schema": "polytool.generating-function.v1",
+      "first_index": 0,
+      "numerator": [
+        [
+          "1"
+        ],
+        [
+          "0",
+          "-1"
+        ]
+      ],
+      "denominator": [
+        [
+          "1"
+        ],
+        [
+          "-1",
+          "-1"
+        ],
+        [
+          "0",
+          "-2",
+          "-1"
+        ],
+        [
+          "0",
+          "0",
+          "1",
+          "1"
+        ]
+      ]
+    },
+    "interval": null,
+    "target_zero_count": null,
+    "uniform_constants": null,
+    "pair_factorization": null
+  },
+  "status": "proved",
+  "reason": "every row is nonzero and has only simple real zeros; exact phase count, degree budget and finite prefix checked",
+  "certificate": {
+    "coordinate_transport": "identity",
+    "root_region": "negative_ray",
+    "interval": {
+      "lower": {
+        "kind": "negative_infinity"
+      },
+      "upper": {
+        "kind": "algebraic",
+        "polynomial": [
+          "0",
+          "8",
+          "96",
+          "148",
+          "64"
+        ],
+        "enclosure": [
+          "-214009705651/2199023255552",
+          "-428019410413/4398046511104"
+        ]
+      }
+    },
+    "characteristic": [
+      [
+        "0",
+        "0",
+        "1",
+        "1"
+      ],
+      [
+        "0",
+        "-2",
+        "-1"
+      ],
+      [
+        "-1",
+        "-1"
+      ],
+      [
+        "1"
+      ]
+    ],
+    "branch_equation": [
+      [
+        "0",
+        "0",
+        "1",
+        "1"
+      ],
+      [
+        "0",
+        "-2",
+        "-1"
+      ],
+      [
+        "-1",
+        "-1"
+      ],
+      [
+        "1"
+      ]
+    ],
+    "branch_selection": "the unique real root r(t) of the negative-discriminant cubic",
+    "expansion": [
+      "lambda=( -D_1-r + i*sqrt(Y) )/2; b=r^2+D_1*r+D_2; Y=4*b-(-D_1-r)^2",
+      "C=([[], [\"0\", \"-1\"], [\"1\"]])/p'(r)",
+      "Re A=([[\"0\", \"-2\", \"-1\"], [\"-2\", \"-1\"], [\"2\"]])/(2*p'(r)); Im A=([[\"0\", \"2\", \"-1\", \"-1\"], [\"2\", \"3\"], [\"-2\", \"1\"]])/(2*p'(r)*sqrt(Y))",
+      "P_n=2*Re(A*lambda^n)+C*r^n for every n>=0 (proper rational partial fractions, including r=0 by continuity)"
+    ],
+    "expansion_data": {
+      "pair_real_part": {
+        "numerator": [
+          [
+            "1/2",
+            "1/2"
+          ],
+          [
+            "-1/2"
+          ]
+        ],
+        "denominator": [
+          [
+            "1"
+          ]
+        ]
+      },
+      "pair_norm_squared": {
+        "numerator": [
+          [
+            "0",
+            "-2",
+            "-1"
+          ],
+          [
+            "-1",
+            "-1"
+          ],
+          [
+            "1"
+          ]
+        ],
+        "denominator": [
+          [
+            "1"
+          ]
+        ]
+      },
+      "cofactor": [
+        {
+          "numerator": [
+            [
+              "1"
+            ]
+          ],
+          "denominator": [
+            [
+              "1"
+            ]
+          ]
+        },
+        {
+          "numerator": [
+            [],
+            [
+              "-1"
+            ]
+          ],
+          "denominator": [
+            [
+              "1"
+            ]
+          ]
+        }
+      ],
+      "remainder_root": {
+        "numerator": [
+          [],
+          [
+            "1"
+          ]
+        ],
+        "denominator": [
+          [
+            "1"
+          ]
+        ]
+      },
+      "remainder_amplitude": {
+        "numerator": [
+          [],
+          [
+            "0",
+            "-1"
+          ],
+          [
+            "1"
+          ]
+        ],
+        "denominator": [
+          [
+            "0",
+            "-2",
+            "-1"
+          ],
+          [
+            "-2",
+            "-2"
+          ],
+          [
+            "3"
+          ]
+        ]
+      }
+    },
+    "signs": [
+      {
+        "name": "cubic discriminant < 0",
+        "polynomial": [
+          [
+            "0",
+            "0",
+            "8",
+            "96",
+            "148",
+            "64"
+          ]
+        ],
+        "resultant": [
+          "0",
+          "0",
+          "8",
+          "96",
+          "148",
+          "64"
+        ],
+        "sample_parameter": "-2",
+        "sample_branch": [
+          "0",
+          "0"
+        ],
+        "sign": -1,
+        "off_branch_boxes": [],
+        "nonnegative_cell_samples": []
+      },
+      {
+        "name": "pair imaginary part squared",
+        "polynomial": [
+          [
+            "-1",
+            "-10",
+            "-5"
+          ],
+          [
+            "-2",
+            "-2"
+          ],
+          [
+            "3"
+          ]
+        ],
+        "resultant": [
+          "0",
+          "0",
+          "-8",
+          "-96",
+          "-148",
+          "-64"
+        ],
+        "sample_parameter": "-2",
+        "sample_branch": [
+          "1345/1024",
+          "2695/2048"
+        ],
+        "sign": 1,
+        "off_branch_boxes": [],
+        "nonnegative_cell_samples": []
+      },
+      {
+        "name": "simple real root derivative",
+        "polynomial": [
+          [
+            "0",
+            "-2",
+            "-1"
+          ],
+          [
+            "-2",
+            "-2"
+          ],
+          [
+            "3"
+          ]
+        ],
+        "resultant": [
+          "0",
+          "0",
+          "-8",
+          "-96",
+          "-148",
+          "-64"
+        ],
+        "sample_parameter": "-2",
+        "sample_branch": [
+          "1345/1024",
+          "2695/2048"
+        ],
+        "sign": 1,
+        "off_branch_boxes": [],
+        "nonnegative_cell_samples": []
+      },
+      {
+        "name": "strict modulus gap b-r^2",
+        "polynomial": [
+          [
+            "0",
+            "-2",
+            "-1"
+          ],
+          [
+            "-1",
+            "-1"
+          ]
+        ],
+        "resultant": [
+          "0",
+          "0",
+          "1",
+          "-4",
+          "-6",
+          "-2"
+        ],
+        "sample_parameter": "-2",
+        "sample_branch": [
+          "1345/1024",
+          "2695/2048"
+        ],
+        "sign": 1,
+        "off_branch_boxes": [],
+        "nonnegative_cell_samples": []
+      },
+      {
+        "name": "amplitude real part",
+        "polynomial": [
+          [
+            "0",
+            "-2",
+            "-1"
+          ],
+          [
+            "-2",
+            "-1"
+          ],
+          [
+            "2"
+          ]
+        ],
+        "resultant": [
+          "0",
+          "0",
+          "0",
+          "-24",
+          "-40",
+          "-18"
+        ],
+        "sample_parameter": "-2",
+        "sample_branch": [
+          "1345/1024",
+          "2695/2048"
+        ],
+        "sign": 1,
+        "off_branch_boxes": [],
+        "nonnegative_cell_samples": []
+      },
+      {
+        "name": "amplitude imaginary part",
+        "polynomial": [
+          [
+            "0",
+            "2",
+            "-1",
+            "-1"
+          ],
+          [
+            "2",
+            "3"
+          ],
+          [
+            "-2",
+            "1"
+          ]
+        ],
+        "resultant": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "-64",
+          "-80",
+          "0",
+          "20"
+        ],
+        "sample_parameter": "-2",
+        "sample_branch": [
+          "1345/1024",
+          "2695/2048"
+        ],
+        "sign": -1,
+        "off_branch_boxes": [],
+        "nonnegative_cell_samples": []
+      },
+      {
+        "name": "single remainder amplitude dominance 4|A|^2-C^2",
+        "polynomial": [
+          [
+            "0",
+            "0",
+            "0",
+            "-80",
+            "-118",
+            "-46"
+          ],
+          [
+            "0",
+            "0",
+            "-32",
+            "-48",
+            "-14"
+          ],
+          [
+            "0",
+            "0",
+            "40",
+            "32"
+          ]
+        ],
+        "resultant": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "0",
+          "2048",
+          "-17920",
+          "-75232",
+          "-93248",
+          "-35504",
+          "9504",
+          "7056"
+        ],
+        "sample_parameter": "-2",
+        "sample_branch": [
+          "1345/1024",
+          "2695/2048"
+        ],
+        "sign": 1,
+        "off_branch_boxes": [],
+        "nonnegative_cell_samples": []
+      }
+    ],
+    "domination": "single_real_remainder: 4|A|^2>=C^2 and |r|<|lambda| give strict domination for n>=1, also when C=0; no uniform modulus gap is needed at infinity",
+    "cutoff": 1,
+    "tail_at_cutoff": "0",
+    "phase": [
+      "right collision: x=([\"0\", \"-2\", \"6\", \"8\"])/(2*[\"1\", \"8\", \"4\"])>0; p'(r)>0; Im A -> -infinity, Re A bounded; phase -> -pi/2",
+      "s=1/t, u=r/t: scaled characteristic [[\"1\", \"1\"], [\"-1\", \"-2\"], [\"-1\", \"-1\"], [\"1\"]]; at s=0 pair root 1 (double), third root -1 (simple), so theta -> pi",
+      "implicit simple-root Taylor coefficients through s^8: [\"-1\", \"-1/2\", \"1/4\", \"-5/32\", \"7/64\", \"-41/512\", \"15/256\", \"-21/512\", \"419/16384\"]; derivative 4 != 0",
+      "scaled Im numerator [\"0\", \"-5\", \"-15/4\", \"5/16\", \"-3/32\", \"-3/256\", \"77/1024\", \"-61/512\", \"311/2048\"], Y [\"0\", \"-4\", \"-5/4\", \"0\", \"3/32\", \"-9/64\", \"173/1024\", \"-3/16\", \"1633/8192\"], Re numerator [\"2\", \"5/2\", \"1/4\", \"-7/32\", \"13/64\", \"-99/512\", \"95/512\", \"-91/512\", \"2765/16384\"]; ord((Im A/Re A)^2)=1 > 0, hence arg A -> 0 within quadrant IV",
+      "arg A in (-pi/2,0); theta in (0,pi); first crossings of j*pi, j=0,...,n-1, give n-1 alternating sign changes"
+    ],
+    "phase_limits": {
+      "left_eigenvalue_argument": "1",
+      "right_eigenvalue_argument": "0",
+      "left_amplitude_argument": "0",
+      "right_amplitude_argument": "-1/2"
+    },
+    "exterior": [
+      "deg_t D_j <= j and deg_t N_j <= j imply deg P_n <= n by induction",
+      "s=1/t: top coefficient GF = [\"1\"]/[\"1\", \"0\", \"-1\"]",
+      "[t^n]P_n = [n even]; hence degree <= n-1 for odd n and monic degree n for even n",
+      "at the leftmost sample the sign is (-1)^(n-1). For positive geometric top coefficients, sign P_n(-infinity)=(-1)^n supplies one extra zero. For the parity top GF it supplies one extra exactly when n is even. Odd degree <= n-1 closes without it"
+    ],
+    "degree_certificate": {
+      "upper_bound": {
+        "slope": 1,
+        "offsets": [
+          0,
+          -1
+        ]
+      },
+      "leading_numerator": [
+        "1"
+      ],
+      "leading_denominator": [
+        "1",
+        "0",
+        "-1"
+      ],
+      "positive_top_residues": [
+        0
+      ]
+    },
+    "zero_count": {
+      "slope": 1,
+      "offsets": [
+        0,
+        -1
+      ]
+    },
+    "finite_rows": [
+      {
+        "index": 0,
+        "coefficients": [
+          "1"
+        ],
+        "degree": 0,
+        "distinct_real_roots": 0
+      }
+    ],
+    "lean_declarations": [
+      "RealRooted.EffectiveBKW.PairExpansion",
+      "RealRooted.EffectiveBKW.PairExpansion.exists_alternating",
+      "RealRooted.EffectiveBKW.splits_nodup_of_strictAnti_alternating",
+      "RealRooted.EffectiveBKW.PairExpansion.dom_of_single_mode",
+      "RealRooted.EffectiveBKW.splits_nodup_of_strictAnti_alternating_of_leftEscape",
+      "RealRooted.EffectiveBKW.eventually_phase_gt_atBot"
+    ]
+  }
+}

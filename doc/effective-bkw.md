@@ -17,14 +17,114 @@ upper-half-plane root `lambda`, and put `F=N/H`. The exact pair expansion is
 remainder domination to fix signs at successive first crossings of the
 continuous phase. The intermediate value theorem gives distinct zeros.
 We close the count with the all-index degree bound and exterior signs,
-then check every row below the cutoff exactly. First crossings give ordered
-samples even when the phase is not monotone.
+then check every row below the cutoff exactly. Rows of degree zero are
+nonzero constants by the exact positive leading-coefficient certificate and
+need no alternating samples. First crossings give ordered samples even when
+the phase is not monotone.
+
+
+## Pointwise remainder supplier
+
+For a cubic, the strict inequality `4|A|^2>C^2` gives domination for every
+`n>=0`; the existing weak inequality with a strict modulus gap remains a
+fallback for `n>=1`. No remainder gives domination from zero automatically.
+
+For a quartic with two real cofactor roots `x,y`, put
+`h(mu)=mu^2+s*mu+c`, `q(mu)=mu^2-2a*mu+b`, and reduce
+`Nbar(mu)/q(mu)` modulo `h` to `U*mu+V`. The real residues satisfy
+
+```text
+Cx+Cy = U,
+(Cx-Cy)^2 = (-s*U+2*V)^2/(s^2-4c).
+```
+
+Thus two symmetric rational inequalities certify
+`4|A|^2>(Cx+Cy)^2` and `4|A|^2>(Cx-Cy)^2`. Since
+`|Cx|+|Cy|=max(|Cx+Cy|,|Cx-Cy|)`, they imply strict domination from zero.
+Every denominator and the real-root and modulus conditions are checked on
+the whole branch. In particular `b-c>0` is required in addition to
+`b+c>0` and `(b+c)^2>b*s^2`; the last two alone do not exclude two real
+roots outside the pair modulus on the same side.
+
+We also try cutoffs `N=1,...,16`, replacing residues by `Cx*x^N,Cy*y^N`
+and the pair amplitude by `A*lambda^N`. Exact reduction of
+`mu^N*(U*mu+V)` modulo `h` supplies the same two inequalities. Strict
+individual modulus gaps make the normalized absolute sum decrease for all
+later indices. Samples only reject candidates; acceptance requires both
+full-interval resultant/sign certificates. The compact uniform supplier
+remains a fallback when these sufficient inequalities do not certify.
+
+A nonreal quadratic cofactor contributes `2 Re(B*mu^n)`. Put
+`Y_h=c-s^2/4>0`, and reduce `Nbar mod h=u*mu+v` and `q mod h=e*mu+f`.
+Then
+
+```text
+4|B|^2 = (c*u^2+v^2-s*u*v)/(Y_h*(f^2-s*e*f+c*e^2)).
+```
+
+An exact inequality `|A|^2*b^N>|B|^2*c^N`, together with `b>c`, certifies
+all later rows. The norm and residue denominators are nonzero because the
+pairs have distinct moduli. On a quartic ray the characteristic discriminant
+can be positive. The largest positive pair product is still continuous:
+it is the maximum of the continuous conjugate-pair norms and positive
+real-root products. A positive mixed product lies below the larger pair
+norm. Collisions between smaller products therefore need not exclude this
+chart. The characteristic roots remain simple, and the selected pair and
+all its rational denominators are checked strictly.
+
+A positive real part of `A` can also fix the bounded-interval lift when
+`Im F` changes sign. Both endpoint arguments then enter the same exact
+residue-class phase closure. This closure requires an exact degree and a
+positive actual leading coefficient. The older parity upper-bound shortcut
+keeps its original phase argument; its vanishing top coefficient cannot
+supply generic exterior signs.
+
+`domination_cutoff` records this independent start when available; older
+certificates omit it and replay their original conservative supplier exactly,
+including enclosing theorem reports with moved seeds or rule normalization.
+`cutoff` is the joint start after degree/phase closure,
+and `finite_rows` contains exactly the earlier local rows. They can differ
+when the eventual degree law starts later than domination. In the classical
+charts, degree-zero rows allow both starts to be zero.
 
 ## Suppliers and supported geometry
+
+### Replay contract
+
+`polytool.effective-bkw.v1` identifies the report layout and exact replay
+protocol. A proved report retains its complete request, supplier evidence,
+finite prefix and optional original recurrence. Verification reconstructs
+and compares every field; editing a witness or its source is rejected.
+Certificates without `domination_cutoff` select the original conservative
+supplier. New suppliers record `Some(N)`, including the uniform fallback,
+so improvements to automatic discovery do not silently switch replay modes.
+Enclosing theorem reports preserve the same selection, normalization and
+moved seeds. Stored legacy and pointwise tiling fixtures test both modes.
+
+The schema remains v1 because the wire layout and mathematical trust model
+are unchanged and the old conservative certificate reconstruction is retained.
+The schema is not an implementation commit: exact replay can reject stale
+evidence when an arithmetic algorithm or witness label changes. Retain the
+producing source version with archived reports. For migration, generate a
+fresh report from the archived request and verify it; never bypass comparison
+or edit the old witnesses. In particular, newer supplied-pair ray reports
+whose pair-discriminant check was labelled as a full characteristic
+discriminant must be regenerated to obtain the corrected label. The stored
+legacy and pointwise fixtures are maintained replay compatibility targets.
+An unsupported `not_proved` result records the current search outcome;
+its diagnostic and completeness are allowed to change as suppliers improve.
+The verifier still rejects any recorded result that differs from its current
+reconstruction. Prefix-shift failures produce source-bound `not_proved`
+reports with exit 0, while malformed input remains an error with exit 2.
+Order-two no-remainder requests reject supplied `uniform_constants` rather
+than ignoring them; the conservative replay of old certificates is retained.
 
 - Order two: proper numerator, bounded pair interval with simple collisions
   at negative and positive eigenvalues. The remainder is zero. A real
   nonzero amplitude or a lift in the lower half-plane certifies the winding.
+  Its Newton ray chart also has zero remainder. Automatic endpoint selection
+  includes `t=0` when the characteristic is nonreal on the left component;
+  all interval, amplitude and phase checks still apply.
 - Order three: one real root `r` and one conjugate pair on a negative ray.
   The original degree-one/parity chart checks `|r|<|lambda|`, `Re A>0`, `Im A<0` and
   `4|A|^2>=C^2`. They give strict domination for `n>=1`, even when the
@@ -35,13 +135,24 @@ samples even when the phase is not monotone.
   simple pair collision with phase limit `-pi/2`.
   Positive-infinity rays use the exact reflection
   `Q_n(u)=(-1)^n P_n(-u)`, recorded in `coordinate_transport`.
-  Newton charts below instead fix the lift by `Re A>0` and calculate both
-  endpoint arguments from exact weighted expansions.
+  Newton charts fix the lift by `Re A>0` or `Im A<0` and calculate endpoint
+  arguments from exact weighted expansions. A generic positive triple point
+  is also supported: the endpoint characteristic is `(mu-r0)^3`, `p_t<0`,
+  and `Nbar(r0)>0`. Its Puiseux roots give `theta->0` and `arg A->-2pi/3`
+  in the certified lower-half-plane lift. No uniform modulus gap is needed
+  at this edge or at a cubic equimodular Newton face.
 - Order four: negative characteristic discriminant and negative constant
   coefficient give a unique positive pair-product branch `b=|lambda|^2`.
-  The cofactor roots are real and have opposite signs. Two exact Jury
-  inequalities check a uniform modulus bound. Supplied `q,m,beta` bound
-  the amplitude and the numerator weights on the whole interval.
+  The cofactor roots are real and have opposite signs. By default we first
+  try exact pointwise remainder domination, described below. Supplied
+  `q,m,beta` retain the compact uniform supplier. Quartic Newton rays also
+  allow same-sign real cofactor roots or a second conjugate pair. The largest
+  positive pair product,
+  its strict denominator sign, nonreal-pair test and strict cofactor gaps
+  identify the dominant conjugates. A simple rational limiting pair-product
+  root gives exact fractional angles at infinity; a finite positive dominant
+  double collision supplies the second phase limit. Both limits close the
+  degree separately in every residue class.
 - Orders through eight: a supplied polynomial pair factorization
   `D=(1-2a z+b z^2)H` is checked identically. Rational-polynomial `a,b` and
   coefficient bounds for `H` supply a compact template even when the
@@ -60,6 +171,28 @@ samples even when the phase is not monotone.
   deflating the double root must satisfy the Cauchy bounds there as well.
   This binds the collision to the dominant pair rather than to two cofactor
   roots. Branch collisions produce `not_proved`.
+
+For a positive constant numerator, a bounded higher-order chart can also use
+real-root barriers. We count exactly `d-2` real characteristic roots in
+`(-rho,rho)` at one rational parameter. Nonvanishing characteristic
+discriminant and signed barriers at `lambda=+/-rho` keep those roots there
+throughout the interval. A pair-product barrier gives `|lambda|>s>rho`.
+Vieta's formulas then give the uniform Cauchy weights
+`gamma_j=binomial(d-2,j)*(rho/s)^j`. If their Cauchy budget is below one,
+`|H(1/lambda)-1|<1`: the constant numerator gives a right-half-plane lift
+of `F=N/H` and the exact lower bound `|F|>=N/(1+sum gamma_j)`.
+Both endpoint collisions are still checked against the same cofactor
+weights, the phase count closes the exact degree, and all earlier rows are
+checked exactly. The sample root count becomes an all-interval argument
+through the discriminant and barrier certificates. The automatic grid uses
+`s=k/16<=1`, `rho/s=j/16` and `q=l/16`; other cases retain the general supplier.
+
+The algebraic supplier reuses resultants of known denominator products by
+exact multiplicativity after checking each product identity. Repeated factors may be reduced
+for critical-root isolation, while retaining every root and the complete
+original resultant in the certificate. Regression checks compare complete
+sign certificates, including off-branch boxes, against direct elimination.
+The original fraction arithmetic and deflation order are retained for replay.
 
 For the compact supplier, `uniform_constants` has `modulus_ratio=q` in
 `(0,1)`, `amplitude_lower_bound=m>0`, and `numerator_weights=beta`, including
@@ -199,7 +332,9 @@ and the path-cube transfer GF
 (1-(1+3t)z-2t(1-t)z^2-t(2-t-t^2)z^3-t^2(1-t)^2z^4).
 ```
 
-For the last family, `q=4/5`, `m=13/100` and
+The default pointwise supplier has cutoff 0 for all three examples. The
+positive constant row at n=0 follows from the degree certificate. For the
+last family, the optional uniform bounds `q=4/5`, `m=13/100` and
 `beta=(1,8/5,3/5,1/2)` give cutoff 39. The phase supplies `n-1`
 interior zeros and the positive monic coefficient supplies one exterior zero.
 The tiling supplier needs no asymptotic cutoff: for `n>=1` it supplies
@@ -213,14 +348,17 @@ Discovery records a successful route only when it strengthens earlier
 conclusions. Existing proof-report verification replays it and ties its GF
 to the exact recurrence and every seed. Consumers of recurrence discovery
 therefore receive this route without a separate adapter or a sequence-name
-lookup. Without supplied constants, the quartic supplier searches `q=k/16`
+lookup. If pointwise domination is not certified, the quartic uniform
+fallback searches `q=k/16`
 for `1<=k<=15`, `m=2^(-k)` for `0<=k<=16`, and each `beta_j` in
 `{0} union {2^k : 0<=k<=16}`. It accepts the first certified bound for
 each obligation. Exact sample checks only reject candidates; full-interval
 sign certificates establish every accepted bound and are retained for replay.
 These grids are independent of the family and numerator degree.
 For the path-cube example this search finds `q=13/16`, `m=1/8` and
-`beta=(1,2,1,1)`, giving cutoff 45 without supplied constants.
+`beta=(1,2,1,1)`, giving uniform cutoff 45. The default exact pointwise
+bound instead uses cutoff 0 and two amplitude resultants of degrees 322
+and 378.
 The certified negative ray makes the tiling and path-cube proofs eligible
 in the existing parent-prover cascade. Downstream consumers can also replay
 theorem reports whose region is the whole real line through their existing
@@ -241,14 +379,27 @@ parent to a proved one.
 
 Direct GF input requires a nonzero proper numerator. General winding
 across multiple half-planes, multiple pair intervals, finite exterior
-amplitude-zero counts and triple collisions are unsupported.
-Higher-order automatic suppliers require compact geometry; higher-order ray
-edges with a degenerating gap remain unsupported.
+amplitude-zero counts and nongeneric multiple collisions are unsupported.
+The positive generic cubic triple point described above is supported.
+A constant numerator and a binomial Newton face with `k>4` equal limiting
+modes give an exact obstruction to global domination on a negative-infinity
+ray. At every local `n=k*m`, the pair has normalized amplitude `2/k` and the
+remainder `(k-2)/k`, so no cutoff works. This does not refute real-rootedness;
+a section argument, merged pairs or domination only at phase samples may
+still apply. At a zero endpoint, a unique minimum valuation/lag face with
+`k>4` gives the same obstruction for a constant numerator. At `n=k*m`, the
+unique lowest-power coefficient and the limiting residues give the same
+pair/remainder ratio. Deflating a zero root rescales both sides of the
+inequality equally and cannot remove this obstruction.
+
+Automatic suppliers above order four require compact geometry; their ray
+edges and multi-mode pointwise remainder bounds remain unsupported.
 Compact charts with eigenvalue arguments pi and zero require degree slope
-one; a sublinear Newton cap is rejected before elimination. Newton layers whose
-positivity cannot be certified are rejected. Newton search has 64 layers,
-1024 support coefficients and phase period at most 1024; cubic Taylor limits
-use sixteen terms. General algebraic scaled edge roots and algebraic squared
+one. Above order four, a sublinear Newton cap is rejected before expensive
+elimination until a higher-order ray supplier is available. Newton layers
+whose positivity cannot be certified are rejected. Newton search has 64 layers,
+1024 support coefficients and phase period at most 1024; cubic and quartic
+Taylor limits use sixteen terms. The pointwise index search stops at 16. General algebraic scaled edge roots and algebraic squared
 trigonometric inputs are unsupported. All inputs have order at most eight.
 Parameter degree is capped at eight, branch box
 refinement at 128 bits/steps and cutoff search at 4096. Failure of any
@@ -262,7 +413,9 @@ still require the complete exact degree proof.
 
 Removed prefix rows must be zero or simple real-rooted. Their removal never
 asserts that a zero row is nonzero. Nonzero prefix rows with repeated roots
-remain unsupported by this simple-root route.
+remain unsupported by this simple-root route. Growing zero multiplicities
+and zero-eigenvalue finite Newton edges need a valuation-aware conclusion;
+the generic nonzero triple-point edge does not cover them.
 
 The quartic proof and its two exact negative controls use the existing
 `full-tests` tier because elimination is costly in debug builds. Run their

@@ -14,13 +14,7 @@ fn gcd(mut a: usize, mut b: usize) -> usize {
     a
 }
 
-/// The top Newton edge gives a cap, not an equality. Expand at that edge
-/// until each residue has an identically zero prefix and a provably positive
-/// layer. Negative coefficients or exhausted guards give no certificate.
-pub(super) fn newton_budget(n: &B, d: &B) -> Result<DegreeBudget, RecurrenceError> {
-    if d.rows().first() != Some(&vec![Q::one()]) {
-        return Err(failure("Newton degree expansion requires D(t,0)=1"));
-    }
+pub(super) fn newton_weight(d: &B) -> Option<(usize, usize)> {
     let (mut growth, mut weight) = (0, 1);
     for (j, row) in d.rows().iter().enumerate().skip(1) {
         if let Some(k) = P::new(row.clone()).degree() {
@@ -30,13 +24,72 @@ pub(super) fn newton_budget(n: &B, d: &B) -> Result<DegreeBudget, RecurrenceErro
         }
     }
     if growth == 0 {
-        return Err(failure(
-            "Newton degree slope is zero; no growing phase grid",
-        ));
+        return None;
     }
     let common = gcd(growth, weight);
-    growth /= common;
-    weight /= common;
+    Some((growth / common, weight / common))
+}
+
+/// A binomial face with k>4 equally sized modes prevents global pair
+/// domination on a negative-infinity ray for a constant numerator. At
+/// n=k*m, the pair has limiting weight 2/k and the remainder (k-2)/k.
+pub(super) fn equimodular_obstruction(n: &B, d: &B) -> Option<usize> {
+    if n.index_degree() != Some(0) || n.rows()[0].len() != 1 {
+        return None;
+    }
+    let (growth, weight) = newton_weight(d)?;
+    let face: Vec<_> = d
+        .rows()
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter_map(|(j, row)| {
+            let degree = P::new(row.clone()).degree()?;
+            (weight * degree == growth * j).then_some(j)
+        })
+        .collect();
+    match face.as_slice() {
+        [k] if *k > 4 => Some(*k),
+        _ => None,
+    }
+}
+
+/// The same equal-mode obstruction at t->0 when the unique minimum
+/// valuation/lag edge has more than four roots and N is constant.
+pub(super) fn zero_edge_obstruction(n: &B, d: &B) -> Option<usize> {
+    if n.index_degree() != Some(0) || n.rows()[0].len() != 1 {
+        return None;
+    }
+    let terms: Vec<_> = d
+        .rows()
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter_map(|(j, row)| row.iter().position(|c| !c.is_zero()).map(|v| (j, v)))
+        .collect();
+    let &(lag, valuation) = terms
+        .iter()
+        .min_by(|(j, v), (k, w)| (v * k).cmp(&(w * j)))?;
+    if valuation == 0 || lag <= 4 {
+        return None;
+    }
+    (terms
+        .iter()
+        .filter(|(j, v)| v * lag == valuation * j)
+        .count()
+        == 1)
+        .then_some(lag)
+}
+
+/// The top Newton edge gives a cap, not an equality. Expand at that edge
+/// until each residue has an identically zero prefix and a provably positive
+/// layer. Negative coefficients or exhausted guards give no certificate.
+pub(super) fn newton_budget(n: &B, d: &B) -> Result<DegreeBudget, RecurrenceError> {
+    if d.rows().first() != Some(&vec![Q::one()]) {
+        return Err(failure("Newton degree expansion requires D(t,0)=1"));
+    }
+    let (growth, weight) = newton_weight(d)
+        .ok_or_else(|| failure("Newton degree slope is zero; no growing phase grid"))?;
     let shift = n
         .rows()
         .iter()
@@ -396,7 +449,10 @@ pub(super) fn value(count: &EffectiveBkwZeroCount, n: usize) -> Result<usize, Re
     if count.divisor == 0 || count.offsets.is_empty() {
         return Err(failure("malformed quasi-linear zero count"));
     }
-    let value = count.slope as i128 * n as i128 + count.offsets[n % count.offsets.len()] as i128;
+    let value = (count.slope as i128)
+        .checked_mul(n as i128)
+        .and_then(|v| v.checked_add(count.offsets[n % count.offsets.len()] as i128))
+        .ok_or_else(|| failure("zero-count arithmetic overflow"))?;
     if value < 0 || value % count.divisor as i128 != 0 {
         return Err(failure(
             "zero-count law is negative or nonintegral at the cutoff",
@@ -410,6 +466,18 @@ pub(super) fn value(count: &EffectiveBkwZeroCount, n: usize) -> Result<usize, Re
 /// one representative and its increment proves the count for every later n.
 pub(super) fn close_phase(out: &mut EffectiveBkwCertificate) -> Result<(), RecurrenceError> {
     let count = &out.zero_count;
+    if count.divisor == 0 || count.offsets.is_empty() {
+        return Err(failure(
+            "phase degree divisor and residue period must be nonzero",
+        ));
+    }
+    // The parity shortcut only gives an upper bound when its top
+    // coefficient vanishes. Its original phase argument remains valid,
+    // but this general two-exterior-sign closure needs an exact degree
+    // and the positive sign of the actual leading coefficient.
+    if out.degree_certificate.newton.is_none() && count.offsets != [0] {
+        return Err(failure("general phase closure requires an exact positive leading-coefficient law; a parity upper bound is insufficient"));
+    }
     let limits = &out.phase_limits;
     let l = rational(&limits.left_eigenvalue_argument)?;
     let r = rational(&limits.right_eigenvalue_argument)?;
@@ -417,6 +485,9 @@ pub(super) fn close_phase(out: &mut EffectiveBkwCertificate) -> Result<(), Recur
     let b = rational(&limits.right_amplitude_argument)?;
     if l <= r {
         return Err(failure("phase interval has no positive asymptotic width"));
+    }
+    if (&l - &r) * Q::from_integer(count.divisor.into()) != Q::from_integer(count.slope.into()) {
+        return Err(failure("phase and degree slopes disagree"));
     }
     if let Some(newton) = &out.degree_certificate.newton {
         out.cutoff = out.cutoff.max(newton.start);
@@ -427,25 +498,42 @@ pub(super) fn close_phase(out: &mut EffectiveBkwCertificate) -> Result<(), Recur
         usize::try_from(l.denom().clone()).unwrap_or(1025),
         usize::try_from(r.denom().clone()).unwrap_or(1025),
     ] {
+        let doubled = d
+            .checked_mul(2)
+            .filter(|d| *d != 0)
+            .ok_or_else(|| failure("phase denominator doubling overflow"))?;
         period = period
-            .checked_mul(2 * d / gcd(period, 2 * d))
+            .checked_mul(doubled / gcd(period, doubled))
             .filter(|p| *p <= 1024)
             .ok_or_else(|| failure("phase residue period exceeds 1024"))?;
     }
     let mut proof = Vec::new();
     let mut right_escape = false;
     for residue in 0..period {
-        let n = out.cutoff + (residue + period - out.cutoff % period) % period;
+        let n = out
+            .cutoff
+            .checked_add((residue + period - out.cutoff % period) % period)
+            .ok_or_else(|| failure("phase representative index overflow"))?;
         let mut previous: Option<usize> = None;
-        for index in [n, n + period] {
+        let next = n
+            .checked_add(period)
+            .ok_or_else(|| failure("phase representative increment overflow"))?;
+        for index in [n, next] {
             let index_q = Q::from_integer(index.into());
             let high = (&l * &index_q + &a).ceil() - q(1);
             let low = (&r * &index_q + &b).floor() + q(1);
             let samples = &high - &low + q(1);
+            let degree = value(count, index)?;
             if samples < q(1) {
+                if degree == 0 {
+                    // The degree/positive-leading-coefficient certificate
+                    // already proves this row is a nonzero constant. The
+                    // next index in this class starts the affine count.
+                    previous = Some(0);
+                    continue;
+                }
                 return Err(failure("phase cutoff has no interior sign sample"));
             }
-            let degree = value(count, index)?;
             let parity = |j: &Q| {
                 (j.to_integer() % num_bigint::BigInt::from(2)) != num_bigint::BigInt::zero()
             };

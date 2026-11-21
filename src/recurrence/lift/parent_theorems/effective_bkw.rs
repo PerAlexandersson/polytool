@@ -53,6 +53,16 @@ fn theorem_report(
     seeds: &[Vec<Q>],
     options: &RealRootednessTheoremOptions,
 ) -> Result<RealRootednessTheoremReport, RecurrenceError> {
+    theorem_report_with_mode(rule, first, seeds, options, false)
+}
+
+pub(super) fn theorem_report_with_mode(
+    rule: &Recurrence,
+    first: usize,
+    seeds: &[Vec<Q>],
+    options: &RealRootednessTheoremOptions,
+    legacy: bool,
+) -> Result<RealRootednessTheoremReport, RecurrenceError> {
     let mut report = RealRootednessTheoremReport::new(
         RealRootednessTheorem::EffectiveBkw,
         rule,
@@ -100,7 +110,11 @@ fn theorem_report(
     }) {
         return Ok(report.not_applicable("a prescribed nonzero seed is not real-rooted"));
     }
-    let checked = match certify_effective_bkw_recurrence(&report.recurrence) {
+    let checked = match if legacy {
+        crate::bkw::effective::certify_recurrence_with_mode(&report.recurrence, true)
+    } else {
+        certify_effective_bkw_recurrence(&report.recurrence)
+    } {
         Ok(c) => c,
         Err(RecurrenceError::Unsupported(reason)) => return Ok(report.not_applicable(reason)),
         Err(e) => return Err(e),
@@ -194,4 +208,54 @@ pub(super) fn verify_certificate_in_report(
         ));
     }
     c.verify()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_effective_wrapper_replays_and_rejects_mutations() {
+        let record: RecurrenceJson = serde_json::from_value(serde_json::json!({
+            "schema":"polytool.recurrence.v1", "first_index":0,
+            "initial_polynomials":[["1"],["0","2"]],
+            "recurrence":{"terms":[
+                {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","2"]]}},
+                {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["-1"]]}}
+            ]}
+        }))
+        .unwrap();
+        let (rule, first, seeds) = record.to_recurrence_parts().unwrap();
+        for delay in [0, 1] {
+            let report = super::super::check_with_start_delay_mode(
+                RealRootednessTheorem::EffectiveBkw,
+                &rule,
+                first,
+                &seeds,
+                &Default::default(),
+                delay,
+                true,
+            )
+            .unwrap();
+            assert!(report.is_proved());
+            assert!(report
+                .effective_bkw_certificate()
+                .unwrap()
+                .certificate
+                .as_ref()
+                .unwrap()
+                .domination_cutoff
+                .is_none());
+            report.verify().unwrap();
+            let mut changed = report.clone();
+            let Some(RouteCertificate::EffectiveBkw(c)) = changed.certificate.as_mut() else {
+                unreachable!()
+            };
+            c.certificate.as_mut().unwrap().cutoff += 1;
+            assert!(changed.verify().is_err());
+            let mut changed = report;
+            changed.hypotheses[0].evidence.push_str(" altered");
+            assert!(changed.verify().is_err());
+        }
+    }
 }

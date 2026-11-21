@@ -1,7 +1,87 @@
-//! No-remainder quadratic and uniform compact quartic suppliers.
+//! Pointwise real-mode domination and compact uniform fallback suppliers.
 
 use super::cubic::{endpoint_is_zero, endpoint_rational_sign, substitute};
 use super::*;
+
+mod barrier;
+mod uniform;
+
+fn verify_pair_factorization(
+    d: &[P],
+    p: &B,
+    a: &R,
+    b: &R,
+    cofactor: &[R],
+) -> Result<(), RecurrenceError> {
+    let pair = [R::of(c(1)), a.scale(&q(-2)), b.clone()];
+    let mut product = vec![R::of(c(0)); d.len()];
+    for (i, u) in pair.iter().enumerate() {
+        for (j, v) in cofactor.iter().enumerate() {
+            product[i + j] = product[i + j].add(&u.mul(v));
+        }
+    }
+    for (j, value) in product.iter().enumerate() {
+        if !rem(&value.sub(&R::of(t(&d[j]))).n, p).is_zero() {
+            return Err(failure("exact pair/cofactor factorization identity failed"));
+        }
+    }
+    Ok(())
+}
+
+fn select_pair(
+    d: &[P],
+    supplied: Option<&EffectiveBkwPairFactorization>,
+    ray: bool,
+) -> Result<(B, R, R, Vec<R>, Branch), RecurrenceError> {
+    let order = d.len() - 1;
+    Ok(if let Some(pair) = supplied {
+        let h = decode_b(&pair.cofactor)?;
+        if h.index_degree() != Some(order - 2) || h.rows().first() != Some(&vec![Q::one()]) {
+            return Err(RecurrenceError::InvalidInput(
+                "pair cofactor must have degree d-2 and constant coefficient one".into(),
+            ));
+        }
+        (
+            variable(),
+            R::of(t(&decode(&pair.real_part)?)),
+            R::of(t(&decode(&pair.norm_squared)?)),
+            h.rows()
+                .iter()
+                .map(|r| R::of(t(&P::new(r.clone()))))
+                .collect(),
+            Branch::Zero,
+        )
+    } else if order == 2 {
+        (
+            variable(),
+            R::of(t(&d[1])).scale(&(q(-1) / q(2))),
+            R::of(t(&d[2])),
+            vec![R::of(c(1))],
+            Branch::Zero,
+        )
+    } else if order > 4 {
+        higher::algebraic_pair(d)?
+    } else {
+        let p = pair_product_polynomial(d);
+        let b = R::of(variable());
+        let a = b
+            .mul(&R::of(t(&d[1])).neg().mul(&b).add(&R::of(t(&d[3]))))
+            .div(&b.square().sub(&R::of(t(&d[4]))).scale(&q(2)));
+        let c0 = R::of(t(&d[4])).div(&b);
+        let c1 = R::of(t(&d[1])).add(&a.scale(&q(2)));
+        (
+            p,
+            a,
+            b,
+            vec![R::of(c(1)), c1, c0],
+            if ray {
+                Branch::LargestPositive
+            } else {
+                Branch::UniquePositive
+            },
+        )
+    })
+}
 
 fn pair_product_polynomial(d: &[P]) -> B {
     let (b, c, e, f) = (d[1].clone(), d[2].clone(), d[3].clone(), d[4].clone());
@@ -63,7 +143,7 @@ fn eval_complex(coefficients: &[R], z: &Z, y2: &R) -> Z {
 // F=b*(U*lambda+V0)/(L*lambda+M). All four displayed coefficients
 // below are polynomials; clearing the common positive g removes artificial
 // denominator factors before the resultant calculation.
-fn quartic_amplitude_forms(n: &B, d: &[P]) -> (R, R, R, R) {
+pub(super) fn quartic_amplitude_forms(n: &B, d: &[P]) -> (R, R, R, R) {
     let b = variable();
     let g = b.power(2).subtract(&t(&d[4]));
     let an = b.multiply(&t(&d[1]).scale(&q(-1)).multiply(&b).add(&t(&d[3])));
@@ -158,6 +238,31 @@ impl UniformSearch<'_> {
 /// Quotient arithmetic may cancel a zero numerator before a later sign
 /// condition sees its denominator. Check the stored pair/cofactor fractions
 /// first, strictly throughout the selected branch, independently of b-a^2.
+fn norm_root_cover(k: &P, known: &[P]) -> P {
+    let mut remaining = k.clone();
+    let mut retained = P::one();
+    // Strip only exact factors, retaining every critical root. The stored
+    // resultant remains complete and unchanged.
+    for factor in known {
+        if !factor.degree().is_some_and(|d| d > 0 && d <= 128) {
+            continue;
+        }
+        let mut used = false;
+        while remaining.degree() >= factor.degree() {
+            let (quotient, remainder) = remaining.div_rem(factor);
+            if !remainder.is_zero() {
+                break;
+            }
+            remaining = quotient;
+            used = true;
+        }
+        if used {
+            retained = retained * factor.clone();
+        }
+    }
+    remaining * retained
+}
+
 pub(super) fn check_pair_denominators(
     p: &B,
     a: &R,
@@ -165,21 +270,66 @@ pub(super) fn check_pair_denominators(
     domain: &Domain,
     which: Branch,
 ) -> Result<Vec<EffectiveBkwSignCertificate>, RecurrenceError> {
-    std::iter::once(a)
-        .chain(cofactor)
-        .enumerate()
-        .filter(|(_, value)| value.d != B::one())
-        .map(|(j, value)| {
-            check_sign(
+    let monic = p.rows().last() == Some(&vec![q(1)]);
+    let mut signs = Vec::new();
+    let mut pair_norm = P::one();
+    let mut cofactor_norms: Vec<P> = Vec::new();
+    for (j, value) in std::iter::once(a).chain(cofactor).enumerate() {
+        if !monic {
+            if value.d != B::one() {
+                signs.push(check_sign(
+                    &format!("pair/cofactor denominator {j} is nonzero"),
+                    p,
+                    &value.d.power(2),
+                    domain,
+                    which,
+                    1,
+                )?);
+            }
+            continue;
+        }
+        // For monic p, Res(p,rem(uv,p))=Res(p,u)*Res(p,v).
+        // Reuse a previous norm only after checking the exact product identity.
+        let norm = if value.d == B::one() {
+            P::one()
+        } else if j >= 2 {
+            let k = j - 1;
+            let mut product = a.d.multiply(&cofactor[k - 1].d);
+            let mut norm = pair_norm.clone() * cofactor_norms[k - 1].clone();
+            if k >= 2 {
+                product = product.multiply(&cofactor[k - 2].d);
+                norm = norm * cofactor_norms[k - 2].clone();
+            }
+            if rem(&product, p) == value.d {
+                norm
+            } else {
+                resultant(p, &value.d)
+            }
+        } else {
+            resultant(p, &value.d)
+        };
+        if value.d != B::one() {
+            let k = norm.pow(2);
+            let mut known = vec![pair_norm.clone(), norm.clone()];
+            known.extend(cofactor_norms.iter().cloned());
+            let cover = norm_root_cover(&k, &known);
+            signs.push(check_sign_with_resultant_cover(
                 &format!("pair/cofactor denominator {j} is nonzero"),
                 p,
                 &value.d.power(2),
                 domain,
                 which,
                 1,
-            )
-        })
-        .collect()
+                |_| (k, cover),
+            )?);
+        }
+        if j == 0 {
+            pair_norm = norm;
+        } else {
+            cofactor_norms.push(norm);
+        }
+    }
+    Ok(signs)
 }
 
 pub(super) fn certify(
@@ -187,19 +337,26 @@ pub(super) fn certify(
     d: &[P],
     request: &EffectiveBkwRequest,
     degree: &DegreeBudget,
+    legacy: bool,
 ) -> Result<EffectiveBkwCertificate, RecurrenceError> {
-    if d.len() > 5 && request.pair_factorization.is_none() {
+    if (d.len() > 5
+        || (d.len() == 5
+            && !legacy
+            && degree.data.newton.is_some()
+            && degree.count.slope < degree.count.divisor))
+        && request.pair_factorization.is_none()
+    {
         // Test every quadratic factor: a smaller complex cofactor need not
         // be the dominant pair, nor share the required collision endpoints.
         for pair in higher::polynomial_pairs(d).unwrap_or_default() {
-            match certify_with_pair(n, d, request, degree, Some(&pair)) {
+            match certify_with_pair(n, d, request, degree, Some(&pair), legacy) {
                 Ok(certificate) => return Ok(certificate),
                 Err(RecurrenceError::Unsupported(_)) => {}
                 Err(error) => return Err(error),
             }
         }
     }
-    certify_with_pair(n, d, request, degree, None)
+    certify_with_pair(n, d, request, degree, None, legacy)
 }
 
 fn certify_with_pair(
@@ -208,6 +365,7 @@ fn certify_with_pair(
     request: &EffectiveBkwRequest,
     degree: &DegreeBudget,
     automatic: Option<&EffectiveBkwPairFactorization>,
+    legacy: bool,
 ) -> Result<EffectiveBkwCertificate, RecurrenceError> {
     let order = d.len() - 1;
     let characteristic = B::new(d.iter().rev().map(|p| p.coeffs().to_vec()).collect());
@@ -219,59 +377,45 @@ fn certify_with_pair(
     } else {
         discriminant(&characteristic)
     };
+    let ray_candidate = !legacy
+        && order == 4
+        && degree.data.newton.is_some()
+        && degree.count.slope < degree.count.divisor;
+    let ray_discriminant_sign = if ray_candidate {
+        quadratic::infinity_sign(&disc)
+    } else {
+        -1
+    };
+    let domain_disc = if ray_discriminant_sign == 1 {
+        disc.scale(&q(-1))
+    } else {
+        disc.clone()
+    };
     let domain = Domain::select(
-        &disc,
-        if supplied.is_some() { 2 } else { order },
+        &domain_disc,
+        if ray_candidate {
+            3
+        } else if supplied.is_some() {
+            2
+        } else {
+            order
+        },
         &request.interval,
     )
     .map_err(RecurrenceError::from)?;
-    if domain.lower.is_none() || domain.upper.is_none() {
+    let ray = domain.lower.is_none() && domain.upper.is_some() && order == 4;
+    if !ray && (domain.lower.is_none() || domain.upper.is_none()) {
         return Err(failure(
             "uniform/no-remainder phase supplier currently needs two finite collision endpoints",
         ));
     }
-    let (p, a, b, cofactor, which) = if let Some(pair) = supplied {
-        let h = decode_b(&pair.cofactor)?;
-        if h.index_degree() != Some(order - 2) || h.rows().first() != Some(&vec![Q::one()]) {
-            return Err(RecurrenceError::InvalidInput(
-                "pair cofactor must have degree d-2 and constant coefficient one".into(),
-            ));
-        }
-        (
-            variable(),
-            R::of(t(&decode(&pair.real_part)?)),
-            R::of(t(&decode(&pair.norm_squared)?)),
-            h.rows()
-                .iter()
-                .map(|r| R::of(t(&P::new(r.clone()))))
-                .collect(),
-            Branch::Zero,
-        )
-    } else if order == 2 {
-        (
-            variable(),
-            R::of(t(&d[1])).scale(&(q(-1) / q(2))),
-            R::of(t(&d[2])),
-            vec![R::of(c(1))],
-            Branch::Zero,
-        )
-    } else if order > 4 {
-        higher::algebraic_pair(d)?
-    } else {
-        let p = pair_product_polynomial(d);
-        let b = R::of(variable());
-        let a = b
-            .mul(&R::of(t(&d[1])).neg().mul(&b).add(&R::of(t(&d[3]))))
-            .div(&b.square().sub(&R::of(t(&d[4]))).scale(&q(2)));
-        let c0 = R::of(t(&d[4])).div(&b);
-        let c1 = R::of(t(&d[1])).add(&a.scale(&q(2)));
-        (p, a, b, vec![R::of(c(1)), c1, c0], Branch::UniquePositive)
-    };
+    let (p, a, b, cofactor, which) = select_pair(d, supplied, ray)?;
     let mut out = empty_certificate(d, &p, &domain, degree);
     if matches!(which, Branch::LargestPositive) {
         let branch_discriminant = discriminant(&p);
-        if branch_discriminant.is_zero()
-            || !domain.critical_roots(&branch_discriminant)?.is_empty()
+        if (!ray
+            && (branch_discriminant.is_zero()
+                || !domain.critical_roots(&branch_discriminant)?.is_empty()))
             || !domain
                 .critical_roots(&P::new(p.rows()[0].clone()))?
                 .is_empty()
@@ -285,12 +429,16 @@ fn certify_with_pair(
         } else {
             -1
         };
-        out.signs.push(check_univariate(
-            "pair-product branch separation",
-            &branch_discriminant,
-            &domain,
-            sign,
-        )?);
+        if !ray {
+            out.signs.push(check_univariate(
+                "pair-product branch separation",
+                &branch_discriminant,
+                &domain,
+                sign,
+            )?);
+        } else {
+            out.phase.push("the simple characteristic roots have a fixed real/nonreal pattern; the largest positive pair product is the maximum of continuous conjugate-pair norms and positive real-root products; any other positive mixed product is bounded by the larger conjugate-pair norm. Thus this maximum is continuous even when off-branch products collide".into());
+        }
         let constant = P::new(p.rows()[0].clone());
         let sign = if constant.evaluate(&domain.sample).is_positive() {
             1
@@ -314,20 +462,73 @@ fn certify_with_pair(
     }
     out.branch_selection=if order==2||supplied.is_some(){"r=0 (rational pair parameters, no algebraic branch needed)"} else if order>4 {"b is the largest positive pair-product root; monic pair-product resultant, nonvanishing branch discriminant and constant term fix its continuous selection; quadratic subresultant and nonreal-pair test identify the conjugates"}else{"b is the unique positive real pair-product root: quartic discriminant < 0 and constant coefficient < 0 give a nonreal pair and two opposite-sign real cofactor roots"}.into();
     out.signs.push(check_univariate(
-        "characteristic discriminant < 0",
+        if ray && supplied.is_some() {
+            "nonvanishing supplied pair discriminant on ray"
+        } else if ray {
+            "nonvanishing characteristic discriminant on ray"
+        } else {
+            "characteristic discriminant < 0"
+        },
         &disc,
         &domain,
-        -1,
+        if ray { ray_discriminant_sign } else { -1 },
     )?);
     if order == 4 && supplied.is_none() {
         out.signs.push(check_univariate(
-            "opposite-sign cofactor roots",
+            if ray {
+                "nonzero characteristic constant on ray"
+            } else {
+                "opposite-sign cofactor roots"
+            },
             &d[4],
             &domain,
-            -1,
+            if ray && d[4].evaluate(&domain.sample).is_positive() {
+                1
+            } else {
+                -1
+            },
+        )?);
+    }
+    if ray {
+        out.branch_selection = if matches!(which,Branch::Zero) {"r=0; exact polynomial pair parameters"} else {"largest positive quartic pair product; nonreal-pair and strict cofactor-modulus tests identify the dominant conjugates"}.into();
+        out.signs.push(check_sign(
+            "quartic pair denominator b^2-D4",
+            &p,
+            &b.square().sub(&R::of(t(&d[4]))).signed_polynomial(&p),
+            &domain,
+            which,
+            1,
         )?);
     }
     let y2 = b.sub(&a.square());
+    if !legacy
+        && order > 4
+        && supplied.is_none()
+        && request.uniform_constants.is_none()
+        && n.index_degree() == Some(0)
+        && n.rows()[0].len() == 1
+        && n.rows()[0][0].is_positive()
+    {
+        verify_pair_factorization(d, &p, &a, &b, &cofactor)?;
+        match barrier::certify(
+            barrier::BarrierData {
+                d,
+                characteristic: &characteristic,
+                p: &p,
+                a: &a,
+                b: &b,
+                cofactor: &cofactor,
+                domain: &domain,
+                which,
+                numerator: &n.rows()[0][0],
+            },
+            out.clone(),
+        ) {
+            Ok(certificate) => return Ok(certificate),
+            Err(RecurrenceError::Unsupported(_)) => {}
+            Err(error) => return Err(error),
+        }
+    }
     out.signs.push(check_sign(
         "nonreal pair b-a^2",
         &p,
@@ -336,19 +537,7 @@ fn certify_with_pair(
         which,
         1,
     )?);
-    // Check the factorization in the algebraic quotient, coefficient by coefficient.
-    let pair = [R::of(c(1)), a.scale(&q(-2)), b.clone()];
-    let mut product = vec![R::of(c(0)); order + 1];
-    for (i, u) in pair.iter().enumerate() {
-        for (j, v) in cofactor.iter().enumerate() {
-            product[i + j] = product[i + j].add(&u.mul(v));
-        }
-    }
-    for (j, value) in product.iter().enumerate() {
-        if !rem(&value.sub(&R::of(t(&d[j]))).n, &p).is_zero() {
-            return Err(failure("exact pair/cofactor factorization identity failed"));
-        }
-    }
+    verify_pair_factorization(d, &p, &a, &b, &cofactor)?;
     let nc: Vec<R> = n
         .rows()
         .iter()
@@ -370,17 +559,46 @@ fn certify_with_pair(
             nv.re.mul(&hv.re).add(&nv.im.mul(&hv.im).mul(&y2)),
         )
     };
+    if ray {
+        return quartic_ray::certify(
+            n,
+            d,
+            degree,
+            &domain,
+            &characteristic,
+            &p,
+            &a,
+            &b,
+            &cofactor,
+            which,
+            out,
+        );
+    }
     let imag_poly = imaginary.signed_polynomial(&p);
     let imaginary_zero = imag_poly.is_zero();
+    let mut positive_real_lift = false;
     if !imaginary_zero {
-        out.signs.push(check_sign(
-            "Im(N/H)/Im(lambda) < 0",
-            &p,
-            &imag_poly,
-            &domain,
-            which,
-            -1,
-        )?);
+        match check_sign("Im(N/H)/Im(lambda) < 0", &p, &imag_poly, &domain, which, -1) {
+            Ok(sign) => out.signs.push(sign),
+            Err(RecurrenceError::Unsupported(_)) if !legacy => {
+                let real_a = if order == 4 && supplied.is_none() {
+                    let g = b.square().sub(&R::of(t(&d[4])));
+                    real.scale(&(q(1) / q(2))).add(&a.mul(&g).mul(&imaginary))
+                } else {
+                    real.add(&a.mul(&imaginary))
+                };
+                out.signs.push(check_sign(
+                    "positive real part of pair amplitude",
+                    &p,
+                    &real_a.signed_polynomial(&p),
+                    &domain,
+                    which,
+                    1,
+                )?);
+                positive_real_lift = true;
+            }
+            Err(error) => return Err(error),
+        }
     }
     let mut endpoint_signs = vec![];
     let mut endpoint_cofactors = Vec::new();
@@ -435,7 +653,9 @@ fn certify_with_pair(
             sign
         ));
     }
-    let winding = if imaginary_zero {
+    let winding = if positive_real_lift {
+        0
+    } else if imaginary_zero {
         if endpoint_signs[0] != endpoint_signs[1] {
             return Err(failure("real amplitude endpoint signs disagree"));
         }
@@ -455,7 +675,8 @@ fn certify_with_pair(
             _ => 0,
         }
     };
-    if degree.data.newton.is_none()
+    if !positive_real_lift
+        && degree.data.newton.is_none()
         && (degree.count.slope != 1
             || degree.count.divisor != 1
             || degree.count.offsets != [0]
@@ -465,8 +686,10 @@ fn certify_with_pair(
             "phase winding and exterior sign do not close the degree budget",
         ));
     }
-    out.phase.push(format!("continuous lift of arg F has winding {winding}; (n+1)*theta+arg F supplies n+{winding} sign changes by first half-integer-pi crossings"));
-    if winding == -1 {
+    if !positive_real_lift {
+        out.phase.push(format!("continuous lift of arg F has winding {winding}; (n+1)*theta+arg F supplies n+{winding} sign changes by first half-integer-pi crossings"));
+    }
+    if winding == -1 && !positive_real_lift {
         out.lean_declarations.push(
             "RealRooted.EffectiveBKW.splits_nodup_of_strictAnti_alternating_of_leftEscape".into(),
         );
@@ -484,6 +707,12 @@ fn certify_with_pair(
     out.phase_limits.left_amplitude_argument = (q(1) / q(2) + delta(endpoint_signs[0])).to_string();
     out.phase_limits.right_amplitude_argument =
         (-q(1) / q(2) + delta(endpoint_signs[1])).to_string();
+    if positive_real_lift {
+        out.phase_limits.left_amplitude_argument = (q(endpoint_signs[0].into()) / q(2)).to_string();
+        out.phase_limits.right_amplitude_argument =
+            (-q(endpoint_signs[1].into()) / q(2)).to_string();
+        out.phase.push("Re A>0 fixes the lift in (-pi/2,pi/2); the finite simple pair collisions give these one-sided amplitude arguments, independently of the winding of F".into());
+    }
     out.expansion_data = EffectiveBkwExpansionData {
         pair_real_part: a.wire(),
         pair_norm_squared: b.wire(),
@@ -496,224 +725,56 @@ fn certify_with_pair(
         format!("H(z) coefficients {:?}; D=(1-2*a*z+b*z^2)*H; equality checked in the branch quotient",cofactor.iter().map(|r|(encode_b(&r.n),encode_b(&r.d))).collect::<Vec<_>>()),
         "sin(theta)*|lambda|^(-n)*P_n = Im(exp(i*(n+1)*theta)*F(1/lambda))-R_n; A=F/(1-conj(lambda)/lambda)".into(),
     ];
+    let pointwise = if !legacy && order == 4 && request.uniform_constants.is_none() {
+        match pointwise::certify(n, &p, &a, &b, &cofactor, &nn, &hn, &domain, which) {
+            Ok(evidence) => Some(evidence),
+            Err(RecurrenceError::Unsupported(_)) => None,
+            Err(error) => return Err(error),
+        }
+    } else {
+        None
+    };
     if order == 2 {
+        if !legacy {
+            set_domination_cutoff(&mut out, 0);
+        }
         out.domination = "no_remainder: proper quadratic numerator, R_n=0 for n>=0".into();
         out.lean_declarations
             .push("RealRooted.EffectiveBKW.PairExpansion.dom_of_rest_eq_zero".into());
-    } else {
-        let mut automatic_cofactor_weights = None;
-        let mut checked_cofactor_weights = None;
-        let (ratio, amplitude, weights) = if let Some(constants) = &request.uniform_constants {
-            let (ratio, amplitude, weights) = parse_uniform_constants(constants, n.rows().len())?;
-            if supplied.is_some() || order > 4 {
-                let bounds = constants.cofactor_weights.as_ref().ok_or_else(|| {
-                    failure("supplied compact factorization requires cofactor weights")
-                })?;
-                if bounds.len() != order - 2 {
-                    return Err(RecurrenceError::InvalidInput(
-                        "cofactor weight count mismatch".into(),
-                    ));
-                }
-                let mut budget = Q::zero();
-                let mut gammas = Vec::new();
-                for (j, (weight, h)) in bounds.iter().zip(cofactor.iter().skip(1)).enumerate() {
-                    let j = j + 1;
-                    let gamma = rational(weight)?;
-                    if gamma.is_negative() {
-                        return Err(RecurrenceError::InvalidInput(
-                            "negative cofactor weight".into(),
-                        ));
-                    }
-                    budget += &gamma / ratio.pow(j as i32);
-                    gammas.push(gamma.clone());
-                    let f = b.pow(j).scale(&(&gamma * &gamma)).sub(&h.square());
-                    out.signs.push(check_sign(
-                        &format!("Cauchy cofactor weight {j}"),
-                        &p,
-                        &f.signed_polynomial(&p),
-                        &domain,
-                        which,
-                        0,
-                    )?);
-                }
-                if budget >= Q::one() {
-                    return Err(failure("cofactor Cauchy budget sum gamma_j/q^j is not < 1"));
-                }
-                checked_cofactor_weights = Some(gammas);
-            } else {
-                let gap = b.scale(&(&ratio * &ratio)).add(&cofactor[2]);
-                for (name, f) in [
-                    ("uniform modulus gap, part one", gap.clone()),
-                    (
-                        "uniform modulus gap, part two",
-                        gap.square()
-                            .sub(&b.mul(&cofactor[1].square()).scale(&(&ratio * &ratio))),
-                    ),
-                ] {
-                    out.signs.push(check_sign(
-                        name,
-                        &p,
-                        &f.signed_polynomial(&p),
-                        &domain,
-                        which,
-                        0,
-                    )?);
-                }
-            }
-            out.signs.push(check_sign(
-                "uniform amplitude lower bound",
-                &p,
-                &nn.sub(&hn.scale(&(&amplitude * &amplitude)))
-                    .signed_polynomial(&p),
-                &domain,
-                which,
-                0,
-            )?);
-            for (j, (weight, coefficient)) in weights.iter().zip(&nc).enumerate() {
-                let f = b
-                    .pow(j)
-                    .scale(&(weight * weight))
-                    .sub(&coefficient.square());
-                out.signs.push(check_sign(
-                    &format!("numerator weight {j}"),
-                    &p,
-                    &f.signed_polynomial(&p),
-                    &domain,
-                    which,
-                    0,
-                )?);
-            }
-            (ratio, amplitude, weights)
+    } else if let Some((cutoff, signs, method)) = pointwise {
+        out.signs.extend(signs);
+        set_domination_cutoff(&mut out, cutoff);
+        out.domination = format!("{method}: exact cofactor residue norms at N={cutoff} and strict root-modulus gaps give domination for every n>=N");
+        if method == "pointwise_two_real_remainders" {
+            out.expansion.push("Nbar/q mod h=U*mu+V; Cx+Cy=U, (Cx-Cy)^2=(-s*U+2*V)^2/(s^2-4c); |Cx|+|Cy|=max(|Cx+Cy|,|Cx-Cy|) for real cofactor roots".into());
         } else {
-            let search = UniformSearch {
-                polynomial: &p,
+            out.expansion.push("Nbar mod h=u*mu+v; q mod h=e*mu+f; 4|B|^2=(c*u^2+v^2-s*u*v)/((c-s^2/4)*(f^2-s*e*f+c*e^2)); rest_n=2 Re(B*mu^n)".into());
+        }
+    } else {
+        uniform::certify(
+            uniform::UniformData {
+                order,
+                supplied: supplied.is_some(),
+                which,
+                n,
+                p: &p,
+                b: &b,
+                cofactor: &cofactor,
+                nn: &nn,
+                hn: &hn,
+                nc: &nc,
                 domain: &domain,
-                branch: which,
-                sample_branch: branch_box(&p, &domain.sample, which, &(q(1) / q(1 << 32)))?,
-            };
-            let (ratio, signs) = if supplied.is_some() || order > 4 {
-                let mut gammas = Vec::new();
-                for (j, h) in cofactor.iter().enumerate().skip(1) {
-                    if rem(&h.n, &p).is_zero() {
-                        // The already checked denominator is nonzero. An
-                        // identically zero coefficient has the exact weak
-                        // Cauchy bound gamma=0; no strict sign is requested.
-                        gammas.push(q(0));
-                        out.signs.push(check_sign(
-                            &format!("Cauchy cofactor weight {j}"),
-                            &p,
-                            &B::zero(),
-                            &domain,
-                            which,
-                            0,
-                        )?);
-                        continue;
-                    }
-                    let (gamma, signs) = search.choose(
-                        "cofactor weight",
-                        std::iter::once(q(0)).chain((-16..=16).map(|k| {
-                            if k < 0 {
-                                q(1) / q(1 << -k)
-                            } else {
-                                q(1 << k)
-                            }
-                        })),
-                        |gamma| {
-                            vec![(
-                                format!("Cauchy cofactor weight {j}"),
-                                b.pow(j)
-                                    .scale(&(gamma * gamma))
-                                    .sub(&h.square())
-                                    .signed_polynomial(&p),
-                            )]
-                        },
-                    )?;
-                    gammas.push(gamma);
-                    out.signs.extend(signs);
-                }
-                let ratio = (1..16).map(|k|q(k)/q(16)).find(|ratio| {
-                    gammas.iter().enumerate().map(|(j,gamma)| gamma/ratio.pow((j+1) as i32)).sum::<Q>() < Q::one()
-                }).ok_or_else(|| failure("automatic cofactor Cauchy budget is not < 1 on the rational ratio grid"))?;
-                automatic_cofactor_weights = Some(gammas.iter().map(ToString::to_string).collect());
-                checked_cofactor_weights = Some(gammas);
-                (ratio, Vec::new())
-            } else {
-                search.choose("modulus", (1..16).map(|k| q(k) / q(16)), |ratio| {
-                    let ratio_squared = ratio * ratio;
-                    let gap = b.scale(&ratio_squared).add(&cofactor[2]);
-                    vec![
-                        (
-                            "uniform modulus gap, part one".into(),
-                            gap.signed_polynomial(&p),
-                        ),
-                        (
-                            "uniform modulus gap, part two".into(),
-                            gap.square()
-                                .sub(&b.mul(&cofactor[1].square()).scale(&ratio_squared))
-                                .signed_polynomial(&p),
-                        ),
-                    ]
-                })?
-            };
-            out.signs.extend(signs);
-            let (amplitude, signs) = search.choose(
-                "amplitude",
-                (0..=16).map(|k| q(1) / q(1 << k)),
-                |amplitude| {
-                    vec![(
-                        "uniform amplitude lower bound".into(),
-                        nn.sub(&hn.scale(&(amplitude * amplitude)))
-                            .signed_polynomial(&p),
-                    )]
-                },
-            )?;
-            out.signs.extend(signs);
-            let mut weights = Vec::new();
-            for (j, coefficient) in nc.iter().enumerate() {
-                let (weight, signs) = search.choose(
-                    "numerator weight",
-                    std::iter::once(q(0)).chain((0..=16).map(|k| q(1 << k))),
-                    |weight| {
-                        vec![(
-                            format!("numerator weight {j}"),
-                            b.pow(j)
-                                .scale(&(weight * weight))
-                                .sub(&coefficient.square())
-                                .signed_polynomial(&p),
-                        )]
-                    },
-                )?;
-                weights.push(weight);
-                out.signs.extend(signs);
-            }
-            (ratio, amplitude, weights)
-        };
-        if matches!(which, Branch::LargestPositive) {
-            let gamma = checked_cofactor_weights
-                .as_ref()
-                .ok_or_else(|| failure("missing endpoint cofactor bounds"))?;
-            for (left, x, h) in &endpoint_cofactors {
-                check_collision_cofactor(&domain, x, h, gamma, *left)?;
-                out.phase.push(format!("{} double root is the dominant pair collision: endpoint cofactor satisfies the same Cauchy weights and strict ratio budget q={ratio}",if *left {"left"} else {"right"}));
-            }
-        }
-        let (cutoff, tail) = cutoff(order, &ratio, &amplitude, &weights)?;
-        out.cutoff = cutoff;
-        out.tail_at_cutoff = tail.to_string();
-        if let Some(gamma) = automatic_cofactor_weights {
-            out.automatic_uniform_constants = Some(EffectiveBkwUniformConstants {
-                modulus_ratio: ratio.to_string(),
-                amplitude_lower_bound: amplitude.to_string(),
-                numerator_weights: weights.iter().map(ToString::to_string).collect(),
-                cofactor_weights: Some(gamma),
-            });
-        }
-        let weight_strings: Vec<_> = weights.iter().map(ToString::to_string).collect();
-        out.domination=format!("uniform_compact_tail: q={ratio}, m={amplitude}, beta={weight_strings:?}; T_n=sum_j beta_j sum_(k>=n+2-j) binomial(k+d-3,d-3) q^k; T_N<m and positive-series tails decrease");
-        out.lean_declarations
-            .push("RealRooted.EffectiveBKW.PairExpansion.dom_of_tail".into());
+                endpoint_cofactors: &endpoint_cofactors,
+            },
+            request,
+            &mut out,
+            legacy,
+        )?;
     }
-    if degree.data.newton.is_some() {
+    if positive_real_lift && out.domination_cutoff.is_none() {
+        out.domination_cutoff = Some(out.cutoff);
+    }
+    if degree.data.newton.is_some() || positive_real_lift {
         super::degree::close_phase(&mut out)?;
     }
     Ok(out)
@@ -756,7 +817,11 @@ pub(super) fn check_collision_cofactor(
     Ok(())
 }
 
-fn collision_root(p: &B, domain: &Domain, left: bool) -> Result<(R, String), RecurrenceError> {
+pub(super) fn collision_root(
+    p: &B,
+    domain: &Domain,
+    left: bool,
+) -> Result<(R, String), RecurrenceError> {
     let mut a = p.clone();
     let mut b = derivative(p);
     while b.index_degree().is_some_and(|d| d > 1) {

@@ -54,16 +54,166 @@ fn chebyshev_no_remainder_and_replay() {
     let r = certify_effective_bkw(&chebyshev()).unwrap();
     assert_eq!(r.status, "proved", "{}", r.reason);
     let c = r.certificate.as_ref().unwrap();
-    assert_eq!(c.cutoff, 1);
+    assert_eq!(c.cutoff, 0);
+    assert_eq!(c.domination_cutoff, Some(0));
     assert_eq!(c.root_region, EffectiveBkwRootRegion::WholeRealLine);
     assert_eq!(c.zero_count.offsets, [0]);
     r.verify().unwrap();
     let mut altered = r.clone();
-    altered.certificate.as_mut().unwrap().finite_rows[0].coefficients[0] = "2".into();
+    altered.certificate.as_mut().unwrap().domination_cutoff = Some(1);
     assert!(altered.verify().is_err());
     let mut altered = r;
     altered.certificate.as_mut().unwrap().signs[0].resultant[0] = "123".into();
     assert!(altered.verify().is_err());
+}
+
+#[test]
+fn supplied_quartic_uniform_supplier_records_its_replay_mode() {
+    let mut input = chebyshev();
+    let h = B::new(vec![vec![q(1)], vec![-q(3) / q(10)], vec![q(1) / q(50)]]);
+    input.generating_function.denominator = encode_b(
+        &decode_b(&input.generating_function.denominator)
+            .unwrap()
+            .multiply(&h),
+    );
+    input.pair_factorization = Some(EffectiveBkwPairFactorization {
+        real_part: vec!["0".into(), "1".into()],
+        norm_squared: vec!["1".into()],
+        cofactor: encode_b(&h),
+    });
+    input.uniform_constants = Some(EffectiveBkwUniformConstants {
+        modulus_ratio: "1/2".into(),
+        amplitude_lower_bound: "1/2".into(),
+        numerator_weights: vec!["1".into()],
+        cofactor_weights: Some(vec!["3/10".into(), "1/50".into()]),
+    });
+    let report = certify_effective_bkw(&input).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    let c = report.certificate.as_ref().unwrap();
+    assert!(c.domination.starts_with("uniform_compact_tail"));
+    assert_eq!(c.domination_cutoff, Some(c.cutoff));
+    assert!(c.branch_selection.starts_with("r=0"));
+    report.verify().unwrap();
+}
+
+#[test]
+fn order_two_rejects_uniform_constants_in_both_charts() {
+    for mut input in [chebyshev(), request(&[&[1]], &[&[1], &[-1], &[0, -1]])] {
+        input.uniform_constants = Some(EffectiveBkwUniformConstants {
+            modulus_ratio: "1/2".into(),
+            amplitude_lower_bound: "1".into(),
+            numerator_weights: vec!["1".into()],
+            cofactor_weights: None,
+        });
+        assert!(
+            matches!(certify_effective_bkw(&input), Err(RecurrenceError::InvalidInput(message)) if message.contains("order-two"))
+        );
+    }
+}
+
+#[test]
+fn phase_period_and_index_arithmetic_is_checked() {
+    let base = certify_effective_bkw(&chebyshev())
+        .unwrap()
+        .certificate
+        .unwrap();
+    let mut out = base.clone();
+    out.zero_count.offsets.clear();
+    assert!(degree::close_phase(&mut out).is_err());
+    let mut out = base.clone();
+    out.zero_count.divisor = 0;
+    assert!(degree::close_phase(&mut out).is_err());
+    let mut out = base.clone();
+    out.zero_count.divisor = usize::MAX;
+    out.zero_count.slope = usize::MAX;
+    assert!(degree::close_phase(&mut out)
+        .unwrap_err()
+        .to_string()
+        .contains("overflow"));
+    let mut out = base;
+    out.cutoff = usize::MAX;
+    assert!(degree::close_phase(&mut out)
+        .unwrap_err()
+        .to_string()
+        .contains("overflow"));
+    assert!(degree::value(
+        &EffectiveBkwZeroCount {
+            slope: usize::MAX,
+            offsets: vec![0],
+            divisor: 1,
+        },
+        usize::MAX
+    )
+    .is_err());
+}
+
+#[test]
+fn denominator_norm_reuse_matches_direct_certificates() {
+    let domain = Domain::select(&P::new(vec![q(-4), q(0), q(4)]), 2, &None).unwrap();
+    let p = B::new(vec![vec![q(-2), q(0), q(-1)], vec![], vec![q(1)]]);
+    let a = R::new(c(1), variable().add(&B::constant(q(3) / q(2)))).modulo(&p);
+    let h = vec![
+        R::of(c(1)),
+        a.clone(),
+        a.square(),
+        a.square().square(),
+        R::new(c(1), variable().add(&c(3))).modulo(&p),
+    ];
+    let direct: Vec<_> = std::iter::once(&a)
+        .chain(&h)
+        .enumerate()
+        .filter(|(_, r)| r.d != B::one())
+        .map(|(j, r)| {
+            check_sign(
+                &format!("pair/cofactor denominator {j} is nonzero"),
+                &p,
+                &r.d.power(2),
+                &domain,
+                Branch::LargestPositive,
+                1,
+            )
+            .unwrap()
+        })
+        .collect();
+    assert!(direct.iter().any(|c| !c.off_branch_boxes.is_empty()));
+    assert_eq!(
+        compact::check_pair_denominators(&p, &a, &h, &domain, Branch::LargestPositive).unwrap(),
+        direct
+    );
+    let bad = R::new(c(1), p.clone());
+    assert!(
+        compact::check_pair_denominators(&p, &bad, &[], &domain, Branch::LargestPositive).is_err()
+    );
+}
+
+#[test]
+#[ignore = "exact irreducible quintic elimination; run explicitly with --release --ignored"]
+fn automatic_irreducible_quintic_proved_and_replays() {
+    let mut input = chebyshev();
+    let mut h = B::one();
+    for j in [1, 2, 3] {
+        h = h.multiply(&B::new(vec![vec![q(1)], vec![-q(j) / q(20)]]));
+    }
+    let d = decode_b(&input.generating_function.denominator)
+        .unwrap()
+        .multiply(&h)
+        .add(&B::monomial(5, 0, q(1) / q(1000000)));
+    input.generating_function.denominator = encode_b(&d);
+    let d: Vec<_> = d.rows().iter().map(|row| P::new(row.clone())).collect();
+    let constant = P::new(d.iter().rev().map(|p| p.coeff(0)).collect());
+    let coefficient = P::new(d.iter().rev().map(|p| p.coeff(1)).collect());
+    // Linear in t and primitive in Q[lambda][t], hence irreducible.
+    assert_eq!(constant.gcd(&coefficient).degree(), Some(0));
+    assert!(higher::polynomial_pairs(&d).unwrap().is_empty());
+    let report = certify_effective_bkw(&input).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    assert!(report
+        .certificate
+        .as_ref()
+        .unwrap()
+        .branch_selection
+        .contains("largest positive pair-product"));
+    report.verify().unwrap();
 }
 #[test]
 fn tiling_single_remainder_at_infinity() {
@@ -72,7 +222,7 @@ fn tiling_single_remainder_at_infinity() {
     let c = r.certificate.as_ref().unwrap();
     assert_eq!(c.zero_count.offsets, [0, -1]);
     assert_eq!(c.root_region, EffectiveBkwRootRegion::NegativeRay);
-    assert_eq!(c.cutoff, 1);
+    assert_eq!(c.cutoff, 0);
     assert!(matches!(
         c.interval.lower,
         EffectiveBkwEndpoint::NegativeInfinity
@@ -163,7 +313,11 @@ fn path_cube_uniform_compact_certificate() {
         "automatic compact cutoff {}: {}",
         certificate.cutoff, certificate.domination
     );
-    assert!(certificate.cutoff <= 59);
+    assert_eq!(certificate.cutoff, 0);
+    assert_eq!(certificate.domination_cutoff, Some(0));
+    assert!(certificate
+        .domination
+        .starts_with("pointwise_two_real_remainders"));
     assert_eq!(certificate.finite_rows.len(), certificate.cutoff);
     assert_eq!(certificate.root_region, EffectiveBkwRootRegion::NegativeRay);
     discovered.verify().unwrap();
@@ -191,8 +345,16 @@ fn rejects_nonreal_rows_and_incorrect_targets() {
     let sublinear = request(&[&[1]], &[&[1], &[-1], &[], &[], &[], &[0, -1]]);
     let report = certify_effective_bkw(&sublinear).unwrap();
     assert_eq!(report.status, "not_proved");
-    assert!(report.reason.contains("degree cap is sublinear"));
+    assert!(report.reason.contains("5 equal limiting modes"));
+    assert!(report.reason.contains("no global domination cutoff"));
     report.verify().unwrap();
+    let four = decode_b(
+        &request(&[&[1]], &[&[1], &[-1], &[], &[], &[0, -1]])
+            .generating_function
+            .denominator,
+    )
+    .unwrap();
+    assert_eq!(degree::equimodular_obstruction(&B::one(), &four), None);
 }
 #[test]
 fn invalid_compact_constants_are_rejected() {
@@ -838,5 +1000,165 @@ fn automatic_cauchy_weights_allow_identically_zero_coefficients() {
     let gamma = constants.cofactor_weights.as_ref().unwrap();
     assert_eq!(gamma[0], "0");
     assert_eq!(gamma[2], "0");
+    report.verify().unwrap();
+}
+
+#[test]
+fn generic_triple_edge_and_equidominant_newton_face() {
+    // [z^n] 1/((1-z)^3-t*z^3) = sum_k binom(n+2,3k+2)*t^k.
+    let request = request(&[&[1]], &[&[1], &[-3], &[3], &[-1, -1]]);
+    let report = certify_effective_bkw(&request).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    let c = report.certificate.as_ref().unwrap();
+    assert_eq!(c.domination_cutoff, Some(0));
+    assert_eq!(c.phase_limits.left_eigenvalue_argument, "1/3");
+    assert_eq!(c.phase_limits.right_amplitude_argument, "-2/3");
+    assert_eq!(c.zero_count.divisor, 3);
+    report.verify().unwrap();
+    let mut altered = report.clone();
+    altered
+        .certificate
+        .as_mut()
+        .unwrap()
+        .phase_limits
+        .right_amplitude_argument = "-1/2".into();
+    assert!(altered.verify().is_err());
+    let mut altered = report;
+    altered.certificate.as_mut().unwrap().domination_cutoff = Some(1);
+    assert!(altered.verify().is_err());
+}
+
+#[test]
+#[cfg_attr(
+    not(feature = "full-tests"),
+    ignore = "exact quartic Newton elimination"
+)]
+fn quartic_fractional_ray_with_two_fixed_real_modes() {
+    // D=((1-2z)^2-t*z^2)*(1-z^2). The pair tends to angle pi/2
+    // at infinity, with two fixed real cofactor modes +1 and -1.
+    let r = request(&[&[1]], &[&[1], &[-4], &[3, -1], &[4], &[-4, 1]]);
+    let report = certify_effective_bkw(&r).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    let c = report.certificate.as_ref().unwrap();
+    assert_eq!(c.phase_limits.left_eigenvalue_argument, "1/2");
+    assert_eq!(c.domination_cutoff, Some(0));
+    assert_eq!(c.zero_count.divisor, 2);
+    report.verify().unwrap();
+}
+
+#[test]
+fn legacy_uniform_and_single_mode_reports_replay_exactly() {
+    for input in [
+        chebyshev(),
+        tiling(),
+        request(&[&[1]], &[&[1], &[-1], &[0, -1], &[0, -1]]),
+    ] {
+        let report = certify_with_mode(&input, true).unwrap();
+        assert_eq!(report.status, "proved", "{}", report.reason);
+        assert!(report
+            .certificate
+            .as_ref()
+            .unwrap()
+            .domination_cutoff
+            .is_none());
+        report.verify().unwrap();
+        let mut bad = report;
+        bad.certificate.as_mut().unwrap().cutoff += 1;
+        assert!(bad.verify().is_err());
+    }
+}
+
+#[test]
+fn pointwise_conjugate_cofactor_and_real_amplitude_lift() {
+    let mut r = chebyshev();
+    let h = B::new(vec![vec![q(1)], vec![], vec![q(1) / q(100)]]);
+    r.generating_function.denominator = encode_b(
+        &decode_b(&r.generating_function.denominator)
+            .unwrap()
+            .multiply(&h),
+    );
+    r.pair_factorization = Some(EffectiveBkwPairFactorization {
+        real_part: vec!["0".into(), "1".into()],
+        norm_squared: vec!["1".into()],
+        cofactor: encode_b(&h),
+    });
+    let report = certify_effective_bkw(&r).unwrap();
+    assert_eq!(report.status, "proved", "{}", report.reason);
+    let c = report.certificate.as_ref().unwrap();
+    assert_eq!(c.domination_cutoff, Some(0));
+    assert!(c.domination.starts_with("pointwise_conjugate_remainder"));
+    assert!(c
+        .signs
+        .iter()
+        .any(|s| s.name == "positive real part of pair amplitude"));
+    report.verify().unwrap();
+    let mut bad = report;
+    bad.certificate.as_mut().unwrap().expansion_data.cofactor[2].numerator[0][0] = "1/101".into();
+    assert!(bad.verify().is_err());
+}
+
+#[test]
+fn collision_factor_preconditioning_preserves_all_resultant_roots() {
+    let left = P::new(vec![q(2), q(1)]);
+    let right = P::new(vec![q(-3), q(1)]);
+    let interior = P::new(vec![q(0), q(1)]);
+    let outside = P::new(vec![q(-5), q(1)]);
+    let nonreal = P::new(vec![q(1), q(0), q(1)]);
+    let domain = Domain::select(
+        &(left.clone() * right.clone()),
+        2,
+        &Some(EffectiveBkwInterval {
+            lower: EffectiveBkwEndpoint::Rational { value: "-2".into() },
+            upper: EffectiveBkwEndpoint::Rational { value: "3".into() },
+        }),
+    )
+    .unwrap();
+    let resultant = left.pow(12) * right.pow(7) * interior.pow(4) * outside.pow(2) * nonreal.pow(3);
+    let reduced = signs::critical_polynomial(&resultant, &domain);
+    assert_eq!(reduced.degree(), Some(6));
+    assert!(
+        reduced
+            .gcd(&(left * right * interior * outside * nonreal))
+            .degree()
+            == Some(6)
+    );
+    assert_eq!(domain.critical_roots(&reduced).unwrap().len(), 1);
+}
+
+#[test]
+fn degree_zero_exceptions_do_not_bypass_the_phase_slope() {
+    let report = certify_effective_bkw(&chebyshev()).unwrap();
+    let mut c = report.certificate.unwrap();
+    c.zero_count = EffectiveBkwZeroCount {
+        slope: 0,
+        offsets: vec![0],
+        divisor: 1,
+    };
+    c.phase_limits.left_eigenvalue_argument = "1/2".into();
+    c.phase_limits.left_amplitude_argument = "-10".into();
+    c.phase_limits.right_amplitude_argument = "0".into();
+    assert!(degree::close_phase(&mut c).is_err());
+}
+
+#[test]
+fn parity_upper_bounds_do_not_supply_generic_exterior_signs() {
+    let report = certify_effective_bkw(&tiling()).unwrap();
+    let mut c = report.certificate.as_ref().unwrap().clone();
+    assert!(c.degree_certificate.newton.is_none());
+    assert_eq!(c.zero_count.offsets, [0, -1]);
+    assert!(degree::close_phase(&mut c).is_err());
+    // Its original parity phase argument is independent of this closure.
+    report.verify().unwrap();
+}
+
+#[test]
+fn five_mode_zero_edge_obstructs_global_pair_domination() {
+    let input = request(&[&[1]], &[&[1], &[], &[0, -2], &[], &[], &[0, -7]]);
+    let report = certify_effective_bkw(&input).unwrap();
+    assert_eq!(report.status, "not_proved");
+    assert!(report.reason.contains("zero-end Newton face has 5"));
+    assert!(report
+        .reason
+        .contains("excluding global pair domination near t=0"));
     report.verify().unwrap();
 }

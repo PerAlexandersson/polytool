@@ -7,6 +7,7 @@ pub(super) fn certify(
     d: &[P],
     request: &EffectiveBkwRequest,
     degree: &DegreeBudget,
+    legacy: bool,
 ) -> Result<EffectiveBkwCertificate, ChartError> {
     let p = B::new(d.iter().rev().map(|c| c.coeffs().to_vec()).collect());
     let disc = discriminant(&p);
@@ -56,13 +57,63 @@ pub(super) fn certify(
         ("strict modulus gap b-r^2", b.subtract(&r2), 1),
         ("amplitude real part", re.clone(), 1),
         ("amplitude imaginary part", im.clone(), -1),
-        ("single remainder amplitude dominance 4|A|^2-C^2", k, 0),
+        (
+            "single remainder amplitude dominance 4|A|^2-C^2",
+            k.clone(),
+            0,
+        ),
     ] {
-        if degree.data.newton.is_some() && name == "amplitude imaginary part" {
+        if (name == "amplitude real part" && !legacy)
+            || (degree.data.newton.is_some() && name == "amplitude imaginary part")
+        {
             continue;
         }
         out.signs
             .push(check_sign(name, &p, &f, &domain, Branch::UniqueReal, want)?);
+    }
+    let mut positive_real_lift = true;
+    if !legacy {
+        let real_lift = check_sign(
+            "amplitude real part",
+            &p,
+            &re,
+            &domain,
+            Branch::UniqueReal,
+            1,
+        );
+        positive_real_lift = real_lift.is_ok();
+        out.signs.push(match real_lift {
+            Ok(sign) => sign,
+            Err(RecurrenceError::Unsupported(_)) if degree.data.newton.is_some() => check_sign(
+                "amplitude lower half-plane",
+                &p,
+                &im,
+                &domain,
+                Branch::UniqueReal,
+                -1,
+            )?,
+            Err(error) => return Err(error.into()),
+        });
+    }
+    if !legacy {
+        out.domination_cutoff = Some(1);
+    }
+    // Strict coefficient domination also covers n=0. The phase/degree
+    // argument can start later, independently of this pointwise bound.
+    if let Ok(sign) = if legacy {
+        Err(failure("legacy single-mode supplier"))
+    } else {
+        check_sign(
+            "strict single remainder amplitude dominance 4|A|^2-C^2",
+            &p,
+            &k,
+            &domain,
+            Branch::UniqueReal,
+            1,
+        )
+    } {
+        out.signs.push(sign);
+        set_domination_cutoff(&mut out, 0);
     }
     out.expansion_data = EffectiveBkwExpansionData {
         pair_real_part: R::of(a.clone()).scale(&(q(1) / q(2))).wire(),
@@ -79,28 +130,58 @@ pub(super) fn certify(
         format!("Re A=({:?})/(2*p'(r)); Im A=({:?})/(2*p'(r)*sqrt(Y))",encode_b(&re),encode_b(&im)),
         "P_n=2*Re(A*lambda^n)+C*r^n for every n>=0 (proper rational partial fractions, including r=0 by continuity)".into(),
     ];
-    // At the finite endpoint: double root x=(9E-BC)/(2(B^2-3C)).
+    // A simple collision and a generic triple point have different phase
+    // offsets. At a triple point, delta^3 = p_t*(beta-t), so on the
+    // dominant side p_t<0 and arg(delta_pair)=pi/3. The residue denominator
+    // has argument 2*pi/3, giving arg A=-2*pi/3 when Nbar(r0)>0.
     let delta = d[1].clone().pow(2) - d[2].scale(&q(3));
     let xn = d[3].scale(&q(9)) - d[1].clone() * d[2].clone();
-    if !endpoint_is_zero(&domain, &disc, false)?
-        || domain.endpoint_sign(&delta, false)? != 1
-        || domain.endpoint_sign(&xn, false)? != 1
-    {
-        return Err(failure("right endpoint is not a positive simple pair collision").into());
+    if !endpoint_is_zero(&domain, &disc, false)? {
+        return Err(failure("right endpoint is not a characteristic collision").into());
     }
-    let x = R::new(t(&xn), t(&delta.scale(&q(2))));
-    let simple = R::of(t(&(-d[1].clone()))).sub(&x.scale(&q(2)));
-    let ie = substitute(&im, &simple);
-    let pe = substitute(&pr, &simple);
-    let edge_imaginary_sign = endpoint_rational_sign(&domain, &ie, false)?;
-    if (degree.data.newton.is_none() && edge_imaginary_sign != -1)
-        || endpoint_rational_sign(&domain, &pe, false)? != 1
-    {
-        return Err(failure("finite-edge amplitude limit is not certified in quadrant IV").into());
-    }
+    let triple = endpoint_is_zero(&domain, &delta, false)?;
+    let right_alpha = if triple {
+        let root = R::of(t(&d[1].scale(&(q(-1) / q(3)))));
+        let cubic_identity = d[3].clone() - d[1].pow(3).scale(&(q(1) / q(27)));
+        let pt = B::new(
+            p.rows()
+                .iter()
+                .map(|row| P::new(row.clone()).derivative().coeffs().to_vec())
+                .collect(),
+        );
+        if degree.data.newton.is_none()
+            || !endpoint_is_zero(&domain, &cubic_identity, false)?
+            || endpoint_rational_sign(&domain, &root, false)? != 1
+            || endpoint_rational_sign(&domain, &substitute(&pt, &root), false)? != -1
+            || endpoint_rational_sign(&domain, &substitute(&cn, &root), false)? != 1
+            || positive_real_lift
+        {
+            return Err(failure("generic positive triple edge requires p_t<0, Nbar>0 and the lower-half-plane amplitude lift").into());
+        }
+        out.phase.push("generic positive triple point: p=(mu-r0)^3 at beta, p_t<0 and Nbar(r0)>0; implicit Puiseux roots delta=c*(beta-t)^(1/3)*omega+O((beta-t)^(2/3)), omega=-1,exp(+-i*pi/3); theta->0, arg A->-2*pi/3 in the certified lower-half-plane lift".into());
+        -q(2) / q(3)
+    } else {
+        if domain.endpoint_sign(&delta, false)? != 1 || domain.endpoint_sign(&xn, false)? != 1 {
+            return Err(failure("right endpoint is not a positive simple pair collision").into());
+        }
+        let x = R::new(t(&xn), t(&delta.scale(&q(2))));
+        let simple = R::of(t(&(-d[1].clone()))).sub(&x.scale(&q(2)));
+        let ie = substitute(&im, &simple);
+        let pe = substitute(&pr, &simple);
+        let sign = endpoint_rational_sign(&domain, &ie, false)?;
+        if sign == 0
+            || (!positive_real_lift && sign != -1)
+            || (degree.data.newton.is_none() && sign != -1)
+            || endpoint_rational_sign(&domain, &pe, false)? != 1
+        {
+            return Err(
+                failure("finite-edge amplitude limit is not certified in its half-plane").into(),
+            );
+        }
+        q(sign.into()) / q(2)
+    };
+    out.phase_limits.right_amplitude_argument = right_alpha.to_string();
     if let Some(newton) = &degree.data.newton {
-        out.phase_limits.right_amplitude_argument =
-            (q(edge_imaginary_sign.into()) / q(2)).to_string();
         let (theta, alpha, evidence) = newton_infinity_edge(
             &p,
             &a,
@@ -113,7 +194,12 @@ pub(super) fn certify(
         out.phase_limits.left_eigenvalue_argument = theta.to_string();
         out.phase_limits.left_amplitude_argument = alpha.to_string();
         out.phase.extend(evidence);
-        out.phase.push(format!("Re A>0 fixes the lift in (-pi/2,pi/2); finite positive simple collision has arg A -> {edge_imaginary_sign}*pi/2"));
+        if legacy {
+            let edge_imaginary_sign = right_alpha * q(2);
+            out.phase.push(format!("Re A>0 fixes the lift in (-pi/2,pi/2); finite positive simple collision has arg A -> {edge_imaginary_sign}*pi/2"));
+        } else {
+            out.phase.push(format!("certified amplitude half-plane fixes the continuous lift; finite edge arg A -> {right_alpha}*pi"));
+        }
     } else {
         out.phase.push(format!("right collision: x=({:?})/(2*{:?})>0; p'(r)>0; Im A -> -infinity, Re A bounded; phase -> -pi/2",encode(&xn),encode(&delta)));
         let edge = infinity_edge(&p, &a, &re, &im, &y)?;
@@ -122,6 +208,9 @@ pub(super) fn certify(
         out.exterior.push("at the leftmost sample the sign is (-1)^(n-1). For positive geometric top coefficients, sign P_n(-infinity)=(-1)^n supplies one extra zero. For the parity top GF it supplies one extra exactly when n is even. Odd degree <= n-1 closes without it".into());
     }
     out.domination="single_real_remainder: 4|A|^2>=C^2 and |r|<|lambda| give strict domination for n>=1, also when C=0; no uniform modulus gap is needed at infinity".into();
+    if out.domination_cutoff == Some(0) {
+        out.domination = "pointwise_single_real_remainder: 4|A|^2>C^2 and |r|<|lambda| imply |C*r^n|<2|A*lambda^n| for every n>=0".into();
+    }
     out.lean_declarations
         .push("RealRooted.EffectiveBKW.PairExpansion.dom_of_single_mode".into());
     out.lean_declarations.push(
@@ -135,7 +224,7 @@ pub(super) fn certify(
     Ok(out)
 }
 
-fn newton_scaled(
+pub(super) fn newton_scaled(
     f: &B,
     growth: usize,
     weight: usize,
@@ -171,7 +260,7 @@ fn newton_scaled(
     (out, m)
 }
 
-fn truncated_evaluate(f: &B, u: &P) -> P {
+pub(super) fn truncated_evaluate(f: &B, u: &P) -> P {
     f.rows().iter().rev().fold(P::zero(), |v, row| {
         let value = v * u.clone() + P::new(row.clone());
         P::new(value.coeffs().iter().take(17).cloned().collect())
@@ -265,7 +354,7 @@ fn newton_infinity_edge(
     let (oy, cy) = leading(y)?;
     let (or, cr) = leading(re)?;
     let (oi, ci) = leading(im)?;
-    if !cy.is_positive() || !cr.is_positive() {
+    if !cy.is_positive() {
         return Err(failure(
             "Newton infinity signs disagree with the positive branch",
         ));
@@ -283,14 +372,18 @@ fn newton_infinity_edge(
     )?;
     let exponent = 2 * oi - oy - 2 * or;
     let alpha = if exponent > 0 {
-        q(0)
+        if cr.is_positive() {
+            q(0)
+        } else {
+            q(if ci.is_positive() { 1 } else { -1 })
+        }
     } else if exponent < 0 {
         q(if ci.is_positive() { 1 } else { -1 }) / q(2)
     } else {
-        super::quadratic::angle_from_tangent_squared(
-            &(&ci * &ci / (&cy * &cr * &cr)),
-            if ci.is_positive() { 1 } else { -1 },
-        )?
+        super::quadratic::angle_from_cosine_squared(
+            &(&cy * &cr * &cr / (&cy * &cr * &cr + &ci * &ci)),
+            if cr.is_positive() { 1 } else { -1 },
+        )? * q(if ci.is_positive() { 1 } else { -1 })
     };
     Ok((theta.clone(),alpha.clone(),vec![format!(
         "t=-{parameter_scale}*s^(-{weight}), r={eigen_scale}*u*s^(-{growth}); scaled characteristic {:?}; simple limit root {r0}, derivative {derivative}; implicit Taylor coefficients {:?}; leading orders a={oa},Y={oy},Re numerator={or},Im numerator={oi}; exact limits theta={theta}*pi, arg A={alpha}*pi",encode_b(&scaled_p),encode(&u))]))

@@ -2,14 +2,17 @@ Prove all-index real-rootedness by an exact dominant-pair sign grid.
 
 Check a rational generating function N(t,z)/D(t,z), an optional exact open
 interval and target zero count. Automatic suppliers cover quadratic pairs, cubic
-single remainders with amplitude dominance on a negative ray, and compact
-quartics with supplied rational constants. Higher orders through eight accept a
-checked polynomial pair factorization and Cauchy cofactor bounds. Every proof
-checks the complete interval by resultants, Sturm isolation and off-branch
-boxes, phase endpoints, the symbolic degree budget, exterior signs and every
-finite row below the cutoff. A failed sufficient condition returns not_proved
-with its reason. --verify recomputes all evidence from the embedded request;
-Lean replay is not attempted.
+single remainders, quartic pointwise domination with compact uniform fallback,
+and pair factorization or algebraic pair-product branches for orders five
+through eight. Newton degree laws handle residue classes and fractional ray
+phases. Recurrence input preserves every seed and exactly checks any removed
+zero or improper prefix. Every proof checks the complete interval by resultants,
+Sturm isolation and off-branch boxes, phase endpoints, the exact degree budget,
+exterior signs and every finite row below the cutoff. Unsupported geometry or a
+failed prefix/sufficient condition returns not_proved with exit 0; malformed
+input returns exit 2. --verify reconstructs every witness from the embedded
+request, using the recorded legacy supplier for old v1 certificates; Lean replay
+is not attempted.
 
 Usage: polytool bkw effective [OPTIONS]
 

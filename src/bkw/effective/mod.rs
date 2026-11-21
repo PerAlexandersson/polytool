@@ -16,8 +16,11 @@ mod algebra;
 mod compact;
 mod cubic;
 mod degree;
+mod edges;
 mod higher;
+mod pointwise;
 mod quadratic;
+mod quartic_ray;
 mod signs;
 #[cfg(test)]
 mod tests;
@@ -286,6 +289,10 @@ pub struct EffectiveBkwCertificate {
     pub signs: Vec<EffectiveBkwSignCertificate>,
     /// Domination supplier, independent of phase/degree closure.
     pub domination: String,
+    /// Strict domination holds for every local n at least this value.
+    /// Omitted in older certificates, whose joint cutoff supplies the bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domination_cutoff: Option<usize>,
     /// Certified local cutoff for strict domination and the phase count.
     pub cutoff: usize,
     /// Exact tail bound at cutoff; zero for the no-remainder supplier.
@@ -324,7 +331,7 @@ pub struct EffectiveBkwReport {
     pub reason: String,
     /// Present exactly when every proof obligation passed.
     pub certificate: Option<EffectiveBkwCertificate>,
-    /// Original complete recurrence when a finite prefix was removed.
+    /// Original complete recurrence when a prefix was removed or its validation failed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_recurrence: Option<crate::recurrence::RecurrenceJson>,
     /// Exactly checked prefix omitted from the nonzero simple-root conclusion.
@@ -352,10 +359,17 @@ impl EffectiveBkwReport {
     /// # Errors
     /// Returns [`RecurrenceError::VerificationFailed`] on any mismatch.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
+        // Reports predating the pointwise supplier retain their exact
+        // original arithmetic route. The absent optional field selects only
+        // this conservative replay, never a relaxed comparison of witnesses.
+        let legacy = self
+            .certificate
+            .as_ref()
+            .is_some_and(|c| c.domination_cutoff.is_none());
         let expected = if let Some(source) = &self.source_recurrence {
-            certify_effective_bkw_recurrence(source)?
+            certify_recurrence_with_mode(source, legacy)?
         } else {
-            certify_effective_bkw(&self.request)?
+            certify_with_mode(&self.request, legacy)?
         };
         if self != &expected {
             return Err(RecurrenceError::VerificationFailed(
@@ -380,15 +394,48 @@ impl EffectiveBkwReport {
 pub fn certify_effective_bkw_recurrence(
     record: &crate::recurrence::RecurrenceJson,
 ) -> Result<EffectiveBkwReport, RecurrenceError> {
+    certify_recurrence_with_mode(record, false)
+}
+
+pub(crate) fn certify_recurrence_with_mode(
+    record: &crate::recurrence::RecurrenceJson,
+    legacy: bool,
+) -> Result<EffectiveBkwReport, RecurrenceError> {
     let (rule, first, seeds) = record.to_recurrence_parts()?;
-    let mut gf = crate::recurrence::rational_generating_function(&rule, first, &seeds)?;
+    let gf = crate::recurrence::rational_generating_function(&rule, first, &seeds)?;
+    match certify_recurrence_from_gf(record, gf.clone(), seeds.len(), legacy) {
+        Err(RecurrenceError::Unsupported(reason)) => Ok(EffectiveBkwReport {
+            schema: EFFECTIVE_BKW_SCHEMA.into(),
+            request: EffectiveBkwRequest {
+                generating_function: gf,
+                interval: None,
+                target_zero_count: None,
+                uniform_constants: None,
+                pair_factorization: None,
+            },
+            status: "not_proved".into(),
+            reason,
+            certificate: None,
+            source_recurrence: Some(record.clone()),
+            skipped_prefix: Vec::new(),
+        }),
+        result => result,
+    }
+}
+
+fn certify_recurrence_from_gf(
+    record: &crate::recurrence::RecurrenceJson,
+    mut gf: RationalGeneratingFunction,
+    seed_count: usize,
+    legacy: bool,
+) -> Result<EffectiveBkwReport, RecurrenceError> {
     let mut numerator = decode_b(&gf.numerator)?;
     let denominator = decode_b(&gf.denominator)?;
     let order = denominator.index_degree().unwrap_or(0);
     let mut skipped = Vec::new();
     // The complete seed-dependent GF is shifted, never rebuilt from a
     // truncated seed list. This retains all prescribed exceptions to the rule.
-    while skipped.len() <= seeds.len()
+    while skipped.len() <= seed_count
         && (numerator
             .rows()
             .first()
@@ -434,13 +481,16 @@ pub fn certify_effective_bkw_recurrence(
             .ok_or_else(|| failure("shift index overflow"))?;
     }
     gf.numerator = encode_b(&numerator);
-    let mut report = certify_effective_bkw(&EffectiveBkwRequest {
-        generating_function: gf,
-        interval: None,
-        target_zero_count: None,
-        uniform_constants: None,
-        pair_factorization: None,
-    })?;
+    let mut report = certify_with_mode(
+        &EffectiveBkwRequest {
+            generating_function: gf,
+            interval: None,
+            target_zero_count: None,
+            uniform_constants: None,
+            pair_factorization: None,
+        },
+        legacy,
+    )?;
     if !skipped.is_empty() {
         report.source_recurrence = Some(record.clone());
         report.skipped_prefix = skipped;
@@ -533,6 +583,13 @@ fn decode_b(p: &[Vec<String>]) -> Result<B, RecurrenceError> {
 pub fn certify_effective_bkw(
     request: &EffectiveBkwRequest,
 ) -> Result<EffectiveBkwReport, RecurrenceError> {
+    certify_with_mode(request, false)
+}
+
+fn certify_with_mode(
+    request: &EffectiveBkwRequest,
+    legacy: bool,
+) -> Result<EffectiveBkwReport, RecurrenceError> {
     let mut report = EffectiveBkwReport {
         schema: EFFECTIVE_BKW_SCHEMA.into(),
         request: request.clone(),
@@ -542,7 +599,7 @@ pub fn certify_effective_bkw(
         source_recurrence: None,
         skipped_prefix: Vec::new(),
     };
-    match certify(request) {
+    match certify(request, legacy) {
         Ok(certificate) => {
             report.status = "proved".into();
             report.reason = "every row is nonzero and has only simple real zeros; exact phase count, degree budget and finite prefix checked".into();
@@ -554,17 +611,20 @@ pub fn certify_effective_bkw(
     Ok(report)
 }
 
-fn certify(request: &EffectiveBkwRequest) -> Result<EffectiveBkwCertificate, RecurrenceError> {
+fn certify(
+    request: &EffectiveBkwRequest,
+    legacy: bool,
+) -> Result<EffectiveBkwCertificate, RecurrenceError> {
     if request
         .interval
         .as_ref()
         .is_some_and(|i| matches!(i.upper, EffectiveBkwEndpoint::PositiveInfinity))
     {
-        return reflected_certificate(request);
+        return reflected_certificate(request, legacy);
     }
-    match certify_in_chart(request) {
+    match certify_in_chart(request, legacy) {
         Err(ChartError::NoNegativeCubicCollision) if request.interval.is_none() => {
-            reflected_certificate(request)
+            reflected_certificate(request, legacy)
         }
         result => result.map_err(Into::into),
     }
@@ -572,6 +632,7 @@ fn certify(request: &EffectiveBkwRequest) -> Result<EffectiveBkwCertificate, Rec
 
 fn reflected_certificate(
     request: &EffectiveBkwRequest,
+    legacy: bool,
 ) -> Result<EffectiveBkwCertificate, RecurrenceError> {
     if request.pair_factorization.is_some() {
         return Err(failure(
@@ -579,7 +640,7 @@ fn reflected_certificate(
         ));
     }
     let reflected = reflect_request(request)?;
-    let mut certificate = certify_in_chart(&reflected).map_err(RecurrenceError::from)?;
+    let mut certificate = certify_in_chart(&reflected, legacy).map_err(RecurrenceError::from)?;
     certificate.coordinate_transport =
         EffectiveBkwCoordinateTransport::ParameterReflectionWithAlternatingRows;
     certificate.root_region = match certificate.root_region {
@@ -659,7 +720,10 @@ fn reflect_request(request: &EffectiveBkwRequest) -> Result<EffectiveBkwRequest,
     Ok(reflected)
 }
 
-fn certify_in_chart(request: &EffectiveBkwRequest) -> Result<EffectiveBkwCertificate, ChartError> {
+fn certify_in_chart(
+    request: &EffectiveBkwRequest,
+    legacy: bool,
+) -> Result<EffectiveBkwCertificate, ChartError> {
     let gf = &request.generating_function;
     if gf.schema != crate::recurrence::RATIONAL_GENERATING_FUNCTION_SCHEMA {
         return Err(
@@ -680,6 +744,12 @@ fn certify_in_chart(request: &EffectiveBkwRequest) -> Result<EffectiveBkwCertifi
         return Err(RecurrenceError::InvalidInput("effective BKW requires D(t,0)=1".into()).into());
     }
     let order = d.len() - 1;
+    if order == 2 && request.uniform_constants.is_some() && !legacy {
+        return Err(RecurrenceError::InvalidInput(
+            "uniform_constants are unsupported for order-two no-remainder proofs".into(),
+        )
+        .into());
+    }
     if !(2..=8).contains(&order) {
         return Err(failure("effective pair suppliers support orders two through eight").into());
     }
@@ -692,17 +762,41 @@ fn certify_in_chart(request: &EffectiveBkwRequest) -> Result<EffectiveBkwCertifi
     if d.iter().any(|p| p.degree().unwrap_or(0) > 8) {
         return Err(failure("parameter degree exceeds the phase-A elimination guard (8)").into());
     }
+    if !legacy {
+        // An exact early rejection, independent of the asymptotic degree or
+        // phase suppliers. A later zero row is outside this route's nonzero
+        // simple-root conclusion, even when the initial numerator is proper.
+        let first = P::new(numerator.rows().first().cloned().unwrap_or_default());
+        let next =
+            P::new(numerator.rows().get(1).cloned().unwrap_or_default()) - d[1].clone() * first;
+        if next.is_zero() {
+            if let Some(k) = degree::zero_edge_obstruction(&numerator, &denominator) {
+                return Err(failure(format!("local row 1 is zero; moreover the zero-end Newton face has {k} equal limiting modes: at n divisible by {k}, remainder/pair amplitude tends ({k}-2)/2>1, excluding global pair domination near t=0" )).into());
+            }
+            return Err(failure("local row 1 is zero; the nonzero simple-root conclusion requires a different tail or a zero/multiplicity-aware supplier").into());
+        }
+    }
     // Two finite collisions with theta limits pi,0 supply n+O(1) roots.
     // A sublinear Newton cap cannot close that count, regardless of the
     // numerator's fixed intercept. Reject before any expensive elimination.
-    if (order >= 4 || request.pair_factorization.is_some())
+    if (order >= if legacy { 4 } else { 5 } || request.pair_factorization.is_some())
         && d.iter()
             .enumerate()
             .skip(1)
             .all(|(j, p)| p.degree().is_none_or(|degree| degree < j))
     {
+        if !legacy
+            && request
+                .interval
+                .as_ref()
+                .is_none_or(|i| matches!(i.lower, EffectiveBkwEndpoint::NegativeInfinity))
+        {
+            if let Some(k) = degree::equimodular_obstruction(&numerator, &denominator) {
+                return Err(failure(format!("negative-infinity Newton face has {k} equal limiting modes and constant numerator: at every n divisible by {k}, remainder/pair amplitude tends ({k}-2)/2>1; no global domination cutoff exists for this pair scheme")).into());
+            }
+        }
         return Err(failure(
-            "compact pair phase has slope one but the Newton degree cap is sublinear",
+            if legacy {"compact pair phase has slope one but the Newton degree cap is sublinear"} else {"higher-order fractional ray requires a multi-mode remainder and Newton edge supplier; the compact phase has slope one but the Newton degree cap is sublinear"},
         )
         .into());
     }
@@ -719,17 +813,17 @@ fn certify_in_chart(request: &EffectiveBkwRequest) -> Result<EffectiveBkwCertifi
     }
     let mut certificate =
         if order == 2 && degree.data.newton.is_some() && request.pair_factorization.is_none() {
-            match compact::certify(&numerator, &d, request, &degree) {
+            match compact::certify(&numerator, &d, request, &degree, legacy) {
                 Ok(certificate) => certificate,
                 Err(RecurrenceError::Unsupported(_)) => {
-                    quadratic::certify(&numerator, &d, request, &degree)?
+                    quadratic::certify(&numerator, &d, request, &degree, legacy)?
                 }
                 Err(error) => return Err(error.into()),
             }
         } else if order == 3 && request.pair_factorization.is_none() {
-            cubic::certify(&numerator, &d, request, &degree)?
+            cubic::certify(&numerator, &d, request, &degree, legacy)?
         } else {
-            compact::certify(&numerator, &d, request, &degree)?
+            compact::certify(&numerator, &d, request, &degree, legacy)?
         };
     let mut rows: Vec<P> = Vec::new();
     let mut negative_prefix = certificate.root_region == EffectiveBkwRootRegion::NegativeRay;

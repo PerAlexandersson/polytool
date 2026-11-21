@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- Effective-BKW uniform certificates retain their supplier mode for exact
+  replay. Failed prefix shifts return source-bound `not_proved` reports;
+  phase periods and index arithmetic reject overflow, and order-two requests
+  reject unused uniform constants. Supplied-pair ray discriminant labels and
+  command help now describe the checks performed. Stored legacy and pointwise
+  reports guard replay, including rejection of changed evidence.
+- Higher-order algebraic pair proofs reuse exact denominator resultant norms
+  and use real-root barriers for constant numerators when
+  available. Full resultants and all critical-root exclusions are retained;
+  legacy arithmetic remains available for replay.
+
 - Standalone Hadamard-factor and preserver-image replay always checks the
   recorded parent proof. Hadamard-factor replay derives its multiplier
   justification from the factor. Forged claims are rejected even without an
@@ -43,6 +54,12 @@
   Hibi, Stanley and Stapledon references cite the original sources.
 
 ### Added
+
+- Effective BKW: exact pointwise quadratic-cofactor bounds with independent domination
+  cutoffs, fractional quartic Newton rays and generic cubic triple edges;
+  degree-zero rows require no phase samples. Exact binomial-face obstructions
+  at infinity and zero diagnose impossible global domination. Compact uniform
+  bounds remain available as a fallback.
 
 - Effective-BKW Newton degree laws and rational leading-coefficient GFs,
   residue-class phase/exterior closure, fractional quadratic/cubic ray limits,

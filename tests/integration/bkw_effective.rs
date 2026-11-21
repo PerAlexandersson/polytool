@@ -31,7 +31,9 @@ fn effective_cli_and_report_replay() {
         &report.to_string(),
     );
     assert!(replay.status.success());
-    report["certificate"]["cutoff"] = json!(0);
+    assert_eq!(report["certificate"]["cutoff"], json!(0));
+    assert_eq!(report["certificate"]["domination_cutoff"], json!(0));
+    report["certificate"]["cutoff"] = json!(1);
     assert_eq!(
         run(&["bkw", "effective", "--verify"], &report.to_string())
             .status
@@ -47,6 +49,67 @@ fn effective_cli_and_report_replay() {
         .code(),
         Some(2)
     );
+}
+
+#[test]
+fn prefix_shift_failures_are_replayable_not_proved_reports() {
+    for (prefix, second, reason) in [
+        (
+            json!(["1", "0", "1"]),
+            json!(["1"]),
+            "not simple real-rooted",
+        ),
+        (
+            json!(["1", "2", "1"]),
+            json!(["1"]),
+            "not simple real-rooted",
+        ),
+        (
+            json!(["0"]),
+            json!(["1", "0", "1"]),
+            "not simple real-rooted",
+        ),
+    ] {
+        let record = json!({"schema":"polytool.recurrence.v1","first_index":0,
+        "initial_polynomials":[prefix,second,["1"],["1"]],
+        "recurrence":{"terms":[
+            {"offset":1,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["1"]]}},
+            {"offset":2,"deriv_order":0,"sign":"none","coeff":{"coeffs":[["0","1"]]}}
+        ]}});
+        let result = run(
+            &["bkw", "effective", "--recurrence", "-", "--json"],
+            &record.to_string(),
+        );
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let report: Value = serde_json::from_slice(&result.stdout).unwrap();
+        assert_eq!(report["status"], "not_proved");
+        assert!(
+            report["reason"].as_str().unwrap().contains(reason),
+            "{report}"
+        );
+        assert!(report["certificate"].is_null());
+        let replay = run(
+            &["bkw", "effective", "--verify", "--json"],
+            &report.to_string(),
+        );
+        assert!(
+            replay.status.success(),
+            "{}",
+            String::from_utf8_lossy(&replay.stderr)
+        );
+        let mut altered = report;
+        altered["source_recurrence"]["initial_polynomials"][0] = json!(["2"]);
+        assert!(!run(
+            &["bkw", "effective", "--verify", "--json"],
+            &altered.to_string()
+        )
+        .status
+        .success());
+    }
 }
 #[test]
 fn tiling_route_is_discovered_and_replays_the_same_family() {
