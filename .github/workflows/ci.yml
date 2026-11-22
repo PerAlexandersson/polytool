@@ -29,8 +29,16 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      # Resolve the full graph before cache actions or unlocked Cargo commands
+      # can repair a stale lockfile. --no-deps would skip this resolution.
+      - name: Check committed standalone dependency graph
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
+
+      - name: Check committed standalone lockfile
+        run: cargo check --locked --lib --bins
 
       - name: Check formatting
         run: cargo fmt --all -- --check

@@ -610,7 +610,7 @@ pub struct CheckPolynomialFamilyResponse {
     pub all_required_checks_passed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub first_failure: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub parse_errors: Vec<ParsePolynomialItem>,
     pub items: Vec<FamilyPolynomialReport>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

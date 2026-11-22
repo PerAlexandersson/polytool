@@ -31,6 +31,10 @@ of the gauged seed rows; S_n is real-rooted for every n by its degree (<= 1), a
 discriminant (degree 2 or 3) or the palindromic-quartic test (u = x + 1/x),
 signs of polynomials in n decided exactly.
 
+Seeded half-step window (half_step_lag): unit seeds below k and
+P_n=(1+xD)P_(n-1)+c(n)xP_(n-k), c(n)>0 throughout the integer rule range.
+Certifies PF rows, degree floor((n-first)/k), and interlacing at distances <=k.
+
 Positive lag-two Euler (lag_two_euler, recorded only when its form matches):
 with theta = x D and m = n - first_index, the operators are [(a+b
 theta)+x(a+b(m-1)-b theta)] P_(n-1) and c x(theta+1)(m-1-theta) P_(n-2). The

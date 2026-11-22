@@ -1,0 +1,48 @@
+Discover and check exact interlacing refinements.
+
+Read a JSON request with exactly one of recurrence (recurrence.v1), source (a
+vector Weyl system), or finite states. Supplied candidates are checked first.
+Derive companion, last-step difference, derivative and sparse polynomial
+coordinates under explicit limits. Exact Ore composition checks
+T(n+1)C(n)=M(n)T(n); nonnegative scalar target recovery, initial PF order and
+quantified preservation are separate obligations. Finite row fits remain finite
+evidence. A proved result certifies a real-rooted or zero target from the
+recorded first index; it does not assert consecutive interlacing.
+
+Usage: polytool interlacing-refine [OPTIONS]
+
+Options:
+      --verify   Replay an interlacing refinement report
+      --compact  Print compact single-line JSON
+  -h, --help     Print help
+
+Input and output:
+      --input <FILE>     Read the input from FILE instead of stdin (`-` is stdin)
+      --format <FORMAT>  Output format [default: json] [possible values: json]
+      --json             Emit JSON (the default; accepted for uniformity)
+
+Input:
+  A JSON document on stdin (or --input FILE), described on this page.
+
+Details:
+  Schema polytool.interlacing-refinement.v1. Limits: dimension <=5, candidates
+  <=256, n degree <=4, x degree <=3, derivative order <=2, exact fit cells
+  <=2000000. Polynomial-preserver proofs require affine x entries and certify
+  every weakly ordered row/column pencil. Index-dependent proofs use sufficient
+  coefficientwise copositivity after shifting the first index; a failed sufficient
+  test is unresolved. The registered Euler-lag Weyl template has a separate
+  common-interleaver proof. Scaled third-order lag-sum coordinates solve the exact
+  positive kappa interval, including zero parameter branches. A failed candidate
+  search does not refute real-rootedness. Rust replay is not Lean replay.
+
+Examples:
+  polytool interlacing-refine --input request.json > certificate.json
+  polytool interlacing-refine --verify --input certificate.json
+
+Exit status:
+  0  proved or replay verified
+  1  finite evidence or no proof within limits
+  2  invalid input or certificate
+
+See also:
+  polytool matrix-orbit, polytool recurrence-prove, polytool interlacing

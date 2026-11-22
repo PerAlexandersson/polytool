@@ -51,6 +51,9 @@
 //!   row-annihilator system), shown to be the image of `(1 + x)^M(n)` under
 //!   a product of nonnegative multiplier sequences (Pólya--Schur, Laguerre,
 //!   `1/(alpha)_k`), with every root in `(-inf, 0]`;
+//! - [`check_half_step_lag_theorem`]: unit seeds below lag k and the
+//!   positive recurrence `(1+xD) P_(n-1)+c(n)x P_(n-k)`, with PF rows,
+//!   exact degree floor((n-first_index)/k) and an interlacing window of width k;
 //! - [`check_variable_delay_theorem`]: fixed-delay rules
 //!   `P_n = a(n) P_(n-1) + b(n) x P_(n-L)`, `L >= 2`, `a > 0`, `b >= 0` (the
 //!   RealRooted route `variableDelay`), with every root in `(-inf, 0)` and
@@ -1552,3 +1555,5 @@ fn earlier_seeds_hypothesis(
         outcome,
     ))
 }
+
+pub(in crate::recurrence) use matrix_orbit::affine as affine_pencils;

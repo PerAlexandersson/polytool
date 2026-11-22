@@ -65,6 +65,14 @@ fn raw_report_bytes_and_rejection_stages_match_the_pre_wire_corpus() {
                 "`parity_product`, `degree_law_reversal`, `matrix_orbit`, `effective_bkw`",
             );
         }
+        if matches!(
+            expected.name.as_str(),
+            "unknown-theorem" | "unknown-certificate"
+        ) {
+            let diagnostic = expected.parse_error.as_mut().unwrap();
+            *diagnostic =
+                diagnostic.replace("`variable_delay`,", "`variable_delay`, `half_step_lag`,");
+        }
         let actual = outcome(expected.name.clone(), expected.input.clone());
         assert_eq!(actual, expected, "{}", expected.name);
         count += 1;

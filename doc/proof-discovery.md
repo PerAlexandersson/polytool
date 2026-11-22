@@ -801,3 +801,12 @@ A proved result concerns the recurrence-defined sequence; a finite fit still nee
 all-index identity for another family.
 
 Lean replay is not attempted.
+
+## Seeded half-step windows
+
+The `half_step_lag` route checks the defining operator, positive lag weights
+throughout the integer rule range, unit seeds below the lag, and exact
+positive lag steps for extra seeds. It supplies PF rows, the exact degree
+and an interlacing window. See
+[interlacing refinements](interlacing-refinements.md#seeded-half-step-windows)
+for the hypotheses and replay certificate.

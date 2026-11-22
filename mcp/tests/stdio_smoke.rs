@@ -441,6 +441,42 @@ fn lists_tools_and_calls_properties() {
         .unwrap()
         .contains("50-second"));
 
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":66,"method":"tools/call","params":{
+            "name":"check_polynomial_family","arguments":{
+                "polynomials":[{"coefficients":[1,1,1]},{"coefficients":[1,2,1]}],
+                "options":{"find_recurrence":false}
+            }
+        }}),
+    );
+    let family = read_response(&mut stdout, 66);
+    assert_ne!(family["result"]["isError"], true, "{family}");
+    assert_eq!(
+        family["result"]["structuredContent"]["parse_errors"],
+        json!([])
+    );
+
+    assert!(tool_names.contains(&"discover_interlacing_refinements"));
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":67,"method":"tools/call","params":{
+            "name":"discover_interlacing_refinements","arguments":{"request":{
+                "states":[[["1"]],[["2"]],[["4"]],[["8"]]],
+                "target_rows":[["1"],["2"],["4"],["8"]],
+                "derive_candidates":false,
+                "limits":{"index_degree":0,"variable_degree":0},
+                "candidates":[{"name":"finite scalar fit"}]
+            }}
+        }}),
+    );
+    let refinement = read_response(&mut stdout, 67);
+    assert_ne!(refinement["result"]["isError"], true, "{refinement}");
+    assert_eq!(
+        refinement["result"]["structuredContent"]["status"],
+        "finite_fit"
+    );
+
     drop(stdin);
     let _ = child.kill();
     let _ = child.wait();

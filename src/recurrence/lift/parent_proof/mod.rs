@@ -76,6 +76,10 @@
 //!    recorded only when the rule has the theorem's form (a fitted relation
 //!    of hypergeometric shape), as for route 8;
 //!
+//!    The seeded half-step lag window, [`check_half_step_lag_theorem`], is
+//!    also tried after the fixed-delay route when its form matches. It
+//!    certifies PF rows and an interlacing window from exact unit seeds.
+//!
 //!    Routes 8c and 8d, tried after route 8b and only for a parent that the
 //!    earlier routes leave open, are the RealRooted row routes
 //!    **fixed-delay window** ([`check_variable_delay_theorem`], route

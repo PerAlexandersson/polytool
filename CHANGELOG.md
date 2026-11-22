@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Refresh the standalone lockfile for the exact arithmetic dependencies and
+  check its full dependency graph before CI cache actions, then build-check
+  the library/CLI with `--locked` before unlocked CI commands.
+- Always emit MCP family `parse_errors`, including empty coefficient-list results.
+
 - OEIS tables can declare coordinate row lengths to retain positional
   trailing zeros. A266178 and A266298 now generate their padded `2n+1`
   rows, with supplied recurrences validated against 10,000 terms each.
@@ -57,6 +62,13 @@
   Hibi, Stanley and Stapledon references cite the original sources.
 
 ### Added
+
+- Seeded half-step lag theorem recognition and replay (`half_step_lag`), including
+  the associated Bell rows A059022/A059023 and the lag-two specializations.
+- Exact interlacing refinement discovery, supplied-coordinate checks, bounded
+  polynomial/Weyl synthesis, uniform affine pencils, sharp scale intervals,
+  rejection witnesses and replay. CLI `interlacing-refine`, MCP
+  `discover_interlacing_refinements`; see `doc/interlacing-refinements.md`.
 
 - Nine stretch OEIS families: A056940, A140982, A142470, A155497, A155516,
   A155537, A202750, A278880 and A370232. Their supplied recurrences match

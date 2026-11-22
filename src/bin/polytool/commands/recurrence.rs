@@ -4,6 +4,39 @@ use crate::cli::spec::{option, positional, switch, CommandSpec, InputKind, Outpu
 
 const GROUP: &str = "Sequences and recurrences";
 
+pub(crate) const INTERLACING_REFINE: CommandSpec = CommandSpec {
+    name: "interlacing-refine",
+    group: GROUP,
+    summary: "Discover and check exact interlacing refinements",
+    description: "Read a JSON request with exactly one of recurrence (recurrence.v1), source (a vector Weyl \
+system), or finite states. Supplied candidates are checked first. Derive companion, last-step difference, \
+derivative and sparse polynomial coordinates under explicit limits. Exact Ore composition checks \
+T(n+1)C(n)=M(n)T(n); nonnegative scalar target recovery, initial PF order and quantified preservation \
+are separate obligations. Finite row fits remain finite evidence. A proved result certifies a \
+real-rooted or zero target from the recorded first index; it does not assert consecutive interlacing.",
+    input: InputKind::Json,
+    output: OutputKind::JsonOnly,
+    flags: &[
+        switch("verify", "Replay an interlacing refinement report"),
+        switch("compact", "Print compact single-line JSON"),
+    ],
+    details: "Schema polytool.interlacing-refinement.v1. Limits: dimension <=5, candidates <=256, n degree <=4, \
+x degree <=3, derivative order <=2, exact fit cells <=2000000. Polynomial-preserver proofs require affine \
+x entries and certify every weakly ordered row/column pencil. Index-dependent proofs use sufficient \
+coefficientwise copositivity after shifting the first index; a failed sufficient test is unresolved. \
+The registered Euler-lag Weyl template has a separate common-interleaver proof. Scaled third-order \
+lag-sum coordinates solve the exact positive kappa interval, including zero parameter branches. \
+A failed candidate search does not refute real-rootedness. Rust replay is not Lean replay.",
+    examples: &[
+        "polytool interlacing-refine --input request.json > certificate.json",
+        "polytool interlacing-refine --verify --input certificate.json",
+    ],
+    exit_codes: &[(0, "proved or replay verified"), (1, "finite evidence or no proof within limits"), (2, "invalid input or certificate")],
+    see_also: &["matrix-orbit", "recurrence-prove", "interlacing"],
+    run: Some(crate::interlacing_refine::cmd_interlacing_refine),
+    ..COMMAND
+};
+
 pub(crate) const MATRIX_ORBIT: CommandSpec = CommandSpec {
     name: "matrix-orbit",
     group: GROUP,
@@ -569,6 +602,10 @@ kappa_j(n) q(x)^j for one fixed q, so P_n = q^(n-e) g S_n with S_n in the span
 of the gauged seed rows; S_n is real-rooted for every n by its degree (<= 1),
 a discriminant (degree 2 or 3) or the palindromic-quartic test (u = x + 1/x),
 signs of polynomials in n decided exactly.
+
+Seeded half-step window (half_step_lag): unit seeds below k and
+P_n=(1+xD)P_(n-1)+c(n)xP_(n-k), c(n)>0 throughout the integer rule range.
+Certifies PF rows, degree floor((n-first)/k), and interlacing at distances <=k.
 
 Positive lag-two Euler (lag_two_euler, recorded only when its form matches):
 with theta = x D and m = n - first_index, the operators are

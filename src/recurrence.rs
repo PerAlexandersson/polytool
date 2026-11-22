@@ -44,6 +44,9 @@
 //!   index-free rules and every seed, with exact Riordan decomposition;
 //! - `root_domain`: optional root-domain information (theorem adapters, exact
 //!   root enclosures) for transformed results;
+//! - `refinement`: supplied interlacing-coordinate checks and bounded
+//!   discovery ([`discover_interlacing_refinements`]), exact Ore intertwiners,
+//!   affine quantified pencils, sharp scale intervals and replay;
 //! - `representation`: the bounded queue search over equivalent
 //!   representations (scalar and vector) that composes all of these
 //!   ([`search_representations`]);
@@ -101,6 +104,8 @@ mod leading_coefficient;
 pub use leading_coefficient::*;
 mod lift;
 pub use lift::*;
+mod refinement;
+pub use refinement::*;
 mod representation;
 pub use representation::*;
 mod root_domain;

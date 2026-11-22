@@ -73,6 +73,12 @@ macro_rules! theorem_routes {
                 VariableDelayCertificate,
                 VariableDelaySeedStep,
             };
+            /// [`check_half_step_lag_theorem`].
+            HalfStepLag, half_step_lag, "half_step_lag",
+            "Seeded positive half-step lag windows and PF rows.", {
+                check_half_step_lag_theorem,
+                HalfStepLagCertificate,
+            };
             /// [`check_residue_class_subsequence_theorem`] (RealRooted route
             /// `subseq`).
             ResidueClassSubsequences, residue_class, "residue_class_subsequences",
@@ -496,6 +502,15 @@ mod tests {
                 true,
             ),
             (
+                HalfStepLag,
+                WhileUnproved,
+                Ray,
+                true,
+                WhenApplicable,
+                true,
+                true,
+            ),
+            (
                 ResidueClassSubsequences,
                 WhileUnproved,
                 Fallback,
@@ -690,11 +705,11 @@ mod tests {
         // may itself be proved by residue classes.
         assert_eq!(
             filtered(|route| route.policy.in_residue_class_menu),
-            [&all[..9], &all[12..15]].concat()
+            [&all[..10], &all[13..16]].concat()
         );
         assert_eq!(
             filtered(|route| route.policy.in_index_section_menu),
-            [&all[..10], &all[12..15]].concat()
+            [&all[..11], &all[13..16]].concat()
         );
     }
 
@@ -703,6 +718,7 @@ mod tests {
         assert_eq!(
             filtered(|route| route.policy.start_policy == StartPolicy::OwnStarts),
             [
+                RealRootednessTheorem::HalfStepLag,
                 RealRootednessTheorem::ResidueClassSubsequences,
                 RealRootednessTheorem::IndexSectionLift,
                 RealRootednessTheorem::RationalPfRiordan,
@@ -717,6 +733,7 @@ mod tests {
             [
                 RealRootednessTheorem::IteratedPreserver,
                 RealRootednessTheorem::VariableDelay,
+                RealRootednessTheorem::HalfStepLag,
                 RealRootednessTheorem::ResidueClassSubsequences,
                 RealRootednessTheorem::IndexSectionLift,
                 RealRootednessTheorem::FactorGauge,

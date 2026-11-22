@@ -985,3 +985,12 @@ pub struct ImplicitRelationSearchToolRequest {
 pub struct VerifyImplicitRelationSearchToolRequest {
     pub report: serde_json::Value,
 }
+
+/// Discovery request, or a saved report when verify=true.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InterlacingRefinementToolRequest {
+    pub request: serde_json::Value,
+    #[serde(default)]
+    pub verify: bool,
+}

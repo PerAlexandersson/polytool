@@ -36,6 +36,19 @@ The server is intentionally small:
 - structured JSON results for agent-friendly use
 - exact arithmetic inherited from `polytool`
 
+## Interlacing refinement discovery
+
+`discover_interlacing_refinements` takes `{request, verify?: false}` and
+returns `polytool.interlacing-refinement.v1`. Supply a defining scalar or
+vector recurrence, or finite refined vectors, plus optional candidate maps
+and search limits. Exact intertwining, target recovery, initial ordering
+and preservation are separate checks. Set `verify: true` with a saved report
+to replay it. See [interlacing refinements](../doc/interlacing-refinements.md)
+for the coefficient encoding, exact scale intervals and supported preservers.
+
+`check_polynomial_family` always emits `parse_errors`, including `[]` for
+coefficient-list input without parse failures.
+
 ## Comparing recurrence representations
 
 `find_recurrence_representations` accepts the same polynomial input forms and

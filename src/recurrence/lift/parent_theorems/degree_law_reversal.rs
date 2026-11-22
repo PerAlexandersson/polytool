@@ -547,6 +547,7 @@ mod tests {
                 IteratedPreserver,
                 HypergeometricRow,
                 VariableDelay,
+                HalfStepLag,
                 FactorGauge,
                 LagTwoEuler,
                 BinomialPerturbedEulerOrbit,

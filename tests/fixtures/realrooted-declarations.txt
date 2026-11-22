@@ -18,6 +18,9 @@ RealRooted.EulerBidiagonal.generalStep
 RealRooted.EulerianTransform.transform_magicExpansion_interl
 RealRooted.EulerianTransform.transform_magicExpansion_isPF
 RealRooted.EvenDerivative.isPFPolynomial_tfae
+RealRooted.HalfStepRows.isPFPolynomial
+RealRooted.HalfStepRows.natDegree_eq_div
+RealRooted.HalfStepRows.strictInterl_add_of_le
 RealRooted.HasNonnegCoeffs.pos_leadingCoeff
 RealRooted.Hypergeometric
 RealRooted.Hypergeometric.threeFTwo_interlaces_and_isCoprime
@@ -48,6 +51,7 @@ RealRooted.MaWang.endpointStep
 RealRooted.MaWang.strictInterl_of_interlaces_evalCoeff_nonpos
 RealRooted.NewtonPreservesNonposRooted.of_parametersAffine
 RealRooted.OrderTwoBasis.forall_isPFPolynomial_iff_of_root_bounds
+RealRooted.PreservesInterlacingSeq0.iff_nonneg_and_2x2
 RealRooted.PreservesRealRootedOrZero.interlaces
 RealRooted.ScalarRec.pos_of_ratio
 RealRooted.StrictInterl

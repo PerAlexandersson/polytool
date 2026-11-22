@@ -15,6 +15,11 @@ suitable for piping into the checking and recurrence commands. Invalid options
 and input return a nonzero exit status; result fields still distinguish
 negative mathematical answers from failed commands.
 
+`polytool interlacing-refine --input request.json` checks supplied refinements
+and searches bounded polynomial/Weyl coordinates. `--verify` replays a saved
+report. See [interlacing refinements](interlacing-refinements.md) for schemas,
+proof obligations, bounds and exact rejection witnesses.
+
 ## Help, options and compatibility
 
 - **Topics.** `polytool help <topic>` explains concepts shared by many

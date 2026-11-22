@@ -115,6 +115,10 @@ route_certificates! {
     VariableDelay(VariableDelayCertificate) => variable_delay,
         variable_delay_certificate: VariableDelayCertificate,
     |_: &VariableDelayCertificate| Ok(None);
+    /// Seeded half-step lag seeds and window width.
+    HalfStepLag(HalfStepLagCertificate) => half_step_lag,
+        half_step_lag_certificate: HalfStepLagCertificate,
+    |_: &HalfStepLagCertificate| Ok(None);
     /// [`check_residue_class_subsequence_theorem`]: the period and the class
     /// families with their theorem reports (JSON key `residue_class_subsequences`).
     ResidueClassSubsequences(ResidueClassCertificate) => residue_class,

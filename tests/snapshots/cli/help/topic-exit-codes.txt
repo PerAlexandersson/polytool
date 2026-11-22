@@ -74,6 +74,10 @@ Per command:
       0 proved or replay verified
       1 no proof within the search bounds
       2 invalid input or certificate
+  interlacing-refine
+      0 proved or replay verified
+      1 finite evidence or no proof within limits
+      2 invalid input or certificate
   recurrence-theorems
       0 at least one theorem matches
       1 no theorem matches

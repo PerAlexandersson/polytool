@@ -55,6 +55,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     recurrence::RECURRENCE_DEGREE,
     recurrence::RECURRENCE_PROVE,
     recurrence::MATRIX_ORBIT,
+    recurrence::INTERLACING_REFINE,
     recurrence::RECURRENCE_THEOREMS,
     recurrence::RECURRENCE_VERONESE_LIFTS,
     recurrence::RECURRENCE_IMPLICIT,

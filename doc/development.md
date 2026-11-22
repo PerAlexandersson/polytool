@@ -58,7 +58,7 @@ only when the bindings, the library sources or its own files change.
 
 `ci.yml`:
 
-- `core`: formatting, OEIS catalog data tests, clippy, tests with `full-tests`, package check,
+- `core`: locked standalone dependency resolution before cache actions and a locked library/CLI check, formatting, OEIS catalog data tests, clippy, tests with `full-tests`, package check,
   `ore-algebra` tests, and the `exact-algebra` unit, fallback-hook and doctests.
 - `companions`: MCP formatting, clippy and tests with `full-tests`; `cargo check` of the web crate.
 - `msrv`: matrix over `polytool`, `ore-algebra`, `exact-real-roots`,

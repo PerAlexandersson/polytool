@@ -7,7 +7,9 @@
 
 use super::*;
 
-fn copositivity(matrix: RationalMatrix) -> Option<MatrixOrbitCopositivityCheck> {
+pub(in crate::recurrence) fn copositivity(
+    matrix: RationalMatrix,
+) -> Option<MatrixOrbitCopositivityCheck> {
     let n = matrix.len();
     let mut minimum: Option<Q> = None;
     for mask in 1..1usize << n {
@@ -69,7 +71,7 @@ fn wronskian(f: &Poly, g: &Poly) -> Q {
     coefficient(f, 1) * coefficient(g, 0) - coefficient(f, 0) * coefficient(g, 1)
 }
 
-fn pencil(
+pub(in crate::recurrence) fn pencil(
     a: &Poly,
     b: &Poly,
     c: &Poly,
@@ -133,11 +135,15 @@ pub(super) fn certify(matrix: &Matrix) -> Option<Vec<MatrixOrbitPencilCheck>> {
         return None;
     }
     let n = matrix.len();
+    let columns = matrix.first()?.len();
+    if columns == 0 || matrix.iter().any(|row| row.len() != columns) {
+        return None;
+    }
     let mut checks = Vec::new();
     for k in 0..n {
         for l in k..n {
-            for i in 0..n {
-                for j in i..n {
+            for i in 0..columns {
+                for j in i..columns {
                     checks.push(pencil(
                         &matrix[k][i],
                         &matrix[k][j],

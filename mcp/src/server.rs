@@ -125,8 +125,12 @@ impl PolynomialToolsServer {
             "stability_univariate" => Ok(Json(
                 json!({"tool":input.tool,"help":crate::stability::HELP}),
             )),
+            "discover_interlacing_refinements" => Ok(Json(json!({
+                "tool":input.tool,
+                "help":include_str!("../../doc/interlacing-refinements.md")
+            }))),
             _ => Err(invalid_params(
-                "extended help is available for stability_univariate",
+                "extended help is available for stability_univariate and discover_interlacing_refinements",
             )),
         }
     }
@@ -757,6 +761,36 @@ impl PolynomialToolsServer {
         let serde_json::Value::Object(fields) =
             serde_json::to_value(report).expect("serialize root enclosures")
         else {
+            unreachable!()
+        };
+        Ok(Json(fields.into_iter().collect()))
+    }
+
+    #[tool(
+        description = "Discover/check interlacing refinements or replay a report. request has exactly one of recurrence (recurrence.v1), source (vector Weyl system), or finite states; optional candidates and limits. Checks exact Ore intertwining, target recovery, ordered PF seed, and all quantified affine pencils separately. Index-dependent proofs use sufficient symbolic copositivity; the Euler-lag Weyl template is separate. Row fits remain finite evidence. Returns polytool.interlacing-refinement.v1. verify=true replays the saved report in request. Rust replay is not Lean replay."
+    )]
+    pub fn discover_interlacing_refinements(
+        &self,
+        Parameters(input): Parameters<crate::requests::InterlacingRefinementToolRequest>,
+    ) -> Result<Json<BTreeMap<String, serde_json::Value>>, McpError> {
+        validate_mcp_text(&input.request.to_string(), "interlacing refinement request")
+            .map_err(invalid_params)?;
+        let value = if input.verify {
+            let report: polytool::recurrence::InterlacingRefinementReport =
+                serde_json::from_value(input.request).map_err(|e| invalid_params(e.to_string()))?;
+            polytool::recurrence::verify_interlacing_refinements(&report)
+                .map_err(invalid_params)?;
+            json!({"verified":true,"status":report.status,"lean_replay":report.lean_replay})
+        } else {
+            let request: polytool::recurrence::InterlacingRefinementRequest =
+                serde_json::from_value(input.request).map_err(|e| invalid_params(e.to_string()))?;
+            serde_json::to_value(
+                polytool::recurrence::discover_interlacing_refinements(&request)
+                    .map_err(invalid_params)?,
+            )
+            .map_err(|e| invalid_params(e.to_string()))?
+        };
+        let serde_json::Value::Object(fields) = value else {
             unreachable!()
         };
         Ok(Json(fields.into_iter().collect()))

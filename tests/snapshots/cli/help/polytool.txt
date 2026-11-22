@@ -37,6 +37,7 @@ Sequences and recurrences:
   recurrence-degree                  Degree law and leading-coefficient signs of a recurrence for all n
   recurrence-prove                   Discover and replay general recurrence proofs
   matrix-orbit                       Certify stationary interlacing-matrix orbits exactly
+  interlacing-refine                 Discover and check exact interlacing refinements
   recurrence-theorems                Conditional interlacing theorem matches for recurrence JSON
   recurrence-veronese-lifts          Parent sequences whose coefficient sections are the sequence
   recurrence-implicit                Diagonal maps and antecedents: implicit relations, uniqueness

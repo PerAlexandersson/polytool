@@ -3207,3 +3207,69 @@ fn recurrence_code_exports_keep_extended_seeds_and_fitted_scaling() {
     assert_eq!(response.recurrence.as_deref(), Some("P(n) = 1/2 P(n-1)"));
     assert!(response.latex.unwrap().contains("$2 P_{n} = P_{n-1}"));
 }
+
+#[test]
+fn coefficient_list_family_emits_empty_parse_errors_and_matches_schema() {
+    let server = PolynomialToolsServer::new();
+    let request = serde_json::from_value(json!({
+        "polynomials": [{"coefficients": [1, 1, 1]}, {"coefficients": [1, 2, 1]}],
+        "options": {"find_recurrence": false}
+    }))
+    .unwrap();
+    let Json(response) = server.check_polynomial_family(Parameters(request)).unwrap();
+    assert_required_properties_present(&response);
+    let value = serde_json::to_value(&response).unwrap();
+    assert_eq!(value["parse_errors"], json!([]));
+    assert_eq!(value["item_count"], 2);
+}
+
+#[test]
+fn interlacing_refinement_tool_checks_replays_and_rejects_tampering() {
+    let entry = polytool::oeis::by_id("A124324").unwrap();
+    let (rule, seeds) = entry.recurrence_parts().unwrap();
+    let recurrence = polytool::recurrence::RecurrenceJson::from_recurrence_rational(
+        &rule,
+        entry.recurrence_first_index,
+        &seeds,
+        None,
+    );
+    let server = PolynomialToolsServer::new();
+    let Json(help) = server
+        .tool_help(Parameters(crate::requests::ToolHelpRequest {
+            tool: "discover_interlacing_refinements".into(),
+        }))
+        .unwrap();
+    assert!(
+        help["help"].as_str().unwrap().contains("maximum_supports")
+            || help["help"].as_str().unwrap().contains("active-support")
+    );
+
+    let Json(report) = server
+        .discover_interlacing_refinements(Parameters(
+            crate::requests::InterlacingRefinementToolRequest {
+                request: json!({"recurrence":recurrence,"limits":{"maximum_candidates":1}}),
+                verify: false,
+            },
+        ))
+        .unwrap();
+    assert_eq!(report["status"], "proved");
+    let Json(replay) = server
+        .discover_interlacing_refinements(Parameters(
+            crate::requests::InterlacingRefinementToolRequest {
+                request: json!(report),
+                verify: true,
+            },
+        ))
+        .unwrap();
+    assert_eq!(replay["verified"], true);
+    let mut modified = json!(report);
+    modified["candidates"][0]["initial_invariant"] = json!(false);
+    assert!(server
+        .discover_interlacing_refinements(Parameters(
+            crate::requests::InterlacingRefinementToolRequest {
+                request: modified,
+                verify: true
+            }
+        ))
+        .is_err());
+}

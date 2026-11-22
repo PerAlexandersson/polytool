@@ -50,9 +50,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
+name = "exact-algebra"
+version = "0.1.0"
+dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-rational",
+ "num-traits",
+]
+
+[[package]]
 name = "exact-real-roots"
 version = "0.2.0"
 dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "exact-stability"
+version = "0.1.0"
+dependencies = [
+ "exact-algebra",
+ "exact-real-roots",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -113,6 +134,7 @@ dependencies = [
 name = "ore-algebra"
 version = "0.1.0"
 dependencies = [
+ "exact-algebra",
  "num-bigint",
  "num-integer",
  "num-rational",
@@ -125,7 +147,9 @@ version = "0.7.0"
 dependencies = [
  "clap",
  "clap_complete",
+ "exact-algebra",
  "exact-real-roots",
+ "exact-stability",
  "num-bigint",
  "num-integer",
  "num-rational",

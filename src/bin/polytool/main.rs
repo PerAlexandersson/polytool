@@ -25,6 +25,7 @@ mod expansion;
 mod family_check;
 mod input;
 mod interlacing;
+mod interlacing_refine;
 mod json_out;
 mod left_production;
 mod matrix_orbit;

@@ -208,3 +208,5 @@ pub use symmetric_companion::*;
 
 mod structural_closure;
 pub use structural_closure::*;
+
+pub(in crate::recurrence) use parent_theorems::affine_pencils;

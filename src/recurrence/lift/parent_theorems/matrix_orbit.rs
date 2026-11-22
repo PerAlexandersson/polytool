@@ -8,7 +8,7 @@ use super::*;
 use crate::Polynomial;
 use std::collections::BTreeSet;
 
-mod affine;
+pub(in crate::recurrence) mod affine;
 mod realization;
 #[cfg(test)]
 mod tests;

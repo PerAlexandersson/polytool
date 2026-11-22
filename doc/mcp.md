@@ -302,3 +302,15 @@ The standard `discover_recurrence_proofs` and `verify_recurrence_proofs`
 tools also handle automatic `matrix_orbit` attempts and their additive
 certificate payload. Only nonzero real-rootedness is concluded; no temporal
 interlacing is asserted. See [matrix-orbit bounds and algorithms](matrix-orbits.md).
+
+## Interlacing refinement discovery
+
+`discover_interlacing_refinements` takes `{request, verify?: false}`.
+The request has exactly one of `recurrence`, `source`, or finite `states`,
+with optional `candidates` and `limits`. Set `verify: true` with a saved
+`polytool.interlacing-refinement.v1` report to replay it exactly.
+See [interlacing refinements](interlacing-refinements.md) for the input
+encoding, proof obligations and finite-evidence statuses.
+
+`check_polynomial_family` always emits `parse_errors`, including `[]` for
+coefficient-list input with no parse failures.

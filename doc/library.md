@@ -11,6 +11,17 @@ See the [README](../README.md#using-as-a-crate) for a short quick start.  This p
 collects the longer library examples; the command-line interface is described in
 [cli.md](cli.md).
 
+## Interlacing refinement discovery
+
+`recurrence::{discover_interlacing_refinements, verify_interlacing_refinements}`
+check supplied coordinates before bounded synthesis. Exact Ore intertwining,
+scalar target recovery, initial PF order and uniform preservation are separate
+obligations. `check_half_step_lag_theorem` supplies the seeded window route.
+See [interlacing refinements](interlacing-refinements.md) for schemas,
+limits, quantified pencil certificates and the sharp scale example. The
+[checked example](../examples/interlacing_refinements.rs) discovers scale 2
+and replays its certificate.
+
 ## Stationary interlacing-matrix orbits
 
 For stationary state systems, `recurrence::{check_matrix_orbit,
