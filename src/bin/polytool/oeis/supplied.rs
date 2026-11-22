@@ -115,7 +115,13 @@ pub(crate) fn add_supplied_recurrence(
     };
     let recurrence_first_width = match layout {
         OeisLayout::RegularTriangle => prefix_count + 1,
-        OeisLayout::Table => initial_rows[0].len().max(1),
+        OeisLayout::Table => match widths {
+            Some(widths) => match widths.catalog_rule().checked_width(prefix_count) {
+                Some(width) => width,
+                None => return AddResult::new(id, "mismatch", "row width overflow"),
+            },
+            None => initial_rows[0].len().max(1),
+        },
     };
     let terms_text = source
         .terms
@@ -133,6 +139,9 @@ pub(crate) fn add_supplied_recurrence(
         prefix_rows,
         recurrence_first_index: first_index,
         recurrence_first_width,
+        row_lengths: widths
+            .filter(|_| layout == OeisLayout::Table)
+            .map(RowWidths::catalog_rule),
         initial_rows: initial_rows
             .iter()
             .map(|row| row.iter().map(format_rational_coeff).collect())

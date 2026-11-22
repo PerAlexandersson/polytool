@@ -104,6 +104,7 @@ pub(crate) fn leak_definition(record: &OeisCatalogRecord) -> &'static OeisSequen
         prefix_rows: leak_rows(&record.prefix_rows),
         recurrence_first_index: record.recurrence_first_index,
         recurrence_first_width: record.recurrence_first_width,
+        row_lengths: record.row_lengths,
         initial_rows: leak_rows(&record.initial_rows),
         recurrence: SparseRecurrence {
             terms: Box::leak(terms.into_boxed_slice()),

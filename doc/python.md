@@ -331,6 +331,10 @@ row number.  `info` has the keys of `polytool oeis info --json`, with
 `first_index` for the CLI's `first_row`, and `recurrence` returns the bundled
 recurrence indexed by the displayed rows.  See [cli-oeis.md](cli-oeis.md) for
 the catalog's statuses, real-rootedness flags and evidence records.
+Explicitly padded tables such as A266178 and A266298 retain their `2n+1`
+coordinates in `generate`; their `info` includes `row_lengths` with
+`first`, `step` and `every`. The recurrence represents polynomial values,
+so its `Polynomial` rows omit positional padding.
 
 ## API summary
 

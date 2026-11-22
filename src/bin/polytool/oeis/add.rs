@@ -440,6 +440,7 @@ fn add_one(options: &AddOptions, id: &str, present: bool) -> AddResult {
         prefix_rows: string_rows(&rows[..skip]),
         recurrence_first_index: 1,
         recurrence_first_width: rows[skip].len(),
+        row_lengths: (layout == OeisLayout::Table).then(|| widths.catalog_rule()),
         initial_rows: string_rows(&searched[..initial_count]),
         recurrence: catalog_recurrence(&found.recurrence),
         provenance: OeisCatalogProvenance {

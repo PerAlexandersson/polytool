@@ -36,3 +36,17 @@ def test_bundled_recurrence_matches_the_rows():
         assert recurrence.first_index == info["first_index"]
         rows = oeis.generate(sequence, 12)
         assert recurrence.generate(12) == [Polynomial(row) for row in rows]
+
+
+@pytest.mark.parametrize("sequence", ["A266178", "A266298"])
+def test_explicit_padded_table_coordinates(sequence):
+    rows = oeis.generate(sequence, 8)
+    assert [len(row) for row in rows] == list(range(1, 16, 2))
+    assert rows[0] == [1]
+    for n, row in enumerate(rows[1:], 1):
+        assert row[0] == 1
+        assert row[1] == (n % 2 if sequence == "A266178" else 1)
+        assert row[2:] == [0] * (2 * n - 1)
+    assert oeis.generate(sequence, 3, from_index=4) == rows[4:7]
+    assert oeis.info(sequence)["row_lengths"] == {"first": 1, "step": 2, "every": 1}
+    assert oeis.recurrence(sequence).generate(8) == [Polynomial(row) for row in rows]

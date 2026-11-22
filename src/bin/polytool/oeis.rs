@@ -44,7 +44,7 @@ impl OeisOutputFormat {
 }
 
 fn oeis_entry_json(entry: &polytool::oeis::OeisSequenceDefinition) -> Value {
-    json!({
+    let mut value = json!({
         "id": entry.id,
         "name": entry.name,
         "status": entry.status.as_str(),
@@ -66,7 +66,11 @@ fn oeis_entry_json(entry: &polytool::oeis::OeisSequenceDefinition) -> Value {
             &evidence.first_failure,
             evidence.as_of,
         )),
-    })
+    });
+    if let Some(lengths) = entry.row_lengths {
+        value["row_lengths"] = json!(lengths);
+    }
+    value
 }
 
 fn cmd_oeis_list(args: &[String]) {

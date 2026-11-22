@@ -239,7 +239,7 @@ verification errors, including duplicate raw keys and omitted/null fields.
 ## Proof-discovery fingerprints
 
 `tests/integration/discovery_fingerprints.rs` is the evidence gate for refactorings of the
-theorem routes. For every bundled OEIS catalog family (919 entries) it hashes
+theorem routes. For every bundled OEIS catalog family (921 entries) it hashes
 the complete JSON of `recurrence::discover_recurrence_proofs` (default
 options, so including the catalog-lift and affine-coordinate stages on the
 records the other stages leave unproved) and of `recurrence::prove_parent_real_rootedness` (first index, no

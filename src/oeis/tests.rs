@@ -5,7 +5,7 @@ use crate::vec_poly::trim;
 
 #[test]
 fn catalog_is_sorted_unique_and_decodable() {
-    assert_eq!(catalog().len(), 919);
+    assert_eq!(catalog().len(), 921);
     assert_eq!(
         catalog()
             .iter()
@@ -18,7 +18,7 @@ fn catalog_is_sorted_unique_and_decodable() {
             .iter()
             .filter(|entry| entry.status == OeisSequenceStatus::Validated)
             .count(),
-        740
+        742
     );
     assert_eq!(
         catalog()
@@ -67,6 +67,7 @@ fn catalog_data_file_is_canonical_and_matches_the_static_catalog() {
         assert_eq!(record.id, entry.id);
         assert_eq!(record.provenance.status, entry.status);
         assert_eq!(record.provenance.source_rows, entry.source_rows);
+        assert_eq!(record.row_lengths, entry.row_lengths);
     }
 }
 
@@ -82,7 +83,7 @@ fn migrated_catalog_provenance_tiers_are_recorded() {
     assert_eq!(count(OeisProvenanceSource::BenchmarkFixture), 73);
     assert_eq!(count(OeisProvenanceSource::LeanDefinition), 630);
     assert_eq!(count(OeisProvenanceSource::CuratedQueue), 71);
-    assert_eq!(count(OeisProvenanceSource::SuppliedRecurrence), 91);
+    assert_eq!(count(OeisProvenanceSource::SuppliedRecurrence), 93);
     for record in &records {
         let provenance = &record.provenance;
         match provenance.source {
@@ -137,6 +138,200 @@ fn catalog_records_reject_inconsistent_provenance() {
     assert!(error
         .to_string()
         .starts_with("records are not strictly sorted by A-number: "));
+}
+
+#[test]
+fn explicit_table_row_lengths_round_trip_and_reject_invalid_shapes() {
+    let records = OeisCatalogRecord::parse_jsonl(&catalog_data_text()).unwrap();
+    let record = records
+        .iter()
+        .find(|record| record.id == "A266178")
+        .unwrap();
+    assert_eq!(
+        record.row_lengths,
+        Some(OeisCatalogRowLengths {
+            first: 1,
+            step: 2,
+            every: 1
+        })
+    );
+    assert_eq!(
+        serde_json::from_str::<OeisCatalogRecord>(&record.to_jsonl_line()).unwrap(),
+        *record
+    );
+    for (layout, lengths, width) in [
+        (
+            OeisLayout::RegularTriangle,
+            OeisCatalogRowLengths {
+                first: 1,
+                step: 2,
+                every: 1,
+            },
+            1,
+        ),
+        (
+            OeisLayout::Table,
+            OeisCatalogRowLengths {
+                first: 0,
+                step: 2,
+                every: 1,
+            },
+            1,
+        ),
+        (
+            OeisLayout::Table,
+            OeisCatalogRowLengths {
+                first: 1,
+                step: 2,
+                every: 0,
+            },
+            1,
+        ),
+        (
+            OeisLayout::Table,
+            OeisCatalogRowLengths {
+                first: 1,
+                step: 0,
+                every: 1,
+            },
+            1,
+        ),
+        (
+            OeisLayout::Table,
+            OeisCatalogRowLengths {
+                first: 1,
+                step: usize::MAX,
+                every: 1,
+            },
+            1,
+        ),
+        (
+            OeisLayout::Table,
+            OeisCatalogRowLengths {
+                first: 1,
+                step: 2,
+                every: 1,
+            },
+            2,
+        ),
+    ] {
+        let mut invalid = record.clone();
+        invalid.layout = layout;
+        invalid.row_lengths = Some(lengths);
+        invalid.recurrence_first_width = width;
+        assert_eq!(
+            invalid.validate(),
+            Err(OeisCatalogError::InvalidRowLengths {
+                id: record.id.clone()
+            })
+        );
+    }
+    let mut unknown = serde_json::to_value(record).unwrap();
+    unknown["row_lengths"]["phase"] = serde_json::json!(0);
+    assert!(serde_json::from_value::<OeisCatalogRecord>(unknown).is_err());
+    let lengths = OeisCatalogRowLengths {
+        first: 1,
+        step: usize::MAX,
+        every: 1,
+    };
+    assert_eq!(lengths.checked_width(1), None);
+    let lengths = OeisCatalogRowLengths {
+        first: 1,
+        step: usize::MAX / 2 + 1,
+        every: 1,
+    };
+    assert_eq!(lengths.checked_width(2), None);
+    // Absence remains absent in canonical serialization for legacy records.
+    assert!(!records[0].to_jsonl_line().contains("row_lengths"));
+}
+
+#[test]
+fn padded_cellular_automaton_rows_keep_every_oeis_coordinate() {
+    for entry in [A266178(), A266298()] {
+        let rows = entry.generate_rows(12).unwrap();
+        for (n, coefficients) in rows.iter().enumerate() {
+            assert_eq!(coefficients.len(), 2 * n + 1);
+            assert_eq!(coefficients[0], BigInt::from(1));
+            if n > 0 {
+                let second = if entry.id == "A266178" { n % 2 } else { 1 };
+                assert_eq!(coefficients[1], BigInt::from(second));
+                assert!(coefficients[2..].iter().all(Zero::is_zero));
+            }
+        }
+        assert_eq!(entry.generate_rows_from(7, 3).unwrap(), rows[7..10]);
+        let bfile = flatten_rows_to_bfile(
+            &rows,
+            &BFileOptions {
+                max_terms: Some(24),
+                ..BFileOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(bfile.rows_included, 4);
+        assert_eq!(bfile.terms_included, 16);
+        assert_eq!(bfile.text.lines().last(), Some("15 0"));
+        assert_eq!(
+            entry.real_rootedness().unwrap().status,
+            OeisRealRootednessStatus::LeanProved
+        );
+    }
+}
+
+#[test]
+fn explicit_lengths_use_catalog_positions_and_pad_zero_rows() {
+    let entry = OeisSequenceDefinition {
+        first_row: 10,
+        prefix_rows: &[&["7"]],
+        recurrence_first_index: 7,
+        recurrence_first_width: 1,
+        initial_rows: &[&["0"]],
+        row_lengths: Some(OeisCatalogRowLengths {
+            first: 1,
+            step: 2,
+            every: 2,
+        }),
+        bfile_prefix_verified: false,
+        ..*A266298()
+    };
+    let rows = entry.generate_rows(6).unwrap();
+    assert_eq!(rows[0], row(&[7]));
+    assert_eq!(
+        rows.iter().map(Vec::len).collect::<Vec<_>>(),
+        [1, 1, 3, 3, 5, 5]
+    );
+    assert!(rows[1..].iter().flatten().all(Zero::is_zero));
+    assert_eq!(entry.generate_rows_from(14, 2).unwrap(), rows[4..6]);
+}
+
+#[test]
+fn explicit_lengths_never_discard_nonzero_coefficients_and_errors_are_fused() {
+    let entry = OeisSequenceDefinition {
+        row_lengths: Some(OeisCatalogRowLengths {
+            first: 1,
+            step: 0,
+            every: 1,
+        }),
+        ..*A266298()
+    };
+    let mut rows = entry.generate_rows_iter().unwrap();
+    assert_eq!(rows.next().unwrap().unwrap(), row(&[1]));
+    assert!(matches!(
+        rows.next().unwrap(),
+        Err(OeisSequenceError::InvalidDefinition { .. })
+    ));
+    assert!(rows.next().is_none());
+    let invalid = OeisSequenceDefinition {
+        row_lengths: Some(OeisCatalogRowLengths {
+            first: 1,
+            step: 2,
+            every: 0,
+        }),
+        ..entry
+    };
+    assert!(matches!(
+        invalid.generate_rows(1),
+        Err(OeisSequenceError::InvalidDefinition { .. })
+    ));
 }
 
 #[test]
@@ -244,7 +439,7 @@ fn bundled_real_rootedness_flags_are_exposed() {
             .filter(|(_, flag)| flag.status == status)
             .count()
     };
-    assert_eq!(count(OeisRealRootednessStatus::LeanProved), 803);
+    assert_eq!(count(OeisRealRootednessStatus::LeanProved), 805);
     assert_eq!(count(OeisRealRootednessStatus::KnownNotRealRooted), 1);
     for (entry, flag) in &flagged {
         assert_eq!(entry.real_rootedness(), Some(*flag));
@@ -649,7 +844,8 @@ fn fnv1a64(text: &str) -> u64 {
 const FINGERPRINT_ROWS: usize = 20;
 
 fn catalog_fingerprint(entry: &OeisSequenceDefinition) -> String {
-    let definition = fnv1a64(&format!("{entry:?}"));
+    // Preserve the pre-extension fingerprints for absent optional row lengths.
+    let definition = fnv1a64(&format!("{entry:?}").replace("row_lengths: None, ", ""));
     let rows = match entry.generate_rows(FINGERPRINT_ROWS) {
         Ok(rows) => rows
             .iter()

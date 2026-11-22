@@ -241,6 +241,17 @@ fn render_definition(out: &mut String, record: &OeisCatalogRecord) {
         "        initial_rows: {},",
         render_rows(&record.initial_rows, "        ")
     );
+    let _ = writeln!(
+        out,
+        "        row_lengths: {},",
+        match record.row_lengths {
+            Some(lengths) => format!(
+                "Some(OeisCatalogRowLengths {{ first: {}, step: {}, every: {} }})",
+                lengths.first, lengths.step, lengths.every
+            ),
+            None => "None".to_string(),
+        }
+    );
     let _ = writeln!(out, "        recurrence: SparseRecurrence {{");
     let _ = writeln!(out, "            terms: &[");
     for term in &recurrence.terms {

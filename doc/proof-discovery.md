@@ -262,7 +262,7 @@ early on large intermediate operators). Finding nothing proves nothing.
 
 **Catalog lifts.** When nothing above proves the record (and no root region
 is requested), the fourth stage connects it to a family of the bundled OEIS
-catalog (919 entries, no external database) by an identity certified for
+catalog (921 entries, no external database) by an identity certified for
 every index, and transfers that family's statement. Two lifts are tried:
 
 1. *Normalized identification.* A catalog family `S` with

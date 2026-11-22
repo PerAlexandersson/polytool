@@ -59,7 +59,8 @@ fn oeis_ids(include_experimental: bool) -> Vec<&'static str> {
 /// ``real_rootedness`` (the catalog flag, or ``None``), ``evidence``
 /// (finite-segment evidence, or ``None``), ``recurrence`` (text) and
 /// ``recurrence_data`` (the ``polytool.recurrence.v1`` record; see
-/// :func:`recurrence`).
+/// :func:`recurrence`). Explicitly padded tables also include ``row_lengths``
+/// (``first``, ``step``, ``every``), counted from the first catalog row.
 ///
 /// Raises ``KeyError`` for an A-number that is not bundled.
 #[pyfunction]
@@ -77,6 +78,9 @@ fn oeis_info<'py>(py: Python<'py>, id: &str) -> PyResult<Bound<'py, PyDict>> {
     dict.set_item("source_rows", entry.source_rows)?;
     dict.set_item("verification_rows", entry.verification_rows)?;
     dict.set_item("rows_sha256", entry.rows_sha256)?;
+    if let Some(lengths) = entry.row_lengths {
+        dict.set_item("row_lengths", serialize_to_python(py, &lengths)?)?;
+    }
     match entry.real_rootedness() {
         Some(flag) => {
             let value = PyDict::new(py);

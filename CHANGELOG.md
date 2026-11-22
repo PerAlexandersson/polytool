@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- OEIS tables can declare coordinate row lengths to retain positional
+  trailing zeros. A266178 and A266298 now generate their padded `2n+1`
+  rows, with supplied recurrences validated against 10,000 terms each.
 - Effective-BKW uniform certificates retain their supplier mode for exact
   replay. Failed prefix shifts return source-bound `not_proved` reports;
   phase periods and index arithmetic reject overflow, and order-two requests

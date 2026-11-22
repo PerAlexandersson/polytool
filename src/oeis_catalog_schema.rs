@@ -48,6 +48,34 @@ impl OeisLayout {
     }
 }
 
+/// Explicit OEIS coordinate lengths, including positional trailing zeros.
+///
+/// Row `i` is counted from the first catalog row (including prefix rows),
+/// independently of the displayed or internal recurrence index. Its length is
+/// `first + step * floor(i / every)`. Used only for explicitly grouped tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OeisCatalogRowLengths {
+    /// Positive length of row zero.
+    pub first: usize,
+    /// Nonnegative increase per group of rows.
+    pub step: usize,
+    /// Positive number of rows per group.
+    pub every: usize,
+}
+
+impl OeisCatalogRowLengths {
+    /// Coordinate length of zero-based catalog row `index`, or `None` for
+    /// invalid parameters or arithmetic overflow.
+    pub fn checked_width(&self, index: usize) -> Option<usize> {
+        if self.first == 0 || self.every == 0 {
+            return None;
+        }
+        self.first
+            .checked_add(self.step.checked_mul(index / self.every)?)
+    }
+}
+
 /// Where the recurrence of a catalog record came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -380,6 +408,9 @@ pub struct OeisCatalogRecord {
     pub recurrence_first_index: usize,
     /// Structural width of the first row after the prefix.
     pub recurrence_first_width: usize,
+    /// Explicit table coordinate lengths; absent preserves the legacy layout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_lengths: Option<OeisCatalogRowLengths>,
     /// Initial rows of the recurrence (exact rational strings).
     pub initial_rows: Vec<Vec<String>>,
     /// The recurrence.
@@ -429,6 +460,12 @@ pub enum OeisCatalogError {
     },
     /// The record has no initial rows.
     NoInitialRows {
+        /// The record id.
+        id: String,
+    },
+    /// Explicit row lengths have invalid parameters, overflow, conflict with
+    /// the layout/first recurrence width, or would discard seed coordinates.
+    InvalidRowLengths {
         /// The record id.
         id: String,
     },
@@ -526,6 +563,7 @@ pub enum OeisCatalogError {
 impl std::fmt::Display for OeisCatalogError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::InvalidRowLengths { id } => write!(f, "{id}: invalid explicit table row lengths"),
             Self::InvalidJsonLine { line, message } => write!(f, "line {line}: {message}"),
             Self::InvalidId { id } => write!(f, "`{id}` is not an upper-case A-number"),
             Self::EmptyName { id } => write!(f, "{id}: empty name"),
@@ -624,8 +662,8 @@ impl OeisCatalogRecord {
             if line.trim().is_empty() {
                 continue;
             }
-            let record: Self = serde_json::from_str(line)
-                .map_err(|error| OeisCatalogError::InvalidJsonLine {
+            let record: Self =
+                serde_json::from_str(line).map_err(|error| OeisCatalogError::InvalidJsonLine {
                     line: line_index + 1,
                     message: error.to_string(),
                 })?;
@@ -654,11 +692,9 @@ impl OeisCatalogRecord {
             let numerator = parts.next().unwrap_or("");
             let digits = |part: &str| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit());
             digits(numerator)
-                && parts
-                    .next()
-                    .is_none_or(|denominator| {
-                        digits(denominator) && denominator.bytes().any(|b| b != b'0')
-                    })
+                && parts.next().is_none_or(|denominator| {
+                    digits(denominator) && denominator.bytes().any(|b| b != b'0')
+                })
         };
         let rows = self.prefix_rows.iter().chain(&self.initial_rows);
         for value in rows.flatten() {
@@ -671,6 +707,24 @@ impl OeisCatalogRecord {
         }
         if self.initial_rows.is_empty() {
             return Err(OeisCatalogError::NoInitialRows { id: error_id() });
+        }
+        if let Some(lengths) = self.row_lengths {
+            let prefix_count = self.prefix_rows.len();
+            if self.layout != OeisLayout::Table
+                || lengths.checked_width(prefix_count) != Some(self.recurrence_first_width)
+                || self
+                    .prefix_rows
+                    .iter()
+                    .chain(&self.initial_rows)
+                    .enumerate()
+                    .any(|(index, row)| {
+                        lengths
+                            .checked_width(index)
+                            .is_none_or(|width| row.len() > width)
+                    })
+            {
+                return Err(OeisCatalogError::InvalidRowLengths { id: error_id() });
+            }
         }
         let recurrence = &self.recurrence;
         let polynomials = recurrence
@@ -753,7 +807,9 @@ impl OeisCatalogRecord {
             let consistent = evidence.rows_checked > 0
                 && OeisEvidenceProperty::ALL.iter().all(|&property| {
                     match evidence.first_failure.get(property) {
-                        Some(row) => property.rank() < evidence.strongest.rank() && checked.contains(&row),
+                        Some(row) => {
+                            property.rank() < evidence.strongest.rank() && checked.contains(&row)
+                        }
                         None => property.rank() >= evidence.strongest.rank(),
                     }
                 });

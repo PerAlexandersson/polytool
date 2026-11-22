@@ -193,6 +193,11 @@ fn sample_of_catalog_entries_matches_recorded_fingerprints() {
     );
 }
 
+#[test]
+fn padded_catalog_entries_match_recorded_fingerprints() {
+    check_entries(vec![polytool::oeis::A266178(), polytool::oeis::A266298()]);
+}
+
 /// All catalog entries (about 10 minutes in release mode).
 #[test]
 #[ignore = "full catalog sweep; run with --release -- --ignored every_"]

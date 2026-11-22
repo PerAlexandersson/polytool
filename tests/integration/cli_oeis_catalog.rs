@@ -169,6 +169,10 @@ fn oeis_add_accepts_explicit_row_width_rules_and_bfiles() {
     assert!(text.starts_with("A055151\tadded\t"), "{text}");
     let record: serde_json::Value = serde_json::from_str(text.lines().nth(1).unwrap()).unwrap();
     assert_eq!(record["layout"], "table");
+    assert_eq!(
+        record["row_lengths"],
+        serde_json::json!({"first":1,"step":1,"every":2})
+    );
 
     let bfile = catalog.with_file_name("b008292.txt");
     let terms = [
@@ -551,4 +555,83 @@ fn oeis_info_reports_missing_evidence() {
     assert!(info["evidence"].is_null());
     let output = run_polytool(&["oeis", "info", "A122431"]);
     assert!(stdout(&output).contains("evidence: none recorded"));
+}
+
+#[test]
+fn oeis_add_and_check_preserve_padded_table_coordinates() {
+    let catalog = scratch_catalog("oeis-add-padded");
+    let directory = catalog.parent().unwrap();
+    let data = fixture_data();
+    for (id, offset) in [("A266178", 2), ("A266298", 1)] {
+        let rule = directory.join(format!("{id}.json"));
+        let recurrence = serde_json::json!({
+            "schema":"polytool.recurrence.v1", "first_index":0,
+            "initial_polynomials":[["1"],["1","1"]],
+            "recurrence":{"terms":[{"offset":offset,"deriv_order":0,"sign":"none",
+                "coeff":{"coeffs":[["1"]]}}]}
+        });
+        std::fs::write(&rule, recurrence.to_string()).unwrap();
+        let output = run_polytool(&[
+            "oeis",
+            "add",
+            id,
+            "--catalog",
+            catalog.to_str().unwrap(),
+            "--oeis-data",
+            data.to_str().unwrap(),
+            "--layout",
+            "table",
+            "--row-widths",
+            "1+2",
+            "--recurrence-json",
+            rule.to_str().unwrap(),
+            "--json",
+        ]);
+        assert!(output.status.success(), "{output:?}");
+        let added: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let record = &added["results"][0]["record"];
+        assert_eq!(added["results"][0]["outcome"], "added");
+        assert_eq!(
+            record["row_lengths"],
+            serde_json::json!({"first":1,"step":2,"every":1})
+        );
+        assert_eq!(record["provenance"]["source"], "supplied_recurrence");
+        assert_eq!(record["provenance"]["terms_source"], "oeis_internal_format");
+        assert_eq!(record["provenance"]["status"], "validated");
+        assert_eq!(record["provenance"]["verification_rows"], 0);
+        let source =
+            std::fs::read_to_string(data.join("seq/A266").join(format!("{id}.seq"))).unwrap();
+        let source = polytool::oeis::parse_oeis_internal_format(&source, id).unwrap();
+        assert_eq!(record["provenance"]["checked_terms"], source.terms.len());
+        // Includes the partial final row in each internal-format term prefix.
+        let complete_rows = record["provenance"]["source_rows"].as_u64().unwrap() as usize;
+        assert!(source.terms.len() > complete_rows * complete_rows);
+
+        let checked = run_polytool(&[
+            "oeis",
+            "check",
+            id,
+            "--catalog",
+            catalog.to_str().unwrap(),
+            "--oeis-data",
+            data.to_str().unwrap(),
+            "--json",
+        ]);
+        assert!(checked.status.success(), "{checked:?}");
+        let checked: serde_json::Value = serde_json::from_slice(&checked.stdout).unwrap();
+        assert_eq!(checked["checked"], 1);
+        assert_eq!(checked["mismatched"], 0);
+        assert_eq!(checked["results"][0]["checked_terms"], source.terms.len());
+
+        // The compiled catalog exposes the same coordinates, including strict b-file output.
+        let info = run_polytool(&["oeis", "info", id, "--json"]);
+        assert!(info.status.success());
+        let info: serde_json::Value = serde_json::from_slice(&info.stdout).unwrap();
+        assert_eq!(info["row_lengths"], record["row_lengths"]);
+        let output = run_polytool(&["oeis", "generate", id, "--count", "4", "--format", "bfile"]);
+        assert!(output.status.success());
+        let bfile = polytool::oeis::parse_bfile(&stdout(&output)).unwrap();
+        assert_eq!(bfile.terms.len(), 16);
+        assert_eq!(bfile.terms, source.terms[..16]);
+    }
 }

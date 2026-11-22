@@ -69,7 +69,7 @@ use crate::recurrence::{
     RecurrenceRowIterator, RecurrenceSign, RecurrenceTerm,
 };
 use num_bigint::BigInt;
-use num_traits::One;
+use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
@@ -186,6 +186,9 @@ pub struct OeisSequenceDefinition {
     /// recurrence-generated row; later rows of a `RegularTriangle` grow by one
     /// each.  Used to pad rows whose top coefficients vanish.
     pub recurrence_first_width: usize,
+    /// Explicit table coordinate lengths, counted from the first catalog row;
+    /// when absent, the legacy layout and verified-triangle padding apply.
+    pub row_lengths: Option<OeisCatalogRowLengths>,
     /// Initial rows (decimal rational strings, ascending powers of `t`)
     /// supplied to the recurrence evaluator, starting at index
     /// `recurrence_first_index`.
@@ -819,7 +822,19 @@ impl OeisRowIterator {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let prefix_count = definition.prefix_rows.len();
-        if definition.bfile_prefix_verified
+        if let Some(lengths) = definition.row_lengths {
+            let invalid = |message: &str| OeisSequenceError::InvalidDefinition {
+                id: definition.id,
+                message: message.to_string(),
+            };
+            let width = lengths
+                .checked_width(index)
+                .ok_or_else(|| invalid("invalid or overflowing row width"))?;
+            if integers.iter().skip(width).any(|value| !value.is_zero()) {
+                return Err(invalid("polynomial exceeds explicit row width"));
+            }
+            integers.resize(width, BigInt::from(0));
+        } else if definition.bfile_prefix_verified
             && definition.layout == OeisLayout::RegularTriangle
             && index >= prefix_count
         {

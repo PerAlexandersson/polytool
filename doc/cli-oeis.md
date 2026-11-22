@@ -103,6 +103,22 @@ Each record holds the executable recurrence (`layout`, `first_row`,
 `recurrence`, with recurrence coefficients as sparse `[n_degree, t_degree,
 "value"]` monomials) and a `provenance` object with the `status`, the
 `source_rows` / `verification_rows` counts and the `rows_sha256` fingerprint.
+Table records may also carry `row_lengths`, before `initial_rows`:
+
+```json
+"row_lengths":{"first":1,"step":2,"every":1}
+```
+
+This declares the coordinate length `first + step * floor(i / every)` for
+zero-based catalog row `i`, including prefix rows. `first` and `every` must
+be positive; `step` may be zero. These coordinates retain positional trailing
+zeros in initial and computed rows, including a zero polynomial. The evaluator
+rejects an overflowing length or any nonzero coefficient beyond the declared
+width. Displayed row numbers and internal recurrence indices do not change
+the rule's origin. The field is optional: records without it keep their
+existing behavior, and regular triangles keep their existing padding policy.
+`oeis info --json` includes the field only when present. The recurrence JSON
+schema is unchanged; coordinate lengths belong to the catalog layout.
 The `source` field records where the recurrence came from:
 
 | `source` | Entries | Origin |
@@ -111,7 +127,7 @@ The `source` field records where the recurrence came from:
 | `lean_definition` | 630 | Fitted by an earlier version of the polytool recurrence search and transcribed into generated Lean definitions; validated against the OEIS data prefix (16 rows); records the last compared row as `validation_row` |
 | `curated_queue` | 71 | Fitted by recurrence search on database-cached rows; `verified` when checked on held-out rows |
 | `polytool_recurrence_search` | 54 | `polytool oeis add` (below); records `fit_rows`, `checked_terms`, `search_options` and the polytool version |
-| `supplied_recurrence` | 91 | `polytool oeis add --recurrence-json` (below): a supplied recurrence, validated against every OEIS term of the snapshot; records `checked_terms`, `terms_source`, the last compared row and the polytool version |
+| `supplied_recurrence` | 93 | `polytool oeis add --recurrence-json` (below): a supplied recurrence, validated against every OEIS term of the snapshot; records `checked_terms`, `terms_source`, the last compared row and the polytool version |
 
 The first three tiers were produced by an earlier offline generator, which
 combined the benchmark fixtures, a curated recurrence queue, and generated
@@ -119,9 +135,9 @@ Lean definitions with a local OEIS copy; its output was migrated to the data
 file unchanged (a test compares every entry's definition and first 20 rows
 with fingerprints captured before the migration).
 
-The catalog contains 919 entries. The [November 2026 additions](oeis-catalog-additions-2026-11.md)
+The catalog contains 921 entries. The [November 2026 additions](oeis-catalog-additions-2026-11.md)
 record the source revision, validation and conservative proof flags for 59
-additional families.
+additional families and the subsequent two padded-table additions.
 
 To add sequences, run from the source directory with a local copy of the OEIS
 in its internal format (`seq/A123/A123456.seq` files):
@@ -160,9 +176,12 @@ recurrence index `first_index` of its first initial row, and the initial rows.
 The first initial row is matched with the first OEIS row after the
 `--prefix-rows P` complete OEIS rows (default 0), which are stored as
 authoritative prefix rows.  `tabl` sequences are regular triangles; another
-sequence needs `--layout triangle` or `--layout table` (with a supplied
-recurrence a table needs no `--row-widths`: the generated rows are the table
-rows, and `--row-widths` is needed only to cut prefix rows).  The candidate
+sequence needs `--layout triangle` or `--layout table`. With a supplied
+recurrence a table may omit `--row-widths`: the generated polynomial vectors
+then determine its rows. To preserve positional trailing zeros, supply
+`--row-widths W+S[/R]`; this stores `row_lengths` for all rows and also cuts
+any prefix rows. Searching with a table layout stores the same coordinate
+rule. The candidate
 entry is replayed through the catalog's row generator and compared term by term
 with every OEIS term (the same comparison as `oeis check`); it is written only
 when every term matches, at least five complete rows and two rows computed by
@@ -174,6 +193,7 @@ with the first differing term.  Search options and `--fit-rows` do not apply.
 polytool oeis info A008292 --json | jq .recurrence_data > a008292.json
 polytool oeis add A008292 --recurrence-json a008292.json --replace --dry-run
 polytool oeis add A051142 --recurrence-json a051142.json --prefix-rows 2
+polytool oeis add A266178 --recurrence-json a266178.json --layout table --row-widths 1+2
 ```
 
 As with the search, a finite match is evidence that the supplied rule produces
@@ -200,7 +220,7 @@ JSON of `oeis info` and `oeis list --json` reports it as `real_rootedness`
 (`null` when unknown), and the Veronese parent provers use a `lean_proved`
 entry only as an attestation (verdict `conditional_on_attestation`, label
 `oeis_catalog:<A-number>:lean_proved`), see the library documentation.  The
-bundled catalog flags 795 entries `lean_proved` and one (A122431, whose row
+bundled catalog flags 805 entries `lean_proved` and one (A122431, whose row
 `3 + 3x + x^2` is not real-rooted) `known_not_real_rooted`.  A replaced entry
 (`oeis add --replace`) loses its flag, because the flag certifies the rows of
 the recurrence it was established for.

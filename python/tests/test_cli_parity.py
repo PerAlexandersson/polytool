@@ -179,7 +179,7 @@ def test_proof_and_degree_reports(eulerian_rows, legendre_record, tmp_path):
         assert recurrence.certify_leading_coefficient().to_dict() == degree
 
 
-@pytest.mark.parametrize("sequence", ["A008292", "A001263", "A102547"])
+@pytest.mark.parametrize("sequence", ["A008292", "A001263", "A102547", "A266178", "A266298"])
 def test_oeis(sequence):
     generated = json.loads(run("oeis", "generate", sequence, "--count", "9", "--format", "json"))
     assert polytool.oeis.generate(sequence, 9) == [as_ints(row) for row in generated["rows"]]

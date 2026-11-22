@@ -120,12 +120,33 @@ A155497 A155516 A155537 A175124 A202750 A245111 A278880 A320280
 A326600 A370232 A383149 A383206 A384968
 ```
 
-A266178 and A266298 have simple recurrences for their polynomial values, but
-their OEIS table rows retain increasing numbers of trailing zeros. The current
-table evaluator trims those coordinates, so `oeis add` rejected both with
-fitted-row mismatches. A regular-triangle reinterpretation would describe
-different rows. Supporting explicit irregular padding requires a separate
-schema and generator change.
+## Padded-table additions, 2026-11-22
+
+A266178 and A266298 are now included, bringing the catalog to 921 entries.
+Both use `layout: table` with explicit coordinate lengths
+`row_lengths: {first: 1, step: 2, every: 1}`. Row `n`, counted from zero,
+therefore retains all `2n+1` OEIS coordinates, including trailing zeros.
+Existing catalog records and generated rows are unchanged.
+
+Both entries were added with the supplied-recurrence maintenance command.
+Their common seeds are `P_0 = 1` and `P_1 = 1+x`. A266178 has
+`P_n = P_(n-2)` for `n >= 2`; A266298 has `P_n = P_(n-1)` for `n >= 2`.
+These are exactly the upstream Lean definitions, with identical indices and
+unit leaders. Induction gives equality for every index; zero padding changes
+no polynomial coefficient. Both carry `lean_proved`, dated 2026-11-22.
+Neither upstream theorem file nor its repository-local import closure
+contains executable `sorry`, `admit` or a custom `axiom`. This source audit
+does not constitute a fresh Lean build.
+
+Every one of the 10,000 locally available consecutive b-file terms matched
+for each entry: 100 complete rows, of which 98 were computed by the
+recurrence. Each b-file also agrees with the corresponding 1,000-term local
+snapshot prefix and the internal-format `%S/%T/%U` prefix. No network
+retrieval was used. Provenance is `supplied_recurrence`, status `validated`,
+with zero fitting holdouts, `terms_source: bfile`, `checked_terms: 10000`,
+the exact term digest, and the full last compared row (`n = 99`). These
+finite OEIS checks are separate from the all-index definition bridge and
+the recorded upstream proof flag.
 
 ## Polytool proof discovery
 

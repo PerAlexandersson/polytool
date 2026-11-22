@@ -199,7 +199,9 @@ object (rule, first_index and initial polynomials; one A-number only). Its first
 initial row is matched with the first OEIS row after the prefix, and the rows it
 generates are compared exactly with every OEIS term. Provenance is
 `supplied_recurrence`, status `validated`. A table layout may omit --row-widths:
-the generated rows give the widths. Search options and --fit-rows do not apply.
+the generated rows give the widths. An explicit --row-widths stores coordinate
+lengths, preserving trailing zeros in every table row (including prefix rows).
+Search options and --fit-rows do not apply.
 
 Outcomes per A-number: added, updated, already_present, no_recurrence (nothing
 within the bounds or budget), layout_unsupported, insufficient_data, mismatch (a

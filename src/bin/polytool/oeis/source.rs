@@ -76,6 +76,14 @@ pub(crate) struct RowWidths {
 }
 
 impl RowWidths {
+    /// Catalog coordinate rule corresponding to the input row grouping.
+    pub(crate) fn catalog_rule(self) -> polytool::oeis::OeisCatalogRowLengths {
+        polytool::oeis::OeisCatalogRowLengths {
+            first: self.first,
+            step: self.step,
+            every: self.every,
+        }
+    }
     /// The regular triangle (`tabl`): widths 1, 2, 3, ...
     pub(crate) const TRIANGLE: Self = Self {
         first: 1,
