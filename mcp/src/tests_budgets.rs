@@ -191,7 +191,7 @@ fn catalog_paging_filters_fields_and_code_opt_in() {
                 serde_json::from_value(json!({"offset":offset,"limit":50})).unwrap(),
             ))
             .unwrap();
-        assert_eq!(list.total, 921);
+        assert_eq!(list.total, 930);
         assert_eq!(list.count, list.sequences.len());
         for item in list.sequences {
             assert_eq!(item.len(), 3);
@@ -202,7 +202,7 @@ fn catalog_paging_filters_fields_and_code_opt_in() {
             None => break,
         }
     }
-    assert_eq!(ids.len(), 921);
+    assert_eq!(ids.len(), 930);
     assert!(ids.windows(2).all(|w| w[0].as_str() < w[1].as_str()));
     let Json(list) = server.list_oeis_sequences(Parameters(serde_json::from_value(json!({"query":"a001263","status":"validated","layout":"regular_triangle","fields":["id","layout"]})).unwrap())).unwrap();
     assert!(list.sequences.iter().any(|s| s["id"] == "A001263"));

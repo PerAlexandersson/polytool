@@ -58,6 +58,13 @@
 
 ### Added
 
+- Nine stretch OEIS families: A056940, A140982, A142470, A155497, A155516,
+  A155537, A202750, A278880 and A370232. Their supplied recurrences match
+  every available local OEIS term and have exact all-index definition
+  bridges with source-audited upstream Lean attestations. The catalog now
+  has 930 entries; the additions notes distinguish the 19 non-D-finite
+  families and the remaining implicit-only A175124 relation.
+
 - Effective BKW: exact pointwise quadratic-cofactor bounds with independent domination
   cutoffs, fractional quartic Newton rays and generic cubic triple edges;
   degree-zero rows require no phase samples. Exact binomial-face obstructions

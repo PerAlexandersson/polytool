@@ -219,3 +219,16 @@ fn every_catalog_entry_matches_recorded_fingerprints() {
     check_entries(catalog().iter().collect());
     assert!(expected.len() >= 860);
 }
+
+#[test]
+fn stretch_catalog_entries_match_recorded_fingerprints() {
+    check_entries(
+        [
+            "A056940", "A140982", "A142470", "A155497", "A155516", "A155537", "A202750", "A278880",
+            "A370232",
+        ]
+        .iter()
+        .map(|id| by_id(id).unwrap())
+        .collect(),
+    );
+}

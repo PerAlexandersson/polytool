@@ -588,7 +588,7 @@ fn lists_and_generates_oeis_catalog_rows() {
             ..Default::default()
         }))
         .unwrap();
-    assert_eq!(list.count, 921);
+    assert_eq!(list.count, 930);
     assert!(list.sequences.iter().any(|entry| entry["id"] == "A008292"));
     assert!(list
         .sequences

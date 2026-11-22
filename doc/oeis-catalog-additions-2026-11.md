@@ -111,14 +111,36 @@ additions, and their existing records were left untouched.
 
 ## Unadded families
 
-The bounded searches did not produce a validated rule for these 29 entries:
+Twenty of the original 29 stretch families remain outside the catalog:
 
 ```text
-A039811 A039812 A048743 A055314 A056940 A090657 A090683 A111636
-A129062 A130191 A140982 A141618 A141686 A142470 A155467 A155493
-A155497 A155516 A155537 A175124 A202750 A245111 A278880 A320280
-A326600 A370232 A383149 A383206 A384968
+A039811 A039812 A048743 A055314 A090657 A090683 A111636 A129062
+A130191 A141618 A141686 A155467 A155493 A175124 A245111 A320280
+A326600 A383149 A383206 A384968
 ```
+
+Here D-finite means P-recursive in the row index over `Q(x)`. A mixed
+shift–derivative row recurrence is a weaker condition. We classify nineteen
+of these families as non-D-finite in this sense:
+
+| Entries | Obstruction |
+| --- | --- |
+| A048743, A055314, A090657, A090683, A141618, A141686, A155467, A155493, A245111, A384968 | Their fixed-column ordinary generating functions have poles at reciprocals of unbounded integers. Stirling or Eulerian column formulas give the poles; for A384968 the largest exponential base in column `k` of the Bell-row square is `floor(k^2/4)`. We first reverse A055314 in degree `n`. |
+| A039811, A039812, A130191, A383206 | A fixed-column exponential generating function is an iterated exponential of infinite order (or its derivative). Entire D-finite functions have finite order. |
+| A129062, A320280, A383149 | Fixed-column exponential generating functions contain `log(2-exp(t))` or `log((3-exp(2t))/2)`, giving infinitely many finite singularities. |
+| A111636 | At positive rational `x`, a middle term grows as `exp(c n^2-O(n))`, exceeding the `C^n (n!)^s` bound for P-recursive sequences. |
+| A326600 | Its leading coefficient is the Bell number `B_n`. Reversing in degree `n` and extracting the constant coefficient gives a sequence whose exponential generating function has infinite order. |
+
+For the first group, an annihilating operator over `Q[x,z]`, after removing
+its common power of `x`, would force every fixed-column generating function
+to have finite singularities in one fixed finite set. The unbounded sets of
+poles contradict this. Fixed-column extraction and degree-`n` reversal
+preserve P-recursiveness, which gives the other obstructions.
+
+A175124 is D-finite by finite hypergeometric sums on each parity and the
+gamma transform. Its available relation includes derivatives of the current
+row through order four and has only finite validation. We retain no catalog
+entry for it.
 
 ## Padded-table additions, 2026-11-22
 
@@ -148,6 +170,55 @@ the exact term digest, and the full last compared row (`n = 99`). These
 finite OEIS checks are separate from the all-index definition bridge and
 the recorded upstream proof flag.
 
+## Stretch additions, 2026-11-22
+
+We add A056940, A140982, A142470, A155497, A155516, A155537, A202750,
+A278880 and A370232, bringing the catalog from 921 to 930 entries. We use
+`oeis add --recurrence-json` for each entry. All 921 earlier catalog records
+remain byte-identical. Each new record has source `supplied_recurrence`,
+status `validated`, zero fitting holdouts, `terms_source: bfile`, and its
+checked term count, term digest and last complete validation row.
+
+The b-files used here reproduce every available term of the local OEIS
+snapshot. We also compare the generated rows with internal-format prefixes
+made from that same snapshot; these are two input formats for the same
+terms, rather than independent data sources. Partial final rows are included.
+We use no network retrieval.
+
+| Entry | Terms checked | Complete rows | Partial final terms | Lag / derivative order | Default `recurrence-prove` status |
+| --- | ---: | ---: | ---: | --- | --- |
+| A056940 | 1000 | 44 | 10 | 1 / 3 | `not_proved` |
+| A140982 | 48 | 9 | 3 | 1 / 3 | `not_proved` |
+| A142470 | 1000 | 44 | 10 | 1 / 3 | `not_proved` |
+| A155497 | 1000 | 44 | 10 | 1 / 3 | `not_proved` |
+| A155516 | 1000 | 44 | 10 | 1 / 3 | `not_proved` |
+| A155537 | 1000 | 44 | 10 | 4 / 0 | `not_proved` |
+| A202750 | 231 | 21 | 0 | 1 / 3 | `not_proved` |
+| A278880 | 1000 | 44 | 10 | 1 / 3 | `not_proved` |
+| A370232 | 55 | 10 | 0 | 2 / 1 | `not_proved` |
+
+For eight entries, exact factorial-ratio simplification proves the
+coefficient identity of the supplied recurrence, with the low and high
+coefficient boundaries checked separately. For A155537 we use the Narayana
+recurrence
+`(n+2)N_n = (2n+1)(1+x)N_(n-1) - (n-1)(1-x)^2 N_(n-2)`
+and eliminate the two states `N_n` and `2^(n+1)N_n`. Their sum equals the
+upstream definition. Every identically vanishing polynomial leader occurs
+within the prescribed initial rows. The nonsingular recurrence and matching
+seeds therefore identify all rows with the upstream formulas. Exact replay
+through native row 80 provides an additional finite check.
+
+All nine carry the existing `real_rootedness` attestation fields
+`status: lean_proved`, `as_of: 2026-11-22`. Their upstream files are
+`ProofsOeisStretch/<A-number>.lean` in
+[`sqrt-of-2/real-rooted-oeis-proofs`, revision
+`a070c710acc3866ecb5af075d4a85b7b6b82de85`](https://github.com/sqrt-of-2/real-rooted-oeis-proofs/tree/a070c710acc3866ecb5af075d4a85b7b6b82de85/ProofsOeisStretch).
+We inspected all nine files and their locally available import closure:
+none contains executable `sorry`, `admit` or a custom `axiom`. The direct
+file hashes agree with the source snapshot used for the recurrence
+identities. We performed no new Lean build; these flags record the upstream
+proofs and the all-index definition bridges.
+
 ## Polytool proof discovery
 
 With the default `recurrence-prove --json` options, 49 of the 59 added
@@ -157,3 +228,12 @@ This dispatcher result is separate from the upstream Lean flags: it proves
 properties of the supplied recurrence and seeds, without a catalog attestation.
 A122766 is proved through a certified alternative representation, using the
 Ma--Wang interval and iterated-preserver routes.
+
+The nine stretch additions each return `not_proved` with the default
+`recurrence-prove --json` options. We retain their upstream Lean
+attestations separately. Adding these flags leaves every pre-existing
+discovery report unchanged; 21 parent-proof reports gain near-miss catalog
+labels in failed attestation diagnostics. The older fingerprints also omitted
+labels for the already catalogued A266178 and A266298. Removing the nine
+stretch labels and these two padded-table labels recovers every older parent
+fingerprint exactly; statuses, routes and all other report fields are unchanged.

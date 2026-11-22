@@ -5,7 +5,7 @@ use crate::vec_poly::trim;
 
 #[test]
 fn catalog_is_sorted_unique_and_decodable() {
-    assert_eq!(catalog().len(), 921);
+    assert_eq!(catalog().len(), 930);
     assert_eq!(
         catalog()
             .iter()
@@ -18,7 +18,7 @@ fn catalog_is_sorted_unique_and_decodable() {
             .iter()
             .filter(|entry| entry.status == OeisSequenceStatus::Validated)
             .count(),
-        742
+        751
     );
     assert_eq!(
         catalog()
@@ -83,7 +83,7 @@ fn migrated_catalog_provenance_tiers_are_recorded() {
     assert_eq!(count(OeisProvenanceSource::BenchmarkFixture), 73);
     assert_eq!(count(OeisProvenanceSource::LeanDefinition), 630);
     assert_eq!(count(OeisProvenanceSource::CuratedQueue), 71);
-    assert_eq!(count(OeisProvenanceSource::SuppliedRecurrence), 93);
+    assert_eq!(count(OeisProvenanceSource::SuppliedRecurrence), 102);
     for record in &records {
         let provenance = &record.provenance;
         match provenance.source {
@@ -439,7 +439,7 @@ fn bundled_real_rootedness_flags_are_exposed() {
             .filter(|(_, flag)| flag.status == status)
             .count()
     };
-    assert_eq!(count(OeisRealRootednessStatus::LeanProved), 805);
+    assert_eq!(count(OeisRealRootednessStatus::LeanProved), 814);
     assert_eq!(count(OeisRealRootednessStatus::KnownNotRealRooted), 1);
     for (entry, flag) in &flagged {
         assert_eq!(entry.real_rootedness(), Some(*flag));
@@ -914,5 +914,161 @@ fn every_imported_lean_definition_reproduces_its_validation_row() {
             .map(|value| value.parse::<BigInt>().unwrap())
             .collect::<Vec<_>>();
         assert_eq!(actual, &expected, "{id} row {row_index}");
+    }
+}
+
+#[test]
+fn stretch_additions_preserve_source_rows_and_supplied_provenance() {
+    let records = OeisCatalogRecord::parse_jsonl(&catalog_data_text()).unwrap();
+    let cases: [(&str, usize, usize, &[&[i64]]); 9] = [
+        (
+            "A056940",
+            1000,
+            44,
+            &[
+                &[1],
+                &[1, 1],
+                &[1, 5, 1],
+                &[1, 15, 15, 1],
+                &[1, 35, 105, 35, 1],
+            ],
+        ),
+        (
+            "A140982",
+            48,
+            9,
+            &[
+                &[1],
+                &[3, 1],
+                &[6, 16, 1],
+                &[10, 100, 50, 1],
+                &[15, 400, 750, 120, 1],
+            ],
+        ),
+        (
+            "A142470",
+            1000,
+            44,
+            &[
+                &[1],
+                &[1, 1],
+                &[1, 8, 1],
+                &[1, 30, 30, 1],
+                &[1, 80, 300, 80, 1],
+            ],
+        ),
+        (
+            "A155497",
+            1000,
+            44,
+            &[
+                &[1],
+                &[1, 1],
+                &[1, 18, 1],
+                &[1, 90, 90, 1],
+                &[1, 280, 1400, 280, 1],
+            ],
+        ),
+        (
+            "A155516",
+            1000,
+            44,
+            &[
+                &[1],
+                &[1, 1],
+                &[1, 20, 1],
+                &[1, 105, 105, 1],
+                &[1, 336, 1764, 336, 1],
+            ],
+        ),
+        (
+            "A155537",
+            1000,
+            44,
+            &[
+                &[3],
+                &[5, 5],
+                &[9, 27, 9],
+                &[17, 102, 102, 17],
+                &[33, 330, 660, 330, 33],
+            ],
+        ),
+        (
+            "A202750",
+            231,
+            21,
+            &[
+                &[1],
+                &[1, 1],
+                &[1, 16, 1],
+                &[1, 81, 81, 1],
+                &[1, 256, 1296, 256, 1],
+            ],
+        ),
+        (
+            "A278880",
+            1000,
+            44,
+            &[
+                &[1],
+                &[1, 1],
+                &[1, 5, 1],
+                &[1, 14, 14, 1],
+                &[1, 30, 81, 30, 1],
+            ],
+        ),
+        (
+            "A370232",
+            55,
+            10,
+            &[
+                &[1],
+                &[1, 1],
+                &[1, 9, 1],
+                &[1, 36, 25, 1],
+                &[1, 100, 225, 49, 1],
+            ],
+        ),
+    ];
+    for (id, checked_terms, source_rows, expected) in cases {
+        let entry = by_id(id).unwrap();
+        let record = records.iter().find(|record| record.id == id).unwrap();
+        assert_eq!(
+            record.provenance.source,
+            OeisProvenanceSource::SuppliedRecurrence,
+            "{id}"
+        );
+        assert_eq!(
+            record.provenance.status,
+            OeisSequenceStatus::Validated,
+            "{id}"
+        );
+        assert_eq!(record.provenance.checked_terms, Some(checked_terms), "{id}");
+        assert_eq!(record.provenance.source_rows, source_rows, "{id}");
+        assert_eq!(record.provenance.verification_rows, 0, "{id}");
+        assert_eq!(
+            record.provenance.terms_source.as_deref(),
+            Some("bfile"),
+            "{id}"
+        );
+        let flag = entry.real_rootedness().unwrap();
+        assert_eq!(flag.status, OeisRealRootednessStatus::LeanProved, "{id}");
+        assert_eq!(flag.as_of, Some("2026-11-22"), "{id}");
+        let expected: Vec<Vec<BigInt>> = expected
+            .iter()
+            .map(|row| row.iter().copied().map(BigInt::from).collect())
+            .collect();
+        assert_eq!(
+            entry.generate_rows(expected.len()).unwrap(),
+            expected,
+            "{id}"
+        );
+    }
+    for id in [
+        "A039811", "A039812", "A048743", "A055314", "A090657", "A090683", "A111636", "A129062",
+        "A130191", "A141618", "A141686", "A155467", "A155493", "A175124", "A245111", "A320280",
+        "A326600", "A383149", "A383206", "A384968",
+    ] {
+        assert!(by_id(id).is_none(), "{id} must remain outside the catalog");
     }
 }
