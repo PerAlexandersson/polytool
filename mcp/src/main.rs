@@ -66,7 +66,7 @@ fn parse_args(args: &[String]) -> Result<StartupMode, String> {
 }
 
 fn version_text() -> String {
-    format!("{} {}", BIN_NAME, env!("CARGO_PKG_VERSION"))
+    format!("{} {}", BIN_NAME, polytool_mcp::build_version())
 }
 
 fn help_text() -> String {

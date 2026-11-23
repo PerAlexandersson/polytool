@@ -100,3 +100,14 @@ pub type TnnNetworkResponse = TotallyNonnegativeNetworkResponse;
 /// Deprecated name of [`TotallyNonnegativeFailureItem`].
 #[deprecated(since = "0.6.0", note = "renamed to `TotallyNonnegativeFailureItem`")]
 pub type TnnFailureItem = TotallyNonnegativeFailureItem;
+
+/// MCP package version and the library's build-time source revision.
+///
+/// Source archives without Git metadata report `unknown`.
+pub fn build_version() -> String {
+    format!(
+        "{} (git {})",
+        env!("CARGO_PKG_VERSION"),
+        polytool::version::build_git_commit().unwrap_or("unknown")
+    )
+}

@@ -67,7 +67,11 @@ fn lists_tools_and_calls_properties() {
     let init = read_response(&mut stdout, 1);
     assert!(init.get("result").is_some(), "initialize failed: {init}");
     let instructions = init["result"]["instructions"].as_str().unwrap();
-    assert!(instructions.len() <= 400);
+    assert!(instructions.lines().count() <= 40);
+    assert_eq!(
+        init["result"]["serverInfo"]["version"],
+        polytool_mcp::build_version()
+    );
     assert!(instructions.contains("report_id"));
 
     send(
@@ -93,6 +97,26 @@ fn lists_tools_and_calls_properties() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect();
+    let mapped_tools: std::collections::BTreeSet<_> = instructions
+        .lines()
+        .filter_map(|line| line.strip_prefix("  "))
+        .flat_map(|line| line.split([',', ' ']))
+        .filter(|name| !name.is_empty())
+        .collect();
+    let listed_tools = tool_names.iter().copied().collect();
+    assert_eq!(
+        mapped_tools, listed_tools,
+        "capability map must match tools/list"
+    );
+    let version = Command::new(env!("CARGO_BIN_EXE_polytool-mcp"))
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(version.status.success());
+    assert_eq!(
+        String::from_utf8(version.stdout).unwrap().trim(),
+        format!("polytool-mcp {}", polytool_mcp::build_version())
+    );
     assert!(tool_names.contains(&"polynomial_properties"));
     assert!(tool_names.contains(&"coefficient_tests"));
     assert!(tool_names.contains(&"hstar_inequalities"));

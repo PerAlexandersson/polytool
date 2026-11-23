@@ -1,6 +1,39 @@
 # Changelog
 
-## 0.7.0 (unreleased)
+## 0.8.0 (unreleased)
+
+### Added
+
+- MCP initialization now provides a compact capability map covering every
+  registered tool, with a regression against `tools/list`.
+- MCP `--version` and `serverInfo.version` include the build commit.
+  `mcp/check-installed.sh` compares an installed binary with the checkout
+  and reports stale builds without installing anything. Source archives
+  without Git metadata remain buildable (`git unknown`).
+- Effective BKW proof discovery and exact replay: dominant-pair sign-grid
+  certificates, Newton degree laws, leading-coefficient generating functions,
+  prefix shifts, pointwise cofactor bounds, quartic rays and cubic triple edges.
+- Seeded half-step window proofs and interlacing-refinement discovery with
+  exact intertwining, preservation pencils, sharp scale intervals and replay.
+- Exact circular-region stability CLI/MCP tools and replayable Gaussian-rational
+  certificates; the `exact-stability` crate shares exact-algebra kernels.
+- Padded OEIS rows for A266178/A266298 and nine validated stretch families,
+  bringing the bundled catalog to 930 entries.
+
+### Fixed
+
+- Standalone locked dependency builds (#64) and MCP family `parse_errors`
+  output (#65). Lift replay checks parent proofs independently; effective-BKW
+  replay, arithmetic overflow guards and stability parsing have been hardened.
+
+### Changed
+
+- Align the library/CLI, MCP, Python and web package versions at 0.8.0.
+- Exact simple-root checks over integers and rationals use the subresultant
+  square-free kernel to avoid rational gcd coefficient growth.
+
+
+## 0.7.0
 
 ### Fixed
 

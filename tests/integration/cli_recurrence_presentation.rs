@@ -481,7 +481,15 @@ fn lean_menus_keep_renderable_candidates_and_explain_the_others() {
 #[test]
 fn default_output_changes_are_documented_separately_from_additions() {
     let changelog = include_str!("../../CHANGELOG.md");
-    let changed = changelog
+    // These presentation changes belong to 0.7.0, regardless of newer releases.
+    let release = changelog
+        .split("\n## 0.7.0\n")
+        .nth(1)
+        .unwrap()
+        .split("\n## ")
+        .next()
+        .unwrap();
+    let changed = release
         .split("### Changed\n")
         .nth(1)
         .unwrap()

@@ -2003,11 +2003,11 @@ impl ServerHandler for PolynomialToolsServer {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(
-                Implementation::new("polytool", env!("CARGO_PKG_VERSION"))
+                Implementation::new("polytool", crate::build_version())
                     .with_title("polytool")
                     .with_description("Exact univariate polytool for combinatorial research."),
             )
-            .with_instructions("Exact univariate polytool for combinatorial research. Proof discovery defaults to a compact summary: pass oeis_id directly, then verify_recurrence_proofs with report_id. Use read_report with select JSON pointers for evidence; detail:full restores the complete report. Catalog listings are paged (next_offset). Generated code is opt-in: include_code:true. Rust replay is not Lean replay.")
+            .with_instructions(CAPABILITY_MAP)
     }
 }
 
@@ -2016,3 +2016,40 @@ impl Default for PolynomialToolsServer {
         Self::new()
     }
 }
+
+// Indented lines contain only tool names, checked against tools/list by the
+// stdio integration test. Keep the task map and operational notes <= 40 lines.
+const CAPABILITY_MAP: &str = r#"Exact univariate polytool for combinatorial research.
+Real roots & polynomial properties:
+  parse_polynomials, polynomial_properties, coefficient_tests, check_polynomial_family,
+  real_roots, exact_root_enclosures, enumerate_real_rooted, resultant, discriminant, analyze_decomposition
+Interlacing (pairs, sequences, profiles, refinement discovery):
+  check_interlacing_pair, check_interlacing_sequence, check_interlacing_profile, discover_interlacing_refinements
+Recurrences (find, representations, spaces, transforms, implicit relations):
+  find_recurrence, find_recurrence_representations, find_recurrence_spaces, verify_recurrence_spaces,
+  transform_recurrence, verify_recurrence_transform, transform_recurrence_implicit, verify_recurrence_implicit,
+  search_recurrence_representations, verify_recurrence_representation_search, assess_generating_description,
+  search_implicit_relations, verify_implicit_relation_search, generate_recurrence_rows
+Proof discovery & verification (theorems, BKW/effective BKW, Veronese lifts, matrix orbits):
+  discover_recurrence_proofs, verify_recurrence_proofs, recurrence_theorems, bkw_certify,
+  find_veronese_section_lifts, certify_veronese_section_lift, matrix_orbit
+PF networks, total nonnegativity (TNN) & production matrices:
+  recognize_pf_network, check_tnn_network, recognize_brenti_strip_digraph, check_left_production_matrix
+Stability (exact circular-region root counts):
+  stability_univariate
+Ehrhart/h*:
+  ehrhart_hstar, hstar_inequalities
+Sieving:
+  cyclic_sieving, bicyclic_sieving, cyclic_sieving_sequence
+OEIS catalog & standard sequences:
+  list_oeis_sequences, get_oeis_sequence, generate_oeis_rows, generate_sequence
+Reports & help:
+  read_report, tool_help
+
+Use tool_help {"tool": "NAME"} for syntax and limits; mcp/README.md documents all tools.
+Proof discovery defaults to compact summaries: pass oeis_id directly, then verify_recurrence_proofs with report_id.
+Effective BKW is a discover_recurrence_proofs route; bkw_certify provides the exact BKW layer.
+With report storage configured, use report_id handles and read_report with select JSON pointers for evidence.
+Set detail:"full" for complete reports (stored handles when configured); catalog pages use next_offset.
+Generated code is opt-in: include_code:true. Rust replay is not Lean replay.
+"#;

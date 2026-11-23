@@ -36,6 +36,36 @@ The server is intentionally small:
 - structured JSON results for agent-friendly use
 - exact arithmetic inherited from `polytool`
 
+## Build identity and installed-binary check
+
+`polytool-mcp --version` prints `polytool-mcp 0.8.0 (git <12-hex-commit>)`.
+The MCP initialization response uses the same version and commit in
+`serverInfo.version`. Both reuse the library's build-time Git metadata;
+source archives without Git metadata build normally and show `git unknown`.
+The existing `POLYTOOL_GIT_COMMIT` build override also applies to the MCP server.
+
+From the source checkout, compare the installed binary with its package
+version and current HEAD:
+
+```sh
+./mcp/check-installed.sh
+./mcp/check-installed.sh /path/to/polytool-mcp
+```
+
+The default binary follows the installer's `BIN_DIR` / `PREFIX` settings,
+otherwise `$HOME/.local/bin/polytool-mcp`. The check prints `current` and exits
+0 when both version and commit match; a missing, unusable or outdated binary
+prints `stale: rebuild with install.sh` and exits 1. Rebuild with
+`./mcp/install.sh`, then restart the MCP client to load the new server.
+Without checkout Git metadata the check exits 2 because freshness cannot be
+verified. This is a commit check: it does not detect uncommitted source edits,
+and it does not build or install anything.
+
+The initialization instructions group all registered tools by task. Use
+`tool_help {"tool": "NAME"}` for individual syntax and limits; the sections
+below and linked guides document the tools in detail. The stdio regression
+checks the capability map against the complete tool list.
+
 ## Interlacing refinement discovery
 
 `discover_interlacing_refinements` takes `{request, verify?: false}` and

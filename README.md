@@ -47,7 +47,7 @@ cargo install --locked --path .
 Use `polytool --version` (or `polytool -V`) for a single deterministic line:
 
 ```text
-polytool 0.6.0 (git 0123456789ab)
+polytool 0.8.0 (git 0123456789ab)
 ```
 
 The version comes from the crate manifest and the lowercase 12-hex-digit Git

@@ -1713,7 +1713,7 @@ fn server_reports_its_identity_and_default_constructs() {
     let from_default = PolynomialToolsServer::default();
     let info = from_default.get_info();
     assert_eq!(info.server_info.name, "polytool");
-    assert_eq!(info.server_info.version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(info.server_info.version, crate::build_version());
     assert!(info.capabilities.tools.is_some());
     assert!(info
         .instructions
